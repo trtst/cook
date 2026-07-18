@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下一餐素材预览</title>
+    <style>
+      body {
+        margin: 0;
+        width: 1600px;
+        min-height: 1080px;
+        background: #eef4f1;
+        color: #17231d;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      .board {
+        padding: 52px;
+      }
+
+      .head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        margin-bottom: 34px;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: #fff3d7;
+        color: #9a6417;
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        font-size: 56px;
+        font-weight: 850;
+        line-height: 1.04;
+      }
+
+      .summary {
+        max-width: 780px;
+        margin: 14px 0 0;
+        color: #607168;
+        font-size: 19px;
+        line-height: 1.55;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 22px;
+      }
+
+      .card {
+        padding: 24px;
+        border: 1px solid rgba(23, 35, 29, 0.1);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 18px 48px rgba(23, 35, 29, 0.08);
+      }
+
+      .art {
+        display: grid;
+        place-items: center;
+        height: 286px;
+        border-radius: 22px;
+        background: #f8fbf9;
+      }
+
+      .art img {
+        width: 238px;
+        height: 238px;
+      }
+
+      .title {
+        display: block;
+        margin-top: 18px;
+        font-size: 20px;
+        font-weight: 820;
+      }
+
+      .desc {
+        display: block;
+        margin-top: 8px;
+        color: #607168;
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .tokens {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: #fff;
+        color: #216e4e;
+        font-size: 12px;
+        font-weight: 720;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <header class="head">
+        <div>
+          <span class="kicker">下一餐 / 原创厨师素材</span>
+          <h1>适合小程序首页、空状态和引导页的素材组</h1>
+          <p class="summary">依据参考图的“亲和厨师 + 暖色动作背景”方向重新绘制，保留温馨感，但避免直接复制原图角色和构图。</p>
+        </div>
+      </header>
+      <section class="grid">
+        <article class="card">
+          <div class="art"><img src="../../apps/client/src/static/illustrations/chef-plan.svg" /></div>
+          <span class="title">chef-plan</span>
+          <span class="desc">首页、下一餐计划、登录引导。</span>
+          <div class="tokens"><span class="tag">主视觉</span><span class="tag">暖黄</span></div>
+        </article>
+        <article class="card">
+          <div class="art"><img src="../../apps/client/src/static/illustrations/chef-recipe.svg" /></div>
+          <span class="title">chef-recipe</span>
+          <span class="desc">菜谱大厅、导入菜谱、系统菜谱。</span>
+          <div class="tokens"><span class="tag">菜谱</span><span class="tag">橙色</span></div>
+        </article>
+        <article class="card">
+          <div class="art"><img src="../../apps/client/src/static/illustrations/chef-fridge.svg" /></div>
+          <span class="title">chef-fridge</span>
+          <span class="desc">冰箱库存、食材缺口、可做菜提示。</span>
+          <div class="tokens"><span class="tag">冰箱</span><span class="tag">橄榄</span></div>
+        </article>
+        <article class="card">
+          <div class="art"><img src="../../apps/client/src/static/illustrations/chef-shopping.svg" /></div>
+          <span class="title">chef-shopping</span>
+          <span class="desc">购物清单、采购历史、超市模式。</span>
+          <div class="tokens"><span class="tag">购物</span><span class="tag">暖橙</span></div>
+        </article>
+        <article class="card">
+          <div class="art"><img src="../../apps/client/src/static/illustrations/chef-empty.svg" /></div>
+          <span class="title">chef-empty</span>
+          <span class="desc">通用空状态、错误页、加载失败。</span>
+          <div class="tokens"><span class="tag">空状态</span><span class="tag">中性</span></div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下一餐 UI Design v1</title>
+    <style>
+      :root {
+        --board-bg: #dfe7e5;
+        --phone-border: rgba(25, 34, 30, 0.12);
+        --page: #f4f7f5;
+        --surface: #ffffff;
+        --surface-raised: #ffffff;
+        --surface-soft: #e9f4ee;
+        --surface-cool: #eaf1f8;
+        --surface-warm: #fff0e5;
+        --text: #17231d;
+        --text-secondary: #425149;
+        --text-muted: #718079;
+        --border: rgba(23, 35, 29, 0.1);
+        --divider: rgba(23, 35, 29, 0.1);
+        --primary: #216e4e;
+        --primary-strong: #15533a;
+        --primary-soft: #dff1e8;
+        --blue: #326fa8;
+        --orange: #c85f2b;
+        --yellow: #c3922e;
+        --tabbar: rgba(255, 255, 255, 0.9);
+        --shadow-card: 0 12px 30px rgba(35, 49, 43, 0.08);
+        --shadow-phone: 0 22px 62px rgba(25, 35, 31, 0.18);
+        --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      body[data-theme="dark"] {
+        --board-bg: #07100d;
+        --phone-border: rgba(255, 255, 255, 0.08);
+        --page: #0f1713;
+        --surface: #17211c;
+        --surface-raised: #1d2923;
+        --surface-soft: #173225;
+        --surface-cool: #172736;
+        --surface-warm: #342315;
+        --text: rgba(255, 255, 255, 0.94);
+        --text-secondary: rgba(255, 255, 255, 0.72);
+        --text-muted: rgba(255, 255, 255, 0.52);
+        --border: rgba(255, 255, 255, 0.12);
+        --divider: rgba(255, 255, 255, 0.1);
+        --primary: #6eca94;
+        --primary-strong: #8ee3ae;
+        --primary-soft: rgba(110, 202, 148, 0.14);
+        --blue: #75addb;
+        --orange: #e58b55;
+        --yellow: #ddb65c;
+        --tabbar: rgba(23, 33, 28, 0.9);
+        --shadow-card: 0 14px 36px rgba(0, 0, 0, 0.2);
+        --shadow-phone: 0 26px 70px rgba(0, 0, 0, 0.5);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 14% 8%, rgba(33, 110, 78, 0.12), transparent 30%),
+          radial-gradient(circle at 86% 6%, rgba(50, 111, 168, 0.12), transparent 28%),
+          var(--board-bg);
+        color: var(--text);
+        font-family: var(--font);
+      }
+
+      .board {
+        width: 1760px;
+        padding: 28px 32px 34px;
+      }
+
+      .board-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        margin: 0 0 22px;
+      }
+
+      .board-title {
+        margin: 0;
+        color: var(--text);
+        font-size: 28px;
+        font-weight: 760;
+        letter-spacing: 0;
+      }
+
+      .board-subtitle {
+        margin: 8px 0 0;
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+
+      .board-meta {
+        display: flex;
+        gap: 8px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        height: 30px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.34);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      body[data-theme="dark"] .chip {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .screens {
+        display: grid;
+        grid-template-columns: repeat(4, 390px);
+        gap: 36px;
+      }
+
+      .phone {
+        position: relative;
+        overflow: hidden;
+        width: 390px;
+        height: 844px;
+        border: 1px solid var(--phone-border);
+        border-radius: 34px;
+        background: var(--page);
+        box-shadow: var(--shadow-phone);
+      }
+
+      .status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 34px;
+        padding: 11px 28px 0;
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .status__right {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .signal {
+        display: grid;
+        grid-template-columns: repeat(4, 3px);
+        align-items: end;
+        gap: 2px;
+        width: 18px;
+        height: 12px;
+      }
+
+      .signal span {
+        width: 3px;
+        border-radius: 2px;
+        background: var(--text);
+      }
+
+      .signal span:nth-child(1) { height: 4px; opacity: 0.5; }
+      .signal span:nth-child(2) { height: 6px; opacity: 0.65; }
+      .signal span:nth-child(3) { height: 9px; opacity: 0.8; }
+      .signal span:nth-child(4) { height: 12px; }
+
+      .battery {
+        width: 22px;
+        height: 11px;
+        border: 1.5px solid var(--text);
+        border-radius: 3px;
+        position: relative;
+      }
+
+      .battery::before {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 5px;
+        border-radius: 2px;
+        background: var(--text);
+        content: "";
+      }
+
+      .battery::after {
+        position: absolute;
+        top: 3px;
+        right: -4px;
+        width: 2px;
+        height: 5px;
+        border-radius: 0 2px 2px 0;
+        background: var(--text);
+        content: "";
+      }
+
+      .nav {
+        display: grid;
+        grid-template-columns: 72px 1fr 72px;
+        align-items: center;
+        height: 54px;
+        padding: 0 18px;
+      }
+
+      .nav__title {
+        overflow: hidden;
+        color: var(--text);
+        font-size: 17px;
+        font-weight: 760;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .content {
+        height: calc(100% - 34px - 54px - 86px);
+        overflow: hidden;
+        padding: 14px 18px 18px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary-strong);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .hero-title {
+        display: block;
+        margin: 12px 0 0;
+        color: var(--text);
+        font-size: 31px;
+        font-weight: 820;
+        line-height: 1.12;
+        letter-spacing: 0;
+      }
+
+      .hero-copy {
+        display: block;
+        margin: 9px 0 0;
+        color: var(--text-secondary);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .panel {
+        margin-top: 16px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: var(--shadow-card);
+      }
+
+      .panel--flat {
+        box-shadow: none;
+      }
+
+      .panel--primary {
+        border-color: transparent;
+        background:
+          linear-gradient(135deg, rgba(33, 110, 78, 0.98), rgba(26, 92, 98, 0.95));
+        color: white;
+      }
+
+      body[data-theme="dark"] .panel--primary {
+        background:
+          linear-gradient(135deg, rgba(43, 115, 78, 0.92), rgba(24, 86, 90, 0.9));
+      }
+
+      .panel--soft {
+        border-color: transparent;
+        background: var(--surface-soft);
+      }
+
+      .panel__top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .panel-title {
+        display: block;
+        color: inherit;
+        font-size: 17px;
+        font-weight: 780;
+        line-height: 1.35;
+      }
+
+      .panel-copy {
+        display: block;
+        margin-top: 6px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        line-height: 1.48;
+      }
+
+      .panel--primary .panel-copy {
+        color: rgba(255, 255, 255, 0.74);
+      }
+
+      .metric {
+        min-width: 66px;
+        text-align: right;
+      }
+
+      .metric__value {
+        display: block;
+        color: inherit;
+        font-size: 22px;
+        font-weight: 820;
+        line-height: 1;
+      }
+
+      .metric__label {
+        display: block;
+        margin-top: 5px;
+        color: inherit;
+        font-size: 11px;
+        opacity: 0.72;
+      }
+
+      .primary-action {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 44px;
+        margin-top: 14px;
+        border-radius: 12px;
+        background: var(--primary);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 760;
+      }
+
+      body[data-theme="dark"] .primary-action {
+        color: #0f1713;
+      }
+
+      .panel--primary .primary-action {
+        background: rgba(255, 255, 255, 0.94);
+        color: #15533a;
+      }
+
+      .grid-two {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .tile {
+        min-height: 90px;
+        padding: 13px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+      }
+
+      .tile__icon {
+        display: block;
+        width: 24px;
+        height: 24px;
+        margin-bottom: 10px;
+        border: 2px solid var(--primary);
+        border-radius: 8px;
+        position: relative;
+      }
+
+      .tile__icon::after {
+        position: absolute;
+        right: -5px;
+        bottom: -5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--orange);
+        content: "";
+      }
+
+      .tile__title {
+        display: block;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 760;
+        line-height: 1.25;
+      }
+
+      .tile__copy {
+        display: block;
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 18px;
+      }
+
+      .section-title {
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 780;
+      }
+
+      .section-link {
+        color: var(--primary-strong);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .recipe-card {
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        gap: 12px;
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+      }
+
+      .recipe-thumb {
+        width: 76px;
+        height: 76px;
+        border-radius: 14px;
+        background:
+          linear-gradient(135deg, rgba(33, 110, 78, 0.15), rgba(50, 111, 168, 0.16)),
+          var(--surface-cool);
+        position: relative;
+      }
+
+      .recipe-thumb::before,
+      .recipe-thumb::after {
+        position: absolute;
+        border-radius: 999px;
+        content: "";
+      }
+
+      .recipe-thumb::before {
+        top: 16px;
+        left: 18px;
+        width: 32px;
+        height: 32px;
+        background: var(--primary);
+      }
+
+      .recipe-thumb::after {
+        right: 12px;
+        bottom: 14px;
+        width: 18px;
+        height: 18px;
+        background: var(--orange);
+      }
+
+      .recipe-title {
+        display: block;
+        margin-top: 4px;
+        color: var(--text);
+        font-size: 15px;
+        font-weight: 780;
+      }
+
+      .recipe-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 23px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--surface-soft);
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .segment {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        margin-top: 14px;
+        padding: 4px;
+        border-radius: 13px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+
+      .segment span {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 32px;
+        border-radius: 10px;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .segment .active {
+        background: var(--primary);
+        color: #fff;
+      }
+
+      body[data-theme="dark"] .segment .active {
+        color: #0f1713;
+      }
+
+      .fridge-hero {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 16px;
+        align-items: center;
+        margin-top: 16px;
+        padding: 18px;
+        border-radius: 20px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+      }
+
+      .ring {
+        display: grid;
+        place-items: center;
+        width: 112px;
+        height: 112px;
+        border-radius: 999px;
+        background:
+          conic-gradient(var(--primary) 0 72%, var(--surface-soft) 72% 100%);
+      }
+
+      .ring__inner {
+        display: grid;
+        place-items: center;
+        width: 78px;
+        height: 78px;
+        border-radius: 999px;
+        background: var(--surface);
+      }
+
+      .ring__value {
+        color: var(--text);
+        font-size: 22px;
+        font-weight: 820;
+      }
+
+      .list {
+        margin-top: 14px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .list-row {
+        display: grid;
+        grid-template-columns: 10px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        min-height: 54px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--divider);
+      }
+
+      .list-row:last-child {
+        border-bottom: 0;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--primary);
+      }
+
+      .dot--orange {
+        background: var(--orange);
+      }
+
+      .dot--blue {
+        background: var(--blue);
+      }
+
+      .list-main {
+        display: block;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 730;
+      }
+
+      .list-sub {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+
+      .list-extra {
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .profile {
+        margin-top: 10px;
+        padding: 18px;
+        border-radius: 20px;
+        background:
+          linear-gradient(135deg, var(--surface-raised), var(--surface-soft));
+        border: 1px solid var(--border);
+      }
+
+      .profile-row {
+        display: grid;
+        grid-template-columns: 54px 1fr;
+        gap: 13px;
+        align-items: center;
+      }
+
+      .avatar {
+        width: 54px;
+        height: 54px;
+        border-radius: 18px;
+        background:
+          linear-gradient(135deg, var(--primary), var(--blue));
+        position: relative;
+      }
+
+      .avatar::after {
+        position: absolute;
+        right: 9px;
+        bottom: 9px;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--surface);
+        border-radius: 999px;
+        background: var(--yellow);
+        content: "";
+      }
+
+      .profile-name {
+        display: block;
+        color: var(--text);
+        font-size: 18px;
+        font-weight: 820;
+      }
+
+      .profile-meta {
+        display: block;
+        margin-top: 5px;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .stat {
+        padding: 12px 8px;
+        border-radius: 14px;
+        background: var(--surface);
+        text-align: center;
+      }
+
+      .stat strong {
+        display: block;
+        color: var(--text);
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .stat span {
+        display: block;
+        margin-top: 6px;
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+
+      .menu {
+        margin-top: 14px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+        overflow: hidden;
+      }
+
+      .menu-row {
+        display: grid;
+        grid-template-columns: 30px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        height: 52px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--divider);
+      }
+
+      .menu-row:last-child {
+        border-bottom: 0;
+      }
+
+      .menu-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+        background: var(--surface-soft);
+        position: relative;
+      }
+
+      .menu-icon::after {
+        position: absolute;
+        inset: 8px;
+        border: 2px solid var(--primary);
+        border-radius: 5px;
+        content: "";
+      }
+
+      .menu-label {
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 720;
+      }
+
+      .menu-arrow {
+        color: var(--text-muted);
+        font-size: 16px;
+      }
+
+      .tabbar {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        height: 86px;
+        padding: 0 8px 12px;
+        border-top: 1px solid var(--divider);
+        background: var(--tabbar);
+        backdrop-filter: blur(18px);
+      }
+
+      .tab {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .tab.active {
+        color: var(--primary-strong);
+      }
+
+      .tab.active::after {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        width: 20px;
+        height: 3px;
+        border-radius: 999px;
+        background: var(--primary);
+        content: "";
+        transform: translateX(-50%);
+      }
+    </style>
+  </head>
+  <body>
+    <section class="board">
+      <header class="board-head">
+        <div>
+          <h1 class="board-title">下一餐小程序 UI Design v1</h1>
+          <p class="board-subtitle">自定义顶部 + 自定义 tabbar + 主题 token；用于后续按图实现，不是代码截图。</p>
+        </div>
+        <div class="board-meta">
+          <span class="chip">390 × 844</span>
+          <span class="chip">主包 4 页</span>
+          <span class="chip">Light / Dark</span>
+        </div>
+      </header>
+
+      <div class="screens">
+        <article class="phone">
+          <div class="status"><span>9:41</span><span class="status__right"><span class="signal"><span></span><span></span><span></span><span></span></span><span class="battery"></span></span></div>
+          <div class="nav"><span></span><span class="nav__title">下一餐</span><span></span></div>
+          <main class="content">
+            <span class="eyebrow">今晚 18:30</span>
+            <span class="hero-title">今天不用再问<br />吃什么</span>
+            <span class="hero-copy">把家里的库存、想吃的菜和采购缺口放在同一个地方。</span>
+            <section class="panel panel--primary">
+              <div class="panel__top">
+                <div>
+                  <span class="panel-title">下一餐还差 2 个决定</span>
+                  <span class="panel-copy">主菜待确认，青菜库存不足。</span>
+                </div>
+                <div class="metric"><span class="metric__value">3</span><span class="metric__label">人参与</span></div>
+              </div>
+              <div class="primary-action">开始安排</div>
+            </section>
+            <div class="grid-two">
+              <div class="tile"><span class="tile__icon"></span><span class="tile__title">点菜征集</span><span class="tile__copy">收集家人想吃</span></div>
+              <div class="tile"><span class="tile__icon"></span><span class="tile__title">冰箱缺口</span><span class="tile__copy">2 个食材不足</span></div>
+              <div class="tile"><span class="tile__icon"></span><span class="tile__title">随机一下</span><span class="tile__copy">按库存推荐</span></div>
+              <div class="tile"><span class="tile__icon"></span><span class="tile__title">购物清单</span><span class="tile__copy">采购前检查</span></div>
+            </div>
+          </main>
+          <nav class="tabbar"><span class="tab active">下一餐</span><span class="tab">菜谱</span><span class="tab">冰箱</span><span class="tab">我的</span></nav>
+        </article>
+
+        <article class="phone">
+          <div class="status"><span>9:41</span><span class="status__right"><span class="signal"><span></span><span></span><span></span><span></span></span><span class="battery"></span></span></div>
+          <div class="nav"><span></span><span class="nav__title">菜谱</span><span></span></div>
+          <main class="content">
+            <span class="hero-title">菜谱</span>
+            <span class="hero-copy">先从系统菜谱大厅开始，登录后接入你的私有菜谱。</span>
+            <div class="segment"><span class="active">推荐</span><span>家常</span><span>快手</span></div>
+            <section class="section-head"><span class="section-title">今晚适合</span><span class="section-link">查看全部</span></section>
+            <div class="recipe-card">
+              <span class="recipe-thumb"></span>
+              <div><span class="recipe-title">番茄牛肉饭</span><span class="panel-copy">35 分钟 · 适合 3 人</span><div class="recipe-meta"><span class="tag">缺番茄</span><span class="tag">可替换</span></div></div>
+            </div>
+            <div class="recipe-card">
+              <span class="recipe-thumb"></span>
+              <div><span class="recipe-title">青椒鸡蛋面</span><span class="panel-copy">20 分钟 · 冰箱可做</span><div class="recipe-meta"><span class="tag">快手</span><span class="tag">少油</span></div></div>
+            </div>
+            <section class="panel panel--soft panel--flat">
+              <span class="panel-title">登录后同步私人菜谱</span>
+              <span class="panel-copy">导入、编辑和家庭共享能力会出现在这里。</span>
+            </section>
+          </main>
+          <nav class="tabbar"><span class="tab">下一餐</span><span class="tab active">菜谱</span><span class="tab">冰箱</span><span class="tab">我的</span></nav>
+        </article>
+
+        <article class="phone">
+          <div class="status"><span>9:41</span><span class="status__right"><span class="signal"><span></span><span></span><span></span><span></span></span><span class="battery"></span></span></div>
+          <div class="nav"><span></span><span class="nav__title">冰箱</span><span></span></div>
+          <main class="content">
+            <span class="eyebrow">当前餐厅</span>
+            <span class="hero-title">库存够不够<br />一眼看清</span>
+            <div class="fridge-hero">
+              <div class="ring"><div class="ring__inner"><span class="ring__value">72%</span></div></div>
+              <div><span class="panel-title">今晚可做 6 道菜</span><span class="panel-copy">2 个关键食材不足，建议加入购物清单。</span><div class="primary-action">补齐缺口</div></div>
+            </div>
+            <div class="list">
+              <div class="list-row"><span class="dot"></span><div><span class="list-main">鸡蛋</span><span class="list-sub">冷藏 · 还够 3 天</span></div><span class="list-extra">8 个</span></div>
+              <div class="list-row"><span class="dot dot--orange"></span><div><span class="list-main">番茄</span><span class="list-sub">今晚计划缺口</span></div><span class="list-extra">缺 2 个</span></div>
+              <div class="list-row"><span class="dot dot--blue"></span><div><span class="list-main">牛肉</span><span class="list-sub">冷冻 · 可替换鸡腿肉</span></div><span class="list-extra">300g</span></div>
+            </div>
+          </main>
+          <nav class="tabbar"><span class="tab">下一餐</span><span class="tab">菜谱</span><span class="tab active">冰箱</span><span class="tab">我的</span></nav>
+        </article>
+
+        <article class="phone">
+          <div class="status"><span>9:41</span><span class="status__right"><span class="signal"><span></span><span></span><span></span><span></span></span><span class="battery"></span></span></div>
+          <div class="nav"><span></span><span class="nav__title">我的</span><span></span></div>
+          <main class="content">
+            <section class="profile">
+              <div class="profile-row"><span class="avatar"></span><div><span class="profile-name">家里的下一餐</span><span class="profile-meta">当前餐厅 · 4 位成员</span></div></div>
+              <div class="stats"><div class="stat"><strong>18</strong><span>菜谱</span></div><div class="stat"><strong>6</strong><span>计划</span></div><div class="stat"><strong>24</strong><span>食材</span></div></div>
+            </section>
+            <div class="menu">
+              <div class="menu-row"><span class="menu-icon"></span><span class="menu-label">餐厅成员</span><span class="menu-arrow">›</span></div>
+              <div class="menu-row"><span class="menu-icon"></span><span class="menu-label">切换餐厅</span><span class="menu-arrow">›</span></div>
+              <div class="menu-row"><span class="menu-icon"></span><span class="menu-label">分享导入记录</span><span class="menu-arrow">›</span></div>
+              <div class="menu-row"><span class="menu-icon"></span><span class="menu-label">主题设置</span><span class="menu-arrow">›</span></div>
+            </div>
+            <section class="panel panel--flat">
+              <span class="panel-title">未登录占位</span>
+              <span class="panel-copy">未登录时这里替换为登录引导，不进入独立登录页。</span>
+            </section>
+          </main>
+          <nav class="tabbar"><span class="tab">下一餐</span><span class="tab">菜谱</span><span class="tab">冰箱</span><span class="tab active">我的</span></nav>
+        </article>
+      </div>
+    </section>
+    <script>
+      const params = new URLSearchParams(location.search);
+      document.body.dataset.theme = params.get("theme") === "dark" ? "dark" : "light";
+    </script>
+  </body>
+</html>

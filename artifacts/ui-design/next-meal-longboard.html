@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下一餐 App Design Longboard</title>
+    <style>
+      :root {
+        --paper: #fff8e8;
+        --paper-2: #fff2cf;
+        --warm: #f6ad2f;
+        --warm-2: #ffcf6d;
+        --orange: #f47c35;
+        --green: #216e4e;
+        --green-2: #6eba83;
+        --ink: #2c2318;
+        --muted: #7d6c55;
+        --line: rgba(108, 78, 39, 0.14);
+        --soft: rgba(255, 255, 255, 0.62);
+        --shadow: 0 22px 60px rgba(113, 76, 20, 0.12);
+        --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 1200px;
+        min-height: 5200px;
+        background:
+          radial-gradient(circle at 70% 1%, rgba(255, 255, 255, 0.92), transparent 5%),
+          linear-gradient(180deg, #ffd87a 0, #fff7e5 760px, #fff9eb 100%);
+        color: var(--ink);
+        font-family: var(--font);
+      }
+
+      .page {
+        overflow: hidden;
+      }
+
+      .hero {
+        position: relative;
+        min-height: 820px;
+        padding: 72px 72px 60px;
+        background:
+          radial-gradient(circle at 86% 18%, rgba(255, 255, 255, 0.8), transparent 17%),
+          linear-gradient(135deg, #ffd75f 0%, #ffb85c 52%, #fff3d3 100%);
+      }
+
+      .hero::before {
+        position: absolute;
+        top: 128px;
+        left: -24px;
+        color: rgba(255, 255, 255, 0.28);
+        content: "NEXT MEAL";
+        font-size: 142px;
+        font-weight: 900;
+        letter-spacing: 10px;
+        line-height: 1;
+      }
+
+      .brand {
+        position: relative;
+        z-index: 1;
+      }
+
+      .label {
+        color: var(--orange);
+        font-size: 29px;
+        font-style: italic;
+        font-weight: 900;
+        letter-spacing: 2px;
+        line-height: 1.05;
+        text-transform: uppercase;
+      }
+
+      .title {
+        margin: 88px 0 0;
+        font-size: 78px;
+        font-weight: 900;
+        letter-spacing: 0;
+        line-height: 1;
+      }
+
+      .title small {
+        display: block;
+        margin-top: 12px;
+        color: #9a6417;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .summary {
+        width: 530px;
+        margin-top: 28px;
+        color: #7b5622;
+        font-size: 19px;
+        font-weight: 650;
+        line-height: 1.75;
+      }
+
+      .hero-tags {
+        display: flex;
+        gap: 12px;
+        margin-top: 30px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.56);
+        color: #7e4f11;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .phone-cluster {
+        position: absolute;
+        right: 84px;
+        top: 116px;
+        width: 360px;
+        height: 630px;
+      }
+
+      .phone {
+        position: absolute;
+        overflow: hidden;
+        width: 245px;
+        height: 510px;
+        border: 10px solid rgba(255, 255, 255, 0.82);
+        border-radius: 42px;
+        background: #fffaf0;
+        box-shadow: 0 34px 80px rgba(121, 73, 11, 0.28);
+        transform: rotate(8deg);
+      }
+
+      .phone::before {
+        position: absolute;
+        top: 13px;
+        left: 78px;
+        width: 74px;
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(45, 35, 24, 0.18);
+        content: "";
+      }
+
+      .phone-screen {
+        padding: 48px 16px 18px;
+      }
+
+      .phone-title {
+        display: block;
+        color: var(--ink);
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1.15;
+      }
+
+      .phone-card {
+        margin-top: 16px;
+        padding: 14px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, var(--green), #2d7d74);
+        color: white;
+      }
+
+      .phone-card strong {
+        display: block;
+        font-size: 15px;
+      }
+
+      .phone-card span {
+        display: block;
+        margin-top: 8px;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .phone-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .phone-tile {
+        height: 64px;
+        border-radius: 14px;
+        background: #fff;
+        border: 1px solid var(--line);
+      }
+
+      .mascot {
+        position: absolute;
+        right: -18px;
+        bottom: 22px;
+        width: 210px;
+        height: 230px;
+      }
+
+      .spark {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        background: #fff7bf;
+        clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+      }
+
+      .spark.one {
+        right: 390px;
+        top: 430px;
+      }
+
+      .spark.two {
+        right: 86px;
+        top: 260px;
+        transform: scale(1.4);
+      }
+
+      .section {
+        padding: 70px 72px 0;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 30px;
+      }
+
+      .mark {
+        color: #ff9a3d;
+        font-size: 24px;
+        font-style: italic;
+        font-weight: 900;
+      }
+
+      h2 {
+        margin: 0;
+        color: var(--orange);
+        font-size: 32px;
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      .en {
+        display: block;
+        margin-top: 4px;
+        color: rgba(125, 88, 42, 0.48);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+      }
+
+      .intro-grid {
+        display: grid;
+        grid-template-columns: 1fr 370px;
+        gap: 56px;
+        align-items: center;
+      }
+
+      .intro-list {
+        display: grid;
+        gap: 28px;
+      }
+
+      .intro-item {
+        display: grid;
+        grid-template-columns: 12px 1fr;
+        gap: 14px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        margin-top: 7px;
+        border-radius: 999px;
+        background: var(--orange);
+      }
+
+      .intro-item strong {
+        color: var(--green);
+        font-size: 19px;
+        font-weight: 900;
+      }
+
+      .intro-item span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.85;
+      }
+
+      .character-card {
+        position: relative;
+        display: grid;
+        place-items: center;
+        height: 390px;
+        border-radius: 36px;
+        background:
+          radial-gradient(circle at 50% 40%, rgba(255, 217, 128, 0.72), transparent 46%),
+          rgba(255, 255, 255, 0.46);
+      }
+
+      .flows {
+        position: relative;
+        margin-top: 24px;
+        padding-left: 140px;
+      }
+
+      .logo-block {
+        position: absolute;
+        top: 150px;
+        left: 0;
+        display: grid;
+        place-items: center;
+        width: 94px;
+        height: 94px;
+        border-radius: 24px;
+        background: #ff9a35;
+        color: white;
+        font-size: 48px;
+        font-weight: 900;
+      }
+
+      .flow-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 74px;
+      }
+
+      .node {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 82px;
+        height: 32px;
+        padding: 0 15px;
+        border: 2px solid #ffc879;
+        border-radius: 999px;
+        background: #fff7e8;
+        color: #b76518;
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      .node.root {
+        min-width: 110px;
+        background: #ffe0a0;
+        color: #9c5b12;
+      }
+
+      .line {
+        width: 38px;
+        height: 2px;
+        background: #ffc879;
+      }
+
+      .screens {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 30px 24px;
+        margin-top: 26px;
+      }
+
+      .mini-phone {
+        overflow: hidden;
+        height: 360px;
+        border: 7px solid #ffe7bb;
+        border-radius: 28px;
+        background: #fffaf0;
+        box-shadow: 0 18px 36px rgba(170, 112, 34, 0.1);
+      }
+
+      .mini-nav {
+        height: 42px;
+        background: #ff9a35;
+      }
+
+      .mini-body {
+        padding: 16px 13px;
+      }
+
+      .mini-h {
+        height: 24px;
+        width: 62%;
+        border-radius: 8px;
+        background: #ffb85c;
+      }
+
+      .mini-card {
+        height: 68px;
+        margin-top: 14px;
+        border-radius: 14px;
+        background: #ffe8bd;
+      }
+
+      .mini-card.green {
+        background: #dff1e8;
+      }
+
+      .mini-list {
+        display: grid;
+        gap: 9px;
+        margin-top: 16px;
+      }
+
+      .mini-line {
+        height: 16px;
+        border-radius: 999px;
+        background: #f5d49a;
+      }
+
+      .brand-grid {
+        display: grid;
+        grid-template-columns: 1fr 420px;
+        gap: 54px;
+        align-items: center;
+      }
+
+      .keyword-list {
+        display: grid;
+        gap: 24px;
+      }
+
+      .keyword strong {
+        display: block;
+        color: var(--ink);
+        font-size: 19px;
+        font-weight: 900;
+      }
+
+      .keyword span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .image-stack {
+        position: relative;
+        height: 360px;
+      }
+
+      .blob-card {
+        position: absolute;
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .blob-card.one {
+        top: 20px;
+        left: 28px;
+        width: 250px;
+        height: 190px;
+        background: linear-gradient(135deg, #ffb13f, #ffef9f);
+      }
+
+      .blob-card.two {
+        right: 0;
+        bottom: 10px;
+        width: 290px;
+        height: 170px;
+        background: linear-gradient(135deg, #216e4e, #81cf90);
+      }
+
+      .blob-card.three {
+        right: 40px;
+        top: 0;
+        width: 150px;
+        height: 130px;
+        background: linear-gradient(135deg, #ff8b4f, #ffc46d);
+      }
+
+      .spec-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 34px;
+      }
+
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+
+      .swatch {
+        min-height: 138px;
+        padding: 16px;
+        border-radius: 20px;
+        background: var(--c);
+        color: var(--tc, #2c2318);
+        box-shadow: var(--shadow);
+      }
+
+      .swatch strong {
+        display: block;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .swatch span {
+        display: block;
+        margin-top: 58px;
+        font-size: 13px;
+        font-weight: 800;
+        opacity: 0.8;
+      }
+
+      .type-card {
+        padding: 26px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.58);
+        box-shadow: var(--shadow);
+      }
+
+      .type-sample {
+        display: grid;
+        gap: 14px;
+      }
+
+      .type-sample div {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .type-sample strong {
+        color: var(--ink);
+      }
+
+      .type-sample span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .icon-grid {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .icon {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border: 2px solid #f3bc69;
+        border-radius: 14px;
+        color: var(--orange);
+        font-size: 18px;
+        font-weight: 900;
+      }
+
+      .footer {
+        padding: 70px 72px 88px;
+        text-align: center;
+        color: #d98028;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      .chef {
+        width: 260px;
+        height: 280px;
+      }
+
+      .small-chef {
+        width: 190px;
+        height: 210px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="brand">
+          <div class="label">UI DESIGN<br />NEXT MEAL</div>
+          <h1 class="title">下一餐<small>家庭餐饮协作小程序</small></h1>
+          <p class="summary">围绕“今天吃什么”这个日常问题，把下一餐计划、菜谱、冰箱库存和购物清单串成一个清晰的家庭协作流程。</p>
+          <div class="hero-tags">
+            <span class="tag">uni-app</span>
+            <span class="tag">微信小程序</span>
+            <span class="tag">自定义顶部</span>
+            <span class="tag">暖黄主题</span>
+          </div>
+        </div>
+        <div class="phone-cluster">
+          <div class="phone">
+            <div class="phone-screen">
+              <span class="phone-title">今天不用再问<br />吃什么</span>
+              <div class="phone-card"><strong>下一餐还差 2 个决定</strong><span>主菜待确认，青菜库存不足。</span></div>
+              <div class="phone-grid"><span class="phone-tile"></span><span class="phone-tile"></span><span class="phone-tile"></span><span class="phone-tile"></span></div>
+            </div>
+          </div>
+          <svg class="mascot" viewBox="0 0 240 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="126" cy="226" rx="88" ry="14" fill="#E8B960" opacity=".45"/>
+            <path d="M78 82C83 38 111 22 126 44C144 22 174 38 178 82H78Z" fill="#FFF8E8"/>
+            <circle cx="128" cy="104" r="58" fill="#FFE0CF"/>
+            <circle cx="76" cy="108" r="14" fill="#FFD1C2"/><circle cx="180" cy="108" r="14" fill="#FFD1C2"/>
+            <circle cx="106" cy="103" r="6" fill="#33201C"/><circle cx="150" cy="103" r="6" fill="#33201C"/>
+            <path d="M122 116L112 128L128 124L144 128L134 116" stroke="#8C4D42" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M98 136C112 120 124 130 128 144C132 130 146 120 158 136C150 154 106 154 98 136Z" fill="#4C241D"/>
+            <circle cx="96" cy="128" r="10" fill="#F1A9A3"/><circle cx="160" cy="128" r="10" fill="#F1A9A3"/>
+            <path d="M82 162C98 144 158 144 174 162L184 220C150 238 104 238 70 220L82 162Z" fill="#FFF9ED"/>
+            <path d="M128 152V232" stroke="#D6CABB" stroke-width="3"/>
+            <circle cx="128" cy="182" r="5" fill="#40231E"/><circle cx="128" cy="208" r="5" fill="#40231E"/>
+            <path d="M90 174C58 178 42 198 28 220" stroke="#FFF9ED" stroke-width="18" stroke-linecap="round"/>
+            <path d="M168 174C194 176 208 194 220 216" stroke="#FFF9ED" stroke-width="18" stroke-linecap="round"/>
+            <rect x="184" y="150" width="42" height="58" rx="10" fill="#FFFFFF"/>
+            <path d="M194 170H218M194 188H212" stroke="#216E4E" stroke-width="6" stroke-linecap="round"/>
+            <path d="M90 218L80 254H106L114 224" fill="#6C5B9A"/><path d="M166 218L176 254H150L142 224" fill="#6C5B9A"/>
+          </svg>
+        </div>
+        <span class="spark one"></span><span class="spark two"></span>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="mark">B</span><div><h2>项目介绍</h2><span class="en">Project Introduction</span></div></div>
+        <div class="intro-grid">
+          <div class="intro-list">
+            <div class="intro-item"><span class="dot"></span><div><strong>项目背景</strong><span>家庭吃饭决策常常散落在聊天、冰箱、购物清单和个人记忆里。下一餐把这些碎片收束到一个小程序里，让“吃什么、缺什么、谁参与”变得清楚。</span></div></div>
+            <div class="intro-item"><span class="dot"></span><div><strong>产品目标</strong><span>不是做一个庞大的菜谱大全，而是围绕家庭餐厅做轻量协作：计划下一餐、管理菜谱、识别库存缺口、沉淀购物清单。</span></div></div>
+            <div class="intro-item"><span class="dot"></span><div><strong>设计语气</strong><span>整体偏温馨暖黄，但保留信息工具的清楚秩序。页面需要每天可重复打开，不做营销感首页，不堆装饰。</span></div></div>
+          </div>
+          <div class="character-card">
+            <svg class="chef" viewBox="0 0 240 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M36 186L184 38" stroke="#FFC36A" stroke-width="18" stroke-linecap="round"/>
+              <path d="M60 226L210 76" stroke="#FFB55F" stroke-width="15" stroke-linecap="round"/>
+              <ellipse cx="126" cy="226" rx="88" ry="14" fill="#E8B960" opacity=".45"/>
+              <path d="M78 82C83 38 111 22 126 44C144 22 174 38 178 82H78Z" fill="#FFF8E8"/>
+              <circle cx="128" cy="104" r="58" fill="#FFE0CF"/>
+              <circle cx="106" cy="103" r="6" fill="#33201C"/><circle cx="150" cy="103" r="6" fill="#33201C"/>
+              <path d="M98 136C112 120 124 130 128 144C132 130 146 120 158 136C150 154 106 154 98 136Z" fill="#4C241D"/>
+              <circle cx="96" cy="128" r="10" fill="#F1A9A3"/><circle cx="160" cy="128" r="10" fill="#F1A9A3"/>
+              <path d="M82 162C98 144 158 144 174 162L184 220C150 238 104 238 70 220L82 162Z" fill="#FFF9ED"/>
+              <path d="M90 174C58 178 42 198 28 220" stroke="#FFF9ED" stroke-width="18" stroke-linecap="round"/>
+              <path d="M168 174C194 176 208 194 220 216" stroke="#FFF9ED" stroke-width="18" stroke-linecap="round"/>
+              <rect x="184" y="150" width="42" height="58" rx="10" fill="#FFFFFF"/>
+              <path d="M194 170H218M194 188H212" stroke="#216E4E" stroke-width="6" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="mark">B</span><div><h2>系统功能</h2><span class="en">System Functions</span></div></div>
+        <div class="flows">
+          <div class="logo-block">餐</div>
+          <div class="flow-row"><span class="node root">首页</span><span class="line"></span><span class="node">下一餐</span><span class="line"></span><span class="node">点菜征集</span><span class="line"></span><span class="node">随机一下</span><span class="line"></span><span class="node">结果汇总</span></div>
+          <div class="flow-row"><span class="node root">菜谱</span><span class="line"></span><span class="node">系统菜谱</span><span class="line"></span><span class="node">私人菜谱</span><span class="line"></span><span class="node">导入</span><span class="line"></span><span class="node">编辑</span></div>
+          <div class="flow-row"><span class="node root">冰箱</span><span class="line"></span><span class="node">库存</span><span class="line"></span><span class="node">食材缺口</span><span class="line"></span><span class="node">可做菜</span><span class="line"></span><span class="node">购物清单</span></div>
+          <div class="flow-row"><span class="node root">我的</span><span class="line"></span><span class="node">餐厅</span><span class="line"></span><span class="node">成员</span><span class="line"></span><span class="node">主题</span><span class="line"></span><span class="node">账号</span></div>
+          <div class="flow-row"><span class="node root">分享</span><span class="line"></span><span class="node">预览</span><span class="line"></span><span class="node">导入</span><span class="line"></span><span class="node">饭搭子卡</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="mark">B</span><div><h2>原型概览</h2><span class="en">Prototype Overview</span></div></div>
+        <div class="screens">
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card green"></div><div class="mini-card"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card"></div><div class="mini-card green"></div><div class="mini-card"></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card green"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card"></div><div class="mini-card"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card green"></div><div class="mini-card"></div><div class="mini-card"></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card green"></div><div class="mini-card"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-card"></div><div class="mini-card green"></div><div class="mini-card"></div></div></div>
+          <div class="mini-phone"><div class="mini-nav"></div><div class="mini-body"><div class="mini-h"></div><div class="mini-list"><span class="mini-line"></span><span class="mini-line"></span><span class="mini-line"></span></div><div class="mini-card"></div></div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="mark">B</span><div><h2>品牌关键词</h2><span class="en">Brand Keywords</span></div></div>
+        <div class="brand-grid">
+          <div class="keyword-list">
+            <div class="keyword"><strong>温馨</strong><span>暖黄和柔和卡片建立家庭餐桌感，但控制饱和度，避免过度厨房风。</span></div>
+            <div class="keyword"><strong>协作</strong><span>页面重点表达参与、待决事项、共享清单和成员关系，让家庭决策变得同步。</span></div>
+            <div class="keyword"><strong>清楚</strong><span>信息层级明确，卡片不套卡片，操作按钮只保留真正下一步。</span></div>
+            <div class="keyword"><strong>可信赖</strong><span>色彩、间距、圆角和状态表达统一，让用户每天打开也不觉得混乱。</span></div>
+          </div>
+          <div class="image-stack"><div class="blob-card one"></div><div class="blob-card two"></div><div class="blob-card three"></div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head"><span class="mark">B</span><div><h2>设计规范</h2><span class="en">Design Specification</span></div></div>
+        <div class="spec-grid">
+          <div>
+            <div class="palette">
+              <div class="swatch" style="--c:#fbf4e5"><strong>暖黄背景</strong><span>#FBF4E5</span></div>
+              <div class="swatch" style="--c:#fffaf0"><strong>卡片白</strong><span>#FFFAF0</span></div>
+              <div class="swatch" style="--c:#b9771f;--tc:#fff"><strong>暖黄主色</strong><span>#B9771F</span></div>
+              <div class="swatch" style="--c:#216e4e;--tc:#fff"><strong>动作绿</strong><span>#216E4E</span></div>
+              <div class="swatch" style="--c:#f47c35;--tc:#fff"><strong>缺口橙</strong><span>#F47C35</span></div>
+              <div class="swatch" style="--c:#326fa8;--tc:#fff"><strong>协作蓝</strong><span>#326FA8</span></div>
+              <div class="swatch" style="--c:#0f1713;--tc:#fff"><strong>暗黑背景</strong><span>#0F1713</span></div>
+              <div class="swatch" style="--c:#6eca94"><strong>暗黑强调</strong><span>#6ECA94</span></div>
+            </div>
+          </div>
+          <div class="type-card">
+            <div class="type-sample">
+              <div><strong style="font-size:34px">下一餐标题</strong><span>34px / Bold</span></div>
+              <div><strong style="font-size:24px">卡片标题</strong><span>24px / Bold</span></div>
+              <div><strong style="font-size:18px">正文说明文字</strong><span>18px / Medium</span></div>
+              <div><strong style="font-size:14px">标签和辅助信息</strong><span>14px / Semibold</span></div>
+            </div>
+            <div class="icon-grid">
+              <span class="icon">餐</span><span class="icon">菜</span><span class="icon">冰</span><span class="icon">购</span><span class="icon">家</span>
+              <span class="icon">人</span><span class="icon">票</span><span class="icon">缺</span><span class="icon">享</span><span class="icon">设</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer">NEXT MEAL DESIGN · WARM THEME · MINI PROGRAM</div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下一餐 Keyword Design Board</title>
+    <style>
+      :root {
+        --bg: #edf3f0;
+        --ink: #14211b;
+        --muted: #607168;
+        --line: rgba(20, 33, 27, 0.12);
+        --card: rgba(255, 255, 255, 0.72);
+        --primary: #216e4e;
+        --primary-soft: #dff1e8;
+        --blue: #326fa8;
+        --blue-soft: #e4eef7;
+        --orange: #c85f2b;
+        --orange-soft: #fff0e5;
+        --radius: 22px;
+        --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 1600px;
+        min-height: 1000px;
+        background:
+          radial-gradient(circle at 12% 12%, rgba(33, 110, 78, 0.16), transparent 30%),
+          radial-gradient(circle at 86% 4%, rgba(50, 111, 168, 0.12), transparent 28%),
+          var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+      }
+
+      .board {
+        padding: 52px;
+      }
+
+      .top {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 34px;
+        align-items: end;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        color: var(--ink);
+        font-size: 64px;
+        font-weight: 850;
+        letter-spacing: 0;
+        line-height: 1.02;
+      }
+
+      .summary {
+        margin: 18px 0 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 21px;
+        line-height: 1.55;
+      }
+
+      .position {
+        padding: 26px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--card);
+        backdrop-filter: blur(20px);
+      }
+
+      .position-title {
+        display: block;
+        color: var(--ink);
+        font-size: 22px;
+        font-weight: 820;
+      }
+
+      .position-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .mini {
+        min-height: 88px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.52);
+      }
+
+      .mini strong {
+        display: block;
+        color: var(--ink);
+        font-size: 16px;
+      }
+
+      .mini span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 0.95fr 1.1fr 0.95fr;
+        gap: 24px;
+        margin-top: 34px;
+      }
+
+      .card {
+        min-height: 280px;
+        padding: 26px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--card);
+        backdrop-filter: blur(20px);
+      }
+
+      .card h2 {
+        margin: 0;
+        color: var(--ink);
+        font-size: 23px;
+        font-weight: 840;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: #fff;
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 720;
+        box-shadow: 0 8px 24px rgba(20, 33, 27, 0.06);
+      }
+
+      .tag.primary {
+        background: var(--primary);
+        color: #fff;
+      }
+
+      .tag.green {
+        background: var(--primary-soft);
+        color: var(--primary);
+      }
+
+      .tag.blue {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .tag.orange {
+        background: var(--orange-soft);
+        color: var(--orange);
+      }
+
+      .list {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 14px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .row:last-child {
+        border-bottom: 0;
+      }
+
+      .row strong {
+        color: var(--primary);
+        font-size: 14px;
+      }
+
+      .row span {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      .palette {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .swatch {
+        height: 90px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .swatch span {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        color: rgba(20, 33, 27, 0.72);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .swatch.dark span,
+      .swatch.primary span,
+      .swatch.blue span {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      .swatch.page { background: #f4f7f5; }
+      .swatch.surface { background: #ffffff; }
+      .swatch.primary { background: #216e4e; }
+      .swatch.dark { background: #0f1713; }
+      .swatch.blue { background: #326fa8; }
+
+      .avoid {
+        background: rgba(255, 240, 229, 0.72);
+      }
+
+      .foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 28px;
+        padding: 20px 26px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.48);
+      }
+
+      .foot strong {
+        color: var(--ink);
+        font-size: 18px;
+      }
+
+      .foot span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <section class="top">
+        <div>
+          <span class="kicker">下一餐 / 家庭协作小程序</span>
+          <h1>把“吃什么”变成<br />可协作的下一步</h1>
+          <p class="summary">项目不是菜谱大全，也不是单人记账工具，而是围绕家庭餐厅、下一餐计划、菜谱、冰箱库存和购物清单的轻量协作系统。小程序端需要快速、亲和、清楚，适合每天反复打开。</p>
+        </div>
+        <aside class="position">
+          <span class="position-title">项目介绍</span>
+          <div class="position-grid">
+            <div class="mini"><strong>目标用户</strong><span>家庭成员、合租伙伴、共同负责采购和做饭的人。</span></div>
+            <div class="mini"><strong>核心问题</strong><span>不知道吃什么、库存不清楚、采购缺口分散、多人意见难同步。</span></div>
+            <div class="mini"><strong>产品形态</strong><span>uni-app 微信小程序，主包四个 tab，功能按域分包。</span></div>
+            <div class="mini"><strong>体验原则</strong><span>未登录可预览，操作时登录；信息密度适中，重复使用不打扰。</span></div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <h2>设计关键词</h2>
+          <div class="tags">
+            <span class="tag primary">清爽工具感</span>
+            <span class="tag green">家庭协作</span>
+            <span class="tag blue">库存可视化</span>
+            <span class="tag orange">下一步行动</span>
+            <span class="tag">轻量</span>
+            <span class="tag">克制</span>
+            <span class="tag">日常</span>
+            <span class="tag">可信赖</span>
+            <span class="tag">少打扰</span>
+            <span class="tag">可扫描</span>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>页面关键词</h2>
+          <div class="list">
+            <div class="row"><strong>首页</strong><span>下一餐状态、待决事项、快捷入口、家庭成员参与感。</span></div>
+            <div class="row"><strong>菜谱</strong><span>系统菜谱大厅、私人菜谱入口、筛选分段、导入与编辑的登录后增强。</span></div>
+            <div class="row"><strong>冰箱</strong><span>库存健康度、缺口提醒、可做菜数量、食材状态列表。</span></div>
+            <div class="row"><strong>我的</strong><span>当前餐厅、成员、切换餐厅、主题设置、账号入口。</span></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>视觉关键词</h2>
+          <div class="tags">
+            <span class="tag green">冷白背景</span>
+            <span class="tag primary">深墨绿主色</span>
+            <span class="tag orange">暖黄可切换</span>
+            <span class="tag blue">少量冷蓝</span>
+            <span class="tag orange">缺口橙色</span>
+            <span class="tag">16px 卡片圆角</span>
+            <span class="tag">柔和边框</span>
+            <span class="tag">低阴影</span>
+            <span class="tag">自定义顶部</span>
+            <span class="tag">自定义 tabbar</span>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>颜色方向</h2>
+          <div class="palette">
+            <div class="swatch page"><span>#F4F7F5</span></div>
+            <div class="swatch surface"><span>#FFFFFF</span></div>
+            <div class="swatch primary"><span>#216E4E</span></div>
+            <div class="swatch blue"><span>#326FA8</span></div>
+            <div class="swatch dark"><span>#0F1713</span></div>
+          </div>
+          <div class="tags">
+            <span class="tag">浅色优先</span>
+            <span class="tag">多套浅色主题</span>
+            <span class="tag">暗黑可用</span>
+            <span class="tag">语义色少而明确</span>
+          </div>
+        </article>
+
+        <article class="card">
+          <h2>组件关键词</h2>
+          <div class="tags">
+            <span class="tag">AppPage</span>
+            <span class="tag">AppNavbar</span>
+            <span class="tag">AppTabbar</span>
+            <span class="tag">MealStatusCard</span>
+            <span class="tag">ActionTile</span>
+            <span class="tag">RecipeCard</span>
+            <span class="tag">FridgeRing</span>
+            <span class="tag">FoodRow</span>
+            <span class="tag">ProfileCard</span>
+            <span class="tag">MenuList</span>
+          </div>
+        </article>
+
+        <article class="card avoid">
+          <h2>避免方向</h2>
+          <div class="tags">
+            <span class="tag orange">不要过度厨房风</span>
+            <span class="tag orange">不要营销首页</span>
+            <span class="tag orange">不要重插画</span>
+            <span class="tag orange">不要大面积渐变</span>
+            <span class="tag orange">不要卡片套卡片</span>
+            <span class="tag orange">不要独立登录页</span>
+            <span class="tag orange">不要业务组件进主包</span>
+          </div>
+        </article>
+      </section>
+
+      <footer class="foot">
+        <strong>设计结论：冷静、清楚、能每天用的家庭餐饮协作工具。</strong>
+        <span>后续实现按 token、页面壳、主包四页、分包页面逐步落地。</span>
+      </footer>
+    </main>
+  </body>
+</html>

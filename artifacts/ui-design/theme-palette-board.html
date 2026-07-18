@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下一餐 Theme Palette Board</title>
+    <style>
+      :root {
+        --bg: #edf3f0;
+        --ink: #17231d;
+        --muted: #607168;
+        --line: rgba(23, 35, 29, 0.12);
+        --card: rgba(255, 255, 255, 0.78);
+        --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 1600px;
+        min-height: 1080px;
+        background:
+          radial-gradient(circle at 12% 10%, rgba(225, 167, 70, 0.18), transparent 30%),
+          radial-gradient(circle at 86% 6%, rgba(33, 110, 78, 0.12), transparent 28%),
+          var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+      }
+
+      .board {
+        padding: 52px;
+      }
+
+      .head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 40px;
+      }
+
+      .kicker {
+        display: inline-flex;
+        align-items: center;
+        height: 32px;
+        padding: 0 13px;
+        border-radius: 999px;
+        background: #fff3d7;
+        color: #9a6417;
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      h1 {
+        margin: 18px 0 0;
+        font-size: 58px;
+        font-weight: 850;
+        line-height: 1.04;
+        letter-spacing: 0;
+      }
+
+      .summary {
+        max-width: 850px;
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1.55;
+      }
+
+      .rule {
+        width: 420px;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--card);
+        backdrop-filter: blur(18px);
+      }
+
+      .rule strong {
+        display: block;
+        font-size: 21px;
+      }
+
+      .rule span {
+        display: block;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      .palettes {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 22px;
+        margin-top: 34px;
+      }
+
+      .palette {
+        min-height: 650px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--card);
+        overflow: hidden;
+        backdrop-filter: blur(18px);
+      }
+
+      .preview {
+        min-height: 390px;
+        padding: 22px;
+        background: var(--page);
+        color: var(--text);
+      }
+
+      .preview.dark {
+        color-scheme: dark;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 28px;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 740;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        height: 25px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        color: var(--primary);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .title {
+        display: block;
+        margin-top: 12px;
+        color: var(--text);
+        font-size: 29px;
+        font-weight: 850;
+        line-height: 1.12;
+      }
+
+      .copy {
+        display: block;
+        margin-top: 9px;
+        color: var(--muted-text);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .card {
+        margin-top: 18px;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--surface);
+        box-shadow: 0 12px 28px var(--shadow);
+      }
+
+      .card strong {
+        display: block;
+        color: var(--text);
+        font-size: 16px;
+      }
+
+      .button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 42px;
+        margin-top: 14px;
+        border-radius: 13px;
+        background: var(--primary);
+        color: var(--button-text);
+        font-size: 14px;
+        font-weight: 780;
+      }
+
+      .meta {
+        padding: 20px 22px 22px;
+      }
+
+      .name {
+        display: block;
+        color: var(--ink);
+        font-size: 20px;
+        font-weight: 840;
+      }
+
+      .desc {
+        display: block;
+        margin-top: 9px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 7px;
+        margin-top: 18px;
+      }
+
+      .swatch {
+        height: 52px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 13px;
+        background: var(--c);
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 29px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .default {
+        --page: #f4f7f5;
+        --surface: #ffffff;
+        --text: #17231d;
+        --muted-text: #607168;
+        --border: rgba(23, 35, 29, 0.1);
+        --primary: #216e4e;
+        --primary-soft: #dff1e8;
+        --button-text: #ffffff;
+        --shadow: rgba(35, 49, 43, 0.08);
+      }
+
+      .warm {
+        --page: #fbf4e5;
+        --surface: #fffaf0;
+        --text: #2d2418;
+        --muted-text: #7b6a52;
+        --border: rgba(86, 63, 30, 0.13);
+        --primary: #b9771f;
+        --primary-soft: #f6dfad;
+        --button-text: #fffaf0;
+        --shadow: rgba(105, 78, 36, 0.1);
+      }
+
+      .olive {
+        --page: #f2f4ea;
+        --surface: #fffef8;
+        --text: #202719;
+        --muted-text: #687059;
+        --border: rgba(45, 58, 28, 0.12);
+        --primary: #647a2f;
+        --primary-soft: #e5ebcf;
+        --button-text: #ffffff;
+        --shadow: rgba(60, 75, 36, 0.08);
+      }
+
+      .cool {
+        --page: #f0f5f8;
+        --surface: #ffffff;
+        --text: #17242d;
+        --muted-text: #60727c;
+        --border: rgba(23, 36, 45, 0.1);
+        --primary: #326fa8;
+        --primary-soft: #e0edf8;
+        --button-text: #ffffff;
+        --shadow: rgba(42, 72, 99, 0.08);
+      }
+
+      .dark-mode {
+        --page: #0f1713;
+        --surface: #17211c;
+        --text: rgba(255, 255, 255, 0.94);
+        --muted-text: rgba(255, 255, 255, 0.62);
+        --border: rgba(255, 255, 255, 0.12);
+        --primary: #6eca94;
+        --primary-soft: rgba(110, 202, 148, 0.16);
+        --button-text: #0f1713;
+        --shadow: rgba(0, 0, 0, 0.2);
+      }
+
+      .recommend {
+        margin-top: 30px;
+        padding: 24px 28px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.68);
+      }
+
+      .recommend strong {
+        font-size: 19px;
+      }
+
+      .recommend span {
+        margin-left: 14px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="board">
+      <header class="head">
+        <div>
+          <span class="kicker">下一餐 / 主题色建议</span>
+          <h1>浅色多主题可切换，<br />暗黑只保留一套</h1>
+          <p class="summary">保留清楚、可扫描的工具感，同时给用户更温馨的暖黄选择。浅色主题可以跟随用户偏好切换；暗黑模式保持单一、稳定、低刺激。</p>
+        </div>
+        <aside class="rule">
+          <strong>主题策略</strong>
+          <span>推荐提供 4 套浅色主题：默认清新绿、温馨暖黄、橄榄自然、冷蓝清爽。暗黑模式不做多主题，只维护一套深绿黑方案。</span>
+        </aside>
+      </header>
+
+      <section class="palettes">
+        <article class="palette">
+          <div class="preview default">
+            <div class="nav"><span>下一餐</span><span>9:41</span></div>
+            <span class="pill">默认推荐</span>
+            <span class="title">今天不用再问吃什么</span>
+            <span class="copy">清爽、可靠，适合作为默认主题。</span>
+            <div class="card"><strong>下一餐还差 2 个决定</strong><span class="copy">主菜待确认，青菜库存不足。</span><div class="button">开始安排</div></div>
+          </div>
+          <div class="meta">
+            <span class="name">清新绿 Default</span>
+            <span class="desc">当前主方向。适合长期默认，兼顾家庭感和工具感。</span>
+            <div class="swatches"><span class="swatch" style="--c:#f4f7f5"></span><span class="swatch" style="--c:#ffffff"></span><span class="swatch" style="--c:#216e4e"></span><span class="swatch" style="--c:#dff1e8"></span><span class="swatch" style="--c:#17231d"></span></div>
+            <div class="tags"><span class="tag">默认</span><span class="tag">清爽</span><span class="tag">可信赖</span></div>
+          </div>
+        </article>
+
+        <article class="palette">
+          <div class="preview warm">
+            <div class="nav"><span>下一餐</span><span>9:41</span></div>
+            <span class="pill">温馨模式</span>
+            <span class="title">今晚吃点热乎的</span>
+            <span class="copy">更像家庭餐桌，但不做重厨房风。</span>
+            <div class="card"><strong>购物清单待补齐</strong><span class="copy">番茄、鸡蛋、青菜建议一起买。</span><div class="button">加入清单</div></div>
+          </div>
+          <div class="meta">
+            <span class="name">温馨暖黄 Warm</span>
+            <span class="desc">满足温馨感诉求。推荐作为用户可选主题，而不是唯一默认。</span>
+            <div class="swatches"><span class="swatch" style="--c:#fbf4e5"></span><span class="swatch" style="--c:#fffaf0"></span><span class="swatch" style="--c:#b9771f"></span><span class="swatch" style="--c:#f6dfad"></span><span class="swatch" style="--c:#2d2418"></span></div>
+            <div class="tags"><span class="tag">温馨</span><span class="tag">家庭</span><span class="tag">暖黄</span></div>
+          </div>
+        </article>
+
+        <article class="palette">
+          <div class="preview olive">
+            <div class="nav"><span>下一餐</span><span>9:41</span></div>
+            <span class="pill">自然模式</span>
+            <span class="title">库存和菜谱放一起</span>
+            <span class="copy">自然、低饱和，更接近食材和生活感。</span>
+            <div class="card"><strong>冰箱健康度 72%</strong><span class="copy">2 个关键食材不足。</span><div class="button">查看缺口</div></div>
+          </div>
+          <div class="meta">
+            <span class="name">橄榄自然 Olive</span>
+            <span class="desc">比默认绿更柔和，适合偏自然、食材、健康的视觉语气。</span>
+            <div class="swatches"><span class="swatch" style="--c:#f2f4ea"></span><span class="swatch" style="--c:#fffef8"></span><span class="swatch" style="--c:#647a2f"></span><span class="swatch" style="--c:#e5ebcf"></span><span class="swatch" style="--c:#202719"></span></div>
+            <div class="tags"><span class="tag">自然</span><span class="tag">低饱和</span><span class="tag">食材感</span></div>
+          </div>
+        </article>
+
+        <article class="palette">
+          <div class="preview cool">
+            <div class="nav"><span>下一餐</span><span>9:41</span></div>
+            <span class="pill">清爽模式</span>
+            <span class="title">多人决定更清楚</span>
+            <span class="copy">偏工具和信息管理，适合重协作场景。</span>
+            <div class="card"><strong>3 人参与点菜</strong><span class="copy">今晚主菜投票还差 1 票。</span><div class="button">继续投票</div></div>
+          </div>
+          <div class="meta">
+            <span class="name">冷蓝清爽 Cool</span>
+            <span class="desc">弱化餐饮情绪，强化协作和清单管理的产品感。</span>
+            <div class="swatches"><span class="swatch" style="--c:#f0f5f8"></span><span class="swatch" style="--c:#ffffff"></span><span class="swatch" style="--c:#326fa8"></span><span class="swatch" style="--c:#e0edf8"></span><span class="swatch" style="--c:#17242d"></span></div>
+            <div class="tags"><span class="tag">清爽</span><span class="tag">协作</span><span class="tag">信息感</span></div>
+          </div>
+        </article>
+
+        <article class="palette">
+          <div class="preview dark dark-mode">
+            <div class="nav"><span>下一餐</span><span>9:41</span></div>
+            <span class="pill">暗黑唯一</span>
+            <span class="title">夜间也不刺眼</span>
+            <span class="copy">暗黑只维护一套，降低设计和实现复杂度。</span>
+            <div class="card"><strong>下一餐计划</strong><span class="copy">继续保持绿色动作和低对比背景。</span><div class="button">查看计划</div></div>
+          </div>
+          <div class="meta">
+            <span class="name">深绿黑 Dark</span>
+            <span class="desc">唯一暗黑模式。所有浅色主题切到暗黑时都进入这一套。</span>
+            <div class="swatches"><span class="swatch" style="--c:#0f1713"></span><span class="swatch" style="--c:#17211c"></span><span class="swatch" style="--c:#6eca94"></span><span class="swatch" style="--c:#173225"></span><span class="swatch" style="--c:#ffffff"></span></div>
+            <div class="tags"><span class="tag">唯一暗黑</span><span class="tag">低刺激</span><span class="tag">稳定</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="recommend">
+        <strong>推荐落地顺序：</strong>
+        <span>先实现清新绿默认 + 温馨暖黄切换 + 唯一暗黑；橄榄自然和冷蓝清爽可以作为后续主题扩展。</span>
+      </section>
+    </main>
+  </body>
+</html>

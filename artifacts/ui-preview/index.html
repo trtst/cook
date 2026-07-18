@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下一餐 UI Preview</title>
+    <style>
+      :root {
+        --preview-bg: #e8edf0;
+        --color-brand-h: 145;
+        --color-brand-s: 40%;
+        --color-brand-l: 31%;
+        --color-primary: hsl(var(--color-brand-h), var(--color-brand-s), var(--color-brand-l));
+        --color-primary-soft: hsl(var(--color-brand-h), 32%, 92%);
+        --color-page: #f7f4ee;
+        --color-surface: #fffdf8;
+        --color-surface-muted: #f1ecdf;
+        --color-text: #1f2933;
+        --color-text-secondary: #4b5563;
+        --color-text-tertiary: #6b7280;
+        --color-text-inverse: #ffffff;
+        --color-border: #e5dfd4;
+        --color-divider: rgba(31, 41, 51, 0.12);
+        --color-tabbar-bg: rgba(255, 253, 248, 0.94);
+        --shadow-floating: 0 -4px 14px rgba(31, 41, 51, 0.08);
+        --font-family-base: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+        --font-size-sm: 12px;
+        --font-size-md: 14px;
+        --font-size-lg: 16px;
+        --font-size-xl: 24px;
+        --line-height-normal: 1.5;
+        --space-sm: 6px;
+        --space-md: 12px;
+        --space-lg: 16px;
+        --space-page: 16px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-pill: 999px;
+      }
+
+      body[data-theme="dark"] {
+        --preview-bg: #0b0f0d;
+        --color-primary: hsl(var(--color-brand-h), 42%, 58%);
+        --color-primary-soft: rgba(74, 156, 109, 0.18);
+        --color-page: #101513;
+        --color-surface: #19201d;
+        --color-surface-muted: #222b27;
+        --color-text: rgba(255, 255, 255, 0.92);
+        --color-text-secondary: rgba(255, 255, 255, 0.72);
+        --color-text-tertiary: rgba(255, 255, 255, 0.54);
+        --color-text-inverse: #101513;
+        --color-border: rgba(255, 255, 255, 0.14);
+        --color-divider: rgba(255, 255, 255, 0.12);
+        --color-tabbar-bg: rgba(25, 32, 29, 0.94);
+        --shadow-floating: 0 -4px 14px rgba(0, 0, 0, 0.26);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--preview-bg);
+        color: var(--color-text);
+        font-family: var(--font-family-base);
+      }
+
+      .preview {
+        display: grid;
+        grid-template-columns: repeat(4, 390px);
+        gap: 28px;
+        padding: 32px;
+      }
+
+      .phone {
+        position: relative;
+        overflow: hidden;
+        width: 390px;
+        height: 844px;
+        border: 1px solid rgba(0, 0, 0, 0.14);
+        border-radius: 32px;
+        background: var(--color-page);
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+      }
+
+      body[data-theme="dark"] .phone {
+        border-color: rgba(255, 255, 255, 0.1);
+        box-shadow: 0 20px 56px rgba(0, 0, 0, 0.5);
+      }
+
+      .navbar {
+        height: 88px;
+        padding-top: 44px;
+        background: var(--color-page);
+      }
+
+      .navbar__inner {
+        display: grid;
+        grid-template-columns: 72px 1fr 72px;
+        align-items: center;
+        height: 44px;
+        padding: 0 16px;
+      }
+
+      .navbar__title {
+        overflow: hidden;
+        color: var(--color-text);
+        font-size: var(--font-size-lg);
+        font-weight: 700;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .body {
+        height: calc(100% - 88px - 84px);
+        padding: 16px;
+      }
+
+      .hero {
+        margin-bottom: 16px;
+      }
+
+      .hero__title {
+        display: block;
+        font-size: 26px;
+        font-weight: 760;
+        line-height: 1.2;
+      }
+
+      .hero__description,
+      .description {
+        display: block;
+        margin-top: 6px;
+        color: var(--color-text-tertiary);
+        font-size: var(--font-size-md);
+        line-height: var(--line-height-normal);
+      }
+
+      .card {
+        margin-bottom: 14px;
+        padding: 18px 16px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+      }
+
+      .card--soft {
+        border-color: transparent;
+        background: var(--color-primary-soft);
+      }
+
+      .card__title,
+      .title {
+        display: block;
+        color: var(--color-text);
+        font-size: var(--font-size-lg);
+        font-weight: 650;
+      }
+
+      .button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 44px;
+        margin-top: 16px;
+        border-radius: var(--radius-md);
+        background: var(--color-primary);
+        color: var(--color-text-inverse);
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .section {
+        margin-top: 14px;
+        padding: 16px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+      }
+
+      .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .quick {
+        min-height: 72px;
+        padding: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+      }
+
+      .quick__label {
+        display: block;
+        color: var(--color-text);
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .quick__meta {
+        display: block;
+        margin-top: 4px;
+        color: var(--color-text-tertiary);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .tabbar {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        height: 84px;
+        padding-bottom: 10px;
+        border-top: 1px solid var(--color-divider);
+        background: var(--color-tabbar-bg);
+        box-shadow: var(--shadow-floating);
+        backdrop-filter: blur(12px);
+      }
+
+      .tab {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-text-tertiary);
+        font-size: var(--font-size-sm);
+        font-weight: 650;
+      }
+
+      .tab--active {
+        color: var(--color-primary);
+      }
+
+      .tab--active::after {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        width: 18px;
+        height: 3px;
+        border-radius: var(--radius-pill);
+        background: var(--color-primary);
+        content: "";
+        transform: translateX(-50%);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="preview">
+      <section class="phone">
+        <nav class="navbar">
+          <div class="navbar__inner"><span></span><span class="navbar__title">下一餐</span><span></span></div>
+        </nav>
+        <div class="body">
+          <div class="hero">
+            <span class="hero__title">下一餐</span>
+            <span class="hero__description">不是菜谱大全，而是你家的下一餐。</span>
+          </div>
+          <div class="card">
+            <span class="card__title">登录后开始安排下一餐</span>
+            <span class="description">登录后可以同步餐厅、计划、冰箱和购物清单。</span>
+            <div class="button">微信登录</div>
+          </div>
+          <div class="quick-grid">
+            <div class="quick"><span class="quick__label">下一餐计划</span><span class="quick__meta">安排今晚吃什么</span></div>
+            <div class="quick"><span class="quick__label">点菜征集</span><span class="quick__meta">家人一起决定</span></div>
+            <div class="quick"><span class="quick__label">冰箱缺口</span><span class="quick__meta">补齐缺少食材</span></div>
+            <div class="quick"><span class="quick__label">购物清单</span><span class="quick__meta">采购前统一检查</span></div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab tab--active">下一餐</div><div class="tab">菜谱</div><div class="tab">冰箱</div><div class="tab">我的</div>
+        </div>
+      </section>
+
+      <section class="phone">
+        <nav class="navbar">
+          <div class="navbar__inner"><span></span><span class="navbar__title">菜谱</span><span></span></div>
+        </nav>
+        <div class="body">
+          <span class="title">菜谱</span>
+          <span class="description">未登录时展示系统菜谱大厅，登录后再接入私人菜谱。</span>
+          <div class="section">
+            <span class="card__title">系统菜谱大厅</span>
+            <span class="description">公共菜谱、导入入口和分类筛选可以先在这里承接。</span>
+          </div>
+          <div class="card">
+            <span class="card__title">登录后查看你的菜谱</span>
+            <span class="description">私人菜谱、导入和编辑能力需要登录后使用。</span>
+            <div class="button">微信登录</div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab">下一餐</div><div class="tab tab--active">菜谱</div><div class="tab">冰箱</div><div class="tab">我的</div>
+        </div>
+      </section>
+
+      <section class="phone">
+        <nav class="navbar">
+          <div class="navbar__inner"><span></span><span class="navbar__title">冰箱</span><span></span></div>
+        </nav>
+        <div class="body">
+          <div class="card card--soft">
+            <span class="card__title">登录后使用冰箱</span>
+            <span class="description">冰箱内容跟随当前餐厅，需要登录后查看。</span>
+            <div class="button">微信登录</div>
+          </div>
+          <div class="section">
+            <span class="card__title">冰箱</span>
+            <span class="description">餐厅冰箱、食材状态和缺口计算将在这里接入。</span>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab">下一餐</div><div class="tab">菜谱</div><div class="tab tab--active">冰箱</div><div class="tab">我的</div>
+        </div>
+      </section>
+
+      <section class="phone">
+        <nav class="navbar">
+          <div class="navbar__inner"><span></span><span class="navbar__title">我的</span><span></span></div>
+        </nav>
+        <div class="body">
+          <div class="card">
+            <span class="card__title">登录后查看我的餐厅</span>
+            <span class="description">登录后可以查看账号、餐厅列表、成员身份和设置。</span>
+            <div class="button">微信登录</div>
+          </div>
+          <div class="section">
+            <span class="card__title">我的</span>
+            <span class="description">个人信息、餐厅列表、角色和账号设置将在这里接入。</span>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab">下一餐</div><div class="tab">菜谱</div><div class="tab">冰箱</div><div class="tab tab--active">我的</div>
+        </div>
+      </section>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.search);
+      document.body.dataset.theme = params.get("theme") === "dark" ? "dark" : "light";
+    </script>
+  </body>
+</html>
