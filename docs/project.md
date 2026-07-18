@@ -95,6 +95,49 @@ infra/
 3. 后台管理独立部署，不与小程序共用前端资源。
 4. `docs/cook/` 是冻结方案来源，顶层 `docs/*.md` 是当前执行规则。
 
+## 扁平化规则
+
+前端路由、后端接口、后台路由和工程目录都默认扁平化。复杂领域关系通过参数、DTO、类型、服务、注释和文档表达，不通过多层目录或多段 URL 表达。
+
+统一规则：
+
+1. 小程序路由默认只表达 `分包 / 页面`，不把餐厅、菜谱、版本、状态流全部写进路径。
+2. 后端 API 默认只表达资源和动作的最短稳定入口，不按数据库关系层层嵌套。
+3. 后台路由按运营页面扁平组织，不按菜单树、权限树或数据模型树嵌套。
+4. NestJS 模块按领域一级拆分，不在模块下继续堆多层子模块。
+5. 共享包只保留一级能力目录，避免 `domain/recipe/version/public/...` 这类路径。
+6. 路径超过两个业务语义层级时，必须先确认是否可以用 query、body、DTO、类型或注释承载上下文。
+
+推荐方向：
+
+```text
+pages_recipe/detail
+pages_meal/poll
+pages_pantry/gap
+
+GET /restaurants/mine
+GET /recipes/{recipeId}
+POST /meal-plans
+GET /admin/restaurants
+
+modules/
+  recipes/
+  meals/
+  shopping/
+```
+
+避免方向：
+
+```text
+pages/restaurant/recipe/version/detail
+pages/admin/content/recipe/import/review
+
+GET /restaurants/{restaurantId}/recipes/{recipeId}/versions/{versionId}/ingredients
+POST /admin/content/recipes/import/batches/{batchId}/rows/{rowId}/publish
+
+modules/restaurants/recipes/versions/public/adoptions
+```
+
 ## 模块状态
 
 | 状态 | 定义 | 实现要求 |

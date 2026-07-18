@@ -19,15 +19,21 @@
    - 项目定位、V1 范围、技术栈、工程结构、领域模型、事务边界和数据库约束。
 3. `technical.md`
    - 技术规则、接口协议、目录边界、命名规则、代码风格和验证规则。
-4. `architecture.md`
+4. `api-contract.md`
+   - 三端并行前的共享 API 契约、错误码、分页、鉴权、Auth/User/Restaurant 纵切链路。
+5. `uniapp.md`
+   - uni-app 小程序端工程规则、分包边界、生命周期、请求、滚动、分享和样式兼容。
+6. `uniapp-architecture.md`
+   - `apps/client` 小程序目录骨架、主包/分包规划、登录组件、请求层、平台适配层和 store 边界。
+7. `architecture.md`
    - 前后端分层、依赖方向、接口边界和数据流。
-5. `decision.md`
+8. `decision.md`
    - 范围写法、不做项、交付口径和边界确认规则。
-6. `components.md`
+9. `components.md`
    - 前端组件准入、拆分边界、命名和输入输出规则。
-7. `runbook.md`
+10. `runbook.md`
    - 启动、调试、验证、联调和交付说明。
-8. `docs/cook/`
+11. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
 
 ## 文档地图
@@ -38,6 +44,12 @@
   - 开发者项目总览，中文完整版。
 - `technical.md`
   - 技术栈、接口、工程规则、命名规则和代码风格。
+- `api-contract.md`
+  - 三端并行前的共享 API 契约、错误码、分页、鉴权、Auth/User/Restaurant 纵切链路。
+- `uniapp.md`
+  - uni-app 小程序端工程规则、分包边界、生命周期、请求、滚动、分享和样式兼容。
+- `uniapp-architecture.md`
+  - `apps/client` 小程序目录骨架、主包/分包规划、登录组件、请求层、平台适配层和 store 边界。
 - `architecture.md`
   - 前后端分层、依赖方向、接口边界和数据流。
 - `decision.md`

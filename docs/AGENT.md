@@ -4,7 +4,7 @@
 
 This is the short guide for AI-assisted vibe coding in this repository.
 
-Read this file first. Use `project.md` for the full developer overview and use `docs/cook/*` only when you need the frozen product, schema, or SQL details.
+Read this file first. Use `project.md` for the full developer overview, use `api-contract.md` before API, client, or admin integration work, use `uniapp.md` before mini program client work, use `uniapp-architecture.md` before scaffolding or changing `apps/client`, and use `docs/cook/*` only when you need the frozen product, schema, or SQL details.
 
 ## Product
 
@@ -57,6 +57,23 @@ Rules:
 2. Shared domain types belong in `packages/domain`.
 3. The admin app is independent from the mini program client.
 4. Keep product source material in `docs/cook/*`; keep current project rules in top-level `docs/*.md`.
+5. For uni-app mini program engineering rules, read `docs/uniapp.md` instead of duplicating those rules here.
+6. For the `apps/client` scaffold, main package, subpackages, login component, request layer, platform adapter, and Pinia boundaries, read `docs/uniapp-architecture.md`.
+7. For shared API response, error codes, auth schemes, DTO boundaries, and the first Auth/User/Restaurant vertical slice, read `docs/api-contract.md`.
+
+## Flat Shape Rules
+
+Keep folders, routes, and API paths flat across client, API, and admin.
+
+Rules:
+
+1. Do not mirror domain model depth in folders or routes.
+2. Mini program routes should be `package/page`, not `package/domain/action/page`.
+3. API paths should be short resource paths. Prefer query/body fields over deep URLs.
+4. Admin routes should follow feature pages, not menu nesting depth.
+5. Backend modules should stay one module per domain area, not nested domain trees.
+6. If a path needs more than two semantic levels, add a short comment or doc note explaining why.
+7. Use DTOs, types, guards, services, and comments to carry complexity. Do not encode complexity in paths.
 
 ## V1 Scope
 

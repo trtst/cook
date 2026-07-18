@@ -19,6 +19,8 @@
 - 平台能力：业务代码不直接调用 `wx.*`，统一通过 `packages/platform` 适配层
 - 类型共享：稳定领域类型进入 `packages/domain`
 - 版本约束：以 `package.json` 和锁文件实际版本为准
+- 小程序工程规则：见 `docs/uniapp.md`
+- 小程序落地基线：见 `docs/uniapp-architecture.md`
 
 ### 后端技术栈
 
@@ -31,6 +33,7 @@
 - 异步可靠交付：PostgreSQL Outbox，V1 建表但不启动 Worker
 - API 契约：OpenAPI 3.0
 - 返回格式：统一 JSON 返回结构
+- 契约基线：见 `docs/api-contract.md`
 - 配置方式：环境变量或被 git 忽略的本地配置文件
 
 ### 后台技术栈
@@ -54,6 +57,8 @@
 7. 是否触达 Worker、Outbox、公共 UGC、支付、饭票、会员或合规闸门。
 
 ## 接口协议规则
+
+详细契约基线见 `docs/api-contract.md`。本节只保留全局摘要。
 
 1. 前后端接口统一返回 JSON。
 2. 所有接口固定使用 `code`、`message`、`data`、`serverTime` 顶层字段。
@@ -129,6 +134,19 @@
   - 跨模块复用的数据类型定义
 - `composables/`
   - 可复用的组合式逻辑，前提是边界已经稳定
+
+## 扁平化规则
+
+前端页面、后端接口、后台页面和包目录都默认扁平化。
+
+1. 目录层级默认不超过 3 层，路由和接口默认不超过 2 个业务语义层级。
+2. 不把数据库关系、菜单树、权限树或领域模型完整搬进路径。
+3. 小程序路由按入口页命名，优先 `pages_recipe/detail`，不要 `pages/restaurant/recipe/version/detail`。
+4. 后端接口按稳定资源命名，优先 `GET /recipes/{recipeId}`、`POST /meal-plans`，不要多层父资源嵌套。
+5. 后台路由按运营动作命名，优先 `/admin/recipes`、`/admin/imports`，不要 `/admin/content/recipe/import/review/list`。
+6. NestJS 模块保持一级领域模块，复杂流程放 service、repo、DTO 和事务边界，不继续拆深层模块目录。
+7. 主题目录保持 `src/themes/{skinId}`，不再增加 `skins/`、`templates/`、`variants/` 等中间层。
+8. 如果超过默认层级，必须在代码注释或文档中说明原因。
 
 ## 命名规则
 
