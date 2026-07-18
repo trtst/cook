@@ -1,158 +1,187 @@
 <template>
   <Layout
-    title="下一餐"
+    title=""
     current-tab="home"
     :show-left="false"
     full-screen
     :navbar-placeholder="false"
     navbar-transparent
   >
-    <view class="home" :class="themeClasses">
-      <view class="hero" :style="heroStyle">
-        <view class="hero__copy">
-          <text class="hero__eyebrow">下一餐</text>
-          <text class="hero__title">今晚吃什么，先看这一屏</text>
-          <text class="hero__description">不是菜谱大全，而是你家的下一餐。</text>
-        </view>
-        <view class="hero-scene">
-          <view class="hero-scene__table" />
-          <view class="hero-scene__plate">
-            <view class="hero-scene__rice" />
-            <view class="hero-scene__leaf hero-scene__leaf--left" />
-            <view class="hero-scene__leaf hero-scene__leaf--right" />
-            <view class="hero-scene__egg" />
+    <template #navbar-left>
+      <view class="table-nav__selector" hover-class="table-nav__selector--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/switch/index')">
+        <text class="restaurant-bar__label">当前饭桌</text>
+        <text class="restaurant-bar__name">{{ restaurantName }}</text>
+      </view>
+    </template>
+    <view class="table-page" :class="themeClasses">
+      <view class="table-hero" :style="heroStyle">
+        <view class="hero-main">
+          <view class="hero-copy">
+            <text class="hero-copy__eyebrow">{{ memberCountText }}</text>
+            <text class="hero-copy__title">{{ heroTitle }}</text>
+            <text class="hero-copy__description">{{ heroDescription }}</text>
           </view>
-          <view class="hero-scene__bowl" />
+
+          <view class="table-scene">
+            <view class="table-scene__cloth" />
+            <view class="table-scene__plate">
+              <view class="table-scene__rice" />
+              <view class="table-scene__leaf table-scene__leaf--left" />
+              <view class="table-scene__leaf table-scene__leaf--right" />
+              <view class="table-scene__egg" />
+            </view>
+            <view class="table-scene__bowl" />
+            <view class="table-scene__cup" />
+          </view>
         </view>
       </view>
 
-      <view class="home-content">
-        <view
-          class="notice-strip"
-          hover-class="notice-strip--hover"
-          hover-stay-time="100"
-          @click="navigateTo('/pages_meal/poll/index')"
-        >
-          <view class="notice-strip__icon" aria-hidden="true">
-            <view class="notice-strip__megaphone">
-              <view class="notice-strip__megaphone-horn" />
-              <view class="notice-strip__megaphone-handle" />
+      <view class="table-content">
+        <view class="feature-board">
+          <view class="feature-card feature-card--main" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_meal/plan/index')">
+            <view class="feature-card__copy">
+              <text class="feature-card__title">饭局</text>
+              <text class="feature-card__subtitle">今晚吃啥先定个方向</text>
+            </view>
+            <view class="feature-card__art feature-card__art--meal">
+              <view class="feature-card__plate">
+                <view class="feature-card__food" />
+              </view>
             </view>
           </view>
-          <text class="notice-strip__message">你还有晚餐投票未完成，截止时间 18:00</text>
-        </view>
 
-        <view class="home-board">
-          <view class="entry-shell">
-            <view
-              class="entry-card entry-card--primary"
-              hover-class="entry-card--hover"
-              hover-stay-time="100"
-              @click="navigateTo('/pages_meal/plan/index')"
-            >
-              <view class="entry-card__header">
-                <text class="entry-card__mark">(</text>
-                <text class="entry-card__title">今晚吃啥</text>
-                <text class="entry-card__mark">)</text>
-              </view>
-              <text class="entry-card__subtitle">#把全家想吃的凑上</text>
-
-              <view class="meal-photo">
-                <view class="meal-photo__plate">
-                  <view class="meal-photo__rice" />
-                  <view class="meal-photo__leaf meal-photo__leaf--left" />
-                  <view class="meal-photo__leaf meal-photo__leaf--right" />
-                  <view class="meal-photo__egg" />
-                </view>
-                <view class="meal-photo__steam meal-photo__steam--one" />
-                <view class="meal-photo__steam meal-photo__steam--two" />
-              </view>
-
-              <view class="quick-button">
-                <text class="quick-button__text">开始安排</text>
-                <text class="quick-button__icon">⌁</text>
+          <view class="feature-side">
+            <view class="feature-card feature-card--side feature-card--mint" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/members/index')">
+              <text class="feature-card__title">成员</text>
+              <text class="feature-card__subtitle">一起吃饭的人</text>
+              <view class="feature-card__mini feature-card__mini--members">
+                <text class="feature-card__mini-text">4</text>
               </view>
             </view>
 
-            <view class="entry-side">
-              <view
-                v-for="item in sideEntries"
-                :key="item.title"
-                class="entry-card entry-card--side"
-                :class="item.className"
-                hover-class="entry-card--hover"
-                hover-stay-time="100"
-                @click="navigateTo(item.url)"
-              >
-                <text class="entry-card__side-title">{{ item.title }}</text>
-                <text class="entry-card__side-subtitle">{{ item.subtitle }}</text>
-                <view class="side-illustration" :class="item.illustrationClass">
-                  <view class="side-illustration__body" />
-                  <view class="side-illustration__accent" />
-                </view>
+            <view class="feature-card feature-card--side feature-card--green" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_recipe/list/index')">
+              <text class="feature-card__title">常吃</text>
+              <text class="feature-card__subtitle">顺手复做</text>
+              <view class="feature-card__mini feature-card__mini--recipe">
+                <view class="feature-card__mini-dot" />
               </view>
             </view>
           </view>
         </view>
 
-        <view class="recommend-section">
-          <view class="recommend-section__header">
-            <text class="recommend-section__title webfont">{{ inspirationSection.title }}</text>
-            <text class="recommend-section__action" @click="navigateTo(inspirationSection.moreUrl)">
-              {{ inspirationSection.actionText }}
-            </text>
+        <view class="action-dock">
+          <view
+            v-for="item in quickActions"
+            :key="item.title"
+            class="dock-action"
+            hover-class="dock-action--hover"
+            hover-stay-time="100"
+            @click="navigateTo(item.url)"
+          >
+            <view class="dock-action__icon" :class="item.className">
+              <text class="dock-action__icon-text">{{ item.icon }}</text>
+            </view>
+            <text class="dock-action__title">{{ item.title }}</text>
           </view>
-          <scroll-view class="inspiration-scroll" scroll-x :show-scrollbar="false" enable-flex>
+        </view>
+
+        <view v-if="hasMealPlan" class="decision-card" hover-class="decision-card--hover" hover-stay-time="100" @click="navigateTo('/pages_meal/plan/index')">
+          <view class="decision-card__header">
+            <view>
+              <text class="decision-card__label">饭局安排</text>
+              <text class="decision-card__title">先把今晚定下来</text>
+            </view>
+            <view class="decision-card__badge">
+              <text class="decision-card__badge-text">征集中</text>
+            </view>
+          </view>
+
+          <view class="candidate-list">
+            <view v-for="item in mealCandidates" :key="item.name" class="candidate-item">
+              <view class="candidate-item__rank">
+                <text class="candidate-item__rank-text">{{ item.rank }}</text>
+              </view>
+              <view class="candidate-item__main">
+                <text class="candidate-item__name">{{ item.name }}</text>
+                <text class="candidate-item__meta">{{ item.meta }}</text>
+              </view>
+              <text class="candidate-item__votes">{{ item.votes }}</text>
+            </view>
+          </view>
+
+          <view class="decision-progress">
+            <view class="decision-progress__track">
+              <view class="decision-progress__value" />
+            </view>
+            <text class="decision-progress__text">2/4 已表态</text>
+          </view>
+
+          <view class="decision-card__footer">
+            <text class="decision-card__hint">18:00 前确认，确认后自动看缺什么</text>
+            <text class="decision-card__action">去确认</text>
+          </view>
+        </view>
+
+        <view class="table-section">
+          <view class="section-heading">
+            <text class="section-heading__title">饭桌动静</text>
+            <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">全部</text>
+          </view>
+          <view class="family-feed">
+            <view v-for="item in familyFeed" :key="item.title" class="feed-item">
+              <view class="feed-item__avatar" :class="item.avatarClass">
+                <text class="feed-item__avatar-text">{{ item.avatar }}</text>
+              </view>
+              <view class="feed-item__content">
+                <text class="feed-item__title">{{ item.title }}</text>
+                <text class="feed-item__description">{{ item.description }}</text>
+              </view>
+              <text class="feed-item__time">{{ item.time }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="pantry-panel">
+          <view class="pantry-panel__header">
+            <view>
+              <text class="pantry-panel__label">买菜和冰箱</text>
+              <text class="pantry-panel__title">今晚还差 3 样</text>
+            </view>
+            <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去买菜</text>
+          </view>
+
+          <view class="pantry-list">
+            <view v-for="item in pantryItems" :key="item.name" class="pantry-item">
+              <view class="pantry-item__dot" :class="item.className" />
+              <text class="pantry-item__name">{{ item.name }}</text>
+              <text class="pantry-item__state">{{ item.state }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="table-section table-section--recipes">
+          <view class="section-heading">
+              <text class="section-heading__title">常吃清单</text>
+            <text class="section-heading__action" @click="navigateTo('/pages_recipe/list/index')">菜谱</text>
+          </view>
+          <scroll-view class="recipe-scroll" scroll-x :show-scrollbar="false" enable-flex>
             <view
-              v-for="item in inspirationSection.items"
+              v-for="item in familyRecipes"
               :key="item.name"
-              class="inspiration-card"
-              hover-class="inspiration-card--hover"
+              class="family-recipe"
+              hover-class="family-recipe--hover"
               hover-stay-time="100"
-              @click="navigateTo(item.url)"
+              @click="navigateTo('/pages_recipe/detail/index')"
             >
-              <view class="inspiration-card__visual" :class="item.visualClass">
-                <view class="inspiration-card__plate">
-                  <view class="inspiration-card__food" />
+              <view class="family-recipe__visual" :class="item.visualClass">
+                <view class="family-recipe__plate">
+                  <view class="family-recipe__food" />
                 </view>
               </view>
-              <text class="inspiration-card__name">{{ item.name }}</text>
-              <view class="inspiration-card__meta">
-                <text class="inspiration-card__scene">{{ item.scene }} / {{ item.difficulty }}</text>
-                <text class="inspiration-card__time">{{ item.duration }}</text>
-              </view>
+              <text class="family-recipe__name">{{ item.name }}</text>
+              <text class="family-recipe__meta">{{ item.meta }}</text>
             </view>
           </scroll-view>
-        </view>
-
-        <view class="recommend-section topic-section">
-          <view class="recommend-section__header">
-            <text class="recommend-section__title webfont">{{ topicSection.title }}</text>
-            <text class="recommend-section__action" @click="navigateTo(topicSection.moreUrl)">
-              {{ topicSection.actionText }}
-            </text>
-          </view>
-          <view class="topic-list">
-            <view
-              v-for="item in topicSection.items"
-              :key="item.title"
-              class="topic-card"
-              :class="item.visualClass"
-              hover-class="topic-card--hover"
-              hover-stay-time="100"
-              @click="navigateTo(item.url)"
-            >
-              <view class="topic-card__art">
-                <view class="topic-card__plate">
-                  <view class="topic-card__food" />
-                </view>
-              </view>
-              <view class="topic-card__content">
-                <text class="topic-card__title">{{ item.title }}</text>
-                <text class="topic-card__description">{{ item.description }}</text>
-              </view>
-            </view>
-          </view>
         </view>
       </view>
     </view>
@@ -163,89 +192,113 @@
 import { computed } from "vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
+import { useRestaurantStore } from "@/stores/restaurant";
 
-const HOME_NAV_GAP = 20;
+const HOME_NAV_GAP = 16;
 const { navBarTotalHeight } = useSystemInfo();
 const { themeClasses } = useTheme();
+const restaurantStore = useRestaurantStore();
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`
 }));
 
-const sideEntries = [
+const restaurantName = computed(() => restaurantStore.currentRestaurant?.name ?? "我的饭桌");
+const memberCountText = computed(() => {
+  const count = restaurantStore.currentRestaurant?.memberCount ?? 4;
+  return `${count} 人饭桌`;
+});
+const hasMealPlan = false;
+
+const heroTitle = computed(() => (hasMealPlan ? "今晚 18:30 开饭" : "今晚谁来定菜？"));
+const heroDescription = computed(() =>
+  hasMealPlan ? "3 道候选菜，2 人已表态，还有成员没确认。" : "还没安排饭局，先记想吃或发起点菜。"
+);
+
+const mealCandidates = [
+  { rank: "1", name: "番茄牛腩", meta: "成员想吃 · 45 分钟", votes: "2 票" },
+  { rank: "2", name: "青椒炒蛋", meta: "有人推荐 · 快手菜", votes: "1 票" },
+  { rank: "3", name: "菌菇鸡汤", meta: "周末常做 · 适合配饭", votes: "待定" }
+];
+
+const quickActions = [
   {
-    title: "我的菜谱",
-    subtitle: "常吃有谱",
-    url: "/pages_recipe/list/index",
-    className: "entry-card--mint",
-    illustrationClass: "side-illustration--book"
+    title: "我想吃",
+    subtitle: "先记一口",
+    icon: "+",
+    url: "/pages_meal/wish/index",
+    className: "quick-action--primary"
   },
   {
-    title: "食材与采购",
-    subtitle: "缺啥马上补",
-    url: "/pages_pantry/index/index",
-    className: "entry-card--aqua",
-    illustrationClass: "side-illustration--bag"
+    title: "点菜",
+    subtitle: "问问大家",
+    icon: "!",
+    url: "/pages_meal/poll/index",
+    className: "quick-action--mint"
+  },
+  {
+    title: "随机",
+    subtitle: "不纠结",
+    icon: "?",
+    url: "/pages_meal/random/index",
+    className: "quick-action--aqua"
+  },
+  {
+    title: "缺什么",
+    subtitle: "买菜前看",
+    icon: "✓",
+    url: "/pages_pantry/gap/index",
+    className: "quick-action--soft"
   }
 ];
 
-const inspirationSection = {
-  title: "吃点什么",
-  actionText: "换一批",
-  moreUrl: "/pages_recipe/system/index",
-  items: [
-    {
-      name: "鸡蛋三明治",
-      scene: "早餐",
-      difficulty: "简单",
-      duration: "10 分钟",
-      url: "/pages_recipe/detail/index",
-      visualClass: "inspiration-card__visual--breakfast"
-    },
-    {
-      name: "番茄牛腩",
-      scene: "家常",
-      difficulty: "中等",
-      duration: "45 分钟",
-      url: "/pages_recipe/detail/index",
-      visualClass: "inspiration-card__visual--dinner"
-    },
-    {
-      name: "芒果酸奶杯",
-      scene: "甜品",
-      difficulty: "简单",
-      duration: "8 分钟",
-      url: "/pages_recipe/detail/index",
-      visualClass: "inspiration-card__visual--dessert"
-    }
-  ]
-};
+const familyFeed = [
+  {
+    avatar: "A",
+    title: "有人想吃番茄牛腩",
+    description: "顺手补一点香菜，今晚就能做。",
+    time: "刚刚",
+    avatarClass: "feed-item__avatar--rose"
+  },
+  {
+    avatar: "B",
+    title: "有人投了青椒炒蛋",
+    description: "工作日简单点，十几分钟能上桌。",
+    time: "8 分钟",
+    avatarClass: "feed-item__avatar--green"
+  },
+  {
+    avatar: "我",
+    title: "购物清单新增 5 项",
+    description: "牛腩、番茄、鸡蛋、菌菇和酸奶。",
+    time: "今天",
+    avatarClass: "feed-item__avatar--blue"
+  }
+];
 
-const topicSection = {
-  title: "美食专题",
-  actionText: "查看全部",
-  moreUrl: "/pages_recipe/system/index",
-  items: [
-    {
-      title: "一周晚餐不重样",
-      description: "把每天的主菜先排好，少一点临时纠结。",
-      url: "/pages_recipe/system/index",
-      visualClass: "topic-card--warm"
-    },
-    {
-      title: "下班 20 分钟快手菜",
-      description: "适合工作日的简单搭配，快做快吃。",
-      url: "/pages_recipe/system/index",
-      visualClass: "topic-card--fresh"
-    },
-    {
-      title: "冰箱剩菜再利用",
-      description: "先看已有食材，把零散库存变成一餐。",
-      url: "/pages_recipe/system/index",
-      visualClass: "topic-card--cool"
-    }
-  ]
-};
+const pantryItems = [
+  { name: "牛腩", state: "待买", className: "pantry-item__dot--danger" },
+  { name: "番茄", state: "待买", className: "pantry-item__dot--warning" },
+  { name: "鸡蛋", state: "够用", className: "pantry-item__dot--ok" }
+];
+
+const familyRecipes = [
+  {
+    name: "番茄牛腩",
+    meta: "上次 6 天前",
+    visualClass: "family-recipe__visual--warm"
+  },
+  {
+    name: "青椒炒蛋",
+    meta: "快手常备",
+    visualClass: "family-recipe__visual--fresh"
+  },
+  {
+    name: "菌菇鸡汤",
+    meta: "周末适合",
+    visualClass: "family-recipe__visual--cool"
+  }
+];
 
 function navigateTo(url: string) {
   uni.navigateTo({ url });
@@ -253,90 +306,144 @@ function navigateTo(url: string) {
 </script>
 
 <style scoped lang="scss">
-.home {
+.table-page {
+  min-height: 100vh;
   padding-bottom: var(--space-page);
 }
 
-.hero {
+.table-hero {
   position: relative;
-  min-height: 650rpx;
   overflow: hidden;
-  padding: 70rpx var(--space-page) 44rpx;
+  min-height: 560rpx;
+  padding: 64rpx var(--space-page) 200rpx;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(21, 27, 22, 0.16)),
-    radial-gradient(circle at 20% 30%, var(--entry-side-mint-bg) 0, transparent 34%),
-    radial-gradient(circle at 78% 18%, var(--entry-side-aqua-bg) 0, transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(21, 27, 22, 0.1)),
+    radial-gradient(circle at 18% 26%, var(--entry-side-mint-bg) 0, transparent 30%),
+    radial-gradient(circle at 84% 18%, var(--entry-side-aqua-bg) 0, transparent 28%),
     linear-gradient(145deg, var(--entry-primary-bg), var(--entry-board-bg));
 }
 
-.hero::after {
+.table-hero::before {
   position: absolute;
-  right: -120rpx;
-  bottom: -120rpx;
-  width: 360rpx;
-  height: 360rpx;
+  right: -42%;
+  bottom: -2rpx;
+  left: -42%;
+  z-index: 3;
+  height: 300rpx;
+  background:
+    radial-gradient(100% 120% at 50% -30%, transparent 46%, rgba(255, 255, 255, 0.16) 53%, rgba(255, 255, 255, 0.42) 62%, rgba(255, 255, 255, 0.76) 75%, var(--color-surface) 90%);
+  content: "";
+  pointer-events: none;
+}
+
+.table-hero::after {
+  position: absolute;
+  right: -144rpx;
+  bottom: -138rpx;
+  width: 390rpx;
+  height: 390rpx;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.22);
   content: "";
 }
 
-.hero__copy {
-  position: relative;
-  z-index: 2;
-  width: 430rpx;
+.table-nav__selector {
+  min-width: 0;
 }
 
-.hero__eyebrow {
+.table-nav__selector--hover,
+.decision-card--hover,
+.feature-card--hover,
+.dock-action--hover,
+.family-recipe--hover {
+  opacity: 0.86;
+}
+
+.restaurant-bar__label,
+.restaurant-bar__name,
+.hero-copy__eyebrow,
+.hero-copy__title,
+.hero-copy__description {
   display: block;
+}
+
+.restaurant-bar__label {
+  color: var(--entry-muted-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.restaurant-bar__name {
+  overflow: hidden;
+  max-width: 420rpx;
+  margin-top: 8rpx;
+  color: var(--entry-ink);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-main {
+  position: relative;
+  z-index: 2;
+  min-height: 330rpx;
+  margin-top: 30rpx;
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  width: 420rpx;
+}
+
+.hero-copy__eyebrow {
   color: var(--entry-ink);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
 }
 
-.hero__title {
-  display: block;
+.hero-copy__title {
   margin-top: 18rpx;
   color: var(--entry-ink);
-  font-size: var(--font-size-hero);
+  font-size: 58rpx;
   font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
+  line-height: 1.04;
 }
 
-.hero__description {
-  display: block;
-  margin-top: 18rpx;
+.hero-copy__description {
+  margin-top: 20rpx;
   color: var(--entry-muted-text);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
 }
 
-.hero-scene {
+.table-scene {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  inset: 0;
   z-index: 1;
 }
 
-.hero-scene__table {
+.table-scene__cloth {
   position: absolute;
-  right: -52rpx;
-  bottom: 32rpx;
-  width: 560rpx;
-  height: 300rpx;
-  border-radius: 96rpx 72rpx 0 0;
-  background: rgba(255, 255, 255, 0.3);
+  right: -60rpx;
+  bottom: -2rpx;
+  width: 536rpx;
+  height: 266rpx;
+  border-radius: 92rpx 72rpx 0 0;
+  background: rgba(255, 255, 255, 0.28);
   box-shadow: inset 0 0 0 1rpx rgba(255, 255, 255, 0.42);
   transform: rotate(-4deg);
 }
 
-.hero-scene__plate {
+.table-scene__plate {
   position: absolute;
-  right: 86rpx;
-  bottom: 124rpx;
-  width: 220rpx;
-  height: 148rpx;
+  right: 80rpx;
+  bottom: 82rpx;
+  width: 206rpx;
+  height: 138rpx;
   border: var(--entry-illustration-border-width) solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-photo-plate-bg);
@@ -344,538 +451,680 @@ function navigateTo(url: string) {
   transform: rotate(-8deg);
 }
 
-.hero-scene__rice {
+.table-scene__rice {
   position: absolute;
-  top: 36rpx;
-  left: 70rpx;
-  width: 84rpx;
-  height: 62rpx;
+  top: 34rpx;
+  left: 66rpx;
+  width: 78rpx;
+  height: 58rpx;
   border-radius: 50%;
   background: var(--entry-food-rice);
   box-shadow:
-    -40rpx 14rpx 0 var(--entry-food-orange),
-    44rpx 10rpx 0 var(--entry-food-green),
-    4rpx 48rpx 0 var(--entry-food-yellow);
+    -38rpx 12rpx 0 var(--entry-food-orange),
+    42rpx 10rpx 0 var(--entry-food-green),
+    4rpx 44rpx 0 var(--entry-food-yellow);
 }
 
-.hero-scene__leaf {
+.table-scene__leaf {
   position: absolute;
-  width: 72rpx;
-  height: 32rpx;
+  width: 68rpx;
+  height: 30rpx;
   border: var(--entry-illustration-border-width) solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-leaf-left);
 }
 
-.hero-scene__leaf--left {
+.table-scene__leaf--left {
   top: -12rpx;
-  left: 24rpx;
+  left: 22rpx;
   transform: rotate(-28deg);
 }
 
-.hero-scene__leaf--right {
-  right: 20rpx;
-  bottom: 12rpx;
+.table-scene__leaf--right {
+  right: 18rpx;
+  bottom: 10rpx;
   background: var(--entry-leaf-right);
   transform: rotate(-20deg);
 }
 
-.hero-scene__egg {
+.table-scene__egg {
   position: absolute;
-  top: 54rpx;
-  right: 52rpx;
-  width: 48rpx;
-  height: 48rpx;
+  top: 50rpx;
+  right: 48rpx;
+  width: 46rpx;
+  height: 46rpx;
   border: var(--entry-illustration-border-width) solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-egg-bg);
 }
 
-.hero-scene__bowl {
+.table-scene__bowl {
   position: absolute;
-  right: 320rpx;
-  bottom: 86rpx;
-  width: 142rpx;
-  height: 98rpx;
+  right: 306rpx;
+  bottom: 54rpx;
+  width: 128rpx;
+  height: 88rpx;
   border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-radius: 30rpx 30rpx 72rpx 72rpx;
+  border-radius: 28rpx 28rpx 68rpx 68rpx;
   background: var(--entry-side-aqua-bg);
   box-shadow: 0 18rpx 36rpx rgba(41, 56, 44, 0.12);
   transform: rotate(7deg);
 }
 
-.home-content {
+.table-scene__cup {
+  position: absolute;
+  right: 40rpx;
+  bottom: 56rpx;
+  width: 66rpx;
+  height: 78rpx;
+  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  border-radius: 18rpx 18rpx 28rpx 28rpx;
+  background: var(--entry-side-mint-bg);
+  transform: rotate(-10deg);
+}
+
+.table-content {
   position: relative;
-  z-index: 2;
-  margin-top: -70rpx;
-  padding: 24rpx var(--space-page) 0;
-  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-  background: var(--color-page);
+  z-index: 3;
+  margin-top: -200rpx;
+  padding: 74rpx var(--space-page) 28rpx;
+  border-radius: 0;
 }
 
-.home-board {
-  padding: 20rpx;
-  border-radius: var(--entry-board-radius);
-  background: var(--entry-board-bg);
-  box-shadow: var(--entry-board-shadow);
-  -webkit-backdrop-filter: var(--entry-board-backdrop-filter);
-  backdrop-filter: var(--entry-board-backdrop-filter);
-}
-
-.entry-shell {
+.feature-board {
   display: flex;
+  gap: 14rpx;
 }
 
-.entry-card {
+.feature-card {
   position: relative;
   overflow: hidden;
-  border: var(--entry-card-border);
   border-radius: var(--entry-card-radius);
-  -webkit-backdrop-filter: var(--entry-card-backdrop-filter);
-  backdrop-filter: var(--entry-card-backdrop-filter);
 }
 
-.entry-card--hover,
-.notice-strip--hover {
-  opacity: 0.88;
-}
-
-.entry-card--primary {
-  width: 62%;
-  min-height: 464rpx;
-  padding: 34rpx 28rpx 28rpx;
+.feature-card--main {
+  flex: 1 1 0;
+  min-height: 292rpx;
+  padding: 24rpx 22rpx;
   background: var(--entry-primary-bg);
 }
 
-.entry-card--primary::after {
-  position: absolute;
-  right: -44rpx;
-  bottom: -50rpx;
-  width: 190rpx;
-  height: 190rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.24);
-  content: "";
-}
-
-.entry-side {
+.feature-side {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   flex-direction: column;
-  margin-left: 20rpx;
+  gap: 14rpx;
 }
 
-.entry-card--side {
-  min-height: 222rpx;
-  padding: 34rpx 28rpx;
+.feature-card--side {
+  flex: 1;
+  min-height: 139rpx;
+  padding: 20rpx 18rpx;
 }
 
-.entry-card--side + .entry-card--side {
-  margin-top: 20rpx;
-}
-
-.entry-card--mint {
+.feature-card--mint {
   background: var(--entry-side-mint-bg);
 }
 
-.entry-card--aqua {
+.feature-card--green {
   background: var(--entry-side-aqua-bg);
 }
 
-.entry-card__header {
+.feature-card__title,
+.feature-card__subtitle {
   position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-}
-
-.entry-card__mark {
-  color: var(--entry-accent);
-  font-size: 40rpx;
-  font-weight: var(--entry-title-weight);
-  line-height: 1;
-}
-
-.entry-card__title {
-  color: var(--entry-ink);
-  font-size: 34rpx;
-  font-weight: var(--entry-title-weight);
-  line-height: 1.15;
-}
-
-.entry-card__subtitle {
-  position: relative;
-  z-index: 1;
+  z-index: 2;
   display: block;
-  margin-top: 10rpx;
+}
+
+.feature-card__title {
+  color: var(--entry-ink);
+  font-size: 28rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+}
+
+.feature-card__subtitle {
+  margin-top: 8rpx;
   color: var(--entry-muted-text);
-  font-size: 22rpx;
-  font-weight: var(--entry-subtitle-weight);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-normal);
 }
 
-.entry-card__side-title {
-  position: relative;
-  z-index: 1;
-  display: block;
-  color: var(--entry-ink);
-  font-size: 32rpx;
-  font-weight: var(--entry-title-weight);
-  line-height: 1.2;
-}
-
-.entry-card__side-subtitle {
-  position: relative;
-  z-index: 1;
-  display: block;
-  margin-top: 12rpx;
-  color: var(--entry-side-muted-text);
-  font-size: 22rpx;
-  font-weight: var(--entry-subtitle-weight);
-}
-
-.meal-photo {
+.feature-card__art {
   position: absolute;
-  right: 28rpx;
-  bottom: 76rpx;
-  left: 28rpx;
-  height: 218rpx;
+  right: 22rpx;
+  bottom: 44rpx;
+  left: 22rpx;
+  height: 132rpx;
   border-radius: var(--radius-md);
-  background: var(--entry-photo-bg);
-  box-shadow: var(--entry-photo-shadow);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 0 0 1rpx rgba(20, 20, 20, 0.03);
 }
 
-.meal-photo__plate {
+.feature-card__plate {
   position: absolute;
-  top: 42rpx;
+  top: 30rpx;
   left: 50%;
-  width: 190rpx;
-  height: 126rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  width: 132rpx;
+  height: 88rpx;
+  border: 5rpx solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-photo-plate-bg);
   transform: translateX(-50%) rotate(-6deg);
 }
 
-.meal-photo__rice {
+.feature-card__food {
   position: absolute;
-  top: 28rpx;
-  left: 60rpx;
-  width: 72rpx;
-  height: 54rpx;
+  top: 22rpx;
+  left: 42rpx;
+  width: 48rpx;
+  height: 36rpx;
   border-radius: 50%;
   background: var(--entry-food-rice);
   box-shadow:
-    -34rpx 10rpx 0 var(--entry-food-orange),
-    38rpx 8rpx 0 var(--entry-food-green),
-    4rpx 42rpx 0 var(--entry-food-yellow);
+    -24rpx 8rpx 0 var(--entry-food-orange),
+    26rpx 7rpx 0 var(--entry-food-green),
+    3rpx 28rpx 0 var(--entry-food-yellow);
 }
 
-.meal-photo__leaf {
+.feature-card__mini {
   position: absolute;
-  width: 64rpx;
-  height: 28rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-radius: 50%;
-  background: var(--entry-leaf-left);
-}
-
-.meal-photo__leaf--left {
-  top: -10rpx;
-  left: 18rpx;
-  transform: rotate(-28deg);
-}
-
-.meal-photo__leaf--right {
-  right: 14rpx;
-  bottom: 6rpx;
-  background: var(--entry-leaf-right);
-  transform: rotate(-20deg);
-}
-
-.meal-photo__egg {
-  position: absolute;
-  top: 44rpx;
-  right: 42rpx;
-  width: 42rpx;
-  height: 42rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-radius: 50%;
-  background: var(--entry-egg-bg);
-}
-
-.meal-photo__steam {
-  position: absolute;
-  top: 26rpx;
-  width: 8rpx;
-  height: 48rpx;
-  border-radius: var(--radius-pill);
-  background: var(--entry-outline);
-}
-
-.meal-photo__steam--one {
-  left: 54rpx;
-  transform: rotate(20deg);
-}
-
-.meal-photo__steam--two {
-  right: 58rpx;
-  transform: rotate(-22deg);
-}
-
-.quick-button {
-  position: absolute;
-  right: 54rpx;
-  bottom: 38rpx;
-  left: 54rpx;
-  z-index: 1;
+  right: 18rpx;
+  bottom: 14rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 70rpx;
+  width: 54rpx;
+  height: 54rpx;
+  border: 5rpx solid var(--entry-outline);
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.86);
+  transform: rotate(-7deg);
+}
+
+.feature-card__mini--members {
   border-radius: var(--radius-pill);
-  background: var(--entry-button-bg);
-  box-shadow: var(--entry-button-shadow);
 }
 
-.quick-button__text {
-  color: var(--entry-button-color);
-  font-size: 26rpx;
-  font-weight: 700;
+.feature-card__mini-text {
+  color: var(--entry-ink);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-heavy);
 }
 
-.quick-button__icon {
-  margin-left: 10rpx;
-  color: var(--entry-button-color);
-  font-size: 30rpx;
-  font-weight: 700;
-}
-
-.side-illustration {
-  position: absolute;
-  right: 22rpx;
-  bottom: 18rpx;
-  width: 92rpx;
-  height: 92rpx;
-}
-
-.side-illustration__body {
-  position: absolute;
-  right: 8rpx;
-  bottom: 4rpx;
-  width: 68rpx;
-  height: 58rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-radius: 16rpx;
-  background: var(--entry-photo-bg);
-  transform: rotate(-8deg);
-}
-
-.side-illustration__accent {
-  position: absolute;
-  top: 4rpx;
-  right: 6rpx;
-  width: 30rpx;
-  height: 30rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-radius: 50%;
-  background: var(--entry-accent);
-  box-shadow: -26rpx 24rpx 0 -2rpx var(--entry-primary-bg);
-}
-
-.side-illustration--book .side-illustration__body {
-  width: 66rpx;
-  height: 76rpx;
-  border-radius: 34rpx 34rpx 18rpx 18rpx;
-}
-
-.side-illustration--bag .side-illustration__body::after {
-  position: absolute;
-  top: 22rpx;
-  left: 16rpx;
-  width: 34rpx;
+.feature-card__mini-dot {
+  width: 22rpx;
   height: 22rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-top: 0;
-  border-right: 0;
-  content: "";
-  transform: rotate(-10deg);
-}
-
-.side-illustration--bag .side-illustration__accent {
-  top: 8rpx;
-  right: 46rpx;
-  width: 34rpx;
-  height: 20rpx;
   border-radius: var(--radius-pill);
-  background: var(--entry-food-green);
-  box-shadow: 28rpx 16rpx 0 -2rpx var(--entry-leaf-right);
+  background: var(--entry-food-yellow);
+  box-shadow: 12rpx -12rpx 0 -3rpx var(--entry-accent);
 }
 
-.notice-strip {
+.action-dock {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8rpx;
+  margin-top: 22rpx;
+  padding: 4rpx 0 8rpx;
+}
+
+.dock-action {
   display: flex;
   align-items: center;
-  min-height: 104rpx;
-  margin-bottom: 20rpx;
-  padding: 0 28rpx;
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-  box-shadow: 0 6rpx 18rpx rgba(23, 35, 29, 0.04);
+  flex-direction: column;
+  min-width: 0;
 }
 
-.notice-strip__icon {
+.dock-action__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 10rpx 22rpx rgba(41, 56, 44, 0.1);
+}
+
+.dock-action__icon.quick-action--primary {
+  background: var(--entry-primary-bg);
+}
+
+.dock-action__icon.quick-action--mint {
+  background: var(--entry-side-mint-bg);
+}
+
+.dock-action__icon.quick-action--aqua {
+  background: var(--entry-side-aqua-bg);
+}
+
+.dock-action__icon.quick-action--soft {
+  background: var(--color-surface-muted);
+}
+
+.dock-action__icon-text {
+  color: var(--entry-ink);
+  font-size: 30rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+}
+
+.dock-action__title {
+  display: block;
+  margin-top: 12rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+  text-align: center;
+}
+
+.decision-card,
+.table-section,
+.pantry-panel {
+  box-shadow: var(--shadow-card);
+}
+
+.decision-card {
+  overflow: hidden;
+  padding: 30rpx;
+  border-radius: var(--entry-board-radius);
+  background: var(--entry-board-bg);
+}
+
+.decision-card__header,
+.decision-card__footer,
+.decision-progress,
+.pantry-panel__header,
+.pantry-item {
+  display: flex;
+}
+
+.decision-card__header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.decision-card__label,
+.decision-card__title,
+.decision-card__hint,
+.decision-card__action {
+  display: block;
+}
+
+.decision-card__label {
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.decision-card__title {
+  margin-top: 10rpx;
+  color: var(--color-text);
+  font-size: 40rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.2;
+}
+
+.decision-card__badge {
+  flex: 0 0 auto;
+  padding: 12rpx 18rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+}
+
+.decision-card__badge-text {
+  color: var(--color-primary-active);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 28rpx;
+}
+
+.candidate-item {
+  display: flex;
+  align-items: center;
+  min-height: 86rpx;
+  padding: 14rpx 16rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.candidate-item__rank {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 52rpx;
-  height: 52rpx;
-  margin-right: 18rpx;
+  width: 44rpx;
+  height: 44rpx;
   border-radius: var(--radius-pill);
-  background: rgba(50, 111, 168, 0.1);
+  background: var(--entry-button-bg);
 }
 
-.notice-strip__megaphone {
-  position: relative;
-  width: 42rpx;
-  height: 42rpx;
-  transform: rotate(-12deg);
+.candidate-item__rank-text {
+  color: var(--entry-button-color);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
 }
 
-.notice-strip__megaphone::before {
-  position: absolute;
-  top: 8rpx;
-  left: 4rpx;
-  width: 15rpx;
-  height: 15rpx;
-  border: 4rpx solid #2e8be8;
-  border-radius: 50%;
-  background: #ffffff;
-  content: "";
-}
-
-.notice-strip__megaphone::after {
-  position: absolute;
-  top: 3rpx;
-  right: 2rpx;
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-  background: var(--entry-food-yellow);
-  box-shadow:
-    -6rpx -5rpx 0 -1rpx var(--entry-food-yellow),
-    5rpx 8rpx 0 -2rpx var(--entry-accent);
-  content: "";
-}
-
-.notice-strip__megaphone-horn {
-  position: absolute;
-  top: 12rpx;
-  left: 18rpx;
-  width: 22rpx;
-  height: 16rpx;
-  border-radius: 5rpx 12rpx 12rpx 5rpx;
-  background: linear-gradient(90deg, #3f8cff, #68cdf9);
-}
-
-.notice-strip__megaphone-handle {
-  position: absolute;
-  top: 25rpx;
-  left: 16rpx;
-  width: 9rpx;
-  height: 15rpx;
-  border-radius: 5rpx;
-  background: #2267c7;
-  transform: rotate(18deg);
-}
-
-.notice-strip__message {
-  overflow: hidden;
-  flex: 1;
+.candidate-item__main {
   min-width: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-medium);
-  line-height: 1.35;
+  margin-left: 16rpx;
+}
+
+.candidate-item__name,
+.candidate-item__meta {
+  display: block;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.recommend-section {
-  margin-top: 34rpx;
+.candidate-item__name {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
 }
 
-.recommend-section__header {
+.candidate-item__meta {
+  margin-top: 8rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.candidate-item__votes {
+  flex: 0 0 auto;
+  margin-left: 14rpx;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.decision-progress {
+  align-items: center;
+  margin-top: 24rpx;
+}
+
+.decision-progress__track {
+  overflow: hidden;
+  flex: 1;
+  height: 12rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+}
+
+.decision-progress__value {
+  width: 50%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
+.decision-progress__text {
+  flex: 0 0 auto;
+  margin-left: 16rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.decision-card__footer {
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24rpx;
+  padding-top: 22rpx;
+  border-top: 1rpx solid var(--color-divider);
+}
+
+.decision-card__hint {
+  min-width: 0;
+  padding-right: 20rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.decision-card__action {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.table-section,
+.pantry-panel {
+  margin-top: 28rpx;
+  padding: 28rpx;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18rpx;
+  margin-bottom: 22rpx;
 }
 
-.recommend-section__title {
+.section-heading__title {
   color: var(--color-text);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-heavy);
-  line-height: var(--line-height-tight);
 }
 
-.recommend-section__action {
+.section-heading__action {
   color: var(--color-primary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
 
-.inspiration-scroll {
+.family-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.feed-item {
+  display: flex;
+  align-items: center;
+}
+
+.feed-item__avatar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: var(--radius-pill);
+}
+
+.feed-item__avatar--rose {
+  background: #ffe1ef;
+}
+
+.feed-item__avatar--green {
+  background: #dcf7e7;
+}
+
+.feed-item__avatar--blue {
+  background: #dff3ff;
+}
+
+.feed-item__avatar-text {
+  color: var(--entry-ink);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.feed-item__content {
+  min-width: 0;
+  margin-left: 18rpx;
+}
+
+.feed-item__title,
+.feed-item__description {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-item__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.feed-item__description {
+  max-width: 430rpx;
+  margin-top: 8rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.feed-item__time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.pantry-panel {
+  background: linear-gradient(135deg, var(--entry-side-aqua-bg), var(--color-surface));
+}
+
+.pantry-panel__header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.pantry-panel__label,
+.pantry-panel__title,
+.pantry-panel__action {
+  display: block;
+}
+
+.pantry-panel__label {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.pantry-panel__title {
+  margin-top: 10rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+}
+
+.pantry-panel__action {
+  flex: 0 0 auto;
+  padding: 14rpx 22rpx;
+  border-radius: var(--radius-pill);
+  background: var(--entry-button-bg);
+  color: var(--entry-button-color);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.pantry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 24rpx;
+}
+
+.pantry-item {
+  align-items: center;
+  min-height: 72rpx;
+  padding: 0 18rpx;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.pantry-item__dot {
+  flex: 0 0 auto;
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: var(--radius-pill);
+}
+
+.pantry-item__dot--danger {
+  background: var(--entry-food-orange);
+}
+
+.pantry-item__dot--warning {
+  background: var(--entry-food-yellow);
+}
+
+.pantry-item__dot--ok {
+  background: var(--entry-food-green);
+}
+
+.pantry-item__name {
+  min-width: 0;
+  margin-left: 16rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.pantry-item__state {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.table-section--recipes {
+  padding-right: 0;
+}
+
+.recipe-scroll {
   width: 100%;
   white-space: nowrap;
 }
 
-.inspiration-card {
+.family-recipe {
   display: inline-block;
-  width: 212rpx;
+  width: 204rpx;
   margin-right: 18rpx;
   vertical-align: top;
 }
 
-.inspiration-card--hover,
-.topic-card--hover {
-  opacity: 0.88;
-}
-
-.inspiration-card__visual {
+.family-recipe__visual {
   position: relative;
   overflow: hidden;
-  height: 286rpx;
+  height: 220rpx;
   border-radius: var(--radius-card);
   background: var(--entry-board-bg);
 }
 
-.inspiration-card__visual::after {
-  position: absolute;
-  right: -52rpx;
-  bottom: -42rpx;
-  width: 154rpx;
-  height: 154rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
-  content: "";
-}
-
-.inspiration-card__visual--breakfast {
-  background: linear-gradient(145deg, #fff3bf, var(--entry-board-bg));
-}
-
-.inspiration-card__visual--dinner {
+.family-recipe__visual--warm {
   background: linear-gradient(145deg, var(--entry-primary-bg), #ffe5b2);
 }
 
-.inspiration-card__visual--dessert {
-  background: linear-gradient(145deg, #ffe1ef, #f7edff);
+.family-recipe__visual--fresh {
+  background: linear-gradient(145deg, #dcf7e7, var(--entry-board-bg));
 }
 
-.inspiration-card__plate {
+.family-recipe__visual--cool {
+  background: linear-gradient(145deg, #dff3ff, var(--entry-board-bg));
+}
+
+.family-recipe__plate {
   position: absolute;
-  right: 28rpx;
-  bottom: 56rpx;
+  right: 24rpx;
+  bottom: 50rpx;
   width: 148rpx;
   height: 104rpx;
   border: 6rpx solid var(--entry-outline);
@@ -884,7 +1133,7 @@ function navigateTo(url: string) {
   transform: rotate(-8deg);
 }
 
-.inspiration-card__food {
+.family-recipe__food {
   position: absolute;
   top: 28rpx;
   left: 50rpx;
@@ -898,144 +1147,24 @@ function navigateTo(url: string) {
     2rpx 30rpx 0 var(--entry-food-yellow);
 }
 
-.inspiration-card__name {
+.family-recipe__name,
+.family-recipe__meta {
   display: block;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-recipe__name {
   margin-top: 14rpx;
   color: var(--color-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.inspiration-card__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 10rpx;
-}
-
-.inspiration-card__scene,
-.inspiration-card__time {
+.family-recipe__meta {
+  margin-top: 8rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
-  line-height: var(--line-height-tight);
-}
-
-.inspiration-card__scene {
-  overflow: hidden;
-  max-width: 132rpx;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.inspiration-card__time {
-  flex: 0 0 auto;
-  margin-left: 10rpx;
-}
-
-.topic-section {
-  padding-bottom: 8rpx;
-}
-
-.topic-list {
-  display: flex;
-  flex-direction: column;
-  gap: 22rpx;
-}
-
-.topic-card {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  padding-bottom: 22rpx;
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-}
-
-.topic-card--warm {
-  background: linear-gradient(135deg, #fff1cf, #fff8ea);
-}
-
-.topic-card--fresh {
-  background: linear-gradient(135deg, #dcf7e7, #fffdf8);
-}
-
-.topic-card--cool {
-  background: linear-gradient(135deg, #dff3ff, #fffdf8);
-}
-
-.topic-card__content {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  padding: 22rpx 24rpx 0;
-}
-
-.topic-card__title,
-.topic-card__description {
-  display: block;
-}
-
-.topic-card__title {
-  color: var(--entry-ink);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-heavy);
-  line-height: var(--line-height-tight);
-}
-
-.topic-card__description {
-  margin-top: 10rpx;
-  color: var(--entry-muted-text);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-  white-space: normal;
-}
-
-.topic-card__art {
-  position: relative;
-  overflow: hidden;
-  width: 100%;
-  height: 306rpx;
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
-}
-
-.topic-card__art::after {
-  position: absolute;
-  right: -70rpx;
-  bottom: -80rpx;
-  width: 220rpx;
-  height: 220rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  content: "";
-}
-
-.topic-card__plate {
-  position: absolute;
-  right: 78rpx;
-  bottom: 74rpx;
-  width: 210rpx;
-  height: 138rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
-  border-radius: 50%;
-  background: var(--entry-photo-plate-bg);
-  transform: rotate(8deg);
-}
-
-.topic-card__food {
-  position: absolute;
-  top: 38rpx;
-  left: 72rpx;
-  width: 62rpx;
-  height: 48rpx;
-  border-radius: 50%;
-  background: var(--entry-food-yellow);
-  box-shadow:
-    -42rpx 12rpx 0 var(--entry-food-green),
-    44rpx 10rpx 0 var(--entry-food-orange),
-    0 42rpx 0 var(--entry-food-rice);
 }
 </style>

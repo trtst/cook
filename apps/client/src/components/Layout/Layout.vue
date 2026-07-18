@@ -6,7 +6,17 @@
       :show-left="showLeft"
       :placeholder="navbarPlaceholder"
       :transparent="navbarTransparent"
-    />
+    >
+      <template v-if="$slots['navbar-left']" #left>
+        <slot name="navbar-left" />
+      </template>
+      <template v-if="$slots['navbar-center']" #default>
+        <slot name="navbar-center" />
+      </template>
+      <template v-if="$slots['navbar-right']" #right>
+        <slot name="navbar-right" />
+      </template>
+    </NavBar>
     <view class="layout__body">
       <slot />
     </view>

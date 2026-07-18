@@ -93,7 +93,7 @@
     "backgroundColor": "#fffdf8",
     "borderStyle": "black",
     "list": [
-      { "pagePath": "pages/home/index", "text": "首页" },
+      { "pagePath": "pages/home/index", "text": "饭桌" },
       { "pagePath": "pages/recipe/index", "text": "菜谱" },
       { "pagePath": "pages/me/index", "text": "我的" }
     ]

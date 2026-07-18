@@ -7,7 +7,7 @@
     >
       <view class="navbar__status" :style="statusStyle" />
       <view class="navbar__inner" :style="innerStyle">
-        <view class="navbar__side">
+        <view class="navbar__side" :class="{ 'navbar__side--custom': !showLeft && hasLeftSlot }">
           <view
             v-if="showLeft"
             class="navbar__icon-button"
@@ -26,7 +26,7 @@
           </slot>
         </view>
 
-        <view class="navbar__side navbar__side--right">
+        <view class="navbar__side navbar__side--right" :class="{ 'navbar__side--custom-right': hasRightSlot }">
           <slot name="right" />
         </view>
       </view>
@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useSlots } from "vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 
 withDefaults(
@@ -57,8 +57,11 @@ withDefaults(
 );
 
 const { navBarHeight, navBarTotalHeight, systemInfo } = useSystemInfo();
+const slots = useSlots();
 
 const canGoBack = computed(() => getCurrentPages().length > 1);
+const hasLeftSlot = computed(() => Boolean(slots.left));
+const hasRightSlot = computed(() => Boolean(slots.right));
 
 const fixedStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`
@@ -120,8 +123,16 @@ function handleLeftClick() {
   min-width: 0;
 }
 
+.navbar__side--custom {
+  flex: 1 1 auto;
+}
+
 .navbar__side--right {
   justify-content: flex-end;
+}
+
+.navbar__side--custom-right {
+  flex: 0 0 auto;
 }
 
 .navbar__center {

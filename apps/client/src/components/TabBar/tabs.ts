@@ -12,7 +12,7 @@ export interface TabItem {
 export const TAB_ITEMS: TabItem[] = [
   {
     key: "home",
-    text: "首页",
+    text: "饭桌",
     iconName: "home",
     pagePath: "/pages/home/index"
   },
