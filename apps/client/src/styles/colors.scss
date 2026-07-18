@@ -1,0 +1,120 @@
+/*
+ * 全局设计变量。
+ *
+ * 这里承担类似 mini_teach/assets/styles/colors.scss 的职责：
+ * 1. 放运行时可切换的 CSS 变量，页面和组件统一使用 var(--xxx)。
+ * 2. 放颜色、字号、行高、间距、圆角、尺寸、暗黑模式等公共 token。
+ * 3. 不放皮肤专属变量。首页入口、tabbar 图标等皮肤差异放在 themes/{skin}/skins.scss。
+ *
+ * 不在这里放 Sass $变量。小程序皮肤切换依赖 CSS 变量，Sass 变量是编译期常量。
+ */
+page,
+.theme-light {
+  --color-page: #f4f7f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef4f1;
+  --color-text: #17231d;
+  --color-text-secondary: #425149;
+  --color-text-tertiary: #607168;
+  --color-text-inverse: #ffffff;
+  --color-primary: #216e4e;
+  --color-primary-active: #15533a;
+  --color-primary-soft: #dff1e8;
+  --color-border: rgba(23, 35, 29, 0.1);
+  --color-divider: rgba(23, 35, 29, 0.1);
+  --color-tabbar-bg: rgba(255, 255, 255, 0.9);
+  --shadow-card: 0 12rpx 32rpx rgba(23, 35, 29, 0.06);
+  --shadow-floating: 0 -8rpx 28rpx rgba(23, 35, 29, 0.08);
+  color-scheme: light;
+}
+
+page,
+.theme-light,
+.theme-dark {
+  --color-success: #216e4e;
+  --color-warning: #d9902f;
+  --color-danger: #f47c35;
+  --color-info: #326fa8;
+  --font-family-base: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  --font-size-xs: 22rpx;
+  --font-size-sm: 24rpx;
+  --font-size-md: 28rpx;
+  --font-size-lg: 32rpx;
+  --font-size-xl: 40rpx;
+  --font-size-hero: 52rpx;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-loose: 1.7;
+  --space-xs: 8rpx;
+  --space-sm: 12rpx;
+  --space-md: 24rpx;
+  --space-lg: 32rpx;
+  --space-xl: 48rpx;
+  --space-page: 32rpx;
+  --radius-xs: 8rpx;
+  --radius-sm: 12rpx;
+  --radius-md: 16rpx;
+  --radius-lg: 20rpx;
+  --radius-xl: 28rpx;
+  --radius-card: var(--radius-lg);
+  --radius-panel: var(--radius-xl);
+  --radius-sheet: 32rpx;
+  --radius-pill: 999rpx;
+  --size-navbar-content: 88rpx;
+  --size-tabbar: 100rpx;
+  --size-button-primary: 88rpx;
+  --size-button-secondary: 72rpx;
+  --size-input: 88rpx;
+  --size-list-item: 104rpx;
+}
+
+.theme-light {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  page {
+    --color-primary: #6eca94;
+    --color-primary-active: #8ee3ae;
+    --color-primary-soft: rgba(110, 202, 148, 0.16);
+    --color-page: #0f1713;
+    --color-surface: #17211c;
+    --color-surface-muted: #1d2923;
+    --color-text: rgba(255, 255, 255, 0.94);
+    --color-text-secondary: rgba(255, 255, 255, 0.72);
+    --color-text-tertiary: rgba(255, 255, 255, 0.62);
+    --color-text-inverse: #0f1713;
+    --color-border: rgba(255, 255, 255, 0.12);
+    --color-divider: rgba(255, 255, 255, 0.1);
+    --color-success: #6eca94;
+    --color-tabbar-bg: rgba(23, 33, 28, 0.9);
+    --shadow-card: 0 12rpx 32rpx rgba(0, 0, 0, 0.22);
+    --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.26);
+    color-scheme: dark;
+  }
+}
+
+.theme-dark {
+  --color-primary: #6eca94;
+  --color-primary-active: #8ee3ae;
+  --color-primary-soft: rgba(110, 202, 148, 0.16);
+  --color-page: #0f1713;
+  --color-surface: #17211c;
+  --color-surface-muted: #1d2923;
+  --color-text: rgba(255, 255, 255, 0.94);
+  --color-text-secondary: rgba(255, 255, 255, 0.72);
+  --color-text-tertiary: rgba(255, 255, 255, 0.62);
+  --color-text-inverse: #0f1713;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-divider: rgba(255, 255, 255, 0.1);
+  --color-success: #6eca94;
+  --color-tabbar-bg: rgba(23, 33, 28, 0.9);
+  --shadow-card: 0 12rpx 32rpx rgba(0, 0, 0, 0.22);
+  --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.26);
+  color-scheme: dark;
+}

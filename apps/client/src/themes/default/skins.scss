@@ -1,0 +1,135 @@
+/* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
+@font-face {
+  font-family: 'cookFont';  /* Project id 5212571 */
+  src: url('//at.alicdn.com/t/c/font_5212571_t99wl91oct.woff2?t=1784384940606') format('woff2'),
+       url('//at.alicdn.com/t/c/font_5212571_t99wl91oct.woff?t=1784384940606') format('woff'),
+       url('//at.alicdn.com/t/c/font_5212571_t99wl91oct.ttf?t=1784384940606') format('truetype');
+}
+
+.cookFont {
+  font-family: "cookFont" !important;
+  font-style: normal;
+  font-variant: normal;
+  font-weight: normal;
+  line-height: 1;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-home::before {
+  content: "\e634";
+}
+
+.icon-recipe::before {
+  content: "\e637";
+}
+
+.icon-me::before {
+  content: "\e631";
+}
+
+page,
+.theme-skin-default {
+  --entry-board-radius: 44rpx;
+  --entry-board-bg: #fffdf8;
+  --entry-board-shadow: 0 18rpx 42rpx rgba(41, 56, 44, 0.12);
+  --entry-board-backdrop-filter: none;
+  --entry-card-radius: 26rpx;
+  --entry-card-border: 0 solid transparent;
+  --entry-card-backdrop-filter: none;
+  --entry-primary-bg: #ffef08;
+  --entry-side-mint-bg: #d6fbf4;
+  --entry-side-aqua-bg: #cff8df;
+  --entry-ink: #171717;
+  --entry-outline: #1b1b1b;
+  --entry-accent: #ff52c9;
+  --entry-muted-text: rgba(34, 34, 34, 0.46);
+  --entry-side-muted-text: rgba(35, 55, 46, 0.42);
+  --entry-title-weight: 800;
+  --entry-subtitle-weight: 600;
+  --entry-photo-bg: #ffffff;
+  --entry-photo-shadow: inset 0 0 0 1rpx rgba(20, 20, 20, 0.03);
+  --entry-photo-plate-bg: #f7faf2;
+  --entry-food-rice: #fff4d8;
+  --entry-food-orange: #f26a2e;
+  --entry-food-green: #6bc45c;
+  --entry-food-yellow: #ffca40;
+  --entry-leaf-left: #62cf5f;
+  --entry-leaf-right: #ff8b42;
+  --entry-egg-bg: #ffdf45;
+  --entry-button-bg: #242424;
+  --entry-button-color: #ffffff;
+  --entry-button-shadow: 0 12rpx 20rpx rgba(20, 20, 20, 0.24);
+  --entry-illustration-border-width: 7rpx;
+}
+
+.theme-skin-default.theme-palette-warm {
+  --color-page: #fbf4e5;
+  --color-surface: #fffaf0;
+  --color-surface-muted: #f7ead0;
+  --color-text: #2d2418;
+  --color-text-secondary: #5e4d38;
+  --color-text-tertiary: #7b6a52;
+  --color-text-inverse: #fffaf0;
+  --color-primary: #b9771f;
+  --color-primary-active: #8c5717;
+  --color-primary-soft: #f6dfad;
+  --color-border: rgba(86, 63, 30, 0.13);
+  --color-divider: rgba(86, 63, 30, 0.11);
+  --color-tabbar-bg: rgba(255, 250, 240, 0.9);
+  --shadow-card: 0 12rpx 32rpx rgba(105, 78, 36, 0.1);
+  --shadow-floating: 0 -8rpx 28rpx rgba(105, 78, 36, 0.1);
+  --entry-board-bg: #fff8e6;
+  --entry-board-shadow: 0 18rpx 42rpx rgba(105, 78, 36, 0.14);
+  --entry-primary-bg: #ffd76a;
+  --entry-side-mint-bg: #ffe6b7;
+  --entry-side-aqua-bg: #f7d99b;
+  --entry-accent: #e95f79;
+}
+
+.theme-skin-default.theme-palette-olive {
+  --color-page: #f2f4ea;
+  --color-surface: #fffef8;
+  --color-surface-muted: #e8ecd5;
+  --color-text: #202719;
+  --color-text-secondary: #4e5b3d;
+  --color-text-tertiary: #687059;
+  --color-text-inverse: #ffffff;
+  --color-primary: #647a2f;
+  --color-primary-active: #4e6123;
+  --color-primary-soft: #e5ebcf;
+  --color-border: rgba(45, 58, 28, 0.12);
+  --color-divider: rgba(45, 58, 28, 0.1);
+  --color-tabbar-bg: rgba(255, 254, 248, 0.9);
+  --shadow-card: 0 12rpx 32rpx rgba(60, 75, 36, 0.08);
+  --shadow-floating: 0 -8rpx 28rpx rgba(60, 75, 36, 0.08);
+  --entry-board-bg: #fffef8;
+  --entry-primary-bg: #d9ec6f;
+  --entry-side-mint-bg: #dff1c2;
+  --entry-side-aqua-bg: #cce9d7;
+  --entry-accent: #f0638f;
+}
+
+.theme-skin-default.theme-palette-cool {
+  --color-page: #f0f5f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #e7f0f6;
+  --color-text: #17242d;
+  --color-text-secondary: #425662;
+  --color-text-tertiary: #60727c;
+  --color-text-inverse: #ffffff;
+  --color-primary: #326fa8;
+  --color-primary-active: #255784;
+  --color-primary-soft: #e0edf8;
+  --color-border: rgba(23, 36, 45, 0.1);
+  --color-divider: rgba(23, 36, 45, 0.1);
+  --color-tabbar-bg: rgba(255, 255, 255, 0.9);
+  --shadow-card: 0 12rpx 32rpx rgba(42, 72, 99, 0.08);
+  --shadow-floating: 0 -8rpx 28rpx rgba(42, 72, 99, 0.08);
+  --entry-board-bg: #ffffff;
+  --entry-primary-bg: #bfe8ff;
+  --entry-side-mint-bg: #d7f2f1;
+  --entry-side-aqua-bg: #dcecff;
+  --entry-accent: #ff63b1;
+}

@@ -1,0 +1,107 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "下一餐",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/recipe/index",
+      "style": {
+        "navigationBarTitleText": "菜谱",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/error/index",
+      "style": {
+        "navigationBarTitleText": "出错了",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "pages_restaurant",
+      "pages": [
+        { "path": "create/index", "style": { "navigationBarTitleText": "创建餐厅", "navigationStyle": "custom" } },
+        { "path": "invite/index", "style": { "navigationBarTitleText": "加入餐厅", "navigationStyle": "custom" } },
+        { "path": "members/index", "style": { "navigationBarTitleText": "成员管理", "navigationStyle": "custom" } },
+        { "path": "settings/index", "style": { "navigationBarTitleText": "餐厅设置", "navigationStyle": "custom" } },
+        { "path": "switch/index", "style": { "navigationBarTitleText": "切换餐厅", "navigationStyle": "custom" } }
+      ]
+    },
+    {
+      "root": "pages_recipe",
+      "pages": [
+        { "path": "list/index", "style": { "navigationBarTitleText": "菜谱列表", "navigationStyle": "custom" } },
+        { "path": "detail/index", "style": { "navigationBarTitleText": "菜谱详情", "navigationStyle": "custom" } },
+        { "path": "edit/index", "style": { "navigationBarTitleText": "编辑菜谱", "navigationStyle": "custom" } },
+        { "path": "import/index", "style": { "navigationBarTitleText": "导入菜谱", "navigationStyle": "custom" } },
+        { "path": "system/index", "style": { "navigationBarTitleText": "系统菜谱", "navigationStyle": "custom" } }
+      ]
+    },
+    {
+      "root": "pages_meal",
+      "pages": [
+        { "path": "plan/index", "style": { "navigationBarTitleText": "下一餐计划", "navigationStyle": "custom" } },
+        { "path": "poll/index", "style": { "navigationBarTitleText": "点菜征集", "navigationStyle": "custom" } },
+        { "path": "wish/index", "style": { "navigationBarTitleText": "想吃池", "navigationStyle": "custom" } },
+        { "path": "random/index", "style": { "navigationBarTitleText": "随机一下", "navigationStyle": "custom" } },
+        { "path": "result/index", "style": { "navigationBarTitleText": "结果汇总", "navigationStyle": "custom" } }
+      ]
+    },
+    {
+      "root": "pages_pantry",
+      "pages": [
+        { "path": "index/index", "style": { "navigationBarTitleText": "食材与采购", "navigationStyle": "custom" } },
+        { "path": "item-edit/index", "style": { "navigationBarTitleText": "编辑食材", "navigationStyle": "custom" } },
+        { "path": "gap/index", "style": { "navigationBarTitleText": "食材缺口", "navigationStyle": "custom" } },
+        { "path": "list/index", "style": { "navigationBarTitleText": "购物清单", "navigationStyle": "custom" } },
+        { "path": "supermarket/index", "style": { "navigationBarTitleText": "超市模式", "navigationStyle": "custom" } },
+        { "path": "history/index", "style": { "navigationBarTitleText": "采购记录", "navigationStyle": "custom" } }
+      ]
+    },
+    {
+      "root": "pages_share",
+      "pages": [
+        { "path": "preview/index", "style": { "navigationBarTitleText": "分享预览", "navigationStyle": "custom" } },
+        { "path": "import/index", "style": { "navigationBarTitleText": "导入分享", "navigationStyle": "custom" } },
+        { "path": "memory/index", "style": { "navigationBarTitleText": "饭搭子卡", "navigationStyle": "custom" } }
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/home/index": {
+      "network": "all",
+      "packages": ["pages_recipe", "pages_meal"]
+    }
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#6b7280",
+    "selectedColor": "#2f6f4e",
+    "backgroundColor": "#fffdf8",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/home/index", "text": "首页" },
+      { "pagePath": "pages/recipe/index", "text": "菜谱" },
+      { "pagePath": "pages/me/index", "text": "我的" }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "下一餐",
+    "navigationBarBackgroundColor": "#fffdf8",
+    "backgroundColor": "#f7f4ee"
+  }
+}
