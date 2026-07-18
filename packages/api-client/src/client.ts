@@ -53,7 +53,7 @@ interface RequestOptions {
 
 function joinUrl(baseUrl: string, path: string, query?: RequestOptions["query"]) {
   const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const routePath = path.startsWith("/") ? path : `/${path}`;
   const search = new URLSearchParams();
 
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -63,7 +63,7 @@ function joinUrl(baseUrl: string, path: string, query?: RequestOptions["query"])
   }
 
   const queryText = search.toString();
-  return `${base}${normalizedPath}${queryText ? `?${queryText}` : ""}`;
+  return `${base}${routePath}${queryText ? `?${queryText}` : ""}`;
 }
 
 function encodePath(value: string) {
