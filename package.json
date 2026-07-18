@@ -1,0 +1,22 @@
+{
+  "name": "next-meal",
+  "private": true,
+  "packageManager": "pnpm@10.22.0",
+  "scripts": {
+    "type-check": "pnpm --filter @next-meal/platform type-check && pnpm --filter @next-meal/domain type-check && pnpm --filter @next-meal/api-client type-check && pnpm --filter @next-meal/api type-check && pnpm --filter @next-meal/client type-check && pnpm --filter @next-meal/admin type-check",
+    "dev:api": "pnpm --filter @next-meal/api dev",
+    "dev:client": "pnpm --filter @next-meal/client dev:mp-weixin",
+    "dev:admin": "pnpm --filter @next-meal/admin dev",
+    "build:api": "pnpm --filter @next-meal/api build",
+    "build:client": "pnpm --filter @next-meal/client build:mp-weixin",
+    "build:admin": "pnpm --filter @next-meal/admin build",
+    "api:dev": "pnpm dev:api",
+    "api:build": "pnpm build:api",
+    "client:dev:mp-weixin": "pnpm dev:client",
+    "client:build:mp-weixin": "pnpm build:client",
+    "check": "pnpm type-check"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
