@@ -1,0 +1,12 @@
+{
+  "name": "@next-meal/admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json --noEmit --watch --preserveWatchOutput",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {}
+}
