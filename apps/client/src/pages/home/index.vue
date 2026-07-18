@@ -97,7 +97,7 @@
 
         <view class="recommend-section">
           <view class="recommend-section__header">
-            <text class="recommend-section__title">{{ inspirationSection.title }}</text>
+            <text class="recommend-section__title webfont">{{ inspirationSection.title }}</text>
             <text class="recommend-section__action" @click="navigateTo(inspirationSection.moreUrl)">
               {{ inspirationSection.actionText }}
             </text>
@@ -127,7 +127,7 @@
 
         <view class="recommend-section topic-section">
           <view class="recommend-section__header">
-            <text class="recommend-section__title">{{ topicSection.title }}</text>
+            <text class="recommend-section__title webfont">{{ topicSection.title }}</text>
             <text class="recommend-section__action" @click="navigateTo(topicSection.moreUrl)">
               {{ topicSection.actionText }}
             </text>
@@ -142,14 +142,14 @@
               hover-stay-time="100"
               @click="navigateTo(item.url)"
             >
-              <view class="topic-card__content">
-                <text class="topic-card__title">{{ item.title }}</text>
-                <text class="topic-card__description">{{ item.description }}</text>
-              </view>
               <view class="topic-card__art">
                 <view class="topic-card__plate">
                   <view class="topic-card__food" />
                 </view>
+              </view>
+              <view class="topic-card__content">
+                <text class="topic-card__title">{{ item.title }}</text>
+                <text class="topic-card__description">{{ item.description }}</text>
               </view>
             </view>
           </view>
@@ -801,7 +801,7 @@ function navigateTo(url: string) {
 }
 
 .recommend-section {
-  margin-top: 30rpx;
+  margin-top: 34rpx;
 }
 
 .recommend-section__header {
@@ -831,8 +831,8 @@ function navigateTo(url: string) {
 
 .inspiration-card {
   display: inline-block;
-  width: 230rpx;
-  margin-right: 20rpx;
+  width: 212rpx;
+  margin-right: 18rpx;
   vertical-align: top;
 }
 
@@ -844,17 +844,17 @@ function navigateTo(url: string) {
 .inspiration-card__visual {
   position: relative;
   overflow: hidden;
-  height: 210rpx;
+  height: 286rpx;
   border-radius: var(--radius-card);
   background: var(--entry-board-bg);
 }
 
 .inspiration-card__visual::after {
   position: absolute;
-  right: -34rpx;
-  bottom: -34rpx;
-  width: 112rpx;
-  height: 112rpx;
+  right: -52rpx;
+  bottom: -42rpx;
+  width: 154rpx;
+  height: 154rpx;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.28);
   content: "";
@@ -874,10 +874,10 @@ function navigateTo(url: string) {
 
 .inspiration-card__plate {
   position: absolute;
-  right: 34rpx;
-  bottom: 38rpx;
-  width: 128rpx;
-  height: 86rpx;
+  right: 28rpx;
+  bottom: 56rpx;
+  width: 148rpx;
+  height: 104rpx;
   border: 6rpx solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-photo-plate-bg);
@@ -886,16 +886,16 @@ function navigateTo(url: string) {
 
 .inspiration-card__food {
   position: absolute;
-  top: 22rpx;
-  left: 42rpx;
-  width: 44rpx;
-  height: 34rpx;
+  top: 28rpx;
+  left: 50rpx;
+  width: 48rpx;
+  height: 38rpx;
   border-radius: 50%;
   background: var(--entry-food-rice);
   box-shadow:
-    -24rpx 8rpx 0 var(--entry-food-orange),
-    26rpx 6rpx 0 var(--entry-food-green),
-    2rpx 26rpx 0 var(--entry-food-yellow);
+    -28rpx 8rpx 0 var(--entry-food-orange),
+    30rpx 8rpx 0 var(--entry-food-green),
+    2rpx 30rpx 0 var(--entry-food-yellow);
 }
 
 .inspiration-card__name {
@@ -943,16 +943,14 @@ function navigateTo(url: string) {
 .topic-list {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 22rpx;
 }
 
 .topic-card {
   position: relative;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  min-height: 168rpx;
-  padding: 28rpx;
+  width: 100%;
+  padding-bottom: 22rpx;
   border-radius: var(--radius-card);
   background: var(--color-surface);
 }
@@ -972,9 +970,8 @@ function navigateTo(url: string) {
 .topic-card__content {
   position: relative;
   z-index: 1;
-  flex: 1;
   min-width: 0;
-  padding-right: 18rpx;
+  padding: 22rpx 24rpx 0;
 }
 
 .topic-card__title,
@@ -994,22 +991,35 @@ function navigateTo(url: string) {
   color: var(--entry-muted-text);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
+  white-space: normal;
 }
 
 .topic-card__art {
   position: relative;
-  flex: 0 0 auto;
-  width: 128rpx;
-  height: 106rpx;
+  overflow: hidden;
+  width: 100%;
+  height: 306rpx;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+}
+
+.topic-card__art::after {
+  position: absolute;
+  right: -70rpx;
+  bottom: -80rpx;
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  content: "";
 }
 
 .topic-card__plate {
   position: absolute;
-  right: 0;
-  bottom: 6rpx;
-  width: 110rpx;
-  height: 74rpx;
-  border: 6rpx solid var(--entry-outline);
+  right: 78rpx;
+  bottom: 74rpx;
+  width: 210rpx;
+  height: 138rpx;
+  border: var(--entry-illustration-border-width) solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-photo-plate-bg);
   transform: rotate(8deg);
@@ -1017,15 +1027,15 @@ function navigateTo(url: string) {
 
 .topic-card__food {
   position: absolute;
-  top: 18rpx;
-  left: 36rpx;
-  width: 38rpx;
-  height: 30rpx;
+  top: 38rpx;
+  left: 72rpx;
+  width: 62rpx;
+  height: 48rpx;
   border-radius: 50%;
   background: var(--entry-food-yellow);
   box-shadow:
-    -22rpx 8rpx 0 var(--entry-food-green),
-    22rpx 7rpx 0 var(--entry-food-orange),
-    0 24rpx 0 var(--entry-food-rice);
+    -42rpx 12rpx 0 var(--entry-food-green),
+    44rpx 10rpx 0 var(--entry-food-orange),
+    0 42rpx 0 var(--entry-food-rice);
 }
 </style>
