@@ -1,0 +1,1146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ModuleState {
+  ACTIVE
+  DISABLED
+  RESERVED
+}
+
+enum RestaurantRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INVITED
+  REMOVED
+  LEFT
+}
+
+enum CollaborationMode {
+  PERSONAL
+  SHARED
+}
+
+enum SharedQuotaPolicy {
+  ALL_WRITERS
+  ADMINS_ONLY
+  OWNER_ONLY
+}
+
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum SubscriptionDisposition {
+  NONE
+  TRANSFER_WITH_RESTAURANT
+  REFUND_BEFORE_TRANSFER
+}
+
+enum ConceptScope {
+  GLOBAL
+  RESTAURANT
+}
+
+enum RecipeVersionType {
+  TEMPLATE
+  CUSTOM
+  TEMPORARY
+  PUBLIC
+}
+
+enum RecipeContentStatus {
+  ACTIVE
+  DEPRECATED
+}
+
+enum RecipeSourceType {
+  MANUAL
+  PROJ_KITCHEN
+  HOW_TO_COOK
+  ADMIN_IMPORT
+  PUBLIC_USER
+}
+
+enum RestaurantRecipeStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum MealPlanStatus {
+  DRAFT
+  COLLECTING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum PollStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum MealWishStatus {
+  ACTIVE
+  SELECTED
+  DONE
+  CANCELLED
+}
+
+enum FridgeStatus {
+  HAVE
+  LOW
+  EMPTY
+}
+
+enum ShoppingListStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ShoppingItemStatus {
+  TODO
+  CHECKED
+  REMOVED
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  HIDDEN
+  DELETED
+}
+
+enum SafetyStatus {
+  PENDING
+  PASSED
+  REVIEW_REQUIRED
+  REJECTED
+}
+
+enum ExposureLevel {
+  NONE
+  LOW
+  NORMAL
+  HOT
+}
+
+enum ReportType {
+  ILLEGAL
+  AD_SPAM
+  MISLEADING
+  QUALITY
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  REJECTED
+}
+
+enum SafetyObjectType {
+  PUBLIC_RECIPE_VERSION
+  SHARE_TEXT
+  ASSET
+}
+
+enum SafetyCheckStatus {
+  PENDING
+  PASSED
+  REVIEW_REQUIRED
+  REJECTED
+  FAILED
+}
+
+enum ImportSource {
+  EXCEL
+  JSON
+  PROJ_KITCHEN
+  HOW_TO_COOK
+  MANUAL
+}
+
+enum ImportBatchStatus {
+  STAGING
+  VALIDATED
+  PUBLISHED
+  FAILED
+  CANCELLED
+  DEPRECATED
+}
+
+enum ImportRowStatus {
+  PENDING
+  PASSED
+  FAILED
+  PUBLISHED
+  SKIPPED
+}
+
+enum AssetOwnerType {
+  USER
+  RESTAURANT
+  SYSTEM
+}
+
+enum AssetScope {
+  PERSONAL
+  RESTAURANT
+  SYSTEM
+}
+
+enum AssetStatus {
+  ACTIVE
+  DELETED
+  QUARANTINED
+}
+
+enum ShareSnapshotType {
+  RECIPE
+  MEAL_PLAN
+  SHOPPING_LIST
+}
+
+enum ShareTokenStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  REVOKED
+}
+
+enum BillingSubjectType {
+  USER
+  RESTAURANT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+enum EntitlementStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum UsageReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+  EXPIRED
+}
+
+enum PointLedgerType {
+  GRANT
+  SPEND
+  REFUND
+  EXPIRE
+  ADJUST
+}
+
+enum PaymentOrderStatus {
+  CREATED
+  PAID_PENDING_GRANT
+  PAID
+  CLOSED
+  REFUNDED
+}
+
+enum RefundOrderStatus {
+  CREATED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum AuditActorType {
+  USER
+  ADMIN
+  SYSTEM
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  openid       String    @unique
+  unionid      String?
+  nickname     String?
+  avatarUrl    String?
+  phone        String?
+  status       String    @default("ACTIVE")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ownedRestaurant Restaurant? @relation("RestaurantOwner")
+  memberships     RestaurantMember[]
+  preferences     UserPreference?
+  tastePreferences TastePreference[]
+  createdRecipeVersions RecipeContentVersion[] @relation("RecipeVersionCreator")
+  importBatches   ImportBatch[]
+  auditEvents     AuditEvent[]
+  pointWallet     PointWallet?
+
+  @@map("users")
+}
+
+model Restaurant {
+  id                 String            @id @default(uuid()) @db.Uuid
+  name               String
+  ownerId            String            @unique @db.Uuid
+  collaborationMode  CollaborationMode @default(PERSONAL)
+  sharedQuotaPolicy  SharedQuotaPolicy @default(ALL_WRITERS)
+  memberLimit        Int               @default(4)
+  status             String            @default("ACTIVE")
+  version            Int               @default(1)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  owner              User              @relation("RestaurantOwner", fields: [ownerId], references: [id])
+  members            RestaurantMember[]
+  privateConcepts    DishConcept[]     @relation("RestaurantPrivateConcepts")
+  restaurantRecipes  RestaurantRecipe[]
+  mealPlans          MealPlan[]
+  mealPolls          MealPoll[]
+  mealWishes         MealWish[]
+  fridgeItems        FridgeItem[]
+  shoppingLists      ShoppingList[]
+
+  @@index([ownerId])
+  @@map("restaurants")
+}
+
+model RestaurantMember {
+  id            String           @id @default(uuid()) @db.Uuid
+  restaurantId  String           @db.Uuid
+  userId        String           @db.Uuid
+  role          RestaurantRole
+  status        MemberStatus     @default(ACTIVE)
+  joinedAt      DateTime?
+  invitedAt     DateTime?
+  removedAt     DateTime?
+  version       Int              @default(1)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  restaurant    Restaurant       @relation(fields: [restaurantId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
+
+  @@unique([restaurantId, userId])
+  @@index([userId, status])
+  @@map("restaurant_members")
+}
+
+model RestaurantOwnershipTransfer {
+  id                       String                  @id @default(uuid()) @db.Uuid
+  restaurantId             String                  @db.Uuid
+  fromOwnerId              String                  @db.Uuid
+  toOwnerId                String                  @db.Uuid
+  subscriptionDisposition  SubscriptionDisposition @default(NONE)
+  status                   TransferStatus          @default(PENDING)
+  operationId              String
+  createdAt                DateTime                @default(now())
+  completedAt              DateTime?
+
+  @@unique([restaurantId, operationId])
+  @@index([restaurantId, status])
+  @@map("restaurant_ownership_transfers")
+}
+
+model UserPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("user_preferences")
+}
+
+model TastePreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, key, value])
+  @@map("taste_preferences")
+}
+
+model Ingredient {
+  id            String   @id @default(uuid()) @db.Uuid
+  canonicalName String
+  category      String
+  unitGroup     String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  aliases       IngredientAlias[]
+  fridgeItems   FridgeItem[]
+  shoppingItems ShoppingItem[]
+
+  @@unique([canonicalName])
+  @@map("ingredients")
+}
+
+model IngredientAlias {
+  id           String     @id @default(uuid()) @db.Uuid
+  ingredientId String     @db.Uuid
+  alias        String
+  createdAt    DateTime   @default(now())
+
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([alias])
+  @@index([ingredientId])
+  @@map("ingredient_aliases")
+}
+
+model DishConcept {
+  id                 String       @id @default(uuid()) @db.Uuid
+  canonicalName      String       @map("canonical_name")
+  searchKey          String       @map("search_key")
+  scope              ConceptScope @default(GLOBAL)
+  ownerRestaurantId  String?      @map("owner_restaurant_id") @db.Uuid
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  ownerRestaurant    Restaurant?  @relation("RestaurantPrivateConcepts", fields: [ownerRestaurantId], references: [id])
+  aliases            DishAlias[]
+  templates          RecipeTemplate[]
+  restaurantRecipes  RestaurantRecipe[]
+  publicRecipes      PublicRecipe[]
+
+  @@index([scope, searchKey])
+  @@index([ownerRestaurantId])
+  @@map("dish_concepts")
+}
+
+model DishAlias {
+  id          String      @id @default(uuid()) @db.Uuid
+  conceptId   String      @db.Uuid
+  alias       String
+  createdAt   DateTime    @default(now())
+
+  concept     DishConcept @relation(fields: [conceptId], references: [id])
+
+  @@unique([conceptId, alias])
+  @@index([alias])
+  @@map("dish_aliases")
+}
+
+model RecipeTemplate {
+  id               String                @id @default(uuid()) @db.Uuid
+  conceptId        String                @db.Uuid
+  currentVersionId String?               @db.Uuid
+  status           String                @default("ACTIVE")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  concept          DishConcept           @relation(fields: [conceptId], references: [id])
+  currentVersion   RecipeContentVersion? @relation("RecipeTemplateCurrentVersion", fields: [currentVersionId], references: [id])
+  versions         RecipeContentVersion[] @relation("RecipeTemplateVersions")
+
+  @@index([conceptId])
+  @@map("recipe_templates")
+}
+
+model RecipeContentVersion {
+  id                   String            @id @default(uuid()) @db.Uuid
+  versionType          RecipeVersionType @map("version_type")
+  templateId           String?           @map("template_id") @db.Uuid
+  restaurantRecipeId   String?           @map("restaurant_recipe_id") @db.Uuid
+  parentVersionId      String?           @map("parent_version_id") @db.Uuid
+  sourceVersionId      String?           @map("source_version_id") @db.Uuid
+  createdById          String?           @map("created_by_id") @db.Uuid
+  sourceType           RecipeSourceType  @default(MANUAL) @map("source_type")
+  sourceRepo           String?           @map("source_repo")
+  sourcePath           String?           @map("source_path")
+  sourceCommit         String?           @map("source_commit")
+  license              String?
+  name                 String
+  description          String?
+  category             String?
+  mealTypes            String[]          @default([]) @map("meal_types")
+  difficulty           String?
+  servingSize          Int?              @map("serving_size")
+  cookingMinutes       Int?              @map("cooking_minutes")
+  tools                Json              @default("[]")
+  ingredients          Json              @default("[]")
+  steps                Json              @default("[]")
+  tips                 String?
+  contentHash          String            @map("content_hash")
+  similaritySignature  String?           @map("similarity_signature")
+  immutable            Boolean           @default(true)
+  status               RecipeContentStatus @default(ACTIVE)
+  deprecatedAt         DateTime?         @map("deprecated_at")
+  deprecatedReason     String?           @map("deprecated_reason")
+  createdAt            DateTime          @default(now())
+
+  template             RecipeTemplate?   @relation("RecipeTemplateVersions", fields: [templateId], references: [id])
+  restaurantRecipe     RestaurantRecipe? @relation("RestaurantRecipeVersions", fields: [restaurantRecipeId], references: [id])
+  parentVersion        RecipeContentVersion? @relation("RecipeVersionParent", fields: [parentVersionId], references: [id])
+  childVersions        RecipeContentVersion[] @relation("RecipeVersionParent")
+  sourceVersion        RecipeContentVersion? @relation("RecipeVersionSource", fields: [sourceVersionId], references: [id])
+  derivedVersions      RecipeContentVersion[] @relation("RecipeVersionSource")
+  createdBy            User?             @relation("RecipeVersionCreator", fields: [createdById], references: [id])
+  currentForTemplates  RecipeTemplate[]  @relation("RecipeTemplateCurrentVersion")
+  sourceForRestaurants RestaurantRecipe[] @relation("RestaurantRecipeSourceVersion")
+  currentForRestaurants RestaurantRecipe[] @relation("RestaurantRecipeCurrentVersion")
+  mealPlanItems        MealPlanItem[]
+  shoppingSources      ShoppingItemSource[]
+  publicVersions       PublicRecipeVersion[]
+
+  @@index([templateId])
+  @@index([restaurantRecipeId])
+  @@index([contentHash])
+  @@index([sourceType, sourceCommit])
+  @@map("recipe_content_versions")
+}
+
+model RestaurantRecipe {
+  id               String               @id @default(uuid()) @db.Uuid
+  restaurantId     String               @map("restaurant_id") @db.Uuid
+  conceptId        String               @map("concept_id") @db.Uuid
+  sourceVersionId  String               @map("source_version_id") @db.Uuid
+  currentVersionId String               @map("current_version_id") @db.Uuid
+  localName        String?              @map("local_name")
+  note             String?
+  category         String?
+  status           RestaurantRecipeStatus @default(ACTIVE)
+  version          Int                  @default(1)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  restaurant       Restaurant           @relation(fields: [restaurantId], references: [id])
+  concept          DishConcept          @relation(fields: [conceptId], references: [id])
+  sourceVersion    RecipeContentVersion @relation("RestaurantRecipeSourceVersion", fields: [sourceVersionId], references: [id])
+  currentVersion   RecipeContentVersion @relation("RestaurantRecipeCurrentVersion", fields: [currentVersionId], references: [id])
+  versions         RecipeContentVersion[] @relation("RestaurantRecipeVersions")
+
+  @@index([restaurantId, status])
+  @@index([conceptId])
+  @@map("restaurant_recipes")
+}
+
+model MealPlan {
+  id           String         @id @default(uuid()) @db.Uuid
+  restaurantId String         @map("restaurant_id") @db.Uuid
+  date         DateTime       @db.Date
+  mealType     MealType       @map("meal_type")
+  status       MealPlanStatus @default(DRAFT)
+  version      Int            @default(1)
+  confirmedById String?       @db.Uuid
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  restaurant   Restaurant     @relation(fields: [restaurantId], references: [id])
+  items        MealPlanItem[]
+  polls        MealPoll[]
+
+  @@index([restaurantId, date, mealType])
+  @@map("meal_plans")
+}
+
+model MealPlanItem {
+  id              String               @id @default(uuid()) @db.Uuid
+  planId          String               @db.Uuid
+  recipeVersionId String               @db.Uuid
+  tempName        String?
+  sort            Int
+  assigneeUserId  String?              @db.Uuid
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  plan            MealPlan             @relation(fields: [planId], references: [id])
+  recipeVersion   RecipeContentVersion @relation(fields: [recipeVersionId], references: [id])
+
+  @@unique([planId, sort])
+  @@index([recipeVersionId])
+  @@map("meal_plan_items")
+}
+
+model MealPoll {
+  id            String      @id @default(uuid()) @db.Uuid
+  restaurantId  String      @db.Uuid
+  planId        String?     @db.Uuid
+  deadline      DateTime?
+  status        PollStatus  @default(OPEN)
+  createdById   String      @db.Uuid
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id])
+  plan          MealPlan?   @relation(fields: [planId], references: [id])
+  options       PollOption[]
+  responses     PollResponse[]
+
+  @@index([restaurantId, status])
+  @@map("meal_polls")
+}
+
+model PollOption {
+  id              String              @id @default(uuid()) @db.Uuid
+  pollId          String              @db.Uuid
+  recipeVersionId String?             @db.Uuid
+  title           String
+  sort            Int
+  createdAt       DateTime            @default(now())
+
+  poll            MealPoll            @relation(fields: [pollId], references: [id])
+  responses       PollResponse[]
+
+  @@unique([pollId, sort])
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+model PollResponse {
+  id          String     @id @default(uuid()) @db.Uuid
+  pollId      String     @db.Uuid
+  optionId    String     @db.Uuid
+  userId      String     @db.Uuid
+  operationId String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  poll        MealPoll   @relation(fields: [pollId], references: [id])
+  option      PollOption @relation(fields: [optionId], references: [id])
+
+  @@unique([pollId, userId])
+  @@unique([pollId, operationId])
+  @@index([optionId])
+  @@map("poll_responses")
+}
+
+model MealWish {
+  id            String         @id @default(uuid()) @db.Uuid
+  restaurantId  String         @db.Uuid
+  userId        String         @db.Uuid
+  targetDate    DateTime?      @db.Date
+  mealType      MealType?
+  title         String
+  recipeVersionId String?      @db.Uuid
+  status        MealWishStatus @default(ACTIVE)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  restaurant    Restaurant     @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId, status])
+  @@index([userId, status])
+  @@map("meal_wishes")
+}
+
+model FridgeItem {
+  id               String       @id @default(uuid()) @db.Uuid
+  restaurantId     String       @db.Uuid
+  ingredientId     String       @db.Uuid
+  status           FridgeStatus @default(HAVE)
+  confidenceDays   Int?
+  expireAt         DateTime?
+  lastConfirmedAt  DateTime?
+  note             String?
+  version          Int          @default(1)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  restaurant       Restaurant   @relation(fields: [restaurantId], references: [id])
+  ingredient       Ingredient   @relation(fields: [ingredientId], references: [id])
+
+  @@unique([restaurantId, ingredientId])
+  @@index([restaurantId, status])
+  @@map("fridge_items")
+}
+
+model ShoppingList {
+  id            String             @id @default(uuid()) @db.Uuid
+  restaurantId  String             @map("restaurant_id") @db.Uuid
+  status        ShoppingListStatus @default(ACTIVE)
+  title         String?
+  version       Int                @default(1)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  completedAt   DateTime?
+
+  restaurant    Restaurant         @relation(fields: [restaurantId], references: [id])
+  items         ShoppingItem[]
+
+  @@index([restaurantId, status])
+  @@map("shopping_lists")
+}
+
+model ShoppingItem {
+  id              String             @id @default(uuid()) @db.Uuid
+  listId          String             @db.Uuid
+  ingredientId    String?            @db.Uuid
+  name            String
+  displayAmount   String?
+  baseQty         Decimal?           @map("base_qty") @db.Decimal(12, 3)
+  baseUnit        String?            @map("base_unit")
+  mergeGroupKey   String
+  status          ShoppingItemStatus @default(TODO)
+  version         Int                @default(1)
+  checkedById     String?            @db.Uuid
+  checkedAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  list            ShoppingList       @relation(fields: [listId], references: [id])
+  ingredient      Ingredient?        @relation(fields: [ingredientId], references: [id])
+  sources         ShoppingItemSource[]
+
+  @@unique([listId, mergeGroupKey])
+  @@index([ingredientId])
+  @@map("shopping_items")
+}
+
+model ShoppingItemSource {
+  id              String               @id @default(uuid()) @db.Uuid
+  shoppingItemId  String               @db.Uuid
+  recipeVersionId String?              @db.Uuid
+  requiredQty     Decimal?             @db.Decimal(12, 3)
+  requiredUnit    String?
+  createdAt       DateTime             @default(now())
+
+  shoppingItem    ShoppingItem         @relation(fields: [shoppingItemId], references: [id])
+  recipeVersion   RecipeContentVersion? @relation(fields: [recipeVersionId], references: [id])
+
+  @@unique([shoppingItemId, recipeVersionId])
+  @@map("shopping_item_sources")
+}
+
+model PublicRecipe {
+  id                String            @id @default(uuid()) @db.Uuid
+  conceptId         String            @db.Uuid
+  authorId          String            @db.Uuid
+  publicationStatus PublicationStatus @default(DRAFT)
+  currentVersionId  String?           @db.Uuid
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  concept           DishConcept       @relation(fields: [conceptId], references: [id])
+  versions          PublicRecipeVersion[]
+  adoptions         PublicRecipeAdoption[]
+
+  @@index([conceptId, authorId])
+  @@map("public_recipes")
+}
+
+model PublicRecipeVersion {
+  id               String               @id @default(uuid()) @db.Uuid
+  publicRecipeId   String               @map("public_recipe_id") @db.Uuid
+  contentVersionId String               @map("content_version_id") @db.Uuid
+  safetyStatus     SafetyStatus         @default(PENDING) @map("safety_status")
+  exposureLevel    ExposureLevel        @default(NONE) @map("exposure_level")
+  promotedAt       DateTime?            @map("promoted_at")
+  createdAt        DateTime             @default(now())
+
+  publicRecipe     PublicRecipe         @relation(fields: [publicRecipeId], references: [id])
+  contentVersion   RecipeContentVersion @relation(fields: [contentVersionId], references: [id])
+  reports          PublicRecipeReport[]
+
+  @@unique([publicRecipeId, contentVersionId])
+  @@index([safetyStatus, exposureLevel])
+  @@map("public_recipe_versions")
+}
+
+model PublicRecipeAdoption {
+  id                    String       @id @default(uuid()) @db.Uuid
+  publicRecipeId         String       @db.Uuid
+  publicRecipeVersionId  String       @db.Uuid
+  restaurantId           String       @db.Uuid
+  userId                 String       @db.Uuid
+  addedAt                DateTime     @default(now())
+  usedInPlanAt           DateTime?
+  deletedAt              DateTime?
+
+  publicRecipe           PublicRecipe @relation(fields: [publicRecipeId], references: [id])
+
+  @@unique([publicRecipeVersionId, restaurantId])
+  @@index([publicRecipeId])
+  @@map("public_recipe_adoptions")
+}
+
+model PublicRecipeReport {
+  id                    String              @id @default(uuid()) @db.Uuid
+  publicRecipeVersionId  String              @db.Uuid
+  reporterId             String              @db.Uuid
+  type                   ReportType
+  description            String?
+  status                 ReportStatus        @default(OPEN)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  publicRecipeVersion    PublicRecipeVersion @relation(fields: [publicRecipeVersionId], references: [id])
+
+  @@unique([publicRecipeVersionId, reporterId])
+  @@index([status, type])
+  @@map("public_recipe_reports")
+}
+
+model ContentSafetyCheck {
+  id          String            @id @default(uuid()) @db.Uuid
+  objectType  SafetyObjectType
+  objectId    String            @db.Uuid
+  status      SafetyCheckStatus @default(PENDING)
+  provider    String?
+  result      Json              @default("{}")
+  error       String?
+  createdAt   DateTime          @default(now())
+  completedAt DateTime?
+
+  @@index([objectType, objectId])
+  @@index([status])
+  @@map("content_safety_checks")
+}
+
+model ImportBatch {
+  id          String            @id @default(uuid()) @db.Uuid
+  operatorId  String            @db.Uuid
+  source      ImportSource
+  sourceMeta  Json              @default("{}")
+  status      ImportBatchStatus @default(STAGING)
+  totalCount  Int               @default(0)
+  passCount   Int               @default(0)
+  failCount   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  publishedAt DateTime?
+
+  operator    User              @relation(fields: [operatorId], references: [id])
+  rows        RecipeImportStaging[]
+
+  @@index([operatorId, createdAt])
+  @@index([status])
+  @@map("import_batches")
+}
+
+model RecipeImportStaging {
+  id          String          @id @default(uuid()) @db.Uuid
+  batchId     String          @db.Uuid
+  rowIndex    Int
+  rawData     Json
+  parsedData  Json            @default("{}") @map("parsed_data")
+  errors      Json            @default("[]")
+  status      ImportRowStatus @default(PENDING)
+  publishedVersionId String?  @db.Uuid
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  batch       ImportBatch     @relation(fields: [batchId], references: [id])
+
+  @@unique([batchId, rowIndex])
+  @@index([batchId, status])
+  @@map("recipe_import_staging")
+}
+
+model Asset {
+  id          String         @id @default(uuid()) @db.Uuid
+  ownerType   AssetOwnerType @map("owner_type")
+  ownerId     String         @map("owner_id") @db.Uuid
+  scope       AssetScope
+  contentHash String         @map("content_hash")
+  storageKey  String         @map("storage_key")
+  mimeType    String         @map("mime_type")
+  sizeBytes   BigInt         @map("size_bytes")
+  width       Int?
+  height      Int?
+  status      AssetStatus    @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  deletedAt   DateTime?
+
+  @@unique([contentHash, storageKey])
+  @@index([ownerType, ownerId])
+  @@map("assets")
+}
+
+model ShareSnapshot {
+  id           String            @id @default(uuid()) @db.Uuid
+  type         ShareSnapshotType
+  ownerUserId  String            @db.Uuid
+  restaurantId String?           @db.Uuid
+  payload      Json
+  createdAt    DateTime          @default(now())
+  expiresAt    DateTime?
+
+  tokens       ShareToken[]
+
+  @@index([ownerUserId, createdAt])
+  @@map("share_snapshots")
+}
+
+model ShareToken {
+  id          String           @id @default(uuid()) @db.Uuid
+  snapshotId  String           @db.Uuid
+  token       String           @unique
+  status      ShareTokenStatus @default(ACTIVE)
+  createdAt   DateTime         @default(now())
+  expiresAt   DateTime?
+  usedAt      DateTime?
+
+  snapshot    ShareSnapshot    @relation(fields: [snapshotId], references: [id])
+
+  @@index([snapshotId])
+  @@map("share_tokens")
+}
+
+model MembershipPlan {
+  id          String             @id @default(uuid()) @db.Uuid
+  code        String             @unique
+  name        String
+  subjectType BillingSubjectType
+  priceCents  Int
+  periodDays  Int
+  entitlements Json              @default("{}")
+  isActive    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  subscriptions MembershipSubscription[]
+
+  @@map("membership_plans")
+}
+
+model MembershipSubscription {
+  id          String             @id @default(uuid()) @db.Uuid
+  planId      String             @db.Uuid
+  subjectType BillingSubjectType
+  subjectId   String             @db.Uuid
+  payerUserId String             @db.Uuid
+  status      SubscriptionStatus @default(ACTIVE)
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  plan        MembershipPlan     @relation(fields: [planId], references: [id])
+
+  @@index([subjectType, subjectId, status])
+  @@map("membership_subscriptions")
+}
+
+model EntitlementGrant {
+  id          String             @id @default(uuid()) @db.Uuid
+  subjectType BillingSubjectType
+  subjectId   String             @db.Uuid
+  entitlementKey String
+  value       Json               @default("{}")
+  status      EntitlementStatus  @default(ACTIVE)
+  startsAt    DateTime
+  endsAt      DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([subjectType, subjectId, entitlementKey, status])
+  @@map("entitlement_grants")
+}
+
+model UsageQuota {
+  id          String             @id @default(uuid()) @db.Uuid
+  subjectType BillingSubjectType
+  subjectId   String             @db.Uuid
+  quotaKey    String
+  periodStart DateTime
+  periodEnd   DateTime
+  limit       Int
+  used        Int                @default(0)
+  frozen      Int                @default(0)
+  version     Int                @default(1)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  reservations UsageReservation[]
+
+  @@unique([subjectType, subjectId, quotaKey, periodStart])
+  @@index([subjectType, subjectId, quotaKey])
+  @@map("usage_quotas")
+}
+
+model UsageReservation {
+  id          String                 @id @default(uuid()) @db.Uuid
+  quotaId     String                 @db.Uuid
+  operationId String
+  capabilityKey String
+  qty         Int
+  status      UsageReservationStatus @default(RESERVED)
+  policyVersion Int?
+  productObjectType String?
+  productObjectId   String?          @db.Uuid
+  createdAt   DateTime               @default(now())
+  settledAt   DateTime?
+  releasedAt  DateTime?
+
+  quota       UsageQuota             @relation(fields: [quotaId], references: [id])
+
+  @@unique([quotaId, operationId])
+  @@index([status])
+  @@map("usage_reservations")
+}
+
+model PointWallet {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @db.Uuid
+  rechargeBalance Int      @default(0) @map("recharge_balance")
+  giftBalance     Int      @default(0) @map("gift_balance")
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id])
+  ledgers         PointLedger[]
+
+  @@map("point_wallets")
+}
+
+model PointLedger {
+  id          String          @id @default(uuid()) @db.Uuid
+  walletId    String          @db.Uuid
+  type        PointLedgerType
+  amount      Int
+  reason      String?
+  operationId String?
+  createdAt   DateTime        @default(now())
+
+  wallet      PointWallet     @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, createdAt])
+  @@unique([walletId, operationId])
+  @@map("point_ledgers")
+}
+
+model PaymentOrder {
+  id                   String             @id @default(uuid()) @db.Uuid
+  orderNo              String             @unique
+  userId               String             @db.Uuid
+  subjectType          BillingSubjectType?
+  subjectId            String?            @db.Uuid
+  amountCents          Int
+  status               PaymentOrderStatus @default(CREATED)
+  channel              String?
+  channelTransactionId String?            @unique
+  payload              Json               @default("{}")
+  createdAt            DateTime           @default(now())
+  paidAt               DateTime?
+  updatedAt            DateTime           @updatedAt
+
+  refunds              RefundOrder[]
+
+  @@index([userId, status])
+  @@map("payment_orders")
+}
+
+model RefundOrder {
+  id             String            @id @default(uuid()) @db.Uuid
+  paymentOrderId String            @db.Uuid
+  refundNo       String            @unique
+  amountCents    Int
+  status         RefundOrderStatus @default(CREATED)
+  reason         String?
+  createdAt      DateTime          @default(now())
+  completedAt    DateTime?
+
+  paymentOrder   PaymentOrder      @relation(fields: [paymentOrderId], references: [id])
+
+  @@index([paymentOrderId])
+  @@map("refund_orders")
+}
+
+model AuditEvent {
+  id            String         @id @default(uuid()) @db.Uuid
+  actorType     AuditActorType
+  actorUserId   String?        @db.Uuid
+  action        String
+  objectType    String
+  objectId      String?        @db.Uuid
+  restaurantId  String?        @db.Uuid
+  payload       Json           @default("{}")
+  createdAt     DateTime       @default(now())
+
+  actorUser     User?          @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorType, actorUserId, createdAt])
+  @@index([objectType, objectId])
+  @@map("audit_events")
+}
+
+model IdempotencyRecord {
+  id             String            @id @default(uuid()) @db.Uuid
+  operationId    String            @map("operation_id")
+  operationType  String            @map("operation_type")
+  userId         String?           @map("user_id") @db.Uuid
+  restaurantId   String?           @map("restaurant_id") @db.Uuid
+  requestHash    String?           @map("request_hash")
+  response       Json?
+  status         IdempotencyStatus @default(PROCESSING)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  expiresAt      DateTime?
+
+  @@unique([operationId, operationType, userId, restaurantId])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  eventType      String
+  aggregateType  String
+  aggregateId    String       @db.Uuid
+  payload        Json
+  status         OutboxStatus @default(PENDING)
+  retryCount     Int          @default(0)
+  nextRunAt      DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  doneAt         DateTime?    @map("processed_at")
+  lastError      String?
+
+  @@index([status, nextRunAt])
+  @@map("outbox_events")
+}
