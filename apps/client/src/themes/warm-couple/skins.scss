@@ -1,6 +1,13 @@
 .theme-skin-warm-couple {
   --color-page: #fff4dc;
   --color-surface: #fffaf0;
+  /*
+   * 遮罩色阶变量
+   * 非默认皮肤使用自身 surface 背景色的不同透明度。
+   */
+  --color-surface-mask-weak: rgba(255, 250, 240, 0.16);
+  --color-surface-mask-medium: rgba(255, 250, 240, 0.42);
+  --color-surface-mask-strong: rgba(255, 250, 240, 0.76);
   --color-surface-muted: #f8e6c2;
   --color-text: #322217;
   --color-text-secondary: #684c39;

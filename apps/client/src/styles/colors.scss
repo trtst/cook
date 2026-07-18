@@ -12,6 +12,14 @@ page,
 .theme-light {
   --color-page: #f4f7f5;
   --color-surface: #ffffff;
+  /*
+   * 遮罩色阶变量
+   * 用于页面顶部弧形遮罩这类从透明到 surface 的渐变。
+   * 默认皮肤在白/黑模式下分别使用对应 surface 背景色的不同透明度。
+   */
+  --color-surface-mask-weak: rgba(255, 255, 255, 0.16);
+  --color-surface-mask-medium: rgba(255, 255, 255, 0.42);
+  --color-surface-mask-strong: rgba(255, 255, 255, 0.76);
   --color-surface-muted: #eef4f1;
   --color-text: #17231d;
   --color-text-secondary: #425149;
@@ -84,6 +92,13 @@ page,
     --color-primary-soft: rgba(110, 202, 148, 0.16);
     --color-page: #0f1713;
     --color-surface: #17211c;
+    /*
+     * 遮罩色阶变量
+     * 默认皮肤暗色模式使用 dark surface 背景色的不同透明度。
+     */
+    --color-surface-mask-weak: rgba(23, 33, 28, 0.16);
+    --color-surface-mask-medium: rgba(23, 33, 28, 0.42);
+    --color-surface-mask-strong: rgba(23, 33, 28, 0.76);
     --color-surface-muted: #1d2923;
     --color-text: rgba(255, 255, 255, 0.94);
     --color-text-secondary: rgba(255, 255, 255, 0.72);
@@ -105,6 +120,13 @@ page,
   --color-primary-soft: rgba(110, 202, 148, 0.16);
   --color-page: #0f1713;
   --color-surface: #17211c;
+  /*
+   * 遮罩色阶变量
+   * 默认皮肤暗色模式使用 dark surface 背景色的不同透明度。
+   */
+  --color-surface-mask-weak: rgba(23, 33, 28, 0.16);
+  --color-surface-mask-medium: rgba(23, 33, 28, 0.42);
+  --color-surface-mask-strong: rgba(23, 33, 28, 0.76);
   --color-surface-muted: #1d2923;
   --color-text: rgba(255, 255, 255, 0.94);
   --color-text-secondary: rgba(255, 255, 255, 0.72);

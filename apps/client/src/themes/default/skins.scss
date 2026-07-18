@@ -67,6 +67,13 @@ page,
 .theme-skin-default.theme-palette-warm {
   --color-page: #fbf4e5;
   --color-surface: #fffaf0;
+  /*
+   * 遮罩色阶变量
+   * 色系皮肤使用对应 surface 背景色的不同透明度。
+   */
+  --color-surface-mask-weak: rgba(255, 250, 240, 0.16);
+  --color-surface-mask-medium: rgba(255, 250, 240, 0.42);
+  --color-surface-mask-strong: rgba(255, 250, 240, 0.76);
   --color-surface-muted: #f7ead0;
   --color-text: #2d2418;
   --color-text-secondary: #5e4d38;
@@ -91,6 +98,13 @@ page,
 .theme-skin-default.theme-palette-olive {
   --color-page: #f2f4ea;
   --color-surface: #fffef8;
+  /*
+   * 遮罩色阶变量
+   * 色系皮肤使用对应 surface 背景色的不同透明度。
+   */
+  --color-surface-mask-weak: rgba(255, 254, 248, 0.16);
+  --color-surface-mask-medium: rgba(255, 254, 248, 0.42);
+  --color-surface-mask-strong: rgba(255, 254, 248, 0.76);
   --color-surface-muted: #e8ecd5;
   --color-text: #202719;
   --color-text-secondary: #4e5b3d;
@@ -114,6 +128,13 @@ page,
 .theme-skin-default.theme-palette-cool {
   --color-page: #f0f5f8;
   --color-surface: #ffffff;
+  /*
+   * 遮罩色阶变量
+   * 色系皮肤使用对应 surface 背景色的不同透明度。
+   */
+  --color-surface-mask-weak: rgba(255, 255, 255, 0.16);
+  --color-surface-mask-medium: rgba(255, 255, 255, 0.42);
+  --color-surface-mask-strong: rgba(255, 255, 255, 0.76);
   --color-surface-muted: #e7f0f6;
   --color-text: #17242d;
   --color-text-secondary: #425662;

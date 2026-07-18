@@ -1,6 +1,13 @@
 .theme-skin-apple-glass {
   --color-page: #eef1f4;
   --color-surface: rgba(255, 255, 255, 0.74);
+  /*
+   * 遮罩色阶变量
+   * 玻璃皮肤的 surface 本身带透明度，这里使用更低的不透明度分档。
+   */
+  --color-surface-mask-weak: rgba(255, 255, 255, 0.12);
+  --color-surface-mask-medium: rgba(255, 255, 255, 0.32);
+  --color-surface-mask-strong: rgba(255, 255, 255, 0.58);
   --color-surface-muted: rgba(255, 255, 255, 0.48);
   --color-text: #1d1d1f;
   --color-text-secondary: #515154;

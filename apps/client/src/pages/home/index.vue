@@ -79,7 +79,7 @@
             @click="navigateTo(item.url)"
           >
             <view class="dock-action__icon" :class="item.className">
-              <text class="dock-action__icon-text">{{ item.icon }}</text>
+              <image class="dock-action__image" :src="item.iconSrc" mode="aspectFit" />
             </view>
             <text class="dock-action__title">{{ item.title }}</text>
           </view>
@@ -190,6 +190,10 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import askIcon from "@/assets/home-actions/ask.svg";
+import gapIcon from "@/assets/home-actions/gap.svg";
+import randomIcon from "@/assets/home-actions/random.svg";
+import wishIcon from "@/assets/home-actions/wish.svg";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { useRestaurantStore } from "@/stores/restaurant";
@@ -225,28 +229,28 @@ const quickActions = [
   {
     title: "我想吃",
     subtitle: "先记一口",
-    icon: "+",
+    iconSrc: wishIcon,
     url: "/pages_meal/wish/index",
     className: "quick-action--primary"
   },
   {
-    title: "点菜",
+    title: "问大家",
     subtitle: "问问大家",
-    icon: "!",
+    iconSrc: askIcon,
     url: "/pages_meal/poll/index",
     className: "quick-action--mint"
   },
   {
     title: "随机",
     subtitle: "不纠结",
-    icon: "?",
+    iconSrc: randomIcon,
     url: "/pages_meal/random/index",
     className: "quick-action--aqua"
   },
   {
     title: "缺什么",
     subtitle: "买菜前看",
-    icon: "✓",
+    iconSrc: gapIcon,
     url: "/pages_pantry/gap/index",
     className: "quick-action--soft"
   }
@@ -331,7 +335,14 @@ function navigateTo(url: string) {
   z-index: 3;
   height: 300rpx;
   background:
-    radial-gradient(100% 120% at 50% -30%, transparent 46%, rgba(255, 255, 255, 0.16) 53%, rgba(255, 255, 255, 0.42) 62%, rgba(255, 255, 255, 0.76) 75%, var(--color-surface) 90%);
+    radial-gradient(
+      100% 120% at 50% -30%,
+      transparent 46%,
+      var(--color-surface-mask-weak) 53%,
+      var(--color-surface-mask-medium) 62%,
+      var(--color-surface-mask-strong) 75%,
+      var(--color-surface) 90%
+    );
   content: "";
   pointer-events: none;
 }
@@ -527,8 +538,7 @@ function navigateTo(url: string) {
   position: relative;
   z-index: 3;
   margin-top: -200rpx;
-  padding: 74rpx var(--space-page) 28rpx;
-  border-radius: 0;
+  padding: 50rpx var(--space-page) 28rpx;
 }
 
 .feature-board {
@@ -666,8 +676,7 @@ function navigateTo(url: string) {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8rpx;
-  margin-top: 22rpx;
-  padding: 4rpx 0 8rpx;
+  margin-top: 32rpx;
 }
 
 .dock-action {
@@ -703,11 +712,9 @@ function navigateTo(url: string) {
   background: var(--color-surface-muted);
 }
 
-.dock-action__icon-text {
-  color: var(--entry-ink);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1;
+.dock-action__image {
+  width: 54rpx;
+  height: 54rpx;
 }
 
 .dock-action__title {
