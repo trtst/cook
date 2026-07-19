@@ -28,3 +28,9 @@ pnpm build:client
 ## 环境变量
 
 复制 `.env.example` 为本地 `.env` 后再按环境填写。
+
+本地真实 API 联调：
+
+```bash
+VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:3310/api pnpm --filter @next-meal/client build:mp-weixin
+```

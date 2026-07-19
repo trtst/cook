@@ -2,6 +2,21 @@
   <view class="login">
     <text class="login__title">{{ title }}</text>
     <text class="login__description">{{ description }}</text>
+    <input
+      v-model="phone"
+      class="login__input"
+      type="number"
+      maxlength="11"
+      placeholder="手机号"
+      :disabled="loading"
+    />
+    <input
+      v-model="password"
+      class="login__input"
+      password
+      placeholder="密码"
+      :disabled="loading"
+    />
     <button class="login__button" :loading="loading" :disabled="loading" @click="handleLogin">
       {{ buttonText }}
     </button>
@@ -12,7 +27,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { authApi } from "@/apis/auth";
-import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import type { LoginSuccessPayload } from "./types";
@@ -26,8 +40,8 @@ withDefaults(
   }>(),
   {
     title: "登录下一餐",
-    description: "登录后可以查看你的餐厅、下一餐计划和食材与采购。",
-    buttonText: "微信登录"
+    description: "登录后可以查看你的饭搭子、下一餐计划和食材与采购。",
+    buttonText: "登录"
   }
 );
 
@@ -38,6 +52,8 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const errorText = ref("");
+const phone = ref("13800000000");
+const password = ref("change-me");
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 
@@ -48,8 +64,10 @@ async function handleLogin() {
   errorText.value = "";
 
   try {
-    const { code } = await uniPlatform.auth.login();
-    const session = await authApi.loginWithWechat({ code });
+    const session = await authApi.loginWithPassword({
+      phone: phone.value.trim(),
+      password: password.value
+    });
 
     await sessionStore.setSession({
       token: session.token,
@@ -59,7 +77,7 @@ async function handleLogin() {
     userStore.setProfile(session.user);
     emit("success", { session });
   } catch (error) {
-    errorText.value = "登录失败，请稍后重试";
+    errorText.value = "手机号或密码错误";
     emit("error", error);
   } finally {
     loading.value = false;

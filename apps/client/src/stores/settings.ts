@@ -27,7 +27,7 @@ export {
 export type { ThemeMode, ThemePalette, ThemeSkin };
 
 interface SettingsSnapshot {
-  lastRestaurantId: string;
+  lastDiningGroupId: string;
   themeMode?: ThemeMode;
   themeSkin?: ThemeSkin;
   themePalette?: ThemePalette;
@@ -47,7 +47,7 @@ function isThemePalette(value: unknown): value is ThemePalette {
 
 export const useSettingsStore = defineStore("settings", {
   state: () => ({
-    lastRestaurantId: "",
+    lastDiningGroupId: "",
     themeMode: "system" as ThemeMode,
     themeSkin: DEFAULT_THEME_SKIN as ThemeSkin,
     themePalette: DEFAULT_THEME_PALETTE as ThemePalette
@@ -61,13 +61,13 @@ export const useSettingsStore = defineStore("settings", {
           ? snapshot.themePalette
           : getDefaultPaletteForSkin(restoredSkin);
 
-      this.lastRestaurantId = snapshot?.lastRestaurantId ?? "";
+      this.lastDiningGroupId = snapshot?.lastDiningGroupId ?? "";
       this.themeMode = isThemeMode(snapshot?.themeMode) ? snapshot.themeMode : "system";
       this.themeSkin = restoredSkin;
       this.themePalette = restoredPalette;
     },
-    async setLastRestaurantId(restaurantId: string) {
-      this.lastRestaurantId = restaurantId;
+    async setLastDiningGroupId(diningGroupId: string) {
+      this.lastDiningGroupId = diningGroupId;
       await this.persist();
     },
     async setThemeMode(themeMode: ThemeMode) {
@@ -91,7 +91,7 @@ export const useSettingsStore = defineStore("settings", {
       await this.persist();
     },
     async clearSettings() {
-      this.lastRestaurantId = "";
+      this.lastDiningGroupId = "";
       this.themeMode = "system";
       this.themeSkin = DEFAULT_THEME_SKIN;
       this.themePalette = DEFAULT_THEME_PALETTE;
@@ -99,7 +99,7 @@ export const useSettingsStore = defineStore("settings", {
     },
     async persist() {
       await uniPlatform.storage.set(SETTINGS_STORAGE_KEY, {
-        lastRestaurantId: this.lastRestaurantId,
+        lastDiningGroupId: this.lastDiningGroupId,
         themeMode: this.themeMode,
         themeSkin: this.themeSkin,
         themePalette: this.themePalette

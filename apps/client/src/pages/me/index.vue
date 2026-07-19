@@ -19,8 +19,8 @@
         <Login
           v-if="!sessionStore.isLoggedIn"
           class="login-card"
-          title="登录后查看我的餐厅"
-          description="登录后可以查看账号、餐厅列表、成员身份和设置。"
+          title="登录后查看我的饭搭子"
+          description="登录后可以查看账号、饭搭子列表、成员身份和设置。"
           @success="loadMe"
         />
 
@@ -39,20 +39,20 @@
 
         <view v-if="sessionStore.isLoggedIn" class="restaurant-panel">
           <view class="section-heading">
-            <text class="section-heading__title">当前餐厅</text>
+            <text class="section-heading__title">当前饭搭子</text>
             <text class="section-heading__action" @click="navigateTo('/pages_restaurant/switch/index')">切换</text>
           </view>
 
-          <view v-if="restaurantStore.currentRestaurant" class="restaurant-card">
-            <text class="restaurant-card__name">{{ restaurantStore.currentRestaurant.name }}</text>
-            <text class="restaurant-card__meta">共 {{ restaurantCount }} 个餐厅 · 当前身份待接口接入</text>
+          <view v-if="diningGroupStore.currentDiningGroup" class="restaurant-card">
+            <text class="restaurant-card__name">{{ diningGroupStore.currentDiningGroup.name }}</text>
+            <text class="restaurant-card__meta">共 {{ diningGroupCount }} 个饭搭子 · 当前身份待接口接入</text>
           </view>
 
-          <Empty v-else title="还没有餐厅" description="创建或加入餐厅后，成员、菜谱和采购都会跟随餐厅管理。" />
+          <Empty v-else title="还没有饭搭子" description="创建或加入饭搭子后，成员、菜谱和采购都会跟随饭搭子管理。" />
 
           <view class="quick-grid">
             <view
-              v-for="item in restaurantActions"
+              v-for="item in diningGroupActions"
               :key="item.title"
               class="quick-entry"
               hover-class="quick-entry--hover"
@@ -115,14 +115,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { restaurantApi } from "@/apis/restaurant";
 import { useTheme } from "@/composables/useTheme";
-import { useRestaurantStore } from "@/stores/restaurant";
+import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
 
 const sessionStore = useSessionStore();
-const restaurantStore = useRestaurantStore();
+const diningGroupStore = useDiningGroupStore();
 const {
   themeClasses,
   effectiveSkin,
@@ -134,7 +133,7 @@ const {
 } = useTheme();
 const profileLoading = ref(false);
 const skinOptions = THEME_SKIN_OPTIONS;
-const restaurantCount = computed(() => restaurantStore.restaurants.length);
+const diningGroupCount = computed(() => diningGroupStore.diningGroups.length);
 
 const paletteLabels: Record<ThemePalette, string> = {
   default: "默认",
@@ -143,9 +142,9 @@ const paletteLabels: Record<ThemePalette, string> = {
   cool: "冷蓝"
 };
 
-const restaurantActions = [
+const diningGroupActions = [
   {
-    title: "创建餐厅",
+    title: "创建饭搭子",
     description: "建立自己的家庭餐桌",
     url: "/pages_restaurant/create/index"
   },
@@ -155,7 +154,7 @@ const restaurantActions = [
     url: "/pages_restaurant/members/index"
   },
   {
-    title: "餐厅设置",
+    title: "饭搭子设置",
     description: "维护偏好和基础信息",
     url: "/pages_restaurant/settings/index"
   }
@@ -166,8 +165,7 @@ async function loadMe() {
 
   profileLoading.value = true;
   try {
-    const result = await restaurantApi.listMine();
-    restaurantStore.setRestaurants(result.restaurants, result.currentRestaurantId);
+    await diningGroupStore.refreshMine();
   } finally {
     profileLoading.value = false;
   }

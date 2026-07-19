@@ -1,5 +1,5 @@
-import type { WechatLoginResult } from "@next-meal/api-client";
+import type { PasswordLoginResult } from "@next-meal/api-client";
 
 export interface LoginSuccessPayload {
-  session: WechatLoginResult;
+  session: PasswordLoginResult;
 }

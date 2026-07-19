@@ -1,5 +1,5 @@
 <template>
-  <Layout title="餐厅设置"><text class="title">餐厅设置</text></Layout>
+  <Layout title="饭搭子设置"><text class="title">饭搭子设置</text></Layout>
 </template>
 
 

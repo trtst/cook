@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onLaunch } from "@dcloudio/uni-app";
 import { userApi } from "@/apis/user";
+import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
@@ -16,6 +17,7 @@ onLaunch(() => {
 
 async function restoreCurrentUser() {
   const sessionStore = useSessionStore();
+  const diningGroupStore = useDiningGroupStore();
   const userStore = useUserStore();
 
   await sessionStore.restore();
@@ -25,6 +27,7 @@ async function restoreCurrentUser() {
     userStore.setProfile(await userApi.getCurrent());
   } catch {
     userStore.clearProfile();
+    await diningGroupStore.clearDiningGroupState();
   }
 }
 </script>

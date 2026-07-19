@@ -196,20 +196,20 @@ import randomIcon from "@/assets/home-actions/random.svg";
 import wishIcon from "@/assets/home-actions/wish.svg";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
-import { useRestaurantStore } from "@/stores/restaurant";
+import { useDiningGroupStore } from "@/stores/dining-group";
 
 const HOME_NAV_GAP = 16;
 const { navBarTotalHeight } = useSystemInfo();
 const { themeClasses } = useTheme();
-const restaurantStore = useRestaurantStore();
+const diningGroupStore = useDiningGroupStore();
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`
 }));
 
-const restaurantName = computed(() => restaurantStore.currentRestaurant?.name ?? "我的饭桌");
+const restaurantName = computed(() => diningGroupStore.currentDiningGroup?.name ?? "我的饭搭子");
 const memberCountText = computed(() => {
-  const count = restaurantStore.currentRestaurant?.memberCount ?? 4;
+  const count = diningGroupStore.currentDiningGroup?.memberCount ?? 4;
   return `${count} 人饭桌`;
 });
 const hasMealPlan = false;
