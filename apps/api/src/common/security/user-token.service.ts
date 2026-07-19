@@ -14,6 +14,23 @@ function base64UrlDecode(value: string) {
   return Buffer.from(value, "base64url").toString("utf8");
 }
 
+function readPayload(encodedPayload: string): UserTokenPayload {
+  try {
+    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as Partial<UserTokenPayload>;
+
+    if (typeof payload.sub !== "string" || !payload.sub || typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) {
+      throw new UnauthorizedException("未登录或 token 失效");
+    }
+
+    return {
+      sub: payload.sub,
+      exp: payload.exp
+    };
+  } catch {
+    throw new UnauthorizedException("未登录或 token 失效");
+  }
+}
+
 function getSecret() {
   const secret = process.env.JWT_SECRET;
 
@@ -32,10 +49,21 @@ function sign(data: string) {
   return createHmac("sha256", getSecret()).update(data).digest("base64url");
 }
 
+function getTokenSeconds() {
+  const configured = process.env.USER_TOKEN_EXPIRES_SECONDS;
+
+  if (configured) {
+    const seconds = Number(configured);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  }
+
+  return process.env.NODE_ENV === "production" ? 1_209_600 : 2_592_000;
+}
+
 @Injectable()
 export class UserTokenService {
   createToken(userId: string) {
-    const expiresInSeconds = Number(process.env.USER_TOKEN_EXPIRES_SECONDS ?? 86_400);
+    const expiresInSeconds = getTokenSeconds();
     const payload: UserTokenPayload = {
       sub: userId,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds
@@ -64,7 +92,7 @@ export class UserTokenService {
       throw new UnauthorizedException("未登录或 token 失效");
     }
 
-    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as UserTokenPayload;
+    const payload = readPayload(encodedPayload);
 
     if (payload.exp <= Math.floor(Date.now() / 1000)) {
       throw new UnauthorizedException("未登录或 token 失效");

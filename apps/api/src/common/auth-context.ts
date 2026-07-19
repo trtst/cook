@@ -7,7 +7,7 @@ export interface AdminAuthContext {
   roles: string[];
 }
 
-export type ClientPlatform = "mp-weixin" | "h5" | "ios" | "android" | "admin-web" | "unknown";
+export type ClientPlatform = "mp-weixin" | "h5" | "pc" | "ios" | "android" | "harmony" | "admin-web" | "unknown";
 
 export interface RequestContext {
   requestId: string;

@@ -14,11 +14,12 @@ import type {
   MyDiningGroupsResult,
   PasswordLoginRequest,
   PasswordLoginResult,
+  RefreshSessionResult,
   DiningGroupMembersResult,
-  UpdateCurrentUserRequest
+  UpdateCurrentUserRequest,
 } from "./contracts";
 import { ApiClientError, HttpError, UnauthorizedError } from "./errors";
-import type { ApiResponse, DiningGroupSummary, UserProfile, UUID } from "./types";
+import type { ApiResponse, DiningGroupSummary, UserBasic, UUID } from "./types";
 
 export type AuthScheme = "none" | "user" | "admin";
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -54,15 +55,11 @@ interface RequestOptions {
 function joinUrl(baseUrl: string, path: string, query?: RequestOptions["query"]) {
   const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
   const routePath = path.startsWith("/") ? path : `/${path}`;
-  const search = new URLSearchParams();
+  const queryText = Object.entries(query ?? {})
+    .filter(([, value]) => value !== null && value !== undefined)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join("&");
 
-  for (const [key, value] of Object.entries(query ?? {})) {
-    if (value !== null && value !== undefined) {
-      search.set(key, String(value));
-    }
-  }
-
-  const queryText = search.toString();
   return `${base}${routePath}${queryText ? `?${queryText}` : ""}`;
 }
 
@@ -102,28 +99,36 @@ async function requestData<T>(options: ApiClientOptions, path: string, requestOp
     body: requestOptions.body
   });
 
-  if (result.status === 401) {
-    const error = new UnauthorizedError();
-    await options.onUnauthorized?.(error);
-    throw error;
-  }
-
-  if (result.status < 200 || result.status >= 300) {
-    throw new HttpError(result.status, "请求失败");
-  }
-
   if (!isApiResponse<T>(result.body)) {
+    if (result.status === 401) {
+      const error = new UnauthorizedError();
+      if (auth !== "none") {
+        await options.onUnauthorized?.(error);
+      }
+      throw error;
+    }
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new HttpError(result.status, "请求失败");
+    }
+
     throw new HttpError(result.status, "响应格式不符合契约");
   }
 
   if (result.body.code === 401) {
     const error = new UnauthorizedError(result.body.message, result.body.data);
-    await options.onUnauthorized?.(error);
+    if (auth !== "none") {
+      await options.onUnauthorized?.(error);
+    }
     throw error;
   }
 
   if (result.body.code !== 0) {
     throw new ApiClientError(result.body.code, result.body.message, result.body.data);
+  }
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new HttpError(result.status, "请求失败");
   }
 
   return result.body.data;
@@ -138,16 +143,22 @@ export function createApiClient(options: ApiClientOptions) {
           auth: "none",
           body
         });
+      },
+      refreshSession() {
+        return requestData<RefreshSessionResult>(options, "/auth/refresh", {
+          method: "POST",
+          auth: "user"
+        });
       }
     },
     user: {
       getCurrent() {
-        return requestData<UserProfile>(options, "/users/me", {
+        return requestData<UserBasic>(options, "/users/me", {
           auth: "user"
         });
       },
       updateCurrent(body: UpdateCurrentUserRequest) {
-        return requestData<UserProfile>(options, "/users/me", {
+        return requestData<UserBasic>(options, "/users/me", {
           method: "PUT",
           auth: "user",
           body

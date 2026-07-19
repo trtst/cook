@@ -19,6 +19,8 @@ async function bootstrap() {
       "content-type",
       "x-admin-version",
       "x-admin-build",
+      "x-cook-from",
+      "x-cook-version",
       "x-app-version",
       "x-app-build",
       "x-platform",

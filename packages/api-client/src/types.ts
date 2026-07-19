@@ -36,17 +36,18 @@ export interface UserProfile {
   nickname: string | null;
   avatarUrl: string | null;
   phone: string | null;
-  membership?: UserMembershipSnapshot;
   status: "ACTIVE" | string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
 
-export interface UserMembershipSnapshot {
-  tier: "FREE" | "PLUS" | "PRO" | string;
-  status: "ACTIVE" | "INACTIVE" | "EXPIRED" | string;
-  skinEntitlements: string[];
-  expiresAt: IsoDateTime | null;
+export interface UserBasic {
+  id: UUID;
+  /** Non-sequential public user number for display and support lookup. */
+  uid: number;
+  nickname: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
 }
 
 export interface UserSummary {

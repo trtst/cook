@@ -1,4 +1,4 @@
-import type { IsoDateTime, PageQuery, PageResult, DiningGroupMemberSummary, DiningGroupSummary, UserProfile, UUID } from "./types";
+import type { IsoDateTime, PageQuery, PageResult, DiningGroupMemberSummary, DiningGroupSummary, UserBasic, UserProfile, UUID } from "./types";
 
 export interface PasswordLoginRequest {
   phone: string;
@@ -8,7 +8,13 @@ export interface PasswordLoginRequest {
 export interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
-  user: UserProfile;
+  userId: UUID;
+  user: UserBasic;
+}
+
+export interface RefreshSessionResult {
+  token: string;
+  expiresAt: IsoDateTime;
 }
 
 export interface UpdateCurrentUserRequest {

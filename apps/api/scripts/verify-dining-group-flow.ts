@@ -42,9 +42,8 @@ interface DiningGroupMembersResult {
 
 const commonHeaders = {
   "content-type": "application/json",
-  "x-app-version": "0.1.0",
-  "x-app-build": "1",
-  "x-platform": "mp-weixin"
+  "x-cook-from": "mini_program",
+  "x-cook-version": "0.1.0"
 };
 
 function assert(condition: unknown, message: string): asserts condition {

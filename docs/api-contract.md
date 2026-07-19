@@ -16,7 +16,7 @@
 
 ## 契约状态
 
-本文为 v0.1 契约草案。三端可以基于本文并行脚手架和 mock 开发。
+本文为 v0.1 契约草案。三端可以基于本文并行脚手架开发；小程序端当前只走真实 API，不再内置 mock 请求通道。
 
 后端实现、OpenAPI 输出或字段命名需要调整时，必须先更新本文，再同步 `packages/api-client` 和调用端代码。
 
@@ -32,7 +32,7 @@
 2. 同步 `packages/domain` 中稳定领域类型，避免把数据库模型或展示模型放入共享领域包。
 3. 同步 `packages/api-client` 中调用端需要的 DTO、请求函数和返回类型。
 4. 小程序和后台按 `packages/api-client` 接入，不各自复制一套字段定义。
-5. 如果真实接口未完成，小程序和后台可以按契约使用 mock；mock 字段必须与本文一致。
+5. 如果真实接口未完成，小程序和后台入口保持关闭或标记未联调；当前小程序端不使用 mock 请求通道。
 6. 契约变更必须写入对应功能执行单或 `docs/plans/minor_change_log.md`，避免联调时出现隐性字段漂移。
 
 最小契约确认清单：
@@ -258,6 +258,21 @@ Disabled 模块统一返回：
 Authorization: Bearer <userAccessToken>
 ```
 
+小程序请求层默认附加：
+
+```text
+X-Cook-From: mini_program
+X-Cook-Version: 0.1.0
+```
+
+规则：
+
+1. `X-Cook-From` 表示端来源，支持 `mini_program`、`h5`、`pc`、`ios`、`android`、`harmony`。
+2. `X-Cook-Version` 表示当前客户端版本，默认与小程序 `manifest.json` 的 `versionName` 对齐。
+3. 两个字段用于日志、排查和兼容判断，不作为鉴权依据。
+4. 开发 / 正式环境和 token 有效期由后端环境变量决定，前端不传环境标识。
+5. 端来源优先使用 `VITE_COOK_FROM`；未配置时按 userAgent 实时判断，无法判断时回退为 `mini_program`。
+
 登录来源：
 
 1. `apps/client` 展示手机号和密码输入。
@@ -295,6 +310,8 @@ type SharedQuotaPolicy = "ALL_WRITERS" | "ADMINS_ONLY" | "OWNER_ONLY";
 
 ### UserProfile
 
+后台和治理类接口使用完整用户资料。小程序登录、当前用户基础展示优先使用 `UserBasic`，避免把治理字段带到登录链路。
+
 ```ts
 interface UserProfile {
   id: UUID;
@@ -306,6 +323,19 @@ interface UserProfile {
   status: "ACTIVE" | string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+}
+```
+
+### UserBasic
+
+```ts
+interface UserBasic {
+  id: UUID;
+  // 非连续公开用户号，只用于展示和客服检索，不用于主键或推算注册量。
+  uid: number;
+  nickname: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
 }
 ```
 
@@ -382,7 +412,8 @@ interface PasswordLoginRequest {
 interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
-  user: UserProfile;
+  userId: UUID;
+  user: UserBasic;
 }
 ```
 
@@ -392,6 +423,33 @@ interface PasswordLoginResult {
 2. 密码只保存安全哈希，不保存明文。
 3. 手机号不存在、密码错误或用户禁用时统一返回 `401` 和 `手机号或密码错误`。
 4. 返回 token 只代表用户身份，不代表当前饭搭子已确定。
+5. 小程序登录态保存到本地 storage，启动恢复时按 `expiresAt` 判断是否仍可用。
+6. 用户 token 默认开发环境 30 天、生产环境 14 天，可通过 `USER_TOKEN_EXPIRES_SECONDS` 覆盖。
+7. 登录响应只返回用户基础资料，不返回 `status`、`createdAt`、`updatedAt` 或任何饭搭子 / 菜谱 / 冰箱 / 购物集合。
+
+### 刷新登录态
+
+```text
+POST /auth/refresh
+Auth: UserBearerAuth
+```
+
+响应 `data`：
+
+```ts
+interface RefreshSessionResult {
+  token: string;
+  expiresAt: IsoDateTime;
+}
+```
+
+规则：
+
+1. 小程序启动或回到前台时，如果 token 距离过期不足 3 天，可以自动调用本接口刷新。
+2. 本接口只刷新 token，不返回用户资料，不替代 `/users/me`。
+3. token 已过期、用户不存在或用户禁用时返回 `401`，小程序必须退出登录并清理本地 session。
+4. 刷新后的 token 有效期仍由后端环境决定，开发默认 30 天、生产默认 14 天。
+5. 小程序本地 10 分钟内最多检查一次 refresh，避免频繁前后台切换重复请求。
 
 ### 当前用户
 
@@ -403,8 +461,15 @@ Auth: UserBearerAuth
 响应 `data`：
 
 ```ts
-type GetCurrentUserResult = UserProfile;
+type GetCurrentUserResult = UserBasic;
 ```
+
+规则：
+
+1. 小程序启动恢复登录态时，只恢复本地 10 分钟用户资料缓存。
+2. 缓存不存在、缓存过期或账号不一致时，不自动请求本接口；由当前页面按需请求。
+3. 用户手动点击刷新，或当前页面确实需要最新用户资料时，才请求本接口。
+4. 任何鉴权接口返回 `401` 时，小程序必须清理 session 和用户资料缓存。
 
 ### 更新当前用户
 
@@ -426,7 +491,7 @@ interface UpdateCurrentUserRequest {
 响应 `data`：
 
 ```ts
-type UpdateCurrentUserResult = UserProfile;
+type UpdateCurrentUserResult = UserBasic;
 ```
 
 ### 我的饭搭子列表
@@ -682,14 +747,14 @@ type AdminListDiningGroupsResult = PageResult<DiningGroupSummary>;
 1. 先完成本文和 `Auth / User / DiningGroup` v0.1 契约。
 2. 创建 `packages/domain` 与 `packages/api-client` 的最小契约壳。
 3. 创建 `apps/api` NestJS 最小壳并输出 OpenAPI。
-4. 创建 `apps/client` 小程序脚手架，并使用 `api-client` 接入 mock / real 双通道。
+4. 创建 `apps/client` 小程序脚手架，并使用 `api-client` 接入真实 API。
 5. 再创建 `apps/admin` 脚手架。
-6. 小程序使用 mock 或最小 `api-client` 接入登录、当前用户和饭搭子列表。
-7. 后台使用 mock 或最小 `api-client` 接入管理员登录、用户列表和饭搭子列表。
+6. 小程序使用最小 `api-client` 接入登录、当前用户和饭搭子列表。
+7. 后台使用最小 `api-client` 接入管理员登录、用户列表和饭搭子列表。
 8. 后端完成真实接口后输出 OpenAPI v0.1。
 9. 三端以第一条纵切链路作为首个联调验收点。
 
-在第一条纵切链路验证通过前，其他业务模块可以脚手架或 mock 开发，但入口保持关闭或明确标记未联调。
+在第一条纵切链路验证通过前，其他业务模块可以先做脚手架，但入口保持关闭或明确标记未联调。
 
 ## 首批验证命令
 

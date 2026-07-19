@@ -1,42 +1,22 @@
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
-import type { PasswordLoginRequest, UserProfile } from "@next-meal/api-client";
+import type { PasswordLoginRequest, UserBasic } from "@next-meal/api-client";
 import { PrismaService } from "../../common/prisma.service";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { verifyPassword } from "../../common/security/password";
 
-function toIsoDate(value: Date) {
-  return value.toISOString();
-}
-
-function getDefaultMembership() {
-  return {
-    tier: "FREE",
-    status: "ACTIVE",
-    skinEntitlements: [] as string[],
-    expiresAt: null
-  };
-}
-
-function toUserProfile(user: {
+function toUserBasic(user: {
   id: string;
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
   phone: string | null;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
-}): UserProfile {
+}): UserBasic {
   return {
     id: user.id,
     uid: user.uid,
     nickname: user.nickname,
     avatarUrl: user.avatarUrl,
-    phone: user.phone,
-    membership: getDefaultMembership(),
-    status: user.status,
-    createdAt: toIsoDate(user.createdAt),
-    updatedAt: toIsoDate(user.updatedAt)
+    phone: user.phone
   };
 }
 
@@ -63,7 +43,8 @@ export class AuthService {
     return {
       token: token.token,
       expiresAt: token.expiresAt,
-      user: toUserProfile(user)
+      userId: user.id,
+      user: toUserBasic(user)
     };
   }
 
@@ -76,10 +57,27 @@ export class AuthService {
       throw new UnauthorizedException("未登录或 token 失效");
     }
 
-    return toUserProfile(user);
+    return toUserBasic(user);
   }
 
-  async updateCurrentUser(userId: string, body: Partial<UserProfile>) {
+  async refreshSession(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user || user.status !== "ACTIVE") {
+      throw new UnauthorizedException("未登录或 token 失效");
+    }
+
+    const token = this.userTokenService.createToken(user.id);
+
+    return {
+      token: token.token,
+      expiresAt: token.expiresAt
+    };
+  }
+
+  async updateCurrentUser(userId: string, body: Partial<UserBasic>) {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -89,6 +87,6 @@ export class AuthService {
       }
     });
 
-    return toUserProfile(user);
+    return toUserBasic(user);
   }
 }

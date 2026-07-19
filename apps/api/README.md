@@ -31,6 +31,14 @@ pnpm build:api
 
 复制 `.env.example` 为本地 `.env` 后再按环境填写。
 
+用户登录 token 有效期由后端控制：
+
+```text
+开发默认：30 天
+生产默认：14 天
+USER_TOKEN_EXPIRES_SECONDS 可覆盖默认值
+```
+
 ## 本地数据库
 
 本机已有 PostgreSQL 时，按 `.env` 的 `DATABASE_URL` 创建数据库后执行迁移和 seed。

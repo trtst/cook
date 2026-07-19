@@ -32,7 +32,17 @@ function parseBuild(value: string | undefined) {
 }
 
 function parsePlatform(value: string | undefined): ClientPlatform {
-  if (value === "mp-weixin" || value === "h5" || value === "ios" || value === "android" || value === "admin-web") {
+  if (value === "mini_program") return "mp-weixin";
+  if (value === "admin_web") return "admin-web";
+  if (
+    value === "mp-weixin" ||
+    value === "h5" ||
+    value === "pc" ||
+    value === "ios" ||
+    value === "android" ||
+    value === "harmony" ||
+    value === "admin-web"
+  ) {
     return value;
   }
 
@@ -42,8 +52,9 @@ function parsePlatform(value: string | undefined): ClientPlatform {
 @Injectable()
 export class RequestContextMiddleware implements NestMiddleware {
   use(request: HeaderRequest & Partial<RequestWithContext>, _response: unknown, next: NextFunction) {
-    const platform = parsePlatform(readHeader(request, "x-platform"));
+    const platform = parsePlatform(readHeader(request, "x-cook-from") ?? readHeader(request, "x-platform"));
     const adminVersion = readHeader(request, "x-admin-version");
+    const cookVersion = readHeader(request, "x-cook-version");
     const appVersion = readHeader(request, "x-app-version");
     const adminBuild = readHeader(request, "x-admin-build");
     const appBuild = readHeader(request, "x-app-build");
@@ -53,7 +64,7 @@ export class RequestContextMiddleware implements NestMiddleware {
       ip: readIp(request),
       userAgent: readHeader(request, "user-agent") ?? "",
       platform,
-      appVersion: adminVersion ?? appVersion ?? null,
+      appVersion: adminVersion ?? cookVersion ?? appVersion ?? null,
       appBuild: parseBuild(adminBuild ?? appBuild)
     };
 

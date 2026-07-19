@@ -9,15 +9,6 @@ function toIsoDate(value: Date) {
   return value.toISOString();
 }
 
-function getDefaultMembership() {
-  return {
-    tier: "FREE",
-    status: "ACTIVE",
-    skinEntitlements: [] as string[],
-    expiresAt: null
-  };
-}
-
 @Injectable()
 export class AdminService {
   constructor(
@@ -80,7 +71,6 @@ export class AdminService {
         nickname: user.nickname,
         avatarUrl: user.avatarUrl,
         phone: user.phone,
-        membership: getDefaultMembership(),
         status: user.status,
         createdAt: toIsoDate(user.createdAt),
         updatedAt: toIsoDate(user.updatedAt)

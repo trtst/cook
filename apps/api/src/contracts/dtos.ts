@@ -1,16 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, MinLength } from "class-validator";
+import { IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
 
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
   @IsString()
+  @MaxLength(11)
   @Matches(/^1[3-9]\d{9}$/)
   phone!: string;
 
   @ApiProperty({ example: "change-me" })
   @IsString()
   @MinLength(6)
+  @MaxLength(128)
   password!: string;
 }
 
