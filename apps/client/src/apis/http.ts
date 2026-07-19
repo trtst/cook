@@ -1,18 +1,23 @@
 import { createApiClient, UnauthorizedError } from "@next-meal/api-client";
 import { clearCurrentDiningGroupPreference } from "@/stores/dining-group-preference";
-import { DEFAULT_API_BASE_URL } from "@/utils/constants";
 import { emitSessionCleared } from "@/utils/session-events";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
-import { mockRequestAdapter } from "./adapters/mock";
-import { uniRequestAdapter } from "./adapters/uni";
+import {
+  downloadFile as uniDownloadFile,
+  getApiUrl,
+  uniRequestAdapter,
+  uploadFile as uniUploadFile,
+  type DownloadFileOptions,
+  type UploadFileOptions
+} from "./adapters/uni";
 
-const API_MODE = import.meta.env.VITE_API_MODE ?? "mock";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+const refreshWindowMs = 3 * 24 * 60 * 60 * 1000;
+const refreshGapMs = 10 * 60 * 1000;
 
 export const api = createApiClient({
-  baseUrl: API_BASE_URL,
-  request: API_MODE === "real" ? uniRequestAdapter : mockRequestAdapter,
+  baseUrl: getApiUrl(),
+  request: uniRequestAdapter,
   getAuthHeader: () => {
     const token = useSessionStore().token;
     return token ? `Bearer ${token}` : null;
@@ -25,3 +30,59 @@ export const api = createApiClient({
     throw error;
   }
 });
+
+function withAuth(headers: Record<string, string> = {}) {
+  const token = useSessionStore().token;
+
+  return {
+    ...headers,
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+}
+
+export function uploadFile(options: UploadFileOptions) {
+  return uniUploadFile({
+    ...options,
+    headers: withAuth(options.headers)
+  });
+}
+
+export function downloadFile(options: DownloadFileOptions) {
+  return uniDownloadFile({
+    ...options,
+    headers: withAuth(options.headers)
+  });
+}
+
+let refreshPromise: Promise<void> | null = null;
+
+function shouldRefresh(expiresAt: string) {
+  const expiresTime = Date.parse(expiresAt);
+  return Number.isFinite(expiresTime) && expiresTime - Date.now() <= refreshWindowMs;
+}
+
+function canCheckRefresh(lastCheckedAt: number) {
+  return Date.now() - lastCheckedAt >= refreshGapMs;
+}
+
+export async function refreshSessionIfNeeded() {
+  const sessionStore = useSessionStore();
+
+  if (!sessionStore.token || !shouldRefresh(sessionStore.expiresAt) || !canCheckRefresh(sessionStore.refreshCheckedAt)) return;
+
+  refreshPromise ??= api.auth
+    .refreshSession()
+    .then(async session => {
+      await sessionStore.setSession({
+        token: session.token,
+        userId: sessionStore.userId,
+        expiresAt: session.expiresAt
+      });
+    })
+    .finally(async () => {
+      await useSessionStore().markRefreshChecked();
+      refreshPromise = null;
+    });
+
+  await refreshPromise;
+}

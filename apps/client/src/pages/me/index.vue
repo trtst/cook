@@ -21,7 +21,7 @@
           class="login-card"
           title="登录后查看我的饭搭子"
           description="登录后可以查看账号、饭搭子列表、成员身份和设置。"
-          @success="loadMe"
+          @success="loadDiningGroups"
         />
 
         <view v-else class="profile-card">
@@ -29,8 +29,8 @@
             <text class="profile-card__avatar-text">我</text>
           </view>
           <view class="profile-card__main">
-            <text class="profile-card__name">下一餐用户</text>
-            <text class="profile-card__meta">当前账号 {{ sessionStore.userId || "已登录" }}</text>
+            <text class="profile-card__name">{{ profileName }}</text>
+            <text class="profile-card__meta">{{ profileMeta }}</text>
           </view>
           <view class="profile-card__action" hover-class="profile-card__action--hover" hover-stay-time="100" @click="loadMe">
             <text class="profile-card__action-text">刷新</text>
@@ -115,12 +115,15 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { userApi } from "@/apis/user";
 import { useTheme } from "@/composables/useTheme";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
+import { useUserStore } from "@/stores/user";
 import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
 
 const sessionStore = useSessionStore();
+const userStore = useUserStore();
 const diningGroupStore = useDiningGroupStore();
 const {
   themeClasses,
@@ -134,6 +137,17 @@ const {
 const profileLoading = ref(false);
 const skinOptions = THEME_SKIN_OPTIONS;
 const diningGroupCount = computed(() => diningGroupStore.diningGroups.length);
+const profileName = computed(() => userStore.profile?.nickname || "下一餐用户");
+const profileMeta = computed(() => {
+  const profile = userStore.profile;
+
+  if (!profile) {
+    return sessionStore.userId ? `当前账号 ${sessionStore.userId}` : "已登录";
+  }
+
+  if (profile.phone) return `手机号 ${profile.phone}`;
+  return `用户号 ${profile.uid}`;
+});
 
 const paletteLabels: Record<ThemePalette, string> = {
   default: "默认",
@@ -165,10 +179,16 @@ async function loadMe() {
 
   profileLoading.value = true;
   try {
-    await diningGroupStore.refreshMine();
+    userStore.setProfile(await userApi.getCurrent());
+    await loadDiningGroups();
   } finally {
     profileLoading.value = false;
   }
+}
+
+async function loadDiningGroups() {
+  if (!sessionStore.isLoggedIn) return;
+  await diningGroupStore.refreshMine();
 }
 
 async function handleSkinChange(skin: ThemeSkin) {

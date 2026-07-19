@@ -5,7 +5,6 @@
         v-if="!sessionStore.isLoggedIn"
         title="登录后创建饭搭子"
         description="登录后可以创建自己的饭搭子，并邀请成员一起使用。"
-        @success="diningGroupStore.refreshMine"
       />
 
       <view v-else class="form-panel">
