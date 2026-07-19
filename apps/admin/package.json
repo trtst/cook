@@ -4,9 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsc -p tsconfig.json --noEmit --watch --preserveWatchOutput",
-    "type-check": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json"
+    "dev": "vite --host 127.0.0.1",
+    "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "build": "vite build"
   },
-  "devDependencies": {}
+  "dependencies": {
+    "@element-plus/icons-vue": "2.3.1",
+    "@next-meal/api-client": "workspace:*",
+    "element-plus": "2.11.5",
+    "pinia": "2.1.7",
+    "vue": "3.4.21",
+    "vue-router": "4.4.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.0.4",
+    "sass": "1.101.0",
+    "vite": "5.2.8",
+    "vue-tsc": "3.3.7"
+  }
 }

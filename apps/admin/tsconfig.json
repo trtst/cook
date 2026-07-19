@@ -1,9 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "noEmitOnError": true
+    "baseUrl": ".",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "vite.config.ts"]
 }

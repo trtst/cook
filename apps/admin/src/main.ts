@@ -1,18 +1,17 @@
-export interface AdminAppConfig {
-  apiBaseUrl: string;
-  adminTokenStorageKey: string;
-}
+import ElementPlus from "element-plus";
+import zhCn from "element-plus/es/locale/lang/zh-cn";
+import { createPinia } from "pinia";
+import { createApp } from "vue";
+import App from "./App.vue";
+import router from "./router";
 
-const runtimeEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+import "element-plus/dist/index.css";
+import "./styles/global.scss";
 
-export const adminAppConfig: AdminAppConfig = {
-  apiBaseUrl: runtimeEnv.VITE_API_BASE_URL ?? "http://127.0.0.1:3000/api",
-  adminTokenStorageKey: runtimeEnv.VITE_ADMIN_TOKEN_STORAGE_KEY ?? "next_meal_admin_token"
-};
+const app = createApp(App);
 
-export function bootstrapAdminShell() {
-  return {
-    app: "next-meal-admin",
-    config: adminAppConfig
-  };
-}
+app.use(createPinia());
+app.use(router);
+app.use(ElementPlus, { locale: zhCn });
+
+app.mount("#app");
