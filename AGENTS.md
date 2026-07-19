@@ -134,9 +134,11 @@ parallel code edits.
 - API dev: `pnpm dev:api`
 - Client dev: `pnpm dev:client`
 - Admin dev: `pnpm dev:admin`
+- Worker dev: `pnpm dev:worker` (disabled status check only in V1)
 - API build: `pnpm build:api`
 - Client build: `pnpm build:client`
 - Admin build: `pnpm build:admin`
+- Worker build: `pnpm build:worker`
 
 Run the smallest relevant command for the change. Use full `pnpm type-check`
 when shared contracts, cross-app types, or broad TypeScript behavior changed.

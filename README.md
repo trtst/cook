@@ -8,6 +8,7 @@
 apps/api      后端 API
 apps/client   uni-app 小程序
 apps/admin    后台管理端
+apps/worker   异步任务 Worker，V1 保留禁用态骨架
 ```
 
 ## 共享包
@@ -24,10 +25,12 @@ packages/platform    平台能力接口
 pnpm dev:api
 pnpm dev:client
 pnpm dev:admin
+pnpm dev:worker
 
 pnpm build:api
 pnpm build:client
 pnpm build:admin
+pnpm build:worker
 
 pnpm type-check
 ```

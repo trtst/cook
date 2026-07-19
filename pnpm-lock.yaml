@@ -150,6 +150,15 @@ importers:
         specifier: 3.3.7
         version: 3.3.7(typescript@5.9.3)
 
+  apps/worker:
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+      tsx:
+        specifier: 4.23.1
+        version: 4.23.1
+
   packages/api-client:
     dependencies:
       '@next-meal/domain':
