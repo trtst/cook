@@ -32,7 +32,7 @@
 9. `components.md`
    - 前端组件准入、拆分边界、命名和输入输出规则。
 10. `runbook.md`
-   - 启动、调试、验证、联调和交付说明。
+   - 启动、调试、验证、三端联合开发流程、联调和交付说明。
 11. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
 
@@ -57,11 +57,11 @@
 - `components.md`
   - 共享组件准入、命名、`props` 和事件规则。
 - `runbook.md`
-  - 启动基线、调试顺序、联调清单和交付说明。
+  - 启动基线、调试顺序、三端联合开发流程、联调清单和交付说明。
 - `cook/`
   - 产品方案、技术实施方案、Prisma Schema 和手写 SQL 约束。
 - `templates/`
-  - 计划和评审模板。
+  - 计划、功能执行单和评审模板。
 - `plans/minor_change_log.md`
   - 小型低风险改动记录。
 - `archive/`
@@ -74,3 +74,4 @@
 3. 一次性执行说明写入 `plans/`。
 4. 已过时材料移入 `archive/`。
 5. 主文档必须写当前项目如何做，不保留与下一餐无关的通用模板口径。
+6. 三端联合开发的功能执行单从 `templates/feature_execution_template.md` 复制到 `plans/`，只保留本轮需要协作和验收的信息。

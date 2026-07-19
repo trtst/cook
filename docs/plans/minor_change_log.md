@@ -10,4 +10,5 @@
 
 | 日期 | 改动 | 影响文件 | 验证 |
 | --- | --- | --- | --- |
+| 2026-07-19 | 补充三端联合开发机制、接口契约流程和功能执行单模板 | `docs/project.md`、`docs/api-contract.md`、`docs/runbook.md`、`docs/index.md`、`docs/templates/feature_execution_template.md` | `git diff --check -- docs/templates/feature_execution_template.md docs/project.md docs/api-contract.md docs/runbook.md docs/index.md` |
 | YYYY-MM-DD | 示例：小型前端清理 | `components/...` | `lint`、`type-check` |
