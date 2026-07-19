@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminAccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum DiningGroupStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum DiningGroupRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INVITED
+  REMOVED
+  LEFT
+}
+
+enum CollaborationMode {
+  PERSONAL
+  SHARED
+}
+
+enum SharedQuotaPolicy {
+  ALL_WRITERS
+  ADMINS_ONLY
+  OWNER_ONLY
+}
+
+model AdminAccount {
+  id           String             @id @default(uuid()) @db.Uuid
+  username     String             @unique @db.VarChar(64)
+  displayName  String             @map("display_name") @db.VarChar(64)
+  passwordHash String             @map("password_hash") @db.VarChar(255)
+  roles        String[]           @default(["SUPER_ADMIN"])
+  status       AdminAccountStatus @default(ACTIVE)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("admin_accounts")
+}
+
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  uid          Int        @unique
+  nickname     String?    @db.VarChar(64)
+  avatarUrl    String?    @map("avatar_url") @db.VarChar(512)
+  phone        String?    @unique @db.VarChar(32)
+  passwordHash String?    @map("password_hash") @db.VarChar(255)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ownedDiningGroups DiningGroup[]       @relation("DiningGroupOwner")
+  memberships       DiningGroupMember[]
+  createdInvites    DiningGroupInvite[] @relation("DiningGroupInviteCreator")
+  idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordUser")
+
+  @@index([uid])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model DiningGroup {
+  id                String             @id @default(uuid()) @db.Uuid
+  name              String             @db.VarChar(80)
+  ownerId           String             @unique @map("owner_id") @db.Uuid
+  collaborationMode CollaborationMode  @default(PERSONAL) @map("collaboration_mode")
+  sharedQuotaPolicy SharedQuotaPolicy  @default(ALL_WRITERS) @map("shared_quota_policy")
+  memberLimit       Int                @default(4) @map("member_limit")
+  status            DiningGroupStatus  @default(ACTIVE)
+  version           Int                @default(1)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner              User                 @relation("DiningGroupOwner", fields: [ownerId], references: [id])
+  members            DiningGroupMember[]
+  invites            DiningGroupInvite[]
+  idempotencyRecords IdempotencyRecord[]
+
+  @@index([status, createdAt])
+  @@index([name])
+  @@index([ownerId])
+  @@map("dining_groups")
+}
+
+model DiningGroupMember {
+  id            String          @id @default(uuid()) @db.Uuid
+  diningGroupId String          @map("dining_group_id") @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  role          DiningGroupRole
+  status        MemberStatus    @default(ACTIVE)
+  joinedAt      DateTime?       @map("joined_at") @db.Timestamptz(3)
+  invitedAt     DateTime?       @map("invited_at") @db.Timestamptz(3)
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningGroup DiningGroup @relation(fields: [diningGroupId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@unique([diningGroupId, userId])
+  @@index([diningGroupId, status])
+  @@index([userId, status])
+  @@map("dining_group_members")
+}
+
+model DiningGroupInvite {
+  id              String   @id @default(uuid()) @db.Uuid
+  diningGroupId   String   @map("dining_group_id") @db.Uuid
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  tokenHash       String   @unique @map("token_hash") @db.VarChar(128)
+  status          String   @default("ACTIVE") @db.VarChar(16)
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningGroup DiningGroup @relation(fields: [diningGroupId], references: [id])
+  createdBy   User        @relation("DiningGroupInviteCreator", fields: [createdByUserId], references: [id])
+
+  @@index([diningGroupId, status])
+  @@index([expiresAt])
+  @@map("dining_group_invites")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  operationId    String   @map("operation_id") @db.Uuid
+  operationType  String   @map("operation_type") @db.VarChar(64)
+  userId         String   @map("user_id") @db.Uuid
+  diningGroupId  String   @map("dining_group_id") @db.Uuid
+  resultJson     Json     @map("result_json")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User        @relation("IdempotencyRecordUser", fields: [userId], references: [id])
+  diningGroup DiningGroup @relation(fields: [diningGroupId], references: [id])
+
+  @@unique([operationId, operationType, userId, diningGroupId])
+  @@index([userId, operationType])
+  @@index([diningGroupId, operationType])
+  @@map("idempotency_records")
+}

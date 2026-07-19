@@ -1,10 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from "class-validator";
+import { Type } from "class-transformer";
+import { IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, MinLength } from "class-validator";
 
-export class WechatLoginDto {
-  @ApiProperty({ example: "wx-login-code" })
+export class PasswordLoginDto {
+  @ApiProperty({ example: "13800000000" })
   @IsString()
-  code!: string;
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ example: "change-me" })
+  @IsString()
+  @MinLength(6)
+  password!: string;
 }
 
 export class AdminLoginDto {
@@ -34,8 +41,8 @@ export class UpdateCurrentUserDto {
   phone?: string;
 }
 
-export class CreateRestaurantDto {
-  @ApiProperty({ example: "我们家餐厅" })
+export class CreateDiningGroupDto {
+  @ApiProperty({ example: "我的饭搭子" })
   @IsString()
   name!: string;
 
@@ -50,27 +57,29 @@ export class OperationDto {
   operationId!: string;
 }
 
-export class RestaurantMembersQueryDto {
+export class DiningGroupMembersQueryDto {
   @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
   @IsUUID()
-  restaurantId!: string;
+  diningGroupId!: string;
 }
 
 export class CreateInviteDto extends OperationDto {
   @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
   @IsUUID()
-  restaurantId!: string;
+  diningGroupId!: string;
 }
 
 export class PageQueryDto {
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
   @ApiPropertyOptional({ default: 20, maximum: 100 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
@@ -82,7 +91,7 @@ export class PageQueryDto {
   keyword?: string;
 }
 
-export class AdminRestaurantQueryDto extends PageQueryDto {
+export class AdminDiningGroupQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: "ACTIVE" })
   @IsOptional()
   @IsString()

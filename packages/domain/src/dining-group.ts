@@ -1,4 +1,4 @@
-export type RestaurantRole = "OWNER" | "ADMIN" | "MEMBER";
+export type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
 
 export type MemberStatus = "ACTIVE" | "INVITED" | "REMOVED" | "LEFT";
 

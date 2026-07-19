@@ -6,9 +6,13 @@
   "main": "./dist/main.js",
   "scripts": {
     "dev": "tsx src/main.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts",
     "type-check": "pnpm --dir ../.. --filter @next-meal/domain build && pnpm --dir ../.. --filter @next-meal/api-client build && tsc -p tsconfig.json --noEmit",
     "build": "pnpm --dir ../.. --filter @next-meal/domain build && pnpm --dir ../.. --filter @next-meal/api-client build && tsc -p tsconfig.json",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.1.28",
@@ -17,6 +21,7 @@
     "@nestjs/swagger": "11.4.6",
     "@next-meal/api-client": "workspace:*",
     "@next-meal/domain": "workspace:*",
+    "@prisma/client": "5.22.0",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
     "reflect-metadata": "0.2.2",
@@ -24,6 +29,10 @@
   },
   "devDependencies": {
     "@types/node": "26.1.1",
+    "prisma": "5.22.0",
     "tsx": "4.23.1"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

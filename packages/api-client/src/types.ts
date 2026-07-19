@@ -2,12 +2,12 @@ import type {
   CollaborationMode,
   IsoDateTime,
   MemberStatus,
-  RestaurantRole,
+  DiningGroupRole,
   SharedQuotaPolicy,
   UUID
 } from "@next-meal/domain";
 
-export type { CollaborationMode, IsoDateTime, MemberStatus, RestaurantRole, SharedQuotaPolicy, UUID };
+export type { CollaborationMode, IsoDateTime, MemberStatus, DiningGroupRole, SharedQuotaPolicy, UUID };
 
 export interface ApiResponse<T> {
   code: number;
@@ -31,6 +31,8 @@ export interface PageResult<T> {
 
 export interface UserProfile {
   id: UUID;
+  /** Non-sequential public user number for display and support lookup. */
+  uid: number;
   nickname: string | null;
   avatarUrl: string | null;
   phone: string | null;
@@ -49,11 +51,13 @@ export interface UserMembershipSnapshot {
 
 export interface UserSummary {
   id: UUID;
+  /** Non-sequential public user number for display and support lookup. */
+  uid: number;
   nickname: string | null;
   avatarUrl: string | null;
 }
 
-export interface RestaurantSummary {
+export interface DiningGroupSummary {
   id: UUID;
   name: string;
   ownerId: UUID;
@@ -62,18 +66,18 @@ export interface RestaurantSummary {
   memberLimit: number;
   status: "ACTIVE" | string;
   version: number;
-  myRole: RestaurantRole;
+  myRole: DiningGroupRole;
   myMemberStatus: MemberStatus;
   memberCount: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
 
-export interface RestaurantMemberSummary {
+export interface DiningGroupMemberSummary {
   id: UUID;
-  restaurantId: UUID;
+  diningGroupId: UUID;
   user: UserSummary;
-  role: RestaurantRole;
+  role: DiningGroupRole;
   status: MemberStatus;
   joinedAt: IsoDateTime | null;
   invitedAt: IsoDateTime | null;

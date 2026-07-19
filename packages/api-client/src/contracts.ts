@@ -1,10 +1,11 @@
-import type { IsoDateTime, PageQuery, PageResult, RestaurantMemberSummary, RestaurantSummary, UserProfile, UUID } from "./types";
+import type { IsoDateTime, PageQuery, PageResult, DiningGroupMemberSummary, DiningGroupSummary, UserProfile, UUID } from "./types";
 
-export interface WechatLoginRequest {
-  code: string;
+export interface PasswordLoginRequest {
+  phone: string;
+  password: string;
 }
 
-export interface WechatLoginResult {
+export interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: UserProfile;
@@ -16,9 +17,9 @@ export interface UpdateCurrentUserRequest {
   phone?: string;
 }
 
-export interface MyRestaurantsResult {
-  restaurants: RestaurantSummary[];
-  currentRestaurantId: UUID | null;
+export interface MyDiningGroupsResult {
+  diningGroups: DiningGroupSummary[];
+  currentDiningGroupId: UUID | null;
   limits: {
     ownedLimit: number;
     joinedLimit: number;
@@ -26,23 +27,23 @@ export interface MyRestaurantsResult {
   };
 }
 
-export interface CreateRestaurantRequest {
+export interface CreateDiningGroupRequest {
   name: string;
   operationId: UUID;
 }
 
-export interface CreateRestaurantResult {
-  restaurant: RestaurantSummary;
-  ownerMember: RestaurantMemberSummary;
+export interface CreateDiningGroupResult {
+  diningGroup: DiningGroupSummary;
+  ownerMember: DiningGroupMemberSummary;
 }
 
-export interface RestaurantMembersResult {
-  restaurantId: UUID;
-  members: RestaurantMemberSummary[];
+export interface DiningGroupMembersResult {
+  diningGroupId: UUID;
+  members: DiningGroupMemberSummary[];
 }
 
 export interface CreateInviteRequest {
-  restaurantId: UUID;
+  diningGroupId: UUID;
   operationId: UUID;
 }
 
@@ -57,8 +58,8 @@ export interface AcceptInviteRequest {
 }
 
 export interface AcceptInviteResult {
-  restaurant: RestaurantSummary;
-  member: RestaurantMemberSummary;
+  diningGroup: DiningGroupSummary;
+  member: DiningGroupMemberSummary;
 }
 
 export interface AdminLoginRequest {
@@ -83,9 +84,9 @@ export interface AdminListUsersQuery extends PageQuery {
 
 export type AdminListUsersResult = PageResult<UserProfile>;
 
-export interface AdminListRestaurantsQuery extends PageQuery {
+export interface AdminListDiningGroupsQuery extends PageQuery {
   keyword?: string;
   status?: string;
 }
 
-export type AdminListRestaurantsResult = PageResult<RestaurantSummary>;
+export type AdminListDiningGroupsResult = PageResult<DiningGroupSummary>;

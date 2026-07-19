@@ -1,17 +1,19 @@
-import { Body, Controller, Inject, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Post, UseGuards } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
-import { WechatLoginDto } from "../../contracts/dtos";
-import { MockAuthService } from "./mock-auth.service";
+import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
+import { PasswordLoginDto } from "../../contracts/dtos";
+import { AuthService } from "./auth.service";
 
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
-  constructor(@Inject(MockAuthService) private readonly authService: MockAuthService) {}
+  constructor(@Inject(AuthService) private readonly authService: AuthService) {}
 
-  @Post("wechat/login")
-  @ApiOkResponse({ description: "微信登录，返回用户 token 和用户摘要" })
-  loginWithWechat(@Body() body: WechatLoginDto) {
-    return ok(this.authService.loginWithWechat(body));
+  @Post("login")
+  @UseGuards(LoginRateLimitGuard)
+  @ApiOkResponse({ description: "手机号密码登录，返回用户 token 和用户摘要" })
+  loginWithPassword(@Body() body: PasswordLoginDto) {
+    return this.authService.loginWithPassword(body).then(result => ok(result));
   }
 }

@@ -1,24 +1,24 @@
 import type {
   AcceptInviteRequest,
   AcceptInviteResult,
-  AdminListRestaurantsQuery,
-  AdminListRestaurantsResult,
+  AdminListDiningGroupsQuery,
+  AdminListDiningGroupsResult,
   AdminListUsersQuery,
   AdminListUsersResult,
   AdminLoginRequest,
   AdminLoginResult,
   CreateInviteRequest,
   CreateInviteResult,
-  CreateRestaurantRequest,
-  CreateRestaurantResult,
-  MyRestaurantsResult,
-  RestaurantMembersResult,
-  UpdateCurrentUserRequest,
-  WechatLoginRequest,
-  WechatLoginResult
+  CreateDiningGroupRequest,
+  CreateDiningGroupResult,
+  MyDiningGroupsResult,
+  PasswordLoginRequest,
+  PasswordLoginResult,
+  DiningGroupMembersResult,
+  UpdateCurrentUserRequest
 } from "./contracts";
 import { ApiClientError, HttpError, UnauthorizedError } from "./errors";
-import type { ApiResponse, RestaurantSummary, UserProfile, UUID } from "./types";
+import type { ApiResponse, DiningGroupSummary, UserProfile, UUID } from "./types";
 
 export type AuthScheme = "none" | "user" | "admin";
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -132,8 +132,8 @@ async function requestData<T>(options: ApiClientOptions, path: string, requestOp
 export function createApiClient(options: ApiClientOptions) {
   return {
     auth: {
-      loginWithWechat(body: WechatLoginRequest) {
-        return requestData<WechatLoginResult>(options, "/auth/wechat/login", {
+      loginWithPassword(body: PasswordLoginRequest) {
+        return requestData<PasswordLoginResult>(options, "/auth/login", {
           method: "POST",
           auth: "none",
           body
@@ -154,39 +154,39 @@ export function createApiClient(options: ApiClientOptions) {
         });
       }
     },
-    restaurant: {
+    diningGroup: {
       listMine() {
-        return requestData<MyRestaurantsResult>(options, "/restaurants/mine", {
+        return requestData<MyDiningGroupsResult>(options, "/dining-groups/mine", {
           auth: "user"
         });
       },
-      create(body: CreateRestaurantRequest) {
-        return requestData<CreateRestaurantResult>(options, "/restaurants", {
+      create(body: CreateDiningGroupRequest) {
+        return requestData<CreateDiningGroupResult>(options, "/dining-groups", {
           method: "POST",
           auth: "user",
           body
         });
       },
-      get(restaurantId: UUID) {
-        return requestData<RestaurantSummary>(options, `/restaurants/${encodePath(restaurantId)}`, {
+      get(diningGroupId: UUID) {
+        return requestData<DiningGroupSummary>(options, `/dining-groups/${encodePath(diningGroupId)}`, {
           auth: "user"
         });
       },
-      listMembers(restaurantId: UUID) {
-        return requestData<RestaurantMembersResult>(options, "/restaurant-members", {
+      listMembers(diningGroupId: UUID) {
+        return requestData<DiningGroupMembersResult>(options, "/dining-group-members", {
           auth: "user",
-          query: { restaurantId }
+          query: { diningGroupId }
         });
       },
       createInvite(body: CreateInviteRequest) {
-        return requestData<CreateInviteResult>(options, "/restaurant-invites", {
+        return requestData<CreateInviteResult>(options, "/dining-group-invites", {
           method: "POST",
           auth: "user",
           body
         });
       },
       acceptInvite(inviteToken: string, body: AcceptInviteRequest) {
-        return requestData<AcceptInviteResult>(options, `/restaurant-invites/${encodePath(inviteToken)}/accept`, {
+        return requestData<AcceptInviteResult>(options, `/dining-group-invites/${encodePath(inviteToken)}/accept`, {
           method: "POST",
           auth: "user",
           body
@@ -207,8 +207,8 @@ export function createApiClient(options: ApiClientOptions) {
           query: { ...query }
         });
       },
-      listRestaurants(query: AdminListRestaurantsQuery) {
-        return requestData<AdminListRestaurantsResult>(options, "/admin/restaurants", {
+      listDiningGroups(query: AdminListDiningGroupsQuery) {
+        return requestData<AdminListDiningGroupsResult>(options, "/admin/dining-groups", {
           auth: "admin",
           query: { ...query }
         });

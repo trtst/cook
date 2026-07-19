@@ -1,2 +1,2 @@
 export * from "./primitives";
-export * from "./restaurant";
+export * from "./dining-group";

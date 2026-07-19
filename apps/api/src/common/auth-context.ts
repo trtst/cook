@@ -4,6 +4,18 @@ export interface UserAuthContext {
 
 export interface AdminAuthContext {
   adminId: string;
+  roles: string[];
+}
+
+export type ClientPlatform = "mp-weixin" | "h5" | "ios" | "android" | "admin-web" | "unknown";
+
+export interface RequestContext {
+  requestId: string;
+  ip: string;
+  userAgent: string;
+  platform: ClientPlatform;
+  appVersion: string | null;
+  appBuild: number | null;
 }
 
 export interface RequestWithUser {
@@ -12,4 +24,8 @@ export interface RequestWithUser {
 
 export interface RequestWithAdmin {
   admin: AdminAuthContext;
+}
+
+export interface RequestWithContext {
+  context: RequestContext;
 }

@@ -1,8 +1,11 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import type { RequestWithUser } from "./auth-context";
+import { UserTokenService } from "./security/user-token.service";
 
 @Injectable()
 export class UserAuthGuard implements CanActivate {
+  constructor(@Inject(UserTokenService) private readonly userTokenService: UserTokenService) {}
+
   canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<HeaderRequest & Partial<RequestWithUser>>();
     const token = readBearerToken(request);
@@ -11,8 +14,10 @@ export class UserAuthGuard implements CanActivate {
       throw new UnauthorizedException("未登录或 token 失效");
     }
 
+    const payload = this.userTokenService.verifyToken(token);
+
     request.user = {
-      userId: "00000000-0000-4000-8000-000000000001"
+      userId: payload.sub
     };
 
     return true;

@@ -6,3 +6,6 @@ apps/*/dist/
 packages/*/dist/
 unpackage/
 **/unpackage/
+.env
+apps/*/.env
+packages/*/.env

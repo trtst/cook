@@ -9,8 +9,8 @@
 1. 全局响应格式、错误码、分页、时间、ID、版本和幂等规则。
 2. `packages/domain` 与 `packages/api-client` 的边界。
 3. 小程序用户 token 与后台管理员 token 的隔离规则。
-4. 第一条纵切链路：微信登录 -> 当前用户 -> 餐厅列表 / 当前餐厅。
-5. 后台第一条链路：管理员登录 -> 用户 / 餐厅只读查询。
+4. 第一条纵切链路：手机号密码登录 -> 当前用户 -> 饭搭子列表 / 当前饭搭子。
+5. 后台第一条链路：管理员登录 -> 用户 / 饭搭子只读查询。
 
 本文不是全量 API 手册。Recipe、Meal、Poll、Fridge、Shopping、Share 等模块在对应接口设计确认后再追加。
 
@@ -28,7 +28,7 @@
 
 可以放：
 
-1. `RestaurantRole`
+1. `DiningGroupRole`
 2. `MemberStatus`
 3. `CollaborationMode`
 4. `SharedQuotaPolicy`
@@ -46,7 +46,7 @@
 
 `packages/api-client` 是接口契约壳。
 
-第一阶段可以手写最小版本，只覆盖 Auth / User / Restaurant。后端 OpenAPI 稳定后，再由 OpenAPI 生成替换或覆盖。
+第一阶段可以手写最小版本，只覆盖 Auth / User / DiningGroup。后端 OpenAPI 稳定后，再由 OpenAPI 生成替换或覆盖。
 
 `packages/api-client` 不持有任何 token，也不直接读取 storage。
 
@@ -66,8 +66,8 @@
 规则：
 
 1. URL 默认不超过两个业务语义层级。
-2. 餐厅归属、筛选条件、版本号、状态和分页优先放 query 或 body。
-3. 当前用户相关接口优先用 `/users/me`、`/restaurants/mine` 这类直接入口。
+2. 饭搭子归属、筛选条件、版本号、状态和分页优先放 query 或 body。
+3. 当前用户相关接口优先用 `/users/me`、`/dining-groups/mine` 这类直接入口。
 4. 管理后台接口统一以 `/admin` 开头，后面只接一级资源。
 5. 批量导入、发布、确认这类动作可以用短 action，但不继续嵌套 row、version、review 等多层路径。
 
@@ -75,18 +75,18 @@
 
 ```text
 GET /recipes/{recipeId}
-GET /recipes?restaurantId=...
+GET /recipes?diningGroupId=...
 POST /meal-plans
 POST /shopping-items/check
-GET /admin/restaurants
+GET /admin/dining-groups
 POST /admin/imports/{batchId}/publish
 ```
 
 避免：
 
 ```text
-GET /restaurants/{restaurantId}/recipes/{recipeId}/versions/{versionId}
-POST /restaurants/{restaurantId}/shopping/lists/{listId}/items/{itemId}/checked
+GET /dining-groups/{diningGroupId}/recipes/{recipeId}/versions/{versionId}
+POST /dining-groups/{diningGroupId}/shopping/lists/{listId}/items/{itemId}/checked
 GET /admin/content/recipes/import/batches/{batchId}/rows/{rowId}
 ```
 
@@ -193,6 +193,8 @@ interface PageResult<T> {
 
 后端按操作作用域去重，避免弱网重试重复创建。
 
+已落库执行成功的写接口，重复提交同一个 `operationId` 必须返回第一次保存的结果，不重新生成 token 或重复写入成员关系。
+
 ## 错误码
 
 | code | HTTP | 含义 | 前端处理 |
@@ -233,9 +235,9 @@ Authorization: Bearer <userAccessToken>
 
 登录来源：
 
-1. `apps/client` 调用 `platform.auth.login()` 获取微信 `code`。
-2. 小程序调用 `/auth/wechat/login`。
-3. 后端换取微信身份，创建或更新用户。
+1. `apps/client` 展示手机号和密码输入。
+2. 小程序调用 `/auth/login`。
+3. 后端校验手机号、密码哈希和用户状态。
 4. 后端返回用户 token 和用户摘要。
 
 ### 后台管理员鉴权
@@ -248,7 +250,7 @@ Authorization: Bearer <userAccessToken>
 Authorization: Bearer <adminAccessToken>
 ```
 
-后台管理员登录不复用小程序微信登录。
+后台管理员登录不复用小程序用户登录。
 
 `packages/api-client` 只暴露 auth scheme 和请求函数，不保存用户 token 或管理员 token。
 
@@ -258,7 +260,7 @@ Authorization: Bearer <adminAccessToken>
 type UUID = string;
 type IsoDateTime = string;
 
-type RestaurantRole = "OWNER" | "ADMIN" | "MEMBER";
+type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
 type MemberStatus = "ACTIVE" | "INVITED" | "REMOVED" | "LEFT";
 type CollaborationMode = "PERSONAL" | "SHARED";
 type SharedQuotaPolicy = "ALL_WRITERS" | "ADMINS_ONLY" | "OWNER_ONLY";
@@ -271,6 +273,8 @@ type SharedQuotaPolicy = "ALL_WRITERS" | "ADMINS_ONLY" | "OWNER_ONLY";
 ```ts
 interface UserProfile {
   id: UUID;
+  // 非连续公开用户号，只用于展示和客服检索，不用于主键或推算注册量。
+  uid: number;
   nickname: string | null;
   avatarUrl: string | null;
   phone: string | null;
@@ -285,17 +289,19 @@ interface UserProfile {
 ```ts
 interface UserSummary {
   id: UUID;
+  // 非连续公开用户号，只用于展示和客服检索，不用于主键或推算注册量。
+  uid: number;
   nickname: string | null;
   avatarUrl: string | null;
 }
 ```
 
-## 餐厅 DTO
+## 饭搭子 DTO
 
-### RestaurantSummary
+### DiningGroupSummary
 
 ```ts
-interface RestaurantSummary {
+interface DiningGroupSummary {
   id: UUID;
   name: string;
   ownerId: UUID;
@@ -304,7 +310,7 @@ interface RestaurantSummary {
   memberLimit: number;
   status: "ACTIVE" | string;
   version: number;
-  myRole: RestaurantRole;
+  myRole: DiningGroupRole;
   myMemberStatus: MemberStatus;
   memberCount: number;
   createdAt: IsoDateTime;
@@ -312,14 +318,14 @@ interface RestaurantSummary {
 }
 ```
 
-### RestaurantMemberSummary
+### DiningGroupMemberSummary
 
 ```ts
-interface RestaurantMemberSummary {
+interface DiningGroupMemberSummary {
   id: UUID;
-  restaurantId: UUID;
+  diningGroupId: UUID;
   user: UserSummary;
-  role: RestaurantRole;
+  role: DiningGroupRole;
   status: MemberStatus;
   joinedAt: IsoDateTime | null;
   invitedAt: IsoDateTime | null;
@@ -329,25 +335,26 @@ interface RestaurantMemberSummary {
 
 ## 第一条纵切链路接口
 
-### 微信登录
+### 手机号密码登录
 
 ```text
-POST /auth/wechat/login
+POST /auth/login
 Auth: none
 ```
 
 请求：
 
-```json
-{
-  "code": "wx-login-code"
+```ts
+interface PasswordLoginRequest {
+  phone: string;
+  password: string;
 }
 ```
 
 响应 `data`：
 
 ```ts
-interface WechatLoginResult {
+interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: UserProfile;
@@ -356,10 +363,10 @@ interface WechatLoginResult {
 
 规则：
 
-1. `code` 只能使用一次。
-2. 用户不存在时自动创建用户。
-3. 用户存在时更新微信身份相关信息，但不得覆盖用户主动填写的资料。
-4. 返回 token 只代表用户身份，不代表当前餐厅已确定。
+1. 手机号必须是已存在的有效用户。
+2. 密码只保存安全哈希，不保存明文。
+3. 手机号不存在、密码错误或用户禁用时统一返回 `401` 和 `手机号或密码错误`。
+4. 返回 token 只代表用户身份，不代表当前饭搭子已确定。
 
 ### 当前用户
 
@@ -397,19 +404,19 @@ interface UpdateCurrentUserRequest {
 type UpdateCurrentUserResult = UserProfile;
 ```
 
-### 我的餐厅列表
+### 我的饭搭子列表
 
 ```text
-GET /restaurants/mine
+GET /dining-groups/mine
 Auth: UserBearerAuth
 ```
 
 响应 `data`：
 
 ```ts
-interface MyRestaurantsResult {
-  restaurants: RestaurantSummary[];
-  currentRestaurantId: UUID | null;
+interface MyDiningGroupsResult {
+  diningGroups: DiningGroupSummary[];
+  currentDiningGroupId: UUID | null;
   limits: {
     ownedLimit: number;
     joinedLimit: number;
@@ -420,21 +427,21 @@ interface MyRestaurantsResult {
 
 规则：
 
-1. 返回用户创建的餐厅和已加入餐厅。
-2. 被移除成员不可继续访问餐厅数据。
-3. `currentRestaurantId` 是服务端建议值；小程序可以在本地记忆最近选择，但写操作必须显式传 `restaurantId`。
+1. 返回用户创建的饭搭子和已加入饭搭子。
+2. 被移除成员不可继续访问饭搭子数据。
+3. `currentDiningGroupId` 是服务端建议值；小程序可以在本地记忆最近选择，但写操作必须显式传 `diningGroupId`。
 
-### 创建餐厅
+### 创建饭搭子
 
 ```text
-POST /restaurants
+POST /dining-groups
 Auth: UserBearerAuth
 ```
 
 请求：
 
 ```ts
-interface CreateRestaurantRequest {
+interface CreateDiningGroupRequest {
   name: string;
   operationId: UUID;
 }
@@ -443,62 +450,62 @@ interface CreateRestaurantRequest {
 响应 `data`：
 
 ```ts
-interface CreateRestaurantResult {
-  restaurant: RestaurantSummary;
-  ownerMember: RestaurantMemberSummary;
+interface CreateDiningGroupResult {
+  diningGroup: DiningGroupSummary;
+  ownerMember: DiningGroupMemberSummary;
 }
 ```
 
 规则：
 
-1. 每个用户最多创建 1 个餐厅。
-2. 创建餐厅后自动成为 `OWNER`。
-3. 需要事务内同时创建餐厅和 owner 成员关系。
+1. 每个用户最多创建 1 个饭搭子。
+2. 创建饭搭子后自动成为 `OWNER`。
+3. 需要事务内同时创建饭搭子和 owner 成员关系。
 4. 弱网重试必须通过 `operationId` 幂等。
 
-### 餐厅详情
+### 饭搭子详情
 
 ```text
-GET /restaurants/{restaurantId}
+GET /dining-groups/{diningGroupId}
 Auth: UserBearerAuth
 ```
 
 响应 `data`：
 
 ```ts
-type GetRestaurantResult = RestaurantSummary;
+type GetDiningGroupResult = DiningGroupSummary;
 ```
 
 规则：
 
-1. 只有有效成员可以读取餐厅详情。
-2. 修改请求参数访问其他餐厅必须返回 403 或 404，不泄露隐私。
+1. 只有有效成员可以读取饭搭子详情。
+2. 修改请求参数访问其他饭搭子必须返回 403 或 404，不泄露隐私。
 
-### 餐厅成员列表
+### 饭搭子成员列表
 
 ```text
-GET /restaurant-members?restaurantId={restaurantId}
+GET /dining-group-members?diningGroupId={diningGroupId}
 Auth: UserBearerAuth
 ```
 
 响应 `data`：
 
 ```ts
-interface RestaurantMembersResult {
-  restaurantId: UUID;
-  members: RestaurantMemberSummary[];
+interface DiningGroupMembersResult {
+  diningGroupId: UUID;
+  members: DiningGroupMemberSummary[];
 }
 ```
 
 规则：
 
 1. 有效成员可以查看成员列表。
-2. 被移除、已退出成员不应继续获得餐厅数据访问权。
+2. 被移除、已退出成员不应继续获得饭搭子数据访问权。
 
 ### 创建邀请
 
 ```text
-POST /restaurant-invites
+POST /dining-group-invites
 Auth: UserBearerAuth
 ```
 
@@ -506,7 +513,7 @@ Auth: UserBearerAuth
 
 ```ts
 interface CreateInviteRequest {
-  restaurantId: UUID;
+  diningGroupId: UUID;
   operationId: UUID;
 }
 ```
@@ -526,12 +533,14 @@ interface CreateInviteResult {
 1. `OWNER` 可以邀请和移除成员。
 2. `ADMIN` 可以邀请成员，但不能移除成员或转让主理人。
 3. `MEMBER` 不能邀请成员。
-4. 邀请 token 不暴露内部主键。
+4. 邀请 token 必须是不透明随机串，不编码饭搭子 ID、用户 ID 或过期时间。
+5. 后端只保存邀请 token 的 hash，不保存原始 token。
+6. 相同 `operationId` 重试必须返回第一次生成的同一个 `inviteToken`、`sharePath` 和 `expiresAt`。
 
 ### 接受邀请
 
 ```text
-POST /restaurant-invites/{inviteToken}/accept
+POST /dining-group-invites/{inviteToken}/accept
 Auth: UserBearerAuth
 ```
 
@@ -547,16 +556,17 @@ interface AcceptInviteRequest {
 
 ```ts
 interface AcceptInviteResult {
-  restaurant: RestaurantSummary;
-  member: RestaurantMemberSummary;
+  diningGroup: DiningGroupSummary;
+  member: DiningGroupMemberSummary;
 }
 ```
 
 规则：
 
-1. 接受邀请必须事务内校验用户加入上限、餐厅成员上限、邀请有效期和成员状态。
+1. 接受邀请必须事务内校验用户加入上限、饭搭子成员上限、邀请有效期和成员状态。
 2. 同一用户重复接受同一邀请不得重复创建成员。
 3. 多人并发接受邀请不能突破成员上限。
+4. 相同 `operationId` 重试必须返回第一次接受邀请保存的结果。
 
 ## 后台第一条链路接口
 
@@ -616,17 +626,17 @@ interface AdminListUsersQuery {
 type AdminListUsersResult = PageResult<UserProfile>;
 ```
 
-### 餐厅只读查询
+### 饭搭子只读查询
 
 ```text
-GET /admin/restaurants
+GET /admin/dining-groups
 Auth: AdminBearerAuth
 ```
 
 请求参数：
 
 ```ts
-interface AdminListRestaurantsQuery {
+interface AdminListDiningGroupsQuery {
   page: number;
   pageSize: number;
   keyword?: string;
@@ -637,20 +647,20 @@ interface AdminListRestaurantsQuery {
 响应 `data`：
 
 ```ts
-type AdminListRestaurantsResult = PageResult<RestaurantSummary>;
+type AdminListDiningGroupsResult = PageResult<DiningGroupSummary>;
 ```
 
 ## 三端并行节奏
 
 第一阶段共享契约只允许小步合入。
 
-1. 先完成本文和 `Auth / User / Restaurant` v0.1 契约。
+1. 先完成本文和 `Auth / User / DiningGroup` v0.1 契约。
 2. 创建 `packages/domain` 与 `packages/api-client` 的最小契约壳。
 3. 创建 `apps/api` NestJS 最小壳并输出 OpenAPI。
 4. 创建 `apps/client` 小程序脚手架，并使用 `api-client` 接入 mock / real 双通道。
 5. 再创建 `apps/admin` 脚手架。
-6. 小程序使用 mock 或最小 `api-client` 接入登录、当前用户和餐厅列表。
-7. 后台使用 mock 或最小 `api-client` 接入管理员登录、用户列表和餐厅列表。
+6. 小程序使用 mock 或最小 `api-client` 接入登录、当前用户和饭搭子列表。
+7. 后台使用 mock 或最小 `api-client` 接入管理员登录、用户列表和饭搭子列表。
 8. 后端完成真实接口后输出 OpenAPI v0.1。
 9. 三端以第一条纵切链路作为首个联调验收点。
 
