@@ -1,25 +1,44 @@
 import type {
   AcceptInviteRequest,
-  AcceptInviteResult,
+  AcceptInviteResponse,
   AdminListDiningGroupsQuery,
   AdminListDiningGroupsResult,
   AdminListUsersQuery,
   AdminListUsersResult,
   AdminLoginRequest,
   AdminLoginResult,
+  CreateMealGuestInvitationsRequest,
+  CreateMealGuestInvitationsResponse,
   CreateInviteRequest,
   CreateInviteResult,
-  CreateDiningGroupRequest,
-  CreateDiningGroupResult,
-  MyDiningGroupsResult,
+  CreateRecipeVariantRequest,
+  CreateRecipeVariantResponse,
+  GetCarryBackSnapshotsResponse,
+  GetCurrentDiningGroupContextResponse,
+  GetCurrentEntitlementsResponse,
+  GetOriginalSpaceImportableDataQuery,
+  GetOriginalSpaceImportableDataResponse,
+  GetStorageUsageResponse,
+  ImportCarryBackSnapshotRequest,
+  ImportCarryBackSnapshotResponse,
+  ImportOriginalSpaceDataRequest,
+  ImportOriginalSpaceDataResponse,
+  LeaveDiningGroupRequest,
+  LeaveDiningGroupResponse,
   PasswordLoginRequest,
   PasswordLoginResult,
+  RecipeDetailResponse,
+  RecipeImportRequest,
+  RecipeImportResponse,
   RefreshSessionResult,
+  RespondMealGuestInvitationRequest,
+  RespondMealGuestInvitationResponse,
   DiningGroupMembersResult,
+  UpdateTasteProfileRequest,
   UpdateCurrentUserRequest,
 } from "./contracts";
 import { ApiClientError, HttpError, UnauthorizedError } from "./errors";
-import type { ApiResponse, DiningGroupSummary, UserBasic, UUID } from "./types";
+import type { ApiResponse, TasteProfileResponse, UserBasic, UUID } from "./types";
 
 export type AuthScheme = "none" | "user" | "admin";
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -163,23 +182,23 @@ export function createApiClient(options: ApiClientOptions) {
           auth: "user",
           body
         });
-      }
-    },
-    diningGroup: {
-      listMine() {
-        return requestData<MyDiningGroupsResult>(options, "/dining-groups/mine", {
+      },
+      getTasteProfile() {
+        return requestData<TasteProfileResponse>(options, "/users/me/taste-profile", {
           auth: "user"
         });
       },
-      create(body: CreateDiningGroupRequest) {
-        return requestData<CreateDiningGroupResult>(options, "/dining-groups", {
-          method: "POST",
+      updateTasteProfile(body: UpdateTasteProfileRequest) {
+        return requestData<TasteProfileResponse>(options, "/users/me/taste-profile", {
+          method: "PUT",
           auth: "user",
           body
         });
-      },
-      get(diningGroupId: UUID) {
-        return requestData<DiningGroupSummary>(options, `/dining-groups/${encodePath(diningGroupId)}`, {
+      }
+    },
+    diningGroup: {
+      getCurrent() {
+        return requestData<GetCurrentDiningGroupContextResponse>(options, "/dining-groups/current", {
           auth: "user"
         });
       },
@@ -197,7 +216,106 @@ export function createApiClient(options: ApiClientOptions) {
         });
       },
       acceptInvite(inviteToken: string, body: AcceptInviteRequest) {
-        return requestData<AcceptInviteResult>(options, `/dining-group-invites/${encodePath(inviteToken)}/accept`, {
+        return requestData<AcceptInviteResponse>(options, `/dining-group-invites/${encodePath(inviteToken)}/accept`, {
+          method: "POST",
+          auth: "user",
+          body
+        });
+      },
+      leave(diningGroupId: UUID, body: LeaveDiningGroupRequest) {
+        return requestData<LeaveDiningGroupResponse>(options, `/dining-groups/${encodePath(diningGroupId)}/leave`, {
+          method: "POST",
+          auth: "user",
+          body
+        });
+      }
+    },
+    originalSpace: {
+      listImportable(query: GetOriginalSpaceImportableDataQuery) {
+        return requestData<GetOriginalSpaceImportableDataResponse>(options, "/original-space/importable-data", {
+          auth: "user",
+          query: { ...query }
+        });
+      },
+      importData(body: ImportOriginalSpaceDataRequest) {
+        return requestData<ImportOriginalSpaceDataResponse>(options, "/original-space/imports", {
+          method: "POST",
+          auth: "user",
+          body
+        });
+      }
+    },
+    carryBack: {
+      list() {
+        return requestData<GetCarryBackSnapshotsResponse>(options, "/carry-back-snapshots", {
+          auth: "user"
+        });
+      },
+      importData(snapshotId: UUID, body: ImportCarryBackSnapshotRequest) {
+        return requestData<ImportCarryBackSnapshotResponse>(
+          options,
+          `/carry-back-snapshots/${encodePath(snapshotId)}/imports`,
+          {
+            method: "POST",
+            auth: "user",
+            body
+          }
+        );
+      }
+    },
+    entitlement: {
+      getCurrent() {
+        return requestData<GetCurrentEntitlementsResponse>(options, "/entitlements/current", {
+          auth: "user"
+        });
+      }
+    },
+    storage: {
+      getUsage() {
+        return requestData<GetStorageUsageResponse>(options, "/storage-usage", {
+          auth: "user"
+        });
+      }
+    },
+    mealGuest: {
+      create(mealPlanId: UUID, body: CreateMealGuestInvitationsRequest) {
+        return requestData<CreateMealGuestInvitationsResponse>(
+          options,
+          `/meal-plans/${encodePath(mealPlanId)}/guest-invitations`,
+          {
+            method: "POST",
+            auth: "user",
+            body
+          }
+        );
+      },
+      respond(invitationId: UUID, body: RespondMealGuestInvitationRequest) {
+        return requestData<RespondMealGuestInvitationResponse>(
+          options,
+          `/meal-guest-invitations/${encodePath(invitationId)}/respond`,
+          {
+            method: "POST",
+            auth: "user",
+            body
+          }
+        );
+      }
+    },
+    recipe: {
+      get(recipeId: UUID) {
+        return requestData<RecipeDetailResponse>(options, `/recipes/${encodePath(recipeId)}`, {
+          auth: "user"
+        });
+      },
+      importRecipe(body: RecipeImportRequest) {
+        return requestData<RecipeImportResponse>(options, "/recipe-imports", {
+          method: "POST",
+          auth: "user",
+          body
+        });
+      },
+      createVariant(body: CreateRecipeVariantRequest) {
+        return requestData<CreateRecipeVariantResponse>(options, "/recipe-variants", {
           method: "POST",
           auth: "user",
           body

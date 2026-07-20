@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DiningGroupSummary } from "@next-meal/api-client";
+import type { AdminDiningGroupSummary } from "@next-meal/api-client";
 import { onMounted, reactive, ref } from "vue";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
@@ -10,7 +10,7 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 const session = useSessionStore();
 const loading = ref(false);
-const diningGroups = ref<DiningGroupSummary[]>([]);
+const diningGroups = ref<AdminDiningGroupSummary[]>([]);
 const total = ref(0);
 
 const query = reactive({
@@ -63,6 +63,8 @@ onMounted(loadDiningGroups);
       />
       <el-select v-model="query.status" class="toolbar-select" placeholder="状态" clearable>
         <el-option label="ACTIVE" value="ACTIVE" />
+        <el-option label="FROZEN" value="FROZEN" />
+        <el-option label="ARCHIVED" value="ARCHIVED" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
       <el-button :icon="Refresh" @click="loadDiningGroups">刷新</el-button>
@@ -73,9 +75,7 @@ onMounted(loadDiningGroups);
         <el-table-column prop="name" label="饭搭子名称" min-width="180" />
         <el-table-column prop="status" label="状态" width="120" />
         <el-table-column prop="memberCount" label="成员数" width="100" />
-        <el-table-column prop="memberLimit" label="成员上限" width="110" />
-        <el-table-column prop="collaborationMode" label="协作模式" min-width="140" />
-        <el-table-column prop="sharedQuotaPolicy" label="额度策略" min-width="150" />
+        <el-table-column prop="ownerId" label="主理人 ID" min-width="280" />
         <el-table-column prop="version" label="版本" width="90" />
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
       </el-table>

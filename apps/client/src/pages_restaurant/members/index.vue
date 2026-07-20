@@ -55,8 +55,8 @@
         </view>
 
         <view v-else class="empty-panel">
-          <text class="empty-panel__title">还没有饭搭子</text>
-          <button class="empty-panel__button" @click="navigateToCreate">去创建</button>
+          <text class="empty-panel__title">饭搭子加载中</text>
+          <text class="member-list__status-text">账号创建后会自动拥有单人饭搭子。</text>
         </view>
       </template>
     </view>
@@ -79,10 +79,7 @@ const errorText = ref("");
 const sharePath = ref("");
 const inviteOperationId = ref<UUID | "">("");
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
-const members = computed(() => {
-  const diningGroupId = currentDiningGroup.value?.id;
-  return diningGroupId ? diningGroupStore.membersByDiningGroupId[diningGroupId] ?? [] : [];
-});
+const members = computed(() => diningGroupStore.members);
 const roleLabels: Record<DiningGroupRole, string> = {
   OWNER: "主理人",
   ADMIN: "管理员",
@@ -106,7 +103,7 @@ watch(
 
 async function loadMine() {
   try {
-    await diningGroupStore.refreshMine();
+    await diningGroupStore.refreshCurrent();
     await loadMembers();
   } catch {
     errorText.value = "饭搭子加载失败";
@@ -157,10 +154,6 @@ function handleCopy() {
     data: sharePath.value,
     success: () => uni.showToast({ title: "已复制", icon: "success" })
   });
-}
-
-function navigateToCreate() {
-  uni.navigateTo({ url: "/pages_restaurant/create/index" });
 }
 
 function getAvatarText(nickname: string | null) {

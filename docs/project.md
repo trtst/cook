@@ -4,7 +4,7 @@
 
 本文是给开发人员阅读的项目总文档，描述当前仓库的产品定位、V1 范围、技术选型、工程边界和核心实现规则。
 
-AI 快速执行规则见 `AGENT.md`。饭搭子生命周期见 `dining-group.md`，会员、配置和空间规则见 `configuration.md`。`docs/cook/` 中的 Prisma v0.1、SQL 和早期产品方案是历史来源，不再覆盖当前产品规则。
+AI 快速执行规则见 `AGENT.md`。饭搭子生命周期见 `dining-group.md`，会员、配置和空间规则见 `configuration.md`。`docs/cook/` 中的 Prisma、SQL 和早期产品方案只是来源材料，不覆盖当前产品规则。
 
 ## 项目定位
 
@@ -185,7 +185,7 @@ V1 模块状态：
 
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
-| Auth / User / DiningGroup | Active / 待扩展 | 当前登录和饭搭子 v0.1 已实现；生命周期 v0.2 按计划补齐 |
+| Auth / User / DiningGroup | Active / 待扩展 | 登录、唯一当前空间、加入冻结、退出恢复和快照头已实现 |
 | Recipe | Active | 概念、模板、入口、版本、写时复制 |
 | Meal / Poll | Active | 计划、点菜、我想吃 |
 | Fridge / Shopping | Active | 冰箱、购物清单、缺口计算 |
@@ -205,7 +205,7 @@ V1 模块状态：
 DishConcept
   -> RecipeTemplate
   -> RecipeContentVersion
-  -> DiningGroupRecipe（v0.2 目标名）
+  -> Recipe
        sourceVersionId
        currentVersionId
 ```
@@ -219,7 +219,7 @@ DishConcept
 5. `MealPlanItem`、公共版本和分享快照必须引用具体 `RecipeContentVersion`。
 6. 系统模板升级不影响已经收录到饭搭子的固定版本。
 7. 私人饭搭子菜谱不能通过全局搜索、相似指纹或采用统计泄露给其他饭搭子。
-8. Prisma v0.1 中的 `RestaurantRecipe` 是历史实现名；新 schema/migration 必须另起版本，不能覆盖历史材料。
+8. 来源材料中的 `RestaurantRecipe` 不进入当前 Schema；当前实现统一使用 `Recipe`。
 9. 旧技术快照没有任何计划、分享或迁出引用时可以清理；Free/Plus 均不提供用户可见编辑历史。
 10. Plus 的“另存为新做法”创建独立菜谱：根菜谱 `rootRecipeId = null`，派生做法指向根菜谱，同一根最多 2 个且不能再次派生。
 
@@ -246,7 +246,7 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 必须保留的约束：
 
 1. `DishConcept` 全局 `searchKey` 唯一。
-2. v0.2 饭搭子私有 `DishConcept` 必须在饭搭子作用域内唯一。
+2. 饭搭子私有 `DishConcept` 必须在饭搭子作用域内唯一。
 3. 同一饭搭子同一来源版本只能有一个未归档入口。
 4. `MealPlan` 同饭搭子、日期、餐次只能有一个未取消计划。
 5. 每个饭搭子同一时间只能有一份 `ACTIVE` 购物清单。
@@ -256,7 +256,7 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 9. `Asset` 归属必须匹配 `scope`。
 10. `IdempotencyRecord` 在操作作用域下唯一。
 11. `FridgeItem(diningGroupId, ingredientId)` 唯一，V1 不表达多批次库存。
-12. 唯一活跃长期饭搭子、快照有效期、空间账本和回收清理约束必须在 v0.2 Schema/SQL 评审时补齐。
+12. 唯一当前饭搭子和快照有效期约束已经落地；空间账本和回收清理约束在对应模块实现时补齐。
 
 ## API 协议
 

@@ -8,7 +8,7 @@
     navbar-transparent
   >
     <template #navbar-left>
-      <view class="table-nav__selector" hover-class="table-nav__selector--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/switch/index')">
+      <view class="table-nav__selector" hover-class="table-nav__selector--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/members/index')">
         <text class="restaurant-bar__label">当前饭桌</text>
         <text class="restaurant-bar__name">{{ restaurantName }}</text>
       </view>
@@ -209,7 +209,7 @@ const heroStyle = computed(() => ({
 
 const restaurantName = computed(() => diningGroupStore.currentDiningGroup?.name ?? "我的饭搭子");
 const memberCountText = computed(() => {
-  const count = diningGroupStore.currentDiningGroup?.memberCount ?? 4;
+  const count = diningGroupStore.currentDiningGroup?.memberCount ?? 1;
   return `${count} 人饭桌`;
 });
 const hasMealPlan = false;

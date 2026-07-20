@@ -4,7 +4,7 @@
 
 本文是饭搭子、原空间、迁入迁出、饭局和“我的口味”的当前产品权威文档。
 
-当本文与 `docs/cook/`、旧 Prisma v0.1、旧 SQL 或早期多饭搭子方案冲突时，以本文为当前产品规则；历史材料只用于追溯，不能直接指导新实现。会员、空间和配置数值见 `configuration.md`。
+当本文与 `docs/cook/` 中的 Prisma、SQL 或早期多饭搭子方案冲突时，以本文为当前产品规则；来源材料不能直接指导实现。会员、空间和配置数值见 `configuration.md`。
 
 ## 一、统一空间模型
 
@@ -115,7 +115,7 @@ V1 规则：
 派生做法：rootRecipeId = 根菜谱 ID
 ```
 
-建议目标字段包括 `dishConceptId`、`rootRecipeId`、`variantName`、`originType`、`sourceVersionId` 和 `currentVersionId`。`ROOT / VARIANT`、派生数量、派生上限和是否可派生由服务端计算，不作为易漂移字段永久保存。最终字段名在 v0.2 API 与数据库契约中冻结。
+建议目标字段包括 `dishConceptId`、`rootRecipeId`、`variantName`、`originType`、`sourceVersionId` 和 `currentVersionId`。`ROOT / VARIANT`、派生数量、派生上限和是否可派生由服务端计算，不作为易漂移字段永久保存。最终字段名在菜谱 API 与数据库契约中冻结。
 
 `originType` 目标语义为 `MANUAL / SYSTEM / PUBLIC / SPACE_IMPORT / CARRY_BACK / DERIVED`。不保存“派生 1 / 派生 2”作为身份编号；用户看到的是“原做法、少糖版、儿童版”等名称，派生列表按稳定 ID 和创建时间管理。
 
@@ -206,13 +206,13 @@ V1 规则：
 完成人
 ```
 
-建议契约概念为 `needScope`、`needUserId`、`createdByUserId`、`assignedToUserId`、`completedByUserId`。最终字段名须在 v0.2 API 与数据库契约中冻结。
+建议契约概念为 `needScope`、`needUserId`、`createdByUserId`、`assignedToUserId`、`completedByUserId`。最终字段名须在购物 API 与数据库契约中冻结。
 
 退出时只有 `USER` 范围、需求人为当前用户、尚未购买且由用户主动选择的项目可以带回。共同需求不会因创建人退出而迁走。
 
 ## 十、状态语义草案
 
-以下是 v0.2 目标语义，不表示当前代码已经实现：
+以下是当前目标语义；具体实现状态见 `api-index.md`：
 
 | 对象 | 状态 |
 | --- | --- |

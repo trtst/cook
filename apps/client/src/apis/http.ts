@@ -1,5 +1,4 @@
 import { createApiClient, UnauthorizedError } from "@next-meal/api-client";
-import { clearCurrentDiningGroupPreference } from "@/stores/dining-group-preference";
 import { emitSessionCleared } from "@/utils/session-events";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
@@ -25,7 +24,6 @@ export const api = createApiClient({
   async onUnauthorized(error: UnauthorizedError) {
     await useSessionStore().clearSession();
     useUserStore().clearProfile();
-    await clearCurrentDiningGroupPreference();
     await emitSessionCleared();
     throw error;
   }

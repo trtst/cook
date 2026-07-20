@@ -38,7 +38,7 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Next Meal API")
-    .setDescription("Auth/User/DiningGroup v0.1 contract")
+    .setDescription("Auth、User 与唯一当前 DiningGroup 契约")
     .setVersion("0.1.0")
     .addBearerAuth({ type: "http", scheme: "bearer", bearerFormat: "JWT" }, "UserBearerAuth")
     .addBearerAuth({ type: "http", scheme: "bearer", bearerFormat: "JWT" }, "AdminBearerAuth")

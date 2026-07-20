@@ -6,6 +6,60 @@ loadLocalEnv();
 
 const prisma = new PrismaClient();
 
+async function seedUserSpace(userId: string, name = "我的饭搭子") {
+  const diningGroup = await prisma.diningGroup.upsert({
+    where: { ownerId: userId },
+    update: {
+      name,
+      status: "ACTIVE",
+      frozenAt: null,
+      archivedAt: null
+    },
+    create: {
+      name,
+      ownerId: userId,
+      status: "ACTIVE"
+    }
+  });
+
+  await prisma.diningGroupMember.upsert({
+    where: {
+      diningGroupId_userId: {
+        diningGroupId: diningGroup.id,
+        userId
+      }
+    },
+    update: {
+      role: "OWNER",
+      status: "ACTIVE",
+      statusReason: null,
+      restrictedAt: null,
+      endedAt: null
+    },
+    create: {
+      diningGroupId: diningGroup.id,
+      userId,
+      role: "OWNER",
+      status: "ACTIVE"
+    }
+  });
+
+  await prisma.userSpace.upsert({
+    where: { userId },
+    update: {
+      originalDiningGroupId: diningGroup.id,
+      currentDiningGroupId: diningGroup.id
+    },
+    create: {
+      userId,
+      originalDiningGroupId: diningGroup.id,
+      currentDiningGroupId: diningGroup.id
+    }
+  });
+
+  return diningGroup;
+}
+
 async function main() {
   const username = process.env.ADMIN_SEED_USERNAME ?? "admin";
   const password = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
@@ -66,40 +120,8 @@ async function main() {
     }
   });
 
-  const diningGroup = await prisma.diningGroup.upsert({
-    where: { id: "10000000-0000-4000-8000-000000000001" },
-    update: {
-      name: "我的饭搭子",
-      status: "ACTIVE"
-    },
-    create: {
-      id: "10000000-0000-4000-8000-000000000001",
-      name: "我的饭搭子",
-      ownerId: user.id,
-      status: "ACTIVE"
-    }
-  });
-
-  await prisma.diningGroupMember.upsert({
-    where: {
-      diningGroupId_userId: {
-        diningGroupId: diningGroup.id,
-        userId: user.id
-      }
-    },
-    update: {
-      role: "OWNER",
-      status: "ACTIVE",
-      joinedAt: new Date()
-    },
-    create: {
-      diningGroupId: diningGroup.id,
-      userId: user.id,
-      role: "OWNER",
-      status: "ACTIVE",
-      joinedAt: new Date()
-    }
-  });
+  await seedUserSpace(user.id);
+  await seedUserSpace(guestUser.id);
 
   console.log(`Seeded admin ${admin.username} and users ${user.phone}, ${guestUser.phone}`);
 }

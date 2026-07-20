@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import type { Prisma, DiningGroupStatus } from "@prisma/client";
-import type { AdminLoginRequest, PageResult, DiningGroupSummary, UserProfile } from "@next-meal/api-client";
+import type { AdminDiningGroupSummary, AdminLoginRequest, PageResult, UserProfile } from "@next-meal/api-client";
 import { PrismaService } from "../../common/prisma.service";
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { verifyPassword } from "../../common/security/password";
@@ -87,13 +87,13 @@ export class AdminService {
     pageSize: number,
     keyword?: string,
     status?: string
-  ): Promise<PageResult<DiningGroupSummary>> {
+  ): Promise<PageResult<AdminDiningGroupSummary>> {
     const normalizedPage = page ?? 1;
     const normalizedPageSize = pageSize ?? 20;
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const normalizedStatus = status?.trim();
 
-    if (normalizedStatus && normalizedStatus !== "ACTIVE" && normalizedStatus !== "ARCHIVED") {
+    if (normalizedStatus && !["ACTIVE", "FROZEN", "ARCHIVED"].includes(normalizedStatus)) {
       throw new BadRequestException("饭搭子状态参数错误");
     }
 
@@ -121,13 +121,8 @@ export class AdminService {
           id: diningGroup.id,
           name: diningGroup.name,
           ownerId: diningGroup.ownerId,
-          collaborationMode: diningGroup.collaborationMode,
-          sharedQuotaPolicy: diningGroup.sharedQuotaPolicy,
-          memberLimit: diningGroup.memberLimit,
           status: diningGroup.status,
           version: diningGroup.version,
-          myRole: "OWNER",
-          myMemberStatus: "ACTIVE",
           memberCount: diningGroup._count.members,
           createdAt: toIsoDate(diningGroup.createdAt),
           updatedAt: toIsoDate(diningGroup.updatedAt)

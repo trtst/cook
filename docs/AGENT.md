@@ -91,8 +91,8 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 
 ## Module State
 
-- Current implemented v0.1: Auth, User, the first DiningGroup slice, Admin read-only queries, and existing scaffolded modules as documented by `api-index.md`.
-- Target v0.2: original-space lifecycle, migration, exit snapshot, meal guests, taste, storage, Personal Plus, Dining Group Plus, and the minimum upgrade/expiry payment path.
+- Current implemented: Auth, User, unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, and Admin read-only queries.
+- Next implementation: original-space imports, snapshot item carry-back, meal guests, taste, storage, Personal Plus, Dining Group Plus, and the minimum upgrade/expiry payment path.
 - Disabled: Public user submissions and Worker/Outbox runtime behavior.
 - Reserved: Points, receipt scanning, OCR, AI, Pro, multi-family, and multi-dining-group switching. Do not add placeholder services or client entry points.
 
@@ -105,7 +105,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 5. Editing ingredients, amounts, or steps creates a new technical content snapshot and atomically switches `currentVersionId`; it is not user-visible edit history.
 6. Editing local name, note, category, or display metadata does not create a new content version.
 7. Private dining-group recipes must not leak through global search, public similarity, or adoption statistics.
-8. The old `RestaurantRecipe` name in v0.1 historical schema material must not be copied into a new contract without an explicit v0.2 migration decision.
+8. The old `RestaurantRecipe` name in source material must not be copied into the current schema; use the confirmed `Recipe` boundary.
 
 ## Lifecycle And Entitlement Rules
 

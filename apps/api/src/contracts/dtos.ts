@@ -43,16 +43,6 @@ export class UpdateCurrentUserDto {
   phone?: string;
 }
 
-export class CreateDiningGroupDto {
-  @ApiProperty({ example: "我的饭搭子" })
-  @IsString()
-  name!: string;
-
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
-  @IsUUID()
-  operationId!: string;
-}
-
 export class OperationDto {
   @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
   @IsUUID()

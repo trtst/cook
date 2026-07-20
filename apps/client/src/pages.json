@@ -33,11 +33,9 @@
     {
       "root": "pages_restaurant",
       "pages": [
-        { "path": "create/index", "style": { "navigationBarTitleText": "创建饭搭子", "navigationStyle": "custom" } },
         { "path": "invite/index", "style": { "navigationBarTitleText": "加入饭搭子", "navigationStyle": "custom" } },
         { "path": "members/index", "style": { "navigationBarTitleText": "成员管理", "navigationStyle": "custom" } },
-        { "path": "settings/index", "style": { "navigationBarTitleText": "饭搭子设置", "navigationStyle": "custom" } },
-        { "path": "switch/index", "style": { "navigationBarTitleText": "切换饭搭子", "navigationStyle": "custom" } }
+        { "path": "settings/index", "style": { "navigationBarTitleText": "饭搭子设置", "navigationStyle": "custom" } }
       ]
     },
     {
