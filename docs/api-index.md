@@ -45,7 +45,8 @@
 | Recipe | `GET /recipes` | 小程序 | 待创建 | 饭搭子菜谱列表 |
 | Recipe | `GET /recipes/{recipeId}` | 小程序 | 待创建 | 菜谱详情，需引用固定内容版本 |
 | Recipe | `POST /recipes` | 小程序 | 待创建 | 创建饭搭子菜谱，写操作需要 `operationId` |
-| Recipe | `PUT /recipes/{recipeId}` | 小程序 | 待创建 | 编辑菜谱入口或创建新内容版本，需明确 version 规则 |
+| Recipe | `PUT /recipes/{recipeId}` | 小程序 | 待创建 | 普通保存更新当前内容；技术快照不作为用户历史 |
+| RecipeVariant | `POST /recipe-variants` | 小程序 | 待契约 | Plus 根菜谱最多派生 2 个，派生不能再次派生 |
 | Recipe | `GET /system-recipes` | 小程序 | 待创建 | 系统推荐广场 / 系统模板列表 |
 | RecipeImport | `POST /recipe-imports` | 小程序 | 待创建 | v0.1 建议路径；v0.2 产品操作名为“收录”，最终路径待契约 |
 | Meal | `POST /meal-plans` | 小程序 | 待创建 | 创建下一餐计划，需事务和 `operationId` |

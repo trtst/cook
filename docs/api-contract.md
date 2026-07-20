@@ -686,6 +686,7 @@ interface AcceptInviteResult {
 | 迁出快照导入 | `POST /carry-back-snapshots/{snapshotId}/imports` | 分批、幂等、数据可携带 |
 | 空间使用量 | `GET /storage-usage` | 服务端逻辑空间与模块明细 |
 | 当前权益 | `GET /entitlements/current` | 不允许客户端自行合并个人与饭搭子权益 |
+| 另存为新做法 | `POST /recipe-variants` | 根菜谱、个人/饭搭子 Plus、总数 2、容量与幂等校验 |
 | 我的口味 | `GET/PUT /users/me/taste-profile` | 用户所有、敏感字段最小返回 |
 | 饭局邀请 | `POST /meal-plans/{mealPlanId}/guest-invitations` | 不创建长期成员，不消耗长期席位 |
 | 饭局回应 | `POST /meal-guest-invitations/{invitationId}/respond` | 接受、拒绝、取消和本次口味快照 |
@@ -693,6 +694,21 @@ interface AcceptInviteResult {
 目标 DTO 使用明确的 `Request/Response` 后缀，例如 `ImportOriginalSpaceDataRequest`、`ImportCarryBackSnapshotRequest`、`StorageUsageResponse` 和 `UpdateTasteProfileRequest`。最终字段不得在本文之外由前后端各自补充。
 
 目标状态语义见 `dining-group.md`，额度和到期行为见 `configuration.md`。
+
+### v0.2 菜谱派生关系
+
+菜谱目标字段至少需要表达 `dishConceptId`、`rootRecipeId`、`variantName`、`originType`、`sourceVersionId` 和 `currentVersionId`：
+
+```text
+根菜谱：rootRecipeId = null
+派生做法：rootRecipeId = 根菜谱 ID
+```
+
+`ROOT / VARIANT`、派生数量、权益上限和 `canCreateVariant` 是服务端计算结果，不保存为可漂移的业务真相。创建派生做法必须锁定根菜谱并校验：操作者写权限、个人 Plus 或饭搭子 Plus、根菜谱身份、当前派生数小于 2、菜谱数量、空间和 `operationId` 幂等。派生做法不能再次派生。
+
+`originType` 目标语义为 `MANUAL / SYSTEM / PUBLIC / SPACE_IMPORT / CARRY_BACK / DERIVED`。不持久化 `variantNo`、`variantCount`、`variantLimit` 或 `canCreateVariant`；接口按稳定关系和当前权益计算返回。
+
+普通保存不创建用户可见历史。`currentVersionId` 只用于不可变技术快照；未被当前菜谱、计划、分享或迁出快照引用的旧内容可以清理。
 
 ## 后台第一条链路接口
 

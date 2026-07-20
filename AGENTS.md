@@ -118,7 +118,7 @@ parallel code edits.
 - `docs/project.md`: full developer overview.
 - `docs/technical.md`: technical rules, naming, style, validation.
 - `docs/dining-group.md`: current long-term dining-group lifecycle, original-space migration, exit snapshot, meal guests, and taste rules.
-- `docs/configuration.md`: current Free/Plus, storage, image, version, downgrade, and configuration rules.
+- `docs/configuration.md`: current Free/Plus, storage, image, recipe-variant, recycle-bin, downgrade, and configuration rules.
 - `docs/api-contract.md`: shared API contract and error rules.
 - `docs/uniapp.md`: mini program engineering rules.
 - `docs/uniapp-architecture.md`: `apps/client` scaffold and boundary rules.

@@ -83,7 +83,8 @@ v0.2 产品目标以 `docs/dining-group.md` 和 `docs/configuration.md` 为准�
 | Recipe | `GET /api/recipes` | 小程序 | 待创建 | 饭搭子筛选、分页、系统/私有来源区分 |
 | Recipe | `GET /api/recipes/{recipeId}` | 小程序 | 待创建 | 固定内容版本、私有菜谱权限 |
 | Recipe | `POST /api/recipes` | 小程序 | 待创建 | `operationId`、本地字段、内容版本创建规则 |
-| Recipe | `PUT /api/recipes/{recipeId}` | 小程序 | 待创建 | 哪些字段创建新版本、哪些字段只更新展示元数据 |
+| Recipe | `PUT /api/recipes/{recipeId}` | 小程序 | 待创建 | 普通保存更新当前内容；固定技术快照不作为用户历史 |
+| RecipeVariant | `POST /api/recipe-variants` | 小程序 | 待契约 | Plus 根菜谱最多派生 2 个，派生不能再次派生 |
 | Recipe | `GET /api/system-recipes` | 小程序 | 待创建 | 系统推荐广场筛选和分页 |
 | RecipeImport | `POST /api/recipe-imports` | 小程序 | 待创建 | v0.1 建议路径；v0.2 产品操作名为“收录”，最终路径待契约 |
 | Meal | `POST /api/meal-plans` | 小程序 | 待创建 | 下一餐事务边界、`operationId` |

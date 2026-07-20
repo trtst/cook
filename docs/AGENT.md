@@ -81,7 +81,7 @@ Build the confirmed meal loop and lifecycle:
 
 1. Registration creates one solo dining group; a user has one active long-term dining group.
 2. A long-term invite freezes the invitee's original space; import is explicit, and exit restores the original space plus a temporary carry-back snapshot.
-3. Dining-group recipes, public browsing and direct collection, immutable source versions, copy-on-write edits, recipe count, media storage, version history, and deletion rules.
+3. Dining-group recipes, public browsing and direct collection, immutable technical snapshots, copy-on-write edits, Plus recipe variants, recipe count, media storage, and deletion rules.
 4. Shared fridge, meal plans, participation, shopping ownership, and the core next-meal loop.
 5. Temporary meal guests (`饭局`) and user-owned taste/allergy profiles without granting shared-space access.
 6. Personal Free/Plus and Dining Group Free/Plus, upgrade proration, expiry, over-quota read-only behavior, and cleanup.
@@ -102,7 +102,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 2. `RecipeContentVersion` is immutable after creation.
 3. `MealPlanItem`, public recipe versions, and share snapshots must reference a fixed content version.
 4. Collecting a system or public recipe creates a light dining-group recipe entry that points to a fixed source version.
-5. Editing ingredients, amounts, or steps creates a new content version and atomically switches `currentVersionId`.
+5. Editing ingredients, amounts, or steps creates a new technical content snapshot and atomically switches `currentVersionId`; it is not user-visible edit history.
 6. Editing local name, note, category, or display metadata does not create a new content version.
 7. Private dining-group recipes must not leak through global search, public similarity, or adoption statistics.
 8. The old `RestaurantRecipe` name in v0.1 historical schema material must not be copied into a new contract without an explicit v0.2 migration decision.
@@ -111,12 +111,13 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 
 1. Solo and shared spaces use one DiningGroup model; shared membership changes access, not data ownership by copying.
 2. Personal entitlements do not add together into dining-group entitlements.
-3. Free/Plus numeric defaults, image parameters, storage accounting, history, recycle bin, snapshot retention, and downgrade behavior come only from `configuration.md` and server policy resolution.
+3. Free/Plus numeric defaults, image parameters, storage accounting, recipe variants, recycle bin, snapshot retention, and downgrade behavior come only from `configuration.md` and server policy resolution.
 4. Over-storage spaces are read-only except viewing, permanent cleanup, export, exit/carry-back, renewal, and user-owned safety actions.
 5. Allergies and strict restrictions are user-owned, always free, and never exposed to unrelated participants.
 6. Carry-back recipes may include any recipe the departing member was authorized to see; fridge, plans, and shopping use the narrower rules in `dining-group.md`.
-7. Free deletion is permanent; Plus retains at most 10 historical recipe versions and a 7-day recycle bin.
-8. Personal Plus to Dining Group Plus uses 100% of the remaining cash-paid value; member exit never triggers reverse proration.
+7. Free deletion is permanent; Plus has a 7-day recycle bin. Free/Plus do not expose edit history.
+8. Personal Plus or Dining Group Plus can create at most two direct variants from one root recipe; variants cannot create more variants.
+9. Personal Plus to Dining Group Plus uses 100% of the remaining cash-paid value; member exit never triggers reverse proration.
 
 ## Write Rules
 
