@@ -16,7 +16,12 @@
 
 ## 契约状态
 
-本文为 v0.1 契约草案。三端可以基于本文并行脚手架开发；小程序端当前只走真实 API，不再内置 mock 请求通道。
+本文同时记录两层状态：
+
+1. v0.1 已实现快照：Auth/User/DiningGroup 第一条真实 API 链路，字段和路径必须与当前代码保持一致。
+2. v0.2 目标契约：已确认产品规则，但原空间、迁入迁出、饭局、口味、会员和空间 DTO 尚未完成代码与数据库评审。
+
+`dining-group.md` 和 `configuration.md` 是 v0.2 产品权威。当前 `/dining-groups/mine` 的多列表、`currentDiningGroupId`、`joinedLimit` 等 v0.1 字段不能再作为“可加入多个饭搭子”的产品依据。
 
 后端实现、OpenAPI 输出或字段命名需要调整时，必须先更新本文，再同步 `packages/api-client` 和调用端代码。
 
@@ -55,9 +60,11 @@
 
 1. `DiningGroupRole`
 2. `MemberStatus`
-3. `CollaborationMode`
-4. `SharedQuotaPolicy`
+3. 已冻结的空间、快照和邀请状态枚举
+4. 已冻结的权益作用域和服务端解析结果类型
 5. 稳定 ID、时间、版本等基础类型别名
+
+v0.1 已存在的 `CollaborationMode`、`SharedQuotaPolicy` 需要在 v0.2 契约评审中决定迁移或废止；单人/多人本身应由有效成员数量推导，不新增可漂移的持久状态。
 
 不放：
 
@@ -353,6 +360,8 @@ interface UserSummary {
 
 ## 饭搭子 DTO
 
+> 以下 `DiningGroupSummary` 与 `DiningGroupMemberSummary` 是当前 v0.1 实现快照。v0.2 需要按唯一活跃空间、原空间和受限成员状态重新设计；未完成契约评审前不得在调用端扩展猜测字段。
+
 ### DiningGroupSummary
 
 ```ts
@@ -517,9 +526,10 @@ interface MyDiningGroupsResult {
 
 规则：
 
-1. 返回用户创建的饭搭子和已加入饭搭子。
+1. 本接口当前返回 v0.1 已实现的用户创建和已加入饭搭子列表。
 2. 被移除成员不可继续访问饭搭子数据。
-3. `currentDiningGroupId` 是服务端建议值；小程序可以在本地记忆最近选择，但写操作必须显式传 `diningGroupId`。
+3. `currentDiningGroupId` 是 v0.1 服务端建议值，不再授权客户端实现普通饭搭子切换。
+4. v0.2 目标是返回唯一活跃饭搭子、原空间摘要和服务端解析权益；最终 DTO 在生命周期实现前冻结。
 
 ### 创建饭搭子
 
@@ -548,7 +558,7 @@ interface CreateDiningGroupResult {
 
 规则：
 
-1. 每个用户最多创建 1 个饭搭子。
+1. 本接口是 v0.1 已实现创建能力；v0.2 注册成功后自动创建单人饭搭子，普通用户流程不再依赖手动创建。
 2. 创建饭搭子后自动成为 `OWNER`。
 3. 需要事务内同时创建饭搭子和 owner 成员关系。
 4. 弱网重试必须通过 `operationId` 幂等。
@@ -653,10 +663,36 @@ interface AcceptInviteResult {
 
 规则：
 
-1. 接受邀请必须事务内校验用户加入上限、饭搭子成员上限、邀请有效期和成员状态。
+1. 接受邀请必须事务内校验唯一活跃长期饭搭子、目标成员上限、邀请有效期、成员状态和原空间冻结条件。
 2. 同一用户重复接受同一邀请不得重复创建成员。
 3. 多人并发接受邀请不能突破成员上限。
-4. 相同 `operationId` 重试必须返回第一次接受邀请保存的结果。
+4. 接受成功必须原子完成原空间冻结和目标成员关系创建。
+5. 相同 `operationId` 重试必须返回第一次接受邀请保存的结果。
+
+## v0.2 生命周期目标契约
+
+以下路径是已经确认的目标资源形状，状态均为“待契约/未实现”。具体请求响应字段必须在 `plans/dining-group-lifecycle-plan.md` 阶段一根据真实模型冻结。
+
+| 能力 | 目标路径 | 关键规则 |
+| --- | --- | --- |
+| 当前饭搭子上下文 | `GET /dining-groups/current` | 唯一活跃饭搭子、原空间摘要、服务端权益 |
+| 创建长期邀请 | `POST /dining-group-invites` | 席位、实例化有效期、幂等 |
+| 接受长期邀请 | `POST /dining-group-invites/{inviteToken}/accept` | 冻结原空间、原子加入 |
+| 拒绝长期邀请 | `POST /dining-group-invites/{inviteToken}/decline` | 不改变空间 |
+| 退出长期饭搭子 | `POST /dining-groups/{diningGroupId}/leave` | 恢复原空间、生成快照、保留参与关系 |
+| 原空间可迁入资料 | `GET /original-space/importable-data` | 只返回当前用户原空间白名单 |
+| 提交原空间迁入 | `POST /original-space/imports` | 容量预检、幂等、源数据不移动 |
+| 迁出快照列表/详情 | `GET /carry-back-snapshots` | 私有、固定版本、服务端 `expiresAt` |
+| 迁出快照导入 | `POST /carry-back-snapshots/{snapshotId}/imports` | 分批、幂等、数据可携带 |
+| 空间使用量 | `GET /storage-usage` | 服务端逻辑空间与模块明细 |
+| 当前权益 | `GET /entitlements/current` | 不允许客户端自行合并个人与饭搭子权益 |
+| 我的口味 | `GET/PUT /users/me/taste-profile` | 用户所有、敏感字段最小返回 |
+| 饭局邀请 | `POST /meal-plans/{mealPlanId}/guest-invitations` | 不创建长期成员，不消耗长期席位 |
+| 饭局回应 | `POST /meal-guest-invitations/{invitationId}/respond` | 接受、拒绝、取消和本次口味快照 |
+
+目标 DTO 使用明确的 `Request/Response` 后缀，例如 `ImportOriginalSpaceDataRequest`、`ImportCarryBackSnapshotRequest`、`StorageUsageResponse` 和 `UpdateTasteProfileRequest`。最终字段不得在本文之外由前后端各自补充。
+
+目标状态语义见 `dining-group.md`，额度和到期行为见 `configuration.md`。
 
 ## 后台第一条链路接口
 

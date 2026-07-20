@@ -4,7 +4,7 @@
 
 This is the short guide for AI-assisted vibe coding in this repository.
 
-Read this file first. Use `project.md` for the full developer overview, use `api-contract.md` before API, client, or admin integration work, use `uniapp.md` before mini program client work, use `uniapp-architecture.md` before scaffolding or changing `apps/client`, and use `docs/cook/*` only when you need the frozen product, schema, or SQL details.
+Read this file first. Use `project.md` for the full developer overview, `dining-group.md` for the current lifecycle and data rules, `configuration.md` for Free/Plus and storage rules, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
 
 ## Product
 
@@ -59,7 +59,7 @@ Rules:
 4. Keep product source material in `docs/cook/*`; keep current project rules in top-level `docs/*.md`.
 5. For uni-app mini program engineering rules, read `docs/uniapp.md` instead of duplicating those rules here.
 6. For the `apps/client` scaffold, main package, subpackages, login component, request layer, platform adapter, and Pinia boundaries, read `docs/uniapp-architecture.md`.
-7. For shared API response, error codes, auth schemes, DTO boundaries, and the first Auth/User/Restaurant vertical slice, read `docs/api-contract.md`.
+7. For shared API response, error codes, auth schemes, DTO boundaries, and the first Auth/User/DiningGroup vertical slice, read `docs/api-contract.md`.
 
 ## Flat Shape Rules
 
@@ -77,40 +77,54 @@ Rules:
 
 ## V1 Scope
 
-Build the family meal loop:
+Build the confirmed meal loop and lifecycle:
 
-1. WeChat login, user account, restaurant creation, invite, members, roles.
-2. Restaurant recipes, system recommendation plaza, fixed-version import, copy-on-write edits.
-3. Next meal, meal poll, unified "want to eat", wish pool, random dish/table.
-4. Restaurant fridge with `HAVE / LOW / EMPTY`, ingredient gap check, shopping list, supermarket mode.
-5. Share snapshots, read-only preview, import, meal memory card.
-6. Admin import, system recipes, ingredient aliases, basic audit.
+1. Registration creates one solo dining group; a user has one active long-term dining group.
+2. A long-term invite freezes the invitee's original space; import is explicit, and exit restores the original space plus a temporary carry-back snapshot.
+3. Dining-group recipes, public browsing and direct collection, immutable source versions, copy-on-write edits, recipe count, media storage, version history, and deletion rules.
+4. Shared fridge, meal plans, participation, shopping ownership, and the core next-meal loop.
+5. Temporary meal guests (`饭局`) and user-owned taste/allergy profiles without granting shared-space access.
+6. Personal Free/Plus and Dining Group Free/Plus, upgrade proration, expiry, over-quota read-only behavior, and cleanup.
+7. Admin system recipes, ingredient aliases, configuration, entitlement inspection, and basic audit.
 
-V1 does not open user public submissions, excellent recommendation ranking, formal payment, AI recipe generation, chat, comments, follows, private messages, delivery, price comparison, or fine-grained inventory accounting.
+V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-family collaboration, ordinary multi-group switching, owner transfer, chat, comments, follows, delivery, price comparison, or fine-grained inventory accounting.
 
 ## Module State
 
-- `Active`: Auth, User, Restaurant, Recipe, Meal, Poll, Fridge, Shopping, RecipeImport, Admin, Share.
-- `Disabled`: Public recipe endpoints and Worker/Outbox behavior. Keep table and endpoint skeletons; return 503 for disabled client-facing behavior. V1 only uses the system recommendation plaza.
-- `Reserved`: Payment, membership, points, entitlement, quota services. Keep tables only.
+- Current implemented v0.1: Auth, User, the first DiningGroup slice, Admin read-only queries, and existing scaffolded modules as documented by `api-index.md`.
+- Target v0.2: original-space lifecycle, migration, exit snapshot, meal guests, taste, storage, Personal Plus, Dining Group Plus, and the minimum upgrade/expiry payment path.
+- Disabled: Public user submissions and Worker/Outbox runtime behavior.
+- Reserved: Points, receipt scanning, OCR, AI, Pro, multi-family, and multi-dining-group switching. Do not add placeholder services or client entry points.
 
 ## Domain Rules
 
 1. Recipe content uses `RecipeContentVersion`.
 2. `RecipeContentVersion` is immutable after creation.
 3. `MealPlanItem`, public recipe versions, and share snapshots must reference a fixed content version.
-4. Importing a system or public recipe creates a light `RestaurantRecipe` entry that points to the source version.
+4. Collecting a system or public recipe creates a light dining-group recipe entry that points to a fixed source version.
 5. Editing ingredients, amounts, or steps creates a new content version and atomically switches `currentVersionId`.
 6. Editing local name, note, category, or display metadata does not create a new content version.
-7. Private restaurant recipes must not leak through global search, public similarity, or adoption statistics.
+7. Private dining-group recipes must not leak through global search, public similarity, or adoption statistics.
+8. The old `RestaurantRecipe` name in v0.1 historical schema material must not be copied into a new contract without an explicit v0.2 migration decision.
+
+## Lifecycle And Entitlement Rules
+
+1. Solo and shared spaces use one DiningGroup model; shared membership changes access, not data ownership by copying.
+2. Personal entitlements do not add together into dining-group entitlements.
+3. Free/Plus numeric defaults, image parameters, storage accounting, history, recycle bin, snapshot retention, and downgrade behavior come only from `configuration.md` and server policy resolution.
+4. Over-storage spaces are read-only except viewing, permanent cleanup, export, exit/carry-back, renewal, and user-owned safety actions.
+5. Allergies and strict restrictions are user-owned, always free, and never exposed to unrelated participants.
+6. Carry-back recipes may include any recipe the departing member was authorized to see; fridge, plans, and shopping use the narrower rules in `dining-group.md`.
+7. Free deletion is permanent; Plus retains at most 10 historical recipe versions and a 7-day recycle bin.
+8. Personal Plus to Dining Group Plus uses 100% of the remaining cash-paid value; member exit never triggers reverse proration.
 
 ## Write Rules
 
 1. All retryable writes carry `operationId`.
 2. Shared mutable objects carry `version`.
-3. Server-side permission checks are mandatory for restaurant, role, membership, fridge, shopping, plan, and recipe writes.
+3. Server-side permission checks are mandatory for dining-group, original-space, role, membership, storage state, fridge, shopping, plan, guest, and recipe writes.
 4. Do not rely on hidden client buttons for security.
-5. Cross-object changes such as confirming a meal, closing a poll, ending shopping, batch fridge updates, invite acceptance, and ownership transfer must be transactional.
+5. Cross-object changes such as confirming a meal, closing a poll, ending shopping, batch fridge updates, invite acceptance, exit/restore, snapshot creation, and entitlement upgrades must be transactional.
 6. Write audit records for important state changes.
 
 ## Naming Rules

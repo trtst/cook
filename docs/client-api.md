@@ -17,6 +17,7 @@
 
 | 日期 | 变更内容 |
 | --- | --- |
+| 2026-07-20 | 入档唯一活跃饭搭子、原空间迁入迁出、饭局、口味、Free/Plus、统一空间和到期超额目标规则；新增接口均为 v0.2 待契约，当前代码未实现。 |
 | 2026-07-19 | 小程序请求层移除 mock 通道，统一走真实 API；无本地数据时通过 seed 或真实创建接口生成。 |
 | 2026-07-19 | 小程序请求默认增加 `X-Cook-From`、`X-Cook-Version`；新增 `POST /api/auth/refresh` 用于登录态自动续期。 |
 | 2026-07-19 | 新增 V1 客户端接口文档，按客户端调用视角整理 Auth、User、DiningGroup、Admin 首条纵切链路。 |
@@ -39,12 +40,19 @@
 3. 小程序用户 token 和后台管理员 token 不能混用。
 4. 小程序端不再内置 mock 请求通道。没有数据时，使用后端 seed 或真实创建接口生成数据。
 
+## v0.1 与 v0.2 边界
+
+本文后续 Auth/User/DiningGroup 详情描述当前 v0.1 已实现接口。`GET /api/dining-groups/mine` 的列表、`currentDiningGroupId` 和旧 limits 不能再解释为普通多饭搭子切换能力。
+
+v0.2 产品目标以 `docs/dining-group.md` 和 `docs/configuration.md` 为准。原空间、退出快照、饭局、口味、会员和空间接口尚未实现；在 `docs/api-contract.md` 冻结 DTO 并同步 `packages/api-client` 前，小程序不得猜字段或用本地 fallback 模拟契约。
+
 ## 状态说明
 
 | 状态 | 含义 |
 | --- | --- |
 | 已实现 | 后端 Controller / Service 已存在，`packages/api-client` 已有调用入口 |
 | 已契约 | 契约已写明，代码可能尚未完整接入 |
+| 待契约 | 产品规则已确认，但 v0.2 API/DTO/数据库尚未完成评审 |
 | 待创建 | V1 范围内需要，但尚未定义接口详情或尚未实现 |
 | 暂不创建 | V1 不做、Disabled 或 Reserved 模块，当前不开放业务入口 |
 
@@ -77,7 +85,7 @@
 | Recipe | `POST /api/recipes` | 小程序 | 待创建 | `operationId`、本地字段、内容版本创建规则 |
 | Recipe | `PUT /api/recipes/{recipeId}` | 小程序 | 待创建 | 哪些字段创建新版本、哪些字段只更新展示元数据 |
 | Recipe | `GET /api/system-recipes` | 小程序 | 待创建 | 系统推荐广场筛选和分页 |
-| RecipeImport | `POST /api/recipe-imports` | 小程序 | 待创建 | 导入固定版本、重复导入、权限 |
+| RecipeImport | `POST /api/recipe-imports` | 小程序 | 待创建 | v0.1 建议路径；v0.2 产品操作名为“收录”，最终路径待契约 |
 | Meal | `POST /api/meal-plans` | 小程序 | 待创建 | 下一餐事务边界、`operationId` |
 | Meal | `GET /api/meal-plans` | 小程序 | 待创建 | 当前计划和历史计划查询口径 |
 | Poll | `POST /api/meal-polls` | 小程序 | 待创建 | 点菜征集状态、截止、权限 |
@@ -92,6 +100,18 @@
 | AdminRecipe | `GET /api/admin/recipes` | 后台 | 待创建 | 系统菜谱治理字段、分页和状态 |
 | AdminRecipe | `POST /api/admin/imports` | 后台 | 待创建 | 导入批次、校验结果、错误回传 |
 | AdminRecipe | `POST /api/admin/imports/{batchId}/publish` | 后台 | 待创建 | 发布事务、重复发布、审计 |
+| DiningGroup | `GET /api/dining-groups/current` | 小程序 | 待契约 | 唯一活跃饭搭子、原空间摘要和服务端权益 |
+| DiningGroup | `POST /api/dining-groups/{diningGroupId}/leave` | 小程序 | 待契约 | 退出、恢复和迁出快照事务 |
+| OriginalSpace | `GET /api/original-space/importable-data` | 小程序 | 待契约 | 可迁入资料白名单 |
+| OriginalSpace | `POST /api/original-space/imports` | 小程序 | 待契约 | 容量预检与幂等 |
+| CarryBack | `GET /api/carry-back-snapshots` | 小程序 | 待契约 | 私有快照与服务端有效期 |
+| CarryBack | `POST /api/carry-back-snapshots/{snapshotId}/imports` | 小程序 | 待契约 | 分批幂等导入 |
+| Storage | `GET /api/storage-usage` | 小程序 | 待契约 | 模块逻辑空间明细 |
+| Entitlement | `GET /api/entitlements/current` | 小程序 | 待契约 | 服务端解析权益 |
+| Taste | `GET /api/users/me/taste-profile` | 小程序 | 待契约 | 用户级口味资料 |
+| Taste | `PUT /api/users/me/taste-profile` | 小程序 | 待契约 | 更新口味资料 |
+| MealGuest | `POST /api/meal-plans/{mealPlanId}/guest-invitations` | 小程序 | 待契约 | 临时饭局邀请 |
+| MealGuest | `POST /api/meal-guest-invitations/{invitationId}/respond` | 小程序 | 待契约 | 饭局回应和本次口味快照 |
 
 ## 暂不创建接口
 
@@ -99,7 +119,8 @@
 | --- | --- | --- |
 | Public | 暂不创建 | V1 不开放用户公共投稿和公开 UGC 运营闭环 |
 | Worker / Outbox | 暂不创建 | V1 建表但不启动 Worker，不开放业务接口 |
-| Payment / Membership / Point | 暂不创建 | Reserved，只预留表，不开放服务和客户端入口 |
+| Point / OCR / AI / Pro | 暂不创建 | Reserved，不开放服务和客户端入口 |
+| Receipt / FridgePhoto | 暂不创建 | 当前不做小票识别和冰箱物品图片 |
 | Chat / Comment / Follow / PrivateMessage | 暂不创建 | V1 明确不做聊天、评论、关注和私信 |
 
 ## 通用约定
@@ -386,6 +407,8 @@ Authorization: Bearer <userAccessToken>
 
 ### 2.1 我的饭搭子列表
 
+> 当前实现快照：本接口仍返回 v0.1 多列表形状。v0.2 不提供普通多饭搭子切换，调用端不得基于本接口扩展切换 UI；目标接口与 DTO 见 `docs/api-contract.md`。
+
 * **编号**: `C-004`
 * **Method**: `GET`
 * **Path**: `/api/dining-groups/mine`
@@ -439,8 +462,8 @@ Authorization: Bearer <userAccessToken>
 | 项目 | 说明 |
 | --- | --- |
 | 鉴权 | 小程序用户 token |
-| 数据职责 | 返回当前用户创建或已加入的饭搭子 |
-| currentDiningGroupId | 服务端建议的当前饭搭子 ID；写操作仍必须显式传 `diningGroupId` |
+| 数据职责 | 返回当前 v0.1 实现中的用户创建或已加入饭搭子；不代表 v0.2 产品允许多饭搭子 |
+| currentDiningGroupId | v0.1 服务端建议值；不得据此实现普通切换 UI |
 | 权限 | 被移除成员不可继续读取饭搭子数据 |
 
 ### 2.2 创建饭搭子
@@ -516,7 +539,7 @@ Authorization: Bearer <userAccessToken>
 | 鉴权 | 小程序用户 token |
 | operationId | 客户端生成 UUID，用于弱网重试幂等 |
 | 数据职责 | 事务内创建饭搭子和 owner 成员关系 |
-| 业务规则 | 每个用户最多创建 1 个饭搭子 |
+| 业务规则 | v0.1 每个用户最多创建 1 个；v0.2 注册后自动创建单人饭搭子，普通流程不再手动创建 |
 
 ### 2.3 饭搭子详情
 
@@ -756,7 +779,7 @@ Authorization: Bearer <userAccessToken>
 | 项目 | 说明 |
 | --- | --- |
 | 鉴权 | 小程序用户 token |
-| 事务 | 接受邀请必须事务内校验加入上限、饭搭子成员上限、邀请有效期和成员状态 |
+| 事务 | v0.2 必须事务内校验唯一活跃长期饭搭子、目标成员上限、邀请有效期、成员状态和原空间冻结条件 |
 | 幂等 | 同一用户重复接受同一邀请不得重复创建成员 |
 | 并发 | 多人并发接受邀请不能突破成员上限 |
 

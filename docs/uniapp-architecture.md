@@ -23,12 +23,12 @@ apps/client/
       me/index.vue
       error/index.vue
 
-    pages_restaurant/          # 分包：餐厅管理
+    pages_restaurant/          # 当前历史目录名：饭搭子管理，重命名须独立执行
       create/
       invite/
       members/
       settings/
-      switch/
+      switch/                  # v0.1 历史页；v0.2 不开放普通切换入口
 
     pages_recipe/              # 分包：菜谱
       list/
@@ -76,7 +76,7 @@ apps/client/
       http.ts
       auth.ts
       user.ts
-      restaurant.ts
+      dining-group.ts
       recipe.ts
       meal.ts
       poll.ts
@@ -88,7 +88,7 @@ apps/client/
       app.ts
       session.ts
       user.ts
-      restaurant.ts
+      dining-group.ts
       settings.ts
 
     platform/                  # 平台适配层注册
@@ -105,9 +105,9 @@ apps/client/
 
 1. 主包页面保持 `pages/{page}/index.vue`，不再继续嵌套业务目录。
 2. 分包页面保持 `pages_xxx/{page}/index.vue` 或项目实际等价形式，不新增 `detail/edit/result` 之上的业务中间层。
-3. 分包 root 只表达一级产品域：`restaurant`、`recipe`、`meal`、`pantry`、`share`。
+3. 分包 root 只表达一级产品域：`dining_group`、`recipe`、`meal`、`pantry`、`share`。
 4. 页面名称直接表达入口：`detail`、`edit`、`poll`、`gap`、`supermarket`。
-5. 餐厅、菜谱、版本、计划、状态等上下文通过 query、store 当前态和接口校验承载，不进入路由层级。
+5. 饭搭子、菜谱、版本、计划、状态等上下文通过 query、store 当前态和接口校验承载，不进入路由层级。
 6. 后台、小程序和 API 的路径不需要一一对应；三端都各自保持短路径。
 7. `src/themes/{skinId}` 是主题目录上限，不增加 `skins/`、`templates/`、`variants/` 等中间层。
 
@@ -132,7 +132,7 @@ pages/error/index
 
 分包按功能域拆，不按页面类型拆。
 
-1. `pages_restaurant/`：餐厅创建、邀请、成员、设置和切换。
+1. `pages_restaurant/`：当前历史目录名，承载饭搭子入口；v0.2 增加原空间资料、长期邀请、成员、设置、退出和迁出快照，并移除普通切换入口。目录重命名必须作为独立迁移执行。
 2. `pages_recipe/`：菜谱列表、详情、编辑、导入和系统菜谱。
 3. `pages_meal/`：下一餐计划、点菜征集、想吃池、随机和结果汇总。
 4. `pages_pantry/`：食材与采购首页、食材编辑、食材缺口、购物清单、超市模式和采购记录。
@@ -179,9 +179,9 @@ components/
 
 1. 不主动弹出。
 2. 不跳转页面。
-3. 不刷新餐厅、用户资料或页面数据。
+3. 不刷新饭搭子、用户资料或页面数据。
 4. 不维护重试队列。
-5. 不包含餐厅、菜谱、冰箱、购物等业务逻辑。
+5. 不包含饭搭子、菜谱、冰箱、购物等业务逻辑。
 
 页面或具体操作负责决定登录成功后的行为，例如刷新当前数据、继续执行当前操作或停留在原页面。
 
@@ -460,11 +460,11 @@ tabbar 固定为：
 | --- | --- | --- |
 | 首页 | 显示品牌占位和登录引导 | 显示下一餐和快捷入口 |
 | 菜谱 | 展示系统菜谱大厅 | 展示私人菜谱和大厅 |
-| 我的 | 显示登录组件 | 展示个人信息和餐厅 |
+| 我的 | 显示登录组件 | 展示个人信息、当前饭搭子、原空间和会员入口 |
 | 食材与采购 | 显示登录后使用食材与采购 | 展示库存、缺口和购物清单 |
 | 分享预览 | 直接展示预览内容 | 直接展示预览内容 |
 
-分享预览页不要求登录。导入、收藏等需要用户身份的操作，再触发登录组件。
+分享预览页不要求登录。收录、迁入等需要用户身份的操作，再触发登录组件。
 
 ## 请求层边界
 
@@ -502,7 +502,7 @@ Pinia 只保存跨页面、跨启动、需要统一清理的状态。
 stores/app.ts          # 启动状态、系统信息、全局 ready
 stores/session.ts      # token、登录态、用户 id、401 清理
 stores/user.ts         # 当前用户资料
-stores/restaurant.ts   # 当前餐厅、餐厅列表、成员角色
+stores/dining-group.ts # 当前唯一活跃饭搭子、原空间状态、成员角色和空间限制
 stores/settings.ts     # 本地配置、持久化 key 统一入口
 ```
 

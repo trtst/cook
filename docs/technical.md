@@ -35,6 +35,7 @@
 - 返回格式：统一 JSON 返回结构
 - 契约基线：见 `docs/api-contract.md`
 - 配置方式：环境变量或被 git 忽略的本地配置文件
+- 产品策略配置：服务端类型化配置与权益解析，规则见 `docs/configuration.md`
 
 ### 后台技术栈
 
@@ -55,6 +56,20 @@
 5. 是否有明确的测试要求。
 6. 是否触达 Prisma Schema、手写 SQL 约束、迁移或历史数据。
 7. 是否触达 Worker、Outbox、公共 UGC、支付、饭票、会员或合规闸门。
+8. 是否触达原空间、迁入迁出、饭局、口味、空间计量、历史版本或到期清理。
+
+## 生命周期与配置技术规则
+
+1. 饭搭子生命周期以 `docs/dining-group.md` 为准，不能从当前 `/dining-groups/mine` 列表形状推导多饭搭子产品能力。
+2. 配置中心只提供 `GLOBAL / ENTITLEMENT / USER / INSTANCE / SAFETY` 输入，所有权、权限和状态机仍由代码保证。
+3. 客户端不得自行计算套餐、快照期限、成员数、图片参数和空间结论。
+4. 快照、邀请等实例创建时保存解析值和策略版本，后续配置变化不追溯已创建快照。
+5. 逻辑空间使用量必须可增量更新也可全量重算；结构化记录至少按 1 KB 取整，图片按压缩后大小计量。
+6. 资源引用与逻辑计量分开；同一空间重复引用不重复计量，物理文件仅在最后引用释放后删除。
+7. Free 删除必须二次确认并永久删除；Plus 历史版本最多 10 个，回收站 7 天。
+8. 过期清理命令必须幂等、分批、可重试、防重复执行并保留审计。Worker 仍 Disabled 时不得声称由 Worker 自动完成。
+9. 支付升级使用原现金实付剩余价值 100% 抵扣，订单和回调必须幂等，支付失败不得移除原权益。
+10. OCR、AI、小票识别和 Pro 当前 Reserved，不提前添加通用抽象或占位服务。
 
 ## 接口协议规则
 
@@ -141,7 +156,7 @@
 
 1. 目录层级默认不超过 3 层，路由和接口默认不超过 2 个业务语义层级。
 2. 不把数据库关系、菜单树、权限树或领域模型完整搬进路径。
-3. 小程序路由按入口页命名，优先 `pages_recipe/detail`，不要 `pages/restaurant/recipe/version/detail`。
+3. 小程序路由按入口页命名，优先 `pages_recipe/detail`，不要 `pages/dining-group/recipe/version/detail`。
 4. 后端接口按稳定资源命名，优先 `GET /recipes/{recipeId}`、`POST /meal-plans`，不要多层父资源嵌套。
 5. 后台路由按运营动作命名，优先 `/admin/recipes`、`/admin/imports`，不要 `/admin/content/recipe/import/review/list`。
 6. NestJS 模块保持一级领域模块，复杂流程放 service、repo、DTO 和事务边界，不继续拆深层模块目录。

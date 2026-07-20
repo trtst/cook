@@ -1,5 +1,7 @@
 # 下一餐 V1 手写 SQL 约束清单
 
+> **历史状态（2026-07-20）**：本文只对应 Prisma Schema v0.1。当前饭搭子生命周期、唯一活跃空间、原空间、迁出快照、会员和空间账本尚未体现在本清单中。实现 v0.2 时必须新增独立 SQL 约束版本，不得改写本文件冒充历史 v0.1 已包含新规则。
+
 Prisma Schema v0.1 覆盖基础表结构、普通索引和普通唯一约束。以下约束需要在 Prisma migration 中追加手写 SQL，原因是它们依赖 PostgreSQL partial index、check constraint 或触发器语义，Prisma 5.22.0 无法完整表达。
 
 ## 1. DishConcept 唯一约束
