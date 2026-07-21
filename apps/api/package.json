@@ -12,7 +12,8 @@
     "type-check": "pnpm --dir ../.. --filter @next-meal/domain build && pnpm --dir ../.. --filter @next-meal/api-client build && tsc -p tsconfig.json --noEmit",
     "build": "pnpm --dir ../.. --filter @next-meal/domain build && pnpm --dir ../.. --filter @next-meal/api-client build && tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts"
+    "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts",
+    "verify:taste-profile-flow": "tsx scripts/verify-taste-profile-flow.ts"
   },
   "dependencies": {
     "@nestjs/common": "11.1.28",

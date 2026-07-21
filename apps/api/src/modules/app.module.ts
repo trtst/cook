@@ -9,6 +9,7 @@ import { DiningGroupService } from "../modules/dining-group/dining-group.service
 import { EntitlementController } from "../modules/entitlement/entitlement.controller";
 import { EntitlementService } from "../modules/entitlement/entitlement.service";
 import { UserController } from "../modules/user/user.controller";
+import { TasteProfileService } from "../modules/user/taste-profile.service";
 import { ClientVersionGuard } from "../common/client-version.guard";
 import { LoginRateLimitGuard } from "../common/login-rate-limit.guard";
 import { PrismaService } from "../common/prisma.service";
@@ -23,6 +24,7 @@ import { AdminService } from "./admin/admin.service";
     AuthService,
     DiningGroupService,
     EntitlementService,
+    TasteProfileService,
     PrismaService,
     AdminTokenService,
     UserTokenService,

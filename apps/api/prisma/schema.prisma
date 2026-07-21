@@ -107,11 +107,26 @@ model User {
   acceptedInvites    DiningGroupInvite[] @relation("DiningGroupInviteAcceptor")
   carryBackSnapshots CarryBackSnapshot[]
   entitlementGrant   EntitlementGrant?
+  tasteProfile       UserTasteProfile?
   idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordUser")
   auditEvents        AuditEvent[]        @relation("AuditEventActor")
 
   @@index([createdAt])
   @@map("users")
+}
+
+model UserTasteProfile {
+  userId               String   @id @map("user_id") @db.Uuid
+  allergies            String[] @default([])
+  strictDislikes       String[] @default([]) @map("strict_dislikes")
+  dislikedIngredients String[] @default([]) @map("disliked_ingredients")
+  flavorPreferences   String[] @default([]) @map("flavor_preferences")
+  note                String?  @db.VarChar(1000)
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_taste_profiles")
 }
 
 model DiningGroup {

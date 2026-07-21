@@ -91,8 +91,8 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 
 ## Module State
 
-- Current implemented: Auth, User, unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, minimum Plus grants, effective entitlement resolution, and Admin read-only queries.
-- Next implementation: original-space imports, snapshot item carry-back, recipes and storage ledger, meal guests, taste, meal completion facts, and the minimum upgrade/expiry payment path.
+- Current implemented: Auth, User, user-owned taste profiles, unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, minimum Plus grants, effective entitlement resolution, and Admin read-only queries.
+- Next implementation: original-space imports, snapshot item carry-back, recipes and storage ledger, meal guests, meal completion facts, and the minimum upgrade/expiry payment path.
 - Disabled: Public user submissions and Worker/Outbox runtime behavior.
 - Target but not contracted: non-monetary activities, achievements, and medal wall. The client may show a Me-page entry placeholder, but no API, DTO, schema, reward, or admin surface may be added until completion facts and contracts are frozen.
 - Reserved: Points, meal tickets, receipt scanning, OCR, AI, Pro, multi-family, and multi-dining-group switching. Do not add placeholder services or client entry points.

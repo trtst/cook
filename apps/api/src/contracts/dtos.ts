@@ -1,6 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { Transform, Type } from "class-transformer";
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsDefined,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf
+} from "class-validator";
+
+function trimItems(value: unknown) {
+  if (!Array.isArray(value)) return value;
+  return value.map(item => (typeof item === "string" ? item.trim() : item));
+}
 
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
@@ -41,6 +61,56 @@ export class UpdateCurrentUserDto {
   @IsOptional()
   @IsString()
   phone?: string;
+}
+
+export class UpdateTasteProfileDto {
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @Transform(({ value }) => trimItems(value))
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(64, { each: true })
+  allergies!: string[];
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @Transform(({ value }) => trimItems(value))
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(64, { each: true })
+  strictDislikes!: string[];
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @Transform(({ value }) => trimItems(value))
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(64, { each: true })
+  dislikedIngredients!: string[];
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @Transform(({ value }) => trimItems(value))
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(64, { each: true })
+  flavorPreferences!: string[];
+
+  @ApiProperty({ nullable: true, maxLength: 1000 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(1000)
+  note!: string | null;
 }
 
 export class OperationDto {

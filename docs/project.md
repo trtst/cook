@@ -185,7 +185,7 @@ V1 模块状态：
 
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
-| Auth / User / DiningGroup | Active / 待扩展 | 登录、唯一当前空间、加入冻结、退出恢复和快照头已实现 |
+| Auth / User / DiningGroup | Active / 待扩展 | 登录、本人口味资料、唯一当前空间、加入冻结、退出恢复和快照头已实现 |
 | Recipe | Active | 概念、模板、入口、版本、写时复制 |
 | Meal / Poll | Active | 计划、点菜、我想吃 |
 | Fridge / Shopping | Active | 冰箱、购物清单、缺口计算 |
