@@ -159,6 +159,34 @@ interface CarryBackSnapshotSummary {
   };
 }
 
+type CarryItemType = "RECIPE" | "FRIDGE_ITEM" | "SHOPPING_ITEM";
+
+interface CarryRecipeItem {
+  itemId: UUID;
+  itemType: "RECIPE";
+  name: string;
+  fixedVersionId: UUID;
+  estimatedBytes: number;
+}
+
+interface CarryFridgeItem {
+  itemId: UUID;
+  itemType: "FRIDGE_ITEM";
+  ingredientName: string;
+  quantityText: string | null;
+  confirmRequired: true;
+  estimatedBytes: number;
+}
+
+interface CarryShoppingItem {
+  itemId: UUID;
+  itemType: "SHOPPING_ITEM";
+  title: string;
+  estimatedBytes: number;
+}
+
+type CarryBackItem = CarryRecipeItem | CarryFridgeItem | CarryShoppingItem;
+
 interface DiningGroupMemberSummary {
   id: UUID;
   diningGroupId: UUID;
@@ -270,7 +298,16 @@ interface GetCurrentDiningGroupContextResponse {
 1. 每个用户只有一个服务端当前空间。
 2. 单人状态 `originalSpace = null`。
 3. 加入别人后返回被冻结的本人原空间。
-4. 当前配置中心和业务模块尚未接入时，服务端返回安全 Free 默认值和真实 `0` 使用量。
+4. 服务端根据当前用户、当前饭搭子和有效 Plus 授权解析权益；空间账本尚未接入时返回真实 `0` 使用量。
+
+### 当前有效权益
+
+```text
+GET /entitlements/current
+Auth: UserBearerAuth
+```
+
+返回 `EffectiveEntitlementSnapshot`。Free 是默认解析结果，只有 Plus 授权落库；接口只解析登录用户和其当前饭搭子，不接受调用方传入主体 id。饭搭子 Plus 包含主理人的个人 Plus，普通成员的个人 Plus 不会叠加为饭搭子 Plus。
 
 ### 成员列表
 
@@ -358,9 +395,23 @@ interface LeaveDiningGroupResponse {
 POST /admin/auth/login
 GET  /admin/users
 GET  /admin/dining-groups
+GET  /admin/user-entitlements?userId={userId}
 ```
 
 后台饭搭子状态筛选支持 `ACTIVE / FROZEN / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
+
+```ts
+interface AdminUserEntitlementResponse {
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
+  currentSpace: {
+    id: UUID;
+    name: string;
+  };
+  entitlements: EffectiveEntitlementSnapshot;
+}
+```
+
+用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。接口只返回用户最小摘要、当前空间最小摘要和服务端解析后的有效权益；不返回原始授权、历史、订单、支付、空间用量或其他私有数据。
 
 ## 已冻结、待实现接口
 
@@ -404,10 +455,23 @@ interface ImportOriginalSpaceDataResponse {
 
 ```text
 GET  /carry-back-snapshots
+GET  /carry-back-snapshot-items
 POST /carry-back-snapshots/{snapshotId}/imports
+Auth: UserBearerAuth
 ```
 
 ```ts
+interface GetCarryBackSnapshotsResponse {
+  snapshots: CarryBackSnapshotSummary[];
+}
+
+interface CarryItemsQuery extends PageQuery {
+  snapshotId: UUID;
+  itemType: CarryItemType;
+}
+
+type CarryItemsResponse = PageResult<CarryBackItem>;
+
 interface CarryBackImportSelection {
   itemType: "RECIPE" | "FRIDGE_ITEM" | "SHOPPING_ITEM";
   itemId: UUID;
@@ -419,16 +483,19 @@ interface ImportCarryBackSnapshotRequest {
 }
 ```
 
-快照只对退出人可见。导入数据永久保留；快照到期不回滚已导入数据。
+快照头列表只返回退出人本人 `AVAILABLE` 且尚未到期的快照，按 `createdAt` 倒序排列；`itemCounts` 是快照冻结时的三类清单总数，不随分批导入递减。
 
-### 当前权益与空间
+清单项接口只返回尚可选择的冻结摘要，`itemId` 是快照清单项 ID，不是源饭搭子业务对象 ID。结果先按快照冻结顺序稳定排列，再以 `itemId` 作为最终同序项排序依据；指定类型没有可选项时返回成功的空分页。三类摘要不返回图片、成员信息或饭搭子内部备注。
+
+只有快照本人可以读取 `AVAILABLE` 且尚未到期的清单。非本人、已过期、`DELETED` 或 `INVALIDATED` 均按不可探测资源返回 `404`。快照头和清单查询均不更新快照状态，也不读取原饭搭子的实时数据。导入数据永久保留；快照到期不回滚已导入数据。
+
+### 空间
 
 ```text
-GET /entitlements/current
 GET /storage-usage
 ```
 
-分别返回 `EffectiveEntitlementSnapshot` 和 `StorageUsageSummary`。
+返回 `StorageUsageSummary`。
 
 ### 我的口味
 

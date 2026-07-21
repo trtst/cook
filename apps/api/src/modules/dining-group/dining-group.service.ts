@@ -7,7 +7,7 @@ import type {
   CurrentSpaceSummary,
   DiningGroupMemberSummary,
   DiningGroupMembersResult,
-  EffectiveEntitlementSnapshot,
+  GetCarryBackSnapshotsResponse,
   GetCurrentDiningGroupContextResponse,
   LeaveDiningGroupResponse,
   OriginalSpaceSummary,
@@ -15,7 +15,8 @@ import type {
 } from "@next-meal/api-client";
 import { Prisma, type CarryBackSnapshot, type DiningGroup, type DiningGroupMember, type User } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
-import { safePolicy } from "../../config/policy";
+import { policy } from "../../config/policy";
+import { EntitlementService } from "../entitlement/entitlement.service";
 
 const inviteTokenBytes = 32;
 const createInviteOperation = "dining-group-invite:create";
@@ -47,35 +48,24 @@ function fromJson<T>(value: unknown): T {
   return value as T;
 }
 
-function resolveEntitlements(memberCount: number): EffectiveEntitlementSnapshot {
-  const shared = memberCount > 1;
-
-  return {
-    personalTier: "FREE",
-    diningGroupTier: "FREE",
-    currentScope: shared ? "DINING_GROUP" : "USER",
-    recipeLimit: shared ? safePolicy.recipeLimit.diningGroup : safePolicy.recipeLimit.personal,
-    memberLimit: shared ? safePolicy.memberLimit : null,
-    storageLimitBytes: shared ? safePolicy.storageLimitBytes.diningGroup : safePolicy.storageLimitBytes.personal,
-    snapshotDays: safePolicy.snapshotDays,
-    recycleDays: 0,
-    variantLimitPerRoot: 0,
-    imagePolicy: {
-      quality: safePolicy.image.quality,
-      maxWidth: safePolicy.image.maxWidth,
-      maxHeight: safePolicy.image.maxHeight,
-      maxOutputBytes: safePolicy.image.maxOutputBytes,
-      maxInputBytes: safePolicy.image.maxInputBytes
-    }
-  };
-}
-
 @Injectable()
 export class DiningGroupService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(EntitlementService) private readonly entitlementService: EntitlementService
+  ) {}
 
   getCurrent(userId: UUID) {
     return this.prisma.$transaction(tx => this.getCurrentWith(tx, userId));
+  }
+
+  async listSnapshots(userId: UUID): Promise<GetCarryBackSnapshotsResponse> {
+    const snapshots = await this.prisma.carryBackSnapshot.findMany({
+      where: { userId, status: "AVAILABLE", expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" }
+    });
+
+    return { snapshots: snapshots.map(snapshot => this.toSnapshotSummary(snapshot)) };
   }
 
   async listMembers(userId: UUID, diningGroupId: UUID): Promise<DiningGroupMembersResult> {
@@ -122,7 +112,13 @@ export class DiningGroupService {
     );
     if (repeated) return repeated;
 
-    const expiresAt = new Date(Date.now() + safePolicy.inviteExpiresMs);
+    const [activeMemberCount, memberLimit] = await Promise.all([
+      this.prisma.diningGroupMember.count({ where: { diningGroupId, status: "ACTIVE" } }),
+      this.entitlementService.getMemberLimit(this.prisma, diningGroupId)
+    ]);
+    if (activeMemberCount >= memberLimit) throw new BadRequestException("饭搭子成员已达上限");
+
+    const expiresAt = new Date(Date.now() + policy.inviteExpiresMs);
     const inviteToken = createOpaqueInviteToken();
     const result = {
       inviteToken,
@@ -139,7 +135,7 @@ export class DiningGroupService {
             tokenHash: hashText(inviteToken),
             status: "PENDING",
             expiresAt,
-            policyVersion: 1
+            policyVersion: policy.version
           }
         });
 
@@ -224,13 +220,14 @@ export class DiningGroupService {
         const targetGroup = await tx.diningGroup.findUnique({ where: { id: currentInvite.diningGroupId } });
         if (!targetGroup || targetGroup.status !== "ACTIVE") throw new NotFoundException("饭搭子不存在");
 
-        const activeMemberCount = await tx.diningGroupMember.count({
-          where: { diningGroupId: targetGroup.id, status: "ACTIVE" }
-        });
-        const existingMember = await tx.diningGroupMember.findUnique({
-          where: { diningGroupId_userId: { diningGroupId: targetGroup.id, userId } }
-        });
-        if (existingMember?.status !== "ACTIVE" && activeMemberCount >= safePolicy.memberLimit) {
+        const [activeMemberCount, existingMember, memberLimit] = await Promise.all([
+          tx.diningGroupMember.count({ where: { diningGroupId: targetGroup.id, status: "ACTIVE" } }),
+          tx.diningGroupMember.findUnique({
+            where: { diningGroupId_userId: { diningGroupId: targetGroup.id, userId } }
+          }),
+          this.entitlementService.getMemberLimit(tx, targetGroup.id)
+        ]);
+        if (existingMember?.status !== "ACTIVE" && activeMemberCount >= memberLimit) {
           throw new BadRequestException("饭搭子成员已达上限");
         }
 
@@ -339,6 +336,16 @@ export class DiningGroupService {
         if (!member || member.status === "ENDED") throw new NotFoundException("饭搭子不存在");
         if (member.role === "OWNER") throw new BadRequestException("主理人不能直接退出自己的饭搭子");
 
+        const memberCount = await tx.diningGroupMember.count({
+          where: { diningGroupId, status: "ACTIVE" }
+        });
+        const entitlements = await this.entitlementService.resolve(tx, {
+          userId,
+          diningGroupId,
+          ownerId: userSpace.currentDiningGroup.ownerId,
+          memberCount
+        });
+
         await tx.diningGroupMember.update({
           where: { id: member.id },
           data: {
@@ -364,8 +371,8 @@ export class DiningGroupService {
             sourceDiningGroupId: diningGroupId,
             targetDiningGroupId: userSpace.originalDiningGroupId,
             sourceDiningGroupName: userSpace.currentDiningGroup.name,
-            expiresAt: new Date(Date.now() + safePolicy.snapshotDays * 24 * 60 * 60 * 1000),
-            policyVersion: 1
+            expiresAt: new Date(Date.now() + entitlements.snapshotDays * 24 * 60 * 60 * 1000),
+            policyVersion: policy.version
           }
         });
         await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_LEFT", userSpace.originalDiningGroupId);
@@ -433,10 +440,16 @@ export class DiningGroupService {
       where: { userId, status: "AVAILABLE", expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" }
     });
-    const entitlements = resolveEntitlements(memberCount);
+    const entitlements = await this.entitlementService.resolve(tx, {
+      userId,
+      diningGroupId: userSpace.currentDiningGroupId,
+      ownerId: userSpace.currentDiningGroup.ownerId,
+      memberCount
+    });
+    const memberLimit = policy.memberLimit[entitlements.diningGroupTier];
 
     return {
-      currentSpace: this.toCurrentSpace(userSpace.currentDiningGroup, member, memberCount),
+      currentSpace: this.toCurrentSpace(userSpace.currentDiningGroup, member, memberCount, memberLimit),
       originalSpace:
         userSpace.originalDiningGroupId === userSpace.currentDiningGroupId
           ? null
@@ -453,7 +466,12 @@ export class DiningGroupService {
     };
   }
 
-  private toCurrentSpace(diningGroup: DiningGroup, member: DiningGroupMember, memberCount: number): CurrentSpaceSummary {
+  private toCurrentSpace(
+    diningGroup: DiningGroup,
+    member: DiningGroupMember,
+    memberCount: number,
+    memberLimit: number
+  ): CurrentSpaceSummary {
     return {
       id: diningGroup.id,
       name: diningGroup.name,
@@ -462,7 +480,7 @@ export class DiningGroupService {
       myStatus: member.status,
       myStatusReason: member.statusReason,
       memberCount,
-      memberLimit: safePolicy.memberLimit,
+      memberLimit,
       state: "NORMAL",
       version: diningGroup.version,
       createdAt: toIsoDate(diningGroup.createdAt),

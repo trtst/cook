@@ -4,6 +4,8 @@ import type {
   AcceptInviteResponse,
   CreateInviteResult,
   DiningGroupMembersResult,
+  EffectiveEntitlementSnapshot,
+  GetCarryBackSnapshotsResponse,
   GetCurrentDiningGroupContextResponse,
   LeaveDiningGroupResponse
 } from "@next-meal/api-client";
@@ -80,6 +82,18 @@ async function main() {
   assert(guestBefore.originalSpace === null, "guest should start in the original space");
   assert(ownerBefore.currentSpace.id !== guestBefore.currentSpace.id, "seed users should own different solo spaces");
 
+  const ownerEntitlements = await requestData<EffectiveEntitlementSnapshot>("/entitlements/current", {
+    headers: { authorization: ownerAuthorization }
+  });
+  assert(
+    JSON.stringify(ownerEntitlements) === JSON.stringify(ownerBefore.entitlements),
+    "standalone entitlement endpoint differs from current dining group context"
+  );
+  assert(
+    ownerBefore.currentSpace.memberLimit === (ownerEntitlements.diningGroupTier === "PLUS" ? 6 : 2),
+    "current space member limit differs from the resolved dining group tier"
+  );
+
   const diningGroupId = ownerBefore.currentSpace.id;
   const prisma = new PrismaClient();
 
@@ -148,6 +162,13 @@ async function main() {
     assert(ownerMember?.role === "OWNER" && ownerMember.status === "ACTIVE", "owner member mismatch");
     assert(guestMember?.role === "MEMBER" && guestMember.status === "ACTIVE", "guest member mismatch");
 
+    const fullInvite = await request<CreateInviteResult>("/dining-group-invites", {
+      method: "POST",
+      headers: { authorization: ownerAuthorization },
+      body: JSON.stringify({ diningGroupId, operationId: randomUUID() })
+    });
+    assert(fullInvite.status === 400, "free dining group should reject new invites at the two-member limit");
+
     const reusedInvite = await request(acceptPath, {
       method: "POST",
       headers: { authorization: ownerAuthorization },
@@ -172,6 +193,69 @@ async function main() {
     assert(leave2.carryBackSnapshot?.id === leave1.carryBackSnapshot?.id, "leave is not idempotent");
     assert(leave1.carryBackSnapshot?.status === "AVAILABLE", "carry-back snapshot is not available");
 
+    const snapshotId = leave1.carryBackSnapshot?.id;
+    assert(snapshotId, "leave did not return a carry-back snapshot id");
+    const guestSnapshots = await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
+      headers: { authorization: guestAuthorization }
+    });
+    assert(guestSnapshots.snapshots.some(snapshot => snapshot.id === snapshotId), "guest cannot list the new snapshot");
+    assert(
+      guestSnapshots.snapshots.every((snapshot, index, list) => {
+        return index === 0 || Date.parse(list[index - 1].createdAt) >= Date.parse(snapshot.createdAt);
+      }),
+      "carry-back snapshots are not sorted by createdAt descending"
+    );
+
+    const ownerSnapshots = await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
+      headers: { authorization: ownerAuthorization }
+    });
+    assert(!ownerSnapshots.snapshots.some(snapshot => snapshot.id === snapshotId), "snapshot leaked to another user");
+
+    const listedSnapshot = await prisma.carryBackSnapshot.findUniqueOrThrow({ where: { id: snapshotId } });
+    const expiredAt = new Date(Date.now() - 1_000);
+    await prisma.carryBackSnapshot.update({
+      where: { id: snapshotId },
+      data: { createdAt: new Date(expiredAt.getTime() - 1_000), expiresAt: expiredAt }
+    });
+    const expiredSnapshots = await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
+      headers: { authorization: guestAuthorization }
+    });
+    assert(!expiredSnapshots.snapshots.some(snapshot => snapshot.id === snapshotId), "expired snapshot was listed");
+
+    await prisma.carryBackSnapshot.update({
+      where: { id: snapshotId },
+      data: { status: "INVALIDATED", expiresAt: listedSnapshot.expiresAt, invalidatedAt: new Date() }
+    });
+    const invalidSnapshots = await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
+      headers: { authorization: guestAuthorization }
+    });
+    assert(!invalidSnapshots.snapshots.some(snapshot => snapshot.id === snapshotId), "invalidated snapshot was listed");
+
+    await prisma.carryBackSnapshot.update({
+      where: { id: snapshotId },
+      data: { status: "DELETED", invalidatedAt: null, deletedAt: new Date() }
+    });
+    const deletedSnapshots = await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
+      headers: { authorization: guestAuthorization }
+    });
+    assert(!deletedSnapshots.snapshots.some(snapshot => snapshot.id === snapshotId), "deleted snapshot was listed");
+
+    const restoredSnapshot = await prisma.carryBackSnapshot.update({
+      where: { id: snapshotId },
+      data: {
+        status: "AVAILABLE",
+        createdAt: listedSnapshot.createdAt,
+        expiresAt: listedSnapshot.expiresAt,
+        invalidatedAt: null,
+        deletedAt: null
+      }
+    });
+    await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
+      headers: { authorization: guestAuthorization }
+    });
+    const snapshotAfterRead = await prisma.carryBackSnapshot.findUniqueOrThrow({ where: { id: snapshotId } });
+    assert(snapshotAfterRead.updatedAt.getTime() === restoredSnapshot.updatedAt.getTime(), "snapshot list wrote to the database");
+
     const guestMemberAfterLeave = await prisma.diningGroupMember.findUnique({
       where: { diningGroupId_userId: { diningGroupId, userId: guestLogin.user.id } }
     });
@@ -193,6 +277,10 @@ async function main() {
 
     const unauthenticated = await request<GetCurrentDiningGroupContextResponse>("/dining-groups/current");
     assert(unauthenticated.status === 401, "unauthenticated current space should return 401");
+    const unauthenticatedEntitlements = await request<EffectiveEntitlementSnapshot>("/entitlements/current");
+    assert(unauthenticatedEntitlements.status === 401, "unauthenticated entitlement request should return 401");
+    const unauthenticatedSnapshots = await request<GetCarryBackSnapshotsResponse>("/carry-back-snapshots");
+    assert(unauthenticatedSnapshots.status === 401, "unauthenticated snapshot request should return 401");
 
     console.log(
       JSON.stringify(
@@ -205,11 +293,18 @@ async function main() {
           acceptInviteIdempotent: true,
           inviteConsumedOnce: true,
           originalSpaceFrozen: true,
+          freeMemberLimitEnforced: true,
           leaveIdempotent: true,
           originalSpaceRestored: true,
           carryBackSnapshotCreated: true,
+          carryBackSnapshotListPrivate: true,
+          carryBackSnapshotFiltersApplied: true,
+          carryBackSnapshotListReadOnly: true,
+          entitlementEndpointConsistent: true,
           invalidInviteStatus: invalid.status,
-          unauthenticatedStatus: unauthenticated.status
+          unauthenticatedStatus: unauthenticated.status,
+          unauthenticatedEntitlementStatus: unauthenticatedEntitlements.status,
+          unauthenticatedSnapshotStatus: unauthenticatedSnapshots.status
         },
         null,
         2

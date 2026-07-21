@@ -19,6 +19,12 @@ export class DiningGroupController {
     return this.diningGroupService.getCurrent(request.user.userId).then(result => ok(result));
   }
 
+  @Get("carry-back-snapshots")
+  @ApiOkResponse({ description: "本人当前可用迁出快照列表" })
+  listSnapshots(@Req() request: RequestWithUser) {
+    return this.diningGroupService.listSnapshots(request.user.userId).then(result => ok(result));
+  }
+
   @Get("dining-group-members")
   @ApiOkResponse({ description: "当前饭搭子成员列表" })
   listMembers(@Req() request: RequestWithUser, @Query() query: DiningGroupMembersQueryDto) {

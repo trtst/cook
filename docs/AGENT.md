@@ -91,8 +91,8 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 
 ## Module State
 
-- Current implemented: Auth, User, unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, and Admin read-only queries.
-- Next implementation: original-space imports, snapshot item carry-back, meal guests, taste, storage, Personal Plus, Dining Group Plus, and the minimum upgrade/expiry payment path.
+- Current implemented: Auth, User, unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, minimum Plus grants, effective entitlement resolution, and Admin read-only queries.
+- Next implementation: original-space imports, snapshot item carry-back, recipes and storage ledger, meal guests, taste, and the minimum upgrade/expiry payment path.
 - Disabled: Public user submissions and Worker/Outbox runtime behavior.
 - Reserved: Points, receipt scanning, OCR, AI, Pro, multi-family, and multi-dining-group switching. Do not add placeholder services or client entry points.
 

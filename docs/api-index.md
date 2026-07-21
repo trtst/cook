@@ -23,9 +23,12 @@
 | DiningGroupInvite | POST | `/dining-group-invites` | `diningGroup.createInvite` | 创建单次长期邀请 |
 | DiningGroupInvite | POST | `/dining-group-invites/{inviteToken}/accept` | `diningGroup.acceptInvite` | 冻结原空间并加入目标饭搭子 |
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/leave` | `diningGroup.leave` | 退出、恢复原空间、创建快照头 |
+| CarryBack | GET | `/carry-back-snapshots` | `carryBack.list` | 本人当前可用迁出快照列表 |
+| Entitlement | GET | `/entitlements/current` | `entitlement.getCurrent` | 服务端解析当前用户与饭搭子有效权益 |
 | AdminAuth | POST | `/admin/auth/login` | `admin.login` | 管理员登录 |
 | AdminUser | GET | `/admin/users` | `admin.listUsers` | 用户只读查询 |
 | AdminDiningGroup | GET | `/admin/dining-groups` | `admin.listDiningGroups` | 饭搭子只读查询 |
+| AdminEntitlement | GET | `/admin/user-entitlements` | `admin.getUserEntitlements` | SUPER_ADMIN 查询用户当前有效权益 |
 
 账号创建后自动拥有单人饭搭子，不提供手动创建和多饭搭子切换接口。
 
@@ -35,10 +38,9 @@
 | --- | --- | --- | --- |
 | OriginalSpace | GET | `/original-space/importable-data` | 原空间可迁入资料 |
 | OriginalSpace | POST | `/original-space/imports` | 选择迁入，源数据不移动 |
-| CarryBack | GET | `/carry-back-snapshots` | 私有迁出快照列表 |
+| CarryBack | GET | `/carry-back-snapshot-items` | 本人分页读取尚可选择的冻结清单摘要 |
 | CarryBack | POST | `/carry-back-snapshots/{snapshotId}/imports` | 分批带回 |
 | Storage | GET | `/storage-usage` | 逻辑空间模块明细 |
-| Entitlement | GET | `/entitlements/current` | 服务端解析权益 |
 | Taste | GET | `/users/me/taste-profile` | 本人口味与安全资料 |
 | Taste | PUT | `/users/me/taste-profile` | 更新本人口味资料 |
 | MealGuest | POST | `/meal-plans/{mealPlanId}/guest-invitations` | 饭局临时邀请 |

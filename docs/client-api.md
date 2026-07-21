@@ -35,6 +35,9 @@ Authorization: Bearer <user-token>
 | --- | --- |
 | 2026-07-20 | 饭搭子接口直接切换为唯一当前空间；删除多列表、手动创建和详情接口；实现原空间冻结、退出恢复与快照头。 |
 | 2026-07-20 | 冻结迁入迁出、权益、空间、口味、饭局、菜谱收录与派生契约。 |
+| 2026-07-21 | 实现当前权益接口、最小 Plus 授权和饭搭子 Free/Plus 席位解析。 |
+| 2026-07-21 | 实现本人当前可用迁出快照列表。 |
+| 2026-07-21 | 冻结迁出快照清单项读取契约；实现 SUPER_ADMIN 用户当前权益查询。 |
 | 2026-07-19 | 接入真实 Auth、User 和后台只读接口。 |
 
 ## 快速索引
@@ -50,9 +53,13 @@ Authorization: Bearer <user-token>
 | C-007 | POST | `/api/dining-group-invites` | `diningGroup.createInvite` | 已实现 |
 | C-008 | POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroup.acceptInvite` | 已实现 |
 | C-009 | POST | `/api/dining-groups/{diningGroupId}/leave` | `diningGroup.leave` | 已实现 |
+| C-010 | GET | `/api/entitlements/current` | `entitlement.getCurrent` | 已实现 |
+| C-011 | GET | `/api/carry-back-snapshots` | `carryBack.list` | 已实现 |
+| C-012 | GET | `/api/carry-back-snapshot-items` | `carryBack.listItems` | 已契约，待实现 |
 | A-001 | POST | `/api/admin/auth/login` | `admin.login` | 已实现 |
 | A-002 | GET | `/api/admin/users` | `admin.listUsers` | 已实现 |
 | A-003 | GET | `/api/admin/dining-groups` | `admin.listDiningGroups` | 已实现 |
+| A-004 | GET | `/api/admin/user-entitlements` | `admin.getUserEntitlements` | 已实现 |
 
 ## 1. 用户认证
 
@@ -201,7 +208,7 @@ interface CreateInviteResult {
 1. 只保存 token 哈希。
 2. 邀请是单次凭证。
 3. 相同 `operationId` 返回第一次生成的同一个 token 和有效期。
-4. 当前配置中心未接入时使用服务端安全默认有效期。
+4. 邀请有效期和策略版本只取服务端配置，客户端不计算。
 
 ### 2.4 接受长期邀请
 
@@ -267,6 +274,39 @@ interface LeaveDiningGroupResponse {
 
 主理人不能通过本接口退出自己的空间。
 
+### 2.6 获取当前有效权益
+
+```text
+GET /api/entitlements/current
+Auth: UserBearerAuth
+```
+
+返回 `EffectiveEntitlementSnapshot`。接口只解析登录用户和服务端当前饭搭子，不接收主体 id；客户端不得合并个人与饭搭子权益，也不得用本地 Plus 状态扩大权限。
+
+### 2.7 获取迁出快照列表
+
+```text
+GET /api/carry-back-snapshots
+Auth: UserBearerAuth
+```
+
+成功 `data` 为 `{ snapshots: CarryBackSnapshotSummary[] }`。服务端只返回本人 `AVAILABLE` 且尚未到期的快照，按 `createdAt` 倒序排列；客户端不得把过期或失效快照恢复为可用。
+
+### 2.8 获取迁出快照清单项（待实现）
+
+```text
+GET /api/carry-back-snapshot-items?snapshotId=<snapshotId>&itemType=RECIPE&page=1&pageSize=20
+Auth: UserBearerAuth
+```
+
+调用 `carryBack.listItems({ snapshotId, itemType, page, pageSize })`。`itemType` 支持 `RECIPE / FRIDGE_ITEM / SHOPPING_ITEM`，成功 `data` 为 `PageResult<CarryBackItem>`：
+
+- `RECIPE`：`itemId / itemType / name / fixedVersionId / estimatedBytes`
+- `FRIDGE_ITEM`：`itemId / itemType / ingredientName / quantityText / confirmRequired / estimatedBytes`
+- `SHOPPING_ITEM`：`itemId / itemType / title / estimatedBytes`
+
+接口只返回尚可选择的冻结摘要，不包含图片、成员信息或内部备注。非本人、已过期、已删除或已失效快照统一按不可探测资源返回 `404`；查询不更新快照状态，也不读取源饭搭子实时数据。当前仅已冻结共享契约，后端尚未实现该路径。
+
 ## 3. 后台接口
 
 ### 3.1 管理员登录
@@ -303,15 +343,33 @@ Auth: AdminBearerAuth
 
 `status` 支持 `ACTIVE / FROZEN / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
 
+### 3.4 用户当前权益查询
+
+```text
+GET /api/admin/user-entitlements?userId=<userId>
+Auth: AdminBearerAuth
+```
+
+调用 `admin.getUserEntitlements(userId)`。只有数据库中当前为 `ACTIVE` 且拥有 `SUPER_ADMIN` 角色的管理员可以访问，成功 `data` 为：
+
+```ts
+interface AdminUserEntitlementResponse {
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
+  currentSpace: Pick<CurrentSpaceSummary, "id" | "name">;
+  entitlements: EffectiveEntitlementSnapshot;
+}
+```
+
+接口不返回原始授权、授权历史、订单、支付、空间用量、私有快照或其他用户私有数据。
+
 ## 4. 已契约、待实现
 
 | 能力 | Path |
 | --- | --- |
 | 原空间资料 | `GET /api/original-space/importable-data` |
 | 原空间迁入 | `POST /api/original-space/imports` |
-| 迁出快照列表 | `GET /api/carry-back-snapshots` |
 | 迁出快照带回 | `POST /api/carry-back-snapshots/{snapshotId}/imports` |
-| 当前权益 | `GET /api/entitlements/current` |
+| 迁出快照清单项 | `GET /api/carry-back-snapshot-items` |
 | 空间明细 | `GET /api/storage-usage` |
 | 我的口味 | `GET/PUT /api/users/me/taste-profile` |
 | 饭局邀请 | `POST /api/meal-plans/{mealPlanId}/guest-invitations` |

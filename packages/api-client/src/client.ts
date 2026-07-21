@@ -7,6 +7,9 @@ import type {
   AdminListUsersResult,
   AdminLoginRequest,
   AdminLoginResult,
+  AdminUserEntitlementResponse,
+  CarryItemsQuery,
+  CarryItemsResponse,
   CreateMealGuestInvitationsRequest,
   CreateMealGuestInvitationsResponse,
   CreateInviteRequest,
@@ -251,6 +254,12 @@ export function createApiClient(options: ApiClientOptions) {
           auth: "user"
         });
       },
+      listItems(query: CarryItemsQuery) {
+        return requestData<CarryItemsResponse>(options, "/carry-back-snapshot-items", {
+          auth: "user",
+          query: { ...query }
+        });
+      },
       importData(snapshotId: UUID, body: ImportCarryBackSnapshotRequest) {
         return requestData<ImportCarryBackSnapshotResponse>(
           options,
@@ -340,6 +349,12 @@ export function createApiClient(options: ApiClientOptions) {
         return requestData<AdminListDiningGroupsResult>(options, "/admin/dining-groups", {
           auth: "admin",
           query: { ...query }
+        });
+      },
+      getUserEntitlements(userId: UUID) {
+        return requestData<AdminUserEntitlementResponse>(options, "/admin/user-entitlements", {
+          auth: "admin",
+          query: { userId }
         });
       }
     }

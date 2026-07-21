@@ -106,6 +106,7 @@ model User {
   createdInvites     DiningGroupInvite[] @relation("DiningGroupInviteCreator")
   acceptedInvites    DiningGroupInvite[] @relation("DiningGroupInviteAcceptor")
   carryBackSnapshots CarryBackSnapshot[]
+  entitlementGrant   EntitlementGrant?
   idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordUser")
   auditEvents        AuditEvent[]        @relation("AuditEventActor")
 
@@ -133,6 +134,7 @@ model DiningGroup {
   targetSnapshots        CarryBackSnapshot[]  @relation("CarryBackTarget")
   idempotencyRecords     IdempotencyRecord[]
   auditEvents            AuditEvent[]
+  entitlementGrant       EntitlementGrant?
 
   @@index([status, createdAt])
   @@index([name])
@@ -225,6 +227,22 @@ model CarryBackSnapshot {
   @@index([userId, status, expiresAt])
   @@index([sourceDiningGroupId])
   @@map("carry_back_snapshots")
+}
+
+/// Free 由服务端默认解析；每个用户或饭搭子至多保存一条 Plus 授权。
+model EntitlementGrant {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String?   @unique @map("user_id") @db.Uuid
+  diningGroupId String?   @unique @map("dining_group_id") @db.Uuid
+  startsAt      DateTime  @default(now()) @map("starts_at") @db.Timestamptz(3)
+  endsAt        DateTime? @map("ends_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  diningGroup DiningGroup? @relation(fields: [diningGroupId], references: [id], onDelete: Cascade)
+
+  @@map("entitlement_grants")
 }
 
 model IdempotencyRecord {

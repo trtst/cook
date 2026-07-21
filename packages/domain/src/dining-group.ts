@@ -12,6 +12,8 @@ export type OriginalSpaceStatus = "ACTIVE" | "FROZEN";
 
 export type CarryBackSnapshotStatus = "AVAILABLE" | "EXPIRED" | "DELETED" | "INVALIDATED";
 
+export type CarryItemType = "RECIPE" | "FRIDGE_ITEM" | "SHOPPING_ITEM";
+
 /** 当前空间的服务端判定状态，客户端不得自行合并权益后推导。 */
 export type SpaceState = "NORMAL" | "OVER_RECIPE_LIMIT" | "OVER_STORAGE_READONLY";
 

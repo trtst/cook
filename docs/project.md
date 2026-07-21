@@ -193,7 +193,8 @@ V1 模块状态：
 | Share | Active | 分享快照、预览、导入 |
 | Public | Disabled | 表和接口骨架保留，客户端不开放公共投稿入口；优秀推荐后续启用 |
 | Worker / Outbox | Disabled | 表保留，V1 不启动 Worker |
-| Membership / Entitlement / Storage | Target | 产品规则已确认，代码按 `plans/dining-group-lifecycle-plan.md` 分阶段实现 |
+| Entitlement | Active / 待扩展 | 最小 Plus 授权、有效权益接口和成员席位解析已实现 |
+| Membership / Storage | Target | 会员订单和真实空间账本按 `plans/dining-group-lifecycle-plan.md` 分阶段实现 |
 | Payment | Target | 仅实现个人 Plus 到饭搭子 Plus 的正常补差升级和到期选择 |
 | Point / OCR / AI / Pro | Reserved | 当前不创建业务入口或占位服务 |
 

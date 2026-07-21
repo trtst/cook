@@ -1,5 +1,7 @@
 import type {
   CarryBackSnapshotSummary,
+  CarryBackItem,
+  CarryItemType,
   CurrentSpaceSummary,
   EffectiveEntitlementSnapshot,
   GuestInvitationAction,
@@ -118,6 +120,13 @@ export interface ImportOriginalSpaceDataResponse {
 export interface GetCarryBackSnapshotsResponse {
   snapshots: CarryBackSnapshotSummary[];
 }
+
+export interface CarryItemsQuery extends PageQuery {
+  snapshotId: UUID;
+  itemType: CarryItemType;
+}
+
+export type CarryItemsResponse = PageResult<CarryBackItem>;
 
 export interface CarryBackImportSelection {
   itemType: "RECIPE" | "FRIDGE_ITEM" | "SHOPPING_ITEM";
@@ -260,3 +269,12 @@ export interface AdminListDiningGroupsQuery extends PageQuery {
 }
 
 export type AdminListDiningGroupsResult = PageResult<AdminDiningGroupSummary>;
+
+export interface AdminUserEntitlementResponse {
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
+  currentSpace: {
+    id: UUID;
+    name: string;
+  };
+  entitlements: EffectiveEntitlementSnapshot;
+}

@@ -1,9 +1,24 @@
-import { BadRequestException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException
+} from "@nestjs/common";
 import type { Prisma, DiningGroupStatus } from "@prisma/client";
-import type { AdminDiningGroupSummary, AdminLoginRequest, PageResult, UserProfile } from "@next-meal/api-client";
+import type {
+  AdminDiningGroupSummary,
+  AdminLoginRequest,
+  AdminUserEntitlementResponse,
+  PageResult,
+  UserProfile,
+  UUID
+} from "@next-meal/api-client";
 import { PrismaService } from "../../common/prisma.service";
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { verifyPassword } from "../../common/security/password";
+import { EntitlementService } from "../entitlement/entitlement.service";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -15,7 +30,9 @@ export class AdminService {
     @Inject(PrismaService)
     private readonly prisma: PrismaService,
     @Inject(AdminTokenService)
-    private readonly adminTokenService: AdminTokenService
+    private readonly adminTokenService: AdminTokenService,
+    @Inject(EntitlementService)
+    private readonly entitlementService: EntitlementService
   ) {}
 
   async login(body: AdminLoginRequest) {
@@ -133,5 +150,74 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async getUserEntitlements(userId: UUID, adminId: UUID): Promise<AdminUserEntitlementResponse> {
+    return this.prisma.$transaction(async tx => {
+      const admin = await tx.adminAccount.findUnique({
+        where: { id: adminId },
+        select: { status: true, roles: true }
+      });
+      if (!admin || admin.status !== "ACTIVE" || !admin.roles.includes("SUPER_ADMIN")) {
+        throw new ForbiddenException("无权查看用户权益");
+      }
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          uid: true,
+          nickname: true,
+          status: true,
+          space: {
+            select: {
+              currentDiningGroup: {
+                select: { id: true, name: true, ownerId: true, status: true }
+              }
+            }
+          }
+        }
+      });
+      if (!user) throw new NotFoundException("用户不存在");
+
+      const currentSpace = user.space?.currentDiningGroup;
+      if (!currentSpace || currentSpace.status !== "ACTIVE") {
+        throw new BadRequestException("用户当前空间关系无效");
+      }
+
+      const [member, memberCount] = await Promise.all([
+        tx.diningGroupMember.findUnique({
+          where: { diningGroupId_userId: { diningGroupId: currentSpace.id, userId } },
+          select: { status: true }
+        }),
+        tx.diningGroupMember.count({
+          where: { diningGroupId: currentSpace.id, status: "ACTIVE" }
+        })
+      ]);
+      if (!member || member.status === "ENDED") {
+        throw new BadRequestException("用户当前成员关系无效");
+      }
+
+      const entitlements = await this.entitlementService.resolve(tx, {
+        userId,
+        diningGroupId: currentSpace.id,
+        ownerId: currentSpace.ownerId,
+        memberCount
+      });
+
+      return {
+        user: {
+          id: user.id,
+          uid: user.uid,
+          nickname: user.nickname,
+          status: user.status
+        },
+        currentSpace: {
+          id: currentSpace.id,
+          name: currentSpace.name
+        },
+        entitlements
+      };
+    });
   }
 }

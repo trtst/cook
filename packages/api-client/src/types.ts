@@ -1,5 +1,6 @@
 import type {
   CarryBackSnapshotStatus,
+  CarryItemType,
   DiningGroupStatus,
   DiningGroupInviteStatus,
   DiningGroupRole,
@@ -22,6 +23,7 @@ import type {
 
 export type {
   CarryBackSnapshotStatus,
+  CarryItemType,
   DiningGroupStatus,
   DiningGroupInviteStatus,
   DiningGroupRole,
@@ -160,6 +162,32 @@ export interface CarryBackSnapshotSummary {
     shoppingItem: number;
   };
 }
+
+export interface CarryRecipeItem {
+  itemId: UUID;
+  itemType: "RECIPE";
+  name: string;
+  fixedVersionId: UUID;
+  estimatedBytes: number;
+}
+
+export interface CarryFridgeItem {
+  itemId: UUID;
+  itemType: "FRIDGE_ITEM";
+  ingredientName: string;
+  quantityText: string | null;
+  confirmRequired: true;
+  estimatedBytes: number;
+}
+
+export interface CarryShoppingItem {
+  itemId: UUID;
+  itemType: "SHOPPING_ITEM";
+  title: string;
+  estimatedBytes: number;
+}
+
+export type CarryBackItem = CarryRecipeItem | CarryFridgeItem | CarryShoppingItem;
 
 export interface StorageModuleUsage {
   module: StorageModule;

@@ -6,6 +6,8 @@ import { AuthController } from "../modules/auth/auth.controller";
 import { AuthService } from "../modules/auth/auth.service";
 import { DiningGroupController } from "../modules/dining-group/dining-group.controller";
 import { DiningGroupService } from "../modules/dining-group/dining-group.service";
+import { EntitlementController } from "../modules/entitlement/entitlement.controller";
+import { EntitlementService } from "../modules/entitlement/entitlement.service";
 import { UserController } from "../modules/user/user.controller";
 import { ClientVersionGuard } from "../common/client-version.guard";
 import { LoginRateLimitGuard } from "../common/login-rate-limit.guard";
@@ -16,10 +18,11 @@ import { UserTokenService } from "../common/security/user-token.service";
 import { AdminService } from "./admin/admin.service";
 
 @Module({
-  controllers: [AdminController, AuthController, DiningGroupController, UserController],
+  controllers: [AdminController, AuthController, DiningGroupController, EntitlementController, UserController],
   providers: [
     AuthService,
     DiningGroupService,
+    EntitlementService,
     PrismaService,
     AdminTokenService,
     UserTokenService,
