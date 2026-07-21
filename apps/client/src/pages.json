@@ -31,6 +31,12 @@
   ],
   "subPackages": [
     {
+      "root": "pages_me",
+      "pages": [
+        { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } }
+      ]
+    },
+    {
       "root": "pages_restaurant",
       "pages": [
         { "path": "invite/index", "style": { "navigationBarTitleText": "加入饭搭子", "navigationStyle": "custom" } },

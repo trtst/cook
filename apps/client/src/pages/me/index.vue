@@ -53,7 +53,6 @@
                 hover-stay-time="100"
                 @click="handleProfileAction"
               >
-                <text class="profile-row__edit-text">{{ profileActionText }}</text>
                 <text class="profile-row__edit-arrow">›</text>
               </view>
             </view>
@@ -195,6 +194,23 @@
 
               <view v-if="themePanelOpen" class="theme-panel">
                 <view class="theme-group">
+                  <text class="theme-group__label">显示模式</text>
+                  <view class="option-row">
+                    <view
+                      v-for="option in themeModeOptions"
+                      :key="option.value"
+                      class="option-chip"
+                      :class="{ 'option-chip--active': option.value === themeMode }"
+                      hover-class="is-pressed"
+                      hover-stay-time="100"
+                      @click="handleThemeModeChange(option.value)"
+                    >
+                      <text class="option-chip__text">{{ option.label }}</text>
+                    </view>
+                  </view>
+                </view>
+
+                <view class="theme-group">
                   <text class="theme-group__label">皮肤风格</text>
                   <view class="option-row">
                     <view
@@ -268,6 +284,46 @@
           />
         </view>
       </view>
+
+      <view
+        v-if="profileEditorOpen"
+        class="profile-modal"
+        @click="closeProfileEditor"
+        @touchmove.stop.prevent
+      >
+        <view class="profile-modal__panel" @click.stop>
+          <view class="profile-modal__header">
+            <text class="profile-modal__title">编辑资料</text>
+            <text class="profile-modal__close" @click="closeProfileEditor">×</text>
+          </view>
+
+          <view class="profile-form">
+            <text class="profile-form__label">昵称</text>
+            <input
+              v-model="profileNameDraft"
+              class="profile-form__input"
+              maxlength="20"
+              placeholder="请输入昵称"
+              :disabled="profileSaving"
+            />
+            <text v-if="profileEditErrorText" class="profile-form__error">{{ profileEditErrorText }}</text>
+          </view>
+
+          <view class="profile-modal__actions">
+            <button class="profile-modal__button profile-modal__button--ghost" :disabled="profileSaving" @click="closeProfileEditor">
+              取消
+            </button>
+            <button
+              class="profile-modal__button profile-modal__button--primary"
+              :loading="profileSaving"
+              :disabled="profileSaving"
+              @click="saveProfile"
+            >
+              保存
+            </button>
+          </view>
+        </view>
+      </view>
     </view>
   </Layout>
 </template>
@@ -297,8 +353,10 @@ const {
   themeClasses,
   effectiveSkin,
   effectivePalette,
+  themeMode,
   supportedPalettes,
   canSwitchPalette,
+  setThemeMode,
   setThemeSkin,
   setThemePalette
 } = useTheme();
@@ -307,6 +365,10 @@ const profileLoading = ref(false);
 const loadErrorText = ref("");
 const themePanelOpen = ref(false);
 const loginVisible = ref(false);
+const profileEditorOpen = ref(false);
+const profileSaving = ref(false);
+const profileNameDraft = ref("");
+const profileEditErrorText = ref("");
 const skinOptions = THEME_SKIN_OPTIONS;
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
@@ -328,7 +390,6 @@ const profileUidText = computed(() =>
 const personalTierText = computed(() =>
   sessionStore.isLoggedIn && diningGroupStore.currentContext?.entitlements.personalTier === "PLUS" ? "Plus" : "Free"
 );
-const profileActionText = computed(() => (sessionStore.isLoggedIn ? "编辑资料" : "登录"));
 const diningGroupName = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后查看饭搭子";
   return currentDiningGroup.value?.name || "饭搭子信息暂未加载";
@@ -348,11 +409,22 @@ const diningGroupStats = computed(() => [
   }
 ]);
 const currentThemeText = computed(() => {
+  const modeLabel = themeModeLabels[themeMode.value];
   const skinLabel = skinOptions.find((item) => item.value === effectiveSkin.value)?.label || "基础";
-  if (!canSwitchPalette.value) return skinLabel;
-  return `${skinLabel} · ${paletteLabels[effectivePalette.value]}`;
+  if (!canSwitchPalette.value) return `${modeLabel} · ${skinLabel}`;
+  return `${modeLabel} · ${skinLabel} · ${paletteLabels[effectivePalette.value]}`;
 });
 
+const themeModeLabels = {
+  system: "跟随系统",
+  light: "浅色",
+  dark: "深色"
+} as const;
+const themeModeOptions = [
+  { label: "跟随系统", value: "system" },
+  { label: "浅色", value: "light" },
+  { label: "深色", value: "dark" }
+] as const;
 const paletteLabels: Record<ThemePalette, string> = {
   default: "默认",
   warm: "暖黄",
@@ -394,7 +466,7 @@ const personalEntries: PageEntry[] = [
     title: "我的口味",
     icon: "味",
     description: "口味偏好、忌口和过敏信息",
-    disabledText: "我的口味"
+    url: "/pages_me/taste/index"
   },
   {
     title: "分类与单位",
@@ -502,6 +574,10 @@ async function handleSkinChange(skin: ThemeSkin) {
   await setThemeSkin(skin);
 }
 
+async function handleThemeModeChange(mode: (typeof themeModeOptions)[number]["value"]) {
+  await setThemeMode(mode);
+}
+
 async function handlePaletteChange(palette: ThemePalette) {
   await setThemePalette(palette);
 }
@@ -530,7 +606,7 @@ function handleEntryClick(entry: PageEntry) {
 
 function handleProfileAction() {
   if (sessionStore.isLoggedIn) {
-    showComingSoon("个人资料编辑");
+    openProfileEditor();
     return;
   }
 
@@ -558,6 +634,47 @@ function openLogin(action: (() => void) | null = null) {
 function closeLogin() {
   loginVisible.value = false;
   pendingAction = null;
+}
+
+function openProfileEditor() {
+  profileNameDraft.value = userStore.profile?.nickname || "";
+  profileEditErrorText.value = "";
+  profileEditorOpen.value = true;
+}
+
+function closeProfileEditor() {
+  if (profileSaving.value) return;
+  profileEditorOpen.value = false;
+  profileEditErrorText.value = "";
+}
+
+async function saveProfile() {
+  if (profileSaving.value) return;
+
+  const nickname = profileNameDraft.value.trim();
+  if (!nickname) {
+    profileEditErrorText.value = "请输入昵称";
+    return;
+  }
+
+  if (nickname === (userStore.profile?.nickname || "").trim()) {
+    closeProfileEditor();
+    return;
+  }
+
+  profileSaving.value = true;
+  profileEditErrorText.value = "";
+
+  try {
+    const profile = await userApi.updateCurrent({ nickname });
+    userStore.setProfile(profile);
+    profileEditorOpen.value = false;
+    uni.showToast({ title: "已保存", icon: "success" });
+  } catch (error) {
+    profileEditErrorText.value = error instanceof Error ? error.message : "保存失败";
+  } finally {
+    profileSaving.value = false;
+  }
 }
 
 async function handleLoginSuccess() {
@@ -660,10 +777,10 @@ function showComingSoon(name: string) {
 .profile-hero::after {
   position: absolute;
   right: -28%;
-  bottom: -142rpx;
+  bottom: -150rpx;
   left: -28%;
   z-index: 0;
-  height: 250rpx;
+  height: 300rpx;
   border-radius: 50% 50% 0 0;
   background: var(--color-page);
   content: "";
@@ -757,7 +874,7 @@ function showComingSoon(name: string) {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  margin-left: var(--space-sm);
+  margin-left: var(--space-lg);
   padding: 12rpx 10rpx;
 }
 
@@ -825,8 +942,8 @@ function showComingSoon(name: string) {
 .page-content {
   position: relative;
   z-index: 2;
-  margin-top: -34rpx;
-  padding: 0 var(--space-page) var(--space-lg);
+  margin-top: -68rpx;
+  padding: 34rpx var(--space-page) var(--space-lg);
 }
 
 .load-notice {
@@ -857,7 +974,7 @@ function showComingSoon(name: string) {
 .overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--space-sm);
+  gap: var(--space-lg);
 }
 
 .dining-card,
@@ -1011,7 +1128,7 @@ function showComingSoon(name: string) {
 }
 
 .service-list {
-  margin-top: var(--space-sm);
+  margin-top: var(--space-lg);
   padding: 0 var(--space-md);
   overflow: hidden;
 }
@@ -1072,7 +1189,7 @@ function showComingSoon(name: string) {
 
 .service-row__arrow {
   flex: 0 0 auto;
-  margin-left: var(--space-sm);
+  margin-left: var(--space-lg);
   color: var(--color-text-tertiary);
   font-size: 40rpx;
   line-height: 1;
@@ -1086,8 +1203,8 @@ function showComingSoon(name: string) {
 .knowledge-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-sm);
-  margin-top: var(--space-sm);
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
   padding: 24rpx 18rpx;
 }
 
@@ -1155,8 +1272,8 @@ function showComingSoon(name: string) {
 .option-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-sm);
-  margin-top: var(--space-sm);
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
 }
 
 .option-chip {
@@ -1230,5 +1347,102 @@ function showComingSoon(name: string) {
   color: var(--color-text-tertiary);
   font-size: 44rpx;
   line-height: 1;
+}
+
+.profile-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-page);
+  background: rgba(15, 23, 19, 0.5);
+}
+
+.profile-modal__panel {
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-sheet);
+  background: var(--color-surface);
+  box-shadow: 0 28rpx 80rpx rgba(15, 23, 19, 0.24);
+}
+
+.profile-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 30rpx 0;
+}
+
+.profile-modal__title {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.profile-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56rpx;
+  height: 56rpx;
+  color: var(--color-text-tertiary);
+  font-size: 44rpx;
+  line-height: 1;
+}
+
+.profile-form {
+  padding: var(--space-lg) 30rpx var(--space-md);
+}
+
+.profile-form__label {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.profile-form__input {
+  min-height: var(--size-input);
+  margin-top: var(--space-lg);
+  padding: 0 var(--space-md);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+}
+
+.profile-form__error {
+  display: block;
+  margin-top: var(--space-lg);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+.profile-modal__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+  padding: 0 30rpx 30rpx;
+}
+
+.profile-modal__button {
+  min-height: var(--size-button-secondary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.profile-modal__button--ghost {
+  border: 1rpx solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.profile-modal__button--primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
 }
 </style>
