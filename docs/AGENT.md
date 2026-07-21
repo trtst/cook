@@ -92,9 +92,10 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 ## Module State
 
 - Current implemented: Auth, User, unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, minimum Plus grants, effective entitlement resolution, and Admin read-only queries.
-- Next implementation: original-space imports, snapshot item carry-back, recipes and storage ledger, meal guests, taste, and the minimum upgrade/expiry payment path.
+- Next implementation: original-space imports, snapshot item carry-back, recipes and storage ledger, meal guests, taste, meal completion facts, and the minimum upgrade/expiry payment path.
 - Disabled: Public user submissions and Worker/Outbox runtime behavior.
-- Reserved: Points, receipt scanning, OCR, AI, Pro, multi-family, and multi-dining-group switching. Do not add placeholder services or client entry points.
+- Target but not contracted: non-monetary activities, achievements, and medal wall. The client may show a Me-page entry placeholder, but no API, DTO, schema, reward, or admin surface may be added until completion facts and contracts are frozen.
+- Reserved: Points, meal tickets, receipt scanning, OCR, AI, Pro, multi-family, and multi-dining-group switching. Do not add placeholder services or client entry points.
 
 ## Domain Rules
 
@@ -118,6 +119,10 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, Pro, multi-
 7. Free deletion is permanent; Plus has a 7-day recycle bin. Free/Plus do not expose edit history.
 8. Personal Plus or Dining Group Plus can create at most two direct variants from one root recipe; variants cannot create more variants.
 9. Personal Plus to Dining Group Plus uses 100% of the remaining cash-paid value; member exit never triggers reverse proration.
+10. Personal Plus and Dining Group Plus activation, upgrade, and renewal are direct-payment only. Points or meal tickets cannot buy, offset, or join a mixed membership payment.
+11. Plus personalization is a continuous non-AI entitlement that affects only the user's own recommendations and never changes safety filters, shared votes, or global ranking.
+12. Activities and achievements are non-monetary meal-loop records. Medals have no cash value, cannot be exchanged, transferred, withdrawn, or used for membership payment, and must be derived from server-confirmed meal or dining-event facts.
+13. Free users can earn baseline medals. Plus may improve history depth, display, templates, and summaries, but must not change shared voting weight, safety filters, or baseline medal eligibility.
 
 ## Write Rules
 

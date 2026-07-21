@@ -58,6 +58,7 @@
 | Recipe | POST | `/recipes` | 成功响应 |
 | Recipe | PUT | `/recipes/{recipeId}` | 成功响应 |
 | Membership | - | 待冻结 | 订单、补差、回调和到期选择 |
+| Activity / Achievement | - | 待冻结 | 服务端完成事实、成就规则、勋章墙摘要、领取或自动发放边界 |
 
 ## 待创建
 
@@ -72,7 +73,7 @@
 
 ## 暂不创建
 
-Public UGC、完整 Worker 运行、饭票、OCR、AI、Pro、多家庭、多饭搭子切换、冰箱图片、聊天、评论、关注和私信当前均不开放。
+Public UGC、完整 Worker 运行、饭票、积分商城、OCR、AI、Pro、多家庭、多饭搭子切换、冰箱图片、聊天、评论、关注和私信当前均不开放。
 
 ## 维护规则
 

@@ -34,7 +34,7 @@ V1 目标是跑通家庭下一餐闭环，包含：
 4. 饭搭子菜谱创建、广场收录、固定版本、编辑写时复制、重复提示和全部可见菜谱带回。
 5. 饭搭子冰箱、计划、参与关系、购物清单和本人需求归属。
 6. 下一餐、点菜、食材缺口、购物和完成用餐的核心闭环。
-7. 饭局临时邀请、参与点菜、本人饭局记录和用户级“我的口味”。
+7. 饭局临时邀请、参与点菜、本人饭局记录、非货币勋章入口占位和用户级“我的口味”。
 8. Free/Plus 权益、统一逻辑空间、图片压缩、派生做法、回收站、升级折算和到期超额只读。
 9. 系统菜谱导入、标准食材与别名治理、基础审计和后台管理。
 
@@ -46,7 +46,7 @@ V1 明确不包含：
 2. 外卖、食材电商、价格比对、超市导购、履约闭环和精细财务记账。
 3. 仓储级批次库存、成本核算和强制自动扣减库存。
 4. 用户公共投稿、优秀推荐曝光晋级和公开 UGC 运营闭环。
-5. 饭票、积分充值和与当前 Plus 无关的复杂支付产品。
+5. 通用饭票、积分钱包、积分充值、积分商城和与当前 Plus 无关的复杂支付产品。
 6. 小票识别、OCR、AI 菜谱解析、AI 周计划和食材推荐。
 7. 冰箱、计划、购物和饭局独立图片。
 8. Pro、多家庭协作、多饭搭子切换和护工专业模式。
@@ -195,8 +195,9 @@ V1 模块状态：
 | Worker / Outbox | Disabled | 表保留，V1 不启动 Worker |
 | Entitlement | Active / 待扩展 | 最小 Plus 授权、有效权益接口和成员席位解析已实现 |
 | Membership / Storage | Target | 会员订单和真实空间账本按 `plans/dining-group-lifecycle-plan.md` 分阶段实现 |
-| Payment | Target | 仅实现个人 Plus 到饭搭子 Plus 的正常补差升级和到期选择 |
-| Point / OCR / AI / Pro | Reserved | 当前不创建业务入口或占位服务 |
+| Payment | Target | 会员只允许直接付费；实现个人 Plus 到饭搭子 Plus 的现金补差和到期选择 |
+| Activity / Achievement | Target / 待契约 | 非货币活动、成就和勋章墙方向已确认；当前只允许客户端入口占位，API/Schema/后台待完成事实冻结后再建 |
+| Point / Ticket / OCR / AI / Pro | Reserved | 当前不创建业务入口或占位服务 |
 
 ## 核心领域模型
 
@@ -253,7 +254,7 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 5. 每个饭搭子同一时间只能有一份 `ACTIVE` 购物清单。
 6. `RecipeContentVersion` 的 `ingredients` 和 `steps` 不能原地更新。
 7. 公共菜谱只有安全通过后才能曝光；V1 中公共曝光保持 `NONE`，系统推荐广场不依赖用户投稿。
-8. `UsageQuota`、`PointWallet` 数值不能为负。
+8. `UsageQuota` 数值不能为负；饭票和积分钱包当前不建业务模型或约束。
 9. `Asset` 归属必须匹配 `scope`。
 10. `IdempotencyRecord` 在操作作用域下唯一。
 11. `FridgeItem(diningGroupId, ingredientId)` 唯一，V1 不表达多批次库存。

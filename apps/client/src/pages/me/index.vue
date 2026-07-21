@@ -114,20 +114,20 @@
             </view>
 
             <view
-              class="ticket-card"
+              class="medal-card"
               hover-class="is-pressed"
               hover-stay-time="100"
-              @click="handleTicketClick"
+              @click="handleMedalClick"
             >
-              <view class="ticket-card__coin">
-                <text class="ticket-card__coin-text">票</text>
+              <view class="medal-card__icon">
+                <text class="medal-card__icon-text">勋</text>
               </view>
-              <text class="ticket-card__label">我的饭票</text>
-              <view class="ticket-card__balance-line">
-                <text class="ticket-card__balance">--</text>
-                <text class="ticket-card__unit">张</text>
+              <text class="medal-card__label">我的勋章</text>
+              <view class="medal-card__count-line">
+                <text class="medal-card__count">--</text>
+                <text class="medal-card__unit">枚</text>
               </view>
-              <text class="ticket-card__action">日常活动 ›</text>
+              <text class="medal-card__action">勋章墙 ›</text>
             </view>
           </view>
 
@@ -537,8 +537,8 @@ function handleProfileAction() {
   openLogin();
 }
 
-function handleTicketClick() {
-  requireLogin(() => showComingSoon("饭票"));
+function handleMedalClick() {
+  requireLogin(() => showComingSoon("勋章墙"));
 }
 
 function requireLogin(action: () => void) {
@@ -861,7 +861,7 @@ function showComingSoon(name: string) {
 }
 
 .dining-card,
-.ticket-card,
+.medal-card,
 .service-list,
 .knowledge-grid {
   border-radius: var(--radius-xs);
@@ -936,7 +936,7 @@ function showComingSoon(name: string) {
   font-size: var(--font-size-xs);
 }
 
-.ticket-card {
+.medal-card {
   position: relative;
   min-width: 0;
   min-height: 246rpx;
@@ -945,7 +945,7 @@ function showComingSoon(name: string) {
   background: linear-gradient(160deg, var(--color-primary-soft), var(--color-surface));
 }
 
-.ticket-card__coin {
+.medal-card__icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -957,13 +957,13 @@ function showComingSoon(name: string) {
   box-shadow: 0 8rpx 16rpx rgba(217, 144, 47, 0.22);
 }
 
-.ticket-card__coin-text {
+.medal-card__icon-text {
   color: #ffffff;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
 
-.ticket-card__label {
+.medal-card__label {
   display: block;
   margin-top: 14rpx;
   color: var(--color-text-secondary);
@@ -971,26 +971,26 @@ function showComingSoon(name: string) {
   font-weight: var(--font-weight-bold);
 }
 
-.ticket-card__balance-line {
+.medal-card__count-line {
   display: flex;
   align-items: baseline;
   margin-top: 4rpx;
 }
 
-.ticket-card__balance {
+.medal-card__count {
   color: var(--color-primary);
   font-size: 42rpx;
   font-weight: var(--font-weight-heavy);
   line-height: var(--line-height-tight);
 }
 
-.ticket-card__unit {
+.medal-card__unit {
   margin-left: 4rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
 }
 
-.ticket-card__action {
+.medal-card__action {
   display: block;
   margin-top: 14rpx;
   color: var(--color-primary);
