@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { UserProfile } from "@next-meal/api-client";
+import { ApiClientError } from "@next-meal/api-client";
+import type { AdminUserEntitlementResponse, UserProfile } from "@next-meal/api-client";
 import { onMounted, reactive, ref } from "vue";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
@@ -12,6 +13,11 @@ const session = useSessionStore();
 const loading = ref(false);
 const users = ref<UserProfile[]>([]);
 const total = ref(0);
+const entitlementVisible = ref(false);
+const entitlementLoading = ref(false);
+const entitlement = ref<AdminUserEntitlementResponse | null>(null);
+const entitlementError = ref("");
+let entitlementRequest = 0;
 
 const query = reactive({
   page: 1,
@@ -44,6 +50,70 @@ async function loadUsers() {
 function search() {
   query.page = 1;
   void loadUsers();
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+
+  const units = ["KB", "MB", "GB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+
+  return `${Number.isInteger(value) ? value : value.toFixed(1)} ${unit}`;
+}
+
+function getEntitlementError(error: unknown) {
+  if (error instanceof ApiClientError) {
+    if (error.code === 403) return "当前管理员无权查看用户权益";
+    if (error.code === 404) return "用户不存在或不可访问";
+  }
+
+  return error instanceof Error ? error.message : "权益加载失败";
+}
+
+function clearEntitlement() {
+  entitlementRequest += 1;
+  entitlementLoading.value = false;
+  entitlement.value = null;
+  entitlementError.value = "";
+}
+
+async function openEntitlement(row: UserProfile) {
+  const requestId = ++entitlementRequest;
+  entitlementVisible.value = true;
+  entitlementLoading.value = true;
+  entitlement.value = null;
+  entitlementError.value = "";
+
+  try {
+    const result = await adminApi.admin.getUserEntitlements(row.id);
+    if (requestId !== entitlementRequest || !entitlementVisible.value) return;
+
+    entitlement.value = result;
+  } catch (error) {
+    if (requestId !== entitlementRequest || !entitlementVisible.value) return;
+
+    entitlement.value = null;
+    if (isUnauthorized(error)) {
+      entitlementVisible.value = false;
+      clearEntitlement();
+      session.clearSession();
+      await router.replace("/login");
+      return;
+    }
+
+    entitlementError.value = getEntitlementError(error);
+    ElMessage.error(entitlementError.value);
+  } finally {
+    if (requestId === entitlementRequest) {
+      entitlementLoading.value = false;
+    }
+  }
 }
 
 onMounted(loadUsers);
@@ -79,6 +149,11 @@ onMounted(loadUsers);
         <el-table-column prop="status" label="状态" width="120" />
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="190" />
+        <el-table-column label="操作" width="110" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openEntitlement(row)">查看权益</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="pagination-row">
@@ -94,5 +169,71 @@ onMounted(loadUsers);
         />
       </div>
     </div>
+
+    <el-drawer
+      v-model="entitlementVisible"
+      title="用户有效权益"
+      size="560px"
+      destroy-on-close
+      @close="clearEntitlement"
+    >
+      <el-skeleton v-if="entitlementLoading" :rows="10" animated />
+
+      <el-result v-else-if="entitlementError" icon="error" title="权益加载失败" :sub-title="entitlementError" />
+
+      <template v-else-if="entitlement">
+        <el-divider content-position="left">用户</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="用户 ID">{{ entitlement.user.id }}</el-descriptions-item>
+          <el-descriptions-item label="UID">{{ entitlement.user.uid }}</el-descriptions-item>
+          <el-descriptions-item label="昵称">{{ entitlement.user.nickname || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ entitlement.user.status }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider content-position="left">当前空间</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="空间 ID">{{ entitlement.currentSpace.id }}</el-descriptions-item>
+          <el-descriptions-item label="空间名称">{{ entitlement.currentSpace.name }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider content-position="left">有效权益</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="个人权益">{{ entitlement.entitlements.personalTier }}</el-descriptions-item>
+          <el-descriptions-item label="饭搭子权益">
+            {{ entitlement.entitlements.diningGroupTier }}
+          </el-descriptions-item>
+          <el-descriptions-item label="当前作用域">{{ entitlement.entitlements.currentScope }}</el-descriptions-item>
+          <el-descriptions-item label="菜谱上限">{{ entitlement.entitlements.recipeLimit }}</el-descriptions-item>
+          <el-descriptions-item label="成员上限">
+            {{ entitlement.entitlements.memberLimit ?? "不适用" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="空间上限">
+            {{ formatBytes(entitlement.entitlements.storageLimitBytes) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="迁出快照保留">{{ entitlement.entitlements.snapshotDays }} 天</el-descriptions-item>
+          <el-descriptions-item label="回收站保留">{{ entitlement.entitlements.recycleDays }} 天</el-descriptions-item>
+          <el-descriptions-item label="根菜谱派生上限">
+            {{ entitlement.entitlements.variantLimitPerRoot }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider content-position="left">图片策略</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="质量">{{ entitlement.entitlements.imagePolicy.quality }}</el-descriptions-item>
+          <el-descriptions-item label="最大宽度">
+            {{ entitlement.entitlements.imagePolicy.maxWidth }} px
+          </el-descriptions-item>
+          <el-descriptions-item label="最大高度">
+            {{ entitlement.entitlements.imagePolicy.maxHeight }} px
+          </el-descriptions-item>
+          <el-descriptions-item label="单图输出上限">
+            {{ formatBytes(entitlement.entitlements.imagePolicy.maxOutputBytes) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="原图输入上限">
+            {{ formatBytes(entitlement.entitlements.imagePolicy.maxInputBytes) }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </template>
+    </el-drawer>
   </section>
 </template>
