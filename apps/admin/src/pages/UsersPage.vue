@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { ApiClientError } from "@/apis/http";
 import { userApi, type AdminUserEntitlementResponse, type UserProfile } from "@/apis/user";
+import { useSessionStore } from "@/stores/session";
 const loading = ref(false);
 const users = ref<UserProfile[]>([]);
 const total = ref(0);
@@ -11,6 +12,9 @@ const entitlementVisible = ref(false);
 const entitlementLoading = ref(false);
 const entitlement = ref<AdminUserEntitlementResponse | null>(null);
 const entitlementError = ref("");
+const sessionStore = useSessionStore();
+const canViewEntitlements = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
+let usersRequest = 0;
 let entitlementRequest = 0;
 
 const query = reactive({
@@ -20,6 +24,7 @@ const query = reactive({
 });
 
 async function loadUsers() {
+  const requestId = ++usersRequest;
   loading.value = true;
   try {
     const result = await userApi.list({
@@ -27,12 +32,18 @@ async function loadUsers() {
       pageSize: query.pageSize,
       keyword: query.keyword || undefined
     });
+    if (requestId !== usersRequest) return;
+
     users.value = result.items;
     total.value = result.total;
   } catch (error) {
+    if (requestId !== usersRequest) return;
+
     ElMessage.error(error instanceof Error ? error.message : "加载失败");
   } finally {
-    loading.value = false;
+    if (requestId === usersRequest) {
+      loading.value = false;
+    }
   }
 }
 
@@ -130,7 +141,7 @@ onMounted(loadUsers);
         <el-table-column prop="status" label="状态" width="120" />
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="190" />
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column v-if="canViewEntitlements" label="操作" width="110" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEntitlement(row)">查看权益</el-button>
           </template>

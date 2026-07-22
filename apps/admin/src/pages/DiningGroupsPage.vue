@@ -10,6 +10,7 @@ import {
 const loading = ref(false);
 const diningGroups = ref<AdminDiningGroupSummary[]>([]);
 const total = ref(0);
+let diningGroupsRequest = 0;
 
 const query = reactive<{
   page: number;
@@ -24,6 +25,7 @@ const query = reactive<{
 });
 
 async function loadDiningGroups() {
+  const requestId = ++diningGroupsRequest;
   loading.value = true;
   try {
     const result = await diningGroupApi.list({
@@ -32,12 +34,18 @@ async function loadDiningGroups() {
       keyword: query.keyword || undefined,
       status: query.status || undefined
     });
+    if (requestId !== diningGroupsRequest) return;
+
     diningGroups.value = result.items;
     total.value = result.total;
   } catch (error) {
+    if (requestId !== diningGroupsRequest) return;
+
     ElMessage.error(error instanceof Error ? error.message : "加载失败");
   } finally {
-    loading.value = false;
+    if (requestId === diningGroupsRequest) {
+      loading.value = false;
+    }
   }
 }
 

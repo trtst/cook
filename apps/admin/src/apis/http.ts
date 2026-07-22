@@ -80,7 +80,12 @@ function isApiResponse<T>(body: unknown): body is ApiResponse<T> {
   if (typeof body !== "object" || body === null) return false;
 
   const candidate = body as Partial<ApiResponse<T>>;
-  return typeof candidate.code === "number" && typeof candidate.message === "string" && "data" in candidate;
+  return (
+    typeof candidate.code === "number" &&
+    typeof candidate.message === "string" &&
+    typeof candidate.serverTime === "string" &&
+    "data" in candidate
+  );
 }
 
 async function readBody(response: Response) {
