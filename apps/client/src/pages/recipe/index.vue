@@ -50,22 +50,7 @@
             <text class="section-heading__title">最近使用</text>
             <text class="section-heading__action" @click="navigateTo('/pages_recipe/list/index')">全部</text>
           </view>
-          <scroll-view class="recent-list" scroll-x :show-scrollbar="false" enable-flex>
-            <view
-              v-for="item in recentRecipes"
-              :key="item.name"
-              class="recent-card"
-              hover-class="recent-card--hover"
-              hover-stay-time="100"
-              @click="navigateTo('/pages_recipe/detail/index')"
-            >
-              <text class="recent-card__name">{{ item.name }}</text>
-              <text class="recent-card__meta">{{ item.meta }}</text>
-              <view class="recent-card__plate">
-                <view class="recent-card__food" />
-              </view>
-            </view>
-          </scroll-view>
+          <Empty title="暂无最近使用" description="保存或复做菜谱后会显示在这里。" />
         </view>
 
         <view class="recipe-section">
@@ -97,6 +82,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import Empty from "@/components/Empty/Empty.vue";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -104,12 +90,6 @@ import { useSessionStore } from "@/stores/session";
 const sessionStore = useSessionStore();
 const { themeClasses } = useTheme();
 const recipeLoading = ref(false);
-
-const recentRecipes = [
-  { name: "番茄牛腩", meta: "45 分钟 · 适合晚餐" },
-  { name: "青椒炒蛋", meta: "12 分钟 · 快手菜" },
-  { name: "菌菇鸡汤", meta: "60 分钟 · 周末" }
-];
 
 const hallEntries = [
   {

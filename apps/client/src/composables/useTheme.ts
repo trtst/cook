@@ -9,6 +9,7 @@ import {
   type ThemePalette,
   type ThemeSkin
 } from "@/stores/settings";
+import { uniPlatform } from "@/platform/uni";
 
 type EffectiveTheme = "light" | "dark";
 
@@ -17,29 +18,16 @@ let initialized = false;
 let mediaQueryCleanup: (() => void) | undefined;
 
 function readMiniProgramTheme() {
-  const platformUni = uni as unknown as {
-    getAppBaseInfo?: () => { theme?: string };
-    onThemeChange?: (listener: (result: { theme?: string }) => void) => void;
-  };
+  const appBaseInfo = uniPlatform.system.getAppBaseInfo();
+  if (appBaseInfo?.theme === "dark" || appBaseInfo?.theme === "light") {
+    systemTheme.value = appBaseInfo.theme;
+  }
 
-  try {
-    const appBaseInfo = platformUni.getAppBaseInfo?.();
-    if (appBaseInfo?.theme === "dark" || appBaseInfo?.theme === "light") {
-      systemTheme.value = appBaseInfo.theme;
+  uniPlatform.system.onThemeChange((result) => {
+    if (result.theme === "dark" || result.theme === "light") {
+      systemTheme.value = result.theme;
     }
-  } catch {
-    systemTheme.value = "light";
-  }
-
-  try {
-    platformUni.onThemeChange?.((result) => {
-      if (result.theme === "dark" || result.theme === "light") {
-        systemTheme.value = result.theme;
-      }
-    });
-  } catch {
-    // Ignore unsupported platforms.
-  }
+  });
 }
 
 function readH5Theme() {

@@ -55,7 +55,7 @@
               <text class="feature-card__title">成员</text>
               <text class="feature-card__subtitle">一起吃饭的人</text>
               <view class="feature-card__mini feature-card__mini--members">
-                <text class="feature-card__mini-text">4</text>
+                <text class="feature-card__mini-text">{{ memberCountValue }}</text>
               </view>
             </view>
 
@@ -113,11 +113,11 @@
             <view class="decision-progress__track">
               <view class="decision-progress__value" />
             </view>
-            <text class="decision-progress__text">2/4 已表态</text>
+            <text class="decision-progress__text">待表态</text>
           </view>
 
           <view class="decision-card__footer">
-            <text class="decision-card__hint">18:00 前确认，确认后自动看缺什么</text>
+            <text class="decision-card__hint">确认后继续看缺什么</text>
             <text class="decision-card__action">去确认</text>
           </view>
         </view>
@@ -128,16 +128,7 @@
             <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">全部</text>
           </view>
           <view class="family-feed">
-            <view v-for="item in familyFeed" :key="item.title" class="feed-item">
-              <view class="feed-item__avatar" :class="item.avatarClass">
-                <text class="feed-item__avatar-text">{{ item.avatar }}</text>
-              </view>
-              <view class="feed-item__content">
-                <text class="feed-item__title">{{ item.title }}</text>
-                <text class="feed-item__description">{{ item.description }}</text>
-              </view>
-              <text class="feed-item__time">{{ item.time }}</text>
-            </view>
+            <Empty title="暂无饭桌动静" description="有新的点菜、饭局或购物变化时会显示在这里。" />
           </view>
         </view>
 
@@ -145,43 +136,22 @@
           <view class="pantry-panel__header">
             <view>
               <text class="pantry-panel__label">买菜和冰箱</text>
-              <text class="pantry-panel__title">今晚还差 3 样</text>
+              <text class="pantry-panel__title">清单暂未接入</text>
             </view>
             <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去买菜</text>
           </view>
 
           <view class="pantry-list">
-            <view v-for="item in pantryItems" :key="item.name" class="pantry-item">
-              <view class="pantry-item__dot" :class="item.className" />
-              <text class="pantry-item__name">{{ item.name }}</text>
-              <text class="pantry-item__state">{{ item.state }}</text>
-            </view>
+            <Empty title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
           </view>
         </view>
 
         <view class="table-section table-section--recipes">
           <view class="section-heading">
-              <text class="section-heading__title">常吃清单</text>
+            <text class="section-heading__title">常吃清单</text>
             <text class="section-heading__action" @click="navigateTo('/pages_recipe/list/index')">菜谱</text>
           </view>
-          <scroll-view class="recipe-scroll" scroll-x :show-scrollbar="false" enable-flex>
-            <view
-              v-for="item in familyRecipes"
-              :key="item.name"
-              class="family-recipe"
-              hover-class="family-recipe--hover"
-              hover-stay-time="100"
-              @click="navigateTo('/pages_recipe/detail/index')"
-            >
-              <view class="family-recipe__visual" :class="item.visualClass">
-                <view class="family-recipe__plate">
-                  <view class="family-recipe__food" />
-                </view>
-              </view>
-              <text class="family-recipe__name">{{ item.name }}</text>
-              <text class="family-recipe__meta">{{ item.meta }}</text>
-            </view>
-          </scroll-view>
+          <Empty title="暂无常吃菜谱" description="保存或复做菜谱后会显示在这里。" />
         </view>
       </view>
     </view>
@@ -194,37 +164,48 @@ import askIcon from "@/assets/home-actions/ask.svg";
 import gapIcon from "@/assets/home-actions/gap.svg";
 import randomIcon from "@/assets/home-actions/random.svg";
 import wishIcon from "@/assets/home-actions/wish.svg";
+import Empty from "@/components/Empty/Empty.vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
+import { useSessionStore } from "@/stores/session";
 
 const HOME_NAV_GAP = 16;
 const { navBarTotalHeight } = useSystemInfo();
 const { themeClasses } = useTheme();
 const diningGroupStore = useDiningGroupStore();
+const sessionStore = useSessionStore();
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`
 }));
 
-const restaurantName = computed(() => diningGroupStore.currentDiningGroup?.name ?? "我的饭搭子");
+const restaurantName = computed(() => {
+  if (!sessionStore.isLoggedIn) return "未登录";
+  return diningGroupStore.currentDiningGroup?.name ?? "饭搭子未加载";
+});
 const memberCountText = computed(() => {
-  const count = diningGroupStore.currentDiningGroup?.memberCount ?? 1;
+  if (!sessionStore.isLoggedIn) return "登录后同步饭桌";
+  const count = diningGroupStore.currentDiningGroup?.memberCount;
+  if (!count) return "饭桌信息待加载";
   return `${count} 人饭桌`;
 });
+const memberCountValue = computed(() => diningGroupStore.currentDiningGroup?.memberCount ?? "--");
 const hasMealPlan = false;
+const mealCandidates: Array<{ rank: string; name: string; meta: string; votes: string }> = [];
 
-const heroTitle = computed(() => (hasMealPlan ? "今晚 18:30 开饭" : "今晚谁来定菜？"));
+const heroTitle = computed(() => {
+  if (!sessionStore.isLoggedIn) return "下一餐从这里开始";
+  return hasMealPlan ? "饭局待确认" : "今晚谁来定菜？";
+});
 const heroDescription = computed(() =>
-  hasMealPlan ? "3 道候选菜，2 人已表态，还有成员没确认。" : "还没安排饭局，先记想吃或发起点菜。"
+  hasMealPlan
+    ? "有待确认的饭局安排。"
+    : sessionStore.isLoggedIn
+      ? "还没安排饭局，先记想吃或发起点菜。"
+      : "登录后同步饭搭子、计划、购物清单和食材。"
 );
-
-const mealCandidates = [
-  { rank: "1", name: "番茄牛腩", meta: "成员想吃 · 45 分钟", votes: "2 票" },
-  { rank: "2", name: "青椒炒蛋", meta: "有人推荐 · 快手菜", votes: "1 票" },
-  { rank: "3", name: "菌菇鸡汤", meta: "周末常做 · 适合配饭", votes: "待定" }
-];
 
 const quickActions = [
   {
@@ -254,54 +235,6 @@ const quickActions = [
     iconSrc: gapIcon,
     url: "/pages_pantry/gap/index",
     className: "quick-action--soft"
-  }
-];
-
-const familyFeed = [
-  {
-    avatar: "A",
-    title: "有人想吃番茄牛腩",
-    description: "顺手补一点香菜，今晚就能做。",
-    time: "刚刚",
-    avatarClass: "feed-item__avatar--rose"
-  },
-  {
-    avatar: "B",
-    title: "有人投了青椒炒蛋",
-    description: "工作日简单点，十几分钟能上桌。",
-    time: "8 分钟",
-    avatarClass: "feed-item__avatar--green"
-  },
-  {
-    avatar: "我",
-    title: "购物清单新增 5 项",
-    description: "牛腩、番茄、鸡蛋、菌菇和酸奶。",
-    time: "今天",
-    avatarClass: "feed-item__avatar--blue"
-  }
-];
-
-const pantryItems = [
-  { name: "牛腩", state: "待买", className: "pantry-item__dot--danger" },
-  { name: "番茄", state: "待买", className: "pantry-item__dot--warning" },
-  { name: "鸡蛋", state: "够用", className: "pantry-item__dot--ok" }
-];
-
-const familyRecipes = [
-  {
-    name: "番茄牛腩",
-    meta: "上次 6 天前",
-    visualClass: "family-recipe__visual--warm"
-  },
-  {
-    name: "青椒炒蛋",
-    meta: "快手常备",
-    visualClass: "family-recipe__visual--fresh"
-  },
-  {
-    name: "菌菇鸡汤",
-    meta: "周末适合",
-    visualClass: "family-recipe__visual--cool"
   }
 ];
 

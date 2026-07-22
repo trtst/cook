@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { uniPlatform } from "@/platform/uni";
 
 interface MenuButtonRect {
   top: number;
@@ -43,28 +44,12 @@ const systemInfo = ref<SystemInfoState>({
 let initialized = false;
 
 function getMenuButtonRect() {
-  const platformUni = uni as unknown as {
-    getMenuButtonBoundingClientRect?: () => MenuButtonRect;
-  };
-
-  try {
-    return platformUni.getMenuButtonBoundingClientRect?.();
-  } catch {
-    return undefined;
-  }
+  return uniPlatform.system.getMenuButtonRect() ?? undefined;
 }
 
 function readWindowInfo(): WindowInfo | undefined {
-  const platformUni = uni as unknown as {
-    getWindowInfo?: () => WindowInfo;
-  };
-
-  try {
-    const windowInfo = platformUni.getWindowInfo?.();
-    if (windowInfo) return windowInfo;
-  } catch {
-    // Continue with H5 fallback or default values.
-  }
+  const windowInfo = uniPlatform.system.getWindowInfo();
+  if (windowInfo) return windowInfo;
 
   if (typeof window === "undefined") return undefined;
 

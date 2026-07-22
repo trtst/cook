@@ -1,4 +1,10 @@
 interface ClientPlatform {
+  system: {
+    getWindowInfo(): WindowInfo | null;
+    getMenuButtonRect(): MenuButtonRect | null;
+    getAppBaseInfo(): AppBaseInfo | null;
+    onThemeChange(listener: (result: ThemeChangeResult) => void): void;
+  };
   storage: {
     get<T>(key: string): Promise<T | null>;
     set<T>(key: string, value: T): Promise<void>;
@@ -17,6 +23,45 @@ interface ClientPlatform {
   clipboard: {
     set(data: string): Promise<void>;
   };
+}
+
+interface MenuButtonRect {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+}
+
+interface SafeArea {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+}
+
+interface WindowInfo {
+  statusBarHeight?: number;
+  windowHeight?: number;
+  safeArea?: SafeArea;
+}
+
+interface AppBaseInfo {
+  theme?: string;
+}
+
+interface ThemeChangeResult {
+  theme?: string;
+}
+
+interface UniSystemApi {
+  getWindowInfo?: () => WindowInfo;
+  getMenuButtonBoundingClientRect?: () => MenuButtonRect;
+  getAppBaseInfo?: () => AppBaseInfo;
+  onThemeChange?: (listener: (result: ThemeChangeResult) => void) => void;
 }
 
 function callUni<T>(runner: (resolve: (value: T) => void, reject: (reason: unknown) => void) => void): Promise<T> {
@@ -81,7 +126,41 @@ function setClipboardData(data: string) {
   });
 }
 
+function getUniSystemApi() {
+  return uni as unknown as UniSystemApi;
+}
+
 export const uniPlatform: ClientPlatform = {
+  system: {
+    getWindowInfo() {
+      try {
+        return getUniSystemApi().getWindowInfo?.() ?? null;
+      } catch {
+        return null;
+      }
+    },
+    getMenuButtonRect() {
+      try {
+        return getUniSystemApi().getMenuButtonBoundingClientRect?.() ?? null;
+      } catch {
+        return null;
+      }
+    },
+    getAppBaseInfo() {
+      try {
+        return getUniSystemApi().getAppBaseInfo?.() ?? null;
+      } catch {
+        return null;
+      }
+    },
+    onThemeChange(listener) {
+      try {
+        getUniSystemApi().onThemeChange?.(listener);
+      } catch {
+        // Unsupported platforms simply do not emit theme changes.
+      }
+    }
+  },
   storage: {
     async get<T>(key: string) {
       const value = uni.getStorageSync(key);
