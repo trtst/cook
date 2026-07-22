@@ -45,6 +45,9 @@
                   <text class="profile-row__tier">{{ personalTierText }}</text>
                 </view>
                 <text class="profile-row__uid">{{ profileUidText }}</text>
+                <view v-if="profileChips.length" class="profile-row__chips">
+                  <text v-for="chip in profileChips" :key="chip" class="profile-row__chip">{{ chip }}</text>
+                </view>
               </view>
 
               <view
@@ -70,6 +73,7 @@
                   <text class="quick-entry__icon">{{ item.icon }}</text>
                 </view>
                 <text class="quick-entry__title">{{ item.title }}</text>
+                <text v-if="isDisabledEntry(item)" class="quick-entry__badge">待开放</text>
               </view>
             </view>
           </template>
@@ -112,21 +116,19 @@
               </view>
             </view>
 
-            <view
-              class="medal-card"
-              hover-class="is-pressed"
-              hover-stay-time="100"
-              @click="handleMedalClick"
-            >
-              <view class="medal-card__icon">
-                <text class="medal-card__icon-text">勋</text>
+            <view class="entitlement-card">
+              <view class="overview-heading">
+                <text class="overview-heading__title">权益状态</text>
+                <text class="entitlement-card__scope">{{ entitlementScopeText }}</text>
               </view>
-              <text class="medal-card__label">我的勋章</text>
-              <view class="medal-card__count-line">
-                <text class="medal-card__count">--</text>
-                <text class="medal-card__unit">枚</text>
+              <text class="entitlement-card__title">{{ entitlementTitle }}</text>
+              <text class="entitlement-card__description">{{ entitlementDescription }}</text>
+              <view class="entitlement-card__limits">
+                <view v-for="item in entitlementLimits" :key="item.label" class="entitlement-limit">
+                  <text class="entitlement-limit__label">{{ item.label }}</text>
+                  <text class="entitlement-limit__value">{{ item.value }}</text>
+                </view>
               </view>
-              <text class="medal-card__action">勋章墙 ›</text>
             </view>
           </view>
 
@@ -454,6 +456,7 @@ let pendingAction: (() => void) | null = null;
 let restoredOnce = false;
 
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
+const currentEntitlements = computed(() => diningGroupStore.currentEntitlements);
 const profileName = computed(() => {
   if (!sessionStore.isLoggedIn) return "点击登录";
   return userStore.profile?.nickname || "下一餐用户";
@@ -466,12 +469,33 @@ const profileAvatarText = computed(() => {
 const profileUidText = computed(() =>
   sessionStore.isLoggedIn ? `UID ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
-const personalTierText = computed(() =>
-  sessionStore.isLoggedIn && diningGroupStore.currentEntitlements?.personalTier === "PLUS" ? "Plus" : "Free"
-);
+const personalTierText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录";
+  return getTierText(currentEntitlements.value?.personalTier);
+});
+const profileChips = computed(() => {
+  if (!sessionStore.isLoggedIn) return [];
+
+  const chips = [`个人 ${getTierText(currentEntitlements.value?.personalTier)}`];
+  if (currentDiningGroup.value) {
+    chips.push(diningGroupRoleText.value);
+  }
+
+  return chips;
+});
 const diningGroupName = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后查看饭搭子";
   return currentDiningGroup.value?.name || "饭搭子信息暂未加载";
+});
+const diningGroupRoleText = computed(() => {
+  const role = currentDiningGroup.value?.myRole;
+  if (!role) return "角色待加载";
+  return diningGroupRoleLabels[role];
+});
+const diningGroupStateText = computed(() => {
+  const state = currentDiningGroup.value?.state;
+  if (!state) return "状态待加载";
+  return diningGroupStateLabels[state];
 });
 const diningGroupStats = computed(() => [
   {
@@ -479,12 +503,35 @@ const diningGroupStats = computed(() => [
     label: "成员"
   },
   {
-    value: "--",
-    label: "菜谱"
+    value: currentDiningGroup.value?.memberLimit ?? currentEntitlements.value?.memberLimit ?? "--",
+    label: "上限"
   },
   {
-    value: "--",
-    label: "分类"
+    value: currentDiningGroup.value ? diningGroupRoleText.value : "--",
+    label: "角色"
+  }
+]);
+const entitlementScopeText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "未登录";
+  const scope = currentEntitlements.value?.currentScope;
+  return scope ? entitlementScopeLabels[scope] : "待加载";
+});
+const entitlementTitle = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后查看权益";
+  return `个人 ${getTierText(currentEntitlements.value?.personalTier)} · 饭搭子 ${getTierText(currentEntitlements.value?.diningGroupTier)}`;
+});
+const entitlementDescription = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后同步饭搭子、计划、购物清单和食材。";
+  return `当前饭搭子${diningGroupStateText.value}`;
+});
+const entitlementLimits = computed(() => [
+  {
+    label: "菜谱",
+    value: currentEntitlements.value ? `${currentEntitlements.value.recipeLimit}` : "--"
+  },
+  {
+    label: "存储",
+    value: currentEntitlements.value ? formatBytes(currentEntitlements.value.storageLimitBytes) : "--"
   }
 ]);
 const currentThemeText = computed(() => {
@@ -510,6 +557,20 @@ const paletteLabels: Record<ThemePalette, string> = {
   olive: "橄榄",
   cool: "冷蓝"
 };
+const diningGroupRoleLabels = {
+  OWNER: "主理人",
+  ADMIN: "管理员",
+  MEMBER: "成员"
+} as const;
+const diningGroupStateLabels = {
+  NORMAL: "正常",
+  OVER_RECIPE_LIMIT: "菜谱超额",
+  OVER_STORAGE_READONLY: "存储只读"
+} as const;
+const entitlementScopeLabels = {
+  USER: "个人",
+  DINING_GROUP: "饭搭子"
+} as const;
 
 const coreEntries: PageEntry[] = [
   {
@@ -546,6 +607,12 @@ const personalEntries: PageEntry[] = [
     icon: "味",
     description: "口味偏好、忌口和过敏信息",
     url: "/pages_me/taste/index"
+  },
+  {
+    title: "我的勋章",
+    icon: "勋",
+    description: "成长记录暂未开放",
+    disabledText: "勋章墙"
   },
   {
     title: "分类与单位",
@@ -588,13 +655,16 @@ const knowledgeEntries: PageEntry[] = [
   }
 ];
 
-const settingEntries: PageEntry[] = [
+const accountSettingEntries: PageEntry[] = [
   {
     title: "修改密码",
     icon: "安",
     description: "更新当前账号登录密码",
     action: "change-password"
-  },
+  }
+];
+
+const supportSettingEntries: PageEntry[] = [
   {
     title: "消息提醒",
     icon: "铃",
@@ -617,19 +687,43 @@ const settingEntries: PageEntry[] = [
   }
 ];
 
-const visibleSettingEntries = computed(() =>
-  sessionStore.isLoggedIn
-    ? [
-        ...settingEntries,
-        {
-          title: "退出登录",
-          icon: "退",
-          description: "清除当前账号会话",
-          action: "logout" as const
-        }
-      ]
-    : settingEntries
-);
+const visibleSettingEntries = computed(() => {
+  const entries = sessionStore.isLoggedIn ? [...accountSettingEntries, ...supportSettingEntries] : supportSettingEntries;
+
+  if (!sessionStore.isLoggedIn) {
+    return entries;
+  }
+
+  return [
+    ...entries,
+    {
+      title: "退出登录",
+      icon: "退",
+      description: "清除当前账号会话",
+      action: "logout" as const
+    }
+  ];
+});
+
+function getTierText(tier?: "FREE" | "PLUS") {
+  return tier === "PLUS" ? "Plus" : "Free";
+}
+
+function formatBytes(bytes: number) {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${Math.round(bytes / 1024 / 1024 / 1024)}GB`;
+  }
+
+  if (bytes >= 1024 * 1024) {
+    return `${Math.round(bytes / 1024 / 1024)}MB`;
+  }
+
+  return `${Math.round(bytes / 1024)}KB`;
+}
+
+function isDisabledEntry(entry: PageEntry) {
+  return Boolean(entry.disabledText && !entry.url && !entry.action);
+}
 
 onShow(() => {
   void syncPageState();
@@ -732,10 +826,6 @@ function handleProfileAction() {
   }
 
   openLogin();
-}
-
-function handleMedalClick() {
-  requireLogin(() => showComingSoon("勋章墙"));
 }
 
 function requireLogin(action: () => void) {
@@ -1081,6 +1171,22 @@ function getPasswordErrorText(error: unknown) {
   font-size: var(--font-size-sm);
 }
 
+.profile-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: 14rpx;
+}
+
+.profile-row__chip {
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
 .profile-row__edit {
   display: flex;
   flex: 0 0 auto;
@@ -1141,13 +1247,20 @@ function getPasswordErrorText(error: unknown) {
 .quick-entry__title {
   overflow: hidden;
   max-width: 136rpx;
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.quick-entry__badge {
+  margin-top: 6rpx;
+  color: var(--color-text-tertiary);
+  font-size: 18rpx;
+  line-height: 1;
 }
 
 .page-content {
@@ -1189,7 +1302,7 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .dining-card,
-.medal-card,
+.entitlement-card,
 .service-list,
 .knowledge-grid {
   border-radius: var(--radius-xs);
@@ -1264,66 +1377,78 @@ function getPasswordErrorText(error: unknown) {
   font-size: var(--font-size-xs);
 }
 
-.medal-card {
-  position: relative;
+.entitlement-card {
   min-width: 0;
   min-height: 246rpx;
   overflow: hidden;
-  padding: 22rpx 20rpx;
+  padding: 26rpx 22rpx 20rpx;
   background: linear-gradient(160deg, var(--color-primary-soft), var(--color-surface));
 }
 
-.medal-card__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 54rpx;
-  height: 54rpx;
-  border: 4rpx solid rgba(255, 255, 255, 0.66);
+.entitlement-card__scope {
+  flex: 0 0 auto;
+  padding: 4rpx 12rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-warning);
-  box-shadow: 0 8rpx 16rpx rgba(217, 144, 47, 0.22);
-}
-
-.medal-card__icon-text {
-  color: #ffffff;
+  background: var(--color-surface);
+  color: var(--color-primary);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-heavy);
+  font-weight: var(--font-weight-bold);
 }
 
-.medal-card__label {
+.entitlement-card__title,
+.entitlement-card__description {
   display: block;
-  margin-top: 14rpx;
-  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entitlement-card__title {
+  margin-top: 18rpx;
+  color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
 
-.medal-card__count-line {
-  display: flex;
-  align-items: baseline;
-  margin-top: 4rpx;
-}
-
-.medal-card__count {
-  color: var(--color-primary);
-  font-size: 42rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: var(--line-height-tight);
-}
-
-.medal-card__unit {
-  margin-left: 4rpx;
+.entitlement-card__description {
+  margin-top: 10rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
 }
 
-.medal-card__action {
+.entitlement-card__limits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+  margin-top: 22rpx;
+}
+
+.entitlement-limit {
+  min-width: 0;
+  padding: 12rpx 10rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-mask-weak);
+}
+
+.entitlement-limit__label,
+.entitlement-limit__value {
   display: block;
-  margin-top: 14rpx;
-  color: var(--color-primary);
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entitlement-limit__label {
+  color: var(--color-text-tertiary);
+  font-size: 20rpx;
+}
+
+.entitlement-limit__value {
+  margin-top: 6rpx;
+  color: var(--color-text);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-heavy);
 }
 
 .service-section {
