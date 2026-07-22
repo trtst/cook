@@ -1,34 +1,19 @@
 import { MiddlewareConsumer, Module, NestModule, RequestMethod } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { AdminAuthGuard } from "../common/admin-auth.guard";
-import { AdminController } from "../modules/auth/admin.controller";
-import { AuthController } from "../modules/auth/auth.controller";
-import { AuthService } from "../modules/auth/auth.service";
-import { DiningGroupController } from "../modules/dining-group/dining-group.controller";
-import { DiningGroupService } from "../modules/dining-group/dining-group.service";
-import { EntitlementController } from "../modules/entitlement/entitlement.controller";
-import { EntitlementService } from "../modules/entitlement/entitlement.service";
-import { UserController } from "../modules/user/user.controller";
-import { TasteProfileService } from "../modules/user/taste-profile.service";
 import { ClientVersionGuard } from "../common/client-version.guard";
 import { LoginRateLimitGuard } from "../common/login-rate-limit.guard";
-import { PrismaService } from "../common/prisma.service";
+import { CoreModule } from "../common/core.module";
 import { RequestContextMiddleware } from "../common/request-context.middleware";
-import { AdminTokenService } from "../common/security/admin-token.service";
-import { UserTokenService } from "../common/security/user-token.service";
-import { AdminService } from "./admin/admin.service";
+import { AdminModule } from "./admin/admin.module";
+import { AuthModule } from "./auth/auth.module";
+import { DiningGroupModule } from "./dining-group/dining-group.module";
+import { EntitlementModule } from "./entitlement/entitlement.module";
+import { UserModule } from "./user/user.module";
 
 @Module({
-  controllers: [AdminController, AuthController, DiningGroupController, EntitlementController, UserController],
+  imports: [CoreModule, AdminModule, AuthModule, DiningGroupModule, EntitlementModule, UserModule],
   providers: [
-    AuthService,
-    DiningGroupService,
-    EntitlementService,
-    TasteProfileService,
-    PrismaService,
-    AdminTokenService,
-    UserTokenService,
-    AdminService,
     AdminAuthGuard,
     LoginRateLimitGuard,
     {
