@@ -5,7 +5,8 @@ const SESSION_STORAGE_KEY = "next_meal_session";
 
 interface SessionSnapshot {
   token: string;
-  userId: string;
+  uid?: number;
+  userId?: string;
   expiresAt: string;
   refreshCheckedAt?: number;
 }
@@ -15,10 +16,14 @@ function isExpired(expiresAt: string) {
   return Number.isNaN(expiresTime) || expiresTime <= Date.now();
 }
 
+function normalizeUid(uid?: number) {
+  return typeof uid === "number" && uid > 0 ? uid : 0;
+}
+
 export const useSessionStore = defineStore("session", {
   state: () => ({
     token: "",
-    userId: "",
+    uid: 0,
     expiresAt: "",
     refreshCheckedAt: 0,
     restored: false
@@ -38,7 +43,7 @@ export const useSessionStore = defineStore("session", {
         }
 
         this.token = snapshot.token;
-        this.userId = snapshot.userId;
+        this.uid = normalizeUid(snapshot.uid);
         this.expiresAt = snapshot.expiresAt;
         this.refreshCheckedAt = snapshot.refreshCheckedAt ?? 0;
       }
@@ -47,7 +52,7 @@ export const useSessionStore = defineStore("session", {
     },
     async setSession(snapshot: SessionSnapshot) {
       this.token = snapshot.token;
-      this.userId = snapshot.userId;
+      this.uid = normalizeUid(snapshot.uid);
       this.expiresAt = snapshot.expiresAt;
       this.refreshCheckedAt = snapshot.refreshCheckedAt ?? this.refreshCheckedAt;
       await uniPlatform.storage.set(SESSION_STORAGE_KEY, {
@@ -61,14 +66,14 @@ export const useSessionStore = defineStore("session", {
       this.refreshCheckedAt = Date.now();
       await uniPlatform.storage.set(SESSION_STORAGE_KEY, {
         token: this.token,
-        userId: this.userId,
+        uid: this.uid,
         expiresAt: this.expiresAt,
         refreshCheckedAt: this.refreshCheckedAt
       });
     },
     async clearSession() {
       this.token = "";
-      this.userId = "";
+      this.uid = 0;
       this.expiresAt = "";
       this.refreshCheckedAt = 0;
       await uniPlatform.storage.remove(SESSION_STORAGE_KEY);

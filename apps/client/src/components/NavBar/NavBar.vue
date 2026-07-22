@@ -38,6 +38,7 @@
 <script setup lang="ts">
 import { computed, useSlots } from "vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { uniPlatform } from "@/platform/uni";
 
 withDefaults(
   defineProps<{
@@ -81,13 +82,11 @@ const placeholderStyle = computed(() => ({
 
 function handleLeftClick() {
   if (canGoBack.value) {
-    uni.navigateBack();
+    void uniPlatform.navigation.navigateBack();
     return;
   }
 
-  uni.switchTab({
-    url: "/pages/home/index"
-  });
+  void uniPlatform.navigation.switchTab("/pages/home/index");
 }
 </script>
 

@@ -104,58 +104,6 @@ async function clearUnauthorized(error: UnauthorizedError) {
 }
 
 /**
- * 统一请求入口。
- *
- * 安全与一致性约束：
- * 1. 默认需要鉴权，只有显式 `auth: false` 的接口才不带 token。
- * 2. 先校验响应是否满足项目 JSON 契约，再判断业务 `code`。
- * 3. 401 一律在这里收口，业务层不应自己重复做登出清理。
- */
-export async function requestData<T>(path: string, options: RequestOptions = {}) {
-	const auth = options.auth ?? true;
-	const token = auth ? useSessionStore().token : "";
-	const result = await uniRequestAdapter({
-		url: buildUrl(path, options.query),
-		method: "GET",
-		headers: {
-			"content-type": "application/json",
-			...(token ? { Authorization: `Bearer ${token}` } : {})
-		},
-		body: options.body
-	});
-
-	if (!isApiResponse<T>(result.body)) {
-		if (result.status === 401) {
-			const error = new UnauthorizedError();
-			if (auth) await clearUnauthorized(error);
-			throw error;
-		}
-
-		if (result.status < 200 || result.status >= 300) {
-			throw new HttpError(result.status, "请求失败");
-		}
-
-		throw new HttpError(result.status, "响应格式不符合契约");
-	}
-
-	if (result.body.code === 401) {
-		const error = new UnauthorizedError(result.body.message, result.body.data);
-		if (auth) await clearUnauthorized(error);
-		throw error;
-	}
-
-	if (result.body.code !== 0) {
-		throw new ApiClientError(result.body.code, result.body.message, result.body.data);
-	}
-
-	if (result.status < 200 || result.status >= 300) {
-		throw new HttpError(result.status, "请求失败");
-	}
-
-	return result.body.data;
-}
-
-/**
  * 统一的底层请求方法。
  * 公开的 `get/post/put/del` 都会走这里，从而共享同一套鉴权与错误处理逻辑。
  */

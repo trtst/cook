@@ -32,6 +32,7 @@
 
 <script setup lang="ts">
 import { TAB_ITEMS, type TabKey } from "./tabs";
+import { uniPlatform } from "@/platform/uni";
 import { useTheme } from "@/composables/useTheme";
 import { FALLBACK_ASSET_SKIN, getThemeSkinAssets, type ThemeTabbarIconName } from "@/themes";
 
@@ -63,9 +64,7 @@ function getFontIconClass(iconName: ThemeTabbarIconName) {
 }
 
 function switchTab(pagePath: string) {
-  uni.switchTab({
-    url: pagePath
-  });
+  void uniPlatform.navigation.switchTab(pagePath);
 }
 </script>
 

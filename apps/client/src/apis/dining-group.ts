@@ -52,7 +52,7 @@ export interface PendingImportCounts {
 export interface CurrentSpaceSummary {
 	id: UUID;
 	name: string;
-	ownerId: UUID;
+	ownerUid: number;
 	myRole: DiningGroupRole;
 	myStatus: LongTermMemberStatus;
 	myStatusReason: LongTermMemberStatusReason | null;
@@ -75,6 +75,11 @@ export interface OriginalSpaceSummary {
 	frozenAt: IsoDateTime | null;
 	canImport: boolean;
 	pendingImportCounts: PendingImportCounts;
+}
+
+export interface CurrentOriginalSpaceSummary {
+	status: OriginalSpaceStatus;
+	canImport: boolean;
 }
 
 export interface CarryBackSnapshotSummary {
@@ -129,10 +134,8 @@ export interface StorageUsageSummary {
 
 export interface GetCurrentDiningGroupContextResponse {
 	currentSpace: CurrentSpaceSummary;
-	originalSpace: OriginalSpaceSummary | null;
-	carryBackSnapshots: CarryBackSnapshotSummary[];
+	originalSpace: CurrentOriginalSpaceSummary | null;
 	entitlements: EffectiveEntitlementSnapshot;
-	storage: StorageUsageSummary;
 }
 
 export interface DiningGroupMembersResult {
@@ -157,7 +160,7 @@ export interface AcceptInviteRequest {
 
 export interface AcceptInviteResponse {
 	currentSpace: CurrentSpaceSummary;
-	originalSpace: OriginalSpaceSummary;
+	originalSpace: CurrentOriginalSpaceSummary;
 	pendingImportCounts: PendingImportCounts;
 }
 

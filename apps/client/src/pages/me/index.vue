@@ -324,6 +324,74 @@
           </view>
         </view>
       </view>
+
+      <view
+        v-if="passwordEditorOpen"
+        class="profile-modal"
+        @click="closePasswordEditor"
+        @touchmove.stop.prevent
+      >
+        <view class="profile-modal__panel" @click.stop>
+          <view class="profile-modal__header">
+            <text class="profile-modal__title">修改密码</text>
+            <text class="profile-modal__close" @click="closePasswordEditor">×</text>
+          </view>
+
+          <view class="password-form">
+            <view class="password-form__field">
+              <text class="password-form__label">当前密码</text>
+              <input
+                v-model="currentPasswordDraft"
+                class="password-form__input"
+                password
+                maxlength="128"
+                placeholder="请输入当前密码"
+                :disabled="passwordSaving"
+              />
+            </view>
+
+            <view class="password-form__field">
+              <text class="password-form__label">新密码</text>
+              <input
+                v-model="nextPasswordDraft"
+                class="password-form__input"
+                password
+                maxlength="128"
+                placeholder="请输入新密码，至少 6 位"
+                :disabled="passwordSaving"
+              />
+            </view>
+
+            <view class="password-form__field">
+              <text class="password-form__label">确认新密码</text>
+              <input
+                v-model="confirmPasswordDraft"
+                class="password-form__input"
+                password
+                maxlength="128"
+                placeholder="请再次输入新密码"
+                :disabled="passwordSaving"
+              />
+            </view>
+
+            <text v-if="passwordEditErrorText" class="password-form__error">{{ passwordEditErrorText }}</text>
+          </view>
+
+          <view class="profile-modal__actions">
+            <button class="profile-modal__button profile-modal__button--ghost" :disabled="passwordSaving" @click="closePasswordEditor">
+              取消
+            </button>
+            <button
+              class="profile-modal__button profile-modal__button--primary"
+              :loading="passwordSaving"
+              :disabled="passwordSaving"
+              @click="savePassword"
+            >
+              保存
+            </button>
+          </view>
+        </view>
+      </view>
     </view>
   </Layout>
 </template>
@@ -331,12 +399,15 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
+import { ApiClientError } from "@/apis/http";
 import { userApi } from "@/apis/user";
+import { uniPlatform } from "@/platform/uni";
 import { useTheme } from "@/composables/useTheme";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
+import { restoreAppSession } from "@/utils/app-session";
 
 interface PageEntry {
   title: string;
@@ -344,7 +415,7 @@ interface PageEntry {
   url?: string;
   disabledText?: string;
   description?: string;
-  action?: "logout";
+  action?: "logout" | "change-password";
 }
 
 const sessionStore = useSessionStore();
@@ -368,12 +439,19 @@ const themePanelOpen = ref(false);
 const loginVisible = ref(false);
 const profileEditorOpen = ref(false);
 const profileSaving = ref(false);
+const passwordEditorOpen = ref(false);
+const passwordSaving = ref(false);
 const profileNameDraft = ref("");
 const profileEditErrorText = ref("");
+const currentPasswordDraft = ref("");
+const nextPasswordDraft = ref("");
+const confirmPasswordDraft = ref("");
+const passwordEditErrorText = ref("");
 const skinOptions = THEME_SKIN_OPTIONS;
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
 let pendingAction: (() => void) | null = null;
+let restoredOnce = false;
 
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
 const profileName = computed(() => {
@@ -389,7 +467,7 @@ const profileUidText = computed(() =>
   sessionStore.isLoggedIn ? `UID ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
 const personalTierText = computed(() =>
-  sessionStore.isLoggedIn && diningGroupStore.currentContext?.entitlements.personalTier === "PLUS" ? "Plus" : "Free"
+  sessionStore.isLoggedIn && diningGroupStore.currentEntitlements?.personalTier === "PLUS" ? "Plus" : "Free"
 );
 const diningGroupName = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后查看饭搭子";
@@ -512,9 +590,10 @@ const knowledgeEntries: PageEntry[] = [
 
 const settingEntries: PageEntry[] = [
   {
-    title: "账号与安全",
+    title: "修改密码",
     icon: "安",
-    disabledText: "账号与安全"
+    description: "更新当前账号登录密码",
+    action: "change-password"
   },
   {
     title: "消息提醒",
@@ -553,19 +632,34 @@ const visibleSettingEntries = computed(() =>
 );
 
 onShow(() => {
+  void syncPageState();
+});
+
+async function syncPageState() {
+  if (!restoredOnce) {
+    await restoreAppSession();
+    restoredOnce = true;
+
+    if (sessionStore.isLoggedIn && userStore.profile && diningGroupStore.hasCurrentContext) {
+      profileLoading.value = false;
+      loadErrorText.value = "";
+      return;
+    }
+  }
+
   if (sessionStore.isLoggedIn) {
-    void loadMe();
+    await loadMe();
     return;
   }
 
   profileLoading.value = false;
   loadErrorText.value = "";
-});
+}
 
 async function loadMe() {
   if (!sessionStore.isLoggedIn || profileLoading.value) return;
 
-  const hasCachedMe = Boolean(userStore.profile && diningGroupStore.currentContext);
+  const hasCachedMe = Boolean(userStore.profile && diningGroupStore.hasCurrentContext);
   profileLoading.value = !hasCachedMe;
   loadErrorText.value = "";
 
@@ -609,6 +703,13 @@ function handleDiningGroupManage() {
 }
 
 function handleEntryClick(entry: PageEntry) {
+  if (entry.action === "change-password") {
+    requireLogin(() => {
+      openPasswordEditor();
+    });
+    return;
+  }
+
   if (entry.action === "logout") {
     void handleLogout();
     return;
@@ -668,6 +769,17 @@ function closeProfileEditor() {
   profileEditErrorText.value = "";
 }
 
+function openPasswordEditor() {
+  resetPasswordForm();
+  passwordEditorOpen.value = true;
+}
+
+function closePasswordEditor() {
+  if (passwordSaving.value) return;
+  passwordEditorOpen.value = false;
+  passwordEditErrorText.value = "";
+}
+
 async function saveProfile() {
   if (profileSaving.value) return;
 
@@ -689,12 +801,47 @@ async function saveProfile() {
     const profile = await userApi.updateCurrent({ nickname });
     userStore.setProfile(profile);
     profileEditorOpen.value = false;
-    uni.showToast({ title: "已保存", icon: "success" });
   } catch (error) {
     profileEditErrorText.value = error instanceof Error ? error.message : "保存失败";
+    return;
   } finally {
     profileSaving.value = false;
   }
+
+  await uniPlatform.feedback.toast({ title: "已保存", icon: "success" }).catch(() => undefined);
+}
+
+async function savePassword() {
+  if (passwordSaving.value) return;
+
+  const currentPassword = currentPasswordDraft.value;
+  const newPassword = nextPasswordDraft.value;
+  const confirmPassword = confirmPasswordDraft.value;
+  const validationError = validatePasswordForm(currentPassword, newPassword, confirmPassword);
+
+  if (validationError) {
+    passwordEditErrorText.value = validationError;
+    return;
+  }
+
+  passwordSaving.value = true;
+  passwordEditErrorText.value = "";
+
+  try {
+    await userApi.changeCurrentPassword({
+      currentPassword,
+      newPassword
+    });
+    passwordEditorOpen.value = false;
+    resetPasswordForm();
+  } catch (error) {
+    passwordEditErrorText.value = getPasswordErrorText(error);
+    return;
+  } finally {
+    passwordSaving.value = false;
+  }
+
+  await uniPlatform.feedback.toast({ title: "密码已更新", icon: "success" }).catch(() => undefined);
 }
 
 async function handleLoginSuccess() {
@@ -709,25 +856,56 @@ async function handleLoginSuccess() {
 async function handleLogout() {
   closeLogin();
   closeProfileEditor();
+  closePasswordEditor();
   await sessionStore.clearSession();
   userStore.clearProfile();
   await diningGroupStore.clearDiningGroupState();
   loadErrorText.value = "";
-  uni.showToast({
+  await uniPlatform.feedback.toast({
     title: "已退出登录",
     icon: "success"
   });
 }
 
 function navigateTo(url: string) {
-  uni.navigateTo({ url });
+  void uniPlatform.navigation.navigateTo(url);
 }
 
 function showComingSoon(name: string) {
-  uni.showToast({
+  void uniPlatform.feedback.toast({
     title: `${name}暂未开放`,
     icon: "none"
   });
+}
+
+function resetPasswordForm() {
+  currentPasswordDraft.value = "";
+  nextPasswordDraft.value = "";
+  confirmPasswordDraft.value = "";
+  passwordEditErrorText.value = "";
+}
+
+function validatePasswordForm(currentPassword: string, newPassword: string, confirmPassword: string) {
+  if (!currentPassword) return "请输入当前密码";
+  if (!newPassword) return "请输入新密码";
+  if (newPassword.length < 6) return "新密码至少 6 位";
+  if (newPassword === currentPassword) return "新密码不能与当前密码相同";
+  if (!confirmPassword) return "请再次输入新密码";
+  if (newPassword !== confirmPassword) return "两次输入的新密码不一致";
+  return "";
+}
+
+function getPasswordErrorText(error: unknown) {
+  if (error instanceof ApiClientError) {
+    if (error.code === 400) return error.message || "请检查密码输入";
+    if (error.code === 401) return "登录状态已失效，请重新登录";
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "修改密码失败，请稍后重试";
 }
 </script>
 
@@ -1448,6 +1626,39 @@ function showComingSoon(name: string) {
 }
 
 .profile-form__error {
+  display: block;
+  margin-top: var(--space-lg);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+.password-form {
+  padding: var(--space-lg) 30rpx var(--space-md);
+}
+
+.password-form__field + .password-form__field {
+  margin-top: var(--space-md);
+}
+
+.password-form__label {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.password-form__input {
+  min-height: var(--size-input);
+  margin-top: 14rpx;
+  padding: 0 var(--space-md);
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+}
+
+.password-form__error {
   display: block;
   margin-top: var(--space-lg);
   color: var(--color-danger);

@@ -68,6 +68,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import type { DiningGroupRole } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
+import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -141,20 +142,27 @@ async function handleCreateInvite() {
     const result = await diningGroupStore.createInvite(diningGroupId, inviteOperationId.value);
     inviteOperationId.value = "";
     sharePath.value = result.sharePath;
-    uni.showToast({ title: "已生成", icon: "success" });
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "生成邀请失败";
+    return;
   } finally {
     submitting.value = false;
   }
+
+  await uniPlatform.feedback.toast({ title: "已生成", icon: "success" }).catch(() => undefined);
 }
 
-function handleCopy() {
+async function handleCopy() {
   if (!sharePath.value) return;
-  uni.setClipboardData({
-    data: sharePath.value,
-    success: () => uni.showToast({ title: "已复制", icon: "success" })
-  });
+
+  try {
+    await uniPlatform.clipboard.set(sharePath.value);
+  } catch {
+    await uniPlatform.feedback.toast({ title: "复制失败", icon: "none" }).catch(() => undefined);
+    return;
+  }
+
+  await uniPlatform.feedback.toast({ title: "已复制", icon: "success" }).catch(() => undefined);
 }
 
 function getAvatarText(nickname: string | null) {

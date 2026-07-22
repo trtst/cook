@@ -25,6 +25,7 @@ import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
+import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -60,13 +61,17 @@ async function handleAccept() {
   try {
     await diningGroupStore.acceptInvite(inviteToken.value, acceptOperationId.value);
     acceptOperationId.value = "";
-    uni.showToast({ title: "已加入", icon: "success" });
-    uni.switchTab({ url: "/pages/me/index" });
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "加入失败，请稍后重试";
+    return;
   } finally {
     submitting.value = false;
   }
+
+  await uniPlatform.feedback.toast({ title: "已加入", icon: "success" }).catch(() => undefined);
+  await uniPlatform.navigation.switchTab("/pages/me/index").catch(() => {
+    errorText.value = "已加入，请返回“我的”页查看";
+  });
 }
 </script>
 

@@ -1,47 +1,21 @@
 <script setup lang="ts">
 import { onLaunch, onShow } from "@dcloudio/uni-app";
 import { refreshSessionIfNeeded } from "@/apis/auth";
-import { userApi } from "@/apis/user";
-import { useDiningGroupStore } from "@/stores/dining-group";
-import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
-import { useUserStore } from "@/stores/user";
 import { initSystemInfo } from "@/composables/useSystemInfo";
 import { initTheme } from "@/composables/useTheme";
-
-const USER_PROFILE_CACHE_MS = 10 * 60 * 1000;
+import { restoreAppSession } from "@/utils/app-session";
 
 onLaunch(() => {
   initSystemInfo();
   initTheme();
   void useSettingsStore().restore();
-  void restoreCurrentUser();
+  void restoreAppSession();
 });
 
 onShow(() => {
   void refreshSessionIfNeeded().catch(() => undefined);
 });
-
-async function restoreCurrentUser() {
-  const sessionStore = useSessionStore();
-  const diningGroupStore = useDiningGroupStore();
-  const userStore = useUserStore();
-
-  await sessionStore.restore();
-  if (!sessionStore.isLoggedIn) return;
-
-  try {
-    const restored = await userStore.restoreProfile(sessionStore.userId, USER_PROFILE_CACHE_MS);
-    if (!restored) {
-      const profile = await userApi.getCurrent();
-      userStore.setProfile(profile);
-    }
-    await refreshSessionIfNeeded();
-  } catch {
-    userStore.clearProfile();
-    await diningGroupStore.clearDiningGroupState();
-  }
-}
 </script>
 
 <style lang="scss">

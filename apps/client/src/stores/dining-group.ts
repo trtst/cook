@@ -2,27 +2,40 @@ import { defineStore } from "pinia";
 import type {
   CreateInviteResult,
   DiningGroupMemberSummary,
-  GetCurrentDiningGroupContextResponse
+  GetCurrentDiningGroupContextResponse,
+  CurrentOriginalSpaceSummary,
+  CurrentSpaceSummary,
+  EffectiveEntitlementSnapshot
 } from "@/apis/dining-group";
 import { diningGroupApi } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
 import { createOperationId } from "@/utils/operation-id";
 import { onSessionCleared } from "@/utils/session-events";
 
+let refreshCurrentPromise: Promise<GetCurrentDiningGroupContextResponse> | null = null;
+
 export const useDiningGroupStore = defineStore("dining-group", {
   state: () => ({
-    currentContext: null as GetCurrentDiningGroupContextResponse | null,
+    currentSpace: null as CurrentSpaceSummary | null,
+    currentEntitlements: null as EffectiveEntitlementSnapshot | null,
+    originalSpace: null as CurrentOriginalSpaceSummary | null,
     members: [] as DiningGroupMemberSummary[]
   }),
   getters: {
-    currentDiningGroup: (state) => state.currentContext?.currentSpace ?? null,
-    currentDiningGroupId: (state) => state.currentContext?.currentSpace.id ?? "",
-    originalSpace: (state) => state.currentContext?.originalSpace ?? null
+    currentDiningGroup: (state) => state.currentSpace,
+    currentDiningGroupId: (state) => state.currentSpace?.id ?? "",
+    hasCurrentContext: (state) => Boolean(state.currentSpace && state.currentEntitlements)
   },
   actions: {
     async refreshCurrent() {
-      const result = await diningGroupApi.getCurrent();
-      this.currentContext = result;
+      refreshCurrentPromise ??= diningGroupApi.getCurrent().finally(() => {
+        refreshCurrentPromise = null;
+      });
+
+      const result = await refreshCurrentPromise;
+      this.currentSpace = result.currentSpace;
+      this.currentEntitlements = result.entitlements;
+      this.originalSpace = result.originalSpace;
       return result;
     },
     async createInvite(diningGroupId: UUID, operationId: UUID = createOperationId()): Promise<CreateInviteResult> {
@@ -52,7 +65,9 @@ export const useDiningGroupStore = defineStore("dining-group", {
       return result;
     },
     clearDiningGroupState() {
-      this.currentContext = null;
+      this.currentSpace = null;
+      this.currentEntitlements = null;
+      this.originalSpace = null;
       this.members = [];
     }
   }

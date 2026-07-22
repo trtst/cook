@@ -28,6 +28,7 @@
 </template>
 
 <script setup lang="ts">
+import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 
 const sessionStore = useSessionStore();
@@ -61,7 +62,7 @@ const pantryEntries = [
 ];
 
 function navigateTo(url: string) {
-  uni.navigateTo({ url });
+  void uniPlatform.navigation.navigateTo(url);
 }
 </script>
 

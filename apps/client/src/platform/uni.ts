@@ -9,6 +9,13 @@ interface ClientPlatform {
     redirectTo(path: string): Promise<void>;
     switchTab(path: string): Promise<void>;
     reLaunch(path: string): Promise<void>;
+    navigateBack(delta?: number): Promise<void>;
+  };
+  feedback: {
+    toast(options: { title: string; icon?: "success" | "error" | "loading" | "none" }): Promise<void>;
+  };
+  clipboard: {
+    set(data: string): Promise<void>;
   };
 }
 
@@ -43,6 +50,37 @@ function navigate(path: string, method: "navigateTo" | "redirectTo" | "switchTab
   });
 }
 
+function navigateBack(delta = 1) {
+  return callUni<void>((resolve, reject) => {
+    uni.navigateBack({
+      delta,
+      success: () => resolve(),
+      fail: reject
+    });
+  });
+}
+
+function showToast(options: { title: string; icon?: "success" | "error" | "loading" | "none" }) {
+  return callUni<void>((resolve, reject) => {
+    uni.showToast({
+      title: options.title,
+      icon: options.icon,
+      success: () => resolve(),
+      fail: reject
+    });
+  });
+}
+
+function setClipboardData(data: string) {
+  return callUni<void>((resolve, reject) => {
+    uni.setClipboardData({
+      data,
+      success: () => resolve(),
+      fail: reject
+    });
+  });
+}
+
 export const uniPlatform: ClientPlatform = {
   storage: {
     async get<T>(key: string) {
@@ -60,6 +98,13 @@ export const uniPlatform: ClientPlatform = {
     navigateTo: (path) => navigate(path, "navigateTo"),
     redirectTo: (path) => navigate(path, "redirectTo"),
     switchTab: (path) => navigate(path, "switchTab"),
-    reLaunch: (path) => navigate(path, "reLaunch")
+    reLaunch: (path) => navigate(path, "reLaunch"),
+    navigateBack
+  },
+  feedback: {
+    toast: showToast
+  },
+  clipboard: {
+    set: setClipboardData
   }
 };

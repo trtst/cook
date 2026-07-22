@@ -66,6 +66,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { reactive, ref } from "vue";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Login from "@/components/Login/Login.vue";
+import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 
 type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "flavorPreferences";
@@ -163,12 +164,14 @@ async function saveTaste() {
     tasteText.flavorPreferences = profile.flavorPreferences.join("、");
     noteText.value = profile.note ?? "";
     loaded.value = true;
-    uni.showToast({ title: "已保存", icon: "success" });
   } catch (error) {
     saveErrorText.value = error instanceof Error ? error.message : "保存失败";
+    return;
   } finally {
     saving.value = false;
   }
+
+  await uniPlatform.feedback.toast({ title: "已保存", icon: "success" }).catch(() => undefined);
 }
 
 function readItems(text: string) {

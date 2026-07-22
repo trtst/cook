@@ -5,10 +5,9 @@
  * 目的是让页面只理解“用户业务对象”，不需要再回到请求层关心域名和 method。
  */
 import { cfg } from "@/config";
-import { get, put, type IsoDateTime, type UUID } from "./http";
+import { get, put, type IsoDateTime } from "./http";
 
 export interface UserBasic {
-	id: UUID;
 	uid: number;
 	nickname: string | null;
 	avatarUrl: string | null;
@@ -16,7 +15,6 @@ export interface UserBasic {
 }
 
 export interface UserSummary {
-	id: UUID;
 	uid: number;
 	nickname: string | null;
 	avatarUrl: string | null;
@@ -25,6 +23,15 @@ export interface UserSummary {
 export interface UpdateCurrentUserRequest {
 	nickname?: string;
 	avatarUrl?: string;
+}
+
+export interface ChangeCurrentPasswordRequest {
+	currentPassword: string;
+	newPassword: string;
+}
+
+export interface ChangeCurrentPasswordResult {
+	changedAt: IsoDateTime;
 }
 
 export interface TasteProfileResponse {
@@ -54,6 +61,9 @@ export const userApi = {
 	},
 	updateCurrent(body: UpdateCurrentUserRequest) {
 		return put<UserBasic>(`${cfg.domain}/api/users/me`, body);
+	},
+	changeCurrentPassword(body: ChangeCurrentPasswordRequest) {
+		return put<ChangeCurrentPasswordResult>(`${cfg.domain}/api/users/me/password`, body);
 	},
 	getTasteProfile() {
 		return get<TasteProfileResponse>(`${cfg.domain}/api/users/me/taste-profile`);

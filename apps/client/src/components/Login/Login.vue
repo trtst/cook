@@ -81,7 +81,7 @@ async function handleLogin() {
 
 		await sessionStore.setSession({
 			token: session.token,
-			userId: session.userId,
+			uid: session.user.uid,
 			expiresAt: session.expiresAt
 		});
 		userStore.setProfile(session.user);

@@ -8,7 +8,7 @@
  * 页面不应该自己决定何时刷新 token，也不应该自己拼认证域名。
  */
 import { cfg } from "@/config";
-import { post, type IsoDateTime, type UUID } from "./http";
+import { post, type IsoDateTime } from "./http";
 import type { UserBasic } from "./user";
 import { useSessionStore } from "@/stores/session";
 
@@ -32,7 +32,6 @@ export interface PasswordLoginRequest {
 export interface PasswordLoginResult {
 	token: string;
 	expiresAt: IsoDateTime;
-	userId: UUID;
 	user: UserBasic;
 }
 
@@ -89,7 +88,7 @@ export async function refreshSessionIfNeeded() {
 		.then(async session => {
 			await sessionStore.setSession({
 				token: session.token,
-				userId: sessionStore.userId,
+				uid: sessionStore.uid,
 				expiresAt: session.expiresAt
 			});
 		})

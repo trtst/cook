@@ -98,6 +98,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useTheme } from "@/composables/useTheme";
+import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 
 const sessionStore = useSessionStore();
@@ -124,7 +125,7 @@ const hallEntries = [
 ];
 
 function navigateTo(url: string) {
-  uni.navigateTo({ url });
+  void uniPlatform.navigation.navigateTo(url);
 }
 </script>
 

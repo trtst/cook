@@ -196,6 +196,7 @@ import randomIcon from "@/assets/home-actions/random.svg";
 import wishIcon from "@/assets/home-actions/wish.svg";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
+import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 
 const HOME_NAV_GAP = 16;
@@ -305,7 +306,7 @@ const familyRecipes = [
 ];
 
 function navigateTo(url: string) {
-  uni.navigateTo({ url });
+  void uniPlatform.navigation.navigateTo(url);
 }
 </script>
 

@@ -34,10 +34,10 @@ export const useUserStore = defineStore("user", {
         void uniPlatform.storage.remove(USER_PROFILE_STORAGE_KEY);
       }
     },
-    async restoreProfile(userId: string, maxAgeMs: number) {
+    async restoreProfile(uid: number, maxAgeMs: number) {
       const snapshot = await uniPlatform.storage.get<UserProfileSnapshot>(USER_PROFILE_STORAGE_KEY);
 
-      if (!snapshot?.profile || snapshot.profile.id !== userId || Date.now() - snapshot.cachedAt > maxAgeMs) {
+      if (!snapshot?.profile || snapshot.profile.uid !== uid || Date.now() - snapshot.cachedAt > maxAgeMs) {
         await uniPlatform.storage.remove(USER_PROFILE_STORAGE_KEY);
         return false;
       }
