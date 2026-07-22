@@ -24,6 +24,16 @@ function toIsoDate(value: Date) {
   return value.toISOString();
 }
 
+function toPositiveInt(value: number | string | undefined, fallback: number) {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+
+  return fallback;
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -59,8 +69,8 @@ export class AdminService {
   }
 
   async listUsers(page: number, pageSize: number, keyword?: string): Promise<PageResult<UserProfile>> {
-    const normalizedPage = page ?? 1;
-    const normalizedPageSize = pageSize ?? 20;
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const where = keyword
       ? {
@@ -105,8 +115,8 @@ export class AdminService {
     keyword?: string,
     status?: string
   ): Promise<PageResult<AdminDiningGroupSummary>> {
-    const normalizedPage = page ?? 1;
-    const normalizedPageSize = pageSize ?? 20;
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const normalizedStatus = status?.trim();
 
@@ -126,7 +136,15 @@ export class AdminService {
       take: normalizedPageSize,
       include: {
         _count: {
-          select: { members: true }
+          select: {
+            members: {
+              where: {
+                status: {
+                  in: ["ACTIVE", "RESTRICTED"]
+                }
+              }
+            }
+          }
         }
       }
     });
@@ -191,7 +209,12 @@ export class AdminService {
           select: { status: true }
         }),
         tx.diningGroupMember.count({
-          where: { diningGroupId: currentSpace.id, status: "ACTIVE" }
+          where: {
+            diningGroupId: currentSpace.id,
+            status: {
+              in: ["ACTIVE", "RESTRICTED"]
+            }
+          }
         })
       ]);
       if (!member || member.status === "ENDED") {

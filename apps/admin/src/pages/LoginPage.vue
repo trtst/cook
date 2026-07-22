@@ -20,7 +20,7 @@ function getRedirect() {
   const redirect = route.query.redirect;
   return typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")
     ? redirect
-    : "/dashboard";
+    : "/users";
 }
 
 async function submit() {
@@ -28,12 +28,16 @@ async function submit() {
   try {
     const result = await authApi.login(form);
     session.setSession(result);
-    await router.replace(getRedirect());
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "登录失败");
+    return;
   } finally {
     loading.value = false;
   }
+
+  await router.replace(getRedirect()).catch(() => {
+    ElMessage.warning("登录成功，请手动进入列表页");
+  });
 }
 </script>
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataAnalysis, ForkSpoon, House, SwitchButton, User } from "@element-plus/icons-vue";
+import { DataAnalysis, ForkSpoon, SwitchButton, User } from "@element-plus/icons-vue";
 import { useSessionStore } from "@/stores/session";
 
 const route = useRoute();
@@ -31,10 +31,6 @@ function logout() {
       </div>
 
       <el-menu :default-active="activeMenu" router class="side-menu">
-        <el-menu-item index="/dashboard">
-          <el-icon><House /></el-icon>
-          <span>工作台</span>
-        </el-menu-item>
         <el-menu-item index="/users">
           <el-icon><User /></el-icon>
           <span>用户查询</span>

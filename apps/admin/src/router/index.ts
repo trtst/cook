@@ -14,14 +14,8 @@ const router = createRouter({
     {
       path: "/",
       component: AdminLayout,
-      redirect: "/dashboard",
+      redirect: "/users",
       children: [
-        {
-          path: "dashboard",
-          name: "dashboard",
-          component: () => import("@/pages/DashboardPage.vue"),
-          meta: { title: "工作台" }
-        },
         {
           path: "users",
           name: "users",
@@ -48,7 +42,7 @@ router.beforeEach(to => {
   }
 
   if (to.meta.public) {
-    return session.isLoggedIn ? { path: "/dashboard" } : true;
+    return session.isLoggedIn ? { path: "/users" } : true;
   }
 
   if (!session.isLoggedIn) {

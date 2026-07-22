@@ -13,6 +13,7 @@
     "type-check": "tsc -p tsconfig.json --noEmit",
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "start": "node dist/main.js",
+    "verify:admin-readonly-flow": "tsx scripts/verify-admin-readonly-flow.ts",
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",
     "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts",
     "verify:taste-profile-flow": "tsx scripts/verify-taste-profile-flow.ts"
