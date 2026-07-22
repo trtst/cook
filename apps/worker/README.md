@@ -9,9 +9,9 @@ behavior is confirmed.
 ## Commands
 
 ```bash
-pnpm --filter @next-meal/worker type-check
-pnpm --filter @next-meal/worker build
-pnpm --filter @next-meal/worker dev
+pnpm type-check
+pnpm build
+pnpm dev
 ```
 
 ## Runtime

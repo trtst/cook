@@ -2,11 +2,12 @@
   "name": "@next-meal/client",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.22.0",
   "type": "module",
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
-    "type-check": "pnpm --dir ../.. --filter @next-meal/platform build && pnpm --dir ../.. --filter @next-meal/domain build && pnpm --dir ../.. --filter @next-meal/api-client build && vue-tsc --noEmit -p tsconfig.json",
+    "type-check": "vue-tsc --noEmit -p tsconfig.json",
     "lint": "eslint src",
     "check": "pnpm lint && pnpm type-check && pnpm build:mp-weixin"
   },
@@ -14,8 +15,6 @@
     "@dcloudio/uni-app": "3.0.0-alpha-5020120260710001",
     "@dcloudio/uni-components": "3.0.0-alpha-5020120260710001",
     "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5020120260710001",
-    "@next-meal/api-client": "workspace:*",
-    "@next-meal/platform": "workspace:*",
     "pinia": "2.1.7",
     "vue": "3.4.21"
   },
@@ -28,8 +27,12 @@
     "eslint-plugin-vue": "10.9.2",
     "sass": "1.101.0",
     "typescript-eslint": "8.64.0",
+    "typescript": "5.9.3",
     "vite": "5.2.8",
     "vue-eslint-parser": "10.4.1",
     "vue-tsc": "3.3.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@parcel/watcher", "esbuild", "vue-demi"]
   }
 }

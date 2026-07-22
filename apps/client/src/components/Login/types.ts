@@ -1,4 +1,4 @@
-import type { PasswordLoginResult } from "@next-meal/api-client";
+import type { PasswordLoginResult } from "@/apis/auth";
 
 export interface LoginSuccessPayload {
   session: PasswordLoginResult;

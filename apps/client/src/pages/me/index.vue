@@ -246,7 +246,7 @@
               </view>
 
               <view
-                v-for="item in settingEntries"
+                v-for="item in visibleSettingEntries"
                 :key="item.title"
                 class="service-row"
                 hover-class="is-pressed"
@@ -344,6 +344,7 @@ interface PageEntry {
   url?: string;
   disabledText?: string;
   description?: string;
+  action?: "logout";
 }
 
 const sessionStore = useSessionStore();
@@ -537,6 +538,20 @@ const settingEntries: PageEntry[] = [
   }
 ];
 
+const visibleSettingEntries = computed(() =>
+  sessionStore.isLoggedIn
+    ? [
+        ...settingEntries,
+        {
+          title: "退出登录",
+          icon: "退",
+          description: "清除当前账号会话",
+          action: "logout" as const
+        }
+      ]
+    : settingEntries
+);
+
 onShow(() => {
   if (sessionStore.isLoggedIn) {
     void loadMe();
@@ -594,6 +609,11 @@ function handleDiningGroupManage() {
 }
 
 function handleEntryClick(entry: PageEntry) {
+  if (entry.action === "logout") {
+    void handleLogout();
+    return;
+  }
+
   requireLogin(() => {
     if (entry.url) {
       navigateTo(entry.url);
@@ -684,6 +704,19 @@ async function handleLoginSuccess() {
   const action = pendingAction;
   pendingAction = null;
   action?.();
+}
+
+async function handleLogout() {
+  closeLogin();
+  closeProfileEditor();
+  await sessionStore.clearSession();
+  userStore.clearProfile();
+  await diningGroupStore.clearDiningGroupState();
+  loadErrorText.value = "";
+  uni.showToast({
+    title: "已退出登录",
+    icon: "success"
+  });
 }
 
 function navigateTo(url: string) {

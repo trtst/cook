@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import type { AdminDiningGroupSummary } from "@next-meal/api-client";
 import { onMounted, reactive, ref } from "vue";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { adminApi, isUnauthorized } from "@/apis/http";
-import { useSessionStore } from "@/stores/session";
-import { useRouter } from "vue-router";
-
-const router = useRouter();
-const session = useSessionStore();
+import {
+  diningGroupApi,
+  type AdminDiningGroupSummary,
+  type DiningGroupStatus
+} from "@/apis/dining-group";
 const loading = ref(false);
 const diningGroups = ref<AdminDiningGroupSummary[]>([]);
 const total = ref(0);
 
-const query = reactive({
+const query = reactive<{
+  page: number;
+  pageSize: number;
+  keyword: string;
+  status: DiningGroupStatus | "";
+}>({
   page: 1,
   pageSize: 20,
   keyword: "",
@@ -23,7 +26,7 @@ const query = reactive({
 async function loadDiningGroups() {
   loading.value = true;
   try {
-    const result = await adminApi.admin.listDiningGroups({
+    const result = await diningGroupApi.list({
       page: query.page,
       pageSize: query.pageSize,
       keyword: query.keyword || undefined,
@@ -32,11 +35,6 @@ async function loadDiningGroups() {
     diningGroups.value = result.items;
     total.value = result.total;
   } catch (error) {
-    if (isUnauthorized(error)) {
-      session.clearSession();
-      await router.replace("/login");
-      return;
-    }
     ElMessage.error(error instanceof Error ? error.message : "加载失败");
   } finally {
     loading.value = false;

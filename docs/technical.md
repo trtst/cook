@@ -16,8 +16,8 @@
 - 状态管理：Pinia
 - 构建目标：mp-weixin
 - 构建工具：Vite / HBuilderX，以实际工程配置为准
-- 平台能力：业务代码不直接调用 `wx.*`，统一通过 `packages/platform` 适配层
-- 类型共享：稳定领域类型进入 `packages/domain`
+- 平台能力：业务代码不直接调用 `wx.*`，统一通过 `apps/client/src/platform/uni.ts` 适配层
+- API 类型：在 `apps/client` 内按接口文件维护，以契约文档和 OpenAPI 为准
 - 版本约束：以 `package.json` 和锁文件实际版本为准
 - 小程序工程规则：见 `docs/uniapp.md`
 - 小程序落地基线：见 `docs/uniapp-architecture.md`
@@ -50,7 +50,7 @@
 常见需要确认的项：
 
 1. `Pinia` 状态是否跨页面共享，是否需要持久化和清理规则。
-2. 小程序端是否触达平台能力；触达时先确认 `packages/platform` 接口。
+2. 小程序端是否触达平台能力；触达时先确认 `apps/client/src/platform/uni.ts` 边界。
 3. 后台管理是否属于本次范围，是否需要新增运营角色。
 4. 接口联调方式是直连、代理还是 mock。
 5. 是否有明确的测试要求。

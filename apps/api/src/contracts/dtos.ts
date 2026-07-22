@@ -56,11 +56,6 @@ export class UpdateCurrentUserDto {
   @IsOptional()
   @IsString()
   avatarUrl?: string;
-
-  @ApiPropertyOptional({ example: "13800000000" })
-  @IsOptional()
-  @IsString()
-  phone?: string;
 }
 
 export class UpdateTasteProfileDto {

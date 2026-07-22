@@ -43,6 +43,10 @@ router.beforeEach(to => {
   document.title = to.meta.title ? `${String(to.meta.title)} | 下一餐后台` : "下一餐后台";
 
   const session = useSessionStore();
+  if (!session.isLoggedIn && session.token) {
+    session.clearSession();
+  }
+
   if (to.meta.public) {
     return session.isLoggedIn ? { path: "/dashboard" } : true;
   }

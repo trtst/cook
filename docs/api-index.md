@@ -12,23 +12,23 @@
 
 ## 已实现接口
 
-| 模块 | 方法 | 路径 | api-client | 说明 |
-| --- | --- | --- | --- | --- |
-| Auth | POST | `/auth/login` | `auth.loginWithPassword` | 手机号密码登录 |
-| Auth | POST | `/auth/refresh` | `auth.refreshSession` | 刷新用户 token |
-| User | GET | `/users/me` | `user.getCurrent` | 当前用户 |
-| User | PUT | `/users/me` | `user.updateCurrent` | 更新当前用户 |
-| DiningGroup | GET | `/dining-groups/current` | `diningGroup.getCurrent` | 唯一当前空间、原空间、快照、权益与空间状态 |
-| DiningGroup | GET | `/dining-group-members` | `diningGroup.listMembers` | 当前饭搭子成员 |
-| DiningGroupInvite | POST | `/dining-group-invites` | `diningGroup.createInvite` | 创建单次长期邀请 |
-| DiningGroupInvite | POST | `/dining-group-invites/{inviteToken}/accept` | `diningGroup.acceptInvite` | 冻结原空间并加入目标饭搭子 |
-| DiningGroup | POST | `/dining-groups/{diningGroupId}/leave` | `diningGroup.leave` | 退出、恢复原空间、创建快照头 |
-| CarryBack | GET | `/carry-back-snapshots` | `carryBack.list` | 本人当前可用迁出快照列表 |
-| Entitlement | GET | `/entitlements/current` | `entitlement.getCurrent` | 服务端解析当前用户与饭搭子有效权益 |
-| AdminAuth | POST | `/admin/auth/login` | `admin.login` | 管理员登录 |
-| AdminUser | GET | `/admin/users` | `admin.listUsers` | 用户只读查询 |
-| AdminDiningGroup | GET | `/admin/dining-groups` | `admin.listDiningGroups` | 饭搭子只读查询 |
-| AdminEntitlement | GET | `/admin/user-entitlements` | `admin.getUserEntitlements` | SUPER_ADMIN 查询用户当前有效权益 |
+| 模块 | 方法 | 路径 | 说明 |
+| --- | --- | --- | --- |
+| Auth | POST | `/auth/login` | 手机号密码登录 |
+| Auth | POST | `/auth/refresh` | 刷新用户 token |
+| User | GET | `/users/me` | 当前用户 |
+| User | PUT | `/users/me` | 更新当前用户 |
+| DiningGroup | GET | `/dining-groups/current` | 唯一当前空间、原空间、快照、权益与空间状态 |
+| DiningGroup | GET | `/dining-group-members` | 当前饭搭子成员 |
+| DiningGroupInvite | POST | `/dining-group-invites` | 创建单次长期邀请 |
+| DiningGroupInvite | POST | `/dining-group-invites/{inviteToken}/accept` | 冻结原空间并加入目标饭搭子 |
+| DiningGroup | POST | `/dining-groups/{diningGroupId}/leave` | 退出、恢复原空间、创建快照头 |
+| CarryBack | GET | `/carry-back-snapshots` | 本人当前可用迁出快照列表 |
+| Entitlement | GET | `/entitlements/current` | 服务端解析当前用户与饭搭子有效权益 |
+| AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
+| AdminUser | GET | `/admin/users` | 用户只读查询 |
+| AdminDiningGroup | GET | `/admin/dining-groups` | 饭搭子只读查询 |
+| AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户当前有效权益 |
 
 账号创建后自动拥有单人饭搭子，不提供手动创建和多饭搭子切换接口。
 
@@ -77,6 +77,6 @@ Public UGC、完整 Worker 运行、饭票、积分商城、OCR、AI、Pro、多
 
 ## 维护规则
 
-1. 先更新 `api-contract.md`，再同步 `packages/domain` 和 `packages/api-client`。
+1. 先更新 `api-contract.md` 和后端 OpenAPI，再同步各端本地 API 类型。
 2. 只有后端真实路径和最小验证通过后才能标记“已实现”。
 3. 客户端不得自行补字段、合并权益或保存当前饭搭子偏好。

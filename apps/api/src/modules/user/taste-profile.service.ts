@@ -1,7 +1,7 @@
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
-import type { TasteProfileResponse, UpdateTasteProfileRequest, UUID } from "@next-meal/api-client";
 import type { UserTasteProfile } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
+import type { TasteProfileResponse, UpdateTasteProfileRequest, UUID } from "../../contracts/types";
 
 function toResponse(profile: UserTasteProfile): TasteProfileResponse {
   return {

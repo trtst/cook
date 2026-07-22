@@ -1,4 +1,4 @@
-import type { UUID } from "@next-meal/api-client";
+import type { UUID } from "@/apis/http";
 
 type RandomSource = typeof globalThis & {
   crypto?: {

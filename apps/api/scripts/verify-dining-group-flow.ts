@@ -8,7 +8,7 @@ import type {
   GetCarryBackSnapshotsResponse,
   GetCurrentDiningGroupContextResponse,
   LeaveDiningGroupResponse
-} from "@next-meal/api-client";
+} from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 
 loadLocalEnv();

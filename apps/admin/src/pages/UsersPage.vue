@@ -1,15 +1,9 @@
 <script setup lang="ts">
-import { ApiClientError } from "@next-meal/api-client";
-import type { AdminUserEntitlementResponse, UserProfile } from "@next-meal/api-client";
 import { onMounted, reactive, ref } from "vue";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { adminApi, isUnauthorized } from "@/apis/http";
-import { useSessionStore } from "@/stores/session";
-import { useRouter } from "vue-router";
-
-const router = useRouter();
-const session = useSessionStore();
+import { ApiClientError } from "@/apis/http";
+import { userApi, type AdminUserEntitlementResponse, type UserProfile } from "@/apis/user";
 const loading = ref(false);
 const users = ref<UserProfile[]>([]);
 const total = ref(0);
@@ -28,7 +22,7 @@ const query = reactive({
 async function loadUsers() {
   loading.value = true;
   try {
-    const result = await adminApi.admin.listUsers({
+    const result = await userApi.list({
       page: query.page,
       pageSize: query.pageSize,
       keyword: query.keyword || undefined
@@ -36,11 +30,6 @@ async function loadUsers() {
     users.value = result.items;
     total.value = result.total;
   } catch (error) {
-    if (isUnauthorized(error)) {
-      session.clearSession();
-      await router.replace("/login");
-      return;
-    }
     ElMessage.error(error instanceof Error ? error.message : "加载失败");
   } finally {
     loading.value = false;
@@ -91,7 +80,7 @@ async function openEntitlement(row: UserProfile) {
   entitlementError.value = "";
 
   try {
-    const result = await adminApi.admin.getUserEntitlements(row.id);
+    const result = await userApi.getEntitlements(row.id);
     if (requestId !== entitlementRequest || !entitlementVisible.value) return;
 
     entitlement.value = result;
@@ -99,14 +88,6 @@ async function openEntitlement(row: UserProfile) {
     if (requestId !== entitlementRequest || !entitlementVisible.value) return;
 
     entitlement.value = null;
-    if (isUnauthorized(error)) {
-      entitlementVisible.value = false;
-      clearEntitlement();
-      session.clearSession();
-      await router.replace("/login");
-      return;
-    }
-
     entitlementError.value = getEntitlementError(error);
     ElMessage.error(entitlementError.value);
   } finally {

@@ -64,8 +64,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { reactive, ref } from "vue";
-import type { UpdateTasteProfileRequest } from "@next-meal/api-client";
-import { userApi } from "@/apis/user";
+import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Login from "@/components/Login/Login.vue";
 import { useSessionStore } from "@/stores/session";
 

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { UserBasic } from "@next-meal/api-client";
+import type { UserBasic } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
 import { THEME_SKIN_OPTIONS, type ThemeSkin } from "@/stores/settings";
 

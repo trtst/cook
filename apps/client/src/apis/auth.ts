@@ -1,3 +1,102 @@
-import { api } from "./http";
+/**
+ * 认证域接口。
+ *
+ * 这里只保留两类能力：
+ * 1. 登录、刷新这类直接面向认证服务的请求。
+ * 2. 会话续期节流逻辑。
+ *
+ * 页面不应该自己决定何时刷新 token，也不应该自己拼认证域名。
+ */
+import { cfg } from "@/config";
+import { post, type IsoDateTime, type UUID } from "./http";
+import type { UserBasic } from "./user";
+import { useSessionStore } from "@/stores/session";
 
-export const authApi = api.auth;
+/**
+ * 提前刷新窗口。
+ * token 距过期时间进入这个窗口后，允许触发后台续期，避免请求发出时才发现已过期。
+ */
+const refreshWindowMs = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * 刷新检查节流间隔。
+ * 这个值用于控制频率，避免每次页面显示或接口调用都重复打 refresh 接口。
+ */
+const refreshGapMs = 10 * 60 * 1000;
+
+export interface PasswordLoginRequest {
+	phone: string;
+	password: string;
+}
+
+export interface PasswordLoginResult {
+	token: string;
+	expiresAt: IsoDateTime;
+	userId: UUID;
+	user: UserBasic;
+}
+
+export interface RefreshSessionResult {
+	token: string;
+	expiresAt: IsoDateTime;
+}
+
+export const authApi = {
+	/**
+	 * 登录接口显式关闭鉴权头。
+	 * 这不是可选优化，而是契约要求：登录前没有稳定 user token 可带。
+	 */
+	loginWithPassword(body: PasswordLoginRequest) {
+		return post<PasswordLoginResult>(`${cfg.authDomain}/api/auth/login`, body, { auth: false });
+	},
+	refreshSession() {
+		return post<RefreshSessionResult>(`${cfg.authDomain}/api/auth/refresh`);
+	}
+};
+
+let refreshPromise: Promise<void> | null = null;
+
+/**
+ * 只在接近过期时刷新，避免把 refresh 变成常规高频请求。
+ */
+function shouldRefresh(expiresAt: string) {
+	const expiresTime = Date.parse(expiresAt);
+	return Number.isFinite(expiresTime) && expiresTime - Date.now() <= refreshWindowMs;
+}
+
+/**
+ * 通过本地时间戳做最小节流，减少同一前台会话里的重复刷新尝试。
+ */
+function canCheckRefresh(lastCheckedAt: number) {
+	return Date.now() - lastCheckedAt >= refreshGapMs;
+}
+
+/**
+ * 会话续期入口。
+ *
+ * 关键约束：
+ * 1. 单飞：`refreshPromise` 保证同一时间最多只有一个 refresh 请求在跑。
+ * 2. 节流：距离上次检查太近时直接返回，保护性能和认证服务。
+ * 3. 幂等：并发调用会等待同一个 Promise，不会重复覆盖本地 session。
+ */
+export async function refreshSessionIfNeeded() {
+	const sessionStore = useSessionStore();
+
+	if (!sessionStore.token || !shouldRefresh(sessionStore.expiresAt) || !canCheckRefresh(sessionStore.refreshCheckedAt)) return;
+
+	refreshPromise ??= authApi
+		.refreshSession()
+		.then(async session => {
+			await sessionStore.setSession({
+				token: session.token,
+				userId: sessionStore.userId,
+				expiresAt: session.expiresAt
+			});
+		})
+		.finally(async () => {
+			await useSessionStore().markRefreshChecked();
+			refreshPromise = null;
+		});
+
+	await refreshPromise;
+}

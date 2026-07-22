@@ -12,7 +12,7 @@ import type {
   LeaveDiningGroupResponse,
   OriginalSpaceSummary,
   UUID
-} from "@next-meal/api-client";
+} from "../../contracts/types";
 import { Prisma, type CarryBackSnapshot, type DiningGroup, type DiningGroupMember, type User } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";

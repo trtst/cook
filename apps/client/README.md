@@ -4,7 +4,7 @@ uni-app 小程序应用。小程序只负责用户侧体验，不承载后台管
 
 ## 边界
 
-- 可以依赖 `packages/platform` 和 `packages/api-client`。
+- 平台能力在 `src/platform/uni.ts` 内维护；请求和类型在 `src/apis/` 内维护。
 - 不 import `apps/api` 或 `apps/admin` 源码。
 - 页面、分包和主题规则见 `docs/uniapp-architecture.md`。
 - 小程序平台能力统一走 `src/platform/uni.ts` 或请求层，业务页面不直接调用 `wx.*`。
@@ -12,17 +12,10 @@ uni-app 小程序应用。小程序只负责用户侧体验，不承载后台管
 ## 命令
 
 ```bash
-pnpm --filter @next-meal/client dev:mp-weixin
-pnpm --filter @next-meal/client type-check
-pnpm --filter @next-meal/client lint
-pnpm --filter @next-meal/client build:mp-weixin
-```
-
-根目录等价命令：
-
-```bash
-pnpm dev:client
-pnpm build:client
+pnpm dev:mp-weixin
+pnpm type-check
+pnpm lint
+pnpm build:mp-weixin
 ```
 
 ## 环境变量
@@ -32,7 +25,7 @@ pnpm build:client
 本地真实 API 联调：
 
 ```bash
-VITE_API_BASE_URL=http://127.0.0.1:3100/api pnpm --filter @next-meal/client build:mp-weixin
+VITE_API_BASE_URL=http://127.0.0.1:3100/api pnpm build:mp-weixin
 ```
 
 小程序端不再内置 mock 请求通道。没有本地数据时，先启动 API 并执行 seed，或通过真实创建接口生成数据。

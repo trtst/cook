@@ -1,6 +1,6 @@
 # Next Meal Workspace
 
-`next-meal` 当前采用单仓库、多应用结构。三端独立开发、独立启动、独立构建，共享契约只放在 `packages/`。
+`next-meal` 当前采用单仓库、多应用结构。三端独立开发、独立启动、独立构建，接口契约统一描述、各端本地实现。
 
 ## 应用入口
 
@@ -9,14 +9,6 @@ apps/api      后端 API
 apps/client   uni-app 小程序
 apps/admin    后台管理端
 apps/worker   异步任务 Worker，V1 保留禁用态骨架
-```
-
-## 共享包
-
-```text
-packages/domain      领域类型和值对象
-packages/api-client  API 契约、响应类型和错误类型
-packages/platform    平台能力接口
 ```
 
 ## 常用命令
@@ -35,7 +27,7 @@ pnpm build:worker
 pnpm type-check
 ```
 
-三端不能互相 import 对方源码。需要共享的类型、错误码、接口契约先进入 `packages/domain` 或 `packages/api-client`。
+三端不能互相 import 对方源码。接口字段和错误码以 `docs/api-contract.md` 与 OpenAPI 为准，各端在自己的应用内维护类型和请求实现。
 
 ## 当前文档入口
 

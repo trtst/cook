@@ -12,12 +12,12 @@ project-scoped agents.
 - Client: `apps/client`, uni-app + Vue 3 + TypeScript + Pinia, WeChat mini program.
 - API: `apps/api`, NestJS + TypeScript.
 - Admin: `apps/admin`, Vue 3 + Element Plus.
-- Shared contracts and reusable types belong in `packages/`.
+- API contracts are described centrally, while each app owns its request code and types.
 - Product, schema, and SQL source material lives under `docs/cook/`.
 
-Do not let one app import source code from another app. Shared domain types,
-API response types, errors, and platform interfaces must go through
-`packages/domain`, `packages/api-client`, or `packages/platform`.
+Do not let one app import source code from another app. Client, admin, and API
+must keep their API types and implementation inside their own app. Mini-program
+platform calls go through `apps/client/src/platform/uni.ts`.
 
 ## Main Agent Workflow
 

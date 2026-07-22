@@ -2,7 +2,7 @@
 
 ## 简介
 
-本文面向小程序和后台调用方，只记录当前真实接口与已经冻结的待实现接口。DTO 权威见 `docs/api-contract.md` 和 `packages/api-client`。
+本文面向小程序和后台调用方，只记录当前真实接口与已经冻结的待实现接口。DTO 权威见 `docs/api-contract.md` 和后端 OpenAPI。
 
 默认本地地址：
 
@@ -382,7 +382,7 @@ interface AdminUserEntitlementResponse {
 
 ## 5. 客户端规则
 
-1. 所有请求通过 `packages/api-client`。
+1. 小程序和后台分别通过本端 `apis/` 请求层调用接口。
 2. 任何 `401` 清理用户 session、用户资料和饭搭子上下文。
 3. 写操作生成并复用 `operationId`，成功后再清除。
 4. 客户端不计算会员、成员上限、快照期限、空间状态或图片参数。

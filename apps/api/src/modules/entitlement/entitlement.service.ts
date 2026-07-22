@@ -1,8 +1,8 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
-import type { EffectiveEntitlementSnapshot, EntitlementTier, UUID } from "@next-meal/api-client";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
+import type { EffectiveEntitlementSnapshot, EntitlementTier, UUID } from "../../contracts/types";
 
 type EntitlementDb = Pick<Prisma.TransactionClient, "entitlementGrant">;
 

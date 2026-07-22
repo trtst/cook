@@ -7,18 +7,14 @@
 契约变更顺序：
 
 1. 更新本文。
-2. 同步 `packages/domain`。
-3. 同步 `packages/api-client`。
-4. 更新后端、客户端和后台。
+2. 更新后端 DTO、响应类型与 OpenAPI。
+3. 同步小程序本地 API 类型与请求。
+4. 同步后台本地 API 类型与请求。
 5. 运行最小真实验证。
 
-## 包边界
+## 应用边界
 
-`packages/domain` 只保存稳定领域类型，例如角色、生命周期状态、权益作用域和 UUID。
-
-`packages/api-client` 保存请求响应 DTO、错误类型和调用入口，不持有 token，不读取客户端 storage。
-
-应用之间不得直接导入对方源码。
+`apps/api` 维护服务端 DTO、响应类型、校验和 OpenAPI；`apps/client` 与 `apps/admin` 分别在本端 `apis/` 内维护所需类型和请求入口。应用之间不得直接导入对方源码，接口字段以本文和 OpenAPI 为准。
 
 ## 统一格式
 
@@ -272,7 +268,6 @@ interface RefreshSessionResult {
 interface UpdateCurrentUserRequest {
   nickname?: string;
   avatarUrl?: string;
-  phone?: string;
 }
 ```
 

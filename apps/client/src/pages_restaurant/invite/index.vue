@@ -23,7 +23,7 @@
 <script setup lang="ts">
 import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import type { UUID } from "@next-meal/api-client";
+import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";

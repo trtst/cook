@@ -1,4 +1,16 @@
-import type { PlatformAdapter } from "@next-meal/platform";
+interface ClientPlatform {
+  storage: {
+    get<T>(key: string): Promise<T | null>;
+    set<T>(key: string, value: T): Promise<void>;
+    remove(key: string): Promise<void>;
+  };
+  navigation: {
+    navigateTo(path: string): Promise<void>;
+    redirectTo(path: string): Promise<void>;
+    switchTab(path: string): Promise<void>;
+    reLaunch(path: string): Promise<void>;
+  };
+}
 
 function callUni<T>(runner: (resolve: (value: T) => void, reject: (reason: unknown) => void) => void): Promise<T> {
   return new Promise<T>((resolve, reject) => runner(resolve, reject));
@@ -31,18 +43,7 @@ function navigate(path: string, method: "navigateTo" | "redirectTo" | "switchTab
   });
 }
 
-export const uniPlatform: PlatformAdapter = {
-  auth: {
-    login() {
-      return callUni((resolve, reject) => {
-        uni.login({
-          provider: "weixin",
-          success: (result) => resolve({ code: result.code }),
-          fail: reject
-        });
-      });
-    }
-  },
+export const uniPlatform: ClientPlatform = {
   storage: {
     async get<T>(key: string) {
       const value = uni.getStorageSync(key);
@@ -60,10 +61,5 @@ export const uniPlatform: PlatformAdapter = {
     redirectTo: (path) => navigate(path, "redirectTo"),
     switchTab: (path) => navigate(path, "switchTab"),
     reLaunch: (path) => navigate(path, "reLaunch")
-  },
-  share: {
-    buildShareMessage(options) {
-      return options;
-    }
   }
 };

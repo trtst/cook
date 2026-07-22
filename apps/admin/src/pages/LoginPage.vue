@@ -3,7 +3,7 @@ import { reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Lock, User } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
-import { adminApi } from "@/apis/http";
+import { authApi } from "@/apis/auth";
 import { useSessionStore } from "@/stores/session";
 
 const route = useRoute();
@@ -16,12 +16,19 @@ const form = reactive({
   password: ""
 });
 
+function getRedirect() {
+  const redirect = route.query.redirect;
+  return typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")
+    ? redirect
+    : "/dashboard";
+}
+
 async function submit() {
   loading.value = true;
   try {
-    const result = await adminApi.admin.login(form);
+    const result = await authApi.login(form);
     session.setSession(result);
-    await router.replace(typeof route.query.redirect === "string" ? route.query.redirect : "/dashboard");
+    await router.replace(getRedirect());
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "登录失败");
   } finally {

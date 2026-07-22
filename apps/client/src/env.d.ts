@@ -14,6 +14,8 @@ declare module "*.svg" {
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
+  readonly VITE_API_DOMAIN?: string;
+  readonly VITE_AUTH_DOMAIN?: string;
   readonly VITE_COOK_FROM?: "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
   readonly VITE_COOK_VERSION?: string;
 }

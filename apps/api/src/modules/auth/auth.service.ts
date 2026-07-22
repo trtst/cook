@@ -1,6 +1,6 @@
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
-import type { PasswordLoginRequest, UserBasic } from "@next-meal/api-client";
 import { PrismaService } from "../../common/prisma.service";
+import type { PasswordLoginRequest, UpdateCurrentUserRequest, UserBasic } from "../../contracts/types";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { verifyPassword } from "../../common/security/password";
 
@@ -77,13 +77,20 @@ export class AuthService {
     };
   }
 
-  async updateCurrentUser(userId: string, body: Partial<UserBasic>) {
+  async updateCurrentUser(userId: string, body: UpdateCurrentUserRequest) {
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!currentUser || currentUser.status !== "ACTIVE") {
+      throw new UnauthorizedException("未登录或 token 失效");
+    }
+
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         nickname: body.nickname,
-        avatarUrl: body.avatarUrl,
-        phone: body.phone
+        avatarUrl: body.avatarUrl
       }
     });
 

@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: next_meal
       POSTGRES_DB: next_meal
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - next_meal_postgres_data:/var/lib/postgresql/data
     healthcheck:

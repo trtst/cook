@@ -40,12 +40,6 @@ apps/
   api/
   worker/
 
-packages/
-  api-client/
-  domain/
-  platform/
-  shared/
-
 infra/
   docker-compose/
   scripts/
@@ -53,13 +47,13 @@ infra/
 
 Rules:
 
-1. Business code must not call `wx.*` directly. Use `packages/platform`.
-2. Shared domain types belong in `packages/domain`.
+1. Business code must not call `wx.*` directly. Use `apps/client/src/platform/uni.ts`.
+2. Client, admin, and API each own their API types and request implementation.
 3. The admin app is independent from the mini program client.
 4. Keep product source material in `docs/cook/*`; keep current project rules in top-level `docs/*.md`.
 5. For uni-app mini program engineering rules, read `docs/uniapp.md` instead of duplicating those rules here.
 6. For the `apps/client` scaffold, main package, subpackages, login component, request layer, platform adapter, and Pinia boundaries, read `docs/uniapp-architecture.md`.
-7. For shared API response, error codes, auth schemes, DTO boundaries, and the first Auth/User/DiningGroup vertical slice, read `docs/api-contract.md`.
+7. For API response, error codes, auth schemes, DTO boundaries, and the first Auth/User/DiningGroup vertical slice, read `docs/api-contract.md`.
 
 ## Flat Shape Rules
 

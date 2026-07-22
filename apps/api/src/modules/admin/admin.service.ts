@@ -14,7 +14,7 @@ import type {
   PageResult,
   UserProfile,
   UUID
-} from "@next-meal/api-client";
+} from "../../contracts/types";
 import { PrismaService } from "../../common/prisma.service";
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { verifyPassword } from "../../common/security/password";

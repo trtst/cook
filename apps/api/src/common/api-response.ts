@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@next-meal/api-client";
+import type { ApiResponse } from "../contracts/types";
 
 export function ok<T>(data: T): ApiResponse<T> {
   return {

@@ -7,7 +7,7 @@
 - 后台使用管理员登录态，不复用小程序用户 token。
 - 后台只通过 API 契约访问后端，不 import `apps/api` 源码。
 - 后台不 import `apps/client` 源码或小程序组件。
-- 共享类型和接口契约进入 `packages/domain` 或 `packages/api-client`。
+- 后台请求和类型在 `src/apis/` 内维护，以 `docs/api-contract.md` 和 OpenAPI 为准。
 
 ## 当前状态
 
@@ -16,16 +16,9 @@
 ## 命令
 
 ```bash
-pnpm --filter @next-meal/admin dev
-pnpm --filter @next-meal/admin type-check
-pnpm --filter @next-meal/admin build
-```
-
-根目录等价命令：
-
-```bash
-pnpm dev:admin
-pnpm build:admin
+pnpm dev
+pnpm type-check
+pnpm build
 ```
 
 ## 环境变量

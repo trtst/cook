@@ -170,10 +170,9 @@ components/
 登录组件只做：
 
 1. 展示登录入口。
-2. 调用 `platform.auth.login()`。
-3. 调用登录 API。
-4. 写入 `sessionStore`。
-5. 通过 `success` 或 `error` 事件通知调用方。
+2. 调用已冻结的登录 API。
+3. 写入 `sessionStore`。
+4. 通过 `success` 或 `error` 事件通知调用方。
 
 登录组件不做：
 
@@ -488,7 +487,7 @@ tabbar 固定为：
 
 ## 平台适配层边界
 
-平台能力通过 `packages/platform` 定义接口，通过 `apps/client/src/platform/uni.ts` 注册 uni-app 实现。
+平台能力及其最小接口统一放在 `apps/client/src/platform/uni.ts`，业务代码不得直接调用 `wx.*`。
 
 业务页面不直接调用 `wx.*`。
 

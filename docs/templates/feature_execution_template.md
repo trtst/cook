@@ -79,11 +79,11 @@ CTO 负责把功能拆成最小纵切链路，并确认接口契约、数据边�
 | --- | --- | --- | --- | --- | --- | --- |
 |  |  |  |  |  |  | 待确认 |
 
-## 共享类型
+## 各端类型
 
-- `packages/domain`：
-- `packages/api-client`：
-- DTO / 枚举 / 错误码：
+- `apps/api` DTO / 响应：
+- `apps/client` API 类型：
+- `apps/admin` API 类型：
 
 ## 联调清单
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onLaunch, onShow } from "@dcloudio/uni-app";
-import { refreshSessionIfNeeded } from "@/apis/http";
+import { refreshSessionIfNeeded } from "@/apis/auth";
+import { userApi } from "@/apis/user";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
@@ -30,7 +31,11 @@ async function restoreCurrentUser() {
   if (!sessionStore.isLoggedIn) return;
 
   try {
-    await userStore.restoreProfile(sessionStore.userId, USER_PROFILE_CACHE_MS);
+    const restored = await userStore.restoreProfile(sessionStore.userId, USER_PROFILE_CACHE_MS);
+    if (!restored) {
+      const profile = await userApi.getCurrent();
+      userStore.setProfile(profile);
+    }
     await refreshSessionIfNeeded();
   } catch {
     userStore.clearProfile();

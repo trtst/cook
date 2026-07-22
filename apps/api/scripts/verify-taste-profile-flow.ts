@@ -1,5 +1,5 @@
 import { PrismaClient, type UserTasteProfile } from "@prisma/client";
-import type { TasteProfileResponse, UpdateTasteProfileRequest } from "@next-meal/api-client";
+import type { TasteProfileResponse, UpdateTasteProfileRequest } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 
 loadLocalEnv();

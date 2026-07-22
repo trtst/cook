@@ -6,8 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-      "@next-meal/api-client": fileURLToPath(new URL("../../packages/api-client/src/index.ts", import.meta.url))
+      "@": fileURLToPath(new URL("./src", import.meta.url))
     }
   },
   server: {

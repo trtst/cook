@@ -2,10 +2,10 @@ import { defineStore } from "pinia";
 import type {
   CreateInviteResult,
   DiningGroupMemberSummary,
-  GetCurrentDiningGroupContextResponse,
-  UUID
-} from "@next-meal/api-client";
+  GetCurrentDiningGroupContextResponse
+} from "@/apis/dining-group";
 import { diningGroupApi } from "@/apis/dining-group";
+import type { UUID } from "@/apis/http";
 import { createOperationId } from "@/utils/operation-id";
 import { onSessionCleared } from "@/utils/session-events";
 

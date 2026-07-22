@@ -65,7 +65,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import type { DiningGroupRole, UUID } from "@next-meal/api-client";
+import type { DiningGroupRole } from "@/apis/dining-group";
+import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
