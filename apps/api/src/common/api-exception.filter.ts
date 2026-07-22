@@ -65,8 +65,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       code: payload.code,
       message: payload.message,
       data: payload.data,
-      serverTime: new Date().toISOString(),
-      requestId: request.context?.requestId
+      serverTime: new Date().toISOString()
     });
   }
 }

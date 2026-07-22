@@ -187,6 +187,15 @@ export class DiningGroupService {
 
     try {
       await this.prisma.$transaction(async tx => {
+        await this.startIdempotentOperation(
+          tx,
+          operationId,
+          createInviteOperation,
+          userId,
+          diningGroupId,
+          requestHash
+        );
+
         await tx.diningGroupInvite.create({
           data: {
             diningGroupId,
@@ -198,7 +207,7 @@ export class DiningGroupService {
           }
         });
 
-        await this.saveIdempotentResult(
+        await this.completeIdempotentOperation(
           tx,
           operationId,
           createInviteOperation,
@@ -244,6 +253,15 @@ export class DiningGroupService {
 
     try {
       return await this.prisma.$transaction(async tx => {
+        await this.startIdempotentOperation(
+          tx,
+          operationId,
+          acceptInviteOperation,
+          userId,
+          invite.diningGroupId,
+          tokenHash
+        );
+
         await tx.$queryRaw`SELECT "id" FROM "dining_group_invites" WHERE "token_hash" = ${tokenHash} FOR UPDATE`;
 
         const currentInvite = await tx.diningGroupInvite.findUnique({ where: { tokenHash } });
@@ -305,6 +323,15 @@ export class DiningGroupService {
           where: { id: userSpace.originalDiningGroupId },
           data: { status: "FROZEN", frozenAt: new Date(), version: { increment: 1 } }
         });
+        const updatedTargetGroup = {
+          ...targetGroup,
+          version: targetGroup.version + 1,
+          updatedAt: new Date()
+        };
+        await tx.diningGroup.update({
+          where: { id: targetGroup.id },
+          data: { version: { increment: 1 } }
+        });
 
         if (existingMember) {
           await tx.diningGroupMember.update({
@@ -336,7 +363,7 @@ export class DiningGroupService {
         await this.writeLifecycleEvent(tx, userId, targetGroup.id, "DINING_GROUP_INVITE_ACCEPTED", userSpace.originalDiningGroupId);
 
         const currentSpace = this.toCurrentSpace(
-          targetGroup,
+          updatedTargetGroup,
           {
             id: existingMember?.id ?? "",
             diningGroupId: targetGroup.id,
@@ -366,7 +393,7 @@ export class DiningGroupService {
           pendingImportCounts: emptyPendingImportCounts()
         };
 
-        await this.saveIdempotentResult(
+        await this.completeIdempotentOperation(
           tx,
           operationId,
           acceptInviteOperation,
@@ -405,6 +432,15 @@ export class DiningGroupService {
 
     try {
       return await this.prisma.$transaction(async tx => {
+        await this.startIdempotentOperation(
+          tx,
+          operationId,
+          leaveDiningGroupOperation,
+          userId,
+          diningGroupId,
+          requestHash
+        );
+
         await tx.$queryRaw`SELECT "user_id" FROM "user_spaces" WHERE "user_id" = ${userId}::uuid FOR UPDATE`;
         await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
 
@@ -446,6 +482,10 @@ export class DiningGroupService {
           }
         });
         await tx.diningGroup.update({
+          where: { id: diningGroupId },
+          data: { version: { increment: 1 } }
+        });
+        await tx.diningGroup.update({
           where: { id: userSpace.originalDiningGroupId },
           data: { status: "ACTIVE", frozenAt: null, archivedAt: null, version: { increment: 1 } }
         });
@@ -483,7 +523,7 @@ export class DiningGroupService {
           futureParticipationCount: 0
         };
 
-        await this.saveIdempotentResult(
+        await this.completeIdempotentOperation(
           tx,
           operationId,
           leaveDiningGroupOperation,
@@ -734,14 +774,13 @@ export class DiningGroupService {
     return record.status === "SUCCEEDED" && record.resultJson ? fromJson<T>(record.resultJson) : null;
   }
 
-  private saveIdempotentResult<T>(
+  private startIdempotentOperation(
     tx: Prisma.TransactionClient,
     operationId: UUID,
     operationType: string,
     userId: UUID,
     diningGroupId: UUID | null,
-    requestHash: string,
-    result: T
+    requestHash: string
   ) {
     return tx.idempotencyRecord.create({
       data: {
@@ -750,6 +789,30 @@ export class DiningGroupService {
         userId,
         diningGroupId,
         requestHash,
+        status: "PROCESSING"
+      }
+    });
+  }
+
+  private completeIdempotentOperation<T>(
+    tx: Prisma.TransactionClient,
+    operationId: UUID,
+    operationType: string,
+    userId: UUID,
+    diningGroupId: UUID | null,
+    requestHash: string,
+    result: T
+  ) {
+    return tx.idempotencyRecord.updateMany({
+      where: {
+        operationId,
+        operationType,
+        userId,
+        diningGroupId,
+        requestHash,
+        status: "PROCESSING"
+      },
+      data: {
         status: "SUCCEEDED",
         resultJson: toJson(result)
       }

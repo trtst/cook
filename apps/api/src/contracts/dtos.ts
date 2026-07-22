@@ -50,11 +50,13 @@ export class UpdateCurrentUserDto {
   @ApiPropertyOptional({ example: "小明" })
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   nickname?: string;
 
   @ApiPropertyOptional({ example: "https://example.com/avatar.png" })
   @IsOptional()
   @IsString()
+  @MaxLength(512)
   avatarUrl?: string;
 }
 

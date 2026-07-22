@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 
 interface UserTokenPayload {
+  kind: "user";
   sub: string;
   exp: number;
 }
@@ -18,11 +19,18 @@ function readPayload(encodedPayload: string): UserTokenPayload {
   try {
     const payload = JSON.parse(base64UrlDecode(encodedPayload)) as Partial<UserTokenPayload>;
 
-    if (typeof payload.sub !== "string" || !payload.sub || typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) {
+    if (
+      payload.kind !== "user" ||
+      typeof payload.sub !== "string" ||
+      !payload.sub ||
+      typeof payload.exp !== "number" ||
+      !Number.isFinite(payload.exp)
+    ) {
       throw new UnauthorizedException("未登录或 token 失效");
     }
 
     return {
+      kind: payload.kind,
       sub: payload.sub,
       exp: payload.exp
     };
@@ -65,6 +73,7 @@ export class UserTokenService {
   createToken(userId: string) {
     const expiresInSeconds = getTokenSeconds();
     const payload: UserTokenPayload = {
+      kind: "user",
       sub: userId,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds
     };

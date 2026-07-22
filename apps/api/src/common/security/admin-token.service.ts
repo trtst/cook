@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 
 interface AdminTokenPayload {
+  kind: "admin";
   sub: string;
   roles: string[];
   exp: number;
@@ -33,11 +34,39 @@ function sign(data: string) {
   return createHmac("sha256", getSecret()).update(data).digest("base64url");
 }
 
+function readPayload(encodedPayload: string): AdminTokenPayload {
+  try {
+    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as Partial<AdminTokenPayload>;
+
+    if (
+      payload.kind !== "admin" ||
+      typeof payload.sub !== "string" ||
+      !payload.sub ||
+      !Array.isArray(payload.roles) ||
+      payload.roles.some(role => typeof role !== "string") ||
+      typeof payload.exp !== "number" ||
+      !Number.isFinite(payload.exp)
+    ) {
+      throw new UnauthorizedException("未登录或 token 失效");
+    }
+
+    return {
+      kind: payload.kind,
+      sub: payload.sub,
+      roles: payload.roles,
+      exp: payload.exp
+    };
+  } catch {
+    throw new UnauthorizedException("未登录或 token 失效");
+  }
+}
+
 @Injectable()
 export class AdminTokenService {
   createToken(adminId: string, roles: string[]) {
     const expiresInSeconds = Number(process.env.ADMIN_TOKEN_EXPIRES_SECONDS ?? 86_400);
     const payload: AdminTokenPayload = {
+      kind: "admin",
       sub: adminId,
       roles,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds
@@ -66,7 +95,7 @@ export class AdminTokenService {
       throw new UnauthorizedException("未登录或 token 失效");
     }
 
-    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as AdminTokenPayload;
+    const payload = readPayload(encodedPayload);
 
     if (payload.exp <= Math.floor(Date.now() / 1000)) {
       throw new UnauthorizedException("未登录或 token 失效");
