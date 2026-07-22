@@ -116,19 +116,21 @@
               </view>
             </view>
 
-            <view class="entitlement-card">
-              <view class="overview-heading">
-                <text class="overview-heading__title">权益状态</text>
-                <text class="entitlement-card__scope">{{ entitlementScopeText }}</text>
+            <view
+              class="medal-card"
+              hover-class="is-pressed"
+              hover-stay-time="100"
+              @click="handleMedalClick"
+            >
+              <view class="medal-card__icon">
+                <text class="medal-card__icon-text">勋</text>
               </view>
-              <text class="entitlement-card__title">{{ entitlementTitle }}</text>
-              <text class="entitlement-card__description">{{ entitlementDescription }}</text>
-              <view class="entitlement-card__limits">
-                <view v-for="item in entitlementLimits" :key="item.label" class="entitlement-limit">
-                  <text class="entitlement-limit__label">{{ item.label }}</text>
-                  <text class="entitlement-limit__value">{{ item.value }}</text>
-                </view>
+              <text class="medal-card__label">我的勋章</text>
+              <view class="medal-card__count-line">
+                <text class="medal-card__count">--</text>
+                <text class="medal-card__unit">枚</text>
               </view>
+              <text class="medal-card__action">勋章墙 ›</text>
             </view>
           </view>
 
@@ -492,11 +494,6 @@ const diningGroupRoleText = computed(() => {
   if (!role) return "角色待加载";
   return diningGroupRoleLabels[role];
 });
-const diningGroupStateText = computed(() => {
-  const state = currentDiningGroup.value?.state;
-  if (!state) return "状态待加载";
-  return diningGroupStateLabels[state];
-});
 const diningGroupStats = computed(() => [
   {
     value: currentDiningGroup.value?.memberCount ?? "--",
@@ -509,29 +506,6 @@ const diningGroupStats = computed(() => [
   {
     value: currentDiningGroup.value ? diningGroupRoleText.value : "--",
     label: "角色"
-  }
-]);
-const entitlementScopeText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "未登录";
-  const scope = currentEntitlements.value?.currentScope;
-  return scope ? entitlementScopeLabels[scope] : "待加载";
-});
-const entitlementTitle = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后查看权益";
-  return `个人 ${getTierText(currentEntitlements.value?.personalTier)} · 饭搭子 ${getTierText(currentEntitlements.value?.diningGroupTier)}`;
-});
-const entitlementDescription = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后同步饭搭子、计划、购物清单和食材。";
-  return `当前饭搭子${diningGroupStateText.value}`;
-});
-const entitlementLimits = computed(() => [
-  {
-    label: "菜谱",
-    value: currentEntitlements.value ? `${currentEntitlements.value.recipeLimit}` : "--"
-  },
-  {
-    label: "存储",
-    value: currentEntitlements.value ? formatBytes(currentEntitlements.value.storageLimitBytes) : "--"
   }
 ]);
 const currentThemeText = computed(() => {
@@ -561,15 +535,6 @@ const diningGroupRoleLabels = {
   OWNER: "主理人",
   ADMIN: "管理员",
   MEMBER: "成员"
-} as const;
-const diningGroupStateLabels = {
-  NORMAL: "正常",
-  OVER_RECIPE_LIMIT: "菜谱超额",
-  OVER_STORAGE_READONLY: "存储只读"
-} as const;
-const entitlementScopeLabels = {
-  USER: "个人",
-  DINING_GROUP: "饭搭子"
 } as const;
 
 const coreEntries: PageEntry[] = [
@@ -607,12 +572,6 @@ const personalEntries: PageEntry[] = [
     icon: "味",
     description: "口味偏好、忌口和过敏信息",
     url: "/pages_me/taste/index"
-  },
-  {
-    title: "我的勋章",
-    icon: "勋",
-    description: "成长记录暂未开放",
-    disabledText: "勋章墙"
   },
   {
     title: "分类与单位",
@@ -707,18 +666,6 @@ const visibleSettingEntries = computed(() => {
 
 function getTierText(tier?: "FREE" | "PLUS") {
   return tier === "PLUS" ? "Plus" : "Free";
-}
-
-function formatBytes(bytes: number) {
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${Math.round(bytes / 1024 / 1024 / 1024)}GB`;
-  }
-
-  if (bytes >= 1024 * 1024) {
-    return `${Math.round(bytes / 1024 / 1024)}MB`;
-  }
-
-  return `${Math.round(bytes / 1024)}KB`;
 }
 
 function isDisabledEntry(entry: PageEntry) {
@@ -826,6 +773,10 @@ function handleProfileAction() {
   }
 
   openLogin();
+}
+
+function handleMedalClick() {
+  requireLogin(() => showComingSoon("勋章墙"));
 }
 
 function requireLogin(action: () => void) {
@@ -1302,7 +1253,7 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .dining-card,
-.entitlement-card,
+.medal-card,
 .service-list,
 .knowledge-grid {
   border-radius: var(--radius-xs);
@@ -1377,78 +1328,66 @@ function getPasswordErrorText(error: unknown) {
   font-size: var(--font-size-xs);
 }
 
-.entitlement-card {
+.medal-card {
+  position: relative;
   min-width: 0;
   min-height: 246rpx;
   overflow: hidden;
-  padding: 26rpx 22rpx 20rpx;
+  padding: 22rpx 20rpx;
   background: linear-gradient(160deg, var(--color-primary-soft), var(--color-surface));
 }
 
-.entitlement-card__scope {
-  flex: 0 0 auto;
-  padding: 4rpx 12rpx;
+.medal-card__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54rpx;
+  height: 54rpx;
+  border: 4rpx solid rgba(255, 255, 255, 0.66);
   border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: var(--color-warning);
+  box-shadow: 0 8rpx 16rpx rgba(217, 144, 47, 0.22);
+}
+
+.medal-card__icon-text {
+  color: #ffffff;
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-heavy);
 }
 
-.entitlement-card__title,
-.entitlement-card__description {
+.medal-card__label {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entitlement-card__title {
-  margin-top: 18rpx;
-  color: var(--color-text);
+  margin-top: 14rpx;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
 
-.entitlement-card__description {
-  margin-top: 10rpx;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
+.medal-card__count-line {
+  display: flex;
+  align-items: baseline;
+  margin-top: 4rpx;
 }
 
-.entitlement-card__limits {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-sm);
-  margin-top: 22rpx;
-}
-
-.entitlement-limit {
-  min-width: 0;
-  padding: 12rpx 10rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-mask-weak);
-}
-
-.entitlement-limit__label,
-.entitlement-limit__value {
-  display: block;
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.entitlement-limit__label {
-  color: var(--color-text-tertiary);
-  font-size: 20rpx;
-}
-
-.entitlement-limit__value {
-  margin-top: 6rpx;
-  color: var(--color-text);
-  font-size: var(--font-size-xs);
+.medal-card__count {
+  color: var(--color-primary);
+  font-size: 42rpx;
   font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+}
+
+.medal-card__unit {
+  margin-left: 4rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.medal-card__action {
+  display: block;
+  margin-top: 14rpx;
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
 }
 
 .service-section {
