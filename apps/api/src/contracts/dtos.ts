@@ -58,6 +58,20 @@ export class UpdateCurrentUserDto {
   avatarUrl?: string;
 }
 
+export class ChangeCurrentPasswordDto {
+  @ApiProperty({ example: "change-me" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  currentPassword!: string;
+
+  @ApiProperty({ example: "change-me-2" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  newPassword!: string;
+}
+
 export class UpdateTasteProfileDto {
   @ApiProperty({ type: [String], maxItems: 50 })
   @Transform(({ value }) => trimItems(value))

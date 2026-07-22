@@ -17,7 +17,6 @@ export interface PageResult<T> {
 }
 
 export interface UserBasic {
-  id: UUID;
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
@@ -25,13 +24,13 @@ export interface UserBasic {
 }
 
 export interface UserSummary {
-  id: UUID;
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
 }
 
 export interface UserProfile extends UserBasic {
+  id: UUID;
   status: string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -45,7 +44,6 @@ export interface PasswordLoginRequest {
 export interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
-  userId: UUID;
   user: UserBasic;
 }
 
@@ -57,6 +55,15 @@ export interface RefreshSessionResult {
 export interface UpdateCurrentUserRequest {
   nickname?: string;
   avatarUrl?: string;
+}
+
+export interface ChangeCurrentPasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangeCurrentPasswordResult {
+  changedAt: IsoDateTime;
 }
 
 export interface TasteProfileResponse {
@@ -94,7 +101,7 @@ export interface PendingImportCounts {
 export interface CurrentSpaceSummary {
   id: UUID;
   name: string;
-  ownerId: UUID;
+  ownerUid: number;
   myRole: DiningGroupRole;
   myStatus: LongTermMemberStatus;
   myStatusReason: LongTermMemberStatusReason | null;
@@ -113,6 +120,11 @@ export interface OriginalSpaceSummary {
   frozenAt: IsoDateTime | null;
   canImport: boolean;
   pendingImportCounts: PendingImportCounts;
+}
+
+export interface CurrentOriginalSpaceSummary {
+  status: OriginalSpaceStatus;
+  canImport: boolean;
 }
 
 export interface CarryBackSnapshotSummary {
@@ -187,10 +199,8 @@ export interface StorageUsageSummary {
 
 export interface GetCurrentDiningGroupContextResponse {
   currentSpace: CurrentSpaceSummary;
-  originalSpace: OriginalSpaceSummary | null;
-  carryBackSnapshots: CarryBackSnapshotSummary[];
+  originalSpace: CurrentOriginalSpaceSummary | null;
   entitlements: EffectiveEntitlementSnapshot;
-  storage: StorageUsageSummary;
 }
 
 export interface DiningGroupMembersResult {
@@ -206,7 +216,7 @@ export interface CreateInviteResult {
 
 export interface AcceptInviteResponse {
   currentSpace: CurrentSpaceSummary;
-  originalSpace: OriginalSpaceSummary;
+  originalSpace: CurrentOriginalSpaceSummary;
   pendingImportCounts: PendingImportCounts;
 }
 

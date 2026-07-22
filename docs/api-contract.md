@@ -95,7 +95,6 @@ interface PageResult<T> {
 
 ```ts
 interface UserBasic {
-  id: UUID;
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
@@ -103,13 +102,13 @@ interface UserBasic {
 }
 
 interface UserSummary {
-  id: UUID;
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
 }
 
 interface UserProfile extends UserBasic {
+  id: UUID;
   status: "ACTIVE" | string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -117,6 +116,7 @@ interface UserProfile extends UserBasic {
 ```
 
 `uid` 是非连续公开用户号，不是主键，不能用来推算注册量。
+用户侧接口默认不返回 `User.id` 这类数据库内部主键；空间等业务对象如果前端需要定位，保留业务对象自身 id。
 
 ## 饭搭子领域类型
 
@@ -142,7 +142,7 @@ interface PendingImportCounts {
 interface CurrentSpaceSummary {
   id: UUID;
   name: string;
-  ownerId: UUID;
+  ownerUid: number;
   myRole: DiningGroupRole;
   myStatus: LongTermMemberStatus;
   myStatusReason: LongTermMemberStatusReason | null;
@@ -267,6 +267,7 @@ POST /auth/login
 POST /auth/refresh
 GET  /users/me
 PUT  /users/me
+PUT  /users/me/password
 ```
 
 ```ts
@@ -278,7 +279,6 @@ interface PasswordLoginRequest {
 interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
-  userId: UUID;
   user: UserBasic;
 }
 
@@ -290,6 +290,15 @@ interface RefreshSessionResult {
 interface UpdateCurrentUserRequest {
   nickname?: string;
   avatarUrl?: string;
+}
+
+interface ChangeCurrentPasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+interface ChangeCurrentPasswordResult {
+  changedAt: IsoDateTime;
 }
 ```
 
@@ -305,10 +314,13 @@ Auth: UserBearerAuth
 ```ts
 interface GetCurrentDiningGroupContextResponse {
   currentSpace: CurrentSpaceSummary;
-  originalSpace: OriginalSpaceSummary | null;
-  carryBackSnapshots: CarryBackSnapshotSummary[];
+  originalSpace:
+    | {
+        status: OriginalSpaceStatus;
+        canImport: boolean;
+      }
+    | null;
   entitlements: EffectiveEntitlementSnapshot;
-  storage: StorageUsageSummary;
 }
 ```
 
@@ -317,7 +329,8 @@ interface GetCurrentDiningGroupContextResponse {
 1. 每个用户只有一个服务端当前空间。
 2. 单人状态 `originalSpace = null`。
 3. 加入别人后返回被冻结的本人原空间。
-4. 服务端根据当前用户、当前饭搭子和有效 Plus 授权解析权益；空间账本尚未接入时返回真实 `0` 使用量。
+4. 服务端根据当前用户、当前饭搭子和有效 Plus 授权解析权益。
+5. `currentSpace.memberCount` 按当前有效长期成员口径返回，即统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入。
 
 打磨方向：
 
@@ -388,7 +401,10 @@ interface AcceptInviteRequest {
 
 interface AcceptInviteResponse {
   currentSpace: CurrentSpaceSummary;
-  originalSpace: OriginalSpaceSummary;
+  originalSpace: {
+    status: OriginalSpaceStatus;
+    canImport: boolean;
+  };
   pendingImportCounts: PendingImportCounts;
 }
 ```
@@ -426,6 +442,8 @@ GET  /admin/user-entitlements?userId={userId}
 ```
 
 后台饭搭子状态筛选支持 `ACTIVE / FROZEN / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
+
+`memberCount` 按当前有效长期成员口径返回，即只统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入后台列表摘要。
 
 ```ts
 interface AdminUserEntitlementResponse {
@@ -520,9 +538,12 @@ interface ImportCarryBackSnapshotRequest {
 
 ```text
 GET /storage-usage
+Auth: UserBearerAuth
 ```
 
 返回 `StorageUsageSummary`。
+
+当前账本尚未接入时，服务端返回真实 `0` 使用量，以及按当前有效权益解析出的 `limitBytes / remainingBytes`。
 
 ### 我的口味
 

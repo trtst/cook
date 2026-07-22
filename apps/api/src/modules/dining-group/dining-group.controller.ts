@@ -14,7 +14,7 @@ export class DiningGroupController {
   constructor(@Inject(DiningGroupService) private readonly diningGroupService: DiningGroupService) {}
 
   @Get("dining-groups/current")
-  @ApiOkResponse({ description: "当前唯一饭搭子、原空间、权益和空间状态" })
+  @ApiOkResponse({ description: "当前登录用户进入饭搭子域所需的入口态" })
   getCurrent(@Req() request: RequestWithUser) {
     return this.diningGroupService.getCurrent(request.user.userId).then(result => ok(result));
   }
@@ -23,6 +23,12 @@ export class DiningGroupController {
   @ApiOkResponse({ description: "本人当前可用迁出快照列表" })
   listSnapshots(@Req() request: RequestWithUser) {
     return this.diningGroupService.listSnapshots(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("storage-usage")
+  @ApiOkResponse({ description: "当前空间的存储使用量摘要" })
+  getStorageUsage(@Req() request: RequestWithUser) {
+    return this.diningGroupService.getStorageUsage(request.user.userId).then(result => ok(result));
   }
 
   @Get("dining-group-members")

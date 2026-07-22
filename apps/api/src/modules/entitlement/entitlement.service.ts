@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { Prisma, type LongTermMemberStatus } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
 import type { EffectiveEntitlementSnapshot, EntitlementTier, UUID } from "../../contracts/types";
@@ -12,6 +12,8 @@ interface EntitlementContext {
   ownerId: UUID;
   memberCount: number;
 }
+
+const effectiveMemberStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
 
 @Injectable()
 export class EntitlementService {
@@ -30,7 +32,7 @@ export class EntitlementService {
           where: { diningGroupId_userId: { diningGroupId: userSpace.currentDiningGroupId, userId } }
         }),
         tx.diningGroupMember.count({
-          where: { diningGroupId: userSpace.currentDiningGroupId, status: "ACTIVE" }
+          where: { diningGroupId: userSpace.currentDiningGroupId, status: { in: effectiveMemberStatuses } }
         })
       ]);
       if (!member || member.status === "ENDED") throw new BadRequestException("当前空间成员关系无效");

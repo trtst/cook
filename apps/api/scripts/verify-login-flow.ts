@@ -65,14 +65,14 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ phone: ownerPhone, password })
     });
-    assert(login.userId === seededUser.id, "login userId mismatch");
+    assert(login.user.uid === seededUser.uid, "login user uid mismatch");
     assert(login.user.phone === ownerPhone, "login phone mismatch");
 
     const authorization = `Bearer ${login.token}`;
     const meAfterLogin = await requestData<UserBasic>("/users/me", {
       headers: { authorization }
     });
-    assert(meAfterLogin.id === seededUser.id, "GET /users/me after login mismatch");
+    assert(meAfterLogin.uid === seededUser.uid, "GET /users/me after login mismatch");
 
     const nickname = `下一餐用户-${Date.now()}`;
     const updatedUser = await requestData<UserBasic>("/users/me", {
@@ -121,7 +121,7 @@ async function main() {
       JSON.stringify(
         {
           apiBaseUrl,
-          loginUserId: login.userId,
+          loginUid: login.user.uid,
           unauthenticatedMeStatus: unauthenticatedMe.status,
           disabledRefreshStatus: disabledRefresh.status,
           disabledMeStatus: disabledMe.status,

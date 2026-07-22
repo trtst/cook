@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { UpdateCurrentUserDto, UpdateTasteProfileDto } from "../../contracts/dtos";
+import { ChangeCurrentPasswordDto, UpdateCurrentUserDto, UpdateTasteProfileDto } from "../../contracts/dtos";
 import { AuthService } from "../auth/auth.service";
 import { TasteProfileService } from "./taste-profile.service";
 
@@ -27,6 +27,12 @@ export class UserController {
   @ApiOkResponse({ description: "更新当前用户" })
   updateCurrent(@Req() request: RequestWithUser, @Body() body: UpdateCurrentUserDto) {
     return this.authService.updateCurrentUser(request.user.userId, body).then(result => ok(result));
+  }
+
+  @Put("me/password")
+  @ApiOkResponse({ description: "修改当前用户登录密码" })
+  updateCurrentPassword(@Req() request: RequestWithUser, @Body() body: ChangeCurrentPasswordDto) {
+    return this.authService.updateCurrentPassword(request.user.userId, body).then(result => ok(result));
   }
 
   @Get("me/taste-profile")

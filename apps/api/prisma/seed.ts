@@ -60,6 +60,59 @@ async function seedUserSpace(userId: string, name = "我的饭搭子") {
   return diningGroup;
 }
 
+async function resetUserLifecycle(userId: string, originalDiningGroupId: string) {
+  const now = new Date();
+
+  await prisma.diningGroupMember.updateMany({
+    where: {
+      userId,
+      diningGroupId: { not: originalDiningGroupId },
+      status: { in: ["ACTIVE", "RESTRICTED"] }
+    },
+    data: {
+      status: "ENDED",
+      statusReason: "LEFT",
+      restrictedAt: null,
+      endedAt: now
+    }
+  });
+
+  await prisma.userSpace.update({
+    where: { userId },
+    data: {
+      currentDiningGroupId: originalDiningGroupId,
+      originalDiningGroupId,
+      version: { increment: 1 }
+    }
+  });
+
+  await prisma.carryBackSnapshot.deleteMany({
+    where: {
+      OR: [
+        { userId },
+        { sourceDiningGroupId: originalDiningGroupId },
+        { targetDiningGroupId: originalDiningGroupId }
+      ]
+    }
+  });
+
+  await prisma.diningGroupInvite.deleteMany({
+    where: {
+      OR: [
+        { diningGroupId: originalDiningGroupId },
+        { createdByUserId: userId },
+        { acceptedByUserId: userId }
+      ]
+    }
+  });
+
+  await prisma.idempotencyRecord.deleteMany({
+    where: {
+      OR: [{ userId }, { diningGroupId: originalDiningGroupId }]
+    }
+  });
+}
+
 async function main() {
   const username = process.env.ADMIN_SEED_USERNAME ?? "admin";
   const password = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
@@ -120,8 +173,10 @@ async function main() {
     }
   });
 
-  await seedUserSpace(user.id);
-  await seedUserSpace(guestUser.id);
+  const userDiningGroup = await seedUserSpace(user.id);
+  const guestDiningGroup = await seedUserSpace(guestUser.id);
+  await resetUserLifecycle(user.id, userDiningGroup.id);
+  await resetUserLifecycle(guestUser.id, guestDiningGroup.id);
 
   console.log(`Seeded admin ${admin.username} and users ${user.phone}, ${guestUser.phone}`);
 }

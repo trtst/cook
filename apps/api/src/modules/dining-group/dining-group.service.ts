@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type {
   AcceptInviteResponse,
   CarryBackSnapshotSummary,
   CreateInviteResult,
+  CurrentOriginalSpaceSummary,
   CurrentSpaceSummary,
   DiningGroupMemberSummary,
   DiningGroupMembersResult,
@@ -11,9 +12,17 @@ import type {
   GetCurrentDiningGroupContextResponse,
   LeaveDiningGroupResponse,
   OriginalSpaceSummary,
+  StorageUsageSummary,
   UUID
 } from "../../contracts/types";
-import { Prisma, type CarryBackSnapshot, type DiningGroup, type DiningGroupMember, type User } from "@prisma/client";
+import {
+  Prisma,
+  type CarryBackSnapshot,
+  type DiningGroup,
+  type DiningGroupMember,
+  type LongTermMemberStatus,
+  type User
+} from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
 import { EntitlementService } from "../entitlement/entitlement.service";
@@ -25,8 +34,33 @@ const leaveDiningGroupOperation = "dining-group:leave";
 const invalidInviteMessage = "邀请已失效";
 
 type MemberWithUser = DiningGroupMember & {
-  user: Pick<User, "id" | "uid" | "nickname" | "avatarUrl">;
+  user: Pick<User, "uid" | "nickname" | "avatarUrl">;
 };
+
+type DiningGroupWithOwnerUid = DiningGroup & {
+  owner: Pick<User, "uid">;
+};
+
+interface CurrentContextFacts {
+  userSpace: {
+    currentDiningGroup: DiningGroupWithOwnerUid;
+    currentDiningGroupId: UUID;
+    originalDiningGroup: DiningGroup;
+    originalDiningGroupId: UUID;
+  };
+  member: DiningGroupMember;
+  memberCount: number;
+  memberLimit: number;
+}
+
+interface SpaceSummaryFacts {
+  diningGroup: DiningGroupWithOwnerUid;
+  member: DiningGroupMember;
+  memberCount: number;
+  memberLimit: number;
+}
+
+const effectiveMemberStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -48,6 +82,15 @@ function fromJson<T>(value: unknown): T {
   return value as T;
 }
 
+function emptyPendingImportCounts() {
+  return {
+    recipe: 0,
+    fridgeItem: 0,
+    planDraft: 0,
+    shoppingItem: 0
+  };
+}
+
 @Injectable()
 export class DiningGroupService {
   constructor(
@@ -60,12 +103,29 @@ export class DiningGroupService {
   }
 
   async listSnapshots(userId: UUID): Promise<GetCarryBackSnapshotsResponse> {
-    const snapshots = await this.prisma.carryBackSnapshot.findMany({
-      where: { userId, status: "AVAILABLE", expiresAt: { gt: new Date() } },
-      orderBy: { createdAt: "desc" }
-    });
+    const now = new Date();
+    const snapshots = await this.listAvailableSnapshots(this.prisma, userId, now);
 
-    return { snapshots: snapshots.map(snapshot => this.toSnapshotSummary(snapshot)) };
+    return { snapshots: snapshots.map(snapshot => this.toSnapshotSummary(snapshot, now)) };
+  }
+
+  getStorageUsage(userId: UUID): Promise<StorageUsageSummary> {
+    return this.prisma.$transaction(async tx => {
+      const now = new Date();
+      const facts = await this.loadCurrentFacts(tx, userId, now);
+      const entitlements = await this.entitlementService.resolve(
+        tx,
+        {
+          userId,
+          diningGroupId: facts.userSpace.currentDiningGroupId,
+          ownerId: facts.userSpace.currentDiningGroup.ownerId,
+          memberCount: facts.memberCount
+        },
+        now
+      );
+
+      return this.buildStorageSummary(entitlements.storageLimitBytes);
+    });
   }
 
   async listMembers(userId: UUID, diningGroupId: UUID): Promise<DiningGroupMembersResult> {
@@ -80,7 +140,6 @@ export class DiningGroupService {
       include: {
         user: {
           select: {
-            id: true,
             uid: true,
             nickname: true,
             avatarUrl: true
@@ -113,7 +172,7 @@ export class DiningGroupService {
     if (repeated) return repeated;
 
     const [activeMemberCount, memberLimit] = await Promise.all([
-      this.prisma.diningGroupMember.count({ where: { diningGroupId, status: "ACTIVE" } }),
+      this.prisma.diningGroupMember.count({ where: { diningGroupId, status: { in: effectiveMemberStatuses } } }),
       this.entitlementService.getMemberLimit(this.prisma, diningGroupId)
     ]);
     if (activeMemberCount >= memberLimit) throw new BadRequestException("饭搭子成员已达上限");
@@ -210,18 +269,25 @@ export class DiningGroupService {
         const originalMemberCount = await tx.diningGroupMember.count({
           where: {
             diningGroupId: userSpace.originalDiningGroupId,
-            status: { in: ["ACTIVE", "RESTRICTED"] }
+            status: { in: effectiveMemberStatuses }
           }
         });
         if (originalMemberCount !== 1) {
           throw new BadRequestException("已有长期成员的主理人不能加入其他饭搭子");
         }
 
-        const targetGroup = await tx.diningGroup.findUnique({ where: { id: currentInvite.diningGroupId } });
+        const targetGroup = await tx.diningGroup.findUnique({
+          where: { id: currentInvite.diningGroupId },
+          include: {
+            owner: {
+              select: { uid: true }
+            }
+          }
+        });
         if (!targetGroup || targetGroup.status !== "ACTIVE") throw new NotFoundException("饭搭子不存在");
 
         const [activeMemberCount, existingMember, memberLimit] = await Promise.all([
-          tx.diningGroupMember.count({ where: { diningGroupId: targetGroup.id, status: "ACTIVE" } }),
+          tx.diningGroupMember.count({ where: { diningGroupId: targetGroup.id, status: { in: effectiveMemberStatuses } } }),
           tx.diningGroupMember.findUnique({
             where: { diningGroupId_userId: { diningGroupId: targetGroup.id, userId } }
           }),
@@ -269,12 +335,35 @@ export class DiningGroupService {
         });
         await this.writeLifecycleEvent(tx, userId, targetGroup.id, "DINING_GROUP_INVITE_ACCEPTED", userSpace.originalDiningGroupId);
 
-        const context = await this.getCurrentWith(tx, userId);
-        if (!context.originalSpace) throw new BadRequestException("原空间冻结失败");
+        const currentSpace = this.toCurrentSpace(
+          targetGroup,
+          {
+            id: existingMember?.id ?? "",
+            diningGroupId: targetGroup.id,
+            userId,
+            role: existingMember?.role === "OWNER" ? "OWNER" : "MEMBER",
+            status: "ACTIVE",
+            statusReason: null,
+            restrictedAt: null,
+            endedAt: null,
+            joinedAt: new Date(),
+            version: existingMember ? existingMember.version + 1 : 1,
+            createdAt: existingMember?.createdAt ?? new Date(),
+            updatedAt: new Date()
+          },
+          existingMember?.status === "ACTIVE" ? activeMemberCount : activeMemberCount + 1,
+          memberLimit
+        );
         const result: AcceptInviteResponse = {
-          currentSpace: context.currentSpace,
-          originalSpace: context.originalSpace,
-          pendingImportCounts: context.originalSpace.pendingImportCounts
+          currentSpace,
+          originalSpace: this.toCurrentOriginalSpace({
+            ...userSpace.originalDiningGroup,
+            status: "FROZEN",
+            frozenAt: new Date(),
+            version: userSpace.originalDiningGroup.version + 1,
+            updatedAt: new Date()
+          }),
+          pendingImportCounts: emptyPendingImportCounts()
         };
 
         await this.saveIdempotentResult(
@@ -337,7 +426,7 @@ export class DiningGroupService {
         if (member.role === "OWNER") throw new BadRequestException("主理人不能直接退出自己的饭搭子");
 
         const memberCount = await tx.diningGroupMember.count({
-          where: { diningGroupId, status: "ACTIVE" }
+          where: { diningGroupId, status: { in: effectiveMemberStatuses } }
         });
         const entitlements = await this.entitlementService.resolve(tx, {
           userId,
@@ -377,10 +466,20 @@ export class DiningGroupService {
         });
         await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_LEFT", userSpace.originalDiningGroupId);
 
-        const context = await this.getCurrentWith(tx, userId);
+        const restoredFacts = await this.loadSpaceSummaryFacts(
+          tx,
+          userSpace.originalDiningGroupId,
+          userId,
+          userSpace.originalDiningGroup.ownerId
+        );
         const result: LeaveDiningGroupResponse = {
-          restoredSpace: context.currentSpace,
-          carryBackSnapshot: this.toSnapshotSummary(snapshot),
+          restoredSpace: this.toCurrentSpace(
+            restoredFacts.diningGroup,
+            restoredFacts.member,
+            restoredFacts.memberCount,
+            restoredFacts.memberLimit
+          ),
+          carryBackSnapshot: this.toSnapshotSummary(snapshot, new Date()),
           futureParticipationCount: 0
         };
 
@@ -422,52 +521,130 @@ export class DiningGroupService {
   }
 
   private async getCurrentWith(tx: Prisma.TransactionClient, userId: UUID): Promise<GetCurrentDiningGroupContextResponse> {
+    const now = new Date();
+    const facts = await this.loadCurrentFacts(tx, userId, now);
+    const entitlements = await this.entitlementService.resolve(
+      tx,
+      {
+        userId,
+        diningGroupId: facts.userSpace.currentDiningGroupId,
+        ownerId: facts.userSpace.currentDiningGroup.ownerId,
+        memberCount: facts.memberCount
+      },
+      now
+    );
+
+    return this.buildCurrentContextResponse(facts, entitlements);
+  }
+
+  private async loadCurrentFacts(tx: Prisma.TransactionClient, userId: UUID, now: Date): Promise<CurrentContextFacts> {
     const userSpace = await tx.userSpace.findUnique({
       where: { userId },
-      include: { currentDiningGroup: true, originalDiningGroup: true }
+      include: {
+        currentDiningGroup: {
+          include: {
+            owner: {
+              select: { uid: true }
+            }
+          }
+        },
+        originalDiningGroup: true
+      }
     });
     if (!userSpace) throw new BadRequestException("当前账号尚未初始化单人空间");
 
-    const member = await tx.diningGroupMember.findUnique({
-      where: { diningGroupId_userId: { diningGroupId: userSpace.currentDiningGroupId, userId } }
-    });
+    const [member, memberCount] = await Promise.all([
+      tx.diningGroupMember.findUnique({
+        where: { diningGroupId_userId: { diningGroupId: userSpace.currentDiningGroupId, userId } }
+      }),
+      tx.diningGroupMember.count({
+        where: { diningGroupId: userSpace.currentDiningGroupId, status: { in: effectiveMemberStatuses } }
+      })
+    ]);
     if (!member || member.status === "ENDED") throw new BadRequestException("当前空间成员关系无效");
 
-    const memberCount = await tx.diningGroupMember.count({
-      where: { diningGroupId: userSpace.currentDiningGroupId, status: "ACTIVE" }
-    });
-    const snapshots = await tx.carryBackSnapshot.findMany({
-      where: { userId, status: "AVAILABLE", expiresAt: { gt: new Date() } },
-      orderBy: { createdAt: "desc" }
-    });
-    const entitlements = await this.entitlementService.resolve(tx, {
-      userId,
-      diningGroupId: userSpace.currentDiningGroupId,
-      ownerId: userSpace.currentDiningGroup.ownerId,
-      memberCount
-    });
-    const memberLimit = policy.memberLimit[entitlements.diningGroupTier];
+    const memberLimit = await this.entitlementService.getMemberLimit(tx, userSpace.currentDiningGroupId, now);
 
     return {
-      currentSpace: this.toCurrentSpace(userSpace.currentDiningGroup, member, memberCount, memberLimit),
+      userSpace,
+      member,
+      memberCount,
+      memberLimit
+    };
+  }
+
+  private async loadSpaceSummaryFacts(
+    tx: Prisma.TransactionClient,
+    diningGroupId: UUID,
+    userId: UUID,
+    ownerId: UUID,
+    now = new Date()
+  ): Promise<SpaceSummaryFacts> {
+    const [diningGroup, member, memberCount, memberLimit] = await Promise.all([
+      tx.diningGroup.findUnique({
+        where: { id: diningGroupId },
+        include: {
+          owner: {
+            select: { uid: true }
+          }
+        }
+      }),
+      tx.diningGroupMember.findUnique({
+        where: { diningGroupId_userId: { diningGroupId, userId } }
+      }),
+      tx.diningGroupMember.count({
+        where: { diningGroupId, status: { in: effectiveMemberStatuses } }
+      }),
+      this.entitlementService.getMemberLimit(tx, diningGroupId, now)
+    ]);
+
+    if (!diningGroup || !member || member.status === "ENDED") {
+      throw new BadRequestException("当前空间成员关系无效");
+    }
+
+    if (diningGroup.ownerId !== ownerId && member.role === "OWNER") {
+      throw new BadRequestException("当前空间主理人关系无效");
+    }
+
+    return {
+      diningGroup,
+      member,
+      memberCount,
+      memberLimit
+    };
+  }
+
+  private buildCurrentContextResponse(
+    facts: CurrentContextFacts,
+    entitlements: GetCurrentDiningGroupContextResponse["entitlements"],
+  ): GetCurrentDiningGroupContextResponse {
+    return {
+      currentSpace: this.toCurrentSpace(
+        facts.userSpace.currentDiningGroup,
+        facts.member,
+        facts.memberCount,
+        facts.memberLimit
+      ),
       originalSpace:
-        userSpace.originalDiningGroupId === userSpace.currentDiningGroupId
+        facts.userSpace.originalDiningGroupId === facts.userSpace.currentDiningGroupId
           ? null
-          : this.toOriginalSpace(userSpace.originalDiningGroup),
-      carryBackSnapshots: snapshots.map(snapshot => this.toSnapshotSummary(snapshot)),
-      entitlements,
-      storage: {
-        state: "NORMAL",
-        usedBytes: 0,
-        limitBytes: entitlements.storageLimitBytes,
-        remainingBytes: entitlements.storageLimitBytes,
-        byModule: []
-      }
+          : this.toCurrentOriginalSpace(facts.userSpace.originalDiningGroup),
+      entitlements
+    };
+  }
+
+  private buildStorageSummary(limitBytes: number): StorageUsageSummary {
+    return {
+      state: "NORMAL",
+      usedBytes: 0,
+      limitBytes,
+      remainingBytes: limitBytes,
+      byModule: []
     };
   }
 
   private toCurrentSpace(
-    diningGroup: DiningGroup,
+    diningGroup: DiningGroupWithOwnerUid,
     member: DiningGroupMember,
     memberCount: number,
     memberLimit: number
@@ -475,7 +652,7 @@ export class DiningGroupService {
     return {
       id: diningGroup.id,
       name: diningGroup.name,
-      ownerId: diningGroup.ownerId,
+      ownerUid: diningGroup.owner.uid,
       myRole: member.role,
       myStatus: member.status,
       myStatusReason: member.statusReason,
@@ -488,6 +665,13 @@ export class DiningGroupService {
     };
   }
 
+  private toCurrentOriginalSpace(diningGroup: DiningGroup): CurrentOriginalSpaceSummary {
+    return {
+      status: diningGroup.status === "FROZEN" ? "FROZEN" : "ACTIVE",
+      canImport: diningGroup.status === "FROZEN"
+    };
+  }
+
   private toOriginalSpace(diningGroup: DiningGroup): OriginalSpaceSummary {
     return {
       id: diningGroup.id,
@@ -495,16 +679,16 @@ export class DiningGroupService {
       status: diningGroup.status === "FROZEN" ? "FROZEN" : "ACTIVE",
       frozenAt: diningGroup.frozenAt ? toIsoDate(diningGroup.frozenAt) : null,
       canImport: diningGroup.status === "FROZEN",
-      pendingImportCounts: { recipe: 0, fridgeItem: 0, planDraft: 0, shoppingItem: 0 }
+      pendingImportCounts: emptyPendingImportCounts()
     };
   }
 
-  private toSnapshotSummary(snapshot: CarryBackSnapshot): CarryBackSnapshotSummary {
+  private toSnapshotSummary(snapshot: CarryBackSnapshot, now: Date): CarryBackSnapshotSummary {
     return {
       id: snapshot.id,
       sourceDiningGroupId: snapshot.sourceDiningGroupId,
       sourceDiningGroupName: snapshot.sourceDiningGroupName,
-      status: snapshot.expiresAt <= new Date() && snapshot.status === "AVAILABLE" ? "EXPIRED" : snapshot.status,
+      status: snapshot.expiresAt <= now && snapshot.status === "AVAILABLE" ? "EXPIRED" : snapshot.status,
       expiresAt: toIsoDate(snapshot.expiresAt),
       createdAt: toIsoDate(snapshot.createdAt),
       itemCounts: {
@@ -520,7 +704,6 @@ export class DiningGroupService {
       id: member.id,
       diningGroupId: member.diningGroupId,
       user: {
-        id: member.user.id,
         uid: member.user.uid,
         nickname: member.user.nickname,
         avatarUrl: member.user.avatarUrl
@@ -547,7 +730,7 @@ export class DiningGroupService {
       orderBy: { createdAt: "asc" }
     });
     if (!record) return null;
-    if (record.requestHash !== requestHash) throw new BadRequestException("operationId 已用于其他请求");
+    if (record.requestHash !== requestHash) throw new ConflictException("operationId 已用于其他请求");
     return record.status === "SUCCEEDED" && record.resultJson ? fromJson<T>(record.resultJson) : null;
   }
 
@@ -603,5 +786,16 @@ export class DiningGroupService {
 
   private isUniqueError(error: unknown) {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  }
+
+  private listAvailableSnapshots(
+    db: Pick<Prisma.TransactionClient, "carryBackSnapshot">,
+    userId: UUID,
+    now: Date
+  ) {
+    return db.carryBackSnapshot.findMany({
+      where: { userId, status: "AVAILABLE", expiresAt: { gt: now } },
+      orderBy: { createdAt: "desc" }
+    });
   }
 }

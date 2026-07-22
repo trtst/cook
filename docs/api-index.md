@@ -18,6 +18,7 @@
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
 | User | GET | `/users/me` | 当前用户 |
 | User | PUT | `/users/me` | 更新当前用户 |
+| User | PUT | `/users/me/password` | 修改当前用户登录密码 |
 | DiningGroup | GET | `/dining-groups/current` | 唯一当前空间、原空间、快照、权益与空间状态 |
 | DiningGroup | GET | `/dining-group-members` | 当前饭搭子成员 |
 | DiningGroupInvite | POST | `/dining-group-invites` | 创建单次长期邀请 |

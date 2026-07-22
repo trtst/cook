@@ -240,6 +240,7 @@ model CarryBackSnapshot {
   targetDiningGroup DiningGroup @relation("CarryBackTarget", fields: [targetDiningGroupId], references: [id])
 
   @@index([userId, status, expiresAt])
+  @@index([userId, sourceDiningGroupId, status])
   @@index([sourceDiningGroupId])
   @@map("carry_back_snapshots")
 }
@@ -278,6 +279,7 @@ model IdempotencyRecord {
 
   @@index([userId, operationType])
   @@index([diningGroupId, operationType])
+  @@index([operationId, operationType, userId, diningGroupId])
   @@index([expiresAt])
   @@map("idempotency_records")
 }

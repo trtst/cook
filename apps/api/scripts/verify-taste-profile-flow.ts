@@ -17,7 +17,7 @@ interface ApiEnvelope<T> {
 
 interface LoginResult {
   token: string;
-  user: { id: string; uid: number };
+  user: { uid: number };
 }
 
 const commonHeaders = {
@@ -86,6 +86,10 @@ async function restoreProfile(prisma: PrismaClient, userId: string, profile: Use
 
 async function main() {
   const prisma = new PrismaClient();
+  const [ownerUser, guestUser] = await Promise.all([
+    prisma.user.findFirstOrThrow({ where: { phone: ownerPhone }, select: { id: true, uid: true } }),
+    prisma.user.findFirstOrThrow({ where: { phone: guestPhone }, select: { id: true, uid: true } })
+  ]);
   const ownerLogin = await requestData<LoginResult>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ phone: ownerPhone, password })
@@ -97,13 +101,13 @@ async function main() {
   const ownerAuthorization = `Bearer ${ownerLogin.token}`;
   const guestAuthorization = `Bearer ${guestLogin.token}`;
   const [ownerBefore, guestBefore] = await Promise.all([
-    prisma.userTasteProfile.findUnique({ where: { userId: ownerLogin.user.id } }),
-    prisma.userTasteProfile.findUnique({ where: { userId: guestLogin.user.id } })
+    prisma.userTasteProfile.findUnique({ where: { userId: ownerUser.id } }),
+    prisma.userTasteProfile.findUnique({ where: { userId: guestUser.id } })
   ]);
 
   try {
     await prisma.userTasteProfile.deleteMany({
-      where: { userId: { in: [ownerLogin.user.id, guestLogin.user.id] } }
+      where: { userId: { in: [ownerUser.id, guestUser.id] } }
     });
 
     const unauthenticatedGet = await request<TasteProfileResponse>("/users/me/taste-profile");
@@ -222,8 +226,8 @@ async function main() {
     );
   } finally {
     await Promise.all([
-      restoreProfile(prisma, ownerLogin.user.id, ownerBefore),
-      restoreProfile(prisma, guestLogin.user.id, guestBefore)
+      restoreProfile(prisma, ownerUser.id, ownerBefore),
+      restoreProfile(prisma, guestUser.id, guestBefore)
     ]);
     await prisma.$disconnect();
   }

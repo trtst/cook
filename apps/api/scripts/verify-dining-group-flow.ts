@@ -2,12 +2,16 @@ import { createHash, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import type {
   AcceptInviteResponse,
+  AdminDiningGroupSummary,
+  AdminUserEntitlementResponse,
   CreateInviteResult,
   DiningGroupMembersResult,
   EffectiveEntitlementSnapshot,
   GetCarryBackSnapshotsResponse,
   GetCurrentDiningGroupContextResponse,
-  LeaveDiningGroupResponse
+  LeaveDiningGroupResponse,
+  PageResult,
+  StorageUsageSummary
 } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 
@@ -17,6 +21,8 @@ const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
 const guestPhone = process.env.TEST_GUEST_PHONE ?? "13900000000";
 const password = process.env.TEST_USER_PASSWORD ?? "change-me";
+const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
+const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -26,7 +32,29 @@ interface ApiEnvelope<T> {
 
 interface LoginResult {
   token: string;
-  user: { id: string; uid: number };
+  user: { uid: number };
+}
+
+interface AdminLoginResult {
+  token: string;
+  admin: { id: string; username: string };
+}
+
+function assertCurrentShape(result: GetCurrentDiningGroupContextResponse, expectedOriginalSpace: "null" | "frozen") {
+  assert(typeof result.currentSpace.id === "string" && result.currentSpace.id.length > 0, "currentSpace.id missing");
+  assert(typeof result.currentSpace.name === "string", "currentSpace.name missing");
+  assert(typeof result.currentSpace.memberCount === "number", "currentSpace.memberCount missing");
+  assert(typeof result.currentSpace.memberLimit === "number", "currentSpace.memberLimit missing");
+  assert(result.entitlements !== null && typeof result.entitlements === "object", "entitlements missing");
+
+  if (expectedOriginalSpace === "null") {
+    assert(result.originalSpace === null, "originalSpace should be null");
+    return;
+  }
+
+  assert(result.originalSpace !== null, "originalSpace should exist");
+  assert(result.originalSpace.status === "FROZEN", "originalSpace should stay frozen");
+  assert(typeof result.originalSpace.canImport === "boolean", "originalSpace.canImport missing");
 }
 
 const commonHeaders = {
@@ -35,8 +63,24 @@ const commonHeaders = {
   "x-cook-version": "0.1.0"
 };
 
+const adminHeaders = {
+  "x-cook-from": "admin_web",
+  "x-admin-version": "0.1.0",
+  "x-admin-build": "1"
+};
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+async function assertDbRejected(message: string, run: () => Promise<unknown>) {
+  try {
+    await run();
+  } catch {
+    return;
+  }
+
+  throw new Error(message);
 }
 
 function tokenHash(inviteToken: string) {
@@ -71,6 +115,12 @@ async function main() {
     body: JSON.stringify({ phone: guestPhone, password })
   });
   const guestAuthorization = `Bearer ${guestLogin.token}`;
+  const adminLogin = await requestData<AdminLoginResult>("/admin/auth/login", {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ username: adminUsername, password: adminPassword })
+  });
+  const adminAuthorization = `Bearer ${adminLogin.token}`;
 
   const ownerBefore = await requestData<GetCurrentDiningGroupContextResponse>("/dining-groups/current", {
     headers: { authorization: ownerAuthorization }
@@ -78,6 +128,8 @@ async function main() {
   const guestBefore = await requestData<GetCurrentDiningGroupContextResponse>("/dining-groups/current", {
     headers: { authorization: guestAuthorization }
   });
+  assertCurrentShape(ownerBefore, "null");
+  assertCurrentShape(guestBefore, "null");
   assert(ownerBefore.originalSpace === null, "owner should start in the original space");
   assert(guestBefore.originalSpace === null, "guest should start in the original space");
   assert(ownerBefore.currentSpace.id !== guestBefore.currentSpace.id, "seed users should own different solo spaces");
@@ -85,10 +137,16 @@ async function main() {
   const ownerEntitlements = await requestData<EffectiveEntitlementSnapshot>("/entitlements/current", {
     headers: { authorization: ownerAuthorization }
   });
+  const ownerStorage = await requestData<StorageUsageSummary>("/storage-usage", {
+    headers: { authorization: ownerAuthorization }
+  });
   assert(
     JSON.stringify(ownerEntitlements) === JSON.stringify(ownerBefore.entitlements),
     "standalone entitlement endpoint differs from current dining group context"
   );
+  assert(ownerStorage.limitBytes === ownerEntitlements.storageLimitBytes, "storage limit differs from entitlement resolution");
+  assert(ownerStorage.usedBytes === 0, "storage usage should stay at 0 before ledger is connected");
+  assert(ownerStorage.remainingBytes === ownerStorage.limitBytes, "storage remaining bytes mismatch");
   assert(
     ownerBefore.currentSpace.memberLimit === (ownerEntitlements.diningGroupTier === "PLUS" ? 6 : 2),
     "current space member limit differs from the resolved dining group tier"
@@ -96,6 +154,10 @@ async function main() {
 
   const diningGroupId = ownerBefore.currentSpace.id;
   const prisma = new PrismaClient();
+  const [ownerUser, guestUser] = await Promise.all([
+    prisma.user.findFirstOrThrow({ where: { phone: ownerPhone }, select: { id: true, uid: true } }),
+    prisma.user.findFirstOrThrow({ where: { phone: guestPhone }, select: { id: true, uid: true } })
+  ]);
 
   try {
     const createOperationId = randomUUID();
@@ -116,6 +178,12 @@ async function main() {
     assert(invite1.expiresAt === invite2.expiresAt, "create invite expiresAt is not idempotent");
     assert(invite1.inviteToken.length >= 32, "invite token is too short");
     assert(!invite1.inviteToken.includes("."), "invite token looks like a structured token");
+
+    const invite3 = await requestData<CreateInviteResult>("/dining-group-invites", {
+      method: "POST",
+      headers: { authorization: ownerAuthorization },
+      body: JSON.stringify({ diningGroupId, operationId: randomUUID() })
+    });
 
     const inviteRow = await prisma.diningGroupInvite.findUnique({
       where: { tokenHash: tokenHash(invite1.inviteToken) }
@@ -140,15 +208,51 @@ async function main() {
 
     assert(accept1.currentSpace.id === diningGroupId, "guest did not switch to the invited dining group");
     assert(accept2.currentSpace.id === accept1.currentSpace.id, "accept invite is not idempotent");
-    assert(accept1.originalSpace.id === guestBefore.currentSpace.id, "guest original space mismatch");
+    assertCurrentShape(
+      {
+        currentSpace: accept1.currentSpace,
+        originalSpace: accept1.originalSpace,
+        entitlements: ownerBefore.entitlements
+      },
+      "frozen"
+    );
     assert(accept1.originalSpace.status === "FROZEN", "guest original space was not frozen");
+    assert(typeof accept1.pendingImportCounts.recipe === "number", "accept pendingImportCounts.recipe missing");
+    assert(typeof accept1.pendingImportCounts.fridgeItem === "number", "accept pendingImportCounts.fridgeItem missing");
+    assert(typeof accept1.pendingImportCounts.planDraft === "number", "accept pendingImportCounts.planDraft missing");
+    assert(typeof accept1.pendingImportCounts.shoppingItem === "number", "accept pendingImportCounts.shoppingItem missing");
+
+    const conflictingAcceptInvite = await request(
+      `/dining-group-invites/${encodeURIComponent(invite3.inviteToken)}/accept`,
+      {
+      method: "POST",
+      headers: { authorization: guestAuthorization },
+      body: JSON.stringify({ operationId: acceptOperationId })
+      }
+    );
+    assert(conflictingAcceptInvite.status === 409, "conflicting accept invite operationId should return 409");
 
     const persistedInvite = await prisma.diningGroupInvite.findUnique({ where: { id: inviteRow.id } });
     assert(persistedInvite?.status === "ACCEPTED", "invite was not consumed");
-    assert(persistedInvite.acceptedByUserId === guestLogin.user.id, "invite acceptor mismatch");
+    assert(persistedInvite.acceptedByUserId === guestUser.id, "invite acceptor mismatch");
+    await assertDbRejected("accepted invite should not allow revokedAt with accepted fields", () =>
+      prisma.diningGroupInvite.update({
+        where: { id: inviteRow.id },
+        data: {
+          status: "REVOKED",
+          revokedAt: new Date()
+        }
+      })
+    );
+
+    const adminDiningGroupsAfterAccept = await requestData<PageResult<AdminDiningGroupSummary>>("/admin/dining-groups?page=1&pageSize=100", {
+      headers: { authorization: adminAuthorization, ...adminHeaders }
+    });
+    const acceptedGroup = adminDiningGroupsAfterAccept.items.find(item => item.id === diningGroupId);
+    assert(acceptedGroup?.memberCount === 2, "admin dining group memberCount should count active members after accept");
 
     const guestSpaceAfterAccept = await prisma.userSpace.findUnique({
-      where: { userId: guestLogin.user.id },
+      where: { userId: guestUser.id },
       include: { originalDiningGroup: true }
     });
     assert(guestSpaceAfterAccept?.currentDiningGroupId === diningGroupId, "guest current space was not persisted");
@@ -157,10 +261,44 @@ async function main() {
     const members = await requestData<DiningGroupMembersResult>(`/dining-group-members?diningGroupId=${diningGroupId}`, {
       headers: { authorization: ownerAuthorization }
     });
-    const ownerMember = members.members.find(member => member.user.id === ownerLogin.user.id);
-    const guestMember = members.members.find(member => member.user.id === guestLogin.user.id);
+    const ownerMember = members.members.find(member => member.user.uid === ownerUser.uid);
+    const guestMember = members.members.find(member => member.user.uid === guestUser.uid);
     assert(ownerMember?.role === "OWNER" && ownerMember.status === "ACTIVE", "owner member mismatch");
     assert(guestMember?.role === "MEMBER" && guestMember.status === "ACTIVE", "guest member mismatch");
+
+    await prisma.diningGroupMember.update({
+      where: { id: guestMember.id },
+      data: {
+        status: "RESTRICTED",
+        statusReason: "GROUP_DOWNGRADED",
+        restrictedAt: new Date(),
+        endedAt: null,
+        version: { increment: 1 }
+      }
+    });
+
+    const guestAfterRestricted = await requestData<GetCurrentDiningGroupContextResponse>("/dining-groups/current", {
+      headers: { authorization: guestAuthorization }
+    });
+    const guestEntitlementsAfterRestricted = await requestData<EffectiveEntitlementSnapshot>("/entitlements/current", {
+      headers: { authorization: guestAuthorization }
+    });
+    const guestAdminEntitlementsAfterRestricted = await requestData<AdminUserEntitlementResponse>(
+      `/admin/user-entitlements?userId=${guestUser.id}`,
+      {
+        headers: { authorization: adminAuthorization, ...adminHeaders }
+      }
+    );
+    assert(guestAfterRestricted.currentSpace.myStatus === "RESTRICTED", "restricted member status was not returned");
+    assert(guestAfterRestricted.currentSpace.memberCount === 2, "restricted member should still count toward memberCount");
+    assert(
+      guestEntitlementsAfterRestricted.currentScope === "DINING_GROUP",
+      "restricted member should keep dining-group entitlement scope"
+    );
+    assert(
+      guestAdminEntitlementsAfterRestricted.entitlements.currentScope === "DINING_GROUP",
+      "admin entitlement query should keep restricted member in dining-group scope"
+    );
 
     const fullInvite = await request<CreateInviteResult>("/dining-group-invites", {
       method: "POST",
@@ -195,6 +333,16 @@ async function main() {
 
     const snapshotId = leave1.carryBackSnapshot?.id;
     assert(snapshotId, "leave did not return a carry-back snapshot id");
+    await assertDbRejected("deleted snapshot should not allow invalidatedAt at the same time", () =>
+      prisma.carryBackSnapshot.update({
+        where: { id: snapshotId },
+        data: {
+          status: "DELETED",
+          deletedAt: new Date(),
+          invalidatedAt: new Date()
+        }
+      })
+    );
     const guestSnapshots = await requestData<GetCarryBackSnapshotsResponse>("/carry-back-snapshots", {
       headers: { authorization: guestAuthorization }
     });
@@ -255,9 +403,14 @@ async function main() {
     });
     const snapshotAfterRead = await prisma.carryBackSnapshot.findUniqueOrThrow({ where: { id: snapshotId } });
     assert(snapshotAfterRead.updatedAt.getTime() === restoredSnapshot.updatedAt.getTime(), "snapshot list wrote to the database");
+    await requestData<GetCurrentDiningGroupContextResponse>("/dining-groups/current", {
+      headers: { authorization: guestAuthorization }
+    });
+    const snapshotAfterCurrent = await prisma.carryBackSnapshot.findUniqueOrThrow({ where: { id: snapshotId } });
+    assert(snapshotAfterCurrent.updatedAt.getTime() === restoredSnapshot.updatedAt.getTime(), "current endpoint wrote to the snapshot");
 
     const guestMemberAfterLeave = await prisma.diningGroupMember.findUnique({
-      where: { diningGroupId_userId: { diningGroupId, userId: guestLogin.user.id } }
+      where: { diningGroupId_userId: { diningGroupId, userId: guestUser.id } }
     });
     assert(guestMemberAfterLeave?.status === "ENDED", "guest membership was not ended");
     assert(guestMemberAfterLeave.statusReason === "LEFT", "guest membership end reason mismatch");
@@ -265,8 +418,15 @@ async function main() {
     const guestAfterLeave = await requestData<GetCurrentDiningGroupContextResponse>("/dining-groups/current", {
       headers: { authorization: guestAuthorization }
     });
+    assertCurrentShape(guestAfterLeave, "null");
     assert(guestAfterLeave.currentSpace.id === guestBefore.currentSpace.id, "current endpoint did not restore solo space");
     assert(guestAfterLeave.originalSpace === null, "restored user should not expose a frozen original space");
+
+    const adminDiningGroupsAfterLeave = await requestData<PageResult<AdminDiningGroupSummary>>("/admin/dining-groups?page=1&pageSize=100", {
+      headers: { authorization: adminAuthorization, ...adminHeaders }
+    });
+    const restoredGroup = adminDiningGroupsAfterLeave.items.find(item => item.id === diningGroupId);
+    assert(restoredGroup?.memberCount === 1, "admin dining group memberCount should drop after leave");
 
     const invalid = await request("/dining-group-invites/not-a-real-token/accept", {
       method: "POST",
@@ -279,6 +439,8 @@ async function main() {
     assert(unauthenticated.status === 401, "unauthenticated current space should return 401");
     const unauthenticatedEntitlements = await request<EffectiveEntitlementSnapshot>("/entitlements/current");
     assert(unauthenticatedEntitlements.status === 401, "unauthenticated entitlement request should return 401");
+    const unauthenticatedStorage = await request<StorageUsageSummary>("/storage-usage");
+    assert(unauthenticatedStorage.status === 401, "unauthenticated storage request should return 401");
     const unauthenticatedSnapshots = await request<GetCarryBackSnapshotsResponse>("/carry-back-snapshots");
     assert(unauthenticatedSnapshots.status === 401, "unauthenticated snapshot request should return 401");
 
@@ -291,6 +453,7 @@ async function main() {
           guestUid: guestLogin.user.uid,
           createInviteIdempotent: true,
           acceptInviteIdempotent: true,
+          acceptInviteConflictStatus: conflictingAcceptInvite.status,
           inviteConsumedOnce: true,
           originalSpaceFrozen: true,
           freeMemberLimitEnforced: true,
@@ -301,9 +464,11 @@ async function main() {
           carryBackSnapshotFiltersApplied: true,
           carryBackSnapshotListReadOnly: true,
           entitlementEndpointConsistent: true,
+          storageUsageEndpointConsistent: true,
           invalidInviteStatus: invalid.status,
           unauthenticatedStatus: unauthenticated.status,
           unauthenticatedEntitlementStatus: unauthenticatedEntitlements.status,
+          unauthenticatedStorageStatus: unauthenticatedStorage.status,
           unauthenticatedSnapshotStatus: unauthenticatedSnapshots.status
         },
         null,

@@ -33,6 +33,7 @@ Authorization: Bearer <user-token>
 
 | 日期 | 变更 |
 | --- | --- |
+| 2026-07-22 | 新增当前用户修改密码接口 `/api/users/me/password`。 |
 | 2026-07-20 | 饭搭子接口直接切换为唯一当前空间；删除多列表、手动创建和详情接口；实现原空间冻结、退出恢复与快照头。 |
 | 2026-07-20 | 冻结迁入迁出、权益、空间、口味、饭局、菜谱收录与派生契约。 |
 | 2026-07-21 | 实现当前权益接口、最小 Plus 授权和饭搭子 Free/Plus 席位解析。 |
@@ -48,14 +49,15 @@ Authorization: Bearer <user-token>
 | C-002 | POST | `/api/auth/refresh` | `auth.refreshSession` | 已实现 |
 | C-003 | GET | `/api/users/me` | `user.getCurrent` | 已实现 |
 | C-004 | PUT | `/api/users/me` | `user.updateCurrent` | 已实现 |
-| C-005 | GET | `/api/dining-groups/current` | `diningGroup.getCurrent` | 已实现 |
-| C-006 | GET | `/api/dining-group-members` | `diningGroup.listMembers` | 已实现 |
-| C-007 | POST | `/api/dining-group-invites` | `diningGroup.createInvite` | 已实现 |
-| C-008 | POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroup.acceptInvite` | 已实现 |
-| C-009 | POST | `/api/dining-groups/{diningGroupId}/leave` | `diningGroup.leave` | 已实现 |
-| C-010 | GET | `/api/entitlements/current` | `entitlement.getCurrent` | 已实现 |
-| C-011 | GET | `/api/carry-back-snapshots` | `carryBack.list` | 已实现 |
-| C-012 | GET | `/api/carry-back-snapshot-items` | `carryBack.listItems` | 已契约，待实现 |
+| C-005 | PUT | `/api/users/me/password` | `user.changeCurrentPassword` | 已实现 |
+| C-006 | GET | `/api/dining-groups/current` | `diningGroup.getCurrent` | 已实现 |
+| C-007 | GET | `/api/dining-group-members` | `diningGroup.listMembers` | 已实现 |
+| C-008 | POST | `/api/dining-group-invites` | `diningGroup.createInvite` | 已实现 |
+| C-009 | POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroup.acceptInvite` | 已实现 |
+| C-010 | POST | `/api/dining-groups/{diningGroupId}/leave` | `diningGroup.leave` | 已实现 |
+| C-011 | GET | `/api/entitlements/current` | `entitlement.getCurrent` | 已实现 |
+| C-012 | GET | `/api/carry-back-snapshots` | `carryBack.list` | 已实现 |
+| C-013 | GET | `/api/carry-back-snapshot-items` | `carryBack.listItems` | 已契约，待实现 |
 | A-001 | POST | `/api/admin/auth/login` | `admin.login` | 已实现 |
 | A-002 | GET | `/api/admin/users` | `admin.listUsers` | 已实现 |
 | A-003 | GET | `/api/admin/dining-groups` | `admin.listDiningGroups` | 已实现 |
@@ -85,9 +87,7 @@ Auth: none
 {
   "token": "<token>",
   "expiresAt": "2026-08-03T12:00:00.000Z",
-  "userId": "00000000-0000-4000-8000-000000000001",
   "user": {
-    "id": "00000000-0000-4000-8000-000000000001",
     "uid": 52738164,
     "nickname": "下一餐用户",
     "avatarUrl": null,
@@ -127,12 +127,37 @@ Auth: UserBearerAuth
 ```json
 {
   "nickname": "小明",
-  "avatarUrl": "https://example.com/avatar.png",
-  "phone": "13800000000"
+  "avatarUrl": "https://example.com/avatar.png"
 }
 ```
 
 GET 和 PUT 都返回 `UserBasic`。
+
+### 1.4 修改当前用户密码
+
+```text
+PUT /api/users/me/password
+Auth: UserBearerAuth
+```
+
+请求：
+
+```json
+{
+  "currentPassword": "change-me",
+  "newPassword": "change-me-2"
+}
+```
+
+成功 `data`：
+
+```json
+{
+  "changedAt": "2026-07-22T12:00:00.000Z"
+}
+```
+
+当前密码错误或新密码与当前密码相同返回 `400`。
 
 ## 2. 当前饭搭子
 
@@ -148,10 +173,13 @@ Auth: UserBearerAuth
 ```ts
 interface GetCurrentDiningGroupContextResponse {
   currentSpace: CurrentSpaceSummary;
-  originalSpace: OriginalSpaceSummary | null;
-  carryBackSnapshots: CarryBackSnapshotSummary[];
+  originalSpace:
+    | {
+        status: OriginalSpaceStatus;
+        canImport: boolean;
+      }
+    | null;
   entitlements: EffectiveEntitlementSnapshot;
-  storage: StorageUsageSummary;
 }
 ```
 
@@ -230,7 +258,10 @@ Auth: UserBearerAuth
 ```ts
 interface AcceptInviteResponse {
   currentSpace: CurrentSpaceSummary;
-  originalSpace: OriginalSpaceSummary;
+  originalSpace: {
+    status: OriginalSpaceStatus;
+    canImport: boolean;
+  };
   pendingImportCounts: PendingImportCounts;
 }
 ```
