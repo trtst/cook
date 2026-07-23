@@ -1,21 +1,31 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
   UnauthorizedException
 } from "@nestjs/common";
-import type { Prisma, DiningGroupStatus } from "@prisma/client";
+import type { Prisma, DiningGroupStatus, RecipeStatus } from "@prisma/client";
 import type {
   AdminDiningGroupSummary,
+  AdminRecipeSummary,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
   PageResult,
+  RecipeReportSummary,
+  RelationshipState,
+  StorageUsageSummary,
   UserProfile,
   UUID
 } from "../../contracts/types";
 import { PrismaService } from "../../common/prisma.service";
+import {
+  completeAdminIdempotentOperation,
+  getAdminIdempotentResult,
+  startAdminIdempotentOperation
+} from "../../common/idempotency";
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
@@ -120,7 +130,7 @@ export class AdminService {
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const normalizedStatus = status?.trim();
 
-    if (normalizedStatus && !["ACTIVE", "FROZEN", "ARCHIVED"].includes(normalizedStatus)) {
+    if (normalizedStatus && !["ACTIVE", "ARCHIVED"].includes(normalizedStatus)) {
       throw new BadRequestException("饭搭子状态参数错误");
     }
 
@@ -186,47 +196,82 @@ export class AdminService {
           id: true,
           uid: true,
           nickname: true,
-          status: true,
-          space: {
-            select: {
-              currentDiningGroup: {
-                select: { id: true, name: true, ownerId: true, status: true }
-              }
-            }
-          }
+          status: true
         }
       });
       if (!user) throw new NotFoundException("用户不存在");
 
-      const currentSpace = user.space?.currentDiningGroup;
-      if (!currentSpace || currentSpace.status !== "ACTIVE") {
-        throw new BadRequestException("用户当前空间关系无效");
-      }
-
-      const [member, memberCount] = await Promise.all([
-        tx.diningGroupMember.findUnique({
-          where: { diningGroupId_userId: { diningGroupId: currentSpace.id, userId } },
-          select: { status: true }
-        }),
-        tx.diningGroupMember.count({
+      const [resolved, memberships, storageRows] = await Promise.all([
+        this.entitlementService.resolveForUser(tx, userId),
+        tx.diningGroupMember.findMany({
           where: {
-            diningGroupId: currentSpace.id,
-            status: {
-              in: ["ACTIVE", "RESTRICTED"]
+            userId,
+            status: { in: ["ACTIVE", "RESTRICTED"] },
+            diningGroup: { status: "ACTIVE" }
+          },
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+          include: {
+            diningGroup: {
+              include: {
+                owner: { select: { uid: true } }
+              }
             }
+          }
+        }),
+        tx.storageLedger.findMany({
+          where: { userId },
+          select: {
+            module: true,
+            usedBytes: true
           }
         })
       ]);
-      if (!member || member.status === "ENDED") {
-        throw new BadRequestException("用户当前成员关系无效");
-      }
 
-      const entitlements = await this.entitlementService.resolve(tx, {
-        userId,
-        diningGroupId: currentSpace.id,
-        ownerId: currentSpace.ownerId,
-        memberCount
-      });
+      const diningGroups = await Promise.all(
+        memberships.map(async membership => {
+          const memberCount = await tx.diningGroupMember.count({
+            where: {
+              diningGroupId: membership.diningGroupId,
+              status: { in: ["ACTIVE", "RESTRICTED"] }
+            }
+          });
+          const ownerPolicy = await this.entitlementService.resolveForUser(tx, membership.diningGroup.ownerId);
+          const state: RelationshipState = memberCount > ownerPolicy.memberLimit ? "OVER_MEMBER_LIMIT" : "NORMAL";
+
+          return {
+            id: membership.diningGroup.id,
+            name: membership.diningGroup.name,
+            ownerUid: membership.diningGroup.owner.uid,
+            isOwned: membership.diningGroup.ownerId === userId,
+            myRole: membership.role,
+            myStatus: membership.status,
+            myStatusReason: membership.statusReason,
+            memberCount,
+            memberLimit: ownerPolicy.memberLimit,
+            state,
+            version: membership.diningGroup.version,
+            createdAt: toIsoDate(membership.diningGroup.createdAt),
+            updatedAt: toIsoDate(membership.diningGroup.updatedAt)
+          };
+        })
+      );
+
+      const byModuleMap = new Map<string, number>();
+      for (const row of storageRows) {
+        byModuleMap.set(row.module, (byModuleMap.get(row.module) ?? 0) + row.usedBytes);
+      }
+      const usedBytes = Array.from(byModuleMap.values()).reduce((total, value) => total + value, 0);
+      const storage: StorageUsageSummary = {
+        state: usedBytes > resolved.storageLimitBytes ? "OVER_STORAGE_READONLY" : "NORMAL",
+        usedBytes,
+        limitBytes: resolved.storageLimitBytes,
+        remainingBytes: Math.max(0, resolved.storageLimitBytes - usedBytes),
+        byModule: Array.from(byModuleMap.entries()).map(([module, moduleUsedBytes]) => ({
+          module: module as AdminUserEntitlementResponse["storage"]["byModule"][number]["module"],
+          usedBytes: moduleUsedBytes
+        })),
+        calculatedAt: toIsoDate(new Date())
+      };
 
       return {
         user: {
@@ -235,12 +280,322 @@ export class AdminService {
           nickname: user.nickname,
           status: user.status
         },
-        currentSpace: {
-          id: currentSpace.id,
-          name: currentSpace.name
+        membership: {
+          tier: resolved.tier,
+          validUntil: resolved.validUntil
         },
-        entitlements
+        display: {
+          canUseProfileBackground: false,
+          canUseHomeBackground: false
+        },
+        diningGroupUsage: {
+          ownedCount: resolved.ownedDiningGroupCount,
+          joinedCount: resolved.joinedDiningGroupCount,
+          joinLimit: resolved.joinLimit,
+          state: resolved.state
+        },
+        diningGroups,
+        storage,
+        recipePolicy: {
+          recipeLimit: resolved.recipeLimit,
+          recycleDays: resolved.recycleDays,
+          variantLimitPerRoot: resolved.variantLimitPerRoot
+        },
+        invitePolicy: {
+          inviteLimit: resolved.inviteLimit,
+          memberLimit: resolved.memberLimit
+        },
+        imagePolicy: resolved.imagePolicy
       };
     });
+  }
+
+  async listRecipes(
+    page: number,
+    pageSize: number,
+    keyword?: string,
+    status?: string,
+    reportsOnly?: boolean
+  ): Promise<PageResult<AdminRecipeSummary>> {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedStatus = status?.trim();
+
+    if (normalizedStatus && !["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"].includes(normalizedStatus)) {
+      throw new BadRequestException("菜谱状态参数错误");
+    }
+
+    const where: Prisma.RecipeWhereInput = {
+      ...(keyword
+        ? {
+            searchText: {
+              contains: keyword,
+              mode: "insensitive"
+            }
+          }
+        : {}),
+      ...(normalizedStatus ? { status: normalizedStatus as RecipeStatus } : {}),
+      ...(reportsOnly ? { reportCount: { gt: 0 } } : {})
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipe.findMany({
+        where,
+        include: {
+          owner: {
+            select: { uid: true }
+          },
+          baseVersion: true,
+          independentVersion: true
+        },
+        orderBy: [{ reportCount: "desc" }, { updatedAt: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipe.count({ where })
+    ]);
+
+    return {
+      items: items.map(recipe => ({
+        id: recipe.id,
+        ownerType: recipe.ownerId ? "USER" : "SYSTEM",
+        title: recipe.title,
+        coverImageUrl: recipe.coverImageUrl,
+        sourceRecipeId: recipe.sourceRecipeId,
+        isCustomized: recipe.isCustomized,
+        status: recipe.status,
+        updatedAt: toIsoDate(recipe.updatedAt),
+        ownerUid: recipe.owner?.uid ?? null,
+        reportCount: recipe.reportCount,
+        blockedReason: recipe.blockedReason
+      })),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async listRecipeReports(page: number, pageSize: number, status?: string): Promise<PageResult<RecipeReportSummary>> {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedStatus = status?.trim();
+    if (normalizedStatus && !["OPEN", "RESOLVED"].includes(normalizedStatus)) {
+      throw new BadRequestException("举报状态参数错误");
+    }
+
+    const where: Prisma.RecipeReportWhereInput = normalizedStatus ? { status: normalizedStatus as "OPEN" | "RESOLVED" } : {};
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipeReport.findMany({
+        where,
+        include: {
+          reporter: {
+            select: { uid: true }
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipeReport.count({ where })
+    ]);
+
+    return {
+      items: items.map(report => ({
+        id: report.id,
+        recipeId: report.recipeId,
+        reporterUid: report.reporter.uid,
+        reason: report.reason,
+        status: report.status,
+        createdAt: toIsoDate(report.createdAt)
+      })),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async blockRecipe(recipeId: UUID, adminId: UUID, operationId: UUID, reason: string) {
+    await this.requireSuperAdmin(adminId);
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) throw new BadRequestException("下架原因不能为空");
+    const requestHash = `${recipeId}:${normalizedReason}`;
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeSummary>(
+        tx,
+        operationId,
+        "admin-recipe:block",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe:block", adminId, requestHash);
+
+      const changed = await tx.recipe.updateMany({
+        where: { id: recipeId, status: "ACTIVE" },
+        data: {
+          status: "BLOCKED",
+          blockedReason: normalizedReason,
+          blockedAt: new Date()
+        }
+      });
+      if (changed.count === 0) throw new ConflictException("只有正常菜谱可以下架");
+      const recipe = await tx.recipe.findUniqueOrThrow({
+        where: { id: recipeId },
+        include: { owner: { select: { uid: true } } }
+      });
+      const result = {
+        id: recipe.id,
+        ownerType: recipe.ownerId ? "USER" : "SYSTEM",
+        title: recipe.title,
+        coverImageUrl: recipe.coverImageUrl,
+        sourceRecipeId: recipe.sourceRecipeId,
+        isCustomized: recipe.isCustomized,
+        status: recipe.status,
+        updatedAt: toIsoDate(recipe.updatedAt),
+        ownerUid: recipe.owner?.uid ?? null,
+        reportCount: recipe.reportCount,
+        blockedReason: recipe.blockedReason
+      } satisfies AdminRecipeSummary;
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_BLOCKED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: { reason: normalizedReason }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe:block", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async unblockRecipe(recipeId: UUID, adminId: UUID, operationId: UUID) {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = recipeId;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeSummary>(
+        tx,
+        operationId,
+        "admin-recipe:unblock",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe:unblock", adminId, requestHash);
+
+      const changed = await tx.recipe.updateMany({
+        where: { id: recipeId, status: "BLOCKED" },
+        data: {
+          status: "ACTIVE",
+          blockedReason: null,
+          blockedAt: null
+        }
+      });
+      if (changed.count === 0) throw new ConflictException("只有已下架菜谱可以恢复");
+      const recipe = await tx.recipe.findUniqueOrThrow({
+        where: { id: recipeId },
+        include: { owner: { select: { uid: true } } }
+      });
+      const result = {
+        id: recipe.id,
+        ownerType: recipe.ownerId ? "USER" : "SYSTEM",
+        title: recipe.title,
+        coverImageUrl: recipe.coverImageUrl,
+        sourceRecipeId: recipe.sourceRecipeId,
+        isCustomized: recipe.isCustomized,
+        status: recipe.status,
+        updatedAt: toIsoDate(recipe.updatedAt),
+        ownerUid: recipe.owner?.uid ?? null,
+        reportCount: recipe.reportCount,
+        blockedReason: recipe.blockedReason
+      } satisfies AdminRecipeSummary;
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_UNBLOCKED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: {}
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe:unblock", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async resolveRecipeReport(reportId: UUID, adminId: UUID, operationId: UUID, resolutionNote?: string | null) {
+    await this.requireSuperAdmin(adminId);
+    const note = resolutionNote?.trim() || null;
+    const requestHash = `${reportId}:${note ?? ""}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<RecipeReportSummary>(
+        tx,
+        operationId,
+        "admin-recipe-report:resolve",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-report:resolve", adminId, requestHash);
+
+      const changed = await tx.recipeReport.updateMany({
+        where: { id: reportId, status: "OPEN" },
+        data: {
+          status: "RESOLVED",
+          resolutionNote: note,
+          resolvedAt: new Date()
+        }
+      });
+      if (changed.count === 0) throw new ConflictException("只有待处理举报可以处理");
+      const report = await tx.recipeReport.findUniqueOrThrow({
+        where: { id: reportId },
+        include: { reporter: { select: { uid: true } } }
+      });
+      const result = {
+        id: report.id,
+        recipeId: report.recipeId,
+        reporterUid: report.reporter.uid,
+        reason: report.reason,
+        status: report.status,
+        createdAt: toIsoDate(report.createdAt)
+      } satisfies RecipeReportSummary;
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_REPORT_RESOLVED",
+          objectType: "RECIPE_REPORT",
+          objectId: reportId,
+          payload: { recipeId: report.recipeId, resolutionNote: note }
+        }
+      });
+      await completeAdminIdempotentOperation(
+        tx,
+        operationId,
+        "admin-recipe-report:resolve",
+        adminId,
+        requestHash,
+        result
+      );
+      return result;
+    });
+  }
+
+  private async requireSuperAdmin(adminId: UUID) {
+    const admin = await this.prisma.adminAccount.findUnique({
+      where: { id: adminId },
+      select: { status: true, roles: true }
+    });
+    if (!admin || admin.status !== "ACTIVE" || !admin.roles.includes("SUPER_ADMIN")) {
+      throw new ForbiddenException("无权执行该操作");
+    }
   }
 }

@@ -19,7 +19,6 @@ enum UserStatus {
 
 enum DiningGroupStatus {
   ACTIVE
-  FROZEN
   ARCHIVED
 }
 
@@ -38,7 +37,8 @@ enum LongTermMemberStatus {
 enum LongTermMemberStatusReason {
   LEFT
   REMOVED
-  GROUP_DOWNGRADED
+  USER_OVER_LIMIT
+  OWNER_OVER_LIMIT
   GROUP_DISSOLVED
 }
 
@@ -48,13 +48,6 @@ enum DiningGroupInviteStatus {
   DECLINED
   REVOKED
   EXPIRED
-}
-
-enum CarryBackSnapshotStatus {
-  AVAILABLE
-  EXPIRED
-  DELETED
-  INVALIDATED
 }
 
 enum IdempotencyStatus {
@@ -76,6 +69,71 @@ enum OutboxStatus {
   FAILED
 }
 
+enum RecipeSourceKind {
+  SYSTEM
+  USER
+}
+
+enum RecipeStatus {
+  ACTIVE
+  RECYCLED
+  BLOCKED
+  DELETED
+}
+
+enum RecipeReportStatus {
+  OPEN
+  RESOLVED
+}
+
+enum MealSlot {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum DiningEventStatus {
+  PLANNED
+  CONFIRMED
+  CANCELLED
+}
+
+enum DiningEventParticipantSource {
+  DINING_GROUP
+  SHARE
+}
+
+enum DiningEventParticipantStatus {
+  INVITED
+  ACCEPTED
+  DECLINED
+  REMOVED
+}
+
+enum ShoppingStatus {
+  OPEN
+  BOUGHT
+  DELETED
+}
+
+enum ShoppingSourceType {
+  MANUAL
+  PLAN
+  EVENT
+  BRING
+}
+
+enum StorageLedgerModule {
+  RECIPE
+  FRIDGE
+  MEAL
+  SHOPPING
+  MEAL_GUEST
+  TECHNICAL_SNAPSHOT
+  RECYCLE_BIN
+  PROFILE_ASSET
+}
+
 model AdminAccount {
   id           String             @id @default(uuid()) @db.Uuid
   username     String             @unique @db.VarChar(64)
@@ -86,39 +144,51 @@ model AdminAccount {
   createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordAdmin")
+  auditEvents        AuditEvent[]        @relation("AuditEventAdmin")
+
   @@map("admin_accounts")
 }
 
 model User {
-  id           String     @id @default(uuid()) @db.Uuid
-  uid          Int        @unique
-  nickname     String?    @db.VarChar(64)
-  avatarUrl    String?    @map("avatar_url") @db.VarChar(512)
-  phone        String?    @unique @db.VarChar(32)
-  passwordHash String?    @map("password_hash") @db.VarChar(255)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                   String     @id @default(uuid()) @db.Uuid
+  uid                  Int        @unique
+  nickname             String?    @db.VarChar(64)
+  avatarUrl            String?    @map("avatar_url") @db.VarChar(512)
+  profileBackgroundUrl String?    @map("profile_background_url") @db.VarChar(512)
+  homeBackgroundUrl    String?    @map("home_background_url") @db.VarChar(512)
+  phone                String?    @unique @db.VarChar(32)
+  passwordHash         String?    @map("password_hash") @db.VarChar(255)
+  status               UserStatus @default(ACTIVE)
+  createdAt            DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  ownedDiningGroup   DiningGroup?        @relation("DiningGroupOwner")
-  space              UserSpace?          @relation("UserSpaceUser")
-  memberships        DiningGroupMember[]
-  createdInvites     DiningGroupInvite[] @relation("DiningGroupInviteCreator")
-  acceptedInvites    DiningGroupInvite[] @relation("DiningGroupInviteAcceptor")
-  carryBackSnapshots CarryBackSnapshot[]
-  entitlementGrant   EntitlementGrant?
-  tasteProfile       UserTasteProfile?
-  idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordUser")
-  auditEvents        AuditEvent[]        @relation("AuditEventActor")
+  ownedDiningGroup        DiningGroup?             @relation("DiningGroupOwner")
+  memberships             DiningGroupMember[]
+  createdInvites          DiningGroupInvite[]      @relation("DiningGroupInviteCreator")
+  acceptedInvites         DiningGroupInvite[]      @relation("DiningGroupInviteAcceptor")
+  entitlementGrant        EntitlementGrant?
+  tasteProfile            UserTasteProfile?
+  idempotencyRecords      IdempotencyRecord[]      @relation("IdempotencyRecordUser")
+  auditEvents             AuditEvent[]             @relation("AuditEventActor")
+  recipes                 Recipe[]                 @relation("RecipeOwner")
+  recipeVersions          RecipeContentVersion[]   @relation("RecipeContentAuthor")
+  recipeReports           RecipeReport[]           @relation("RecipeReportReporter")
+  mealPlans               MealPlanItem[]
+  diningEvents            DiningEvent[]            @relation("DiningEventOwner")
+  diningEventParticipants DiningEventParticipant[] @relation("DiningEventParticipantUser")
+  fridgeItems             FridgeItem[]
+  shoppingItems           ShoppingItem[]
+  storageLedger           StorageLedger[]
 
   @@index([createdAt])
   @@map("users")
 }
 
 model UserTasteProfile {
-  userId               String   @id @map("user_id") @db.Uuid
-  allergies            String[] @default([])
-  strictDislikes       String[] @default([]) @map("strict_dislikes")
+  userId              String   @id @map("user_id") @db.Uuid
+  allergies           String[] @default([])
+  strictDislikes      String[] @default([]) @map("strict_dislikes")
   dislikedIngredients String[] @default([]) @map("disliked_ingredients")
   flavorPreferences   String[] @default([]) @map("flavor_preferences")
   note                String?  @db.VarChar(1000)
@@ -134,57 +204,36 @@ model DiningGroup {
   name       String            @db.VarChar(80)
   ownerId    String            @unique @map("owner_id") @db.Uuid
   status     DiningGroupStatus @default(ACTIVE)
-  frozenAt   DateTime?         @map("frozen_at") @db.Timestamptz(3)
   archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
   version    Int               @default(1)
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner                  User                 @relation("DiningGroupOwner", fields: [ownerId], references: [id])
-  members                DiningGroupMember[]
-  invites                DiningGroupInvite[]
-  originalSpaces         UserSpace[]          @relation("OriginalDiningGroup")
-  currentSpaces          UserSpace[]          @relation("CurrentDiningGroup")
-  sourceSnapshots        CarryBackSnapshot[]  @relation("CarryBackSource")
-  targetSnapshots        CarryBackSnapshot[]  @relation("CarryBackTarget")
-  idempotencyRecords     IdempotencyRecord[]
-  auditEvents            AuditEvent[]
-  entitlementGrant       EntitlementGrant?
+  owner              User                @relation("DiningGroupOwner", fields: [ownerId], references: [id])
+  members            DiningGroupMember[]
+  invites            DiningGroupInvite[]
+  idempotencyRecords IdempotencyRecord[]
+  auditEvents        AuditEvent[]
+  diningEvents       DiningEvent[]
 
   @@index([status, createdAt])
   @@index([name])
   @@map("dining_groups")
 }
 
-model UserSpace {
-  userId                   String   @id @map("user_id") @db.Uuid
-  originalDiningGroupId    String   @unique @map("original_dining_group_id") @db.Uuid
-  currentDiningGroupId     String   @map("current_dining_group_id") @db.Uuid
-  version                  Int      @default(1)
-  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  user                User        @relation("UserSpaceUser", fields: [userId], references: [id])
-  originalDiningGroup DiningGroup @relation("OriginalDiningGroup", fields: [originalDiningGroupId], references: [id])
-  currentDiningGroup  DiningGroup @relation("CurrentDiningGroup", fields: [currentDiningGroupId], references: [id])
-
-  @@index([currentDiningGroupId])
-  @@map("user_spaces")
-}
-
 model DiningGroupMember {
-  id            String                     @id @default(uuid()) @db.Uuid
-  diningGroupId String                     @map("dining_group_id") @db.Uuid
-  userId        String                     @map("user_id") @db.Uuid
+  id            String                      @id @default(uuid()) @db.Uuid
+  diningGroupId String                      @map("dining_group_id") @db.Uuid
+  userId        String                      @map("user_id") @db.Uuid
   role          DiningGroupRole
-  status        LongTermMemberStatus       @default(ACTIVE)
+  status        LongTermMemberStatus        @default(ACTIVE)
   statusReason  LongTermMemberStatusReason? @map("status_reason")
-  joinedAt      DateTime                   @default(now()) @map("joined_at") @db.Timestamptz(3)
-  restrictedAt  DateTime?                  @map("restricted_at") @db.Timestamptz(3)
-  endedAt       DateTime?                  @map("ended_at") @db.Timestamptz(3)
-  version       Int                        @default(1)
-  createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  joinedAt      DateTime                    @default(now()) @map("joined_at") @db.Timestamptz(3)
+  restrictedAt  DateTime?                   @map("restricted_at") @db.Timestamptz(3)
+  endedAt       DateTime?                   @map("ended_at") @db.Timestamptz(3)
+  version       Int                         @default(1)
+  createdAt     DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   diningGroup DiningGroup @relation(fields: [diningGroupId], references: [id])
   user        User        @relation(fields: [userId], references: [id])
@@ -196,76 +245,266 @@ model DiningGroupMember {
 }
 
 model DiningGroupInvite {
-  id               String                    @id @default(uuid()) @db.Uuid
-  diningGroupId    String                    @map("dining_group_id") @db.Uuid
-  createdByUserId  String                    @map("created_by_user_id") @db.Uuid
-  acceptedByUserId String?                   @map("accepted_by_user_id") @db.Uuid
-  tokenHash        String                    @unique @map("token_hash") @db.VarChar(128)
-  status           DiningGroupInviteStatus   @default(PENDING)
-  expiresAt        DateTime                  @map("expires_at") @db.Timestamptz(3)
-  acceptedAt       DateTime?                 @map("accepted_at") @db.Timestamptz(3)
-  revokedAt        DateTime?                 @map("revoked_at") @db.Timestamptz(3)
-  policyVersion    Int                       @default(1) @map("policy_version")
-  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id               String                  @id @default(uuid()) @db.Uuid
+  diningGroupId    String                  @map("dining_group_id") @db.Uuid
+  createdByUserId  String                  @map("created_by_user_id") @db.Uuid
+  acceptedByUserId String?                 @map("accepted_by_user_id") @db.Uuid
+  tokenHash        String                  @unique @map("token_hash") @db.VarChar(128)
+  status           DiningGroupInviteStatus @default(PENDING)
+  expiresAt        DateTime                @map("expires_at") @db.Timestamptz(3)
+  acceptedAt       DateTime?               @map("accepted_at") @db.Timestamptz(3)
+  revokedAt        DateTime?               @map("revoked_at") @db.Timestamptz(3)
+  policyVersion    Int                     @default(1) @map("policy_version")
+  createdAt        DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   diningGroup DiningGroup @relation(fields: [diningGroupId], references: [id])
   createdBy   User        @relation("DiningGroupInviteCreator", fields: [createdByUserId], references: [id])
   acceptedBy  User?       @relation("DiningGroupInviteAcceptor", fields: [acceptedByUserId], references: [id])
 
   @@index([diningGroupId, status])
+  @@index([tokenHash, status, expiresAt])
   @@index([expiresAt])
   @@map("dining_group_invites")
 }
 
-model CarryBackSnapshot {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  userId                String                  @map("user_id") @db.Uuid
-  sourceDiningGroupId   String                  @map("source_dining_group_id") @db.Uuid
-  targetDiningGroupId   String                  @map("target_dining_group_id") @db.Uuid
-  sourceDiningGroupName String                  @map("source_dining_group_name") @db.VarChar(80)
-  status                CarryBackSnapshotStatus @default(AVAILABLE)
-  expiresAt             DateTime                @map("expires_at") @db.Timestamptz(3)
-  policyVersion         Int                     @default(1) @map("policy_version")
-  recipeCount           Int                     @default(0) @map("recipe_count")
-  fridgeItemCount       Int                     @default(0) @map("fridge_item_count")
-  shoppingItemCount     Int                     @default(0) @map("shopping_item_count")
-  deletedAt             DateTime?               @map("deleted_at") @db.Timestamptz(3)
-  invalidatedAt         DateTime?               @map("invalidated_at") @db.Timestamptz(3)
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
-
-  user              User        @relation(fields: [userId], references: [id])
-  sourceDiningGroup DiningGroup @relation("CarryBackSource", fields: [sourceDiningGroupId], references: [id])
-  targetDiningGroup DiningGroup @relation("CarryBackTarget", fields: [targetDiningGroupId], references: [id])
-
-  @@index([userId, status, expiresAt])
-  @@index([userId, sourceDiningGroupId, status])
-  @@index([sourceDiningGroupId])
-  @@map("carry_back_snapshots")
+enum EntitlementTier {
+  FREE
+  PLUS
+  PRO
+  ULTRA
 }
 
-/// Free 由服务端默认解析；每个用户或饭搭子至多保存一条 Plus 授权。
+/// Free 由服务端默认解析；这里只保存用户级有效套餐事实。
 model EntitlementGrant {
-  id            String    @id @default(uuid()) @db.Uuid
-  userId        String?   @unique @map("user_id") @db.Uuid
-  diningGroupId String?   @unique @map("dining_group_id") @db.Uuid
-  startsAt      DateTime  @default(now()) @map("starts_at") @db.Timestamptz(3)
-  endsAt        DateTime? @map("ends_at") @db.Timestamptz(3)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id        String          @id @default(uuid()) @db.Uuid
+  userId    String          @unique @map("user_id") @db.Uuid
+  tier      EntitlementTier
+  startsAt  DateTime        @default(now()) @map("starts_at") @db.Timestamptz(3)
+  endsAt    DateTime?       @map("ends_at") @db.Timestamptz(3)
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  diningGroup DiningGroup? @relation(fields: [diningGroupId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([tier, endsAt])
   @@map("entitlement_grants")
+}
+
+model RecipeContentVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  createdByUserId  String?  @map("created_by_user_id") @db.Uuid
+  name             String   @db.VarChar(120)
+  ingredientsJson  Json     @map("ingredients_json")
+  stepsJson        Json     @map("steps_json")
+  servings         String?  @db.VarChar(64)
+  durationMinutes  Int?     @map("duration_minutes")
+  imagesJson       Json     @map("images_json")
+  searchText       String   @map("search_text") @db.Text
+  contentSizeBytes Int      @default(0) @map("content_size_bytes")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdByUser           User?                    @relation("RecipeContentAuthor", fields: [createdByUserId], references: [id])
+  baseRecipes             Recipe[]                 @relation("RecipeBaseVersion")
+  independentRecipes      Recipe[]                 @relation("RecipeIndependentVersion")
+  mealPlans               MealPlanItem[]           @relation("MealPlanRecipeVersion")
+  diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
+
+  @@index([name])
+  @@index([createdByUserId, createdAt])
+  @@map("recipe_content_versions")
+}
+
+model Recipe {
+  id                   String           @id @default(uuid()) @db.Uuid
+  ownerId              String?          @map("owner_id") @db.Uuid
+  sourceKind           RecipeSourceKind @map("source_kind")
+  sourceRecipeId       String?          @map("source_recipe_id") @db.Uuid
+  baseVersionId        String           @map("base_version_id") @db.Uuid
+  independentVersionId String?          @map("independent_version_id") @db.Uuid
+  overrideJson         Json?            @map("override_json")
+  hiddenBaseImages     String[]         @default([]) @map("hidden_base_images")
+  isCustomized         Boolean          @default(false) @map("is_customized")
+  title                String           @db.VarChar(120)
+  searchText           String           @map("search_text") @db.Text
+  coverImageUrl        String?          @map("cover_image_url") @db.VarChar(512)
+  status               RecipeStatus     @default(ACTIVE)
+  blockedReason        String?          @map("blocked_reason") @db.VarChar(255)
+  blockedAt            DateTime?        @map("blocked_at") @db.Timestamptz(3)
+  recycledUntil        DateTime?        @map("recycled_until") @db.Timestamptz(3)
+  deletedAt            DateTime?        @map("deleted_at") @db.Timestamptz(3)
+  reportCount          Int              @default(0) @map("report_count")
+  version              Int              @default(1)
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner                   User?                    @relation("RecipeOwner", fields: [ownerId], references: [id])
+  sourceRecipe            Recipe?                  @relation("RecipeSource", fields: [sourceRecipeId], references: [id])
+  importedRecipes         Recipe[]                 @relation("RecipeSource")
+  baseVersion             RecipeContentVersion     @relation("RecipeBaseVersion", fields: [baseVersionId], references: [id])
+  independentVersion      RecipeContentVersion?    @relation("RecipeIndependentVersion", fields: [independentVersionId], references: [id])
+  reports                 RecipeReport[]
+  mealPlans               MealPlanItem[]
+  diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
+
+  @@index([ownerId, status, updatedAt])
+  @@index([sourceKind, status, updatedAt])
+  @@index([sourceRecipeId, baseVersionId, ownerId, status])
+  @@map("recipes")
+}
+
+model RecipeReport {
+  id             String             @id @default(uuid()) @db.Uuid
+  recipeId       String             @map("recipe_id") @db.Uuid
+  reporterId     String             @map("reporter_id") @db.Uuid
+  reason         String             @db.VarChar(255)
+  status         RecipeReportStatus @default(OPEN)
+  resolutionNote String?            @map("resolution_note") @db.VarChar(255)
+  resolvedAt     DateTime?          @map("resolved_at") @db.Timestamptz(3)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipe   Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  reporter User   @relation("RecipeReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([recipeId, status])
+  @@map("recipe_reports")
+}
+
+model MealPlanItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  planDate        DateTime @map("plan_date") @db.Date
+  mealSlot        MealSlot @map("meal_slot")
+  recipeId        String?  @map("recipe_id") @db.Uuid
+  recipeVersionId String   @map("recipe_version_id") @db.Uuid
+  menuSnapshot    Json     @map("menu_snapshot")
+  note            String?  @db.VarChar(255)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe        Recipe?              @relation(fields: [recipeId], references: [id])
+  recipeVersion RecipeContentVersion @relation("MealPlanRecipeVersion", fields: [recipeVersionId], references: [id])
+  diningEvent   DiningEvent?
+
+  @@unique([userId, planDate, mealSlot])
+  @@index([userId, planDate])
+  @@map("meal_plan_items")
+}
+
+model DiningEvent {
+  id                  String            @id @default(uuid()) @db.Uuid
+  userId              String            @map("user_id") @db.Uuid
+  mealPlanItemId      String?           @unique @map("meal_plan_item_id") @db.Uuid
+  diningGroupId       String?           @map("dining_group_id") @db.Uuid
+  title               String            @db.VarChar(120)
+  scheduledAt         DateTime          @map("scheduled_at") @db.Timestamptz(3)
+  location            String?           @db.VarChar(255)
+  status              DiningEventStatus @default(PLANNED)
+  menuSnapshot        Json              @map("menu_snapshot")
+  shareTokenHash      String?           @unique @map("share_token_hash") @db.VarChar(128)
+  shareTokenExpiresAt DateTime?         @map("share_token_expires_at") @db.Timestamptz(3)
+  version             Int               @default(1)
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User                     @relation("DiningEventOwner", fields: [userId], references: [id], onDelete: Cascade)
+  mealPlanItem MealPlanItem?            @relation(fields: [mealPlanItemId], references: [id])
+  diningGroup  DiningGroup?             @relation(fields: [diningGroupId], references: [id])
+  participants DiningEventParticipant[]
+
+  @@index([userId, scheduledAt])
+  @@index([diningGroupId, scheduledAt])
+  @@map("dining_events")
+}
+
+model DiningEventParticipant {
+  id             String                       @id @default(uuid()) @db.Uuid
+  diningEventId  String                       @map("dining_event_id") @db.Uuid
+  userId         String?                      @map("user_id") @db.Uuid
+  guestName      String?                      @map("guest_name") @db.VarChar(120)
+  sourceType     DiningEventParticipantSource @map("source_type")
+  status         DiningEventParticipantStatus @default(INVITED)
+  bringRecipeId  String?                      @map("bring_recipe_id") @db.Uuid
+  bringVersionId String?                      @map("bring_version_id") @db.Uuid
+  respondedAt    DateTime?                    @map("responded_at") @db.Timestamptz(3)
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningEvent  DiningEvent           @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+  user         User?                 @relation("DiningEventParticipantUser", fields: [userId], references: [id])
+  bringRecipe  Recipe?               @relation("DiningEventBringRecipe", fields: [bringRecipeId], references: [id])
+  bringVersion RecipeContentVersion? @relation("DiningEventBringVersion", fields: [bringVersionId], references: [id])
+
+  @@index([diningEventId, status])
+  @@index([userId, status])
+  @@map("dining_event_participants")
+}
+
+model FridgeItem {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  name         String    @db.VarChar(120)
+  quantityText String?   @map("quantity_text") @db.VarChar(64)
+  note         String?   @db.VarChar(255)
+  available    Boolean   @default(true)
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
+  version      Int       @default(1)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, available, updatedAt])
+  @@index([userId, name])
+  @@map("fridge_items")
+}
+
+model ShoppingItem {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  name         String             @db.VarChar(120)
+  quantityText String?            @map("quantity_text") @db.VarChar(64)
+  note         String?            @db.VarChar(255)
+  sourceType   ShoppingSourceType @map("source_type")
+  sourceKey    String?            @map("source_key") @db.VarChar(120)
+  status       ShoppingStatus     @default(OPEN)
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, updatedAt])
+  @@index([userId, sourceType, sourceKey])
+  @@map("shopping_items")
+}
+
+model StorageLedger {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  module    StorageLedgerModule
+  recordKey String              @map("record_key") @db.VarChar(160)
+  usedBytes Int                 @map("used_bytes")
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, module, recordKey])
+  @@index([userId, module])
+  @@map("storage_ledger")
 }
 
 model IdempotencyRecord {
   id            String            @id @default(uuid()) @db.Uuid
   operationId   String            @map("operation_id") @db.Uuid
   operationType String            @map("operation_type") @db.VarChar(64)
-  userId        String            @map("user_id") @db.Uuid
+  userId        String?           @map("user_id") @db.Uuid
+  adminId       String?           @map("admin_id") @db.Uuid
   diningGroupId String?           @map("dining_group_id") @db.Uuid
   requestHash   String            @map("request_hash") @db.VarChar(64)
   status        IdempotencyStatus @default(PROCESSING)
@@ -274,10 +513,12 @@ model IdempotencyRecord {
   createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user        User         @relation("IdempotencyRecordUser", fields: [userId], references: [id])
-  diningGroup DiningGroup? @relation(fields: [diningGroupId], references: [id])
+  user        User?         @relation("IdempotencyRecordUser", fields: [userId], references: [id], onDelete: Restrict)
+  admin       AdminAccount? @relation("IdempotencyRecordAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  diningGroup DiningGroup?  @relation(fields: [diningGroupId], references: [id])
 
   @@index([userId, operationType])
+  @@index([adminId, operationType])
   @@index([diningGroupId, operationType])
   @@index([operationId, operationType, userId, diningGroupId])
   @@index([expiresAt])
@@ -288,6 +529,7 @@ model AuditEvent {
   id            String         @id @default(uuid()) @db.Uuid
   actorType     AuditActorType @map("actor_type")
   actorUserId   String?        @map("actor_user_id") @db.Uuid
+  actorAdminId  String?        @map("actor_admin_id") @db.Uuid
   action        String         @db.VarChar(64)
   objectType    String         @map("object_type") @db.VarChar(64)
   objectId      String?        @map("object_id") @db.Uuid
@@ -295,10 +537,12 @@ model AuditEvent {
   payload       Json           @default("{}")
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  actorUser  User?        @relation("AuditEventActor", fields: [actorUserId], references: [id])
-  diningGroup DiningGroup? @relation(fields: [diningGroupId], references: [id])
+  actorUser   User?         @relation("AuditEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  actorAdmin  AdminAccount? @relation("AuditEventAdmin", fields: [actorAdminId], references: [id], onDelete: Restrict)
+  diningGroup DiningGroup?  @relation(fields: [diningGroupId], references: [id])
 
   @@index([actorType, actorUserId, createdAt])
+  @@index([actorType, actorAdminId, createdAt])
   @@index([objectType, objectId])
   @@index([diningGroupId, createdAt])
   @@map("audit_events")

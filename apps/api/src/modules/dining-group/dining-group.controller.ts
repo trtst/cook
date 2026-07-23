@@ -1,9 +1,26 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { CreateInviteDto, DiningGroupMembersQueryDto, OperationDto } from "../../contracts/dtos";
+import {
+  CreateInviteDto,
+  DiningGroupMembersQueryDto,
+  OperationDto,
+  RemoveDiningGroupMemberDto,
+  VersionedOperationDto
+} from "../../contracts/dtos";
+import {
+  AcceptInviteResultModel,
+  ApiOkModel,
+  CreateInviteResultModel,
+  DiningGroupMembersModel,
+  DissolveDiningGroupResultModel,
+  LeaveDiningGroupResultModel,
+  MyDiningGroupsModel,
+  RemoveDiningGroupMemberResultModel,
+  StorageUsageModel
+} from "../../contracts/openapi";
 import { DiningGroupService } from "./dining-group.service";
 
 @ApiTags("dining-groups")
@@ -13,32 +30,26 @@ import { DiningGroupService } from "./dining-group.service";
 export class DiningGroupController {
   constructor(@Inject(DiningGroupService) private readonly diningGroupService: DiningGroupService) {}
 
-  @Get("dining-groups/current")
-  @ApiOkResponse({ description: "当前登录用户进入饭搭子域所需的入口态" })
-  getCurrent(@Req() request: RequestWithUser) {
-    return this.diningGroupService.getCurrent(request.user.userId).then(result => ok(result));
-  }
-
-  @Get("carry-back-snapshots")
-  @ApiOkResponse({ description: "本人当前可用迁出快照列表" })
-  listSnapshots(@Req() request: RequestWithUser) {
-    return this.diningGroupService.listSnapshots(request.user.userId).then(result => ok(result));
-  }
-
-  @Get("storage-usage")
-  @ApiOkResponse({ description: "当前空间的存储使用量摘要" })
-  getStorageUsage(@Req() request: RequestWithUser) {
-    return this.diningGroupService.getStorageUsage(request.user.userId).then(result => ok(result));
+  @Get("dining-groups")
+  @ApiOkModel(MyDiningGroupsModel, "查询本人主理和加入的有效饭搭子")
+  listMine(@Req() request: RequestWithUser) {
+    return this.diningGroupService.listMine(request.user.userId).then(result => ok(result));
   }
 
   @Get("dining-group-members")
-  @ApiOkResponse({ description: "当前饭搭子成员列表" })
+  @ApiOkModel(DiningGroupMembersModel, "查询某个有效饭搭子的成员")
   listMembers(@Req() request: RequestWithUser, @Query() query: DiningGroupMembersQueryDto) {
     return this.diningGroupService.listMembers(request.user.userId, query.diningGroupId).then(result => ok(result));
   }
 
+  @Get("storage-usage")
+  @ApiOkModel(StorageUsageModel, "查询个人空间额度摘要")
+  getStorageUsage(@Req() request: RequestWithUser) {
+    return this.diningGroupService.getStorageUsage(request.user.userId).then(result => ok(result));
+  }
+
   @Post("dining-group-invites")
-  @ApiOkResponse({ description: "为当前饭搭子创建单次邀请" })
+  @ApiOkModel(CreateInviteResultModel, "为指定饭搭子创建单次邀请")
   createInvite(@Req() request: RequestWithUser, @Body() body: CreateInviteDto) {
     return this.diningGroupService
       .createInvite(request.user.userId, body.diningGroupId, body.operationId)
@@ -46,18 +57,44 @@ export class DiningGroupController {
   }
 
   @Post("dining-group-invites/:inviteToken/accept")
-  @ApiOkResponse({ description: "冻结原空间并加入当前唯一饭搭子" })
+  @ApiOkModel(AcceptInviteResultModel, "接受邀请并建立新的饭搭子成员关系")
   acceptInvite(@Req() request: RequestWithUser, @Param("inviteToken") inviteToken: string, @Body() body: OperationDto) {
     return this.diningGroupService.acceptInvite(request.user.userId, inviteToken, body.operationId).then(result => ok(result));
   }
 
   @Post("dining-groups/:diningGroupId/leave")
-  @ApiOkResponse({ description: "退出饭搭子、恢复原空间并创建迁出快照" })
+  @ApiOkModel(LeaveDiningGroupResultModel, "主动退出饭搭子，不回填个人数据")
   leave(
     @Req() request: RequestWithUser,
-    @Param("diningGroupId") diningGroupId: string,
-    @Body() body: OperationDto
+    @Param("diningGroupId", new ParseUUIDPipe({ version: "4" })) diningGroupId: string,
+    @Body() body: VersionedOperationDto
   ) {
-    return this.diningGroupService.leave(request.user.userId, diningGroupId, body.operationId).then(result => ok(result));
+    return this.diningGroupService
+      .leave(request.user.userId, diningGroupId, body.operationId, body.expectedVersion)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-groups/:diningGroupId/remove-member")
+  @ApiOkModel(RemoveDiningGroupMemberResultModel, "主理人移除指定成员")
+  removeMember(
+    @Req() request: RequestWithUser,
+    @Param("diningGroupId", new ParseUUIDPipe({ version: "4" })) diningGroupId: string,
+    @Body() body: RemoveDiningGroupMemberDto
+  ) {
+    return this.diningGroupService
+      .removeMember(request.user.userId, diningGroupId, body.userId, body.operationId, body.expectedVersion)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-groups/:diningGroupId/dissolve")
+  @ApiOkModel(DissolveDiningGroupResultModel, "主理人直接解散饭搭子，只结束关系对象")
+  dissolve(
+    @Req() request: RequestWithUser,
+    @Param("diningGroupId", new ParseUUIDPipe({ version: "4" })) diningGroupId: string,
+    @Body() body: VersionedOperationDto
+  ) {
+    return this.diningGroupService
+      .dissolve(request.user.userId, diningGroupId, body.operationId, body.expectedVersion)
+      .then(result => ok(result));
   }
 }

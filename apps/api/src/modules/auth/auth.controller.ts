@@ -1,10 +1,11 @@
 import { Body, Controller, Inject, Post, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import { PasswordLoginDto } from "../../contracts/dtos";
+import { ApiOkModel, PasswordLoginResultModel, RefreshSessionResultModel } from "../../contracts/openapi";
 import { AuthService } from "./auth.service";
 
 @ApiTags("auth")
@@ -14,7 +15,7 @@ export class AuthController {
 
   @Post("login")
   @UseGuards(LoginRateLimitGuard)
-  @ApiOkResponse({ description: "手机号密码登录，返回用户 token 和用户摘要" })
+  @ApiOkModel(PasswordLoginResultModel, "手机号密码登录，返回用户 token 和用户摘要")
   loginWithPassword(@Body() body: PasswordLoginDto) {
     return this.authService.loginWithPassword(body).then(result => ok(result));
   }
@@ -22,7 +23,7 @@ export class AuthController {
   @Post("refresh")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkResponse({ description: "刷新小程序用户 token" })
+  @ApiOkModel(RefreshSessionResultModel, "刷新小程序用户 token")
   refreshSession(@Req() request: RequestWithUser) {
     return this.authService.refreshSession(request.user.userId).then(result => ok(result));
   }

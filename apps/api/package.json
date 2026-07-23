@@ -6,7 +6,7 @@
   "type": "commonjs",
   "main": "./dist/main.js",
   "scripts": {
-    "dev": "tsx src/main.ts",
+    "dev": "node scripts/dev-api.cjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
@@ -14,8 +14,13 @@
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "verify:admin-readonly-flow": "tsx scripts/verify-admin-readonly-flow.ts",
+    "verify:admin-recipe-flow": "tsx scripts/verify-admin-recipe-flow.ts",
+    "verify:dto-flow": "tsx scripts/verify-dto-flow.ts",
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",
     "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts",
+    "verify:meal-pantry-flow": "tsx scripts/verify-meal-pantry-flow.ts",
+    "verify:openapi": "tsx scripts/verify-openapi.ts",
+    "verify:recipe-flow": "tsx scripts/verify-recipe-flow.ts",
     "verify:taste-profile-flow": "tsx scripts/verify-taste-profile-flow.ts"
   },
   "dependencies": {

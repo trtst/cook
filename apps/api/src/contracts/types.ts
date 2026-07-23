@@ -16,11 +16,28 @@ export interface PageResult<T> {
   hasNext: boolean;
 }
 
-export interface UserBasic {
+export interface SessionUser {
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
+}
+
+export interface UserDisplay {
+  profileBackgroundUrl: string | null;
+  homeBackgroundUrl: string | null;
+  canUseProfileBackground: boolean;
+  canUseHomeBackground: boolean;
+}
+
+export interface UserMembership {
+  tier: EntitlementTier;
+  validUntil: IsoDateTime | null;
+}
+
+export interface MeResponse extends SessionUser {
   phone: string | null;
+  display: UserDisplay;
+  membership: UserMembership;
 }
 
 export interface UserSummary {
@@ -29,8 +46,9 @@ export interface UserSummary {
   avatarUrl: string | null;
 }
 
-export interface UserProfile extends UserBasic {
+export interface UserProfile extends SessionUser {
   id: UUID;
+  phone: string | null;
   status: string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -44,7 +62,7 @@ export interface PasswordLoginRequest {
 export interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
-  user: UserBasic;
+  user: SessionUser;
 }
 
 export interface RefreshSessionResult {
@@ -84,65 +102,40 @@ export interface UpdateTasteProfileRequest {
 }
 
 export type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
-export type DiningGroupStatus = "ACTIVE" | "FROZEN" | "ARCHIVED";
+export type DiningGroupStatus = "ACTIVE" | "ARCHIVED";
 export type LongTermMemberStatus = "ACTIVE" | "RESTRICTED" | "ENDED";
-export type LongTermMemberStatusReason = "LEFT" | "REMOVED" | "GROUP_DOWNGRADED" | "GROUP_DISSOLVED";
-export type OriginalSpaceStatus = "ACTIVE" | "FROZEN";
-export type CarryBackSnapshotStatus = "AVAILABLE" | "EXPIRED" | "DELETED" | "INVALIDATED";
-export type SpaceState = "NORMAL" | "OVER_RECIPE_LIMIT" | "OVER_STORAGE_READONLY";
+export type LongTermMemberStatusReason =
+  | "LEFT"
+  | "REMOVED"
+  | "USER_OVER_LIMIT"
+  | "OWNER_OVER_LIMIT"
+  | "GROUP_DISSOLVED";
+export type RelationshipState = "NORMAL" | "OVER_MEMBER_LIMIT";
+export type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
+export type StorageModule =
+  | "RECIPE"
+  | "FRIDGE"
+  | "MEAL"
+  | "SHOPPING"
+  | "MEAL_GUEST"
+  | "TECHNICAL_SNAPSHOT"
+  | "RECYCLE_BIN"
+  | "PROFILE_ASSET";
 
-export interface PendingImportCounts {
-  recipe: number;
-  fridgeItem: number;
-  planDraft: number;
-  shoppingItem: number;
-}
-
-export interface CurrentSpaceSummary {
+export interface DiningGroupSummary {
   id: UUID;
   name: string;
   ownerUid: number;
+  isOwned: boolean;
   myRole: DiningGroupRole;
   myStatus: LongTermMemberStatus;
   myStatusReason: LongTermMemberStatusReason | null;
   memberCount: number;
   memberLimit: number;
-  recipeCount: number;
-  isShared: boolean;
-  sharedSince: IsoDateTime | null;
-  sharedDays: number | null;
-  state: SpaceState;
+  state: RelationshipState;
   version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
-}
-
-export interface OriginalSpaceSummary {
-  id: UUID;
-  name: string;
-  status: OriginalSpaceStatus;
-  frozenAt: IsoDateTime | null;
-  canImport: boolean;
-  pendingImportCounts: PendingImportCounts;
-}
-
-export interface CurrentOriginalSpaceSummary {
-  status: OriginalSpaceStatus;
-  canImport: boolean;
-}
-
-export interface CarryBackSnapshotSummary {
-  id: UUID;
-  sourceDiningGroupId: UUID;
-  sourceDiningGroupName: string;
-  status: CarryBackSnapshotStatus;
-  expiresAt: IsoDateTime;
-  createdAt: IsoDateTime;
-  itemCounts: {
-    recipe: number;
-    fridgeItem: number;
-    shoppingItem: number;
-  };
 }
 
 export interface DiningGroupMemberSummary {
@@ -158,17 +151,6 @@ export interface DiningGroupMemberSummary {
   version: number;
 }
 
-export type EntitlementTier = "FREE" | "PLUS";
-export type EntitlementScope = "USER" | "DINING_GROUP";
-export type StorageModule =
-  | "RECIPE"
-  | "FRIDGE"
-  | "MEAL"
-  | "SHOPPING"
-  | "MEAL_GUEST"
-  | "TECHNICAL_SNAPSHOT"
-  | "RECYCLE_BIN";
-
 export interface EffectiveImagePolicy {
   quality: number;
   maxWidth: number;
@@ -177,21 +159,24 @@ export interface EffectiveImagePolicy {
   maxInputBytes: number;
 }
 
-export interface EffectiveEntitlementSnapshot {
-  personalTier: EntitlementTier;
-  diningGroupTier: EntitlementTier;
-  currentScope: EntitlementScope;
+export interface ResolvedPolicy {
+  tier: EntitlementTier;
+  validUntil: IsoDateTime | null;
   recipeLimit: number;
-  memberLimit: number | null;
+  inviteLimit: number;
+  joinLimit: number;
+  memberLimit: number;
   storageLimitBytes: number;
-  snapshotDays: number;
   recycleDays: number;
   variantLimitPerRoot: number;
   imagePolicy: EffectiveImagePolicy;
+  ownedDiningGroupCount: number;
+  joinedDiningGroupCount: number;
+  state: RelationshipState;
 }
 
 export interface StorageUsageSummary {
-  state: SpaceState;
+  state: "NORMAL" | "OVER_STORAGE_READONLY";
   usedBytes: number;
   limitBytes: number;
   remainingBytes: number;
@@ -199,12 +184,19 @@ export interface StorageUsageSummary {
     module: StorageModule;
     usedBytes: number;
   }>;
+  calculatedAt: IsoDateTime;
 }
 
-export interface GetCurrentDiningGroupContextResponse {
-  currentSpace: CurrentSpaceSummary;
-  originalSpace: CurrentOriginalSpaceSummary | null;
-  entitlements: EffectiveEntitlementSnapshot;
+export interface DiningGroupUsageSummary {
+  ownedCount: number;
+  joinedCount: number;
+  joinLimit: number;
+  state: RelationshipState;
+}
+
+export interface GetMyDiningGroupsResponse {
+  items: DiningGroupSummary[];
+  usage: DiningGroupUsageSummary;
 }
 
 export interface DiningGroupMembersResult {
@@ -219,19 +211,23 @@ export interface CreateInviteResult {
 }
 
 export interface AcceptInviteResponse {
-  currentSpace: CurrentSpaceSummary;
-  originalSpace: CurrentOriginalSpaceSummary;
-  pendingImportCounts: PendingImportCounts;
+  diningGroup: DiningGroupSummary;
 }
 
 export interface LeaveDiningGroupResponse {
-  restoredSpace: CurrentSpaceSummary;
-  carryBackSnapshot: CarryBackSnapshotSummary | null;
-  futureParticipationCount: number;
+  diningGroupId: UUID;
+  leftAt: IsoDateTime;
 }
 
-export interface GetCarryBackSnapshotsResponse {
-  snapshots: CarryBackSnapshotSummary[];
+export interface RemoveDiningGroupMemberResponse {
+  diningGroupId: UUID;
+  userId: UUID;
+  removedAt: IsoDateTime;
+}
+
+export interface DissolveDiningGroupResponse {
+  diningGroupId: UUID;
+  dissolvedAt: IsoDateTime;
 }
 
 export interface AdminDiningGroupSummary {
@@ -252,9 +248,159 @@ export interface AdminLoginRequest {
 
 export interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
-  currentSpace: {
-    id: UUID;
-    name: string;
-  };
-  entitlements: EffectiveEntitlementSnapshot;
+  membership: UserMembership;
+  display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
+  diningGroupUsage: DiningGroupUsageSummary;
+  diningGroups: DiningGroupSummary[];
+  storage: StorageUsageSummary;
+  recipePolicy: Pick<ResolvedPolicy, "recipeLimit" | "recycleDays" | "variantLimitPerRoot">;
+  invitePolicy: Pick<ResolvedPolicy, "inviteLimit" | "memberLimit">;
+  imagePolicy: EffectiveImagePolicy;
+}
+
+export interface RecipeIngredientInput {
+  name: string;
+  amount: string;
+}
+
+export interface RecipeStepInput {
+  content: string;
+}
+
+export interface RecipeImageInput {
+  key: string;
+  url: string;
+  sizeBytes: number;
+}
+
+export interface RecipeContentInput {
+  name: string;
+  ingredients: RecipeIngredientInput[];
+  steps: RecipeStepInput[];
+  servings: string | null;
+  durationMinutes: number | null;
+}
+
+export interface RecipeContentPayload extends RecipeContentInput {
+  images: RecipeImageInput[];
+}
+
+export interface RecipeSummary {
+  id: UUID;
+  ownerType: "USER" | "SYSTEM";
+  title: string;
+  coverImageUrl: string | null;
+  sourceRecipeId: UUID | null;
+  isCustomized: boolean;
+  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  updatedAt: IsoDateTime;
+}
+
+export interface RecipeDetail extends RecipeSummary {
+  ownerUid: number | null;
+  content: RecipeContentPayload;
+  hiddenBaseImages: string[];
+  canEdit: boolean;
+  canImport: boolean;
+  version: number;
+  createdAt: IsoDateTime;
+}
+
+export interface RecipeListResult {
+  items: RecipeSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasNext: boolean;
+}
+
+export interface ImportRecipeResult {
+  recipe: RecipeDetail;
+  reusedExisting: boolean;
+}
+
+export interface DeleteRecipeResponse {
+  recipeId: UUID;
+  status: "RECYCLED" | "DELETED";
+  deletedAt: IsoDateTime;
+  recycledUntil: IsoDateTime | null;
+}
+
+export interface RecipeReportSummary {
+  id: UUID;
+  recipeId: UUID;
+  reporterUid: number;
+  reason: string;
+  status: "OPEN" | "RESOLVED";
+  createdAt: IsoDateTime;
+}
+
+export interface AdminRecipeSummary extends RecipeSummary {
+  ownerUid: number | null;
+  reportCount: number;
+  blockedReason: string | null;
+}
+
+export interface MealPlanSummary {
+  id: UUID;
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  title: string;
+  hasDiningEvent: boolean;
+  diningEventId: UUID | null;
+  createdAt: IsoDateTime;
+}
+
+export interface DiningEventParticipantSummary {
+  id: UUID;
+  userUid: number | null;
+  guestName: string | null;
+  sourceType: "DINING_GROUP" | "SHARE";
+  status: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED";
+  bringRecipeId: UUID | null;
+  bringRecipeTitle: string | null;
+}
+
+export interface DiningEventSummary {
+  id: UUID;
+  title: string;
+  scheduledAt: IsoDateTime;
+  location: string | null;
+  status: "PLANNED" | "CONFIRMED" | "CANCELLED";
+  planItemId: UUID | null;
+  diningGroupId: UUID | null;
+  menu: RecipeContentPayload;
+  participants: DiningEventParticipantSummary[];
+  shareTokenPath: string | null;
+  createdAt: IsoDateTime;
+}
+
+export interface FridgeItemSummary {
+  id: UUID;
+  name: string;
+  quantityText: string | null;
+  note: string | null;
+  available: boolean;
+  updatedAt: IsoDateTime;
+}
+
+export interface ShoppingItemSummary {
+  id: UUID;
+  name: string;
+  quantityText: string | null;
+  note: string | null;
+  sourceType: "MANUAL" | "PLAN" | "EVENT" | "BRING";
+  sourceKey: string | null;
+  status: "OPEN" | "BOUGHT" | "DELETED";
+  updatedAt: IsoDateTime;
+}
+
+export interface SharePreviewResponse {
+  title: string;
+  scheduledAt: IsoDateTime;
+  location: string | null;
+  menu: Pick<RecipeContentPayload, "name" | "ingredients" | "images">;
+  organizerUid: number;
 }

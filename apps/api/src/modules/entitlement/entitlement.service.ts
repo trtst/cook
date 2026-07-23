@@ -1,97 +1,73 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
-import { Prisma, type LongTermMemberStatus } from "@prisma/client";
+import { Inject, Injectable } from "@nestjs/common";
+import { Prisma, type EntitlementTier as DbEntitlementTier, type LongTermMemberStatus } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
-import type { EffectiveEntitlementSnapshot, EntitlementTier, UUID } from "../../contracts/types";
+import type { EntitlementTier, RelationshipState, ResolvedPolicy, UUID } from "../../contracts/types";
 
-type EntitlementDb = Pick<Prisma.TransactionClient, "entitlementGrant">;
+type EntitlementDb = Pick<Prisma.TransactionClient, "entitlementGrant" | "diningGroupMember" | "diningGroup">;
 
-interface EntitlementContext {
-  userId: UUID;
-  diningGroupId: UUID;
-  ownerId: UUID;
-  memberCount: number;
+const activeStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
+
+function mapTier(tier: DbEntitlementTier | null | undefined): EntitlementTier {
+  return tier ?? "FREE";
 }
-
-const effectiveMemberStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
 
 @Injectable()
 export class EntitlementService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  getCurrent(userId: UUID) {
-    return this.prisma.$transaction(async tx => {
-      const userSpace = await tx.userSpace.findUnique({
-        where: { userId },
-        include: { currentDiningGroup: true }
-      });
-      if (!userSpace) throw new BadRequestException("当前账号尚未初始化单人空间");
+  async resolveForUser(db: EntitlementDb, userId: UUID, now = new Date()): Promise<ResolvedPolicy> {
+    const [grant, ownedDiningGroupCount, joinedDiningGroupCount] = await Promise.all([
+      db.entitlementGrant.findFirst({
+        where: {
+          userId,
+          startsAt: { lte: now },
+          OR: [{ endsAt: null }, { endsAt: { gt: now } }]
+        },
+        orderBy: { startsAt: "desc" },
+        select: { tier: true, endsAt: true }
+      }),
+      db.diningGroup.count({ where: { ownerId: userId, status: "ACTIVE" } }),
+      db.diningGroupMember.count({
+        where: {
+          userId,
+          status: { in: activeStatuses },
+          diningGroup: { status: "ACTIVE" }
+        }
+      })
+    ]);
 
-      const [member, memberCount] = await Promise.all([
-        tx.diningGroupMember.findUnique({
-          where: { diningGroupId_userId: { diningGroupId: userSpace.currentDiningGroupId, userId } }
-        }),
-        tx.diningGroupMember.count({
-          where: { diningGroupId: userSpace.currentDiningGroupId, status: { in: effectiveMemberStatuses } }
-        })
-      ]);
-      if (!member || member.status === "ENDED") throw new BadRequestException("当前空间成员关系无效");
-
-      return this.resolve(tx, {
-        userId,
-        diningGroupId: userSpace.currentDiningGroupId,
-        ownerId: userSpace.currentDiningGroup.ownerId,
-        memberCount
-      });
-    });
-  }
-
-  async resolve(db: EntitlementDb, context: EntitlementContext, now = new Date()): Promise<EffectiveEntitlementSnapshot> {
-    const grants = await db.entitlementGrant.findMany({
-      where: {
-        AND: [
-          { OR: [{ userId: context.userId }, { diningGroupId: context.diningGroupId }] },
-          { startsAt: { lte: now } },
-          { OR: [{ endsAt: null }, { endsAt: { gt: now } }] }
-        ]
-      },
-      select: { userId: true, diningGroupId: true }
-    });
-
-    const groupPlus = grants.some(grant => grant.diningGroupId === context.diningGroupId);
-    const directPlus = grants.some(grant => grant.userId === context.userId);
-    const personalPlus = directPlus || (groupPlus && context.ownerId === context.userId);
-    const personalTier: EntitlementTier = personalPlus ? "PLUS" : "FREE";
-    const diningGroupTier: EntitlementTier = groupPlus ? "PLUS" : "FREE";
-    const groupScope = context.memberCount > 1 || groupPlus;
-    const currentScope = groupScope ? "DINING_GROUP" : "USER";
-    const scopeTier = groupScope ? diningGroupTier : personalTier;
-    const actionTier: EntitlementTier = personalPlus || groupPlus ? "PLUS" : "FREE";
+    const tier = mapTier(grant?.tier);
+    const state: RelationshipState = joinedDiningGroupCount > policy.joinLimit[tier] ? "OVER_MEMBER_LIMIT" : "NORMAL";
 
     return {
-      personalTier,
-      diningGroupTier,
-      currentScope,
-      recipeLimit: policy.recipeLimit[currentScope][scopeTier],
-      memberLimit: groupScope ? policy.memberLimit[diningGroupTier] : null,
-      storageLimitBytes: policy.storageLimitBytes[currentScope][scopeTier],
-      snapshotDays: policy.snapshotDays[personalTier],
-      recycleDays: policy.recycleDays[scopeTier],
-      variantLimitPerRoot: policy.variantLimit[actionTier],
-      imagePolicy: policy.image[actionTier]
+      tier,
+      validUntil: grant?.endsAt?.toISOString() ?? null,
+      recipeLimit: policy.recipeLimit[tier],
+      inviteLimit: policy.inviteLimit[tier],
+      joinLimit: policy.joinLimit[tier],
+      memberLimit: policy.memberLimit[tier],
+      storageLimitBytes: policy.storageLimitBytes[tier],
+      recycleDays: policy.recycleDays[tier],
+      variantLimitPerRoot: policy.variantLimit[tier],
+      imagePolicy: policy.image[tier],
+      ownedDiningGroupCount,
+      joinedDiningGroupCount,
+      state
     };
   }
 
-  async getMemberLimit(db: EntitlementDb, diningGroupId: UUID, now = new Date()) {
-    const plusGrant = await db.entitlementGrant.findFirst({
+  async getTier(db: EntitlementDb, userId: UUID, now = new Date()): Promise<EntitlementTier> {
+    const grant = await db.entitlementGrant.findFirst({
       where: {
-        diningGroupId,
+        userId,
         startsAt: { lte: now },
         OR: [{ endsAt: null }, { endsAt: { gt: now } }]
       },
-      select: { id: true }
+      orderBy: { startsAt: "desc" },
+      select: { tier: true }
     });
 
-    return policy.memberLimit[plusGrant ? "PLUS" : "FREE"];
+    return mapTier(grant?.tier);
   }
 }

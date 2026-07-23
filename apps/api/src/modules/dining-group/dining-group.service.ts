@@ -1,37 +1,32 @@
 import { createHash, randomBytes } from "node:crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma, type DiningGroup, type DiningGroupMember, type LongTermMemberStatus, type User } from "@prisma/client";
+import { PrismaService } from "../../common/prisma.service";
+import { policy } from "../../config/policy";
 import type {
   AcceptInviteResponse,
-  CarryBackSnapshotSummary,
   CreateInviteResult,
-  CurrentOriginalSpaceSummary,
-  CurrentSpaceSummary,
+  DiningGroupUsageSummary,
   DiningGroupMemberSummary,
   DiningGroupMembersResult,
-  GetCarryBackSnapshotsResponse,
-  GetCurrentDiningGroupContextResponse,
+  DiningGroupSummary,
+  DissolveDiningGroupResponse,
+  GetMyDiningGroupsResponse,
   LeaveDiningGroupResponse,
-  OriginalSpaceSummary,
+  RemoveDiningGroupMemberResponse,
   StorageUsageSummary,
   UUID
 } from "../../contracts/types";
-import {
-  Prisma,
-  type CarryBackSnapshot,
-  type DiningGroup,
-  type DiningGroupMember,
-  type LongTermMemberStatus,
-  type User
-} from "@prisma/client";
-import { PrismaService } from "../../common/prisma.service";
-import { policy } from "../../config/policy";
 import { EntitlementService } from "../entitlement/entitlement.service";
 
 const inviteTokenBytes = 32;
 const createInviteOperation = "dining-group-invite:create";
 const acceptInviteOperation = "dining-group-invite:accept";
 const leaveDiningGroupOperation = "dining-group:leave";
+const removeMemberOperation = "dining-group:remove-member";
+const dissolveDiningGroupOperation = "dining-group:dissolve";
 const invalidInviteMessage = "邀请已失效";
+const activeStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
 
 type MemberWithUser = DiningGroupMember & {
   user: Pick<User, "uid" | "nickname" | "avatarUrl">;
@@ -41,42 +36,16 @@ type DiningGroupWithOwnerUid = DiningGroup & {
   owner: Pick<User, "uid">;
 };
 
-interface CurrentContextFacts {
-  userSpace: {
-    currentDiningGroup: DiningGroupWithOwnerUid;
-    currentDiningGroupId: UUID;
-    originalDiningGroup: DiningGroup;
-    originalDiningGroupId: UUID;
-  };
-  member: DiningGroupMember;
-  memberCount: number;
-  memberLimit: number;
-  recipeCount: number;
-  sharedSince: Date | null;
-}
-
-interface SpaceSummaryFacts {
-  diningGroup: DiningGroupWithOwnerUid;
-  member: DiningGroupMember;
-  memberCount: number;
-  memberLimit: number;
-  recipeCount: number;
-  sharedSince: Date | null;
-}
-
-const effectiveMemberStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
-const dayMs = 24 * 60 * 60 * 1000;
-
 function toIsoDate(value: Date) {
   return value.toISOString();
 }
 
-function createOpaqueInviteToken() {
-  return randomBytes(inviteTokenBytes).toString("base64url");
-}
-
 function hashText(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function createOpaqueInviteToken() {
+  return randomBytes(inviteTokenBytes).toString("base64url");
 }
 
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -87,15 +56,6 @@ function fromJson<T>(value: unknown): T {
   return value as T;
 }
 
-function emptyPendingImportCounts() {
-  return {
-    recipe: 0,
-    fridgeItem: 0,
-    planDraft: 0,
-    shoppingItem: 0
-  };
-}
-
 @Injectable()
 export class DiningGroupService {
   constructor(
@@ -103,45 +63,48 @@ export class DiningGroupService {
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService
   ) {}
 
-  getCurrent(userId: UUID) {
-    return this.prisma.$transaction(tx => this.getCurrentWith(tx, userId));
-  }
-
-  async listSnapshots(userId: UUID): Promise<GetCarryBackSnapshotsResponse> {
-    const now = new Date();
-    const snapshots = await this.listAvailableSnapshots(this.prisma, userId, now);
-
-    return { snapshots: snapshots.map(snapshot => this.toSnapshotSummary(snapshot, now)) };
-  }
-
-  getStorageUsage(userId: UUID): Promise<StorageUsageSummary> {
+  async listMine(userId: UUID): Promise<GetMyDiningGroupsResponse> {
     return this.prisma.$transaction(async tx => {
-      const now = new Date();
-      const facts = await this.loadCurrentFacts(tx, userId, now);
-      const entitlements = await this.entitlementService.resolve(
-        tx,
-        {
-          userId,
-          diningGroupId: facts.userSpace.currentDiningGroupId,
-          ownerId: facts.userSpace.currentDiningGroup.ownerId,
-          memberCount: facts.memberCount
-        },
-        now
-      );
+      const [memberships, resolved] = await Promise.all([
+        tx.diningGroupMember.findMany({
+          where: {
+            userId,
+            status: { in: activeStatuses },
+            diningGroup: { status: "ACTIVE" }
+          },
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
+          include: {
+            diningGroup: {
+              include: {
+                owner: { select: { uid: true } }
+              }
+            }
+          }
+        }),
+        this.entitlementService.resolveForUser(tx, userId)
+      ]);
 
-      return this.buildStorageSummary(entitlements.storageLimitBytes);
+      const items = await Promise.all(memberships.map(membership => this.buildDiningGroupSummary(tx, membership.diningGroupId, membership)));
+      const usage: DiningGroupUsageSummary = {
+        ownedCount: resolved.ownedDiningGroupCount,
+        joinedCount: resolved.joinedDiningGroupCount,
+        joinLimit: resolved.joinLimit,
+        state: resolved.state
+      };
+
+      return { items, usage };
     });
   }
 
   async listMembers(userId: UUID, diningGroupId: UUID): Promise<DiningGroupMembersResult> {
-    await this.requireCurrentMember(userId, diningGroupId);
+    await this.requireActiveMembership(this.prisma, userId, diningGroupId);
 
     const members = await this.prisma.diningGroupMember.findMany({
       where: {
         diningGroupId,
-        status: { in: ["ACTIVE", "RESTRICTED"] }
+        status: { in: activeStatuses }
       },
-      orderBy: { joinedAt: "asc" },
+      orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
       include: {
         user: {
           select: {
@@ -159,13 +122,39 @@ export class DiningGroupService {
     };
   }
 
+  async getStorageUsage(userId: UUID): Promise<StorageUsageSummary> {
+    return this.prisma.$transaction(async tx => {
+      const [resolved, rows] = await Promise.all([
+        this.entitlementService.resolveForUser(tx, userId),
+        tx.storageLedger.findMany({
+          where: { userId },
+          select: {
+            module: true,
+            usedBytes: true
+          }
+        })
+      ]);
+      const byModuleMap = new Map<string, number>();
+      for (const row of rows) {
+        byModuleMap.set(row.module, (byModuleMap.get(row.module) ?? 0) + row.usedBytes);
+      }
+      const usedBytes = Array.from(byModuleMap.values()).reduce((total, value) => total + value, 0);
+      const remainingBytes = Math.max(0, resolved.storageLimitBytes - usedBytes);
+      return {
+        state: usedBytes > resolved.storageLimitBytes ? "OVER_STORAGE_READONLY" : "NORMAL",
+        usedBytes,
+        limitBytes: resolved.storageLimitBytes,
+        remainingBytes,
+        byModule: Array.from(byModuleMap.entries()).map(([module, moduleUsedBytes]) => ({
+          module: module as StorageUsageSummary["byModule"][number]["module"],
+          usedBytes: moduleUsedBytes
+        })),
+        calculatedAt: toIsoDate(new Date())
+      };
+    });
+  }
+
   async createInvite(userId: UUID, diningGroupId: UUID, operationId: UUID): Promise<CreateInviteResult> {
-    const membership = await this.requireCurrentMember(userId, diningGroupId);
-
-    if (membership.role === "MEMBER") {
-      throw new ForbiddenException("无权邀请成员");
-    }
-
     const requestHash = hashText(diningGroupId);
     const repeated = await this.getIdempotentResult<CreateInviteResult>(
       operationId,
@@ -176,35 +165,36 @@ export class DiningGroupService {
     );
     if (repeated) return repeated;
 
-    const [activeMemberCount, memberLimit] = await Promise.all([
-      this.prisma.diningGroupMember.count({ where: { diningGroupId, status: { in: effectiveMemberStatuses } } }),
-      this.entitlementService.getMemberLimit(this.prisma, diningGroupId)
-    ]);
-    if (activeMemberCount >= memberLimit) throw new BadRequestException("饭搭子成员已达上限");
-
-    const expiresAt = new Date(Date.now() + policy.inviteExpiresMs);
     const inviteToken = createOpaqueInviteToken();
+    const expiresAt = new Date(Date.now() + policy.inviteExpiresMs);
     const result = {
       inviteToken,
       sharePath: `/pages_restaurant/invite/index?token=${encodeURIComponent(inviteToken)}`,
-      expiresAt: expiresAt.toISOString()
+      expiresAt: toIsoDate(expiresAt)
     };
 
     try {
       await this.prisma.$transaction(async tx => {
-        await this.startIdempotentOperation(
-          tx,
-          operationId,
-          createInviteOperation,
-          userId,
-          diningGroupId,
-          requestHash
-        );
+        await this.startIdempotentOperation(tx, operationId, createInviteOperation, userId, diningGroupId, requestHash);
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+
+        const ownerMembership = await this.requireOwnerMembership(tx, userId, diningGroupId);
+        const entitlements = await this.entitlementService.resolveForUser(tx, userId);
+        if (entitlements.state === "OVER_MEMBER_LIMIT") {
+          throw new ForbiddenException("当前已超出饭搭子关系上限");
+        }
+
+        const activeMemberCount = await tx.diningGroupMember.count({
+          where: { diningGroupId, status: { in: activeStatuses } }
+        });
+        if (activeMemberCount >= entitlements.memberLimit) {
+          throw new BadRequestException("饭搭子成员已达上限");
+        }
 
         await tx.diningGroupInvite.create({
           data: {
             diningGroupId,
-            createdByUserId: userId,
+            createdByUserId: ownerMembership.userId,
             tokenHash: hashText(inviteToken),
             status: "PENDING",
             expiresAt,
@@ -212,6 +202,9 @@ export class DiningGroupService {
           }
         });
 
+        await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_INVITE_CREATED", {
+          diningGroupId
+        });
         await this.completeIdempotentOperation(
           tx,
           operationId,
@@ -268,70 +261,48 @@ export class DiningGroupService {
         );
 
         await tx.$queryRaw`SELECT "id" FROM "dining_group_invites" WHERE "token_hash" = ${tokenHash} FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${invite.diningGroupId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId}::uuid FOR UPDATE`;
 
-        const currentInvite = await tx.diningGroupInvite.findUnique({ where: { tokenHash } });
-        if (!currentInvite || currentInvite.status !== "PENDING" || currentInvite.expiresAt <= new Date()) {
-          throw new BadRequestException(invalidInviteMessage);
-        }
-
-        await tx.$queryRaw`SELECT "user_id" FROM "user_spaces" WHERE "user_id" = ${userId}::uuid FOR UPDATE`;
-        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${currentInvite.diningGroupId}::uuid FOR UPDATE`;
-
-        const userSpace = await tx.userSpace.findUnique({
-          where: { userId },
-          include: { originalDiningGroup: true }
-        });
-        if (!userSpace) throw new BadRequestException("当前账号尚未初始化单人空间");
-        if (userSpace.currentDiningGroupId !== userSpace.originalDiningGroupId) {
-          throw new BadRequestException("当前已加入长期饭搭子，请先退出后再加入");
-        }
-        if (currentInvite.diningGroupId === userSpace.originalDiningGroupId) {
-          throw new BadRequestException("不能加入自己的饭搭子");
-        }
-
-        const originalMemberCount = await tx.diningGroupMember.count({
-          where: {
-            diningGroupId: userSpace.originalDiningGroupId,
-            status: { in: effectiveMemberStatuses }
-          }
-        });
-        if (originalMemberCount !== 1) {
-          throw new BadRequestException("已有长期成员的主理人不能加入其他饭搭子");
-        }
-
-        const targetGroup = await tx.diningGroup.findUnique({
-          where: { id: currentInvite.diningGroupId },
+        const currentInvite = await tx.diningGroupInvite.findUnique({
+          where: { tokenHash },
           include: {
-            owner: {
-              select: { uid: true }
+            diningGroup: {
+              include: { owner: { select: { uid: true } } }
             }
           }
         });
-        if (!targetGroup || targetGroup.status !== "ACTIVE") throw new NotFoundException("饭搭子不存在");
-
-        const [activeMemberCount, existingMember, memberLimit] = await Promise.all([
-          tx.diningGroupMember.count({ where: { diningGroupId: targetGroup.id, status: { in: effectiveMemberStatuses } } }),
-          tx.diningGroupMember.findUnique({
-            where: { diningGroupId_userId: { diningGroupId: targetGroup.id, userId } }
-          }),
-          this.entitlementService.getMemberLimit(tx, targetGroup.id)
-        ]);
-        if (existingMember?.status !== "ACTIVE" && activeMemberCount >= memberLimit) {
-          throw new BadRequestException("饭搭子成员已达上限");
+        if (!currentInvite || currentInvite.status !== "PENDING" || currentInvite.expiresAt <= new Date()) {
+          throw new BadRequestException(invalidInviteMessage);
+        }
+        if (currentInvite.diningGroup.status !== "ACTIVE") {
+          throw new NotFoundException("饭搭子不存在");
         }
 
-        await tx.carryBackSnapshot.updateMany({
-          where: { userId, sourceDiningGroupId: targetGroup.id, status: "AVAILABLE" },
-          data: { status: "INVALIDATED", invalidatedAt: new Date() }
+        const existingMember = await tx.diningGroupMember.findUnique({
+          where: {
+            diningGroupId_userId: {
+              diningGroupId: currentInvite.diningGroupId,
+              userId
+            }
+          }
         });
-        await tx.diningGroup.update({
-          where: { id: userSpace.originalDiningGroupId },
-          data: { status: "FROZEN", frozenAt: new Date(), version: { increment: 1 } }
+        if (existingMember?.status === "ACTIVE" || existingMember?.status === "RESTRICTED") {
+          throw new BadRequestException("当前已加入该饭搭子");
+        }
+
+        const userEntitlements = await this.entitlementService.resolveForUser(tx, userId);
+        if (userEntitlements.joinedDiningGroupCount >= userEntitlements.joinLimit) {
+          throw new BadRequestException("可加入饭搭子数已达上限");
+        }
+
+        const ownerEntitlements = await this.entitlementService.resolveForUser(tx, currentInvite.diningGroup.ownerId);
+        const activeMemberCount = await tx.diningGroupMember.count({
+          where: { diningGroupId: currentInvite.diningGroupId, status: { in: activeStatuses } }
         });
-        await tx.diningGroup.update({
-          where: { id: targetGroup.id },
-          data: { version: { increment: 1 } }
-        });
+        if (activeMemberCount >= ownerEntitlements.memberLimit) {
+          throw new BadRequestException("饭搭子成员已达上限");
+        }
 
         if (existingMember) {
           await tx.diningGroupMember.update({
@@ -348,47 +319,37 @@ export class DiningGroupService {
           });
         } else {
           await tx.diningGroupMember.create({
-            data: { diningGroupId: targetGroup.id, userId, role: "MEMBER", status: "ACTIVE" }
+            data: {
+              diningGroupId: currentInvite.diningGroupId,
+              userId,
+              role: "MEMBER",
+              status: "ACTIVE"
+            }
           });
         }
 
-        await tx.userSpace.update({
-          where: { userId },
-          data: { currentDiningGroupId: targetGroup.id, version: { increment: 1 } }
-        });
         await tx.diningGroupInvite.update({
           where: { id: currentInvite.id },
           data: { status: "ACCEPTED", acceptedByUserId: userId, acceptedAt: new Date() }
         });
-        await this.writeLifecycleEvent(tx, userId, targetGroup.id, "DINING_GROUP_INVITE_ACCEPTED", userSpace.originalDiningGroupId);
+        await tx.diningGroup.update({
+          where: { id: currentInvite.diningGroupId },
+          data: { version: { increment: 1 } }
+        });
 
-        const acceptedFacts = await this.loadSpaceSummaryFacts(tx, targetGroup.id, userId, targetGroup.ownerId);
-        const currentSpace = this.toCurrentSpace(
-          acceptedFacts.diningGroup,
-          acceptedFacts.member,
-          acceptedFacts.memberCount,
-          acceptedFacts.memberLimit,
-          acceptedFacts.recipeCount,
-          acceptedFacts.sharedSince
-        );
-        const result: AcceptInviteResponse = {
-          currentSpace,
-          originalSpace: this.toCurrentOriginalSpace({
-            ...userSpace.originalDiningGroup,
-            status: "FROZEN",
-            frozenAt: new Date(),
-            version: userSpace.originalDiningGroup.version + 1,
-            updatedAt: new Date()
-          }),
-          pendingImportCounts: emptyPendingImportCounts()
-        };
+        const membership = await this.requireActiveMembership(tx, userId, currentInvite.diningGroupId);
+        const diningGroup = await this.buildDiningGroupSummary(tx, currentInvite.diningGroupId, membership);
+        const result: AcceptInviteResponse = { diningGroup };
 
+        await this.writeLifecycleEvent(tx, userId, currentInvite.diningGroupId, "DINING_GROUP_INVITE_ACCEPTED", {
+          diningGroupId: currentInvite.diningGroupId
+        });
         await this.completeIdempotentOperation(
           tx,
           operationId,
           acceptInviteOperation,
           userId,
-          targetGroup.id,
+          currentInvite.diningGroupId,
           tokenHash,
           result
         );
@@ -409,8 +370,13 @@ export class DiningGroupService {
     }
   }
 
-  async leave(userId: UUID, diningGroupId: UUID, operationId: UUID): Promise<LeaveDiningGroupResponse> {
-    const requestHash = hashText(diningGroupId);
+  async leave(
+    userId: UUID,
+    diningGroupId: UUID,
+    operationId: UUID,
+    expectedVersion: number
+  ): Promise<LeaveDiningGroupResponse> {
+    const requestHash = hashText(`${diningGroupId}:${expectedVersion}`);
     const repeated = await this.getIdempotentResult<LeaveDiningGroupResponse>(
       operationId,
       leaveDiningGroupOperation,
@@ -422,52 +388,23 @@ export class DiningGroupService {
 
     try {
       return await this.prisma.$transaction(async tx => {
-        await this.startIdempotentOperation(
-          tx,
-          operationId,
-          leaveDiningGroupOperation,
-          userId,
-          diningGroupId,
-          requestHash
-        );
-
-        await tx.$queryRaw`SELECT "user_id" FROM "user_spaces" WHERE "user_id" = ${userId}::uuid FOR UPDATE`;
+        await this.startIdempotentOperation(tx, operationId, leaveDiningGroupOperation, userId, diningGroupId, requestHash);
         await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
 
-        const userSpace = await tx.userSpace.findUnique({
-          where: { userId },
-          include: { originalDiningGroup: true, currentDiningGroup: true }
-        });
-        if (!userSpace || userSpace.currentDiningGroupId !== diningGroupId) {
-          throw new NotFoundException("饭搭子不存在");
+        const member = await this.requireActiveMembership(tx, userId, diningGroupId);
+        if (member.role === "OWNER") {
+          throw new BadRequestException("主理人请直接解散饭搭子");
         }
-        if (userSpace.originalDiningGroupId === diningGroupId) {
-          throw new BadRequestException("主理人不能直接退出自己的饭搭子");
-        }
+        await this.assertGroupVersion(tx, diningGroupId, expectedVersion);
 
-        const member = await tx.diningGroupMember.findUnique({
-          where: { diningGroupId_userId: { diningGroupId, userId } }
-        });
-        if (!member || member.status === "ENDED") throw new NotFoundException("饭搭子不存在");
-        if (member.role === "OWNER") throw new BadRequestException("主理人不能直接退出自己的饭搭子");
-
-        const memberCount = await tx.diningGroupMember.count({
-          where: { diningGroupId, status: { in: effectiveMemberStatuses } }
-        });
-        const entitlements = await this.entitlementService.resolve(tx, {
-          userId,
-          diningGroupId,
-          ownerId: userSpace.currentDiningGroup.ownerId,
-          memberCount
-        });
-
+        const leftAt = new Date();
         await tx.diningGroupMember.update({
           where: { id: member.id },
           data: {
             status: "ENDED",
             statusReason: "LEFT",
             restrictedAt: null,
-            endedAt: new Date(),
+            endedAt: leftAt,
             version: { increment: 1 }
           }
         });
@@ -475,46 +412,15 @@ export class DiningGroupService {
           where: { id: diningGroupId },
           data: { version: { increment: 1 } }
         });
-        await tx.diningGroup.update({
-          where: { id: userSpace.originalDiningGroupId },
-          data: { status: "ACTIVE", frozenAt: null, archivedAt: null, version: { increment: 1 } }
-        });
-        await tx.userSpace.update({
-          where: { userId },
-          data: { currentDiningGroupId: userSpace.originalDiningGroupId, version: { increment: 1 } }
-        });
 
-        const snapshot = await tx.carryBackSnapshot.create({
-          data: {
-            userId,
-            sourceDiningGroupId: diningGroupId,
-            targetDiningGroupId: userSpace.originalDiningGroupId,
-            sourceDiningGroupName: userSpace.currentDiningGroup.name,
-            expiresAt: new Date(Date.now() + entitlements.snapshotDays * 24 * 60 * 60 * 1000),
-            policyVersion: policy.version
-          }
-        });
-        await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_LEFT", userSpace.originalDiningGroupId);
-
-        const restoredFacts = await this.loadSpaceSummaryFacts(
-          tx,
-          userSpace.originalDiningGroupId,
-          userId,
-          userSpace.originalDiningGroup.ownerId
-        );
         const result: LeaveDiningGroupResponse = {
-          restoredSpace: this.toCurrentSpace(
-            restoredFacts.diningGroup,
-            restoredFacts.member,
-            restoredFacts.memberCount,
-            restoredFacts.memberLimit,
-            restoredFacts.recipeCount,
-            restoredFacts.sharedSince
-          ),
-          carryBackSnapshot: this.toSnapshotSummary(snapshot, new Date()),
-          futureParticipationCount: 0
+          diningGroupId,
+          leftAt: toIsoDate(leftAt)
         };
 
+        await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_LEFT", {
+          diningGroupId
+        });
         await this.completeIdempotentOperation(
           tx,
           operationId,
@@ -541,231 +447,272 @@ export class DiningGroupService {
     }
   }
 
-  private async requireCurrentMember(userId: UUID, diningGroupId: UUID) {
-    const userSpace = await this.prisma.userSpace.findUnique({ where: { userId } });
-    if (!userSpace || userSpace.currentDiningGroupId !== diningGroupId) throw new NotFoundException("饭搭子不存在");
-
-    const member = await this.prisma.diningGroupMember.findUnique({
-      where: { diningGroupId_userId: { diningGroupId, userId } }
-    });
-    if (!member || member.status !== "ACTIVE") throw new ForbiddenException("当前成员无权访问完整饭搭子数据");
-    return member;
-  }
-
-  private async getCurrentWith(tx: Prisma.TransactionClient, userId: UUID): Promise<GetCurrentDiningGroupContextResponse> {
-    const now = new Date();
-    const facts = await this.loadCurrentFacts(tx, userId, now);
-    const entitlements = await this.entitlementService.resolve(
-      tx,
-      {
-        userId,
-        diningGroupId: facts.userSpace.currentDiningGroupId,
-        ownerId: facts.userSpace.currentDiningGroup.ownerId,
-        memberCount: facts.memberCount
-      },
-      now
-    );
-
-    return this.buildCurrentContextResponse(facts, entitlements);
-  }
-
-  private async loadCurrentFacts(tx: Prisma.TransactionClient, userId: UUID, now: Date): Promise<CurrentContextFacts> {
-    const userSpace = await tx.userSpace.findUnique({
-      where: { userId },
-      include: {
-        currentDiningGroup: {
-          include: {
-            owner: {
-              select: { uid: true }
-            }
-          }
-        },
-        originalDiningGroup: true
-      }
-    });
-    if (!userSpace) throw new BadRequestException("当前账号尚未初始化单人空间");
-
-    const [member, memberCount, sharedSince] = await Promise.all([
-      tx.diningGroupMember.findUnique({
-        where: { diningGroupId_userId: { diningGroupId: userSpace.currentDiningGroupId, userId } }
-      }),
-      tx.diningGroupMember.count({
-        where: { diningGroupId: userSpace.currentDiningGroupId, status: { in: effectiveMemberStatuses } }
-      }),
-      this.findSharedSince(tx, userSpace.currentDiningGroupId)
-    ]);
-    // 菜谱模块尚未落表；recipeCount 字段先冻结为入口态摘要，落表后替换为真实计数。
-    const recipeCount = 0;
-    if (!member || member.status === "ENDED") throw new BadRequestException("当前空间成员关系无效");
-
-    const memberLimit = await this.entitlementService.getMemberLimit(tx, userSpace.currentDiningGroupId, now);
-
-    return {
-      userSpace,
-      member,
-      memberCount,
-      memberLimit,
-      recipeCount,
-      sharedSince
-    };
-  }
-
-  private async loadSpaceSummaryFacts(
-    tx: Prisma.TransactionClient,
-    diningGroupId: UUID,
+  async removeMember(
     userId: UUID,
-    ownerId: UUID,
-    now = new Date()
-  ): Promise<SpaceSummaryFacts> {
-    const [diningGroup, member, memberCount, memberLimit, sharedSince] = await Promise.all([
-      tx.diningGroup.findUnique({
-        where: { id: diningGroupId },
-        include: {
-          owner: {
-            select: { uid: true }
+    diningGroupId: UUID,
+    targetUserId: UUID,
+    operationId: UUID,
+    expectedVersion: number
+  ): Promise<RemoveDiningGroupMemberResponse> {
+    const requestHash = hashText(`${diningGroupId}:${targetUserId}:${expectedVersion}`);
+    const repeated = await this.getIdempotentResult<RemoveDiningGroupMemberResponse>(
+      operationId,
+      removeMemberOperation,
+      userId,
+      diningGroupId,
+      requestHash
+    );
+    if (repeated) return repeated;
+
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await this.startIdempotentOperation(tx, operationId, removeMemberOperation, userId, diningGroupId, requestHash);
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+
+        await this.requireOwnerMembership(tx, userId, diningGroupId);
+        const member = await this.requireActiveMembership(tx, targetUserId, diningGroupId);
+        if (member.role === "OWNER") throw new BadRequestException("不能移除主理人");
+        await this.assertGroupVersion(tx, diningGroupId, expectedVersion);
+
+        const removedAt = new Date();
+        await tx.diningGroupMember.update({
+          where: { id: member.id },
+          data: {
+            status: "ENDED",
+            statusReason: "REMOVED",
+            restrictedAt: null,
+            endedAt: removedAt,
+            version: { increment: 1 }
           }
+        });
+        await tx.diningGroup.update({
+          where: { id: diningGroupId },
+          data: { version: { increment: 1 } }
+        });
+
+        const result: RemoveDiningGroupMemberResponse = {
+          diningGroupId,
+          userId: targetUserId,
+          removedAt: toIsoDate(removedAt)
+        };
+
+        await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_MEMBER_REMOVED", {
+          diningGroupId,
+          targetUserId
+        });
+        await this.completeIdempotentOperation(
+          tx,
+          operationId,
+          removeMemberOperation,
+          userId,
+          diningGroupId,
+          requestHash,
+          result
+        );
+        return result;
+      });
+    } catch (error) {
+      if (this.isUniqueError(error)) {
+        const existing = await this.getIdempotentResult<RemoveDiningGroupMemberResponse>(
+          operationId,
+          removeMemberOperation,
+          userId,
+          diningGroupId,
+          requestHash
+        );
+        if (existing) return existing;
+      }
+      throw error;
+    }
+  }
+
+  async dissolve(
+    userId: UUID,
+    diningGroupId: UUID,
+    operationId: UUID,
+    expectedVersion: number
+  ): Promise<DissolveDiningGroupResponse> {
+    const requestHash = hashText(`${diningGroupId}:${expectedVersion}`);
+    const repeated = await this.getIdempotentResult<DissolveDiningGroupResponse>(
+      operationId,
+      dissolveDiningGroupOperation,
+      userId,
+      diningGroupId,
+      requestHash
+    );
+    if (repeated) return repeated;
+
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await this.startIdempotentOperation(
+          tx,
+          operationId,
+          dissolveDiningGroupOperation,
+          userId,
+          diningGroupId,
+          requestHash
+        );
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+        await this.requireOwnerMembership(tx, userId, diningGroupId);
+        await this.assertGroupVersion(tx, diningGroupId, expectedVersion);
+
+        const dissolvedAt = new Date();
+        await tx.diningGroupMember.updateMany({
+          where: {
+            diningGroupId,
+            status: { in: activeStatuses }
+          },
+          data: {
+            status: "ENDED",
+            statusReason: "GROUP_DISSOLVED",
+            restrictedAt: null,
+            endedAt: dissolvedAt
+          }
+        });
+        await tx.diningGroupInvite.updateMany({
+          where: {
+            diningGroupId,
+            status: "PENDING"
+          },
+          data: {
+            status: "REVOKED",
+            revokedAt: dissolvedAt
+          }
+        });
+        await tx.diningGroup.update({
+          where: { id: diningGroupId },
+          data: {
+            status: "ARCHIVED",
+            archivedAt: dissolvedAt,
+            version: { increment: 1 }
+          }
+        });
+
+        const result: DissolveDiningGroupResponse = {
+          diningGroupId,
+          dissolvedAt: toIsoDate(dissolvedAt)
+        };
+
+        await this.writeLifecycleEvent(tx, userId, diningGroupId, "DINING_GROUP_DISSOLVED", {
+          diningGroupId
+        });
+        await this.completeIdempotentOperation(
+          tx,
+          operationId,
+          dissolveDiningGroupOperation,
+          userId,
+          diningGroupId,
+          requestHash,
+          result
+        );
+        return result;
+      });
+    } catch (error) {
+      if (this.isUniqueError(error)) {
+        const existing = await this.getIdempotentResult<DissolveDiningGroupResponse>(
+          operationId,
+          dissolveDiningGroupOperation,
+          userId,
+          diningGroupId,
+          requestHash
+        );
+        if (existing) return existing;
+      }
+      throw error;
+    }
+  }
+
+  private async buildDiningGroupSummary(
+    db: Prisma.TransactionClient | PrismaService,
+    diningGroupId: UUID,
+    membership: Pick<DiningGroupMember, "id" | "diningGroupId" | "role" | "status" | "statusReason" | "joinedAt" | "restrictedAt" | "endedAt" | "version" | "userId"> & {
+      diningGroup?: DiningGroupWithOwnerUid;
+    }
+  ): Promise<DiningGroupSummary> {
+    const diningGroup =
+      membership.diningGroup ??
+      (await db.diningGroup.findUnique({
+        where: { id: diningGroupId },
+        include: { owner: { select: { uid: true } } }
+      }));
+    if (!diningGroup || diningGroup.status !== "ACTIVE") throw new NotFoundException("饭搭子不存在");
+
+    const [memberCount, ownerEntitlements] = await Promise.all([
+      db.diningGroupMember.count({
+        where: {
+          diningGroupId,
+          status: { in: activeStatuses }
         }
       }),
-      tx.diningGroupMember.findUnique({
-        where: { diningGroupId_userId: { diningGroupId, userId } }
-      }),
-      tx.diningGroupMember.count({
-        where: { diningGroupId, status: { in: effectiveMemberStatuses } }
-      }),
-      this.entitlementService.getMemberLimit(tx, diningGroupId, now),
-      this.findSharedSince(tx, diningGroupId)
+      this.entitlementService.resolveForUser(db, diningGroup.ownerId)
     ]);
-    const recipeCount = 0;
-
-    if (!diningGroup || !member || member.status === "ENDED") {
-      throw new BadRequestException("当前空间成员关系无效");
-    }
-
-    if (diningGroup.ownerId !== ownerId && member.role === "OWNER") {
-      throw new BadRequestException("当前空间主理人关系无效");
-    }
-
-    return {
-      diningGroup,
-      member,
-      memberCount,
-      memberLimit,
-      recipeCount,
-      sharedSince
-    };
-  }
-
-  private buildCurrentContextResponse(
-    facts: CurrentContextFacts,
-    entitlements: GetCurrentDiningGroupContextResponse["entitlements"],
-  ): GetCurrentDiningGroupContextResponse {
-    return {
-      currentSpace: this.toCurrentSpace(
-        facts.userSpace.currentDiningGroup,
-        facts.member,
-        facts.memberCount,
-        facts.memberLimit,
-        facts.recipeCount,
-        facts.sharedSince
-      ),
-      originalSpace:
-        facts.userSpace.originalDiningGroupId === facts.userSpace.currentDiningGroupId
-          ? null
-          : this.toCurrentOriginalSpace(facts.userSpace.originalDiningGroup),
-      entitlements
-    };
-  }
-
-  private buildStorageSummary(limitBytes: number): StorageUsageSummary {
-    return {
-      state: "NORMAL",
-      usedBytes: 0,
-      limitBytes,
-      remainingBytes: limitBytes,
-      byModule: []
-    };
-  }
-
-  private toCurrentSpace(
-    diningGroup: DiningGroupWithOwnerUid,
-    member: DiningGroupMember,
-    memberCount: number,
-    memberLimit: number,
-    recipeCount: number,
-    sharedSince: Date | null
-  ): CurrentSpaceSummary {
-    const isShared = Boolean(sharedSince);
 
     return {
       id: diningGroup.id,
       name: diningGroup.name,
       ownerUid: diningGroup.owner.uid,
-      myRole: member.role,
-      myStatus: member.status,
-      myStatusReason: member.statusReason,
+      isOwned: diningGroup.ownerId === membership.userId,
+      myRole: membership.role,
+      myStatus: membership.status,
+      myStatusReason: membership.statusReason,
       memberCount,
-      memberLimit,
-      recipeCount,
-      isShared,
-      sharedSince: sharedSince ? toIsoDate(sharedSince) : null,
-      sharedDays: sharedSince ? this.countSharedDays(sharedSince) : null,
-      state: "NORMAL",
+      memberLimit: ownerEntitlements.memberLimit,
+      state: memberCount > ownerEntitlements.memberLimit ? "OVER_MEMBER_LIMIT" : "NORMAL",
       version: diningGroup.version,
       createdAt: toIsoDate(diningGroup.createdAt),
       updatedAt: toIsoDate(diningGroup.updatedAt)
     };
   }
 
-  private async findSharedSince(tx: Prisma.TransactionClient, diningGroupId: UUID) {
-    const firstMember = await tx.diningGroupMember.findFirst({
+  private async requireActiveMembership(
+    db: Prisma.TransactionClient | PrismaService,
+    userId: UUID,
+    diningGroupId: UUID
+  ) {
+    const member = await db.diningGroupMember.findUnique({
       where: {
-        diningGroupId,
-        role: { not: "OWNER" },
-        status: { in: effectiveMemberStatuses }
-      },
-      orderBy: { joinedAt: "asc" },
-      select: { joinedAt: true }
-    });
-
-    return firstMember?.joinedAt ?? null;
-  }
-
-  private countSharedDays(sharedSince: Date) {
-    return Math.max(1, Math.floor((Date.now() - sharedSince.getTime()) / dayMs) + 1);
-  }
-
-  private toCurrentOriginalSpace(diningGroup: DiningGroup): CurrentOriginalSpaceSummary {
-    return {
-      status: diningGroup.status === "FROZEN" ? "FROZEN" : "ACTIVE",
-      canImport: diningGroup.status === "FROZEN"
-    };
-  }
-
-  private toOriginalSpace(diningGroup: DiningGroup): OriginalSpaceSummary {
-    return {
-      id: diningGroup.id,
-      name: diningGroup.name,
-      status: diningGroup.status === "FROZEN" ? "FROZEN" : "ACTIVE",
-      frozenAt: diningGroup.frozenAt ? toIsoDate(diningGroup.frozenAt) : null,
-      canImport: diningGroup.status === "FROZEN",
-      pendingImportCounts: emptyPendingImportCounts()
-    };
-  }
-
-  private toSnapshotSummary(snapshot: CarryBackSnapshot, now: Date): CarryBackSnapshotSummary {
-    return {
-      id: snapshot.id,
-      sourceDiningGroupId: snapshot.sourceDiningGroupId,
-      sourceDiningGroupName: snapshot.sourceDiningGroupName,
-      status: snapshot.expiresAt <= now && snapshot.status === "AVAILABLE" ? "EXPIRED" : snapshot.status,
-      expiresAt: toIsoDate(snapshot.expiresAt),
-      createdAt: toIsoDate(snapshot.createdAt),
-      itemCounts: {
-        recipe: snapshot.recipeCount,
-        fridgeItem: snapshot.fridgeItemCount,
-        shoppingItem: snapshot.shoppingItemCount
+        diningGroupId_userId: {
+          diningGroupId,
+          userId
+        }
       }
-    };
+    });
+    if (!member || !activeStatuses.includes(member.status)) {
+      throw new NotFoundException("饭搭子不存在");
+    }
+
+    const diningGroup = await db.diningGroup.findUnique({
+      where: { id: diningGroupId },
+      select: { status: true }
+    });
+    if (!diningGroup || diningGroup.status !== "ACTIVE") {
+      throw new NotFoundException("饭搭子不存在");
+    }
+
+    return member;
+  }
+
+  private async requireOwnerMembership(
+    db: Prisma.TransactionClient | PrismaService,
+    userId: UUID,
+    diningGroupId: UUID
+  ) {
+    const member = await this.requireActiveMembership(db, userId, diningGroupId);
+    if (member.role !== "OWNER") {
+      throw new ForbiddenException("无权操作该饭搭子");
+    }
+    return member;
+  }
+
+  private async assertGroupVersion(tx: Prisma.TransactionClient, diningGroupId: UUID, expectedVersion: number) {
+    const diningGroup = await tx.diningGroup.findUnique({
+      where: { id: diningGroupId },
+      select: { version: true }
+    });
+    if (!diningGroup) throw new NotFoundException("饭搭子不存在");
+    if (diningGroup.version !== expectedVersion) {
+      throw new ConflictException("饭搭子已被更新，请刷新后重试");
+    }
   }
 
   private toMemberSummary(member: MemberWithUser): DiningGroupMemberSummary {
@@ -853,7 +800,7 @@ export class DiningGroupService {
     userId: UUID,
     diningGroupId: UUID,
     action: string,
-    originalDiningGroupId: UUID
+    payload: Record<string, unknown>
   ) {
     await tx.auditEvent.create({
       data: {
@@ -863,7 +810,7 @@ export class DiningGroupService {
         objectType: "DINING_GROUP",
         objectId: diningGroupId,
         diningGroupId,
-        payload: { originalDiningGroupId }
+        payload: toJson(payload)
       }
     });
     await tx.outboxEvent.create({
@@ -871,23 +818,12 @@ export class DiningGroupService {
         eventType: action,
         aggregateType: "DINING_GROUP",
         aggregateId: diningGroupId,
-        payload: { userId, originalDiningGroupId }
+        payload: toJson(payload)
       }
     });
   }
 
   private isUniqueError(error: unknown) {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-  }
-
-  private listAvailableSnapshots(
-    db: Pick<Prisma.TransactionClient, "carryBackSnapshot">,
-    userId: UUID,
-    now: Date
-  ) {
-    return db.carryBackSnapshot.findMany({
-      where: { userId, status: "AVAILABLE", expiresAt: { gt: now } },
-      orderBy: { createdAt: "desc" }
-    });
   }
 }

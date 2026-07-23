@@ -1,5 +1,5 @@
 import { PrismaClient, type UserStatus } from "@prisma/client";
-import type { PasswordLoginResult, RefreshSessionResult, UserBasic } from "../src/contracts/types";
+import type { MeResponse, PasswordLoginResult, RefreshSessionResult } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 
 loadLocalEnv();
@@ -58,7 +58,7 @@ async function main() {
   const originalStatus = seededUser.status;
 
   try {
-    const unauthenticatedMe = await request<UserBasic>("/users/me");
+    const unauthenticatedMe = await request<MeResponse>("/users/me");
     assert(unauthenticatedMe.status === 401, "unauthenticated GET /users/me should return 401");
 
     const login = await requestData<PasswordLoginResult>("/auth/login", {
@@ -66,22 +66,32 @@ async function main() {
       body: JSON.stringify({ phone: ownerPhone, password })
     });
     assert(login.user.uid === seededUser.uid, "login user uid mismatch");
-    assert(login.user.phone === ownerPhone, "login phone mismatch");
+    assert(!("phone" in login.user), "login response should not expose phone");
 
     const authorization = `Bearer ${login.token}`;
-    const meAfterLogin = await requestData<UserBasic>("/users/me", {
+    const meAfterLogin = await requestData<MeResponse>("/users/me", {
       headers: { authorization }
     });
     assert(meAfterLogin.uid === seededUser.uid, "GET /users/me after login mismatch");
 
     const nickname = `下一餐用户-${Date.now()}`;
-    const updatedUser = await requestData<UserBasic>("/users/me", {
+    const oldFieldUpdate = await request<MeResponse>("/users/me", {
       method: "PUT",
       headers: { authorization },
       body: JSON.stringify({
         nickname,
         avatarUrl: "https://example.com/avatar.png",
         phone: "13700000000"
+      })
+    });
+    assert(oldFieldUpdate.status === 400, "old phone field should return 400");
+
+    const updatedUser = await requestData<MeResponse>("/users/me", {
+      method: "PUT",
+      headers: { authorization },
+      body: JSON.stringify({
+        nickname,
+        avatarUrl: "https://example.com/avatar.png"
       })
     });
     assert(updatedUser.nickname === nickname, "nickname update failed");
@@ -96,7 +106,7 @@ async function main() {
     assert(refreshed.expiresAt, "refresh expiresAt missing");
 
     const refreshedAuthorization = `Bearer ${refreshed.token}`;
-    const meAfterRefresh = await requestData<UserBasic>("/users/me", {
+    const meAfterRefresh = await requestData<MeResponse>("/users/me", {
       headers: { authorization: refreshedAuthorization }
     });
     assert(meAfterRefresh.nickname === nickname, "refreshed session did not read the updated profile");
@@ -112,7 +122,7 @@ async function main() {
     });
     assert(disabledRefresh.status === 401, "disabled user refresh should return 401");
 
-    const disabledMe = await request<UserBasic>("/users/me", {
+    const disabledMe = await request<MeResponse>("/users/me", {
       headers: { authorization: refreshedAuthorization }
     });
     assert(disabledMe.status === 401, "disabled user GET /users/me should return 401");
@@ -126,6 +136,7 @@ async function main() {
           disabledRefreshStatus: disabledRefresh.status,
           disabledMeStatus: disabledMe.status,
           nicknameUpdated: updatedUser.nickname === nickname,
+          oldPhoneFieldStatus: oldFieldUpdate.status,
           phoneUnchanged: updatedUser.phone === ownerPhone
         },
         null,

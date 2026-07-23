@@ -9,10 +9,13 @@ import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
 import { DiningGroupModule } from "./dining-group/dining-group.module";
 import { EntitlementModule } from "./entitlement/entitlement.module";
+import { MealModule } from "./meal/meal.module";
+import { PantryModule } from "./pantry/pantry.module";
+import { RecipeModule } from "./recipe/recipe.module";
 import { UserModule } from "./user/user.module";
 
 @Module({
-  imports: [CoreModule, AdminModule, AuthModule, DiningGroupModule, EntitlementModule, UserModule],
+  imports: [CoreModule, AdminModule, AuthModule, DiningGroupModule, EntitlementModule, RecipeModule, MealModule, PantryModule, UserModule],
   providers: [
     AdminAuthGuard,
     LoginRateLimitGuard,

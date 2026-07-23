@@ -3,23 +3,20 @@ import { PrismaService } from "../../common/prisma.service";
 import type {
   ChangeCurrentPasswordRequest,
   PasswordLoginRequest,
-  UpdateCurrentUserRequest,
-  UserBasic
+  SessionUser
 } from "../../contracts/types";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 
-function toUserBasic(user: {
+function toSessionUser(user: {
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
-  phone: string | null;
-}): UserBasic {
+}): SessionUser {
   return {
     uid: user.uid,
     nickname: user.nickname,
-    avatarUrl: user.avatarUrl,
-    phone: user.phone
+    avatarUrl: user.avatarUrl
   };
 }
 
@@ -46,20 +43,8 @@ export class AuthService {
     return {
       token: token.token,
       expiresAt: token.expiresAt,
-      user: toUserBasic(user)
+      user: toSessionUser(user)
     };
-  }
-
-  async getCurrentUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!user || user.status !== "ACTIVE") {
-      throw new UnauthorizedException("未登录或 token 失效");
-    }
-
-    return toUserBasic(user);
   }
 
   async refreshSession(userId: string) {
@@ -77,26 +62,6 @@ export class AuthService {
       token: token.token,
       expiresAt: token.expiresAt
     };
-  }
-
-  async updateCurrentUser(userId: string, body: UpdateCurrentUserRequest) {
-    const currentUser = await this.prisma.user.findUnique({
-      where: { id: userId }
-    });
-
-    if (!currentUser || currentUser.status !== "ACTIVE") {
-      throw new UnauthorizedException("未登录或 token 失效");
-    }
-
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        nickname: body.nickname,
-        avatarUrl: body.avatarUrl
-      }
-    });
-
-    return toUserBasic(user);
   }
 
   async updateCurrentPassword(userId: string, body: ChangeCurrentPasswordRequest) {
