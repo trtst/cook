@@ -2,9 +2,7 @@
 
 ## 简介
 
-本文面向小程序和后台调用方，只记录当前真实接口与已经冻结的待实现接口。DTO 权威见 `docs/api-contract.md` 和后端 OpenAPI。
-
-> 过渡说明：当前饭搭子接口仍描述唯一空间、冻结恢复和迁出快照，只代表现有代码可调用状态。新的个人数据、多饭搭子关系和四档会员规则已经入档，等待新 API 契约和代码重构；客户端不得在旧接口上继续追加目标产品能力。
+本文面向小程序和后台调用方，记录当前个人数据与多饭搭子关系模型的调用边界。完整路径索引见 `docs/api-index.md`，共享 DTO 见 `docs/api-contract.md`。
 
 默认本地地址：
 
@@ -19,56 +17,43 @@ http://127.0.0.1:3100/api
   "code": 0,
   "message": "ok",
   "data": {},
-  "serverTime": "2026-07-20T12:00:00.000Z"
+  "serverTime": "2026-07-23T12:00:00.000Z"
 }
 ```
 
-除登录外，小程序接口使用：
-
-```text
-Authorization: Bearer <user-token>
-```
-
-后台接口使用独立管理员 token，不得与用户 token 混用。
+小程序用户接口使用 `Authorization: Bearer <user-token>`。后台接口使用独立管理员 token，两种 token 不得混用。
 
 ## 变更日志
 
 | 日期 | 变更 |
 | --- | --- |
-| 2026-07-22 | 当前饭搭子摘要新增 `recipeCount`、`isShared`、`sharedSince` 和 `sharedDays`，支持“未开启饭搭子”和开启后三项统计展示。 |
-| 2026-07-22 | 新增当前用户修改密码接口 `/api/users/me/password`。 |
-| 2026-07-20 | 饭搭子接口直接切换为唯一当前空间；删除多列表、手动创建和详情接口；实现原空间冻结、退出恢复与快照头。 |
-| 2026-07-20 | 冻结迁入迁出、权益、空间、口味、饭局、菜谱收录与派生契约。 |
-| 2026-07-21 | 实现当前权益接口、最小 Plus 授权和饭搭子 Free/Plus 席位解析。 |
-| 2026-07-21 | 实现本人当前可用迁出快照列表。 |
-| 2026-07-21 | 冻结迁出快照清单项读取契约；实现 SUPER_ADMIN 用户当前权益查询。 |
-| 2026-07-19 | 接入真实 Auth、User 和后台只读接口。 |
+| 2026-07-23 | 用户、会员事实、饭搭子关系和存储用量按领域拆分；移除客户端全局权益快照依赖。 |
+| 2026-07-23 | 背景图字段暂时保留，当前统一返回空 URL 和 `false` 能力位；背景设置写接口返回 `503`。 |
+| 2026-07-23 | 饭搭子切换为多关系列表，关系变化不迁移、不冻结个人数据。 |
 
 ## 快速索引
 
-| 编号 | 方法 | Path | api-client | 状态 |
-| --- | --- | --- | --- | --- |
-| C-001 | POST | `/api/auth/login` | `auth.loginWithPassword` | 已实现 |
-| C-002 | POST | `/api/auth/refresh` | `auth.refreshSession` | 已实现 |
-| C-003 | GET | `/api/users/me` | `user.getCurrent` | 已实现 |
-| C-004 | PUT | `/api/users/me` | `user.updateCurrent` | 已实现 |
-| C-005 | PUT | `/api/users/me/password` | `user.changeCurrentPassword` | 已实现 |
-| C-006 | GET | `/api/dining-groups/current` | `diningGroup.getCurrent` | 已实现 |
-| C-007 | GET | `/api/dining-group-members` | `diningGroup.listMembers` | 已实现 |
-| C-008 | POST | `/api/dining-group-invites` | `diningGroup.createInvite` | 已实现 |
-| C-009 | POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroup.acceptInvite` | 已实现 |
-| C-010 | POST | `/api/dining-groups/{diningGroupId}/leave` | `diningGroup.leave` | 已实现 |
-| C-011 | GET | `/api/entitlements/current` | `entitlement.getCurrent` | 已实现 |
-| C-012 | GET | `/api/carry-back-snapshots` | `carryBack.list` | 已实现 |
-| C-013 | GET | `/api/carry-back-snapshot-items` | `carryBack.listItems` | 已契约，待实现 |
-| A-001 | POST | `/api/admin/auth/login` | `admin.login` | 已实现 |
-| A-002 | GET | `/api/admin/users` | `admin.listUsers` | 已实现 |
-| A-003 | GET | `/api/admin/dining-groups` | `admin.listDiningGroups` | 已实现 |
-| A-004 | GET | `/api/admin/user-entitlements` | `admin.getUserEntitlements` | 已实现 |
+| 方法 | Path | 客户端调用 | 职责 |
+| --- | --- | --- | --- |
+| POST | `/api/auth/login` | `authApi.loginWithPassword` | 登录并创建会话 |
+| POST | `/api/auth/refresh` | `authApi.refreshSession` | 刷新会话 |
+| GET | `/api/users/me` | `userApi.getCurrent` | 身份、展示占位和会员事实 |
+| PUT | `/api/users/me` | `userApi.updateCurrent` | 更新昵称和头像 |
+| PUT | `/api/users/me/display` | `userApi.updateDisplay` | 预留背景设置，当前返回 `503` |
+| PUT | `/api/users/me/password` | `userApi.changeCurrentPassword` | 修改密码 |
+| GET | `/api/users/me/taste-profile` | `userApi.getTasteProfile` | 本人口味与安全资料 |
+| PUT | `/api/users/me/taste-profile` | `userApi.updateTasteProfile` | 更新本人口味与安全资料 |
+| GET | `/api/dining-groups` | `diningGroupApi.getMine` | 关系列表和关系用量 |
+| GET | `/api/dining-group-members` | `diningGroupApi.listMembers` | 指定关系的成员列表 |
+| GET | `/api/storage-usage` | `diningGroupApi.getStorageUsage` | 个人存储用量 |
+| POST | `/api/dining-group-invites` | `diningGroupApi.createInvite` | 创建关系邀请 |
+| POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroupApi.acceptInvite` | 接受邀请并建立关系 |
+| POST | `/api/dining-groups/{diningGroupId}/leave` | `diningGroupApi.leave` | 退出关系 |
+| GET | `/api/admin/user-entitlements` | `userApi.getEntitlements` | 后台分域审计视图 |
 
-## 1. 用户认证
+## 1. 用户与会员
 
-### 1.1 手机号密码登录
+### 1.1 登录
 
 ```text
 POST /api/auth/login
@@ -86,46 +71,69 @@ Auth: none
 
 成功 `data`：
 
-```json
-{
-  "token": "<token>",
-  "expiresAt": "2026-08-03T12:00:00.000Z",
-  "user": {
-    "uid": 52738164,
-    "nickname": "下一餐用户",
-    "avatarUrl": null,
-    "phone": "13800000000"
-  }
+```ts
+interface PasswordLoginResult {
+  token: string;
+  expiresAt: IsoDateTime;
+  user: {
+    uid: number;
+    nickname: string | null;
+    avatarUrl: string | null;
+  };
 }
 ```
 
-手机号、密码错误或账号禁用统一返回 `401`。
+登录响应只提供建立会话所需的最小用户摘要。登录成功后调用 `/api/users/me` 拉取完整本人资料。
 
-### 1.2 刷新登录态
+### 1.2 当前用户
 
 ```text
-POST /api/auth/refresh
+GET /api/users/me
 Auth: UserBearerAuth
 ```
 
 成功 `data`：
 
-```json
-{
-  "token": "<new-token>",
-  "expiresAt": "2026-08-03T12:00:00.000Z"
+```ts
+interface MeResponse {
+  uid: number;
+  nickname: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
+  display: {
+    profileBackgroundUrl: string | null;
+    homeBackgroundUrl: string | null;
+    canUseProfileBackground: boolean;
+    canUseHomeBackground: boolean;
+  };
+  membership: {
+    tier: "FREE" | "PLUS" | "PRO" | "ULTRA";
+    validUntil: IsoDateTime | null;
+  };
 }
 ```
 
-### 1.3 当前用户
+当前背景图能力未开放，因此四个展示字段固定为：
+
+```json
+{
+  "profileBackgroundUrl": null,
+  "homeBackgroundUrl": null,
+  "canUseProfileBackground": false,
+  "canUseHomeBackground": false
+}
+```
+
+客户端不下载、不预缓存背景图，也不持久化背景 URL。后续开放图片资产能力时，再单独冻结上传、访问 URL、缓存失效和清理规则。
+
+### 1.3 更新资料
 
 ```text
-GET /api/users/me
 PUT /api/users/me
 Auth: UserBearerAuth
 ```
 
-更新请求允许：
+请求只允许昵称和头像：
 
 ```json
 {
@@ -134,78 +142,62 @@ Auth: UserBearerAuth
 }
 ```
 
-GET 和 PUT 都返回 `UserBasic`。
+成功返回 `MeResponse`。背景图不得混入本接口。
 
-### 1.4 修改当前用户密码
+### 1.4 背景设置预留接口
 
 ```text
-PUT /api/users/me/password
+PUT /api/users/me/display
 Auth: UserBearerAuth
 ```
 
-请求：
+路径和请求类型暂时保留，但能力未开放，当前统一返回：
 
 ```json
 {
-  "currentPassword": "change-me",
-  "newPassword": "change-me-2"
+  "code": 503,
+  "message": "功能开发中，敬请期待",
+  "data": null
 }
 ```
 
-成功 `data`：
+客户端当前不展示背景 URL 输入或上传入口。
 
-```json
-{
-  "changedAt": "2026-07-22T12:00:00.000Z"
-}
-```
+## 2. 饭搭子关系
 
-当前密码错误或新密码与当前密码相同返回 `400`。
-
-## 2. 当前饭搭子
-
-### 2.1 获取唯一当前空间
+### 2.1 本人关系列表
 
 ```text
-GET /api/dining-groups/current
+GET /api/dining-groups
 Auth: UserBearerAuth
 ```
 
 成功 `data`：
 
 ```ts
-interface GetCurrentDiningGroupContextResponse {
-  currentSpace: CurrentSpaceSummary;
-  originalSpace:
-    | {
-        status: OriginalSpaceStatus;
-        canImport: boolean;
-      }
-    | null;
-  entitlements: EffectiveEntitlementSnapshot;
+interface GetMyDiningGroupsResponse {
+  items: DiningGroupSummary[];
+  usage: {
+    ownedCount: number;
+    joinedCount: number;
+    joinLimit: number;
+    state: "NORMAL" | "OVER_MEMBER_LIMIT";
+  };
 }
 ```
 
-单人状态下 `originalSpace = null`。加入别人后，`currentSpace` 是目标饭搭子，`originalSpace.status = FROZEN`。
+`items` 只返回本人主理或加入的有效关系。`usage` 只属于关系域，不包含会员详情、存储用量、菜谱配额或展示设置。
 
-客户端只保存这一份服务端上下文，不保存本地当前饭搭子 ID，也不提供普通切换操作。
+客户端可以保存当前页面选中的 `diningGroupId`，但它只是 UI 选择，不是数据空间切换，也不得改变菜谱、冰箱、计划或购物数据的 `userId` 归属。
 
-`currentSpace` 摘要字段用于“我的”页和饭搭子详情页展示：
-
-1. `memberCount` 是当前有效长期成员数，统计 `ACTIVE / RESTRICTED`。
-2. `recipeCount` 是当前饭搭子可见有效菜谱数；菜谱主表落地前返回 `0`。
-3. `isShared=false` 表示尚未开启用户感知的多人饭搭子；客户端展示介绍和邀请入口，不展示统计数字。
-4. `isShared=true` 后展示 `memberCount / recipeCount / sharedDays`。
-5. `sharedSince` 取当前有效非主理人长期成员最早加入时间，`sharedDays` 由服务端计算，当天为 1 天。
-
-### 2.2 当前饭搭子成员
+### 2.2 成员列表
 
 ```text
-GET /api/dining-group-members?diningGroupId=<currentDiningGroupId>
+GET /api/dining-group-members?diningGroupId=<diningGroupId>
 Auth: UserBearerAuth
 ```
 
-成功 `data`：
+成功 `data` 为：
 
 ```ts
 interface DiningGroupMembersResult {
@@ -214,218 +206,59 @@ interface DiningGroupMembersResult {
 }
 ```
 
-参数必须是服务端当前空间；修改参数访问其他空间返回 `404`。受限成员不能读取完整成员列表。
+调用人必须是该饭搭子的有效成员。
 
-### 2.3 创建长期邀请
+### 2.3 邀请与退出
+
+所有写操作携带并复用 UUID `operationId`：
 
 ```text
 POST /api/dining-group-invites
-Auth: UserBearerAuth
-```
-
-请求：
-
-```json
-{
-  "diningGroupId": "<currentDiningGroupId>",
-  "operationId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-成功 `data`：
-
-```ts
-interface CreateInviteResult {
-  inviteToken: string;
-  sharePath: string;
-  expiresAt: IsoDateTime;
-}
-```
-
-规则：
-
-1. 只保存 token 哈希。
-2. 邀请是单次凭证。
-3. 相同 `operationId` 返回第一次生成的同一个 token 和有效期。
-4. 邀请有效期和策略版本只取服务端配置，客户端不计算。
-
-### 2.4 接受长期邀请
-
-```text
 POST /api/dining-group-invites/{inviteToken}/accept
-Auth: UserBearerAuth
-```
-
-请求：
-
-```json
-{
-  "operationId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-成功 `data`：
-
-```ts
-interface AcceptInviteResponse {
-  currentSpace: CurrentSpaceSummary;
-  originalSpace: {
-    status: OriginalSpaceStatus;
-    canImport: boolean;
-  };
-  pendingImportCounts: PendingImportCounts;
-}
-```
-
-一个事务内完成：锁定邀请和饭搭子、校验席位、冻结单人原空间、建立成员、切换当前空间、消费邀请、写审计和幂等结果。
-
-以下情况拒绝：
-
-1. 邀请不存在、已过期或已消费。
-2. 用户已经加入另一个长期饭搭子。
-3. 用户主理的原空间已经有其他长期成员。
-4. 目标饭搭子成员已满。
-5. 用户尝试加入自己的饭搭子。
-
-### 2.5 退出长期饭搭子
-
-```text
 POST /api/dining-groups/{diningGroupId}/leave
-Auth: UserBearerAuth
+POST /api/dining-groups/{diningGroupId}/remove-member
+POST /api/dining-groups/{diningGroupId}/dissolve
 ```
 
-请求：
+接受邀请只建立成员关系；退出、移除和解散只结束关系。以上操作都不迁移、不复制、不冻结、不恢复个人数据。
 
-```json
-{
-  "operationId": "550e8400-e29b-41d4-a716-446655440000"
-}
+## 3. 个人存储
+
+```text
+GET /api/storage-usage
+Auth: UserBearerAuth
 ```
 
 成功 `data`：
 
 ```ts
-interface LeaveDiningGroupResponse {
-  restoredSpace: CurrentSpaceSummary;
-  carryBackSnapshot: CarryBackSnapshotSummary | null;
-  futureParticipationCount: number;
+interface StorageUsageSummary {
+  state: "NORMAL" | "OVER_STORAGE_READONLY";
+  usedBytes: number;
+  limitBytes: number;
+  remainingBytes: number;
+  byModule: Array<{ module: string; usedBytes: number }>;
+  calculatedAt: IsoDateTime;
 }
 ```
 
-当前业务模块尚未建表，所以快照头的三类条目数量为 `0`，`futureParticipationCount = 0`。后续模块接入后由真实数据填充，不能在客户端模拟。
+该接口只负责个人逻辑存储账本。客户端不得从会员等级自行计算额度，也不得把 `byModule` 当成业务对象列表。
 
-主理人不能通过本接口退出自己的空间。
-
-### 2.6 获取当前有效权益
-
-```text
-GET /api/entitlements/current
-Auth: UserBearerAuth
-```
-
-返回 `EffectiveEntitlementSnapshot`。接口只解析登录用户和服务端当前饭搭子，不接收主体 id；客户端不得合并个人与饭搭子权益，也不得用本地 Plus 状态扩大权限。
-
-### 2.7 获取迁出快照列表
-
-```text
-GET /api/carry-back-snapshots
-Auth: UserBearerAuth
-```
-
-成功 `data` 为 `{ snapshots: CarryBackSnapshotSummary[] }`。服务端只返回本人 `AVAILABLE` 且尚未到期的快照，按 `createdAt` 倒序排列；客户端不得把过期或失效快照恢复为可用。
-
-### 2.8 获取迁出快照清单项（待实现）
-
-```text
-GET /api/carry-back-snapshot-items?snapshotId=<snapshotId>&itemType=RECIPE&page=1&pageSize=20
-Auth: UserBearerAuth
-```
-
-调用 `carryBack.listItems({ snapshotId, itemType, page, pageSize })`。`itemType` 支持 `RECIPE / FRIDGE_ITEM / SHOPPING_ITEM`，成功 `data` 为 `PageResult<CarryBackItem>`：
-
-- `RECIPE`：`itemId / itemType / name / fixedVersionId / estimatedBytes`
-- `FRIDGE_ITEM`：`itemId / itemType / ingredientName / quantityText / confirmRequired / estimatedBytes`
-- `SHOPPING_ITEM`：`itemId / itemType / title / estimatedBytes`
-
-接口只返回尚可选择的冻结摘要，不包含图片、成员信息或内部备注。非本人、已过期、已删除或已失效快照统一按不可探测资源返回 `404`；查询不更新快照状态，也不读取源饭搭子实时数据。当前仅已冻结共享契约，后端尚未实现该路径。
-
-## 3. 后台接口
-
-### 3.1 管理员登录
-
-```text
-POST /api/admin/auth/login
-Auth: none
-```
-
-请求：
-
-```json
-{
-  "username": "admin",
-  "password": "change-me"
-}
-```
-
-### 3.2 用户只读查询
-
-```text
-GET /api/admin/users?page=1&pageSize=20&keyword=
-Auth: AdminBearerAuth
-```
-
-返回 `PageResult<UserProfile>`。
-
-### 3.3 饭搭子只读查询
-
-```text
-GET /api/admin/dining-groups?page=1&pageSize=20&keyword=&status=ACTIVE
-Auth: AdminBearerAuth
-```
-
-`status` 支持 `ACTIVE / FROZEN / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
-
-### 3.4 用户当前权益查询
+## 4. 后台审计
 
 ```text
 GET /api/admin/user-entitlements?userId=<userId>
 Auth: AdminBearerAuth
 ```
 
-调用 `admin.getUserEntitlements(userId)`。只有数据库中当前为 `ACTIVE` 且拥有 `SUPER_ADMIN` 角色的管理员可以访问，成功 `data` 为：
+返回分域结构：`membership`、`display`、`diningGroupUsage`、`diningGroups`、`storage`、`recipePolicy`、`invitePolicy` 和 `imagePolicy`。
 
-```ts
-interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
-  currentSpace: Pick<CurrentSpaceSummary, "id" | "name">;
-  entitlements: EffectiveEntitlementSnapshot;
-}
-```
-
-接口不返回原始授权、授权历史、订单、支付、空间用量、私有快照或其他用户私有数据。
-
-## 4. 已契约、待实现
-
-| 能力 | Path |
-| --- | --- |
-| 原空间资料 | `GET /api/original-space/importable-data` |
-| 原空间迁入 | `POST /api/original-space/imports` |
-| 迁出快照带回 | `POST /api/carry-back-snapshots/{snapshotId}/imports` |
-| 迁出快照清单项 | `GET /api/carry-back-snapshot-items` |
-| 空间明细 | `GET /api/storage-usage` |
-| 我的口味 | `GET/PUT /api/users/me/taste-profile` |
-| 饭局邀请 | `POST /api/meal-plans/{mealPlanId}/guest-invitations` |
-| 饭局回应 | `POST /api/meal-guest-invitations/{invitationId}/respond` |
-| 菜谱详情 | `GET /api/recipes/{recipeId}` |
-| 菜谱收录 | `POST /api/recipe-imports` |
-| 另存新做法 | `POST /api/recipe-variants` |
-
-菜谱列表筛选、系统菜谱分页、菜谱创建/更新成功响应和会员订单仍待补契约。
+该接口只用于 `SUPER_ADMIN` 审计，不是小程序共享快照。背景图能力当前在后台也固定显示为未开放。
 
 ## 5. 客户端规则
 
-1. 小程序和后台分别通过本端 `apis/` 请求层调用接口。
-2. 任何 `401` 清理用户 session、用户资料和饭搭子上下文。
-3. 写操作生成并复用 `operationId`，成功后再清除。
-4. 客户端不计算会员、成员上限、快照期限、空间状态或图片参数。
-5. 不使用多字段 fallback 或本地 mock 隐藏契约缺失。
+1. 小程序和后台分别通过本端 `apis/` 请求层调用接口，不跨应用导入类型。
+2. `401` 清理 session、用户资料和关系状态。
+3. 可重试写操作生成并复用 `operationId`，成功后再清除。
+4. 会员事实只读 `/users/me.membership`；关系用量只读 `/dining-groups.usage`；存储只读 `/storage-usage`。
+5. 不使用旧字段兼容、多个字段 fallback 或本地拼装全局权益对象。

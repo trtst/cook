@@ -117,6 +117,7 @@ parallel code edits.
 - `docs/AGENT.md`: short AI execution guide. Read first.
 - `docs/project.md`: full developer overview.
 - `docs/technical.md`: technical rules, naming, style, validation.
+- `docs/api-database-rules.md`: mandatory API, field, schema, constraint, security, performance, cache, and migration rules.
 - `docs/dining-group.md`: current dining-group relationships, member limits, weekly plans, dining events, fridge, shopping, and taste boundaries.
 - `docs/recipe.md`: current recipe visibility, base-version, override, image-promotion, variant, and deletion rules.
 - `docs/configuration.md`: current Free/Plus/Pro/Ultra, personal storage, image, recycle-bin, downgrade, and configuration rules.
@@ -171,3 +172,9 @@ when shared contracts, cross-app types, or broad TypeScript behavior changed.
 11. Do not implement or advertise OCR, AI, receipt scanning, owner transfer,
     shared fridge, shared shopping, or a generic permission center unless the
     user explicitly reopens them.
+12. Before designing or changing APIs, DTOs, Prisma models, SQL constraints,
+    indexes, caches, or migrations, read and apply `docs/api-database-rules.md`.
+    Its pre-commit checklist is mandatory for that change surface.
+13. Every completed change must update `docs/plans/minor_change_log.md` as the
+    central timeline. Large work also uses an independent execution document,
+    but the independent document does not replace the central log entry.

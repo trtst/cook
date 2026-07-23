@@ -4,7 +4,7 @@
 
 This is the short guide for AI-assisted vibe coding in this repository.
 
-Read this file first. Use `project.md` for the full developer overview, `dining-group.md` for relationship and collaboration rules, `recipe.md` for recipe data rules, `configuration.md` for membership and personal storage rules, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
+Read this file first. Use `project.md` for the full developer overview, `dining-group.md` for relationship and collaboration rules, `recipe.md` for recipe data rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
 
 ## Product
 
@@ -85,9 +85,10 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 
 ## Module State
 
-- Current implemented but scheduled for replacement: unique current DiningGroup, original-space freeze/restore, carry-back snapshot header, group-scoped Plus resolution, and related client/admin views.
-- Current reusable foundation: Auth, User, user-owned taste profiles, idempotency, audit, Outbox tables, platform adapter, request boundaries, and Admin read-only foundations.
-- Next implementation must follow a confirmed refactor plan: personal four-tier entitlements, multi-membership relationships, user-owned recipes, personal storage, weekly plans, dining events, fridge, and shopping.
+- Engineering foundation: authentication, request boundaries, platform adapter, personal membership resolution, idempotency, audit, Outbox tables, and candidate implementations for dining groups, recipes, meals, pantry, shopping, storage, sharing, and Admin. Existing code is not evidence that those business modules are accepted.
+- In development: DiningGroup, Recipe, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
+- Background image upload and asset management are deferred. User responses keep nullable URL fields and capability flags, but currently return `null` and `false`.
+- Deferred business decisions and known risks are tracked in `plans/business-development-todo.md`. That list prevents omissions but does not confirm a contract.
 - Disabled until the replacement contract is complete: broad public-user discovery and Worker/Outbox runtime behavior.
 - Target but not contracted: non-monetary activities, achievements, and medal wall. The client may show a Me-page entry placeholder, but no API, DTO, schema, reward, or admin surface may be added until completion facts and contracts are frozen.
 - Reserved: Points, meal tickets, receipt scanning, OCR, AI, owner transfer, and generic fine-grained permission management. Do not add placeholder services or client entry points.
@@ -99,7 +100,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 3. `MealPlanItem`, public recipe versions, and share snapshots must reference a fixed content version.
 4. Importing a recipe creates a user-owned light entry that points to a fixed base version.
 5. Text edits use structured user overrides; services return the merged effective recipe.
-6. Adding, replacing, or processing an image currently promotes the recipe to a user-owned independent version; deleting an image alone does not.
+6. Recipe image upload and mutation are deferred. Existing system images remain readable; future image writes follow the independent-version rules in `recipe.md`.
 7. Recipe visibility has no per-recipe permission, but editing remains owner-only and broad discovery requires content-safety controls.
 8. The old `RestaurantRecipe` name in source material must not be copied into the current schema; use the confirmed `Recipe` boundary.
 
@@ -164,6 +165,8 @@ If a short name needs context, add a comment. Do not make the name longer to car
 
 ## API Rules
 
+Before changing APIs, DTOs, Prisma models, SQL constraints, indexes, caches, or migrations, read and apply `docs/api-database-rules.md`. Its ownership, least-data, least-privilege, database-constraint, predictable-cost, migration, and pre-commit rules are mandatory.
+
 All APIs return JSON:
 
 ```json
@@ -189,6 +192,14 @@ Disabled features return:
 
 Start directly when the task is local and the target is clear.
 
+Business features must follow this order:
+
+```text
+business flow -> page behavior -> permissions and states -> minimal API -> minimal tables and constraints -> implementation -> real acceptance
+```
+
+Do not treat existing routes, DTOs, OpenAPI schemas, Prisma models, migrations, or pages as proof that the business contract is confirmed. For business work, create or update the feature execution sheet and complete the business-flow and page-behavior gates before designing APIs or tables. Apply the mandatory details in `docs/api-database-rules.md`.
+
 Pause for confirmation when the change affects:
 
 1. V1 scope.
@@ -208,3 +219,5 @@ For every change, verify the smallest real path:
 3. relevant failure path,
 4. idempotency or version behavior when touched,
 5. no obvious adjacent regression.
+
+Before delivery, update `plans/minor_change_log.md`. Small changes are recorded directly. Large changes also use an independent execution document, but still require a dated central-log summary with the actual validation and remaining gaps.

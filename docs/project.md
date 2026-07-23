@@ -171,28 +171,33 @@ modules/dining-groups/recipes/versions/public/adoptions
 
 | 状态 | 定义 | 实现要求 |
 | --- | --- | --- |
-| Active | V1 实际跑业务 | 注册 Controller、Service、Guard，并开放客户端或后台入口 |
-| Disabled | 表和接口骨架存在，但业务不执行 | Controller 返回 503，客户端不注册入口 |
-| Reserved | 只建表，不写服务实现 | 没有 Service，没有 Controller |
+| Engineering Foundation | 通用工程能力可供业务开发使用 | 必须通过类型、构建及基础安全验证，不代表业务验收 |
+| In Development | 存在候选页面、接口或数据结构 | 回到功能执行单逐项确认，不能承诺兼容或上线 |
+| Accepted | 业务、页面、权限、接口、约束和真实流程均已验收 | 才能进入发布口径 |
+| Deferred | 当前明确延期 | 保留必要空返回或记录，不继续补实现 |
+| Disabled | 骨架存在但业务不执行 | Controller 返回 503，客户端不注册入口 |
+| Reserved | 只保留方向 | 不创建 Service、Controller 或客户端入口 |
 
 V1 模块状态：
 
 | 模块 | 状态 | 说明 |
 | --- | --- | --- |
-| Auth / User | Active | 登录、用户资料和本人口味资料可复用 |
-| DiningGroup | Active / 待替换 | 当前唯一空间、冻结恢复和快照实现与目标规则冲突，按新计划重构 |
-| Recipe | Target | 个人归属、固定基础版本、字段级覆盖和图片独立化 |
-| Meal / Poll | Target | 稀疏周计划、饭局、点菜和我想吃 |
-| Fridge / Shopping | Target | 个人冰箱、个人购物清单和缺口计算 |
-| RecipeImport / Admin | Active | 系统菜谱导入、发布、治理 |
-| Share | Active | 分享快照、预览、导入 |
-| Public | Disabled / 待治理 | 不开放公共投稿运营；用户菜谱可见需要举报、下架和安全审核能力 |
+| Auth / User / Request Boundary | Engineering Foundation | 可支持后续业务开发，具体页面流程仍按功能执行单验收 |
+| Idempotency / Audit / Outbox | Engineering Foundation | 幂等和审计可复用；Worker 不启动 |
+| DiningGroup | In Development | 多饭搭子候选实现存在，关系流程和页面行为待逐项验收 |
+| Recipe / RecipeImport | In Development | 候选版本和导入实现存在，重复导入等问题见后续 To-do |
+| Meal / DiningEvent | In Development | 周计划和饭局候选实现存在，参与者身份约束待业务确认 |
+| Fridge / Shopping | In Development | 个人数据候选实现存在，缺口生成规则待业务确认 |
+| Share / Admin | In Development | 候选实现存在，需随对应业务纵切验收 |
+| Public | Disabled | 不开放公共投稿运营；开放前需完成内容治理验收 |
 | Worker / Outbox | Disabled | 表保留，V1 不启动 Worker |
-| Entitlement | Active / 待替换 | 当前个人/饭搭子 Plus 解析改为个人四档权益 |
-| Membership / Storage | Target | 四档个人会员和可重算个人空间账本 |
-| Payment | Target / 待契约 | 会员只允许直接付费；价格、周期和升级规则确认后再实现 |
-| Activity / Achievement | Target / 待契约 | 非货币活动、成就和勋章墙方向已确认；当前只允许客户端入口占位，API/Schema/后台待完成事实冻结后再建 |
+| Entitlement / Membership / Storage | In Development | 四档权益候选实现存在，空间重算和额度口径延期确认 |
+| Background Asset | Deferred | 接口保留空值和 `false`，不实现上传和资产管理 |
+| Payment | Deferred | 价格、周期和升级规则确认后再开发 |
+| Activity / Achievement | Deferred | 当前只允许客户端入口占位，不创建 API、Schema 和后台能力 |
 | Point / Ticket / OCR / AI | Reserved | 当前不创建业务入口或占位服务 |
+
+尚未进入业务确认的问题统一记录在 `plans/business-development-todo.md`。清单用于防遗漏，不等于契约确认。
 
 ## 核心领域模型
 

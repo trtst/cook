@@ -2,9 +2,7 @@
 
 ## 定位
 
-本文是小程序、API 和后台共享的当前契约。项目尚未上线，不保留旧饭搭子列表、手动创建空间或多饭搭子切换契约。
-
-> 过渡说明：`dining-group.md`、`recipe.md` 和 `configuration.md` 已确认新的“个人数据 + 多饭搭子关系 + 四档个人会员”目标规则。本文中的唯一当前空间、原空间冻结、迁出快照和饭搭子 Plus 契约是当前代码现状，等待新重构计划逐步替换；在替换契约冻结前，不得继续扩展这些旧接口，也不得猜测新字段。
+本文是小程序、API 和后台共享的当前契约。现行模型是“个人数据 + 多饭搭子关系 + 四档个人会员”。饭搭子只表达关系，不承载或切换用户数据。
 
 契约变更顺序：
 
@@ -69,6 +67,12 @@ interface PageResult<T> {
 
 所有时间使用 ISO 8601；数据库使用 `TIMESTAMPTZ(3)`。所有可重试写操作携带 UUID `operationId`。共享可变对象携带 `version`。
 
+路径中的资源 ID 使用 UUID v4，格式错误统一返回 `400`。`inviteToken`、`shareToken` 等不透明凭证不是 UUID，不使用 UUID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回 `409`，客户端刷新详情后再决定是否重试。
+
+OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema；对象、数组和分页响应不得退化为无字段的 `object`。本文、服务端 OpenAPI 和各应用本地类型共同变更，不直接复用 Prisma Model。
+
+请求 DTO 使用严格白名单：请求体或查询参数包含未声明字段时返回 `400`，不静默忽略旧字段。嵌套对象必须递归校验。当前菜谱正文的 `ingredients` 和 `steps` 分别最多 100 项，批量消耗冰箱条目最多 100 个且不允许空数组或重复 ID。
+
 ## 鉴权
 
 | 鉴权 | 用途 |
@@ -96,11 +100,28 @@ interface PageResult<T> {
 ## 用户 DTO
 
 ```ts
-interface UserBasic {
+interface SessionUser {
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
+}
+
+interface UserDisplay {
+  profileBackgroundUrl: string | null;
+  homeBackgroundUrl: string | null;
+  canUseProfileBackground: boolean;
+  canUseHomeBackground: boolean;
+}
+
+interface UserMembership {
+  tier: EntitlementTier;
+  validUntil: IsoDateTime | null;
+}
+
+interface MeResponse extends SessionUser {
   phone: string | null;
+  display: UserDisplay;
+  membership: UserMembership;
 }
 
 interface UserSummary {
@@ -109,8 +130,9 @@ interface UserSummary {
   avatarUrl: string | null;
 }
 
-interface UserProfile extends UserBasic {
+interface UserProfile extends SessionUser {
   id: UUID;
+  phone: string | null;
   status: "ACTIVE" | string;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -120,96 +142,57 @@ interface UserProfile extends UserBasic {
 `uid` 是非连续公开用户号，不是主键，不能用来推算注册量。
 用户侧接口默认不返回 `User.id` 这类数据库内部主键；空间等业务对象如果前端需要定位，保留业务对象自身 id。
 
-## 饭搭子领域类型
+## 饭搭子与用量 DTO
 
 ```ts
+type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
 type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
-type DiningGroupStatus = "ACTIVE" | "FROZEN" | "ARCHIVED";
+type DiningGroupStatus = "ACTIVE" | "ARCHIVED";
 type LongTermMemberStatus = "ACTIVE" | "RESTRICTED" | "ENDED";
-type LongTermMemberStatusReason = "LEFT" | "REMOVED" | "GROUP_DOWNGRADED" | "GROUP_DISSOLVED";
-type DiningGroupInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED" | "EXPIRED";
-type OriginalSpaceStatus = "ACTIVE" | "FROZEN";
-type CarryBackSnapshotStatus = "AVAILABLE" | "EXPIRED" | "DELETED" | "INVALIDATED";
-type SpaceState = "NORMAL" | "OVER_RECIPE_LIMIT" | "OVER_STORAGE_READONLY";
-```
+type LongTermMemberStatusReason =
+  | "LEFT"
+  | "REMOVED"
+  | "USER_OVER_LIMIT"
+  | "OWNER_OVER_LIMIT"
+  | "GROUP_DISSOLVED";
+type RelationshipState = "NORMAL" | "OVER_MEMBER_LIMIT";
+type StorageModule =
+  | "RECIPE"
+  | "FRIDGE"
+  | "MEAL"
+  | "SHOPPING"
+  | "MEAL_GUEST"
+  | "TECHNICAL_SNAPSHOT"
+  | "RECYCLE_BIN"
+  | "PROFILE_ASSET";
 
-```ts
-interface PendingImportCounts {
-  recipe: number;
-  fridgeItem: number;
-  planDraft: number;
-  shoppingItem: number;
-}
-
-interface CurrentSpaceSummary {
+interface DiningGroupSummary {
   id: UUID;
   name: string;
   ownerUid: number;
+  isOwned: boolean;
   myRole: DiningGroupRole;
   myStatus: LongTermMemberStatus;
   myStatusReason: LongTermMemberStatusReason | null;
   memberCount: number;
   memberLimit: number;
-  recipeCount: number;
-  isShared: boolean;
-  sharedSince: IsoDateTime | null;
-  sharedDays: number | null;
-  state: SpaceState;
+  state: RelationshipState;
   version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
 
-interface OriginalSpaceSummary {
-  id: UUID;
-  name: string;
-  status: OriginalSpaceStatus;
-  frozenAt: IsoDateTime | null;
-  canImport: boolean;
-  pendingImportCounts: PendingImportCounts;
+interface DiningGroupUsageSummary {
+  ownedCount: number;
+  joinedCount: number;
+  joinLimit: number;
+  state: RelationshipState;
 }
 
-interface CarryBackSnapshotSummary {
-  id: UUID;
-  sourceDiningGroupId: UUID;
-  sourceDiningGroupName: string;
-  status: CarryBackSnapshotStatus;
-  expiresAt: IsoDateTime;
-  createdAt: IsoDateTime;
-  itemCounts: {
-    recipe: number;
-    fridgeItem: number;
-    shoppingItem: number;
-  };
+interface GetMyDiningGroupsResponse {
+  items: DiningGroupSummary[];
+  usage: DiningGroupUsageSummary;
 }
-
-type CarryItemType = "RECIPE" | "FRIDGE_ITEM" | "SHOPPING_ITEM";
-
-interface CarryRecipeItem {
-  itemId: UUID;
-  itemType: "RECIPE";
-  name: string;
-  fixedVersionId: UUID;
-  estimatedBytes: number;
-}
-
-interface CarryFridgeItem {
-  itemId: UUID;
-  itemType: "FRIDGE_ITEM";
-  ingredientName: string;
-  quantityText: string | null;
-  confirmRequired: true;
-  estimatedBytes: number;
-}
-
-interface CarryShoppingItem {
-  itemId: UUID;
-  itemType: "SHOPPING_ITEM";
-  title: string;
-  estimatedBytes: number;
-}
-
-type CarryBackItem = CarryRecipeItem | CarryFridgeItem | CarryShoppingItem;
 
 interface DiningGroupMemberSummary {
   id: UUID;
@@ -223,14 +206,6 @@ interface DiningGroupMemberSummary {
   endedAt: IsoDateTime | null;
   version: number;
 }
-```
-
-## 权益与空间 DTO
-
-```ts
-type EntitlementTier = "FREE" | "PLUS";
-type EntitlementScope = "USER" | "DINING_GROUP";
-type StorageModule = "RECIPE" | "FRIDGE" | "MEAL" | "SHOPPING" | "MEAL_GUEST" | "TECHNICAL_SNAPSHOT" | "RECYCLE_BIN";
 
 interface EffectiveImagePolicy {
   quality: number;
@@ -240,29 +215,17 @@ interface EffectiveImagePolicy {
   maxInputBytes: number;
 }
 
-interface EffectiveEntitlementSnapshot {
-  personalTier: EntitlementTier;
-  diningGroupTier: EntitlementTier;
-  currentScope: EntitlementScope;
-  recipeLimit: number;
-  memberLimit: number | null;
-  storageLimitBytes: number;
-  snapshotDays: number;
-  recycleDays: number;
-  variantLimitPerRoot: number;
-  imagePolicy: EffectiveImagePolicy;
-}
-
 interface StorageUsageSummary {
-  state: SpaceState;
+  state: "NORMAL" | "OVER_STORAGE_READONLY";
   usedBytes: number;
   limitBytes: number;
   remainingBytes: number;
   byModule: Array<{ module: StorageModule; usedBytes: number }>;
+  calculatedAt: IsoDateTime;
 }
 ```
 
-客户端不得自行合并个人权益与饭搭子权益。
+会员事实、关系用量和存储用量分别归属 `/users/me`、`/dining-groups` 和 `/storage-usage`。客户端不得自行拼出全局权益快照。
 
 ## 当前已实现接口
 
@@ -273,6 +236,7 @@ POST /auth/login
 POST /auth/refresh
 GET  /users/me
 PUT  /users/me
+PUT  /users/me/display
 PUT  /users/me/password
 ```
 
@@ -285,7 +249,7 @@ interface PasswordLoginRequest {
 interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
-  user: UserBasic;
+  user: SessionUser;
 }
 
 interface RefreshSessionResult {
@@ -308,55 +272,16 @@ interface ChangeCurrentPasswordResult {
 }
 ```
 
-### 当前唯一空间
+`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。
+
+### 本人饭搭子关系
 
 ```text
-GET /dining-groups/current
+GET /dining-groups
 Auth: UserBearerAuth
 ```
 
-接口职责：返回当前登录用户进入饭搭子域所需的入口态。
-
-```ts
-interface GetCurrentDiningGroupContextResponse {
-  currentSpace: CurrentSpaceSummary;
-  originalSpace:
-    | {
-        status: OriginalSpaceStatus;
-        canImport: boolean;
-      }
-    | null;
-  entitlements: EffectiveEntitlementSnapshot;
-}
-```
-
-规则：
-
-1. 每个用户只有一个服务端当前空间。
-2. 单人状态 `originalSpace = null`。
-3. 加入别人后返回被冻结的本人原空间。
-4. 服务端根据当前用户、当前饭搭子和有效 Plus 授权解析权益。
-5. `currentSpace.memberCount` 按当前有效长期成员口径返回，即统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入。
-6. `currentSpace.isShared` 仅在当前存在非主理人的 `ACTIVE / RESTRICTED` 长期成员时为 `true`。
-7. `currentSpace.sharedSince` 取当前有效非主理人长期成员最早加入时间；`sharedDays` 由服务端按该时间计算，当天为 1 天。
-8. `currentSpace.recipeCount` 是当前饭搭子可见有效菜谱数；菜谱主表落地前实现返回 `0`。
-
-打磨方向：
-
-1. `/dining-groups/current` 应收敛为入口态接口。
-2. 可保留 `currentSpace`、必要的 relation 状态和必要的 `entitlements`。
-3. `originalSpace` 详情应在用户进入原空间流程时按需读取；当前接口最多返回是否处于加入别人饭搭子的状态结论。
-4. `carryBackSnapshots` 属于迁出快照列表，应走 `/carry-back-snapshots`。
-5. `storage` 属于空间计量或账本，应走 `/storage-usage` 或后续已冻结的存储接口。
-
-### 当前有效权益
-
-```text
-GET /entitlements/current
-Auth: UserBearerAuth
-```
-
-返回 `EffectiveEntitlementSnapshot`。Free 是默认解析结果，只有 Plus 授权落库；接口只解析登录用户和其当前饭搭子，不接受调用方传入主体 id。饭搭子 Plus 包含主理人的个人 Plus，普通成员的个人 Plus 不会叠加为饭搭子 Plus。
+返回 `GetMyDiningGroupsResponse`。`items` 是本人主理和加入的有效关系，`usage` 只表达关系域计数和上限，不返回会员、菜谱、存储或展示设置。
 
 ### 成员列表
 
@@ -372,7 +297,7 @@ interface DiningGroupMembersResult {
 }
 ```
 
-只有当前 `ACTIVE` 成员可以读取完整成员列表。
+只有该饭搭子的有效成员可以读取完整成员列表。
 
 ### 创建邀请
 
@@ -409,16 +334,11 @@ interface AcceptInviteRequest {
 }
 
 interface AcceptInviteResponse {
-  currentSpace: CurrentSpaceSummary;
-  originalSpace: {
-    status: OriginalSpaceStatus;
-    canImport: boolean;
-  };
-  pendingImportCounts: PendingImportCounts;
+  diningGroup: DiningGroupSummary;
 }
 ```
 
-同一事务完成邀请锁定、席位校验、原空间冻结、成员创建、当前空间切换、邀请消费、审计和幂等结果。用户已有长期饭搭子，或本人原空间已有其他成员时拒绝加入。
+同一事务完成邀请锁定、关系上限校验、成员创建、邀请消费、审计和幂等结果。接受邀请只建立关系，不迁移、冻结或共享个人数据。
 
 ### 退出饭搭子
 
@@ -430,16 +350,48 @@ Auth: UserBearerAuth
 ```ts
 interface LeaveDiningGroupRequest {
   operationId: UUID;
+  expectedVersion: number;
 }
 
 interface LeaveDiningGroupResponse {
-  restoredSpace: CurrentSpaceSummary;
-  carryBackSnapshot: CarryBackSnapshotSummary | null;
-  futureParticipationCount: number;
+  diningGroupId: UUID;
+  leftAt: IsoDateTime;
 }
 ```
 
-同一事务结束成员关系、恢复原空间、切换当前空间并创建迁出快照头。主理人不能直接退出自己的空间。
+退出只结束成员关系，不迁移或回填个人数据。主理人不能通过该接口退出自己主理的饭搭子，应使用解散接口。
+
+### 移除成员与解散
+
+```text
+POST /dining-groups/{diningGroupId}/remove-member
+POST /dining-groups/{diningGroupId}/dissolve
+Auth: UserBearerAuth
+```
+
+```ts
+interface RemoveDiningGroupMemberRequest {
+  operationId: UUID;
+  expectedVersion: number;
+  userId: UUID;
+}
+
+interface DissolveDiningGroupRequest {
+  operationId: UUID;
+  expectedVersion: number;
+}
+```
+
+`leave`、`remove-member` 和 `dissolve` 都以 `GET /dining-groups` 返回的 `DiningGroupSummary.version` 作为预期版本。服务端在事务内锁定饭搭子并校验版本，成功变更后递增版本；相同幂等请求必须复用同一个 `operationId` 和 `expectedVersion`。
+
+### 个人存储用量
+
+```text
+GET /storage-usage
+Auth: UserBearerAuth
+```
+
+返回 `StorageUsageSummary`。该接口只负责个人存储账本，不返回会员详情、关系列表或业务对象明细。
 
 ### 后台只读
 
@@ -450,109 +402,27 @@ GET  /admin/dining-groups
 GET  /admin/user-entitlements?userId={userId}
 ```
 
-后台饭搭子状态筛选支持 `ACTIVE / FROZEN / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
+后台饭搭子状态筛选支持 `ACTIVE / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
 
 `memberCount` 按当前有效长期成员口径返回，即只统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入后台列表摘要。
 
 ```ts
 interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
-  currentSpace: {
-    id: UUID;
-    name: string;
-  };
-  entitlements: EffectiveEntitlementSnapshot;
+  membership: UserMembership;
+  display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
+  diningGroupUsage: DiningGroupUsageSummary;
+  diningGroups: DiningGroupSummary[];
+  storage: StorageUsageSummary;
+  recipePolicy: { recipeLimit: number; recycleDays: number; variantLimitPerRoot: number };
+  invitePolicy: { inviteLimit: number; memberLimit: number };
+  imagePolicy: EffectiveImagePolicy;
 }
 ```
 
-用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。接口只返回用户最小摘要、当前空间最小摘要和服务端解析后的有效权益；不返回原始授权、历史、订单、支付、空间用量或其他私有数据。
+用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。它是后台审计视图，按领域分段返回，不作为小程序的聚合契约。背景图能力当前统一返回 `false`。
 
-## 已冻结、待实现接口
-
-### 原空间迁入
-
-```text
-GET  /original-space/importable-data
-POST /original-space/imports
-```
-
-```ts
-type ImportableItemType = "RECIPE" | "FRIDGE_ITEM" | "PLAN_DRAFT" | "SHOPPING_ITEM";
-type DuplicateState = "NONE" | "EXACT" | "SIMILAR";
-
-interface GetOriginalSpaceImportableDataQuery extends PageQuery {
-  itemType: ImportableItemType;
-}
-
-interface OriginalSpaceImportSelection {
-  itemType: ImportableItemType;
-  itemId: UUID;
-}
-
-interface ImportOriginalSpaceDataRequest {
-  operationId: UUID;
-  selections: OriginalSpaceImportSelection[];
-}
-
-interface ImportOriginalSpaceDataResponse {
-  importedCount: number;
-  skippedCount: number;
-  state: SpaceState;
-  usedBytes: number;
-  limitBytes: number;
-}
-```
-
-迁入是复制，不是移动。菜谱允许批量；冰箱仅迁入本人确认带入的真实物品；计划只复制本人未发布草稿；购物只复制本人未购买需求。
-
-### 迁出快照带回
-
-```text
-GET  /carry-back-snapshots
-GET  /carry-back-snapshot-items
-POST /carry-back-snapshots/{snapshotId}/imports
-Auth: UserBearerAuth
-```
-
-```ts
-interface GetCarryBackSnapshotsResponse {
-  snapshots: CarryBackSnapshotSummary[];
-}
-
-interface CarryItemsQuery extends PageQuery {
-  snapshotId: UUID;
-  itemType: CarryItemType;
-}
-
-type CarryItemsResponse = PageResult<CarryBackItem>;
-
-interface CarryBackImportSelection {
-  itemType: "RECIPE" | "FRIDGE_ITEM" | "SHOPPING_ITEM";
-  itemId: UUID;
-}
-
-interface ImportCarryBackSnapshotRequest {
-  operationId: UUID;
-  selections: CarryBackImportSelection[];
-}
-```
-
-快照头列表只返回退出人本人 `AVAILABLE` 且尚未到期的快照，按 `createdAt` 倒序排列；`itemCounts` 是快照冻结时的三类清单总数，不随分批导入递减。
-
-清单项接口只返回尚可选择的冻结摘要，`itemId` 是快照清单项 ID，不是源饭搭子业务对象 ID。结果先按快照冻结顺序稳定排列，再以 `itemId` 作为最终同序项排序依据；指定类型没有可选项时返回成功的空分页。三类摘要不返回图片、成员信息或饭搭子内部备注。
-
-只有快照本人可以读取 `AVAILABLE` 且尚未到期的清单。非本人、已过期、`DELETED` 或 `INVALIDATED` 均按不可探测资源返回 `404`。快照头和清单查询均不更新快照状态，也不读取原饭搭子的实时数据。导入数据永久保留；快照到期不回滚已导入数据。
-
-### 空间
-
-```text
-GET /storage-usage
-Auth: UserBearerAuth
-```
-
-返回 `StorageUsageSummary`。
-
-当前账本尚未接入时，服务端返回真实 `0` 使用量，以及按当前有效权益解析出的 `limitBytes / remainingBytes`。
+## 其他领域接口摘要
 
 ### 我的口味
 
@@ -573,49 +443,59 @@ interface UpdateTasteProfileRequest {
 
 口味归用户本人，不参与空间迁移，不计入会员空间。过敏和严格忌口永久免费。
 
-### 饭局邀请
-
-```text
-POST /meal-plans/{mealPlanId}/guest-invitations
-POST /meal-guest-invitations/{invitationId}/respond
-```
-
-饭局参与人不是长期成员，不占长期席位，不获得冰箱、购物清单、完整菜谱库或其他内部计划权限。
-
 ### 菜谱
 
 ```ts
-type RecipeRecordStatus = "ACTIVE" | "ARCHIVED" | "RECYCLED";
-type RecipeOriginType = "MANUAL" | "SYSTEM" | "PUBLIC" | "SPACE_IMPORT" | "CARRY_BACK" | "DERIVED";
+interface RecipeContentInput {
+  name: string;
+  ingredients: RecipeIngredientInput[];
+  steps: RecipeStepInput[];
+  servings: string | null;
+  durationMinutes: number | null;
+}
+```
 
+`POST /recipes` 和 `PUT /recipes/{recipeId}` 只接受上述文本结构，当前不接受 `images`。请求包含 `images` 时返回 `400`；文本更新由服务端保留已有图片。详情响应的 `RecipeContentPayload` 仍可包含系统或历史图片的只读引用。
+
+```ts
+interface UpdateRecipeRequest {
+  operationId: UUID;
+  expectedVersion: number;
+  content: RecipeContentInput;
+}
+
+interface DeleteRecipeRequest {
+  operationId: UUID;
+  expectedVersion: number;
+}
+```
+
+更新和删除使用菜谱详情返回的 `version`。服务端锁定菜谱行后比较 `expectedVersion`，版本不一致返回 `409`，成功更新或删除后递增版本。创建、导入和举报不提交 `expectedVersion`。
+
+```ts
 interface RecipeSummary {
   id: UUID;
-  dishConceptId: UUID;
-  rootRecipeId: UUID | null;
-  name: string;
-  variantName: string | null;
-  originType: RecipeOriginType;
-  status: RecipeRecordStatus;
-  coverUrl: string | null;
-  sourceVersionId: UUID | null;
-  currentVersionId: UUID;
-  version: number;
-  createdAt: IsoDateTime;
+  ownerType: "USER" | "SYSTEM";
+  title: string;
+  coverImageUrl: string | null;
+  sourceRecipeId: UUID | null;
+  isCustomized: boolean;
+  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   updatedAt: IsoDateTime;
 }
 ```
 
-已冻结：`GET /recipes/{recipeId}`、`POST /recipe-imports`、`POST /recipe-variants`。
+现行路径为 `GET /recipes`、`GET /recipes/{recipeId}`、`POST /recipes`、`POST /recipes/{recipeId}/import`、`PUT /recipes/{recipeId}`、`POST /recipes/{recipeId}/delete` 和 `POST /recipes/{recipeId}/report`。菜谱归用户本人，饭搭子关系不改变所有权。
 
-待补契约：`GET /recipes`、`GET /system-recipes` 的筛选分页，以及 `POST /recipes`、`PUT /recipes/{recipeId}` 的成功响应。
-
-普通保存不产生用户可见历史。派生只允许根菜谱创建，同一根最多两个，派生不能再次派生。
+完整现行路径索引见 `docs/api-index.md`。新增或修改字段时，先在对应领域冻结请求和响应，再同步三端本地类型。
 
 ## 数据库与事务规则
 
-1. 当前空间由 `UserSpace` 唯一指针保证。
-2. 接受邀请和退出恢复使用延迟复合外键与事务。
+1. 用户数据以 `userId` 归属，饭搭子关系变化不得改写数据归属。
+2. 接受邀请、退出、移除成员和解散必须在事务中完成关系、审计和幂等写入。
 3. 动态成员上限通过锁定目标 `dining_groups` 行防止并发突破。
-4. 邀请、成员状态、快照和幂等记录有手写 SQL check/partial unique 约束。
-5. 重要生命周期写入 `AuditEvent` 和 `OutboxEvent`；V1 不启动完整 Worker。
-6. 客户端隐藏按钮不是安全边界，所有权限必须在服务端验证。
+4. 邀请、成员状态和幂等记录使用数据库约束保护。
+5. 菜谱生命周期、版本正数、非负计数和空间、冰箱消费状态、购物来源、饭局参与人来源及带菜引用配对由数据库 Check 约束兜底。
+6. 同一用户对同一菜谱最多存在一条 `OPEN` 举报，由数据库部分唯一索引保证。
+7. 重要生命周期写入 `AuditEvent` 和 `OutboxEvent`；V1 不启动完整 Worker。
+8. 客户端隐藏按钮不是安全边界，所有权限必须在服务端验证。

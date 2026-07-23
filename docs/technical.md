@@ -34,6 +34,7 @@
 - API 契约：OpenAPI 3.0
 - 返回格式：统一 JSON 返回结构
 - 契约基线：见 `docs/api-contract.md`
+- API 与数据库设计规则：见 `docs/api-database-rules.md`，涉及 API、DTO、Prisma、SQL、索引、缓存或迁移时必须执行
 - 配置方式：环境变量或被 git 忽略的本地配置文件
 - 产品策略配置：服务端类型化配置与权益解析，规则见 `docs/configuration.md`
 
@@ -60,7 +61,7 @@
 
 ## 生命周期与配置技术规则
 
-1. 饭搭子关系以 `docs/dining-group.md` 为准；当前唯一空间、冻结恢复和迁出快照代码是待替换实现。
+1. 饭搭子关系以 `docs/dining-group.md` 为准；饭搭子只表达关系，不承载个人数据空间。
 2. 配置中心只提供 `GLOBAL / ENTITLEMENT / USER / INSTANCE / SAFETY` 输入，所有权、权限和状态机仍由代码保证。
 3. 客户端不得自行计算套餐、双方饭搭子额度、图片参数和空间结论。
 4. 邀请和饭局等实例创建时保存必要的解析值和策略版本，后续配置变化不追溯已创建事实。
@@ -73,6 +74,8 @@
 11. OCR、AI 和小票识别当前 Reserved，不提前添加通用抽象或占位服务。
 
 ## 数据库建模规则
+
+本节是摘要。字段、表、约束、安全、性能、缓存、事务和迁移的完整强制规则见 `docs/api-database-rules.md`。
 
 1. 同一可变业务事实只能有一个写入 owner。
 2. 其他表只能保存外键、不可变历史快照，或有明确一致性机制的缓存摘要。
@@ -87,7 +90,7 @@
 
 ## 接口协议规则
 
-详细契约基线见 `docs/api-contract.md`。本节只保留全局摘要。
+详细设计规则见 `docs/api-database-rules.md`，当前契约基线见 `docs/api-contract.md`。本节只保留全局摘要。
 
 1. 前后端接口统一返回 JSON。
 2. 所有接口固定使用 `code`、`message`、`data`、`serverTime` 顶层字段。
