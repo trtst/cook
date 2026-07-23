@@ -117,8 +117,9 @@ parallel code edits.
 - `docs/AGENT.md`: short AI execution guide. Read first.
 - `docs/project.md`: full developer overview.
 - `docs/technical.md`: technical rules, naming, style, validation.
-- `docs/dining-group.md`: current long-term dining-group lifecycle, original-space migration, exit snapshot, meal guests, and taste rules.
-- `docs/configuration.md`: current Free/Plus, storage, image, recipe-variant, recycle-bin, downgrade, and configuration rules.
+- `docs/dining-group.md`: current dining-group relationships, member limits, weekly plans, dining events, fridge, shopping, and taste boundaries.
+- `docs/recipe.md`: current recipe visibility, base-version, override, image-promotion, variant, and deletion rules.
+- `docs/configuration.md`: current Free/Plus/Pro/Ultra, personal storage, image, recycle-bin, downgrade, and configuration rules.
 - `docs/api-contract.md`: shared API contract and error rules.
 - `docs/uniapp.md`: mini program engineering rules.
 - `docs/uniapp-architecture.md`: `apps/client` scaffold and boundary rules.
@@ -164,8 +165,9 @@ when shared contracts, cross-app types, or broad TypeScript behavior changed.
 9. Do not add "while here" cleanup, modernization, or consistency edits unless
    the user explicitly includes them in scope.
 10. Treat `docs/cook/` Prisma v0.1, SQL, and older product plans as historical
-    source material when they conflict with `docs/dining-group.md` or
-    `docs/configuration.md`; create a new schema/SQL version instead of
-    overwriting history.
-11. Do not implement or advertise OCR, AI, receipt scanning, Pro, multi-family,
-    or multi-dining-group switching unless the user explicitly reopens them.
+    source material when they conflict with `docs/dining-group.md`,
+    `docs/recipe.md`, or `docs/configuration.md`; create a new schema/SQL version
+    instead of overwriting history.
+11. Do not implement or advertise OCR, AI, receipt scanning, owner transfer,
+    shared fridge, shared shopping, or a generic permission center unless the
+    user explicitly reopens them.

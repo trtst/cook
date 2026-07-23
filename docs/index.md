@@ -20,29 +20,29 @@
 3. `technical.md`
    - 技术规则、接口协议、目录边界、命名规则、代码风格和验证规则。
 4. `dining-group.md`
-   - 饭搭子、原空间、迁入迁出、饭局和“我的口味”的当前产品权威规则。
-5. `configuration.md`
-   - Free/Plus、空间计量、图片、派生做法、回收站、到期降级和配置中心规则。
-6. `client-api.md`
+   - 饭搭子关系、成员额度、周计划、饭局、冰箱和购物清单边界。
+5. `recipe.md`
+   - 菜谱可见性、基础版本、覆盖修改、图片独立化和派生规则。
+6. `configuration.md`
+   - Free/Plus/Pro/Ultra、个人空间、图片、回收站、降级和个性化权益。
+7. `client-api.md`
    - 客户端/后台接口手册，查看已创建接口、待创建接口、请求响应示例和调用说明。
-7. `api-contract.md`
+8. `api-contract.md`
    - 三端并行前的共享 API 契约、错误码、分页、鉴权、Auth/User/DiningGroup 纵切链路。
-8. `api-index.md`
+9. `api-index.md`
    - 接口看板，查看已创建接口、待创建接口、实现位置和详情位置。
-9. `uniapp.md`
+10. `uniapp.md`
    - uni-app 小程序端工程规则、分包边界、生命周期、请求、滚动、分享和样式兼容。
-10. `uniapp-architecture.md`
+11. `uniapp-architecture.md`
    - `apps/client` 小程序目录骨架、主包/分包规划、登录组件、请求层、平台适配层和 store 边界。
-11. `architecture.md`
+12. `architecture.md`
    - 前后端分层、依赖方向、接口边界和数据流。
-12. `decision.md`
+13. `decision.md`
    - 范围写法、不做项、交付口径和边界确认规则。
-13. `components.md`
+14. `components.md`
    - 前端组件准入、拆分边界、命名和输入输出规则。
-14. `runbook.md`
+15. `runbook.md`
    - 启动、调试、验证、三端联合开发流程、联调和交付说明。
-15. `plans/dining-group-lifecycle-plan.md`
-   - 当前规则落地为 v0.2 契约、迁移和分阶段实现的执行计划。
 16. `apps/worker/README.md`
    - Worker 禁用态骨架、命令和 V1 不启动异步任务边界。
 17. `docs/cook/`
@@ -57,9 +57,11 @@
 - `technical.md`
   - 技术栈、接口、工程规则、命名规则和代码风格。
 - `dining-group.md`
-  - 当前饭搭子生命周期、原空间、迁入迁出、饭局和口味规则。
+  - 当前饭搭子关系、成员额度、计划、饭局和个人数据边界。
+- `recipe.md`
+  - 当前菜谱可见性、基础版本、覆盖修改、图片独立化和派生规则。
 - `configuration.md`
-  - 当前会员、配置、空间、图片、版本、回收站和降级规则。
+  - 当前四档个人会员、配置、空间、图片、回收站和降级规则。
 - `client-api.md`
   - 客户端/后台接口手册，查看已创建接口、待创建接口、请求响应示例和调用说明。
 - `api-contract.md`
@@ -87,14 +89,14 @@
 - `plans/minor_change_log.md`
   - 小型低风险改动记录。
 - `plans/dining-group-lifecycle-plan.md`
-  - 饭搭子 v0.2 分阶段契约与实施计划。
+  - 旧共享空间生命周期计划，待新重构计划替代后标记为历史。
 - `archive/`
   - 不再属于当前主路径的历史文档。
 
 ## 维护规则
 
 1. 长期稳定规则写入顶层主文档。
-2. `docs/cook/` 保留历史产品、Schema 和 SQL 来源；当其与 `dining-group.md` 或 `configuration.md` 冲突时，以顶层当前权威文档为准。
+2. `docs/cook/` 保留历史产品、Schema 和 SQL 来源；冲突时以 `dining-group.md`、`recipe.md` 和 `configuration.md` 为准。
 3. 一次性执行说明写入 `plans/`。
 4. 已过时材料移入 `archive/`。
 5. 主文档必须写当前项目如何做，不保留与下一餐无关的通用模板口径。
