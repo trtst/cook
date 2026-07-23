@@ -1,7 +1,6 @@
 import { defineStore } from "pinia";
+import { APP_STORAGE_KEYS } from "@/config";
 import { uniPlatform } from "@/platform/uni";
-
-const SESSION_STORAGE_KEY = "next_meal_session";
 
 interface SessionSnapshot {
   token: string;
@@ -33,11 +32,11 @@ export const useSessionStore = defineStore("session", {
   },
   actions: {
     async restore() {
-      const snapshot = await uniPlatform.storage.get<SessionSnapshot>(SESSION_STORAGE_KEY);
+      const snapshot = await uniPlatform.storage.get<SessionSnapshot>(APP_STORAGE_KEYS.session);
 
       if (snapshot?.token) {
         if (isExpired(snapshot.expiresAt)) {
-          await uniPlatform.storage.remove(SESSION_STORAGE_KEY);
+          await uniPlatform.storage.remove(APP_STORAGE_KEYS.session);
           this.restored = true;
           return;
         }
@@ -55,7 +54,7 @@ export const useSessionStore = defineStore("session", {
       this.uid = normalizeUid(snapshot.uid);
       this.expiresAt = snapshot.expiresAt;
       this.refreshCheckedAt = snapshot.refreshCheckedAt ?? this.refreshCheckedAt;
-      await uniPlatform.storage.set(SESSION_STORAGE_KEY, {
+      await uniPlatform.storage.set(APP_STORAGE_KEYS.session, {
         ...snapshot,
         refreshCheckedAt: this.refreshCheckedAt
       });
@@ -64,7 +63,7 @@ export const useSessionStore = defineStore("session", {
       if (!this.token) return;
 
       this.refreshCheckedAt = Date.now();
-      await uniPlatform.storage.set(SESSION_STORAGE_KEY, {
+      await uniPlatform.storage.set(APP_STORAGE_KEYS.session, {
         token: this.token,
         uid: this.uid,
         expiresAt: this.expiresAt,
@@ -76,7 +75,7 @@ export const useSessionStore = defineStore("session", {
       this.uid = 0;
       this.expiresAt = "";
       this.refreshCheckedAt = 0;
-      await uniPlatform.storage.remove(SESSION_STORAGE_KEY);
+      await uniPlatform.storage.remove(APP_STORAGE_KEYS.session);
     }
   }
 });

@@ -13,13 +13,13 @@ const defaultApiUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:310
 const defaultDomain = defaultApiUrl.replace(/\/api\/?$/i, "");
 
 export const cfg = {
-  apiUrl: defaultApiUrl,
-  domain: import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
-  /**
-   * 默认所有业务都走 `domain`。
-   * 只有像认证网关这类确实可能单独拆出的场景，才额外提供专用覆盖项。
-   */
-  authDomain: import.meta.env.VITE_AUTH_DOMAIN ?? import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
-  cookFrom: import.meta.env.VITE_COOK_FROM,
-  cookVersion: import.meta.env.VITE_COOK_VERSION ?? APP_VERSION
+	apiUrl: defaultApiUrl,
+	domain: import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
+	/**
+	 * 默认所有业务都走 `domain`。
+	 * 只有像认证网关这类确实可能单独拆出的场景，才额外提供专用覆盖项。
+	 */
+	authDomain: import.meta.env.VITE_AUTH_DOMAIN ?? import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
+	cookFrom: import.meta.env.VITE_COOK_FROM,
+	cookVersion: import.meta.env.VITE_COOK_VERSION ?? APP_VERSION
 };

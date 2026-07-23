@@ -25,6 +25,19 @@ import {
 export type UUID = string;
 export type IsoDateTime = string;
 
+export interface PageQuery {
+	page?: number;
+	pageSize?: number;
+}
+
+export interface PageResult<T> {
+	items: T[];
+	page: number;
+	pageSize: number;
+	total: number;
+	hasNext: boolean;
+}
+
 /**
  * 业务成功返回了 JSON 契约，但 `code !== 0`。
  * 调用方可以读取 `code` 和 `data` 做业务级提示，不需要再关心 transport 层细节。

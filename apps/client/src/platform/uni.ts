@@ -9,6 +9,9 @@ interface ClientPlatform {
     get<T>(key: string): Promise<T | null>;
     set<T>(key: string, value: T): Promise<void>;
     remove(key: string): Promise<void>;
+    getSync<T>(key: string): T | null;
+    setSync<T>(key: string, value: T): void;
+    removeSync(key: string): void;
   };
   navigation: {
     navigateTo(path: string): Promise<void>;
@@ -163,15 +166,24 @@ export const uniPlatform: ClientPlatform = {
     }
   },
   storage: {
-    async get<T>(key: string) {
+    getSync<T>(key: string) {
       const value = uni.getStorageSync(key);
-      return value ? (value as T) : null;
+      return value === "" || value === undefined ? null : (value as T);
     },
-    async set<T>(key: string, value: T) {
+    setSync<T>(key: string, value: T) {
       uni.setStorageSync(key, value);
     },
-    async remove(key: string) {
+    removeSync(key: string) {
       uni.removeStorageSync(key);
+    },
+    async get<T>(key: string) {
+      return uniPlatform.storage.getSync<T>(key);
+    },
+    async set<T>(key: string, value: T) {
+      uniPlatform.storage.setSync(key, value);
+    },
+    async remove(key: string) {
+      uniPlatform.storage.removeSync(key);
     }
   },
   navigation: {

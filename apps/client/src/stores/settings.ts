@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { APP_STORAGE_KEYS } from "@/config";
 import { uniPlatform } from "@/platform/uni";
 import {
   DEFAULT_THEME_PALETTE,
@@ -12,8 +13,6 @@ import {
   type ThemePalette,
   type ThemeSkin
 } from "@/themes";
-
-const SETTINGS_STORAGE_KEY = "next_meal_settings";
 
 export {
   DEFAULT_THEME_PALETTE,
@@ -54,7 +53,7 @@ export const useSettingsStore = defineStore("settings", {
   }),
   actions: {
     async restore() {
-      const snapshot = await uniPlatform.storage.get<SettingsSnapshot>(SETTINGS_STORAGE_KEY);
+      const snapshot = await uniPlatform.storage.get<SettingsSnapshot>(APP_STORAGE_KEYS.settings);
       const restoredSkin = isThemeSkin(snapshot?.themeSkin) ? snapshot.themeSkin : DEFAULT_THEME_SKIN;
       const restoredPalette =
         isThemePalette(snapshot?.themePalette) && isPaletteSupportedBySkin(restoredSkin, snapshot.themePalette)
@@ -95,10 +94,10 @@ export const useSettingsStore = defineStore("settings", {
       this.themeMode = "system";
       this.themeSkin = DEFAULT_THEME_SKIN;
       this.themePalette = DEFAULT_THEME_PALETTE;
-      await uniPlatform.storage.remove(SETTINGS_STORAGE_KEY);
+      await uniPlatform.storage.remove(APP_STORAGE_KEYS.settings);
     },
     async persist() {
-      await uniPlatform.storage.set(SETTINGS_STORAGE_KEY, {
+      await uniPlatform.storage.set(APP_STORAGE_KEYS.settings, {
         lastDiningGroupId: this.lastDiningGroupId,
         themeMode: this.themeMode,
         themeSkin: this.themeSkin,

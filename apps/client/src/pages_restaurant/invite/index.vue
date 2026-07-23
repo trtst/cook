@@ -1,16 +1,16 @@
 <template>
-  <Layout title="加入饭搭子">
+  <Layout title="加入饭搭子关系">
     <view class="invite-page">
       <Login
         v-if="!sessionStore.isLoggedIn"
-        title="登录后加入饭搭子"
-        description="登录后可以通过邀请加入饭搭子。"
+        title="登录后加入饭搭子关系"
+        description="登录后可以通过邀请建立饭搭子成员关系。"
         @success="handleAccept"
       />
 
       <view v-else class="accept-panel">
-        <text class="accept-panel__title">加入饭搭子</text>
-        <text class="accept-panel__description">确认加入后，当前账号会成为该饭搭子的成员。</text>
+        <text class="accept-panel__title">加入饭搭子关系</text>
+        <text class="accept-panel__description">确认加入后，当前账号会成为该饭搭子的成员，不会切换个人数据归属。</text>
         <button class="accept-panel__button" :loading="submitting" :disabled="submitting || !inviteToken" @click="handleAccept">
           确认加入
         </button>

@@ -23,14 +23,14 @@
       <template v-else>
         <view class="search-entry" hover-class="search-entry--hover" hover-stay-time="100" @click="navigateTo('/pages_recipe/list/index')">
           <text class="search-entry__icon">⌕</text>
-          <text class="search-entry__text">搜索菜名、食材或做法</text>
+          <text class="search-entry__text">搜索菜名或食材</text>
         </view>
 
         <view class="private-panel">
           <view class="private-panel__copy">
             <text class="private-panel__label">私人菜谱</text>
             <text class="private-panel__title">把家里常吃的菜，放在最顺手的位置</text>
-            <text class="private-panel__description">登录后展示当前饭搭子的私有菜谱、最近编辑和快速复做。</text>
+            <text class="private-panel__description">登录后展示你的个人菜谱、最近编辑和快速复做。</text>
           </view>
           <view class="private-panel__art">
             <view class="private-panel__book" />

@@ -10,7 +10,7 @@
   >
     <template #navbar-left>
       <view class="table-nav__selector" hover-class="table-nav__selector--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/members/index')">
-        <text class="restaurant-bar__label">当前饭桌</text>
+        <text class="restaurant-bar__label">当前关系</text>
         <text class="restaurant-bar__name">{{ restaurantName }}</text>
       </view>
     </template>
@@ -125,11 +125,11 @@
 
         <view class="table-section">
           <view class="section-heading">
-            <text class="section-heading__title">饭桌动静</text>
+            <text class="section-heading__title">饭局动静</text>
             <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">全部</text>
           </view>
           <view class="family-feed">
-            <Empty title="暂无饭桌动静" description="有新的点菜、饭局或购物变化时会显示在这里。" />
+            <Empty title="暂无饭局动静" description="有新的点菜、饭局或购物变化时会显示在这里。" />
           </view>
         </view>
 
@@ -137,7 +137,7 @@
           <view class="pantry-panel__header">
             <view>
               <text class="pantry-panel__label">买菜和冰箱</text>
-              <text class="pantry-panel__title">清单暂未接入</text>
+              <text class="pantry-panel__title">个人清单和冰箱</text>
             </view>
             <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去买菜</text>
           </view>
@@ -171,15 +171,20 @@ import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
+import { useUserStore } from "@/stores/user";
 
 const HOME_NAV_GAP = 16;
 const { navBarTotalHeight } = useSystemInfo();
 const { themeClasses } = useTheme();
 const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
+const userStore = useUserStore();
 
 const heroStyle = computed(() => ({
-  paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`
+  paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
+  backgroundImage: userStore.profile?.display?.homeBackgroundUrl ? `url(${userStore.profile.display.homeBackgroundUrl})` : undefined,
+  backgroundSize: userStore.profile?.display?.homeBackgroundUrl ? "cover" : undefined,
+  backgroundPosition: userStore.profile?.display?.homeBackgroundUrl ? "center" : undefined
 }));
 
 const restaurantName = computed(() => {
@@ -187,10 +192,10 @@ const restaurantName = computed(() => {
   return diningGroupStore.currentDiningGroup?.name ?? "饭搭子未加载";
 });
 const memberCountText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后同步饭桌";
+  if (!sessionStore.isLoggedIn) return "登录后同步饭局和关系";
   const count = diningGroupStore.currentDiningGroup?.memberCount;
-  if (!count) return "饭桌信息待加载";
-  return `${count} 人饭桌`;
+  if (!count) return "关系信息待加载";
+  return `${count} 人参与关系`;
 });
 const memberCountValue = computed(() => diningGroupStore.currentDiningGroup?.memberCount ?? "--");
 const hasMealPlan = false;
@@ -205,7 +210,7 @@ const heroDescription = computed(() =>
     ? "有待确认的饭局安排。"
     : sessionStore.isLoggedIn
       ? "还没安排饭局，先记想吃或发起点菜。"
-      : "登录后同步饭搭子、计划、购物清单和食材。"
+      : "登录后同步你的饭搭子关系、计划、购物清单和食材。"
 );
 
 const quickActions = [

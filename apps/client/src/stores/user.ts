@@ -1,18 +1,40 @@
 import { defineStore } from "pinia";
-import type { UserBasic } from "@/apis/user";
+import type { MeResponse } from "@/apis/user";
+import { APP_STORAGE_KEYS } from "@/config";
 import { uniPlatform } from "@/platform/uni";
 import { THEME_SKIN_OPTIONS, type ThemeSkin } from "@/stores/settings";
 
-const USER_PROFILE_STORAGE_KEY = "next_meal_user_profile";
-
 interface UserProfileSnapshot {
-  profile: UserBasic;
-  cachedAt: number;
+  profile?: unknown;
+  cachedAt?: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isNullableString(value: unknown) {
+  return value === null || typeof value === "string";
+}
+
+function isUserProfile(profile: unknown): profile is MeResponse {
+  if (!isRecord(profile) || typeof profile.uid !== "number") return false;
+  if (!isNullableString(profile.nickname) || !isNullableString(profile.avatarUrl) || !isNullableString(profile.phone)) return false;
+  if (!isRecord(profile.display) || !isRecord(profile.membership)) return false;
+
+  return (
+    isNullableString(profile.display.profileBackgroundUrl) &&
+    isNullableString(profile.display.homeBackgroundUrl) &&
+    typeof profile.display.canUseProfileBackground === "boolean" &&
+    typeof profile.display.canUseHomeBackground === "boolean" &&
+    ["FREE", "PLUS", "PRO", "ULTRA"].includes(String(profile.membership.tier)) &&
+    isNullableString(profile.membership.validUntil)
+  );
 }
 
 export const useUserStore = defineStore("user", {
   state: () => ({
-    profile: null as UserBasic | null,
+    profile: null as MeResponse | null,
     profileCachedAt: 0
   }),
   getters: {
@@ -21,24 +43,30 @@ export const useUserStore = defineStore("user", {
     canUseThemeSkin: () => (themeSkin: ThemeSkin) => THEME_SKIN_OPTIONS.some((option) => option.value === themeSkin)
   },
   actions: {
-    setProfile(profile: UserBasic | null) {
+    setProfile(profile: MeResponse | null) {
       this.profile = profile;
       this.profileCachedAt = profile ? Date.now() : 0;
 
       if (profile) {
-        void uniPlatform.storage.set(USER_PROFILE_STORAGE_KEY, {
+        void uniPlatform.storage.set(APP_STORAGE_KEYS.userProfile, {
           profile,
           cachedAt: this.profileCachedAt
         });
       } else {
-        void uniPlatform.storage.remove(USER_PROFILE_STORAGE_KEY);
+        void uniPlatform.storage.remove(APP_STORAGE_KEYS.userProfile);
       }
     },
     async restoreProfile(uid: number, maxAgeMs: number) {
-      const snapshot = await uniPlatform.storage.get<UserProfileSnapshot>(USER_PROFILE_STORAGE_KEY);
+      const snapshot = await uniPlatform.storage.get<UserProfileSnapshot>(APP_STORAGE_KEYS.userProfile);
 
-      if (!snapshot?.profile || snapshot.profile.uid !== uid || Date.now() - snapshot.cachedAt > maxAgeMs) {
-        await uniPlatform.storage.remove(USER_PROFILE_STORAGE_KEY);
+      if (
+        !snapshot ||
+        !isUserProfile(snapshot.profile) ||
+        snapshot.profile.uid !== uid ||
+        typeof snapshot.cachedAt !== "number" ||
+        Date.now() - snapshot.cachedAt > maxAgeMs
+      ) {
+        await uniPlatform.storage.remove(APP_STORAGE_KEYS.userProfile);
         return false;
       }
 
@@ -49,7 +77,7 @@ export const useUserStore = defineStore("user", {
     clearProfile() {
       this.profile = null;
       this.profileCachedAt = 0;
-      void uniPlatform.storage.remove(USER_PROFILE_STORAGE_KEY);
+      void uniPlatform.storage.remove(APP_STORAGE_KEYS.userProfile);
     }
   }
 });

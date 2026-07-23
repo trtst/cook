@@ -17,7 +17,13 @@
       placeholder="密码"
       :disabled="loading"
     />
-    <button class="login__button" :loading="loading" :disabled="loading" @click="handleLogin">
+    <button
+      class="login__button"
+      :class="{ 'login__button--disabled': loading }"
+      :loading="loading"
+      :disabled="loading"
+      @click="handleLogin"
+    >
       {{ buttonText }}
     </button>
     <text v-if="errorText" class="login__error">{{ errorText }}</text>
@@ -28,6 +34,7 @@
 import { ref } from "vue";
 import { authApi } from "@/apis/auth";
 import { ApiClientError } from "@/apis/http";
+import { userApi } from "@/apis/user";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import type { LoginSuccessPayload } from "./types";
@@ -84,7 +91,7 @@ async function handleLogin() {
 			uid: session.user.uid,
 			expiresAt: session.expiresAt
 		});
-		userStore.setProfile(session.user);
+		userStore.setProfile(await userApi.getCurrent());
 		password.value = "";
 		emit("success", { session });
 	} catch (error) {

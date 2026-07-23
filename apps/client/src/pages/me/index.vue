@@ -107,12 +107,12 @@
               @click="handleDiningGroupManage"
             >
               <view class="overview-heading">
-                <text class="overview-heading__title">我的饭搭子</text>
+                <text class="overview-heading__title">饭搭子关系</text>
                 <text class="overview-heading__arrow">›</text>
               </view>
               <text class="dining-card__description">{{ diningGroupDescription }}</text>
 
-              <view v-if="isDiningGroupShared" class="dining-card__stats">
+              <view v-if="diningGroupStats.length" class="dining-card__stats">
                 <view v-for="item in diningGroupStats" :key="item.label" class="dining-stat">
                   <text class="dining-stat__value">{{ item.value }}</text>
                   <text class="dining-stat__label">{{ item.label }}</text>
@@ -462,9 +462,11 @@ const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profil
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
 let pendingAction: (() => void) | null = null;
 let restoredOnce = false;
+let loadMePromise: Promise<void> | null = null;
 
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
-const currentEntitlements = computed(() => diningGroupStore.currentEntitlements);
+const currentRelation = computed(() => diningGroupStore.currentRelationSummary);
+const relationUsage = computed(() => diningGroupStore.relationUsage);
 const profileHeroStyle = computed(() => ({
   "--profile-hero-padding-top": `${navBarTotalHeight.value}px`
 }));
@@ -472,10 +474,7 @@ const profileName = computed(() => {
   if (!sessionStore.isLoggedIn) return "点击登录";
   return userStore.profile?.nickname || "下一餐用户";
 });
-const profileCoverUrl = computed(
-  () =>
-    "https://img.zcool.cn/material/681111117d138ei1z6txeh8209.png?k=7f4d7412f87a4b4d4998d469f5e4e5c1&t=6a60fbf0&x-oss-process=image/format,webp"
-);
+const profileCoverUrl = computed(() => userStore.profile?.display?.profileBackgroundUrl || "");
 const profileAvatarUrl = computed(() => userStore.profile?.avatarUrl || "");
 const profileAvatarText = computed(() => {
   if (!sessionStore.isLoggedIn) return "我";
@@ -486,39 +485,41 @@ const profileUidText = computed(() =>
 );
 const personalTierText = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录";
-  return getTierText(currentEntitlements.value?.personalTier);
+  return getTierText(userStore.profile?.membership?.tier);
 });
 const profileChips = computed(() => {
   if (!sessionStore.isLoggedIn) return [];
 
-  const chips = [`个人 ${getTierText(currentEntitlements.value?.personalTier)}`];
-  if (currentEntitlements.value) {
-    chips.push(`饭搭子 ${getTierText(currentEntitlements.value.diningGroupTier)}`);
-  }
-
-  return chips;
+  return [`个人 ${getTierText(userStore.profile?.membership?.tier)}`];
 });
-const diningGroupDescription = computed(() => "和常一起吃饭的人，共享菜谱、计划下一餐。");
-const isDiningGroupShared = computed(() => Boolean(currentDiningGroup.value?.isShared));
+const diningGroupDescription = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后查看你的饭搭子关系和个人权益。";
+  if (!currentRelation.value) return "饭搭子关系加载中";
+  return `${currentRelation.value.name} · 只管理成员关系，不切换个人菜谱、冰箱和计划。`;
+});
 const diningGroupInviteText = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后可以邀请饭搭子加入";
-  if (!currentDiningGroup.value) return "饭搭子信息加载中";
-  return "分享给饭搭子，点开即可加入";
+  if (!currentRelation.value) return "饭搭子关系加载中";
+  return "查看成员、邀请关系和当前个人权益摘要";
 });
-const diningGroupStats = computed(() => [
-  {
-    value: currentDiningGroup.value?.memberCount ?? "--",
-    label: "成员"
-  },
-  {
-    value: currentDiningGroup.value?.recipeCount ?? "--",
-    label: "菜谱"
-  },
-  {
-    value: currentDiningGroup.value?.sharedDays ?? "--",
-    label: "天数"
-  }
-]);
+const diningGroupStats = computed(() => {
+  if (!currentRelation.value || !relationUsage.value) return [];
+
+  return [
+    {
+      value: getRoleText(currentRelation.value.myRole),
+      label: "我的身份"
+    },
+    {
+      value: `${relationUsage.value.joinedCount} / ${relationUsage.value.joinLimit}`,
+      label: "已加入"
+    },
+    {
+      value: relationUsage.value.ownedCount,
+      label: "已主理"
+    }
+  ];
+});
 const currentThemeText = computed(() => {
   const modeLabel = themeModeLabels[themeMode.value];
   const skinLabel = skinOptions.find((item) => item.value === effectiveSkin.value)?.label || "基础";
@@ -669,8 +670,17 @@ const visibleSettingEntries = computed(() => {
   ];
 });
 
-function getTierText(tier?: "FREE" | "PLUS") {
-  return tier === "PLUS" ? "Plus" : "Free";
+function getTierText(tier?: "FREE" | "PLUS" | "PRO" | "ULTRA") {
+  if (tier === "ULTRA") return "Ultra";
+  if (tier === "PRO") return "Pro";
+  if (tier === "PLUS") return "Plus";
+  return "Free";
+}
+
+function getRoleText(role?: "OWNER" | "ADMIN" | "MEMBER") {
+  if (role === "OWNER") return "主理人";
+  if (role === "ADMIN") return "管理员";
+  return "成员";
 }
 
 function isDisabledEntry(entry: PageEntry) {
@@ -703,22 +713,46 @@ async function syncPageState() {
 }
 
 async function loadMe() {
-  if (!sessionStore.isLoggedIn || profileLoading.value) return;
+  if (!sessionStore.isLoggedIn) return;
+  if (loadMePromise) {
+    await loadMePromise;
+    return;
+  }
+  if (profileLoading.value) return;
 
-  const hasCachedMe = Boolean(userStore.profile && diningGroupStore.hasCurrentContext);
-  profileLoading.value = !hasCachedMe;
+  loadMePromise = doLoadMe().finally(() => {
+    loadMePromise = null;
+  });
+
+  await loadMePromise;
+}
+
+async function doLoadMe() {
+  const shouldLoadProfile = !userStore.profile;
+  const shouldLoadDiningGroup = !diningGroupStore.hasCurrentContext;
+
+  if (!shouldLoadProfile && !shouldLoadDiningGroup) {
+    profileLoading.value = false;
+    loadErrorText.value = "";
+    return;
+  }
+
+  profileLoading.value = true;
   loadErrorText.value = "";
 
   const [profileResult, diningGroupResult] = await Promise.allSettled([
-    userApi.getCurrent(),
-    diningGroupStore.refreshCurrent()
+    shouldLoadProfile ? userApi.getCurrent() : Promise.resolve(null),
+    shouldLoadDiningGroup ? diningGroupStore.refreshCurrent() : Promise.resolve()
   ]);
 
-  if (profileResult.status === "fulfilled") {
+  if (shouldLoadProfile && profileResult.status === "fulfilled" && profileResult.value) {
     userStore.setProfile(profileResult.value);
   }
 
-  if (profileResult.status === "rejected" || diningGroupResult.status === "rejected") {
+  if (
+    (shouldLoadProfile && profileResult.status === "rejected") ||
+    (shouldLoadDiningGroup && diningGroupResult.status === "rejected")
+  ) {
     loadErrorText.value = "部分信息加载失败";
   }
 
@@ -835,7 +869,9 @@ async function saveProfile() {
     return;
   }
 
-  if (nickname === (userStore.profile?.nickname || "").trim()) {
+  const nicknameUnchanged = nickname === (userStore.profile?.nickname || "").trim();
+
+  if (nicknameUnchanged) {
     closeProfileEditor();
     return;
   }

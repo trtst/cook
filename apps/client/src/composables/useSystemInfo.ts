@@ -1,4 +1,5 @@
 import { computed, ref } from "vue";
+import { APP_STORAGE_KEYS } from "@/config";
 import { uniPlatform } from "@/platform/uni";
 
 interface MenuButtonRect {
@@ -27,6 +28,10 @@ interface SystemInfoState {
   menuButtonRect?: MenuButtonRect;
 }
 
+interface SystemInfoSnapshot extends SystemInfoState {
+  updatedAt: number;
+}
+
 interface WindowInfo {
   statusBarHeight?: number;
   windowWidth?: number;
@@ -45,6 +50,69 @@ const systemInfo = ref<SystemInfoState>({
 });
 
 let initialized = false;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const nextValue = Number(value);
+  return Number.isFinite(nextValue) ? nextValue : fallback;
+}
+
+function readRect(value: unknown): MenuButtonRect | undefined {
+  if (!isRecord(value)) return undefined;
+
+  return {
+    top: toNumber(value.top),
+    bottom: toNumber(value.bottom),
+    left: toNumber(value.left),
+    right: toNumber(value.right),
+    width: toNumber(value.width),
+    height: toNumber(value.height)
+  };
+}
+
+function readSafeArea(value: unknown): SafeArea | undefined {
+  if (!isRecord(value)) return undefined;
+
+  return {
+    top: toNumber(value.top),
+    bottom: toNumber(value.bottom),
+    left: toNumber(value.left),
+    right: toNumber(value.right),
+    width: toNumber(value.width),
+    height: toNumber(value.height)
+  };
+}
+
+function normalizeSnapshot(value: unknown): SystemInfoSnapshot | null {
+  if (!isRecord(value)) return null;
+
+  const windowWidth = toNumber(value.windowWidth);
+  const windowHeight = toNumber(value.windowHeight);
+  if (!windowWidth && !windowHeight) return null;
+
+  return {
+    statusBarHeight: toNumber(value.statusBarHeight, 20),
+    windowWidth,
+    windowHeight,
+    safeArea: readSafeArea(value.safeArea),
+    menuButtonRect: readRect(value.menuButtonRect),
+    updatedAt: toNumber(value.updatedAt)
+  };
+}
+
+function readCachedSystemInfo() {
+  return normalizeSnapshot(uniPlatform.storage.getSync<SystemInfoSnapshot>(APP_STORAGE_KEYS.systemInfoSnapshot));
+}
+
+function writeCachedSystemInfo(info: SystemInfoState) {
+  uniPlatform.storage.setSync<SystemInfoSnapshot>(APP_STORAGE_KEYS.systemInfoSnapshot, {
+    ...info,
+    updatedAt: Date.now()
+  });
+}
 
 function getMenuButtonRect() {
   return uniPlatform.system.getMenuButtonRect() ?? undefined;
@@ -67,21 +135,30 @@ export function initSystemInfo() {
   if (initialized) return;
   initialized = true;
 
+  const cachedInfo = readCachedSystemInfo();
+  if (cachedInfo) {
+    systemInfo.value = cachedInfo;
+  }
+
   try {
     const info = readWindowInfo();
-    systemInfo.value = {
+    const nextInfo = {
       statusBarHeight: info?.statusBarHeight ?? 20,
       windowWidth: info?.windowWidth ?? 0,
       windowHeight: info?.windowHeight ?? 0,
       safeArea: info?.safeArea,
       menuButtonRect: getMenuButtonRect()
     };
+    systemInfo.value = nextInfo;
+    writeCachedSystemInfo(nextInfo);
   } catch {
-    systemInfo.value = {
-      statusBarHeight: 20,
-      windowWidth: 0,
-      windowHeight: 0
-    };
+    if (!cachedInfo) {
+      systemInfo.value = {
+        statusBarHeight: 20,
+        windowWidth: 0,
+        windowHeight: 0
+      };
+    }
   }
 }
 

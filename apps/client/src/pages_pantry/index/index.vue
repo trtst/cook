@@ -1,10 +1,10 @@
 <template>
   <Layout title="食材与采购">
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看食材与采购" description="库存、缺口和购物清单跟随当前饭搭子，需要登录后查看。" />
+    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看食材与采购" description="冰箱、缺口和购物清单都归你本人所有，需要登录后查看。" />
     <template v-else>
       <view class="summary">
         <text class="summary__title">食材与采购</text>
-        <text class="summary__description">把冰箱库存、食材缺口和购物清单放在同一个入口里。</text>
+        <text class="summary__description">把个人冰箱库存、饭局缺口和购物清单放在同一个入口里。</text>
       </view>
 
       <view class="entry-list">
@@ -56,7 +56,7 @@ const pantryEntries = [
   },
   {
     title: "编辑食材",
-    description: "维护饭搭子已有食材",
+    description: "维护你自己的冰箱食材",
     url: "/pages_pantry/item-edit/index"
   }
 ];

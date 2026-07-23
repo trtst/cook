@@ -6,4 +6,9 @@
  */
 export { authApi } from "./auth";
 export { diningGroupApi } from "./dining-group";
+export { fridgeApi } from "./fridge";
+export { mealApi } from "./meal";
+export { recipeApi } from "./recipe";
+export { shareApi } from "./share";
+export { shoppingApi } from "./shopping";
 export { userApi } from "./user";

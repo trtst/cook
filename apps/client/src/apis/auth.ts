@@ -9,7 +9,7 @@
  */
 import { cfg } from "@/config";
 import { post, type IsoDateTime } from "./http";
-import type { UserBasic } from "./user";
+import type { SessionUser } from "./user";
 import { useSessionStore } from "@/stores/session";
 
 /**
@@ -32,7 +32,7 @@ export interface PasswordLoginRequest {
 export interface PasswordLoginResult {
 	token: string;
 	expiresAt: IsoDateTime;
-	user: UserBasic;
+	user: SessionUser;
 }
 
 export interface RefreshSessionResult {
@@ -48,6 +48,10 @@ export const authApi = {
 	loginWithPassword(body: PasswordLoginRequest) {
 		return post<PasswordLoginResult>(`${cfg.authDomain}/api/auth/login`, body, { auth: false });
 	},
+	/**
+	 * 刷新当前 user token。
+	 * 只服务会话续期，不返回完整用户资料；用户资料统一再走 `/users/me`。
+	 */
 	refreshSession() {
 		return post<RefreshSessionResult>(`${cfg.authDomain}/api/auth/refresh`);
 	}

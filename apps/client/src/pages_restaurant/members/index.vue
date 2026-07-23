@@ -1,5 +1,5 @@
 <template>
-  <Layout title="饭搭子详情">
+  <Layout title="饭搭子关系">
     <view class="members-page">
       <Login
         v-if="!sessionStore.isLoggedIn"
@@ -11,15 +11,16 @@
       <template v-else>
         <view v-if="currentDiningGroup" class="invite-panel">
           <text class="invite-panel__title">{{ currentDiningGroup.name }}</text>
-          <text class="invite-panel__meta">和常一起吃饭的人，共享菜谱、计划下一餐。</text>
+          <text class="invite-panel__meta">这里管理饭搭子关系，不切换个人菜谱、冰箱和计划。</text>
 
-          <view v-if="currentDiningGroup.isShared" class="summary-grid">
+          <view class="summary-grid">
             <view v-for="item in diningGroupStats" :key="item.label" class="summary-item">
               <text class="summary-item__value">{{ item.value }}</text>
               <text class="summary-item__label">{{ item.label }}</text>
             </view>
           </view>
-          <text v-else class="invite-panel__hint">分享给饭搭子，点开即可加入。</text>
+          <text class="invite-panel__hint">邀请只增加成员关系，不会迁移或恢复个人数据。</text>
+          <text class="invite-panel__link" @click="handleOpenEntitlements">查看个人权益</text>
 
           <view class="member-list">
             <view class="member-list__header">
@@ -63,8 +64,8 @@
         </view>
 
         <view v-else class="empty-panel">
-          <text class="empty-panel__title">饭搭子加载中</text>
-          <text class="member-list__status-text">账号创建后会自动拥有单人饭搭子。</text>
+          <text class="empty-panel__title">饭搭子关系加载中</text>
+          <text class="member-list__status-text">登录后可查看当前饭搭子成员关系。</text>
         </view>
       </template>
     </view>
@@ -89,21 +90,26 @@ const errorText = ref("");
 const sharePath = ref("");
 const inviteOperationId = ref<UUID | "">("");
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
+const currentRelation = computed(() => diningGroupStore.currentRelationSummary);
 const members = computed(() => diningGroupStore.members);
-const diningGroupStats = computed(() => [
-  {
-    value: currentDiningGroup.value?.memberCount ?? "--",
-    label: "成员"
-  },
-  {
-    value: currentDiningGroup.value?.recipeCount ?? "--",
-    label: "菜谱"
-  },
-  {
-    value: currentDiningGroup.value?.sharedDays ?? "--",
-    label: "天数"
-  }
-]);
+const diningGroupStats = computed(() => {
+  if (!currentRelation.value) return [];
+
+  return [
+    {
+      value: roleLabels[currentRelation.value.myRole] ?? currentRelation.value.myRole,
+      label: "我的身份"
+    },
+    {
+      value: currentRelation.value.memberCount,
+      label: "当前成员"
+    },
+    {
+      value: currentRelation.value.memberLimit,
+      label: "当前上限"
+    }
+  ];
+});
 const roleLabels: Record<DiningGroupRole, string> = {
   OWNER: "主理人",
   ADMIN: "管理员",
@@ -149,6 +155,10 @@ async function loadMembers() {
   } finally {
     membersLoading.value = false;
   }
+}
+
+function handleOpenEntitlements() {
+  void uniPlatform.navigation.navigateTo("/pages_restaurant/settings/index").catch(() => undefined);
 }
 
 async function handleCreateInvite() {
@@ -227,6 +237,11 @@ function getAvatarText(nickname: string | null) {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
   line-height: 1.5;
+}
+
+.invite-panel__link {
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
 }
 
 .summary-grid {
