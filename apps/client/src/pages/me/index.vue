@@ -7,12 +7,16 @@
     :navbar-placeholder="false"
     navbar-transparent
   >
-    <template #navbar-center>
-      <text class="nav-title">我的</text>
-    </template>
-
     <view class="me-page" :class="themeClasses">
-      <view class="profile-hero" :class="profileHeroVariant">
+      <view class="profile-hero" :class="profileHeroVariant" :style="profileHeroStyle">
+        <image
+          v-if="profileCoverUrl"
+          class="profile-hero__cover"
+          :src="profileCoverUrl"
+          mode="aspectFill"
+        />
+        <view v-if="profileCoverUrl" class="profile-hero__frost" />
+        <view class="profile-hero__mask" />
         <view class="identity-card">
           <template v-if="profileLoading">
             <view class="profile-row">
@@ -106,14 +110,15 @@
                 <text class="overview-heading__title">我的饭搭子</text>
                 <text class="overview-heading__arrow">›</text>
               </view>
-              <text class="dining-card__name">{{ diningGroupName }}</text>
+              <text class="dining-card__description">{{ diningGroupDescription }}</text>
 
-              <view class="dining-card__stats">
+              <view v-if="isDiningGroupShared" class="dining-card__stats">
                 <view v-for="item in diningGroupStats" :key="item.label" class="dining-stat">
                   <text class="dining-stat__value">{{ item.value }}</text>
                   <text class="dining-stat__label">{{ item.label }}</text>
                 </view>
               </view>
+              <text v-else class="dining-card__invite">{{ diningGroupInviteText }}</text>
             </view>
 
             <view
@@ -130,7 +135,6 @@
                 <text class="medal-card__count">--</text>
                 <text class="medal-card__unit">枚</text>
               </view>
-              <text class="medal-card__action">勋章墙 ›</text>
             </view>
           </view>
 
@@ -406,6 +410,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { ApiClientError } from "@/apis/http";
 import { userApi } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
+import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
@@ -436,6 +441,7 @@ const {
   setThemeSkin,
   setThemePalette
 } = useTheme();
+const { navBarTotalHeight } = useSystemInfo();
 
 const profileLoading = ref(false);
 const loadErrorText = ref("");
@@ -459,10 +465,17 @@ let restoredOnce = false;
 
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
 const currentEntitlements = computed(() => diningGroupStore.currentEntitlements);
+const profileHeroStyle = computed(() => ({
+  "--profile-hero-padding-top": `${navBarTotalHeight.value}px`
+}));
 const profileName = computed(() => {
   if (!sessionStore.isLoggedIn) return "点击登录";
   return userStore.profile?.nickname || "下一餐用户";
 });
+const profileCoverUrl = computed(
+  () =>
+    "https://img.zcool.cn/material/681111117d138ei1z6txeh8209.png?k=7f4d7412f87a4b4d4998d469f5e4e5c1&t=6a60fbf0&x-oss-process=image/format,webp"
+);
 const profileAvatarUrl = computed(() => userStore.profile?.avatarUrl || "");
 const profileAvatarText = computed(() => {
   if (!sessionStore.isLoggedIn) return "我";
@@ -479,20 +492,18 @@ const profileChips = computed(() => {
   if (!sessionStore.isLoggedIn) return [];
 
   const chips = [`个人 ${getTierText(currentEntitlements.value?.personalTier)}`];
-  if (currentDiningGroup.value) {
-    chips.push(diningGroupRoleText.value);
+  if (currentEntitlements.value) {
+    chips.push(`饭搭子 ${getTierText(currentEntitlements.value.diningGroupTier)}`);
   }
 
   return chips;
 });
-const diningGroupName = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后查看饭搭子";
-  return currentDiningGroup.value?.name || "饭搭子信息暂未加载";
-});
-const diningGroupRoleText = computed(() => {
-  const role = currentDiningGroup.value?.myRole;
-  if (!role) return "角色待加载";
-  return diningGroupRoleLabels[role];
+const diningGroupDescription = computed(() => "和常一起吃饭的人，共享菜谱、计划下一餐。");
+const isDiningGroupShared = computed(() => Boolean(currentDiningGroup.value?.isShared));
+const diningGroupInviteText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后可以邀请饭搭子加入";
+  if (!currentDiningGroup.value) return "饭搭子信息加载中";
+  return "分享给饭搭子，点开即可加入";
 });
 const diningGroupStats = computed(() => [
   {
@@ -500,12 +511,12 @@ const diningGroupStats = computed(() => [
     label: "成员"
   },
   {
-    value: currentDiningGroup.value?.memberLimit ?? currentEntitlements.value?.memberLimit ?? "--",
-    label: "上限"
+    value: currentDiningGroup.value?.recipeCount ?? "--",
+    label: "菜谱"
   },
   {
-    value: currentDiningGroup.value ? diningGroupRoleText.value : "--",
-    label: "角色"
+    value: currentDiningGroup.value?.sharedDays ?? "--",
+    label: "天数"
   }
 ]);
 const currentThemeText = computed(() => {
@@ -531,12 +542,6 @@ const paletteLabels: Record<ThemePalette, string> = {
   olive: "橄榄",
   cool: "冷蓝"
 };
-const diningGroupRoleLabels = {
-  OWNER: "主理人",
-  ADMIN: "管理员",
-  MEMBER: "成员"
-} as const;
-
 const coreEntries: PageEntry[] = [
   {
     title: "饭局",
@@ -971,10 +976,13 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .profile-hero {
+  --profile-hero-end: var(--color-page);
+  --profile-hero-padding-top: var(--size-navbar-content);
+
   position: relative;
   min-height: 520rpx;
   overflow: hidden;
-  padding: 200rpx var(--space-page) 74rpx;
+  padding: var(--profile-hero-padding-top) var(--space-page) 74rpx;
   background:
     radial-gradient(circle at 16% 18%, var(--entry-side-mint-bg) 0, transparent 32%),
     radial-gradient(circle at 86% 12%, var(--entry-side-aqua-bg) 0, transparent 30%),
@@ -985,7 +993,7 @@ function getPasswordErrorText(error: unknown) {
   position: absolute;
   top: 88rpx;
   right: -96rpx;
-  z-index: 0;
+  z-index: 2;
   width: 310rpx;
   height: 220rpx;
   border-radius: 50%;
@@ -1026,32 +1034,86 @@ function getPasswordErrorText(error: unknown) {
   transform: rotate(-8deg);
 }
 
-.profile-hero::after {
+.profile-hero__cover {
   position: absolute;
-  right: -28%;
-  bottom: -150rpx;
-  left: -28%;
+  inset: 0;
   z-index: 0;
-  height: 300rpx;
-  border-radius: 50% 50% 0 0;
-  background: var(--color-page);
-  content: "";
+  width: 100%;
+  height: 100%;
+}
+
+.profile-hero__frost {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),
+    radial-gradient(circle at 50% 12%, transparent 0%, var(--color-surface-mask-weak) 72%);
+  backdrop-filter: blur(10rpx);
   pointer-events: none;
+  -webkit-backdrop-filter: blur(10rpx);
+}
+
+.profile-hero__mask {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  height: 260rpx;
+  background: var(--profile-hero-end);
+  mask-image:
+    radial-gradient(
+      ellipse at 15% 100%,
+      #000 0%,
+      rgba(0, 0, 0, 0.76) 36%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse at 85% 100%,
+      #000 0%,
+      rgba(0, 0, 0, 0.76) 36%,
+      transparent 72%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.42) 50%,
+      #000 100%
+    );
+  mask-size: 100% 100%;
+  pointer-events: none;
+  -webkit-mask-image:
+    radial-gradient(
+      ellipse at 15% 100%,
+      #000 0%,
+      rgba(0, 0, 0, 0.76) 36%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse at 85% 100%,
+      #000 0%,
+      rgba(0, 0, 0, 0.76) 36%,
+      transparent 72%
+    ),
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.42) 50%,
+      #000 100%
+    );
+  -webkit-mask-size: 100% 100%;
 }
 
 .identity-card {
   position: relative;
-  z-index: 1;
+  z-index: 3;
   min-height: 302rpx;
   overflow: hidden;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--me-card-shadow);
 }
 
 .profile-row {
   display: flex;
-  align-items: center;
   min-height: 154rpx;
   padding: 24rpx 26rpx 20rpx;
 }
@@ -1162,8 +1224,7 @@ function getPasswordErrorText(error: unknown) {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   min-height: 142rpx;
-  padding: 18rpx 8rpx 20rpx;
-  border-top: 1rpx solid var(--color-divider);
+  padding: 16rpx 0;
 }
 
 .quick-grid--skeleton {
@@ -1263,7 +1324,7 @@ function getPasswordErrorText(error: unknown) {
 
 .dining-card {
   min-width: 0;
-  min-height: 246rpx;
+  min-height: 206rpx;
   padding: 26rpx 24rpx 22rpx;
 }
 
@@ -1285,20 +1346,26 @@ function getPasswordErrorText(error: unknown) {
   line-height: 1;
 }
 
-.dining-card__name {
+.dining-card__description,
+.dining-card__invite {
   display: block;
-  overflow: hidden;
-  margin-top: 10rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.dining-card__description {
+  margin-top: 8rpx;
+}
+
+.dining-card__invite {
+  margin-top: 26rpx;
 }
 
 .dining-card__stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 30rpx;
+  margin-top: 24rpx;
 }
 
 .dining-stat {
@@ -1331,7 +1398,7 @@ function getPasswordErrorText(error: unknown) {
 .medal-card {
   position: relative;
   min-width: 0;
-  min-height: 246rpx;
+  min-height: 206rpx;
   overflow: hidden;
   padding: 22rpx 20rpx;
   background: linear-gradient(160deg, var(--color-primary-soft), var(--color-surface));
@@ -1380,14 +1447,6 @@ function getPasswordErrorText(error: unknown) {
   margin-left: 4rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
-}
-
-.medal-card__action {
-  display: block;
-  margin-top: 14rpx;
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
 }
 
 .service-section {

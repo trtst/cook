@@ -4,6 +4,7 @@
       v-if="showNavbar"
       :title="title"
       :show-left="showLeft"
+      :layout="navbarLayout"
       :placeholder="navbarPlaceholder"
       :transparent="navbarTransparent"
     >
@@ -38,6 +39,7 @@ const props = withDefaults(
     fullScreen?: boolean;
     navbarPlaceholder?: boolean;
     navbarTransparent?: boolean;
+    navbarLayout?: "title" | "custom-left";
   }>(),
   {
     title: "",
@@ -46,7 +48,8 @@ const props = withDefaults(
     currentTab: undefined,
     fullScreen: false,
     navbarPlaceholder: true,
-    navbarTransparent: false
+    navbarTransparent: false,
+    navbarLayout: "title"
   }
 );
 

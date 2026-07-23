@@ -21,6 +21,7 @@ interface SafeArea {
 
 interface SystemInfoState {
   statusBarHeight: number;
+  windowWidth: number;
   windowHeight: number;
   safeArea?: SafeArea;
   menuButtonRect?: MenuButtonRect;
@@ -28,6 +29,7 @@ interface SystemInfoState {
 
 interface WindowInfo {
   statusBarHeight?: number;
+  windowWidth?: number;
   windowHeight?: number;
   safeArea?: SafeArea;
 }
@@ -38,6 +40,7 @@ const DEFAULT_SAFE_AREA_BOTTOM = 0;
 
 const systemInfo = ref<SystemInfoState>({
   statusBarHeight: 20,
+  windowWidth: 0,
   windowHeight: 0
 });
 
@@ -55,6 +58,7 @@ function readWindowInfo(): WindowInfo | undefined {
 
   return {
     statusBarHeight: 0,
+    windowWidth: window.innerWidth,
     windowHeight: window.innerHeight
   };
 }
@@ -67,6 +71,7 @@ export function initSystemInfo() {
     const info = readWindowInfo();
     systemInfo.value = {
       statusBarHeight: info?.statusBarHeight ?? 20,
+      windowWidth: info?.windowWidth ?? 0,
       windowHeight: info?.windowHeight ?? 0,
       safeArea: info?.safeArea,
       menuButtonRect: getMenuButtonRect()
@@ -74,6 +79,7 @@ export function initSystemInfo() {
   } catch {
     systemInfo.value = {
       statusBarHeight: 20,
+      windowWidth: 0,
       windowHeight: 0
     };
   }
@@ -92,6 +98,14 @@ export function useSystemInfo() {
 
   const navBarTotalHeight = computed(() => systemInfo.value.statusBarHeight + navBarHeight.value);
 
+  const navSideGuardWidth = computed(() => {
+    const rect = systemInfo.value.menuButtonRect;
+    if (!rect || !systemInfo.value.windowWidth) return navBarHeight.value;
+
+    const rightGap = Math.max(0, systemInfo.value.windowWidth - rect.right);
+    return Math.ceil(rect.width + rightGap);
+  });
+
   const safeAreaBottom = computed(() => {
     const safeArea = systemInfo.value.safeArea;
     if (!safeArea || !systemInfo.value.windowHeight) return DEFAULT_SAFE_AREA_BOTTOM;
@@ -104,6 +118,7 @@ export function useSystemInfo() {
     systemInfo,
     navBarHeight,
     navBarTotalHeight,
+    navSideGuardWidth,
     safeAreaBottom,
     tabBarHeight
   };

@@ -58,6 +58,10 @@ export interface CurrentSpaceSummary {
 	myStatusReason: LongTermMemberStatusReason | null;
 	memberCount: number;
 	memberLimit: number;
+	recipeCount: number;
+	isShared: boolean;
+	sharedSince: IsoDateTime | null;
+	sharedDays: number | null;
 	state: SpaceState;
 	version: number;
 	createdAt: IsoDateTime;

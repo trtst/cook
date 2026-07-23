@@ -33,6 +33,7 @@ Authorization: Bearer <user-token>
 
 | 日期 | 变更 |
 | --- | --- |
+| 2026-07-22 | 当前饭搭子摘要新增 `recipeCount`、`isShared`、`sharedSince` 和 `sharedDays`，支持“未开启饭搭子”和开启后三项统计展示。 |
 | 2026-07-22 | 新增当前用户修改密码接口 `/api/users/me/password`。 |
 | 2026-07-20 | 饭搭子接口直接切换为唯一当前空间；删除多列表、手动创建和详情接口；实现原空间冻结、退出恢复与快照头。 |
 | 2026-07-20 | 冻结迁入迁出、权益、空间、口味、饭局、菜谱收录与派生契约。 |
@@ -186,6 +187,14 @@ interface GetCurrentDiningGroupContextResponse {
 单人状态下 `originalSpace = null`。加入别人后，`currentSpace` 是目标饭搭子，`originalSpace.status = FROZEN`。
 
 客户端只保存这一份服务端上下文，不保存本地当前饭搭子 ID，也不提供普通切换操作。
+
+`currentSpace` 摘要字段用于“我的”页和饭搭子详情页展示：
+
+1. `memberCount` 是当前有效长期成员数，统计 `ACTIVE / RESTRICTED`。
+2. `recipeCount` 是当前饭搭子可见有效菜谱数；菜谱主表落地前返回 `0`。
+3. `isShared=false` 表示尚未开启用户感知的多人饭搭子；客户端展示介绍和邀请入口，不展示统计数字。
+4. `isShared=true` 后展示 `memberCount / recipeCount / sharedDays`。
+5. `sharedSince` 取当前有效非主理人长期成员最早加入时间，`sharedDays` 由服务端计算，当天为 1 天。
 
 ### 2.2 当前饭搭子成员
 

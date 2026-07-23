@@ -7,7 +7,7 @@
     >
       <view class="navbar__status" :style="statusStyle" />
       <view class="navbar__inner" :style="innerStyle">
-        <view class="navbar__side" :class="{ 'navbar__side--custom': !showLeft && hasLeftSlot }">
+        <view class="navbar__side" :class="{ 'navbar__side--custom-left': isCustomLeft && !showLeft && hasLeftSlot }">
           <view
             v-if="showLeft"
             class="navbar__icon-button"
@@ -26,7 +26,7 @@
           </slot>
         </view>
 
-        <view class="navbar__side navbar__side--right" :class="{ 'navbar__side--custom-right': hasRightSlot }">
+        <view class="navbar__side navbar__side--right" :class="{ 'navbar__side--custom-right': isCustomLeft && hasRightSlot }">
           <slot name="right" />
         </view>
       </view>
@@ -40,29 +40,32 @@ import { computed, useSlots } from "vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     title?: string;
     showLeft?: boolean;
     fixed?: boolean;
     placeholder?: boolean;
     transparent?: boolean;
+    layout?: "title" | "custom-left";
   }>(),
   {
     title: "",
     showLeft: true,
     fixed: true,
     placeholder: true,
-    transparent: false
+    transparent: false,
+    layout: "title"
   }
 );
 
-const { navBarHeight, navBarTotalHeight, systemInfo } = useSystemInfo();
+const { navBarHeight, navBarTotalHeight, navSideGuardWidth, systemInfo } = useSystemInfo();
 const slots = useSlots();
 
 const canGoBack = computed(() => getCurrentPages().length > 1);
 const hasLeftSlot = computed(() => Boolean(slots.left));
 const hasRightSlot = computed(() => Boolean(slots.right));
+const isCustomLeft = computed(() => props.layout === "custom-left");
 
 const fixedStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`
@@ -73,6 +76,7 @@ const statusStyle = computed(() => ({
 }));
 
 const innerStyle = computed(() => ({
+  "--navbar-side-width": `${navSideGuardWidth.value}px`,
   height: `${navBarHeight.value}px`
 }));
 
@@ -110,6 +114,8 @@ function handleLeftClick() {
 }
 
 .navbar__inner {
+  --navbar-side-width: 44px;
+
   display: flex;
   align-items: center;
   padding: 0 var(--space-page);
@@ -117,13 +123,16 @@ function handleLeftClick() {
 
 .navbar__side {
   display: flex;
-  flex: 0 0 96rpx;
+  flex: 0 0 var(--navbar-side-width);
   align-items: center;
-  min-width: 0;
+  width: var(--navbar-side-width);
+  min-width: var(--navbar-side-width);
 }
 
-.navbar__side--custom {
+.navbar__side--custom-left {
   flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
 }
 
 .navbar__side--right {
@@ -132,6 +141,8 @@ function handleLeftClick() {
 
 .navbar__side--custom-right {
   flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
 }
 
 .navbar__center {

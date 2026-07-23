@@ -51,6 +51,8 @@ interface CurrentContextFacts {
   member: DiningGroupMember;
   memberCount: number;
   memberLimit: number;
+  recipeCount: number;
+  sharedSince: Date | null;
 }
 
 interface SpaceSummaryFacts {
@@ -58,9 +60,12 @@ interface SpaceSummaryFacts {
   member: DiningGroupMember;
   memberCount: number;
   memberLimit: number;
+  recipeCount: number;
+  sharedSince: Date | null;
 }
 
 const effectiveMemberStatuses: LongTermMemberStatus[] = ["ACTIVE", "RESTRICTED"];
+const dayMs = 24 * 60 * 60 * 1000;
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -323,11 +328,6 @@ export class DiningGroupService {
           where: { id: userSpace.originalDiningGroupId },
           data: { status: "FROZEN", frozenAt: new Date(), version: { increment: 1 } }
         });
-        const updatedTargetGroup = {
-          ...targetGroup,
-          version: targetGroup.version + 1,
-          updatedAt: new Date()
-        };
         await tx.diningGroup.update({
           where: { id: targetGroup.id },
           data: { version: { increment: 1 } }
@@ -362,24 +362,14 @@ export class DiningGroupService {
         });
         await this.writeLifecycleEvent(tx, userId, targetGroup.id, "DINING_GROUP_INVITE_ACCEPTED", userSpace.originalDiningGroupId);
 
+        const acceptedFacts = await this.loadSpaceSummaryFacts(tx, targetGroup.id, userId, targetGroup.ownerId);
         const currentSpace = this.toCurrentSpace(
-          updatedTargetGroup,
-          {
-            id: existingMember?.id ?? "",
-            diningGroupId: targetGroup.id,
-            userId,
-            role: existingMember?.role === "OWNER" ? "OWNER" : "MEMBER",
-            status: "ACTIVE",
-            statusReason: null,
-            restrictedAt: null,
-            endedAt: null,
-            joinedAt: new Date(),
-            version: existingMember ? existingMember.version + 1 : 1,
-            createdAt: existingMember?.createdAt ?? new Date(),
-            updatedAt: new Date()
-          },
-          existingMember?.status === "ACTIVE" ? activeMemberCount : activeMemberCount + 1,
-          memberLimit
+          acceptedFacts.diningGroup,
+          acceptedFacts.member,
+          acceptedFacts.memberCount,
+          acceptedFacts.memberLimit,
+          acceptedFacts.recipeCount,
+          acceptedFacts.sharedSince
         );
         const result: AcceptInviteResponse = {
           currentSpace,
@@ -517,7 +507,9 @@ export class DiningGroupService {
             restoredFacts.diningGroup,
             restoredFacts.member,
             restoredFacts.memberCount,
-            restoredFacts.memberLimit
+            restoredFacts.memberLimit,
+            restoredFacts.recipeCount,
+            restoredFacts.sharedSince
           ),
           carryBackSnapshot: this.toSnapshotSummary(snapshot, new Date()),
           futureParticipationCount: 0
@@ -593,14 +585,17 @@ export class DiningGroupService {
     });
     if (!userSpace) throw new BadRequestException("当前账号尚未初始化单人空间");
 
-    const [member, memberCount] = await Promise.all([
+    const [member, memberCount, sharedSince] = await Promise.all([
       tx.diningGroupMember.findUnique({
         where: { diningGroupId_userId: { diningGroupId: userSpace.currentDiningGroupId, userId } }
       }),
       tx.diningGroupMember.count({
         where: { diningGroupId: userSpace.currentDiningGroupId, status: { in: effectiveMemberStatuses } }
-      })
+      }),
+      this.findSharedSince(tx, userSpace.currentDiningGroupId)
     ]);
+    // 菜谱模块尚未落表；recipeCount 字段先冻结为入口态摘要，落表后替换为真实计数。
+    const recipeCount = 0;
     if (!member || member.status === "ENDED") throw new BadRequestException("当前空间成员关系无效");
 
     const memberLimit = await this.entitlementService.getMemberLimit(tx, userSpace.currentDiningGroupId, now);
@@ -609,7 +604,9 @@ export class DiningGroupService {
       userSpace,
       member,
       memberCount,
-      memberLimit
+      memberLimit,
+      recipeCount,
+      sharedSince
     };
   }
 
@@ -620,7 +617,7 @@ export class DiningGroupService {
     ownerId: UUID,
     now = new Date()
   ): Promise<SpaceSummaryFacts> {
-    const [diningGroup, member, memberCount, memberLimit] = await Promise.all([
+    const [diningGroup, member, memberCount, memberLimit, sharedSince] = await Promise.all([
       tx.diningGroup.findUnique({
         where: { id: diningGroupId },
         include: {
@@ -635,8 +632,10 @@ export class DiningGroupService {
       tx.diningGroupMember.count({
         where: { diningGroupId, status: { in: effectiveMemberStatuses } }
       }),
-      this.entitlementService.getMemberLimit(tx, diningGroupId, now)
+      this.entitlementService.getMemberLimit(tx, diningGroupId, now),
+      this.findSharedSince(tx, diningGroupId)
     ]);
+    const recipeCount = 0;
 
     if (!diningGroup || !member || member.status === "ENDED") {
       throw new BadRequestException("当前空间成员关系无效");
@@ -650,7 +649,9 @@ export class DiningGroupService {
       diningGroup,
       member,
       memberCount,
-      memberLimit
+      memberLimit,
+      recipeCount,
+      sharedSince
     };
   }
 
@@ -663,7 +664,9 @@ export class DiningGroupService {
         facts.userSpace.currentDiningGroup,
         facts.member,
         facts.memberCount,
-        facts.memberLimit
+        facts.memberLimit,
+        facts.recipeCount,
+        facts.sharedSince
       ),
       originalSpace:
         facts.userSpace.originalDiningGroupId === facts.userSpace.currentDiningGroupId
@@ -687,8 +690,12 @@ export class DiningGroupService {
     diningGroup: DiningGroupWithOwnerUid,
     member: DiningGroupMember,
     memberCount: number,
-    memberLimit: number
+    memberLimit: number,
+    recipeCount: number,
+    sharedSince: Date | null
   ): CurrentSpaceSummary {
+    const isShared = Boolean(sharedSince);
+
     return {
       id: diningGroup.id,
       name: diningGroup.name,
@@ -698,11 +705,33 @@ export class DiningGroupService {
       myStatusReason: member.statusReason,
       memberCount,
       memberLimit,
+      recipeCount,
+      isShared,
+      sharedSince: sharedSince ? toIsoDate(sharedSince) : null,
+      sharedDays: sharedSince ? this.countSharedDays(sharedSince) : null,
       state: "NORMAL",
       version: diningGroup.version,
       createdAt: toIsoDate(diningGroup.createdAt),
       updatedAt: toIsoDate(diningGroup.updatedAt)
     };
+  }
+
+  private async findSharedSince(tx: Prisma.TransactionClient, diningGroupId: UUID) {
+    const firstMember = await tx.diningGroupMember.findFirst({
+      where: {
+        diningGroupId,
+        role: { not: "OWNER" },
+        status: { in: effectiveMemberStatuses }
+      },
+      orderBy: { joinedAt: "asc" },
+      select: { joinedAt: true }
+    });
+
+    return firstMember?.joinedAt ?? null;
+  }
+
+  private countSharedDays(sharedSince: Date) {
+    return Math.max(1, Math.floor((Date.now() - sharedSince.getTime()) / dayMs) + 1);
   }
 
   private toCurrentOriginalSpace(diningGroup: DiningGroup): CurrentOriginalSpaceSummary {

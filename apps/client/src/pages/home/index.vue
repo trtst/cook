@@ -6,6 +6,7 @@
     full-screen
     :navbar-placeholder="false"
     navbar-transparent
+    navbar-layout="custom-left"
   >
     <template #navbar-left>
       <view class="table-nav__selector" hover-class="table-nav__selector--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/members/index')">

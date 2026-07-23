@@ -45,6 +45,7 @@ interface SafeArea {
 
 interface WindowInfo {
   statusBarHeight?: number;
+  windowWidth?: number;
   windowHeight?: number;
   safeArea?: SafeArea;
 }

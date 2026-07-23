@@ -148,6 +148,10 @@ interface CurrentSpaceSummary {
   myStatusReason: LongTermMemberStatusReason | null;
   memberCount: number;
   memberLimit: number;
+  recipeCount: number;
+  isShared: boolean;
+  sharedSince: IsoDateTime | null;
+  sharedDays: number | null;
   state: SpaceState;
   version: number;
   createdAt: IsoDateTime;
@@ -331,6 +335,9 @@ interface GetCurrentDiningGroupContextResponse {
 3. 加入别人后返回被冻结的本人原空间。
 4. 服务端根据当前用户、当前饭搭子和有效 Plus 授权解析权益。
 5. `currentSpace.memberCount` 按当前有效长期成员口径返回，即统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入。
+6. `currentSpace.isShared` 仅在当前存在非主理人的 `ACTIVE / RESTRICTED` 长期成员时为 `true`。
+7. `currentSpace.sharedSince` 取当前有效非主理人长期成员最早加入时间；`sharedDays` 由服务端按该时间计算，当天为 1 天。
+8. `currentSpace.recipeCount` 是当前饭搭子可见有效菜谱数；菜谱主表落地前实现返回 `0`。
 
 打磨方向：
 

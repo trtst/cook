@@ -1,5 +1,5 @@
 <template>
-  <Layout title="成员管理">
+  <Layout title="饭搭子详情">
     <view class="members-page">
       <Login
         v-if="!sessionStore.isLoggedIn"
@@ -11,7 +11,15 @@
       <template v-else>
         <view v-if="currentDiningGroup" class="invite-panel">
           <text class="invite-panel__title">{{ currentDiningGroup.name }}</text>
-          <text class="invite-panel__meta">当前 {{ currentDiningGroup.memberCount }} / {{ currentDiningGroup.memberLimit }} 人</text>
+          <text class="invite-panel__meta">和常一起吃饭的人，共享菜谱、计划下一餐。</text>
+
+          <view v-if="currentDiningGroup.isShared" class="summary-grid">
+            <view v-for="item in diningGroupStats" :key="item.label" class="summary-item">
+              <text class="summary-item__value">{{ item.value }}</text>
+              <text class="summary-item__label">{{ item.label }}</text>
+            </view>
+          </view>
+          <text v-else class="invite-panel__hint">分享给饭搭子，点开即可加入。</text>
 
           <view class="member-list">
             <view class="member-list__header">
@@ -82,6 +90,20 @@ const sharePath = ref("");
 const inviteOperationId = ref<UUID | "">("");
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
 const members = computed(() => diningGroupStore.members);
+const diningGroupStats = computed(() => [
+  {
+    value: currentDiningGroup.value?.memberCount ?? "--",
+    label: "成员"
+  },
+  {
+    value: currentDiningGroup.value?.recipeCount ?? "--",
+    label: "菜谱"
+  },
+  {
+    value: currentDiningGroup.value?.sharedDays ?? "--",
+    label: "天数"
+  }
+]);
 const roleLabels: Record<DiningGroupRole, string> = {
   OWNER: "主理人",
   ADMIN: "管理员",
@@ -199,6 +221,41 @@ function getAvatarText(nickname: string | null) {
 .invite-panel__meta {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+}
+
+.invite-panel__hint {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-subtle);
+  padding: var(--space-sm) var(--space-xs);
+}
+
+.summary-item__value {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-heavy);
+}
+
+.summary-item__label {
+  margin-top: 4rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
 }
 
 .member-list {

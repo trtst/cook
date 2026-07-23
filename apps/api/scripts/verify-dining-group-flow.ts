@@ -45,6 +45,16 @@ function assertCurrentShape(result: GetCurrentDiningGroupContextResponse, expect
   assert(typeof result.currentSpace.name === "string", "currentSpace.name missing");
   assert(typeof result.currentSpace.memberCount === "number", "currentSpace.memberCount missing");
   assert(typeof result.currentSpace.memberLimit === "number", "currentSpace.memberLimit missing");
+  assert(typeof result.currentSpace.recipeCount === "number", "currentSpace.recipeCount missing");
+  assert(typeof result.currentSpace.isShared === "boolean", "currentSpace.isShared missing");
+  assert(
+    result.currentSpace.sharedSince === null || typeof result.currentSpace.sharedSince === "string",
+    "currentSpace.sharedSince invalid"
+  );
+  assert(
+    result.currentSpace.sharedDays === null || typeof result.currentSpace.sharedDays === "number",
+    "currentSpace.sharedDays invalid"
+  );
   assert(result.entitlements !== null && typeof result.entitlements === "object", "entitlements missing");
 
   if (expectedOriginalSpace === "null") {
@@ -133,6 +143,10 @@ async function main() {
   assert(ownerBefore.originalSpace === null, "owner should start in the original space");
   assert(guestBefore.originalSpace === null, "guest should start in the original space");
   assert(ownerBefore.currentSpace.id !== guestBefore.currentSpace.id, "seed users should own different solo spaces");
+  assert(ownerBefore.currentSpace.isShared === false, "owner solo space should not be shared before invite accept");
+  assert(ownerBefore.currentSpace.sharedSince === null, "owner solo space sharedSince should be null");
+  assert(ownerBefore.currentSpace.sharedDays === null, "owner solo space sharedDays should be null");
+  assert(ownerBefore.currentSpace.recipeCount === 0, "recipeCount should stay 0 before recipe module is implemented");
 
   const ownerEntitlements = await requestData<EffectiveEntitlementSnapshot>("/entitlements/current", {
     headers: { authorization: ownerAuthorization }
@@ -208,6 +222,12 @@ async function main() {
 
     assert(accept1.currentSpace.id === diningGroupId, "guest did not switch to the invited dining group");
     assert(accept2.currentSpace.id === accept1.currentSpace.id, "accept invite is not idempotent");
+    assert(accept1.currentSpace.isShared === true, "accepted dining group should be shared");
+    assert(typeof accept1.currentSpace.sharedSince === "string", "accepted dining group sharedSince missing");
+    assert(
+      accept1.currentSpace.sharedDays !== null && accept1.currentSpace.sharedDays >= 1,
+      "accepted dining group sharedDays invalid"
+    );
     assertCurrentShape(
       {
         currentSpace: accept1.currentSpace,
