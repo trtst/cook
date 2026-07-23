@@ -27,6 +27,12 @@ const router = createRouter({
           name: "dining-groups",
           component: () => import("@/pages/DiningGroupsPage.vue"),
           meta: { title: "饭搭子查询" }
+        },
+        {
+          path: "recipes",
+          name: "recipes",
+          component: () => import("@/pages/RecipesPage.vue"),
+          meta: { title: "菜谱治理" }
         }
       ]
     }

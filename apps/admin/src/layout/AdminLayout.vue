@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataAnalysis, ForkSpoon, SwitchButton, User } from "@element-plus/icons-vue";
+import { DataAnalysis, Files, ForkSpoon, SwitchButton, User } from "@element-plus/icons-vue";
 import { useSessionStore } from "@/stores/session";
 
 const route = useRoute();
@@ -38,6 +38,10 @@ function logout() {
         <el-menu-item index="/dining-groups">
           <el-icon><DataAnalysis /></el-icon>
           <span>饭搭子查询</span>
+        </el-menu-item>
+        <el-menu-item index="/recipes">
+          <el-icon><Files /></el-icon>
+          <span>菜谱治理</span>
         </el-menu-item>
       </el-menu>
     </el-aside>

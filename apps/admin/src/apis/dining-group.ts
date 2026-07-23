@@ -1,6 +1,6 @@
 import { requestData, type IsoDateTime, type PageQuery, type PageResult, type UUID } from "./http";
 
-export type DiningGroupStatus = "ACTIVE" | "FROZEN" | "ARCHIVED";
+export type DiningGroupStatus = "ACTIVE" | "ARCHIVED";
 
 export interface AdminDiningGroupSummary {
   id: UUID;

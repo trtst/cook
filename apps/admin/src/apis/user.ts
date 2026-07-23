@@ -15,8 +15,38 @@ export interface AdminListUsersQuery extends PageQuery {
   keyword?: string;
 }
 
-export type EntitlementTier = "FREE" | "PLUS";
-export type EntitlementScope = "USER" | "DINING_GROUP";
+export type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
+export type DiningGroupState = "NORMAL" | "OVER_MEMBER_LIMIT";
+export type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
+export type LongTermMemberStatus = "ACTIVE" | "RESTRICTED" | "ENDED";
+
+export interface UserMembership {
+  tier: EntitlementTier;
+  validUntil: IsoDateTime | null;
+}
+
+export interface DiningGroupUsageSummary {
+  ownedCount: number;
+  joinedCount: number;
+  joinLimit: number;
+  state: DiningGroupState;
+}
+
+export interface DiningGroupSummary {
+  id: UUID;
+  name: string;
+  ownerUid: number;
+  isOwned: boolean;
+  myRole: DiningGroupRole;
+  myStatus: LongTermMemberStatus;
+  myStatusReason: string | null;
+  memberCount: number;
+  memberLimit: number;
+  state: DiningGroupState;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
 
 export interface EffectiveImagePolicy {
   quality: number;
@@ -26,26 +56,38 @@ export interface EffectiveImagePolicy {
   maxInputBytes: number;
 }
 
-export interface EffectiveEntitlementSnapshot {
-  personalTier: EntitlementTier;
-  diningGroupTier: EntitlementTier;
-  currentScope: EntitlementScope;
-  recipeLimit: number;
-  memberLimit: number | null;
-  storageLimitBytes: number;
-  snapshotDays: number;
-  recycleDays: number;
-  variantLimitPerRoot: number;
-  imagePolicy: EffectiveImagePolicy;
+export interface StorageUsageSummary {
+  state: "NORMAL" | "OVER_STORAGE_READONLY";
+  usedBytes: number;
+  limitBytes: number;
+  remainingBytes: number;
+  byModule: Array<{
+    module: string;
+    usedBytes: number;
+  }>;
+  calculatedAt: IsoDateTime;
 }
 
 export interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
-  currentSpace: {
-    id: UUID;
-    name: string;
+  membership: UserMembership;
+  display: {
+    canUseProfileBackground: boolean;
+    canUseHomeBackground: boolean;
   };
-  entitlements: EffectiveEntitlementSnapshot;
+  diningGroupUsage: DiningGroupUsageSummary;
+  diningGroups: DiningGroupSummary[];
+  storage: StorageUsageSummary;
+  recipePolicy: {
+    recipeLimit: number;
+    recycleDays: number;
+    variantLimitPerRoot: number;
+  };
+  invitePolicy: {
+    inviteLimit: number;
+    memberLimit: number;
+  };
+  imagePolicy: EffectiveImagePolicy;
 }
 
 export const userApi = {

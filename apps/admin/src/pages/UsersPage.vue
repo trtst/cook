@@ -162,13 +162,7 @@ onMounted(loadUsers);
       </div>
     </div>
 
-    <el-drawer
-      v-model="entitlementVisible"
-      title="用户有效权益"
-      size="560px"
-      destroy-on-close
-      @close="clearEntitlement"
-    >
+    <el-drawer v-model="entitlementVisible" title="用户个人权益" size="560px" destroy-on-close @close="clearEntitlement">
       <el-skeleton v-if="entitlementLoading" :rows="10" animated />
 
       <el-result v-else-if="entitlementError" icon="error" title="权益加载失败" :sub-title="entitlementError" />
@@ -182,47 +176,74 @@ onMounted(loadUsers);
           <el-descriptions-item label="状态">{{ entitlement.user.status }}</el-descriptions-item>
         </el-descriptions>
 
-        <el-divider content-position="left">当前空间</el-divider>
+        <el-divider content-position="left">饭搭子关系</el-divider>
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="空间 ID">{{ entitlement.currentSpace.id }}</el-descriptions-item>
-          <el-descriptions-item label="空间名称">{{ entitlement.currentSpace.name }}</el-descriptions-item>
+          <el-descriptions-item label="主理数量">{{ entitlement.diningGroupUsage.ownedCount }}</el-descriptions-item>
+          <el-descriptions-item label="加入数量">{{ entitlement.diningGroupUsage.joinedCount }}</el-descriptions-item>
+          <el-descriptions-item label="可加入上限">{{ entitlement.diningGroupUsage.joinLimit }}</el-descriptions-item>
+          <el-descriptions-item label="关系状态">{{ entitlement.diningGroupUsage.state }}</el-descriptions-item>
+        </el-descriptions>
+        <el-table :data="entitlement.diningGroups" row-key="id" style="margin-top: 12px">
+          <el-table-column prop="name" label="关系名称" min-width="160" />
+          <el-table-column label="身份" width="100">
+            <template #default="{ row }">
+              {{ row.myRole }}
+            </template>
+          </el-table-column>
+          <el-table-column label="成员" width="100">
+            <template #default="{ row }">
+              {{ row.memberCount }} / {{ row.memberLimit }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="state" label="状态" width="150" />
+        </el-table>
+
+        <el-divider content-position="left">个人会员</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="个人套餐">{{ entitlement.membership.tier }}</el-descriptions-item>
+          <el-descriptions-item label="有效期">{{ entitlement.membership.validUntil || "长期有效" }}</el-descriptions-item>
+          <el-descriptions-item label="我的页背景图">
+            {{ entitlement.display.canUseProfileBackground ? "已开放" : "未开放" }}
+          </el-descriptions-item>
+          <el-descriptions-item label="首页背景图">
+            {{ entitlement.display.canUseHomeBackground ? "已开放" : "未开放" }}
+          </el-descriptions-item>
         </el-descriptions>
 
-        <el-divider content-position="left">有效权益</el-divider>
+        <el-divider content-position="left">个人空间</el-divider>
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="个人权益">{{ entitlement.entitlements.personalTier }}</el-descriptions-item>
-          <el-descriptions-item label="饭搭子权益">
-            {{ entitlement.entitlements.diningGroupTier }}
-          </el-descriptions-item>
-          <el-descriptions-item label="当前作用域">{{ entitlement.entitlements.currentScope }}</el-descriptions-item>
-          <el-descriptions-item label="菜谱上限">{{ entitlement.entitlements.recipeLimit }}</el-descriptions-item>
-          <el-descriptions-item label="成员上限">
-            {{ entitlement.entitlements.memberLimit ?? "不适用" }}
-          </el-descriptions-item>
-          <el-descriptions-item label="空间上限">
-            {{ formatBytes(entitlement.entitlements.storageLimitBytes) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="迁出快照保留">{{ entitlement.entitlements.snapshotDays }} 天</el-descriptions-item>
-          <el-descriptions-item label="回收站保留">{{ entitlement.entitlements.recycleDays }} 天</el-descriptions-item>
+          <el-descriptions-item label="空间状态">{{ entitlement.storage.state }}</el-descriptions-item>
+          <el-descriptions-item label="已用空间">{{ formatBytes(entitlement.storage.usedBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="空间上限">{{ formatBytes(entitlement.storage.limitBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="剩余空间">{{ formatBytes(entitlement.storage.remainingBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="计算时间">{{ entitlement.storage.calculatedAt }}</el-descriptions-item>
+        </el-descriptions>
+
+        <el-divider content-position="left">策略摘要</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="菜谱上限">{{ entitlement.recipePolicy.recipeLimit }}</el-descriptions-item>
+          <el-descriptions-item label="可邀请成员">{{ entitlement.invitePolicy.inviteLimit }}</el-descriptions-item>
+          <el-descriptions-item label="饭搭子成员上限">{{ entitlement.invitePolicy.memberLimit }}</el-descriptions-item>
+          <el-descriptions-item label="回收站保留">{{ entitlement.recipePolicy.recycleDays }} 天</el-descriptions-item>
           <el-descriptions-item label="根菜谱派生上限">
-            {{ entitlement.entitlements.variantLimitPerRoot }}
+            {{ entitlement.recipePolicy.variantLimitPerRoot }}
           </el-descriptions-item>
         </el-descriptions>
 
         <el-divider content-position="left">图片策略</el-divider>
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="质量">{{ entitlement.entitlements.imagePolicy.quality }}</el-descriptions-item>
+          <el-descriptions-item label="质量">{{ entitlement.imagePolicy.quality }}</el-descriptions-item>
           <el-descriptions-item label="最大宽度">
-            {{ entitlement.entitlements.imagePolicy.maxWidth }} px
+            {{ entitlement.imagePolicy.maxWidth }} px
           </el-descriptions-item>
           <el-descriptions-item label="最大高度">
-            {{ entitlement.entitlements.imagePolicy.maxHeight }} px
+            {{ entitlement.imagePolicy.maxHeight }} px
           </el-descriptions-item>
           <el-descriptions-item label="单图输出上限">
-            {{ formatBytes(entitlement.entitlements.imagePolicy.maxOutputBytes) }}
+            {{ formatBytes(entitlement.imagePolicy.maxOutputBytes) }}
           </el-descriptions-item>
           <el-descriptions-item label="原图输入上限">
-            {{ formatBytes(entitlement.entitlements.imagePolicy.maxInputBytes) }}
+            {{ formatBytes(entitlement.imagePolicy.maxInputBytes) }}
           </el-descriptions-item>
         </el-descriptions>
       </template>

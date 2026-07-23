@@ -69,7 +69,6 @@ onMounted(loadDiningGroups);
       />
       <el-select v-model="query.status" class="toolbar-select" placeholder="状态" clearable>
         <el-option label="ACTIVE" value="ACTIVE" />
-        <el-option label="FROZEN" value="FROZEN" />
         <el-option label="ARCHIVED" value="ARCHIVED" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
@@ -80,13 +79,13 @@ onMounted(loadDiningGroups);
       <el-table v-loading="loading" :data="diningGroups" row-key="id">
         <el-table-column prop="name" label="饭搭子名称" min-width="180" />
         <el-table-column prop="status" label="状态" width="120" />
-        <el-table-column prop="memberCount" label="有效成员数" width="120" />
+        <el-table-column prop="memberCount" label="当前成员数" width="120" />
         <el-table-column prop="ownerId" label="主理人 ID" min-width="280" />
         <el-table-column prop="version" label="版本" width="90" />
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
       </el-table>
 
-      <div class="table-hint">成员数按当前有效长期成员口径展示，仅统计 ACTIVE / RESTRICTED。</div>
+      <div class="table-hint">成员数按当前有效成员口径展示，仅统计 ACTIVE / RESTRICTED。</div>
 
       <div class="pagination-row">
         <el-pagination
