@@ -1,11 +1,14 @@
 import type { UUID } from "@/apis/http";
 
+// 小程序运行环境不一定完整暴露 Web Crypto，这里先把可用能力收窄出来。
 type RandomSource = typeof globalThis & {
   crypto?: {
     getRandomValues?: <T extends Uint8Array>(array: T) => T;
   };
 };
 
+// 给字节数组填充随机数。
+// 优先走 Web Crypto；不支持时才退回到 Math.random。
 function fillRandom(bytes: Uint8Array) {
   const randomSource = globalThis as RandomSource;
 
@@ -19,9 +22,11 @@ function fillRandom(bytes: Uint8Array) {
   }
 }
 
+// 生成 UUID v4 形态的 operationId，供前端可重试写请求复用幂等键。
 export function createOperationId(): UUID {
   const bytes = new Uint8Array(16);
   fillRandom(bytes);
+  // 写入 RFC 4122 要求的 version / variant 位，再格式化成 UUID 字符串。
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
 

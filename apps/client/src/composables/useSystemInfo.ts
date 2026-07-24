@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
-import { APP_STORAGE_KEYS } from "@/config";
-import { uniPlatform } from "@/platform/uni";
+import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
+import { isRecord } from "@/utils/utils";
 
 interface MenuButtonRect {
   top: number;
@@ -51,10 +51,6 @@ const systemInfo = ref<SystemInfoState>({
 
 let initialized = false;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object";
-}
-
 function toNumber(value: unknown, fallback = 0) {
   const nextValue = Number(value);
   return Number.isFinite(nextValue) ? nextValue : fallback;
@@ -86,7 +82,7 @@ function readSafeArea(value: unknown): SafeArea | undefined {
   };
 }
 
-function normalizeSnapshot(value: unknown): SystemInfoSnapshot | null {
+function readSnapshot(value: unknown): SystemInfoSnapshot | null {
   if (!isRecord(value)) return null;
 
   const windowWidth = toNumber(value.windowWidth);
@@ -104,7 +100,7 @@ function normalizeSnapshot(value: unknown): SystemInfoSnapshot | null {
 }
 
 function readCachedSystemInfo() {
-  return normalizeSnapshot(uniPlatform.storage.getSync<SystemInfoSnapshot>(APP_STORAGE_KEYS.systemInfoSnapshot));
+  return readSnapshot(uniPlatform.storage.getSync<SystemInfoSnapshot>(APP_STORAGE_KEYS.systemInfoSnapshot));
 }
 
 function writeCachedSystemInfo(info: SystemInfoState) {

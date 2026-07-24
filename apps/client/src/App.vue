@@ -4,7 +4,7 @@ import { refreshSessionIfNeeded } from "@/apis/auth";
 import { useSettingsStore } from "@/stores/settings";
 import { initSystemInfo } from "@/composables/useSystemInfo";
 import { initTheme } from "@/composables/useTheme";
-import { restoreAppSession } from "@/utils/app-session";
+import { restoreAppSession } from "@/utils/session";
 
 onLaunch(() => {
   initSystemInfo();

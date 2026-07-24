@@ -416,7 +416,7 @@ import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
-import { restoreAppSession } from "@/utils/app-session";
+import { restoreAppSession } from "@/utils/session";
 
 interface PageEntry {
   title: string;

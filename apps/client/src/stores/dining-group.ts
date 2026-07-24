@@ -10,13 +10,22 @@ import type { UUID } from "@/apis/http";
 import { createOperationId } from "@/utils/operation-id";
 import { onSessionCleared } from "@/utils/session-events";
 
+// Dedupe concurrent "load my dining groups" requests so multiple pages
+// do not stampede the same bootstrap API during startup.
 let refreshCurrentPromise: Promise<void> | null = null;
 
+// Dining-group store owns only relationship context:
+// current list, usage summary, member list, and selected group id.
+// It does not own recipe, pantry, or meal data.
 export const useDiningGroupStore = defineStore("dining-group", {
 	state: () => ({
+		// All dining groups visible to the current user.
 		diningGroups: [] as DiningGroupSummary[],
+		// Server-resolved usage summary for current dining-group relationship limits.
 		usage: null as DiningGroupUsageSummary | null,
+		// Members of the currently inspected dining group.
 		members: [] as DiningGroupMemberSummary[],
+		// Current client selection used by pages as relationship context.
 		selectedDiningGroupId: "" as UUID | ""
 	}),
 	getters: {
@@ -40,6 +49,8 @@ export const useDiningGroupStore = defineStore("dining-group", {
 		relationUsage: (state) => state.usage
 	},
 	actions: {
+		// Refreshes the relationship context from the server.
+		// Keeps the current selection when possible, otherwise falls back to owned group first.
 		async refreshCurrent() {
 			refreshCurrentPromise ??= diningGroupApi
 				.getMine()
@@ -59,9 +70,12 @@ export const useDiningGroupStore = defineStore("dining-group", {
 
 			await refreshCurrentPromise;
 		},
+		// Creates an invite for one dining group.
+		// Operation id defaults here so pages can stay focused on their own flow.
 		async createInvite(diningGroupId: UUID, operationId: UUID = createOperationId()): Promise<CreateInviteResult> {
 			return diningGroupApi.createInvite({ diningGroupId, operationId });
 		},
+		// Loads members for the requested group or the currently selected group.
 		async refreshMembers(diningGroupId?: UUID) {
 			const targetDiningGroupId = diningGroupId || this.currentDiningGroupId;
 			if (!targetDiningGroupId) return null;
@@ -70,6 +84,7 @@ export const useDiningGroupStore = defineStore("dining-group", {
 			this.members = result.members;
 			return result;
 		},
+		// Accepts an invite, refreshes relationship context, and points selection to the joined group.
 		async acceptInvite(inviteToken: string, operationId: UUID = createOperationId()) {
 			const result = await diningGroupApi.acceptInvite(inviteToken, { operationId });
 			await this.refreshCurrent();
@@ -77,6 +92,7 @@ export const useDiningGroupStore = defineStore("dining-group", {
 			this.members = [];
 			return result;
 		},
+		// Leaves the currently selected group using optimistic version check from the current summary.
 		async leaveCurrent(operationId: UUID = createOperationId()) {
 			const diningGroupId = this.currentDiningGroupId;
 			const currentDiningGroup = this.currentDiningGroup;
@@ -90,9 +106,11 @@ export const useDiningGroupStore = defineStore("dining-group", {
 			this.members = [];
 			return result;
 		},
+		// Pure client-side selection update.
 		selectDiningGroup(diningGroupId: UUID) {
 			this.selectedDiningGroupId = diningGroupId;
 		},
+		// Clears all relationship context when login session is no longer valid.
 		clearDiningGroupState() {
 			this.diningGroups = [];
 			this.usage = null;
@@ -102,4 +120,5 @@ export const useDiningGroupStore = defineStore("dining-group", {
 	}
 });
 
+// Dining-group context becomes invalid as soon as the session is cleared.
 onSessionCleared(() => useDiningGroupStore().clearDiningGroupState());
