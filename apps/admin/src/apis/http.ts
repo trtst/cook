@@ -53,7 +53,7 @@ interface ApiResponse<T> {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   auth?: boolean;
   query?: Record<string, string | number | boolean | null | undefined>;
   body?: unknown;
@@ -122,6 +122,49 @@ export async function requestData<T>(path: string, options: RequestOptions = {})
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    cache: "no-store",
+    credentials: "omit"
+  });
+  const body = await readBody(response);
+
+  if (!isApiResponse<T>(body)) {
+    if (response.status === 401) {
+      const error = new UnauthorizedError();
+      if (auth) clearUnauthorized();
+      throw error;
+    }
+
+    if (!response.ok) throw new HttpError(response.status, "请求失败");
+    throw new HttpError(response.status, "响应格式不符合契约");
+  }
+
+  if (body.code === 401) {
+    const error = new UnauthorizedError(body.message, body.data);
+    if (auth) clearUnauthorized();
+    throw error;
+  }
+
+  if (body.code !== 0) {
+    throw new ApiClientError(body.code, body.message, body.data);
+  }
+
+  if (!response.ok) throw new HttpError(response.status, "请求失败");
+  return body.data;
+}
+
+export async function uploadForm<T>(path: string, formData: FormData, options: Pick<RequestOptions, "auth"> = {}) {
+  const auth = options.auth ?? true;
+  const token = auth ? useSessionStore().token : null;
+  const response = await fetch(buildUrl(path), {
+    method: "POST",
+    headers: {
+      "X-Admin-Version": adminAppConfig.appVersion,
+      "X-Admin-Build": String(adminAppConfig.appBuild),
+      "X-Platform": "admin-web",
+      "X-Request-Id": getRequestId(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: formData,
     cache: "no-store",
     credentials: "omit"
   });

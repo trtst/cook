@@ -233,7 +233,9 @@ interface StorageUsageSummary {
 
 ```text
 POST /auth/login
+POST /auth/code-login
 POST /auth/refresh
+GET  /app-config
 GET  /users/me
 PUT  /users/me
 PUT  /users/me/display
@@ -246,7 +248,18 @@ interface PasswordLoginRequest {
   password: string;
 }
 
+interface CodeLoginRequest {
+  phone: string;
+  code: string;
+}
+
 interface PasswordLoginResult {
+  token: string;
+  expiresAt: IsoDateTime;
+  user: SessionUser;
+}
+
+interface CodeLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: SessionUser;
@@ -255,6 +268,12 @@ interface PasswordLoginResult {
 interface RefreshSessionResult {
   token: string;
   expiresAt: IsoDateTime;
+}
+
+interface AppConfigResponse {
+  login: {
+    imageUrl: string | null;
+  };
 }
 
 interface UpdateCurrentUserRequest {
@@ -272,7 +291,11 @@ interface ChangeCurrentPasswordResult {
 }
 ```
 
-`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。
+`POST /auth/code-login` 是当前客户端主登录入口。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
+
+`GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
+
+`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。
 
 ### 本人饭搭子关系
 
@@ -393,13 +416,16 @@ Auth: UserBearerAuth
 
 返回 `StorageUsageSummary`。该接口只负责个人存储账本，不返回会员详情、关系列表或业务对象明细。
 
-### 后台只读
+### 后台管理
 
 ```text
 POST /admin/auth/login
 GET  /admin/users
 GET  /admin/dining-groups
 GET  /admin/user-entitlements?userId={userId}
+GET  /admin/app-config
+POST /admin/app-config/login-image
+DELETE /admin/app-config/login-image
 ```
 
 后台饭搭子状态筛选支持 `ACTIVE / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
@@ -421,6 +447,8 @@ interface AdminUserEntitlementResponse {
 ```
 
 用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。它是后台审计视图，按领域分段返回，不作为小程序的聚合契约。背景图能力当前统一返回 `false`。
+
+`GET /admin/app-config`、`POST /admin/app-config/login-image` 和 `DELETE /admin/app-config/login-image` 共同维护登录弹窗图片。它们只服务这一条已确认配置，不扩成通用配置中心或通用素材库。上传成功和清空成功都返回最新 `AppConfigResponse`。
 
 ## 其他领域接口摘要
 

@@ -3,7 +3,7 @@
     {
       "path": "pages/home/index",
       "style": {
-        "navigationBarTitleText": "下一餐",
+        "navigationBarTitleText": "炊火记",
         "navigationStyle": "custom"
       }
     },
@@ -104,7 +104,7 @@
   },
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "下一餐",
+    "navigationBarTitleText": "炊火记",
     "navigationBarBackgroundColor": "#fffdf8",
     "backgroundColor": "#f7f4ee"
   }

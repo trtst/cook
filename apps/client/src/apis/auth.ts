@@ -29,7 +29,18 @@ export interface PasswordLoginRequest {
 	password: string;
 }
 
+export interface CodeLoginRequest {
+	phone: string;
+	code: string;
+}
+
 export interface PasswordLoginResult {
+	token: string;
+	expiresAt: IsoDateTime;
+	user: SessionUser;
+}
+
+export interface CodeLoginResult {
 	token: string;
 	expiresAt: IsoDateTime;
 	user: SessionUser;
@@ -47,6 +58,13 @@ export const authApi = {
 	 */
 	loginWithPassword(body: PasswordLoginRequest) {
 		return post<PasswordLoginResult>(`${cfg.authDomain}/api/auth/login`, body, { auth: false });
+	},
+	/**
+	 * 测试阶段验证码登录。
+	 * 当前服务端只接受 `123456`，后续切真实短信时仍保持独立入口。
+	 */
+	loginWithCode(body: CodeLoginRequest) {
+		return post<CodeLoginResult>(`${cfg.authDomain}/api/auth/code-login`, body, { auth: false });
 	},
 	/**
 	 * 刷新当前 user token。

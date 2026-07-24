@@ -31,6 +31,7 @@ interface ClientPlatform {
 		getWindowInfo(): WindowInfo | null;
 		getMenuButtonRect(): MenuButtonRect | null;
 		getAppBaseInfo(): AppBaseInfo | null;
+		getRuntimeChannel(): RuntimeChannel;
 		onThemeChange(listener: (result: ThemeChangeResult) => void): void;
 	};
 	/**
@@ -104,6 +105,8 @@ interface AppBaseInfo {
 interface ThemeChangeResult {
 	theme?: string;
 }
+
+type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 interface UniSystemApi {
 	getWindowInfo?: () => WindowInfo;
@@ -221,6 +224,17 @@ function getUniSystemApi() {
 	return uni as unknown as UniSystemApi;
 }
 
+function getRuntimeChannel(): RuntimeChannel {
+	if (typeof navigator === "undefined") return "mini_program";
+
+	const userAgent = navigator.userAgent.toLowerCase();
+	if (/harmonyos|openharmony/.test(userAgent)) return "harmony";
+	if (/android/.test(userAgent)) return "android";
+	if (/iphone|ipad|ipod/.test(userAgent)) return "ios";
+
+	return /mobile/.test(userAgent) ? "h5" : "pc";
+}
+
 /**
  * 对业务层暴露的统一平台对象。
  * 业务代码应优先依赖这里，而不是直接散落访问 `uni.*`。
@@ -247,6 +261,9 @@ export const uniPlatform: ClientPlatform = {
 			} catch {
 				return null;
 			}
+		},
+		getRuntimeChannel() {
+			return getRuntimeChannel();
 		},
 		onThemeChange(listener) {
 			try {

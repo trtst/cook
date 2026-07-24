@@ -276,24 +276,6 @@
       </view>
 
       <view
-        v-if="loginVisible"
-        class="login-modal"
-        @click="closeLogin"
-        @touchmove.stop.prevent
-      >
-        <view class="login-modal__panel" @click.stop>
-          <view class="login-modal__header">
-            <text class="login-modal__close" @click="closeLogin">×</text>
-          </view>
-          <Login
-            title="登录下一餐"
-            description="登录后可以同步饭搭子、计划、购物清单和食材。"
-            @success="handleLoginSuccess"
-          />
-        </view>
-      </view>
-
-      <view
         v-if="profileEditorOpen"
         class="profile-modal"
         @click="closeProfileEditor"
@@ -412,7 +394,9 @@ import { userApi } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
+import { APP_NAME } from "@/config";
 import { useDiningGroupStore } from "@/stores/dining-group";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
@@ -430,6 +414,7 @@ interface PageEntry {
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 const diningGroupStore = useDiningGroupStore();
+const loginModalStore = useLoginModalStore();
 const {
   themeClasses,
   effectiveSkin,
@@ -446,7 +431,6 @@ const { navBarTotalHeight } = useSystemInfo();
 const profileLoading = ref(false);
 const loadErrorText = ref("");
 const themePanelOpen = ref(false);
-const loginVisible = ref(false);
 const profileEditorOpen = ref(false);
 const profileSaving = ref(false);
 const passwordEditorOpen = ref(false);
@@ -460,7 +444,6 @@ const passwordEditErrorText = ref("");
 const skinOptions = THEME_SKIN_OPTIONS;
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
-let pendingAction: (() => void) | null = null;
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 
@@ -472,7 +455,7 @@ const profileHeroStyle = computed(() => ({
 }));
 const profileName = computed(() => {
   if (!sessionStore.isLoggedIn) return "点击登录";
-  return userStore.profile?.nickname || "下一餐用户";
+  return userStore.profile?.nickname || `${APP_NAME}用户`;
 });
 const profileCoverUrl = computed(() => userStore.profile?.display?.profileBackgroundUrl || "");
 const profileAvatarUrl = computed(() => userStore.profile?.avatarUrl || "");
@@ -646,9 +629,9 @@ const supportSettingEntries: PageEntry[] = [
     disabledText: "帮助与反馈"
   },
   {
-    title: "关于下一餐",
+    title: `关于${APP_NAME}`,
     icon: "关",
-    disabledText: "关于下一餐"
+    disabledText: `关于${APP_NAME}`
   }
 ];
 
@@ -828,13 +811,7 @@ function requireLogin(action: () => void) {
 }
 
 function openLogin(action: (() => void) | null = null) {
-  pendingAction = action;
-  loginVisible.value = true;
-}
-
-function closeLogin() {
-  loginVisible.value = false;
-  pendingAction = null;
+  loginModalStore.open(null, action);
 }
 
 function openProfileEditor() {
@@ -926,17 +903,8 @@ async function savePassword() {
   await uniPlatform.feedback.toast({ title: "密码已更新", icon: "success" }).catch(() => undefined);
 }
 
-async function handleLoginSuccess() {
-  loginVisible.value = false;
-  await loadMe();
-
-  const action = pendingAction;
-  pendingAction = null;
-  action?.();
-}
-
 async function handleLogout() {
-  closeLogin();
+  loginModalStore.close();
   closeProfileEditor();
   closePasswordEditor();
   await sessionStore.clearSession();
@@ -1674,49 +1642,6 @@ function getPasswordErrorText(error: unknown) {
 .is-pressed {
   opacity: 0.86;
   transform: scale(0.98);
-}
-
-.login-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-page);
-  background: rgba(15, 23, 19, 0.56);
-}
-
-.login-modal__panel {
-  width: 100%;
-  overflow: hidden;
-  border-radius: var(--radius-sheet);
-  background: var(--color-surface);
-  box-shadow: 0 28rpx 80rpx rgba(15, 23, 19, 0.28);
-}
-
-.login-modal__header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 24rpx 28rpx 0;
-}
-
-.login-modal__panel :deep(.login) {
-  padding-top: 8rpx;
-  border: 0;
-  border-radius: 0;
-}
-
-.login-modal__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56rpx;
-  height: 56rpx;
-  color: var(--color-text-tertiary);
-  font-size: 44rpx;
-  line-height: 1;
 }
 
 .profile-modal {

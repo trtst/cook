@@ -1,6 +1,6 @@
-# Next Meal Agent Guide
+# 炊火记 Agent Guide
 
-This repository is the **Next Meal** workspace.
+This repository is the **炊火记** workspace.
 
 Read `docs/AGENT.md` first. It is the current short AI coding guide for this
 project. Use this file as the Codex entrypoint for orchestration rules and

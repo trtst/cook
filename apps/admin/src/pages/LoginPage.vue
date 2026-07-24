@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { Lock, User } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { authApi } from "@/apis/auth";
+import { ADMIN_APP_NAME, ADMIN_LOGIN_KICKER } from "@/config/app";
 import { useSessionStore } from "@/stores/session";
 
 const route = useRoute();
@@ -45,8 +46,8 @@ async function submit() {
   <main class="login-page">
     <section class="login-panel">
       <div class="login-copy">
-        <div class="login-kicker">Next Meal Admin</div>
-        <h1>下一餐后台</h1>
+        <div class="login-kicker">{{ ADMIN_LOGIN_KICKER }}</div>
+        <h1>{{ ADMIN_APP_NAME }}</h1>
       </div>
 
       <el-form class="login-form" @submit.prevent="submit">

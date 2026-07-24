@@ -1,6 +1,7 @@
 import { type INestApplication, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { API_DOC_TITLE } from "../src/config/app";
 import { AppModule } from "../src/modules/app.module";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -33,7 +34,7 @@ async function main() {
     app.useGlobalPipes(new ValidationPipe({ forbidNonWhitelisted: true, whitelist: true, transform: true }));
     await app.init();
 
-    const config = new DocumentBuilder().setTitle("Next Meal API").setVersion("0.1.0").build();
+    const config = new DocumentBuilder().setTitle(API_DOC_TITLE).setVersion("0.1.0").build();
     const document = SwaggerModule.createDocument(app, config);
     const schemas = document.components?.schemas ?? {};
     let operationCount = 0;

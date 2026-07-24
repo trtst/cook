@@ -8,7 +8,7 @@ Read this file first. Use `project.md` for the full developer overview, `dining-
 
 ## Product
 
-The product is **Next Meal**.
+The product is **炊火记**.
 
 It is a family meal planning mini program. The core loop is not recipe browsing. The core loop is:
 
@@ -87,7 +87,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 
 - Engineering foundation: authentication, request boundaries, platform adapter, personal membership resolution, idempotency, audit, Outbox tables, and candidate implementations for dining groups, recipes, meals, pantry, shopping, storage, sharing, and Admin. Existing code is not evidence that those business modules are accepted.
 - In development: DiningGroup, Recipe, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
-- Background image upload and asset management are deferred. User responses keep nullable URL fields and capability flags, but currently return `null` and `false`.
+- User profile and home background image upload remain deferred. User responses keep nullable URL fields and capability flags, and those user-background fields currently return `null` and `false`. The admin-managed login popup image is a separate `app-config` surface, not a generic asset-management reopening.
 - Deferred business decisions and known risks are tracked in `plans/business-development-todo.md`. That list prevents omissions but does not confirm a contract.
 - Disabled until the replacement contract is complete: broad public-user discovery and Worker/Outbox runtime behavior.
 - Target but not contracted: non-monetary activities, achievements, and medal wall. The client may show a Me-page entry placeholder, but no API, DTO, schema, reward, or admin surface may be added until completion facts and contracts are frozen.

@@ -168,6 +168,7 @@ import wishIcon from "@/assets/home-actions/wish.svg";
 import Empty from "@/components/Empty/Empty.vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
+import { APP_NAME } from "@/config";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
@@ -202,7 +203,7 @@ const hasMealPlan = false;
 const mealCandidates: Array<{ rank: string; name: string; meta: string; votes: string }> = [];
 
 const heroTitle = computed(() => {
-  if (!sessionStore.isLoggedIn) return "下一餐从这里开始";
+  if (!sessionStore.isLoggedIn) return `${APP_NAME}从这里开始`;
   return hasMealPlan ? "饭局待确认" : "今晚谁来定菜？";
 });
 const heroDescription = computed(() =>

@@ -4,6 +4,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
+import { API_DOC_TITLE } from "./config/app";
 import { AppModule } from "./modules/app.module";
 
 loadLocalEnv();
@@ -38,7 +39,7 @@ async function bootstrap() {
   app.useGlobalFilters(new ApiExceptionFilter());
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle("Next Meal API")
+    .setTitle(API_DOC_TITLE)
     .setDescription("Auth、User 与唯一当前 DiningGroup 契约")
     .setVersion("0.1.0")
     .addBearerAuth({ type: "http", scheme: "bearer", bearerFormat: "JWT" }, "UserBearerAuth")

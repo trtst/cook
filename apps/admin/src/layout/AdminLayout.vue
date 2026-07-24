@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataAnalysis, Files, ForkSpoon, SwitchButton, User } from "@element-plus/icons-vue";
+import { DataAnalysis, Files, ForkSpoon, Setting, SwitchButton, User } from "@element-plus/icons-vue";
+import { ADMIN_APP_NAME } from "@/config/app";
 import { useSessionStore } from "@/stores/session";
 
 const route = useRoute();
@@ -25,7 +26,7 @@ function logout() {
           <el-icon><ForkSpoon /></el-icon>
         </div>
         <div>
-          <div class="brand-title">下一餐后台</div>
+          <div class="brand-title">{{ ADMIN_APP_NAME }}</div>
           <div class="brand-subtitle">Content Ops</div>
         </div>
       </div>
@@ -42,6 +43,10 @@ function logout() {
         <el-menu-item index="/recipes">
           <el-icon><Files /></el-icon>
           <span>菜谱治理</span>
+        </el-menu-item>
+        <el-menu-item index="/config">
+          <el-icon><Setting /></el-icon>
+          <span>公共配置</span>
         </el-menu-item>
       </el-menu>
     </el-aside>

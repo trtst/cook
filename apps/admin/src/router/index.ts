@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { ADMIN_APP_NAME } from "@/config/app";
 import AdminLayout from "@/layout/AdminLayout.vue";
 import { useSessionStore } from "@/stores/session";
 
@@ -33,6 +34,12 @@ const router = createRouter({
           name: "recipes",
           component: () => import("@/pages/RecipesPage.vue"),
           meta: { title: "菜谱治理" }
+        },
+        {
+          path: "config",
+          name: "config",
+          component: () => import("@/pages/ConfigPage.vue"),
+          meta: { title: "公共配置" }
         }
       ]
     }
@@ -40,7 +47,7 @@ const router = createRouter({
 });
 
 router.beforeEach(to => {
-  document.title = to.meta.title ? `${String(to.meta.title)} | 下一餐后台` : "下一餐后台";
+  document.title = to.meta.title ? `${String(to.meta.title)} | ${ADMIN_APP_NAME}` : ADMIN_APP_NAME;
 
   const session = useSessionStore();
   if (!session.isLoggedIn && session.token) {

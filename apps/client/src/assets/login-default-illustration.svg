@@ -1,0 +1,33 @@
+<svg width="720" height="900" viewBox="0 0 720 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="900" rx="64" fill="url(#bg)"/>
+  <circle cx="530" cy="170" r="180" fill="url(#glow1)" opacity="0.75"/>
+  <circle cx="180" cy="260" r="210" fill="url(#glow2)" opacity="0.72"/>
+  <path d="M175 580C175 465.678 267.678 373 382 373H490C563.454 373 623 432.546 623 506V694C623 715.539 605.539 733 584 733H214C192.461 733 175 715.539 175 694V580Z" fill="white" fill-opacity="0.88"/>
+  <path d="M255 477C255 424.533 297.533 382 350 382H444C496.467 382 539 424.533 539 477V733H255V477Z" fill="url(#card)"/>
+  <rect x="285" y="439" width="224" height="28" rx="14" fill="white" fill-opacity="0.72"/>
+  <rect x="285" y="491" width="182" height="20" rx="10" fill="white" fill-opacity="0.42"/>
+  <rect x="285" y="561" width="164" height="18" rx="9" fill="white" fill-opacity="0.65"/>
+  <rect x="285" y="599" width="212" height="18" rx="9" fill="white" fill-opacity="0.38"/>
+  <rect x="285" y="637" width="148" height="18" rx="9" fill="white" fill-opacity="0.38"/>
+  <circle cx="198" cy="214" r="74" fill="white" fill-opacity="0.18"/>
+  <path d="M198 127L216 182L274 182L227 216L245 271L198 237L151 271L169 216L122 182L180 182L198 127Z" fill="white" fill-opacity="0.62"/>
+  <defs>
+    <linearGradient id="bg" x1="68" y1="58" x2="621" y2="808" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE9E0"/>
+      <stop offset="0.52" stop-color="#F2E4D8"/>
+      <stop offset="1" stop-color="#E4F1EB"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(530 170) rotate(90) scale(180)">
+      <stop stop-color="#F4C6C6"/>
+      <stop offset="1" stop-color="#F4C6C6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 260) rotate(90) scale(210)">
+      <stop stop-color="#F7F1C6"/>
+      <stop offset="1" stop-color="#F7F1C6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="255" y1="400" x2="563" y2="733" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8A685"/>
+      <stop offset="1" stop-color="#84B5A0"/>
+    </linearGradient>
+  </defs>
+</svg>

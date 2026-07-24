@@ -1,5 +1,5 @@
-import type { PasswordLoginResult } from "@/apis/auth";
+import type { CodeLoginResult } from "@/apis/auth";
 
 export interface LoginSuccessPayload {
-  session: PasswordLoginResult;
+  session: CodeLoginResult;
 }

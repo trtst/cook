@@ -22,11 +22,13 @@
       <slot />
     </view>
     <TabBar v-if="showTabbar && currentTab" :current="currentTab" />
+    <LoginModal />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
+import LoginModal from "@/components/Login/LoginModal.vue";
 import { useTheme } from "@/composables/useTheme";
 import type { TabKey } from "@/components/TabBar/tabs";
 

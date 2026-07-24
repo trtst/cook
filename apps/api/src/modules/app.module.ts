@@ -6,6 +6,7 @@ import { LoginRateLimitGuard } from "../common/login-rate-limit.guard";
 import { CoreModule } from "../common/core.module";
 import { RequestContextMiddleware } from "../common/request-context.middleware";
 import { AdminModule } from "./admin/admin.module";
+import { AppConfigModule } from "./app-config/app-config.module";
 import { AuthModule } from "./auth/auth.module";
 import { DiningGroupModule } from "./dining-group/dining-group.module";
 import { EntitlementModule } from "./entitlement/entitlement.module";
@@ -15,7 +16,7 @@ import { RecipeModule } from "./recipe/recipe.module";
 import { UserModule } from "./user/user.module";
 
 @Module({
-  imports: [CoreModule, AdminModule, AuthModule, DiningGroupModule, EntitlementModule, RecipeModule, MealModule, PantryModule, UserModule],
+  imports: [CoreModule, AdminModule, AppConfigModule, AuthModule, DiningGroupModule, EntitlementModule, RecipeModule, MealModule, PantryModule, UserModule],
   providers: [
     AdminAuthGuard,
     LoginRateLimitGuard,

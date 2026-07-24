@@ -1,0 +1,67 @@
+import { defineStore } from "pinia";
+import { useAppConfigStore } from "./app-config";
+import { uniPlatform } from "@/platform/uni";
+import type { CodeLoginResult } from "@/apis/auth";
+
+type LoginModalMode = "options" | "phone";
+
+let pendingAction: (() => void) | null = null;
+
+export const useLoginModalStore = defineStore("login-modal", {
+	state: () => ({
+		visible: false,
+		mode: "phone" as LoginModalMode,
+		sourceId: null as string | null,
+		openImageUrl: "",
+		openSeed: 0,
+		openedInMiniProgram: false
+	}),
+	actions: {
+		open(sourceId: string | null = null, action: (() => void) | null = null) {
+			const isMiniProgram = uniPlatform.system.getRuntimeChannel() === "mini_program";
+			const appConfigStore = useAppConfigStore();
+
+			pendingAction = action;
+			this.sourceId = sourceId;
+			this.openedInMiniProgram = isMiniProgram;
+			this.mode = isMiniProgram ? "options" : "phone";
+			this.openImageUrl = appConfigStore.loginImageUrl;
+			this.visible = true;
+			this.openSeed += 1;
+		},
+		openPhoneMode() {
+			this.mode = "phone";
+		},
+		back() {
+			if (!this.openedInMiniProgram) {
+				this.close();
+				return;
+			}
+
+			this.mode = "options";
+		},
+		close() {
+			this.visible = false;
+			this.mode = this.openedInMiniProgram ? "options" : "phone";
+			this.sourceId = null;
+			this.openImageUrl = "";
+			this.openedInMiniProgram = false;
+			pendingAction = null;
+		},
+		complete(_session: CodeLoginResult) {
+			const result = {
+				sourceId: this.sourceId,
+				action: pendingAction
+			};
+
+			this.visible = false;
+			this.mode = "phone";
+			this.sourceId = null;
+			this.openImageUrl = "";
+			this.openedInMiniProgram = false;
+			pendingAction = null;
+
+			return result;
+		}
+	}
+});

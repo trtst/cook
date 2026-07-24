@@ -1,4 +1,4 @@
-# Next Meal Worker
+# 炊火记 Worker
 
 `apps/worker` is the reserved async worker boundary.
 

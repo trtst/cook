@@ -4,8 +4,8 @@ import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { PasswordLoginDto } from "../../contracts/dtos";
-import { ApiOkModel, PasswordLoginResultModel, RefreshSessionResultModel } from "../../contracts/openapi";
+import { CodeLoginDto, PasswordLoginDto } from "../../contracts/dtos";
+import { ApiOkModel, CodeLoginResultModel, PasswordLoginResultModel, RefreshSessionResultModel } from "../../contracts/openapi";
 import { AuthService } from "./auth.service";
 
 @ApiTags("auth")
@@ -18,6 +18,13 @@ export class AuthController {
   @ApiOkModel(PasswordLoginResultModel, "手机号密码登录，返回用户 token 和用户摘要")
   loginWithPassword(@Body() body: PasswordLoginDto) {
     return this.authService.loginWithPassword(body).then(result => ok(result));
+  }
+
+  @Post("code-login")
+  @UseGuards(LoginRateLimitGuard)
+  @ApiOkModel(CodeLoginResultModel, "手机号验证码登录，测试阶段固定验证码为 123456")
+  loginWithCode(@Body() body: CodeLoginDto) {
+    return this.authService.loginWithCode(body).then(result => ok(result));
   }
 
   @Post("refresh")

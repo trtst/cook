@@ -1,6 +1,7 @@
 import { PrismaClient, type UserStatus } from "@prisma/client";
 import type { MeResponse, PasswordLoginResult, RefreshSessionResult } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
+import { APP_NAME } from "../src/config/app";
 
 loadLocalEnv();
 
@@ -74,7 +75,7 @@ async function main() {
     });
     assert(meAfterLogin.uid === seededUser.uid, "GET /users/me after login mismatch");
 
-    const nickname = `下一餐用户-${Date.now()}`;
+    const nickname = `${APP_NAME}用户-${Date.now()}`;
     const oldFieldUpdate = await request<MeResponse>("/users/me", {
       method: "PUT",
       headers: { authorization },

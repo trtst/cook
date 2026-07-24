@@ -42,6 +42,19 @@ export class PasswordLoginDto {
   password!: string;
 }
 
+export class CodeLoginDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ example: "123456" })
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
+}
+
 export class AdminLoginDto {
   @ApiProperty({ example: "admin" })
   @IsString()
@@ -137,6 +150,8 @@ export class OperationDto {
   @IsUUID()
   operationId!: string;
 }
+
+export class UpdateLoginImageDto extends OperationDto {}
 
 export class VersionedOperationDto extends OperationDto {
   @ApiProperty({ minimum: 1 })

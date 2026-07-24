@@ -68,9 +68,19 @@ export class PasswordLoginResultModel {
   @ApiProperty({ type: SessionUserModel }) user!: SessionUserModel;
 }
 
+export class CodeLoginResultModel extends PasswordLoginResultModel {}
+
 export class RefreshSessionResultModel {
   @ApiProperty({ type: String }) token!: string;
   @ApiProperty(dateTime) expiresAt!: string;
+}
+
+export class LoginImageConfigModel {
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+}
+
+export class AppConfigResponseModel {
+  @ApiProperty({ type: LoginImageConfigModel }) login!: LoginImageConfigModel;
 }
 
 export class AdminIdentityModel {

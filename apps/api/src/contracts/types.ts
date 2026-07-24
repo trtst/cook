@@ -59,7 +59,18 @@ export interface PasswordLoginRequest {
   password: string;
 }
 
+export interface CodeLoginRequest {
+  phone: string;
+  code: string;
+}
+
 export interface PasswordLoginResult {
+  token: string;
+  expiresAt: IsoDateTime;
+  user: SessionUser;
+}
+
+export interface CodeLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: SessionUser;
@@ -68,6 +79,14 @@ export interface PasswordLoginResult {
 export interface RefreshSessionResult {
   token: string;
   expiresAt: IsoDateTime;
+}
+
+export interface LoginImageConfig {
+  imageUrl: string | null;
+}
+
+export interface AppConfigResponse {
+  login: LoginImageConfig;
 }
 
 export interface UpdateCurrentUserRequest {
