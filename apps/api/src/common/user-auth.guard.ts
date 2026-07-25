@@ -1,12 +1,16 @@
 import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import type { RequestWithUser } from "./auth-context";
+import { PrismaService } from "./prisma.service";
 import { UserTokenService } from "./security/user-token.service";
 
 @Injectable()
 export class UserAuthGuard implements CanActivate {
-  constructor(@Inject(UserTokenService) private readonly userTokenService: UserTokenService) {}
+  constructor(
+    @Inject(UserTokenService) private readonly userTokenService: UserTokenService,
+    @Inject(PrismaService) private readonly prisma: PrismaService
+  ) {}
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<HeaderRequest & Partial<RequestWithUser>>();
     const token = readBearerToken(request);
 
@@ -15,6 +19,14 @@ export class UserAuthGuard implements CanActivate {
     }
 
     const payload = this.userTokenService.verifyToken(token);
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { status: true, sessionVersion: true }
+    });
+
+    if (!user || user.status !== "ACTIVE" || user.sessionVersion !== payload.ver) {
+      throw new UnauthorizedException("未登录或 token 失效");
+    }
 
     request.user = {
       userId: payload.sub

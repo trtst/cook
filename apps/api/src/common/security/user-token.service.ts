@@ -4,6 +4,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 interface UserTokenPayload {
   kind: "user";
   sub: string;
+  ver: number;
   exp: number;
 }
 
@@ -23,6 +24,9 @@ function readPayload(encodedPayload: string): UserTokenPayload {
       payload.kind !== "user" ||
       typeof payload.sub !== "string" ||
       !payload.sub ||
+      typeof payload.ver !== "number" ||
+      !Number.isInteger(payload.ver) ||
+      payload.ver < 0 ||
       typeof payload.exp !== "number" ||
       !Number.isFinite(payload.exp)
     ) {
@@ -32,6 +36,7 @@ function readPayload(encodedPayload: string): UserTokenPayload {
     return {
       kind: payload.kind,
       sub: payload.sub,
+      ver: payload.ver,
       exp: payload.exp
     };
   } catch {
@@ -70,11 +75,12 @@ function getTokenSeconds() {
 
 @Injectable()
 export class UserTokenService {
-  createToken(userId: string) {
+  createToken(userId: string, sessionVersion: number) {
     const expiresInSeconds = getTokenSeconds();
     const payload: UserTokenPayload = {
       kind: "user",
       sub: userId,
+      ver: sessionVersion,
       exp: Math.floor(Date.now() / 1000) + expiresInSeconds
     };
     const encodedPayload = base64UrlEncode(JSON.stringify(payload));

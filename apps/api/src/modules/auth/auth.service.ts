@@ -41,7 +41,7 @@ export class AuthService {
       throw new UnauthorizedException("手机号或密码错误");
     }
 
-    const token = this.userTokenService.createToken(user.id);
+    const token = this.userTokenService.createToken(user.id, user.sessionVersion);
 
     return {
       token: token.token,
@@ -60,7 +60,7 @@ export class AuthService {
       throw new UnauthorizedException("账号不可用");
     }
 
-    const token = this.userTokenService.createToken(user.id);
+    const token = this.userTokenService.createToken(user.id, user.sessionVersion);
 
     return {
       token: token.token,
@@ -78,7 +78,7 @@ export class AuthService {
       throw new UnauthorizedException("未登录或 token 失效");
     }
 
-    const token = this.userTokenService.createToken(user.id);
+    const token = this.userTokenService.createToken(user.id, user.sessionVersion);
 
     return {
       token: token.token,
