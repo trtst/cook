@@ -33,7 +33,11 @@
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/remove-member` | 主理人移除成员 |
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/dissolve` | 主理人解散饭搭子 |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
-| AdminUser | GET | `/admin/users` | 用户只读查询 |
+| AdminUser | GET | `/admin/users` | 用户查询 |
+| AdminUser | POST | `/admin/users` | 新增用户 |
+| AdminUser | PUT | `/admin/users/{userId}` | 更新用户昵称或手机号 |
+| AdminUser | POST | `/admin/users/{userId}/status` | 启用或禁用用户 |
+| AdminUser | POST | `/admin/users/{userId}/reset-password` | 重置用户密码 |
 | AdminDiningGroup | GET | `/admin/dining-groups` | 饭搭子只读查询 |
 | AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员、关系和分域策略摘要 |
 | Recipe | GET/POST | `/recipes` | 查询或创建个人菜谱 |

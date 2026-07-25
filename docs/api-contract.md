@@ -421,6 +421,10 @@ Auth: UserBearerAuth
 ```text
 POST /admin/auth/login
 GET  /admin/users
+POST /admin/users
+PUT  /admin/users/{userId}
+POST /admin/users/{userId}/status
+POST /admin/users/{userId}/reset-password
 GET  /admin/dining-groups
 GET  /admin/user-entitlements?userId={userId}
 GET  /admin/app-config
@@ -431,6 +435,37 @@ DELETE /admin/app-config/login-image
 后台饭搭子状态筛选支持 `ACTIVE / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
 
 `memberCount` 按当前有效长期成员口径返回，即只统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入后台列表摘要。
+
+```ts
+interface CreateAdminUserRequest {
+  operationId: UUID;
+  phone: string;
+  password: string;
+  nickname?: string;
+  status?: "ACTIVE" | "DISABLED";
+}
+
+interface UpdateAdminUserRequest {
+  operationId: UUID;
+  phone?: string;
+  nickname?: string;
+}
+
+interface SetAdminUserStatusRequest {
+  operationId: UUID;
+  status: "ACTIVE" | "DISABLED";
+}
+
+interface ResetAdminUserPasswordRequest {
+  operationId: UUID;
+  newPassword: string;
+}
+
+interface AdminResetUserPasswordResponse {
+  userId: UUID;
+  resetAt: IsoDateTime;
+}
+```
 
 ```ts
 interface AdminUserEntitlementResponse {
@@ -445,6 +480,10 @@ interface AdminUserEntitlementResponse {
   imagePolicy: EffectiveImagePolicy;
 }
 ```
+
+`POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status` 和 `POST /admin/users/{userId}/reset-password` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用和重置密码；不支持物理删除用户，也不通过后台直接改用户归属数据。
+
+用户 token 绑定服务端 `sessionVersion`。后台启用、禁用或重置密码时递增该版本；此前签发的 token 从下一次鉴权请求起统一返回 `401`，重新启用用户不会恢复旧 token。
 
 用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。它是后台审计视图，按领域分段返回，不作为小程序的聚合契约。背景图能力当前统一返回 `false`。
 

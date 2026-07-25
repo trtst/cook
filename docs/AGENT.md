@@ -79,7 +79,7 @@ Build the confirmed personal-data meal loop:
 4. Fridge and shopping data are user-owned and never become long-term shared objects.
 5. Sparse weekly plans remain personal; dining events handle invitations, participants, menus, and bring-a-dish coordination.
 6. Personal Free/Plus/Pro/Ultra plans control recipes, storage, images, variants, recycle bin, dining-group growth, and personalization.
-7. Admin supports entitlement inspection, relationship inspection, configuration, basic audit, and the content-safety surface required by visible user recipes.
+7. Admin supports user management, entitlement inspection, relationship inspection, configuration, basic audit, and the content-safety surface required by visible user recipes.
 
 V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner transfer, chat, comments, follows, delivery, price comparison, fine-grained inventory accounting, shared fridge, shared shopping, or a generic permission center.
 
