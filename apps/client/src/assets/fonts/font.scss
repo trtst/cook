@@ -1,0 +1,40 @@
+/* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
+@font-face {
+    font-family: 'cookfont';  /* Project id 5215640 */
+    src: url('//at.alicdn.com/t/c/font_5215640_govkb04suiw.woff2?t=1784968048733') format('woff2'),
+         url('//at.alicdn.com/t/c/font_5215640_govkb04suiw.woff?t=1784968048733') format('woff'),
+         url('//at.alicdn.com/t/c/font_5215640_govkb04suiw.ttf?t=1784968048733') format('truetype');
+  }
+
+.cookfont {
+    font-family: "cookfont" !important;
+    font-size: 40rpx;
+    font-style: normal;
+    /* -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale; */
+    color: var(--color-primary);
+}
+
+.icon-close::before {
+    content: "\e9eb";
+}
+
+.icon-back::before {
+    content: "\e9ee";
+}
+
+.icon-dining-event::before {
+    content: "\e625";
+}
+
+.icon-plan::before {
+    content: "\e61f";
+}
+
+.icon-shopping::before {
+    content: "\e614";
+}
+
+.icon-ingredient::before {
+    content: "\e61b";
+}

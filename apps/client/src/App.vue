@@ -22,23 +22,51 @@ onShow(() => {
 
 <style lang="scss">
 @use "@/styles/colors.scss";
+@use "@/assets/fonts/font.scss";
 @use "@/themes/skins.scss";
 
-/* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
+
+
+/* Black / Heavy / 900 */
 @font-face {
-  font-family: "阿里妈妈方圆体 VF Regular";
-  src:
-    url("//at.alicdn.com/wf/webfont/l9YzNPwvbPQs/kJBX7iP6vDbv.woff2") format("woff2"),
-    url("//at.alicdn.com/wf/webfont/l9YzNPwvbPQs/q6jC32Ou0NlF.woff") format("woff");
-  font-display: swap;
-  font-variation-settings: "BEVL" 1, "wght" 700;
+	font-family: 'SC-Black';
+	font-display: block ;
+	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCBlack.ttf") format("truetype");
+	font-weight: 900;
+	font-style: normal;
+	font-display: swap;
 }
 
-.webfont {
-  /* Chrome 140 以下版本需要显式声明可变字体轴。 */
-  font-family: "阿里妈妈方圆体 VF Regular";
-  font-variation-settings: "BEVL" 1, "wght" 700;
+/* Bold / 700 */
+@font-face {
+	font-family: 'SC-Bold';
+	font-display: block ;
+	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCBold.ttf") format("truetype");
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
 }
+
+/* Medium / 500 */
+@font-face {
+	font-family: 'SC-Medium';
+	font-display: block ;
+	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCMedium.ttf") format("truetype");
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+
+.font-black {
+	font-family: 'SC-Black';
+}
+.font-bold {
+	font-family: 'SC-Bold';
+}
+.font-medium {
+	font-family: 'SC-Medium';
+}
+
 
 page {
   min-height: 100%;

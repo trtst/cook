@@ -10,29 +10,59 @@
  */
 page,
 .theme-light {
-  --color-page: #f4f7f5;
-  --color-surface: #ffffff;
+  /*
+   * 基础兜底色，默认皮肤的正式 light 配色在 themes/default/skins.scss 中覆盖。
+   * 这里保留一份接近默认色板的安全值，用于主题 class 尚未挂载前的首屏。
+   */
+  --button-primary-gradient-start: #e7a37d;
+  --button-primary-gradient-end: #8ab7a4;
+  --button-primary-text: #fffdf8;
+  --button-primary-shadow: 0 22rpx 44rpx rgba(138, 183, 164, 0.24);
+  --color-page: #f7f3ed;
+  --color-surface: #fffdf9;
   /*
    * 遮罩色阶变量
    * 用于页面顶部弧形遮罩这类从透明到 surface 的渐变。
    * 默认皮肤在白/黑模式下分别使用对应 surface 背景色的不同透明度。
    */
-  --color-surface-mask-weak: rgba(255, 255, 255, 0.16);
-  --color-surface-mask-medium: rgba(255, 255, 255, 0.42);
-  --color-surface-mask-strong: rgba(255, 255, 255, 0.76);
-  --color-surface-muted: #eef4f1;
-  --color-text: #17231d;
-  --color-text-secondary: #425149;
-  --color-text-tertiary: #607168;
+  --color-surface-mask-weak: rgba(255, 253, 249, 0.16);
+  --color-surface-mask-medium: rgba(255, 253, 249, 0.42);
+  --color-surface-mask-strong: rgba(255, 253, 249, 0.76);
+  --color-surface-muted: #f1ebe3;
+  --color-text: #2a241d;
+  --color-text-secondary: #5e554a;
+  --color-text-tertiary: #817668;
   --color-text-inverse: #ffffff;
-  --color-primary: #216e4e;
-  --color-primary-active: #15533a;
-  --color-primary-soft: #dff1e8;
-  --color-border: rgba(23, 35, 29, 0.1);
-  --color-divider: rgba(23, 35, 29, 0.1);
-  --color-tabbar-bg: rgba(255, 255, 255, 0.9);
-  --shadow-card: 0 12rpx 32rpx rgba(23, 35, 29, 0.06);
-  --shadow-floating: 0 -8rpx 28rpx rgba(23, 35, 29, 0.08);
+  --color-primary: #baab90;
+  --color-primary-active: #a19177;
+  --color-primary-soft: rgba(186, 171, 144, 0.18);
+  --color-border: rgba(56, 44, 30, 0.1);
+  --color-divider: rgba(56, 44, 30, 0.08);
+  --color-tabbar-bg: rgba(255, 253, 249, 0.9);
+  --shadow-card: 0 12rpx 32rpx rgba(56, 44, 30, 0.06);
+  --shadow-floating: 0 -8rpx 28rpx rgba(56, 44, 30, 0.08);
+  --login-popup-backdrop-bg: rgba(15, 23, 19, 0.36);
+  --login-popup-hero-copy: var(--color-text);
+  --login-popup-hero-copy-secondary: var(--color-text-secondary);
+  --login-popup-hero-mask-spot: rgba(255, 255, 255, 0.44);
+  --login-popup-hero-mask-top: rgba(255, 255, 255, 0.02);
+  --login-popup-hero-mask-bottom: rgba(255, 255, 255, 0.48);
+  --login-popup-sheet-border: rgba(255, 255, 255, 0.3);
+  --login-popup-sheet-shadow: 0 -20rpx 60rpx rgba(66, 53, 40, 0.08);
+  --login-popup-sheet-overlay-start: rgba(255, 252, 247, 0.72);
+  --login-popup-sheet-overlay-end: rgba(255, 249, 242, 0.62);
+  --login-popup-title: var(--color-text);
+  --login-popup-description: var(--color-text-secondary);
+  --login-popup-input-bg: rgba(255, 255, 255, 0.92);
+  --login-popup-input-border: rgba(129, 111, 91, 0.14);
+  --login-popup-input-text: var(--color-text);
+  --login-popup-code-bg: var(--color-primary-soft);
+  --login-popup-code-text: var(--color-primary);
+  --login-popup-ghost-bg: rgba(255, 255, 255, 0.84);
+  --login-popup-ghost-border: rgba(129, 111, 91, 0.18);
+  --login-popup-ghost-text: var(--color-text-secondary);
+  --login-popup-hint: var(--color-text-tertiary);
+  --login-popup-error: var(--color-danger);
   color-scheme: light;
 }
 
@@ -44,6 +74,7 @@ page,
   --color-danger: #f47c35;
   --color-info: #326fa8;
   --font-family-base: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  --font-size-xxs: 20rpx;
   --font-size-xs: 22rpx;
   --font-size-sm: 24rpx;
   --font-size-md: 28rpx;
@@ -87,56 +118,111 @@ page,
 
 @media (prefers-color-scheme: dark) {
   page {
-    --color-primary: #6eca94;
-    --color-primary-active: #8ee3ae;
-    --color-primary-soft: rgba(110, 202, 148, 0.16);
-    --color-page: #0f1713;
-    --color-surface: #17211c;
+    /*
+     * 基础兜底暗色，默认皮肤 dark 正式配色在 themes/default/skins.scss 中覆盖。
+     */
+    --button-primary-gradient-start: #8fbf8c;
+    --button-primary-gradient-end: #5a9d90;
+    --button-primary-text: #0f1713;
+    --button-primary-shadow: 0 22rpx 44rpx rgba(90, 157, 144, 0.3);
+    --color-primary: #8e9f8b;
+    --color-primary-active: #a6b8a3;
+    --color-primary-soft: rgba(142, 159, 139, 0.22);
+    --color-page: #14110e;
+    --color-surface: #1b1714;
     /*
      * 遮罩色阶变量
      * 默认皮肤暗色模式使用 dark surface 背景色的不同透明度。
      */
-    --color-surface-mask-weak: rgba(23, 33, 28, 0.16);
-    --color-surface-mask-medium: rgba(23, 33, 28, 0.42);
-    --color-surface-mask-strong: rgba(23, 33, 28, 0.76);
-    --color-surface-muted: #1d2923;
-    --color-text: rgba(255, 255, 255, 0.94);
-    --color-text-secondary: rgba(255, 255, 255, 0.72);
-    --color-text-tertiary: rgba(255, 255, 255, 0.62);
+    --color-surface-mask-weak: rgba(27, 23, 20, 0.16);
+    --color-surface-mask-medium: rgba(27, 23, 20, 0.42);
+    --color-surface-mask-strong: rgba(27, 23, 20, 0.76);
+    --color-surface-muted: #26211d;
+    --color-text: rgba(255, 248, 241, 0.94);
+    --color-text-secondary: rgba(255, 241, 228, 0.72);
+    --color-text-tertiary: rgba(255, 235, 220, 0.58);
     --color-text-inverse: #0f1713;
-    --color-border: rgba(255, 255, 255, 0.12);
-    --color-divider: rgba(255, 255, 255, 0.1);
+    --color-border: rgba(255, 241, 228, 0.12);
+    --color-divider: rgba(255, 241, 228, 0.1);
     --color-success: #6eca94;
-    --color-tabbar-bg: rgba(23, 33, 28, 0.9);
+    --color-tabbar-bg: rgba(27, 23, 20, 0.9);
     --shadow-card: 0 12rpx 32rpx rgba(0, 0, 0, 0.22);
     --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.26);
+    --login-popup-backdrop-bg: rgba(4, 8, 6, 0.48);
+    --login-popup-hero-copy: var(--color-text);
+    --login-popup-hero-copy-secondary: var(--color-text-secondary);
+    --login-popup-hero-mask-spot: rgba(255, 255, 255, 0.18);
+    --login-popup-hero-mask-top: rgba(10, 16, 12, 0.08);
+    --login-popup-hero-mask-bottom: rgba(10, 16, 12, 0.52);
+    --login-popup-sheet-border: rgba(255, 255, 255, 0.14);
+    --login-popup-sheet-shadow: 0 -20rpx 60rpx rgba(0, 0, 0, 0.26);
+    --login-popup-sheet-overlay-start: rgba(28, 39, 33, 0.76);
+    --login-popup-sheet-overlay-end: rgba(18, 27, 22, 0.84);
+    --login-popup-title: var(--color-text);
+    --login-popup-description: var(--color-text-secondary);
+    --login-popup-input-bg: rgba(255, 255, 255, 0.08);
+    --login-popup-input-border: rgba(255, 255, 255, 0.12);
+    --login-popup-input-text: var(--color-text);
+    --login-popup-code-bg: var(--color-primary-soft);
+    --login-popup-code-text: var(--color-primary-active);
+    --login-popup-ghost-bg: rgba(255, 255, 255, 0.08);
+    --login-popup-ghost-border: rgba(255, 255, 255, 0.12);
+    --login-popup-ghost-text: var(--color-text);
+    --login-popup-hint: var(--color-text-tertiary);
+    --login-popup-error: #ff9c7f;
     color-scheme: dark;
   }
 }
 
 .theme-dark {
-  --color-primary: #6eca94;
-  --color-primary-active: #8ee3ae;
-  --color-primary-soft: rgba(110, 202, 148, 0.16);
-  --color-page: #0f1713;
-  --color-surface: #17211c;
+  --button-primary-gradient-start: #8fbf8c;
+  --button-primary-gradient-end: #5a9d90;
+  --button-primary-text: #0f1713;
+  --button-primary-shadow: 0 22rpx 44rpx rgba(90, 157, 144, 0.3);
+  --color-primary: #8e9f8b;
+  --color-primary-active: #a6b8a3;
+  --color-primary-soft: rgba(142, 159, 139, 0.22);
+  --color-page: #14110e;
+  --color-surface: #1b1714;
   /*
    * 遮罩色阶变量
    * 默认皮肤暗色模式使用 dark surface 背景色的不同透明度。
    */
-  --color-surface-mask-weak: rgba(23, 33, 28, 0.16);
-  --color-surface-mask-medium: rgba(23, 33, 28, 0.42);
-  --color-surface-mask-strong: rgba(23, 33, 28, 0.76);
-  --color-surface-muted: #1d2923;
-  --color-text: rgba(255, 255, 255, 0.94);
-  --color-text-secondary: rgba(255, 255, 255, 0.72);
-  --color-text-tertiary: rgba(255, 255, 255, 0.62);
+  --color-surface-mask-weak: rgba(27, 23, 20, 0.16);
+  --color-surface-mask-medium: rgba(27, 23, 20, 0.42);
+  --color-surface-mask-strong: rgba(27, 23, 20, 0.76);
+  --color-surface-muted: #26211d;
+  --color-text: rgba(255, 248, 241, 0.94);
+  --color-text-secondary: rgba(255, 241, 228, 0.72);
+  --color-text-tertiary: rgba(255, 235, 220, 0.58);
   --color-text-inverse: #0f1713;
-  --color-border: rgba(255, 255, 255, 0.12);
-  --color-divider: rgba(255, 255, 255, 0.1);
+  --color-border: rgba(255, 241, 228, 0.12);
+  --color-divider: rgba(255, 241, 228, 0.1);
   --color-success: #6eca94;
-  --color-tabbar-bg: rgba(23, 33, 28, 0.9);
+  --color-tabbar-bg: rgba(27, 23, 20, 0.9);
   --shadow-card: 0 12rpx 32rpx rgba(0, 0, 0, 0.22);
   --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.26);
+  --login-popup-backdrop-bg: rgba(4, 8, 6, 0.48);
+  --login-popup-hero-copy: var(--color-text);
+  --login-popup-hero-copy-secondary: var(--color-text-secondary);
+  --login-popup-hero-mask-spot: rgba(255, 255, 255, 0.18);
+  --login-popup-hero-mask-top: rgba(10, 16, 12, 0.08);
+  --login-popup-hero-mask-bottom: rgba(10, 16, 12, 0.52);
+  --login-popup-sheet-border: rgba(255, 255, 255, 0.14);
+  --login-popup-sheet-shadow: 0 -20rpx 60rpx rgba(0, 0, 0, 0.26);
+  --login-popup-sheet-overlay-start: rgba(28, 39, 33, 0.76);
+  --login-popup-sheet-overlay-end: rgba(18, 27, 22, 0.84);
+  --login-popup-title: var(--color-text);
+  --login-popup-description: var(--color-text-secondary);
+  --login-popup-input-bg: rgba(255, 255, 255, 0.08);
+  --login-popup-input-border: rgba(255, 255, 255, 0.12);
+  --login-popup-input-text: var(--color-text);
+  --login-popup-code-bg: var(--color-primary-soft);
+  --login-popup-code-text: var(--color-primary-active);
+  --login-popup-ghost-bg: rgba(255, 255, 255, 0.08);
+  --login-popup-ghost-border: rgba(255, 255, 255, 0.12);
+  --login-popup-ghost-text: var(--color-text);
+  --login-popup-hint: var(--color-text-tertiary);
+  --login-popup-error: #ff9c7f;
   color-scheme: dark;
 }
