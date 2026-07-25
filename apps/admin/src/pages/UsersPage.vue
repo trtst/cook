@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Refresh, Search } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
+import { Plus, Refresh, Search } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { ApiClientError } from "@/apis/http";
-import { userApi, type AdminUserEntitlementResponse, type UserProfile } from "@/apis/user";
+import {
+  userApi,
+  type AdminUserEntitlementResponse,
+  type UserProfile
+} from "@/apis/user";
 import { useSessionStore } from "@/stores/session";
+
+type UserStatus = "ACTIVE" | "DISABLED";
+type UserFormMode = "create" | "edit";
+
 const loading = ref(false);
 const users = ref<UserProfile[]>([]);
 const total = ref(0);
@@ -12,8 +20,18 @@ const entitlementVisible = ref(false);
 const entitlementLoading = ref(false);
 const entitlement = ref<AdminUserEntitlementResponse | null>(null);
 const entitlementError = ref("");
+const userDialogVisible = ref(false);
+const userDialogMode = ref<UserFormMode>("create");
+const userSaving = ref(false);
+const editingUserId = ref<string | null>(null);
+const resetPasswordVisible = ref(false);
+const resetPasswordSaving = ref(false);
+const resetPasswordUser = ref<UserProfile | null>(null);
+const resetPasswordDraft = ref("");
 const sessionStore = useSessionStore();
 const canViewEntitlements = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
+const canManageUsers = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
+const showActionColumn = computed(() => canViewEntitlements.value || canManageUsers.value);
 let usersRequest = 0;
 let entitlementRequest = 0;
 
@@ -21,6 +39,18 @@ const query = reactive({
   page: 1,
   pageSize: 20,
   keyword: ""
+});
+
+const userForm = reactive<{
+  phone: string;
+  nickname: string;
+  password: string;
+  status: UserStatus;
+}>({
+  phone: "",
+  nickname: "",
+  password: "",
+  status: "ACTIVE"
 });
 
 async function loadUsers() {
@@ -38,7 +68,6 @@ async function loadUsers() {
     total.value = result.total;
   } catch (error) {
     if (requestId !== usersRequest) return;
-
     ElMessage.error(error instanceof Error ? error.message : "加载失败");
   } finally {
     if (requestId === usersRequest) {
@@ -93,11 +122,9 @@ async function openEntitlement(row: UserProfile) {
   try {
     const result = await userApi.getEntitlements(row.id);
     if (requestId !== entitlementRequest || !entitlementVisible.value) return;
-
     entitlement.value = result;
   } catch (error) {
     if (requestId !== entitlementRequest || !entitlementVisible.value) return;
-
     entitlement.value = null;
     entitlementError.value = getEntitlementError(error);
     ElMessage.error(entitlementError.value);
@@ -106,6 +133,149 @@ async function openEntitlement(row: UserProfile) {
       entitlementLoading.value = false;
     }
   }
+}
+
+function clearUserDialog() {
+  userSaving.value = false;
+  editingUserId.value = null;
+  userForm.phone = "";
+  userForm.nickname = "";
+  userForm.password = "";
+  userForm.status = "ACTIVE";
+}
+
+function openCreateUser() {
+  userDialogMode.value = "create";
+  clearUserDialog();
+  userDialogVisible.value = true;
+}
+
+function openEditUser(row: UserProfile) {
+  userDialogMode.value = "edit";
+  clearUserDialog();
+  editingUserId.value = row.id;
+  userForm.phone = row.phone || "";
+  userForm.nickname = row.nickname || "";
+  userForm.status = row.status === "DISABLED" ? "DISABLED" : "ACTIVE";
+  userDialogVisible.value = true;
+}
+
+function validatePhone(value: string) {
+  return /^1[3-9]\d{9}$/.test(value.trim());
+}
+
+async function submitUser() {
+  const phone = userForm.phone.trim();
+  const nickname = userForm.nickname.trim();
+
+  if (!validatePhone(phone)) {
+    ElMessage.error("请输入合法手机号");
+    return;
+  }
+
+  if (userDialogMode.value === "create" && userForm.password.trim().length < 6) {
+    ElMessage.error("初始密码至少 6 位");
+    return;
+  }
+
+  if (userDialogMode.value === "edit" && !editingUserId.value) {
+    ElMessage.error("用户信息缺失");
+    return;
+  }
+
+  userSaving.value = true;
+  try {
+    if (userDialogMode.value === "create") {
+      await userApi.create({
+        operationId: crypto.randomUUID(),
+        phone,
+        password: userForm.password.trim(),
+        nickname: nickname || undefined,
+        status: userForm.status
+      });
+      query.page = 1;
+      ElMessage.success("用户已创建");
+    } else {
+      await userApi.update(editingUserId.value!, {
+        operationId: crypto.randomUUID(),
+        phone,
+        nickname
+      });
+      ElMessage.success("用户已更新");
+    }
+
+    userDialogVisible.value = false;
+    clearUserDialog();
+    await loadUsers();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "保存失败");
+  } finally {
+    userSaving.value = false;
+  }
+}
+
+function clearResetPasswordDialog() {
+  resetPasswordSaving.value = false;
+  resetPasswordUser.value = null;
+  resetPasswordDraft.value = "";
+}
+
+function openResetPassword(row: UserProfile) {
+  resetPasswordUser.value = row;
+  resetPasswordDraft.value = "";
+  resetPasswordVisible.value = true;
+}
+
+async function submitResetPassword() {
+  if (!resetPasswordUser.value) return;
+  if (resetPasswordDraft.value.trim().length < 6) {
+    ElMessage.error("新密码至少 6 位");
+    return;
+  }
+
+  resetPasswordSaving.value = true;
+  try {
+    await userApi.resetPassword(resetPasswordUser.value.id, {
+      operationId: crypto.randomUUID(),
+      newPassword: resetPasswordDraft.value.trim()
+    });
+    resetPasswordVisible.value = false;
+    clearResetPasswordDialog();
+    ElMessage.success("密码已重置");
+    await loadUsers();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "重置失败");
+  } finally {
+    resetPasswordSaving.value = false;
+  }
+}
+
+async function toggleUserStatus(row: UserProfile, status: UserStatus) {
+  const actionText = status === "ACTIVE" ? "启用" : "禁用";
+  try {
+    await ElMessageBox.confirm(`确认${actionText}该用户吗？`, `${actionText}用户`, {
+      type: status === "ACTIVE" ? "info" : "warning",
+      confirmButtonText: actionText,
+      cancelButtonText: "取消"
+    });
+  } catch {
+    return;
+  }
+
+  try {
+    await userApi.setStatus(row.id, {
+      operationId: crypto.randomUUID(),
+      status
+    });
+    ElMessage.success(`已${actionText}`);
+    await loadUsers();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : `${actionText}失败`);
+  }
+}
+
+function statusTagType(status: string) {
+  return status === "ACTIVE" ? "success" : "warning";
 }
 
 onMounted(loadUsers);
@@ -117,12 +287,13 @@ onMounted(loadUsers);
       <el-input
         v-model="query.keyword"
         class="toolbar-search"
-        placeholder="昵称 / 手机号"
+        placeholder="UID / 昵称 / 手机号"
         clearable
         @keyup.enter="search"
       />
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
       <el-button :icon="Refresh" @click="loadUsers">刷新</el-button>
+      <el-button v-if="canManageUsers" type="success" :icon="Plus" @click="openCreateUser">新增用户</el-button>
     </div>
 
     <div class="table-panel">
@@ -138,12 +309,34 @@ onMounted(loadUsers);
             {{ row.phone || "-" }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="190" />
-        <el-table-column v-if="canViewEntitlements" label="操作" width="110" fixed="right">
+        <el-table-column v-if="showActionColumn" label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openEntitlement(row)">查看权益</el-button>
+            <el-button v-if="canViewEntitlements" link type="primary" @click="openEntitlement(row)">查看权益</el-button>
+            <el-button v-if="canManageUsers" link type="primary" @click="openEditUser(row)">编辑</el-button>
+            <el-button
+              v-if="canManageUsers && row.status === 'ACTIVE'"
+              link
+              type="warning"
+              @click="toggleUserStatus(row, 'DISABLED')"
+            >
+              禁用
+            </el-button>
+            <el-button
+              v-if="canManageUsers && row.status === 'DISABLED'"
+              link
+              type="success"
+              @click="toggleUserStatus(row, 'ACTIVE')"
+            >
+              启用
+            </el-button>
+            <el-button v-if="canManageUsers" link type="danger" @click="openResetPassword(row)">重置密码</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -161,6 +354,59 @@ onMounted(loadUsers);
         />
       </div>
     </div>
+
+    <el-dialog
+      v-model="userDialogVisible"
+      :title="userDialogMode === 'create' ? '新增用户' : '编辑用户'"
+      width="480px"
+      destroy-on-close
+      @close="clearUserDialog"
+    >
+      <el-form label-position="top">
+        <el-form-item label="手机号" required>
+          <el-input v-model="userForm.phone" maxlength="11" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="昵称">
+          <el-input v-model="userForm.nickname" maxlength="64" placeholder="留空则不设置昵称" />
+        </el-form-item>
+        <el-form-item v-if="userDialogMode === 'create'" label="初始密码" required>
+          <el-input v-model="userForm.password" type="password" show-password maxlength="128" placeholder="至少 6 位" />
+        </el-form-item>
+        <el-form-item v-if="userDialogMode === 'create'" label="状态">
+          <el-select v-model="userForm.status" style="width: 100%">
+            <el-option label="ACTIVE" value="ACTIVE" />
+            <el-option label="DISABLED" value="DISABLED" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button :disabled="userSaving" @click="userDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="userSaving" @click="submitUser">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="resetPasswordVisible"
+      title="重置密码"
+      width="420px"
+      destroy-on-close
+      @close="clearResetPasswordDialog"
+    >
+      <el-form label-position="top">
+        <el-form-item label="用户">
+          <el-text>{{ resetPasswordUser?.phone || resetPasswordUser?.nickname || resetPasswordUser?.uid || "-" }}</el-text>
+        </el-form-item>
+        <el-form-item label="新密码" required>
+          <el-input v-model="resetPasswordDraft" type="password" show-password maxlength="128" placeholder="至少 6 位" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button :disabled="resetPasswordSaving" @click="resetPasswordVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resetPasswordSaving" @click="submitResetPassword">确认重置</el-button>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="entitlementVisible" title="用户个人权益" size="560px" destroy-on-close @close="clearEntitlement">
       <el-skeleton v-if="entitlementLoading" :rows="10" animated />
@@ -233,12 +479,8 @@ onMounted(loadUsers);
         <el-divider content-position="left">图片策略</el-divider>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="质量">{{ entitlement.imagePolicy.quality }}</el-descriptions-item>
-          <el-descriptions-item label="最大宽度">
-            {{ entitlement.imagePolicy.maxWidth }} px
-          </el-descriptions-item>
-          <el-descriptions-item label="最大高度">
-            {{ entitlement.imagePolicy.maxHeight }} px
-          </el-descriptions-item>
+          <el-descriptions-item label="最大宽度">{{ entitlement.imagePolicy.maxWidth }} px</el-descriptions-item>
+          <el-descriptions-item label="最大高度">{{ entitlement.imagePolicy.maxHeight }} px</el-descriptions-item>
           <el-descriptions-item label="单图输出上限">
             {{ formatBytes(entitlement.imagePolicy.maxOutputBytes) }}
           </el-descriptions-item>
