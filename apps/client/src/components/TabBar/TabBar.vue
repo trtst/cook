@@ -1,5 +1,5 @@
 <template>
-  <view class="tabbar-shell">
+  <view class="tabbar-shell" :class="`tabbar-shell--${effectiveSkin}`">
     <view class="tabbar">
       <view
         v-for="item in TAB_ITEMS"
@@ -173,5 +173,20 @@ function switchTab(pagePath: string) {
 
 .tabbar__item--active .tabbar__font-icon {
   color: var(--entry-ink);
+}
+
+.tabbar-shell--default .tabbar__icon-wrap,
+.tabbar-shell--default .tabbar__icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+.tabbar-shell--default .tabbar__label {
+  font-size: 28rpx;
+  font-weight: var(--font-weight-bold);
+}
+
+.tabbar-shell--default .tabbar__item--active .tabbar__label {
+  font-weight: var(--font-weight-heavy);
 }
 </style>

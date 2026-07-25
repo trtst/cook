@@ -93,7 +93,7 @@ const THEME_SKIN_CONFIGS = [
     label: "基础",
     access: "free",
     palettes: ["default", "warm", "olive", "cool"],
-    tabbarAssetType: "font"
+    tabbarAssetType: "svg"
   },
   {
     value: "handdrawn-food",
