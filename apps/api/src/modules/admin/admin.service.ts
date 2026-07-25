@@ -1,3 +1,4 @@
+import { createHash, randomInt } from "node:crypto";
 import {
   BadRequestException,
   ConflictException,
@@ -7,16 +8,21 @@ import {
   NotFoundException,
   UnauthorizedException
 } from "@nestjs/common";
-import type { Prisma, DiningGroupStatus, RecipeStatus } from "@prisma/client";
+import { Prisma, type DiningGroupStatus, type RecipeStatus } from "@prisma/client";
 import type {
+  AdminResetUserPasswordResponse,
   AdminDiningGroupSummary,
   AdminRecipeSummary,
+  CreateAdminUserRequest,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
   PageResult,
   RecipeReportSummary,
+  ResetAdminUserPasswordRequest,
   RelationshipState,
+  SetAdminUserStatusRequest,
   StorageUsageSummary,
+  UpdateAdminUserRequest,
   UserProfile,
   UUID
 } from "../../contracts/types";
@@ -27,7 +33,7 @@ import {
   startAdminIdempotentOperation
 } from "../../common/idempotency";
 import { AdminTokenService } from "../../common/security/admin-token.service";
-import { verifyPassword } from "../../common/security/password";
+import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
 
 function toIsoDate(value: Date) {
@@ -42,6 +48,28 @@ function toPositiveInt(value: number | string | undefined, fallback: number) {
   }
 
   return fallback;
+}
+
+function toUserProfile(user: {
+  id: string;
+  uid: number;
+  nickname: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): UserProfile {
+  return {
+    id: user.id,
+    uid: user.uid,
+    nickname: user.nickname,
+    avatarUrl: user.avatarUrl,
+    phone: user.phone,
+    status: user.status,
+    createdAt: toIsoDate(user.createdAt),
+    updatedAt: toIsoDate(user.updatedAt)
+  };
 }
 
 @Injectable()
@@ -82,11 +110,15 @@ export class AdminService {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
-    const where = keyword
+    const normalizedKeyword = keyword?.trim();
+    const uidKeyword =
+      normalizedKeyword && /^\d{1,8}$/.test(normalizedKeyword) ? Number(normalizedKeyword) : null;
+    const where = normalizedKeyword
       ? {
           OR: [
-            { nickname: { contains: keyword, mode: "insensitive" as const } },
-            { phone: { contains: keyword, mode: "insensitive" as const } }
+            ...(uidKeyword ? [{ uid: uidKeyword }] : []),
+            { nickname: { contains: normalizedKeyword, mode: "insensitive" as const } },
+            { phone: { contains: normalizedKeyword, mode: "insensitive" as const } }
           ]
         }
       : {};
@@ -102,21 +134,226 @@ export class AdminService {
     ]);
 
     return {
-      items: items.map(user => ({
-        id: user.id,
-        uid: user.uid,
-        nickname: user.nickname,
-        avatarUrl: user.avatarUrl,
-        phone: user.phone,
-        status: user.status,
-        createdAt: toIsoDate(user.createdAt),
-        updatedAt: toIsoDate(user.updatedAt)
-      })),
+      items: items.map(user => toUserProfile(user)),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async createUser(body: CreateAdminUserRequest, adminId: UUID): Promise<UserProfile> {
+    await this.requireSuperAdmin(adminId);
+    const phone = body.phone.trim();
+    const nickname = this.readNickname(body.nickname);
+    const status = body.status ?? "ACTIVE";
+    const requestHash = `${phone}:${nickname ?? ""}:${status}:${this.hashSecret(body.password)}`;
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<UserProfile>(tx, body.operationId, "admin-user:create", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-user:create", adminId, requestHash);
+
+      const created = await this.createUserRecord(tx, {
+        phone,
+        nickname,
+        password: body.password,
+        status
+      });
+      const result = toUserProfile(created);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "USER_CREATED",
+          objectType: "USER",
+          objectId: created.id,
+          payload: { phone, status }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-user:create", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async updateUser(userId: UUID, body: UpdateAdminUserRequest, adminId: UUID): Promise<UserProfile> {
+    await this.requireSuperAdmin(adminId);
+    const patch = this.buildUserPatch(body);
+    if (Object.keys(patch).length === 0) {
+      throw new BadRequestException("至少提供一个可修改字段");
+    }
+    const requestHash = `${userId}:${patch.phone ?? ""}:${patch.nickname ?? ""}`;
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<UserProfile>(tx, body.operationId, "admin-user:update", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-user:update", adminId, requestHash);
+
+      const current = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+      if (!current) throw new NotFoundException("用户不存在");
+
+      const updated =
+        current.nickname === (patch.nickname === undefined ? current.nickname : patch.nickname) &&
+        current.phone === (patch.phone === undefined ? current.phone : patch.phone)
+          ? current
+          : await this.updateUserRecord(tx, userId, patch);
+
+      const result = toUserProfile(updated);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "USER_UPDATED",
+          objectType: "USER",
+          objectId: userId,
+          payload: patch
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-user:update", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async setUserStatus(userId: UUID, body: SetAdminUserStatusRequest, adminId: UUID): Promise<UserProfile> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${userId}:${body.status}`;
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<UserProfile>(
+        tx,
+        body.operationId,
+        "admin-user:set-status",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-user:set-status", adminId, requestHash);
+
+      const current = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+      if (!current) throw new NotFoundException("用户不存在");
+
+      const updated =
+        current.status === body.status
+          ? current
+          : await tx.user.update({
+              where: { id: userId },
+              data: {
+                status: body.status,
+                sessionVersion: { increment: 1 }
+              },
+              select: {
+                id: true,
+                uid: true,
+                nickname: true,
+                avatarUrl: true,
+                phone: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true
+              }
+            });
+
+      const result = toUserProfile(updated);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "USER_STATUS_CHANGED",
+          objectType: "USER",
+          objectId: userId,
+          payload: { status: body.status }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-user:set-status", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async resetUserPassword(
+    userId: UUID,
+    body: ResetAdminUserPasswordRequest,
+    adminId: UUID
+  ): Promise<AdminResetUserPasswordResponse> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${userId}:${this.hashSecret(body.newPassword)}`;
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminResetUserPasswordResponse>(
+        tx,
+        body.operationId,
+        "admin-user:reset-password",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-user:reset-password", adminId, requestHash);
+
+      const current = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true }
+      });
+      if (!current) throw new NotFoundException("用户不存在");
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: hashPassword(body.newPassword),
+          sessionVersion: { increment: 1 }
+        },
+        select: {
+          id: true,
+          updatedAt: true
+        }
+      });
+
+      const result = {
+        userId: updated.id,
+        resetAt: toIsoDate(updated.updatedAt)
+      } satisfies AdminResetUserPasswordResponse;
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "USER_PASSWORD_RESET",
+          objectType: "USER",
+          objectId: userId,
+          payload: {}
+        }
+      });
+      await completeAdminIdempotentOperation(
+        tx,
+        body.operationId,
+        "admin-user:reset-password",
+        adminId,
+        requestHash,
+        result
+      );
+      return result;
+    });
   }
 
   async listDiningGroups(
@@ -597,5 +834,110 @@ export class AdminService {
     if (!admin || admin.status !== "ACTIVE" || !admin.roles.includes("SUPER_ADMIN")) {
       throw new ForbiddenException("无权执行该操作");
     }
+  }
+
+  private readNickname(value?: string) {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private buildUserPatch(body: UpdateAdminUserRequest) {
+    const patch: {
+      nickname?: string | null;
+      phone?: string;
+    } = {};
+    if (body.nickname !== undefined) {
+      patch.nickname = this.readNickname(body.nickname);
+    }
+    if (body.phone !== undefined) {
+      patch.phone = body.phone.trim();
+    }
+    return patch;
+  }
+
+  private async createUserRecord(
+    tx: Prisma.TransactionClient,
+    input: {
+      phone: string;
+      password: string;
+      nickname: string | null;
+      status: "ACTIVE" | "DISABLED";
+    }
+  ) {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        return await tx.user.create({
+          data: {
+            uid: this.createUid(),
+            phone: input.phone,
+            nickname: input.nickname,
+            passwordHash: hashPassword(input.password),
+            status: input.status
+          },
+          select: {
+            id: true,
+            uid: true,
+            nickname: true,
+            avatarUrl: true,
+            phone: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+          throw error;
+        }
+        const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
+        if (targets.includes("phone")) {
+          throw new ConflictException("手机号已存在");
+        }
+        if (!targets.includes("uid")) {
+          throw error;
+        }
+      }
+    }
+
+    throw new BadRequestException("创建用户失败，请稍后重试");
+  }
+
+  private async updateUserRecord(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    patch: { nickname?: string | null; phone?: string }
+  ) {
+    try {
+      return await tx.user.update({
+        where: { id: userId },
+        data: patch,
+        select: {
+          id: true,
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
+        if (targets.includes("phone")) {
+          throw new ConflictException("手机号已存在");
+        }
+      }
+      throw error;
+    }
+  }
+
+  private createUid() {
+    return randomInt(10_000_000, 100_000_000);
+  }
+
+  private hashSecret(value: string) {
+    return createHash("sha256").update(value).digest("hex");
   }
 }

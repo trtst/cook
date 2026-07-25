@@ -14,6 +14,7 @@
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "verify:admin-readonly-flow": "tsx scripts/verify-admin-readonly-flow.ts",
+    "verify:admin-user-management-flow": "tsx scripts/verify-admin-user-management-flow.ts",
     "verify:admin-recipe-flow": "tsx scripts/verify-admin-recipe-flow.ts",
     "verify:dto-flow": "tsx scripts/verify-dto-flow.ts",
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",

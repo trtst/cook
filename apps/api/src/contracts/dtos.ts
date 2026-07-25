@@ -151,6 +151,60 @@ export class OperationDto {
   operationId!: string;
 }
 
+export class CreateAdminUserDto extends OperationDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ example: "change-me" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  password!: string;
+
+  @ApiPropertyOptional({ example: "小明" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  nickname?: string;
+
+  @ApiPropertyOptional({ example: "ACTIVE" })
+  @IsOptional()
+  @IsIn(["ACTIVE", "DISABLED"])
+  status?: "ACTIVE" | "DISABLED";
+}
+
+export class UpdateAdminUserDto extends OperationDto {
+  @ApiPropertyOptional({ example: "小明" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  nickname?: string;
+
+  @ApiPropertyOptional({ example: "13800000000" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone?: string;
+}
+
+export class SetAdminUserStatusDto extends OperationDto {
+  @ApiProperty({ example: "DISABLED" })
+  @IsIn(["ACTIVE", "DISABLED"])
+  status!: "ACTIVE" | "DISABLED";
+}
+
+export class ResetAdminUserPasswordDto extends OperationDto {
+  @ApiProperty({ example: "change-me-2" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  newPassword!: string;
+}
+
 export class UpdateLoginImageDto extends OperationDto {}
 
 export class VersionedOperationDto extends OperationDto {

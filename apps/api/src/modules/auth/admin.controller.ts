@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
@@ -11,13 +11,18 @@ import {
   AdminRecipeReportQueryDto,
   AdminUserEntitlementQueryDto,
   BlockRecipeDto,
+  CreateAdminUserDto,
   OperationDto,
   PageQueryDto,
-  ResolveRecipeReportDto
+  ResetAdminUserPasswordDto,
+  ResolveRecipeReportDto,
+  SetAdminUserStatusDto,
+  UpdateAdminUserDto
 } from "../../contracts/dtos";
 import {
   AdminDiningGroupModel,
   AdminLoginResultModel,
+  AdminResetUserPasswordResultModel,
   AdminRecipeModel,
   AdminUserEntitlementModel,
   ApiOkModel,
@@ -45,6 +50,50 @@ export class AdminController {
   @ApiOkPage(UserProfileModel, "后台用户只读查询")
   listUsers(@Query() query: PageQueryDto) {
     return this.adminService.listUsers(query.page, query.pageSize, query.keyword).then(result => ok(result));
+  }
+
+  @Post("users")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(UserProfileModel, "后台创建一个用户")
+  createUser(@Req() request: RequestWithAdmin, @Body() body: CreateAdminUserDto) {
+    return this.adminService.createUser(body, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("users/:userId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(UserProfileModel, "后台更新一个用户的昵称或手机号")
+  updateUser(
+    @Req() request: RequestWithAdmin,
+    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Body() body: UpdateAdminUserDto
+  ) {
+    return this.adminService.updateUser(userId, body, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("users/:userId/status")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(UserProfileModel, "后台启用或禁用一个用户")
+  setUserStatus(
+    @Req() request: RequestWithAdmin,
+    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Body() body: SetAdminUserStatusDto
+  ) {
+    return this.adminService.setUserStatus(userId, body, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("users/:userId/reset-password")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminResetUserPasswordResultModel, "后台重置一个用户的登录密码")
+  resetUserPassword(
+    @Req() request: RequestWithAdmin,
+    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Body() body: ResetAdminUserPasswordDto
+  ) {
+    return this.adminService.resetUserPassword(userId, body, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("dining-groups")

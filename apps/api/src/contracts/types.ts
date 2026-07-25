@@ -277,6 +277,35 @@ export interface AdminUserEntitlementResponse {
   imagePolicy: EffectiveImagePolicy;
 }
 
+export interface CreateAdminUserRequest {
+  operationId: UUID;
+  phone: string;
+  password: string;
+  nickname?: string;
+  status?: "ACTIVE" | "DISABLED";
+}
+
+export interface UpdateAdminUserRequest {
+  operationId: UUID;
+  phone?: string;
+  nickname?: string;
+}
+
+export interface SetAdminUserStatusRequest {
+  operationId: UUID;
+  status: "ACTIVE" | "DISABLED";
+}
+
+export interface ResetAdminUserPasswordRequest {
+  operationId: UUID;
+  newPassword: string;
+}
+
+export interface AdminResetUserPasswordResponse {
+  userId: UUID;
+  resetAt: IsoDateTime;
+}
+
 export interface RecipeIngredientInput {
   name: string;
   amount: string;

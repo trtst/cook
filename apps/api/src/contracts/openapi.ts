@@ -269,6 +269,11 @@ export class AdminUserEntitlementModel {
   @ApiProperty({ type: ImagePolicyModel }) imagePolicy!: ImagePolicyModel;
 }
 
+export class AdminResetUserPasswordResultModel {
+  @ApiProperty(uuid) userId!: string;
+  @ApiProperty(dateTime) resetAt!: string;
+}
+
 export class AdminDiningGroupModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
