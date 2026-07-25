@@ -46,12 +46,9 @@
               <view class="profile-row__main">
                 <view class="profile-row__name-line">
                   <text class="profile-row__name">{{ profileName }}</text>
-                  <text class="profile-row__tier">{{ personalTierText }}</text>
+                  <TierBadge v-if="sessionStore.isLoggedIn" :tier="userStore.profile?.membership?.tier" />
                 </view>
                 <text class="profile-row__uid">{{ profileUidText }}</text>
-                <view v-if="profileChips.length" class="profile-row__chips">
-                  <text v-for="chip in profileChips" :key="chip" class="profile-row__chip">{{ chip }}</text>
-                </view>
               </view>
 
               <view
@@ -60,7 +57,7 @@
                 hover-stay-time="100"
                 @click="handleProfileAction"
               >
-                <text class="profile-row__edit-arrow">›</text>
+                <text class="profile-row__edit-arrow cookfont icon-back" aria-hidden="true" />
               </view>
             </view>
 
@@ -74,7 +71,7 @@
                 @click="handleEntryClick(item)"
               >
                 <view class="quick-entry__icon-wrap">
-                  <text class="quick-entry__icon">{{ item.icon }}</text>
+                  <image class="quick-entry__icon" :src="item.iconSrc" mode="aspectFit" />
                 </view>
                 <text class="quick-entry__title">{{ item.title }}</text>
                 <text v-if="isDisabledEntry(item)" class="quick-entry__badge">待开放</text>
@@ -107,16 +104,14 @@
               @click="handleDiningGroupManage"
             >
               <view class="overview-heading">
-                <text class="overview-heading__title">饭搭子关系</text>
+                <text class="overview-heading__title">饭搭子</text>
                 <text class="overview-heading__arrow">›</text>
               </view>
-              <text class="dining-card__description">{{ diningGroupDescription }}</text>
+              <text class="dining-card__description">一起决定下一顿吃什么</text>
 
-              <view v-if="diningGroupStats.length" class="dining-card__stats">
-                <view v-for="item in diningGroupStats" :key="item.label" class="dining-stat">
-                  <text class="dining-stat__value">{{ item.value }}</text>
-                  <text class="dining-stat__label">{{ item.label }}</text>
-                </view>
+              <view v-if="hasDiningGroup" class="dining-card__summary">
+                <text class="dining-card__count">{{ diningGroupCountText }}</text>
+                <text class="dining-card__current">{{ diningGroupCurrentText }}</text>
               </view>
               <text v-else class="dining-card__invite">{{ diningGroupInviteText }}</text>
             </view>
@@ -139,7 +134,7 @@
           </view>
 
           <view class="service-section">
-            <text class="service-section__title">其他个人服务</text>
+            <text class="service-section__title">个人服务</text>
             <view class="service-list">
               <view
                 v-for="item in personalEntries"
@@ -150,7 +145,7 @@
                 @click="handleEntryClick(item)"
               >
                 <view class="service-row__icon-wrap">
-                  <text class="service-row__icon">{{ item.icon }}</text>
+                  <image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
                 </view>
                 <view class="service-row__copy">
                   <text class="service-row__title">{{ item.title }}</text>
@@ -173,7 +168,7 @@
                 @click="handleEntryClick(item)"
               >
                 <view class="knowledge-entry__icon-wrap">
-                  <text class="knowledge-entry__icon">{{ item.icon }}</text>
+                  <image class="knowledge-entry__icon" :src="item.iconSrc" mode="aspectFit" />
                 </view>
                 <text class="knowledge-entry__title">{{ item.title }}</text>
                 <text class="knowledge-entry__description">{{ item.description }}</text>
@@ -191,7 +186,7 @@
                 @click="themePanelOpen = !themePanelOpen"
               >
                 <view class="service-row__icon-wrap">
-                  <text class="service-row__icon">肤</text>
+                  <image class="service-row__icon" :src="themeIcon" mode="aspectFit" />
                 </view>
                 <view class="service-row__copy">
                   <text class="service-row__title">皮肤主题</text>
@@ -262,7 +257,7 @@
                 @click="handleEntryClick(item)"
               >
                 <view class="service-row__icon-wrap">
-                  <text class="service-row__icon">{{ item.icon }}</text>
+                  <image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
                 </view>
                 <view class="service-row__copy">
                   <text class="service-row__title">{{ item.title }}</text>
@@ -390,7 +385,27 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { ApiClientError } from "@/apis/http";
+import aboutIcon from "@/assets/me-actions/about.svg";
+import categoriesUnitsIcon from "@/assets/me-actions/categories-units.svg";
+import cookingSkillsIcon from "@/assets/me-actions/cooking-skills.svg";
+import cookwareIcon from "@/assets/me-actions/cookware.svg";
+import diningEventIcon from "@/assets/me-actions/dining-event.svg";
+import feedbackIcon from "@/assets/me-actions/feedback.svg";
+import ingredientCatalogIcon from "@/assets/me-actions/ingredient-catalog.svg";
+import kitchenPrepIcon from "@/assets/me-actions/kitchen-prep.svg";
+import logoutIcon from "@/assets/me-actions/logout.svg";
+import mealPlanIcon from "@/assets/me-actions/meal-plan.svg";
+import notificationsIcon from "@/assets/me-actions/notifications.svg";
+import pantryIcon from "@/assets/me-actions/pantry.svg";
+import passwordIcon from "@/assets/me-actions/password.svg";
+import privacyIcon from "@/assets/me-actions/privacy.svg";
+import recipeSkillsIcon from "@/assets/me-actions/recipe-skills.svg";
+import remindersIcon from "@/assets/me-actions/reminders.svg";
+import shoppingListIcon from "@/assets/me-actions/shopping-list.svg";
+import tasteIcon from "@/assets/me-actions/taste.svg";
+import themeIcon from "@/assets/me-actions/theme.svg";
 import { userApi } from "@/apis/user";
+import TierBadge from "@/components/TierBadge/TierBadge.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
@@ -404,7 +419,7 @@ import { restoreAppSession } from "@/utils/session";
 
 interface PageEntry {
   title: string;
-  icon: string;
+  iconSrc: string;
   url?: string;
   disabledText?: string;
   description?: string;
@@ -447,7 +462,6 @@ const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profil
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 
-const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
 const currentRelation = computed(() => diningGroupStore.currentRelationSummary);
 const relationUsage = computed(() => diningGroupStore.relationUsage);
 const profileHeroStyle = computed(() => ({
@@ -464,44 +478,19 @@ const profileAvatarText = computed(() => {
   return profileName.value.trim().slice(0, 1) || "我";
 });
 const profileUidText = computed(() =>
-  sessionStore.isLoggedIn ? `UID ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
+  sessionStore.isLoggedIn ? `UID: ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
-const personalTierText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录";
-  return getTierText(userStore.profile?.membership?.tier);
+const hasDiningGroup = computed(() => Boolean(currentRelation.value && relationUsage.value));
+const diningGroupCountText = computed(() => {
+  if (!relationUsage.value) return "已加入 0 个";
+  return `已加入 ${relationUsage.value.joinedCount} 个`;
 });
-const profileChips = computed(() => {
-  if (!sessionStore.isLoggedIn) return [];
-
-  return [`个人 ${getTierText(userStore.profile?.membership?.tier)}`];
-});
-const diningGroupDescription = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后查看你的饭搭子关系和个人权益。";
-  if (!currentRelation.value) return "饭搭子关系加载中";
-  return `${currentRelation.value.name} · 只管理成员关系，不切换个人菜谱、冰箱和计划。`;
+const diningGroupCurrentText = computed(() => {
+  if (!currentRelation.value) return "";
+  return `当前：${currentRelation.value.name} · ${getRoleText(currentRelation.value.myRole)}`;
 });
 const diningGroupInviteText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后可以邀请饭搭子加入";
-  if (!currentRelation.value) return "饭搭子关系加载中";
-  return "查看成员、邀请关系和当前个人权益摘要";
-});
-const diningGroupStats = computed(() => {
-  if (!currentRelation.value || !relationUsage.value) return [];
-
-  return [
-    {
-      value: getRoleText(currentRelation.value.myRole),
-      label: "我的身份"
-    },
-    {
-      value: `${relationUsage.value.joinedCount} / ${relationUsage.value.joinLimit}`,
-      label: "已加入"
-    },
-    {
-      value: relationUsage.value.ownedCount,
-      label: "已主理"
-    }
-  ];
+  return "把链接分享给饭搭子，点开就能加入。";
 });
 const currentThemeText = computed(() => {
   const modeLabel = themeModeLabels[themeMode.value];
@@ -529,22 +518,21 @@ const paletteLabels: Record<ThemePalette, string> = {
 const coreEntries: PageEntry[] = [
   {
     title: "饭局",
-    icon: "局",
-    disabledText: "饭局"
+    iconSrc: diningEventIcon
   },
   {
     title: "计划",
-    icon: "计",
+    iconSrc: mealPlanIcon,
     url: "/pages_meal/plan/index"
   },
   {
     title: "购物清单",
-    icon: "购",
+    iconSrc: shoppingListIcon,
     url: "/pages_pantry/list/index"
   },
   {
     title: "食材",
-    icon: "材",
+    iconSrc: pantryIcon,
     url: "/pages_pantry/index/index"
   }
 ];
@@ -552,31 +540,31 @@ const coreEntries: PageEntry[] = [
 const personalEntries: PageEntry[] = [
   {
     title: "消息通知",
-    icon: "讯",
+    iconSrc: notificationsIcon,
     description: "饭局邀请、计划进度和系统消息",
     disabledText: "消息通知"
   },
   {
     title: "我的口味",
-    icon: "味",
+    iconSrc: tasteIcon,
     description: "口味偏好、忌口和过敏信息",
     url: "/pages_me/taste/index"
   },
   {
     title: "分类与单位",
-    icon: "类",
+    iconSrc: categoriesUnitsIcon,
     description: "蔬菜、肉蛋奶、水产海鲜｜克、千克、斤、升、个",
     disabledText: "分类与单位"
   },
   {
     title: "食材",
-    icon: "材",
+    iconSrc: ingredientCatalogIcon,
     description: "土豆、小葱等基础食材资料",
     disabledText: "食材资料"
   },
   {
     title: "厨具",
-    icon: "具",
+    iconSrc: cookwareIcon,
     description: "平底锅等常用厨具资料",
     disabledText: "厨具"
   }
@@ -585,19 +573,19 @@ const personalEntries: PageEntry[] = [
 const knowledgeEntries: PageEntry[] = [
   {
     title: "烹饪技巧",
-    icon: "烹",
+    iconSrc: cookingSkillsIcon,
     description: "火候与做法",
     disabledText: "烹饪技巧"
   },
   {
     title: "厨房准备",
-    icon: "备",
+    iconSrc: kitchenPrepIcon,
     description: "备菜与收纳",
     disabledText: "厨房准备"
   },
   {
     title: "食谱技巧",
-    icon: "谱",
+    iconSrc: recipeSkillsIcon,
     description: "配方与替换",
     disabledText: "食谱技巧"
   }
@@ -606,7 +594,7 @@ const knowledgeEntries: PageEntry[] = [
 const accountSettingEntries: PageEntry[] = [
   {
     title: "修改密码",
-    icon: "安",
+    iconSrc: passwordIcon,
     description: "更新当前账号登录密码",
     action: "change-password"
   }
@@ -615,22 +603,22 @@ const accountSettingEntries: PageEntry[] = [
 const supportSettingEntries: PageEntry[] = [
   {
     title: "消息提醒",
-    icon: "铃",
+    iconSrc: remindersIcon,
     disabledText: "消息提醒"
   },
   {
     title: "隐私保护",
-    icon: "隐",
+    iconSrc: privacyIcon,
     disabledText: "隐私保护"
   },
   {
     title: "帮助与反馈",
-    icon: "帮",
+    iconSrc: feedbackIcon,
     disabledText: "帮助与反馈"
   },
   {
     title: `关于${APP_NAME}`,
-    icon: "关",
+    iconSrc: aboutIcon,
     disabledText: `关于${APP_NAME}`
   }
 ];
@@ -646,19 +634,12 @@ const visibleSettingEntries = computed(() => {
     ...entries,
     {
       title: "退出登录",
-      icon: "退",
+      iconSrc: logoutIcon,
       description: "清除当前账号会话",
       action: "logout" as const
     }
   ];
 });
-
-function getTierText(tier?: "FREE" | "PLUS" | "PRO" | "ULTRA") {
-  if (tier === "ULTRA") return "Ultra";
-  if (tier === "PRO") return "Pro";
-  if (tier === "PLUS") return "Plus";
-  return "Free";
-}
 
 function getRoleText(role?: "OWNER" | "ADMIN" | "MEMBER") {
   if (role === "OWNER") return "主理人";
@@ -755,14 +736,7 @@ async function handlePaletteChange(palette: ThemePalette) {
 }
 
 function handleDiningGroupManage() {
-  requireLogin(() => {
-    if (currentDiningGroup.value) {
-      navigateTo("/pages_restaurant/members/index");
-      return;
-    }
-
-    void loadMe();
-  });
+  navigateTo("/pages_restaurant/members/index");
 }
 
 function handleEntryClick(entry: PageEntry) {
@@ -1170,38 +1144,11 @@ function getPasswordErrorText(error: unknown) {
   white-space: nowrap;
 }
 
-.profile-row__tier {
-  flex: 0 0 auto;
-  margin-left: 10rpx;
-  padding: 4rpx 12rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
 .profile-row__uid {
   display: block;
   margin-top: 10rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
-}
-
-.profile-row__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  margin-top: 14rpx;
-}
-
-.profile-row__chip {
-  padding: 4rpx 12rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
 }
 
 .profile-row__edit {
@@ -1219,9 +1166,9 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .profile-row__edit-arrow {
-  margin-left: 6rpx;
-  font-size: var(--font-size-lg);
+  font-size: 30rpx;
   line-height: 1;
+  transform: rotate(180deg);
 }
 
 .quick-grid {
@@ -1250,14 +1197,12 @@ function getPasswordErrorText(error: unknown) {
   justify-content: center;
   width: 62rpx;
   height: 62rpx;
-  border-radius: var(--radius-lg);
-  background: var(--color-primary-soft);
 }
 
 .quick-entry__icon {
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
+  display: block;
+  width: 64rpx;
+  height: 64rpx;
 }
 
 .quick-entry__title {
@@ -1283,7 +1228,7 @@ function getPasswordErrorText(error: unknown) {
   position: relative;
   z-index: 2;
   margin-top: -68rpx;
-  padding: 34rpx var(--space-page) var(--space-lg);
+  padding: 0 var(--space-page) var(--space-lg);
 }
 
 .load-notice {
@@ -1328,7 +1273,6 @@ function getPasswordErrorText(error: unknown) {
 
 .dining-card {
   min-width: 0;
-  min-height: 206rpx;
   padding: 26rpx 24rpx 22rpx;
 }
 
@@ -1366,24 +1310,14 @@ function getPasswordErrorText(error: unknown) {
   margin-top: 26rpx;
 }
 
-.dining-card__stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.dining-card__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
   margin-top: 24rpx;
 }
 
-.dining-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-}
-
-.dining-stat + .dining-stat {
-  border-left: 1rpx solid var(--color-divider);
-}
-
-.dining-stat__value {
+.dining-card__count {
   overflow: hidden;
   max-width: 100%;
   color: var(--color-text);
@@ -1393,16 +1327,18 @@ function getPasswordErrorText(error: unknown) {
   white-space: nowrap;
 }
 
-.dining-stat__label {
-  margin-top: 8rpx;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-xs);
+.dining-card__current {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .medal-card {
   position: relative;
   min-width: 0;
-  min-height: 206rpx;
   overflow: hidden;
   padding: 22rpx 20rpx;
   background: linear-gradient(160deg, var(--color-primary-soft), var(--color-surface));
@@ -1489,14 +1425,12 @@ function getPasswordErrorText(error: unknown) {
   justify-content: center;
   width: 58rpx;
   height: 58rpx;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
 }
 
 .service-row__icon {
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
+  display: block;
+  width: 58rpx;
+  height: 58rpx;
 }
 
 .service-row__copy {
@@ -1560,14 +1494,12 @@ function getPasswordErrorText(error: unknown) {
   justify-content: center;
   width: 72rpx;
   height: 72rpx;
-  border-radius: var(--radius-lg);
-  background: var(--color-primary-soft);
 }
 
 .knowledge-entry__icon {
-  color: var(--color-primary);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-heavy);
+  display: block;
+  width: 72rpx;
+  height: 72rpx;
 }
 
 .knowledge-entry__title {
