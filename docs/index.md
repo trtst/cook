@@ -94,14 +94,16 @@
   - 计划、功能执行单和评审模板。
 - `plans/minor_change_log.md`
   - 全项目中央变更时间线；小改动直接记录，大改动记录摘要并链接独立执行文档。
-- `plans/dining-group-lifecycle-plan.md`
-  - 旧共享空间生命周期计划，待新重构计划替代后标记为历史。
+- `plans/personal-data-refactor-plan.md`
+  - 当前个人数据与饭搭子关系重构计划；涉及关系模型、个人权益、菜谱、计划和后台治理时优先参考。
+- `plans/api-database-boundary-audit.md`
+  - 当前 API 与数据库边界审计基线；接口、字段和约束整改按此文执行。
 - `plans/business-development-todo.md`
   - 后续业务问题、触发时机和确认门禁，不直接规定接口或数据库约束。
 - `plans/engineering-foundation-fix.md`
   - 2026-07-24 幂等、管理员审计、迁移验证和模块状态收口的实际执行记录。
 - `archive/`
-  - 不再属于当前主路径的历史文档。
+  - 不再属于当前主路径的历史文档；`archive/plans/` 保存已被替代的旧阶段计划，不作为当前实现依据。
 
 ## 维护规则
 
@@ -112,3 +114,4 @@
 5. 主文档必须写当前项目如何做，不保留与炊火记无关的通用模板口径。
 6. 三端联合开发的功能执行单从 `templates/feature_execution_template.md` 复制到 `plans/`，只保留本轮需要协作和验收的信息。
 7. 每次交付必须更新 `plans/minor_change_log.md`；独立计划和执行文档不能替代中央时间线记录。
+8. 被替代的旧阶段方案必须移出 `plans/` 主路径；当前实现只依据顶层主文档和仍留在 `plans/` 的现行计划。

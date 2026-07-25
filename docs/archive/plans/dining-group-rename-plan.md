@@ -1,6 +1,6 @@
 # 计划：饭搭子命名迁移
 
-> **已被后续计划替代（2026-07-20）**：本文只处理 `Restaurant -> DiningGroup` 命名迁移，不包含已经确认的唯一活跃饭搭子、原空间、迁入迁出、饭局、口味、Free/Plus 和空间规则。后续工作以 `../dining-group.md`、`../configuration.md` 和 `dining-group-lifecycle-plan.md` 为准；本文保留为历史迁移记录。
+> **已归档（2026-07-25）**：本文只处理 `Restaurant -> DiningGroup` 命名迁移，不包含当前个人数据 + 多饭搭子关系模型。后续工作以 `../../dining-group.md`、`../../configuration.md` 和 `../../plans/personal-data-refactor-plan.md` 为准；本文保留为历史迁移记录。
 
 ## 目标
 

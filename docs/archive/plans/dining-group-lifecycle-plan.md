@@ -1,5 +1,7 @@
 # 饭搭子生命周期实施计划
 
+> **已归档（2026-07-25）**：本文基于旧“唯一当前空间/原空间冻结”模型，已不再指导当前实现。后续开发请改读 `../../dining-group.md`、`../../configuration.md`、`../../api-contract.md` 和 `../../plans/personal-data-refactor-plan.md`。
+
 ## 状态
 
 - 产品规则：已确认并入档。
@@ -7,9 +9,9 @@
 - API/DTO：首批生命周期契约已冻结并同步共享包。
 - 数据库：当前 Schema 和开发 migration 已落地，不做旧数据回填和多饭搭子历史迁移。
 
-当前真实代码与目标规则之间的详细差异，见 `docs/plans/current-implementation-gap.md`。
+当前真实代码与目标规则之间的详细差异，见 `current-implementation-gap.md`。
 
-首批 Prisma 模型、手写 SQL 约束和直接重构顺序，见 `docs/plans/prisma-schema-plan.md`。
+首批 Prisma 模型、手写 SQL 约束和直接重构顺序，见 `prisma-schema-plan.md`。
 
 ## 权威输入
 
@@ -18,7 +20,7 @@
 3. `docs/api-contract.md`
 4. `docs/technical.md`
 
-`docs/cook/` 和 `docs/plans/dining-group-rename-plan.md` 是历史来源；冲突时不得覆盖上述当前规则。
+`../../cook/` 和 `dining-group-rename-plan.md` 是历史来源；冲突时不得覆盖上述当前规则。
 
 ## 当前不做
 

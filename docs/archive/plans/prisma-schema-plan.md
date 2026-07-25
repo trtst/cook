@@ -1,5 +1,7 @@
 # 当前 Prisma Schema 与 SQL 实施方案
 
+> **已归档（2026-07-25）**：本文基于旧“唯一当前空间/冻结恢复”数据模型，已不再指导当前实现。后续开发请改读 `../../api-database-rules.md`、`../../dining-group.md`、`../../configuration.md` 和 `../../plans/personal-data-refactor-plan.md`。
+
 ## 状态
 
 - 当前项目尚未上线，不存在需要保留的多饭搭子或旧生命周期业务数据。

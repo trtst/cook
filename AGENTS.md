@@ -129,7 +129,7 @@ parallel code edits.
 - `docs/components.md`: frontend component rules.
 - `docs/runbook.md`: execution, debug, validation, and delivery process.
 - `docs/templates/feature_execution_template.md`: joint feature execution sheet.
-- `docs/plans/dining-group-lifecycle-plan.md`: staged v0.2 contract and implementation plan.
+- `docs/plans/personal-data-refactor-plan.md`: current personal-data and dining-group relationship refactor plan.
 
 ## Commands
 

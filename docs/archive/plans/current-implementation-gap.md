@@ -1,5 +1,7 @@
 # 当前实现差异清单
 
+> **已归档（2026-07-25）**：本文记录的是旧“唯一当前空间/迁出快照”阶段的实现差异，不再作为当前实现依据。后续开发请改读 `../../project.md`、`../../api-index.md`、`../../api-contract.md` 和 `../../plans/personal-data-refactor-plan.md`。
+
 ## 定位
 
 现有代码是尚未上线的脚手架，直接按当前产品方案重构，不保留旧业务接口、旧状态模型或多饭搭子兼容逻辑。
@@ -31,4 +33,4 @@
 
 当前空间在真实账本落地前继续返回真实 `0` 使用量和 `NORMAL`，不提前伪造空间占用。
 
-详细 Schema 与 SQL 方案见 `docs/plans/prisma-schema-plan.md`。
+详细 Schema 与 SQL 方案见 `prisma-schema-plan.md`。
