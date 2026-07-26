@@ -59,7 +59,7 @@ function getSvgIconPath(iconName: ThemeTabbarIconName, active: boolean) {
 function getFontIconClass(iconName: ThemeTabbarIconName) {
   const asset = getTabbarAsset(iconName);
 
-  if (asset?.type !== "font") return "";
+  if (asset?.type !== "icon") return "";
   return asset.className;
 }
 

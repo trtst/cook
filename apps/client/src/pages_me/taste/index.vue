@@ -290,7 +290,7 @@ function readItems(text: string) {
 .taste-form__error {
   display: block;
   margin-top: var(--space-md);
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   font-size: var(--font-size-sm);
 }
 

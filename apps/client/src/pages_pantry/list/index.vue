@@ -240,7 +240,7 @@ async function updateStatus(itemId: string, nextStatus: "BOUGHT" | "DELETED") {
 }
 
 .danger {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--color-danger-button-bg);
+  color: var(--color-danger-button-text);
 }
 </style>

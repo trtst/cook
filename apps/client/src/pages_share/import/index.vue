@@ -94,6 +94,6 @@ async function acceptInvite() {
 
 .notice {
   margin-top: var(--space-md);
-  color: var(--color-danger);
+  color: var(--color-danger-text);
 }
 </style>

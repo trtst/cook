@@ -36,8 +36,12 @@
   width: 100%;
   margin-top: 28rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #e7a37d 0%, #8ab7a4 100%);
-  color: #fffdf8;
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  color: var(--button-primary-text);
   font-size: 30rpx;
-  box-shadow: 0 18rpx 42rpx rgba(138, 183, 164, 0.24);
+  box-shadow: var(--button-primary-shadow);
 }

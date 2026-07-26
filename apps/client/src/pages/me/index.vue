@@ -7,7 +7,7 @@
     :navbar-placeholder="false"
     navbar-transparent
   >
-    <view class="me-page" :class="themeClasses">
+    <view class="me-page">
       <view class="profile-hero" :class="profileHeroVariant" :style="profileHeroStyle">
         <image
           v-if="profileCoverUrl"
@@ -431,7 +431,6 @@ const userStore = useUserStore();
 const diningGroupStore = useDiningGroupStore();
 const loginModalStore = useLoginModalStore();
 const {
-  themeClasses,
   effectiveSkin,
   effectivePalette,
   themeMode,
@@ -941,16 +940,12 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .me-page {
-  --me-card-shadow: 0 4rpx 14rpx rgba(23, 35, 29, 0.035);
+  --me-card-shadow: var(--shadow-card);
 
   min-height: 100vh;
   min-height: 100dvh;
   padding-bottom: calc(132rpx + env(safe-area-inset-bottom));
   background: var(--color-page);
-}
-
-.me-page.theme-dark {
-  --me-card-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.1);
 }
 
 .profile-hero {
@@ -1033,6 +1028,10 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .profile-hero__mask {
+  --profile-mask-solid: #000;
+  --profile-mask-strong: rgba(0, 0, 0, 0.76);
+  --profile-mask-mid: rgba(0, 0, 0, 0.42);
+
   position: absolute;
   right: 0;
   bottom: 0;
@@ -1043,42 +1042,42 @@ function getPasswordErrorText(error: unknown) {
   mask-image:
     radial-gradient(
       ellipse at 15% 100%,
-      #000 0%,
-      rgba(0, 0, 0, 0.76) 36%,
+      var(--profile-mask-solid) 0%,
+      var(--profile-mask-strong) 36%,
       transparent 72%
     ),
     radial-gradient(
       ellipse at 85% 100%,
-      #000 0%,
-      rgba(0, 0, 0, 0.76) 36%,
+      var(--profile-mask-solid) 0%,
+      var(--profile-mask-strong) 36%,
       transparent 72%
     ),
     linear-gradient(
       to bottom,
       transparent 0%,
-      rgba(0, 0, 0, 0.42) 50%,
-      #000 100%
+      var(--profile-mask-mid) 50%,
+      var(--profile-mask-solid) 100%
     );
   mask-size: 100% 100%;
   pointer-events: none;
   -webkit-mask-image:
     radial-gradient(
       ellipse at 15% 100%,
-      #000 0%,
-      rgba(0, 0, 0, 0.76) 36%,
+      var(--profile-mask-solid) 0%,
+      var(--profile-mask-strong) 36%,
       transparent 72%
     ),
     radial-gradient(
       ellipse at 85% 100%,
-      #000 0%,
-      rgba(0, 0, 0, 0.76) 36%,
+      var(--profile-mask-solid) 0%,
+      var(--profile-mask-strong) 36%,
       transparent 72%
     ),
     linear-gradient(
       to bottom,
       transparent 0%,
-      rgba(0, 0, 0, 0.42) 50%,
-      #000 100%
+      var(--profile-mask-mid) 50%,
+      var(--profile-mask-solid) 100%
     );
   -webkit-mask-size: 100% 100%;
 }
@@ -1107,7 +1106,7 @@ function getPasswordErrorText(error: unknown) {
   border: 4rpx solid var(--color-surface);
   border-radius: var(--radius-pill);
   background: var(--entry-primary-bg);
-  box-shadow: 0 8rpx 22rpx rgba(23, 35, 29, 0.12);
+  box-shadow: var(--entry-board-shadow);
 }
 
 .profile-row__avatar-image {
@@ -1350,14 +1349,14 @@ function getPasswordErrorText(error: unknown) {
   justify-content: center;
   width: 54rpx;
   height: 54rpx;
-  border: 4rpx solid rgba(255, 255, 255, 0.66);
+  border: 4rpx solid var(--medal-icon-border);
   border-radius: var(--radius-pill);
-  background: var(--color-warning);
-  box-shadow: 0 8rpx 16rpx rgba(217, 144, 47, 0.22);
+  background: var(--medal-icon-bg);
+  box-shadow: var(--medal-icon-shadow);
 }
 
 .medal-card__icon-text {
-  color: #ffffff;
+  color: var(--medal-icon-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -1584,7 +1583,7 @@ function getPasswordErrorText(error: unknown) {
   align-items: center;
   justify-content: center;
   padding: var(--space-page);
-  background: rgba(15, 23, 19, 0.5);
+  background: var(--login-popup-backdrop-bg);
 }
 
 .profile-modal__panel {
@@ -1592,7 +1591,7 @@ function getPasswordErrorText(error: unknown) {
   overflow: hidden;
   border-radius: var(--radius-sheet);
   background: var(--color-surface);
-  box-shadow: 0 28rpx 80rpx rgba(15, 23, 19, 0.24);
+  box-shadow: var(--login-popup-sheet-shadow);
 }
 
 .profile-modal__header {
@@ -1644,7 +1643,7 @@ function getPasswordErrorText(error: unknown) {
 .profile-form__error {
   display: block;
   margin-top: var(--space-lg);
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   font-size: var(--font-size-sm);
 }
 
@@ -1677,7 +1676,7 @@ function getPasswordErrorText(error: unknown) {
 .password-form__error {
   display: block;
   margin-top: var(--space-lg);
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   font-size: var(--font-size-sm);
 }
 

@@ -1,5 +1,9 @@
 <template>
-  <view class="layout" :class="[themeClasses, { 'layout--with-tabbar': showTabbar, 'layout--full-screen': fullScreen }]">
+  <view
+    class="layout"
+    :class="[themeClasses, { 'layout--with-tabbar': showTabbar, 'layout--full-screen': fullScreen }]"
+    :style="themeVars"
+  >
     <NavBar
       v-if="showNavbar"
       :title="title"
@@ -55,7 +59,7 @@ const props = withDefaults(
   }
 );
 
-const { themeClasses } = useTheme();
+const { themeClasses, themeVars } = useTheme();
 const showTabbar = computed(() => Boolean(props.currentTab));
 </script>
 

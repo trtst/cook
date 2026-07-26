@@ -8,15 +8,17 @@ export {
 
 export type {
   ThemeAssets,
-  ThemeFontAsset,
+  ThemeIconAsset,
   ThemeMode,
   ThemePalette,
+  ThemeSeed,
+  ThemeSeedSet,
   ThemeSkin,
   ThemeSkinAccess,
   ThemeSkinOption,
   ThemeSvgAsset,
   ThemeTabbarAsset,
-  ThemeTabbarAssetType,
+  ThemeAssetType,
   ThemeTabbarIconName
 } from "./config";
 
@@ -25,6 +27,8 @@ import {
   THEME_SKIN_OPTIONS,
   type ThemeAssets,
   type ThemePalette,
+  type ThemeSeed,
+  type ThemeSeedSet,
   type ThemeSkin
 } from "./config";
 
@@ -46,4 +50,30 @@ export function getSupportedPalettesForSkin(themeSkin: ThemeSkin) {
 
 export function isPaletteSupportedBySkin(themeSkin: ThemeSkin, themePalette: ThemePalette) {
   return getSupportedPalettesForSkin(themeSkin).includes(themePalette);
+}
+
+export function supportsPaletteForSkin(themeSkin: ThemeSkin) {
+  return getThemeSkinOption(themeSkin).supportsPalette;
+}
+
+export function supportsDarkForSkin(themeSkin: ThemeSkin) {
+  return getThemeSkinOption(themeSkin).supportsDark;
+}
+
+export function getThemeSeedSet(themeSkin: ThemeSkin, themePalette: ThemePalette): ThemeSeedSet | null {
+  const option = getThemeSkinOption(themeSkin);
+
+  if (option.seeds[themePalette]) {
+    return option.seeds[themePalette] ?? null;
+  }
+
+  return option.seeds[DEFAULT_THEME_PALETTE] ?? null;
+}
+
+export function getThemeSeed(themeSkin: ThemeSkin, themePalette: ThemePalette, themeMode: "light" | "dark"): ThemeSeed | null {
+  const seedSet = getThemeSeedSet(themeSkin, themePalette);
+
+  if (!seedSet) return null;
+  if (themeMode === "dark" && seedSet.dark) return seedSet.dark;
+  return seedSet.light;
 }

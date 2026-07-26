@@ -400,7 +400,7 @@ function getAvatarText(nickname: string | null) {
 }
 
 .invite-panel__error {
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   font-size: var(--font-size-sm);
 }
 </style>

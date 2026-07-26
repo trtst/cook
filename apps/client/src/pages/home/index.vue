@@ -14,7 +14,7 @@
         <text class="restaurant-bar__name">{{ restaurantName }}</text>
       </view>
     </template>
-    <view class="table-page" :class="themeClasses">
+    <view class="table-page">
       <view class="table-hero" :style="heroStyle">
         <view class="hero-main">
           <view class="hero-copy">
@@ -176,7 +176,6 @@ import { useUserStore } from "@/stores/user";
 
 const HOME_NAV_GAP = 16;
 const { navBarTotalHeight } = useSystemInfo();
-const { themeClasses } = useTheme();
 const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -262,7 +261,7 @@ function navigateTo(url: string) {
   min-height: 560rpx;
   padding: 64rpx var(--space-page) 200rpx;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(21, 27, 22, 0.1)),
+    linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),
     radial-gradient(circle at 18% 26%, var(--entry-side-mint-bg) 0, transparent 30%),
     radial-gradient(circle at 84% 18%, var(--entry-side-aqua-bg) 0, transparent 28%),
     linear-gradient(145deg, var(--entry-primary-bg), var(--entry-board-bg));
@@ -295,7 +294,7 @@ function navigateTo(url: string) {
   width: 390rpx;
   height: 390rpx;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--color-surface-mask-medium);
   content: "";
 }
 
@@ -385,8 +384,8 @@ function navigateTo(url: string) {
   width: 536rpx;
   height: 266rpx;
   border-radius: 92rpx 72rpx 0 0;
-  background: rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 0 0 1rpx rgba(255, 255, 255, 0.42);
+  background: var(--color-surface-mask-medium);
+  box-shadow: inset 0 0 0 1rpx var(--color-surface-mask-strong);
   transform: rotate(-4deg);
 }
 
@@ -399,7 +398,7 @@ function navigateTo(url: string) {
   border: var(--entry-illustration-border-width) solid var(--entry-outline);
   border-radius: 50%;
   background: var(--entry-photo-plate-bg);
-  box-shadow: 0 18rpx 38rpx rgba(41, 56, 44, 0.12);
+  box-shadow: var(--entry-board-shadow);
   transform: rotate(-8deg);
 }
 
@@ -459,7 +458,7 @@ function navigateTo(url: string) {
   border: var(--entry-illustration-border-width) solid var(--entry-outline);
   border-radius: 28rpx 28rpx 68rpx 68rpx;
   background: var(--entry-side-aqua-bg);
-  box-shadow: 0 18rpx 36rpx rgba(41, 56, 44, 0.12);
+  box-shadow: var(--entry-board-shadow);
   transform: rotate(7deg);
 }
 
@@ -550,8 +549,8 @@ function navigateTo(url: string) {
   left: 22rpx;
   height: 132rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: inset 0 0 0 1rpx rgba(20, 20, 20, 0.03);
+  background: var(--entry-photo-bg);
+  box-shadow: var(--entry-photo-shadow);
 }
 
 .feature-card__plate {
@@ -591,7 +590,7 @@ function navigateTo(url: string) {
   height: 54rpx;
   border: 5rpx solid var(--entry-outline);
   border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--entry-photo-bg);
   transform: rotate(-7deg);
 }
 
@@ -634,7 +633,7 @@ function navigateTo(url: string) {
   width: 64rpx;
   height: 64rpx;
   border-radius: 20rpx;
-  box-shadow: 0 10rpx 22rpx rgba(41, 56, 44, 0.1);
+  box-shadow: var(--shadow-card);
 }
 
 .dock-action__icon.quick-action--primary {
@@ -894,15 +893,15 @@ function navigateTo(url: string) {
 }
 
 .feed-item__avatar--rose {
-  background: #ffe1ef;
+  background: var(--entry-primary-bg);
 }
 
 .feed-item__avatar--green {
-  background: #dcf7e7;
+  background: var(--entry-side-mint-bg);
 }
 
 .feed-item__avatar--blue {
-  background: #dff3ff;
+  background: var(--entry-side-aqua-bg);
 }
 
 .feed-item__avatar-text {
@@ -996,7 +995,7 @@ function navigateTo(url: string) {
   min-height: 72rpx;
   padding: 0 18rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.56);
+  background: var(--entry-photo-bg);
 }
 
 .pantry-item__dot {
@@ -1058,15 +1057,15 @@ function navigateTo(url: string) {
 }
 
 .family-recipe__visual--warm {
-  background: linear-gradient(145deg, var(--entry-primary-bg), #ffe5b2);
+  background: linear-gradient(145deg, var(--entry-primary-bg), var(--entry-photo-plate-bg));
 }
 
 .family-recipe__visual--fresh {
-  background: linear-gradient(145deg, #dcf7e7, var(--entry-board-bg));
+  background: linear-gradient(145deg, var(--entry-side-mint-bg), var(--entry-board-bg));
 }
 
 .family-recipe__visual--cool {
-  background: linear-gradient(145deg, #dff3ff, var(--entry-board-bg));
+  background: linear-gradient(145deg, var(--entry-side-aqua-bg), var(--entry-board-bg));
 }
 
 .family-recipe__plate {

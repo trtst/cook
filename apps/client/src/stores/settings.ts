@@ -6,6 +6,7 @@ import {
 	getDefaultPaletteForSkin,
 	getSupportedPalettesForSkin,
 	isPaletteSupportedBySkin,
+	supportsDarkForSkin,
 	THEME_PALETTE_OPTIONS,
 	THEME_SKIN_OPTIONS,
 	type ThemeMode,
@@ -20,6 +21,7 @@ export {
 	getDefaultPaletteForSkin,
 	getSupportedPalettesForSkin,
 	isPaletteSupportedBySkin,
+	supportsDarkForSkin,
 	THEME_PALETTE_OPTIONS,
 	THEME_SKIN_OPTIONS
 };
