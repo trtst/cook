@@ -4,7 +4,7 @@
 
 本文是给开发人员阅读的项目总文档，描述当前仓库的产品定位、V1 范围、技术选型、工程边界和核心实现规则。
 
-AI 快速执行规则见 `AGENT.md`。饭搭子生命周期见 `dining-group.md`，会员、配置和空间规则见 `configuration.md`。`docs/cook/` 中的 Prisma、SQL 和早期产品方案只是来源材料，不覆盖当前产品规则。
+AI 快速执行规则见 `AGENT.md`。饭搭子生命周期见 `dining-group.md`，菜谱规则见 `recipe.md`，食材与单位规则见 `ingredient.md`，会员、配置和空间规则见 `configuration.md`。`docs/cook/` 中的 Prisma、SQL 和早期产品方案只是来源材料，不覆盖当前产品规则。
 
 ## 项目定位
 
@@ -22,7 +22,7 @@ Slogan：**炊烟晚，人归缓，烟火暖流年**。
 
 菜谱流转闭环：
 
-`浏览或手动创建 -> 导入为个人菜谱 -> 安排个人计划或饭局 -> 做饭并沉淀个人记录`
+`浏览灵感或手动创建 -> 收藏或进入我的 -> 安排个人计划或饭局 -> 做饭并沉淀个人记录`
 
 产品不是聊天工具。所有协作都围绕菜谱发现、饭局邀请、菜单和带菜发生；冰箱和购物清单始终属于个人。
 
@@ -32,13 +32,13 @@ V1 目标是跑通家庭下一餐闭环，包含：
 
 1. 每人最多创建一个自己主理的饭搭子，并按个人套餐加入多个饭搭子。
 2. 饭搭子只维护成员关系；加入和退出不触碰个人业务数据。
-3. 个人菜谱、固定基础版本、字段级覆盖、图片独立化、派生做法和可重算空间计量。
-4. 菜谱不设可见权限，当前通过饭搭子和分享发现，后续可扩展用户主页。
+3. “我的 / 灵感 / 合集”菜谱结构、固定基础版本、字段级覆盖、只读收藏、图片独立化、派生做法和可重算空间计量。
+4. 菜谱不设个人可配置的可见权限；灵感只展示系统内容和人工审核通过的用户推荐固定版本。
 5. 个人冰箱、稀疏周计划、个人购物清单和食材缺口。
 6. 饭局邀请、外部分享、参与状态、“我带菜”和本人饭局记录。
 7. 个人 Free/Plus/Pro/Ultra、饭搭子增长额度、回收站、降级超额限制和个性化展示。
 8. 用户级“我的口味”、过敏与忌口安全、基础审计和必要的内容治理。
-9. 系统菜谱导入、标准食材与别名治理和后台管理。
+9. 系统菜谱导入、用户菜谱受控推荐、点赞与收藏统计、统一食材和单位库、个人食材及后台审核。
 
 ## V1 不做
 
@@ -47,7 +47,7 @@ V1 明确不包含：
 1. 聊天、群聊、评论、私信、关注关系和公开家庭动态流。
 2. 外卖、食材电商、价格比对、超市导购、履约闭环和精细财务记账。
 3. 仓储级批次库存、成本核算和强制自动扣减库存。
-4. 用户公共投稿活动、优秀推荐曝光晋级和完整公开 UGC 运营闭环；用户菜谱可见仍需最小内容治理。
+4. 用户动态流、投稿活动、榜单和完整公开 UGC 运营闭环；V1 只开放菜谱固定版本的受控推荐与人工审核。
 5. 通用饭票、积分钱包、积分充值、积分商城和与当前 Plus 无关的复杂支付产品。
 6. 小票识别、OCR、AI 菜谱解析、AI 周计划和食材推荐。
 7. 冰箱、计划、购物和饭局独立图片。
@@ -187,13 +187,14 @@ V1 模块状态：
 | Auth / User / Request Boundary | Engineering Foundation | 可支持后续业务开发，具体页面流程仍按功能执行单验收 |
 | Idempotency / Audit / Outbox | Engineering Foundation | 幂等和审计可复用；Worker 不启动 |
 | DiningGroup | In Development | 多饭搭子候选实现存在，关系流程和页面行为待逐项验收 |
-| Recipe / RecipeImport | In Development | 候选版本和导入实现存在，重复导入等问题见后续 To-do |
+| Recipe / RecipeImport | In Development | 产品与页面规则见 `recipe.md` 和 `plans/recipe-execution.md`；候选实现需重新设计和验收 |
+| Ingredient / Unit | In Development | 统一库和个人项规则已确认；API、数据约束、审核与换算仍未设计 |
 | Meal / DiningEvent | In Development | 周计划和饭局候选实现存在，参与者身份约束待业务确认 |
 | Fridge / Shopping | In Development | 个人数据候选实现存在，缺口生成规则待业务确认 |
 | Share / Admin | In Development | 候选实现存在，需随对应业务纵切验收 |
-| Public | Disabled | 不开放公共投稿运营；开放前需完成内容治理验收 |
+| Inspiration / Review | In Development | 仅系统内容和人工审核通过的用户推荐版本；不扩展为通用公共 UGC |
 | Worker / Outbox | Disabled | 表保留，V1 不启动 Worker |
-| Entitlement / Membership / Storage | In Development | 四档权益候选实现存在，空间重算和额度口径延期确认 |
+| Entitlement / Membership / Storage | In Development | 收藏和草稿计量口径已确认；全量重算算法和真实计量仍待设计验收 |
 | Background Asset | Deferred | 接口保留空值和 `false`，不实现上传和资产管理 |
 | Payment | Deferred | 价格、周期和升级规则确认后再开发 |
 | Activity / Achievement | Deferred | 当前只允许客户端入口占位，不创建 API、Schema 和后台能力 |
@@ -216,12 +217,12 @@ DishConcept
 
 核心规则：
 
-1. `RecipeContentVersion` 统一承载系统模板、家庭修订、临时菜谱和公共菜谱内容。
+1. `RecipeContentVersion` 统一承载系统模板、个人修订、临时菜谱和灵感收录内容。
 2. `RecipeContentVersion` 一旦创建即不可变。
 3. 导入菜谱创建指向固定基础版本的个人入口；文本修改保存结构化覆盖，由服务端合并有效菜谱。
 4. 首次新增、替换或加工图片时，暂按当前规则固化为个人独立版本；仅删除图片保存隐藏标记。
-5. `MealPlanItem`、公共版本和分享快照必须引用具体 `RecipeContentVersion`。
-6. 系统模板升级不影响已经收录到饭搭子的固定版本。
+5. `MealPlanItem`、灵感收录版本和分享快照必须引用具体 `RecipeContentVersion`。
+6. 系统模板升级不影响已经收藏、加入计划或加入饭局的固定版本。
 7. 菜谱不设用户可配置的可见权限，但用户只能编辑自己的菜谱，广泛发现前必须具备内容治理。
 8. 来源材料中的 `RestaurantRecipe` 不进入当前 Schema；当前实现统一使用 `Recipe`。
 9. 旧技术快照没有任何计划、分享或迁出引用时可以清理；Free/Plus 均不提供用户可见编辑历史。
@@ -251,11 +252,11 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 
 1. `DishConcept` 全局 `searchKey` 唯一。
 2. 饭搭子私有 `DishConcept` 必须在饭搭子作用域内唯一。
-3. 同一用户同一来源版本只能有一个未修改的有效轻量入口。
+3. 收藏、升级为“我的”和再次导入原版的唯一性范围必须先按 `plans/recipe-execution.md` 评审；现有候选约束不得直接视为最终契约。
 4. `MealPlan` 同用户、日期、餐次只能有一个未取消计划。
 5. 每个用户同一时间只能有一份 `ACTIVE` 购物清单。
 6. `RecipeContentVersion` 的 `ingredients` 和 `steps` 不能原地更新。
-7. 公共菜谱只有安全通过后才能曝光；V1 中公共曝光保持 `NONE`，系统推荐广场不依赖用户投稿。
+7. 灵感菜谱只有通过必要的内容安全和人工审核后才能曝光；用户推荐提交必须固定版本，不能直接公开实时个人正文。
 8. `UsageQuota` 数值不能为负；饭票和积分钱包当前不建业务模型或约束。
 9. `Asset` 归属必须匹配 `scope`。
 10. `IdempotencyRecord` 在操作作用域下唯一。

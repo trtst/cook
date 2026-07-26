@@ -16,18 +16,12 @@ import type {
   DiningEventSummary,
   MealPlanSummary,
   PageResult,
-  RecipeContentPayload,
+  RecipeContentSnapshot,
   SharePreviewResponse,
   UUID
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
-import {
-  buildRecipeSearchText,
-  fromJson,
-  mergeRecipeContent,
-  toJson,
-  versionToContent
-} from "../recipe/recipe-content";
+import { fromJson, toJson, versionToContent } from "../recipe/recipe-content";
 
 type MealPlanRow = Prisma.MealPlanItemGetPayload<{
   include: {
@@ -216,7 +210,7 @@ export class MealService {
       await startIdempotentOperation(tx, operationId, "dining-event:create", userId, null, eventRequestHash);
       await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location, menu: plan.menuSnapshot }));
 
-      const menu = fromJson<RecipeContentPayload>(plan.menuSnapshot);
+      const menu = fromJson<RecipeContentSnapshot>(plan.menuSnapshot);
       const event = await tx.diningEvent.create({
         data: {
           userId,
@@ -411,15 +405,14 @@ export class MealService {
       throw new NotFoundException("分享已失效");
     }
 
-    const menu = fromJson<RecipeContentPayload>(event.menuSnapshot);
+    const menu = fromJson<RecipeContentSnapshot>(event.menuSnapshot);
     return {
       title: event.title,
       scheduledAt: toIsoDate(event.scheduledAt),
       location: event.location,
       menu: {
         name: menu.name,
-        ingredients: menu.ingredients,
-        images: menu.images
+        ingredients: menu.ingredients
       },
       organizerUid: event.user.uid
     };
@@ -479,7 +472,7 @@ export class MealService {
   }
 
   private toMealPlanSummary(item: MealPlanRow) {
-    const menu = fromJson<RecipeContentPayload>(item.menuSnapshot);
+    const menu = fromJson<RecipeContentSnapshot>(item.menuSnapshot);
     return {
       id: item.id,
       planDate: item.planDate.toISOString().slice(0, 10),
@@ -494,7 +487,7 @@ export class MealService {
   }
 
   private toDiningEventSummary(event: DiningEventRow, shareTokenPath?: string | null): DiningEventSummary {
-    const menu = fromJson<RecipeContentPayload>(event.menuSnapshot);
+    const menu = fromJson<RecipeContentSnapshot>(event.menuSnapshot);
     return {
       id: event.id,
       title: event.title,
@@ -519,54 +512,25 @@ export class MealService {
   }
 
   private getEffectiveRecipeContent(recipe: Prisma.RecipeGetPayload<{
-    include: { baseVersion: true; independentVersion: true };
+    include: { currentVersion: true };
   }>) {
-    if (recipe.independentVersion) return versionToContent(recipe.independentVersion);
-    return mergeRecipeContent(
-      versionToContent(recipe.baseVersion),
-      fromJson(recipe.overrideJson),
-      recipe.hiddenBaseImages
-    );
+    return versionToContent(recipe.currentVersion);
   }
 
   private async resolveRecipeVersion(
     tx: Prisma.TransactionClient,
     recipe: Prisma.RecipeGetPayload<{
-      include: { baseVersion: true; independentVersion: true };
+      include: { currentVersion: true };
     }>
   ) {
-    if (recipe.independentVersion) return recipe.independentVersion;
-    if (!recipe.overrideJson && recipe.hiddenBaseImages.length === 0) return recipe.baseVersion;
-
-    const content = this.getEffectiveRecipeContent(recipe);
-    return tx.recipeContentVersion.create({
-      data: {
-        createdByUserId: recipe.ownerId,
-        name: content.name,
-        ingredientsJson: toJson(content.ingredients),
-        stepsJson: toJson(content.steps),
-        servings: content.servings,
-        durationMinutes: content.durationMinutes,
-        imagesJson: toJson(content.images),
-        searchText: buildRecipeSearchText(content),
-        contentSizeBytes: sizeOfJson({
-          name: content.name,
-          ingredients: content.ingredients,
-          steps: content.steps,
-          servings: content.servings,
-          durationMinutes: content.durationMinutes,
-          images: content.images.map(item => ({ key: item.key, url: item.url }))
-        })
-      }
-    });
+    return recipe.currentVersion;
   }
 
   private async requireOwnedRecipe(tx: Prisma.TransactionClient, userId: UUID, recipeId: UUID) {
     const recipe = await tx.recipe.findUnique({
       where: { id: recipeId },
       include: {
-        baseVersion: true,
-        independentVersion: true
+        currentVersion: true
       }
     });
     if (!recipe || recipe.ownerId !== userId || recipe.status !== "ACTIVE") {

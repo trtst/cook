@@ -12,12 +12,12 @@ import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../comm
 import type {
   FridgeItemSummary,
   PageResult,
-  RecipeContentPayload,
+  RecipeContentSnapshot,
   ShoppingItemSummary,
   UUID
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
-import { fromJson } from "../recipe/recipe-content";
+import { formatRecipeAmount, fromJson } from "../recipe/recipe-content";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -245,17 +245,17 @@ export class PantryService {
     if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
 
     const ownedIngredientKeys = new Set(fridgeItems.map(item => item.name.trim().toLowerCase()));
-    const menu = fromJson<RecipeContentPayload>(event.menuSnapshot);
+    const menu = fromJson<RecipeContentSnapshot>(event.menuSnapshot);
 
     return menu.ingredients
-      .filter(item => !ownedIngredientKeys.has(item.name.trim().toLowerCase()))
+      .filter(item => !ownedIngredientKeys.has(item.ingredientName.trim().toLowerCase()))
       .map((item, index) => ({
         id: `preview-${eventId}-${index}`,
-        name: item.name,
-        quantityText: item.amount,
+        name: item.ingredientName,
+        quantityText: formatRecipeAmount(item.amount),
         note: "来自饭局菜单缺口",
-        sourceType: "EVENT",
-        sourceKey: `${eventId}:${item.name}`,
+        sourceType: "EVENT" as const,
+        sourceKey: `${eventId}:${item.ingredientId}`,
         status: "OPEN",
         updatedAt: toIsoDate(event.updatedAt)
       }));

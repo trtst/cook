@@ -306,65 +306,172 @@ export interface AdminResetUserPasswordResponse {
   resetAt: IsoDateTime;
 }
 
-export interface RecipeIngredientInput {
-  name: string;
-  amount: string;
-}
+export type RecipeDifficulty = "EASY" | "MEDIUM" | "HARD";
+export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "CONTAINER" | "PACKAGE" | "OTHER";
+export type IngredientSource = "SYSTEM" | "PERSONAL";
+export type InspirationSort = "RECOMMENDED" | "LATEST";
 
-export interface RecipeStepInput {
-  content: string;
-}
+export type RecipeAmountInput =
+  | {
+      kind: "EXACT";
+      quantity: string;
+      unitId: UUID;
+    }
+  | {
+      kind: "FUZZY";
+      text: "适量" | "少许" | "按需";
+    };
 
-export interface RecipeImageInput {
-  key: string;
-  url: string;
-  sizeBytes: number;
-}
+export type RecipeAmountSnapshot =
+  | {
+      kind: "EXACT";
+      quantity: string;
+      unitId: UUID;
+      unitName: string;
+      unitType: UnitType;
+    }
+  | {
+      kind: "FUZZY";
+      text: "适量" | "少许" | "按需";
+    };
 
-export interface RecipeContentInput {
-  name: string;
-  ingredients: RecipeIngredientInput[];
-  steps: RecipeStepInput[];
-  servings: string | null;
-  durationMinutes: number | null;
-}
-
-export interface RecipeContentPayload extends RecipeContentInput {
-  images: RecipeImageInput[];
-}
-
-export interface RecipeSummary {
+export interface RecipeCategorySummary {
   id: UUID;
-  ownerType: "USER" | "SYSTEM";
-  title: string;
-  coverImageUrl: string | null;
-  sourceRecipeId: UUID | null;
-  isCustomized: boolean;
-  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  name: string;
+  version: number;
+}
+
+export interface RecipeSceneSummary {
+  id: UUID;
+  name: string;
+  version: number;
+}
+
+export interface InspirationCategorySummary {
+  id: UUID;
+  name: string;
+  iconKey: string | null;
+}
+
+export interface IngredientCategorySummary {
+  id: UUID;
+  name: string;
+  iconKey: string | null;
+}
+
+export interface UnitSummary {
+  id: UUID;
+  name: string;
+  type: UnitType;
+  source: IngredientSource;
+}
+
+export interface IngredientSummary {
+  id: UUID;
+  name: string;
+  source: IngredientSource;
+  categoryId: UUID;
+  defaultUnit: UnitSummary;
+}
+
+export interface RecipeIngredientInput {
+  ingredientId: UUID;
+  amount: RecipeAmountInput;
+}
+
+export interface RecipeIngredientSnapshot {
+  ingredientId: UUID;
+  ingredientName: string;
+  source: IngredientSource;
+  categoryId: UUID;
+  amount: RecipeAmountSnapshot;
+}
+
+export interface RecipeStepSnapshot {
+  text: string;
+}
+
+export interface RecipeContentSnapshot {
+  name: string;
+  story: string | null;
+  baseServings: number;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  tips: string | null;
+  ingredients: RecipeIngredientSnapshot[];
+  steps: RecipeStepSnapshot[];
+}
+
+export interface RecipeDraftContentInput {
+  name: string;
+  story: string | null;
+  categoryId: UUID | null;
+  sceneIds: UUID[];
+  baseServings: number | null;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  tips: string | null;
+  ingredients: RecipeIngredientInput[];
+  steps: RecipeStepSnapshot[];
+}
+
+export interface ReorderItem {
+  id: UUID;
+  expectedVersion: number;
+}
+
+export interface RecipeDraftSummary {
+  id: UUID;
+  recipeId: UUID | null;
+  title: string | null;
+  category: RecipeCategorySummary | null;
+  version: number;
   updatedAt: IsoDateTime;
 }
 
-export interface RecipeDetail extends RecipeSummary {
-  ownerUid: number | null;
-  content: RecipeContentPayload;
-  hiddenBaseImages: string[];
-  canEdit: boolean;
-  canImport: boolean;
+export interface RecipeDraftDetail {
+  id: UUID;
+  recipeId: UUID | null;
+  version: number;
+  content: RecipeDraftContentInput;
+  category: RecipeCategorySummary | null;
+  scenes: RecipeSceneSummary[];
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface DeleteRecipeDraftResponse {
+  draftId: UUID;
+  deletedAt: IsoDateTime;
+}
+
+export interface MyRecipeSummary {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  category: RecipeCategorySummary;
+  version: number;
+  updatedAt: IsoDateTime;
+}
+
+export interface MyRecipeDetail {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  category: RecipeCategorySummary;
+  scenes: RecipeSceneSummary[];
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
+  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   version: number;
   createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
 }
 
-export interface RecipeListResult {
-  items: RecipeSummary[];
-  page: number;
-  pageSize: number;
-  total: number;
-  hasNext: boolean;
-}
-
-export interface ImportRecipeResult {
-  recipe: RecipeDetail;
-  reusedExisting: boolean;
+export interface PublishRecipeDraftResponse {
+  recipe: MyRecipeDetail;
 }
 
 export interface DeleteRecipeResponse {
@@ -372,6 +479,31 @@ export interface DeleteRecipeResponse {
   status: "RECYCLED" | "DELETED";
   deletedAt: IsoDateTime;
   recycledUntil: IsoDateTime | null;
+}
+
+export interface InspirationRecipeSummary {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  category: InspirationCategorySummary;
+  likeCount: number;
+  collectCount: number;
+  updatedAt: IsoDateTime;
+}
+
+export interface InspirationRecipeDetail {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  category: InspirationCategorySummary;
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
+  likeCount: number;
+  collectCount: number;
+  curatedByName: string | null;
+  updatedAt: IsoDateTime;
 }
 
 export interface RecipeReportSummary {
@@ -383,7 +515,12 @@ export interface RecipeReportSummary {
   createdAt: IsoDateTime;
 }
 
-export interface AdminRecipeSummary extends RecipeSummary {
+export interface AdminRecipeSummary {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  updatedAt: IsoDateTime;
   ownerUid: number | null;
   reportCount: number;
   blockedReason: string | null;
@@ -419,7 +556,7 @@ export interface DiningEventSummary {
   status: "PLANNED" | "CONFIRMED" | "CANCELLED";
   planItemId: UUID | null;
   diningGroupId: UUID | null;
-  menu: RecipeContentPayload;
+  menu: RecipeContentSnapshot;
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
   createdAt: IsoDateTime;
@@ -449,6 +586,6 @@ export interface SharePreviewResponse {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
-  menu: Pick<RecipeContentPayload, "name" | "ingredients" | "images">;
+  menu: Pick<RecipeContentSnapshot, "name" | "ingredients">;
   organizerUid: number;
 }

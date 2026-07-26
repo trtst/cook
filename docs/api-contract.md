@@ -512,47 +512,272 @@ interface UpdateTasteProfileRequest {
 
 ### 菜谱
 
-```ts
-interface RecipeContentInput {
-  name: string;
-  ingredients: RecipeIngredientInput[];
-  steps: RecipeStepInput[];
-  servings: string | null;
-  durationMinutes: number | null;
-}
-```
-
-`POST /recipes` 和 `PUT /recipes/{recipeId}` 只接受上述文本结构，当前不接受 `images`。请求包含 `images` 时返回 `400`；文本更新由服务端保留已有图片。详情响应的 `RecipeContentPayload` 仍可包含系统或历史图片的只读引用。
+菜谱 R1 已冻结为“草稿 -> 发布到我的”纵切。现有直接创建、直接更新和导入接口仍是候选实现，不属于 R1 契约；实现时直接替换，不保留旧字段 fallback。
 
 ```ts
-interface UpdateRecipeRequest {
-  operationId: UUID;
-  expectedVersion: number;
-  content: RecipeContentInput;
-}
+type RecipeDifficulty = "EASY" | "MEDIUM" | "HARD";
+type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "CONTAINER" | "PACKAGE" | "OTHER";
+type IngredientSource = "SYSTEM" | "PERSONAL";
+type InspirationSort = "RECOMMENDED" | "LATEST";
 
-interface DeleteRecipeRequest {
-  operationId: UUID;
-  expectedVersion: number;
-}
-```
+type RecipeAmountInput =
+  | { kind: "EXACT"; quantity: string; unitId: UUID }
+  | { kind: "FUZZY"; text: "适量" | "少许" | "按需" };
 
-更新和删除使用菜谱详情返回的 `version`。服务端锁定菜谱行后比较 `expectedVersion`，版本不一致返回 `409`，成功更新或删除后递增版本。创建、导入和举报不提交 `expectedVersion`。
+type RecipeAmountSnapshot =
+  | {
+      kind: "EXACT";
+      quantity: string;
+      unitId: UUID;
+      unitName: string;
+      unitType: UnitType;
+    }
+  | {
+      kind: "FUZZY";
+      text: "适量" | "少许" | "按需";
+    };
 
-```ts
-interface RecipeSummary {
+interface RecipeCategorySummary {
   id: UUID;
-  ownerType: "USER" | "SYSTEM";
+  name: string;
+  version: number;
+}
+
+interface RecipeSceneSummary {
+  id: UUID;
+  name: string;
+  version: number;
+}
+
+interface InspirationCategorySummary {
+  id: UUID;
+  name: string;
+  iconKey: string | null;
+}
+
+interface IngredientCategorySummary {
+  id: UUID;
+  name: string;
+  iconKey: string | null;
+}
+
+interface UnitSummary {
+  id: UUID;
+  name: string;
+  type: UnitType;
+  source: IngredientSource;
+}
+
+interface IngredientSummary {
+  id: UUID;
+  name: string;
+  source: IngredientSource;
+  categoryId: UUID;
+  defaultUnit: UnitSummary;
+}
+
+interface RecipeIngredientInput {
+  ingredientId: UUID;
+  amount: RecipeAmountInput;
+}
+
+interface RecipeIngredientSnapshot {
+  ingredientId: UUID;
+  ingredientName: string;
+  source: IngredientSource;
+  categoryId: UUID;
+  amount: RecipeAmountSnapshot;
+}
+
+interface RecipeStepSnapshot {
+  text: string;
+}
+
+interface RecipeContentSnapshot {
+  name: string;
+  story: string | null;
+  baseServings: number;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  tips: string | null;
+  ingredients: RecipeIngredientSnapshot[];
+  steps: RecipeStepSnapshot[];
+}
+
+interface RecipeDraftContentInput {
+  name: string;
+  story: string | null;
+  categoryId: UUID | null;
+  sceneIds: UUID[];
+  baseServings: number | null;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  tips: string | null;
+  ingredients: RecipeIngredientInput[];
+  steps: Array<{ text: string }>;
+}
+```
+
+草稿允许发布必填项暂时为空。发布时必须校验名称、有效个人分类、`1～20` 人份、至少一个有效食材和至少一个非空文本步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。R1 不接受图片字段，提交图片字段返回 `400`。
+
+```ts
+interface CreateRecipeDraftRequest {
+  operationId: UUID;
+  recipeId: UUID | null;
+  content: RecipeDraftContentInput;
+}
+
+interface UpdateRecipeDraftRequest {
+  operationId: UUID;
+  expectedVersion: number;
+  content: RecipeDraftContentInput;
+}
+
+interface PublishRecipeDraftRequest {
+  operationId: UUID;
+  expectedVersion: number;
+}
+
+interface ReorderItem {
+  id: UUID;
+  expectedVersion: number;
+}
+
+interface ReorderRecipesRequest {
+  operationId: UUID;
+  categoryId: UUID;
+  items: ReorderItem[];
+}
+
+interface RecipeDraftSummary {
+  id: UUID;
+  recipeId: UUID | null;
+  title: string | null;
+  category: RecipeCategorySummary | null;
+  version: number;
+  updatedAt: IsoDateTime;
+}
+
+interface RecipeDraftDetail {
+  id: UUID;
+  recipeId: UUID | null;
+  version: number;
+  content: RecipeDraftContentInput;
+  category: RecipeCategorySummary | null;
+  scenes: RecipeSceneSummary[];
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface DeleteRecipeDraftResponse {
+  draftId: UUID;
+  deletedAt: IsoDateTime;
+}
+
+interface PublishRecipeDraftResponse {
+  recipe: MyRecipeDetail;
+}
+```
+
+分类和场景重排提交完整作用域的 `ReorderItem[]`，分类内菜谱重排提交 `ReorderRecipesRequest`。三者都不得缺失、重复或混入越权 ID。服务端锁定最小作用域并逐项比较版本，冲突返回 `409`。
+
+```ts
+interface MyRecipeSummary {
+  id: UUID;
   title: string;
   coverImageUrl: string | null;
-  sourceRecipeId: UUID | null;
-  isCustomized: boolean;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  category: { id: UUID; name: string; version: number };
+  version: number;
+  updatedAt: IsoDateTime;
+}
+
+interface MyRecipeDetail {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  category: RecipeCategorySummary;
+  scenes: RecipeSceneSummary[];
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface InspirationRecipeSummary {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  durationMinutes: number | null;
+  category: InspirationCategorySummary;
+  likeCount: number;
+  collectCount: number;
+  updatedAt: IsoDateTime;
+}
+
+interface InspirationRecipeDetail {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  category: InspirationCategorySummary;
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
+  likeCount: number;
+  collectCount: number;
+  curatedByName: string | null;
   updatedAt: IsoDateTime;
 }
 ```
 
-现行路径为 `GET /recipes`、`GET /recipes/{recipeId}`、`POST /recipes`、`POST /recipes/{recipeId}/import`、`PUT /recipes/{recipeId}`、`POST /recipes/{recipeId}/delete` 和 `POST /recipes/{recipeId}/report`。菜谱归用户本人，饭搭子关系不改变所有权。
+R1 鉴权路径：
+
+```text
+GET/POST /recipe-categories
+PUT /recipe-categories/{categoryId}
+POST /recipe-categories/reorder
+GET/POST /recipe-scenes
+PUT /recipe-scenes/{sceneId}
+POST /recipe-scenes/reorder
+GET /ingredient-categories
+GET/POST /ingredients
+GET/POST /units
+GET/POST /recipe-drafts
+GET/PUT /recipe-drafts/{draftId}
+POST /recipe-drafts/{draftId}/delete
+POST /recipe-drafts/{draftId}/publish
+GET /recipes
+GET /recipes/{recipeId}
+POST /recipes/reorder
+POST /recipes/{recipeId}/delete
+```
+
+`GET /recipes` 只返回本人已发布菜谱，支持分页、关键词和个人分类筛选。查询参数为 `page`、`pageSize`、`keyword` 和 `categoryId`。新建和编辑正文统一经过草稿发布，R1 不注册直接 `POST /recipes` 和 `PUT /recipes/{recipeId}`。
+
+匿名灵感读取路径冻结为：
+
+```text
+GET /inspiration-categories
+GET /inspiration-recipes
+GET /inspiration-recipes/{recipeId}
+```
+
+`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `maxDurationMinutes`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。R1 先接已有系统内容；用户推荐、收藏、点赞和升级接口后续独立冻结。
+
+`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。
+
+创建和保存草稿时，服务端按以下逻辑计量草稿空间：
+
+1. 新建菜谱草稿：按整份草稿正文的逻辑大小计入 `RECIPE` 模块。
+2. 已发布菜谱编辑草稿：按 `max(0, 草稿正文大小 - 当前已发布正文大小)` 的差量计入 `RECIPE` 模块。
+3. 发布成功后删除草稿账本，写入已发布菜谱账本。
+
+个人分类和场景各最多 50 个，名称最多 20 字；菜谱名最多 120 字，故事最多 2000 字，小贴士最多 1000 字，食材名最多 64 字，单位名最多 16 字。分类 R1 不提供删除，后续删除前必须先迁移其下菜谱。
+
+完整 owner、主事实、事务、索引和数据库约束见 `plans/recipe-contract-review.md`。菜谱归用户本人，饭搭子关系不改变所有权。
 
 完整现行路径索引见 `docs/api-index.md`。新增或修改字段时，先在对应领域冻结请求和响应，再同步三端本地类型。
 

@@ -270,10 +270,60 @@ export class AdminUserEntitlementQueryDto {
 }
 
 export class RecipeListQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: "mine" })
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
   @IsOptional()
-  @IsIn(["mine", "system", "all"])
-  scope?: string;
+  @IsUUID()
+  categoryId?: string;
+}
+
+export class RecipeDraftListQueryDto extends PageQueryDto {}
+
+export class IngredientListQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ example: "ALL" })
+  @IsOptional()
+  @IsIn(["SYSTEM", "PERSONAL", "ALL"])
+  source?: string;
+}
+
+export class UnitListQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "WEIGHT" })
+  @IsOptional()
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "CONTAINER", "PACKAGE", "OTHER"])
+  type?: string;
+
+  @ApiPropertyOptional({ example: "ALL" })
+  @IsOptional()
+  @IsIn(["SYSTEM", "PERSONAL", "ALL"])
+  source?: string;
+}
+
+export class InspirationRecipeListQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ example: "RECOMMENDED" })
+  @IsOptional()
+  @IsIn(["RECOMMENDED", "LATEST"])
+  sort?: string;
+
+  @ApiPropertyOptional({ example: "EASY" })
+  @IsOptional()
+  @IsIn(["EASY", "MEDIUM", "HARD"])
+  difficulty?: string;
+
+  @ApiPropertyOptional({ example: 30 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  maxDurationMinutes?: number;
 }
 
 export class MealPlanQueryDto extends PageQueryDto {
@@ -288,36 +338,218 @@ export class MealPlanQueryDto extends PageQueryDto {
   to?: string;
 }
 
-export class RecipeIngredientDto {
+export class RecipeCategoryNameDto extends OperationDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(120)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class UpdateRecipeCategoryDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class RecipeSceneNameDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class UpdateRecipeSceneDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class ReorderItemDto {
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  id!: string;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class ReorderRecipeCategoriesDto extends OperationDto {
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
+export class ReorderRecipeScenesDto extends OperationDto {
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
+export class ReorderRecipesDto extends OperationDto {
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  categoryId!: string;
+
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
+export class CreateUnitDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16)
   name!: string;
 
+  @ApiProperty({ example: "WEIGHT" })
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "CONTAINER", "PACKAGE", "OTHER"])
+  type!: string;
+}
+
+export class CreateIngredientDto extends OperationDto {
   @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
+  @MinLength(1)
   @MaxLength(64)
-  amount!: string;
+  name!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  categoryId!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  defaultUnitId!: string;
+}
+
+export class RecipeAmountDto {
+  @ApiProperty({ example: "EXACT" })
+  @IsIn(["EXACT", "FUZZY"])
+  kind!: string;
+
+  @ApiPropertyOptional({ example: "2.5" })
+  @ValidateIf(object => object.kind === "EXACT")
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/)
+  quantity?: string;
+
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ValidateIf(object => object.kind === "EXACT")
+  @IsUUID()
+  unitId?: string;
+
+  @ApiPropertyOptional({ example: "适量" })
+  @ValidateIf(object => object.kind === "FUZZY")
+  @IsIn(["适量", "少许", "按需"])
+  text?: string;
+}
+
+export class RecipeIngredientDto {
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  ingredientId!: string;
+
+  @ApiProperty({ type: RecipeAmountDto })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => RecipeAmountDto)
+  amount!: RecipeAmountDto;
 }
 
 export class RecipeStepDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
-  @MinLength(1)
   @MaxLength(1000)
-  content!: string;
+  text!: string;
 }
 
-export class RecipeContentDto {
+export class RecipeDraftContentDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
-  @MinLength(1)
   @MaxLength(120)
   name!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 2000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(2000)
+  story!: string | null;
+
+  @ApiProperty({ nullable: true, example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  categoryId!: string | null;
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  sceneIds!: string[];
+
+  @ApiProperty({ nullable: true, minimum: 1, maximum: 20 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  baseServings!: number | null;
+
+  @ApiPropertyOptional({ nullable: true, example: "EASY" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(["EASY", "MEDIUM", "HARD"])
+  difficulty!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, minimum: 1 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  durationMinutes!: number | null;
+
+  @ApiProperty({ nullable: true, maxLength: 1000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(1000)
+  tips!: string | null;
 
   @ApiProperty({ type: [RecipeIngredientDto] })
   @IsArray()
@@ -332,41 +564,33 @@ export class RecipeContentDto {
   @ValidateNested({ each: true })
   @Type(() => RecipeStepDto)
   steps!: RecipeStepDto[];
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @ValidateIf((_object, value) => value !== null)
-  @IsString()
-  @MaxLength(64)
-  servings?: string | null;
-
-  @ApiPropertyOptional({ nullable: true })
-  @IsOptional()
-  @ValidateIf((_object, value) => value !== null)
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  durationMinutes?: number | null;
-
-  @IsEmpty({ message: "图片上传功能尚未开放" })
-  images?: never;
 }
 
-export class CreateRecipeDto extends OperationDto {
-  @ApiProperty({ type: RecipeContentDto })
+export class CreateRecipeDraftDto extends OperationDto {
+  @ApiProperty({ nullable: true, example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  recipeId!: string | null;
+
+  @ApiProperty({ type: RecipeDraftContentDto })
   @IsDefined()
   @ValidateNested()
-  @Type(() => RecipeContentDto)
-  content!: RecipeContentDto;
+  @Type(() => RecipeDraftContentDto)
+  content!: RecipeDraftContentDto;
 }
 
-export class UpdateRecipeDto extends VersionedOperationDto {
-  @ApiProperty({ type: RecipeContentDto })
+export class UpdateRecipeDraftDto extends VersionedOperationDto {
+  @ApiProperty({ type: RecipeDraftContentDto })
   @IsDefined()
   @ValidateNested()
-  @Type(() => RecipeContentDto)
-  content!: RecipeContentDto;
+  @Type(() => RecipeDraftContentDto)
+  content!: RecipeDraftContentDto;
 }
+
+export class DeleteRecipeDraftDto extends VersionedOperationDto {}
+
+export class PublishRecipeDraftDto extends VersionedOperationDto {}
 
 export class DeleteRecipeDto extends VersionedOperationDto {}
 

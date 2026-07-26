@@ -69,11 +69,6 @@ enum OutboxStatus {
   FAILED
 }
 
-enum RecipeSourceKind {
-  SYSTEM
-  USER
-}
-
 enum RecipeStatus {
   ACTIVE
   RECYCLED
@@ -81,9 +76,24 @@ enum RecipeStatus {
   DELETED
 }
 
+enum RecipeDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
 enum RecipeReportStatus {
   OPEN
   RESOLVED
+}
+
+enum UnitType {
+  WEIGHT
+  VOLUME
+  COUNT
+  CONTAINER
+  PACKAGE
+  OTHER
 }
 
 enum MealSlot {
@@ -173,8 +183,13 @@ model User {
   idempotencyRecords      IdempotencyRecord[]      @relation("IdempotencyRecordUser")
   auditEvents             AuditEvent[]             @relation("AuditEventActor")
   recipes                 Recipe[]                 @relation("RecipeOwner")
+  recipeCategories        RecipeCategory[]
+  recipeScenes            RecipeScene[]
+  recipeDrafts            RecipeDraft[]
   recipeVersions          RecipeContentVersion[]   @relation("RecipeContentAuthor")
   recipeReports           RecipeReport[]           @relation("RecipeReportReporter")
+  ingredients             Ingredient[]             @relation("IngredientOwner")
+  units                   Unit[]                   @relation("UnitOwner")
   mealPlans               MealPlanItem[]
   diningEvents            DiningEvent[]            @relation("DiningEventOwner")
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventParticipantUser")
@@ -292,13 +307,124 @@ model EntitlementGrant {
   @@map("entitlement_grants")
 }
 
+model RecipeCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(20)
+  searchKey String   @map("search_key") @db.VarChar(40)
+  sortOrder Int      @default(0) @map("sort_order")
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipes Recipe[]
+  drafts  RecipeDraft[]
+
+  @@unique([userId, searchKey])
+  @@unique([userId, sortOrder])
+  @@index([userId, sortOrder, id])
+  @@map("recipe_categories")
+}
+
+model RecipeScene {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(20)
+  searchKey String   @map("search_key") @db.VarChar(40)
+  sortOrder Int      @default(0) @map("sort_order")
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeLinks RecipeSceneLink[]
+  draftLinks  RecipeDraftScene[]
+
+  @@unique([userId, searchKey])
+  @@unique([userId, sortOrder])
+  @@index([userId, sortOrder, id])
+  @@map("recipe_scenes")
+}
+
+model InspirationCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(20)
+  iconKey   String?  @map("icon_key") @db.VarChar(64)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipes Recipe[]
+
+  @@unique([name])
+  @@unique([sortOrder])
+  @@index([sortOrder, id])
+  @@map("inspiration_categories")
+}
+
+model IngredientCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(20)
+  iconKey   String?  @map("icon_key") @db.VarChar(64)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ingredients Ingredient[]
+
+  @@unique([name])
+  @@unique([sortOrder])
+  @@index([sortOrder, id])
+  @@map("ingredient_categories")
+}
+
+model Unit {
+  id        String   @id @default(uuid()) @db.Uuid
+  ownerId   String?  @map("owner_id") @db.Uuid
+  type      UnitType
+  name      String   @db.VarChar(16)
+  searchKey String   @map("search_key") @db.VarChar(32)
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner              User?         @relation("UnitOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  defaultIngredients Ingredient[]  @relation("IngredientDefaultUnit")
+
+  @@index([ownerId, type, searchKey, id])
+  @@map("units")
+}
+
+model Ingredient {
+  id            String   @id @default(uuid()) @db.Uuid
+  ownerId       String?  @map("owner_id") @db.Uuid
+  categoryId    String   @map("category_id") @db.Uuid
+  defaultUnitId String   @map("default_unit_id") @db.Uuid
+  name          String   @db.VarChar(64)
+  searchKey     String   @map("search_key") @db.VarChar(80)
+  version       Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner       User?              @relation("IngredientOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  category    IngredientCategory @relation(fields: [categoryId], references: [id])
+  defaultUnit Unit               @relation("IngredientDefaultUnit", fields: [defaultUnitId], references: [id])
+
+  @@index([ownerId, categoryId, searchKey, id])
+  @@map("ingredients")
+}
+
 model RecipeContentVersion {
   id               String   @id @default(uuid()) @db.Uuid
   createdByUserId  String?  @map("created_by_user_id") @db.Uuid
   name             String   @db.VarChar(120)
+  story            String?  @db.VarChar(2000)
+  baseServings     Int      @map("base_servings")
+  difficulty       RecipeDifficulty?
+  tips             String?  @db.VarChar(1000)
   ingredientsJson  Json     @map("ingredients_json")
   stepsJson        Json     @map("steps_json")
-  servings         String?  @db.VarChar(64)
   durationMinutes  Int?     @map("duration_minutes")
   imagesJson       Json     @map("images_json")
   searchText       String   @map("search_text") @db.Text
@@ -306,8 +432,7 @@ model RecipeContentVersion {
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   createdByUser           User?                    @relation("RecipeContentAuthor", fields: [createdByUserId], references: [id])
-  baseRecipes             Recipe[]                 @relation("RecipeBaseVersion")
-  independentRecipes      Recipe[]                 @relation("RecipeIndependentVersion")
+  currentRecipes          Recipe[]                 @relation("RecipeCurrentVersion")
   mealPlans               MealPlanItem[]           @relation("MealPlanRecipeVersion")
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
 
@@ -317,41 +442,89 @@ model RecipeContentVersion {
 }
 
 model Recipe {
-  id                   String           @id @default(uuid()) @db.Uuid
-  ownerId              String?          @map("owner_id") @db.Uuid
-  sourceKind           RecipeSourceKind @map("source_kind")
-  sourceRecipeId       String?          @map("source_recipe_id") @db.Uuid
-  baseVersionId        String           @map("base_version_id") @db.Uuid
-  independentVersionId String?          @map("independent_version_id") @db.Uuid
-  overrideJson         Json?            @map("override_json")
-  hiddenBaseImages     String[]         @default([]) @map("hidden_base_images")
-  isCustomized         Boolean          @default(false) @map("is_customized")
-  title                String           @db.VarChar(120)
-  searchText           String           @map("search_text") @db.Text
-  coverImageUrl        String?          @map("cover_image_url") @db.VarChar(512)
-  status               RecipeStatus     @default(ACTIVE)
-  blockedReason        String?          @map("blocked_reason") @db.VarChar(255)
-  blockedAt            DateTime?        @map("blocked_at") @db.Timestamptz(3)
-  recycledUntil        DateTime?        @map("recycled_until") @db.Timestamptz(3)
-  deletedAt            DateTime?        @map("deleted_at") @db.Timestamptz(3)
-  reportCount          Int              @default(0) @map("report_count")
-  version              Int              @default(1)
-  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                    String       @id @default(uuid()) @db.Uuid
+  ownerId               String?      @map("owner_id") @db.Uuid
+  categoryId            String?      @map("category_id") @db.Uuid
+  inspirationCategoryId String?      @map("inspiration_category_id") @db.Uuid
+  currentVersionId      String       @map("current_version_id") @db.Uuid
+  title                 String       @db.VarChar(120)
+  searchText            String       @map("search_text") @db.Text
+  coverImageUrl         String?      @map("cover_image_url") @db.VarChar(512)
+  status                RecipeStatus @default(ACTIVE)
+  blockedReason         String?      @map("blocked_reason") @db.VarChar(255)
+  blockedAt             DateTime?    @map("blocked_at") @db.Timestamptz(3)
+  recycledUntil         DateTime?    @map("recycled_until") @db.Timestamptz(3)
+  deletedAt             DateTime?    @map("deleted_at") @db.Timestamptz(3)
+  reportCount           Int          @default(0) @map("report_count")
+  likeCount             Int          @default(0) @map("like_count")
+  collectCount          Int          @default(0) @map("collect_count")
+  sortOrder             Int          @default(0) @map("sort_order")
+  version               Int          @default(1)
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner                   User?                    @relation("RecipeOwner", fields: [ownerId], references: [id])
-  sourceRecipe            Recipe?                  @relation("RecipeSource", fields: [sourceRecipeId], references: [id])
-  importedRecipes         Recipe[]                 @relation("RecipeSource")
-  baseVersion             RecipeContentVersion     @relation("RecipeBaseVersion", fields: [baseVersionId], references: [id])
-  independentVersion      RecipeContentVersion?    @relation("RecipeIndependentVersion", fields: [independentVersionId], references: [id])
+  owner                   User?                 @relation("RecipeOwner", fields: [ownerId], references: [id])
+  category                RecipeCategory?       @relation(fields: [categoryId], references: [id])
+  inspirationCategory     InspirationCategory?  @relation(fields: [inspirationCategoryId], references: [id])
+  currentVersion          RecipeContentVersion  @relation("RecipeCurrentVersion", fields: [currentVersionId], references: [id])
   reports                 RecipeReport[]
+  sceneLinks              RecipeSceneLink[]
+  draft                   RecipeDraft?
   mealPlans               MealPlanItem[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
 
+  @@index([ownerId, status, categoryId, sortOrder, id])
+  @@index([inspirationCategoryId, status, updatedAt, id])
   @@index([ownerId, status, updatedAt])
-  @@index([sourceKind, status, updatedAt])
-  @@index([sourceRecipeId, baseVersionId, ownerId, status])
   @@map("recipes")
+}
+
+model RecipeSceneLink {
+  recipeId   String   @map("recipe_id") @db.Uuid
+  sceneId    String   @map("scene_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  recipe Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  scene  RecipeScene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@id([recipeId, sceneId])
+  @@index([sceneId, recipeId])
+  @@map("recipe_scene_links")
+}
+
+model RecipeDraft {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  recipeId         String?  @unique @map("recipe_id") @db.Uuid
+  categoryId       String?  @map("category_id") @db.Uuid
+  title            String?  @db.VarChar(120)
+  searchText       String   @map("search_text") @db.Text
+  contentJson      Json     @map("content_json")
+  contentSizeBytes Int      @default(0) @map("content_size_bytes")
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe   Recipe?         @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  category RecipeCategory? @relation(fields: [categoryId], references: [id])
+  scenes   RecipeDraftScene[]
+
+  @@index([userId, updatedAt, id])
+  @@map("recipe_drafts")
+}
+
+model RecipeDraftScene {
+  draftId    String   @map("draft_id") @db.Uuid
+  sceneId    String   @map("scene_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  draft RecipeDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  scene RecipeScene @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+
+  @@id([draftId, sceneId])
+  @@index([sceneId, draftId])
+  @@map("recipe_draft_scenes")
 }
 
 model RecipeReport {

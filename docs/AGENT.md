@@ -4,7 +4,7 @@
 
 This is the short guide for AI-assisted vibe coding in this repository.
 
-Read this file first. Use `project.md` for the full developer overview, `dining-group.md` for relationship and collaboration rules, `recipe.md` for recipe data rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
+Read this file first. Use `project.md` for the full developer overview, `dining-group.md` for relationship and collaboration rules, `recipe.md` for recipe product and version rules, `ingredient.md` for ingredient and unit rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
 
 ## Product
 
@@ -75,21 +75,21 @@ Build the confirmed personal-data meal loop:
 
 1. A user may own one dining group and join additional dining groups within the personal plan limit.
 2. Dining-group membership never freezes, switches, merges, or migrates personal data.
-3. Recipes are user-owned and readable without per-recipe visibility settings; imports use a fixed base version plus user overrides.
+3. Recipes use My / Inspiration / Collections: editable personal recipes, reviewed inspiration versions, and read-only saved fixed versions. Imports use a fixed base version plus user overrides.
 4. Fridge and shopping data are user-owned and never become long-term shared objects.
 5. Sparse weekly plans remain personal; dining events handle invitations, participants, menus, and bring-a-dish coordination.
 6. Personal Free/Plus/Pro/Ultra plans control recipes, storage, images, variants, recycle bin, dining-group growth, and personalization.
-7. Admin supports user management, entitlement inspection, relationship inspection, configuration, basic audit, and the content-safety surface required by visible user recipes.
+7. Admin supports user management, entitlement inspection, relationship inspection, configuration, basic audit, ingredient review, and the content-safety and manual-review surface required by Inspiration recipes.
 
 V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner transfer, chat, comments, follows, delivery, price comparison, fine-grained inventory accounting, shared fridge, shared shopping, or a generic permission center.
 
 ## Module State
 
 - Engineering foundation: authentication, request boundaries, platform adapter, personal membership resolution, idempotency, audit, Outbox tables, and candidate implementations for dining groups, recipes, meals, pantry, shopping, storage, sharing, and Admin. Existing code is not evidence that those business modules are accepted.
-- In development: DiningGroup, Recipe, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
+- In development: DiningGroup, Recipe, Inspiration review, Ingredient/Unit, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
 - User profile and home background image upload remain deferred. User responses keep nullable URL fields and capability flags, and those user-background fields currently return `null` and `false`. The admin-managed login popup image is a separate `app-config` surface, not a generic asset-management reopening.
 - Deferred business decisions and known risks are tracked in `plans/business-development-todo.md`. That list prevents omissions but does not confirm a contract.
-- Disabled until the replacement contract is complete: broad public-user discovery and Worker/Outbox runtime behavior.
+- Disabled until a separate contract is confirmed: generic public-user discovery outside the reviewed Inspiration flow and Worker/Outbox runtime behavior.
 - Target but not contracted: non-monetary activities, achievements, and medal wall. The client may show a Me-page entry placeholder, but no API, DTO, schema, reward, or admin surface may be added until completion facts and contracts are frozen.
 - Reserved: Points, meal tickets, receipt scanning, OCR, AI, owner transfer, and generic fine-grained permission management. Do not add placeholder services or client entry points.
 
@@ -103,6 +103,9 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 6. Recipe image upload and mutation are deferred. Existing system images remain readable; future image writes follow the independent-version rules in `recipe.md`.
 7. Recipe visibility has no per-recipe permission, but editing remains owner-only and broad discovery requires content-safety controls.
 8. The old `RestaurantRecipe` name in source material must not be copied into the current schema; use the confirmed `Recipe` boundary.
+9. Saved recipes in Collections are read-only fixed versions, count toward personal recipe and storage quotas, and may be promoted into My without a second recipe count.
+10. Publishing a personal recipe does not publish it to Inspiration. User recommendations submit a fixed version for manual review.
+11. Ingredient and unit behavior comes from `ingredient.md`; do not split vegetables or seasonings into separate domain stores.
 
 ## Lifecycle And Entitlement Rules
 

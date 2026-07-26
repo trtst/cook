@@ -120,6 +120,7 @@ parallel code edits.
 - `docs/api-database-rules.md`: mandatory API, field, schema, constraint, security, performance, cache, and migration rules.
 - `docs/dining-group.md`: current dining-group relationships, member limits, weekly plans, dining events, fridge, shopping, and taste boundaries.
 - `docs/recipe.md`: current recipe visibility, base-version, override, image-promotion, variant, and deletion rules.
+- `docs/ingredient.md`: current system/personal ingredient, unit, review, and conversion rules.
 - `docs/configuration.md`: current Free/Plus/Pro/Ultra, personal storage, image, recycle-bin, downgrade, and configuration rules.
 - `docs/api-contract.md`: shared API contract and error rules.
 - `docs/uniapp.md`: mini program engineering rules.
@@ -130,6 +131,8 @@ parallel code edits.
 - `docs/runbook.md`: execution, debug, validation, and delivery process.
 - `docs/templates/feature_execution_template.md`: joint feature execution sheet.
 - `docs/plans/personal-data-refactor-plan.md`: current personal-data and dining-group relationship refactor plan.
+- `docs/plans/recipe-execution.md`: confirmed recipe flows and page behavior, plus the remaining API/database/implementation gates.
+- `docs/plans/recipe-contract-review.md`: confirmed R1 API/data implementation baseline; concrete public paths and DTO rules must stay synchronized with `docs/api-contract.md`.
 
 ## Commands
 
@@ -167,8 +170,8 @@ when shared contracts, cross-app types, or broad TypeScript behavior changed.
    the user explicitly includes them in scope.
 10. Treat `docs/cook/` Prisma v0.1, SQL, and older product plans as historical
     source material when they conflict with `docs/dining-group.md`,
-    `docs/recipe.md`, or `docs/configuration.md`; create a new schema/SQL version
-    instead of overwriting history.
+    `docs/recipe.md`, `docs/ingredient.md`, or `docs/configuration.md`; create a
+    new schema/SQL version instead of overwriting history.
 11. Do not implement or advertise OCR, AI, receipt scanning, owner transfer,
     shared fridge, shared shopping, or a generic permission center unless the
     user explicitly reopens them.

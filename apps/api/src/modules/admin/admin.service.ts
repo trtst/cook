@@ -582,9 +582,7 @@ export class AdminService {
         include: {
           owner: {
             select: { uid: true }
-          },
-          baseVersion: true,
-          independentVersion: true
+          }
         },
         orderBy: [{ reportCount: "desc" }, { updatedAt: "desc" }],
         skip,
@@ -596,11 +594,8 @@ export class AdminService {
     return {
       items: items.map(recipe => ({
         id: recipe.id,
-        ownerType: recipe.ownerId ? "USER" : "SYSTEM",
         title: recipe.title,
         coverImageUrl: recipe.coverImageUrl,
-        sourceRecipeId: recipe.sourceRecipeId,
-        isCustomized: recipe.isCustomized,
         status: recipe.status,
         updatedAt: toIsoDate(recipe.updatedAt),
         ownerUid: recipe.owner?.uid ?? null,
@@ -687,11 +682,8 @@ export class AdminService {
       });
       const result = {
         id: recipe.id,
-        ownerType: recipe.ownerId ? "USER" : "SYSTEM",
         title: recipe.title,
         coverImageUrl: recipe.coverImageUrl,
-        sourceRecipeId: recipe.sourceRecipeId,
-        isCustomized: recipe.isCustomized,
         status: recipe.status,
         updatedAt: toIsoDate(recipe.updatedAt),
         ownerUid: recipe.owner?.uid ?? null,
@@ -742,11 +734,8 @@ export class AdminService {
       });
       const result = {
         id: recipe.id,
-        ownerType: recipe.ownerId ? "USER" : "SYSTEM",
         title: recipe.title,
         coverImageUrl: recipe.coverImageUrl,
-        sourceRecipeId: recipe.sourceRecipeId,
-        isCustomized: recipe.isCustomized,
         status: recipe.status,
         updatedAt: toIsoDate(recipe.updatedAt),
         ownerUid: recipe.owner?.uid ?? null,

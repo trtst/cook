@@ -40,9 +40,9 @@
 | AdminUser | POST | `/admin/users/{userId}/reset-password` | 重置用户密码 |
 | AdminDiningGroup | GET | `/admin/dining-groups` | 饭搭子只读查询 |
 | AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员、关系和分域策略摘要 |
-| Recipe | GET/POST | `/recipes` | 查询或创建个人菜谱 |
-| Recipe | GET/PUT | `/recipes/{recipeId}` | 读取或更新菜谱 |
-| Recipe | POST | `/recipes/{recipeId}/import` | 导入系统或其他用户菜谱 |
+| RecipeCandidate | GET/POST | `/recipes` | 旧候选查询/直接创建；R1 实现时删除直接创建 |
+| RecipeCandidate | GET/PUT | `/recipes/{recipeId}` | 旧候选读取/直接更新；R1 实现时删除直接更新 |
+| RecipeCandidate | POST | `/recipes/{recipeId}/import` | 旧候选导入；不作为收藏或升级契约 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划 |
@@ -68,6 +68,17 @@
 
 ## 待补契约
 
+### 已冻结待实现：菜谱 R1
+
+| 模块 | 方法与路径 | 状态 |
+| --- | --- | --- |
+| RecipeCategory | `GET/POST /recipe-categories`、`PUT /recipe-categories/{categoryId}`、`POST /recipe-categories/reorder` | 已冻结，待实现 |
+| RecipeScene | `GET/POST /recipe-scenes`、`PUT /recipe-scenes/{sceneId}`、`POST /recipe-scenes/reorder` | 已冻结，待实现 |
+| Ingredient | `GET /ingredient-categories`、`GET/POST /ingredients`、`GET/POST /units` | 已冻结，待实现 |
+| RecipeDraft | `GET/POST /recipe-drafts`、`GET/PUT /recipe-drafts/{draftId}`、删除、发布 | 已冻结，待实现 |
+| Recipe | `GET /recipes`、`GET /recipes/{recipeId}`、分类内重排、删除 | 已冻结，待替换候选实现 |
+| Inspiration | `GET /inspiration-categories`、`GET /inspiration-recipes`、`GET /inspiration-recipes/{recipeId}` | 匿名只读已冻结，待实现 |
+
 | 模块 | 路径 | 缺失内容 |
 | --- | --- | --- |
 | Membership | 待冻结 | 订单、补差、回调和到期选择 |
@@ -75,7 +86,7 @@
 
 ## 暂不创建
 
-菜谱图片上传与修改、背景图上传、Public UGC、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。菜谱创建和更新请求包含 `images` 时返回 `400`。
+菜谱图片上传与修改、收藏/升级、用户推荐审核、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回 `400`。
 
 ## 维护规则
 

@@ -1,50 +1,55 @@
 import type { Prisma } from "@prisma/client";
-import type { RecipeContentInput, RecipeContentPayload } from "../../contracts/types";
-import { sizeOfJson, sumImageBytes } from "../../common/storage-ledger";
+import type { RecipeAmountSnapshot, RecipeContentSnapshot, RecipeDraftContentInput } from "../../contracts/types";
+import { sizeOfJson } from "../../common/storage-ledger";
 
-export interface RecipeOverrideData {
-  name?: string;
-  ingredients?: RecipeContentPayload["ingredients"];
-  steps?: RecipeContentPayload["steps"];
-  servings?: string | null;
-  durationMinutes?: number | null;
+export function buildSearchKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-export function normalizeRecipeContent(content: RecipeContentInput): RecipeContentInput {
+export function normalizeRecipeDraftContent(content: RecipeDraftContentInput): RecipeDraftContentInput {
   return {
     name: content.name.trim(),
+    story: content.story?.trim() || null,
+    categoryId: content.categoryId,
+    sceneIds: Array.from(new Set(content.sceneIds)),
+    baseServings: content.baseServings ?? null,
+    difficulty: content.difficulty ?? null,
+    durationMinutes: content.durationMinutes ?? null,
+    tips: content.tips?.trim() || null,
     ingredients: content.ingredients.map(item => ({
-      name: item.name.trim(),
-      amount: item.amount.trim()
+      ingredientId: item.ingredientId,
+      amount:
+        item.amount.kind === "EXACT"
+          ? {
+              kind: "EXACT",
+              quantity: item.amount.quantity.trim(),
+              unitId: item.amount.unitId
+            }
+          : {
+              kind: "FUZZY",
+              text: item.amount.text
+            }
     })),
     steps: content.steps.map(item => ({
-      content: item.content.trim()
-    })),
-    servings: content.servings?.trim() || null,
-    durationMinutes: content.durationMinutes ?? null
+      text: item.text.trim()
+    }))
   };
 }
 
-export function buildRecipeSearchText(content: RecipeContentPayload) {
-  return [content.name, ...content.ingredients.map(item => item.name)].join(" ").trim();
+export function buildDraftSearchText(content: RecipeDraftContentInput) {
+  return [content.name, content.story ?? ""].join(" ").trim();
 }
 
-export function structureSizeBytes(content: RecipeContentPayload) {
-  return sizeOfJson({
-    name: content.name,
-    ingredients: content.ingredients,
-    steps: content.steps,
-    servings: content.servings,
-    durationMinutes: content.durationMinutes,
-    imageMeta: content.images.map(item => ({
-      key: item.key,
-      url: item.url
-    }))
-  });
+export function buildRecipeSearchText(content: RecipeContentSnapshot) {
+  return [content.name, content.story ?? "", ...content.ingredients.map(item => item.ingredientName)].join(" ").trim();
 }
 
-export function imageOnlyBytes(content: RecipeContentPayload) {
-  return sumImageBytes(content.images);
+export function draftSizeBytes(content: RecipeDraftContentInput) {
+  return sizeOfJson(content);
+}
+
+export function contentSizeBytes(content: RecipeContentSnapshot) {
+  return sizeOfJson(content);
 }
 
 export function toJson(value: unknown): Prisma.InputJsonValue {
@@ -57,34 +62,27 @@ export function fromJson<T>(value: unknown): T {
 
 export function versionToContent(version: {
   name: string;
+  story: string | null;
+  baseServings: number;
+  difficulty: string | null;
+  tips: string | null;
   ingredientsJson: unknown;
   stepsJson: unknown;
-  servings: string | null;
   durationMinutes: number | null;
-  imagesJson: unknown;
-}): RecipeContentPayload {
+}): RecipeContentSnapshot {
   return {
     name: version.name,
-    ingredients: fromJson<RecipeContentPayload["ingredients"]>(version.ingredientsJson),
-    steps: fromJson<RecipeContentPayload["steps"]>(version.stepsJson),
-    servings: version.servings,
+    story: version.story,
+    baseServings: version.baseServings,
+    difficulty: version.difficulty as RecipeContentSnapshot["difficulty"],
     durationMinutes: version.durationMinutes,
-    images: fromJson<RecipeContentPayload["images"]>(version.imagesJson)
+    tips: version.tips,
+    ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
+    steps: fromJson<RecipeContentSnapshot["steps"]>(version.stepsJson)
   };
 }
 
-export function mergeRecipeContent(
-  base: RecipeContentPayload,
-  overrideData: RecipeOverrideData | null,
-  hiddenBaseImages: string[]
-) {
-  const hiddenKeys = new Set(hiddenBaseImages);
-  return {
-    name: overrideData?.name ?? base.name,
-    ingredients: overrideData?.ingredients ?? base.ingredients,
-    steps: overrideData?.steps ?? base.steps,
-    servings: overrideData?.servings ?? base.servings,
-    durationMinutes: overrideData?.durationMinutes ?? base.durationMinutes,
-    images: base.images.filter(item => !hiddenKeys.has(item.key))
-  } satisfies RecipeContentPayload;
+export function formatRecipeAmount(amount: RecipeAmountSnapshot) {
+  if (amount.kind === "FUZZY") return amount.text;
+  return `${amount.quantity}${amount.unitName}`;
 }

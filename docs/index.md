@@ -24,32 +24,34 @@
 5. `dining-group.md`
    - 饭搭子关系、成员额度、周计划、饭局、冰箱和购物清单边界。
 6. `recipe.md`
-   - 菜谱可见性、基础版本、覆盖修改、图片独立化和派生规则。
-7. `configuration.md`
+   - 我的/灵感/合集、录入、收藏、推荐、基础版本、覆盖修改和图片规则。
+7. `ingredient.md`
+   - 系统与个人食材、分类、单位、审核和换算边界。
+8. `configuration.md`
    - Free/Plus/Pro/Ultra、个人空间、图片、回收站、降级和个性化权益。
-8. `client-api.md`
+9. `client-api.md`
    - 客户端/后台接口手册，查看已创建接口、待创建接口、请求响应示例和调用说明。
-9. `api-contract.md`
+10. `api-contract.md`
    - 三端并行前的共享 API 契约、错误码、分页、鉴权、Auth/User/DiningGroup 纵切链路。
-10. `api-index.md`
+11. `api-index.md`
    - 接口看板，查看已创建接口、待创建接口、实现位置和详情位置。
-11. `uniapp.md`
+12. `uniapp.md`
    - uni-app 小程序端工程规则、分包边界、生命周期、请求、滚动、分享和样式兼容。
-12. `uniapp-architecture.md`
+13. `uniapp-architecture.md`
    - `apps/client` 小程序目录骨架、主包/分包规划、登录组件、请求层、平台适配层和 store 边界。
-13. `architecture.md`
+14. `architecture.md`
    - 前后端分层、依赖方向、接口边界和数据流。
-14. `decision.md`
+15. `decision.md`
    - 范围写法、不做项、交付口径和边界确认规则。
-15. `components.md`
+16. `components.md`
    - 前端组件准入、拆分边界、命名和输入输出规则。
-16. `runbook.md`
+17. `runbook.md`
    - 启动、调试、验证、三端联合开发流程、联调和交付说明。
-17. `apps/worker/README.md`
+18. `apps/worker/README.md`
    - Worker 禁用态骨架、命令和 V1 不启动异步任务边界。
-18. `docs/cook/`
+19. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
-19. `plans/business-development-todo.md`
+20. `plans/business-development-todo.md`
    - 记录后续业务开发必须重新确认的问题；只防遗漏，不作为已确认契约。
 
 ## 文档地图
@@ -65,7 +67,9 @@
 - `dining-group.md`
   - 当前饭搭子关系、成员额度、计划、饭局和个人数据边界。
 - `recipe.md`
-  - 当前菜谱可见性、基础版本、覆盖修改、图片独立化和派生规则。
+  - 当前我的/灵感/合集、录入、收藏、推荐、版本、图片和派生规则。
+- `ingredient.md`
+  - 当前系统与个人食材、分类、单位、审核和换算规则。
 - `configuration.md`
   - 当前四档个人会员、配置、空间、图片、回收站和降级规则。
 - `client-api.md`
@@ -92,10 +96,16 @@
   - 产品方案、技术实施方案、Prisma Schema 和手写 SQL 约束。
 - `templates/`
   - 计划、功能执行单和评审模板。
+- `templates/theme_add_checklist.md`
+  - `apps/client` 新增主题时的最小接入步骤、自检项和校验命令。
 - `plans/minor_change_log.md`
   - 全项目中央变更时间线；小改动直接记录，大改动记录摘要并链接独立执行文档。
 - `plans/personal-data-refactor-plan.md`
   - 当前个人数据与饭搭子关系重构计划；涉及关系模型、个人权益、菜谱、计划和后台治理时优先参考。
+- `plans/recipe-execution.md`
+  - 菜谱业务流与页面行为确认结果，以及接口、数据、实现和验收门禁。
+- `plans/recipe-contract-review.md`
+  - 已确认的菜谱 R1 最小接口、数据主事实、约束、事务和实施门禁；具体公共路径与 DTO 同步到正式 API 契约。
 - `plans/api-database-boundary-audit.md`
   - 当前 API 与数据库边界审计基线；接口、字段和约束整改按此文执行。
 - `plans/business-development-todo.md`
@@ -108,7 +118,7 @@
 ## 维护规则
 
 1. 长期稳定规则写入顶层主文档。
-2. `docs/cook/` 保留历史产品、Schema 和 SQL 来源；冲突时以 `dining-group.md`、`recipe.md` 和 `configuration.md` 为准。
+2. `docs/cook/` 保留历史产品、Schema 和 SQL 来源；冲突时以 `dining-group.md`、`recipe.md`、`ingredient.md` 和 `configuration.md` 为准。
 3. 一次性执行说明写入 `plans/`。
 4. 已过时材料移入 `archive/`。
 5. 主文档必须写当前项目如何做，不保留与炊火记无关的通用模板口径。
