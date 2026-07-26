@@ -2,11 +2,8 @@ import { requestData, type IsoDateTime, type PageQuery, type PageResult, type UU
 
 export interface AdminRecipeSummary {
   id: UUID;
-  ownerType: "USER" | "SYSTEM";
   title: string;
   coverImageUrl: string | null;
-  sourceRecipeId: UUID | null;
-  isCustomized: boolean;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   updatedAt: IsoDateTime;
   ownerUid: number | null;

@@ -135,7 +135,11 @@ onMounted(() => {
       <el-table v-loading="loading" :data="recipes" row-key="id">
         <el-table-column prop="title" label="菜名" min-width="180" />
         <el-table-column prop="ownerUid" label="持有人 UID" width="120" />
-        <el-table-column prop="ownerType" label="来源" width="100" />
+        <el-table-column label="来源" width="100">
+          <template #default="{ row }">
+            {{ row.ownerUid === null ? "灵感" : "个人" }}
+          </template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="120" />
         <el-table-column prop="reportCount" label="举报数" width="100" />
         <el-table-column prop="blockedReason" label="下架原因" min-width="180" />
