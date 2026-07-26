@@ -1,71 +1,183 @@
 import { cfg } from "@/config";
 import { get, post, put, type IsoDateTime, type PageResult, type UUID } from "./http";
 
-export interface RecipeIngredientInput {
-	name: string;
-	amount: string;
-}
+export type RecipeDifficulty = "EASY" | "MEDIUM" | "HARD";
+export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "CONTAINER" | "PACKAGE" | "OTHER";
+export type IngredientSource = "SYSTEM" | "PERSONAL";
+export type InspirationSort = "RECOMMENDED" | "LATEST";
 
-export interface RecipeStepInput {
-	content: string;
-}
+export type RecipeAmountInput =
+	| {
+			kind: "EXACT";
+			quantity: string;
+			unitId: UUID;
+	  }
+	| {
+			kind: "FUZZY";
+			text: "适量" | "少许" | "按需";
+	  };
 
-export interface RecipeImageInput {
-	key: string;
-	url: string;
-	sizeBytes: number;
-}
+export type RecipeAmountSnapshot =
+	| {
+			kind: "EXACT";
+			quantity: string;
+			unitId: UUID;
+			unitName: string;
+			unitType: UnitType;
+	  }
+	| {
+			kind: "FUZZY";
+			text: "适量" | "少许" | "按需";
+	  };
 
-export interface RecipeContentInput {
-	name: string;
-	ingredients: RecipeIngredientInput[];
-	steps: RecipeStepInput[];
-	servings: string | null;
-	durationMinutes: number | null;
-}
-
-export interface RecipeContentPayload extends RecipeContentInput {
-	images: RecipeImageInput[];
-}
-
-export interface RecipeSummary {
+export interface RecipeCategorySummary {
 	id: UUID;
-	ownerType: "USER" | "SYSTEM";
-	title: string;
-	coverImageUrl: string | null;
-	sourceRecipeId: UUID | null;
-	isCustomized: boolean;
-	status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+	name: string;
+	version: number;
+}
+
+export interface RecipeSceneSummary {
+	id: UUID;
+	name: string;
+	version: number;
+}
+
+export interface InspirationCategorySummary {
+	id: UUID;
+	name: string;
+	iconKey: string | null;
+}
+
+export interface IngredientCategorySummary {
+	id: UUID;
+	name: string;
+	iconKey: string | null;
+}
+
+export interface UnitSummary {
+	id: UUID;
+	name: string;
+	type: UnitType;
+	source: IngredientSource;
+}
+
+export interface IngredientSummary {
+	id: UUID;
+	name: string;
+	source: IngredientSource;
+	categoryId: UUID;
+	defaultUnit: UnitSummary;
+}
+
+export interface RecipeIngredientInput {
+	ingredientId: UUID;
+	amount: RecipeAmountInput;
+}
+
+export interface RecipeIngredientSnapshot {
+	ingredientId: UUID;
+	ingredientName: string;
+	source: IngredientSource;
+	categoryId: UUID;
+	amount: RecipeAmountSnapshot;
+}
+
+export interface RecipeStepSnapshot {
+	text: string;
+}
+
+export interface RecipeContentSnapshot {
+	name: string;
+	story: string | null;
+	baseServings: number;
+	difficulty: RecipeDifficulty | null;
+	durationMinutes: number | null;
+	tips: string | null;
+	ingredients: RecipeIngredientSnapshot[];
+	steps: RecipeStepSnapshot[];
+}
+
+export interface RecipeDraftContentInput {
+	name: string;
+	story: string | null;
+	categoryId: UUID | null;
+	sceneIds: UUID[];
+	baseServings: number | null;
+	difficulty: RecipeDifficulty | null;
+	durationMinutes: number | null;
+	tips: string | null;
+	ingredients: RecipeIngredientInput[];
+	steps: RecipeStepSnapshot[];
+}
+
+export interface RecipeDraftSummary {
+	id: UUID;
+	recipeId: UUID | null;
+	title: string | null;
+	category: RecipeCategorySummary | null;
+	version: number;
 	updatedAt: IsoDateTime;
 }
 
-export interface RecipeDetail extends RecipeSummary {
-	ownerUid: number | null;
-	content: RecipeContentPayload;
-	hiddenBaseImages: string[];
-	canEdit: boolean;
-	canImport: boolean;
+export interface RecipeDraftDetail {
+	id: UUID;
+	recipeId: UUID | null;
+	version: number;
+	content: RecipeDraftContentInput;
+	category: RecipeCategorySummary | null;
+	scenes: RecipeSceneSummary[];
+	createdAt: IsoDateTime;
+	updatedAt: IsoDateTime;
+}
+
+export interface MyRecipeSummary {
+	id: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	difficulty: RecipeDifficulty | null;
+	durationMinutes: number | null;
+	category: RecipeCategorySummary;
+	version: number;
+	updatedAt: IsoDateTime;
+}
+
+export interface MyRecipeDetail {
+	id: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	category: RecipeCategorySummary;
+	scenes: RecipeSceneSummary[];
+	contentVersionId: UUID;
+	content: RecipeContentSnapshot;
+	status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
 	version: number;
 	createdAt: IsoDateTime;
+	updatedAt: IsoDateTime;
 }
 
-export interface RecipeListQuery {
-	page?: number;
-	pageSize?: number;
-	keyword?: string;
-	scope?: "mine" | "system" | "all";
+export interface InspirationRecipeSummary {
+	id: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	difficulty: RecipeDifficulty | null;
+	durationMinutes: number | null;
+	category: InspirationCategorySummary;
+	likeCount: number;
+	collectCount: number;
+	updatedAt: IsoDateTime;
 }
 
-export interface ImportRecipeResult {
-	recipe: RecipeDetail;
-	reusedExisting: boolean;
-}
-
-export interface DeleteRecipeResult {
-	recipeId: UUID;
-	status: "RECYCLED" | "DELETED";
-	deletedAt: IsoDateTime;
-	recycledUntil: IsoDateTime | null;
+export interface InspirationRecipeDetail {
+	id: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	category: InspirationCategorySummary;
+	contentVersionId: UUID;
+	content: RecipeContentSnapshot;
+	likeCount: number;
+	collectCount: number;
+	curatedByName: string | null;
+	updatedAt: IsoDateTime;
 }
 
 export interface RecipeReportResult {
@@ -77,65 +189,201 @@ export interface RecipeReportResult {
 	createdAt: IsoDateTime;
 }
 
-export interface CreateRecipeRequest {
-	operationId: UUID;
-	content: RecipeContentInput;
+export interface DeleteRecipeDraftResult {
+	draftId: UUID;
+	deletedAt: IsoDateTime;
 }
 
-export interface UpdateRecipeRequest extends CreateRecipeRequest {
+export interface DeleteRecipeResult {
+	recipeId: UUID;
+	status: "RECYCLED" | "DELETED";
+	deletedAt: IsoDateTime;
+	recycledUntil: IsoDateTime | null;
+}
+
+export interface PublishRecipeDraftResult {
+	recipe: MyRecipeDetail;
+}
+
+export interface ReorderItem {
+	id: UUID;
 	expectedVersion: number;
 }
 
+export interface IngredientQuery {
+	page?: number;
+	pageSize?: number;
+	keyword?: string;
+	categoryId?: UUID;
+	source?: "SYSTEM" | "PERSONAL" | "ALL";
+}
+
+export interface UnitQuery {
+	page?: number;
+	pageSize?: number;
+	keyword?: string;
+	type?: UnitType;
+	source?: "SYSTEM" | "PERSONAL" | "ALL";
+}
+
+export interface RecipeDraftQuery {
+	page?: number;
+	pageSize?: number;
+	keyword?: string;
+}
+
+export interface MyRecipeQuery {
+	page?: number;
+	pageSize?: number;
+	keyword?: string;
+	categoryId?: UUID;
+}
+
+export interface InspirationRecipeQuery {
+	page?: number;
+	pageSize?: number;
+	keyword?: string;
+	categoryId?: UUID;
+	sort?: InspirationSort;
+	difficulty?: RecipeDifficulty;
+	maxDurationMinutes?: number;
+}
+
+export interface CreateRecipeDraftRequest {
+	operationId: UUID;
+	recipeId: UUID | null;
+	content: RecipeDraftContentInput;
+}
+
+export interface UpdateRecipeDraftRequest {
+	operationId: UUID;
+	expectedVersion: number;
+	content: RecipeDraftContentInput;
+}
+
+export interface PublishRecipeDraftRequest {
+	operationId: UUID;
+	expectedVersion: number;
+}
+
+export interface DeleteRecipeDraftRequest extends PublishRecipeDraftRequest {}
+
+export interface RenameTagRequest extends PublishRecipeDraftRequest {
+	name: string;
+}
+
+export interface CreateTagRequest {
+	operationId: UUID;
+	name: string;
+}
+
+export interface CreateUnitRequest {
+	operationId: UUID;
+	name: string;
+	type: UnitType;
+}
+
+export interface CreateIngredientRequest {
+	operationId: UUID;
+	name: string;
+	categoryId: UUID;
+	defaultUnitId: UUID;
+}
+
 export const recipeApi = {
-	/**
-	 * 分页读取菜谱列表。
-	 * `scope` 决定读取个人菜谱、系统菜谱或合并视图。
-	 */
-	list(query: RecipeListQuery) {
-		return get<PageResult<RecipeSummary>>(`${cfg.domain}/api/recipes`, { ...query });
+	listCategories() {
+		return get<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories`);
 	},
-	/**
-	 * 读取单个菜谱详情。
-	 * 返回有效正文、可编辑性、可导入性和版本信息。
-	 */
-	getDetail(recipeId: UUID) {
-		return get<RecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}`);
+	createCategory(body: CreateTagRequest) {
+		return post<RecipeCategorySummary>(`${cfg.domain}/api/recipe-categories`, body);
 	},
-	/**
-	 * 创建当前用户自己的菜谱。
-	 * 正文通过结构化 `content` 写入，写操作携带 `operationId`。
-	 */
-	create(body: CreateRecipeRequest) {
-		return post<RecipeDetail>(`${cfg.domain}/api/recipes`, body);
+	updateCategory(categoryId: UUID, body: RenameTagRequest) {
+		return put<RecipeCategorySummary>(`${cfg.domain}/api/recipe-categories/${encodeURIComponent(categoryId)}`, body);
 	},
-	/**
-	 * 更新当前用户可编辑的菜谱。
-	 * 系统菜谱不能直接修改，导入后按个人菜谱规则编辑。
-	 */
-	update(recipeId: UUID, body: UpdateRecipeRequest) {
-		return put<RecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}`, body);
+	reorderCategories(operationId: UUID, items: ReorderItem[]) {
+		return post<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories/reorder`, {
+			operationId,
+			items
+		});
 	},
-	/**
-	 * 导入系统或可导入菜谱为当前用户自己的菜谱入口。
-	 * 重复导入由服务端返回复用结果，不在客户端复制判断。
-	 */
-	importRecipe(recipeId: UUID, operationId: UUID) {
-		return post<ImportRecipeResult>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}/import`, { operationId });
+	listScenes() {
+		return get<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes`);
 	},
-	/**
-	 * 删除当前用户自己的菜谱。
-	 * 服务端根据套餐和回收站规则决定进入回收站或直接删除。
-	 */
+	createScene(body: CreateTagRequest) {
+		return post<RecipeSceneSummary>(`${cfg.domain}/api/recipe-scenes`, body);
+	},
+	updateScene(sceneId: UUID, body: RenameTagRequest) {
+		return put<RecipeSceneSummary>(`${cfg.domain}/api/recipe-scenes/${encodeURIComponent(sceneId)}`, body);
+	},
+	reorderScenes(operationId: UUID, items: ReorderItem[]) {
+		return post<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes/reorder`, {
+			operationId,
+			items
+		});
+	},
+	listIngredientCategories() {
+		return get<IngredientCategorySummary[]>(`${cfg.domain}/api/ingredient-categories`);
+	},
+	listIngredients(query: IngredientQuery) {
+		return get<PageResult<IngredientSummary>>(`${cfg.domain}/api/ingredients`, { ...query });
+	},
+	createIngredient(body: CreateIngredientRequest) {
+		return post<IngredientSummary>(`${cfg.domain}/api/ingredients`, body);
+	},
+	listUnits(query: UnitQuery) {
+		return get<PageResult<UnitSummary>>(`${cfg.domain}/api/units`, { ...query });
+	},
+	createUnit(body: CreateUnitRequest) {
+		return post<UnitSummary>(`${cfg.domain}/api/units`, body);
+	},
+	listDrafts(query: RecipeDraftQuery) {
+		return get<PageResult<RecipeDraftSummary>>(`${cfg.domain}/api/recipe-drafts`, { ...query });
+	},
+	createDraft(body: CreateRecipeDraftRequest) {
+		return post<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts`, body);
+	},
+	getDraft(draftId: UUID) {
+		return get<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`);
+	},
+	updateDraft(draftId: UUID, body: UpdateRecipeDraftRequest) {
+		return put<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`, body);
+	},
+	deleteDraft(draftId: UUID, body: DeleteRecipeDraftRequest) {
+		return post<DeleteRecipeDraftResult>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}/delete`, body);
+	},
+	publishDraft(draftId: UUID, body: PublishRecipeDraftRequest) {
+		return post<PublishRecipeDraftResult>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}/publish`, body);
+	},
+	listMyRecipes(query: MyRecipeQuery) {
+		return get<PageResult<MyRecipeSummary>>(`${cfg.domain}/api/recipes`, { ...query });
+	},
+	getMyRecipe(recipeId: UUID) {
+		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}`);
+	},
+	reorderRecipes(operationId: UUID, categoryId: UUID, items: ReorderItem[]) {
+		return post<MyRecipeSummary[]>(`${cfg.domain}/api/recipes/reorder`, {
+			operationId,
+			categoryId,
+			items
+		});
+	},
 	deleteRecipe(recipeId: UUID, operationId: UUID, expectedVersion: number) {
 		return post<DeleteRecipeResult>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}/delete`, {
 			operationId,
 			expectedVersion
 		});
 	},
-	/**
-	 * 举报可见菜谱内容。
-	 * 只提交原因和幂等 ID，审核状态由后台处理。
-	 */
+	listInspirationCategories() {
+		return get<InspirationCategorySummary[]>(`${cfg.domain}/api/inspiration-categories`, undefined, {
+			auth: false
+		});
+	},
+	listInspirationRecipes(query: InspirationRecipeQuery) {
+		return get<PageResult<InspirationRecipeSummary>>(`${cfg.domain}/api/inspiration-recipes`, { ...query }, { auth: false });
+	},
+	getInspirationRecipe(recipeId: UUID) {
+		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(recipeId)}`, undefined, { auth: false });
+	},
 	reportRecipe(recipeId: UUID, operationId: UUID, reason: string) {
 		return post<RecipeReportResult>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}/report`, {
 			operationId,

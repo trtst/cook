@@ -82,7 +82,7 @@
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { mealApi, type DiningEventSummary, type MealPlanSummary } from "@/apis/meal";
-import { recipeApi, type RecipeSummary } from "@/apis/recipe";
+import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
@@ -92,7 +92,7 @@ import { createOperationId } from "@/utils/operation-id";
 
 const sessionStore = useSessionStore();
 const diningGroupStore = useDiningGroupStore();
-const recipes = ref<RecipeSummary[]>([]);
+const recipes = ref<MyRecipeSummary[]>([]);
 const plans = ref<MealPlanSummary[]>([]);
 const eventMap = ref<Record<string, DiningEventSummary>>({});
 const loading = ref(false);
@@ -121,10 +121,10 @@ async function loadPage() {
   errorText.value = "";
   try {
     const [recipeResult, planResult] = await Promise.all([
-      recipeApi.list({ page: 1, pageSize: 20, scope: "mine" }),
+      recipeApi.listMyRecipes({ page: 1, pageSize: 20 }),
       mealApi.listPlans({ page: 1, pageSize: 50 })
     ]);
-    recipes.value = recipeResult.items.filter(item => item.status === "ACTIVE");
+    recipes.value = recipeResult.items;
     plans.value = planResult.items;
     if (!recipes.value.some(item => item.id === selectedRecipeId.value)) {
       selectedRecipeId.value = recipes.value[0]?.id ?? "";

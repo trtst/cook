@@ -1,46 +1,46 @@
 <template>
-  <Layout title="菜谱列表">
+  <Layout title="菜谱管理">
     <Login
       v-if="!sessionStore.isLoggedIn"
-      title="登录后查看个人菜谱"
-      description="第一版搜索只覆盖我的个人菜谱和系统菜谱。"
+      title="登录后管理菜谱"
+      description="这里查看我的已发布菜谱和草稿箱。当前日期是 2026-07-25。"
     />
 
     <template v-else>
       <view class="toolbar">
-        <input v-model="keyword" class="toolbar__input" placeholder="搜菜名或食材" confirm-type="search" @confirm="loadList" />
-        <button class="toolbar__button" @click="loadList">搜索</button>
-      </view>
-
-      <view class="scope-row">
-        <view
-          v-for="item in scopes"
-          :key="item.value"
-          class="scope-chip"
-          :class="{ 'scope-chip--active': scope === item.value }"
-          @click="handleScopeChange(item.value)"
-        >
-          {{ item.label }}
+        <view class="tabs">
+          <view class="tab" :class="{ 'tab--active': mode === 'recipes' }" @click="switchMode('recipes')">我的菜谱</view>
+          <view class="tab" :class="{ 'tab--active': mode === 'drafts' }" @click="switchMode('drafts')">草稿箱</view>
         </view>
+        <button class="toolbar__button" @click="createRecipe">新建菜谱</button>
       </view>
 
-      <view class="action-row">
-        <button class="action-row__button" @click="navigateTo('/pages_recipe/edit/index')">新建菜谱</button>
-        <button class="action-row__button action-row__button--light" @click="navigateTo('/pages_recipe/import/index')">导入菜谱</button>
+      <view class="search-row">
+        <input
+          v-model="keyword"
+          class="search-row__input"
+          placeholder="搜索菜名"
+          confirm-type="search"
+          @confirm="loadList"
+        />
+        <button class="search-row__button" @click="loadList">搜索</button>
       </view>
 
       <view v-if="errorText" class="notice" @click="loadList">{{ errorText }}</view>
-
       <view v-if="loading" class="notice">加载中...</view>
-      <Empty v-else-if="!items.length" title="暂无菜谱" description="先新建自己的菜谱，或从系统菜谱导入。" />
+      <Empty
+        v-else-if="!items.length"
+        :title="mode === 'recipes' ? '还没有已发布菜谱' : '还没有草稿'"
+        :description="mode === 'recipes' ? '先新建一份属于你的菜谱。' : '存草稿后会显示在这里。'"
+      />
 
       <view v-else class="list">
-        <view v-for="item in items" :key="item.id" class="card" @click="openDetail(item.id)">
+        <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
           <view class="card__main">
             <text class="card__title">{{ item.title }}</text>
-            <text class="card__meta">{{ item.ownerType === 'SYSTEM' ? '系统菜谱' : '我的菜谱' }} · {{ formatTime(item.updatedAt) }}</text>
+            <text class="card__meta">{{ item.meta }}</text>
           </view>
-          <text class="card__tag">{{ item.isCustomized ? "已修改" : "原样" }}</text>
+          <text class="card__tail">{{ item.updatedAt.slice(0, 10) }}</text>
         </view>
       </view>
     </template>
@@ -50,174 +50,200 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import { recipeApi, type RecipeSummary } from "@/apis/recipe";
+import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 
+type ListMode = "recipes" | "drafts";
+
+interface DisplayItem {
+	id: string;
+	title: string;
+	meta: string;
+	updatedAt: string;
+	raw: MyRecipeSummary | RecipeDraftSummary;
+}
+
 const sessionStore = useSessionStore();
+const mode = ref<ListMode>("recipes");
+const keyword = ref("");
 const loading = ref(false);
 const errorText = ref("");
-const keyword = ref("");
-const scope = ref<"mine" | "all" | "system">("all");
-const items = ref<RecipeSummary[]>([]);
-
-const scopes = [
-  { value: "all" as const, label: "我的 + 系统" },
-  { value: "mine" as const, label: "只看我的" },
-  { value: "system" as const, label: "只看系统" }
-];
+const items = ref<DisplayItem[]>([]);
 
 onShow(() => {
-  if (!sessionStore.isLoggedIn) return;
-  void loadList();
+	if (!sessionStore.isLoggedIn) return;
+	void loadList();
 });
 
+function switchMode(nextMode: ListMode) {
+	if (mode.value === nextMode) return;
+	mode.value = nextMode;
+	void loadList();
+}
+
 async function loadList() {
-  if (!sessionStore.isLoggedIn || loading.value) return;
-  loading.value = true;
-  errorText.value = "";
-  try {
-    const result = await recipeApi.list({
-      page: 1,
-      pageSize: 50,
-      keyword: keyword.value.trim() || undefined,
-      scope: scope.value
-    });
-    items.value = result.items;
-  } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "菜谱加载失败，点击重试";
-  } finally {
-    loading.value = false;
-  }
+	if (!sessionStore.isLoggedIn || loading.value) return;
+	loading.value = true;
+	errorText.value = "";
+	try {
+		if (mode.value === "recipes") {
+			const result = await recipeApi.listMyRecipes({
+				page: 1,
+				pageSize: 50,
+				keyword: keyword.value.trim() || undefined
+			});
+			items.value = result.items.map(toRecipeItem);
+		} else {
+			const result = await recipeApi.listDrafts({
+				page: 1,
+				pageSize: 50,
+				keyword: keyword.value.trim() || undefined
+			});
+			items.value = result.items.map(toDraftItem);
+		}
+	} catch (error) {
+		errorText.value = error instanceof Error ? error.message : "列表加载失败";
+	} finally {
+		loading.value = false;
+	}
 }
 
-function handleScopeChange(value: "mine" | "all" | "system") {
-  if (scope.value === value) return;
-  scope.value = value;
-  void loadList();
+function createRecipe() {
+	void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
 }
 
-function openDetail(recipeId: string) {
-  void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(recipeId)}`);
+function openItem(item: DisplayItem) {
+	if (mode.value === "recipes") {
+		void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(item.id)}&kind=my`);
+		return;
+	}
+	void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?draftId=${encodeURIComponent(item.id)}`);
 }
 
-function navigateTo(url: string) {
-  void uniPlatform.navigation.navigateTo(url);
+function toRecipeItem(item: MyRecipeSummary): DisplayItem {
+	return {
+		id: item.id,
+		title: item.title,
+		meta: `${item.category.name} · ${item.difficulty ?? "未设置难度"} · ${item.durationMinutes ? `${item.durationMinutes} 分钟` : "未设置时长"}`,
+		updatedAt: item.updatedAt,
+		raw: item
+	};
 }
 
-function formatTime(value: string) {
-  return value.slice(0, 10);
+function toDraftItem(item: RecipeDraftSummary): DisplayItem {
+	return {
+		id: item.id,
+		title: item.title || "未命名草稿",
+		meta: `${item.category?.name ?? "未选分类"} · 草稿版本 ${item.version}`,
+		updatedAt: item.updatedAt,
+		raw: item
+	};
 }
 </script>
 
 <style scoped lang="scss">
 .toolbar,
-.scope-row,
-.action-row,
-.card {
-  display: flex;
-  gap: var(--space-sm);
+.search-row,
+.card,
+.tabs {
+	display: flex;
+	gap: var(--space-sm);
 }
 
-.toolbar__input {
-  flex: 1;
-  min-width: 0;
-  padding: 20rpx 24rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+.toolbar {
+	align-items: center;
+	justify-content: space-between;
 }
 
 .toolbar__button,
-.action-row__button {
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+.search-row__button {
+	border-radius: var(--radius-md);
+	background: var(--color-primary);
+	color: var(--color-primary-foreground);
 }
 
-.action-row {
-  margin-top: var(--space-sm);
+.tabs {
+	flex: 1;
 }
 
-.action-row__button {
-  flex: 1;
+.tab {
+	padding: 16rpx 26rpx;
+	border-radius: 999rpx;
+	background: var(--color-surface-muted);
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-sm);
 }
 
-.action-row__button--light {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1rpx solid var(--color-border);
+.tab--active {
+	background: var(--color-primary-soft);
+	color: var(--color-primary);
 }
 
-.scope-row {
-  margin-top: var(--space-sm);
-  flex-wrap: wrap;
+.search-row {
+	margin-top: var(--space-md);
 }
 
-.scope-chip {
-  padding: 12rpx 24rpx;
-  border-radius: 999rpx;
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.scope-chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+.search-row__input {
+	flex: 1;
+	min-width: 0;
+	padding: 20rpx 24rpx;
+	border: 1rpx solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface);
 }
 
 .notice {
-  margin-top: var(--space-md);
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
+	margin-top: var(--space-md);
+	padding: var(--space-md);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-muted);
+	color: var(--color-text-secondary);
 }
 
 .list {
-  margin-top: var(--space-md);
+	margin-top: var(--space-md);
 }
 
 .card {
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--space-md);
+	border: 1rpx solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface);
 }
 
 .card + .card {
-  margin-top: var(--space-sm);
+	margin-top: var(--space-sm);
 }
 
 .card__main {
-  flex: 1;
-  min-width: 0;
+	flex: 1;
+	min-width: 0;
 }
 
 .card__title,
 .card__meta {
-  display: block;
+	display: block;
 }
 
 .card__title {
-  color: var(--color-text);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+	color: var(--color-text);
+	font-size: var(--font-size-lg);
+	font-weight: var(--font-weight-semibold);
+}
+
+.card__meta,
+.card__tail {
+	color: var(--color-text-secondary);
+	font-size: var(--font-size-sm);
 }
 
 .card__meta {
-  margin-top: 6rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.card__tag {
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
+	margin-top: 8rpx;
+	line-height: 1.6;
 }
 </style>

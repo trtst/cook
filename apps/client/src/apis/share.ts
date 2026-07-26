@@ -1,13 +1,13 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type UUID } from "./http";
 import type { DiningEventSummary } from "./meal";
-import type { RecipeContentPayload } from "./recipe";
+import type { RecipeContentSnapshot } from "./recipe";
 
 export interface SharePreviewResponse {
 	title: string;
 	scheduledAt: IsoDateTime;
 	location: string | null;
-	menu: Pick<RecipeContentPayload, "name" | "ingredients" | "images">;
+	menu: Pick<RecipeContentSnapshot, "name" | "ingredients">;
 	organizerUid: number;
 }
 

@@ -14,9 +14,9 @@
 
       <view class="section">
         <text class="section__title">菜单预览</text>
-        <view v-for="item in preview.menu.ingredients" :key="`${item.name}-${item.amount}`" class="line">
-          <text>{{ item.name }}</text>
-          <text>{{ item.amount }}</text>
+        <view v-for="item in preview.menu.ingredients" :key="`${item.ingredientId}-${item.amount.kind}`" class="line">
+          <text>{{ item.ingredientName }}</text>
+          <text>{{ formatAmount(item.amount) }}</text>
         </view>
       </view>
 
@@ -31,6 +31,7 @@ import { ref } from "vue";
 import { shareApi, type SharePreviewResponse } from "@/apis/share";
 import Empty from "@/components/Empty/Empty.vue";
 import { uniPlatform } from "@/platform/uni";
+import type { RecipeAmountSnapshot } from "@/apis/recipe";
 
 const shareToken = ref("");
 const preview = ref<SharePreviewResponse | null>(null);
@@ -63,6 +64,11 @@ async function loadPreview() {
 function goImport() {
   if (!shareToken.value) return;
   void uniPlatform.navigation.navigateTo(`/pages_share/import/index?token=${encodeURIComponent(shareToken.value)}`);
+}
+
+function formatAmount(amount: RecipeAmountSnapshot) {
+  if (amount.kind === "FUZZY") return amount.text;
+  return `${amount.quantity}${amount.unitName}`;
 }
 </script>
 

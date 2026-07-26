@@ -1,0 +1,21 @@
+<svg width="420" height="300" viewBox="0 0 420 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="34" y="66" width="352" height="176" rx="40" fill="#FFF8F2"/>
+  <rect x="52" y="176" width="316" height="44" rx="22" fill="#EEF4EF"/>
+  <rect x="80" y="164" width="260" height="54" rx="27" fill="#FFFDFB"/>
+  <rect x="88" y="88" width="66" height="50" rx="16" transform="rotate(-8 88 88)" fill="#D9E8E1" stroke="#1B1B1B" stroke-width="6"/>
+  <rect x="267" y="92" width="66" height="48" rx="16" transform="rotate(8 267 92)" fill="#DBECE5" stroke="#1B1B1B" stroke-width="6"/>
+  <ellipse cx="210" cy="154" rx="86" ry="54" fill="#EDF4EF" stroke="#1B1B1B" stroke-width="7"/>
+  <ellipse cx="210" cy="154" rx="62" ry="37" fill="#FFFDFB"/>
+  <ellipse cx="191" cy="145" rx="18" ry="13" fill="#FFF4D8"/>
+  <ellipse cx="172" cy="157" rx="14" ry="11" fill="#F26A2E"/>
+  <ellipse cx="220" cy="144" rx="16" ry="12" fill="#6BC45C"/>
+  <ellipse cx="242" cy="159" rx="15" ry="11" fill="#FFCA40"/>
+  <ellipse cx="204" cy="169" rx="17" ry="10" fill="#FFDF45"/>
+  <path d="M164 106C169 92 188 88 199 99C190 103 182 108 176 116L164 106Z" fill="#62CF5F" stroke="#1B1B1B" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M249 170C255 156 272 152 283 160C274 165 266 171 260 179L249 170Z" fill="#FF8B42" stroke="#1B1B1B" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M129 179H152C159.732 179 166 185.268 166 193V200C166 219.33 150.33 235 131 235H150C130.67 235 115 219.33 115 200V193C115 185.268 121.268 179 129 179Z" fill="#D9E8E1" stroke="#1B1B1B" stroke-width="6"/>
+  <path d="M277 180H304C310.627 180 316 185.373 316 192V217C316 223.627 310.627 229 304 229H277C270.373 229 265 223.627 265 217V192C265 185.373 270.373 180 277 180Z" fill="#DBECE5" stroke="#1B1B1B" stroke-width="6"/>
+  <path d="M184 64C179 53 182 42 192 35" stroke="#1B1B1B" stroke-width="6" stroke-linecap="round"/>
+  <path d="M210 58C207 46 211 36 220 30" stroke="#1B1B1B" stroke-width="6" stroke-linecap="round"/>
+  <path d="M236 64C235 53 241 43 249 37" stroke="#1B1B1B" stroke-width="6" stroke-linecap="round"/>
+</svg>

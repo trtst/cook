@@ -1,6 +1,6 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type PageResult, type UUID } from "./http";
-import type { RecipeContentPayload } from "./recipe";
+import type { RecipeContentSnapshot } from "./recipe";
 
 export interface MealPlanSummary {
 	id: UUID;
@@ -32,7 +32,7 @@ export interface DiningEventSummary {
 	status: "PLANNED" | "CONFIRMED" | "CANCELLED";
 	planItemId: UUID | null;
 	diningGroupId: UUID | null;
-	menu: RecipeContentPayload;
+	menu: RecipeContentSnapshot;
 	participants: DiningEventParticipantSummary[];
 	shareTokenPath: string | null;
 	createdAt: IsoDateTime;
