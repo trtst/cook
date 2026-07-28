@@ -10,18 +10,44 @@ import {
 } from "@nestjs/common";
 import { Prisma, type DiningGroupStatus, type RecipeStatus } from "@prisma/client";
 import type {
+  AdminDashboardSummary,
+  AdminDeleteUnitResult,
+  AdminIngredientCategoryPayloadRequest,
+  AdminIngredientCategorySummary,
+  AdminIngredientPayloadRequest,
+  AdminPendingIngredientSummary,
+  AdminReviewPendingIngredientRequest,
+  AdminReviewPendingIngredientResult,
+  AdminIngredientSummary,
+  SetAdminIngredientStatusRequest,
+  AdminUnitPayloadRequest,
+  AdminUnitSummary,
   AdminResetUserPasswordResponse,
   AdminDiningGroupSummary,
   AdminRecipeSummary,
+  AdminUserRecipeDomainOverview,
+  CollectionListResponse,
+  CollectionSceneSummary,
+  CollectedRecipeSummary,
   CreateAdminUserRequest,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
+  InspirationCategorySummary,
+  MyRecipeSummary,
   PageResult,
+  RecipeCategorySummary,
+  RecipeDraftSummary,
+  RecipeSceneSummary,
   RecipeReportSummary,
+  ReorderItem,
   ResetAdminUserPasswordRequest,
   RelationshipState,
   SetAdminUserStatusRequest,
   StorageUsageSummary,
+  UnitSummary,
+  UpdateAdminUnitRequest,
+  UpdateAdminIngredientCategoryRequest,
+  UpdateAdminIngredientRequest,
   UpdateAdminUserRequest,
   UserProfile,
   UUID
@@ -35,6 +61,8 @@ import {
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
+import { buildSearchKey, versionToContent } from "../recipe/recipe-content";
+import { IngredientImageService } from "./ingredient-image.service";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -48,6 +76,10 @@ function toPositiveInt(value: number | string | undefined, fallback: number) {
   }
 
   return fallback;
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
 function toUserProfile(user: {
@@ -72,6 +104,160 @@ function toUserProfile(user: {
   };
 }
 
+type AdminUserRecipeRow = Prisma.RecipeGetPayload<{
+  include: {
+    category: true;
+    currentVersion: true;
+  };
+}>;
+
+type AdminDraftRow = Prisma.RecipeDraftGetPayload<{
+  include: {
+    category: true;
+  };
+}>;
+
+type AdminSceneRow = Prisma.RecipeSceneGetPayload<Record<string, never>>;
+
+type AdminCollectionRow = Prisma.RecipeCollectionGetPayload<{
+  include: {
+    sourceRecipe: {
+      include: {
+        inspirationCategory: true;
+      };
+    };
+    sourceVersion: true;
+    sceneLinks: {
+      include: {
+        scene: true;
+      };
+    };
+  };
+}>;
+
+type AdminIngredientCategoryRow = Prisma.IngredientCategoryGetPayload<Record<string, never>>;
+type AdminIngredientRow = Prisma.IngredientGetPayload<{
+  include: {
+    category: true;
+    defaultUnit: true;
+  };
+}>;
+type AdminIngredientWithImageRow = AdminIngredientRow & { imageUpdatedAt: Date | null };
+type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
+  include: {
+    ingredient: {
+      include: {
+        owner: {
+          select: {
+            id: true;
+            uid: true;
+            nickname: true;
+          };
+        };
+        defaultUnit: true;
+      };
+    };
+  };
+}>;
+
+function toRecipeCategorySummary(category: { id: string; name: string; version: number }): RecipeCategorySummary {
+  return {
+    id: category.id,
+    name: category.name,
+    version: category.version
+  };
+}
+
+function toRecipeSceneSummary(scene: { id: string; name: string; version: number }): RecipeSceneSummary {
+  return {
+    id: scene.id,
+    name: scene.name,
+    version: scene.version
+  };
+}
+
+function toInspirationCategorySummary(category: { id: string; name: string; iconKey: string | null }): InspirationCategorySummary {
+  return {
+    id: category.id,
+    name: category.name,
+    iconKey: category.iconKey
+  };
+}
+
+function toCollectionSceneSummary(scene: AdminSceneRow, recipeCount: number, updatedAt: Date | null): CollectionSceneSummary {
+  return {
+    id: scene.id,
+    name: scene.name,
+    version: scene.version,
+    recipeCount,
+    updatedAt: updatedAt ? toIsoDate(updatedAt) : null
+  };
+}
+
+function toUnitSummary(unit: { id: string; name: string; type: UnitSummary["type"]; ownerId: string | null }): UnitSummary {
+  return {
+    id: unit.id,
+    name: unit.name,
+    type: unit.type,
+    source: unit.ownerId ? "PERSONAL" : "SYSTEM"
+  };
+}
+
+function toAdminIngredientCategorySummary(category: AdminIngredientCategoryRow, ingredientCount: number): AdminIngredientCategorySummary {
+  return {
+    id: category.id,
+    name: category.name,
+    version: category.version,
+    ingredientCount,
+    updatedAt: toIsoDate(category.updatedAt)
+  };
+}
+
+function toAdminIngredientSummary(ingredient: AdminIngredientRow): AdminIngredientSummary {
+  return {
+    id: ingredient.id,
+    name: ingredient.name,
+    version: ingredient.version,
+    status: ingredient.status === "DISABLED" ? "DISABLED" : "ACTIVE",
+    categoryId: ingredient.categoryId,
+    categoryName: ingredient.category.name,
+    defaultUnit: toUnitSummary(ingredient.defaultUnit),
+    imageUrl: null,
+    updatedAt: toIsoDate(ingredient.updatedAt)
+  };
+}
+
+function toAdminUnitSummary(unit: { id: string; name: string; type: UnitSummary["type"]; version: number; updatedAt: Date }): AdminUnitSummary {
+  return {
+    id: unit.id,
+    name: unit.name,
+    type: unit.type,
+    source: "SYSTEM",
+    version: unit.version,
+    updatedAt: toIsoDate(unit.updatedAt)
+  };
+}
+
+function toAdminPendingIngredientSummary(row: AdminPendingIngredientRow): AdminPendingIngredientSummary {
+  return {
+    id: row.ingredient.id,
+    name: row.ingredient.name,
+    version: row.ingredient.version,
+    categoryId: row.ingredient.categoryId,
+    categoryName: row.categoryName,
+    defaultUnitId: row.ingredient.defaultUnitId,
+    defaultUnitName: row.defaultUnitName,
+    status: "PENDING",
+    createdAt: toIsoDate(row.createdAt),
+    updatedAt: toIsoDate(row.updatedAt),
+    user: {
+      id: row.ingredient.owner?.id ?? row.userId,
+      uid: row.ingredient.owner?.uid ?? 0,
+      nickname: row.ingredient.owner?.nickname ?? null
+    }
+  };
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -80,7 +266,9 @@ export class AdminService {
     @Inject(AdminTokenService)
     private readonly adminTokenService: AdminTokenService,
     @Inject(EntitlementService)
-    private readonly entitlementService: EntitlementService
+    private readonly entitlementService: EntitlementService,
+    @Inject(IngredientImageService)
+    private readonly ingredientImageService: IngredientImageService
   ) {}
 
   async login(body: AdminLoginRequest) {
@@ -106,7 +294,70 @@ export class AdminService {
     };
   }
 
-  async listUsers(page: number, pageSize: number, keyword?: string): Promise<PageResult<UserProfile>> {
+  async getDashboardSummary(adminId: UUID): Promise<AdminDashboardSummary> {
+    await this.requireSuperAdmin(adminId);
+    const [
+      userTotal,
+      userActiveCount,
+      userDisabledCount,
+      diningGroupTotal,
+      diningGroupActiveCount,
+      diningGroupMemberCount,
+      recipeTotal,
+      recipeActiveCount,
+      recipeBlockedCount,
+      recipeRecycledCount,
+      recipeOpenReportCount,
+      ingredientCategoryCount,
+      ingredientItemCount,
+      unitCount
+    ] = await this.prisma.$transaction([
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { status: "ACTIVE" } }),
+      this.prisma.user.count({ where: { status: "DISABLED" } }),
+      this.prisma.diningGroup.count(),
+      this.prisma.diningGroup.count({ where: { status: "ACTIVE" } }),
+      this.prisma.diningGroupMember.count({
+        where: { status: { in: ["ACTIVE", "RESTRICTED"] } }
+      }),
+      this.prisma.recipe.count(),
+      this.prisma.recipe.count({ where: { status: "ACTIVE" } }),
+      this.prisma.recipe.count({ where: { status: "BLOCKED" } }),
+      this.prisma.recipe.count({ where: { status: "RECYCLED" } }),
+      this.prisma.recipeReport.count({ where: { status: "OPEN" } }),
+      this.prisma.ingredientCategory.count(),
+      this.prisma.ingredient.count({ where: { ownerId: null, status: "ACTIVE" } }),
+      this.prisma.unit.count({ where: { ownerId: null } })
+    ]);
+
+    return {
+      user: {
+        total: userTotal,
+        activeCount: userActiveCount,
+        disabledCount: userDisabledCount
+      },
+      diningGroup: {
+        total: diningGroupTotal,
+        activeCount: diningGroupActiveCount,
+        memberCount: diningGroupMemberCount
+      },
+      recipe: {
+        total: recipeTotal,
+        activeCount: recipeActiveCount,
+        blockedCount: recipeBlockedCount,
+        recycledCount: recipeRecycledCount,
+        openReportCount: recipeOpenReportCount
+      },
+      ingredient: {
+        categoryCount: ingredientCategoryCount,
+        itemCount: ingredientItemCount,
+        unitCount
+      }
+    };
+  }
+
+  async listUsers(page: number, pageSize: number, keyword: string | undefined, adminId: UUID): Promise<PageResult<UserProfile>> {
+    await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -360,8 +611,11 @@ export class AdminService {
     page: number,
     pageSize: number,
     keyword?: string,
-    status?: string
+    status?: string,
+    adminId?: UUID
   ): Promise<PageResult<AdminDiningGroupSummary>> {
+    if (!adminId) throw new ForbiddenException("无权执行该操作");
+    await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -547,13 +801,1493 @@ export class AdminService {
     });
   }
 
+  async getUserRecipeDomain(userId: UUID, adminId: UUID): Promise<AdminUserRecipeDomainOverview> {
+    await this.requireSuperAdmin(adminId);
+    return this.prisma.$transaction(async tx => {
+      const user = await this.requireUser(tx, userId);
+      const [publishedCount, draftCount, collectionCount, sceneCount, latestRecipe, latestDraft, latestCollection] = await Promise.all([
+        tx.recipe.count({
+          where: {
+            ownerId: userId,
+            status: "ACTIVE"
+          }
+        }),
+        tx.recipeDraft.count({
+          where: {
+            userId
+          }
+        }),
+        tx.recipeCollection.count({
+          where: {
+            userId
+          }
+        }),
+        tx.recipeScene.count({
+          where: {
+            userId
+          }
+        }),
+        tx.recipe.findFirst({
+          where: {
+            ownerId: userId,
+            status: "ACTIVE"
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { updatedAt: true }
+        }),
+        tx.recipeDraft.findFirst({
+          where: {
+            userId
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { updatedAt: true }
+        }),
+        tx.recipeCollection.findFirst({
+          where: {
+            userId
+          },
+          orderBy: { updatedAt: "desc" },
+          select: { updatedAt: true }
+        })
+      ]);
+
+      return {
+        user: {
+          id: user.id,
+          uid: user.uid,
+          nickname: user.nickname
+        },
+        publishedCount,
+        draftCount,
+        collectionCount,
+        sceneCount,
+        latestPublishedAt: latestRecipe ? toIsoDate(latestRecipe.updatedAt) : null,
+        latestDraftAt: latestDraft ? toIsoDate(latestDraft.updatedAt) : null,
+        latestCollectionAt: latestCollection ? toIsoDate(latestCollection.updatedAt) : null
+      };
+    });
+  }
+
+  async listUserRecipes(
+    userId: UUID,
+    adminId: UUID,
+    page: number,
+    pageSize: number,
+    keyword?: string
+  ): Promise<PageResult<MyRecipeSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    await this.requireUserExists(userId);
+
+    const where: Prisma.RecipeWhereInput = {
+      ownerId: userId,
+      status: "ACTIVE",
+      ...(keyword
+        ? {
+            searchText: {
+              contains: keyword,
+              mode: "insensitive"
+            }
+          }
+        : {})
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipe.findMany({
+        where,
+        include: {
+          category: true,
+          currentVersion: true
+        },
+        orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipe.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => this.toUserRecipeSummary(item)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async listUserRecipeDrafts(
+    userId: UUID,
+    adminId: UUID,
+    page: number,
+    pageSize: number,
+    keyword?: string
+  ): Promise<PageResult<RecipeDraftSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    await this.requireUserExists(userId);
+
+    const where: Prisma.RecipeDraftWhereInput = {
+      userId,
+      ...(keyword
+        ? {
+            searchText: {
+              contains: keyword,
+              mode: "insensitive"
+            }
+          }
+        : {})
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipeDraft.findMany({
+        where,
+        include: {
+          category: true
+        },
+        orderBy: { updatedAt: "desc" },
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipeDraft.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => this.toUserDraftSummary(item)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async listUserCollections(userId: UUID, adminId: UUID): Promise<CollectionListResponse> {
+    await this.requireSuperAdmin(adminId);
+    return this.prisma.$transaction(async tx => {
+      await this.requireUser(tx, userId);
+      const [scenes, collections] = await Promise.all([
+        tx.recipeScene.findMany({
+          where: { userId },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+        }),
+        tx.recipeCollection.findMany({
+          where: { userId },
+          select: {
+            updatedAt: true,
+            sceneLinks: {
+              select: {
+                sceneId: true
+              }
+            }
+          }
+        })
+      ]);
+
+      const stats = new Map<string, { recipeCount: number; updatedAt: Date | null }>();
+      for (const scene of scenes) {
+        stats.set(scene.id, { recipeCount: 0, updatedAt: null });
+      }
+      for (const collection of collections) {
+        for (const link of collection.sceneLinks) {
+          const current = stats.get(link.sceneId);
+          if (!current) continue;
+          current.recipeCount += 1;
+          current.updatedAt =
+            !current.updatedAt || collection.updatedAt > current.updatedAt ? collection.updatedAt : current.updatedAt;
+        }
+      }
+
+      return {
+        items: scenes.map(scene => {
+          const current = stats.get(scene.id) ?? { recipeCount: 0, updatedAt: null };
+          return toCollectionSceneSummary(scene, current.recipeCount, current.updatedAt);
+        }),
+        totalCount: collections.length
+      };
+    });
+  }
+
+  async listUserCollectionRecipes(
+    userId: UUID,
+    sceneId: UUID,
+    adminId: UUID,
+    page: number,
+    pageSize: number
+  ): Promise<PageResult<CollectedRecipeSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+
+    return this.prisma.$transaction(async tx => {
+      await this.requireUser(tx, userId);
+      const scene = await tx.recipeScene.findFirst({
+        where: {
+          id: sceneId,
+          userId
+        },
+        select: { id: true }
+      });
+      if (!scene) throw new NotFoundException("合集不存在");
+
+      const where: Prisma.RecipeCollectionWhereInput = {
+        userId,
+        sceneLinks: {
+          some: {
+            sceneId
+          }
+        }
+      };
+      const [items, total] = await Promise.all([
+        tx.recipeCollection.findMany({
+          where,
+          include: {
+            sourceRecipe: {
+              include: {
+                inspirationCategory: true
+              }
+            },
+            sourceVersion: true,
+            sceneLinks: {
+              include: {
+                scene: true
+              }
+            }
+          },
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+          skip,
+          take: normalizedPageSize
+        }),
+        tx.recipeCollection.count({ where })
+      ]);
+
+      return {
+        items: items.map(item => this.toCollectedRecipeSummary(item)),
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total,
+        hasNext: skip + items.length < total
+      };
+    });
+  }
+
+  async listIngredientCategories(keyword: string | undefined, adminId: UUID): Promise<AdminIngredientCategorySummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedKeyword = keyword?.trim();
+    const where: Prisma.IngredientCategoryWhereInput = normalizedKeyword
+      ? {
+          name: {
+            contains: normalizedKeyword,
+            mode: "insensitive"
+          }
+        }
+      : {};
+    const categories = await this.prisma.ingredientCategory.findMany({
+      where,
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+    });
+    if (!categories.length) return [];
+
+    const counts = await this.prisma.ingredient.groupBy({
+      by: ["categoryId"],
+      where: {
+        ownerId: null,
+        status: {
+          in: ["ACTIVE", "DISABLED"]
+        },
+        categoryId: {
+          in: categories.map(item => item.id)
+        }
+      },
+      _count: {
+        _all: true
+      }
+    });
+    const countMap = new Map(counts.map(item => [item.categoryId, item._count._all]));
+    return categories.map(category => toAdminIngredientCategorySummary(category, countMap.get(category.id) ?? 0));
+  }
+
+  async listSystemUnits(adminId: UUID): Promise<AdminUnitSummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const items = await this.prisma.unit.findMany({
+      where: {
+        ownerId: null
+      },
+      orderBy: [{ type: "asc" }, { systemSortOrder: "asc" }, { name: "asc" }]
+    });
+    return items.map(toAdminUnitSummary);
+  }
+
+  async createSystemUnit(body: AdminUnitPayloadRequest, adminId: UUID): Promise<AdminUnitSummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const searchKey = buildSearchKey(name);
+    const requestHash = `${body.type}:${searchKey}`;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminUnitSummary>(
+          tx,
+          body.operationId,
+          "admin-unit:create",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-unit:create", adminId, requestHash);
+        await this.assertSystemUnitNameAvailable(tx, searchKey, null);
+        const systemSortOrder = await this.nextSystemUnitSortOrder(tx, body.type);
+        const unit = await tx.unit.create({
+          data: {
+            ownerId: null,
+            type: body.type,
+            name,
+            searchKey,
+            systemSortOrder
+          }
+        });
+        const result = toAdminUnitSummary(unit);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "UNIT_CREATED",
+            objectType: "UNIT",
+            objectId: unit.id,
+            payload: {
+              name,
+              type: body.type,
+              source: "SYSTEM"
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-unit:create", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统单位名称已存在，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async updateSystemUnit(unitId: UUID, body: UpdateAdminUnitRequest, adminId: UUID): Promise<AdminUnitSummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const searchKey = buildSearchKey(name);
+    const requestHash = `${unitId}:${body.expectedVersion}:${body.type}:${searchKey}`;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminUnitSummary>(
+          tx,
+          body.operationId,
+          "admin-unit:update",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-unit:update", adminId, requestHash);
+        const unit = await this.requireSystemUnit(tx, unitId);
+        if (unit.version !== body.expectedVersion) throw new ConflictException("单位已被更新，请刷新后重试");
+        await this.assertSystemUnitNameAvailable(tx, searchKey, unitId);
+        const systemSortOrder =
+          unit.type === body.type ? unit.systemSortOrder : await this.nextSystemUnitSortOrder(tx, body.type);
+        const updated = await tx.unit.update({
+          where: { id: unitId },
+          data: {
+            name,
+            type: body.type,
+            searchKey,
+            systemSortOrder,
+            version: { increment: 1 }
+          }
+        });
+        const result = toAdminUnitSummary(updated);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "UNIT_UPDATED",
+            objectType: "UNIT",
+            objectId: unitId,
+            payload: {
+              name,
+              type: body.type,
+              source: "SYSTEM"
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-unit:update", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统单位名称已存在，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async deleteSystemUnit(unitId: UUID, operationId: UUID, expectedVersion: number, adminId: UUID): Promise<AdminDeleteUnitResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${unitId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteUnitResult>(
+        tx,
+        operationId,
+        "admin-unit:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-unit:delete", adminId, requestHash);
+      const unit = await this.requireSystemUnit(tx, unitId);
+      if (unit.version !== expectedVersion) throw new ConflictException("单位已被更新，请刷新后重试");
+
+      const ingredientCount = await tx.ingredient.count({
+        where: {
+          defaultUnitId: unitId,
+          status: {
+            in: ["ACTIVE", "DISABLED"]
+          }
+        }
+      });
+      if (ingredientCount > 0) throw new ConflictException("该单位已被食材使用，不能删除");
+      if (await this.hasDraftUnitReference(tx, unitId)) {
+        throw new ConflictException("该单位仍被菜谱草稿使用，不能删除");
+      }
+      if (await this.hasRecipeVersionUnitReference(tx, unitId)) {
+        throw new ConflictException("该单位仍被已发布菜谱使用，不能删除");
+      }
+
+      await tx.unit.delete({
+        where: { id: unitId }
+      });
+      const result = {
+        unitId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "UNIT_DELETED",
+          objectType: "UNIT",
+          objectId: unitId,
+          payload: {
+            name: unit.name,
+            type: unit.type,
+            source: "SYSTEM"
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-unit:delete", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async reorderSystemUnits(type: UnitSummary["type"], operationId: UUID, items: ReorderItem[], adminId: UUID): Promise<AdminUnitSummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({ type, items });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminUnitSummary[]>(
+        tx,
+        operationId,
+        "admin-unit:reorder",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-unit:reorder", adminId, requestHash);
+
+      const all = await tx.unit.findMany({
+        where: {
+          ownerId: null,
+          type
+        },
+        orderBy: [{ systemSortOrder: "asc" }, { createdAt: "asc" }]
+      });
+      this.assertReorderScope(all, items, "系统单位");
+      await this.writeSystemUnitSortOrder(tx, type, items.map(item => item.id));
+
+      const updated = await tx.unit.findMany({
+        where: {
+          ownerId: null
+        },
+        orderBy: [{ type: "asc" }, { systemSortOrder: "asc" }, { name: "asc" }]
+      });
+      const result = updated.map(toAdminUnitSummary);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "UNIT_REORDERED",
+          objectType: "UNIT_TYPE",
+          objectId: null,
+          payload: {
+            type,
+            ids: items.map(item => item.id),
+            source: "SYSTEM"
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-unit:reorder", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async createIngredientCategory(body: AdminIngredientCategoryPayloadRequest, adminId: UUID): Promise<AdminIngredientCategorySummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const requestHash = name;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminIngredientCategorySummary>(
+        tx,
+        body.operationId,
+        "admin-ingredient-category:create",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:create", adminId, requestHash);
+      await this.assertIngredientCategoryNameAvailable(tx, name, null);
+      const sortOrder = await this.nextIngredientCategorySortOrder(tx);
+      const category = await tx.ingredientCategory.create({
+        data: {
+          name,
+          sortOrder
+        }
+      });
+      const result = toAdminIngredientCategorySummary(category, 0);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_CATEGORY_CREATED",
+          objectType: "INGREDIENT_CATEGORY",
+          objectId: category.id,
+          payload: { name }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:create", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async updateIngredientCategory(
+    categoryId: UUID,
+    body: UpdateAdminIngredientCategoryRequest,
+    adminId: UUID
+  ): Promise<AdminIngredientCategorySummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const requestHash = `${categoryId}:${body.expectedVersion}:${name}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminIngredientCategorySummary>(
+        tx,
+        body.operationId,
+        "admin-ingredient-category:update",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:update", adminId, requestHash);
+
+      const category = await this.requireIngredientCategory(tx, categoryId);
+      if (category.version !== body.expectedVersion) throw new ConflictException("食材分类已被更新，请刷新后重试");
+      await this.assertIngredientCategoryNameAvailable(tx, name, categoryId);
+
+      const updated = await tx.ingredientCategory.update({
+        where: { id: categoryId },
+        data: {
+          name,
+          version: { increment: 1 }
+        }
+      });
+      const ingredientCount = await tx.ingredient.count({
+        where: {
+          ownerId: null,
+          status: "ACTIVE",
+          categoryId
+        }
+      });
+      const result = toAdminIngredientCategorySummary(updated, ingredientCount);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_CATEGORY_UPDATED",
+          objectType: "INGREDIENT_CATEGORY",
+          objectId: categoryId,
+          payload: { name }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:update", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async reorderIngredientCategories(
+    operationId: UUID,
+    items: ReorderItem[],
+    adminId: UUID
+  ): Promise<AdminIngredientCategorySummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify(items);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminIngredientCategorySummary[]>(
+        tx,
+        operationId,
+        "admin-ingredient-category:reorder",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-ingredient-category:reorder", adminId, requestHash);
+
+      const all = await tx.ingredientCategory.findMany({
+        orderBy: { sortOrder: "asc" }
+      });
+      this.assertReorderScope(all, items, "食材分类");
+      await this.writeIngredientCategorySortOrder(tx, items.map(item => item.id));
+
+      const [updated, counts] = await Promise.all([
+        tx.ingredientCategory.findMany({
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+        }),
+        tx.ingredient.groupBy({
+          by: ["categoryId"],
+          where: { ownerId: null, status: "ACTIVE" },
+          _count: { _all: true }
+        })
+      ]);
+      const countMap = new Map(counts.map(item => [item.categoryId, item._count._all]));
+      const result = updated.map(category => toAdminIngredientCategorySummary(category, countMap.get(category.id) ?? 0));
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_CATEGORY_REORDERED",
+          objectType: "INGREDIENT_CATEGORY",
+          objectId: updated[0]?.id ?? null,
+          payload: { ids: items.map(item => item.id) }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient-category:reorder", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async listIngredients(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    page: number,
+    pageSize: number,
+    categoryId: string | undefined,
+    keyword: string | undefined,
+    status: string | undefined,
+    adminId: UUID
+  ): Promise<PageResult<AdminIngredientSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedKeyword = keyword?.trim();
+    const normalizedStatus = status === "DISABLED" || status === "ALL" ? status : "ACTIVE";
+    const where: Prisma.IngredientWhereInput = {
+      ownerId: null,
+      status:
+        normalizedStatus === "ALL"
+          ? {
+              in: ["ACTIVE", "DISABLED"]
+            }
+          : normalizedStatus,
+      ...(categoryId ? { categoryId } : {}),
+      ...(normalizedKeyword
+        ? {
+            searchKey: {
+              contains: buildSearchKey(normalizedKeyword)
+            }
+          }
+        : {})
+    };
+    const orderBy = categoryId
+      ? ([{ systemSortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[])
+      : ([{ category: { sortOrder: "asc" } }, { systemSortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[]);
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.ingredient.findMany({
+        where,
+        include: {
+          category: true,
+          defaultUnit: true
+        },
+        orderBy,
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.ingredient.count({ where })
+    ]);
+    return {
+      items: items.map(item => ({
+        ...toAdminIngredientSummary(item),
+        imageUrl: this.ingredientImageService.buildImageUrl(request, item.id, (item as AdminIngredientWithImageRow).imageUpdatedAt)
+      })),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async createIngredient(body: AdminIngredientPayloadRequest, adminId: UUID): Promise<AdminIngredientSummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const searchKey = buildSearchKey(name);
+    const requestHash = `${searchKey}:${body.categoryId}:${body.defaultUnitId}`;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
+          tx,
+          body.operationId,
+          "admin-ingredient:create",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:create", adminId, requestHash);
+
+        await this.requireIngredientCategory(tx, body.categoryId);
+        const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
+        await this.assertSystemIngredientNameAvailable(tx, searchKey, null);
+        const systemSortOrder = await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+        const ingredient = await tx.ingredient.create({
+          data: {
+            ownerId: null,
+            status: "ACTIVE",
+            categoryId: body.categoryId,
+            defaultUnitId: unit.id,
+            name,
+            searchKey,
+            systemSortOrder
+          },
+          include: {
+            category: true,
+            defaultUnit: true
+          }
+        });
+        const result = toAdminIngredientSummary(ingredient);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_CREATED",
+            objectType: "INGREDIENT",
+            objectId: ingredient.id,
+            payload: { categoryId: body.categoryId, name }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:create", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统食材名称或排序已冲突，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async updateIngredient(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    ingredientId: UUID,
+    body: UpdateAdminIngredientRequest,
+    adminId: UUID
+  ): Promise<AdminIngredientSummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const searchKey = buildSearchKey(name);
+    const requestHash = `${ingredientId}:${body.expectedVersion}:${searchKey}:${body.categoryId}:${body.defaultUnitId}`;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
+          tx,
+          body.operationId,
+          "admin-ingredient:update",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:update", adminId, requestHash);
+
+        const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
+        if (ingredient.version !== body.expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
+        await this.requireIngredientCategory(tx, body.categoryId);
+        const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
+        await this.assertSystemIngredientNameAvailable(tx, searchKey, ingredientId);
+        const systemSortOrder =
+          ingredient.categoryId === body.categoryId
+            ? ingredient.systemSortOrder
+            : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+
+        const updated = await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            name,
+            searchKey,
+            categoryId: body.categoryId,
+            defaultUnitId: unit.id,
+            systemSortOrder,
+            version: { increment: 1 }
+          },
+          include: {
+            category: true,
+            defaultUnit: true
+          }
+        });
+        const result = {
+          ...toAdminIngredientSummary(updated),
+          imageUrl: this.ingredientImageService.buildImageUrl(
+            request,
+            updated.id,
+            (updated as AdminIngredientWithImageRow).imageUpdatedAt
+          )
+        };
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_UPDATED",
+            objectType: "INGREDIENT",
+            objectId: ingredientId,
+            payload: {
+              categoryId: body.categoryId,
+              name
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:update", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统食材名称或排序已冲突，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async setIngredientStatus(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    ingredientId: UUID,
+    body: SetAdminIngredientStatusRequest,
+    adminId: UUID
+  ): Promise<AdminIngredientSummary> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${ingredientId}:${body.expectedVersion}:${body.status}`;
+
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
+          tx,
+          body.operationId,
+          "admin-ingredient:set-status",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:set-status", adminId, requestHash);
+
+        const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
+        if (ingredient.version !== body.expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
+
+        const updated =
+          ingredient.status === body.status
+            ? ingredient
+            : await tx.ingredient.update({
+                where: { id: ingredientId },
+                data: {
+                  status: body.status,
+                  systemSortOrder:
+                    body.status === "ACTIVE" ? await this.nextSystemIngredientSortOrder(tx, ingredient.categoryId) : ingredient.systemSortOrder,
+                  version: { increment: 1 }
+                },
+                include: {
+                  category: true,
+                  defaultUnit: true
+                }
+              });
+
+        const result = {
+          ...toAdminIngredientSummary(updated as AdminIngredientRow),
+          imageUrl: this.ingredientImageService.buildImageUrl(
+            request,
+            updated.id,
+            (updated as AdminIngredientWithImageRow).imageUpdatedAt
+          )
+        };
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_STATUS_CHANGED",
+            objectType: "INGREDIENT",
+            objectId: ingredientId,
+            payload: {
+              status: body.status
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:set-status", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统食材排序已更新，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async uploadIngredientImage(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    ingredientId: UUID,
+    operationId: UUID,
+    expectedVersion: number,
+    file: { buffer?: Buffer; size?: number } | undefined,
+    adminId: UUID
+  ): Promise<AdminIngredientSummary> {
+    await this.requireSuperAdmin(adminId);
+    const fileHash = file?.buffer ? createHash("sha256").update(file.buffer).digest("hex") : "missing";
+    const requestHash = `${ingredientId}:${expectedVersion}:${fileHash}`;
+    const stagedImagePath = await this.ingredientImageService.stageImageUpload(ingredientId, file);
+    let backupImagePath: string | null = null;
+    let replaced = false;
+
+    try {
+      const result = await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
+          tx,
+          operationId,
+          "admin-ingredient:upload-image",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, operationId, "admin-ingredient:upload-image", adminId, requestHash);
+
+        const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
+        if (ingredient.version !== expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
+
+        backupImagePath = await this.ingredientImageService.replaceStagedImage(ingredientId, stagedImagePath);
+        replaced = true;
+
+        const updated = await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            imageUpdatedAt: new Date(),
+            version: { increment: 1 }
+          } as Prisma.IngredientUpdateInput,
+          include: {
+            category: true,
+            defaultUnit: true
+          }
+        });
+        const result = {
+          ...toAdminIngredientSummary(updated as AdminIngredientRow),
+          imageUrl: this.ingredientImageService.buildImageUrl(
+            request,
+            updated.id,
+            (updated as AdminIngredientWithImageRow).imageUpdatedAt
+          )
+        };
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_IMAGE_UPDATED",
+            objectType: "INGREDIENT",
+            objectId: ingredientId,
+            payload: {
+              fileHash
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient:upload-image", adminId, requestHash, result);
+        return result;
+      });
+
+      if (replaced) {
+        await this.ingredientImageService.finalizeReplacedImage(backupImagePath);
+      } else {
+        await this.ingredientImageService.discardStagedImage(stagedImagePath);
+      }
+
+      return result;
+    } catch (error) {
+      if (replaced) {
+        await this.ingredientImageService.rollbackReplacedImage(ingredientId, backupImagePath);
+      } else {
+        await this.ingredientImageService.discardStagedImage(stagedImagePath);
+      }
+      throw error;
+    }
+  }
+
+  async clearIngredientImage(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    ingredientId: UUID,
+    operationId: UUID,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminIngredientSummary> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${ingredientId}:${expectedVersion}:clear`;
+    let backupImagePath: string | null = null;
+    let cleared = false;
+
+    try {
+      const result = await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
+          tx,
+          operationId,
+          "admin-ingredient:clear-image",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, operationId, "admin-ingredient:clear-image", adminId, requestHash);
+
+        const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
+        if (ingredient.version !== expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
+
+        backupImagePath = await this.ingredientImageService.stageClearImage(ingredientId);
+        cleared = true;
+
+        const updated = await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            imageUpdatedAt: null,
+            version: { increment: 1 }
+          } as Prisma.IngredientUpdateInput,
+          include: {
+            category: true,
+            defaultUnit: true
+          }
+        });
+        const result = {
+          ...toAdminIngredientSummary(updated as AdminIngredientRow),
+          imageUrl: null
+        };
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_IMAGE_CLEARED",
+            objectType: "INGREDIENT",
+            objectId: ingredientId,
+            payload: {}
+          }
+        });
+        await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient:clear-image", adminId, requestHash, result);
+        return result;
+      });
+
+      if (cleared) {
+        await this.ingredientImageService.finalizeClearedImage(backupImagePath);
+      }
+
+      return result;
+    } catch (error) {
+      if (cleared) {
+        await this.ingredientImageService.rollbackClearedImage(ingredientId, backupImagePath);
+      }
+      throw error;
+    }
+  }
+
+  async reorderIngredients(
+    categoryId: UUID,
+    operationId: UUID,
+    items: ReorderItem[],
+    adminId: UUID
+  ): Promise<AdminIngredientSummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({ categoryId, items });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminIngredientSummary[]>(
+        tx,
+        operationId,
+        "admin-ingredient:reorder",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-ingredient:reorder", adminId, requestHash);
+
+      await this.requireIngredientCategory(tx, categoryId);
+      const all = await tx.ingredient.findMany({
+        where: {
+          ownerId: null,
+          status: "ACTIVE",
+          categoryId
+        },
+        include: {
+          category: true,
+          defaultUnit: true
+        },
+        orderBy: [{ systemSortOrder: "asc" }, { createdAt: "asc" }]
+      });
+      this.assertReorderScope(all, items, "系统食材");
+      await this.writeSystemIngredientSortOrder(tx, items.map(item => item.id), categoryId);
+
+      const updated = await tx.ingredient.findMany({
+        where: {
+          ownerId: null,
+          status: "ACTIVE",
+          categoryId
+        },
+        include: {
+          category: true,
+          defaultUnit: true
+        },
+        orderBy: [{ systemSortOrder: "asc" }, { createdAt: "asc" }]
+      });
+      const result = updated.map(toAdminIngredientSummary);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_REORDERED",
+          objectType: "INGREDIENT_CATEGORY",
+          objectId: categoryId,
+          payload: { ids: items.map(item => item.id) }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient:reorder", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async listPendingIngredients(page: number, pageSize: number, keyword: string | undefined, adminId: UUID): Promise<PageResult<AdminPendingIngredientSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedKeyword = keyword?.trim();
+    const uidKeyword = normalizedKeyword && /^\d+$/.test(normalizedKeyword) ? Number(normalizedKeyword) : null;
+    const where: Prisma.IngredientRecommendationWhereInput = {
+      status: "PENDING",
+      ingredient: {
+        is: {
+          ownerId: {
+            not: null
+          },
+          status: "ACTIVE"
+        }
+      },
+      ...(normalizedKeyword
+        ? {
+            OR: [
+              { ingredientName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { categoryName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { user: { is: { nickname: { contains: normalizedKeyword, mode: "insensitive" } } } },
+              ...(uidKeyword === null ? [] : [{ ingredient: { is: { owner: { is: { uid: uidKeyword } } } } }])
+            ]
+          }
+        : {})
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.ingredientRecommendation.findMany({
+        where,
+        include: {
+          ingredient: {
+            include: {
+              owner: {
+                select: {
+                  id: true,
+                  uid: true,
+                  nickname: true
+                }
+              },
+              defaultUnit: true
+            }
+          }
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.ingredientRecommendation.count({ where })
+    ]);
+
+    return {
+      items: items.map(toAdminPendingIngredientSummary),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async reviewPendingIngredient(
+    _request: { protocol?: string; get?: (name: string) => string | undefined },
+    ingredientId: UUID,
+    body: AdminReviewPendingIngredientRequest,
+    adminId: UUID
+  ): Promise<AdminReviewPendingIngredientResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({ ingredientId, ...body });
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId}::uuid FOR UPDATE`;
+        const recommendation = await this.requirePendingIngredientRecommendation(tx, ingredientId);
+        const repeated = await getAdminIdempotentResult<AdminReviewPendingIngredientResult>(
+          tx,
+          body.operationId,
+          "admin-pending-ingredient:review",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        if (recommendation.ingredient.version !== body.expectedVersion) {
+          throw new ConflictException("食材已被更新，请刷新后重试");
+        }
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-pending-ingredient:review", adminId, requestHash);
+
+        const now = new Date();
+        if (body.action === "REJECT") {
+          await tx.ingredientRecommendation.update({
+            where: { id: recommendation.id },
+            data: {
+              status: "REJECTED",
+              reviewNote: body.reason?.trim() || null,
+              reviewedAt: now
+            }
+          });
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "INGREDIENT_RECOMMENDATION_REVIEWED",
+              objectType: "INGREDIENT",
+              objectId: ingredientId,
+              payload: {
+                action: body.action,
+                targetIngredientId: null,
+                reason: body.reason?.trim() || null
+              }
+            },
+          });
+          const result = {
+            id: ingredientId,
+            status: "REJECTED",
+            reviewedAt: toIsoDate(now),
+            targetIngredientId: null
+          } satisfies AdminReviewPendingIngredientResult;
+          await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-ingredient:review", adminId, requestHash, result);
+          return result;
+        }
+
+        const name = body.name?.trim() || "";
+        if (!name) throw new BadRequestException("食材名称不能为空");
+        if (!body.categoryId) throw new BadRequestException("请选择分类");
+        if (!body.defaultUnitId) throw new BadRequestException("请选择默认单位");
+        const searchKey = buildSearchKey(name);
+        const category = await this.requireIngredientCategory(tx, body.categoryId);
+        const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
+
+        let targetIngredientId: UUID | null = null;
+
+        if (body.action === "APPROVE_MERGE") {
+          if (!body.targetIngredientId) throw new BadRequestException("请选择归并目标");
+          const mergeTarget = await this.requireSystemIngredient(tx, body.targetIngredientId);
+          await this.assertSystemIngredientNameAvailable(tx, searchKey, mergeTarget.id);
+          const nextSortOrder =
+            mergeTarget.categoryId === body.categoryId
+              ? mergeTarget.systemSortOrder
+              : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+          const updatedTarget = await tx.ingredient.update({
+            where: { id: mergeTarget.id },
+            data: {
+              name,
+              searchKey,
+              categoryId: body.categoryId,
+              defaultUnitId: unit.id,
+              systemSortOrder: nextSortOrder,
+              version: { increment: 1 }
+            },
+            include: {
+              category: true,
+              defaultUnit: true
+            }
+          });
+          await tx.ingredient.update({
+            where: { id: ingredientId },
+            data: {
+              status: "MERGED",
+              mergedToId: updatedTarget.id,
+              version: { increment: 1 }
+            }
+          });
+          await tx.ingredientRecommendation.update({
+            where: { id: recommendation.id },
+            data: {
+              status: "MERGED",
+              ingredientName: updatedTarget.name,
+              categoryId: updatedTarget.categoryId,
+              categoryName: category.name,
+              defaultUnitId: updatedTarget.defaultUnitId,
+              defaultUnitName: updatedTarget.defaultUnit.name,
+              reviewNote: body.reason?.trim() || null,
+              targetIngredientId: updatedTarget.id,
+              reviewedAt: now
+            }
+          });
+          targetIngredientId = updatedTarget.id;
+        } else {
+          const duplicate = await tx.ingredient.findFirst({
+            where: {
+              ownerId: null,
+              status: {
+                in: ["ACTIVE", "DISABLED"]
+              },
+              searchKey,
+            },
+            include: {
+              category: true,
+              defaultUnit: true
+            }
+          });
+
+          if (duplicate) {
+            const nextSortOrder =
+              duplicate.categoryId === body.categoryId
+                ? duplicate.systemSortOrder
+                : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+            const updatedTarget = await tx.ingredient.update({
+              where: { id: duplicate.id },
+              data: {
+                status: "ACTIVE",
+                name,
+                searchKey,
+                categoryId: body.categoryId,
+                defaultUnitId: unit.id,
+                systemSortOrder: nextSortOrder,
+                version: { increment: 1 }
+              },
+              include: {
+                category: true,
+                defaultUnit: true
+              }
+            });
+            await tx.ingredient.update({
+              where: { id: ingredientId },
+              data: {
+                status: "MERGED",
+                mergedToId: updatedTarget.id,
+                version: { increment: 1 }
+              }
+            });
+            await tx.ingredientRecommendation.update({
+              where: { id: recommendation.id },
+              data: {
+                status: "MERGED",
+                ingredientName: updatedTarget.name,
+                categoryId: updatedTarget.categoryId,
+                categoryName: category.name,
+                defaultUnitId: updatedTarget.defaultUnitId,
+                defaultUnitName: updatedTarget.defaultUnit.name,
+                reviewNote: body.reason?.trim() || null,
+                targetIngredientId: updatedTarget.id,
+                reviewedAt: now
+              }
+            });
+            targetIngredientId = updatedTarget.id;
+          } else {
+            const current = recommendation.ingredient;
+            const nextSortOrder =
+              current.categoryId === body.categoryId && current.ownerId === null
+                ? current.systemSortOrder
+                : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+            const updatedIngredient = await tx.ingredient.update({
+              where: { id: ingredientId },
+              data: {
+                ownerId: null,
+                status: "ACTIVE",
+                mergedToId: null,
+                name,
+                searchKey,
+                categoryId: body.categoryId,
+                defaultUnitId: unit.id,
+                systemSortOrder: nextSortOrder,
+                version: { increment: 1 }
+              },
+              include: {
+                category: true,
+                defaultUnit: true
+              }
+            });
+            await tx.ingredientRecommendation.update({
+              where: { id: recommendation.id },
+              data: {
+                status: "ADOPTED",
+                ingredientName: updatedIngredient.name,
+                categoryId: updatedIngredient.categoryId,
+                categoryName: category.name,
+                defaultUnitId: updatedIngredient.defaultUnitId,
+                defaultUnitName: updatedIngredient.defaultUnit.name,
+                reviewNote: body.reason?.trim() || null,
+                targetIngredientId: updatedIngredient.id,
+                reviewedAt: now
+              }
+            });
+            targetIngredientId = updatedIngredient.id;
+          }
+        }
+
+        const result = {
+          id: ingredientId,
+          status: "APPROVED",
+          reviewedAt: toIsoDate(now),
+          targetIngredientId
+        } satisfies AdminReviewPendingIngredientResult;
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_RECOMMENDATION_REVIEWED",
+            objectType: "INGREDIENT",
+            objectId: ingredientId,
+            payload: {
+              action: body.action,
+              targetIngredientId,
+              reason: body.reason?.trim() || null
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-ingredient:review", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统食材名称或排序已冲突，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
   async listRecipes(
     page: number,
     pageSize: number,
     keyword?: string,
     status?: string,
-    reportsOnly?: boolean
+    reportsOnly?: boolean,
+    adminId?: UUID
   ): Promise<PageResult<AdminRecipeSummary>> {
+    if (!adminId) throw new ForbiddenException("无权执行该操作");
+    await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -609,7 +2343,8 @@ export class AdminService {
     };
   }
 
-  async listRecipeReports(page: number, pageSize: number, status?: string): Promise<PageResult<RecipeReportSummary>> {
+  async listRecipeReports(page: number, pageSize: number, status: string | undefined, adminId: UUID): Promise<PageResult<RecipeReportSummary>> {
+    await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -815,6 +2550,69 @@ export class AdminService {
     });
   }
 
+  private toUserRecipeSummary(recipe: AdminUserRecipeRow): MyRecipeSummary {
+    const content = versionToContent(recipe.currentVersion);
+    return {
+      id: recipe.id,
+      title: recipe.title,
+      coverImageUrl: recipe.coverImageUrl,
+      difficulty: content.difficulty,
+      duration: content.duration,
+      category: toRecipeCategorySummary(recipe.category!),
+      version: recipe.version,
+      updatedAt: toIsoDate(recipe.updatedAt)
+    };
+  }
+
+  private toUserDraftSummary(draft: AdminDraftRow): RecipeDraftSummary {
+    return {
+      id: draft.id,
+      recipeId: draft.recipeId,
+      title: draft.title,
+      category: draft.category ? toRecipeCategorySummary(draft.category) : null,
+      version: draft.version,
+      updatedAt: toIsoDate(draft.updatedAt)
+    };
+  }
+
+  private toCollectedRecipeSummary(collection: AdminCollectionRow): CollectedRecipeSummary {
+    const content = versionToContent(collection.sourceVersion);
+    return {
+      id: collection.id,
+      sourceRecipeId: collection.sourceRecipeId,
+      title: collection.sourceVersion.name,
+      coverImageUrl: collection.sourceRecipe.coverImageUrl,
+      difficulty: content.difficulty,
+      duration: content.duration,
+      category: toInspirationCategorySummary(collection.sourceRecipe.inspirationCategory!),
+      scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
+      contentVersionId: collection.sourceVersionId,
+      collectedAt: toIsoDate(collection.createdAt),
+      updatedAt: toIsoDate(collection.updatedAt)
+    };
+  }
+
+  private async requireUser(tx: Prisma.TransactionClient, userId: UUID) {
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        uid: true,
+        nickname: true
+      }
+    });
+    if (!user) throw new NotFoundException("用户不存在");
+    return user;
+  }
+
+  private async requireUserExists(userId: UUID) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true }
+    });
+    if (!user) throw new NotFoundException("用户不存在");
+  }
+
   private async requireSuperAdmin(adminId: UUID) {
     const admin = await this.prisma.adminAccount.findUnique({
       where: { id: adminId },
@@ -823,6 +2621,267 @@ export class AdminService {
     if (!admin || admin.status !== "ACTIVE" || !admin.roles.includes("SUPER_ADMIN")) {
       throw new ForbiddenException("无权执行该操作");
     }
+  }
+
+  private async requireIngredientCategory(tx: Prisma.TransactionClient, categoryId: UUID) {
+    const category = await tx.ingredientCategory.findUnique({
+      where: { id: categoryId }
+    });
+    if (!category) throw new NotFoundException("食材分类不存在");
+    return category;
+  }
+
+  private async requireSystemUnit(tx: Prisma.TransactionClient, unitId: UUID) {
+    const unit = await tx.unit.findFirst({
+      where: {
+        id: unitId,
+        ownerId: null
+      }
+    });
+    if (!unit) throw new NotFoundException("系统单位不存在");
+    return unit;
+  }
+
+  private async assertSystemUnitNameAvailable(tx: Prisma.TransactionClient, searchKey: string, unitId: UUID | null) {
+    const existing = await tx.unit.findFirst({
+      where: {
+        ownerId: null,
+        searchKey,
+        ...(unitId ? { NOT: { id: unitId } } : {})
+      }
+    });
+    if (existing) throw new ConflictException("系统单位名称已存在");
+  }
+
+  private async requireSystemIngredient(tx: Prisma.TransactionClient, ingredientId: UUID, includeDisabled = false) {
+    const ingredient = await tx.ingredient.findFirst({
+      where: {
+        id: ingredientId,
+        ownerId: null,
+        status: includeDisabled
+          ? {
+              in: ["ACTIVE", "DISABLED"]
+            }
+          : "ACTIVE"
+      },
+      include: {
+        category: true,
+        defaultUnit: true
+      }
+    });
+    if (!ingredient) throw new NotFoundException("系统食材不存在");
+    return ingredient;
+  }
+
+  private async assertIngredientCategoryNameAvailable(tx: Prisma.TransactionClient, name: string, categoryId: UUID | null) {
+    const existing = await tx.ingredientCategory.findFirst({
+      where: {
+        name,
+        ...(categoryId ? { NOT: { id: categoryId } } : {})
+      }
+    });
+    if (existing) throw new ConflictException("食材分类名称已存在");
+  }
+
+  private async assertSystemIngredientNameAvailable(tx: Prisma.TransactionClient, searchKey: string, ingredientId: UUID | null) {
+    const existing = await tx.ingredient.findFirst({
+      where: {
+        ownerId: null,
+        status: {
+          in: ["ACTIVE", "DISABLED"]
+        },
+        searchKey,
+        ...(ingredientId ? { NOT: { id: ingredientId } } : {})
+      }
+    });
+    if (existing) throw new ConflictException("系统食材名称已存在");
+  }
+
+  private async requirePendingIngredientRecommendation(tx: Prisma.TransactionClient, ingredientId: UUID) {
+    const recommendation = await tx.ingredientRecommendation.findFirst({
+      where: {
+        ingredientId,
+        status: "PENDING"
+      },
+      include: {
+        ingredient: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                uid: true,
+                nickname: true
+              }
+            },
+            defaultUnit: true
+          }
+        }
+      }
+    });
+    if (!recommendation || !recommendation.ingredient.ownerId || recommendation.ingredient.status !== "ACTIVE") {
+      throw new NotFoundException("待审核个人食材不存在");
+    }
+    return recommendation;
+  }
+
+  private async nextIngredientCategorySortOrder(tx: Prisma.TransactionClient) {
+    const last = await tx.ingredientCategory.findFirst({
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true }
+    });
+    return (last?.sortOrder ?? -1) + 1;
+  }
+
+  private async nextSystemIngredientSortOrder(tx: Prisma.TransactionClient, categoryId: UUID) {
+    const last = await tx.ingredient.findFirst({
+      where: {
+        ownerId: null,
+        status: "ACTIVE",
+        categoryId
+      },
+      orderBy: { systemSortOrder: "desc" },
+      select: { systemSortOrder: true }
+    });
+    return (last?.systemSortOrder ?? -1) + 1;
+  }
+
+  private async nextSystemUnitSortOrder(tx: Prisma.TransactionClient, type: UnitSummary["type"]) {
+    const last = await tx.unit.findFirst({
+      where: {
+        ownerId: null,
+        type
+      },
+      orderBy: { systemSortOrder: "desc" },
+      select: { systemSortOrder: true }
+    });
+    return (last?.systemSortOrder ?? -1) + 1;
+  }
+
+  private assertReorderScope<T extends { id: string; version: number }>(all: T[], items: ReorderItem[], label: string) {
+    if (all.length !== items.length) throw new ConflictException(`${label}排序集合不完整`);
+    const currentMap = new Map(all.map(item => [item.id, item.version]));
+    for (const item of items) {
+      const currentVersion = currentMap.get(item.id);
+      if (!currentVersion) throw new ConflictException(`${label}排序集合包含无权对象`);
+      if (currentVersion !== item.expectedVersion) throw new ConflictException(`${label}已被更新，请刷新后重试`);
+    }
+  }
+
+  private async writeIngredientCategorySortOrder(tx: Prisma.TransactionClient, ids: string[]) {
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.ingredientCategory.update({
+        where: { id: ids[index] },
+        data: { sortOrder: -(index + 1) * 1000 }
+      });
+    }
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.ingredientCategory.update({
+        where: { id: ids[index] },
+        data: {
+          sortOrder: index,
+          version: { increment: 1 }
+        }
+      });
+    }
+  }
+
+  private async writeSystemIngredientSortOrder(tx: Prisma.TransactionClient, ids: string[], categoryId: UUID) {
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.ingredient.updateMany({
+        where: {
+          id: ids[index],
+          ownerId: null,
+          status: "ACTIVE",
+          categoryId
+        },
+        data: {
+          systemSortOrder: -(index + 1) * 1000
+        }
+      });
+    }
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.ingredient.updateMany({
+        where: {
+          id: ids[index],
+          ownerId: null,
+          status: "ACTIVE",
+          categoryId
+        },
+        data: {
+          systemSortOrder: index,
+          version: { increment: 1 }
+        }
+      });
+    }
+  }
+
+  private async writeSystemUnitSortOrder(tx: Prisma.TransactionClient, type: UnitSummary["type"], ids: string[]) {
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.unit.updateMany({
+        where: {
+          id: ids[index],
+          ownerId: null,
+          type
+        },
+        data: {
+          systemSortOrder: -(index + 1) * 1000
+        }
+      });
+    }
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.unit.updateMany({
+        where: {
+          id: ids[index],
+          ownerId: null,
+          type
+        },
+        data: {
+          systemSortOrder: index,
+          version: {
+            increment: 1
+          }
+        }
+      });
+    }
+  }
+
+  private async hasDraftUnitReference(tx: Prisma.TransactionClient, unitId: UUID) {
+    const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM "recipe_drafts" AS draft
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(draft."content_json"->'ingredients', '[]'::jsonb)) AS item
+        WHERE item->'amount'->>'kind' = 'EXACT'
+          AND item->'amount'->>'unitId' = ${unitId}
+      ) AS "exists"
+    `;
+    return rows[0]?.exists === true;
+  }
+
+  private async hasRecipeVersionUnitReference(tx: Prisma.TransactionClient, unitId: UUID) {
+    const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+      WITH "referenced_versions" AS (
+        SELECT "current_version_id" AS "version_id" FROM "recipes"
+        UNION
+        SELECT "source_version_id" AS "version_id" FROM "recipe_collections"
+        UNION
+        SELECT "recipe_version_id" AS "version_id" FROM "meal_plan_items"
+        UNION
+        SELECT "bring_version_id" AS "version_id"
+        FROM "dining_event_participants"
+        WHERE "bring_version_id" IS NOT NULL
+      )
+      SELECT EXISTS (
+        SELECT 1
+        FROM "recipe_content_versions" AS version
+        INNER JOIN "referenced_versions" AS refs
+          ON refs."version_id" = version."id"
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(version."ingredients_json", '[]'::jsonb)) AS item
+        WHERE item->'amount'->>'kind' = 'EXACT'
+          AND item->'amount'->>'unitId' = ${unitId}
+      ) AS "exists"
+    `;
+    return rows[0]?.exists === true;
   }
 
   private readNickname(value?: string) {

@@ -9,12 +9,19 @@ import { AppModule } from "./modules/app.module";
 
 loadLocalEnv();
 
+function readOrigins(rawValue: string | undefined) {
+  const defaults = ["http://127.0.0.1:5174", "http://localhost:5174"];
+  const source = rawValue?.trim() ? rawValue : defaults.join(",");
+
+  return [...new Set(source.split(",").map(item => item.trim()).filter(Boolean))];
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix("api");
   app.enableCors({
-    origin: ["http://127.0.0.1:5174", "http://localhost:5174"],
+    origin: readOrigins(process.env.CORS_ORIGINS),
     allowedHeaders: [
       "authorization",
       "content-type",

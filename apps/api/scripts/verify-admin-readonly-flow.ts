@@ -1,4 +1,10 @@
-import type { AdminDiningGroupSummary, AdminUserEntitlementResponse, PageResult, UserProfile } from "../src/contracts/types";
+import type {
+  AdminDashboardSummary,
+  AdminDiningGroupSummary,
+  AdminUserEntitlementResponse,
+  PageResult,
+  UserProfile
+} from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 
 loadLocalEnv();
@@ -68,6 +74,16 @@ async function main() {
   assert(login.admin.username === adminUsername, "admin login username mismatch");
 
   const authorization = `Bearer ${login.token}`;
+  const dashboard = await requestData<AdminDashboardSummary>("/admin/dashboard/summary", {
+    headers: { authorization }
+  });
+  assert(dashboard.user.total >= dashboard.user.activeCount, "dashboard user total should cover active count");
+  assert(dashboard.user.total >= dashboard.user.disabledCount, "dashboard user total should cover disabled count");
+  assert(
+    dashboard.recipe.total >= dashboard.recipe.activeCount + dashboard.recipe.blockedCount + dashboard.recipe.recycledCount,
+    "dashboard recipe total should cover visible status counts"
+  );
+
   const users = await requestData<PageResult<UserProfile>>("/admin/users?page=1&pageSize=100", {
     headers: { authorization }
   });
@@ -94,6 +110,8 @@ async function main() {
         unauthenticatedUsersStatus: unauthenticatedUsers.status,
         lowVersionLoginStatus: lowVersionLogin.status,
         adminLoginOk: true,
+        dashboardOpenReports: dashboard.recipe.openReportCount,
+        dashboardUnitCount: dashboard.ingredient.unitCount,
         usersTotal: users.total,
         diningGroupsTotal: diningGroups.total,
         ownerTier: entitlements.membership.tier,

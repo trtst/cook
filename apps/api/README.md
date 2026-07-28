@@ -32,6 +32,13 @@ API_BASE_URL=http://127.0.0.1:3310/api pnpm verify:dining-group-flow
 USER_TOKEN_EXPIRES_SECONDS 可覆盖默认值
 ```
 
+后台浏览器跨域来源通过 `CORS_ORIGINS` 配置，多个来源用逗号分隔：
+
+```text
+开发默认：http://127.0.0.1:5174,http://localhost:5174
+局域网示例：http://127.0.0.1:5174,http://localhost:5174,http://192.168.110.102:5174
+```
+
 ## 本地数据库
 
 本机已有 PostgreSQL 时，按 `.env` 的 `DATABASE_URL` 创建数据库后执行迁移和 seed。

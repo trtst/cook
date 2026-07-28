@@ -16,6 +16,7 @@
     "verify:admin-readonly-flow": "tsx scripts/verify-admin-readonly-flow.ts",
     "verify:admin-user-management-flow": "tsx scripts/verify-admin-user-management-flow.ts",
     "verify:admin-recipe-flow": "tsx scripts/verify-admin-recipe-flow.ts",
+    "repair:empty-recipe-collections": "tsx scripts/repair-empty-recipe-collections.ts",
     "verify:dto-flow": "tsx scripts/verify-dto-flow.ts",
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",
     "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts",

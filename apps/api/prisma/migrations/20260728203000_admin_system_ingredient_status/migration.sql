@@ -1,0 +1,1 @@
+ALTER TYPE "IngredientStatus" ADD VALUE 'DISABLED';
