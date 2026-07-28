@@ -14,7 +14,7 @@ export function normalizeRecipeDraftContent(content: RecipeDraftContentInput): R
     sceneIds: Array.from(new Set(content.sceneIds)),
     baseServings: content.baseServings ?? null,
     difficulty: content.difficulty ?? null,
-    durationMinutes: content.durationMinutes ?? null,
+    duration: content.duration ?? null,
     tips: content.tips?.trim() || null,
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
@@ -65,17 +65,17 @@ export function versionToContent(version: {
   story: string | null;
   baseServings: number;
   difficulty: string | null;
+  duration: string | null;
   tips: string | null;
   ingredientsJson: unknown;
   stepsJson: unknown;
-  durationMinutes: number | null;
 }): RecipeContentSnapshot {
   return {
     name: version.name,
     story: version.story,
     baseServings: version.baseServings,
     difficulty: version.difficulty as RecipeContentSnapshot["difficulty"],
-    durationMinutes: version.durationMinutes,
+    duration: version.duration as RecipeContentSnapshot["duration"],
     tips: version.tips,
     ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
     steps: fromJson<RecipeContentSnapshot["steps"]>(version.stepsJson)

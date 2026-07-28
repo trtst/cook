@@ -285,6 +285,39 @@ export class AdminDiningGroupModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class AdminDashboardUserSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) activeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) disabledCount!: number;
+}
+
+export class AdminDashboardDiningGroupSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) activeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) memberCount!: number;
+}
+
+export class AdminDashboardRecipeSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) activeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) blockedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) recycledCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) openReportCount!: number;
+}
+
+export class AdminDashboardIngredientSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) categoryCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) itemCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) unitCount!: number;
+}
+
+export class AdminDashboardSummaryModel {
+  @ApiProperty({ type: AdminDashboardUserSummaryModel }) user!: AdminDashboardUserSummaryModel;
+  @ApiProperty({ type: AdminDashboardDiningGroupSummaryModel }) diningGroup!: AdminDashboardDiningGroupSummaryModel;
+  @ApiProperty({ type: AdminDashboardRecipeSummaryModel }) recipe!: AdminDashboardRecipeSummaryModel;
+  @ApiProperty({ type: AdminDashboardIngredientSummaryModel }) ingredient!: AdminDashboardIngredientSummaryModel;
+}
+
 export class RecipeCategoryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
@@ -306,13 +339,12 @@ export class InspirationCategoryModel {
 export class IngredientCategoryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
-  @ApiProperty(nullableString) iconKey!: string | null;
 }
 
 export class UnitModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COUNT", "CONTAINER", "PACKAGE", "OTHER"] }) type!: string;
+  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] }) type!: string;
   @ApiProperty({ type: String, enum: ["SYSTEM", "PERSONAL"] }) source!: string;
 }
 
@@ -322,6 +354,25 @@ export class IngredientModel {
   @ApiProperty({ type: String, enum: ["SYSTEM", "PERSONAL"] }) source!: string;
   @ApiProperty(uuid) categoryId!: string;
   @ApiProperty({ type: UnitModel }) defaultUnit!: UnitModel;
+  @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["PENDING", "REJECTED"], nullable: true }) recommendationStatus!: "PENDING" | "REJECTED" | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+}
+
+export class IngredientRecommendationModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) ingredientVersion!: number;
+  @ApiProperty({ type: String }) ingredientName!: string;
+  @ApiProperty({ type: String, enum: ["PENDING", "REJECTED", "ADOPTED", "MERGED"] }) status!: string;
+  @ApiProperty({ type: IngredientCategoryModel }) category!: IngredientCategoryModel;
+  @ApiProperty({ type: UnitModel }) defaultUnit!: UnitModel;
+  @ApiProperty(nullableString) reviewNote!: string | null;
+  @ApiProperty({ type: IngredientModel, nullable: true }) adoptedIngredient!: IngredientModel | null;
+  @ApiProperty({ type: IngredientModel, nullable: true }) mergedIngredient!: IngredientModel | null;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) reviewedAt!: string | null;
 }
 
 export class RecipeAmountModel {
@@ -329,7 +380,7 @@ export class RecipeAmountModel {
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
   @ApiProperty(nullableString) unitName!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["WEIGHT", "VOLUME", "COUNT", "CONTAINER", "PACKAGE", "OTHER"] })
+  @ApiProperty({ type: String, nullable: true, enum: ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] })
   unitType!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) text!: string | null;
 }
@@ -350,8 +401,8 @@ export class RecipeContentModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) story!: string | null;
   @ApiProperty({ type: Number, minimum: 1, maximum: 20 }) baseServings!: number;
-  @ApiProperty({ type: String, nullable: true, enum: ["EASY", "MEDIUM", "HARD"] }) difficulty!: string | null;
-  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) durationMinutes!: number | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) tips!: string | null;
   @ApiProperty({ type: [RecipeIngredientModel] }) ingredients!: RecipeIngredientModel[];
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
@@ -375,8 +426,8 @@ export class RecipeDraftContentModel {
   @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
   @ApiProperty({ type: [String] }) sceneIds!: string[];
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 20 }) baseServings!: number | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["EASY", "MEDIUM", "HARD"] }) difficulty!: string | null;
-  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) durationMinutes!: number | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) tips!: string | null;
   @ApiProperty({ type: [RecipeIngredientInputModel] }) ingredients!: RecipeIngredientInputModel[];
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
@@ -396,6 +447,8 @@ export class RecipeDraftDetailModel {
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: RecipeDraftContentModel }) content!: RecipeDraftContentModel;
+  @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
+  @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
   @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(dateTime) createdAt!: string;
@@ -406,8 +459,8 @@ export class MyRecipeSummaryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["EASY", "MEDIUM", "HARD"] }) difficulty!: string | null;
-  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) durationMinutes!: number | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty({ type: RecipeCategoryModel }) category!: RecipeCategoryModel;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -421,10 +474,56 @@ export class MyRecipeDetailModel {
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
+  @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class CollectionSceneModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty({ ...dateTime, nullable: true }) updatedAt!: string | null;
+}
+
+export class CollectionListModel {
+  @ApiProperty({ type: [CollectionSceneModel] }) items!: CollectionSceneModel[];
+  @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;
+}
+
+export class CollectedRecipeSummaryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) sourceRecipeId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
+  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
+  @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty(dateTime) collectedAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class CollectedRecipeDetailModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) sourceRecipeId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
+  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
+  @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty(dateTime) collectedAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class SaveCollectionRecipeResultModel {
+  @ApiProperty({ type: CollectedRecipeDetailModel }) recipe!: CollectedRecipeDetailModel;
 }
 
 export class PublishRecipeDraftResultModel {
@@ -447,8 +546,8 @@ export class InspirationRecipeSummaryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["EASY", "MEDIUM", "HARD"] }) difficulty!: string | null;
-  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) durationMinutes!: number | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
@@ -486,6 +585,84 @@ export class AdminRecipeModel {
   @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
   @ApiProperty(nullableString) blockedReason!: string | null;
+}
+
+export class AdminIngredientCategoryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) ingredientCount!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminIngredientModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "DISABLED"] }) status!: string;
+  @ApiProperty(uuid) categoryId!: string;
+  @ApiProperty({ type: String }) categoryName!: string;
+  @ApiProperty({ type: UnitModel }) defaultUnit!: UnitModel;
+  @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminIngredientSuggestionUserModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Number }) uid!: number;
+  @ApiProperty(nullableString) nickname!: string | null;
+}
+
+export class AdminPendingIngredientModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
+  @ApiProperty(nullableString) categoryName!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) defaultUnitId!: string | null;
+  @ApiProperty(nullableString) defaultUnitName!: string | null;
+  @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
+}
+
+export class AdminReviewPendingIngredientResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["APPROVED", "REJECTED"] }) status!: string;
+  @ApiProperty(dateTime) reviewedAt!: string;
+  @ApiProperty({ ...uuid, nullable: true }) targetIngredientId!: string | null;
+}
+
+export class AdminUnitModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] }) type!: string;
+  @ApiProperty({ type: String, enum: ["SYSTEM"] }) source!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminDeleteUnitResultModel {
+  @ApiProperty(uuid) unitId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminUserRecipeDomainUserModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Number }) uid!: number;
+  @ApiProperty(nullableString) nickname!: string | null;
+}
+
+export class AdminUserRecipeDomainOverviewModel {
+  @ApiProperty({ type: AdminUserRecipeDomainUserModel }) user!: AdminUserRecipeDomainUserModel;
+  @ApiProperty({ type: Number, minimum: 0 }) publishedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) draftCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) collectionCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) sceneCount!: number;
+  @ApiProperty({ ...dateTime, nullable: true }) latestPublishedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) latestDraftAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) latestCollectionAt!: string | null;
 }
 
 export class MealPlanModel {

@@ -5,14 +5,18 @@ import type { RequestWithUser } from "../../common/auth-context";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   CreateIngredientDto,
+  IngredientRecommendationListQueryDto,
+  CreateCollectionRecipeDto,
   CreateRecipeDraftDto,
   CreateUnitDto,
+  CollectionRecipeListQueryDto,
   DeleteRecipeDraftDto,
   DeleteRecipeDto,
   IngredientListQueryDto,
   InspirationRecipeListQueryDto,
   OperationDto,
   PublishRecipeDraftDto,
+  RecommendIngredientDto,
   RecipeCategoryNameDto,
   RecipeDraftListQueryDto,
   RecipeListQueryDto,
@@ -23,6 +27,7 @@ import {
   ReportRecipeDto,
   UnitListQueryDto,
   UpdateRecipeCategoryDto,
+  UpdateIngredientDto,
   UpdateRecipeDraftDto,
   UpdateRecipeSceneDto
 } from "../../contracts/dtos";
@@ -30,9 +35,13 @@ import {
   ApiOkArray,
   ApiOkModel,
   ApiOkPage,
+  CollectionListModel,
+  CollectedRecipeDetailModel,
+  CollectedRecipeSummaryModel,
   DeleteRecipeDraftResultModel,
   DeleteRecipeResultModel,
   IngredientCategoryModel,
+  IngredientRecommendationModel,
   IngredientModel,
   InspirationCategoryModel,
   InspirationRecipeDetailModel,
@@ -45,10 +54,25 @@ import {
   RecipeDraftSummaryModel,
   RecipeReportModel,
   RecipeSceneModel,
+  SaveCollectionRecipeResultModel,
   UnitModel
 } from "../../contracts/openapi";
 import type { RecipeDraftContentInput, UnitType } from "../../contracts/types";
 import { RecipeService } from "./recipe.service";
+
+function toAssetRequest(request: RequestWithUser) {
+  const current = request as RequestWithUser & {
+    protocol?: string;
+    headers?: Record<string, string | string[] | undefined>;
+  };
+  return {
+    protocol: current.protocol,
+    get(name: string) {
+      const value = current.headers?.[name.toLowerCase()];
+      return Array.isArray(value) ? value[0] : value;
+    }
+  };
+}
 
 function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRecipeDraftDto["content"]): RecipeDraftContentInput {
   return {
@@ -58,7 +82,7 @@ function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRe
     sceneIds: content.sceneIds,
     baseServings: content.baseServings,
     difficulty: content.difficulty as RecipeDraftContentInput["difficulty"],
-    durationMinutes: content.durationMinutes,
+    duration: content.duration as RecipeDraftContentInput["duration"],
     tips: content.tips,
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
@@ -101,8 +125,8 @@ export class RecipeController {
         query.keyword,
         query.categoryId,
         query.sort as "RECOMMENDED" | "LATEST" | undefined,
-        query.difficulty as "EASY" | "MEDIUM" | "HARD" | undefined,
-        query.maxDurationMinutes
+        query.difficulty as "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | undefined,
+        query.duration as "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | undefined
       )
       .then(result => ok(result));
   }
@@ -203,7 +227,7 @@ export class RecipeController {
   @ApiOkPage(IngredientModel, "分页读取系统或我的食材")
   listIngredients(@Req() request: RequestWithUser, @Query() query: IngredientListQueryDto) {
     return this.recipeService
-      .listIngredients(request.user.userId, query.page, query.pageSize, query.keyword, query.categoryId, query.source)
+      .listIngredients(toAssetRequest(request), request.user.userId, query.page, query.pageSize, query.keyword, query.categoryId, query.source)
       .then(result => ok(result));
   }
 
@@ -213,7 +237,54 @@ export class RecipeController {
   @ApiOkModel(IngredientModel, "新建我的食材")
   createIngredient(@Req() request: RequestWithUser, @Body() body: CreateIngredientDto) {
     return this.recipeService
-      .createIngredient(request.user.userId, body.operationId, body.name, body.categoryId, body.defaultUnitId)
+      .createIngredient(toAssetRequest(request), request.user.userId, body.operationId, body.name, body.categoryId, body.defaultUnitId)
+      .then(result => ok(result));
+  }
+
+  @Put("ingredients/:ingredientId")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(IngredientModel, "编辑我的个人食材")
+  updateIngredient(
+    @Req() request: RequestWithUser,
+    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Body() body: UpdateIngredientDto
+  ) {
+    return this.recipeService
+      .updateIngredient(
+        toAssetRequest(request),
+        request.user.userId,
+        ingredientId,
+        body.operationId,
+        body.expectedVersion,
+        body.name,
+        body.categoryId,
+        body.defaultUnitId
+      )
+      .then(result => ok(result));
+  }
+
+  @Post("ingredients/:ingredientId/recommendations")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(IngredientRecommendationModel, "显式推荐个人食材进入系统库")
+  recommendIngredient(
+    @Req() request: RequestWithUser,
+    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Body() body: RecommendIngredientDto
+  ) {
+    return this.recipeService
+      .recommendIngredient(toAssetRequest(request), request.user.userId, ingredientId, body.operationId)
+      .then(result => ok(result));
+  }
+
+  @Get("ingredient-recommendations")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkPage(IngredientRecommendationModel, "分页读取我的食材推荐记录")
+  listIngredientRecommendations(@Req() request: RequestWithUser, @Query() query: IngredientRecommendationListQueryDto) {
+    return this.recipeService
+      .listIngredientRecommendations(toAssetRequest(request), request.user.userId, query.page, query.pageSize)
       .then(result => ok(result));
   }
 
@@ -339,6 +410,45 @@ export class RecipeController {
     @Body() body: DeleteRecipeDto
   ) {
     return this.recipeService.deleteRecipe(request.user.userId, recipeId, body.operationId, body.expectedVersion).then(result => ok(result));
+  }
+
+  @Get("collections")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(CollectionListModel, "读取我的合集列表和总收藏数")
+  listCollections(@Req() request: RequestWithUser) {
+    return this.recipeService.listCollections(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("collections/recipes")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkPage(CollectedRecipeSummaryModel, "分页读取我的合集内容")
+  listCollectionRecipes(@Req() request: RequestWithUser, @Query() query: CollectionRecipeListQueryDto) {
+    return this.recipeService
+      .listCollectionRecipes(request.user.userId, query.page, query.pageSize, query.sceneId)
+      .then(result => ok(result));
+  }
+
+  @Get("collections/recipes/:collectionRecipeId")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(CollectedRecipeDetailModel, "读取我的一个收藏快照详情")
+  getCollectionRecipe(
+    @Req() request: RequestWithUser,
+    @Param("collectionRecipeId", new ParseUUIDPipe({ version: "4" })) collectionRecipeId: string
+  ) {
+    return this.recipeService.getCollectionRecipe(request.user.userId, collectionRecipeId).then(result => ok(result));
+  }
+
+  @Post("collections/recipes")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(SaveCollectionRecipeResultModel, "收藏一个灵感固定版本到我的合集")
+  collectRecipe(@Req() request: RequestWithUser, @Body() body: CreateCollectionRecipeDto) {
+    return this.recipeService
+      .collectRecipe(request.user.userId, body.operationId, body.sourceRecipeId, body.sourceVersionId, body.sceneIds)
+      .then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/report")

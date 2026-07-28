@@ -74,7 +74,7 @@ async function main() {
           ingredients: [],
           steps: [],
           servings: null,
-          durationMinutes: null,
+          duration: null,
           images: [{ key: "cover", url: "https://example.com/forged.jpg", sizeBytes: 1 }]
         }
       })
@@ -90,7 +90,7 @@ async function main() {
         ingredients: [{ name: "测试食材", amount: "1份" }],
         steps: [{ content: "验证并发幂等" }],
         servings: "1人份",
-        durationMinutes: 1
+        duration: "WITHIN_15"
       }
     });
     const [concurrentCreate1, concurrentCreate2] = await Promise.all([
@@ -131,7 +131,7 @@ async function main() {
           ingredients: import1.recipe.content.ingredients,
           steps: import1.recipe.content.steps,
           servings: import1.recipe.content.servings,
-          durationMinutes: import1.recipe.content.durationMinutes
+          duration: import1.recipe.content.duration
         }
       })
     });
@@ -151,7 +151,7 @@ async function main() {
           ingredients: textUpdatedRecipe.content.ingredients,
           steps: textUpdatedRecipe.content.steps,
           servings: textUpdatedRecipe.content.servings,
-          durationMinutes: textUpdatedRecipe.content.durationMinutes
+          duration: textUpdatedRecipe.content.duration
         }
       })
     });
@@ -171,7 +171,7 @@ async function main() {
           ingredients: textUpdatedRecipe.content.ingredients,
           steps: textUpdatedRecipe.content.steps,
           servings: textUpdatedRecipe.content.servings,
-          durationMinutes: textUpdatedRecipe.content.durationMinutes,
+          duration: textUpdatedRecipe.content.duration,
           images: [{ key: "mine-cover", url: "https://example.com/recipe/my-cover.jpg", sizeBytes: 102400 }]
         }
       })

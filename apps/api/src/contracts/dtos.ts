@@ -293,7 +293,7 @@ export class IngredientListQueryDto extends PageQueryDto {
 export class UnitListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: "WEIGHT" })
   @IsOptional()
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
   type?: string;
 
   @ApiPropertyOptional({ example: "ALL" })
@@ -301,6 +301,8 @@ export class UnitListQueryDto extends PageQueryDto {
   @IsIn(["SYSTEM", "PERSONAL", "ALL"])
   source?: string;
 }
+
+export class IngredientRecommendationListQueryDto extends PageQueryDto {}
 
 export class InspirationRecipeListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
@@ -313,17 +315,22 @@ export class InspirationRecipeListQueryDto extends PageQueryDto {
   @IsIn(["RECOMMENDED", "LATEST"])
   sort?: string;
 
-  @ApiPropertyOptional({ example: "EASY" })
+  @ApiPropertyOptional({ example: "BEGINNER" })
   @IsOptional()
-  @IsIn(["EASY", "MEDIUM", "HARD"])
+  @IsIn(["BEGINNER", "EASY", "SKILLED", "CHALLENGING"])
   difficulty?: string;
 
-  @ApiPropertyOptional({ example: 30 })
+  @ApiPropertyOptional({ example: "WITHIN_15" })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  maxDurationMinutes?: number;
+  @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
+  duration?: string;
+}
+
+export class CollectionRecipeListQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsOptional()
+  @IsUUID()
+  sceneId?: string;
 }
 
 export class MealPlanQueryDto extends PageQueryDto {
@@ -429,7 +436,7 @@ export class CreateUnitDto extends OperationDto {
   name!: string;
 
   @ApiProperty({ example: "WEIGHT" })
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
   type!: string;
 }
 
@@ -449,6 +456,25 @@ export class CreateIngredientDto extends OperationDto {
   @IsUUID()
   defaultUnitId!: string;
 }
+
+export class UpdateIngredientDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  categoryId!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  defaultUnitId!: string;
+}
+
+export class RecommendIngredientDto extends OperationDto {}
 
 export class RecipeAmountDto {
   @ApiProperty({ example: "EXACT" })
@@ -529,19 +555,17 @@ export class RecipeDraftContentDto {
   @Max(20)
   baseServings!: number | null;
 
-  @ApiPropertyOptional({ nullable: true, example: "EASY" })
+  @ApiPropertyOptional({ nullable: true, example: "BEGINNER" })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
-  @IsIn(["EASY", "MEDIUM", "HARD"])
+  @IsIn(["BEGINNER", "EASY", "SKILLED", "CHALLENGING"])
   difficulty!: string | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 1 })
+  @ApiPropertyOptional({ nullable: true, example: "WITHIN_15" })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  durationMinutes!: number | null;
+  @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
+  duration!: string | null;
 
   @ApiProperty({ nullable: true, maxLength: 1000 })
   @IsDefined()
@@ -593,6 +617,24 @@ export class DeleteRecipeDraftDto extends VersionedOperationDto {}
 export class PublishRecipeDraftDto extends VersionedOperationDto {}
 
 export class DeleteRecipeDto extends VersionedOperationDto {}
+
+export class CreateCollectionRecipeDto extends OperationDto {
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  sourceRecipeId!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  sourceVersionId!: string;
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  sceneIds!: string[];
+}
 
 export class ReportRecipeDto extends OperationDto {
   @ApiProperty()
@@ -753,6 +795,205 @@ export class AdminRecipeReportQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["OPEN", "RESOLVED"])
   status?: string;
+}
+
+export class AdminIngredientCategoryQueryDto {
+  @ApiPropertyOptional({ example: "蔬菜" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(20)
+  keyword?: string;
+}
+
+export class AdminIngredientQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "西红柿" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(64)
+  declare keyword?: string;
+
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ example: "ACTIVE", enum: ["ACTIVE", "DISABLED", "ALL"] })
+  @IsOptional()
+  @IsIn(["ACTIVE", "DISABLED", "ALL"])
+  status?: "ACTIVE" | "DISABLED" | "ALL";
+}
+
+export class AdminUnitPayloadDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16)
+  name!: string;
+
+  @ApiProperty({ example: "WEIGHT" })
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  type!: string;
+}
+
+export class UpdateAdminUnitDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16)
+  name!: string;
+
+  @ApiProperty({ example: "WEIGHT" })
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  type!: string;
+}
+
+export class DeleteAdminUnitDto extends VersionedOperationDto {}
+
+export class ReorderAdminUnitsDto extends OperationDto {
+  @ApiProperty({ example: "WEIGHT" })
+  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  type!: string;
+
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
+export class AdminIngredientCategoryNameDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class UpdateAdminIngredientCategoryDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class ReorderAdminIngredientCategoriesDto extends OperationDto {
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
+export class AdminIngredientPayloadDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  categoryId!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  defaultUnitId!: string;
+}
+
+export class UpdateAdminIngredientDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  categoryId!: string;
+
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  defaultUnitId!: string;
+}
+
+export class UpdateAdminIngredientImageDto extends VersionedOperationDto {}
+
+export class SetAdminIngredientStatusDto extends VersionedOperationDto {
+  @ApiProperty({ example: "DISABLED", enum: ["ACTIVE", "DISABLED"] })
+  @IsIn(["ACTIVE", "DISABLED"])
+  status!: "ACTIVE" | "DISABLED";
+}
+
+export class ReorderAdminIngredientsDto extends OperationDto {
+  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @IsUUID()
+  categoryId!: string;
+
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
+export class AdminPendingIngredientQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "西红柿" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(64)
+  declare keyword?: string;
+}
+
+export class ReviewPendingIngredientDto extends VersionedOperationDto {
+  @ApiProperty({ example: "APPROVE_CREATE" })
+  @IsIn(["APPROVE_CREATE", "APPROVE_MERGE", "REJECT"])
+  action!: "APPROVE_CREATE" | "APPROVE_MERGE" | "REJECT";
+
+  @ApiPropertyOptional()
+  @ValidateIf(object => object.action !== "REJECT")
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name?: string;
+
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ValidateIf(object => object.action !== "REJECT")
+  @IsUUID()
+  categoryId?: string;
+
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ValidateIf(object => object.action !== "REJECT")
+  @IsUUID()
+  defaultUnitId?: string;
+
+  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ValidateIf(object => object.action === "APPROVE_MERGE")
+  @IsUUID()
+  targetIngredientId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
 }
 
 export class BlockRecipeDto extends OperationDto {
