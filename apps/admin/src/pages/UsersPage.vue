@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { Plus, Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ApiClientError } from "@/apis/http";
@@ -28,10 +29,12 @@ const resetPasswordVisible = ref(false);
 const resetPasswordSaving = ref(false);
 const resetPasswordUser = ref<UserProfile | null>(null);
 const resetPasswordDraft = ref("");
+const router = useRouter();
 const sessionStore = useSessionStore();
+const canViewRecipeDomain = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
 const canViewEntitlements = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
 const canManageUsers = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
-const showActionColumn = computed(() => canViewEntitlements.value || canManageUsers.value);
+const showActionColumn = computed(() => canViewRecipeDomain.value || canViewEntitlements.value || canManageUsers.value);
 let usersRequest = 0;
 let entitlementRequest = 0;
 
@@ -79,6 +82,13 @@ async function loadUsers() {
 function search() {
   query.page = 1;
   void loadUsers();
+}
+
+function openRecipeDomain(row: UserProfile) {
+  void router.push({
+    name: "user-recipe-domain",
+    params: { userId: row.id }
+  });
 }
 
 function formatBytes(bytes: number) {
@@ -316,8 +326,9 @@ onMounted(loadUsers);
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="190" />
-        <el-table-column v-if="showActionColumn" label="操作" width="280" fixed="right">
+        <el-table-column v-if="showActionColumn" label="操作" width="360" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="canViewRecipeDomain" link type="primary" @click="openRecipeDomain(row)">查看菜谱域</el-button>
             <el-button v-if="canViewEntitlements" link type="primary" @click="openEntitlement(row)">查看权益</el-button>
             <el-button v-if="canManageUsers" link type="primary" @click="openEditUser(row)">编辑</el-button>
             <el-button
