@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from "vue";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { recipeApi, type AdminRecipeSummary, type RecipeReportSummary } from "@/apis/recipe";
+import { formatStatusText } from "@/utils/status";
 
 const loading = ref(false);
 const reportLoading = ref(false);
@@ -120,10 +121,10 @@ onMounted(() => {
     <div class="toolbar-panel">
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="菜名 / 食材" clearable @keyup.enter="search" />
       <el-select v-model="query.status" class="toolbar-select" placeholder="状态" clearable>
-        <el-option label="ACTIVE" value="ACTIVE" />
-        <el-option label="RECYCLED" value="RECYCLED" />
-        <el-option label="BLOCKED" value="BLOCKED" />
-        <el-option label="DELETED" value="DELETED" />
+        <el-option :label="formatStatusText('ACTIVE')" value="ACTIVE" />
+        <el-option :label="formatStatusText('RECYCLED')" value="RECYCLED" />
+        <el-option :label="formatStatusText('BLOCKED')" value="BLOCKED" />
+        <el-option :label="formatStatusText('DELETED')" value="DELETED" />
       </el-select>
       <el-checkbox v-model="query.reportsOnly">只看有举报</el-checkbox>
       <el-input v-model="blockReason" class="toolbar-search" placeholder="下架原因" />
@@ -140,7 +141,11 @@ onMounted(() => {
             {{ row.ownerUid === null ? "灵感" : "个人" }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            {{ formatStatusText(row.status) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="reportCount" label="举报数" width="100" />
         <el-table-column prop="blockedReason" label="下架原因" min-width="180" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
@@ -168,8 +173,8 @@ onMounted(() => {
 
     <div class="toolbar-panel">
       <el-select v-model="reportQuery.status" class="toolbar-select" placeholder="举报状态" clearable>
-        <el-option label="OPEN" value="OPEN" />
-        <el-option label="RESOLVED" value="RESOLVED" />
+        <el-option :label="formatStatusText('OPEN')" value="OPEN" />
+        <el-option :label="formatStatusText('RESOLVED')" value="RESOLVED" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="searchReports">查询举报</el-button>
       <el-button :icon="Refresh" @click="loadReports">刷新举报</el-button>
@@ -180,7 +185,11 @@ onMounted(() => {
         <el-table-column prop="recipeId" label="菜谱 ID" min-width="260" />
         <el-table-column prop="reporterUid" label="举报人 UID" width="120" />
         <el-table-column prop="reason" label="原因" min-width="220" />
-        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            {{ formatStatusText(row.status) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="举报时间" min-width="180" />
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">

@@ -10,6 +10,7 @@ import {
   type UserProfile
 } from "@/apis/user";
 import { useSessionStore } from "@/stores/session";
+import { formatStatusText } from "@/utils/status";
 
 type UserStatus = "ACTIVE" | "DISABLED";
 type UserFormMode = "create" | "edit";
@@ -321,7 +322,7 @@ onMounted(loadUsers);
         </el-table-column>
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
+            <el-tag :type="statusTagType(row.status)">{{ formatStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="190" />
@@ -385,8 +386,8 @@ onMounted(loadUsers);
         </el-form-item>
         <el-form-item v-if="userDialogMode === 'create'" label="状态">
           <el-select v-model="userForm.status" style="width: 100%">
-            <el-option label="ACTIVE" value="ACTIVE" />
-            <el-option label="DISABLED" value="DISABLED" />
+            <el-option :label="formatStatusText('ACTIVE')" value="ACTIVE" />
+            <el-option :label="formatStatusText('DISABLED')" value="DISABLED" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -430,7 +431,7 @@ onMounted(loadUsers);
           <el-descriptions-item label="用户 ID">{{ entitlement.user.id }}</el-descriptions-item>
           <el-descriptions-item label="UID">{{ entitlement.user.uid }}</el-descriptions-item>
           <el-descriptions-item label="昵称">{{ entitlement.user.nickname || "-" }}</el-descriptions-item>
-          <el-descriptions-item label="状态">{{ entitlement.user.status }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ formatStatusText(entitlement.user.status) }}</el-descriptions-item>
         </el-descriptions>
 
         <el-divider content-position="left">饭搭子关系</el-divider>

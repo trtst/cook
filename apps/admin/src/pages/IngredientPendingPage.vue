@@ -10,6 +10,7 @@ import {
   type AdminPendingIngredientSummary,
   type AdminUnitSummary
 } from "@/apis/ingredient";
+import { formatStatusText } from "@/utils/status";
 
 const actionLabelMap: Record<AdminIngredientReviewAction, string> = {
   APPROVE_CREATE: "通过为系统食材",
@@ -304,7 +305,7 @@ onUnmounted(() => {
         <el-table-column prop="createdAt" label="推荐时间" min-width="180" />
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tag type="warning">{{ row.status }}</el-tag>
+            <el-tag type="warning">{{ formatStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">

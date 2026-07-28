@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { dashboardApi, type AdminDashboardSummary } from "@/apis/dashboard";
+import { formatStatusText } from "@/utils/status";
 
 const router = useRouter();
 const loading = ref(false);
@@ -46,7 +47,7 @@ const topCards = computed(() => {
     {
       label: "生效中饭搭子",
       value: summary.value.diningGroup.activeCount,
-      hint: "状态为 ACTIVE 的饭搭子",
+      hint: `状态为${formatStatusText("ACTIVE")}的饭搭子`,
       path: "/dining-groups"
     },
     {
@@ -65,8 +66,8 @@ const sections = computed(() => {
       title: "用户概览",
       items: [
         { label: "用户总数", value: summary.value.user.total, hint: "当前全部用户", path: "/users" },
-        { label: "启用中", value: summary.value.user.activeCount, hint: "状态 ACTIVE", path: "/users" },
-        { label: "禁用中", value: summary.value.user.disabledCount, hint: "状态 DISABLED", path: "/users" }
+        { label: "启用中", value: summary.value.user.activeCount, hint: `状态 ${formatStatusText("ACTIVE")}`, path: "/users" },
+        { label: "禁用中", value: summary.value.user.disabledCount, hint: `状态 ${formatStatusText("DISABLED")}`, path: "/users" }
       ]
     },
     {
@@ -76,13 +77,13 @@ const sections = computed(() => {
         {
           label: "生效中饭搭子",
           value: summary.value.diningGroup.activeCount,
-          hint: "状态 ACTIVE",
+          hint: `状态 ${formatStatusText("ACTIVE")}`,
           path: "/dining-groups"
         },
         {
           label: "当前成员关系",
           value: summary.value.diningGroup.memberCount,
-          hint: "只统计 ACTIVE / RESTRICTED",
+          hint: `只统计 ${formatStatusText("ACTIVE")} / ${formatStatusText("RESTRICTED")}`,
           path: "/dining-groups"
         }
       ]
@@ -91,10 +92,10 @@ const sections = computed(() => {
       title: "内容治理",
       items: [
         { label: "菜谱总数", value: summary.value.recipe.total, hint: "系统 + 个人菜谱", path: "/recipes" },
-        { label: "正常菜谱", value: summary.value.recipe.activeCount, hint: "状态 ACTIVE", path: "/recipes" },
-        { label: "已下架", value: summary.value.recipe.blockedCount, hint: "状态 BLOCKED", path: "/recipes" },
-        { label: "已回收", value: summary.value.recipe.recycledCount, hint: "状态 RECYCLED", path: "/recipes" },
-        { label: "待处理举报", value: summary.value.recipe.openReportCount, hint: "举报状态 OPEN", path: "/recipes" }
+        { label: "正常菜谱", value: summary.value.recipe.activeCount, hint: `状态 ${formatStatusText("ACTIVE")}`, path: "/recipes" },
+        { label: "已下架", value: summary.value.recipe.blockedCount, hint: `状态 ${formatStatusText("BLOCKED")}`, path: "/recipes" },
+        { label: "已回收", value: summary.value.recipe.recycledCount, hint: `状态 ${formatStatusText("RECYCLED")}`, path: "/recipes" },
+        { label: "待处理举报", value: summary.value.recipe.openReportCount, hint: `举报状态 ${formatStatusText("OPEN")}`, path: "/recipes" }
       ]
     },
     {
