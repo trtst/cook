@@ -27,17 +27,18 @@ R1 包含：
 
 1. 个人分类的查询、新建、改名和排序。
 2. 个人场景的查询、新建、改名和排序。
-3. 系统/个人食材与单位的查询，以及新建本人食材和单位。
-4. 新建草稿、已有菜谱编辑草稿、草稿箱、保存、删除和发布。
-5. “我的”菜谱列表、详情、分类内排序和正常删除。
-6. 文本菜谱的完整字段、结构化食材用量和纯文本步骤。
+3. 系统/个人食材与单位的查询，以及新建、编辑本人食材和新建本人单位。
+4. 个人食材显式推荐入系统库、我的推荐记录，以及后台待审、通过、归并和拒绝闭环。
+5. 新建草稿、已有菜谱编辑草稿、草稿箱、保存、删除和发布。
+6. “我的”菜谱列表、详情、分类内排序和正常删除。
+7. 文本菜谱的完整字段、结构化食材用量和纯文本步骤。
 
 R1 不包含：
 
 1. 图片上传、临时区、封面和图文步骤写入。
 2. 合集收藏、升级为“我的”和再次导入原版。
-3. 用户推荐审核、点赞、收藏统计和推荐排序。
-4. 食材或单位推荐入系统库、后台审核、合并与跨单位换算。
+3. 用户推荐到灵感审核、点赞、收藏统计和推荐排序。
+4. 个人单位推荐入系统库与跨单位换算。
 5. 个人分类删除和个人场景删除。
 6. 分享、计划和饭局现有契约改造。
 
@@ -114,11 +115,14 @@ R1 不提供删除场景接口。菜谱与场景的关联由草稿发布统一�
 | --- | --- | --- |
 | `GET` | `/ingredients` | 按来源、系统分类和关键词分页查询系统/本人食材 |
 | `POST` | `/ingredients` | 新建本人食材，立即本人可用 |
-| `GET` | `/ingredient-categories` | 返回系统食材分类及分类图标、顺序 |
+| `PUT` | `/ingredients/{ingredientId}` | 编辑本人未处于审核中的个人食材 |
+| `POST` | `/ingredients/{ingredientId}/recommendations` | 显式推荐个人食材入系统库 |
+| `GET` | `/ingredient-recommendations` | 分页返回“我的推荐”记录 |
+| `GET` | `/ingredient-categories` | 返回系统食材分类最小摘要，供选择器左侧分类筛选 |
 | `GET` | `/units` | 按来源、类型和关键词分页查询系统/本人单位 |
 | `POST` | `/units` | 新建本人单位，立即本人可用 |
 
-系统食材分类使用独立只读接口，便于选择器左侧分类一次加载并保持平台 owner；R1 不把分类清单硬编码进客户端。
+系统食材分类使用独立只读接口，便于选择器左侧分类一次加载并保持平台 owner；R1 不把分类清单硬编码进客户端。个人食材推荐采用独立记录表承接状态，审核通过时要么直接转为系统食材，要么归并到现有系统食材；归并后本人草稿和已发布内容中的食材引用需要同步切到系统食材。`GET /ingredients` 的食材摘要继续保持列表最小字段，但补充 `recommendationStatus: PENDING | REJECTED | null`，仅用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`，不把完整推荐记录塞回列表接口。草稿详情和我的菜谱详情额外返回当前内容真实引用到的 `ingredientRefs`、`unitRefs`，编辑页必须优先用这两组引用补齐历史数据，不能依赖第一页食材/单位列表碰运气命中。
 
 ### 草稿
 
@@ -152,7 +156,7 @@ R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。
 | `GET` | `/inspiration-recipes` | 匿名 | 分页返回可曝光灵感摘要 |
 | `GET` | `/inspiration-recipes/{recipeId}` | 匿名 | 返回一个可曝光固定版本详情 |
 
-灵感只读接口与本人 `/recipes` 分开，避免可选登录状态影响同一列表的字段、权限和缓存边界。R1 只允许已有系统菜谱进入该读取面，不在本阶段建设用户推荐审核表。
+灵感只读接口与本人 `/recipes` 分开，避免可选登录状态影响同一列表的字段、权限和缓存边界。R1 只允许已有系统菜谱进入该读取面；用户推荐到灵感、点赞和升级为我的仍不在本阶段建设。
 
 ## 五、建议 DTO
 
@@ -206,7 +210,7 @@ interface RecipeDraftContentInput {
   sceneIds: UUID[];
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
-  durationMinutes: number | null;
+  duration: RecipeDuration | null;
   tips: string | null;
   ingredients: RecipeIngredientInput[];
   steps: Array<{
@@ -238,7 +242,7 @@ interface MyRecipeSummary {
   title: string;
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
-  durationMinutes: number | null;
+  duration: RecipeDuration | null;
   category: RecipeCategorySummary;
   version: number;
   updatedAt: IsoDateTime;
@@ -283,16 +287,16 @@ RecipeDraftScene
 
 ```text
 IngredientCategory
-  id, name, iconKey, sortOrder, status
+  id, name, sortOrder, status
 
 Unit
   id, ownerId?, type, name, searchKey, createdAt, updatedAt
 
 Ingredient
-  id, ownerId?, categoryId, defaultUnitId, name, searchKey, createdAt, updatedAt
+  id, ownerId?, categoryId, defaultUnitId, name, searchKey, imageUpdatedAt?, createdAt, updatedAt
 ```
 
-`ownerId = null` 表示系统项，非空表示个人项。系统和个人食材都不保存图片字段。R1 不新增审核、合并目标、换算倍率或别名表。
+`ownerId = null` 表示系统项，非空表示个人项。个人食材不保存图片字段；系统食材图片由后台后传治理，当前终存 `50x50 PNG` 小图，不进入个人食材创建契约。R1 不新增审核、合并目标、换算倍率或别名表。
 
 ### 内容版本快照
 
@@ -303,7 +307,7 @@ name
 story?
 baseServings
 difficulty?
-durationMinutes?
+duration?
 tips?
 ingredientsJson
 stepsJson
@@ -334,7 +338,7 @@ InspirationCategory
 7. 个人已发布 `Recipe` 必须有 `ownerId`、`categoryId` 和有效内容版本；平台入口不得引用个人分类。
 8. `Ingredient(ownerId, searchKey)` 在 owner 非空时唯一；系统食材 `searchKey` 全局唯一。
 9. `Unit(ownerId, searchKey)` 在 owner 非空时唯一；系统单位 `searchKey` 全局唯一。
-10. `RecipeContentVersion.baseServings` 为 `1～20`，`durationMinutes` 为空或大于 0。
+10. `RecipeContentVersion.baseServings` 为 `1～20`，`duration` 为空或属于固定四档之一。
 
 JSON 中食材用量互斥、步骤非空、数组长度和引用权限由服务端发布事务验证。不能用客户端校验代替。
 
@@ -386,18 +390,18 @@ R1 不增加推荐、点赞、收藏统计或全文检索专用索引。关键�
 3. `403`：已登录但无权操作已知对象。
 4. `404`：对象不存在或调用方无权知道其存在；匿名灵感内容不可曝光时同样返回 `404`。
 5. `409`：`version`、`operationId`、排序集合、重名或并发额度冲突。
-6. `503`：图片、收藏、推荐审核、点赞或食材审核能力尚未开放。
+6. `503`：图片、点赞、灵感推荐审核或跨单位换算能力尚未开放。
 
 ## 十一、已确认决策
 
 以下决策于 2026-07-25 确认：
 
-1. 难度档位：建议首版固定 `简单 / 中等 / 困难` 三档，对应稳定枚举 `EASY / MEDIUM / HARD`；允许不选择。
+1. 难度档位：建议首版固定 `新手友好 / 轻松上手 / 需要经验 / 进阶挑战` 四档，对应稳定枚举 `BEGINNER / EASY / SKILLED / CHALLENGING`；允许不选择。
 2. 个人分类删除：建议 R1 暂不提供删除；后续删除时必须先把分类下菜谱批量迁移到另一个分类，不允许产生“未分类”已发布菜谱。
 3. 模糊用量：建议首版固定 `适量 / 少许 / 按需` 三项，不允许自由输入；其他表达使用食材备注能力时再单独确认。
 
 4. 工程安全上限：名称 120 字、故事 2000 字、小贴士 1000 字、分类/场景名 20 字、个人分类和个人场景各最多 50 个、食材名 64 字、单位名 16 字、食材和步骤各最多 100 项、精确数量最多 3 位小数。
-5. 单位类型固定为重量、容量、数量、容器、包装、其他，对应 `WEIGHT / VOLUME / COUNT / CONTAINER / PACKAGE / OTHER`。
+5. 单位类型固定为重量、容量、数量、形态、容器、包装、其他，对应 `WEIGHT / VOLUME / COUNT / SHAPE / CONTAINER / PACKAGE / OTHER`。
 
 ## 十三、历史清空策略
 

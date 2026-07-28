@@ -33,6 +33,7 @@
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/remove-member` | 主理人移除成员 |
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/dissolve` | 主理人解散饭搭子 |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
+| AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
 | AdminUser | GET | `/admin/users` | 用户查询 |
 | AdminUser | POST | `/admin/users` | 新增用户 |
 | AdminUser | PUT | `/admin/users/{userId}` | 更新用户昵称或手机号 |
@@ -45,6 +46,41 @@
 | RecipeCandidate | POST | `/recipes/{recipeId}/import` | 旧候选导入；不作为收藏或升级契约 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
+| Collection | GET | `/collections` | 当前用户合集场景摘要 |
+| Collection | GET | `/collections/recipes` | 当前用户收藏快照分页 |
+| Collection | GET | `/collections/recipes/{collectionRecipeId}` | 当前用户收藏快照详情 |
+| Collection | POST | `/collections/recipes` | 收藏灵感固定版本到合集，`sceneIds` 至少一个 |
+| AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-domain` | 后台按用户读取菜谱域概览 |
+| AdminRecipeDomain | GET | `/admin/users/{userId}/recipes` | 后台按用户读取已发布菜谱 |
+| AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-drafts` | 后台按用户读取菜谱草稿 |
+| AdminRecipeDomain | GET | `/admin/users/{userId}/collections` | 后台按用户读取合集场景摘要 |
+| AdminRecipeDomain | GET | `/admin/users/{userId}/collections/{sceneId}/recipes` | 后台按用户读取某合集内容 |
+| AdminIngredient | GET | `/admin/ingredient-categories` | 后台系统食材分类列表 |
+| AdminIngredient | POST | `/admin/ingredient-categories` | 后台新建系统食材分类 |
+| AdminIngredient | PUT | `/admin/ingredient-categories/{categoryId}` | 后台编辑系统食材分类 |
+| AdminIngredient | POST | `/admin/ingredient-categories/reorder` | 后台重排系统食材分类 |
+| AdminIngredient | GET | `/admin/units` | 后台系统单位列表 |
+| AdminIngredient | POST | `/admin/units` | 后台新建系统单位 |
+| AdminIngredient | PUT | `/admin/units/{unitId}` | 后台编辑系统单位 |
+| AdminIngredient | DELETE | `/admin/units/{unitId}` | 后台删除系统单位 |
+| AdminIngredient | POST | `/admin/units/reorder` | 后台重排同类型系统单位 |
+| AdminIngredient | GET | `/admin/ingredients` | 后台系统食材分页列表 |
+| AdminIngredient | POST | `/admin/ingredients` | 后台新建系统食材 |
+| AdminIngredient | PUT | `/admin/ingredients/{ingredientId}` | 后台编辑系统食材 |
+| AdminIngredient | POST | `/admin/ingredients/{ingredientId}/status` | 后台下架或恢复系统食材 |
+| AdminIngredient | POST | `/admin/ingredients/{ingredientId}/image` | 后台上传或替换系统食材图片 |
+| AdminIngredient | DELETE | `/admin/ingredients/{ingredientId}/image` | 后台清空系统食材图片 |
+| AdminIngredient | POST | `/admin/ingredients/reorder` | 后台重排系统食材 |
+| AdminIngredient | GET | `/admin/pending-ingredients` | 后台待审核个人食材分页列表 |
+| AdminIngredient | POST | `/admin/pending-ingredients/{ingredientId}/review` | 后台审核个人食材推荐 |
+| Ingredient | GET | `/ingredient-categories` | 系统食材分类列表 |
+| Ingredient | GET | `/ingredients` | 分页查询系统/本人食材 |
+| Ingredient | POST | `/ingredients` | 新建个人食材 |
+| Ingredient | PUT | `/ingredients/{ingredientId}` | 编辑个人食材 |
+| Ingredient | POST | `/ingredients/{ingredientId}/recommendations` | 显式推荐个人食材入系统库 |
+| Ingredient | GET | `/ingredient-recommendations` | 分页查询我的食材推荐记录 |
+| Unit | GET | `/units` | 分页查询系统/本人单位 |
+| Unit | POST | `/units` | 新建个人单位 |
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划 |
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
 | DiningEvent | GET | `/dining-events/{eventId}` | 饭局详情 |
@@ -68,16 +104,13 @@
 
 ## 待补契约
 
-### 已冻结待实现：菜谱 R1
+### 已冻结待继续扩展：菜谱 R1
 
 | 模块 | 方法与路径 | 状态 |
 | --- | --- | --- |
-| RecipeCategory | `GET/POST /recipe-categories`、`PUT /recipe-categories/{categoryId}`、`POST /recipe-categories/reorder` | 已冻结，待实现 |
-| RecipeScene | `GET/POST /recipe-scenes`、`PUT /recipe-scenes/{sceneId}`、`POST /recipe-scenes/reorder` | 已冻结，待实现 |
-| Ingredient | `GET /ingredient-categories`、`GET/POST /ingredients`、`GET/POST /units` | 已冻结，待实现 |
-| RecipeDraft | `GET/POST /recipe-drafts`、`GET/PUT /recipe-drafts/{draftId}`、删除、发布 | 已冻结，待实现 |
-| Recipe | `GET /recipes`、`GET /recipes/{recipeId}`、分类内重排、删除 | 已冻结，待替换候选实现 |
-| Inspiration | `GET /inspiration-categories`、`GET /inspiration-recipes`、`GET /inspiration-recipes/{recipeId}` | 匿名只读已冻结，待实现 |
+| RecipeCandidate | `POST /recipes`、`PUT /recipes/{recipeId}`、`POST /recipes/{recipeId}/import` | 仍是旧候选实现，待后续移除或替换 |
+| RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
+| InspirationGovernance | 用户推荐到灵感审核、点赞与收藏统计治理 | 已确认非本轮范围，待契约 |
 
 | 模块 | 路径 | 缺失内容 |
 | --- | --- | --- |
@@ -86,7 +119,7 @@
 
 ## 暂不创建
 
-菜谱图片上传与修改、收藏/升级、用户推荐审核、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回 `400`。
+菜谱图片上传与修改、升级合集快照为“我的”、用户推荐到灵感审核、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回 `400`。
 
 ## 维护规则
 

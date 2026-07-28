@@ -420,6 +420,7 @@ Auth: UserBearerAuth
 
 ```text
 POST /admin/auth/login
+GET  /admin/dashboard/summary
 GET  /admin/users
 POST /admin/users
 PUT  /admin/users/{userId}
@@ -430,11 +431,31 @@ GET  /admin/user-entitlements?userId={userId}
 GET  /admin/app-config
 POST /admin/app-config/login-image
 DELETE /admin/app-config/login-image
+GET  /admin/ingredient-categories
+POST /admin/ingredient-categories
+PUT  /admin/ingredient-categories/{categoryId}
+POST /admin/ingredient-categories/reorder
+GET  /admin/units
+POST /admin/units
+PUT  /admin/units/{unitId}
+DELETE /admin/units/{unitId}
+POST /admin/units/reorder
+GET  /admin/ingredients
+POST /admin/ingredients
+PUT  /admin/ingredients/{ingredientId}
+POST /admin/ingredients/{ingredientId}/status
+POST /admin/ingredients/{ingredientId}/image
+DELETE /admin/ingredients/{ingredientId}/image
+POST /admin/ingredients/reorder
+GET  /admin/pending-ingredients
+POST /admin/pending-ingredients/{ingredientId}/review
 ```
 
 后台饭搭子状态筛选支持 `ACTIVE / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
 
 `memberCount` 按当前有效长期成员口径返回，即只统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入后台列表摘要。
+
+`GET /admin/dashboard/summary` 是后台首页只读摘要接口，只返回首页当前需要的计数，不混入分页列表、明细、趋势和策略对象。当前固定返回四组统计：用户 `total / activeCount / disabledCount`，饭搭子 `total / activeCount / memberCount`，菜谱 `total / activeCount / blockedCount / recycledCount / openReportCount`，以及基础资料 `categoryCount / itemCount / unitCount`。其中 `memberCount` 继续沿用后台饭搭子列表的有效成员口径，只统计 `ACTIVE / RESTRICTED`。
 
 ```ts
 interface CreateAdminUserRequest {
@@ -489,6 +510,37 @@ interface AdminUserEntitlementResponse {
 
 `GET /admin/app-config`、`POST /admin/app-config/login-image` 和 `DELETE /admin/app-config/login-image` 共同维护登录弹窗图片。它们只服务这一条已确认配置，不扩成通用配置中心或通用素材库。上传成功和清空成功都返回最新 `AppConfigResponse`。
 
+后台系统食材治理本轮新增：
+
+```text
+GET  /admin/ingredient-categories
+POST /admin/ingredient-categories
+PUT  /admin/ingredient-categories/{categoryId}
+POST /admin/ingredient-categories/reorder
+GET  /admin/units
+POST /admin/units
+PUT  /admin/units/{unitId}
+DELETE /admin/units/{unitId}
+POST /admin/units/reorder
+GET  /admin/ingredients
+POST /admin/ingredients
+PUT  /admin/ingredients/{ingredientId}
+POST /admin/ingredients/{ingredientId}/status
+POST /admin/ingredients/{ingredientId}/image
+DELETE /admin/ingredients/{ingredientId}/image
+POST /admin/ingredients/reorder
+GET  /admin/pending-ingredients
+POST /admin/pending-ingredients/{ingredientId}/review
+```
+
+这一组接口治理 `系统食材分类 + 系统食材 + 系统单位 + 个人食材推荐审核`。系统单位是后台运营面维护的公共基础数据，多个后台录入入口统一复用这一组接口并按 `type` 分组展示；个人食材只通过待审列表进入后台，不在系统食材列表里直接混排编辑。
+
+`GET /admin/ingredient-categories` 返回全部系统食材分类摘要，按后台排序返回。分类摘要新增 `version`、`ingredientCount` 和 `updatedAt`，用于后台编辑和排序并发控制；当前 `ingredientCount` 统计后台仍可治理的系统食材总数，即 `ACTIVE + DISABLED`，不包含已归并条目。`POST /admin/ingredient-categories/reorder` 提交完整分类集合的 `id + expectedVersion` 顺序，成功后统一重写排序并递增对应 `version`。
+
+`GET /admin/units` 返回全部系统单位摘要，按 `type -> systemSortOrder -> name` 排序；系统单位摘要新增 `version` 和 `updatedAt`，用于后台编辑、删除和拖拽排序的并发控制。`POST /admin/units` 新建一个系统单位；`PUT /admin/units/{unitId}` 修改单位名称或类型；`DELETE /admin/units/{unitId}` 只在该单位未被任何食材引用时允许删除，否则返回冲突错误；`POST /admin/units/reorder` 只重排某一个 `type` 分组下的完整系统单位集合，成功后统一重写该分组顺序。
+
+`GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword` 和 `status` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`。后台排序按“分类内系统顺序”返回，不再按创建时间倒序表达运营顺序。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`，下架不做物理删除；重新上架时服务端会把该食材放到当前分类排序末尾，避免与现有启用中食材顺序冲突。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /public-assets/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态文件还在也不得继续外露。`POST /admin/ingredients/reorder` 只接收一个分类下的完整系统食材集合顺序，且仅针对当前启用中的系统食材；服务端校验集合完整性和 `expectedVersion` 后重写该分类的系统食材顺序。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。
+
 ## 其他领域接口摘要
 
 ### 我的口味
@@ -512,11 +564,12 @@ interface UpdateTasteProfileRequest {
 
 ### 菜谱
 
-菜谱 R1 已冻结为“草稿 -> 发布到我的”纵切。现有直接创建、直接更新和导入接口仍是候选实现，不属于 R1 契约；实现时直接替换，不保留旧字段 fallback。
+菜谱 R1 本轮冻结为两条最小链路：`草稿 -> 发布到我的`，以及 `灵感固定版本 -> 收藏到合集`。现有直接创建、直接更新和导入接口仍是候选实现，不属于 R1 契约；实现时直接替换，不保留旧字段 fallback。
 
 ```ts
-type RecipeDifficulty = "EASY" | "MEDIUM" | "HARD";
-type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "CONTAINER" | "PACKAGE" | "OTHER";
+type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
+type RecipeDuration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
+type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
 type IngredientSource = "SYSTEM" | "PERSONAL";
 type InspirationSort = "RECOMMENDED" | "LATEST";
 
@@ -558,7 +611,6 @@ interface InspirationCategorySummary {
 interface IngredientCategorySummary {
   id: UUID;
   name: string;
-  iconKey: string | null;
 }
 
 interface UnitSummary {
@@ -574,6 +626,27 @@ interface IngredientSummary {
   source: IngredientSource;
   categoryId: UUID;
   defaultUnit: UnitSummary;
+  imageUrl: string | null;
+  recommendationStatus: "PENDING" | "REJECTED" | null;
+  version: number;
+}
+
+type IngredientRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
+
+interface IngredientRecommendationSummary {
+  id: UUID;
+  ingredientId: UUID;
+  ingredientVersion: number;
+  ingredientName: string;
+  status: IngredientRecommendationStatus;
+  category: IngredientCategorySummary;
+  defaultUnit: UnitSummary;
+  reviewNote: string | null;
+  adoptedIngredient: IngredientSummary | null;
+  mergedIngredient: IngredientSummary | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  reviewedAt: IsoDateTime | null;
 }
 
 interface RecipeIngredientInput {
@@ -598,7 +671,7 @@ interface RecipeContentSnapshot {
   story: string | null;
   baseServings: number;
   difficulty: RecipeDifficulty | null;
-  durationMinutes: number | null;
+  duration: RecipeDuration | null;
   tips: string | null;
   ingredients: RecipeIngredientSnapshot[];
   steps: RecipeStepSnapshot[];
@@ -611,7 +684,7 @@ interface RecipeDraftContentInput {
   sceneIds: UUID[];
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
-  durationMinutes: number | null;
+  duration: RecipeDuration | null;
   tips: string | null;
   ingredients: RecipeIngredientInput[];
   steps: Array<{ text: string }>;
@@ -663,6 +736,8 @@ interface RecipeDraftDetail {
   recipeId: UUID | null;
   version: number;
   content: RecipeDraftContentInput;
+  ingredientRefs: IngredientSummary[];
+  unitRefs: UnitSummary[];
   category: RecipeCategorySummary | null;
   scenes: RecipeSceneSummary[];
   createdAt: IsoDateTime;
@@ -687,7 +762,7 @@ interface MyRecipeSummary {
   title: string;
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
-  durationMinutes: number | null;
+  duration: RecipeDuration | null;
   category: { id: UUID; name: string; version: number };
   version: number;
   updatedAt: IsoDateTime;
@@ -701,10 +776,63 @@ interface MyRecipeDetail {
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  ingredientRefs: IngredientSummary[];
+  unitRefs: UnitSummary[];
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+}
+
+interface CollectionSceneSummary {
+  id: UUID;
+  name: string;
+  version: number;
+  recipeCount: number;
+  updatedAt: IsoDateTime | null;
+}
+
+interface CollectionListResponse {
+  items: CollectionSceneSummary[];
+  totalCount: number;
+}
+
+interface CollectedRecipeSummary {
+  id: UUID;
+  sourceRecipeId: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  duration: RecipeDuration | null;
+  category: InspirationCategorySummary;
+  scenes: RecipeSceneSummary[];
+  contentVersionId: UUID;
+  collectedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface CollectedRecipeDetail {
+  id: UUID;
+  sourceRecipeId: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  category: InspirationCategorySummary;
+  scenes: RecipeSceneSummary[];
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
+  collectedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface SaveCollectionRecipeRequest {
+  operationId: UUID;
+  sourceRecipeId: UUID;
+  sourceVersionId: UUID;
+  sceneIds: UUID[];
+}
+
+interface SaveCollectionRecipeResponse {
+  recipe: CollectedRecipeDetail;
 }
 
 interface InspirationRecipeSummary {
@@ -712,7 +840,7 @@ interface InspirationRecipeSummary {
   title: string;
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
-  durationMinutes: number | null;
+  duration: RecipeDuration | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -731,6 +859,17 @@ interface InspirationRecipeDetail {
   curatedByName: string | null;
   updatedAt: IsoDateTime;
 }
+
+interface AdminUserRecipeDomainOverview {
+  user: Pick<UserProfile, "id" | "uid" | "nickname">;
+  publishedCount: number;
+  draftCount: number;
+  collectionCount: number;
+  sceneCount: number;
+  latestPublishedAt: IsoDateTime | null;
+  latestDraftAt: IsoDateTime | null;
+  latestCollectionAt: IsoDateTime | null;
+}
 ```
 
 R1 鉴权路径：
@@ -744,6 +883,9 @@ PUT /recipe-scenes/{sceneId}
 POST /recipe-scenes/reorder
 GET /ingredient-categories
 GET/POST /ingredients
+PUT /ingredients/{ingredientId}
+POST /ingredients/{ingredientId}/recommendations
+GET /ingredient-recommendations
 GET/POST /units
 GET/POST /recipe-drafts
 GET/PUT /recipe-drafts/{draftId}
@@ -751,11 +893,17 @@ POST /recipe-drafts/{draftId}/delete
 POST /recipe-drafts/{draftId}/publish
 GET /recipes
 GET /recipes/{recipeId}
+GET /collections
+GET /collections/recipes
+GET /collections/recipes/{collectionRecipeId}
+POST /collections/recipes
 POST /recipes/reorder
 POST /recipes/{recipeId}/delete
 ```
 
 `GET /recipes` 只返回本人已发布菜谱，支持分页、关键词和个人分类筛选。查询参数为 `page`、`pageSize`、`keyword` 和 `categoryId`。新建和编辑正文统一经过草稿发布，R1 不注册直接 `POST /recipes` 和 `PUT /recipes/{recipeId}`。
+
+`GET /collections` 返回当前用户的合集场景摘要。`items` 按场景返回 `recipeCount` 和最近更新时间；`totalCount` 返回该用户当前收藏主记录总条数，不是场景条数。`GET /collections/recipes` 返回当前用户收藏快照分页，支持 `page`、`pageSize` 和可选 `sceneId`；传 `sceneId` 时只返回该合集内容。`GET /collections/recipes/{collectionRecipeId}` 返回一个固定版本快照详情。`POST /collections/recipes` 只接收 `operationId`、`sourceRecipeId`、`sourceVersionId` 和 `sceneIds`，不接受前端传正文快照；`sceneIds` 必须是非空数组，至少选择一个合集场景。
 
 匿名灵感读取路径冻结为：
 
@@ -765,15 +913,30 @@ GET /inspiration-recipes
 GET /inspiration-recipes/{recipeId}
 ```
 
-`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `maxDurationMinutes`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。R1 先接已有系统内容；用户推荐、收藏、点赞和升级接口后续独立冻结。
+`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。R1 先接已有系统内容；用户推荐、点赞和升级为我的接口后续独立冻结。
 
-`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。
+收藏主事实冻结为“同一用户 + 同一灵感固定版本最多一条收藏记录”。`sceneIds` 表达该收藏记录挂载到哪些个人场景，必须至少挂到 1 个场景；仅补挂新场景时服务端补关系并刷新 `updatedAt`，同一场景重复收藏返回 `409`。收藏详情和后台合集内容都读取当时固定版本快照，来源菜谱后续更新不得改写已收藏内容。
+
+后台只读查询本轮新增：
+
+```text
+GET /admin/users/{userId}/recipe-domain
+GET /admin/users/{userId}/recipes
+GET /admin/users/{userId}/recipe-drafts
+GET /admin/users/{userId}/collections
+GET /admin/users/{userId}/collections/{sceneId}/recipes
+```
+
+`GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；`/collections` 返回该用户全部合集场景摘要；`/collections/{sceneId}/recipes` 返回该场景下的收藏快照分页。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
+
+`GET /ingredient-categories` 只返回系统食材分类的最小摘要 `id + name`，不再返回空的图片字段。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位，不再依赖第一页预加载是否刚好命中。
 
 创建和保存草稿时，服务端按以下逻辑计量草稿空间：
 
 1. 新建菜谱草稿：按整份草稿正文的逻辑大小计入 `RECIPE` 模块。
 2. 已发布菜谱编辑草稿：按 `max(0, 草稿正文大小 - 当前已发布正文大小)` 的差量计入 `RECIPE` 模块。
 3. 发布成功后删除草稿账本，写入已发布菜谱账本。
+4. 首次收藏一个灵感固定版本：按该固定版本正文大小计入 `RECIPE` 模块；后续只补场景关系时不重复计量空间。
 
 个人分类和场景各最多 50 个，名称最多 20 字；菜谱名最多 120 字，故事最多 2000 字，小贴士最多 1000 字，食材名最多 64 字，单位名最多 16 字。分类 R1 不提供删除，后续删除前必须先迁移其下菜谱。
 
