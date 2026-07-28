@@ -65,6 +65,7 @@
 import { onShow } from "@dcloudio/uni-app";
 import { reactive, ref } from "vue";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";

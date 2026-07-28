@@ -166,6 +166,7 @@ import gapIcon from "@/assets/home-actions/gap.svg";
 import randomIcon from "@/assets/home-actions/random.svg";
 import wishIcon from "@/assets/home-actions/wish.svg";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { APP_NAME } from "@/config";

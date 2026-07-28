@@ -10,13 +10,11 @@
         <view class="navbar__side" :class="{ 'navbar__side--custom-left': isCustomLeft && !showLeft && hasLeftSlot }">
           <view
             v-if="showLeft"
-            class="navbar__icon-button"
-            hover-class="navbar__icon-button--hover"
+            class="cookfont icon-back navbar__icon"
+            hover-class="navbar__icon--hover"
             hover-stay-time="100"
             @click="handleLeftClick"
-          >
-            <text class="navbar__icon">{{ canGoBack ? "<" : "⌂" }}</text>
-          </view>
+          />
           <slot v-else name="left" />
         </view>
 
@@ -26,7 +24,13 @@
           </slot>
         </view>
 
-        <view class="navbar__side navbar__side--right" :class="{ 'navbar__side--custom-right': isCustomLeft && hasRightSlot }">
+        <view
+          class="navbar__side navbar__side--right"
+          :class="{
+            'navbar__side--custom-right': isCustomLeft && hasRightSlot,
+            'navbar__side--slot-right': hasRightSlot
+          }"
+        >
           <slot name="right" />
         </view>
       </view>
@@ -47,6 +51,7 @@ const props = withDefaults(
     fixed?: boolean;
     placeholder?: boolean;
     transparent?: boolean;
+    backgroundOpacity?: number;
     layout?: "title" | "custom-left";
   }>(),
   {
@@ -55,6 +60,7 @@ const props = withDefaults(
     fixed: true,
     placeholder: true,
     transparent: false,
+    backgroundOpacity: 1,
     layout: "title"
   }
 );
@@ -77,6 +83,7 @@ const statusStyle = computed(() => ({
 
 const innerStyle = computed(() => ({
   "--navbar-side-width": `${navSideGuardWidth.value}px`,
+  "--navbar-capsule-width": `${navSideGuardWidth.value}px`,
   height: `${navBarHeight.value}px`
 }));
 
@@ -139,6 +146,13 @@ function handleLeftClick() {
   justify-content: flex-end;
 }
 
+.navbar__side--slot-right {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  padding-right: var(--navbar-capsule-width);
+}
+
 .navbar__side--custom-right {
   flex: 0 0 auto;
   width: auto;
@@ -164,25 +178,16 @@ function handleLeftClick() {
   white-space: nowrap;
 }
 
-.navbar__icon-button {
+.navbar__icon {
   display: flex;
   align-items: center;
-  justify-content: center;
   width: 64rpx;
   height: 64rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
   color: var(--color-text);
-}
-
-.navbar__icon-button--hover {
-  background: var(--color-surface-muted);
-}
-
-.navbar__icon {
-  font-size: var(--font-size-md);
-  font-weight: 700;
   line-height: 1;
+}
+
+.navbar__icon--hover {
+  opacity: 0.68;
 }
 </style>

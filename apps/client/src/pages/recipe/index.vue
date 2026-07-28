@@ -23,6 +23,7 @@
             class="search-row__input"
             :disabled="activeTab === 'collection'"
             placeholder="搜索菜谱、食材"
+            placeholder-class="search-row__placeholder"
             confirm-type="search"
             @confirm="searchCurrent"
           />
@@ -81,6 +82,21 @@
               </view>
             </view>
           </view>
+
+          <view class="filter-group">
+            <text class="filter-group__title">时长</text>
+            <view class="filter-group__chips">
+              <view
+                v-for="item in durationItems"
+                :key="item.value"
+                class="filter-chip"
+                :class="{ 'filter-chip--active': inspirationDuration === item.value }"
+                @click="changeDuration(item.value)"
+              >
+                {{ item.label }}
+              </view>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -101,7 +117,7 @@
         </view>
 
         <Empty
-          v-else-if="!cards.length"
+          v-else-if="!cards.length && activeTab === 'inspiration'"
           title="还没有灵感菜谱"
           description="换个分类或筛选条件再看看。"
         />
@@ -134,10 +150,10 @@
         :class="{ 'manage-fab--hidden': fabHidden }"
         hover-class="manage-fab--hover"
         hover-stay-time="100"
-        @click="openManage"
+        @click="handleFab"
       >
         <image class="manage-fab__icon" :src="manageIcon" mode="aspectFit" />
-        <text class="manage-fab__text">管理</text>
+        <text class="manage-fab__text">{{ fabText }}</text>
       </view>
 
       <view v-if="sheetMode" class="action-sheet" @click="closeSheet">
@@ -232,15 +248,19 @@ import manageIcon from "@/assets/recipe-page/manage.svg";
 import searchIcon from "@/assets/recipe-page/search.svg";
 import {
 	recipeApi,
+	type CollectionSceneSummary,
+	type CollectedRecipeSummary,
 	type InspirationCategorySummary,
 	type InspirationRecipeSummary,
 	type InspirationSort,
 	type MyRecipeSummary,
 	type RecipeCategorySummary,
 	type RecipeSceneSummary,
-	type RecipeDifficulty
+	type RecipeDifficulty,
+	type RecipeDuration
 } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -260,7 +280,7 @@ interface CardItem {
 	title: string;
 	meta: string;
 	subline: string;
-	kind: "my" | "inspiration";
+	kind: "my" | "inspiration" | "collection";
 }
 
 const sessionStore = useSessionStore();
@@ -278,9 +298,17 @@ const sortItems = [
 ];
 const difficultyItems = [
 	{ value: "" as const, label: "全部" },
-	{ value: "EASY" as const, label: "简单" },
-	{ value: "MEDIUM" as const, label: "中等" },
-	{ value: "HARD" as const, label: "困难" }
+	{ value: "BEGINNER" as const, label: "新手友好" },
+	{ value: "EASY" as const, label: "轻松上手" },
+	{ value: "SKILLED" as const, label: "需要经验" },
+	{ value: "CHALLENGING" as const, label: "进阶挑战" }
+];
+const durationItems = [
+	{ value: "" as const, label: "全部" },
+	{ value: "WITHIN_15" as const, label: "15分钟内" },
+	{ value: "BETWEEN_15_30" as const, label: "15~30分钟" },
+	{ value: "BETWEEN_30_60" as const, label: "30~60分钟" },
+	{ value: "OVER_60" as const, label: "1小时以上" }
 ];
 
 const activeTab = ref<RecipeTab>(sessionStore.isLoggedIn ? "my" : "inspiration");
@@ -291,12 +319,14 @@ const errorText = ref("");
 const fabHidden = ref(false);
 const myCategories = ref<RecipeCategorySummary[]>([]);
 const inspirationCategories = ref<InspirationCategorySummary[]>([]);
-const collectionScenes = ref<RecipeSceneSummary[]>([]);
+const collectionScenes = ref<CollectionSceneSummary[]>([]);
+const collectionRecipes = ref<CollectedRecipeSummary[]>([]);
 const myCategoryId = ref("");
 const inspirationCategoryId = ref("");
 const collectionSceneId = ref("");
 const inspirationSort = ref<InspirationSort>("RECOMMENDED");
 const inspirationDifficulty = ref<RecipeDifficulty | "">("");
+const inspirationDuration = ref<RecipeDuration | "">("");
 const myRecipes = ref<MyRecipeSummary[]>([]);
 const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
 const loginIntentTab = ref<RecipeTab | null>(null);
@@ -323,10 +353,14 @@ const currentCategoryId = computed(() => {
 	if (activeTab.value === "inspiration") return inspirationCategoryId.value;
 	return collectionSceneId.value;
 });
+const selectedCollection = computed(() => {
+	if (!collectionScenes.value.length) return null;
+	return collectionScenes.value.find(item => item.id === collectionSceneId.value) || collectionScenes.value[0];
+});
 const cards = computed<CardItem[]>(() => {
 	if (activeTab.value === "my") return myRecipes.value.map(toMyCard);
 	if (activeTab.value === "inspiration") return inspirationRecipes.value.map(toInspirationCard);
-	return [];
+	return collectionRecipes.value.map(toCollectionCard);
 });
 const collectionNeedsCreate = computed(
 	() => activeTab.value === "collection" && !collectionScenes.value.length && !collectionSceneId.value
@@ -340,10 +374,12 @@ const showCategoryBar = computed(() => {
 const showStickyControls = computed(
 	() => showCategoryBar.value || activeTab.value === "inspiration"
 );
-const showRecipeEmpty = computed(() => activeTab.value === "my" || activeTab.value === "collection");
+const showRecipeEmpty = computed(
+	() => activeTab.value === "my" || (activeTab.value === "collection" && !cards.value.length)
+);
 const emptyStateTitle = computed(() => {
 	if (activeTab.value === "my") return "添加你的第一道菜谱";
-	return collectionNeedsCreate.value ? "创建合集并添加菜谱" : "给合集添加菜谱";
+	return collectionNeedsCreate.value ? "创建合集并添加菜谱" : `${selectedCollection.value?.name || "这个合集"}还没有菜谱`;
 });
 const emptyStateDescription = computed(() =>
 	activeTab.value === "my"
@@ -357,6 +393,12 @@ const sheetTitle = computed(() => {
 	if (sheetMode.value === "my") return "添加菜谱";
 	if (sheetMode.value === "collection") return "创建合集";
 	return "添加菜谱到合集";
+});
+const fabText = computed(() => {
+	if (activeTab.value === "collection") {
+		return collectionNeedsCreate.value ? "新建" : "添加";
+	}
+	return "管理";
 });
 
 onShow(() => {
@@ -438,6 +480,12 @@ function changeDifficulty(value: RecipeDifficulty | "") {
 	void loadActiveTab();
 }
 
+function changeDuration(value: RecipeDuration | "") {
+	if (inspirationDuration.value === value) return;
+	inspirationDuration.value = value;
+	void loadActiveTab();
+}
+
 function toggleFilters() {
 	showFilters.value = !showFilters.value;
 }
@@ -455,12 +503,32 @@ async function loadActiveTab() {
 		if (sessionStore.isLoggedIn) {
 			loading.value = true;
 			try {
-				collectionScenes.value = await recipeApi.listScenes();
+				const result = await recipeApi.listCollections();
+				collectionScenes.value = result.items;
+				if (collectionScenes.value.length && !collectionScenes.value.some(item => item.id === collectionSceneId.value)) {
+					collectionSceneId.value = collectionScenes.value[0].id;
+				}
+				if (!collectionScenes.value.length) {
+					collectionSceneId.value = "";
+					collectionRecipes.value = [];
+					return;
+				}
+				const list = await recipeApi.listCollectionRecipes({
+					page: 1,
+					pageSize: 20,
+					sceneId: collectionSceneId.value || undefined
+				});
+				collectionRecipes.value = list.items;
 			} catch (error) {
 				errorText.value = error instanceof Error ? error.message : "合集加载失败";
+				collectionRecipes.value = [];
 			} finally {
 				loading.value = false;
 			}
+		} else {
+			collectionScenes.value = [];
+			collectionSceneId.value = "";
+			collectionRecipes.value = [];
 		}
 		return;
 	}
@@ -491,7 +559,8 @@ async function loadActiveTab() {
 			keyword: keyword.value.trim() || undefined,
 			categoryId: inspirationCategoryId.value || undefined,
 			sort: inspirationSort.value,
-			difficulty: inspirationDifficulty.value || undefined
+			difficulty: inspirationDifficulty.value || undefined,
+			duration: inspirationDuration.value || undefined
 		});
 		inspirationRecipes.value = result.items;
 	} catch (error) {
@@ -510,6 +579,15 @@ function openCard(item: CardItem) {
 function openManage() {
 	closeSheet();
 	void uniPlatform.navigation.navigateTo("/pages_recipe/list/index");
+}
+
+function handleFab() {
+	if (activeTab.value === "collection") {
+		closeSheet();
+		sheetMode.value = collectionNeedsCreate.value ? "collection" : "collection-add";
+		return;
+	}
+	openManage();
 }
 
 function closeSheet() {
@@ -559,7 +637,14 @@ async function createCollection() {
 			operationId: createOperationId(),
 			name
 		});
-		collectionScenes.value = [...collectionScenes.value, scene];
+		collectionScenes.value = [
+			...collectionScenes.value,
+			{
+				...scene,
+				recipeCount: 0,
+				updatedAt: null
+			}
+		];
 		collectionSceneId.value = scene.id;
 		closeSheet();
 		await uniPlatform.feedback.toast({ title: "合集已创建", icon: "success" }).catch(() => undefined);
@@ -573,21 +658,26 @@ async function createCollection() {
 }
 
 function formatDifficulty(value: RecipeDifficulty | null) {
-	if (value === "EASY") return "简单";
-	if (value === "MEDIUM") return "中等";
-	if (value === "HARD") return "困难";
+	if (value === "BEGINNER") return "新手友好";
+	if (value === "EASY") return "轻松上手";
+	if (value === "SKILLED") return "需要经验";
+	if (value === "CHALLENGING") return "进阶挑战";
 	return "未设难度";
 }
 
-function formatDuration(value: number | null) {
-	return value ? `${value} 分钟` : "未设时长";
+function formatDuration(value: RecipeDuration | null) {
+	if (value === "WITHIN_15") return "15分钟内";
+	if (value === "BETWEEN_15_30") return "15~30分钟";
+	if (value === "BETWEEN_30_60") return "30~60分钟";
+	if (value === "OVER_60") return "1小时以上";
+	return "未设时长";
 }
 
 function toMyCard(item: MyRecipeSummary): CardItem {
 	return {
 		id: item.id,
 		title: item.title,
-		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.durationMinutes)}`,
+		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
 		subline: `${item.category.name} · 更新于 ${item.updatedAt.slice(0, 10)}`,
 		kind: "my"
 	};
@@ -597,9 +687,20 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 	return {
 		id: item.id,
 		title: item.title,
-		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.durationMinutes)}`,
+		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
 		subline: `${item.category.name} · ${item.likeCount} 赞 · ${item.collectCount} 收藏`,
 		kind: "inspiration"
+	};
+}
+
+function toCollectionCard(item: CollectedRecipeSummary): CardItem {
+	const sceneNames = item.scenes.map(scene => scene.name).join("、");
+	return {
+		id: item.id,
+		title: item.title,
+		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
+		subline: `${item.category.name} · ${sceneNames || "未归档"} · 收藏于 ${item.collectedAt.slice(0, 10)}`,
+		kind: "collection"
 	};
 }
 </script>
@@ -693,6 +794,10 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
   color: var(--color-text);
   font-size: 30rpx;
   font-weight: var(--font-weight-medium);
+}
+
+:deep(.search-row__placeholder) {
+  color: var(--color-text-tertiary);
 }
 
 .sticky-wrap {
@@ -842,6 +947,54 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-loose);
+}
+
+.collection-board {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  margin-top: var(--space-md);
+  padding: 32rpx 30rpx;
+  border: 1rpx solid var(--color-border);
+  border-radius: 30rpx;
+  background: var(--color-surface);
+  box-shadow: 0 20rpx 48rpx rgba(41, 59, 47, 0.08);
+}
+
+.collection-board__title {
+  color: var(--color-text);
+  font-size: 34rpx;
+  font-weight: var(--font-weight-bold);
+}
+
+.collection-board__desc {
+  color: var(--color-text-secondary);
+  font-size: 26rpx;
+  line-height: var(--line-height-loose);
+}
+
+.collection-board__actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 8rpx;
+}
+
+.collection-board__button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 84rpx;
+  padding: 0 24rpx;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  color: var(--button-primary-text);
+  font-size: 28rpx;
+}
+
+.collection-board__button--ghost {
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
 }
 
 .notice {

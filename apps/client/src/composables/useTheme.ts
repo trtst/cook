@@ -120,7 +120,7 @@ function buildThemeVars(seed: ThemeSeed, themeMode: EffectiveTheme): ThemeVars {
   const primarySoft = toRgba(seed.primary, themeMode === "dark" ? 0.26 : 0.24);
   const primaryActive = mixColor(seed.primary, seed.text, themeMode === "dark" ? 0.18 : 0.14);
   const buttonTone = mixColor(seed.primary, accent, 0.48);
-  const buttonText = getContrastText(buttonTone);
+  const buttonText = themeMode === "light" ? inverseText : getContrastText(buttonTone);
   const ink = themeMode === "dark" ? "#f5efe8" : "#1b1b1b";
 
   return {

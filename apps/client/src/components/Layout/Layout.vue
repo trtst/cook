@@ -11,6 +11,7 @@
       :layout="navbarLayout"
       :placeholder="navbarPlaceholder"
       :transparent="navbarTransparent"
+      :background-opacity="navbarOpacity"
     >
       <template v-if="$slots['navbar-left']" #left>
         <slot name="navbar-left" />
@@ -33,6 +34,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import LoginModal from "@/components/Login/LoginModal.vue";
+import NavBar from "@/components/NavBar/NavBar.vue";
+import TabBar from "@/components/TabBar/TabBar.vue";
 import { useTheme } from "@/composables/useTheme";
 import type { TabKey } from "@/components/TabBar/tabs";
 
@@ -45,6 +48,7 @@ const props = withDefaults(
     fullScreen?: boolean;
     navbarPlaceholder?: boolean;
     navbarTransparent?: boolean;
+    navbarOpacity?: number;
     navbarLayout?: "title" | "custom-left";
   }>(),
   {
@@ -55,6 +59,7 @@ const props = withDefaults(
     fullScreen: false,
     navbarPlaceholder: true,
     navbarTransparent: false,
+    navbarOpacity: 1,
     navbarLayout: "title"
   }
 );

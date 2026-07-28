@@ -181,3 +181,8 @@ page,
   --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.28);
   color-scheme: dark;
 }
+
+button::after {
+  border: 0;
+  display: none;
+}

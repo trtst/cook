@@ -3,7 +3,8 @@
     <Login
       v-if="!sessionStore.isLoggedIn"
       title="登录后管理菜谱"
-      description="这里查看我的已发布菜谱和草稿箱。当前日期是 2026-07-25。"
+      description="这里查看我的已发布菜谱和草稿箱。"
+      @success="handleLoginSuccess"
     />
 
     <template v-else>
@@ -48,10 +49,11 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -73,10 +75,19 @@ const loading = ref(false);
 const errorText = ref("");
 const items = ref<DisplayItem[]>([]);
 
+onLoad((query) => {
+	const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
+	mode.value = rawMode === "drafts" ? "drafts" : "recipes";
+});
+
 onShow(() => {
 	if (!sessionStore.isLoggedIn) return;
 	void loadList();
 });
+
+function handleLoginSuccess() {
+	void loadList();
+}
 
 function switchMode(nextMode: ListMode) {
 	if (mode.value === nextMode) return;
@@ -124,10 +135,30 @@ function openItem(item: DisplayItem) {
 }
 
 function toRecipeItem(item: MyRecipeSummary): DisplayItem {
+	const difficultyText =
+		item.difficulty === "BEGINNER"
+			? "新手友好"
+			: item.difficulty === "EASY"
+				? "轻松上手"
+				: item.difficulty === "SKILLED"
+					? "需要经验"
+					: item.difficulty === "CHALLENGING"
+						? "进阶挑战"
+						: "未设置难度";
+	const durationText =
+		item.duration === "WITHIN_15"
+			? "15分钟内"
+			: item.duration === "BETWEEN_15_30"
+				? "15~30分钟"
+				: item.duration === "BETWEEN_30_60"
+					? "30~60分钟"
+					: item.duration === "OVER_60"
+						? "1小时以上"
+						: "未设置时长";
 	return {
 		id: item.id,
 		title: item.title,
-		meta: `${item.category.name} · ${item.difficulty ?? "未设置难度"} · ${item.durationMinutes ? `${item.durationMinutes} 分钟` : "未设置时长"}`,
+		meta: `${item.category.name} · ${difficultyText} · ${durationText}`,
 		updatedAt: item.updatedAt,
 		raw: item
 	};
