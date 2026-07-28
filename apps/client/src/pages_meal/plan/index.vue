@@ -81,10 +81,11 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import { mealApi, type DiningEventSummary, type MealPlanSummary } from "@/apis/meal";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
+import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";

@@ -10,9 +10,8 @@
  * 1. 不在这里编排业务参数，也不做多字段兜底。
  * 2. 不在这里推断接口属于哪个域名，域名归属必须由各业务 API 模块显式声明。
  */
-import { emitSessionCleared } from "@/utils/session-events";
 import { useSessionStore } from "@/stores/session";
-import { useUserStore } from "@/stores/user";
+import { clearUserSessionState } from "@/utils/session-cleanup";
 import {
 	downloadFile as uniDownloadFile,
 	uniRequestAdapter,
@@ -115,9 +114,7 @@ function isApiResponse<T>(body: unknown): body is ApiResponse<T> {
  * 避免页面各自处理导致状态残留或重复跳转。
  */
 async function clearUnauthorized(error: UnauthorizedError) {
-	await useSessionStore().clearSession();
-	useUserStore().clearProfile();
-	await emitSessionCleared();
+	await clearUserSessionState();
 	throw error;
 }
 

@@ -29,7 +29,6 @@ export type { ThemeMode, ThemePalette, ThemeSkin };
 
 // Local-only settings persisted for app relaunch.
 interface SettingsSnapshot {
-	lastDiningGroupId: string;
 	themeMode?: ThemeMode;
 	themeSkin?: ThemeSkin;
 	themePalette?: ThemePalette;
@@ -52,8 +51,6 @@ function isThemePalette(value: unknown): value is ThemePalette {
 // It does not resolve entitlement or system theme listeners by itself.
 export const useSettingsStore = defineStore("settings", {
 	state: () => ({
-		// Last chosen dining-group id for restoring user context in the UI.
-		lastDiningGroupId: "",
 		// User-selected theme mode or system-following mode.
 		themeMode: "system" as ThemeMode,
 		// Active visual skin.
@@ -64,22 +61,16 @@ export const useSettingsStore = defineStore("settings", {
 	actions: {
 		// Restores local settings snapshot and repairs unsupported skin/palette combinations.
 		async restore() {
-			const snapshot = await uniPlatform.storage.get<SettingsSnapshot>(APP_STORAGE_KEYS.settings);
+			const snapshot = await uniPlatform.storage.get<SettingsSnapshot>(APP_STORAGE_KEYS.theme);
 			const restoredSkin = isThemeSkin(snapshot?.themeSkin) ? snapshot.themeSkin : DEFAULT_THEME_SKIN;
 			const restoredPalette =
 				isThemePalette(snapshot?.themePalette) && isPaletteSupportedBySkin(restoredSkin, snapshot.themePalette)
 					? snapshot.themePalette
 					: getDefaultPaletteForSkin(restoredSkin);
 
-			this.lastDiningGroupId = snapshot?.lastDiningGroupId ?? "";
 			this.themeMode = isThemeMode(snapshot?.themeMode) ? snapshot.themeMode : "system";
 			this.themeSkin = restoredSkin;
 			this.themePalette = restoredPalette;
-		},
-		// Tracks the last used dining-group context for future app restore.
-		async setLastDiningGroupId(diningGroupId: string) {
-			this.lastDiningGroupId = diningGroupId;
-			await this.persist();
 		},
 		// Updates theme mode and persists immediately because pages depend on it across relaunches.
 		async setThemeMode(themeMode: ThemeMode) {
@@ -106,16 +97,14 @@ export const useSettingsStore = defineStore("settings", {
 		},
 		// Resets local settings to default values and clears persisted storage.
 		async clearSettings() {
-			this.lastDiningGroupId = "";
 			this.themeMode = "system";
 			this.themeSkin = DEFAULT_THEME_SKIN;
 			this.themePalette = DEFAULT_THEME_PALETTE;
-			await uniPlatform.storage.remove(APP_STORAGE_KEYS.settings);
+			await uniPlatform.storage.remove(APP_STORAGE_KEYS.theme);
 		},
 		// Central persistence path so every setting write uses one storage shape.
 		async persist() {
-			await uniPlatform.storage.set(APP_STORAGE_KEYS.settings, {
-				lastDiningGroupId: this.lastDiningGroupId,
+			await uniPlatform.storage.set(APP_STORAGE_KEYS.theme, {
 				themeMode: this.themeMode,
 				themeSkin: this.themeSkin,
 				themePalette: this.themePalette

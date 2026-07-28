@@ -33,6 +33,7 @@ interface ClientPlatform {
 		getAppBaseInfo(): AppBaseInfo | null;
 		getRuntimeChannel(): RuntimeChannel;
 		onThemeChange(listener: (result: ThemeChangeResult) => void): void;
+		measure(selector: string): Promise<ElementRect | null>;
 	};
 	/**
 	 * 本地存储能力。
@@ -42,9 +43,11 @@ interface ClientPlatform {
 		get<T>(key: string): Promise<T | null>;
 		set<T>(key: string, value: T): Promise<void>;
 		remove(key: string): Promise<void>;
+		keys(): Promise<string[]>;
 		getSync<T>(key: string): T | null;
 		setSync<T>(key: string, value: T): void;
 		removeSync(key: string): void;
+		keysSync(): string[];
 	};
 	/**
 	 * 页面路由能力。
@@ -56,6 +59,7 @@ interface ClientPlatform {
 		switchTab(path: string): Promise<void>;
 		reLaunch(path: string): Promise<void>;
 		navigateBack(delta?: number): Promise<void>;
+		pageScrollTo(options: { selector?: string; scrollTop?: number; offsetTop?: number; duration?: number }): Promise<void>;
 	};
 	/**
 	 * 轻量反馈能力。
@@ -63,6 +67,8 @@ interface ClientPlatform {
 	 */
 	feedback: {
 		toast(options: { title: string; icon?: "success" | "error" | "loading" | "none" }): Promise<void>;
+		confirm(options: { title: string; content: string; confirmText?: string; cancelText?: string }): Promise<boolean>;
+		hideKeyboard(): Promise<void>;
 	};
 	/**
 	 * 剪贴板能力。
@@ -106,6 +112,15 @@ interface ThemeChangeResult {
 	theme?: string;
 }
 
+interface ElementRect {
+	top: number;
+	bottom: number;
+	left: number;
+	right: number;
+	width: number;
+	height: number;
+}
+
 type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 interface UniSystemApi {
@@ -119,7 +134,7 @@ interface UniSystemApi {
  * 客户端本地缓存统一前缀。
  * 所有小程序本地 key 都从这里派生，避免与其他项目、历史调试数据混用。
  */
-const STORAGE_PREFIX = "next_meal_";
+const STORAGE_PREFIX = "cook_meal_";
 
 function buildStorageKey(name: string) {
 	return `${STORAGE_PREFIX}${name}`;
@@ -131,9 +146,12 @@ function buildStorageKey(name: string) {
  */
 export const APP_STORAGE_KEYS = Object.freeze({
 	session: buildStorageKey("session"),
-	settings: buildStorageKey("settings"),
+	theme: buildStorageKey("theme"),
 	systemInfoSnapshot: buildStorageKey("system_info_snapshot"),
-	userProfile: buildStorageKey("user_profile")
+	userProfile: buildStorageKey("user_profile"),
+	recipeEdit(uid: number | string) {
+		return buildStorageKey(`recipe_edit_${String(uid || "").trim()}`);
+	}
 });
 
 /**
@@ -188,6 +206,19 @@ function navigateBack(delta = 1) {
 	});
 }
 
+function pageScrollTo(options: { selector?: string; scrollTop?: number; offsetTop?: number; duration?: number }) {
+	return callUni<void>((resolve, reject) => {
+		uni.pageScrollTo({
+			selector: options.selector,
+			scrollTop: options.scrollTop,
+			offsetTop: options.offsetTop,
+			duration: options.duration ?? 260,
+			success: () => resolve(),
+			fail: reject
+		});
+	});
+}
+
 /**
  * 统一 Toast 出口。
  * 页面只关心提示文案和图标，不直接触碰平台细节。
@@ -200,6 +231,25 @@ function showToast(options: { title: string; icon?: "success" | "error" | "loadi
 			success: () => resolve(),
 			fail: reject
 		});
+	});
+}
+
+function showConfirm(options: { title: string; content: string; confirmText?: string; cancelText?: string }) {
+	return callUni<boolean>((resolve, reject) => {
+		uni.showModal({
+			title: options.title,
+			content: options.content,
+			confirmText: options.confirmText,
+			cancelText: options.cancelText,
+			success: (result) => resolve(Boolean(result.confirm)),
+			fail: reject
+		});
+	});
+}
+
+function hideKeyboard() {
+	return Promise.resolve().then(() => {
+		uni.hideKeyboard();
 	});
 }
 
@@ -233,6 +283,16 @@ function getRuntimeChannel(): RuntimeChannel {
 	if (/iphone|ipad|ipod/.test(userAgent)) return "ios";
 
 	return /mobile/.test(userAgent) ? "h5" : "pc";
+}
+
+function measure(selector: string) {
+	return callUni<ElementRect | null>((resolve) => {
+		const query = uni.createSelectorQuery();
+		query.select(selector).boundingClientRect((rect) => {
+			resolve((rect as ElementRect | null) ?? null);
+		});
+		query.exec();
+	});
 }
 
 /**
@@ -271,6 +331,9 @@ export const uniPlatform: ClientPlatform = {
 			} catch {
 				// Unsupported platforms simply do not emit theme changes.
 			}
+		},
+		measure(selector) {
+			return measure(selector);
 		}
 	},
 	storage: {
@@ -294,6 +357,14 @@ export const uniPlatform: ClientPlatform = {
 		removeSync(key: string) {
 			uni.removeStorageSync(key);
 		},
+		keysSync() {
+			try {
+				const result = uni.getStorageInfoSync();
+				return Array.isArray(result.keys) ? result.keys.map(item => String(item || "").trim()).filter(Boolean) : [];
+			} catch {
+				return [];
+			}
+		},
 		/**
 		 * 异步接口当前复用同步实现。
 		 * 这样上层可以统一使用 async/await，同时不额外引入一套重复逻辑。
@@ -306,6 +377,9 @@ export const uniPlatform: ClientPlatform = {
 		},
 		async remove(key: string) {
 			uniPlatform.storage.removeSync(key);
+		},
+		async keys() {
+			return uniPlatform.storage.keysSync();
 		}
 	},
 	navigation: {
@@ -313,10 +387,13 @@ export const uniPlatform: ClientPlatform = {
 		redirectTo: (path) => navigate(path, "redirectTo"),
 		switchTab: (path) => navigate(path, "switchTab"),
 		reLaunch: (path) => navigate(path, "reLaunch"),
-		navigateBack
+		navigateBack,
+		pageScrollTo
 	},
 	feedback: {
-		toast: showToast
+		toast: showToast,
+		confirm: showConfirm,
+		hideKeyboard
 	},
 	clipboard: {
 		set: setClipboardData

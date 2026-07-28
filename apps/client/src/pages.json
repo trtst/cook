@@ -1,4 +1,7 @@
 {
+  "easycom": {
+    "autoscan": false
+  },
   "pages": [
     {
       "path": "pages/home/index",
@@ -33,7 +36,8 @@
     {
       "root": "pages_me",
       "pages": [
-        { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } }
+        { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } },
+        { "path": "recommend/index", "style": { "navigationBarTitleText": "我的推荐", "navigationStyle": "custom" } }
       ]
     },
     {

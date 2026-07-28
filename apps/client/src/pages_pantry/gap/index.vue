@@ -41,10 +41,11 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import { mealApi } from "@/apis/meal";
-import { shoppingApi, type ShoppingItemSummary } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
+import { pantryMealApi } from "../apis/meal";
+import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -67,7 +68,7 @@ async function loadEvents() {
   loading.value = true;
   errorText.value = "";
   try {
-    const planResult = await mealApi.listPlans({ page: 1, pageSize: 50 });
+    const planResult = await pantryMealApi.listPlans({ page: 1, pageSize: 50 });
     events.value = planResult.items
       .filter(item => item.diningEventId)
       .map(item => ({

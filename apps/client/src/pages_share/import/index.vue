@@ -22,7 +22,8 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Login from "@/components/Login/Login.vue";
-import { shareApi } from "@/apis/share";
+import Layout from "@/components/Layout/Layout.vue";
+import { shareApi } from "../apis/share";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";

@@ -28,8 +28,9 @@
 <script setup lang="ts">
 import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import { shareApi, type SharePreviewResponse } from "@/apis/share";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
+import { shareApi, type SharePreviewResponse } from "../apis/share";
 import { uniPlatform } from "@/platform/uni";
 import type { RecipeAmountSnapshot } from "@/apis/recipe";
 

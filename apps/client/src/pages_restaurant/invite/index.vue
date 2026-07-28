@@ -24,6 +24,7 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import type { UUID } from "@/apis/http";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";

@@ -34,6 +34,7 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { diningGroupApi, type StorageUsageSummary } from "@/apis/dining-group";
+import Layout from "@/components/Layout/Layout.vue";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";

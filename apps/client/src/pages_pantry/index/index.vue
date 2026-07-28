@@ -28,6 +28,8 @@
 </template>
 
 <script setup lang="ts">
+import Layout from "@/components/Layout/Layout.vue";
+import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 

@@ -34,9 +34,10 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import { fridgeApi, type FridgeItemSummary } from "@/apis/fridge";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
+import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";

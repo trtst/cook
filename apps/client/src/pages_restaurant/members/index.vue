@@ -76,6 +76,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import type { DiningGroupRole } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";

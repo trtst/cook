@@ -33,9 +33,10 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import { shoppingApi, type ShoppingItemSummary } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
+import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
+import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { useSessionStore } from "@/stores/session";
 
 const sessionStore = useSessionStore();
