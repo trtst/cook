@@ -405,6 +405,8 @@ import shoppingListIcon from "@/assets/me-actions/shopping-list.svg";
 import tasteIcon from "@/assets/me-actions/taste.svg";
 import themeIcon from "@/assets/me-actions/theme.svg";
 import { userApi } from "@/apis/user";
+import Layout from "@/components/Layout/Layout.vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import TierBadge from "@/components/TierBadge/TierBadge.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -415,6 +417,7 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
+import { clearLocalClientCache, clearUserSessionState } from "@/utils/session-cleanup";
 import { restoreAppSession } from "@/utils/session";
 
 interface PageEntry {
@@ -423,7 +426,7 @@ interface PageEntry {
   url?: string;
   disabledText?: string;
   description?: string;
-  action?: "logout" | "change-password";
+  action?: "logout" | "change-password" | "clear-cache";
 }
 
 const sessionStore = useSessionStore();
@@ -550,6 +553,12 @@ const personalEntries: PageEntry[] = [
     url: "/pages_me/taste/index"
   },
   {
+    title: "我的推荐",
+    iconSrc: ingredientCatalogIcon,
+    description: "查看食材推荐审核结果，已拒绝可修改后重新推荐",
+    url: "/pages_me/recommend/index"
+  },
+  {
     title: "分类与单位",
     iconSrc: categoriesUnitsIcon,
     description: "蔬菜、肉蛋奶、水产海鲜｜克、千克、斤、升、个",
@@ -600,6 +609,12 @@ const accountSettingEntries: PageEntry[] = [
 ];
 
 const supportSettingEntries: PageEntry[] = [
+  {
+    title: "清除缓存",
+    iconSrc: privacyIcon,
+    description: "清除本地资料缓存和菜谱编辑缓存",
+    action: "clear-cache"
+  },
   {
     title: "消息提醒",
     iconSrc: remindersIcon,
@@ -751,6 +766,11 @@ function handleEntryClick(entry: PageEntry) {
     return;
   }
 
+  if (entry.action === "clear-cache") {
+    void handleClearCache();
+    return;
+  }
+
   requireLogin(() => {
     if (entry.url) {
       navigateTo(entry.url);
@@ -880,12 +900,27 @@ async function handleLogout() {
   loginModalStore.close();
   closeProfileEditor();
   closePasswordEditor();
-  await sessionStore.clearSession();
-  userStore.clearProfile();
-  await diningGroupStore.clearDiningGroupState();
+  await clearUserSessionState();
   loadErrorText.value = "";
   await uniPlatform.feedback.toast({
     title: "已退出登录",
+    icon: "success"
+  });
+}
+
+async function handleClearCache() {
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "清除缓存",
+    content: "将清除本地资料缓存和菜谱编辑缓存，不会退出登录，也不会清除主题和设备布局快照。",
+    confirmText: "清除",
+    cancelText: "取消"
+  }).catch(() => false);
+  if (!confirmed) return;
+
+  clearLocalClientCache();
+  loadErrorText.value = "";
+  await uniPlatform.feedback.toast({
+    title: "缓存已清除",
     icon: "success"
   });
 }

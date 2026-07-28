@@ -1,8 +1,9 @@
 import { cfg } from "@/config";
 import { get, post, put, type IsoDateTime, type PageResult, type UUID } from "./http";
 
-export type RecipeDifficulty = "EASY" | "MEDIUM" | "HARD";
-export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "CONTAINER" | "PACKAGE" | "OTHER";
+export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
+export type RecipeDuration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
+export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
 export type IngredientSource = "SYSTEM" | "PERSONAL";
 export type InspirationSort = "RECOMMENDED" | "LATEST";
 
@@ -51,7 +52,6 @@ export interface InspirationCategorySummary {
 export interface IngredientCategorySummary {
 	id: UUID;
 	name: string;
-	iconKey: string | null;
 }
 
 export interface UnitSummary {
@@ -67,6 +67,9 @@ export interface IngredientSummary {
 	source: IngredientSource;
 	categoryId: UUID;
 	defaultUnit: UnitSummary;
+	imageUrl: string | null;
+	recommendationStatus: "PENDING" | "REJECTED" | null;
+	version: number;
 }
 
 export interface RecipeIngredientInput {
@@ -91,7 +94,7 @@ export interface RecipeContentSnapshot {
 	story: string | null;
 	baseServings: number;
 	difficulty: RecipeDifficulty | null;
-	durationMinutes: number | null;
+	duration: RecipeDuration | null;
 	tips: string | null;
 	ingredients: RecipeIngredientSnapshot[];
 	steps: RecipeStepSnapshot[];
@@ -104,7 +107,7 @@ export interface RecipeDraftContentInput {
 	sceneIds: UUID[];
 	baseServings: number | null;
 	difficulty: RecipeDifficulty | null;
-	durationMinutes: number | null;
+	duration: RecipeDuration | null;
 	tips: string | null;
 	ingredients: RecipeIngredientInput[];
 	steps: RecipeStepSnapshot[];
@@ -124,6 +127,8 @@ export interface RecipeDraftDetail {
 	recipeId: UUID | null;
 	version: number;
 	content: RecipeDraftContentInput;
+	ingredientRefs: IngredientSummary[];
+	unitRefs: UnitSummary[];
 	category: RecipeCategorySummary | null;
 	scenes: RecipeSceneSummary[];
 	createdAt: IsoDateTime;
@@ -135,7 +140,7 @@ export interface MyRecipeSummary {
 	title: string;
 	coverImageUrl: string | null;
 	difficulty: RecipeDifficulty | null;
-	durationMinutes: number | null;
+	duration: RecipeDuration | null;
 	category: RecipeCategorySummary;
 	version: number;
 	updatedAt: IsoDateTime;
@@ -149,9 +154,51 @@ export interface MyRecipeDetail {
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	ingredientRefs: IngredientSummary[];
+	unitRefs: UnitSummary[];
 	status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
 	version: number;
 	createdAt: IsoDateTime;
+	updatedAt: IsoDateTime;
+}
+
+export interface CollectionSceneSummary {
+	id: UUID;
+	name: string;
+	version: number;
+	recipeCount: number;
+	updatedAt: IsoDateTime | null;
+}
+
+export interface CollectionListResponse {
+	items: CollectionSceneSummary[];
+	totalCount: number;
+}
+
+export interface CollectedRecipeSummary {
+	id: UUID;
+	sourceRecipeId: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	difficulty: RecipeDifficulty | null;
+	duration: RecipeDuration | null;
+	category: InspirationCategorySummary;
+	scenes: RecipeSceneSummary[];
+	contentVersionId: UUID;
+	collectedAt: IsoDateTime;
+	updatedAt: IsoDateTime;
+}
+
+export interface CollectedRecipeDetail {
+	id: UUID;
+	sourceRecipeId: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	category: InspirationCategorySummary;
+	scenes: RecipeSceneSummary[];
+	contentVersionId: UUID;
+	content: RecipeContentSnapshot;
+	collectedAt: IsoDateTime;
 	updatedAt: IsoDateTime;
 }
 
@@ -160,7 +207,7 @@ export interface InspirationRecipeSummary {
 	title: string;
 	coverImageUrl: string | null;
 	difficulty: RecipeDifficulty | null;
-	durationMinutes: number | null;
+	duration: RecipeDuration | null;
 	category: InspirationCategorySummary;
 	likeCount: number;
 	collectCount: number;
@@ -246,7 +293,13 @@ export interface InspirationRecipeQuery {
 	categoryId?: UUID;
 	sort?: InspirationSort;
 	difficulty?: RecipeDifficulty;
-	maxDurationMinutes?: number;
+	duration?: RecipeDuration;
+}
+
+export interface CollectionRecipeQuery {
+	page?: number;
+	pageSize?: number;
+	sceneId?: UUID;
 }
 
 export interface CreateRecipeDraftRequest {
@@ -290,6 +343,48 @@ export interface CreateIngredientRequest {
 	defaultUnitId: UUID;
 }
 
+export interface UpdateIngredientRequest extends CreateIngredientRequest {
+	expectedVersion: number;
+}
+
+export type IngredientRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
+
+export interface IngredientRecommendationSummary {
+	id: UUID;
+	ingredientId: UUID;
+	ingredientVersion: number;
+	ingredientName: string;
+	status: IngredientRecommendationStatus;
+	category: IngredientCategorySummary;
+	defaultUnit: UnitSummary;
+	reviewNote: string | null;
+	adoptedIngredient: IngredientSummary | null;
+	mergedIngredient: IngredientSummary | null;
+	createdAt: IsoDateTime;
+	updatedAt: IsoDateTime;
+	reviewedAt: IsoDateTime | null;
+}
+
+export interface IngredientRecommendationQuery {
+	page?: number;
+	pageSize?: number;
+}
+
+export interface RecommendIngredientRequest {
+	operationId: UUID;
+}
+
+export interface SaveCollectionRecipeRequest {
+	operationId: UUID;
+	sourceRecipeId: UUID;
+	sourceVersionId: UUID;
+	sceneIds: UUID[];
+}
+
+export interface SaveCollectionRecipeResponse {
+	recipe: CollectedRecipeDetail;
+}
+
 export const recipeApi = {
 	listCategories() {
 		return get<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories`);
@@ -330,6 +425,18 @@ export const recipeApi = {
 	createIngredient(body: CreateIngredientRequest) {
 		return post<IngredientSummary>(`${cfg.domain}/api/ingredients`, body);
 	},
+	updateIngredient(ingredientId: UUID, body: UpdateIngredientRequest) {
+		return put<IngredientSummary>(`${cfg.domain}/api/ingredients/${encodeURIComponent(ingredientId)}`, body);
+	},
+	recommendIngredient(ingredientId: UUID, body: RecommendIngredientRequest) {
+		return post<IngredientRecommendationSummary>(
+			`${cfg.domain}/api/ingredients/${encodeURIComponent(ingredientId)}/recommendations`,
+			body
+		);
+	},
+	listIngredientRecommendations(query: IngredientRecommendationQuery) {
+		return get<PageResult<IngredientRecommendationSummary>>(`${cfg.domain}/api/ingredient-recommendations`, { ...query });
+	},
 	listUnits(query: UnitQuery) {
 		return get<PageResult<UnitSummary>>(`${cfg.domain}/api/units`, { ...query });
 	},
@@ -359,6 +466,18 @@ export const recipeApi = {
 	},
 	getMyRecipe(recipeId: UUID) {
 		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}`);
+	},
+	listCollections() {
+		return get<CollectionListResponse>(`${cfg.domain}/api/collections`);
+	},
+	listCollectionRecipes(query: CollectionRecipeQuery) {
+		return get<PageResult<CollectedRecipeSummary>>(`${cfg.domain}/api/collections/recipes`, { ...query });
+	},
+	getCollectionRecipe(collectionRecipeId: UUID) {
+		return get<CollectedRecipeDetail>(`${cfg.domain}/api/collections/recipes/${encodeURIComponent(collectionRecipeId)}`);
+	},
+	collectRecipe(body: SaveCollectionRecipeRequest) {
+		return post<SaveCollectionRecipeResponse>(`${cfg.domain}/api/collections/recipes`, body);
 	},
 	reorderRecipes(operationId: UUID, categoryId: UUID, items: ReorderItem[]) {
 		return post<MyRecipeSummary[]>(`${cfg.domain}/api/recipes/reorder`, {
