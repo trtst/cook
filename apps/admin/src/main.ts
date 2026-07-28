@@ -1,5 +1,42 @@
-import ElementPlus from "element-plus";
-import zhCn from "element-plus/es/locale/lang/zh-cn";
+import {
+  ElAlert,
+  ElAside,
+  ElButton,
+  ElCard,
+  ElCheckbox,
+  ElContainer,
+  ElDescriptions,
+  ElDescriptionsItem,
+  ElDialog,
+  ElDivider,
+  ElDrawer,
+  ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElHeader,
+  ElIcon,
+  ElInput,
+  ElLoading,
+  ElMain,
+  ElMenu,
+  ElMenuItem,
+  ElOption,
+  ElOptionGroup,
+  ElPagination,
+  ElRadio,
+  ElRadioGroup,
+  ElResult,
+  ElSelect,
+  ElSkeleton,
+  ElSlider,
+  ElSubMenu,
+  ElTabPane,
+  ElTable,
+  ElTableColumn,
+  ElTabs,
+  ElTag,
+  ElText
+} from "element-plus";
 import { createPinia } from "pinia";
 import { createApp } from "vue";
 import App from "./App.vue";
@@ -9,9 +46,52 @@ import "element-plus/dist/index.css";
 import "./styles/global.scss";
 
 const app = createApp(App);
+const components = [
+  ElAlert,
+  ElAside,
+  ElButton,
+  ElCard,
+  ElCheckbox,
+  ElContainer,
+  ElDescriptions,
+  ElDescriptionsItem,
+  ElDialog,
+  ElDivider,
+  ElDrawer,
+  ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElHeader,
+  ElIcon,
+  ElInput,
+  ElMain,
+  ElMenu,
+  ElMenuItem,
+  ElOption,
+  ElOptionGroup,
+  ElPagination,
+  ElRadio,
+  ElRadioGroup,
+  ElResult,
+  ElSelect,
+  ElSkeleton,
+  ElSlider,
+  ElSubMenu,
+  ElTabPane,
+  ElTable,
+  ElTableColumn,
+  ElTabs,
+  ElTag,
+  ElText
+] as const;
 
 app.use(createPinia());
 app.use(router);
-app.use(ElementPlus, { locale: zhCn });
+app.directive("loading", ElLoading.directive);
+
+for (const component of components) {
+  if (!component.name) continue;
+  app.component(component.name, component);
+}
 
 app.mount("#app");

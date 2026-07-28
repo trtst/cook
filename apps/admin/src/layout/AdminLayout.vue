@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataAnalysis, Files, ForkSpoon, Setting, SwitchButton, User } from "@element-plus/icons-vue";
+import { DataAnalysis, Files, ForkSpoon, House, Setting, SwitchButton, User } from "@element-plus/icons-vue";
 import { ADMIN_APP_NAME } from "@/config/app";
 import { useSessionStore } from "@/stores/session";
 
@@ -10,6 +10,7 @@ const router = useRouter();
 const session = useSessionStore();
 
 const activeMenu = computed(() => route.path);
+const openedMenus = computed(() => (route.path.startsWith("/ingredients") ? ["/ingredients"] : []));
 const adminName = computed(() => session.admin?.displayName ?? "管理员");
 
 function logout() {
@@ -31,7 +32,11 @@ function logout() {
         </div>
       </div>
 
-      <el-menu :default-active="activeMenu" router class="side-menu">
+      <el-menu :default-active="activeMenu" :default-openeds="openedMenus" router class="side-menu">
+        <el-menu-item index="/dashboard">
+          <el-icon><House /></el-icon>
+          <span>首页</span>
+        </el-menu-item>
         <el-menu-item index="/users">
           <el-icon><User /></el-icon>
           <span>用户查询</span>
@@ -44,6 +49,16 @@ function logout() {
           <el-icon><Files /></el-icon>
           <span>菜谱治理</span>
         </el-menu-item>
+        <el-sub-menu index="/ingredients">
+          <template #title>
+            <el-icon><ForkSpoon /></el-icon>
+            <span>食材治理</span>
+          </template>
+          <el-menu-item index="/ingredients/categories">系统食材分类</el-menu-item>
+          <el-menu-item index="/ingredients/items">系统食材</el-menu-item>
+          <el-menu-item index="/ingredients/pending">待审核个人食材</el-menu-item>
+          <el-menu-item index="/ingredients/units">单位</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/config">
           <el-icon><Setting /></el-icon>
           <span>公共配置</span>

@@ -123,6 +123,25 @@ a {
   padding: 16px;
 }
 
+.page-toolbar {
+  flex-wrap: wrap;
+}
+
+.page-title-block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
 .toolbar-search {
   width: 260px;
 }

@@ -3,6 +3,8 @@ import { ADMIN_APP_NAME } from "@/config/app";
 import AdminLayout from "@/layout/AdminLayout.vue";
 import { useSessionStore } from "@/stores/session";
 
+const superAdminRoles = ["SUPER_ADMIN"];
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -15,13 +17,32 @@ const router = createRouter({
     {
       path: "/",
       component: AdminLayout,
-      redirect: "/users",
+      redirect: "/dashboard",
+      meta: { roles: superAdminRoles },
       children: [
+        {
+          path: "dashboard",
+          name: "dashboard",
+          component: () => import("@/pages/DashboardPage.vue"),
+          meta: { title: "运营看板" }
+        },
         {
           path: "users",
           name: "users",
           component: () => import("@/pages/UsersPage.vue"),
           meta: { title: "用户查询" }
+        },
+        {
+          path: "user-recipes/:userId",
+          name: "user-recipe-domain",
+          component: () => import("@/pages/UserRecipeDomainPage.vue"),
+          meta: { title: "用户菜谱域" }
+        },
+        {
+          path: "user-collections/:userId/:collectionId",
+          name: "user-collection-detail",
+          component: () => import("@/pages/UserCollectionDetailPage.vue"),
+          meta: { title: "合集内容" }
         },
         {
           path: "dining-groups",
@@ -34,6 +55,34 @@ const router = createRouter({
           name: "recipes",
           component: () => import("@/pages/RecipesPage.vue"),
           meta: { title: "菜谱治理" }
+        },
+        {
+          path: "ingredients",
+          redirect: "/ingredients/categories"
+        },
+        {
+          path: "ingredients/categories",
+          name: "ingredient-categories",
+          component: () => import("@/pages/IngredientsPage.vue"),
+          meta: { title: "系统食材分类" }
+        },
+        {
+          path: "ingredients/items",
+          name: "ingredient-items",
+          component: () => import("@/pages/IngredientItemsPage.vue"),
+          meta: { title: "系统食材" }
+        },
+        {
+          path: "ingredients/pending",
+          name: "ingredient-pending",
+          component: () => import("@/pages/IngredientPendingPage.vue"),
+          meta: { title: "待审核个人食材" }
+        },
+        {
+          path: "ingredients/units",
+          name: "ingredient-units",
+          component: () => import("@/pages/UnitsPage.vue"),
+          meta: { title: "单位" }
         },
         {
           path: "config",
@@ -55,7 +104,7 @@ router.beforeEach(to => {
   }
 
   if (to.meta.public) {
-    return session.isLoggedIn ? { path: "/users" } : true;
+    return session.isLoggedIn ? { path: "/dashboard" } : true;
   }
 
   if (!session.isLoggedIn) {
@@ -63,6 +112,19 @@ router.beforeEach(to => {
       path: "/login",
       query: { redirect: to.fullPath }
     };
+  }
+
+  const requiredRoles = Array.isArray(to.meta.roles) ? to.meta.roles.filter(role => typeof role === "string") : [];
+  if (requiredRoles.length > 0) {
+    const adminRoles = session.admin?.roles ?? [];
+    const hasRole = requiredRoles.some(role => adminRoles.includes(role));
+    if (!hasRole) {
+      session.clearSession();
+      return {
+        path: "/login",
+        query: { redirect: to.fullPath }
+      };
+    }
   }
 
   return true;

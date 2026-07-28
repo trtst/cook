@@ -24,3 +24,11 @@ pnpm build
 ## 环境变量
 
 复制 `.env.example` 为本地 `.env` 后再按环境填写。
+
+本地局域网联调示例：
+
+```env
+VITE_API_BASE_URL=http://192.168.110.102:3100/api
+VITE_DEV_HOST=0.0.0.0
+VITE_DEV_PORT=5174
+```
