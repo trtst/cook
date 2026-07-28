@@ -349,6 +349,8 @@ function stopMotionTimer() {
   inset: 0;
   z-index: 0;
   background: var(--login-popup-backdrop-bg);
+  -webkit-backdrop-filter: blur(24rpx) saturate(145%);
+  backdrop-filter: blur(24rpx) saturate(145%);
 }
 
 .login-popup__panel {

@@ -1619,6 +1619,8 @@ function getPasswordErrorText(error: unknown) {
   justify-content: center;
   padding: var(--space-page);
   background: var(--login-popup-backdrop-bg);
+  -webkit-backdrop-filter: blur(24rpx) saturate(145%);
+  backdrop-filter: blur(24rpx) saturate(145%);
 }
 
 .profile-modal__panel {

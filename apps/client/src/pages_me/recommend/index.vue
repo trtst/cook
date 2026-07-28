@@ -453,6 +453,8 @@ async function submitEditor() {
   display: flex;
   align-items: flex-end;
   background: rgba(23, 35, 29, 0.38);
+  -webkit-backdrop-filter: blur(24rpx) saturate(145%);
+  backdrop-filter: blur(24rpx) saturate(145%);
 }
 
 .editor-panel {

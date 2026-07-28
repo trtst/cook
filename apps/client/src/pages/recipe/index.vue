@@ -1104,6 +1104,8 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   position: absolute;
   inset: 0;
   background: var(--login-popup-backdrop-bg);
+  -webkit-backdrop-filter: blur(24rpx) saturate(145%);
+  backdrop-filter: blur(24rpx) saturate(145%);
 }
 
 .action-sheet__panel {

@@ -287,7 +287,7 @@
                                 class="ingredient-choice__action ingredient-choice__action--primary"
                                 @click.stop="recommendIngredient(item)"
                               >
-                                推荐入系统库
+                                推荐
                               </text>
                               <text v-else-if="isIngredientRecommendationPending(item)" class="ingredient-choice__status">审核中</text>
                             </view>
@@ -345,7 +345,7 @@
                                   class="ingredient-choice__action ingredient-choice__action--primary"
                                   @click.stop="recommendIngredient(item)"
                                 >
-                                  推荐入系统库
+                                  推荐
                                 </text>
                                 <text v-else-if="isIngredientRecommendationPending(item)" class="ingredient-choice__status">审核中</text>
                               </view>
@@ -391,12 +391,11 @@
                     <view class="ingredient-create">
                       <view class="ingredient-create__summary">
                         <view class="ingredient-create__card ingredient-create__card--field">
-                          <text class="ingredient-create__label">食材名</text>
                           <input
                             v-model="ingredientCreateDraft.name"
                             class="ingredient-create__input"
                             maxlength="30"
-                            placeholder="请输入食材名称"
+                            placeholder="请输入食材名字"
                             placeholder-class="ingredient-create__input-placeholder"
                           />
                         </view>
@@ -405,12 +404,11 @@
                           :class="{ 'ingredient-create__card--active': ingredientCreateSection === 'category' }"
                           @click="toggleIngredientCreateSection('category')"
                         >
-                          <text class="ingredient-create__label">分类</text>
                           <text
                             class="ingredient-create__value"
                             :class="{ 'ingredient-create__value--placeholder': !ingredientCreateCategoryName }"
                           >
-                            {{ ingredientCreateCategoryName || "未选择" }}
+                            {{ ingredientCreateCategoryName || "选择分类" }}
                           </text>
                         </view>
                         <view
@@ -418,12 +416,11 @@
                           :class="{ 'ingredient-create__card--active': ingredientCreateSection === 'unit' }"
                           @click="toggleIngredientCreateSection('unit')"
                         >
-                          <text class="ingredient-create__label">单位</text>
                           <text
                             class="ingredient-create__value"
                             :class="{ 'ingredient-create__value--placeholder': !ingredientCreateUnitName }"
                           >
-                            {{ ingredientCreateUnitName || "未选择" }}
+                            {{ ingredientCreateUnitName || "选择单位" }}
                           </text>
                         </view>
                       </view>
@@ -1562,7 +1559,12 @@ function clearIngredientCategory() {
 }
 
 function changeIngredientSourceFilter(source: "ALL" | "PERSONAL") {
-  if (ingredientSourceFilter.value === source) return;
+  if (ingredientSourceFilter.value === source) {
+    if (source !== "PERSONAL") return;
+    ingredientSourceFilter.value = "ALL";
+    void reloadIngredientOptions();
+    return;
+  }
   ingredientSourceFilter.value = source;
   void reloadIngredientOptions();
 }
@@ -1688,6 +1690,13 @@ async function confirmIngredientEditor() {
 
 async function recommendIngredient(item: IngredientSummary) {
   if (!canRecommendIngredient(item)) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "推荐入系统库",
+    content: "推荐后会进入后台审核。审核中不能再编辑这份个人食材，仍可继续用于当前菜谱，并可在“我的推荐”查看结果。",
+    confirmText: "确认",
+    cancelText: "取消"
+  }).catch(() => false);
+  if (!confirmed) return;
   try {
     await recipeApi.recommendIngredient(item.id, {
       operationId: createOperationId()
@@ -3125,7 +3134,7 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-choice__name {
-  color: var(--color-text);
+  color: var(--color-text-secondary);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.4;
@@ -3248,17 +3257,16 @@ function nextLocalId(prefix: string) {
 
 .ingredient-create__summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
   gap: 14rpx;
 }
 
 .ingredient-create__card {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  gap: 10rpx;
-  min-height: 108rpx;
-  padding: 18rpx 20rpx;
+  min-height: 92rpx;
+  padding: 0 20rpx;
   border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.82);
 }
@@ -3268,7 +3276,7 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-create__card--field {
-  grid-column: 1 / -1;
+  justify-content: flex-start;
 }
 
 .ingredient-create__card--active {
@@ -3276,14 +3284,9 @@ function nextLocalId(prefix: string) {
   box-shadow: inset 0 0 0 1rpx var(--color-border);
 }
 
-.ingredient-create__label {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-}
-
 .ingredient-create__input {
   width: 100%;
-  height: 44rpx;
+  height: 100%;
   color: var(--color-text);
   font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
@@ -3298,6 +3301,9 @@ function nextLocalId(prefix: string) {
   color: var(--color-text);
   font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .ingredient-create__value--fixed {
@@ -3491,6 +3497,8 @@ function nextLocalId(prefix: string) {
   position: absolute;
   inset: 0;
   background: var(--login-popup-backdrop-bg);
+  -webkit-backdrop-filter: blur(10rpx) saturate(145%);
+  backdrop-filter: blur(10rpx) saturate(145%);
   opacity: 0;
   transition: opacity 220ms ease;
 }
