@@ -23,13 +23,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { dismissConfirm, submitConfirm, useConfirmState } from "@/feedback/confirm";
 
 const confirm = useConfirmState();
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("confirm"));
 
 const confirmButtonClass = computed(() =>
   confirm.tone === "danger" ? "confirm-card__button--danger" : "confirm-card__button--primary"
+);
+
+watch(
+  () => confirm.visible,
+  (visible) => {
+    setPageLocked(visible);
+  },
+  { immediate: true }
 );
 
 function handleMask() {

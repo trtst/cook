@@ -37,6 +37,7 @@ import type {
   RecipeSceneSummary,
   ReorderItem,
   SaveCollectionRecipeResponse,
+  SaveRecipeDraftResponse,
   UUID,
   UnitSummary
 } from "../../contracts/types";
@@ -183,6 +184,15 @@ function toCollectionSceneSummary(scene: RecipeSceneRow, recipeCount: number, up
     version: scene.version,
     recipeCount,
     updatedAt: updatedAt ? toIsoDate(updatedAt) : null
+  };
+}
+
+function toSaveRecipeDraftResponse(draft: Pick<DraftRow, "id" | "recipeId" | "version" | "updatedAt">): SaveRecipeDraftResponse {
+  return {
+    id: draft.id,
+    recipeId: draft.recipeId,
+    version: draft.version,
+    updatedAt: toIsoDate(draft.updatedAt)
   };
 }
 
@@ -334,7 +344,7 @@ export class RecipeService {
     const searchKey = buildSearchKey(normalizedName);
     const requestHash = `${categoryId}:${expectedVersion}:${searchKey}`;
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipe_categories" WHERE "id" = ${categoryId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipe_categories" WHERE "id" = ${categoryId} FOR UPDATE`;
       const category = await this.requireOwnedCategory(tx, userId, categoryId);
       const repeated = await getIdempotentResult<RecipeCategorySummary>(tx, operationId, "recipe-category:update", userId, null, requestHash);
       if (repeated) return repeated;
@@ -415,7 +425,7 @@ export class RecipeService {
     const searchKey = buildSearchKey(normalizedName);
     const requestHash = `${sceneId}:${expectedVersion}:${searchKey}`;
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipe_scenes" WHERE "id" = ${sceneId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipe_scenes" WHERE "id" = ${sceneId} FOR UPDATE`;
       const scene = await this.requireOwnedScene(tx, userId, sceneId);
       const repeated = await getIdempotentResult<RecipeSceneSummary>(tx, operationId, "recipe-scene:update", userId, null, requestHash);
       if (repeated) return repeated;
@@ -572,7 +582,7 @@ export class RecipeService {
     const requestHash = `${ingredientId}:${expectedVersion}:${searchKey}:${categoryId}:${defaultUnitId}`;
     try {
       return await this.prisma.$transaction(async tx => {
-        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
         const ingredient = await this.requireOwnedEditableIngredient(tx, userId, ingredientId);
         const repeated = await getIdempotentResult<IngredientSummary>(tx, operationId, "ingredient:update", userId, null, requestHash);
         if (repeated) return repeated;
@@ -619,7 +629,7 @@ export class RecipeService {
   ): Promise<IngredientRecommendationSummary> {
     const requestHash = ingredientId;
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
       const ingredient = await this.requireOwnedIngredient(tx, userId, ingredientId);
       const repeated = await getIdempotentResult<IngredientRecommendationSummary>(
         tx,
@@ -818,11 +828,11 @@ export class RecipeService {
     };
   }
 
-  async createRecipeDraft(userId: UUID, operationId: UUID, recipeId: UUID | null, content: RecipeDraftContentInput): Promise<RecipeDraftDetail> {
+  async createRecipeDraft(userId: UUID, operationId: UUID, recipeId: UUID | null, content: RecipeDraftContentInput): Promise<SaveRecipeDraftResponse> {
     const normalized = normalizeRecipeDraftContent(content);
     const requestHash = JSON.stringify({ recipeId, content: normalized });
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<RecipeDraftDetail>(tx, operationId, "recipe-draft:create", userId, null, requestHash);
+      const repeated = await getIdempotentResult<SaveRecipeDraftResponse>(tx, operationId, "recipe-draft:create", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "recipe-draft:create", userId, null, requestHash);
       await this.assertDraftReferences(tx, userId, normalized);
@@ -836,7 +846,7 @@ export class RecipeService {
           }
         });
         if (existing) {
-          const result = await this.toDraftDetail(tx, userId, existing);
+          const result = toSaveRecipeDraftResponse(existing);
           await completeIdempotentOperation(tx, operationId, "recipe-draft:create", userId, null, requestHash, result);
           return result;
         }
@@ -871,8 +881,7 @@ export class RecipeService {
         });
       }
       await upsertStorageLedger(tx, userId, "RECIPE", draftRecordKey(draft.id), usedBytes);
-      const fullDraft = await this.loadDraft(tx, userId, draft.id);
-      const result = await this.toDraftDetail(tx, userId, fullDraft);
+      const result = toSaveRecipeDraftResponse(draft);
       await completeIdempotentOperation(tx, operationId, "recipe-draft:create", userId, null, requestHash, result);
       return result;
     });
@@ -889,13 +898,13 @@ export class RecipeService {
     operationId: UUID,
     expectedVersion: number,
     content: RecipeDraftContentInput
-  ): Promise<RecipeDraftDetail> {
+  ): Promise<SaveRecipeDraftResponse> {
     const normalized = normalizeRecipeDraftContent(content);
     const requestHash = JSON.stringify({ draftId, expectedVersion, content: normalized });
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "id" = ${draftId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "id" = ${draftId} FOR UPDATE`;
       const draft = await this.loadDraft(tx, userId, draftId);
-      const repeated = await getIdempotentResult<RecipeDraftDetail>(tx, operationId, "recipe-draft:update", userId, null, requestHash);
+      const repeated = await getIdempotentResult<SaveRecipeDraftResponse>(tx, operationId, "recipe-draft:update", userId, null, requestHash);
       if (repeated) return repeated;
       if (draft.version !== expectedVersion) throw new ConflictException("草稿已被更新，请刷新后重试");
       await startIdempotentOperation(tx, operationId, "recipe-draft:update", userId, null, requestHash);
@@ -916,7 +925,7 @@ export class RecipeService {
         });
       }
 
-      await tx.recipeDraft.update({
+      const next = await tx.recipeDraft.update({
         where: { id: draftId },
         data: {
           categoryId: normalized.categoryId,
@@ -925,11 +934,14 @@ export class RecipeService {
           contentJson: toJson(normalized),
           contentSizeBytes: nextBytes,
           version: { increment: 1 }
+        },
+        include: {
+          category: true,
+          scenes: { include: { scene: true } }
         }
       });
       await upsertStorageLedger(tx, userId, "RECIPE", draftRecordKey(draftId), nextBytes);
-      const next = await this.loadDraft(tx, userId, draftId);
-      const result = await this.toDraftDetail(tx, userId, next);
+      const result = toSaveRecipeDraftResponse(next);
       await completeIdempotentOperation(tx, operationId, "recipe-draft:update", userId, null, requestHash, result);
       return result;
     });
@@ -938,7 +950,7 @@ export class RecipeService {
   async deleteRecipeDraft(userId: UUID, draftId: UUID, operationId: UUID, expectedVersion: number): Promise<DeleteRecipeDraftResponse> {
     const requestHash = `${draftId}:${expectedVersion}`;
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "id" = ${draftId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "id" = ${draftId} FOR UPDATE`;
       const draft = await this.loadDraft(tx, userId, draftId);
       const repeated = await getIdempotentResult<DeleteRecipeDraftResponse>(tx, operationId, "recipe-draft:delete", userId, null, requestHash);
       if (repeated) return repeated;
@@ -958,7 +970,7 @@ export class RecipeService {
   async publishRecipeDraft(userId: UUID, draftId: UUID, operationId: UUID, expectedVersion: number): Promise<PublishRecipeDraftResponse> {
     const requestHash = `${draftId}:${expectedVersion}`;
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "id" = ${draftId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "id" = ${draftId} FOR UPDATE`;
       const draft = await this.loadDraft(tx, userId, draftId);
       const repeated = await getIdempotentResult<PublishRecipeDraftResponse>(tx, operationId, "recipe-draft:publish", userId, null, requestHash);
       if (repeated) return repeated;
@@ -1120,7 +1132,7 @@ export class RecipeService {
   async deleteRecipe(userId: UUID, recipeId: UUID, operationId: UUID, expectedVersion: number): Promise<DeleteRecipeResponse> {
     const requestHash = `${recipeId}:${expectedVersion}`;
     return this.prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
       const recipe = await this.requireOwnedPublishedRecipe(tx, userId, recipeId);
       const repeated = await getIdempotentResult<DeleteRecipeResponse>(tx, operationId, "recipe:delete", userId, null, requestHash);
       if (repeated) return repeated;
@@ -1287,7 +1299,7 @@ export class RecipeService {
         }
       }
 
-      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${sourceRecipeId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${sourceRecipeId} FOR UPDATE`;
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
           id: sourceRecipeId,
@@ -1948,6 +1960,8 @@ export class RecipeService {
     if (!content.baseServings || content.baseServings < 1 || content.baseServings > 20) {
       throw new BadRequestException("基准人数必须为 1 到 20");
     }
+    if (!content.difficulty) throw new BadRequestException("请选择难度");
+    if (!content.duration) throw new BadRequestException("请选择时长");
     if (content.ingredients.length === 0) throw new BadRequestException("至少需要一个食材");
     if (!content.steps.some(item => item.text.trim())) throw new BadRequestException("至少需要一个制作步骤");
     for (const item of content.ingredients) {

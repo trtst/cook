@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout
     title="我的"
     current-tab="me"
@@ -382,7 +383,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { ApiClientError } from "@/apis/http";
 import aboutIcon from "@/assets/me-actions/about.svg";
@@ -406,8 +407,10 @@ import tasteIcon from "@/assets/me-actions/taste.svg";
 import themeIcon from "@/assets/me-actions/theme.svg";
 import { userApi } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import TierBadge from "@/components/TierBadge/TierBadge.vue";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
@@ -428,6 +431,8 @@ interface PageEntry {
   description?: string;
   action?: "logout" | "change-password" | "clear-cache";
 }
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -461,6 +466,7 @@ const passwordEditErrorText = ref("");
 const skinOptions = THEME_SKIN_OPTIONS;
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 
@@ -469,6 +475,13 @@ const relationUsage = computed(() => diningGroupStore.relationUsage);
 const profileHeroStyle = computed(() => ({
   "--profile-hero-padding-top": `${navBarTotalHeight.value}px`
 }));
+watch(
+  () => profileEditorOpen.value || passwordEditorOpen.value,
+  (visible) => {
+    setPageLocked(visible);
+  },
+  { immediate: true }
+);
 const profileName = computed(() => {
   if (!sessionStore.isLoggedIn) return "点击登录";
   return userStore.profile?.nickname || `${APP_NAME}用户`;

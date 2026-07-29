@@ -96,7 +96,9 @@
 | Shopping | POST | `/shopping-items/{itemId}/status` | 更新购物状态 |
 | Shopping | GET | `/shopping-gap` | 查询个人购物缺口 |
 | Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局购物缺口 |
-| AdminRecipe | GET | `/admin/recipes` | 后台菜谱查询 |
+| AdminRecipe | GET | `/admin/recipes` | 后台菜谱列表 |
+| AdminRecipe | GET | `/admin/recipes/{recipeId}` | 后台菜谱详情 |
+| AdminRecipe | PUT | `/admin/recipes/{recipeId}` | 后台编辑灵感菜谱正文 |
 | AdminRecipe | GET | `/admin/recipe-reports` | 后台举报查询 |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/block` | 下架菜谱 |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/unblock` | 恢复菜谱 |

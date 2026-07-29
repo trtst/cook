@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="个人权益">
     <view class="page">
       <view class="section">
@@ -35,9 +36,12 @@ import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { diningGroupApi, type StorageUsageSummary } from "@/apis/dining-group";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();

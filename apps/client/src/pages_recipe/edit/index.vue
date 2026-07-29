@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout
     :title="''"
     full-screen
@@ -222,9 +223,14 @@
                   placeholder="搜索食材名称"
                   placeholder-class="sheet-search__placeholder"
                 />
+                <text
+                  v-if="ingredientSearchMode"
+                  class="cookfont icon-close sheet-search__close"
+                  @click="exitIngredientSearch"
+                />
               </view>
 
-              <view v-if="!ingredientCreateVisible" class="ingredient-filter">
+              <view v-if="!ingredientCreateVisible && !ingredientSearchMode" class="ingredient-filter">
                 <view
                   class="ingredient-filter__chip"
                   :class="{ 'ingredient-filter__chip--active': ingredientAllActive }"
@@ -258,7 +264,7 @@
                 >
                   <view class="ingredient-stage__pane">
                     <template v-if="ingredientSearchMode">
-                      <view v-if="ingredientLoading && !searchedIngredients.length" class="ingredient-picker__empty ingredient-picker__empty--create">
+                      <view v-if="ingredientSearchLoading && !searchedIngredients.length" class="ingredient-picker__empty ingredient-picker__empty--create">
                         <text class="ingredient-picker__empty-text">加载中...</text>
                       </view>
                       <view v-else-if="searchedIngredients.length" class="ingredient-search">
@@ -381,8 +387,15 @@
                         </view>
                       </scroll-view>
                       <button
+                        v-if="ingredientSearchMode"
+                        class="sheet-cancel"
+                        @click="exitIngredientSearch"
+                      >
+                        取消
+                      </button>
+                      <button
                         class="sheet-confirm"
-                        :disabled="!pendingIngredientIds.length"
+                        :disabled="ingredientConfirmDisabled"
                         @click="confirmIngredientSelection"
                       >
                         确认
@@ -691,6 +704,8 @@ import {
 } from "@/apis/recipe";
 import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import {
@@ -757,6 +772,8 @@ interface RecipeEditCacheEntry {
   stepRows: RecipeEditCacheStepSnapshot[];
 }
 
+const pageStyle = usePageScrollStyle();
+
 const sessionStore = useSessionStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight } = useSystemInfo();
@@ -782,6 +799,7 @@ const draftVersion = ref<number | null>(null);
 const recipeVersion = ref<number | null>(null);
 const sheetMode = ref<SheetMode>("");
 const sheetVisible = ref(false);
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-edit-sheet"));
 
 let rowSeed = 0;
 let sheetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -809,6 +827,7 @@ const ingredientPage = ref(1);
 const ingredientHasNext = ref(false);
 const ingredientLoading = ref(false);
 const ingredientLoadingMore = ref(false);
+const ingredientSearchPending = ref(false);
 const ingredientVisibleCount = ref(0);
 const ingredientPickerHeight = ref(0);
 const pendingIngredientIds = ref<string[]>([]);
@@ -892,8 +911,12 @@ const storyCount = computed(() => form.story.length);
 const ingredientCount = computed(() => ingredientRows.value.length);
 const ingredientSearchText = computed(() => ingredientKeyword.value.trim());
 const ingredientSearchMode = computed(() => Boolean(ingredientSearchText.value));
+const ingredientLoadedKeyword = ref("");
 const ingredientAllActive = computed(() => ingredientSourceFilter.value === "ALL" && !ingredientCategoryId.value);
 const ingredientUseWindowedList = computed(() => !ingredientSearchMode.value);
+const ingredientSearchReady = computed(() => ingredientLoadedKeyword.value === ingredientSearchText.value);
+const ingredientSearchLoading = computed(() => ingredientSearchMode.value && (ingredientSearchPending.value || ingredientLoading.value));
+const ingredientConfirmDisabled = computed(() => !ingredientSearchMode.value && !pendingIngredientIds.value.length);
 const showIngredientPersonalActions = computed(() => ingredientSourceFilter.value === "PERSONAL");
 const pendingIngredientMap = computed(() => new Map(ingredients.value.map(item => [item.id, item])));
 const pendingIngredients = computed(() => {
@@ -932,7 +955,12 @@ const categoryIngredients = computed(() => {
   if (!ingredientUseWindowedList.value) return ingredientOptions.value;
   return ingredientOptions.value.slice(0, ingredientVisibleCount.value);
 });
-const searchedIngredients = computed(() => ingredientOptions.value);
+const searchedIngredients = computed(() => {
+  if (ingredientSearchMode.value && !ingredientSearchReady.value) {
+    return [];
+  }
+  return ingredientOptions.value;
+});
 const ingredientCreateCategoryName = computed(() => {
   return ingredientCategories.value.find(item => item.id === ingredientCreateDraft.categoryId)?.name || "";
 });
@@ -1075,6 +1103,7 @@ watch(
   () => ingredientKeyword.value,
   () => {
     if (sheetMode.value !== "ingredient" || ingredientCreateVisible.value) return;
+    ingredientSearchPending.value = ingredientSearchMode.value;
     if (ingredientSearchTimer) {
       clearTimeout(ingredientSearchTimer);
     }
@@ -1096,6 +1125,14 @@ watch(
   () => {
     void syncIngredientPickerHeight();
   }
+);
+
+watch(
+  () => Boolean(sheetMode.value),
+  (visible) => {
+    setPageLocked(visible);
+  },
+  { immediate: true }
 );
 
 function handleNameInput(event: Event) {
@@ -1265,12 +1302,13 @@ function revealMoreIngredientOptions() {
 }
 
 function buildIngredientQuery(page: number) {
+  const searchMode = ingredientSearchMode.value;
   return {
     page,
     pageSize: buildIngredientPageSize(),
     keyword: ingredientSearchText.value || undefined,
-    categoryId: ingredientCategoryId.value || undefined,
-    source: ingredientSourceFilter.value
+    categoryId: searchMode ? undefined : ingredientCategoryId.value || undefined,
+    source: searchMode ? undefined : ingredientSourceFilter.value
   } as const;
 }
 
@@ -1278,6 +1316,7 @@ async function loadIngredientOptionsPage(reset: boolean) {
   if (!reset && (ingredientLoading.value || ingredientLoadingMore.value || !ingredientHasNext.value)) return;
 
   const requestId = ingredientRequestSeed + 1;
+  const queryKeyword = ingredientSearchText.value;
   ingredientRequestSeed = requestId;
   if (reset) {
     ingredientLoading.value = true;
@@ -1292,9 +1331,16 @@ async function loadIngredientOptionsPage(reset: boolean) {
 
     ingredientPage.value = result.page;
     ingredientHasNext.value = result.hasNext;
+    ingredientLoadedKeyword.value = queryKeyword;
+    ingredientSearchPending.value = ingredientSearchText.value !== queryKeyword;
     mergeIngredients(result.items);
     updateIngredientOptions(result.items, reset);
     syncIngredientVisibleCount(reset);
+  } catch (error) {
+    if (requestId === ingredientRequestSeed && ingredientSearchText.value === queryKeyword) {
+      ingredientSearchPending.value = false;
+    }
+    throw error;
   } finally {
     if (requestId === ingredientRequestSeed) {
       ingredientLoading.value = false;
@@ -1511,12 +1557,14 @@ function openSheet(mode: SheetMode) {
 
 async function openIngredientSheet() {
   ingredientKeyword.value = "";
+  ingredientLoadedKeyword.value = "";
   ingredientSourceFilter.value = "ALL";
   ingredientCategoryId.value = "";
   ingredientPage.value = 1;
   ingredientHasNext.value = false;
   ingredientOptions.value = [];
   ingredientVisibleCount.value = 0;
+  ingredientSearchPending.value = false;
   pendingIngredientIds.value = [];
   resetIngredientCreate();
   try {
@@ -1602,6 +1650,12 @@ function removePendingIngredient(ingredientId: string) {
 
 function dismissSheetKeyboard() {
   void uniPlatform.feedback.hideKeyboard().catch(() => undefined);
+}
+
+function exitIngredientSearch() {
+  if (!ingredientSearchMode.value) return;
+  dismissSheetKeyboard();
+  ingredientKeyword.value = "";
 }
 
 function isIngredientRecommendationPending(item: IngredientSummary) {
@@ -1698,6 +1752,10 @@ function selectIngredientCreateUnit(unitId: string) {
 }
 
 async function confirmIngredientSelection() {
+  if (ingredientSearchMode.value) {
+    exitIngredientSearch();
+    return;
+  }
   const additions = buildIngredientAdditions(pendingIngredients.value);
   if (!additions.length) {
     await uniPlatform.feedback.toast({ title: "所选食材已在列表中", icon: "none" });
@@ -2163,6 +2221,7 @@ async function saveDraft() {
 async function publishDraft() {
   if (submitting.value) return;
   const cacheItemKey = getRecipeEditCacheItemKey();
+  if (!(await validatePublishForm())) return;
   submitting.value = true;
   try {
     if (!draftId.value || draftVersion.value === null) {
@@ -2237,6 +2296,38 @@ async function handleStepImages() {
 
 async function showStepSortTip() {
   await uniPlatform.feedback.toast({ title: "当前版本可直接删除后重排步骤", icon: "none" });
+}
+
+async function validatePublishForm() {
+  if (!form.name.trim()) {
+    await uniPlatform.feedback.toast({ title: "请填写菜谱标题", icon: "none" });
+    return false;
+  }
+  if (!form.categoryId) {
+    await uniPlatform.feedback.toast({ title: "请选择分类", icon: "none" });
+    return false;
+  }
+  if (!form.baseServingsText.trim()) {
+    await uniPlatform.feedback.toast({ title: "请选择人数", icon: "none" });
+    return false;
+  }
+  if (!form.difficulty) {
+    await uniPlatform.feedback.toast({ title: "请选择难度", icon: "none" });
+    return false;
+  }
+  if (!form.duration) {
+    await uniPlatform.feedback.toast({ title: "请选择时长", icon: "none" });
+    return false;
+  }
+  if (!buildFilledIngredientRows().length) {
+    await uniPlatform.feedback.toast({ title: "请至少添加一个食材", icon: "none" });
+    return false;
+  }
+  if (!stepRows.value.some(item => item.text.trim())) {
+    await uniPlatform.feedback.toast({ title: "请至少填写一个步骤", icon: "none" });
+    return false;
+  }
+  return true;
 }
 
 async function buildDraftContent(): Promise<RecipeDraftContentInput> {
@@ -2401,8 +2492,10 @@ function createIngredientRow(partial: Partial<Omit<IngredientRow, "localId">> = 
 }
 
 function matchesCurrentIngredientFilter(item: IngredientSummary) {
-  if (ingredientSourceFilter.value === "PERSONAL" && item.source !== "PERSONAL") return false;
-  if (ingredientCategoryId.value && item.categoryId !== ingredientCategoryId.value) return false;
+  if (!ingredientSearchMode.value) {
+    if (ingredientSourceFilter.value === "PERSONAL" && item.source !== "PERSONAL") return false;
+    if (ingredientCategoryId.value && item.categoryId !== ingredientCategoryId.value) return false;
+  }
   const keyword = normalizeText(ingredientSearchText.value);
   if (keyword && !normalizeText(item.name).includes(keyword)) return false;
   return true;
@@ -3015,12 +3108,16 @@ function nextLocalId(prefix: string) {
 }
 
 .sheet-search {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
   padding: 0 var(--space-page);
   margin-top: 18rpx;
 }
 
 .sheet-search__input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 70rpx;
   padding: 0 26rpx;
   border-radius: 999rpx;
@@ -3032,6 +3129,19 @@ function nextLocalId(prefix: string) {
 
 :deep(.sheet-search__placeholder) {
   color: var(--color-text-tertiary);
+}
+
+.sheet-search__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56rpx;
+  height: 56rpx;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
 }
 
 .ingredient-picker__hint {
@@ -3158,6 +3268,18 @@ function nextLocalId(prefix: string) {
 .ingredient-picker__scroll,
 .ingredient-search__scroll {
   height: 100%;
+}
+
+.ingredient-search {
+  display: flex;
+  flex-direction: column;
+  height: 320px;
+  min-height: 0;
+}
+
+.ingredient-search__scroll {
+  flex: 1;
+  min-height: 0;
 }
 
 .ingredient-grid {

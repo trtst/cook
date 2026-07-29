@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="下一餐计划">
     <Login v-if="!sessionStore.isLoggedIn" title="登录后安排下一餐" description="从个人菜谱创建餐次，再发起饭局。" />
 
@@ -84,12 +85,15 @@ import { ref } from "vue";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const diningGroupStore = useDiningGroupStore();

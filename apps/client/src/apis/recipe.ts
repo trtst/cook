@@ -135,6 +135,13 @@ export interface RecipeDraftDetail {
 	updatedAt: IsoDateTime;
 }
 
+export interface SaveRecipeDraftResponse {
+	id: UUID;
+	recipeId: UUID | null;
+	version: number;
+	updatedAt: IsoDateTime;
+}
+
 export interface MyRecipeSummary {
 	id: UUID;
 	title: string;
@@ -448,13 +455,13 @@ export const recipeApi = {
 		return get<PageResult<RecipeDraftSummary>>(`${cfg.domain}/api/recipe-drafts`, { ...query });
 	},
 	createDraft(body: CreateRecipeDraftRequest) {
-		return post<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts`, body);
+		return post<SaveRecipeDraftResponse>(`${cfg.domain}/api/recipe-drafts`, body);
 	},
 	getDraft(draftId: UUID) {
 		return get<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`);
 	},
 	updateDraft(draftId: UUID, body: UpdateRecipeDraftRequest) {
-		return put<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`, body);
+		return put<SaveRecipeDraftResponse>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`, body);
 	},
 	deleteDraft(draftId: UUID, body: DeleteRecipeDraftRequest) {
 		return post<DeleteRecipeDraftResult>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}/delete`, body);

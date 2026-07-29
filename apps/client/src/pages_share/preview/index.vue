@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="分享预览">
     <view v-if="loading" class="notice">加载中...</view>
     <view v-else-if="errorText" class="notice" @click="loadPreview">{{ errorText }}</view>
@@ -30,9 +31,12 @@ import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { shareApi, type SharePreviewResponse } from "../apis/share";
 import { uniPlatform } from "@/platform/uni";
 import type { RecipeAmountSnapshot } from "@/apis/recipe";
+
+const pageStyle = usePageScrollStyle();
 
 const shareToken = ref("");
 const preview = ref<SharePreviewResponse | null>(null);

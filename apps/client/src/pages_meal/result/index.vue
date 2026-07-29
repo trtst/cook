@@ -1,9 +1,13 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="结果汇总"><text class="title">结果汇总</text></Layout>
 </template>
 
 <script setup lang="ts">
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+
+const pageStyle = usePageScrollStyle();
 </script>
 
 

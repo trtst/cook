@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="采购记录">
     <Login v-if="!sessionStore.isLoggedIn" title="登录后查看采购记录" description="采购记录只保留你自己的已完成条目。" />
 
@@ -35,9 +36,12 @@ import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { useSessionStore } from "@/stores/session";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const status = ref<"BOUGHT" | "DELETED">("BOUGHT");

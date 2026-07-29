@@ -1,4 +1,6 @@
 export type UUID = string;
+export type ResourceId = UUID;
+export type OperationId = UUID;
 export type IsoDateTime = string;
 
 export interface ApiResponse<T> {
@@ -522,6 +524,17 @@ export interface RecipeDraftContentInput {
   steps: RecipeStepSnapshot[];
 }
 
+export interface AdminRecipeContentInput {
+  name: string;
+  story: string | null;
+  baseServings: number;
+  difficulty: RecipeDifficulty;
+  duration: RecipeDuration;
+  tips: string | null;
+  ingredients: RecipeIngredientInput[];
+  steps: RecipeStepSnapshot[];
+}
+
 export interface ReorderItem {
   id: UUID;
   expectedVersion: number;
@@ -546,6 +559,13 @@ export interface RecipeDraftDetail {
   category: RecipeCategorySummary | null;
   scenes: RecipeSceneSummary[];
   createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface SaveRecipeDraftResponse {
+  id: UUID;
+  recipeId: UUID | null;
+  version: number;
   updatedAt: IsoDateTime;
 }
 
@@ -684,8 +704,33 @@ export interface AdminRecipeSummary {
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   updatedAt: IsoDateTime;
   ownerUid: number | null;
+}
+
+export interface AdminRecipeDetail {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  ownerUid: number | null;
+  personalCategory: RecipeCategorySummary | null;
+  inspirationCategory: InspirationCategorySummary | null;
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
+  version: number;
   reportCount: number;
   blockedReason: string | null;
+  likeCount: number;
+  collectCount: number;
+  canEdit: boolean;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface UpdateAdminRecipeRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  inspirationCategoryId: UUID;
+  content: AdminRecipeContentInput;
 }
 
 export interface AdminIngredientCategorySummary {

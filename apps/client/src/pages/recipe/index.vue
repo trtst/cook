@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout current-tab="recipe" :show-left="false" navbar-layout="custom-left" full-screen>
     <template #navbar-left>
       <view class="nav-tabs">
@@ -261,6 +262,8 @@ import {
 } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -282,6 +285,8 @@ interface CardItem {
 	subline: string;
 	kind: "my" | "inspiration" | "collection";
 }
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
@@ -333,6 +338,7 @@ const loginIntentTab = ref<RecipeTab | null>(null);
 const sheetMode = ref<SheetMode>("");
 const collectionName = ref("");
 const sheetSubmitting = ref(false);
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-page-sheet"));
 
 let scrollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -373,6 +379,13 @@ const showCategoryBar = computed(() => {
 });
 const showStickyControls = computed(
 	() => showCategoryBar.value || activeTab.value === "inspiration"
+);
+watch(
+	() => Boolean(sheetMode.value),
+	(visible) => {
+		setPageLocked(visible);
+	},
+	{ immediate: true }
 );
 const showRecipeEmpty = computed(
 	() => activeTab.value === "my" || (activeTab.value === "collection" && !cards.value.length)

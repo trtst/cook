@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="编辑食材">
     <Login v-if="!sessionStore.isLoggedIn" title="登录后维护冰箱食材" description="冰箱条目只归你本人所有。" />
 
@@ -36,11 +37,14 @@ import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const loading = ref(false);

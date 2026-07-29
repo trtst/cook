@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="加入分享饭局">
     <Login
       v-if="!sessionStore.isLoggedIn"
@@ -23,10 +24,13 @@ import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { shareApi } from "../apis/share";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const shareToken = ref("");

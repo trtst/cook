@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="饭搭子关系">
     <view class="members-page">
       <Login
@@ -77,11 +78,14 @@ import { computed, onMounted, ref, watch } from "vue";
 import type { DiningGroupRole } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const diningGroupStore = useDiningGroupStore();

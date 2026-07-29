@@ -54,6 +54,7 @@ import {
   RecipeDraftSummaryModel,
   RecipeReportModel,
   RecipeSceneModel,
+  SaveRecipeDraftResultModel,
   SaveCollectionRecipeResultModel,
   UnitModel
 } from "../../contracts/openapi";
@@ -317,7 +318,7 @@ export class RecipeController {
   @Post("recipe-drafts")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(RecipeDraftDetailModel, "首次保存一个新草稿或编辑草稿")
+  @ApiOkModel(SaveRecipeDraftResultModel, "首次保存一个新草稿或编辑草稿")
   createRecipeDraft(@Req() request: RequestWithUser, @Body() body: CreateRecipeDraftDto) {
     return this.recipeService
       .createRecipeDraft(request.user.userId, body.operationId, body.recipeId, toDraftContentInput(body.content))
@@ -335,7 +336,7 @@ export class RecipeController {
   @Put("recipe-drafts/:draftId")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(RecipeDraftDetailModel, "保存一个已有草稿")
+  @ApiOkModel(SaveRecipeDraftResultModel, "保存一个已有草稿")
   updateRecipeDraft(
     @Req() request: RequestWithUser,
     @Param("draftId", new ParseUUIDPipe({ version: "4" })) draftId: string,

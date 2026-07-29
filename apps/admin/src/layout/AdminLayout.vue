@@ -9,8 +9,22 @@ const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 
-const activeMenu = computed(() => route.path);
-const openedMenus = computed(() => (route.path.startsWith("/ingredients") ? ["/ingredients"] : []));
+const activeMenu = computed(() => {
+  if (route.path.startsWith("/recipes/") && route.path !== "/recipes/list" && route.path !== "/recipes/reports") {
+    return "/recipes/list";
+  }
+  return route.path;
+});
+const openedMenus = computed(() => {
+  const menus: string[] = [];
+  if (route.path.startsWith("/recipes")) {
+    menus.push("/recipes");
+  }
+  if (route.path.startsWith("/ingredients")) {
+    menus.push("/ingredients");
+  }
+  return menus;
+});
 const adminName = computed(() => session.admin?.displayName ?? "管理员");
 
 function logout() {
@@ -45,10 +59,14 @@ function logout() {
           <el-icon><DataAnalysis /></el-icon>
           <span>饭搭子查询</span>
         </el-menu-item>
-        <el-menu-item index="/recipes">
-          <el-icon><Files /></el-icon>
-          <span>菜谱治理</span>
-        </el-menu-item>
+        <el-sub-menu index="/recipes">
+          <template #title>
+            <el-icon><Files /></el-icon>
+            <span>菜谱治理</span>
+          </template>
+          <el-menu-item index="/recipes/list">菜谱列表</el-menu-item>
+          <el-menu-item index="/recipes/reports">菜谱举报</el-menu-item>
+        </el-sub-menu>
         <el-sub-menu index="/ingredients">
           <template #title>
             <el-icon><ForkSpoon /></el-icon>

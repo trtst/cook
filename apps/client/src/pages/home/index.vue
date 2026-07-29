@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout
     title=""
     current-tab="home"
@@ -167,6 +168,7 @@ import randomIcon from "@/assets/home-actions/random.svg";
 import wishIcon from "@/assets/home-actions/wish.svg";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { APP_NAME } from "@/config";
@@ -174,6 +176,8 @@ import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
+
+const pageStyle = usePageScrollStyle();
 
 const HOME_NAV_GAP = 16;
 const { navBarTotalHeight } = useSystemInfo();

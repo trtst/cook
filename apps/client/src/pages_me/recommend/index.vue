@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="我的推荐" full-screen>
     <view class="recommend-page">
       <view class="recommend-tip">
@@ -123,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { reactive, ref, watch } from "vue";
 import { onReachBottom, onShow } from "@dcloudio/uni-app";
 import {
   recipeApi,
@@ -133,14 +134,19 @@ import {
   type UnitSummary
 } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const loading = ref(false);
 const loadingMore = ref(false);
 const errorText = ref("");
 const editorVisible = ref(false);
 const editorSubmitting = ref(false);
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recommend-editor"));
 const items = ref<IngredientRecommendationSummary[]>([]);
 const categories = ref<IngredientCategorySummary[]>([]);
 const units = ref<UnitSummary[]>([]);
@@ -165,6 +171,14 @@ onReachBottom(() => {
   if (loading.value || loadingMore.value || !hasNext.value) return;
   void loadMore();
 });
+
+watch(
+  () => editorVisible.value,
+  (visible) => {
+    setPageLocked(visible);
+  },
+  { immediate: true }
+);
 
 async function loadPage() {
   if (loadPromise) {

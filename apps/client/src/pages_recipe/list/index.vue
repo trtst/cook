@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="菜谱管理">
     <Login
       v-if="!sessionStore.isLoggedIn"
@@ -54,6 +55,7 @@ import { ref } from "vue";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -67,6 +69,8 @@ interface DisplayItem {
 	updatedAt: string;
 	raw: MyRecipeSummary | RecipeDraftSummary;
 }
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const mode = ref<ListMode>("recipes");

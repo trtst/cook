@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="出错了">
     <text class="title">页面暂时不可用</text>
     <text class="description">请返回上一页后重试。</text>
@@ -7,6 +8,9 @@
 
 <script setup lang="ts">
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+
+const pageStyle = usePageScrollStyle();
 </script>
 
 

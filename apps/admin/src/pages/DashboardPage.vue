@@ -36,7 +36,7 @@ const topCards = computed(() => {
       label: "待处理举报",
       value: summary.value.recipe.openReportCount,
       hint: "点击进入举报列表",
-      path: "/recipes"
+      path: "/recipes/reports"
     },
     {
       label: "启用中用户",
@@ -91,11 +91,16 @@ const sections = computed(() => {
     {
       title: "内容治理",
       items: [
-        { label: "菜谱总数", value: summary.value.recipe.total, hint: "系统 + 个人菜谱", path: "/recipes" },
-        { label: "正常菜谱", value: summary.value.recipe.activeCount, hint: `状态 ${formatStatusText("ACTIVE")}`, path: "/recipes" },
-        { label: "已下架", value: summary.value.recipe.blockedCount, hint: `状态 ${formatStatusText("BLOCKED")}`, path: "/recipes" },
-        { label: "已回收", value: summary.value.recipe.recycledCount, hint: `状态 ${formatStatusText("RECYCLED")}`, path: "/recipes" },
-        { label: "待处理举报", value: summary.value.recipe.openReportCount, hint: `举报状态 ${formatStatusText("OPEN")}`, path: "/recipes" }
+        { label: "菜谱总数", value: summary.value.recipe.total, hint: "系统 + 个人菜谱", path: "/recipes/list" },
+        { label: "正常菜谱", value: summary.value.recipe.activeCount, hint: `状态 ${formatStatusText("ACTIVE")}`, path: "/recipes/list" },
+        { label: "已下架", value: summary.value.recipe.blockedCount, hint: `状态 ${formatStatusText("BLOCKED")}`, path: "/recipes/list" },
+        { label: "已回收", value: summary.value.recipe.recycledCount, hint: `状态 ${formatStatusText("RECYCLED")}`, path: "/recipes/list" },
+        {
+          label: "待处理举报",
+          value: summary.value.recipe.openReportCount,
+          hint: `举报状态 ${formatStatusText("OPEN")}`,
+          path: "/recipes/reports"
+        }
       ]
     },
     {
@@ -181,7 +186,8 @@ onMounted(() => {
         <div class="entry-grid">
           <button type="button" class="entry-item entry-item--button" @click="open('/users')">用户查询</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/dining-groups')">饭搭子查询</button>
-          <button type="button" class="entry-item entry-item--button" @click="open('/recipes')">菜谱治理</button>
+          <button type="button" class="entry-item entry-item--button" @click="open('/recipes/list')">菜谱列表</button>
+          <button type="button" class="entry-item entry-item--button" @click="open('/recipes/reports')">菜谱举报</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/ingredients/categories')">系统食材分类</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/ingredients/items')">系统食材</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/ingredients/units')">单位</button>

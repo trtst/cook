@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="食材缺口">
     <Login v-if="!sessionStore.isLoggedIn" title="登录后看饭局缺口" description="缺口只按你自己的冰箱计算。" />
 
@@ -43,12 +44,15 @@ import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { pantryMealApi } from "../apis/meal";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const events = ref<Array<{ id: string; title: string; planDate: string }>>([]);

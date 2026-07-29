@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="购物清单">
     <Login v-if="!sessionStore.isLoggedIn" title="登录后查看购物清单" description="购物清单只归你本人所有。" />
 
@@ -55,11 +56,14 @@ import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const loading = ref(false);

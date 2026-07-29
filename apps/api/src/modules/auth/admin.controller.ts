@@ -14,6 +14,7 @@ import {
   AdminUnitPayloadDto,
   AdminDiningGroupQueryDto,
   AdminLoginDto,
+  AdminRecipeContentDto,
   AdminRecipeQueryDto,
   AdminRecipeReportQueryDto,
   AdminUserEntitlementQueryDto,
@@ -30,6 +31,7 @@ import {
   ResolveRecipeReportDto,
   SetAdminIngredientStatusDto,
   SetAdminUserStatusDto,
+  UpdateAdminRecipeDto,
   UpdateAdminUnitDto,
   UpdateAdminIngredientCategoryDto,
   UpdateAdminIngredientImageDto,
@@ -42,6 +44,7 @@ import {
   AdminIngredientCategoryModel,
   AdminIngredientModel,
   AdminPendingIngredientModel,
+  AdminRecipeDetailModel,
   AdminReviewPendingIngredientResultModel,
   AdminUnitModel,
   AdminUserRecipeDomainOverviewModel,
@@ -60,10 +63,38 @@ import {
   RecipeDraftSummaryModel,
   UserProfileModel
 } from "../../contracts/openapi";
-import type { UnitType } from "../../contracts/types";
+import type { AdminRecipeContentInput, UnitType } from "../../contracts/types";
 import { AdminService } from "../admin/admin.service";
 
 type AssetRequest = { protocol?: string; get?: (name: string) => string | undefined };
+
+function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeContentInput {
+  return {
+    name: content.name,
+    story: content.story,
+    baseServings: content.baseServings,
+    difficulty: content.difficulty as AdminRecipeContentInput["difficulty"],
+    duration: content.duration as AdminRecipeContentInput["duration"],
+    tips: content.tips,
+    ingredients: content.ingredients.map(item => ({
+      ingredientId: item.ingredientId,
+      amount:
+        item.amount.kind === "EXACT"
+          ? {
+              kind: "EXACT",
+              quantity: item.amount.quantity ?? "",
+              unitId: item.amount.unitId ?? ""
+            }
+          : {
+              kind: "FUZZY",
+              text: (item.amount.text ?? "适量") as "适量" | "少许" | "按需"
+            }
+    })),
+    steps: content.steps.map(item => ({
+      text: item.text
+    }))
+  };
+}
 
 @ApiTags("admin")
 @Controller("admin")
@@ -225,8 +256,33 @@ export class AdminController {
   @ApiBearerAuth("AdminBearerAuth")
   @ApiOkPage(AdminRecipeModel, "后台菜谱治理列表")
   listRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeQueryDto) {
+    return this.adminService.listRecipes(query.page, query.pageSize, query.keyword, query.status, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Get("recipes/:recipeId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminRecipeDetailModel, "后台菜谱详情")
+  getRecipeDetail(@Req() request: RequestWithAdmin, @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string) {
+    return this.adminService.getRecipeDetail(recipeId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("recipes/:recipeId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminRecipeDetailModel, "后台编辑一个灵感菜谱正文")
+  updateRecipe(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string,
+    @Body() body: UpdateAdminRecipeDto
+  ) {
     return this.adminService
-      .listRecipes(query.page, query.pageSize, query.keyword, query.status, query.reportsOnly, request.admin.adminId)
+      .updateRecipe(recipeId, request.admin.adminId, {
+        operationId: body.operationId,
+        expectedVersion: body.expectedVersion,
+        inspirationCategoryId: body.inspirationCategoryId,
+        content: toAdminRecipeContentInput(body.content)
+      })
       .then(result => ok(result));
   }
 

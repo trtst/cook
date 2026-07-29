@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout
     title=""
     full-screen
@@ -198,6 +199,7 @@ import {
 } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -217,6 +219,8 @@ interface InfoItem {
   iconClass?: string;
   muted?: boolean;
 }
+
+const pageStyle = usePageScrollStyle();
 
 const anchorTabs = [
   { value: "ingredients" as const, label: "食材" },

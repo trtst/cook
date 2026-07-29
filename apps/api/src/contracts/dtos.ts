@@ -28,6 +28,8 @@ function trimItems(value: unknown) {
   return value.map(item => (typeof item === "string" ? item.trim() : item));
 }
 
+const resourceIdExample = "550e8400-e29b-41d4-a716-446655440000";
+
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
   @IsString()
@@ -216,19 +218,19 @@ export class VersionedOperationDto extends OperationDto {
 }
 
 export class DiningGroupMembersQueryDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   diningGroupId!: string;
 }
 
 export class CreateInviteDto extends OperationDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   diningGroupId!: string;
 }
 
 export class RemoveDiningGroupMemberDto extends VersionedOperationDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   userId!: string;
 }
@@ -264,13 +266,13 @@ export class AdminDiningGroupQueryDto extends PageQueryDto {
 }
 
 export class AdminUserEntitlementQueryDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   userId!: string;
 }
 
 export class RecipeListQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
   @IsUUID()
   categoryId?: string;
@@ -279,7 +281,7 @@ export class RecipeListQueryDto extends PageQueryDto {
 export class RecipeDraftListQueryDto extends PageQueryDto {}
 
 export class IngredientListQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
   @IsUUID()
   categoryId?: string;
@@ -305,7 +307,7 @@ export class UnitListQueryDto extends PageQueryDto {
 export class IngredientRecommendationListQueryDto extends PageQueryDto {}
 
 export class InspirationRecipeListQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
   @IsUUID()
   categoryId?: string;
@@ -327,7 +329,7 @@ export class InspirationRecipeListQueryDto extends PageQueryDto {
 }
 
 export class CollectionRecipeListQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
   @IsUUID()
   sceneId?: string;
@@ -382,7 +384,7 @@ export class UpdateRecipeSceneDto extends VersionedOperationDto {
 }
 
 export class ReorderItemDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   id!: string;
 
@@ -414,7 +416,7 @@ export class ReorderRecipeScenesDto extends OperationDto {
 }
 
 export class ReorderRecipesDto extends OperationDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   categoryId!: string;
 
@@ -448,11 +450,11 @@ export class CreateIngredientDto extends OperationDto {
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   categoryId!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   defaultUnitId!: string;
 }
@@ -465,11 +467,11 @@ export class UpdateIngredientDto extends VersionedOperationDto {
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   categoryId!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   defaultUnitId!: string;
 }
@@ -487,7 +489,7 @@ export class RecipeAmountDto {
   @Matches(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/)
   quantity?: string;
 
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.kind === "EXACT")
   @IsUUID()
   unitId?: string;
@@ -499,7 +501,7 @@ export class RecipeAmountDto {
 }
 
 export class RecipeIngredientDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   ingredientId!: string;
 
@@ -533,7 +535,7 @@ export class RecipeDraftContentDto {
   @MaxLength(2000)
   story!: string | null;
 
-  @ApiProperty({ nullable: true, example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ nullable: true, example: resourceIdExample })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
   @IsUUID()
@@ -591,7 +593,7 @@ export class RecipeDraftContentDto {
 }
 
 export class CreateRecipeDraftDto extends OperationDto {
-  @ApiProperty({ nullable: true, example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ nullable: true, example: resourceIdExample })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
   @IsUUID()
@@ -619,11 +621,11 @@ export class PublishRecipeDraftDto extends VersionedOperationDto {}
 export class DeleteRecipeDto extends VersionedOperationDto {}
 
 export class CreateCollectionRecipeDto extends OperationDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   sourceRecipeId!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   sourceVersionId!: string;
 
@@ -782,12 +784,6 @@ export class AdminRecipeQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"])
   status?: string;
-
-  @ApiPropertyOptional({ example: true })
-  @IsOptional()
-  @Transform(({ value }) => (value === "true" ? true : value === "false" ? false : value))
-  @IsBoolean()
-  reportsOnly?: boolean;
 }
 
 export class AdminRecipeReportQueryDto extends PageQueryDto {
@@ -814,7 +810,7 @@ export class AdminIngredientQueryDto extends PageQueryDto {
   @MaxLength(64)
   declare keyword?: string;
 
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
   @IsUUID()
   categoryId?: string;
@@ -885,6 +881,74 @@ export class UpdateAdminIngredientCategoryDto extends VersionedOperationDto {
   name!: string;
 }
 
+export class AdminRecipeContentDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  name!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 2000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(2000)
+  story!: string | null;
+
+  @ApiProperty({ minimum: 1, maximum: 20 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  baseServings!: number;
+
+  @ApiProperty({ example: "BEGINNER" })
+  @IsIn(["BEGINNER", "EASY", "SKILLED", "CHALLENGING"])
+  difficulty!: string;
+
+  @ApiProperty({ example: "WITHIN_15" })
+  @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
+  duration!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 1000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(1000)
+  tips!: string | null;
+
+  @ApiProperty({ type: [RecipeIngredientDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeIngredientDto)
+  ingredients!: RecipeIngredientDto[];
+
+  @ApiProperty({ type: [RecipeStepDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeStepDto)
+  steps!: RecipeStepDto[];
+}
+
+export class UpdateAdminRecipeDto extends VersionedOperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @IsUUID()
+  inspirationCategoryId!: string;
+
+  @ApiProperty({ type: AdminRecipeContentDto })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => AdminRecipeContentDto)
+  content!: AdminRecipeContentDto;
+}
+
 export class ReorderAdminIngredientCategoriesDto extends OperationDto {
   @ApiProperty({ type: [ReorderItemDto] })
   @IsArray()
@@ -903,11 +967,11 @@ export class AdminIngredientPayloadDto extends OperationDto {
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   categoryId!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   defaultUnitId!: string;
 }
@@ -920,11 +984,11 @@ export class UpdateAdminIngredientDto extends VersionedOperationDto {
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   categoryId!: string;
 
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   defaultUnitId!: string;
 }
@@ -938,7 +1002,7 @@ export class SetAdminIngredientStatusDto extends VersionedOperationDto {
 }
 
 export class ReorderAdminIngredientsDto extends OperationDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiProperty({ example: resourceIdExample })
   @IsUUID()
   categoryId!: string;
 
@@ -973,17 +1037,17 @@ export class ReviewPendingIngredientDto extends VersionedOperationDto {
   @MaxLength(64)
   name?: string;
 
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.action !== "REJECT")
   @IsUUID()
   categoryId?: string;
 
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.action !== "REJECT")
   @IsUUID()
   defaultUnitId?: string;
 
-  @ApiPropertyOptional({ example: "550e8400-e29b-41d4-a716-446655440000" })
+  @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.action === "APPROVE_MERGE")
   @IsUUID()
   targetIngredientId?: string;

@@ -176,7 +176,7 @@ export class DiningGroupService {
     try {
       await this.prisma.$transaction(async tx => {
         await this.startIdempotentOperation(tx, operationId, createInviteOperation, userId, diningGroupId, requestHash);
-        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId} FOR UPDATE`;
 
         const ownerMembership = await this.requireOwnerMembership(tx, userId, diningGroupId);
         const entitlements = await this.entitlementService.resolveForUser(tx, userId);
@@ -261,8 +261,8 @@ export class DiningGroupService {
         );
 
         await tx.$queryRaw`SELECT "id" FROM "dining_group_invites" WHERE "token_hash" = ${tokenHash} FOR UPDATE`;
-        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${invite.diningGroupId}::uuid FOR UPDATE`;
-        await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${invite.diningGroupId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
 
         const currentInvite = await tx.diningGroupInvite.findUnique({
           where: { tokenHash },
@@ -389,7 +389,7 @@ export class DiningGroupService {
     try {
       return await this.prisma.$transaction(async tx => {
         await this.startIdempotentOperation(tx, operationId, leaveDiningGroupOperation, userId, diningGroupId, requestHash);
-        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId} FOR UPDATE`;
 
         const member = await this.requireActiveMembership(tx, userId, diningGroupId);
         if (member.role === "OWNER") {
@@ -467,7 +467,7 @@ export class DiningGroupService {
     try {
       return await this.prisma.$transaction(async tx => {
         await this.startIdempotentOperation(tx, operationId, removeMemberOperation, userId, diningGroupId, requestHash);
-        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId} FOR UPDATE`;
 
         await this.requireOwnerMembership(tx, userId, diningGroupId);
         const member = await this.requireActiveMembership(tx, targetUserId, diningGroupId);
@@ -552,7 +552,7 @@ export class DiningGroupService {
           diningGroupId,
           requestHash
         );
-        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "dining_groups" WHERE "id" = ${diningGroupId} FOR UPDATE`;
         await this.requireOwnerMembership(tx, userId, diningGroupId);
         await this.assertGroupVersion(tx, diningGroupId, expectedVersion);
 

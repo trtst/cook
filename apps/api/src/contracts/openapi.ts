@@ -456,6 +456,13 @@ export class RecipeDraftDetailModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class SaveRecipeDraftResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
 export class MyRecipeSummaryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
@@ -584,8 +591,37 @@ export class AdminRecipeModel {
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
+}
+
+export class AdminRecipeContentInputModel {
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty(nullableString) story!: string | null;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 20 }) baseServings!: number;
+  @ApiProperty({ type: String, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string;
+  @ApiProperty({ type: String, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string;
+  @ApiProperty(nullableString) tips!: string | null;
+  @ApiProperty({ type: [RecipeIngredientInputModel] }) ingredients!: RecipeIngredientInputModel[];
+  @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
+}
+
+export class AdminRecipeDetailModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
+  @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
+  @ApiProperty({ type: RecipeCategoryModel, nullable: true }) personalCategory!: RecipeCategoryModel | null;
+  @ApiProperty({ type: InspirationCategoryModel, nullable: true }) inspirationCategory!: InspirationCategoryModel | null;
+  @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
   @ApiProperty(nullableString) blockedReason!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+  @ApiProperty({ type: Boolean }) canEdit!: boolean;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
 }
 
 export class AdminIngredientCategoryModel {

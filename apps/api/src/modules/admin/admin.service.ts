@@ -10,7 +10,9 @@ import {
 } from "@nestjs/common";
 import { Prisma, type DiningGroupStatus, type RecipeStatus } from "@prisma/client";
 import type {
+  AdminRecipeContentInput,
   AdminDashboardSummary,
+  AdminRecipeDetail,
   AdminDeleteUnitResult,
   AdminIngredientCategoryPayloadRequest,
   AdminIngredientRejectReasonCode,
@@ -37,7 +39,9 @@ import type {
   MyRecipeSummary,
   PageResult,
   RecipeCategorySummary,
+  RecipeContentSnapshot,
   RecipeDraftSummary,
+  RecipeIngredientInput,
   RecipeSceneSummary,
   RecipeReportSummary,
   ReorderItem,
@@ -49,6 +53,7 @@ import type {
   UpdateAdminUnitRequest,
   UpdateAdminIngredientCategoryRequest,
   UpdateAdminIngredientRequest,
+  UpdateAdminRecipeRequest,
   UpdateAdminUserRequest,
   UserProfile,
   UUID
@@ -62,7 +67,7 @@ import {
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
-import { buildSearchKey, versionToContent } from "../recipe/recipe-content";
+import { buildRecipeSearchText, buildSearchKey, contentSizeBytes, toJson, versionToContent } from "../recipe/recipe-content";
 import { IngredientImageService } from "./ingredient-image.service";
 
 function toIsoDate(value: Date) {
@@ -135,6 +140,15 @@ function toUserProfile(user: {
 type AdminUserRecipeRow = Prisma.RecipeGetPayload<{
   include: {
     category: true;
+    currentVersion: true;
+  };
+}>;
+
+type AdminRecipeRow = Prisma.RecipeGetPayload<{
+  include: {
+    owner: { select: { uid: true } };
+    category: true;
+    inspirationCategory: true;
     currentVersion: true;
   };
 }>;
@@ -220,6 +234,10 @@ function toCollectionSceneSummary(scene: AdminSceneRow, recipeCount: number, upd
     recipeCount,
     updatedAt: updatedAt ? toIsoDate(updatedAt) : null
   };
+}
+
+function isAdminEditableInspiration(recipe: Pick<AdminRecipeRow, "ownerId" | "inspirationCategoryId" | "status">) {
+  return recipe.ownerId === null && !!recipe.inspirationCategoryId && recipe.status !== "DELETED";
 }
 
 function toUnitSummary(unit: { id: string; name: string; type: UnitSummary["type"]; ownerId: string | null }): UnitSummary {
@@ -2086,7 +2104,7 @@ export class AdminService {
     });
     try {
       return await this.prisma.$transaction(async tx => {
-        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
         const recommendation = await this.requirePendingIngredientRecommendation(tx, ingredientId);
         const repeated = await getAdminIdempotentResult<AdminReviewPendingIngredientResult>(
           tx,
@@ -2338,7 +2356,6 @@ export class AdminService {
     pageSize: number,
     keyword?: string,
     status?: string,
-    reportsOnly?: boolean,
     adminId?: UUID
   ): Promise<PageResult<AdminRecipeSummary>> {
     if (!adminId) throw new ForbiddenException("无权执行该操作");
@@ -2361,8 +2378,7 @@ export class AdminService {
             }
           }
         : {}),
-      ...(normalizedStatus ? { status: normalizedStatus as RecipeStatus } : {}),
-      ...(reportsOnly ? { reportCount: { gt: 0 } } : {})
+      ...(normalizedStatus ? { status: normalizedStatus as RecipeStatus } : {})
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -2373,7 +2389,7 @@ export class AdminService {
             select: { uid: true }
           }
         },
-        orderBy: [{ reportCount: "desc" }, { updatedAt: "desc" }],
+        orderBy: [{ updatedAt: "desc" }],
         skip,
         take: normalizedPageSize
       }),
@@ -2381,21 +2397,29 @@ export class AdminService {
     ]);
 
     return {
-      items: items.map(recipe => ({
-        id: recipe.id,
-        title: recipe.title,
-        coverImageUrl: recipe.coverImageUrl,
-        status: recipe.status,
-        updatedAt: toIsoDate(recipe.updatedAt),
-        ownerUid: recipe.owner?.uid ?? null,
-        reportCount: recipe.reportCount,
-        blockedReason: recipe.blockedReason
-      })),
+      items: items.map(recipe => this.toAdminRecipeSummary(recipe)),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async getRecipeDetail(recipeId: UUID, adminId: UUID): Promise<AdminRecipeDetail> {
+    await this.requireSuperAdmin(adminId);
+    const recipe = await this.prisma.recipe.findUnique({
+      where: { id: recipeId },
+      include: {
+        owner: {
+          select: { uid: true }
+        },
+        category: true,
+        inspirationCategory: true,
+        currentVersion: true
+      }
+    });
+    if (!recipe) throw new NotFoundException("菜谱不存在");
+    return this.toAdminRecipeDetail(recipe);
   }
 
   async listRecipeReports(page: number, pageSize: number, status: string | undefined, adminId: UUID): Promise<PageResult<RecipeReportSummary>> {
@@ -2440,6 +2464,92 @@ export class AdminService {
     };
   }
 
+  async updateRecipe(recipeId: UUID, adminId: UUID, body: UpdateAdminRecipeRequest): Promise<AdminRecipeDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({
+      recipeId,
+      expectedVersion: body.expectedVersion,
+      inspirationCategoryId: body.inspirationCategoryId,
+      content: body.content
+    });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeDetail>(tx, body.operationId, "admin-recipe:update", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe:update", adminId, requestHash);
+
+      const recipe = await tx.recipe.findUnique({
+        where: { id: recipeId },
+        include: {
+          owner: {
+            select: { uid: true }
+          },
+          category: true,
+          inspirationCategory: true,
+          currentVersion: true
+        }
+      });
+      if (!recipe || recipe.ownerId !== null || !recipe.inspirationCategoryId) {
+        throw new NotFoundException("灵感菜谱不存在");
+      }
+      if (recipe.status === "DELETED") {
+        throw new ConflictException("已删除菜谱不支持编辑");
+      }
+      if (recipe.version !== body.expectedVersion) {
+        throw new ConflictException("菜谱版本已更新，请刷新后重试");
+      }
+
+      const inspirationCategory = await tx.inspirationCategory.findUnique({
+        where: { id: body.inspirationCategoryId }
+      });
+      if (!inspirationCategory) throw new NotFoundException("灵感分类不存在");
+
+      const content = await this.buildAdminRecipeContent(tx, body.content);
+      this.assertAdminRecipeContent(content);
+
+      const nextVersion = await tx.recipeContentVersion.create({
+        data: this.buildAdminRecipeVersionCreateInput(content)
+      });
+
+      const updated = await tx.recipe.update({
+        where: { id: recipeId },
+        data: {
+          currentVersionId: nextVersion.id,
+          title: content.name,
+          searchText: buildRecipeSearchText(content),
+          inspirationCategoryId: inspirationCategory.id,
+          version: { increment: 1 }
+        },
+        include: {
+          owner: {
+            select: { uid: true }
+          },
+          category: true,
+          inspirationCategory: true,
+          currentVersion: true
+        }
+      });
+
+      const result = this.toAdminRecipeDetail(updated);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_UPDATED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: {
+            previousVersionId: recipe.currentVersionId,
+            nextVersionId: nextVersion.id,
+            inspirationCategoryId: inspirationCategory.id
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-recipe:update", adminId, requestHash, result);
+      return result;
+    });
+  }
+
   async blockRecipe(recipeId: UUID, adminId: UUID, operationId: UUID, reason: string) {
     await this.requireSuperAdmin(adminId);
     const normalizedReason = reason.trim();
@@ -2470,16 +2580,7 @@ export class AdminService {
         where: { id: recipeId },
         include: { owner: { select: { uid: true } } }
       });
-      const result = {
-        id: recipe.id,
-        title: recipe.title,
-        coverImageUrl: recipe.coverImageUrl,
-        status: recipe.status,
-        updatedAt: toIsoDate(recipe.updatedAt),
-        ownerUid: recipe.owner?.uid ?? null,
-        reportCount: recipe.reportCount,
-        blockedReason: recipe.blockedReason
-      } satisfies AdminRecipeSummary;
+      const result = this.toAdminRecipeSummary(recipe);
       await tx.auditEvent.create({
         data: {
           actorType: "ADMIN",
@@ -2522,16 +2623,7 @@ export class AdminService {
         where: { id: recipeId },
         include: { owner: { select: { uid: true } } }
       });
-      const result = {
-        id: recipe.id,
-        title: recipe.title,
-        coverImageUrl: recipe.coverImageUrl,
-        status: recipe.status,
-        updatedAt: toIsoDate(recipe.updatedAt),
-        ownerUid: recipe.owner?.uid ?? null,
-        reportCount: recipe.reportCount,
-        blockedReason: recipe.blockedReason
-      } satisfies AdminRecipeSummary;
+      const result = this.toAdminRecipeSummary(recipe);
       await tx.auditEvent.create({
         data: {
           actorType: "ADMIN",
@@ -2603,6 +2695,152 @@ export class AdminService {
       );
       return result;
     });
+  }
+
+  private toAdminRecipeSummary(recipe: {
+    id: string;
+    title: string;
+    coverImageUrl: string | null;
+    status: RecipeStatus;
+    updatedAt: Date;
+    owner?: { uid: number } | null;
+  }): AdminRecipeSummary {
+    return {
+      id: recipe.id,
+      title: recipe.title,
+      coverImageUrl: recipe.coverImageUrl,
+      status: recipe.status,
+      updatedAt: toIsoDate(recipe.updatedAt),
+      ownerUid: recipe.owner?.uid ?? null
+    };
+  }
+
+  private toAdminRecipeDetail(recipe: AdminRecipeRow): AdminRecipeDetail {
+    return {
+      id: recipe.id,
+      title: recipe.title,
+      coverImageUrl: recipe.coverImageUrl,
+      status: recipe.status,
+      ownerUid: recipe.owner?.uid ?? null,
+      personalCategory: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
+      inspirationCategory: recipe.inspirationCategory ? toInspirationCategorySummary(recipe.inspirationCategory) : null,
+      contentVersionId: recipe.currentVersionId,
+      content: versionToContent(recipe.currentVersion),
+      version: recipe.version,
+      reportCount: recipe.reportCount,
+      blockedReason: recipe.blockedReason,
+      likeCount: recipe.likeCount,
+      collectCount: recipe.collectCount,
+      canEdit: isAdminEditableInspiration(recipe),
+      createdAt: toIsoDate(recipe.createdAt),
+      updatedAt: toIsoDate(recipe.updatedAt)
+    };
+  }
+
+  private assertAdminRecipeContent(content: RecipeContentSnapshot) {
+    if (!content.name.trim()) throw new BadRequestException("菜谱名称不能为空");
+    if (content.baseServings < 1 || content.baseServings > 20) {
+      throw new BadRequestException("基准人数必须为 1 到 20");
+    }
+    if (content.ingredients.length === 0) throw new BadRequestException("至少需要一个食材");
+    if (!content.steps.some(item => item.text.trim())) throw new BadRequestException("至少需要一个制作步骤");
+    for (const item of content.ingredients) {
+      if (item.amount.kind === "EXACT") {
+        if (!item.amount.quantity.trim() || Number(item.amount.quantity) <= 0) {
+          throw new BadRequestException("精确用量必须大于 0");
+        }
+      }
+    }
+  }
+
+  private async buildAdminRecipeContent(tx: Prisma.TransactionClient, content: AdminRecipeContentInput): Promise<RecipeContentSnapshot> {
+    const ingredientIds = Array.from(new Set(content.ingredients.map(item => item.ingredientId)));
+    const unitIds = Array.from(new Set(content.ingredients.flatMap(item => (item.amount.kind === "EXACT" ? [item.amount.unitId] : []))));
+    const [ingredientRows, unitRows] = await Promise.all([
+      tx.ingredient.findMany({
+        where: {
+          id: { in: ingredientIds },
+          ownerId: null,
+          status: "ACTIVE",
+          category: {
+            is: {
+              isSelectable: true
+            }
+          }
+        }
+      }),
+      unitIds.length === 0
+        ? []
+        : tx.unit.findMany({
+            where: {
+              id: { in: unitIds },
+              ownerId: null
+            }
+          })
+    ]);
+    if (ingredientRows.length !== ingredientIds.length) throw new NotFoundException("系统食材不存在或已下架");
+    if (unitRows.length !== unitIds.length) throw new NotFoundException("系统单位不存在");
+
+    const ingredientMap = new Map(ingredientRows.map(item => [item.id, item]));
+    const unitMap = new Map(unitRows.map(item => [item.id, item]));
+
+    return {
+      name: content.name.trim(),
+      story: content.story?.trim() || null,
+      baseServings: content.baseServings,
+      difficulty: content.difficulty,
+      duration: content.duration,
+      tips: content.tips?.trim() || null,
+      ingredients: content.ingredients.map(item => {
+        const ingredient = ingredientMap.get(item.ingredientId);
+        if (!ingredient) throw new NotFoundException("系统食材不存在或已下架");
+        if (item.amount.kind === "FUZZY") {
+          return {
+            ingredientId: ingredient.id,
+            ingredientName: ingredient.name,
+            source: "SYSTEM",
+            categoryId: ingredient.categoryId,
+            amount: {
+              kind: "FUZZY",
+              text: item.amount.text
+            }
+          };
+        }
+        const unit = unitMap.get(item.amount.unitId);
+        if (!unit) throw new NotFoundException("系统单位不存在");
+        return {
+          ingredientId: ingredient.id,
+          ingredientName: ingredient.name,
+          source: "SYSTEM",
+          categoryId: ingredient.categoryId,
+          amount: {
+            kind: "EXACT",
+            quantity: item.amount.quantity.trim(),
+            unitId: unit.id,
+            unitName: unit.name,
+            unitType: unit.type
+          }
+        };
+      }),
+      steps: content.steps.filter(item => item.text.trim()).map(item => ({ text: item.text.trim() }))
+    };
+  }
+
+  private buildAdminRecipeVersionCreateInput(content: RecipeContentSnapshot): Prisma.RecipeContentVersionUncheckedCreateInput {
+    return {
+      createdByUserId: null,
+      name: content.name,
+      story: content.story,
+      baseServings: content.baseServings,
+      difficulty: content.difficulty,
+      duration: content.duration,
+      tips: content.tips,
+      ingredientsJson: toJson(content.ingredients),
+      stepsJson: toJson(content.steps),
+      imagesJson: toJson([]),
+      searchText: buildRecipeSearchText(content),
+      contentSizeBytes: contentSizeBytes(content)
+    };
   }
 
   private toUserRecipeSummary(recipe: AdminUserRecipeRow): MyRecipeSummary {

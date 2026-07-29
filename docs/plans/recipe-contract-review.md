@@ -135,7 +135,7 @@ R1 不提供删除场景接口。菜谱与场景的关联由草稿发布统一�
 | `POST` | `/recipe-drafts/{draftId}/delete` | 删除草稿并释放对应数量/空间 |
 | `POST` | `/recipe-drafts/{draftId}/publish` | 校验完整内容并发布到“我的” |
 
-预览使用当前页面表单状态，不增加预览 API。首次保存已有菜谱编辑草稿时，请求携带该菜谱 ID；服务端存在有效编辑草稿时返回已有草稿，不重复创建。
+预览使用当前页面表单状态，不增加预览 API。首次保存已有菜谱编辑草稿时，请求携带该菜谱 ID；服务端存在有效编辑草稿时返回已有草稿，不重复创建。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`；只有 `GET /recipe-drafts/{draftId}` 继续返回完整详情。
 
 ### 我的菜谱
 
@@ -158,19 +158,35 @@ R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。
 
 灵感只读接口与本人 `/recipes` 分开，避免可选登录状态影响同一列表的字段、权限和缓存边界。R1 只允许已有系统菜谱进入该读取面；用户推荐到灵感、点赞和升级为我的仍不在本阶段建设。
 
+### 后台菜谱治理
+
+| 方法 | 路径 | 鉴权 | 职责 |
+| --- | --- | --- | --- |
+| `GET` | `/admin/recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 只返回后台菜谱列表最小摘要，支持关键词和状态筛选 |
+| `GET` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回后台菜谱详情，覆盖灵感与个人菜谱 |
+| `PUT` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 只编辑灵感菜谱正文并切换到新固定版本 |
+
+后台详情对所有菜谱开放，但正文编辑只允许 `ownerId = null` 且仍挂灵感分类的系统菜谱。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。后台正文编辑当前只允许系统食材和系统单位，不把个人食材、个人单位或图片写入口径带进灵感治理。
+
 ## 五、建议 DTO
 
 ### 分类与场景
 
+下文 `ResourceId` 表示资源 ID（当前仍为 UUID 字符串）；`operationId` 表示幂等键。
+
 ```ts
+type UUID = string;
+type ResourceId = UUID;
+type IsoDateTime = string;
+
 interface RecipeCategorySummary {
-  id: UUID;
+  id: ResourceId;
   name: string;
   version: number;
 }
 
 interface RecipeSceneSummary {
-  id: UUID;
+  id: ResourceId;
   name: string;
   version: number;
 }
@@ -185,7 +201,7 @@ type RecipeAmountInput =
   | {
       kind: "EXACT";
       quantity: string;
-      unitId: UUID;
+      unitId: ResourceId;
     }
   | {
       kind: "FUZZY";
@@ -193,7 +209,7 @@ type RecipeAmountInput =
     };
 
 interface RecipeIngredientInput {
-  ingredientId: UUID;
+  ingredientId: ResourceId;
   amount: RecipeAmountInput;
 }
 ```
@@ -206,8 +222,8 @@ interface RecipeIngredientInput {
 interface RecipeDraftContentInput {
   name: string;
   story: string | null;
-  categoryId: UUID | null;
-  sceneIds: UUID[];
+  categoryId: ResourceId | null;
+  sceneIds: ResourceId[];
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
@@ -221,7 +237,7 @@ interface RecipeDraftContentInput {
 
 上述 DTO 为客户端一次提交结构。服务端持久化时把 `categoryId` 和 `sceneIds` 分别写入外键与关联表，`contentJson` 只保存草稿正文，不重复保存关系 ID。
 
-草稿允许名称、分类、基准人数、食材和步骤暂时为空，但数组仍受最大 100 项限制。R1 尚未开放图片，因此每个步骤必须有非空文本，请求包含图片字段时返回 `400`。
+草稿允许名称、分类、基准人数、难度、时长、食材和步骤暂时为空，但数组仍受最大 100 项限制。R1 尚未开放图片，因此每个步骤必须有非空文本，请求包含图片字段时返回 `400`。
 
 发布接口不重复提交正文，只提交：
 
@@ -238,12 +254,21 @@ interface PublishRecipeDraftRequest {
 
 ```ts
 interface MyRecipeSummary {
-  id: UUID;
+  id: ResourceId;
   title: string;
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
   category: RecipeCategorySummary;
+  version: number;
+  updatedAt: IsoDateTime;
+}
+```
+
+```ts
+interface SaveRecipeDraftResponse {
+  id: ResourceId;
+  recipeId: ResourceId | null;
   version: number;
   updatedAt: IsoDateTime;
 }
@@ -306,8 +331,8 @@ Ingredient
 name
 story?
 baseServings
-difficulty?
-duration?
+difficulty
+duration
 tips?
 ingredientsJson
 stepsJson
@@ -338,7 +363,7 @@ InspirationCategory
 7. 个人已发布 `Recipe` 必须有 `ownerId`、`categoryId` 和有效内容版本；平台入口不得引用个人分类。
 8. `Ingredient(ownerId, searchKey)` 在 owner 非空时唯一；系统食材 `searchKey` 全局唯一。
 9. `Unit(ownerId, searchKey)` 在 owner 非空时唯一；系统单位 `searchKey` 全局唯一。
-10. `RecipeContentVersion.baseServings` 为 `1～20`，`duration` 为空或属于固定四档之一。
+10. `RecipeContentVersion.baseServings` 为 `1～20`，`difficulty` 与 `duration` 都必须属于固定四档之一。
 
 JSON 中食材用量互斥、步骤非空、数组长度和引用权限由服务端发布事务验证。不能用客户端校验代替。
 
@@ -396,7 +421,7 @@ R1 不增加推荐、点赞、收藏统计或全文检索专用索引。关键�
 
 以下决策于 2026-07-25 确认：
 
-1. 难度档位：建议首版固定 `新手友好 / 轻松上手 / 需要经验 / 进阶挑战` 四档，对应稳定枚举 `BEGINNER / EASY / SKILLED / CHALLENGING`；允许不选择。
+1. 难度档位：建议首版固定 `新手友好 / 轻松上手 / 需要经验 / 进阶挑战` 四档，对应稳定枚举 `BEGINNER / EASY / SKILLED / CHALLENGING`；发布时必须显式选择。
 2. 个人分类删除：建议 R1 暂不提供删除；后续删除时必须先把分类下菜谱批量迁移到另一个分类，不允许产生“未分类”已发布菜谱。
 3. 模糊用量：建议首版固定 `适量 / 少许 / 按需` 三项，不允许自由输入；其他表达使用食材备注能力时再单独确认。
 

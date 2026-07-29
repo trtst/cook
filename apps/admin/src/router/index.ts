@@ -52,9 +52,25 @@ const router = createRouter({
         },
         {
           path: "recipes",
-          name: "recipes",
+          redirect: "/recipes/list"
+        },
+        {
+          path: "recipes/list",
+          name: "recipe-list",
           component: () => import("@/pages/RecipesPage.vue"),
-          meta: { title: "菜谱治理" }
+          meta: { title: "菜谱列表" }
+        },
+        {
+          path: "recipes/reports",
+          name: "recipe-reports",
+          component: () => import("@/pages/RecipeReportsPage.vue"),
+          meta: { title: "菜谱举报" }
+        },
+        {
+          path: "recipes/:recipeId",
+          name: "recipe-detail",
+          component: () => import("@/pages/RecipeDetailPage.vue"),
+          meta: { title: "菜谱详情" }
         },
         {
           path: "ingredients",

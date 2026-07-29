@@ -92,6 +92,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { authApi } from "@/apis/auth";
 import { APP_NAME, APP_SLOGAN } from "@/config";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { userApi } from "@/apis/user";
 import { ApiClientError } from "@/apis/http";
 import { uniPlatform } from "@/platform/uni";
@@ -118,6 +119,7 @@ const renderMode = ref<"options" | "phone">("phone");
 const renderOpenedInMiniProgram = ref(false);
 const renderImageUrl = ref("");
 const motionState = ref<"entering" | "open" | "closing">("entering");
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("login-modal"));
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let motionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -171,6 +173,14 @@ watch(
 		if (!loginModalStore.visible) return;
 		syncRenderState();
 	}
+);
+
+watch(
+	() => renderVisible.value,
+	(visible) => {
+		setPageLocked(visible);
+	},
+	{ immediate: true }
 );
 
 onBeforeUnmount(() => {

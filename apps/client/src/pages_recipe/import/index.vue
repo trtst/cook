@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="灵感入口">
     <view class="panel">
       <text class="panel__title">独立导入页已下线</text>
@@ -10,7 +11,10 @@
 
 <script setup lang="ts">
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
+
+const pageStyle = usePageScrollStyle();
 
 function goRecipeHome() {
 	void uniPlatform.navigation.switchTab("/pages/recipe/index");

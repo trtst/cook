@@ -1,32 +1,22 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { Refresh, Search } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
-import { recipeApi, type AdminRecipeSummary, type RecipeReportSummary } from "@/apis/recipe";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { recipeApi, type AdminRecipeSummary } from "@/apis/recipe";
 import { formatStatusText } from "@/utils/status";
 
+const router = useRouter();
 const loading = ref(false);
-const reportLoading = ref(false);
 const recipes = ref<AdminRecipeSummary[]>([]);
-const reports = ref<RecipeReportSummary[]>([]);
 const total = ref(0);
-const reportTotal = ref(0);
-const blockReason = ref("违规或不适合继续曝光");
 let requestId = 0;
-let reportRequestId = 0;
 
 const query = reactive({
   page: 1,
   pageSize: 20,
   keyword: "",
-  status: "" as "" | "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED",
-  reportsOnly: false
-});
-
-const reportQuery = reactive({
-  page: 1,
-  pageSize: 20,
-  status: "" as "" | "OPEN" | "RESOLVED"
+  status: "" as "" | "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED"
 });
 
 async function loadRecipes() {
@@ -37,8 +27,7 @@ async function loadRecipes() {
       page: query.page,
       pageSize: query.pageSize,
       keyword: query.keyword || undefined,
-      status: query.status || undefined,
-      reportsOnly: query.reportsOnly || undefined
+      status: query.status || undefined
     });
     if (current !== requestId) return;
     recipes.value = result.items;
@@ -51,42 +40,24 @@ async function loadRecipes() {
   }
 }
 
-async function loadReports() {
-  const current = ++reportRequestId;
-  reportLoading.value = true;
-  try {
-    const result = await recipeApi.listReports({
-      page: reportQuery.page,
-      pageSize: reportQuery.pageSize,
-      status: reportQuery.status || undefined
-    });
-    if (current !== reportRequestId) return;
-    reports.value = result.items;
-    reportTotal.value = result.total;
-  } catch (error) {
-    if (current !== reportRequestId) return;
-    ElMessage.error(error instanceof Error ? error.message : "加载举报失败");
-  } finally {
-    if (current === reportRequestId) reportLoading.value = false;
-  }
-}
-
 function search() {
   query.page = 1;
   void loadRecipes();
 }
 
-function searchReports() {
-  reportQuery.page = 1;
-  void loadReports();
-}
-
 async function blockRecipe(recipeId: string) {
   try {
-    await recipeApi.block(recipeId, crypto.randomUUID(), blockReason.value.trim() || "后台下架");
+    const { value } = await ElMessageBox.prompt("请输入下架原因", "下架菜谱", {
+      inputValue: "违规或不适合继续曝光",
+      inputPlaceholder: "例如：违规或不适合继续曝光",
+      confirmButtonText: "确认下架",
+      cancelButtonText: "取消"
+    });
+    await recipeApi.block(recipeId, crypto.randomUUID(), value.trim() || "后台下架");
     ElMessage.success("已下架");
-    await Promise.all([loadRecipes(), loadReports()]);
+    await loadRecipes();
   } catch (error) {
+    if (error === "cancel" || error === "close") return;
     ElMessage.error(error instanceof Error ? error.message : "下架失败");
   }
 }
@@ -101,19 +72,13 @@ async function unblockRecipe(recipeId: string) {
   }
 }
 
-async function resolveReport(reportId: string) {
-  try {
-    await recipeApi.resolveReport(reportId, crypto.randomUUID(), "已核查");
-    ElMessage.success("已处理举报");
-    await Promise.all([loadRecipes(), loadReports()]);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "处理失败");
-  }
-}
-
 onMounted(() => {
-  void Promise.all([loadRecipes(), loadReports()]);
+  void loadRecipes();
 });
+
+function openDetail(recipeId: string) {
+  void router.push(`/recipes/${recipeId}`);
+}
 </script>
 
 <template>
@@ -126,8 +91,6 @@ onMounted(() => {
         <el-option :label="formatStatusText('BLOCKED')" value="BLOCKED" />
         <el-option :label="formatStatusText('DELETED')" value="DELETED" />
       </el-select>
-      <el-checkbox v-model="query.reportsOnly">只看有举报</el-checkbox>
-      <el-input v-model="blockReason" class="toolbar-search" placeholder="下架原因" />
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
       <el-button :icon="Refresh" @click="loadRecipes">刷新</el-button>
     </div>
@@ -146,11 +109,10 @@ onMounted(() => {
             {{ formatStatusText(row.status) }}
           </template>
         </el-table-column>
-        <el-table-column prop="reportCount" label="举报数" width="100" />
-        <el-table-column prop="blockedReason" label="下架原因" min-width="180" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="openDetail(row.id)">详情</el-button>
             <el-button v-if="row.status === 'ACTIVE'" link type="danger" @click="blockRecipe(row.id)">下架</el-button>
             <el-button v-else-if="row.status === 'BLOCKED'" link type="primary" @click="unblockRecipe(row.id)">恢复</el-button>
           </template>
@@ -167,48 +129,6 @@ onMounted(() => {
           :page-sizes="[20, 50, 100]"
           @current-change="loadRecipes"
           @size-change="search"
-        />
-      </div>
-    </div>
-
-    <div class="toolbar-panel">
-      <el-select v-model="reportQuery.status" class="toolbar-select" placeholder="举报状态" clearable>
-        <el-option :label="formatStatusText('OPEN')" value="OPEN" />
-        <el-option :label="formatStatusText('RESOLVED')" value="RESOLVED" />
-      </el-select>
-      <el-button type="primary" :icon="Search" @click="searchReports">查询举报</el-button>
-      <el-button :icon="Refresh" @click="loadReports">刷新举报</el-button>
-    </div>
-
-    <div class="table-panel">
-      <el-table v-loading="reportLoading" :data="reports" row-key="id">
-        <el-table-column prop="recipeId" label="菜谱 ID" min-width="260" />
-        <el-table-column prop="reporterUid" label="举报人 UID" width="120" />
-        <el-table-column prop="reason" label="原因" min-width="220" />
-        <el-table-column label="状态" width="120">
-          <template #default="{ row }">
-            {{ formatStatusText(row.status) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="举报时间" min-width="180" />
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button v-if="row.status === 'OPEN'" link type="primary" @click="resolveReport(row.id)">处理</el-button>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-row">
-        <el-pagination
-          v-model:current-page="reportQuery.page"
-          v-model:page-size="reportQuery.pageSize"
-          background
-          layout="total, sizes, prev, pager, next"
-          :total="reportTotal"
-          :page-sizes="[20, 50, 100]"
-          @current-change="loadReports"
-          @size-change="searchReports"
         />
       </div>
     </div>

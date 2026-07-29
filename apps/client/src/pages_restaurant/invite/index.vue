@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="加入饭搭子关系">
     <view class="invite-page">
       <Login
@@ -25,11 +26,14 @@ import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
 import type { UUID } from "@/apis/http";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const diningGroupStore = useDiningGroupStore();

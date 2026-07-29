@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="食材与采购">
     <Login v-if="!sessionStore.isLoggedIn" title="登录后查看食材与采购" description="冰箱、缺口和购物清单都归你本人所有，需要登录后查看。" />
     <template v-else>
@@ -29,9 +30,12 @@
 
 <script setup lang="ts">
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 

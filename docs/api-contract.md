@@ -42,6 +42,8 @@
 
 ```ts
 type UUID = string;
+type ResourceId = UUID;
+type OperationId = UUID;
 type IsoDateTime = string;
 
 interface ApiResponse<T> {
@@ -67,7 +69,7 @@ interface PageResult<T> {
 
 所有时间使用 ISO 8601；数据库使用 `TIMESTAMPTZ(3)`。所有可重试写操作携带 UUID `operationId`。共享可变对象携带 `version`。
 
-路径中的资源 ID 使用 UUID v4，格式错误统一返回 `400`。`inviteToken`、`shareToken` 等不透明凭证不是 UUID，不使用 UUID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回 `409`，客户端刷新详情后再决定是否重试。
+路径中的资源 ID 使用 UUID v4，格式错误统一返回 `400`。`inviteToken`、`shareToken` 和 `operationId` 等不透明凭证不是资源 ID，不使用资源 ID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回 `409`，客户端刷新详情后再决定是否重试。
 
 OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema；对象、数组和分页响应不得退化为无字段的 `object`。本文、服务端 OpenAPI 和各应用本地类型共同变更，不直接复用 Prisma Model。
 
@@ -541,6 +543,20 @@ POST /admin/pending-ingredients/{ingredientId}/review
 
 `GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword` 和 `status` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`。后台排序按“分类内系统顺序”返回，不再按创建时间倒序表达运营顺序。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`，下架不做物理删除；重新上架时服务端会把该食材放到当前分类排序末尾，避免与现有启用中食材顺序冲突。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /public-assets/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态文件还在也不得继续外露。`POST /admin/ingredients/reorder` 只接收一个分类下的完整系统食材集合顺序，且仅针对当前启用中的系统食材；服务端校验集合完整性和 `expectedVersion` 后重写该分类的系统食材顺序。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。拒绝时必须选择预设 `rejectReasonCode`：`NAME_NOT_CLEAR / NAME_HAS_BRAND / CATEGORY_NOT_FIT / UNIT_NOT_FIT / OUT_OF_SCOPE / OTHER`；只有 `OTHER` 仍要求补充详细 `reason`。服务端会把对应建议写入推荐记录，供前台“我的推荐”直接展示。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。
 
+后台菜谱治理当前补充为：
+
+```text
+GET /admin/recipes
+GET /admin/recipes/{recipeId}
+PUT /admin/recipes/{recipeId}
+GET /admin/recipe-reports
+POST /admin/recipes/{recipeId}/block
+POST /admin/recipes/{recipeId}/unblock
+POST /admin/recipe-reports/{reportId}/resolve
+```
+
+`GET /admin/recipes` 只返回后台菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `keyword`、`status` 过滤；列表不再混入举报筛选、举报数和下架原因，排序统一按 `updatedAt desc`。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统灵感菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount` 和 `canEdit`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前灵感菜谱正文，且仅限 `ownerId = null`、当前仍挂灵感分类的菜谱；请求体必须携带 `operationId`、`expectedVersion`、`inspirationCategoryId` 和完整正文输入。保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText` 和 `inspirationCategoryId` 切到新版本，保证已收藏、已引用和历史固定版本不漂移。后台编辑正文时食材和单位只允许引用当前可选的系统食材与系统单位，不开放图片写入。
+
 ## 其他领域接口摘要
 
 ### 我的口味
@@ -681,8 +697,8 @@ interface RecipeContentSnapshot {
 interface RecipeDraftContentInput {
   name: string;
   story: string | null;
-  categoryId: UUID | null;
-  sceneIds: UUID[];
+  categoryId: ResourceId | null;
+  sceneIds: ResourceId[];
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
@@ -692,49 +708,56 @@ interface RecipeDraftContentInput {
 }
 ```
 
-草稿允许发布必填项暂时为空。发布时必须校验名称、有效个人分类、`1～20` 人份、至少一个有效食材和至少一个非空文本步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。R1 不接受图片字段，提交图片字段返回 `400`。
+草稿允许发布必填项暂时为空。发布时必须校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材和至少一个非空文本步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。R1 不接受图片字段，提交图片字段返回 `400`。
 
 ```ts
 interface CreateRecipeDraftRequest {
-  operationId: UUID;
-  recipeId: UUID | null;
+  operationId: OperationId;
+  recipeId: ResourceId | null;
   content: RecipeDraftContentInput;
 }
 
 interface UpdateRecipeDraftRequest {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
   content: RecipeDraftContentInput;
 }
 
 interface PublishRecipeDraftRequest {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
 }
 
 interface ReorderItem {
-  id: UUID;
+  id: ResourceId;
   expectedVersion: number;
 }
 
 interface ReorderRecipesRequest {
-  operationId: UUID;
-  categoryId: UUID;
+  operationId: OperationId;
+  categoryId: ResourceId;
   items: ReorderItem[];
 }
 
 interface RecipeDraftSummary {
-  id: UUID;
-  recipeId: UUID | null;
+  id: ResourceId;
+  recipeId: ResourceId | null;
   title: string | null;
   category: RecipeCategorySummary | null;
   version: number;
   updatedAt: IsoDateTime;
 }
 
+interface SaveRecipeDraftResponse {
+  id: ResourceId;
+  recipeId: ResourceId | null;
+  version: number;
+  updatedAt: IsoDateTime;
+}
+
 interface RecipeDraftDetail {
-  id: UUID;
-  recipeId: UUID | null;
+  id: ResourceId;
+  recipeId: ResourceId | null;
   version: number;
   content: RecipeDraftContentInput;
   ingredientRefs: IngredientSummary[];
@@ -746,7 +769,7 @@ interface RecipeDraftDetail {
 }
 
 interface DeleteRecipeDraftResponse {
-  draftId: UUID;
+  draftId: ResourceId;
   deletedAt: IsoDateTime;
 }
 
@@ -754,6 +777,8 @@ interface PublishRecipeDraftResponse {
   recipe: MyRecipeDetail;
 }
 ```
+
+`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 返回 `SaveRecipeDraftResponse`，不再复用 `RecipeDraftDetail`。`GET /recipe-drafts/{draftId}` 继续返回完整 `RecipeDraftDetail`，供编辑页补齐历史食材和历史单位引用。
 
 分类和场景重排提交完整作用域的 `ReorderItem[]`，分类内菜谱重排提交 `ReorderRecipesRequest`。三者都不得缺失、重复或混入越权 ID。服务端锁定最小作用域并逐项比较版本，冲突返回 `409`。
 
@@ -930,7 +955,7 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 
 `GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；`/collections` 返回该用户全部合集场景摘要；`/collections/{sceneId}/recipes` 返回该场景下的收藏快照分页。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
 
-`GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位，不再依赖第一页预加载是否刚好命中。
+`GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。
 
 创建和保存草稿时，服务端按以下逻辑计量草稿空间：
 

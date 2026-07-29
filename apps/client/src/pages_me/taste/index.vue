@@ -1,4 +1,5 @@
 <template>
+  <page-meta :page-style="pageStyle" />
   <Layout title="我的口味">
     <view class="taste-page">
       <Login
@@ -66,11 +67,14 @@ import { onShow } from "@dcloudio/uni-app";
 import { reactive, ref } from "vue";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 
 type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "flavorPreferences";
+
+const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const loading = ref(false);
