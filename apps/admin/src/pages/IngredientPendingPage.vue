@@ -6,6 +6,7 @@ import {
   ingredientApi,
   type AdminIngredientCategorySummary,
   type AdminIngredientReviewAction,
+  type AdminIngredientRejectReasonCode,
   type AdminIngredientSummary,
   type AdminPendingIngredientSummary,
   type AdminUnitSummary
@@ -17,6 +18,42 @@ const actionLabelMap: Record<AdminIngredientReviewAction, string> = {
   APPROVE_MERGE: "通过并归并到现有系统食材",
   REJECT: "拒绝"
 };
+const rejectReasonOptions: Array<{
+  code: AdminIngredientRejectReasonCode;
+  label: string;
+  advice: string;
+}> = [
+  {
+    code: "NAME_NOT_CLEAR",
+    label: "名称不明确",
+    advice: "请改成明确、通用的食材名称后再提交。"
+  },
+  {
+    code: "NAME_HAS_BRAND",
+    label: "名称含品牌或规格",
+    advice: "请去掉品牌、口味、包装规格等描述，保留通用食材名后再提交。"
+  },
+  {
+    code: "CATEGORY_NOT_FIT",
+    label: "分类不合适",
+    advice: "请调整到更合适的系统分类后再提交。"
+  },
+  {
+    code: "UNIT_NOT_FIT",
+    label: "默认单位不合适",
+    advice: "请改成更常用的默认单位后再提交。"
+  },
+  {
+    code: "OUT_OF_SCOPE",
+    label: "不属于系统食材范围",
+    advice: "请确认提交的是可复用的食材本体，而不是菜名、套餐、品牌商品或临时描述。"
+  },
+  {
+    code: "OTHER",
+    label: "其他",
+    advice: "请根据审核意见修改后重新提交。"
+  }
+];
 const MERGE_SEARCH_DEBOUNCE_MS = 300;
 
 const loading = ref(false);
@@ -46,13 +83,17 @@ const form = reactive({
   categoryId: "",
   defaultUnitId: "",
   targetIngredientId: "",
+  rejectReasonCode: "" as AdminIngredientRejectReasonCode | "",
   reason: ""
 });
 
 const targetOptions = computed(() => mergeOptions.value);
+const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
 
 const needApproveFields = computed(() => form.action !== "REJECT");
 const needMergeTarget = computed(() => form.action === "APPROVE_MERGE");
+const currentRejectOption = computed(() => rejectReasonOptions.find(item => item.code === form.rejectReasonCode) || null);
+const needRejectDetail = computed(() => form.action === "REJECT" && form.rejectReasonCode === "OTHER");
 
 function resetForm() {
   clearMergeSearchTimer();
@@ -63,6 +104,7 @@ function resetForm() {
   form.categoryId = "";
   form.defaultUnitId = "";
   form.targetIngredientId = "";
+  form.rejectReasonCode = "";
   form.reason = "";
   mergeOptions.value = [];
   mergeLoading.value = false;
@@ -118,9 +160,10 @@ function openReview(row: AdminPendingIngredientSummary) {
   currentRow.value = row;
   form.action = "APPROVE_CREATE";
   form.name = row.name;
-  form.categoryId = row.categoryId || categories.value[0]?.id || "";
+  form.categoryId = selectableCategories.value.find(item => item.id === row.categoryId)?.id || selectableCategories.value[0]?.id || "";
   form.defaultUnitId = row.defaultUnitId || units.value[0]?.id || "";
   form.targetIngredientId = "";
+  form.rejectReasonCode = "";
   form.reason = "";
   mergeOptions.value = [];
   dialogVisible.value = true;
@@ -170,10 +213,19 @@ function buildPayload() {
   if (!currentRow.value) return null;
 
   if (form.action === "REJECT") {
+    if (!form.rejectReasonCode) {
+      ElMessage.error("请选择拒绝原因");
+      return null;
+    }
+    if (form.rejectReasonCode === "OTHER" && !form.reason.trim()) {
+      ElMessage.error("请填写详细拒绝原因");
+      return null;
+    }
     return {
       operationId: crypto.randomUUID(),
       action: form.action,
       expectedVersion: currentRow.value.version,
+      rejectReasonCode: form.rejectReasonCode,
       reason: form.reason.trim() || undefined
     };
   }
@@ -348,7 +400,7 @@ onUnmounted(() => {
           </el-form-item>
           <el-form-item label="分类">
             <el-select v-model="form.categoryId" placeholder="请选择分类">
-              <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+              <el-option v-for="item in selectableCategories" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
           </el-form-item>
           <el-form-item label="默认单位">
@@ -374,14 +426,35 @@ onUnmounted(() => {
           </el-form-item>
         </template>
 
-        <el-form-item label="备注">
+        <template v-if="form.action === 'REJECT'">
+          <el-form-item label="拒绝原因">
+            <el-select v-model="form.rejectReasonCode" placeholder="请选择默认拒绝原因">
+              <el-option v-for="item in rejectReasonOptions" :key="item.code" :label="item.label" :value="item.code" />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="currentRejectOption" label="修改建议">
+            <el-alert :title="currentRejectOption.advice" type="info" :closable="false" show-icon />
+          </el-form-item>
+          <el-form-item v-if="needRejectDetail" label="详细原因">
+            <el-input
+              v-model="form.reason"
+              type="textarea"
+              :rows="3"
+              maxlength="255"
+              show-word-limit
+              placeholder="请填写本次拒绝的具体原因"
+            />
+          </el-form-item>
+        </template>
+
+        <el-form-item v-else label="审核备注">
           <el-input
             v-model="form.reason"
             type="textarea"
             :rows="3"
             maxlength="255"
             show-word-limit
-            :placeholder="form.action === 'REJECT' ? '可填写拒绝原因' : '可填写审核备注'"
+            placeholder="可填写审核备注"
           />
         </el-form-item>
       </el-form>

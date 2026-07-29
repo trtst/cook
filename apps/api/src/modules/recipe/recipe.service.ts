@@ -263,6 +263,7 @@ function toIngredientRecommendationSummary(
     },
     defaultUnit,
     reviewNote: record.reviewNote,
+    reviewAdvice: record.reviewAdvice,
     adoptedIngredient,
     mergedIngredient,
     createdAt: toIsoDate(record.createdAt),
@@ -455,6 +456,9 @@ export class RecipeService {
 
   async listIngredientCategories() {
     const items = await this.prisma.ingredientCategory.findMany({
+      where: {
+        isSelectable: true
+      },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
     });
     return items.map(toIngredientCategorySummary);
@@ -526,7 +530,7 @@ export class RecipeService {
         const repeated = await getIdempotentResult<IngredientSummary>(tx, operationId, "ingredient:create", userId, null, requestHash);
         if (repeated) return repeated;
         await startIdempotentOperation(tx, operationId, "ingredient:create", userId, null, requestHash);
-        await this.requireIngredientCategory(tx, categoryId);
+        await this.requireSelectableIngredientCategory(tx, categoryId);
         const unit = await this.requireAccessibleUnit(tx, userId, defaultUnitId);
         await this.assertIngredientNameAvailable(tx, userId, searchKey, null);
         const ingredient = await tx.ingredient.create({
@@ -574,7 +578,7 @@ export class RecipeService {
         if (repeated) return repeated;
         if (ingredient.version !== expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
         await startIdempotentOperation(tx, operationId, "ingredient:update", userId, null, requestHash);
-        await this.requireIngredientCategory(tx, categoryId);
+        await this.requireSelectableIngredientCategory(tx, categoryId);
         const unit = await this.requireAccessibleUnit(tx, userId, defaultUnitId);
         await this.assertIngredientNameAvailable(tx, userId, searchKey, ingredientId);
         const updated = await tx.ingredient.update({
@@ -1588,6 +1592,12 @@ export class RecipeService {
     return category;
   }
 
+  private async requireSelectableIngredientCategory(tx: RecipeDb, categoryId: UUID) {
+    const category = await this.requireIngredientCategory(tx, categoryId);
+    if (!category.isSelectable) throw new BadRequestException("该分类暂不开放选择");
+    return category;
+  }
+
   private async requireAccessibleUnit(tx: RecipeDb, userId: UUID, unitId: UUID) {
     const unit = await tx.unit.findFirst({
       where: {
@@ -2411,11 +2421,11 @@ export class RecipeService {
   }
 
   private buildIngredientOwnerWhere(userId: UUID, source?: string): Prisma.IngredientWhereInput {
-    if (source === "SYSTEM") return { ownerId: null, status: "ACTIVE" };
+    if (source === "SYSTEM") return { ownerId: null, status: "ACTIVE", category: { is: { isSelectable: true } } };
     if (source === "PERSONAL") return { ownerId: userId, status: "ACTIVE" };
     return {
       OR: [
-        { ownerId: null, status: "ACTIVE" },
+        { ownerId: null, status: "ACTIVE", category: { is: { isSelectable: true } } },
         { ownerId: userId, status: "ACTIVE" }
       ]
     };

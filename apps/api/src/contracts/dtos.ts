@@ -798,7 +798,7 @@ export class AdminRecipeReportQueryDto extends PageQueryDto {
 }
 
 export class AdminIngredientCategoryQueryDto {
-  @ApiPropertyOptional({ example: "蔬菜" })
+  @ApiPropertyOptional({ example: "蔬果菌菇" })
   @IsOptional()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
@@ -987,6 +987,11 @@ export class ReviewPendingIngredientDto extends VersionedOperationDto {
   @ValidateIf(object => object.action === "APPROVE_MERGE")
   @IsUUID()
   targetIngredientId?: string;
+
+  @ApiPropertyOptional({ example: "NAME_NOT_CLEAR" })
+  @ValidateIf(object => object.action === "REJECT")
+  @IsIn(["NAME_NOT_CLEAR", "NAME_HAS_BRAND", "CATEGORY_NOT_FIT", "UNIT_NOT_FIT", "OUT_OF_SCOPE", "OTHER"])
+  rejectReasonCode?: "NAME_NOT_CLEAR" | "NAME_HAS_BRAND" | "CATEGORY_NOT_FIT" | "UNIT_NOT_FIT" | "OUT_OF_SCOPE" | "OTHER";
 
   @ApiPropertyOptional()
   @IsOptional()

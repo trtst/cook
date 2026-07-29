@@ -14,7 +14,10 @@ type SystemUnitSeed = {
 };
 
 type SystemCategorySeed = {
+  id: string;
+  code: string;
   name: string;
+  isSelectable: boolean;
   sortOrder: number;
 };
 
@@ -61,41 +64,49 @@ const defaultSystemUnits: SystemUnitSeed[] = [
 ];
 
 const defaultSystemCategories: SystemCategorySeed[] = [
-  { name: "蔬菜", sortOrder: 10 },
-  { name: "肉禽蛋", sortOrder: 20 },
-  { name: "水产海鲜", sortOrder: 30 },
-  { name: "豆乳制品", sortOrder: 40 },
-  { name: "主食干货", sortOrder: 50 },
-  { name: "调味酱料", sortOrder: 60 },
-  { name: "水果", sortOrder: 70 },
-  { name: "冷冻食品", sortOrder: 80 },
-  { name: "其他", sortOrder: 90 }
+  { id: "50000000-0000-4000-8000-000000000001", code: "PRODUCE", name: "蔬果菌菇", isSelectable: true, sortOrder: 0 },
+  { id: "50000000-0000-4000-8000-000000000002", code: "MEAT_POULTRY_EGG", name: "肉禽蛋", isSelectable: true, sortOrder: 1 },
+  { id: "50000000-0000-4000-8000-000000000003", code: "SEAFOOD", name: "水产海鲜", isSelectable: true, sortOrder: 2 },
+  { id: "50000000-0000-4000-8000-000000000004", code: "SOY_DAIRY", name: "豆乳制品", isSelectable: true, sortOrder: 3 },
+  { id: "50000000-0000-4000-8000-000000000005", code: "GRAINS_STAPLES", name: "米面杂粮", isSelectable: true, sortOrder: 4 },
+  { id: "50000000-0000-4000-8000-000000000006", code: "SEASONING", name: "调味料", isSelectable: true, sortOrder: 5 },
+  { id: "50000000-0000-4000-8000-000000000007", code: "DRIED_PRESERVED", name: "干货腌制", isSelectable: true, sortOrder: 6 },
+  { id: "50000000-0000-4000-8000-000000000008", code: "BEVERAGE_ALCOHOL", name: "酒水饮料", isSelectable: true, sortOrder: 7 },
+  { id: "50000000-0000-4000-8000-000000000009", code: "UNCLASSIFIED", name: "待归类", isSelectable: false, sortOrder: 8 }
 ];
 
-const legacyCategoryAliases = [{ from: "肉类", to: "肉禽蛋" }] as const;
+const legacyCategoryNameMap = new Map<string, string>([
+  ["蔬菜", "蔬果菌菇"],
+  ["水果", "蔬果菌菇"],
+  ["肉类", "肉禽蛋"],
+  ["主食干货", "米面杂粮"],
+  ["调味酱料", "调味料"],
+  ["冷冻食品", "待归类"],
+  ["其他", "待归类"]
+]);
 
 const defaultSystemIngredients: SystemIngredientSeed[] = [
-  { id: "40000000-0000-4000-8000-000000000001", name: "番茄", categoryName: "蔬菜", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000001", name: "番茄", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: "40000000-0000-4000-8000-000000000002", name: "鸡蛋", categoryName: "肉禽蛋", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000003", name: "土豆", categoryName: "蔬菜", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000003", name: "土豆", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: "40000000-0000-4000-8000-000000000004", name: "牛肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000005", name: "青椒", categoryName: "蔬菜", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000005", name: "青椒", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: "40000000-0000-4000-8000-000000000006", name: "里脊肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000007", name: "白菜", categoryName: "蔬菜", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000008", name: "菠菜", categoryName: "蔬菜", defaultUnitName: "把" },
-  { id: "40000000-0000-4000-8000-000000000009", name: "生菜", categoryName: "蔬菜", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000010", name: "黄瓜", categoryName: "蔬菜", defaultUnitName: "根" },
-  { id: "40000000-0000-4000-8000-000000000011", name: "胡萝卜", categoryName: "蔬菜", defaultUnitName: "根" },
-  { id: "40000000-0000-4000-8000-000000000012", name: "茄子", categoryName: "蔬菜", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000013", name: "西兰花", categoryName: "蔬菜", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000014", name: "洋葱", categoryName: "蔬菜", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000015", name: "大葱", categoryName: "蔬菜", defaultUnitName: "根" },
-  { id: "40000000-0000-4000-8000-000000000016", name: "生姜", categoryName: "蔬菜", defaultUnitName: "块" },
-  { id: "40000000-0000-4000-8000-000000000017", name: "大蒜", categoryName: "蔬菜", defaultUnitName: "瓣" },
-  { id: "40000000-0000-4000-8000-000000000018", name: "香菇", categoryName: "蔬菜", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000019", name: "金针菇", categoryName: "蔬菜", defaultUnitName: "把" },
-  { id: "40000000-0000-4000-8000-000000000020", name: "莲藕", categoryName: "蔬菜", defaultUnitName: "节" },
-  { id: "40000000-0000-4000-8000-000000000021", name: "南瓜", categoryName: "蔬菜", defaultUnitName: "块" },
+  { id: "40000000-0000-4000-8000-000000000007", name: "白菜", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000008", name: "菠菜", categoryName: "蔬果菌菇", defaultUnitName: "把" },
+  { id: "40000000-0000-4000-8000-000000000009", name: "生菜", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000010", name: "黄瓜", categoryName: "蔬果菌菇", defaultUnitName: "根" },
+  { id: "40000000-0000-4000-8000-000000000011", name: "胡萝卜", categoryName: "蔬果菌菇", defaultUnitName: "根" },
+  { id: "40000000-0000-4000-8000-000000000012", name: "茄子", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000013", name: "西兰花", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000014", name: "洋葱", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000015", name: "大葱", categoryName: "蔬果菌菇", defaultUnitName: "根" },
+  { id: "40000000-0000-4000-8000-000000000016", name: "生姜", categoryName: "蔬果菌菇", defaultUnitName: "块" },
+  { id: "40000000-0000-4000-8000-000000000017", name: "大蒜", categoryName: "蔬果菌菇", defaultUnitName: "瓣" },
+  { id: "40000000-0000-4000-8000-000000000018", name: "香菇", categoryName: "蔬果菌菇", defaultUnitName: "朵" },
+  { id: "40000000-0000-4000-8000-000000000019", name: "金针菇", categoryName: "蔬果菌菇", defaultUnitName: "把" },
+  { id: "40000000-0000-4000-8000-000000000020", name: "莲藕", categoryName: "蔬果菌菇", defaultUnitName: "节" },
+  { id: "40000000-0000-4000-8000-000000000021", name: "南瓜", categoryName: "蔬果菌菇", defaultUnitName: "块" },
   { id: "40000000-0000-4000-8000-000000000022", name: "猪肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: "40000000-0000-4000-8000-000000000023", name: "鸡肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: "40000000-0000-4000-8000-000000000024", name: "鸭肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
@@ -123,46 +134,125 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: "40000000-0000-4000-8000-000000000046", name: "牛奶", categoryName: "豆乳制品", defaultUnitName: "毫升" },
   { id: "40000000-0000-4000-8000-000000000047", name: "酸奶", categoryName: "豆乳制品", defaultUnitName: "盒" },
   { id: "40000000-0000-4000-8000-000000000048", name: "黄油", categoryName: "豆乳制品", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000049", name: "大米", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000050", name: "面粉", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000051", name: "挂面", categoryName: "主食干货", defaultUnitName: "把" },
-  { id: "40000000-0000-4000-8000-000000000052", name: "意面", categoryName: "主食干货", defaultUnitName: "把" },
-  { id: "40000000-0000-4000-8000-000000000053", name: "燕麦", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000054", name: "小米", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000055", name: "红豆", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000056", name: "绿豆", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000057", name: "木耳", categoryName: "主食干货", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000058", name: "银耳", categoryName: "主食干货", defaultUnitName: "朵" },
-  { id: "40000000-0000-4000-8000-000000000059", name: "盐", categoryName: "调味酱料", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000060", name: "糖", categoryName: "调味酱料", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000061", name: "生抽", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000062", name: "老抽", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000063", name: "蚝油", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000064", name: "醋", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000065", name: "料酒", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000066", name: "黄酒", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000067", name: "米酒", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000068", name: "豆瓣酱", categoryName: "调味酱料", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000069", name: "番茄酱", categoryName: "调味酱料", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000070", name: "食用油", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000071", name: "香油", categoryName: "调味酱料", defaultUnitName: "毫升" },
-  { id: "40000000-0000-4000-8000-000000000072", name: "胡椒粉", categoryName: "调味酱料", defaultUnitName: "克" },
-  { id: "40000000-0000-4000-8000-000000000073", name: "苹果", categoryName: "水果", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000074", name: "香蕉", categoryName: "水果", defaultUnitName: "根" },
-  { id: "40000000-0000-4000-8000-000000000075", name: "橙子", categoryName: "水果", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000076", name: "柠檬", categoryName: "水果", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000077", name: "梨", categoryName: "水果", defaultUnitName: "个" },
-  { id: "40000000-0000-4000-8000-000000000078", name: "葡萄", categoryName: "水果", defaultUnitName: "串" },
-  { id: "40000000-0000-4000-8000-000000000079", name: "速冻饺子", categoryName: "冷冻食品", defaultUnitName: "袋" },
-  { id: "40000000-0000-4000-8000-000000000080", name: "速冻馄饨", categoryName: "冷冻食品", defaultUnitName: "袋" },
-  { id: "40000000-0000-4000-8000-000000000081", name: "丸子", categoryName: "冷冻食品", defaultUnitName: "袋" },
-  { id: "40000000-0000-4000-8000-000000000082", name: "手抓饼", categoryName: "冷冻食品", defaultUnitName: "袋" },
-  { id: "40000000-0000-4000-8000-000000000083", name: "冷冻玉米粒", categoryName: "冷冻食品", defaultUnitName: "袋" },
-  { id: "40000000-0000-4000-8000-000000000084", name: "冷冻虾仁", categoryName: "冷冻食品", defaultUnitName: "袋" },
-  { id: "40000000-0000-4000-8000-000000000085", name: "啤酒", categoryName: "其他", defaultUnitName: "瓶" },
-  { id: "40000000-0000-4000-8000-000000000086", name: "红酒", categoryName: "其他", defaultUnitName: "瓶" },
-  { id: "40000000-0000-4000-8000-000000000087", name: "洋酒", categoryName: "其他", defaultUnitName: "瓶" },
-  { id: "40000000-0000-4000-8000-000000000088", name: "罐头", categoryName: "其他", defaultUnitName: "罐" }
+  { id: "40000000-0000-4000-8000-000000000049", name: "大米", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000050", name: "面粉", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000051", name: "挂面", categoryName: "米面杂粮", defaultUnitName: "把" },
+  { id: "40000000-0000-4000-8000-000000000052", name: "意面", categoryName: "米面杂粮", defaultUnitName: "把" },
+  { id: "40000000-0000-4000-8000-000000000053", name: "燕麦", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000054", name: "小米", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000055", name: "红豆", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000056", name: "绿豆", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000057", name: "木耳", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000058", name: "银耳", categoryName: "干货腌制", defaultUnitName: "朵" },
+  { id: "40000000-0000-4000-8000-000000000059", name: "盐", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000060", name: "糖", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000061", name: "生抽", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000062", name: "老抽", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000063", name: "蚝油", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000064", name: "醋", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000065", name: "料酒", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000066", name: "黄酒", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000067", name: "米酒", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000068", name: "豆瓣酱", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000069", name: "番茄酱", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000070", name: "食用油", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000071", name: "香油", categoryName: "调味料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000072", name: "胡椒粉", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000073", name: "苹果", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000074", name: "香蕉", categoryName: "蔬果菌菇", defaultUnitName: "根" },
+  { id: "40000000-0000-4000-8000-000000000075", name: "橙子", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000076", name: "柠檬", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000077", name: "梨", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000078", name: "葡萄", categoryName: "蔬果菌菇", defaultUnitName: "串" },
+  { id: "40000000-0000-4000-8000-000000000079", name: "速冻饺子", categoryName: "米面杂粮", defaultUnitName: "袋" },
+  { id: "40000000-0000-4000-8000-000000000080", name: "速冻馄饨", categoryName: "米面杂粮", defaultUnitName: "袋" },
+  { id: "40000000-0000-4000-8000-000000000081", name: "丸子", categoryName: "肉禽蛋", defaultUnitName: "袋" },
+  { id: "40000000-0000-4000-8000-000000000082", name: "手抓饼", categoryName: "米面杂粮", defaultUnitName: "袋" },
+  { id: "40000000-0000-4000-8000-000000000083", name: "冷冻玉米粒", categoryName: "蔬果菌菇", defaultUnitName: "袋" },
+  { id: "40000000-0000-4000-8000-000000000084", name: "冷冻虾仁", categoryName: "水产海鲜", defaultUnitName: "袋" },
+  { id: "40000000-0000-4000-8000-000000000085", name: "啤酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000086", name: "红酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000087", name: "洋酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000088", name: "罐头", categoryName: "干货腌制", defaultUnitName: "罐" },
+  { id: "40000000-0000-4000-8000-000000000089", name: "猪里脊", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000090", name: "牛腩", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000091", name: "羊肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000092", name: "羊排", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000093", name: "鸡胸肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000094", name: "鸡爪", categoryName: "肉禽蛋", defaultUnitName: "只" },
+  { id: "40000000-0000-4000-8000-000000000095", name: "鸭翅", categoryName: "肉禽蛋", defaultUnitName: "只" },
+  { id: "40000000-0000-4000-8000-000000000096", name: "鹌鹑蛋", categoryName: "肉禽蛋", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000097", name: "三文鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000098", name: "鲫鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
+  { id: "40000000-0000-4000-8000-000000000099", name: "鲳鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
+  { id: "40000000-0000-4000-8000-000000000100", name: "黄鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
+  { id: "40000000-0000-4000-8000-000000000101", name: "生蚝", categoryName: "水产海鲜", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000102", name: "扇贝", categoryName: "水产海鲜", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000103", name: "螃蟹", categoryName: "水产海鲜", defaultUnitName: "只" },
+  { id: "40000000-0000-4000-8000-000000000104", name: "鲍鱼", categoryName: "水产海鲜", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000105", name: "墨鱼", categoryName: "水产海鲜", defaultUnitName: "只" },
+  { id: "40000000-0000-4000-8000-000000000106", name: "内酯豆腐", categoryName: "豆乳制品", defaultUnitName: "盒" },
+  { id: "40000000-0000-4000-8000-000000000107", name: "豆腐泡", categoryName: "豆乳制品", defaultUnitName: "个" },
+  { id: "40000000-0000-4000-8000-000000000108", name: "豆腐乳", categoryName: "豆乳制品", defaultUnitName: "罐" },
+  { id: "40000000-0000-4000-8000-000000000109", name: "奶酪", categoryName: "豆乳制品", defaultUnitName: "片" },
+  { id: "40000000-0000-4000-8000-000000000110", name: "芝士片", categoryName: "豆乳制品", defaultUnitName: "片" },
+  { id: "40000000-0000-4000-8000-000000000111", name: "淡奶油", categoryName: "豆乳制品", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000112", name: "椰浆", categoryName: "豆乳制品", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000113", name: "炼乳", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000114", name: "奶粉", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000115", name: "马苏里拉芝士", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000116", name: "糯米", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000117", name: "玉米面", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000118", name: "河粉", categoryName: "米面杂粮", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000119", name: "米粉", categoryName: "米面杂粮", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000120", name: "年糕", categoryName: "米面杂粮", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000121", name: "黑米", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000122", name: "薏米", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000123", name: "藜麦", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000124", name: "玉米淀粉", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000125", name: "鸡精", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000126", name: "辣椒粉", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000127", name: "花椒", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000128", name: "孜然粉", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000129", name: "甜面酱", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000130", name: "黄豆酱", categoryName: "调味料", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000131", name: "海米", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000132", name: "虾皮", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000133", name: "干香菇", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000134", name: "干辣椒", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000135", name: "榨菜", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000136", name: "酸菜", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000137", name: "梅干菜", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000138", name: "泡椒", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000139", name: "酸豆角", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000140", name: "雪菜", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000141", name: "笋干", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000142", name: "粉丝", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000143", name: "粉条", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000144", name: "腐乳", categoryName: "干货腌制", defaultUnitName: "罐" },
+  { id: "40000000-0000-4000-8000-000000000145", name: "萝卜干", categoryName: "干货腌制", defaultUnitName: "包" },
+  { id: "40000000-0000-4000-8000-000000000146", name: "红枣", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000147", name: "枸杞", categoryName: "干货腌制", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000148", name: "清酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000149", name: "威士忌", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000150", name: "朗姆酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000151", name: "伏特加", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000152", name: "金酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000153", name: "白兰地", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000154", name: "苏打水", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000155", name: "气泡水", categoryName: "酒水饮料", defaultUnitName: "瓶" },
+  { id: "40000000-0000-4000-8000-000000000156", name: "椰奶", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000157", name: "柠檬汁", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000158", name: "橙汁", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000159", name: "可乐", categoryName: "酒水饮料", defaultUnitName: "罐" },
+  { id: "40000000-0000-4000-8000-000000000160", name: "雪碧", categoryName: "酒水饮料", defaultUnitName: "罐" },
+  { id: "40000000-0000-4000-8000-000000000161", name: "乌龙茶", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000162", name: "绿茶", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000163", name: "红茶", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000164", name: "咖啡液", categoryName: "酒水饮料", defaultUnitName: "毫升" },
+  { id: "40000000-0000-4000-8000-000000000165", name: "猪肝", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000166", name: "鸡胗", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: "40000000-0000-4000-8000-000000000167", name: "皮蛋", categoryName: "肉禽蛋", defaultUnitName: "个" }
 ];
 
 const unitTypes: UnitType[] = ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"];
@@ -277,6 +367,10 @@ function requireSeedItem<T>(value: T | undefined, message: string) {
   return value;
 }
 
+function normalizeSeedCategoryName(name: string) {
+  return legacyCategoryNameMap.get(name) ?? name;
+}
+
 async function seedSystemUnits() {
   const defaultUnitMap = new Map<string, { id: string; type: UnitType; name: string }>();
 
@@ -357,35 +451,62 @@ async function seedSystemUnits() {
 }
 
 async function seedSystemCategories() {
-  const categoryMap = new Map<string, { id: string; sortOrder: number }>();
+  const categoryMap = new Map<string, { id: string; sortOrder: number; code: string; isSelectable: boolean }>();
 
   for (const item of defaultSystemCategories) {
-    const category = await prisma.ingredientCategory.upsert({
-      where: { name: item.name },
-      update: {
-        name: item.name,
-        sortOrder: item.sortOrder,
-        iconKey: null
+    const existing = await prisma.ingredientCategory.findFirst({
+      where: {
+        OR: [{ code: item.code }, { name: item.name }]
       },
-      create: {
-        name: item.name,
-        sortOrder: item.sortOrder,
-        iconKey: null
-      },
-      select: {
-        id: true,
-        sortOrder: true
-      }
-    });
-    categoryMap.set(item.name, category);
-  }
-
-  for (const alias of legacyCategoryAliases) {
-    const source = await prisma.ingredientCategory.findFirst({
-      where: { name: alias.from },
       select: { id: true }
     });
-    const target = categoryMap.get(alias.to);
+    const category = existing
+      ? await prisma.ingredientCategory.update({
+          where: { id: existing.id },
+          data: {
+            code: item.code,
+            name: item.name,
+            isSelectable: item.isSelectable,
+            sortOrder: item.sortOrder,
+            iconKey: null
+          },
+          select: {
+            id: true,
+            sortOrder: true,
+            code: true,
+            isSelectable: true
+          }
+        })
+      : await prisma.ingredientCategory.create({
+          data: {
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            isSelectable: item.isSelectable,
+            sortOrder: item.sortOrder,
+            iconKey: null
+          },
+          select: {
+            id: true,
+            sortOrder: true,
+            code: true,
+            isSelectable: true
+          }
+        });
+    categoryMap.set(item.name, {
+      id: category.id,
+      sortOrder: category.sortOrder,
+      code: category.code,
+      isSelectable: category.isSelectable
+    });
+  }
+
+  for (const [from, to] of legacyCategoryNameMap.entries()) {
+    const source = await prisma.ingredientCategory.findFirst({
+      where: { name: from },
+      select: { id: true }
+    });
+    const target = categoryMap.get(to);
     if (!source || !target || source.id === target.id) continue;
 
     await prisma.ingredient.updateMany({
@@ -400,7 +521,7 @@ async function seedSystemCategories() {
       where: { categoryId: source.id },
       data: {
         categoryId: target.id,
-        categoryName: alias.to
+        categoryName: to
       }
     });
 
@@ -418,7 +539,7 @@ async function seedSystemCategories() {
 }
 
 async function seedSystemIngredients(
-  categoryMap: Map<string, { id: string; sortOrder: number }>,
+  categoryMap: Map<string, { id: string; sortOrder: number; code: string; isSelectable: boolean }>,
   unitMap: Map<string, { id: string; type: UnitType; name: string }>
 ) {
   const ingredientMap = new Map<
@@ -434,11 +555,12 @@ async function seedSystemIngredients(
 
   const categoryItems = defaultSystemCategories.map(item => item.name);
   for (const categoryName of categoryItems) {
-    const currentItems = defaultSystemIngredients.filter(item => item.categoryName === categoryName);
+    const currentItems = defaultSystemIngredients.filter(item => normalizeSeedCategoryName(item.categoryName) === categoryName);
     for (let index = 0; index < currentItems.length; index += 1) {
       const item = currentItems[index];
       const searchKey = buildSearchKey(item.name);
-      const category = requireSeedItem(categoryMap.get(item.categoryName), `系统分类缺失: ${item.categoryName}`);
+      const normalizedCategoryName = normalizeSeedCategoryName(item.categoryName);
+      const category = requireSeedItem(categoryMap.get(normalizedCategoryName), `系统分类缺失: ${normalizedCategoryName}`);
       const unit = requireSeedItem(unitMap.get(item.defaultUnitName), `系统单位缺失: ${item.defaultUnitName}`);
       const existing = await prisma.ingredient.findFirst({
         where: {

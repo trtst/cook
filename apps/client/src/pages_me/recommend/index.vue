@@ -32,9 +32,12 @@
           <text class="recommend-card__time">推荐时间 {{ formatTime(item.createdAt) }}</text>
 
           <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
-          <text v-else-if="item.status === 'REJECTED'" class="recommend-card__desc">
-            {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
-          </text>
+          <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
+            <text class="recommend-card__desc">
+              {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
+            </text>
+            <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+          </view>
           <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
             已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
           </text>
@@ -363,6 +366,12 @@ async function submitEditor() {
   gap: 16rpx;
 }
 
+.recommend-card__reject {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
 .recommend-footer {
   padding: 8rpx 0 12rpx;
   color: var(--color-text-secondary);
@@ -416,6 +425,12 @@ async function submitEditor() {
 .recommend-card__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.recommend-card__advice {
+  color: #d29322;
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .recommend-button,

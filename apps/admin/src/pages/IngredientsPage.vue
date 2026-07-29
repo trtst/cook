@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Plus, Refresh } from "@element-plus/icons-vue";
+import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
-
-type CategoryDialogMode = "create" | "edit";
 
 const loading = ref(false);
 const saving = ref(false);
 const dialogVisible = ref(false);
-const dialogMode = ref<CategoryDialogMode>("create");
 const editingCategoryId = ref<string | null>(null);
 const categories = ref<AdminIngredientCategorySummary[]>([]);
 
@@ -43,14 +40,7 @@ async function loadCategories() {
   }
 }
 
-function openCreateCategory() {
-  dialogMode.value = "create";
-  resetForm();
-  dialogVisible.value = true;
-}
-
 function openEditCategory(row: AdminIngredientCategorySummary) {
-  dialogMode.value = "edit";
   editingCategoryId.value = row.id;
   form.name = row.name;
   dialogVisible.value = true;
@@ -64,13 +54,7 @@ async function submitCategory() {
   }
   saving.value = true;
   try {
-    if (dialogMode.value === "create") {
-      await ingredientApi.createCategory({
-        operationId: crypto.randomUUID(),
-        name
-      });
-      ElMessage.success("分类已创建");
-    } else if (editingCategoryId.value) {
+    if (editingCategoryId.value) {
       const current = categories.value.find(item => item.id === editingCategoryId.value);
       if (!current) {
         ElMessage.error("分类信息缺失");
@@ -139,17 +123,21 @@ onMounted(() => {
     <div class="toolbar-panel page-toolbar">
       <div class="page-title-block">
         <strong>系统食材分类</strong>
-        <div class="page-subtitle">这里只维护系统分类本身，系统食材单独在“系统食材”子页管理。</div>
+        <div class="page-subtitle">正式分类已固定，只维护排序、名称微调，以及隐藏兜底分类“待归类”。</div>
       </div>
       <div class="toolbar-spacer" />
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="筛选分类" clearable />
-      <el-button type="primary" :icon="Plus" @click="openCreateCategory">新增分类</el-button>
       <el-button :icon="Refresh" @click="loadCategories">刷新</el-button>
     </div>
 
     <div class="table-panel">
       <el-table v-loading="loading" :data="filteredCategories" row-key="id">
-        <el-table-column prop="name" label="分类" min-width="180" />
+        <el-table-column label="分类" min-width="220">
+          <template #default="{ row }">
+            <div>{{ row.name }}</div>
+            <div class="table-subtext">{{ row.isSelectable ? "正式分类" : "系统兜底，不对录入开放" }}</div>
+          </template>
+        </el-table-column>
         <el-table-column prop="ingredientCount" label="系统食材数" width="120" />
         <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
         <el-table-column label="操作" width="220" fixed="right">
@@ -166,13 +154,13 @@ onMounted(() => {
 
     <el-dialog
       v-model="dialogVisible"
-      :title="dialogMode === 'create' ? '新增系统食材分类' : '编辑系统食材分类'"
+      title="编辑系统食材分类"
       width="440px"
       @closed="resetForm"
     >
       <el-form label-position="top">
         <el-form-item label="分类名称">
-          <el-input v-model="form.name" maxlength="20" placeholder="例如：蔬菜" />
+          <el-input v-model="form.name" maxlength="20" placeholder="例如：蔬果菌菇" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -182,3 +170,11 @@ onMounted(() => {
     </el-dialog>
   </section>
 </template>
+
+<style scoped lang="scss">
+.table-subtext {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+</style>

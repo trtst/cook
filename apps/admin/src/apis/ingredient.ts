@@ -18,7 +18,9 @@ export interface AdminUnitSummary {
 
 export interface AdminIngredientCategorySummary {
   id: UUID;
+  code: string;
   name: string;
+  isSelectable: boolean;
   version: number;
   ingredientCount: number;
   updatedAt: IsoDateTime;
@@ -39,6 +41,13 @@ export interface AdminIngredientSummary {
 export type AdminIngredientReviewStatus = "PENDING";
 
 export type AdminIngredientReviewAction = "APPROVE_CREATE" | "APPROVE_MERGE" | "REJECT";
+export type AdminIngredientRejectReasonCode =
+  | "NAME_NOT_CLEAR"
+  | "NAME_HAS_BRAND"
+  | "CATEGORY_NOT_FIT"
+  | "UNIT_NOT_FIT"
+  | "OUT_OF_SCOPE"
+  | "OTHER";
 
 export interface AdminIngredientSuggestionUser {
   id: UUID;
@@ -68,6 +77,7 @@ export interface AdminReviewPendingIngredientPayload {
   categoryId?: UUID;
   defaultUnitId?: UUID;
   targetIngredientId?: UUID;
+  rejectReasonCode?: AdminIngredientRejectReasonCode;
   reason?: string;
 }
 

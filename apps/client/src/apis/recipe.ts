@@ -358,6 +358,7 @@ export interface IngredientRecommendationSummary {
 	category: IngredientCategorySummary;
 	defaultUnit: UnitSummary;
 	reviewNote: string | null;
+	reviewAdvice: string | null;
 	adoptedIngredient: IngredientSummary | null;
 	mergedIngredient: IngredientSummary | null;
 	createdAt: IsoDateTime;

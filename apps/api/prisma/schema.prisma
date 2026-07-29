@@ -390,8 +390,10 @@ model InspirationCategory {
 
 model IngredientCategory {
   id        String   @id @default(uuid()) @db.Uuid
+  code      String   @db.VarChar(32)
   name      String   @db.VarChar(20)
   iconKey   String?  @map("icon_key") @db.VarChar(64)
+  isSelectable Boolean @default(true) @map("is_selectable")
   sortOrder Int      @default(0) @map("sort_order")
   version   Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -399,6 +401,7 @@ model IngredientCategory {
 
   ingredients Ingredient[]
 
+  @@unique([code])
   @@unique([name])
   @@unique([sortOrder])
   @@index([sortOrder, id])
@@ -465,6 +468,8 @@ model IngredientRecommendation {
   defaultUnitId    String                         @map("default_unit_id") @db.Uuid
   defaultUnitName  String                         @map("default_unit_name") @db.VarChar(16)
   reviewNote       String?                        @map("review_note") @db.VarChar(255)
+  reviewReasonCode String?                        @map("review_reason_code") @db.VarChar(32)
+  reviewAdvice     String?                        @map("review_advice") @db.VarChar(255)
   targetIngredientId String?                      @map("target_ingredient_id") @db.Uuid
   reviewedAt       DateTime?                      @map("reviewed_at") @db.Timestamptz(3)
   createdAt        DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)

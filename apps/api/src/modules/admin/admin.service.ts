@@ -13,6 +13,7 @@ import type {
   AdminDashboardSummary,
   AdminDeleteUnitResult,
   AdminIngredientCategoryPayloadRequest,
+  AdminIngredientRejectReasonCode,
   AdminIngredientCategorySummary,
   AdminIngredientPayloadRequest,
   AdminPendingIngredientSummary,
@@ -67,6 +68,33 @@ import { IngredientImageService } from "./ingredient-image.service";
 function toIsoDate(value: Date) {
   return value.toISOString();
 }
+
+const ingredientRejectChoiceMap: Record<AdminIngredientRejectReasonCode, { reason: string; advice: string }> = {
+  NAME_NOT_CLEAR: {
+    reason: "名称不明确",
+    advice: "请改成明确、通用的食材名称后再提交。"
+  },
+  NAME_HAS_BRAND: {
+    reason: "名称含品牌或规格",
+    advice: "请去掉品牌、口味、包装规格等描述，保留通用食材名后再提交。"
+  },
+  CATEGORY_NOT_FIT: {
+    reason: "分类不合适",
+    advice: "请调整到更合适的系统分类后再提交。"
+  },
+  UNIT_NOT_FIT: {
+    reason: "默认单位不合适",
+    advice: "请改成更常用的默认单位后再提交。"
+  },
+  OUT_OF_SCOPE: {
+    reason: "不属于系统食材范围",
+    advice: "请确认提交的是可复用的食材本体，而不是菜名、套餐、品牌商品或临时描述。"
+  },
+  OTHER: {
+    reason: "其他",
+    advice: "请根据审核意见修改后重新提交。"
+  }
+};
 
 function toPositiveInt(value: number | string | undefined, fallback: number) {
   if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
@@ -206,7 +234,9 @@ function toUnitSummary(unit: { id: string; name: string; type: UnitSummary["type
 function toAdminIngredientCategorySummary(category: AdminIngredientCategoryRow, ingredientCount: number): AdminIngredientCategorySummary {
   return {
     id: category.id,
+    code: category.code,
     name: category.name,
+    isSelectable: category.isSelectable,
     version: category.version,
     ingredientCount,
     updatedAt: toIsoDate(category.updatedAt)
@@ -235,6 +265,44 @@ function toAdminUnitSummary(unit: { id: string; name: string; type: UnitSummary[
     source: "SYSTEM",
     version: unit.version,
     updatedAt: toIsoDate(unit.updatedAt)
+  };
+}
+
+function resolveIngredientReviewNote(body: AdminReviewPendingIngredientRequest) {
+  const note = body.reason?.trim() || null;
+  if (body.action !== "REJECT") {
+    return {
+      reviewNote: note,
+      reviewAdvice: null,
+      reviewReasonCode: null as AdminIngredientRejectReasonCode | null,
+      auditReason: note
+    };
+  }
+
+  if (!body.rejectReasonCode) {
+    throw new BadRequestException("请选择拒绝原因");
+  }
+  const choice = ingredientRejectChoiceMap[body.rejectReasonCode];
+  if (!choice) {
+    throw new BadRequestException("拒绝原因参数错误");
+  }
+  if (body.rejectReasonCode === "OTHER") {
+    if (!note) {
+      throw new BadRequestException("请填写详细拒绝原因");
+    }
+    return {
+      reviewNote: note,
+      reviewAdvice: choice.advice,
+      reviewReasonCode: body.rejectReasonCode,
+      auditReason: note
+    };
+  }
+
+  return {
+    reviewNote: choice.reason,
+    reviewAdvice: choice.advice,
+    reviewReasonCode: body.rejectReasonCode,
+    auditReason: choice.reason
   };
 }
 
@@ -1341,40 +1409,8 @@ export class AdminService {
 
   async createIngredientCategory(body: AdminIngredientCategoryPayloadRequest, adminId: UUID): Promise<AdminIngredientCategorySummary> {
     await this.requireSuperAdmin(adminId);
-    const name = body.name.trim();
-    const requestHash = name;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getAdminIdempotentResult<AdminIngredientCategorySummary>(
-        tx,
-        body.operationId,
-        "admin-ingredient-category:create",
-        adminId,
-        requestHash
-      );
-      if (repeated) return repeated;
-      await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:create", adminId, requestHash);
-      await this.assertIngredientCategoryNameAvailable(tx, name, null);
-      const sortOrder = await this.nextIngredientCategorySortOrder(tx);
-      const category = await tx.ingredientCategory.create({
-        data: {
-          name,
-          sortOrder
-        }
-      });
-      const result = toAdminIngredientCategorySummary(category, 0);
-      await tx.auditEvent.create({
-        data: {
-          actorType: "ADMIN",
-          actorAdminId: adminId,
-          action: "INGREDIENT_CATEGORY_CREATED",
-          objectType: "INGREDIENT_CATEGORY",
-          objectId: category.id,
-          payload: { name }
-        }
-      });
-      await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:create", adminId, requestHash, result);
-      return result;
-    });
+    void body;
+    throw new ConflictException("系统食材分类已固定，当前不支持新增分类");
   }
 
   async updateIngredientCategory(
@@ -1410,7 +1446,9 @@ export class AdminService {
       const ingredientCount = await tx.ingredient.count({
         where: {
           ownerId: null,
-          status: "ACTIVE",
+          status: {
+            in: ["ACTIVE", "DISABLED"]
+          },
           categoryId
         }
       });
@@ -1558,7 +1596,7 @@ export class AdminService {
         if (repeated) return repeated;
         await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:create", adminId, requestHash);
 
-        await this.requireIngredientCategory(tx, body.categoryId);
+        await this.requireSelectableIngredientCategory(tx, body.categoryId);
         const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
         await this.assertSystemIngredientNameAvailable(tx, searchKey, null);
         const systemSortOrder = await this.nextSystemIngredientSortOrder(tx, body.categoryId);
@@ -1623,7 +1661,7 @@ export class AdminService {
 
         const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
         if (ingredient.version !== body.expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
-        await this.requireIngredientCategory(tx, body.categoryId);
+        await this.requireSelectableIngredientCategory(tx, body.categoryId);
         const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
         await this.assertSystemIngredientNameAvailable(tx, searchKey, ingredientId);
         const systemSortOrder =
@@ -2038,7 +2076,14 @@ export class AdminService {
     adminId: UUID
   ): Promise<AdminReviewPendingIngredientResult> {
     await this.requireSuperAdmin(adminId);
-    const requestHash = JSON.stringify({ ingredientId, ...body });
+    const reviewContent = resolveIngredientReviewNote(body);
+    const requestHash = JSON.stringify({
+      ingredientId,
+      ...body,
+      reason: reviewContent.reviewNote,
+      reviewAdvice: reviewContent.reviewAdvice,
+      reviewReasonCode: reviewContent.reviewReasonCode
+    });
     try {
       return await this.prisma.$transaction(async tx => {
         await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId}::uuid FOR UPDATE`;
@@ -2062,7 +2107,9 @@ export class AdminService {
             where: { id: recommendation.id },
             data: {
               status: "REJECTED",
-              reviewNote: body.reason?.trim() || null,
+              reviewNote: reviewContent.reviewNote,
+              reviewReasonCode: reviewContent.reviewReasonCode,
+              reviewAdvice: reviewContent.reviewAdvice,
               reviewedAt: now
             }
           });
@@ -2076,7 +2123,9 @@ export class AdminService {
               payload: {
                 action: body.action,
                 targetIngredientId: null,
-                reason: body.reason?.trim() || null
+                rejectReasonCode: reviewContent.reviewReasonCode,
+                reason: reviewContent.auditReason,
+                advice: reviewContent.reviewAdvice
               }
             },
           });
@@ -2095,7 +2144,7 @@ export class AdminService {
         if (!body.categoryId) throw new BadRequestException("请选择分类");
         if (!body.defaultUnitId) throw new BadRequestException("请选择默认单位");
         const searchKey = buildSearchKey(name);
-        const category = await this.requireIngredientCategory(tx, body.categoryId);
+        const category = await this.requireSelectableIngredientCategory(tx, body.categoryId);
         const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
 
         let targetIngredientId: UUID | null = null;
@@ -2140,7 +2189,9 @@ export class AdminService {
               categoryName: category.name,
               defaultUnitId: updatedTarget.defaultUnitId,
               defaultUnitName: updatedTarget.defaultUnit.name,
-              reviewNote: body.reason?.trim() || null,
+              reviewNote: reviewContent.reviewNote,
+              reviewReasonCode: null,
+              reviewAdvice: null,
               targetIngredientId: updatedTarget.id,
               reviewedAt: now
             }
@@ -2192,18 +2243,20 @@ export class AdminService {
             });
             await tx.ingredientRecommendation.update({
               where: { id: recommendation.id },
-              data: {
-                status: "MERGED",
-                ingredientName: updatedTarget.name,
-                categoryId: updatedTarget.categoryId,
-                categoryName: category.name,
-                defaultUnitId: updatedTarget.defaultUnitId,
-                defaultUnitName: updatedTarget.defaultUnit.name,
-                reviewNote: body.reason?.trim() || null,
-                targetIngredientId: updatedTarget.id,
-                reviewedAt: now
-              }
-            });
+            data: {
+              status: "MERGED",
+              ingredientName: updatedTarget.name,
+              categoryId: updatedTarget.categoryId,
+              categoryName: category.name,
+              defaultUnitId: updatedTarget.defaultUnitId,
+              defaultUnitName: updatedTarget.defaultUnit.name,
+              reviewNote: reviewContent.reviewNote,
+              reviewReasonCode: null,
+              reviewAdvice: null,
+              targetIngredientId: updatedTarget.id,
+              reviewedAt: now
+            }
+          });
             targetIngredientId = updatedTarget.id;
           } else {
             const current = recommendation.ingredient;
@@ -2231,18 +2284,20 @@ export class AdminService {
             });
             await tx.ingredientRecommendation.update({
               where: { id: recommendation.id },
-              data: {
-                status: "ADOPTED",
-                ingredientName: updatedIngredient.name,
-                categoryId: updatedIngredient.categoryId,
-                categoryName: category.name,
-                defaultUnitId: updatedIngredient.defaultUnitId,
-                defaultUnitName: updatedIngredient.defaultUnit.name,
-                reviewNote: body.reason?.trim() || null,
-                targetIngredientId: updatedIngredient.id,
-                reviewedAt: now
-              }
-            });
+            data: {
+              status: "ADOPTED",
+              ingredientName: updatedIngredient.name,
+              categoryId: updatedIngredient.categoryId,
+              categoryName: category.name,
+              defaultUnitId: updatedIngredient.defaultUnitId,
+              defaultUnitName: updatedIngredient.defaultUnit.name,
+              reviewNote: reviewContent.reviewNote,
+              reviewReasonCode: null,
+              reviewAdvice: null,
+              targetIngredientId: updatedIngredient.id,
+              reviewedAt: now
+            }
+          });
             targetIngredientId = updatedIngredient.id;
           }
         }
@@ -2263,7 +2318,7 @@ export class AdminService {
             payload: {
               action: body.action,
               targetIngredientId,
-              reason: body.reason?.trim() || null
+              reason: reviewContent.auditReason
             }
           }
         });
@@ -2628,6 +2683,14 @@ export class AdminService {
       where: { id: categoryId }
     });
     if (!category) throw new NotFoundException("食材分类不存在");
+    return category;
+  }
+
+  private async requireSelectableIngredientCategory(tx: Prisma.TransactionClient, categoryId: UUID) {
+    const category = await this.requireIngredientCategory(tx, categoryId);
+    if (!category.isSelectable) {
+      throw new BadRequestException("该分类仅用于系统兜底，不能直接选择");
+    }
     return category;
   }
 

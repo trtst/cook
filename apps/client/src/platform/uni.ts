@@ -1,3 +1,6 @@
+import { showConfirm, type ConfirmOptions } from "@/feedback/confirm";
+import { showToast, type ToastOptions } from "@/feedback/toast";
+
 /**
  * 小程序平台适配层。
  *
@@ -63,11 +66,11 @@ interface ClientPlatform {
 	};
 	/**
 	 * 轻量反馈能力。
-	 * 当前只暴露 Toast；后续如果出现真实需求，再扩展到 modal / loading。
+	 * 这里暴露统一的自定义 Toast / Confirm 出口，避免业务层散落系统弹层调用。
 	 */
 	feedback: {
-		toast(options: { title: string; icon?: "success" | "error" | "loading" | "none" }): Promise<void>;
-		confirm(options: { title: string; content: string; confirmText?: string; cancelText?: string }): Promise<boolean>;
+		toast(options: ToastOptions): Promise<void>;
+		confirm(options: ConfirmOptions): Promise<boolean>;
 		hideKeyboard(): Promise<void>;
 	};
 	/**
@@ -214,34 +217,6 @@ function pageScrollTo(options: { selector?: string; scrollTop?: number; offsetTo
 			offsetTop: options.offsetTop,
 			duration: options.duration ?? 260,
 			success: () => resolve(),
-			fail: reject
-		});
-	});
-}
-
-/**
- * 统一 Toast 出口。
- * 页面只关心提示文案和图标，不直接触碰平台细节。
- */
-function showToast(options: { title: string; icon?: "success" | "error" | "loading" | "none" }) {
-	return callUni<void>((resolve, reject) => {
-		uni.showToast({
-			title: options.title,
-			icon: options.icon,
-			success: () => resolve(),
-			fail: reject
-		});
-	});
-}
-
-function showConfirm(options: { title: string; content: string; confirmText?: string; cancelText?: string }) {
-	return callUni<boolean>((resolve, reject) => {
-		uni.showModal({
-			title: options.title,
-			content: options.content,
-			confirmText: options.confirmText,
-			cancelText: options.cancelText,
-			success: (result) => resolve(Boolean(result.confirm)),
 			fail: reject
 		});
 	});

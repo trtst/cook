@@ -27,15 +27,20 @@
       <slot />
     </view>
     <TabBar v-if="showTabbar && currentTab" :current="currentTab" />
+    <Toast :top-offset="toastTop" />
+    <Confirm />
     <LoginModal />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
+import Confirm from "@/components/Confirm/Confirm.vue";
 import LoginModal from "@/components/Login/LoginModal.vue";
 import NavBar from "@/components/NavBar/NavBar.vue";
 import TabBar from "@/components/TabBar/TabBar.vue";
+import Toast from "@/components/Toast/Toast.vue";
+import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import type { TabKey } from "@/components/TabBar/tabs";
 
@@ -65,7 +70,9 @@ const props = withDefaults(
 );
 
 const { themeClasses, themeVars } = useTheme();
+const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const showTabbar = computed(() => Boolean(props.currentTab));
+const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : systemInfo.value.statusBarHeight));
 </script>
 
 <style scoped lang="scss">

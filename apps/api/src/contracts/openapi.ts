@@ -368,6 +368,7 @@ export class IngredientRecommendationModel {
   @ApiProperty({ type: IngredientCategoryModel }) category!: IngredientCategoryModel;
   @ApiProperty({ type: UnitModel }) defaultUnit!: UnitModel;
   @ApiProperty(nullableString) reviewNote!: string | null;
+  @ApiProperty(nullableString) reviewAdvice!: string | null;
   @ApiProperty({ type: IngredientModel, nullable: true }) adoptedIngredient!: IngredientModel | null;
   @ApiProperty({ type: IngredientModel, nullable: true }) mergedIngredient!: IngredientModel | null;
   @ApiProperty(dateTime) createdAt!: string;
@@ -589,7 +590,9 @@ export class AdminRecipeModel {
 
 export class AdminIngredientCategoryModel {
   @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) code!: string;
   @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Boolean }) isSelectable!: boolean;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) ingredientCount!: number;
   @ApiProperty(dateTime) updatedAt!: string;

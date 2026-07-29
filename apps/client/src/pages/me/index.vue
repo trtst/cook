@@ -561,7 +561,7 @@ const personalEntries: PageEntry[] = [
   {
     title: "分类与单位",
     iconSrc: categoriesUnitsIcon,
-    description: "蔬菜、肉蛋奶、水产海鲜｜克、千克、斤、升、个",
+    description: "蔬果菌菇、肉禽蛋、水产海鲜｜克、千克、斤、升、个",
     disabledText: "分类与单位"
   },
   {
@@ -913,7 +913,8 @@ async function handleClearCache() {
     title: "清除缓存",
     content: "将清除本地资料缓存和菜谱编辑缓存，不会退出登录，也不会清除主题和设备布局快照。",
     confirmText: "清除",
-    cancelText: "取消"
+    cancelText: "取消",
+    tone: "danger"
   }).catch(() => false);
   if (!confirmed) return;
 

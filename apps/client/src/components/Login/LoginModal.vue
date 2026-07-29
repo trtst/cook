@@ -341,7 +341,7 @@ function stopMotionTimer() {
 .login-popup {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: 1500;
 }
 
 .login-popup__backdrop {

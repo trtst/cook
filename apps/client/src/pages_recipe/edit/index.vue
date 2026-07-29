@@ -266,7 +266,7 @@
                         <scroll-view
                           class="ingredient-search__scroll"
                           scroll-y
-                          lower-threshold="80"
+                          lower-threshold="240"
                           @scrolltolower="loadMoreIngredients"
                         >
                           <view class="ingredient-grid ingredient-grid--search">
@@ -304,7 +304,7 @@
                       </view>
                     </template>
                     <view v-else class="ingredient-picker">
-                      <view class="ingredient-picker__side">
+                      <view id="ingredient-picker-side" class="ingredient-picker__side">
                         <view
                           v-for="item in ingredientCategories"
                           :key="item.id"
@@ -316,7 +316,7 @@
                         </view>
                       </view>
 
-                      <view class="ingredient-picker__main">
+                      <view class="ingredient-picker__main" :style="ingredientPickerMainStyle">
                         <view v-if="ingredientLoading && !categoryIngredients.length" class="ingredient-picker__empty">
                           <text class="ingredient-picker__empty-text">加载中...</text>
                         </view>
@@ -324,7 +324,8 @@
                           v-else-if="categoryIngredients.length"
                           class="ingredient-picker__scroll"
                           scroll-y
-                          lower-threshold="80"
+                          show-scrollbar="false"
+                          lower-threshold="240"
                           @scrolltolower="loadMoreIngredients"
                         >
                           <view class="ingredient-grid">
@@ -367,16 +368,18 @@
                     </view>
 
                     <view class="ingredient-picker__footer">
-                      <view class="ingredient-selected">
-                        <view
-                          v-for="item in pendingIngredients"
-                          :key="item.id"
-                          class="ingredient-selected__chip"
-                        >
-                          <text class="ingredient-selected__name">{{ item.name }}</text>
-                          <text class="ingredient-selected__remove" @click.stop="removePendingIngredient(item.id)">×</text>
+                      <scroll-view scroll-x class="ingredient-selected" show-scrollbar="false">
+                        <view class="ingredient-selected__track">
+                          <view
+                            v-for="item in pendingSelectedIngredients"
+                            :key="item.id"
+                            class="ingredient-selected__chip"
+                          >
+                            <text class="ingredient-selected__name">{{ item.name }}</text>
+                            <text class="cookfont icon-close ingredient-selected__remove" @click.stop="removePendingIngredient(item.id)" />
+                          </view>
                         </view>
-                      </view>
+                      </scroll-view>
                       <button
                         class="sheet-confirm"
                         :disabled="!pendingIngredientIds.length"
@@ -765,6 +768,8 @@ const NAV_FADE_RANGE = 132;
 const RECIPE_EDIT_CACHE_KEY_NEW = "new";
 const RECIPE_EDIT_CACHE_DEBOUNCE_MS = 320;
 const INGREDIENT_PAGE_SIZE = 20;
+const INGREDIENT_ALL_PAGE_SIZE = 48;
+const INGREDIENT_ALL_REVEAL_STEP = 12;
 const INGREDIENT_SEARCH_DEBOUNCE_MS = 240;
 
 const recipeId = ref("");
@@ -804,6 +809,8 @@ const ingredientPage = ref(1);
 const ingredientHasNext = ref(false);
 const ingredientLoading = ref(false);
 const ingredientLoadingMore = ref(false);
+const ingredientVisibleCount = ref(0);
+const ingredientPickerHeight = ref(0);
 const pendingIngredientIds = ref<string[]>([]);
 const ingredientCreateVisible = ref(false);
 const ingredientCreateSubmitting = ref(false);
@@ -886,11 +893,15 @@ const ingredientCount = computed(() => ingredientRows.value.length);
 const ingredientSearchText = computed(() => ingredientKeyword.value.trim());
 const ingredientSearchMode = computed(() => Boolean(ingredientSearchText.value));
 const ingredientAllActive = computed(() => ingredientSourceFilter.value === "ALL" && !ingredientCategoryId.value);
+const ingredientUseWindowedList = computed(() => !ingredientSearchMode.value);
 const showIngredientPersonalActions = computed(() => ingredientSourceFilter.value === "PERSONAL");
+const pendingIngredientMap = computed(() => new Map(ingredients.value.map(item => [item.id, item])));
 const pendingIngredients = computed(() => {
-  const selectedIds = new Set(pendingIngredientIds.value);
-  return ingredients.value.filter(item => selectedIds.has(item.id));
+  return pendingIngredientIds.value
+    .map(id => pendingIngredientMap.value.get(id))
+    .filter((item): item is IngredientSummary => Boolean(item));
 });
+const pendingSelectedIngredients = computed(() => [...pendingIngredients.value].reverse());
 const pendingIngredientAddCount = computed(() => {
   const existingIds = new Set(ingredientRows.value.map(item => item.ingredientId).filter(Boolean));
   return pendingIngredients.value.filter(item => !existingIds.has(item.id)).length;
@@ -917,7 +928,10 @@ const sheetTitleTag = computed(() => {
   }
   return `新增 ${pendingIngredientAddCount.value} 项`;
 });
-const categoryIngredients = computed(() => ingredientOptions.value);
+const categoryIngredients = computed(() => {
+  if (!ingredientUseWindowedList.value) return ingredientOptions.value;
+  return ingredientOptions.value.slice(0, ingredientVisibleCount.value);
+});
 const searchedIngredients = computed(() => ingredientOptions.value);
 const ingredientCreateCategoryName = computed(() => {
   return ingredientCategories.value.find(item => item.id === ingredientCreateDraft.categoryId)?.name || "";
@@ -934,9 +948,14 @@ const ingredientEmptyText = computed(() => {
 const showIngredientEmptyCreate = computed(() => ingredientSourceFilter.value === "PERSONAL");
 const ingredientFooterText = computed(() => {
   if (ingredientLoadingMore.value) return "加载中...";
-  if (ingredientHasNext.value) return "上拉加载更多";
   if (ingredientOptions.value.length) return "没有更多了";
   return "";
+});
+const ingredientPickerMainStyle = computed(() => {
+  if (!ingredientPickerHeight.value) return undefined;
+  return {
+    height: `${ingredientPickerHeight.value}px`
+  };
 });
 const activeUnitRow = computed(() => ingredientRows.value.find(item => item.localId === activeUnitRowId.value) || null);
 const unitQuickOptions = computed(() => {
@@ -1066,6 +1085,19 @@ watch(
   }
 );
 
+watch(
+  [
+    () => sheetMode.value,
+    () => sheetVisible.value,
+    () => ingredientCreateVisible.value,
+    () => ingredientSearchMode.value,
+    () => ingredientCategories.value.length
+  ],
+  () => {
+    void syncIngredientPickerHeight();
+  }
+);
+
 function handleNameInput(event: Event) {
   form.name = readInputValue(event);
 }
@@ -1080,6 +1112,23 @@ function handleFormFieldFocus() {
 
 function handleFormFieldBlur() {
   formFieldFocused.value = false;
+}
+
+async function syncIngredientPickerHeight() {
+  if (
+    sheetMode.value !== "ingredient" ||
+    !sheetVisible.value ||
+    ingredientCreateVisible.value ||
+    ingredientSearchMode.value ||
+    !ingredientCategories.value.length
+  ) {
+    ingredientPickerHeight.value = 0;
+    return;
+  }
+
+  await nextTick();
+  const rect = await uniPlatform.system.measure("#ingredient-picker-side");
+  ingredientPickerHeight.value = rect?.height ? Math.round(rect.height) : 0;
 }
 
 function handleLoginSuccess() {
@@ -1191,10 +1240,34 @@ async function ensureUnitsLoaded() {
   await unitPromise;
 }
 
+function buildIngredientPageSize() {
+  if (ingredientUseWindowedList.value) return INGREDIENT_ALL_PAGE_SIZE;
+  return INGREDIENT_PAGE_SIZE;
+}
+
+function syncIngredientVisibleCount(reset: boolean) {
+  if (!ingredientUseWindowedList.value) {
+    ingredientVisibleCount.value = ingredientOptions.value.length;
+    return;
+  }
+  if (reset) {
+    ingredientVisibleCount.value = Math.min(INGREDIENT_ALL_PAGE_SIZE, ingredientOptions.value.length);
+    return;
+  }
+  ingredientVisibleCount.value = Math.min(ingredientVisibleCount.value + INGREDIENT_ALL_REVEAL_STEP, ingredientOptions.value.length);
+}
+
+function revealMoreIngredientOptions() {
+  if (!ingredientUseWindowedList.value) return false;
+  if (ingredientVisibleCount.value >= ingredientOptions.value.length) return false;
+  ingredientVisibleCount.value = Math.min(ingredientVisibleCount.value + INGREDIENT_ALL_REVEAL_STEP, ingredientOptions.value.length);
+  return true;
+}
+
 function buildIngredientQuery(page: number) {
   return {
     page,
-    pageSize: INGREDIENT_PAGE_SIZE,
+    pageSize: buildIngredientPageSize(),
     keyword: ingredientSearchText.value || undefined,
     categoryId: ingredientCategoryId.value || undefined,
     source: ingredientSourceFilter.value
@@ -1221,6 +1294,7 @@ async function loadIngredientOptionsPage(reset: boolean) {
     ingredientHasNext.value = result.hasNext;
     mergeIngredients(result.items);
     updateIngredientOptions(result.items, reset);
+    syncIngredientVisibleCount(reset);
   } finally {
     if (requestId === ingredientRequestSeed) {
       ingredientLoading.value = false;
@@ -1243,6 +1317,7 @@ async function reloadIngredientOptions(showError = true) {
 
 async function loadMoreIngredients() {
   try {
+    if (revealMoreIngredientOptions()) return;
     await loadIngredientOptionsPage(false);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "食材加载失败", icon: "none" });
@@ -1441,6 +1516,7 @@ async function openIngredientSheet() {
   ingredientPage.value = 1;
   ingredientHasNext.value = false;
   ingredientOptions.value = [];
+  ingredientVisibleCount.value = 0;
   pendingIngredientIds.value = [];
   resetIngredientCreate();
   try {
@@ -2616,6 +2692,10 @@ function nextLocalId(prefix: string) {
   align-items: center;
 }
 
+.sheet__header {
+  padding: 0 var(--space-page);
+}
+
 .panel__meta {
   flex: 1;
   min-width: 0;
@@ -2935,6 +3015,7 @@ function nextLocalId(prefix: string) {
 }
 
 .sheet-search {
+  padding: 0 var(--space-page);
   margin-top: 18rpx;
 }
 
@@ -2959,6 +3040,7 @@ function nextLocalId(prefix: string) {
   color: var(--color-text-secondary);
   font-size: 22rpx;
   line-height: 1.6;
+  padding: 0 var(--space-page);
 }
 
 .ingredient-filter {
@@ -2966,6 +3048,7 @@ function nextLocalId(prefix: string) {
   align-items: center;
   justify-content: space-between;
   gap: 14rpx;
+  padding: 0 var(--space-page);
   margin-top: 18rpx;
 }
 
@@ -2981,12 +3064,13 @@ function nextLocalId(prefix: string) {
   display: inline-flex;
   align-items: center;
   gap: 8rpx;
-  padding: 14rpx 24rpx;
+  min-width: 160rpx;
+  padding: 18rpx 20rpx;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--color-text-secondary);
   font-size: 24rpx;
-  line-height: 1.3;
+  line-height: 1;
 }
 
 .ingredient-filter__chip--active {
@@ -3001,12 +3085,10 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-filter__action {
-  padding: 14rpx 24rpx;
-  border-radius: 999rpx;
-  background: var(--color-primary-soft);
+  padding: 18rpx 20rpx;
   color: var(--color-primary);
   font-size: 24rpx;
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .ingredient-filter__action--hidden {
@@ -3016,7 +3098,6 @@ function nextLocalId(prefix: string) {
 
 .ingredient-stage {
   margin-top: 20rpx;
-  overflow: hidden;
 }
 
 .ingredient-stage__track {
@@ -3030,21 +3111,26 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-stage__pane {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   width: 50%;
   flex: 0 0 50%;
+  padding: 0 var(--space-page);
+  box-sizing: border-box;
 }
 
 .ingredient-picker {
   display: flex;
+  align-items: flex-start;
   gap: 18rpx;
-  min-height: 620rpx;
 }
 
 .ingredient-picker__side {
-  width: 180rpx;
+  width: 160rpx;
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 20rpx;
 }
 
 .ingredient-category {
@@ -3053,7 +3139,7 @@ function nextLocalId(prefix: string) {
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 24rpx;
-  line-height: 1.4;
+  line-height: 1;
 }
 
 .ingredient-category--active {
@@ -3065,6 +3151,8 @@ function nextLocalId(prefix: string) {
 .ingredient-picker__main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .ingredient-picker__scroll,
@@ -3083,7 +3171,7 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-grid--create {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .ingredient-grid--create .ingredient-choice {
@@ -3116,7 +3204,7 @@ function nextLocalId(prefix: string) {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 12rpx;
+  gap: 10rpx;
   padding: 18rpx 0;
   border-radius: var(--radius-xs);
   background: var(--color-surface);
@@ -3135,9 +3223,9 @@ function nextLocalId(prefix: string) {
 
 .ingredient-choice__name {
   color: var(--color-text-secondary);
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 1.4;
+  line-height: 1;
   word-break: break-all;
 }
 
@@ -3185,9 +3273,7 @@ function nextLocalId(prefix: string) {
   align-items: center;
   justify-content: center;
   gap: 18rpx;
-  min-height: 320rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  height: 100%;
   text-align: center;
 }
 
@@ -3197,9 +3283,10 @@ function nextLocalId(prefix: string) {
 
 .ingredient-picker__create {
   min-width: 220rpx;
-  height: 76rpx;
+  height: 60rpx;
+  line-height: 60rpx;
   padding: 0 28rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-primary-soft);
   color: var(--color-primary);
   font-size: 24rpx;
@@ -3214,17 +3301,24 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-selected {
-  display: flex;
   flex: 1;
-  flex-wrap: wrap;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ingredient-selected__track {
+  display: inline-flex;
+  align-items: center;
   gap: 12rpx;
+  min-width: 100%;
 }
 
 .ingredient-selected__chip {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 10rpx;
-  padding: 10rpx 20rpx;
+  padding: 8rpx 16rpx;
   border-radius: 999rpx;
   background: var(--color-primary-soft);
   color: var(--color-primary);
@@ -3232,27 +3326,25 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-selected__name {
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .ingredient-selected__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24rpx;
-  height: 24rpx;
-  border-radius: 50%;
-  background: var(--color-border);
+  width: 22rpx;
+  height: 22rpx;
+  flex: 0 0 auto;
   color: var(--color-primary);
-  font-size: 22rpx;
-  line-height: 1;
+  font-size: 18rpx;
+  line-height: 22rpx;
 }
 
 .ingredient-create {
   display: flex;
   flex-direction: column;
   gap: 18rpx;
-  min-height: 766rpx;
 }
 
 .ingredient-create__summary {
@@ -3509,8 +3601,8 @@ function nextLocalId(prefix: string) {
   bottom: 0;
   left: 0;
   max-height: 82vh;
-  padding: 34rpx 28rpx calc(42rpx + env(safe-area-inset-bottom));
-  border-radius: 38rpx 38rpx 0 0;
+  padding: 34rpx 0 calc(42rpx + env(safe-area-inset-bottom));
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
   box-shadow: 0 -12rpx 60rpx rgba(59, 40, 21, 0.12);
   overflow-y: auto;
@@ -3582,6 +3674,7 @@ function nextLocalId(prefix: string) {
 }
 
 .sheet-section {
+  padding: 0 var(--space-page);
   margin-top: 26rpx;
 }
 

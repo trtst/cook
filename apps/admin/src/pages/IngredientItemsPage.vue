@@ -113,6 +113,16 @@ const unitNameMap = computed(() => {
   return map;
 });
 
+const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
+
+const categoryFormOptions = computed(() => {
+  const options = selectableCategories.value.slice();
+  if (!form.categoryId) return options;
+  if (options.some(item => item.id === form.categoryId)) return options;
+  const current = categories.value.find(item => item.id === form.categoryId);
+  return current ? [current, ...options] : options;
+});
+
 const editingIngredient = computed(() => ingredients.value.find(item => item.id === editingIngredientId.value) || null);
 
 const cropImageStyle = computed(() => ({
@@ -123,13 +133,13 @@ const cropImageStyle = computed(() => ({
 
 function resetForm() {
   form.name = "";
-  form.categoryId = query.categoryId || categories.value[0]?.id || "";
+  form.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
   form.defaultUnitId = units.value[0]?.id || "";
   editingIngredientId.value = null;
 }
 
 function resetBatchForm() {
-  batchForm.categoryId = query.categoryId || categories.value[0]?.id || "";
+  batchForm.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
   batchForm.text = "";
 }
 
@@ -168,14 +178,14 @@ function centerCropImage(width: number, height: number) {
 
 async function loadCategories() {
   categories.value = await ingredientApi.listCategories();
-  if (!query.categoryId) {
-    query.categoryId = categories.value[0]?.id || "";
+  if (!query.categoryId || !categories.value.some(item => item.id === query.categoryId)) {
+    query.categoryId = selectableCategories.value[0]?.id || categories.value[0]?.id || "";
   }
   if (!form.categoryId) {
-    form.categoryId = query.categoryId || categories.value[0]?.id || "";
+    form.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
   }
   if (!batchForm.categoryId) {
-    batchForm.categoryId = query.categoryId || categories.value[0]?.id || "";
+    batchForm.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
   }
 }
 
@@ -707,7 +717,10 @@ watch(
           :class="{ 'category-item--active': item.id === query.categoryId }"
           @click="selectCategory(item.id)"
         >
-          <span class="category-item__name">{{ item.name }}</span>
+          <span class="category-item__name">
+            {{ item.name }}
+            <span v-if="!item.isSelectable" class="category-item__tag">兜底</span>
+          </span>
           <span class="category-item__count">{{ item.ingredientCount }}</span>
         </button>
       </aside>
@@ -777,7 +790,7 @@ watch(
         </el-form-item>
         <el-form-item label="所属分类">
           <el-select v-model="form.categoryId" placeholder="请选择分类">
-            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+            <el-option v-for="item in categoryFormOptions" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="默认单位">
@@ -818,7 +831,7 @@ watch(
       <el-form label-position="top">
         <el-form-item label="所属分类">
           <el-select v-model="batchForm.categoryId" placeholder="请选择分类">
-            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
+            <el-option v-for="item in selectableCategories" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="多行文本批量导入">
@@ -926,7 +939,20 @@ watch(
 }
 
 .category-item__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
+}
+
+.category-item__tag {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
 }
 
 .category-item__count {

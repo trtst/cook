@@ -353,6 +353,13 @@ export interface SetAdminIngredientStatusRequest {
 }
 
 export type AdminIngredientReviewAction = "APPROVE_CREATE" | "APPROVE_MERGE" | "REJECT";
+export type AdminIngredientRejectReasonCode =
+  | "NAME_NOT_CLEAR"
+  | "NAME_HAS_BRAND"
+  | "CATEGORY_NOT_FIT"
+  | "UNIT_NOT_FIT"
+  | "OUT_OF_SCOPE"
+  | "OTHER";
 
 export interface AdminReviewPendingIngredientRequest {
   operationId: UUID;
@@ -362,6 +369,7 @@ export interface AdminReviewPendingIngredientRequest {
   categoryId?: UUID;
   defaultUnitId?: UUID;
   targetIngredientId?: UUID;
+  rejectReasonCode?: AdminIngredientRejectReasonCode;
   reason?: string;
 }
 
@@ -461,6 +469,7 @@ export interface IngredientRecommendationSummary {
   category: IngredientCategorySummary;
   defaultUnit: UnitSummary;
   reviewNote: string | null;
+  reviewAdvice: string | null;
   adoptedIngredient: IngredientSummary | null;
   mergedIngredient: IngredientSummary | null;
   createdAt: IsoDateTime;
@@ -681,7 +690,9 @@ export interface AdminRecipeSummary {
 
 export interface AdminIngredientCategorySummary {
   id: UUID;
+  code: string;
   name: string;
+  isSelectable: boolean;
   version: number;
   ingredientCount: number;
   updatedAt: IsoDateTime;
