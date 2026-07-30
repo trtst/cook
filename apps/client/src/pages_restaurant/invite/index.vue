@@ -24,7 +24,6 @@
 <script setup lang="ts">
 import { onLoad } from "@dcloudio/uni-app";
 import { ref } from "vue";
-import type { UUID } from "@/apis/http";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
@@ -40,7 +39,7 @@ const diningGroupStore = useDiningGroupStore();
 const inviteToken = ref("");
 const submitting = ref(false);
 const errorText = ref("");
-const acceptOperationId = ref<UUID | "">("");
+const acceptOperationId = ref("");
 
 onLoad((query) => {
   const token = Array.isArray(query?.token) ? query?.token[0] : query?.token;

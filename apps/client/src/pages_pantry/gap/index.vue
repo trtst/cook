@@ -42,6 +42,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
+import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -55,8 +56,8 @@ import { createOperationId } from "@/utils/operation-id";
 const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
-const events = ref<Array<{ id: string; title: string; planDate: string }>>([]);
-const selectedEventId = ref("");
+const events = ref<Array<{ id: UUID; title: string; planDate: string }>>([]);
+const selectedEventId = ref<UUID | "">("");
 const gapItems = ref<ShoppingItemSummary[]>([]);
 const loading = ref(false);
 const submitting = ref(false);
@@ -76,7 +77,7 @@ async function loadEvents() {
     events.value = planResult.items
       .filter(item => item.diningEventId)
       .map(item => ({
-        id: item.diningEventId as string,
+        id: item.diningEventId as UUID,
         title: item.title,
         planDate: item.planDate
       }));
@@ -91,7 +92,7 @@ async function loadEvents() {
   }
 }
 
-function selectEvent(eventId: string) {
+function selectEvent(eventId: UUID) {
   selectedEventId.value = eventId;
   void loadGap();
 }

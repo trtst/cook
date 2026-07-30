@@ -260,6 +260,7 @@ import {
 	type RecipeDifficulty,
 	type RecipeDuration
 } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -274,12 +275,12 @@ type RecipeTab = "my" | "inspiration" | "collection";
 type SheetMode = "" | "my" | "collection" | "collection-add";
 
 interface CategoryItem {
-	id: string;
+	id: UUID | "";
 	name: string;
 }
 
 interface CardItem {
-	id: string;
+	id: UUID;
 	title: string;
 	meta: string;
 	subline: string;
@@ -326,9 +327,9 @@ const myCategories = ref<RecipeCategorySummary[]>([]);
 const inspirationCategories = ref<InspirationCategorySummary[]>([]);
 const collectionScenes = ref<CollectionSceneSummary[]>([]);
 const collectionRecipes = ref<CollectedRecipeSummary[]>([]);
-const myCategoryId = ref("");
-const inspirationCategoryId = ref("");
-const collectionSceneId = ref("");
+const myCategoryId = ref<UUID | "">("");
+const inspirationCategoryId = ref<UUID | "">("");
+const collectionSceneId = ref<UUID | "">("");
 const inspirationSort = ref<InspirationSort>("RECOMMENDED");
 const inspirationDifficulty = ref<RecipeDifficulty | "">("");
 const inspirationDuration = ref<RecipeDuration | "">("");
@@ -469,7 +470,7 @@ function switchTab(tab: RecipeTab) {
 	void loadActiveTab();
 }
 
-function changeCategory(categoryId: string) {
+function changeCategory(categoryId: UUID | "") {
 	if (currentCategoryId.value === categoryId) return;
 	if (activeTab.value === "my") {
 		myCategoryId.value = categoryId;
@@ -584,9 +585,9 @@ async function loadActiveTab() {
 }
 
 function openCard(item: CardItem) {
-	void uniPlatform.navigation.navigateTo(
-		`/pages_recipe/detail/index?recipeId=${encodeURIComponent(item.id)}&kind=${item.kind}`
-	);
+		void uniPlatform.navigation.navigateTo(
+			`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.id))}&kind=${item.kind}`
+		);
 }
 
 function openManage() {

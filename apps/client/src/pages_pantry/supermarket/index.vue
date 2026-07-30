@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
+import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -65,7 +66,7 @@ async function loadItems() {
   }
 }
 
-async function markBought(itemId: string) {
+async function markBought(itemId: UUID) {
   if (submitting.value) return;
   submitting.value = true;
   try {

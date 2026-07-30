@@ -1,20 +1,21 @@
 import { defineStore } from "pinia";
+import type { UUID } from "@/apis/http";
 import type { IngredientSource, RecipeDifficulty, RecipeDuration, RecipeStepSnapshot, UnitType } from "@/apis/recipe";
 
 export interface RecipePreviewAmount {
   kind: "EXACT" | "FUZZY";
   quantity?: string;
-  unitId?: string;
+  unitId?: UUID | "";
   unitName?: string;
   unitType?: UnitType;
   text?: "适量" | "少许" | "按需";
 }
 
 export interface RecipePreviewIngredient {
-  ingredientId: string;
+  ingredientId: UUID | "";
   ingredientName: string;
   source: IngredientSource | "";
-  categoryId: string;
+  categoryId: UUID | "";
   amount: RecipePreviewAmount;
 }
 

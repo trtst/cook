@@ -54,7 +54,7 @@ async function acceptInvite() {
     const result = await shareApi.acceptInvite(shareToken.value, createOperationId(), guestName.value.trim());
     await uniPlatform.feedback.toast({ title: "已加入饭局", icon: "success" });
     if (result.participants.length) {
-      await uniPlatform.clipboard.set(result.id);
+      await uniPlatform.clipboard.set(String(result.id));
     }
     void uniPlatform.navigation.redirectTo("/pages_meal/plan/index");
   } catch (error) {

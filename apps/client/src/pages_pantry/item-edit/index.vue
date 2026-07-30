@@ -35,6 +35,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
+import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -51,7 +52,7 @@ const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
 const items = ref<FridgeItemSummary[]>([]);
-const editingId = ref("");
+const editingId = ref<UUID | "">("");
 const name = ref("");
 const quantityText = ref("");
 const note = ref("");
@@ -104,7 +105,7 @@ async function createItem() {
   }
 }
 
-async function consumeItem(itemId: string) {
+async function consumeItem(itemId: UUID) {
   if (submitting.value) return;
   submitting.value = true;
   try {

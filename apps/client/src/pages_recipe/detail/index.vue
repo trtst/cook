@@ -186,6 +186,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import { onHide, onLoad, onPageScroll, onUnload } from "@dcloudio/uni-app";
+import type { UUID } from "@/apis/http";
 import {
   recipeApi,
   type CollectedRecipeDetail,
@@ -232,7 +233,7 @@ const loginModalStore = useLoginModalStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight } = useSystemInfo();
 const NAV_FADE_RANGE = 132;
-const recipeId = ref("");
+const recipeId = ref<UUID | "">("");
 const kind = ref<DetailKind>("my");
 const mode = ref<DetailMode>("published");
 const detail = ref<PublishedDetail | RecipePreviewDetail | null>(null);
@@ -247,7 +248,7 @@ const collecting = ref(false);
 const sceneError = ref("");
 const sceneName = ref("");
 const scenes = ref<RecipeSceneSummary[]>([]);
-const selectedSceneIds = ref<string[]>([]);
+const selectedSceneIds = ref<UUID[]>([]);
 const navOpacity = ref(0);
 const scrollTop = ref(0);
 const titleThreshold = ref(Number.POSITIVE_INFINITY);
@@ -397,11 +398,16 @@ const activeAnchor = computed<AnchorKey>(() => {
   return "ingredients";
 });
 
+function parseQueryId(value: unknown): UUID | "" {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const decoded = typeof raw === "string" ? Number(decodeURIComponent(raw)) : Number(raw);
+  return Number.isInteger(decoded) && decoded > 0 ? decoded : "";
+}
+
 onLoad((query) => {
-  const rawId = Array.isArray(query?.recipeId) ? query.recipeId[0] : query?.recipeId;
   const rawKind = Array.isArray(query?.kind) ? query.kind[0] : query?.kind;
   const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
-  recipeId.value = typeof rawId === "string" ? decodeURIComponent(rawId) : "";
+  recipeId.value = parseQueryId(query?.recipeId);
   kind.value = rawKind === "inspiration" || rawKind === "collection" ? rawKind : "my";
   mode.value = rawMode === "preview" ? "preview" : "published";
 
@@ -491,7 +497,7 @@ function goBack() {
 
 function editRecipe() {
   if (!recipeId.value) return;
-  void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(recipeId.value)}`);
+      void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
 }
 
 function backToEdit() {
@@ -586,7 +592,7 @@ async function collectRecipe() {
   }
 }
 
-function toggleScene(sceneId: string) {
+function toggleScene(sceneId: UUID) {
   if (selectedSceneIds.value.includes(sceneId)) {
     selectedSceneIds.value = selectedSceneIds.value.filter(item => item !== sceneId);
     return;

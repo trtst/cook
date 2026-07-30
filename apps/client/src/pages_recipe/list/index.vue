@@ -52,6 +52,7 @@
 <script setup lang="ts">
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
+import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -63,7 +64,7 @@ import { useSessionStore } from "@/stores/session";
 type ListMode = "recipes" | "drafts";
 
 interface DisplayItem {
-	id: string;
+	id: UUID;
 	title: string;
 	meta: string;
 	updatedAt: string;
@@ -132,10 +133,10 @@ function createRecipe() {
 
 function openItem(item: DisplayItem) {
 	if (mode.value === "recipes") {
-		void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(item.id)}&kind=my`);
+		void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.id))}&kind=my`);
 		return;
 	}
-	void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?draftId=${encodeURIComponent(item.id)}`);
+	void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?draftId=${encodeURIComponent(String(item.id))}`);
 }
 
 function toRecipeItem(item: MyRecipeSummary): DisplayItem {

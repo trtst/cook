@@ -93,7 +93,7 @@ const submitting = ref(false);
 const membersLoading = ref(false);
 const errorText = ref("");
 const sharePath = ref("");
-const inviteOperationId = ref<UUID | "">("");
+const inviteOperationId = ref("");
 const currentDiningGroup = computed(() => diningGroupStore.currentDiningGroup);
 const currentRelation = computed(() => diningGroupStore.currentRelationSummary);
 const members = computed(() => diningGroupStore.members);

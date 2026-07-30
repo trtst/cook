@@ -82,6 +82,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
+import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -103,7 +104,7 @@ const eventMap = ref<Record<string, DiningEventSummary>>({});
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
-const selectedRecipeId = ref("");
+const selectedRecipeId = ref<UUID | "">("");
 const planDate = ref("2026-07-23");
 const mealSlot = ref<"BREAKFAST" | "LUNCH" | "DINNER">("DINNER");
 const eventTime = ref("2026-07-23T19:00:00.000Z");
@@ -160,7 +161,7 @@ async function createPlan() {
   }
 }
 
-async function createEvent(planItemId: string) {
+async function createEvent(planItemId: UUID) {
   if (submitting.value) return;
   submitting.value = true;
   try {
@@ -179,7 +180,7 @@ async function createEvent(planItemId: string) {
   }
 }
 
-async function loadEvent(planItemId: string, eventId: string) {
+async function loadEvent(planItemId: UUID, eventId: UUID) {
   if (submitting.value) return;
   submitting.value = true;
   try {
@@ -192,7 +193,7 @@ async function loadEvent(planItemId: string, eventId: string) {
   }
 }
 
-async function inviteGroup(planItemId: string, eventId: string) {
+async function inviteGroup(planItemId: UUID, eventId: UUID) {
   if (!diningGroupStore.currentDiningGroupId || submitting.value) return;
   submitting.value = true;
   try {

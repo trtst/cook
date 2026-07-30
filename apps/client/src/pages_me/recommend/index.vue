@@ -133,6 +133,7 @@ import {
   type IngredientRecommendationSummary,
   type UnitSummary
 } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -154,11 +155,11 @@ const page = ref(1);
 const pageSize = ref(20);
 const hasNext = ref(false);
 const editorForm = reactive({
-  ingredientId: "",
+  ingredientId: "" as UUID | "",
   expectedVersion: 0,
   name: "",
-  categoryId: "",
-  defaultUnitId: ""
+  categoryId: "" as UUID | "",
+  defaultUnitId: "" as UUID | ""
 });
 
 let loadPromise: Promise<void> | null = null;
@@ -287,17 +288,25 @@ async function submitEditor() {
     await uniPlatform.feedback.toast({ title: "请选择默认单位", icon: "none" });
     return;
   }
+  if (!editorForm.ingredientId) {
+    await uniPlatform.feedback.toast({ title: "食材记录缺失，请重新打开", icon: "none" });
+    return;
+  }
+
+  const ingredientId = editorForm.ingredientId;
+  const categoryId = editorForm.categoryId;
+  const defaultUnitId = editorForm.defaultUnitId;
 
   editorSubmitting.value = true;
   try {
-    await recipeApi.updateIngredient(editorForm.ingredientId, {
+    await recipeApi.updateIngredient(ingredientId, {
       operationId: createOperationId(),
       expectedVersion: editorForm.expectedVersion,
       name,
-      categoryId: editorForm.categoryId,
-      defaultUnitId: editorForm.defaultUnitId
+      categoryId,
+      defaultUnitId
     });
-    await recipeApi.recommendIngredient(editorForm.ingredientId, {
+    await recipeApi.recommendIngredient(ingredientId, {
       operationId: createOperationId()
     });
     editorVisible.value = false;

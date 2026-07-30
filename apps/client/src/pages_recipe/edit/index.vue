@@ -45,7 +45,7 @@
                 <text class="hero__cover-title">菜谱封面图</text>
                 <text class="hero__cover-sub">4:3 封面图位置，当前版本先保留展示位。</text>
               </view>
-              <button class="cover-button" @click="showCoverTip">更换封面图</button>
+              <button v-if="showCoverButton" class="cover-button" @click="showCoverTip">更换封面图</button>
             </view>
           </view>
         </view>
@@ -97,12 +97,22 @@
               <text class="ingredient-empty__text">暂无食材，可点击下方“添加食材”补充</text>
             </view>
 
-            <view v-else class="ingredient-stack ingredient-stack--compact">
+            <view id="ingredient-stack" v-else class="ingredient-stack ingredient-stack--compact">
               <view
                 v-for="row in ingredientRows"
+                :id="`ingredient-row-${row.localId}`"
                 :key="row.localId"
                 class="ingredient-line"
+                :class="{ 'ingredient-line--placeholder': ingredientDraggingId === row.localId }"
               >
+                <text
+                  v-if="showIngredientDragHandle"
+                  class="cookfont icon-drag ingredient-line__drag"
+                  @touchstart.stop.prevent="handleIngredientDragTouchStart(row.localId, $event)"
+                  @touchmove.stop.prevent="handleIngredientDragTouchMove"
+                  @touchend.stop="finishIngredientDrag"
+                  @touchcancel.stop="finishIngredientDrag"
+                />
                 <input
                   v-model="row.name"
                   class="ingredient-line__field ingredient-line__field--name"
@@ -127,7 +137,7 @@
                     {{ getRowUnitText(row) || "单位" }}
                   </text>
                 </view>
-                <text class="ingredient-line__remove" @click="removeIngredientRow(row.localId)">×</text>
+                <text class="cookfont icon-close ingredient-line__remove" @click="removeIngredientRow(row.localId)" />
               </view>
             </view>
 
@@ -137,11 +147,28 @@
             </view>
           </view>
 
+          <view v-if="ingredientGhostRow" class="ingredient-drag-layer">
+            <view class="ingredient-line ingredient-line--ghost" :style="ingredientGhostStyle">
+              <text class="cookfont icon-drag ingredient-line__drag ingredient-line__drag--ghost" />
+              <view class="ingredient-line__field ingredient-line__field--name">
+                {{ ingredientGhostRow.name || "食材" }}
+              </view>
+              <view class="ingredient-line__field ingredient-line__field--quantity">
+                {{ ingredientGhostRow.quantity || "数量" }}
+              </view>
+              <view class="ingredient-line__field ingredient-line__field--unit">
+                <text :class="{ 'ingredient-line__placeholder': !getRowUnitText(ingredientGhostRow) }">
+                  {{ getRowUnitText(ingredientGhostRow) || "单位" }}
+                </text>
+              </view>
+            </view>
+          </view>
+
           <view class="panel">
             <view class="panel__head panel__head--center">
               <text class="panel__title">做法</text>
               <view class="panel__tools">
-                <view class="panel__pill panel__pill--ghost" @click="showStepSortTip">调整步骤</view>
+                <view v-if="showStepSortEntry" class="panel__pill panel__pill--ghost" @click="openStepSort">调整步骤</view>
                 <view class="panel__pill panel__pill--ghost" @click="handleStepImages">批量传图</view>
               </view>
             </view>
@@ -157,10 +184,19 @@
                   <text class="step-card__remove" @click="removeStepRow(row.localId)">删除</text>
                 </view>
 
-                <view class="step-card__image" @click="handleStepImages">
-                  <text class="cookfont icon-add step-card__image-plus" />
-                  <text class="step-card__image-label">步骤图</text>
-                  <text class="step-card__image-tip">清晰的步骤会让菜谱更受欢迎</text>
+                <view
+                  class="step-card__image"
+                  :class="{ 'step-card__image--filled': hasStepImage(row) }"
+                  @click="handleStepImages"
+                >
+                  <template v-if="hasStepImage(row)">
+                    <text class="step-card__image-change">更换步骤图</text>
+                  </template>
+                  <template v-else>
+                    <text class="cookfont icon-add step-card__image-plus" />
+                    <text class="step-card__image-label">步骤图</text>
+                    <text class="step-card__image-tip">清晰的步骤会让菜谱更受欢迎</text>
+                  </template>
                 </view>
 
                 <view class="step-card__field">
@@ -197,6 +233,70 @@
                 <text class="cookfont icon-back advanced-row__arrow" />
               </view>
               <text class="advanced-row__desc">{{ advancedSummary }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="stepSortVisible" class="step-sort" :class="{ 'step-sort--open': stepSortOpen }">
+          <view class="step-sort__mask" @click="cancelStepSort" />
+          <view
+            class="step-sort__panel"
+            :style="stepSortStyle"
+            @click.stop
+            @touchmove.stop="handleStepSortTouchMove"
+            @touchend.stop="finishStepSortDrag"
+            @touchcancel.stop="finishStepSortDrag"
+          >
+            <view class="step-sort__head">
+              <view class="step-sort__title-row">
+                <text class="step-sort__title">制作步骤</text>
+                <text class="step-sort__count">{{ stepSortCountText }}</text>
+              </view>
+              <text class="cookfont icon-close step-sort__close" @click="cancelStepSort" />
+            </view>
+            <text class="step-sort__desc">长按卡片拖动调整顺序</text>
+
+            <scroll-view
+              id="step-sort-scroll"
+              class="step-sort__scroll"
+              :scroll-y="!stepSortDragging"
+              show-scrollbar="false"
+              @scroll="handleStepSortScroll"
+            >
+              <transition-group id="step-sort-list" name="step-sort-list" tag="view" class="step-sort__list">
+                <view
+                  v-for="(row, index) in stepSortRows"
+                  :id="`step-sort-card-${row.localId}`"
+                  :key="row.localId"
+                  class="step-sort-card"
+                  :class="{ 'step-sort-card--placeholder': stepSortDraggingId === row.localId }"
+                  @touchstart.stop="handleStepSortTouchStart(row.localId, $event)"
+                >
+                  <view class="step-sort-card__index">{{ formatStepIndex(index) }}</view>
+                  <view class="step-sort-card__thumb">
+                    <text class="step-sort-card__thumb-text">暂无步骤图</text>
+                  </view>
+                  <view class="step-sort-card__copy">
+                    <text class="step-sort-card__text">{{ getStepSortText(row.text) }}</text>
+                  </view>
+                </view>
+              </transition-group>
+            </scroll-view>
+
+            <view class="step-sort__footer">
+              <button class="step-sort__confirm" @click="confirmStepSort">确认</button>
+            </view>
+          </view>
+
+          <view v-if="stepSortGhostRow" class="step-sort__ghost" :style="stepSortGhostStyle">
+            <view class="step-sort-card step-sort-card--ghost">
+              <view class="step-sort-card__index">{{ formatStepIndex(stepSortGhostIndex) }}</view>
+              <view class="step-sort-card__thumb">
+                <text class="step-sort-card__thumb-text">暂无步骤图</text>
+              </view>
+              <view class="step-sort-card__copy">
+                <text class="step-sort-card__text">{{ getStepSortText(stepSortGhostRow.text) }}</text>
+              </view>
             </view>
           </view>
         </view>
@@ -679,7 +779,7 @@
           </view>
         </view>
 
-        <view class="bottom-bar" :class="{ 'bottom-bar--hidden': formFieldFocused }">
+        <view class="bottom-bar" :class="{ 'bottom-bar--hidden': formFieldFocused || stepSortVisible || ingredientDragging }">
           <button class="bar-button bar-button--primary bottom-bar__publish" :disabled="submitting" @click="publishDraft">发布这个菜谱</button>
         </view>
     </view>
@@ -696,12 +796,16 @@ import {
   type IngredientSummary,
   type MyRecipeDetail,
   type RecipeDraftContentInput,
+  type RecipeDraftIngredientInput,
   type RecipeDraftDetail,
   type RecipeDifficulty,
   type RecipeDuration,
   type RecipeIngredientInput,
+  type RecipeCategorySummary,
+  type RecipeSceneSummary,
   type UnitSummary
 } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -720,16 +824,19 @@ import { createOperationId } from "@/utils/operation-id";
 
 type FuzzyAmount = "适量" | "少许" | "按需";
 type SheetMode = "" | "ingredient" | "unit" | "advanced";
+type ResourceId = UUID;
+type OptionalResourceId = UUID | "";
+type NullableResourceId = UUID | null;
 
 interface IngredientRow {
   localId: string;
-  ingredientId: string;
+  ingredientId: OptionalResourceId;
   name: string;
   quantity: string;
-  unitId: string;
+  unitId: OptionalResourceId;
   fuzzyText: FuzzyAmount | "";
-  categoryId: string;
-  defaultUnitId: string;
+  categoryId: OptionalResourceId;
+  defaultUnitId: OptionalResourceId;
   source: IngredientSource | "";
 }
 
@@ -741,8 +848,8 @@ interface StepRow {
 interface RecipeEditCacheFormSnapshot {
   name: string;
   story: string;
-  categoryId: string | null;
-  sceneIds: string[];
+  categoryId: NullableResourceId;
+  sceneIds: ResourceId[];
   baseServingsText: string;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
@@ -750,13 +857,13 @@ interface RecipeEditCacheFormSnapshot {
 }
 
 interface RecipeEditCacheIngredientSnapshot {
-  ingredientId: string;
+  ingredientId: OptionalResourceId;
   name: string;
   quantity: string;
-  unitId: string;
+  unitId: OptionalResourceId;
   fuzzyText: FuzzyAmount | "";
-  categoryId: string;
-  defaultUnitId: string;
+  categoryId: OptionalResourceId;
+  defaultUnitId: OptionalResourceId;
   source: IngredientSource | "";
 }
 
@@ -776,7 +883,7 @@ const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const recipePreviewStore = useRecipePreviewStore();
-const { navBarTotalHeight } = useSystemInfo();
+const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const TITLE_LIMIT = 30;
 const STORY_LIMIT = 150;
 const STEP_LIMIT = 200;
@@ -784,25 +891,55 @@ const SHEET_ANIMATION_MS = 260;
 const NAV_FADE_RANGE = 132;
 const RECIPE_EDIT_CACHE_KEY_NEW = "new";
 const RECIPE_EDIT_CACHE_DEBOUNCE_MS = 320;
+const INGREDIENT_DRAG_PRESS_DELAY_MS = 260;
+const INGREDIENT_DRAG_PRESS_MOVE_PX = 8;
+const INGREDIENT_DRAG_GAP_RPX = 16;
 const INGREDIENT_PAGE_SIZE = 20;
 const INGREDIENT_ALL_PAGE_SIZE = 48;
 const INGREDIENT_ALL_REVEAL_STEP = 12;
 const INGREDIENT_SEARCH_DEBOUNCE_MS = 240;
+const STEP_SORT_PRESS_DELAY_MS = 260;
+const STEP_SORT_PRESS_MOVE_PX = 8;
+const STEP_SORT_GAP_RPX = 20;
 
-const recipeId = ref("");
-const draftId = ref("");
+const recipeId = ref<OptionalResourceId>("");
+const draftId = ref<OptionalResourceId>("");
+const coverImageUrl = ref("");
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
 const navOpacity = ref(0);
 const draftVersion = ref<number | null>(null);
 const recipeVersion = ref<number | null>(null);
+const stepSortVisible = ref(false);
+const stepSortOpen = ref(false);
+const stepSortRows = ref<StepRow[]>([]);
+const stepSortDraggingId = ref("");
+const stepSortListTop = ref(0);
+const stepSortCardLeft = ref(0);
+const stepSortCardWidth = ref(0);
+const stepSortCardHeight = ref(0);
+const stepSortGhostTop = ref(0);
+const stepSortStartTouchY = ref(0);
+const stepSortStartCardTop = ref(0);
+const stepSortScrollTop = ref(0);
+const ingredientDraggingId = ref("");
+const ingredientStackTop = ref(0);
+const ingredientGhostTop = ref(0);
+const ingredientGhostLeft = ref(0);
+const ingredientGhostWidth = ref(0);
+const ingredientRowHeight = ref(0);
+const ingredientDragStartTouchY = ref(0);
+const ingredientDragStartTop = ref(0);
 const sheetMode = ref<SheetMode>("");
 const sheetVisible = ref(false);
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-edit-sheet"));
 
 let rowSeed = 0;
 let sheetTimer: ReturnType<typeof setTimeout> | null = null;
+let stepSortTimer: ReturnType<typeof setTimeout> | null = null;
+let stepSortPressTimer: ReturnType<typeof setTimeout> | null = null;
+let ingredientDragPressTimer: ReturnType<typeof setTimeout> | null = null;
 let recipeEditCacheTimer: ReturnType<typeof setTimeout> | null = null;
 let recipeEditCacheBaseline = "";
 let recipeEditCacheSuspended = true;
@@ -811,9 +948,13 @@ let ingredientCategoryPromise: Promise<void> | null = null;
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let ingredientRequestSeed = 0;
 let unitPromise: Promise<void> | null = null;
+let ingredientDragPressId = "";
+let ingredientDragPressTouchY = 0;
+let stepSortPressId = "";
+let stepSortPressTouchY = 0;
 
-const categories = ref<Array<{ id: string; name: string; version: number }>>([]);
-const scenes = ref<Array<{ id: string; name: string; version: number }>>([]);
+const categories = ref<RecipeCategorySummary[]>([]);
+const scenes = ref<RecipeSceneSummary[]>([]);
 const ingredientCategories = ref<IngredientCategorySummary[]>([]);
 const ingredients = ref<IngredientSummary[]>([]);
 const ingredientOptions = ref<IngredientSummary[]>([]);
@@ -821,7 +962,7 @@ const units = ref<UnitSummary[]>([]);
 const ingredientRows = ref<IngredientRow[]>([]);
 const stepRows = ref<StepRow[]>([createStepRow()]);
 const ingredientKeyword = ref("");
-const ingredientCategoryId = ref("");
+const ingredientCategoryId = ref<OptionalResourceId>("");
 const ingredientSourceFilter = ref<"ALL" | "PERSONAL">("ALL");
 const ingredientPage = ref(1);
 const ingredientHasNext = ref(false);
@@ -830,7 +971,7 @@ const ingredientLoadingMore = ref(false);
 const ingredientSearchPending = ref(false);
 const ingredientVisibleCount = ref(0);
 const ingredientPickerHeight = ref(0);
-const pendingIngredientIds = ref<string[]>([]);
+const pendingIngredientIds = ref<ResourceId[]>([]);
 const ingredientCreateVisible = ref(false);
 const ingredientCreateSubmitting = ref(false);
 const ingredientCreateSection = ref<"" | "category" | "unit">("");
@@ -842,18 +983,18 @@ const scenesLoaded = ref(false);
 const ingredientCategoriesLoaded = ref(false);
 const unitsLoaded = ref(false);
 const ingredientCreateDraft = reactive({
-  id: "",
+  id: "" as OptionalResourceId,
   version: null as number | null,
   name: "",
-  categoryId: "",
-  unitId: ""
+  categoryId: "" as OptionalResourceId,
+  unitId: "" as OptionalResourceId
 });
 
 const form = reactive({
   name: "",
   story: "",
-  categoryId: "" as string | null,
-  sceneIds: [] as string[],
+  categoryId: null as NullableResourceId,
+  sceneIds: [] as ResourceId[],
   baseServingsText: "",
   difficulty: null as RecipeDifficulty | null,
   duration: null as RecipeDuration | null,
@@ -861,8 +1002,8 @@ const form = reactive({
 });
 
 const advancedForm = reactive({
-  categoryId: "" as string | null,
-  sceneIds: [] as string[],
+  categoryId: null as NullableResourceId,
+  sceneIds: [] as ResourceId[],
   baseServingsText: "",
   difficulty: null as RecipeDifficulty | null,
   duration: null as RecipeDuration | null,
@@ -902,6 +1043,7 @@ const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
 const heroStyle = computed(() => ({
   "--hero-header-offset": `${navBarTotalHeight.value}px`
 }));
+const showCoverButton = computed(() => Boolean(coverImageUrl.value));
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
   opacity: navOpacity.value
@@ -1054,12 +1196,45 @@ const advancedSummary = computed(() => {
   }
   return advancedItems.value.join(" · ");
 });
+const showIngredientDragHandle = computed(() => ingredientRows.value.length > 1);
+const ingredientDragging = computed(() => Boolean(ingredientDraggingId.value));
+const ingredientGhostRow = computed(() => {
+  return ingredientRows.value.find(item => item.localId === ingredientDraggingId.value) || null;
+});
+const ingredientGhostStyle = computed(() => ({
+  top: `${ingredientGhostTop.value}px`,
+  left: `${ingredientGhostLeft.value}px`,
+  width: `${ingredientGhostWidth.value}px`
+}));
+
+const showStepSortEntry = computed(() => stepRows.value.length > 1);
+const stepSortDragging = computed(() => Boolean(stepSortDraggingId.value));
+const stepSortCountText = computed(() => `${stepSortRows.value.length} 步`);
+const stepSortGhostRow = computed(() => {
+  return stepSortRows.value.find(item => item.localId === stepSortDraggingId.value) || null;
+});
+const stepSortGhostIndex = computed(() => {
+  const index = stepSortRows.value.findIndex(item => item.localId === stepSortDraggingId.value);
+  return index >= 0 ? index : 0;
+});
+const stepSortStyle = computed(() => ({
+  top: `${navBarTotalHeight.value}px`
+}));
+const stepSortGhostStyle = computed(() => ({
+  top: `${stepSortGhostTop.value}px`,
+  left: `${stepSortCardLeft.value}px`,
+  width: `${stepSortCardWidth.value}px`
+}));
+
+function parseQueryId(value: unknown): OptionalResourceId {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const decoded = typeof raw === "string" ? Number(decodeURIComponent(raw)) : Number(raw);
+  return Number.isInteger(decoded) && decoded > 0 ? decoded : "";
+}
 
 onLoad((query) => {
-  const rawRecipeId = Array.isArray(query?.recipeId) ? query.recipeId[0] : query?.recipeId;
-  const rawDraftId = Array.isArray(query?.draftId) ? query.draftId[0] : query?.draftId;
-  recipeId.value = typeof rawRecipeId === "string" ? decodeURIComponent(rawRecipeId) : "";
-  draftId.value = typeof rawDraftId === "string" ? decodeURIComponent(rawDraftId) : "";
+  recipeId.value = parseQueryId(query?.recipeId);
+  draftId.value = parseQueryId(query?.draftId);
   void loadPage();
 });
 
@@ -1074,6 +1249,12 @@ onHide(() => {
 onUnload(() => {
   flushRecipeEditCache();
   clearRecipeEditCacheTimer();
+  clearIngredientDragPressTimer();
+  clearStepSortPressTimer();
+  if (stepSortTimer) {
+    clearTimeout(stepSortTimer);
+    stepSortTimer = null;
+  }
   if (ingredientSearchTimer) {
     clearTimeout(ingredientSearchTimer);
     ingredientSearchTimer = null;
@@ -1130,9 +1311,23 @@ watch(
 watch(
   () => Boolean(sheetMode.value),
   (visible) => {
-    setPageLocked(visible);
+    setPageLocked(visible || stepSortVisible.value || ingredientDragging.value);
   },
   { immediate: true }
+);
+
+watch(
+  () => stepSortVisible.value,
+  (visible) => {
+    setPageLocked(Boolean(sheetMode.value) || visible || ingredientDragging.value);
+  }
+);
+
+watch(
+  () => ingredientDragging.value,
+  (visible) => {
+    setPageLocked(Boolean(sheetMode.value) || stepSortVisible.value || visible);
+  }
 );
 
 function handleNameInput(event: Event) {
@@ -1452,11 +1647,13 @@ async function loadPage() {
 function fillFromDraft(draft: RecipeDraftDetail) {
   draftVersion.value = draft.version;
   recipeId.value = draft.recipeId || recipeId.value;
+  coverImageUrl.value = "";
   fillForm(draft.content);
 }
 
 function fillFromRecipe(recipe: MyRecipeDetail) {
   recipeVersion.value = recipe.version;
+  coverImageUrl.value = recipe.coverImageUrl || "";
   const content: RecipeDraftContentInput = {
     name: recipe.content.name,
     story: recipe.content.story,
@@ -1468,17 +1665,13 @@ function fillFromRecipe(recipe: MyRecipeDetail) {
     tips: recipe.content.tips,
     ingredients: recipe.content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
-      amount:
-        item.amount.kind === "EXACT"
-          ? {
-              kind: "EXACT",
-              quantity: item.amount.quantity,
-              unitId: item.amount.unitId
-            }
-          : {
-              kind: "FUZZY",
-              text: item.amount.text
-            }
+      name: item.ingredientName,
+      quantity: item.amount.kind === "EXACT" ? item.amount.quantity : "",
+      unitId: item.amount.kind === "EXACT" ? item.amount.unitId : null,
+      fuzzyText: item.amount.kind === "FUZZY" ? item.amount.text : null,
+      categoryId: item.categoryId,
+      defaultUnitId: item.amount.kind === "EXACT" ? item.amount.unitId : null,
+      source: item.source
     })),
     steps: recipe.content.steps
   };
@@ -1498,14 +1691,14 @@ function fillForm(content: RecipeDraftContentInput) {
   ingredientRows.value = content.ingredients.length
     ? content.ingredients.map(item =>
         createIngredientRow({
-          ingredientId: item.ingredientId,
-          name: ingredientMap.get(item.ingredientId)?.name || "",
-          quantity: item.amount.kind === "EXACT" ? item.amount.quantity : "",
-          unitId: item.amount.kind === "EXACT" ? item.amount.unitId : "",
-          fuzzyText: item.amount.kind === "FUZZY" ? item.amount.text : "",
-          categoryId: ingredientMap.get(item.ingredientId)?.categoryId || "",
-          defaultUnitId: ingredientMap.get(item.ingredientId)?.defaultUnit.id || (item.amount.kind === "EXACT" ? item.amount.unitId : ""),
-          source: ingredientMap.get(item.ingredientId)?.source || ""
+          ingredientId: item.ingredientId || "",
+          name: item.name || (item.ingredientId ? ingredientMap.get(item.ingredientId)?.name || "" : ""),
+          quantity: item.quantity,
+          unitId: item.unitId || "",
+          fuzzyText: item.fuzzyText || "",
+          categoryId: item.categoryId || "",
+          defaultUnitId: item.defaultUnitId || (item.ingredientId ? ingredientMap.get(item.ingredientId)?.defaultUnit.id || "" : ""),
+          source: item.source || (item.ingredientId ? ingredientMap.get(item.ingredientId)?.source || "" : "")
         })
       )
     : [];
@@ -1515,8 +1708,13 @@ function fillForm(content: RecipeDraftContentInput) {
 }
 
 function resetRows() {
+  coverImageUrl.value = "";
   ingredientRows.value = [];
   stepRows.value = [createStepRow()];
+}
+
+function hasStepImage(_row: StepRow) {
+  return false;
 }
 
 function closeSheet() {
@@ -1635,7 +1833,7 @@ function openPreviewSheet() {
   void uniPlatform.navigation.navigateTo("/pages_recipe/detail/index?mode=preview");
 }
 
-function togglePendingIngredient(ingredientId: string) {
+function togglePendingIngredient(ingredientId: ResourceId) {
   dismissSheetKeyboard();
   if (pendingIngredientIds.value.includes(ingredientId)) {
     pendingIngredientIds.value = pendingIngredientIds.value.filter(item => item !== ingredientId);
@@ -1644,7 +1842,7 @@ function togglePendingIngredient(ingredientId: string) {
   pendingIngredientIds.value = [...pendingIngredientIds.value, ingredientId];
 }
 
-function removePendingIngredient(ingredientId: string) {
+function removePendingIngredient(ingredientId: ResourceId) {
   pendingIngredientIds.value = pendingIngredientIds.value.filter(item => item !== ingredientId);
 }
 
@@ -1674,7 +1872,7 @@ function showIngredientItemActions(item: IngredientSummary) {
   return showIngredientPersonalActions.value && item.source === "PERSONAL";
 }
 
-function changeIngredientCategory(categoryId: string) {
+function changeIngredientCategory(categoryId: ResourceId) {
   dismissSheetKeyboard();
   ingredientCategoryId.value = ingredientCategoryId.value === categoryId ? "" : categoryId;
   void reloadIngredientOptions();
@@ -1743,11 +1941,11 @@ async function toggleIngredientCreateSection(section: "category" | "unit") {
   ingredientCreateSection.value = section;
 }
 
-function selectIngredientCreateCategory(categoryId: string) {
+function selectIngredientCreateCategory(categoryId: ResourceId) {
   ingredientCreateDraft.categoryId = ingredientCreateDraft.categoryId === categoryId ? "" : categoryId;
 }
 
-function selectIngredientCreateUnit(unitId: string) {
+function selectIngredientCreateUnit(unitId: ResourceId) {
   ingredientCreateDraft.unitId = ingredientCreateDraft.unitId === unitId ? "" : unitId;
 }
 
@@ -1845,7 +2043,7 @@ async function recommendIngredient(item: IngredientSummary) {
   }
 }
 
-function toggleScene(sceneId: string) {
+function toggleScene(sceneId: ResourceId) {
   if (form.sceneIds.includes(sceneId)) {
     form.sceneIds = form.sceneIds.filter(item => item !== sceneId);
     return;
@@ -1853,7 +2051,7 @@ function toggleScene(sceneId: string) {
   form.sceneIds = [...form.sceneIds, sceneId];
 }
 
-function toggleDraftScene(sceneId: string) {
+function toggleDraftScene(sceneId: ResourceId) {
   if (advancedForm.sceneIds.includes(sceneId)) {
     advancedForm.sceneIds = advancedForm.sceneIds.filter(item => item !== sceneId);
     return;
@@ -1974,6 +2172,94 @@ function removeIngredientRow(localId: string) {
   ingredientRows.value = ingredientRows.value.filter(item => item.localId !== localId);
 }
 
+function clearIngredientDragPressTimer() {
+  if (!ingredientDragPressTimer) return;
+  clearTimeout(ingredientDragPressTimer);
+  ingredientDragPressTimer = null;
+}
+
+function handleIngredientDragTouchStart(localId: string, event: Event) {
+  if (!showIngredientDragHandle.value || ingredientDragging.value) return;
+  dismissSheetKeyboard();
+
+  const touchY = readTouchY(event);
+  if (touchY === null) return;
+
+  clearIngredientDragPressTimer();
+  ingredientDragPressId = localId;
+  ingredientDragPressTouchY = touchY;
+  ingredientDragPressTimer = setTimeout(() => {
+    ingredientDragPressTimer = null;
+    void activateIngredientDrag(ingredientDragPressId, ingredientDragPressTouchY);
+  }, INGREDIENT_DRAG_PRESS_DELAY_MS);
+}
+
+async function activateIngredientDrag(localId: string, touchY: number) {
+  if (!showIngredientDragHandle.value || ingredientDragging.value) return;
+
+  const [stackRect, rowRect] = await Promise.all([
+    uniPlatform.system.measure("#ingredient-stack"),
+    uniPlatform.system.measure(`#ingredient-row-${localId}`)
+  ]);
+  if (!rowRect) return;
+
+  ingredientDraggingId.value = localId;
+  ingredientStackTop.value = stackRect?.top ?? rowRect.top;
+  ingredientGhostLeft.value = rowRect.left;
+  ingredientGhostWidth.value = rowRect.width;
+  ingredientRowHeight.value = rowRect.height;
+  ingredientDragStartTouchY.value = touchY;
+  ingredientDragStartTop.value = rowRect.top;
+  ingredientGhostTop.value = rowRect.top;
+}
+
+function handleIngredientDragTouchMove(event: Event) {
+  const touchY = readTouchY(event);
+  if (!ingredientDragging.value) {
+    if (touchY !== null && ingredientDragPressId && Math.abs(touchY - ingredientDragPressTouchY) > INGREDIENT_DRAG_PRESS_MOVE_PX) {
+      clearIngredientDragPressTimer();
+      ingredientDragPressId = "";
+    }
+    return;
+  }
+
+  const rowSpan = getIngredientRowSpan();
+  if (touchY === null || !rowSpan) return;
+
+  const minTop = ingredientStackTop.value;
+  const maxTop = minTop + Math.max(0, (ingredientRows.value.length - 1) * rowSpan);
+  const nextTop = clampNumber(
+    ingredientDragStartTop.value + (touchY - ingredientDragStartTouchY.value),
+    minTop,
+    maxTop
+  );
+  ingredientGhostTop.value = nextTop;
+
+  const currentIndex = ingredientRows.value.findIndex(item => item.localId === ingredientDraggingId.value);
+  if (currentIndex < 0) return;
+
+  const centerY = nextTop - ingredientStackTop.value + ingredientRowHeight.value / 2;
+  const targetIndex = clampNumber(Math.floor(centerY / rowSpan), 0, ingredientRows.value.length - 1);
+  if (targetIndex === currentIndex) return;
+
+  ingredientRows.value = moveIngredientRow(ingredientRows.value, currentIndex, targetIndex);
+}
+
+function finishIngredientDrag() {
+  clearIngredientDragPressTimer();
+  ingredientDragPressId = "";
+  ingredientDragPressTouchY = 0;
+  if (!ingredientDragging.value) return;
+  ingredientDraggingId.value = "";
+  ingredientStackTop.value = 0;
+  ingredientGhostTop.value = 0;
+  ingredientGhostLeft.value = 0;
+  ingredientGhostWidth.value = 0;
+  ingredientRowHeight.value = 0;
+  ingredientDragStartTouchY.value = 0;
+  ingredientDragStartTop.value = 0;
+}
+
 function addStepRow() {
   stepRows.value = [...stepRows.value, createStepRow()];
 }
@@ -1997,7 +2283,7 @@ async function openUnitSheet(localId: string) {
   }
 }
 
-function selectUnitOption(unitId: string) {
+function selectUnitOption(unitId: ResourceId) {
   const unit = units.value.find(item => item.id === unitId);
   const row = activeUnitRow.value;
   if (!unit || !row) return;
@@ -2033,7 +2319,9 @@ function getRecipeEditCacheUid() {
 }
 
 function getRecipeEditCacheItemKey() {
-  return draftId.value || recipeId.value || RECIPE_EDIT_CACHE_KEY_NEW;
+  if (draftId.value) return String(draftId.value);
+  if (recipeId.value) return String(recipeId.value);
+  return RECIPE_EDIT_CACHE_KEY_NEW;
 }
 
 function getRecipeEditSourceVersion() {
@@ -2184,10 +2472,14 @@ async function maybeRestoreRecipeEditCache() {
 
 async function saveDraft() {
   if (submitting.value) return;
+  if (!form.name.trim()) {
+    await uniPlatform.feedback.toast({ title: "请填写菜谱标题", icon: "none" });
+    return;
+  }
   const cacheItemKey = getRecipeEditCacheItemKey();
   submitting.value = true;
   try {
-    const content = await buildDraftContent();
+    const content = await buildSaveContent();
     if (draftId.value && draftVersion.value !== null) {
       const result = await recipeApi.updateDraft(draftId.value, {
         operationId: createOperationId(),
@@ -2241,7 +2533,7 @@ async function publishDraft() {
     });
     removeCurrentRecipeEditCache(cacheItemKey);
     await uniPlatform.feedback.toast({ title: "已发布", icon: "success" });
-    void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(result.recipe.id)}&kind=my`);
+    void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(result.recipe.id))}&kind=my`);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "发布失败", icon: "none" });
   } finally {
@@ -2294,8 +2586,145 @@ async function handleStepImages() {
   await uniPlatform.feedback.toast({ title: "当前版本暂不支持步骤图片上传", icon: "none" });
 }
 
-async function showStepSortTip() {
-  await uniPlatform.feedback.toast({ title: "当前版本可直接删除后重排步骤", icon: "none" });
+async function openStepSort() {
+  if (stepRows.value.length <= 1) return;
+  dismissSheetKeyboard();
+  if (stepSortTimer) {
+    clearTimeout(stepSortTimer);
+    stepSortTimer = null;
+  }
+  stepSortRows.value = stepRows.value.map(cloneStepRow);
+  stepSortDraggingId.value = "";
+  stepSortScrollTop.value = 0;
+  stepSortVisible.value = true;
+  stepSortOpen.value = false;
+  await nextTick();
+  stepSortOpen.value = true;
+}
+
+function cancelStepSort() {
+  closeStepSort();
+}
+
+function confirmStepSort() {
+  if (stepSortRows.value.length) {
+    stepRows.value = stepSortRows.value.map(cloneStepRow);
+  }
+  closeStepSort();
+}
+
+function closeStepSort() {
+  stepSortOpen.value = false;
+  resetStepSortDrag();
+  if (stepSortTimer) {
+    clearTimeout(stepSortTimer);
+  }
+  stepSortTimer = setTimeout(() => {
+    stepSortVisible.value = false;
+    stepSortRows.value = [];
+    stepSortScrollTop.value = 0;
+    stepSortTimer = null;
+  }, SHEET_ANIMATION_MS);
+}
+
+function resetStepSortDrag() {
+  clearStepSortPressTimer();
+  stepSortPressId = "";
+  stepSortPressTouchY = 0;
+  stepSortDraggingId.value = "";
+  stepSortGhostTop.value = 0;
+  stepSortStartTouchY.value = 0;
+  stepSortStartCardTop.value = 0;
+}
+
+function clearStepSortPressTimer() {
+  if (!stepSortPressTimer) return;
+  clearTimeout(stepSortPressTimer);
+  stepSortPressTimer = null;
+}
+
+function handleStepSortScroll(event: Event) {
+  const detail = (event as Event & { detail?: { scrollTop?: number } }).detail;
+  stepSortScrollTop.value = Number(detail?.scrollTop || 0);
+}
+
+function handleStepSortTouchStart(localId: string, event: Event) {
+  if (stepSortDragging.value) return;
+  const touchY = readTouchY(event);
+  if (touchY === null) return;
+  clearStepSortPressTimer();
+  stepSortPressId = localId;
+  stepSortPressTouchY = touchY;
+  stepSortPressTimer = setTimeout(() => {
+    stepSortPressTimer = null;
+    void activateStepSortDrag(stepSortPressId, stepSortPressTouchY);
+  }, STEP_SORT_PRESS_DELAY_MS);
+}
+
+async function activateStepSortDrag(localId: string, touchY: number) {
+  if (!stepSortVisible.value) return;
+  const index = stepSortRows.value.findIndex(item => item.localId === localId);
+  if (index < 0) return;
+
+  const [scrollRect, rowRect] = await Promise.all([
+    uniPlatform.system.measure("#step-sort-scroll"),
+    uniPlatform.system.measure(`#step-sort-card-${localId}`)
+  ]);
+  if (scrollRect) {
+    stepSortListTop.value = scrollRect.top;
+  }
+  stepSortDraggingId.value = localId;
+  stepSortCardLeft.value = rowRect?.left ?? stepSortCardLeft.value;
+  stepSortCardWidth.value = rowRect?.width ?? stepSortCardWidth.value;
+  stepSortCardHeight.value = rowRect?.height ?? stepSortCardHeight.value;
+  const rowSpan = getStepSortRowSpan();
+  if (!rowSpan) {
+    resetStepSortDrag();
+    return;
+  }
+  const fallbackTop = stepSortListTop.value - stepSortScrollTop.value + index * rowSpan;
+  stepSortStartTouchY.value = touchY;
+  stepSortStartCardTop.value = rowRect?.top ?? fallbackTop;
+  stepSortGhostTop.value = rowRect?.top ?? fallbackTop;
+}
+
+function handleStepSortTouchMove(event: Event) {
+  const touchY = readTouchY(event);
+  if (!stepSortDragging.value) {
+    if (touchY !== null && stepSortPressId && Math.abs(touchY - stepSortPressTouchY) > STEP_SORT_PRESS_MOVE_PX) {
+      clearStepSortPressTimer();
+      stepSortPressId = "";
+    }
+    return;
+  }
+
+  const rowSpan = getStepSortRowSpan();
+  if (touchY === null || !rowSpan) return;
+
+  const minTop = stepSortListTop.value - stepSortScrollTop.value;
+  const maxTop = minTop + Math.max(0, (stepSortRows.value.length - 1) * rowSpan);
+  const nextTop = clampNumber(
+    stepSortStartCardTop.value + (touchY - stepSortStartTouchY.value),
+    minTop,
+    maxTop
+  );
+  stepSortGhostTop.value = nextTop;
+
+  const currentIndex = stepSortRows.value.findIndex(item => item.localId === stepSortDraggingId.value);
+  if (currentIndex < 0) return;
+
+  const centerY = nextTop - stepSortListTop.value + stepSortScrollTop.value + stepSortCardHeight.value / 2;
+  const targetIndex = clampNumber(Math.floor(centerY / rowSpan), 0, stepSortRows.value.length - 1);
+  if (targetIndex === currentIndex) return;
+
+  stepSortRows.value = moveStepRow(stepSortRows.value, currentIndex, targetIndex);
+}
+
+function finishStepSortDrag() {
+  clearStepSortPressTimer();
+  stepSortPressId = "";
+  if (!stepSortDragging.value) return;
+  resetStepSortDrag();
 }
 
 async function validatePublishForm() {
@@ -2331,6 +2760,8 @@ async function validatePublishForm() {
 }
 
 async function buildDraftContent(): Promise<RecipeDraftContentInput> {
+  const rows = buildFilledIngredientRows();
+  await buildIngredients();
   return {
     name: form.name.trim(),
     story: form.story.trim() || null,
@@ -2340,12 +2771,60 @@ async function buildDraftContent(): Promise<RecipeDraftContentInput> {
     difficulty: form.difficulty,
     duration: form.duration,
     tips: form.tips.trim() || null,
-    ingredients: await buildIngredients(),
-    steps: stepRows.value
-      .map(item => item.text.trim())
-      .filter(Boolean)
-      .map(text => ({ text }))
+    ingredients: rows.map(row => ({
+      ingredientId: row.ingredientId || null,
+      name: row.name.trim(),
+      quantity: row.quantity.trim(),
+      unitId: row.unitId || null,
+      fuzzyText: row.fuzzyText || null,
+      categoryId: row.categoryId || null,
+      defaultUnitId: row.defaultUnitId || null,
+      source: row.source || null
+    })),
+    steps: buildStepItems()
   };
+}
+
+async function buildSaveContent(): Promise<RecipeDraftContentInput> {
+  return {
+    name: form.name.trim(),
+    story: form.story.trim() || null,
+    categoryId: form.categoryId || null,
+    sceneIds: [...form.sceneIds],
+    baseServings: form.baseServingsText ? Number(form.baseServingsText) : null,
+    difficulty: form.difficulty,
+    duration: form.duration,
+    tips: form.tips.trim() || null,
+    ingredients: await buildSaveIngredients(),
+    steps: buildStepItems()
+  };
+}
+
+function buildStepItems() {
+  return stepRows.value
+    .map(item => item.text.trim())
+    .filter(Boolean)
+    .map(text => ({ text }));
+}
+
+async function buildSaveIngredients(): Promise<RecipeDraftIngredientInput[]> {
+  const rows = buildFilledIngredientRows();
+  const result: RecipeDraftIngredientInput[] = [];
+
+  for (const row of rows) {
+    result.push({
+      ingredientId: row.ingredientId || null,
+      name: row.name.trim(),
+      quantity: row.quantity.trim(),
+      unitId: row.unitId || null,
+      fuzzyText: row.fuzzyText || null,
+      categoryId: row.categoryId || null,
+      defaultUnitId: row.defaultUnitId || null,
+      source: row.source || null
+    });
+  }
+
+  return result;
 }
 
 async function buildIngredients(): Promise<RecipeIngredientInput[]> {
@@ -2391,7 +2870,7 @@ async function ensureIngredientRow(
   row: IngredientRow,
   index: number,
   createdMap: Map<string, IngredientSummary>
-): Promise<string> {
+): Promise<ResourceId> {
   const name = row.name.trim();
   if (!name) {
     throw new Error(`请填写第 ${index + 1} 个食材名称`);
@@ -2458,7 +2937,7 @@ function buildIngredientAdditions(list: IngredientSummary[]) {
     );
 }
 
-function applyIngredientUpdate(updated: IngredientSummary, previousDefaultUnitId = "") {
+function applyIngredientUpdate(updated: IngredientSummary, previousDefaultUnitId: OptionalResourceId = "") {
   mergeIngredients([updated]);
   if (matchesCurrentIngredientFilter(updated)) {
     ingredientOptions.value = [updated, ...ingredientOptions.value.filter(item => item.id !== updated.id)];
@@ -2501,7 +2980,7 @@ function matchesCurrentIngredientFilter(item: IngredientSummary) {
   return true;
 }
 
-async function findIngredientByName(name: string, currentId: string) {
+async function findIngredientByName(name: string, currentId: OptionalResourceId) {
   const searchKey = normalizeText(name);
   if (!searchKey) return null;
   const current = ingredients.value.find(item => item.id === currentId && normalizeText(item.name) === searchKey);
@@ -2539,6 +3018,13 @@ function createStepRow(text = ""): StepRow {
   };
 }
 
+function cloneStepRow(row: StepRow): StepRow {
+  return {
+    localId: row.localId,
+    text: row.text
+  };
+}
+
 function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
@@ -2546,6 +3032,60 @@ function normalizeText(value: string) {
 function readInputValue(event: Event) {
   const payload = event as Event & { detail?: { value?: string } };
   return payload.detail?.value ?? "";
+}
+
+function readTouchY(event: Event) {
+  const payload = event as Event & {
+    touches?: Array<{ pageY?: number; clientY?: number }>;
+    changedTouches?: Array<{ pageY?: number; clientY?: number }>;
+  };
+  const touch = payload.touches?.[0] || payload.changedTouches?.[0];
+  if (!touch) return null;
+  return touch.pageY ?? touch.clientY ?? null;
+}
+
+function moveStepRow(rows: StepRow[], fromIndex: number, toIndex: number) {
+  const nextRows = [...rows];
+  const [current] = nextRows.splice(fromIndex, 1);
+  if (!current) return rows;
+  nextRows.splice(toIndex, 0, current);
+  return nextRows;
+}
+
+function moveIngredientRow(rows: IngredientRow[], fromIndex: number, toIndex: number) {
+  const nextRows = [...rows];
+  const [current] = nextRows.splice(fromIndex, 1);
+  if (!current) return rows;
+  nextRows.splice(toIndex, 0, current);
+  return nextRows;
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getIngredientRowSpan() {
+  if (!ingredientRowHeight.value) return 0;
+  return ingredientRowHeight.value + rpxToPx(INGREDIENT_DRAG_GAP_RPX);
+}
+
+function getStepSortRowSpan() {
+  if (!stepSortCardHeight.value) return 0;
+  return stepSortCardHeight.value + rpxToPx(STEP_SORT_GAP_RPX);
+}
+
+function rpxToPx(value: number) {
+  const width = systemInfo.value.windowWidth || 375;
+  return width * value / 750;
+}
+
+function formatStepIndex(index: number) {
+  return String(index + 1).padStart(2, "0");
+}
+
+function getStepSortText(text: string) {
+  const content = text.trim();
+  return content || "未填写步骤说明";
 }
 
 function nextLocalId(prefix: string) {
@@ -2598,7 +3138,7 @@ function nextLocalId(prefix: string) {
 .panel__tools {
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 40rpx;
   flex-shrink: 0;
 }
 
@@ -2878,7 +3418,6 @@ function nextLocalId(prefix: string) {
   align-items: center;
   justify-content: center;
   min-height: 78rpx;
-  padding: 0 26rpx;
   background: var(--color-surface-muted);
   color: var(--color-text);
   font-size: 26rpx;
@@ -2921,18 +3460,36 @@ function nextLocalId(prefix: string) {
   display: flex;
   align-items: center;
   gap: 14rpx;
+  transition: transform 180ms ease;
+}
+
+.ingredient-line--placeholder {
+  opacity: 0;
 }
 
 .ingredient-line__field {
   display: flex;
   align-items: center;
-  min-height: 84rpx;
+  min-height: 80rpx;
   padding: 0 22rpx;
   border-radius: var(--radius-xs);
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 28rpx;
   box-sizing: border-box;
+}
+
+.ingredient-line__drag {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.ingredient-line__drag--ghost {
+  color: var(--color-primary);
 }
 
 .ingredient-line__field--name {
@@ -2959,8 +3516,21 @@ function nextLocalId(prefix: string) {
   justify-content: center;
   width: 48rpx;
   color: var(--color-text-secondary);
-  font-size: 38rpx;
+  font-size: 20rpx;
   line-height: 1;
+}
+
+.ingredient-drag-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1150;
+}
+
+.ingredient-line--ghost {
+  position: fixed;
+  gap: 14rpx;
+  padding: 0;
+  box-shadow: 0 20rpx 54rpx rgba(95, 79, 63, 0.18);
 }
 
 .ingredient-add {
@@ -3629,6 +4199,7 @@ function nextLocalId(prefix: string) {
 }
 
 .step-card__image {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3641,6 +4212,14 @@ function nextLocalId(prefix: string) {
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
   text-align: center;
+}
+
+.step-card__image--filled {
+  align-items: flex-end;
+  justify-content: flex-start;
+  align-content: flex-end;
+  padding: 22rpx;
+  text-align: left;
 }
 
 .step-card__image-plus {
@@ -3659,6 +4238,12 @@ function nextLocalId(prefix: string) {
   width: 100%;
   margin-top: 4rpx;
   font-size: 24rpx;
+}
+
+.step-card__image-change {
+  color: var(--color-white);
+  font-size: 24rpx;
+  line-height: 1.4;
 }
 
 .step-card__field {
@@ -3680,6 +4265,214 @@ function nextLocalId(prefix: string) {
   display: flex;
   justify-content: flex-end;
   margin-top: 24rpx;
+}
+
+.step-sort {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.step-sort__mask {
+  position: absolute;
+  inset: 0;
+  background: var(--login-popup-backdrop-bg);
+  -webkit-backdrop-filter: blur(10rpx) saturate(145%);
+  backdrop-filter: blur(10rpx) saturate(145%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.step-sort__panel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
+  box-shadow: 0 -12rpx 60rpx rgba(59, 40, 21, 0.12);
+  opacity: 0.98;
+  transform: translateY(calc(100% + env(safe-area-inset-bottom)));
+  transition:
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms ease;
+  will-change: transform, opacity;
+}
+
+.step-sort--open .step-sort__mask {
+  opacity: 1;
+}
+
+.step-sort--open .step-sort__panel {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.step-sort__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 34rpx var(--space-page) 12rpx;
+}
+
+.step-sort__title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+}
+
+.step-sort__title {
+  color: var(--color-text);
+  font-size: 42rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.2;
+}
+
+.step-sort__count {
+  color: var(--color-text-secondary);
+  font-size: 28rpx;
+  line-height: 1.2;
+}
+
+.step-sort__close {
+  color: var(--color-text-secondary);
+  font-size: 42rpx;
+  line-height: 1;
+}
+
+.step-sort__desc {
+  display: block;
+  padding: 0 var(--space-page) 18rpx;
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.step-sort__scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.step-sort__list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  padding: 0 var(--space-page) 32rpx;
+}
+
+.step-sort-card {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx;
+  border-radius: var(--radius-xs);
+  border: 1rpx solid rgba(109, 92, 72, 0.08);
+  background: var(--color-surface);
+  box-shadow: 0 12rpx 40rpx rgba(95, 79, 63, 0.08);
+  box-sizing: border-box;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.step-sort-card--placeholder {
+  opacity: 0;
+}
+
+.step-sort-card--ghost {
+  border-color: var(--color-primary);
+  box-shadow: 0 20rpx 54rpx rgba(95, 79, 63, 0.18);
+}
+
+.step-sort-card__index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50rpx;
+  height: 50rpx;
+  flex: 0 0 50rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 22rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+}
+
+.step-sort-card__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100rpx;
+  height: 100rpx;
+  flex: 0 0 100rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+}
+
+.step-sort-card__thumb-text {
+  width: 72rpx;
+  color: var(--color-text-tertiary);
+  font-size: 20rpx;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.step-sort-card__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-sort-card__text {
+  color: var(--color-text);
+  font-size: 28rpx;
+  line-height: 1.6;
+  word-break: break-word;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.step-sort__ghost {
+  position: fixed;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.step-sort-list-move {
+  transition: transform 180ms ease;
+}
+
+.step-sort__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 22rpx var(--space-page) calc(22rpx + env(safe-area-inset-bottom));
+}
+
+.step-sort__confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 96rpx;
+  padding: 0 34rpx;
+  border: 0;
+  border-radius: 999rpx;
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  font-size: 32rpx;
+  font-weight: var(--font-weight-heavy);
 }
 
 .bottom-bar__publish {
