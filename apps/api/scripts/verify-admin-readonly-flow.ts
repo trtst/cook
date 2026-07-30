@@ -12,7 +12,7 @@ loadLocalEnv();
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
-const ownerUserId = process.env.TEST_OWNER_USER_ID ?? "00000000-0000-4000-8000-000000000001";
+const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -22,7 +22,7 @@ interface ApiEnvelope<T> {
 
 interface AdminLoginResult {
   token: string;
-  admin: { id: string; username: string };
+  admin: { id: number; username: string };
 }
 
 const adminHeaders = {
@@ -87,7 +87,8 @@ async function main() {
   const users = await requestData<PageResult<UserProfile>>("/admin/users?page=1&pageSize=100", {
     headers: { authorization }
   });
-  assert(users.items.some(item => item.id === ownerUserId), "admin users list missing owner user");
+  const ownerUser = users.items.find(item => item.phone === ownerPhone);
+  assert(ownerUser, "admin users list missing owner user");
 
   const diningGroups = await requestData<PageResult<AdminDiningGroupSummary>>("/admin/dining-groups?page=1&pageSize=100", {
     headers: { authorization }
@@ -95,10 +96,10 @@ async function main() {
   assert(diningGroups.items.length > 0, "admin dining groups should not be empty");
   assert(diningGroups.items.every(item => item.status === "ACTIVE" || item.status === "ARCHIVED"), "unexpected dining group status");
 
-  const entitlements = await requestData<AdminUserEntitlementResponse>(`/admin/user-entitlements?userId=${ownerUserId}`, {
+  const entitlements = await requestData<AdminUserEntitlementResponse>(`/admin/user-entitlements?userId=${ownerUser.id}`, {
     headers: { authorization }
   });
-  assert(entitlements.user.id === ownerUserId, "admin entitlement user mismatch");
+  assert(entitlements.user.id === ownerUser.id, "admin entitlement user mismatch");
   assert(entitlements.membership.tier.length > 0, "admin membership tier missing");
   assert(Array.isArray(entitlements.diningGroups), "admin dining groups summary missing");
   assert(entitlements.storage.calculatedAt.length > 0, "admin storage summary missing calculation time");

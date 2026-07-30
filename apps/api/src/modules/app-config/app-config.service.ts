@@ -1,8 +1,11 @@
 import { createReadStream } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { AppConfigResponse } from "../../contracts/types";
+import { createHash } from "node:crypto";
+import { Inject, BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
+import { PrismaService } from "../../common/prisma.service";
+import type { AppConfigResponse, OperationId, UUID } from "../../contracts/types";
 
 type ImageKind = "jpeg" | "png" | "webp";
 type RequestLike = {
@@ -61,6 +64,8 @@ function getExtension(kind: ImageKind) {
 
 @Injectable()
 export class AppConfigService {
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
   async getPublicConfig(request: RequestLike): Promise<AppConfigResponse> {
     return {
       login: {
@@ -69,30 +74,74 @@ export class AppConfigService {
     };
   }
 
-  async saveLoginImage(request: RequestLike, file: { buffer?: Buffer; size?: number } | undefined): Promise<AppConfigResponse> {
+  async saveLoginImage(
+    request: RequestLike,
+    adminId: UUID,
+    operationId: OperationId,
+    file: { buffer?: Buffer; size?: number } | undefined
+  ): Promise<AppConfigResponse> {
     if (!file?.buffer || typeof file.size !== "number") {
       throw new BadRequestException("请上传登录图片");
     }
+    const buffer = file.buffer;
 
     if (file.size <= 0 || file.size > maxImageBytes) {
       throw new BadRequestException("图片大小不能超过 5 MB");
     }
 
-    const kind = detectImageKind(file.buffer);
+    const kind = detectImageKind(buffer);
     if (!kind) {
       throw new BadRequestException("仅支持 JPG、PNG、WEBP 图片");
     }
 
-    await mkdir(this.getLoginImageDir(), { recursive: true });
-    await this.clearStoredLoginImage();
-    await writeFile(this.getLoginImagePath(kind), file.buffer);
+    const requestHash = createHash("sha256")
+      .update(kind)
+      .update(":")
+      .update(String(file.size))
+      .update(":")
+      .update(buffer)
+      .digest("hex");
 
-    return this.getPublicConfig(request);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AppConfigResponse>(
+        tx,
+        operationId,
+        "admin-app-config:login-image:save",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-app-config:login-image:save", adminId, requestHash);
+
+      await mkdir(this.getLoginImageDir(), { recursive: true });
+      await this.clearStoredLoginImage();
+      await writeFile(this.getLoginImagePath(kind), buffer);
+
+      const result = await this.getPublicConfig(request);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-app-config:login-image:save", adminId, requestHash, result);
+      return result;
+    });
   }
 
-  async clearLoginImage(request: RequestLike): Promise<AppConfigResponse> {
-    await this.clearStoredLoginImage();
-    return this.getPublicConfig(request);
+  async clearLoginImage(request: RequestLike, adminId: UUID, operationId: OperationId): Promise<AppConfigResponse> {
+    const requestHash = "clear";
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AppConfigResponse>(
+        tx,
+        operationId,
+        "admin-app-config:login-image:clear",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-app-config:login-image:clear", adminId, requestHash);
+
+      await this.clearStoredLoginImage();
+
+      const result = await this.getPublicConfig(request);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-app-config:login-image:clear", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async getLoginImageAsset() {

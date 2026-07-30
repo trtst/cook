@@ -20,8 +20,10 @@ interface ApiEnvelope<T> {
 
 interface AdminLoginResult {
   token: string;
-  admin: { id: string; username: string };
+  admin: { id: number; username: string };
 }
+
+let idempotencySeed = Date.now();
 
 const adminHeaders = {
   "content-type": "application/json",
@@ -39,6 +41,18 @@ const userHeaders = {
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+function nextIdempotencyKey() {
+  idempotencySeed += 1;
+  return String(idempotencySeed);
+}
+
+function withIdempotencyKey(headers: Record<string, string>, key = nextIdempotencyKey()) {
+  return {
+    ...headers,
+    "Idempotency-Key": key
+  };
 }
 
 async function request<T>(path: string, options: RequestInit = {}, headers: Record<string, string> = adminHeaders) {
@@ -63,7 +77,6 @@ async function main() {
   const updatedPhone = `138${suffix}`;
   const initialPassword = "change-me";
   const resetPassword = "change-me-2";
-  const operationId = () => crypto.randomUUID();
 
   const login = await requestData<AdminLoginResult>("/admin/auth/login", {
     method: "POST",
@@ -75,9 +88,8 @@ async function main() {
     "/admin/users",
     {
       method: "POST",
-      headers: { authorization },
+      headers: withIdempotencyKey({ authorization }),
       body: JSON.stringify({
-        operationId: operationId(),
         phone: createdPhone,
         password: initialPassword,
         nickname: "后台新增用户"
@@ -91,9 +103,8 @@ async function main() {
     `/admin/users/${created.id}`,
     {
       method: "PUT",
-      headers: { authorization },
+      headers: withIdempotencyKey({ authorization }),
       body: JSON.stringify({
-        operationId: operationId(),
         phone: updatedPhone,
         nickname: "后台已编辑用户"
       })
@@ -115,9 +126,8 @@ async function main() {
     `/admin/users/${created.id}`,
     {
       method: "PUT",
-      headers: { authorization },
+      headers: withIdempotencyKey({ authorization }),
       body: JSON.stringify({
-        operationId: operationId(),
         nickname: ""
       })
     }
@@ -128,9 +138,8 @@ async function main() {
     `/admin/users/${created.id}/reset-password`,
     {
       method: "POST",
-      headers: { authorization },
+      headers: withIdempotencyKey({ authorization }),
       body: JSON.stringify({
-        operationId: operationId(),
         newPassword: resetPassword
       })
     }
@@ -155,9 +164,8 @@ async function main() {
     `/admin/users/${created.id}/status`,
     {
       method: "POST",
-      headers: { authorization },
+      headers: withIdempotencyKey({ authorization }),
       body: JSON.stringify({
-        operationId: operationId(),
         status: "DISABLED"
       })
     }
@@ -183,9 +191,8 @@ async function main() {
     `/admin/users/${created.id}/status`,
     {
       method: "POST",
-      headers: { authorization },
+      headers: withIdempotencyKey({ authorization }),
       body: JSON.stringify({
-        operationId: operationId(),
         status: "ACTIVE"
       })
     }

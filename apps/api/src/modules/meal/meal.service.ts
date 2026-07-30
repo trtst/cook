@@ -15,6 +15,7 @@ import type {
   DiningEventParticipantSummary,
   DiningEventSummary,
   MealPlanSummary,
+  OperationId,
   PageResult,
   RecipeContentSnapshot,
   SharePreviewResponse,
@@ -47,8 +48,8 @@ function toIsoDate(value: Date) {
   return value.toISOString();
 }
 
-function hashText(value: string) {
-  return createHash("sha256").update(value).digest("hex");
+function hashText(value: string | number) {
+  return createHash("sha256").update(String(value)).digest("hex");
 }
 
 function createShareToken() {
@@ -137,7 +138,7 @@ export class MealService {
 
   async createMealPlan(
     userId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     planDate: string,
     mealSlot: string,
     recipeId: UUID,
@@ -192,7 +193,7 @@ export class MealService {
     });
   }
 
-  async createDiningEvent(userId: UUID, planItemId: UUID, operationId: UUID, scheduledAt: string, location?: string | null) {
+  async createDiningEvent(userId: UUID, planItemId: UUID, operationId: OperationId, scheduledAt: string, location?: string | null) {
     return this.prisma.$transaction(async tx => {
       const plan = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
@@ -231,7 +232,7 @@ export class MealService {
     });
   }
 
-  async inviteDiningGroup(userId: UUID, eventId: UUID, diningGroupId: UUID, operationId: UUID) {
+  async inviteDiningGroup(userId: UUID, eventId: UUID, diningGroupId: UUID, operationId: OperationId) {
     const requestHash = `${eventId}:${diningGroupId}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:invite-group", userId, null, requestHash);
@@ -301,7 +302,7 @@ export class MealService {
     });
   }
 
-  async respondToDiningEvent(userId: UUID, eventId: UUID, operationId: UUID, status: string) {
+  async respondToDiningEvent(userId: UUID, eventId: UUID, operationId: OperationId, status: string) {
     const normalizedStatus = normalizeEventStatus(status);
     const requestHash = `${eventId}:${normalizedStatus}`;
     return this.prisma.$transaction(async tx => {
@@ -331,7 +332,7 @@ export class MealService {
     });
   }
 
-  async chooseBringRecipe(userId: UUID, eventId: UUID, recipeId: UUID, operationId: UUID) {
+  async chooseBringRecipe(userId: UUID, eventId: UUID, recipeId: UUID, operationId: OperationId) {
     const requestHash = `${eventId}:${recipeId}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:bring", userId, null, requestHash);
@@ -418,7 +419,7 @@ export class MealService {
     };
   }
 
-  async acceptShareInvite(userId: UUID, shareToken: string, operationId: UUID, guestName: string) {
+  async acceptShareInvite(userId: UUID, shareToken: string, operationId: OperationId, guestName: string) {
     const normalizedGuestName = guestName.trim();
     if (!normalizedGuestName) throw new BadRequestException("展示名称不能为空");
     const shareTokenHash = hashText(shareToken);

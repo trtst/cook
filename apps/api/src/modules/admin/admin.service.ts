@@ -38,6 +38,7 @@ import type {
   InspirationCategorySummary,
   MyRecipeSummary,
   PageResult,
+  OperationId,
   RecipeCategorySummary,
   RecipeContentSnapshot,
   RecipeDraftSummary,
@@ -116,7 +117,7 @@ function isUniqueConstraintError(error: unknown) {
 }
 
 function toUserProfile(user: {
-  id: string;
+  id: UUID;
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
@@ -202,7 +203,7 @@ type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
   };
 }>;
 
-function toRecipeCategorySummary(category: { id: string; name: string; version: number }): RecipeCategorySummary {
+function toRecipeCategorySummary(category: { id: UUID; name: string; version: number }): RecipeCategorySummary {
   return {
     id: category.id,
     name: category.name,
@@ -210,7 +211,7 @@ function toRecipeCategorySummary(category: { id: string; name: string; version: 
   };
 }
 
-function toRecipeSceneSummary(scene: { id: string; name: string; version: number }): RecipeSceneSummary {
+function toRecipeSceneSummary(scene: { id: UUID; name: string; version: number }): RecipeSceneSummary {
   return {
     id: scene.id,
     name: scene.name,
@@ -218,7 +219,7 @@ function toRecipeSceneSummary(scene: { id: string; name: string; version: number
   };
 }
 
-function toInspirationCategorySummary(category: { id: string; name: string; iconKey: string | null }): InspirationCategorySummary {
+function toInspirationCategorySummary(category: { id: UUID; name: string; iconKey: string | null }): InspirationCategorySummary {
   return {
     id: category.id,
     name: category.name,
@@ -240,7 +241,7 @@ function isAdminEditableInspiration(recipe: Pick<AdminRecipeRow, "ownerId" | "in
   return recipe.ownerId === null && !!recipe.inspirationCategoryId && recipe.status !== "DELETED";
 }
 
-function toUnitSummary(unit: { id: string; name: string; type: UnitSummary["type"]; ownerId: string | null }): UnitSummary {
+function toUnitSummary(unit: { id: UUID; name: string; type: UnitSummary["type"]; ownerId: UUID | null }): UnitSummary {
   return {
     id: unit.id,
     name: unit.name,
@@ -275,7 +276,7 @@ function toAdminIngredientSummary(ingredient: AdminIngredientRow): AdminIngredie
   };
 }
 
-function toAdminUnitSummary(unit: { id: string; name: string; type: UnitSummary["type"]; version: number; updatedAt: Date }): AdminUnitSummary {
+function toAdminUnitSummary(unit: { id: UUID; name: string; type: UnitSummary["type"]; version: number; updatedAt: Date }): AdminUnitSummary {
   return {
     id: unit.id,
     name: unit.name,
@@ -1072,7 +1073,7 @@ export class AdminService {
         })
       ]);
 
-      const stats = new Map<string, { recipeCount: number; updatedAt: Date | null }>();
+      const stats = new Map<UUID, { recipeCount: number; updatedAt: Date | null }>();
       for (const scene of scenes) {
         stats.set(scene.id, { recipeCount: 0, updatedAt: null });
       }
@@ -1317,7 +1318,7 @@ export class AdminService {
     }
   }
 
-  async deleteSystemUnit(unitId: UUID, operationId: UUID, expectedVersion: number, adminId: UUID): Promise<AdminDeleteUnitResult> {
+  async deleteSystemUnit(unitId: UUID, operationId: OperationId, expectedVersion: number, adminId: UUID): Promise<AdminDeleteUnitResult> {
     await this.requireSuperAdmin(adminId);
     const requestHash = `${unitId}:${expectedVersion}`;
     return this.prisma.$transaction(async tx => {
@@ -1375,7 +1376,7 @@ export class AdminService {
     });
   }
 
-  async reorderSystemUnits(type: UnitSummary["type"], operationId: UUID, items: ReorderItem[], adminId: UUID): Promise<AdminUnitSummary[]> {
+  async reorderSystemUnits(type: UnitSummary["type"], operationId: OperationId, items: ReorderItem[], adminId: UUID): Promise<AdminUnitSummary[]> {
     await this.requireSuperAdmin(adminId);
     const requestHash = JSON.stringify({ type, items });
     return this.prisma.$transaction(async tx => {
@@ -1487,7 +1488,7 @@ export class AdminService {
   }
 
   async reorderIngredientCategories(
-    operationId: UUID,
+    operationId: OperationId,
     items: ReorderItem[],
     adminId: UUID
   ): Promise<AdminIngredientCategorySummary[]> {
@@ -1541,7 +1542,7 @@ export class AdminService {
     request: { protocol?: string; get?: (name: string) => string | undefined },
     page: number,
     pageSize: number,
-    categoryId: string | undefined,
+    categoryId: UUID | undefined,
     keyword: string | undefined,
     status: string | undefined,
     adminId: UUID
@@ -1809,7 +1810,7 @@ export class AdminService {
   async uploadIngredientImage(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     ingredientId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     expectedVersion: number,
     file: { buffer?: Buffer; size?: number } | undefined,
     adminId: UUID
@@ -1894,7 +1895,7 @@ export class AdminService {
   async clearIngredientImage(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     ingredientId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     expectedVersion: number,
     adminId: UUID
   ): Promise<AdminIngredientSummary> {
@@ -1965,7 +1966,7 @@ export class AdminService {
 
   async reorderIngredients(
     categoryId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     items: ReorderItem[],
     adminId: UUID
   ): Promise<AdminIngredientSummary[]> {
@@ -2550,7 +2551,7 @@ export class AdminService {
     });
   }
 
-  async blockRecipe(recipeId: UUID, adminId: UUID, operationId: UUID, reason: string) {
+  async blockRecipe(recipeId: UUID, adminId: UUID, operationId: OperationId, reason: string) {
     await this.requireSuperAdmin(adminId);
     const normalizedReason = reason.trim();
     if (!normalizedReason) throw new BadRequestException("下架原因不能为空");
@@ -2596,9 +2597,9 @@ export class AdminService {
     });
   }
 
-  async unblockRecipe(recipeId: UUID, adminId: UUID, operationId: UUID) {
+  async unblockRecipe(recipeId: UUID, adminId: UUID, operationId: OperationId) {
     await this.requireSuperAdmin(adminId);
-    const requestHash = recipeId;
+    const requestHash = String(recipeId);
     return this.prisma.$transaction(async tx => {
       const repeated = await getAdminIdempotentResult<AdminRecipeSummary>(
         tx,
@@ -2639,7 +2640,7 @@ export class AdminService {
     });
   }
 
-  async resolveRecipeReport(reportId: UUID, adminId: UUID, operationId: UUID, resolutionNote?: string | null) {
+  async resolveRecipeReport(reportId: UUID, adminId: UUID, operationId: OperationId, resolutionNote?: string | null) {
     await this.requireSuperAdmin(adminId);
     const note = resolutionNote?.trim() || null;
     const requestHash = `${reportId}:${note ?? ""}`;
@@ -2698,7 +2699,7 @@ export class AdminService {
   }
 
   private toAdminRecipeSummary(recipe: {
-    id: string;
+    id: UUID;
     title: string;
     coverImageUrl: string | null;
     status: RecipeStatus;
@@ -3058,7 +3059,7 @@ export class AdminService {
     return (last?.systemSortOrder ?? -1) + 1;
   }
 
-  private assertReorderScope<T extends { id: string; version: number }>(all: T[], items: ReorderItem[], label: string) {
+  private assertReorderScope<T extends { id: UUID; version: number }>(all: T[], items: ReorderItem[], label: string) {
     if (all.length !== items.length) throw new ConflictException(`${label}排序集合不完整`);
     const currentMap = new Map(all.map(item => [item.id, item.version]));
     for (const item of items) {
@@ -3068,7 +3069,7 @@ export class AdminService {
     }
   }
 
-  private async writeIngredientCategorySortOrder(tx: Prisma.TransactionClient, ids: string[]) {
+  private async writeIngredientCategorySortOrder(tx: Prisma.TransactionClient, ids: UUID[]) {
     for (let index = 0; index < ids.length; index += 1) {
       await tx.ingredientCategory.update({
         where: { id: ids[index] },
@@ -3086,7 +3087,7 @@ export class AdminService {
     }
   }
 
-  private async writeSystemIngredientSortOrder(tx: Prisma.TransactionClient, ids: string[], categoryId: UUID) {
+  private async writeSystemIngredientSortOrder(tx: Prisma.TransactionClient, ids: UUID[], categoryId: UUID) {
     for (let index = 0; index < ids.length; index += 1) {
       await tx.ingredient.updateMany({
         where: {
@@ -3116,7 +3117,7 @@ export class AdminService {
     }
   }
 
-  private async writeSystemUnitSortOrder(tx: Prisma.TransactionClient, type: UnitSummary["type"], ids: string[]) {
+  private async writeSystemUnitSortOrder(tx: Prisma.TransactionClient, type: UnitSummary["type"], ids: UUID[]) {
     for (let index = 0; index < ids.length; index += 1) {
       await tx.unit.updateMany({
         where: {

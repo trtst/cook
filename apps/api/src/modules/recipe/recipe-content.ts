@@ -18,17 +18,13 @@ export function normalizeRecipeDraftContent(content: RecipeDraftContentInput): R
     tips: content.tips?.trim() || null,
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
-      amount:
-        item.amount.kind === "EXACT"
-          ? {
-              kind: "EXACT",
-              quantity: item.amount.quantity.trim(),
-              unitId: item.amount.unitId
-            }
-          : {
-              kind: "FUZZY",
-              text: item.amount.text
-            }
+      name: item.name.trim(),
+      quantity: item.quantity.trim(),
+      unitId: item.unitId ?? null,
+      fuzzyText: item.fuzzyText ?? null,
+      categoryId: item.categoryId ?? null,
+      defaultUnitId: item.defaultUnitId ?? null,
+      source: item.source ?? null
     })),
     steps: content.steps.map(item => ({
       text: item.text.trim()

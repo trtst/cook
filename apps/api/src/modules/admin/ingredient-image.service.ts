@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import type { UUID } from "../../contracts/types";
 
 type RequestLike = {
   protocol?: string;
@@ -43,7 +44,7 @@ function readPngSize(buffer: Buffer) {
 
 @Injectable()
 export class IngredientImageService {
-  buildImageUrl(request: RequestLike, ingredientId: string, updatedAt: Date | null) {
+  buildImageUrl(request: RequestLike, ingredientId: UUID, updatedAt: Date | null) {
     if (!updatedAt) return null;
     const protocol = request.protocol || "http";
     const host = request.get?.("host");
@@ -52,7 +53,7 @@ export class IngredientImageService {
     return `${protocol}://${host}${path}`;
   }
 
-  async stageImageUpload(ingredientId: string, file: { buffer?: Buffer; size?: number } | undefined) {
+  async stageImageUpload(ingredientId: UUID, file: { buffer?: Buffer; size?: number } | undefined) {
     if (!file?.buffer || typeof file.size !== "number") {
       throw new BadRequestException("请上传食材图片");
     }
@@ -74,7 +75,7 @@ export class IngredientImageService {
     return tempPath;
   }
 
-  async replaceStagedImage(ingredientId: string, tempPath: string) {
+  async replaceStagedImage(ingredientId: UUID, tempPath: string) {
     const imagePath = this.getImagePath(ingredientId);
     const backupPath = this.getBackupPath(ingredientId);
     await mkdir(this.getImageDir(), { recursive: true });
@@ -98,7 +99,7 @@ export class IngredientImageService {
     return backupPath;
   }
 
-  async rollbackReplacedImage(ingredientId: string, backupPath: string | null) {
+  async rollbackReplacedImage(ingredientId: UUID, backupPath: string | null) {
     const imagePath = this.getImagePath(ingredientId);
     await rm(imagePath, { force: true });
     if (!backupPath) return;
@@ -114,7 +115,7 @@ export class IngredientImageService {
     await rm(backupPath, { force: true });
   }
 
-  async stageClearImage(ingredientId: string) {
+  async stageClearImage(ingredientId: UUID) {
     const imagePath = this.getImagePath(ingredientId);
     const backupPath = this.getBackupPath(ingredientId);
     await mkdir(this.getTempDir(), { recursive: true });
@@ -127,7 +128,7 @@ export class IngredientImageService {
     }
   }
 
-  async rollbackClearedImage(ingredientId: string, backupPath: string | null) {
+  async rollbackClearedImage(ingredientId: UUID, backupPath: string | null) {
     if (!backupPath) return;
     const imagePath = this.getImagePath(ingredientId);
     await rm(imagePath, { force: true });
@@ -148,7 +149,7 @@ export class IngredientImageService {
     await rm(tempPath, { force: true });
   }
 
-  async getImageAsset(ingredientId: string) {
+  async getImageAsset(ingredientId: UUID) {
     const filePath = this.getImagePath(ingredientId);
     try {
       return {
@@ -165,7 +166,7 @@ export class IngredientImageService {
     return join(getAssetRoot(), "ingredients");
   }
 
-  private getImagePath(ingredientId: string) {
+  private getImagePath(ingredientId: UUID) {
     return join(this.getImageDir(), `${ingredientId}.png`);
   }
 
@@ -173,11 +174,11 @@ export class IngredientImageService {
     return join(getAssetRoot(), "ingredients-temp");
   }
 
-  private getTempPath(ingredientId: string) {
+  private getTempPath(ingredientId: UUID) {
     return join(this.getTempDir(), `${ingredientId}-${randomUUID()}.png`);
   }
 
-  private getBackupPath(ingredientId: string) {
+  private getBackupPath(ingredientId: UUID) {
     return join(this.getTempDir(), `${ingredientId}-${randomUUID()}.bak`);
   }
 }

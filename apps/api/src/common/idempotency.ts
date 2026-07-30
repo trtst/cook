@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { ConflictException } from "@nestjs/common";
 import { createHash } from "node:crypto";
+import { IDEMPOTENCY_KEY_HEADER } from "./idempotency-key";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -22,8 +23,8 @@ export async function getIdempotentResult<T>(
   db: Prisma.TransactionClient,
   operationId: string,
   operationType: string,
-  userId: string,
-  diningGroupId: string | null,
+  userId: number,
+  diningGroupId: number | null,
   requestHash: string
 ): Promise<T | null> {
   await lockOperation(db, `USER:${userId}:${operationType}:${operationId}`);
@@ -33,7 +34,7 @@ export async function getIdempotentResult<T>(
     orderBy: { createdAt: "asc" }
   });
   if (!record) return null;
-  if (record.requestHash !== normalizedHash) throw new ConflictException("operationId 已用于其他请求");
+  if (record.requestHash !== normalizedHash) throw new ConflictException(`${IDEMPOTENCY_KEY_HEADER} 已用于其他请求`);
   return record.status === "SUCCEEDED" && record.resultJson ? fromJson<T>(record.resultJson) : null;
 }
 
@@ -41,7 +42,7 @@ export async function getAdminIdempotentResult<T>(
   tx: Prisma.TransactionClient,
   operationId: string,
   operationType: string,
-  adminId: string,
+  adminId: number,
   requestHash: string
 ): Promise<T | null> {
   await lockOperation(tx, `ADMIN:${adminId}:${operationType}:${operationId}`);
@@ -51,7 +52,7 @@ export async function getAdminIdempotentResult<T>(
     orderBy: { createdAt: "asc" }
   });
   if (!record) return null;
-  if (record.requestHash !== normalizedHash) throw new ConflictException("operationId 已用于其他请求");
+  if (record.requestHash !== normalizedHash) throw new ConflictException(`${IDEMPOTENCY_KEY_HEADER} 已用于其他请求`);
   return record.status === "SUCCEEDED" && record.resultJson ? fromJson<T>(record.resultJson) : null;
 }
 
@@ -59,7 +60,7 @@ export function startAdminIdempotentOperation(
   tx: Prisma.TransactionClient,
   operationId: string,
   operationType: string,
-  adminId: string,
+  adminId: number,
   requestHash: string
 ) {
   return tx.idempotencyRecord.create({
@@ -77,7 +78,7 @@ export function completeAdminIdempotentOperation<T>(
   tx: Prisma.TransactionClient,
   operationId: string,
   operationType: string,
-  adminId: string,
+  adminId: number,
   requestHash: string,
   result: T
 ) {
@@ -100,8 +101,8 @@ export function startIdempotentOperation(
   tx: Prisma.TransactionClient,
   operationId: string,
   operationType: string,
-  userId: string,
-  diningGroupId: string | null,
+  userId: number,
+  diningGroupId: number | null,
   requestHash: string
 ) {
   const normalizedHash = toRequestHash(requestHash);
@@ -121,8 +122,8 @@ export function completeIdempotentOperation<T>(
   tx: Prisma.TransactionClient,
   operationId: string,
   operationType: string,
-  userId: string,
-  diningGroupId: string | null,
+  userId: number,
+  diningGroupId: number | null,
   requestHash: string,
   result: T
 ) {

@@ -11,6 +11,7 @@ import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperat
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
   FridgeItemSummary,
+  OperationId,
   PageResult,
   RecipeContentSnapshot,
   ShoppingItemSummary,
@@ -77,7 +78,7 @@ export class PantryService {
     };
   }
 
-  async createFridgeItem(userId: UUID, operationId: UUID, name: string, quantityText?: string | null, note?: string | null) {
+  async createFridgeItem(userId: UUID, operationId: OperationId, name: string, quantityText?: string | null, note?: string | null) {
     const normalized = this.normalizePantryFields(name, quantityText, note);
     const requestHash = JSON.stringify(normalized);
     return this.prisma.$transaction(async tx => {
@@ -101,7 +102,7 @@ export class PantryService {
     });
   }
 
-  async updateFridgeItem(userId: UUID, itemId: UUID, operationId: UUID, name: string, quantityText?: string | null, note?: string | null) {
+  async updateFridgeItem(userId: UUID, itemId: UUID, operationId: OperationId, name: string, quantityText?: string | null, note?: string | null) {
     const normalized = this.normalizePantryFields(name, quantityText, note);
     const requestHash = `${itemId}:${JSON.stringify(normalized)}`;
     return this.prisma.$transaction(async tx => {
@@ -124,7 +125,7 @@ export class PantryService {
     });
   }
 
-  async consumeFridgeItems(userId: UUID, operationId: UUID, itemIds: UUID[]) {
+  async consumeFridgeItems(userId: UUID, operationId: OperationId, itemIds: UUID[]) {
     const uniqueIds = Array.from(new Set(itemIds));
     const requestHash = uniqueIds.join(",");
     return this.prisma.$transaction(async tx => {
@@ -176,7 +177,7 @@ export class PantryService {
     };
   }
 
-  async createShoppingItem(userId: UUID, operationId: UUID, name: string, quantityText?: string | null, note?: string | null) {
+  async createShoppingItem(userId: UUID, operationId: OperationId, name: string, quantityText?: string | null, note?: string | null) {
     const normalized = this.normalizePantryFields(name, quantityText, note);
     const requestHash = JSON.stringify(normalized);
     return this.prisma.$transaction(async tx => {
@@ -200,7 +201,7 @@ export class PantryService {
     });
   }
 
-  async updateShoppingStatus(userId: UUID, itemId: UUID, operationId: UUID, status: string) {
+  async updateShoppingStatus(userId: UUID, itemId: UUID, operationId: OperationId, status: string) {
     const normalizedStatus = normalizeShoppingStatus(status);
     const requestHash = `${itemId}:${normalizedStatus}`;
     return this.prisma.$transaction(async tx => {
@@ -250,7 +251,7 @@ export class PantryService {
     return menu.ingredients
       .filter(item => !ownedIngredientKeys.has(item.ingredientName.trim().toLowerCase()))
       .map((item, index) => ({
-        id: `preview-${eventId}-${index}`,
+        id: -(eventId * 1000 + index + 1),
         name: item.ingredientName,
         quantityText: formatRecipeAmount(item.amount),
         note: "来自饭局菜单缺口",
@@ -261,8 +262,8 @@ export class PantryService {
       }));
   }
 
-  async createEventGap(userId: UUID, eventId: UUID, operationId: UUID) {
-    const requestHash = eventId;
+  async createEventGap(userId: UUID, eventId: UUID, operationId: OperationId) {
+    const requestHash = String(eventId);
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<ShoppingItemSummary[]>(tx, operationId, "shopping:gap", userId, null, requestHash);
       if (repeated) return repeated;
@@ -330,7 +331,7 @@ export class PantryService {
   }
 
   private toFridgeItemSummary(item: {
-    id: string;
+    id: UUID;
     name: string;
     quantityText: string | null;
     note: string | null;
@@ -348,7 +349,7 @@ export class PantryService {
   }
 
   private toShoppingItemSummary = (item: {
-    id: string;
+    id: UUID;
     name: string;
     quantityText: string | null;
     note: string | null;

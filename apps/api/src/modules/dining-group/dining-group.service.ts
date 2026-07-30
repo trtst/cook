@@ -13,6 +13,7 @@ import type {
   DissolveDiningGroupResponse,
   GetMyDiningGroupsResponse,
   LeaveDiningGroupResponse,
+  OperationId,
   RemoveDiningGroupMemberResponse,
   StorageUsageSummary,
   UUID
@@ -40,8 +41,8 @@ function toIsoDate(value: Date) {
   return value.toISOString();
 }
 
-function hashText(value: string) {
-  return createHash("sha256").update(value).digest("hex");
+function hashText(value: string | number) {
+  return createHash("sha256").update(String(value)).digest("hex");
 }
 
 function createOpaqueInviteToken() {
@@ -154,7 +155,7 @@ export class DiningGroupService {
     });
   }
 
-  async createInvite(userId: UUID, diningGroupId: UUID, operationId: UUID): Promise<CreateInviteResult> {
+  async createInvite(userId: UUID, diningGroupId: UUID, operationId: OperationId): Promise<CreateInviteResult> {
     const requestHash = hashText(diningGroupId);
     const repeated = await this.getIdempotentResult<CreateInviteResult>(
       operationId,
@@ -232,7 +233,7 @@ export class DiningGroupService {
     return result;
   }
 
-  async acceptInvite(userId: UUID, inviteToken: string, operationId: UUID): Promise<AcceptInviteResponse> {
+  async acceptInvite(userId: UUID, inviteToken: string, operationId: OperationId): Promise<AcceptInviteResponse> {
     const tokenHash = hashText(inviteToken);
     const invite = await this.prisma.diningGroupInvite.findUnique({
       where: { tokenHash },
@@ -373,7 +374,7 @@ export class DiningGroupService {
   async leave(
     userId: UUID,
     diningGroupId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     expectedVersion: number
   ): Promise<LeaveDiningGroupResponse> {
     const requestHash = hashText(`${diningGroupId}:${expectedVersion}`);
@@ -451,7 +452,7 @@ export class DiningGroupService {
     userId: UUID,
     diningGroupId: UUID,
     targetUserId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     expectedVersion: number
   ): Promise<RemoveDiningGroupMemberResponse> {
     const requestHash = hashText(`${diningGroupId}:${targetUserId}:${expectedVersion}`);
@@ -529,7 +530,7 @@ export class DiningGroupService {
   async dissolve(
     userId: UUID,
     diningGroupId: UUID,
-    operationId: UUID,
+    operationId: OperationId,
     expectedVersion: number
   ): Promise<DissolveDiningGroupResponse> {
     const requestHash = hashText(`${diningGroupId}:${expectedVersion}`);
@@ -735,7 +736,7 @@ export class DiningGroupService {
   }
 
   private async getIdempotentResult<T>(
-    operationId: UUID,
+    operationId: OperationId,
     operationType: string,
     userId: UUID,
     diningGroupId: UUID | null,
@@ -752,7 +753,7 @@ export class DiningGroupService {
 
   private startIdempotentOperation(
     tx: Prisma.TransactionClient,
-    operationId: UUID,
+    operationId: OperationId,
     operationType: string,
     userId: UUID,
     diningGroupId: UUID | null,
@@ -772,7 +773,7 @@ export class DiningGroupService {
 
   private completeIdempotentOperation<T>(
     tx: Prisma.TransactionClient,
-    operationId: UUID,
+    operationId: OperationId,
     operationType: string,
     userId: UUID,
     diningGroupId: UUID | null,

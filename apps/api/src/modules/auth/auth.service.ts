@@ -69,7 +69,7 @@ export class AuthService {
     };
   }
 
-  async refreshSession(userId: string) {
+  async refreshSession(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId }
     });
@@ -86,7 +86,7 @@ export class AuthService {
     };
   }
 
-  async updateCurrentPassword(userId: string, body: ChangeCurrentPasswordRequest) {
+  async updateCurrentPassword(userId: number, body: ChangeCurrentPasswordRequest) {
     const currentUser = await this.prisma.user.findUnique({
       where: { id: userId }
     });

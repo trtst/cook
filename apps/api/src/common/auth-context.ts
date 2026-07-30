@@ -1,9 +1,9 @@
 export interface UserAuthContext {
-  userId: string;
+  userId: number;
 }
 
 export interface AdminAuthContext {
-  adminId: string;
+  adminId: number;
   roles: string[];
 }
 

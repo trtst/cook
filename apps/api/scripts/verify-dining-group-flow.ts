@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import type {
   AcceptInviteResponse,
@@ -41,6 +41,8 @@ interface AdminLoginResult {
   token: string;
 }
 
+let idempotencySeed = Date.now();
+
 const commonHeaders = {
   "content-type": "application/json",
   "x-cook-from": "mini_program",
@@ -56,6 +58,18 @@ const adminHeaders = {
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+function nextIdempotencyKey() {
+  idempotencySeed += 1;
+  return String(idempotencySeed);
+}
+
+function withIdempotencyKey(headers: Record<string, string>, key = nextIdempotencyKey()) {
+  return {
+    ...headers,
+    "Idempotency-Key": key
+  };
 }
 
 function tokenHash(inviteToken: string) {
@@ -117,6 +131,11 @@ async function main() {
     const ownerAuthorization = `Bearer ${ownerLogin.token}`;
     const freeAuthorization = `Bearer ${freeLogin.token}`;
     const memberAuthorization = `Bearer ${memberLogin.token}`;
+    const memberUser = await prisma.user.findUnique({
+      where: { phone: memberPhone },
+      select: { id: true }
+    });
+    assert(memberUser, "member user should exist in database");
 
     const [ownerGroupsBefore, freeGroupsBefore, memberGroupsBefore, ownerMe, memberMe, ownerStorage] =
       await Promise.all([
@@ -147,10 +166,9 @@ async function main() {
     if (memberGroupsBefore.items.some(item => item.id === ownerGroup.id && item.myStatus === "ACTIVE")) {
       await requestData<RemoveDiningGroupMemberResponse>(`/dining-groups/${ownerGroup.id}/remove-member`, {
         method: "POST",
-        headers: { authorization: ownerAuthorization },
+        headers: withIdempotencyKey({ authorization: ownerAuthorization }),
         body: JSON.stringify({
-          userId: "00000000-0000-4000-8000-000000000003",
-          operationId: randomUUID(),
+          userId: memberUser.id,
           expectedVersion: ownerGroup.version
         })
       });
@@ -161,16 +179,16 @@ async function main() {
       assert(ownerGroup, "owner group should remain active after cleanup");
     }
 
-    const createOperationId = randomUUID();
+    const createOperationId = nextIdempotencyKey();
     const invite1 = await requestData<CreateInviteResult>("/dining-group-invites", {
       method: "POST",
-      headers: { authorization: ownerAuthorization },
-      body: JSON.stringify({ diningGroupId: ownerGroup.id, operationId: createOperationId })
+      headers: withIdempotencyKey({ authorization: ownerAuthorization }, createOperationId),
+      body: JSON.stringify({ diningGroupId: ownerGroup.id })
     });
     const invite2 = await requestData<CreateInviteResult>("/dining-group-invites", {
       method: "POST",
-      headers: { authorization: ownerAuthorization },
-      body: JSON.stringify({ diningGroupId: ownerGroup.id, operationId: createOperationId })
+      headers: withIdempotencyKey({ authorization: ownerAuthorization }, createOperationId),
+      body: JSON.stringify({ diningGroupId: ownerGroup.id })
     });
     assert(invite1.inviteToken === invite2.inviteToken, "create invite should be idempotent");
 
@@ -184,27 +202,24 @@ async function main() {
       `/dining-group-invites/${encodeURIComponent(invite1.inviteToken)}/accept`,
       {
         method: "POST",
-        headers: { authorization: freeAuthorization },
-        body: JSON.stringify({ operationId: randomUUID() })
+        headers: withIdempotencyKey({ authorization: freeAuthorization })
       }
     );
     assert(freeAccept.status === 400, "free user with owned group should not be able to join another dining group");
 
-    const acceptOperationId = randomUUID();
+    const acceptOperationId = nextIdempotencyKey();
     const accept1 = await requestData<AcceptInviteResponse>(
       `/dining-group-invites/${encodeURIComponent(invite1.inviteToken)}/accept`,
       {
         method: "POST",
-        headers: { authorization: memberAuthorization },
-        body: JSON.stringify({ operationId: acceptOperationId })
+        headers: withIdempotencyKey({ authorization: memberAuthorization }, acceptOperationId)
       }
     );
     const accept2 = await requestData<AcceptInviteResponse>(
       `/dining-group-invites/${encodeURIComponent(invite1.inviteToken)}/accept`,
       {
         method: "POST",
-        headers: { authorization: memberAuthorization },
-        body: JSON.stringify({ operationId: acceptOperationId })
+        headers: withIdempotencyKey({ authorization: memberAuthorization }, acceptOperationId)
       }
     );
     assert(accept1.diningGroup.id === ownerGroup.id, "member should join owner group");
@@ -216,15 +231,14 @@ async function main() {
     );
     assert(membersAfterAccept.members.length === 2, "owner group should have owner and accepted member");
 
-    const removeOperationId = randomUUID();
+    const removeOperationId = nextIdempotencyKey();
     const remove1 = await requestData<RemoveDiningGroupMemberResponse>(
       `/dining-groups/${ownerGroup.id}/remove-member`,
       {
         method: "POST",
-        headers: { authorization: ownerAuthorization },
+        headers: withIdempotencyKey({ authorization: ownerAuthorization }, removeOperationId),
         body: JSON.stringify({
-          userId: "00000000-0000-4000-8000-000000000003",
-          operationId: removeOperationId,
+          userId: memberUser.id,
           expectedVersion: accept1.diningGroup.version
         })
       }
@@ -233,10 +247,9 @@ async function main() {
       `/dining-groups/${ownerGroup.id}/remove-member`,
       {
         method: "POST",
-        headers: { authorization: ownerAuthorization },
+        headers: withIdempotencyKey({ authorization: ownerAuthorization }, removeOperationId),
         body: JSON.stringify({
-          userId: "00000000-0000-4000-8000-000000000003",
-          operationId: removeOperationId,
+          userId: memberUser.id,
           expectedVersion: accept1.diningGroup.version
         })
       }
@@ -256,21 +269,21 @@ async function main() {
 
     const leaveOwn = await request<LeaveDiningGroupResponse>(`/dining-groups/${ownerGroup.id}/leave`, {
       method: "POST",
-      headers: { authorization: ownerAuthorization },
-      body: JSON.stringify({ operationId: randomUUID(), expectedVersion: ownerGroupAfterRemove.version })
+      headers: withIdempotencyKey({ authorization: ownerAuthorization }),
+      body: JSON.stringify({ expectedVersion: ownerGroupAfterRemove.version })
     });
     assert(leaveOwn.status === 400, "owner should not leave own dining group directly");
 
-    const dissolveOperationId = randomUUID();
+    const dissolveOperationId = nextIdempotencyKey();
     const dissolve1 = await requestData<DissolveDiningGroupResponse>(`/dining-groups/${ownerGroup.id}/dissolve`, {
       method: "POST",
-      headers: { authorization: ownerAuthorization },
-      body: JSON.stringify({ operationId: dissolveOperationId, expectedVersion: ownerGroupAfterRemove.version })
+      headers: withIdempotencyKey({ authorization: ownerAuthorization }, dissolveOperationId),
+      body: JSON.stringify({ expectedVersion: ownerGroupAfterRemove.version })
     });
     const dissolve2 = await requestData<DissolveDiningGroupResponse>(`/dining-groups/${ownerGroup.id}/dissolve`, {
       method: "POST",
-      headers: { authorization: ownerAuthorization },
-      body: JSON.stringify({ operationId: dissolveOperationId, expectedVersion: ownerGroupAfterRemove.version })
+      headers: withIdempotencyKey({ authorization: ownerAuthorization }, dissolveOperationId),
+      body: JSON.stringify({ expectedVersion: ownerGroupAfterRemove.version })
     });
     assert(dissolve1.diningGroupId === dissolve2.diningGroupId, "dissolve should be idempotent");
 

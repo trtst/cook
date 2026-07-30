@@ -1,6 +1,6 @@
-import type { RecipeContentSnapshot, RecipeDraftContentInput } from "../../contracts/types";
+import type { RecipeContentSnapshot, RecipeDraftContentInput, UUID } from "../../contracts/types";
 
-export function replaceDraftIngredient(content: RecipeDraftContentInput, fromId: string, toId: string) {
+export function replaceDraftIngredient(content: RecipeDraftContentInput, fromId: UUID, toId: UUID) {
   let changed = false;
   const ingredients = content.ingredients.map(item => {
     if (item.ingredientId !== fromId) return item;
@@ -24,8 +24,8 @@ export function replaceDraftIngredient(content: RecipeDraftContentInput, fromId:
 
 export function replaceRecipeIngredient(
   content: RecipeContentSnapshot,
-  fromId: string,
-  target: { id: string; name: string; categoryId: string }
+  fromId: UUID,
+  target: { id: UUID; name: string; categoryId: UUID }
 ) {
   let changed = false;
   const ingredients = content.ingredients.map(item => {

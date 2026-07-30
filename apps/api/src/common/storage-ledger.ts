@@ -20,24 +20,25 @@ export function sumImageBytes(images: Array<{ sizeBytes: number }>) {
 
 export function upsertStorageLedger(
   tx: Prisma.TransactionClient,
-  userId: string,
+  userId: number,
   module: StorageLedgerModule,
-  recordKey: string,
+  recordKey: string | number,
   usedBytes: number
 ) {
+  const normalizedKey = String(recordKey);
   return tx.storageLedger.upsert({
     where: {
       userId_module_recordKey: {
         userId,
         module,
-        recordKey
+        recordKey: normalizedKey
       }
     },
     update: { usedBytes },
     create: {
       userId,
       module,
-      recordKey,
+      recordKey: normalizedKey,
       usedBytes
     }
   });
@@ -45,15 +46,16 @@ export function upsertStorageLedger(
 
 export function removeStorageLedger(
   tx: Prisma.TransactionClient,
-  userId: string,
+  userId: number,
   module: StorageLedgerModule,
-  recordKey: string
+  recordKey: string | number
 ) {
+  const normalizedKey = String(recordKey);
   return tx.storageLedger.deleteMany({
     where: {
       userId,
       module,
-      recordKey
+      recordKey: normalizedKey
     }
   });
 }

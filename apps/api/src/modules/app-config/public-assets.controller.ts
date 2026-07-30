@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, NotFoundException, Param, ParseUUIDPipe, Res } from "@nestjs/common";
+import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Res } from "@nestjs/common";
 import { ApiExcludeController } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { PrismaService } from "../../common/prisma.service";
@@ -28,7 +28,7 @@ export class PublicAssetsController {
   }
 
   @Get("ingredients/:ingredientId")
-  async getIngredientImage(@Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string, @Res() response: ResponseLike) {
+  async getIngredientImage(@Param("ingredientId", ParseIntPipe) ingredientId: number, @Res() response: ResponseLike) {
     const ingredient = await this.prisma.ingredient.findFirst({
       where: {
         id: ingredientId,

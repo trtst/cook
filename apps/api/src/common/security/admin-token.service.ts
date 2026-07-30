@@ -3,7 +3,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 
 interface AdminTokenPayload {
   kind: "admin";
-  sub: string;
+  sub: number;
   roles: string[];
   exp: number;
 }
@@ -40,8 +40,9 @@ function readPayload(encodedPayload: string): AdminTokenPayload {
 
     if (
       payload.kind !== "admin" ||
-      typeof payload.sub !== "string" ||
-      !payload.sub ||
+      typeof payload.sub !== "number" ||
+      !Number.isInteger(payload.sub) ||
+      payload.sub <= 0 ||
       !Array.isArray(payload.roles) ||
       payload.roles.some(role => typeof role !== "string") ||
       typeof payload.exp !== "number" ||
@@ -63,7 +64,7 @@ function readPayload(encodedPayload: string): AdminTokenPayload {
 
 @Injectable()
 export class AdminTokenService {
-  createToken(adminId: string, roles: string[]) {
+  createToken(adminId: number, roles: string[]) {
     const expiresInSeconds = Number(process.env.ADMIN_TOKEN_EXPIRES_SECONDS ?? 86_400);
     const payload: AdminTokenPayload = {
       kind: "admin",

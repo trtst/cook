@@ -1,11 +1,11 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
-import type { MeResponse, UUID } from "../../contracts/types";
+import type { MeResponse, OperationId, UUID } from "../../contracts/types";
 
 @Injectable()
 export class DisplayService {
   async updateCurrent(
     _userId: UUID,
-    _operationId: UUID,
+    _operationId: OperationId,
     _profileBackgroundUrl?: string | null,
     _homeBackgroundUrl?: string | null
   ): Promise<MeResponse> {

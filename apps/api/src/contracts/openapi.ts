@@ -51,7 +51,7 @@ export function ApiOkPage(model: Type<unknown>, description: string) {
   );
 }
 
-const uuid = { type: "string" as const, format: "uuid" };
+const uuid = { type: Number, minimum: 1 };
 const dateTime = { type: "string" as const, format: "date-time" };
 const nullableString = { type: String, nullable: true };
 const tierValues = ["FREE", "PLUS", "PRO", "ULTRA"];
@@ -421,16 +421,27 @@ export class RecipeIngredientInputModel {
   @ApiProperty({ type: RecipeIngredientInputAmountModel }) amount!: RecipeIngredientInputAmountModel;
 }
 
+export class RecipeDraftIngredientModel {
+  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String }) quantity!: string;
+  @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) fuzzyText!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) defaultUnitId!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["SYSTEM", "PERSONAL"] }) source!: string | null;
+}
+
 export class RecipeDraftContentModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) story!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
-  @ApiProperty({ type: [String] }) sceneIds!: string[];
+  @ApiProperty({ type: [Number] }) sceneIds!: string[];
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 20 }) baseServings!: number | null;
   @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) tips!: string | null;
-  @ApiProperty({ type: [RecipeIngredientInputModel] }) ingredients!: RecipeIngredientInputModel[];
+  @ApiProperty({ type: [RecipeDraftIngredientModel] }) ingredients!: RecipeDraftIngredientModel[];
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
 }
 
