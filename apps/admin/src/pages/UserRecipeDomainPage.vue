@@ -10,6 +10,7 @@ import {
   type AdminUserDraftRecipe,
   type AdminUserPublishedRecipe
 } from "@/apis/user-recipe";
+import type { UUID } from "@/apis/http";
 
 type RecipeDomainTab = "published" | "drafts" | "collections";
 
@@ -45,7 +46,12 @@ let publishedRequest = 0;
 let draftsRequest = 0;
 let collectionsRequest = 0;
 
-const userId = computed(() => String(route.params.userId ?? ""));
+function parseRouteId(value: unknown) {
+  const normalized = typeof value === "string" ? Number(value) : Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
+const userId = computed<UUID | null>(() => parseRouteId(route.params.userId));
 const pageTitle = computed(() => {
   if (!overview.value) return "用户菜谱域";
   return overview.value.user.nickname ? `${overview.value.user.nickname} 的菜谱域` : `UID ${overview.value.user.uid} 的菜谱域`;
@@ -77,9 +83,8 @@ function formatCategory(category?: { name: string } | null) {
 }
 
 function getUserId() {
-  const value = userId.value.trim();
-  if (!value) throw new Error("用户 ID 缺失");
-  return value;
+  if (!userId.value) throw new Error("用户 ID 缺失");
+  return userId.value;
 }
 
 function resetLists() {

@@ -1,4 +1,4 @@
-import { requestData, type IsoDateTime, type PageQuery, type PageResult, type UUID } from "./http";
+import { requestData, type IsoDateTime, type PageQuery, type PageResult, type OperationId, type UUID } from "./http";
 
 export interface AdminRecipeSummary {
   id: UUID;
@@ -103,7 +103,7 @@ export interface AdminRecipeReportQuery extends PageQuery {
 }
 
 export interface UpdateAdminRecipePayload {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
   inspirationCategoryId: UUID;
   content: AdminRecipeContentInput;
@@ -116,12 +116,14 @@ export const recipeApi = {
     });
   },
   getDetail(recipeId: UUID) {
-    return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(recipeId)}`);
+    return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(String(recipeId))}`);
   },
   update(recipeId: UUID, body: UpdateAdminRecipePayload) {
-    return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(recipeId)}`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(String(recipeId))}`, {
       method: "PUT",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   listReports(query: AdminRecipeReportQuery) {
@@ -134,22 +136,24 @@ export const recipeApi = {
       auth: false
     });
   },
-  block(recipeId: UUID, operationId: UUID, reason: string) {
-    return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(recipeId)}/block`, {
+  block(recipeId: UUID, operationId: OperationId, reason: string) {
+    return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/block`, {
       method: "POST",
-      body: { operationId, reason }
+      body: { reason },
+      idempotencyKey: operationId
     });
   },
-  unblock(recipeId: UUID, operationId: UUID) {
-    return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(recipeId)}/unblock`, {
+  unblock(recipeId: UUID, operationId: OperationId) {
+    return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/unblock`, {
       method: "POST",
-      body: { operationId }
+      idempotencyKey: operationId
     });
   },
-  resolveReport(reportId: UUID, operationId: UUID, resolutionNote?: string | null) {
-    return requestData<RecipeReportSummary>(`/admin/recipe-reports/${encodeURIComponent(reportId)}/resolve`, {
+  resolveReport(reportId: UUID, operationId: OperationId, resolutionNote?: string | null) {
+    return requestData<RecipeReportSummary>(`/admin/recipe-reports/${encodeURIComponent(String(reportId))}/resolve`, {
       method: "POST",
-      body: { operationId, resolutionNote }
+      body: { resolutionNote },
+      idempotencyKey: operationId
     });
   }
 };

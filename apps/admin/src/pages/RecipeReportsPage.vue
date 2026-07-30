@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { recipeApi, type RecipeReportSummary } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
 const router = useRouter();
@@ -43,9 +45,9 @@ function search() {
   void loadReports();
 }
 
-async function resolveReport(reportId: string) {
+async function resolveReport(reportId: UUID) {
   try {
-    await recipeApi.resolveReport(reportId, crypto.randomUUID(), "已核查");
+    await recipeApi.resolveReport(reportId, createOperationId(), "已核查");
     ElMessage.success("已处理举报");
     await loadReports();
   } catch (error) {
@@ -57,7 +59,7 @@ onMounted(() => {
   void loadReports();
 });
 
-function openDetail(recipeId: string) {
+function openDetail(recipeId: UUID) {
   void router.push(`/recipes/${recipeId}`);
 }
 </script>

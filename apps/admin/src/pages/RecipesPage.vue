@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { recipeApi, type AdminRecipeSummary } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
 const router = useRouter();
@@ -45,7 +47,7 @@ function search() {
   void loadRecipes();
 }
 
-async function blockRecipe(recipeId: string) {
+async function blockRecipe(recipeId: UUID) {
   try {
     const { value } = await ElMessageBox.prompt("请输入下架原因", "下架菜谱", {
       inputValue: "违规或不适合继续曝光",
@@ -53,7 +55,7 @@ async function blockRecipe(recipeId: string) {
       confirmButtonText: "确认下架",
       cancelButtonText: "取消"
     });
-    await recipeApi.block(recipeId, crypto.randomUUID(), value.trim() || "后台下架");
+    await recipeApi.block(recipeId, createOperationId(), value.trim() || "后台下架");
     ElMessage.success("已下架");
     await loadRecipes();
   } catch (error) {
@@ -62,9 +64,9 @@ async function blockRecipe(recipeId: string) {
   }
 }
 
-async function unblockRecipe(recipeId: string) {
+async function unblockRecipe(recipeId: UUID) {
   try {
-    await recipeApi.unblock(recipeId, crypto.randomUUID());
+    await recipeApi.unblock(recipeId, createOperationId());
     ElMessage.success("已恢复");
     await loadRecipes();
   } catch (error) {
@@ -76,7 +78,7 @@ onMounted(() => {
   void loadRecipes();
 });
 
-function openDetail(recipeId: string) {
+function openDetail(recipeId: UUID) {
   void router.push(`/recipes/${recipeId}`);
 }
 </script>

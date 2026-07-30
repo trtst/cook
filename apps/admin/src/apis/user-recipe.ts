@@ -77,11 +77,11 @@ export interface AdminUserCollectionRecipe {
 }
 
 function getRecipeDomainPath(userId: UUID) {
-  return `/admin/users/${encodeURIComponent(userId)}/recipe-domain`;
+  return `/admin/users/${encodeURIComponent(String(userId))}/recipe-domain`;
 }
 
 function getUserPath(userId: UUID) {
-  return `/admin/users/${encodeURIComponent(userId)}`;
+  return `/admin/users/${encodeURIComponent(String(userId))}`;
 }
 
 export const userRecipeApi = {
@@ -103,7 +103,7 @@ export const userRecipeApi = {
   },
   listCollectionRecipes(userId: UUID, collectionId: UUID, query: PageQuery) {
     return requestData<PageResult<AdminUserCollectionRecipe>>(
-      `${getUserPath(userId)}/collections/${encodeURIComponent(collectionId)}/recipes`,
+      `${getUserPath(userId)}/collections/${encodeURIComponent(String(collectionId))}/recipes`,
       {
         query: { ...query }
       }

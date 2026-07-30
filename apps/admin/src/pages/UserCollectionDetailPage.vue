@@ -9,6 +9,7 @@ import {
   type AdminUserCollectionRecipe,
   type AdminUserCollectionSummary
 } from "@/apis/user-recipe";
+import type { UUID } from "@/apis/http";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,23 +28,26 @@ const pageSize = ref(20);
 let headerRequest = 0;
 let itemsRequest = 0;
 
-const userId = computed(() => String(route.params.userId ?? ""));
-const collectionId = computed(() => String(route.params.collectionId ?? ""));
+function parseRouteId(value: unknown) {
+  const normalized = typeof value === "string" ? Number(value) : Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
+const userId = computed<UUID | null>(() => parseRouteId(route.params.userId));
+const collectionId = computed<UUID | null>(() => parseRouteId(route.params.collectionId));
 const pageTitle = computed(() => {
   if (!collection.value) return "合集内容";
   return `${collection.value.name} · 合集内容`;
 });
 
 function getUserId() {
-  const value = userId.value.trim();
-  if (!value) throw new Error("用户 ID 缺失");
-  return value;
+  if (!userId.value) throw new Error("用户 ID 缺失");
+  return userId.value;
 }
 
 function getCollectionId() {
-  const value = collectionId.value.trim();
-  if (!value) throw new Error("合集 ID 缺失");
-  return value;
+  if (!collectionId.value) throw new Error("合集 ID 缺失");
+  return collectionId.value;
 }
 
 function formatCategory(category?: { name: string } | null) {

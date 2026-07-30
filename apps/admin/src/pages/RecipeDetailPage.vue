@@ -14,8 +14,11 @@ import {
   type AdminInspirationCategorySummary,
   type AdminRecipeContentInput,
   type AdminRecipeDetail,
+  type RecipeIngredientInput,
   type UpdateAdminRecipePayload
 } from "@/apis/recipe";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
 type Difficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
@@ -23,12 +26,12 @@ type Duration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
 type FuzzyText = "适量" | "少许" | "按需";
 
 interface EditIngredientRow {
-  ingredientId: string;
+  ingredientId: UUID | "";
   amount:
     | {
         kind: "EXACT";
         quantity: string;
-        unitId: string;
+        unitId: UUID | "";
       }
     | {
         kind: "FUZZY";
@@ -37,7 +40,7 @@ interface EditIngredientRow {
 }
 
 interface EditFormState {
-  inspirationCategoryId: string;
+  inspirationCategoryId: UUID | "";
   content: {
     name: string;
     story: string;
@@ -51,7 +54,7 @@ interface EditFormState {
 }
 
 interface IngredientOptionItem {
-  id: string;
+  id: UUID;
   label: string;
   disabled?: boolean;
 }
@@ -106,7 +109,12 @@ const form = reactive<EditFormState>({
   }
 });
 
-const recipeId = computed(() => String(route.params.recipeId ?? ""));
+function parseRouteId(value: unknown) {
+  const normalized = typeof value === "string" ? Number(value) : Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
+const recipeId = computed<UUID | null>(() => parseRouteId(route.params.recipeId));
 const selectableCategoryIds = computed(() => new Set(ingredientCategories.value.filter(item => item.isSelectable).map(item => item.id)));
 const validIngredientIdSet = computed(() => new Set(ingredientOptions.value.map(item => item.id)));
 const activeIngredientLabelMap = computed(() => new Map(ingredientOptions.value.map(item => [item.id, `${item.name} · ${item.categoryName}`])));
@@ -154,6 +162,7 @@ const unitOptionList = computed(() => {
 async function loadDetail() {
   loading.value = true;
   try {
+    if (!recipeId.value) throw new Error("菜谱 ID 缺失");
     detail.value = await recipeApi.getDetail(recipeId.value);
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载菜谱详情失败");
@@ -208,8 +217,12 @@ const invalidIngredientNames = computed(() => {
   const names: string[] = [];
   const seen = new Set<string>();
   for (const item of form.content.ingredients) {
-    if (validIngredientIdSet.value.has(item.ingredientId)) continue;
-    const name = currentIngredientLabelMap.value.get(item.ingredientId) ?? activeIngredientLabelMap.value.get(item.ingredientId) ?? item.ingredientId;
+    const ingredientId = resolveEditId(item.ingredientId);
+    if (ingredientId && validIngredientIdSet.value.has(ingredientId)) continue;
+    const name =
+      (ingredientId ? currentIngredientLabelMap.value.get(ingredientId) : null) ??
+      (ingredientId ? activeIngredientLabelMap.value.get(ingredientId) : null) ??
+      String(item.ingredientId);
     if (seen.has(name)) continue;
     seen.add(name);
     names.push(name);
@@ -276,16 +289,65 @@ function removeStep(index: number) {
   form.content.steps.splice(index, 1);
 }
 
+function resolveEditId(value: UUID | ""): UUID | null {
+  return value === "" ? null : value;
+}
+
+function buildIngredientInput(item: EditIngredientRow): RecipeIngredientInput | null {
+  const ingredientId = resolveEditId(item.ingredientId);
+  if (!ingredientId) {
+    ElMessage.error("请选择系统食材");
+    return null;
+  }
+
+  if (item.amount.kind === "EXACT") {
+    const unitId = resolveEditId(item.amount.unitId);
+    if (!unitId) {
+      ElMessage.error("请选择单位");
+      return null;
+    }
+    return {
+      ingredientId,
+      amount: {
+        kind: "EXACT",
+        quantity: item.amount.quantity.trim(),
+        unitId
+      }
+    };
+  }
+
+  return {
+    ingredientId,
+    amount: {
+      kind: "FUZZY",
+      text: item.amount.text
+    }
+  };
+}
+
 function buildPayload(): UpdateAdminRecipePayload | null {
   if (!detail.value) return null;
   if (invalidIngredientNames.value.length) {
     ElMessage.error(`请先替换已下架或不可选的系统食材：${invalidIngredientNames.value.join("、")}`);
     return null;
   }
+  const inspirationCategoryId = resolveEditId(form.inspirationCategoryId);
+  if (!inspirationCategoryId) {
+    ElMessage.error("请选择灵感分类");
+    return null;
+  }
+
+  const ingredients: RecipeIngredientInput[] = [];
+  for (const item of form.content.ingredients) {
+    const ingredient = buildIngredientInput(item);
+    if (!ingredient) return null;
+    ingredients.push(ingredient);
+  }
+
   return {
-    operationId: crypto.randomUUID(),
+    operationId: createOperationId(),
     expectedVersion: detail.value.version,
-    inspirationCategoryId: form.inspirationCategoryId,
+    inspirationCategoryId,
     content: {
       name: form.content.name.trim(),
       story: form.content.story.trim() ? form.content.story.trim() : null,
@@ -293,20 +355,7 @@ function buildPayload(): UpdateAdminRecipePayload | null {
       difficulty: form.content.difficulty,
       duration: form.content.duration,
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
-      ingredients: form.content.ingredients.map(item => ({
-        ingredientId: item.ingredientId,
-        amount:
-          item.amount.kind === "EXACT"
-            ? {
-                kind: "EXACT",
-                quantity: item.amount.quantity.trim(),
-                unitId: item.amount.unitId
-              }
-            : {
-                kind: "FUZZY",
-                text: item.amount.text
-              }
-      })),
+      ingredients,
       steps: form.content.steps.map(item => ({
         text: item.text
       }))
