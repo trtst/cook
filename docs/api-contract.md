@@ -532,12 +532,17 @@ POST /admin/pending-ingredients/{ingredientId}/review
 
 `GET /admin/units` 返回全部系统单位摘要，按 `type -> systemSortOrder -> name` 排序；系统单位摘要新增 `version` 和 `updatedAt`，用于后台编辑、删除和拖拽排序的并发控制。`POST /admin/units` 新建一个系统单位；`PUT /admin/units/{unitId}` 修改单位名称或类型；`DELETE /admin/units/{unitId}` 只在该单位未被任何食材引用时允许删除，否则返回冲突错误；`POST /admin/units/reorder` 只重排某一个 `type` 分组下的完整系统单位集合，成功后统一重写该分组顺序。
 
-`GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword` 和 `status` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`。后台排序按“分类内系统顺序”返回，不再按创建时间倒序表达运营顺序。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`，下架不做物理删除；重新上架时服务端会把该食材放到当前分类排序末尾，避免与现有启用中食材顺序冲突。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /public-assets/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态文件还在也不得继续外露。`POST /admin/ingredients/reorder` 只接收一个分类下的完整系统食材集合顺序，且仅针对当前启用中的系统食材；服务端校验集合完整性和 `expectedVersion` 后重写该分类的系统食材顺序。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。拒绝时必须选择预设 `rejectReasonCode`：`NAME_NOT_CLEAR / NAME_HAS_BRAND / CATEGORY_NOT_FIT / UNIT_NOT_FIT / OUT_OF_SCOPE / OTHER`；只有 `OTHER` 仍要求补充详细 `reason`。服务端会把对应建议写入推荐记录，供前台“我的推荐”直接展示。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。
+`GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword` 和 `status` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`。当传 `categoryId` 时，列表按该分类内系统顺序返回；不传 `categoryId` 时，列表进入后台虚拟“全部食材”视图，按系统食材全局展示顺序返回，用于统一查看、编辑和拖拽控制前台“全部食材”口径。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。系统食材同时维护两套顺序：`分类内顺序` 只服务真实分类管理，`全局展示顺序` 只服务后台“全部食材”视图和前台“全部食材”展示。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`，下架不做物理删除；重新上架时服务端会把该食材同时放到当前分类排序末尾和全局展示顺序末尾，避免与现有启用中食材顺序冲突。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /public-assets/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态文件还在也不得继续外露。`POST /admin/ingredients/reorder` 支持两种模式：传 `categoryId` 时，只接收该分类下启用中系统食材的完整集合顺序并重写分类内顺序；不传 `categoryId` 时，只接收全部启用中系统食材的完整集合顺序并重写全局展示顺序。服务端统一校验集合完整性和 `expectedVersion`。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。拒绝时必须选择预设 `rejectReasonCode`：`NAME_NOT_CLEAR / NAME_HAS_BRAND / CATEGORY_NOT_FIT / UNIT_NOT_FIT / OUT_OF_SCOPE / OTHER`；只有 `OTHER` 仍要求补充详细 `reason`。服务端会把对应建议写入推荐记录，供前台“我的推荐”直接展示。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。
 
 后台菜谱治理当前补充为：
 
 ```text
+GET /admin/inspiration-categories
+POST /admin/inspiration-categories
+PUT /admin/inspiration-categories/{categoryId}
+POST /admin/inspiration-categories/reorder
 GET /admin/recipes
+POST /admin/recipes
 GET /admin/recipes/{recipeId}
 PUT /admin/recipes/{recipeId}
 GET /admin/recipe-reports
@@ -546,7 +551,7 @@ POST /admin/recipes/{recipeId}/unblock
 POST /admin/recipe-reports/{reportId}/resolve
 ```
 
-`GET /admin/recipes` 只返回后台菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `keyword`、`status` 过滤；列表不再混入举报筛选、举报数和下架原因，排序统一按 `updatedAt desc`。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统灵感菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount` 和 `canEdit`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前灵感菜谱正文，且仅限 `ownerId = null`、当前仍挂灵感分类的菜谱；请求头必须携带 `Idempotency-Key`，请求体只提交 `expectedVersion`、`inspirationCategoryId` 和完整正文输入。保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText` 和 `inspirationCategoryId` 切到新版本，保证已收藏、已引用和历史固定版本不漂移。后台编辑正文时食材和单位只允许引用当前可选的系统食材与系统单位，不开放图片写入。
+`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排系统菜谱分类，请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `ownerId = null` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName`，排序统一按 `updatedAt desc`。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体只提交 `inspirationCategoryId` 和完整正文输入；服务端会新建一条 `RecipeContentVersion`，再创建 `ownerId = null` 的系统菜谱记录。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount` 和 `canEdit`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `ownerId = null`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText` 和 `inspirationCategoryId` 切到新版本，保证已收藏、已引用和历史固定版本不漂移。`GET /admin/pending-recipes` 返回待审核个人菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位，不开放图片写入。
 
 ## 其他领域接口摘要
 
@@ -672,6 +677,29 @@ interface RecipeIngredientSnapshot {
 
 interface RecipeStepSnapshot {
   text: string;
+  imageUrl: string | null;
+}
+
+type UploadAssetScene = "RECIPE_COVER" | "RECIPE_STEP";
+type UploadAssetStatus = "TEMP" | "BOUND" | "DELETED";
+
+interface UploadImageSummary {
+  id: UUID;
+  publicId: string;
+  scene: UploadAssetScene;
+  slotKey: string;
+  status: UploadAssetStatus;
+  imageUrl: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+  createdAt: IsoDateTime;
+  expiresAt: IsoDateTime | null;
+}
+
+interface UploadImageResponse {
+  upload: UploadImageSummary;
 }
 
 interface RecipeContentSnapshot {
@@ -690,6 +718,8 @@ interface RecipeDraftContentInput {
   story: string | null;
   categoryId: ResourceId | null;
   sceneIds: ResourceId[];
+  coverUploadId: ResourceId | null;
+  coverImageUrl: string | null;
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
@@ -704,11 +734,27 @@ interface RecipeDraftContentInput {
     defaultUnitId: ResourceId | null;
     source: "SYSTEM" | "PERSONAL" | null;
   }>;
-  steps: Array<{ text: string }>;
+  steps: Array<{
+    slotKey: string;
+    text: string;
+    uploadId: ResourceId | null;
+    imageUrl: string | null;
+  }>;
 }
 ```
 
-保存草稿时仅强制校验 `content.name` 非空；其余发布必填项允许暂时为空。草稿里的分类、场景、食材和单位引用即使当前已失效，也不阻塞保存，原始输入继续保留在 `content` 里；详情里的 `category / scenes / ingredientRefs / unitRefs` 只回填当前仍能解析到的真实引用。发布时再统一校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材、精确用量必须同时具备正数数量和单位，以及至少一个非空文本步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。R1 不接受图片字段，提交图片字段返回 `400`。
+保存草稿时仅强制校验 `content.name` 非空；其余发布必填项允许暂时为空。草稿里的分类、场景、食材和单位引用即使当前已失效，也不阻塞保存，原始输入继续保留在 `content` 里；详情里的 `category / scenes / ingredientRefs / unitRefs` 只回填当前仍能解析到的真实引用。发布时再统一校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材、精确用量必须同时具备正数数量和单位，以及至少一个“文本或图片至少其一非空”的步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。
+
+菜谱图片的当前链路固定为：
+
+1. 编辑阶段图片只保留在小程序本地缓存，不写服务端。
+2. 本地图片在进入上传链路前，先经过客户端裁剪页处理：封面固定 `4:3`，步骤图自由裁剪；两者都在客户端导出受控宽高、质量后的本地文件。
+3. 用户点击“存草稿”或“发布”时，若还没有 `draftId`，先创建草稿。
+4. 前端随后调用 `POST /uploads/images` 逐张上传本地图片，服务端在草稿临时区创建或替换同一 `slotKey` 的图片。
+5. 上传成功后，前端再把 `coverUploadId / coverImageUrl / steps[].uploadId / steps[].imageUrl` 写回草稿正文。
+6. 发布时服务端把当前草稿引用的临时图片正式绑定到发布版本；已发布旧版本继续保留自己已引用的图片，不因新版本替换而删掉。
+
+`slotKey` 是草稿步骤图片的稳定槽位键。封面固定使用 `cover`；步骤图由客户端为每一步生成稳定 `slotKey`，重复替换图片时必须沿用同一个键，服务端才会把旧临时图按槽位覆盖。
 
 ```ts
 interface CreateRecipeDraftRequest {
@@ -723,6 +769,13 @@ interface UpdateRecipeDraftRequest {
 
 interface PublishRecipeDraftRequest {
   expectedVersion: number;
+}
+
+interface UploadRecipeImageRequest {
+  draftId: ResourceId;
+  scene: UploadAssetScene;
+  slotKey: string;
+  file: binary;
 }
 
 interface ReorderItem {
@@ -912,6 +965,7 @@ GET/POST /recipe-drafts
 GET/PUT /recipe-drafts/{draftId}
 POST /recipe-drafts/{draftId}/delete
 POST /recipe-drafts/{draftId}/publish
+POST /uploads/images
 GET /recipes
 GET /recipes/{recipeId}
 GET /collections
@@ -957,6 +1011,8 @@ Idempotency-Key: 172251000001
     "story": null,
     "categoryId": 1,
     "sceneIds": [1],
+    "coverUploadId": null,
+    "coverImageUrl": null,
     "baseServings": 2,
     "difficulty": "EASY",
     "duration": "WITHIN_15",
@@ -970,9 +1026,33 @@ Idempotency-Key: 172251000001
         }
       }
     ],
-    "steps": [{ "text": "热锅下油后翻炒" }]
+    "steps": [
+      {
+        "slotKey": "step-1",
+        "text": "热锅下油后翻炒",
+        "uploadId": null,
+        "imageUrl": null
+      }
+    ]
   }
 }
+```
+
+上传菜谱图片使用 multipart：
+
+```text
+POST /uploads/images
+Idempotency-Key: 172251000002
+Content-Type: multipart/form-data
+```
+
+表单字段固定为：
+
+```text
+draftId: 123
+scene: RECIPE_COVER | RECIPE_STEP
+slotKey: cover | step-1 | ...
+file: <binary>
 ```
 
 `GET /collections` 返回当前用户的合集场景摘要。`items` 按场景返回 `recipeCount` 和最近更新时间；`totalCount` 返回该用户当前收藏主记录总条数，不是场景条数。`GET /collections/recipes` 返回当前用户收藏快照分页，支持 `page`、`pageSize` 和可选 `sceneId`；传 `sceneId` 时只返回该合集内容。`GET /collections/recipes/{collectionRecipeId}` 返回一个固定版本快照详情。`POST /collections/recipes` 通过请求头 `Idempotency-Key` 保证幂等，请求体只接收 `sourceRecipeId`、`sourceVersionId` 和 `sceneIds`，不接受前端传正文快照；`sceneIds` 必须是非空数组，至少选择一个合集场景。
@@ -985,7 +1065,7 @@ GET /inspiration-recipes
 GET /inspiration-recipes/{recipeId}
 ```
 
-`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。R1 先接已有系统内容；用户推荐、点赞和升级为我的接口后续独立冻结。
+`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；后者详情页额外返回 `curatedByName`，仅用于展示 `由某某整理` 的昵称快照，不跳用户主页。点赞、推荐排序和升级为我的接口后续独立冻结。
 
 收藏主事实冻结为“同一用户 + 同一灵感固定版本最多一条收藏记录”。`sceneIds` 表达该收藏记录挂载到哪些个人场景，必须至少挂到 1 个场景；仅补挂新场景时服务端补关系并刷新 `updatedAt`，同一场景重复收藏返回 `409`。收藏详情和后台合集内容都读取当时固定版本快照，来源菜谱后续更新不得改写已收藏内容。
 
@@ -1001,7 +1081,7 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 
 `GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；`/collections` 返回该用户全部合集场景摘要；`/collections/{sceneId}/recipes` 返回该场景下的收藏快照分页。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
 
-`GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。
+`GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `ownerId = null`、挂系统分类的系统菜谱，并把审核通过时的昵称快照写入 `curatedByName`；原个人菜谱继续保留在“我的”下，不被替换或删除。
 
 创建和保存草稿时，服务端按以下逻辑计量草稿空间：
 

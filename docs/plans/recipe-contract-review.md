@@ -30,14 +30,15 @@ R1 包含：
 3. 系统/个人食材与单位的查询，以及新建、编辑本人食材和新建本人单位。
 4. 个人食材显式推荐入系统库、我的推荐记录，以及后台待审、通过、归并和拒绝闭环。
 5. 新建草稿、已有菜谱编辑草稿、草稿箱、保存、删除和发布。
-6. “我的”菜谱列表、详情、分类内排序和正常删除。
-7. 文本菜谱的完整字段、结构化食材用量和纯文本步骤。
+6. “我的”菜谱列表、详情、分类内排序、推荐到灵感、撤回待审推荐和正常删除。
+7. 后台待审核个人菜谱列表，以及“通过后复制到系统菜谱 / 拒绝”最小闭环。
+8. 文本菜谱的完整字段、结构化食材用量和纯文本步骤。
 
 R1 不包含：
 
 1. 图片上传、临时区、封面和图文步骤写入。
 2. 合集收藏、升级为“我的”和再次导入原版。
-3. 用户推荐到灵感审核、点赞、收藏统计和推荐排序。
+3. 点赞、收藏统计和推荐排序。
 4. 个人单位推荐入系统库与跨单位换算。
 5. 个人分类删除和个人场景删除。
 6. 分享、计划和饭局现有契约改造。
@@ -122,7 +123,7 @@ R1 不提供删除场景接口。菜谱与场景的关联由草稿发布统一�
 | `GET` | `/units` | 按来源、类型和关键词分页查询系统/本人单位 |
 | `POST` | `/units` | 新建本人单位，立即本人可用 |
 
-系统食材分类使用独立只读接口，便于选择器左侧分类一次加载并保持平台 owner；R1 不把分类清单硬编码进客户端。个人食材推荐采用独立记录表承接状态，审核通过时要么直接转为系统食材，要么归并到现有系统食材；归并后本人草稿和已发布内容中的食材引用需要同步切到系统食材。`GET /ingredients` 的食材摘要继续保持列表最小字段，但补充 `recommendationStatus: PENDING | REJECTED | null`，仅用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`，不把完整推荐记录塞回列表接口；`GET /ingredient-recommendations` 在 `REJECTED` 状态下额外返回 `reviewNote + reviewAdvice`，用于把后台标准拒绝原因和修改建议直接展示给用户。草稿详情和我的菜谱详情额外返回当前内容真实引用到的 `ingredientRefs`、`unitRefs`，编辑页必须优先用这两组引用补齐历史数据，不能依赖第一页食材/单位列表碰运气命中。
+系统食材分类使用独立只读接口，便于选择器左侧分类一次加载并保持平台 owner；R1 不把分类清单硬编码进客户端。系统食材同时维护“分类内顺序”和“全局展示顺序”两套事实：前者只服务真实分类管理，后者只服务后台虚拟“全部食材”视图和前台“全部食材”展示；因此 `GET /ingredients` 在未传真实 `categoryId` 时，系统食材部分必须按后台全局展示顺序返回，传了 `categoryId` 时再切回该分类内顺序。个人食材推荐采用独立记录表承接状态，审核通过时要么直接转为系统食材，要么归并到现有系统食材；归并后本人草稿和已发布内容中的食材引用需要同步切到系统食材。`GET /ingredients` 的食材摘要继续保持列表最小字段，但补充 `recommendationStatus: PENDING | REJECTED | null`，仅用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`，不把完整推荐记录塞回列表接口；`GET /ingredient-recommendations` 在 `REJECTED` 状态下额外返回 `reviewNote + reviewAdvice`，用于把后台标准拒绝原因和修改建议直接展示给用户。草稿详情和我的菜谱详情额外返回当前内容真实引用到的 `ingredientRefs`、`unitRefs`，编辑页必须优先用这两组引用补齐历史数据，不能依赖第一页食材/单位列表碰运气命中。
 
 ### 草稿
 
@@ -143,10 +144,12 @@ R1 不提供删除场景接口。菜谱与场景的关联由草稿发布统一�
 | --- | --- | --- |
 | `GET` | `/recipes` | 只分页返回本人已发布菜谱摘要，支持关键词和分类筛选 |
 | `GET` | `/recipes/{recipeId}` | 返回本人持有菜谱详情和当前固定版本 |
+| `POST` | `/recipes/{recipeId}/recommendations` | 提交当前个人菜谱固定版本到系统菜谱审核 |
+| `POST` | `/recipe-recommendations/{recommendationId}/withdraw` | 撤回一条待审核菜谱推荐 |
 | `POST` | `/recipes/reorder` | 在指定分类内提交完整菜谱 ID 顺序 |
 | `POST` | `/recipes/{recipeId}/delete` | 按套餐进入回收站或永久删除 |
 
-R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。新建和编辑统一经过草稿发布，避免“保存草稿”和“发布”共享旧创建语义。
+R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。新建和编辑统一经过草稿发布，避免“保存草稿”和“发布”共享旧创建语义。`GET /recipes/{recipeId}` 额外返回最新一条菜谱推荐摘要，用于展示 `未推荐 / 审核中 / 已驳回 / 已收录 / 已撤回`。提交推荐时，服务端冻结当前 `sourceVersionId`，并在存在待审推荐时阻止该个人菜谱继续创建编辑草稿、发布编辑草稿或删除；用户只有先撤回待审推荐，才能恢复编辑和删除。若该个人菜谱最初由灵感详情带入创建，服务端同时记录当时的来源固定版本和封面快照；后续推荐前会比对当前正文与封面，只要仍与来源版本完全一致，就按“未改动的灵感菜谱”拒绝推荐。对于历史上没有来源快照的旧个人菜谱，服务端再按“是否与现有系统菜谱正文和封面完全一致”做一次兜底识别，同样阻止未改动的灵感菜谱重复推荐。审核通过后，原个人菜谱仍继续保留在“我的”下，不会原地转成系统菜谱。
 
 ### 灵感只读
 
@@ -156,17 +159,24 @@ R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。
 | `GET` | `/inspiration-recipes` | 匿名 | 分页返回可曝光灵感摘要 |
 | `GET` | `/inspiration-recipes/{recipeId}` | 匿名 | 返回一个可曝光固定版本详情 |
 
-灵感只读接口与本人 `/recipes` 分开，避免可选登录状态影响同一列表的字段、权限和缓存边界。R1 只允许已有系统菜谱进入该读取面；用户推荐到灵感、点赞和升级为我的仍不在本阶段建设。
+灵感只读接口与本人 `/recipes` 分开，避免可选登录状态影响同一列表的字段、权限和缓存边界。R1 允许两类内容进入该读取面：平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；后者详情页只补一个 `curatedByName` 昵称快照展示 `由某某整理`，不扩展用户主页跳转。点赞和升级为我的仍不在本阶段建设。
 
 ### 后台菜谱治理
 
 | 方法 | 路径 | 鉴权 | 职责 |
 | --- | --- | --- | --- |
-| `GET` | `/admin/recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 只返回后台菜谱列表最小摘要，支持关键词和状态筛选 |
+| `GET` | `/admin/inspiration-categories` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回后台系统菜谱分类列表 |
+| `POST` | `/admin/inspiration-categories` | `AdminBearerAuth` + `SUPER_ADMIN` | 后台新建系统菜谱分类 |
+| `PUT` | `/admin/inspiration-categories/{categoryId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 后台编辑系统菜谱分类 |
+| `POST` | `/admin/inspiration-categories/reorder` | `AdminBearerAuth` + `SUPER_ADMIN` | 后台重排系统菜谱分类 |
+| `GET` | `/admin/recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 只返回后台系统菜谱列表最小摘要，支持分类、关键词和状态筛选 |
+| `POST` | `/admin/recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 后台直接创建一条系统菜谱 |
 | `GET` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回后台菜谱详情，覆盖灵感与个人菜谱 |
-| `PUT` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 只编辑灵感菜谱正文并切换到新固定版本 |
+| `PUT` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 只编辑系统菜谱正文并切换到新固定版本 |
+| `GET` | `/admin/pending-recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回待审核个人菜谱推荐分页 |
+| `POST` | `/admin/pending-recipes/{recommendationId}/review` | `AdminBearerAuth` + `SUPER_ADMIN` | 审核个人菜谱推荐，支持通过或拒绝 |
 
-后台详情对所有菜谱开放，但正文编辑只允许 `ownerId = null` 且仍挂灵感分类的系统菜谱。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。后台正文编辑当前只允许系统食材和系统单位，不把个人食材、个人单位或图片写入口径带进灵感治理。
+后台系统菜谱分类独立于个人分类，由平台直接维护，分类管理请求统一走 `Idempotency-Key + expectedVersion`。后台系统菜谱列表只收 `ownerId = null` 且仍挂系统分类的菜谱，不再把个人菜谱混入运营列表；个人菜谱继续只从用户菜谱域进入。后台可直接新增系统菜谱，创建时服务端新建 `RecipeContentVersion`，再创建一条 `ownerId = null` 的系统菜谱记录。后台详情仍对所有菜谱开放，但正文编辑只允许 `ownerId = null` 且仍挂系统分类的系统菜谱。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。个人菜谱推荐审核走独立 `/admin/pending-recipes` 队列：本期审核弹窗只处理 `通过/拒绝 + 最终系统分类`，不在后台二次编辑正文；通过时服务端复制推荐记录中的 `sourceVersionId` 为新的系统菜谱，并把 `adoptedRecipeId` 回写到推荐记录。后台系统菜谱创建、推荐收录与正文编辑当前只允许系统食材和系统单位，不把个人食材、个人单位或图片写入口径带进系统治理。
 
 ## 五、建议 DTO
 
@@ -224,20 +234,25 @@ interface RecipeDraftContentInput {
   story: string | null;
   categoryId: ResourceId | null;
   sceneIds: ResourceId[];
+  coverUploadId: ResourceId | null;
+  coverImageUrl: string | null;
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
   tips: string | null;
   ingredients: RecipeIngredientInput[];
   steps: Array<{
+    slotKey: string;
     text: string;
+    uploadId: ResourceId | null;
+    imageUrl: string | null;
   }>;
 }
 ```
 
 上述 DTO 为客户端一次提交结构。服务端持久化时把 `categoryId` 和 `sceneIds` 分别写入外键与关联表，`contentJson` 只保存草稿正文，不重复保存关系 ID。
 
-草稿允许名称、分类、基准人数、难度、时长、食材和步骤暂时为空，但数组仍受最大 100 项限制。R1 尚未开放图片，因此每个步骤必须有非空文本，请求包含图片字段时返回 `400`。
+草稿允许名称、分类、基准人数、难度、时长、食材和步骤暂时为空，但数组仍受最大 100 项限制。当前图片链路改为“编辑页本地缓存 -> 存草稿/发布时先确保 `draftId` -> `POST /uploads/images` 上传 -> 再把 `uploadId/imageUrl` 写回草稿正文”。步骤允许“纯图 / 纯文 / 图文”，但图片和文字不能同时为空。
 
 发布接口不重复提交正文，只提交：
 
@@ -273,7 +288,7 @@ interface SaveRecipeDraftResponse {
 }
 ```
 
-R1 封面始终为 `null` 或既有只读来源图，不开放写入。场景、故事、食材和步骤不进入列表摘要。
+列表摘要继续只返回 `coverImageUrl`、名称、难度、时长和分类，不把步骤、故事和图片元数据塞进列表。
 
 ## 六、建议数据主事实
 
@@ -340,7 +355,7 @@ contentSizeBytes
 createdAt
 ```
 
-`ingredientsJson` 保存食材 ID、食材名快照、精确/模糊用量、单位 ID 和单位名快照。`stepsJson` 在 R1 只保存有序文本；后续图片契约通过新版本扩展，不修改已发布版本。
+`ingredientsJson` 保存食材 ID、食材名快照、精确/模糊用量、单位 ID 和单位名快照。`stepsJson` 当前保存“有序步骤文本 + 已发布步骤图 URL 快照”；`imagesJson` 保存发布时草稿引用过的图片槽位状态，用于版本和草稿图片生命周期分离，不修改已发布版本。
 
 ### 灵感平台分类
 

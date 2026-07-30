@@ -60,6 +60,8 @@
 | Recipe | POST | `/recipe-drafts/{draftId}/publish` | 发布草稿到“我的” |
 | Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
 | Recipe | GET | `/recipes/{recipeId}` | 当前用户已发布菜谱详情 |
+| Recipe | POST | `/recipes/{recipeId}/recommendations` | 推荐当前个人菜谱到系统菜谱审核 |
+| Recipe | POST | `/recipe-recommendations/{recommendationId}/withdraw` | 撤回待审核的菜谱推荐 |
 | Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
@@ -90,6 +92,10 @@
 | AdminIngredient | POST | `/admin/ingredients/reorder` | 后台重排系统食材 |
 | AdminIngredient | GET | `/admin/pending-ingredients` | 后台待审核个人食材分页列表 |
 | AdminIngredient | POST | `/admin/pending-ingredients/{ingredientId}/review` | 后台审核个人食材推荐 |
+| AdminRecipe | GET | `/admin/inspiration-categories` | 后台系统菜谱分类列表 |
+| AdminRecipe | POST | `/admin/inspiration-categories` | 后台新建系统菜谱分类 |
+| AdminRecipe | PUT | `/admin/inspiration-categories/{categoryId}` | 后台编辑系统菜谱分类 |
+| AdminRecipe | POST | `/admin/inspiration-categories/reorder` | 后台重排系统菜谱分类 |
 | Ingredient | GET | `/ingredient-categories` | 系统食材分类列表 |
 | Ingredient | GET | `/ingredients` | 分页查询系统/本人食材 |
 | Ingredient | POST | `/ingredients` | 新建个人食材 |
@@ -113,9 +119,12 @@
 | Shopping | POST | `/shopping-items/{itemId}/status` | 更新购物状态 |
 | Shopping | GET | `/shopping-gap` | 查询个人购物缺口 |
 | Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局购物缺口 |
-| AdminRecipe | GET | `/admin/recipes` | 后台菜谱列表 |
+| AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |
+| AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
 | AdminRecipe | GET | `/admin/recipes/{recipeId}` | 后台菜谱详情 |
-| AdminRecipe | PUT | `/admin/recipes/{recipeId}` | 后台编辑灵感菜谱正文 |
+| AdminRecipe | PUT | `/admin/recipes/{recipeId}` | 后台编辑系统菜谱正文 |
+| AdminRecipe | GET | `/admin/pending-recipes` | 后台待审核个人菜谱分页列表 |
+| AdminRecipe | POST | `/admin/pending-recipes/{recommendationId}/review` | 后台审核个人菜谱推荐 |
 | AdminRecipe | GET | `/admin/recipe-reports` | 后台举报查询 |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/block` | 下架菜谱 |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/unblock` | 恢复菜谱 |
@@ -128,7 +137,7 @@
 | 模块 | 方法与路径 | 状态 |
 | --- | --- | --- |
 | RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
-| InspirationGovernance | 用户推荐到灵感审核、点赞与收藏统计治理 | 已确认非本轮范围，待契约 |
+| InspirationInteraction | 点赞、收藏统计与推荐排序治理 | 已确认非本轮范围，待契约 |
 
 | 模块 | 路径 | 缺失内容 |
 | --- | --- | --- |
@@ -137,7 +146,7 @@
 
 ## 暂不创建
 
-菜谱图片上传与修改、升级合集快照为“我的”、用户推荐到灵感审核、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回 `400`。
+菜谱图片上传与修改、升级合集快照为“我的”、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回 `400`。
 
 ## 维护规则
 
