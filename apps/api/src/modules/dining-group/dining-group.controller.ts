@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
+import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   CreateInviteDto,
@@ -49,52 +50,69 @@ export class DiningGroupController {
   }
 
   @Post("dining-group-invites")
+  @ApiIdempotencyKey()
   @ApiOkModel(CreateInviteResultModel, "为指定饭搭子创建单次邀请")
-  createInvite(@Req() request: RequestWithUser, @Body() body: CreateInviteDto) {
+  createInvite(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateInviteDto
+  ) {
     return this.diningGroupService
-      .createInvite(request.user.userId, body.diningGroupId, body.operationId)
+      .createInvite(request.user.userId, body.diningGroupId, operationId)
       .then(result => ok(result));
   }
 
   @Post("dining-group-invites/:inviteToken/accept")
+  @ApiIdempotencyKey()
   @ApiOkModel(AcceptInviteResultModel, "接受邀请并建立新的饭搭子成员关系")
-  acceptInvite(@Req() request: RequestWithUser, @Param("inviteToken") inviteToken: string, @Body() body: OperationDto) {
-    return this.diningGroupService.acceptInvite(request.user.userId, inviteToken, body.operationId).then(result => ok(result));
+  acceptInvite(
+    @Req() request: RequestWithUser,
+    @Param("inviteToken") inviteToken: string,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: OperationDto
+  ) {
+    return this.diningGroupService.acceptInvite(request.user.userId, inviteToken, operationId).then(result => ok(result));
   }
 
   @Post("dining-groups/:diningGroupId/leave")
+  @ApiIdempotencyKey()
   @ApiOkModel(LeaveDiningGroupResultModel, "主动退出饭搭子，不回填个人数据")
   leave(
     @Req() request: RequestWithUser,
-    @Param("diningGroupId", new ParseUUIDPipe({ version: "4" })) diningGroupId: string,
+    @Param("diningGroupId", ParseIntPipe) diningGroupId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: VersionedOperationDto
   ) {
     return this.diningGroupService
-      .leave(request.user.userId, diningGroupId, body.operationId, body.expectedVersion)
+      .leave(request.user.userId, diningGroupId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 
   @Post("dining-groups/:diningGroupId/remove-member")
+  @ApiIdempotencyKey()
   @ApiOkModel(RemoveDiningGroupMemberResultModel, "主理人移除指定成员")
   removeMember(
     @Req() request: RequestWithUser,
-    @Param("diningGroupId", new ParseUUIDPipe({ version: "4" })) diningGroupId: string,
+    @Param("diningGroupId", ParseIntPipe) diningGroupId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: RemoveDiningGroupMemberDto
   ) {
     return this.diningGroupService
-      .removeMember(request.user.userId, diningGroupId, body.userId, body.operationId, body.expectedVersion)
+      .removeMember(request.user.userId, diningGroupId, body.userId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 
   @Post("dining-groups/:diningGroupId/dissolve")
+  @ApiIdempotencyKey()
   @ApiOkModel(DissolveDiningGroupResultModel, "主理人直接解散饭搭子，只结束关系对象")
   dissolve(
     @Req() request: RequestWithUser,
-    @Param("diningGroupId", new ParseUUIDPipe({ version: "4" })) diningGroupId: string,
+    @Param("diningGroupId", ParseIntPipe) diningGroupId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: VersionedOperationDto
   ) {
     return this.diningGroupService
-      .dissolve(request.user.userId, diningGroupId, body.operationId, body.expectedVersion)
+      .dissolve(request.user.userId, diningGroupId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 }

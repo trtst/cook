@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
+import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AcceptShareInviteDto,
@@ -33,24 +34,31 @@ export class MealController {
   @Post("meal-plans")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(MealPlanModel, "创建或更新一个计划餐次")
-  createMealPlan(@Req() request: RequestWithUser, @Body() body: CreateMealPlanDto) {
+  createMealPlan(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateMealPlanDto
+  ) {
     return this.mealService
-      .createMealPlan(request.user.userId, body.operationId, body.planDate, body.mealSlot, body.recipeId, body.note)
+      .createMealPlan(request.user.userId, operationId, body.planDate, body.mealSlot, body.recipeId, body.note)
       .then(result => ok(result));
   }
 
   @Post("meal-plans/:planItemId/dining-event")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "从计划餐次发起饭局")
   createDiningEvent(
     @Req() request: RequestWithUser,
-    @Param("planItemId", new ParseUUIDPipe({ version: "4" })) planItemId: string,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateDiningEventDto
   ) {
     return this.mealService
-      .createDiningEvent(request.user.userId, planItemId, body.operationId, body.scheduledAt, body.location)
+      .createDiningEvent(request.user.userId, planItemId, operationId, body.scheduledAt, body.location)
       .then(result => ok(result));
   }
 
@@ -58,49 +66,55 @@ export class MealController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiOkModel(DiningEventModel, "查看我的饭局详情或参与中的饭局详情")
-  getDiningEvent(@Req() request: RequestWithUser, @Param("eventId", new ParseUUIDPipe({ version: "4" })) eventId: string) {
+  getDiningEvent(@Req() request: RequestWithUser, @Param("eventId", ParseIntPipe) eventId: number) {
     return this.mealService.getDiningEvent(request.user.userId, eventId).then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/invite-group")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "从某个饭搭子一键邀请成员参加饭局")
   inviteDiningGroup(
     @Req() request: RequestWithUser,
-    @Param("eventId", new ParseUUIDPipe({ version: "4" })) eventId: string,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: InviteDiningGroupParticipantsDto
   ) {
     return this.mealService
-      .inviteDiningGroup(request.user.userId, eventId, body.diningGroupId, body.operationId)
+      .inviteDiningGroup(request.user.userId, eventId, body.diningGroupId, operationId)
       .then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/respond")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "参与人接受或拒绝饭局邀请")
   respondToDiningEvent(
     @Req() request: RequestWithUser,
-    @Param("eventId", new ParseUUIDPipe({ version: "4" })) eventId: string,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: RespondDiningEventDto
   ) {
     return this.mealService
-      .respondToDiningEvent(request.user.userId, eventId, body.operationId, body.status)
+      .respondToDiningEvent(request.user.userId, eventId, operationId, body.status)
       .then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/bring")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "参与人选择我带菜")
   chooseBringRecipe(
     @Req() request: RequestWithUser,
-    @Param("eventId", new ParseUUIDPipe({ version: "4" })) eventId: string,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: ChooseBringRecipeDto
   ) {
     return this.mealService
-      .chooseBringRecipe(request.user.userId, eventId, body.recipeId, body.operationId)
+      .chooseBringRecipe(request.user.userId, eventId, body.recipeId, operationId)
       .then(result => ok(result));
   }
 
@@ -113,14 +127,16 @@ export class MealController {
   @Post("share/:shareToken/accept")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "登录用户通过分享加入饭局")
   acceptShareInvite(
     @Req() request: RequestWithUser,
     @Param("shareToken") shareToken: string,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: AcceptShareInviteDto
   ) {
     return this.mealService
-      .acceptShareInvite(request.user.userId, shareToken, body.operationId, body.guestName)
+      .acceptShareInvite(request.user.userId, shareToken, operationId, body.guestName)
       .then(result => ok(result));
   }
 }

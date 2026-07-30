@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
+import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   ConsumeFridgeItemsDto,
@@ -31,29 +32,41 @@ export class PantryController {
   }
 
   @Post("fridge-items")
+  @ApiIdempotencyKey()
   @ApiOkModel(FridgeItemModel, "创建一个冰箱条目")
-  createFridgeItem(@Req() request: RequestWithUser, @Body() body: CreateFridgeItemDto) {
+  createFridgeItem(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateFridgeItemDto
+  ) {
     return this.pantryService
-      .createFridgeItem(request.user.userId, body.operationId, body.name, body.quantityText, body.note)
+      .createFridgeItem(request.user.userId, operationId, body.name, body.quantityText, body.note)
       .then(result => ok(result));
   }
 
   @Put("fridge-items/:itemId")
+  @ApiIdempotencyKey()
   @ApiOkModel(FridgeItemModel, "更新一个冰箱条目")
   updateFridgeItem(
     @Req() request: RequestWithUser,
-    @Param("itemId", new ParseUUIDPipe({ version: "4" })) itemId: string,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateFridgeItemDto
   ) {
     return this.pantryService
-      .updateFridgeItem(request.user.userId, itemId, body.operationId, body.name, body.quantityText, body.note)
+      .updateFridgeItem(request.user.userId, itemId, operationId, body.name, body.quantityText, body.note)
       .then(result => ok(result));
   }
 
   @Post("fridge-items/consume")
+  @ApiIdempotencyKey()
   @ApiOkPage(FridgeItemModel, "本人确认库存扣减")
-  consumeFridgeItems(@Req() request: RequestWithUser, @Body() body: ConsumeFridgeItemsDto) {
-    return this.pantryService.consumeFridgeItems(request.user.userId, body.operationId, body.itemIds).then(result => ok(result));
+  consumeFridgeItems(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ConsumeFridgeItemsDto
+  ) {
+    return this.pantryService.consumeFridgeItems(request.user.userId, operationId, body.itemIds).then(result => ok(result));
   }
 
   @Get("shopping-items")
@@ -65,22 +78,29 @@ export class PantryController {
   }
 
   @Post("shopping-items")
+  @ApiIdempotencyKey()
   @ApiOkModel(ShoppingItemModel, "手动创建一个购物项")
-  createShoppingItem(@Req() request: RequestWithUser, @Body() body: CreateShoppingItemDto) {
+  createShoppingItem(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateShoppingItemDto
+  ) {
     return this.pantryService
-      .createShoppingItem(request.user.userId, body.operationId, body.name, body.quantityText, body.note)
+      .createShoppingItem(request.user.userId, operationId, body.name, body.quantityText, body.note)
       .then(result => ok(result));
   }
 
   @Post("shopping-items/:itemId/status")
+  @ApiIdempotencyKey()
   @ApiOkModel(ShoppingItemModel, "更新购物项状态")
   updateShoppingStatus(
     @Req() request: RequestWithUser,
-    @Param("itemId", new ParseUUIDPipe({ version: "4" })) itemId: string,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateShoppingStatusDto
   ) {
     return this.pantryService
-      .updateShoppingStatus(request.user.userId, itemId, body.operationId, body.status)
+      .updateShoppingStatus(request.user.userId, itemId, operationId, body.status)
       .then(result => ok(result));
   }
 
@@ -91,12 +111,14 @@ export class PantryController {
   }
 
   @Post("dining-events/:eventId/shopping-gap")
+  @ApiIdempotencyKey()
   @ApiOkArray(ShoppingItemModel, "把某个饭局菜单缺口写入本人购物清单")
   createGap(
     @Req() request: RequestWithUser,
-    @Param("eventId", new ParseUUIDPipe({ version: "4" })) eventId: string,
-    @Body() body: OperationDto
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: OperationDto
   ) {
-    return this.pantryService.createEventGap(request.user.userId, eventId, body.operationId).then(result => ok(result));
+    return this.pantryService.createEventGap(request.user.userId, eventId, operationId).then(result => ok(result));
   }
 }

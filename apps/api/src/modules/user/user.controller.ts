@@ -2,6 +2,7 @@ import { Body, Controller, Get, Inject, Put, Req, UseGuards } from "@nestjs/comm
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
+import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import { ChangeCurrentPasswordDto, UpdateCurrentUserDto, UpdateTasteProfileDto, UpdateUserDisplayDto } from "../../contracts/dtos";
 import { ApiOkModel, ChangePasswordResultModel, MeResponseModel, TasteProfileModel } from "../../contracts/openapi";
@@ -53,10 +54,15 @@ export class UserController {
   }
 
   @Put("me/display")
+  @ApiIdempotencyKey()
   @ApiOkModel(MeResponseModel, "更新当前用户的我的页和首页背景图设置")
-  updateDisplay(@Req() request: RequestWithUser, @Body() body: UpdateUserDisplayDto) {
+  updateDisplay(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateUserDisplayDto
+  ) {
     return this.displayService
-      .updateCurrent(request.user.userId, body.operationId, body.profileBackgroundUrl, body.homeBackgroundUrl)
+      .updateCurrent(request.user.userId, operationId, body.profileBackgroundUrl, body.homeBackgroundUrl)
       .then(result => ok(result));
   }
 }

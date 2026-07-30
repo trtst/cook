@@ -32,7 +32,8 @@ async function bootstrap() {
       "x-app-version",
       "x-app-build",
       "x-platform",
-      "x-request-id"
+      "x-request-id",
+      "idempotency-key"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   });

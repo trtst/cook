@@ -1,6 +1,6 @@
-export type UUID = string;
+export type UUID = number;
 export type ResourceId = UUID;
-export type OperationId = UUID;
+export type OperationId = string;
 export type IsoDateTime = string;
 
 export interface ApiResponse<T> {
@@ -305,7 +305,7 @@ export interface AdminUserEntitlementResponse {
 }
 
 export interface CreateAdminUserRequest {
-  operationId: UUID;
+  operationId: OperationId;
   phone: string;
   password: string;
   nickname?: string;
@@ -313,23 +313,23 @@ export interface CreateAdminUserRequest {
 }
 
 export interface UpdateAdminUserRequest {
-  operationId: UUID;
+  operationId: OperationId;
   phone?: string;
   nickname?: string;
 }
 
 export interface SetAdminUserStatusRequest {
-  operationId: UUID;
+  operationId: OperationId;
   status: "ACTIVE" | "DISABLED";
 }
 
 export interface ResetAdminUserPasswordRequest {
-  operationId: UUID;
+  operationId: OperationId;
   newPassword: string;
 }
 
 export interface AdminIngredientCategoryPayloadRequest {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
 }
 
@@ -338,7 +338,7 @@ export interface UpdateAdminIngredientCategoryRequest extends AdminIngredientCat
 }
 
 export interface AdminIngredientPayloadRequest {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
   categoryId: UUID;
   defaultUnitId: UUID;
@@ -349,7 +349,7 @@ export interface UpdateAdminIngredientRequest extends AdminIngredientPayloadRequ
 }
 
 export interface SetAdminIngredientStatusRequest {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
   status: "ACTIVE" | "DISABLED";
 }
@@ -364,7 +364,7 @@ export type AdminIngredientRejectReasonCode =
   | "OTHER";
 
 export interface AdminReviewPendingIngredientRequest {
-  operationId: UUID;
+  operationId: OperationId;
   action: AdminIngredientReviewAction;
   expectedVersion: number;
   name?: string;
@@ -376,7 +376,7 @@ export interface AdminReviewPendingIngredientRequest {
 }
 
 export interface AdminUnitPayloadRequest {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
   type: UnitType;
 }
@@ -480,12 +480,23 @@ export interface IngredientRecommendationSummary {
 }
 
 export interface RecommendIngredientRequest {
-  operationId: UUID;
+  operationId: OperationId;
 }
 
 export interface RecipeIngredientInput {
   ingredientId: UUID;
   amount: RecipeAmountInput;
+}
+
+export interface RecipeDraftIngredientInput {
+  ingredientId: UUID | null;
+  name: string;
+  quantity: string;
+  unitId: UUID | null;
+  fuzzyText: "适量" | "少许" | "按需" | null;
+  categoryId: UUID | null;
+  defaultUnitId: UUID | null;
+  source: IngredientSource | null;
 }
 
 export interface RecipeIngredientSnapshot {
@@ -520,7 +531,7 @@ export interface RecipeDraftContentInput {
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
   tips: string | null;
-  ingredients: RecipeIngredientInput[];
+  ingredients: RecipeDraftIngredientInput[];
   steps: RecipeStepSnapshot[];
 }
 
@@ -642,7 +653,7 @@ export interface CollectedRecipeDetail {
 }
 
 export interface SaveCollectionRecipeRequest {
-  operationId: UUID;
+  operationId: OperationId;
   sourceRecipeId: UUID;
   sourceVersionId: UUID;
   sceneIds: UUID[];

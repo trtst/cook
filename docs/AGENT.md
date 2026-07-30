@@ -124,7 +124,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 
 ## Write Rules
 
-1. All retryable writes carry `operationId`.
+1. All retryable writes carry a numeric-string `Idempotency-Key` header.
 2. Shared mutable objects carry `version`.
 3. Server-side ownership, membership, entitlement, storage, fridge, shopping, plan, dining-event, and recipe checks are mandatory for writes.
 4. Do not rely on hidden client buttons for security.

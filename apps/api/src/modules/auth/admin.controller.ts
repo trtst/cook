@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import type { RequestWithAdmin } from "../../common/auth-context";
+import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import {
   AdminIngredientCategoryNameDto,
@@ -83,7 +84,7 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
           ? {
               kind: "EXACT",
               quantity: item.amount.quantity ?? "",
-              unitId: item.amount.unitId ?? ""
+              unitId: item.amount.unitId as number
             }
           : {
               kind: "FUZZY",
@@ -127,9 +128,14 @@ export class AdminController {
   @Post("users")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(UserProfileModel, "后台创建一个用户")
-  createUser(@Req() request: RequestWithAdmin, @Body() body: CreateAdminUserDto) {
-    return this.adminService.createUser(body, request.admin.adminId).then(result => ok(result));
+  createUser(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateAdminUserDto
+  ) {
+    return this.adminService.createUser({ ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("users/:userId/recipe-domain")
@@ -138,7 +144,7 @@ export class AdminController {
   @ApiOkModel(AdminUserRecipeDomainOverviewModel, "后台按用户读取菜谱域概览")
   getUserRecipeDomain(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string
+    @Param("userId", ParseIntPipe) userId: number
   ) {
     return this.adminService.getUserRecipeDomain(userId, request.admin.adminId).then(result => ok(result));
   }
@@ -149,7 +155,7 @@ export class AdminController {
   @ApiOkPage(MyRecipeSummaryModel, "后台按用户读取已发布菜谱")
   listUserRecipes(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Param("userId", ParseIntPipe) userId: number,
     @Query() query: PageQueryDto
   ) {
     return this.adminService
@@ -163,7 +169,7 @@ export class AdminController {
   @ApiOkPage(RecipeDraftSummaryModel, "后台按用户读取菜谱草稿")
   listUserRecipeDrafts(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Param("userId", ParseIntPipe) userId: number,
     @Query() query: PageQueryDto
   ) {
     return this.adminService
@@ -177,7 +183,7 @@ export class AdminController {
   @ApiOkModel(CollectionListModel, "后台按用户读取合集列表")
   listUserCollections(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string
+    @Param("userId", ParseIntPipe) userId: number
   ) {
     return this.adminService.listUserCollections(userId, request.admin.adminId).then(result => ok(result));
   }
@@ -188,8 +194,8 @@ export class AdminController {
   @ApiOkPage(CollectedRecipeSummaryModel, "后台按用户读取某合集内容")
   listUserCollectionRecipes(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
-    @Param("sceneId", new ParseUUIDPipe({ version: "4" })) sceneId: string,
+    @Param("userId", ParseIntPipe) userId: number,
+    @Param("sceneId", ParseIntPipe) sceneId: number,
     @Query() query: PageQueryDto
   ) {
     return this.adminService
@@ -200,37 +206,43 @@ export class AdminController {
   @Put("users/:userId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(UserProfileModel, "后台更新一个用户的昵称或手机号")
   updateUser(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Param("userId", ParseIntPipe) userId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminUserDto
   ) {
-    return this.adminService.updateUser(userId, body, request.admin.adminId).then(result => ok(result));
+    return this.adminService.updateUser(userId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("users/:userId/status")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(UserProfileModel, "后台启用或禁用一个用户")
   setUserStatus(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Param("userId", ParseIntPipe) userId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: SetAdminUserStatusDto
   ) {
-    return this.adminService.setUserStatus(userId, body, request.admin.adminId).then(result => ok(result));
+    return this.adminService.setUserStatus(userId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("users/:userId/reset-password")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminResetUserPasswordResultModel, "后台重置一个用户的登录密码")
   resetUserPassword(
     @Req() request: RequestWithAdmin,
-    @Param("userId", new ParseUUIDPipe({ version: "4" })) userId: string,
+    @Param("userId", ParseIntPipe) userId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: ResetAdminUserPasswordDto
   ) {
-    return this.adminService.resetUserPassword(userId, body, request.admin.adminId).then(result => ok(result));
+    return this.adminService.resetUserPassword(userId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("dining-groups")
@@ -263,22 +275,24 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiOkModel(AdminRecipeDetailModel, "后台菜谱详情")
-  getRecipeDetail(@Req() request: RequestWithAdmin, @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string) {
+  getRecipeDetail(@Req() request: RequestWithAdmin, @Param("recipeId", ParseIntPipe) recipeId: number) {
     return this.adminService.getRecipeDetail(recipeId, request.admin.adminId).then(result => ok(result));
   }
 
   @Put("recipes/:recipeId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminRecipeDetailModel, "后台编辑一个灵感菜谱正文")
   updateRecipe(
     @Req() request: RequestWithAdmin,
-    @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminRecipeDto
   ) {
     return this.adminService
       .updateRecipe(recipeId, request.admin.adminId, {
-        operationId: body.operationId,
+        operationId,
         expectedVersion: body.expectedVersion,
         inspirationCategoryId: body.inspirationCategoryId,
         content: toAdminRecipeContentInput(body.content)
@@ -297,30 +311,42 @@ export class AdminController {
   @Post("ingredient-categories")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientCategoryModel, "后台新建系统食材分类")
-  createIngredientCategory(@Req() request: RequestWithAdmin, @Body() body: AdminIngredientCategoryNameDto) {
-    return this.adminService.createIngredientCategory(body, request.admin.adminId).then(result => ok(result));
+  createIngredientCategory(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminIngredientCategoryNameDto
+  ) {
+    return this.adminService.createIngredientCategory({ ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Put("ingredient-categories/:categoryId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientCategoryModel, "后台编辑系统食材分类")
   updateIngredientCategory(
     @Req() request: RequestWithAdmin,
-    @Param("categoryId", new ParseUUIDPipe({ version: "4" })) categoryId: string,
+    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminIngredientCategoryDto
   ) {
-    return this.adminService.updateIngredientCategory(categoryId, body, request.admin.adminId).then(result => ok(result));
+    return this.adminService.updateIngredientCategory(categoryId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("ingredient-categories/reorder")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkArray(AdminIngredientCategoryModel, "后台重排系统食材分类")
-  reorderIngredientCategories(@Req() request: RequestWithAdmin, @Body() body: ReorderAdminIngredientCategoriesDto) {
+  reorderIngredientCategories(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderAdminIngredientCategoriesDto
+  ) {
     return this.adminService
-      .reorderIngredientCategories(body.operationId, body.items, request.admin.adminId)
+      .reorderIngredientCategories(operationId, body.items, request.admin.adminId)
       .then(result => ok(result));
   }
 
@@ -348,83 +374,102 @@ export class AdminController {
   @Post("units")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminUnitModel, "后台新建系统单位")
-  createSystemUnit(@Req() request: RequestWithAdmin, @Body() body: AdminUnitPayloadDto) {
+  createSystemUnit(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminUnitPayloadDto
+  ) {
     return this.adminService
-      .createSystemUnit({ ...body, type: body.type as UnitType }, request.admin.adminId)
+      .createSystemUnit({ ...body, operationId, type: body.type as UnitType }, request.admin.adminId)
       .then(result => ok(result));
   }
 
   @Put("units/:unitId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminUnitModel, "后台编辑系统单位")
   updateSystemUnit(
     @Req() request: RequestWithAdmin,
-    @Param("unitId", new ParseUUIDPipe({ version: "4" })) unitId: string,
+    @Param("unitId", ParseIntPipe) unitId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminUnitDto
   ) {
     return this.adminService
-      .updateSystemUnit(unitId, { ...body, type: body.type as UnitType }, request.admin.adminId)
+      .updateSystemUnit(unitId, { ...body, operationId, type: body.type as UnitType }, request.admin.adminId)
       .then(result => ok(result));
   }
 
   @Delete("units/:unitId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminDeleteUnitResultModel, "后台删除系统单位")
   deleteSystemUnit(
     @Req() request: RequestWithAdmin,
-    @Param("unitId", new ParseUUIDPipe({ version: "4" })) unitId: string,
+    @Param("unitId", ParseIntPipe) unitId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: DeleteAdminUnitDto
   ) {
-    return this.adminService.deleteSystemUnit(unitId, body.operationId, body.expectedVersion, request.admin.adminId).then(result => ok(result));
+    return this.adminService.deleteSystemUnit(unitId, operationId, body.expectedVersion, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("units/reorder")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkArray(AdminUnitModel, "后台重排系统单位")
-  reorderSystemUnits(@Req() request: RequestWithAdmin, @Body() body: ReorderAdminUnitsDto) {
+  reorderSystemUnits(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderAdminUnitsDto
+  ) {
     return this.adminService
-      .reorderSystemUnits(body.type as UnitType, body.operationId, body.items, request.admin.adminId)
+      .reorderSystemUnits(body.type as UnitType, operationId, body.items, request.admin.adminId)
       .then(result => ok(result));
   }
 
   @Post("ingredients")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "后台新建系统食材")
-  createIngredient(@Req() request: RequestWithAdmin, @Body() body: AdminIngredientPayloadDto) {
-    return this.adminService.createIngredient(body, request.admin.adminId).then(result => ok(result));
+  createIngredient(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminIngredientPayloadDto
+  ) {
+    return this.adminService.createIngredient({ ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Put("ingredients/:ingredientId")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "后台编辑系统食材")
   updateIngredient(
     @Req() request: RequestWithAdmin & AssetRequest,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminIngredientDto
   ) {
-    return this.adminService
-      .updateIngredient(request, ingredientId, body, request.admin.adminId)
-      .then(result => ok(result));
+    return this.adminService.updateIngredient(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("ingredients/:ingredientId/status")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "后台更新系统食材状态")
   setIngredientStatus(
     @Req() request: RequestWithAdmin & AssetRequest,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: SetAdminIngredientStatusDto
   ) {
-    return this.adminService
-      .setIngredientStatus(request, ingredientId, body, request.admin.adminId)
-      .then(result => ok(result));
+    return this.adminService.setIngredientStatus(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("ingredients/:ingredientId/image")
@@ -432,39 +477,48 @@ export class AdminController {
   @ApiBearerAuth("AdminBearerAuth")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "上传或替换系统食材图片")
   uploadIngredientImage(
     @Req() request: RequestWithAdmin & AssetRequest,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminIngredientImageDto,
     @UploadedFile() file?: { buffer?: Buffer; size?: number }
   ) {
     return this.adminService
-      .uploadIngredientImage(request, ingredientId, body.operationId, body.expectedVersion, file, request.admin.adminId)
+      .uploadIngredientImage(request, ingredientId, operationId, body.expectedVersion, file, request.admin.adminId)
       .then(result => ok(result));
   }
 
   @Delete("ingredients/:ingredientId/image")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminIngredientModel, "清空系统食材图片")
   clearIngredientImage(
     @Req() request: RequestWithAdmin & AssetRequest,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminIngredientImageDto
   ) {
     return this.adminService
-      .clearIngredientImage(request, ingredientId, body.operationId, body.expectedVersion, request.admin.adminId)
+      .clearIngredientImage(request, ingredientId, operationId, body.expectedVersion, request.admin.adminId)
       .then(result => ok(result));
   }
 
   @Post("ingredients/reorder")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkArray(AdminIngredientModel, "后台重排系统食材")
-  reorderIngredients(@Req() request: RequestWithAdmin, @Body() body: ReorderAdminIngredientsDto) {
+  reorderIngredients(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderAdminIngredientsDto
+  ) {
     return this.adminService
-      .reorderIngredients(body.categoryId, body.operationId, body.items, request.admin.adminId)
+      .reorderIngredients(body.categoryId, operationId, body.items, request.admin.adminId)
       .then(result => ok(result));
   }
 
@@ -481,13 +535,15 @@ export class AdminController {
   @Post("pending-ingredients/:ingredientId/review")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminReviewPendingIngredientResultModel, "后台审核个人食材推荐")
   reviewPendingIngredient(
     @Req() request: RequestWithAdmin & AssetRequest,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: ReviewPendingIngredientDto
   ) {
-    return this.adminService.reviewPendingIngredient(request, ingredientId, body, request.admin.adminId).then(result => ok(result));
+    return this.adminService.reviewPendingIngredient(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("recipe-reports")
@@ -501,38 +557,44 @@ export class AdminController {
   @Post("recipes/:recipeId/block")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminRecipeModel, "后台下架一个菜谱")
   blockRecipe(
     @Req() request: RequestWithAdmin,
-    @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: BlockRecipeDto
   ) {
-    return this.adminService.blockRecipe(recipeId, request.admin.adminId, body.operationId, body.reason).then(result => ok(result));
+    return this.adminService.blockRecipe(recipeId, request.admin.adminId, operationId, body.reason).then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/unblock")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(AdminRecipeModel, "后台恢复一个菜谱")
   unblockRecipe(
     @Req() request: RequestWithAdmin,
-    @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string,
-    @Body() body: OperationDto
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: OperationDto
   ) {
-    return this.adminService.unblockRecipe(recipeId, request.admin.adminId, body.operationId).then(result => ok(result));
+    return this.adminService.unblockRecipe(recipeId, request.admin.adminId, operationId).then(result => ok(result));
   }
 
   @Post("recipe-reports/:reportId/resolve")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RecipeReportModel, "后台处理一个菜谱举报")
   resolveRecipeReport(
     @Req() request: RequestWithAdmin,
-    @Param("reportId", new ParseUUIDPipe({ version: "4" })) reportId: string,
+    @Param("reportId", ParseIntPipe) reportId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: ResolveRecipeReportDto
   ) {
     return this.adminService
-      .resolveRecipeReport(reportId, request.admin.adminId, body.operationId, body.resolutionNote)
+      .resolveRecipeReport(reportId, request.admin.adminId, operationId, body.resolutionNote)
       .then(result => ok(result));
   }
 }

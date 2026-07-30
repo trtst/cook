@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Inject, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
+import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   CreateIngredientDto,
@@ -87,17 +88,13 @@ function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRe
     tips: content.tips,
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
-      amount:
-        item.amount.kind === "EXACT"
-          ? {
-              kind: "EXACT",
-              quantity: item.amount.quantity ?? "",
-              unitId: item.amount.unitId ?? ""
-            }
-          : {
-              kind: "FUZZY",
-              text: (item.amount.text ?? "适量") as "适量" | "少许" | "按需"
-            }
+      name: item.name,
+      quantity: item.quantity,
+      unitId: item.unitId,
+      fuzzyText: item.fuzzyText,
+      categoryId: item.categoryId,
+      defaultUnitId: item.defaultUnitId,
+      source: item.source
     })),
     steps: content.steps.map(item => ({
       text: item.text
@@ -134,7 +131,7 @@ export class RecipeController {
 
   @Get("inspiration-recipes/:recipeId")
   @ApiOkModel(InspirationRecipeDetailModel, "匿名读取一个可曝光灵感菜谱详情")
-  getInspirationRecipe(@Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string) {
+  getInspirationRecipe(@Param("recipeId", ParseIntPipe) recipeId: number) {
     return this.recipeService.getInspirationRecipe(recipeId).then(result => ok(result));
   }
 
@@ -149,31 +146,43 @@ export class RecipeController {
   @Post("recipe-categories")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RecipeCategoryModel, "新建个人分类")
-  createRecipeCategory(@Req() request: RequestWithUser, @Body() body: RecipeCategoryNameDto) {
-    return this.recipeService.createRecipeCategory(request.user.userId, body.operationId, body.name).then(result => ok(result));
+  createRecipeCategory(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: RecipeCategoryNameDto
+  ) {
+    return this.recipeService.createRecipeCategory(request.user.userId, operationId, body.name).then(result => ok(result));
   }
 
   @Put("recipe-categories/:categoryId")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RecipeCategoryModel, "改名一个个人分类")
   updateRecipeCategory(
     @Req() request: RequestWithUser,
-    @Param("categoryId", new ParseUUIDPipe({ version: "4" })) categoryId: string,
+    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateRecipeCategoryDto
   ) {
     return this.recipeService
-      .updateRecipeCategory(request.user.userId, categoryId, body.operationId, body.expectedVersion, body.name)
+      .updateRecipeCategory(request.user.userId, categoryId, operationId, body.expectedVersion, body.name)
       .then(result => ok(result));
   }
 
   @Post("recipe-categories/reorder")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkArray(RecipeCategoryModel, "重排我的个人分类")
-  reorderRecipeCategories(@Req() request: RequestWithUser, @Body() body: ReorderRecipeCategoriesDto) {
-    return this.recipeService.reorderRecipeCategories(request.user.userId, body.operationId, body.items).then(result => ok(result));
+  reorderRecipeCategories(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderRecipeCategoriesDto
+  ) {
+    return this.recipeService.reorderRecipeCategories(request.user.userId, operationId, body.items).then(result => ok(result));
   }
 
   @Get("recipe-scenes")
@@ -187,31 +196,43 @@ export class RecipeController {
   @Post("recipe-scenes")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RecipeSceneModel, "新建个人场景")
-  createRecipeScene(@Req() request: RequestWithUser, @Body() body: RecipeSceneNameDto) {
-    return this.recipeService.createRecipeScene(request.user.userId, body.operationId, body.name).then(result => ok(result));
+  createRecipeScene(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: RecipeSceneNameDto
+  ) {
+    return this.recipeService.createRecipeScene(request.user.userId, operationId, body.name).then(result => ok(result));
   }
 
   @Put("recipe-scenes/:sceneId")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RecipeSceneModel, "改名一个个人场景")
   updateRecipeScene(
     @Req() request: RequestWithUser,
-    @Param("sceneId", new ParseUUIDPipe({ version: "4" })) sceneId: string,
+    @Param("sceneId", ParseIntPipe) sceneId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateRecipeSceneDto
   ) {
     return this.recipeService
-      .updateRecipeScene(request.user.userId, sceneId, body.operationId, body.expectedVersion, body.name)
+      .updateRecipeScene(request.user.userId, sceneId, operationId, body.expectedVersion, body.name)
       .then(result => ok(result));
   }
 
   @Post("recipe-scenes/reorder")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkArray(RecipeSceneModel, "重排我的个人场景")
-  reorderRecipeScenes(@Req() request: RequestWithUser, @Body() body: ReorderRecipeScenesDto) {
-    return this.recipeService.reorderRecipeScenes(request.user.userId, body.operationId, body.items).then(result => ok(result));
+  reorderRecipeScenes(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderRecipeScenesDto
+  ) {
+    return this.recipeService.reorderRecipeScenes(request.user.userId, operationId, body.items).then(result => ok(result));
   }
 
   @Get("ingredient-categories")
@@ -235,20 +256,27 @@ export class RecipeController {
   @Post("ingredients")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(IngredientModel, "新建我的食材")
-  createIngredient(@Req() request: RequestWithUser, @Body() body: CreateIngredientDto) {
+  createIngredient(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateIngredientDto
+  ) {
     return this.recipeService
-      .createIngredient(toAssetRequest(request), request.user.userId, body.operationId, body.name, body.categoryId, body.defaultUnitId)
+      .createIngredient(toAssetRequest(request), request.user.userId, operationId, body.name, body.categoryId, body.defaultUnitId)
       .then(result => ok(result));
   }
 
   @Put("ingredients/:ingredientId")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(IngredientModel, "编辑我的个人食材")
   updateIngredient(
     @Req() request: RequestWithUser,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateIngredientDto
   ) {
     return this.recipeService
@@ -256,7 +284,7 @@ export class RecipeController {
         toAssetRequest(request),
         request.user.userId,
         ingredientId,
-        body.operationId,
+        operationId,
         body.expectedVersion,
         body.name,
         body.categoryId,
@@ -268,15 +296,15 @@ export class RecipeController {
   @Post("ingredients/:ingredientId/recommendations")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(IngredientRecommendationModel, "显式推荐个人食材进入系统库")
   recommendIngredient(
     @Req() request: RequestWithUser,
-    @Param("ingredientId", new ParseUUIDPipe({ version: "4" })) ingredientId: string,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: RecommendIngredientDto
   ) {
-    return this.recipeService
-      .recommendIngredient(toAssetRequest(request), request.user.userId, ingredientId, body.operationId)
-      .then(result => ok(result));
+    return this.recipeService.recommendIngredient(toAssetRequest(request), request.user.userId, ingredientId, operationId).then(result => ok(result));
   }
 
   @Get("ingredient-recommendations")
@@ -302,9 +330,14 @@ export class RecipeController {
   @Post("units")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(UnitModel, "新建我的单位")
-  createUnit(@Req() request: RequestWithUser, @Body() body: CreateUnitDto) {
-    return this.recipeService.createUnit(request.user.userId, body.operationId, body.name, body.type as UnitType).then(result => ok(result));
+  createUnit(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateUnitDto
+  ) {
+    return this.recipeService.createUnit(request.user.userId, operationId, body.name, body.type as UnitType).then(result => ok(result));
   }
 
   @Get("recipe-drafts")
@@ -318,10 +351,15 @@ export class RecipeController {
   @Post("recipe-drafts")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(SaveRecipeDraftResultModel, "首次保存一个新草稿或编辑草稿")
-  createRecipeDraft(@Req() request: RequestWithUser, @Body() body: CreateRecipeDraftDto) {
+  createRecipeDraft(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateRecipeDraftDto
+  ) {
     return this.recipeService
-      .createRecipeDraft(request.user.userId, body.operationId, body.recipeId, toDraftContentInput(body.content))
+      .createRecipeDraft(request.user.userId, operationId, body.recipeId, toDraftContentInput(body.content))
       .then(result => ok(result));
   }
 
@@ -329,49 +367,55 @@ export class RecipeController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiOkModel(RecipeDraftDetailModel, "读取我的一个草稿详情")
-  getRecipeDraft(@Req() request: RequestWithUser, @Param("draftId", new ParseUUIDPipe({ version: "4" })) draftId: string) {
+  getRecipeDraft(@Req() request: RequestWithUser, @Param("draftId", ParseIntPipe) draftId: number) {
     return this.recipeService.getRecipeDraft(request.user.userId, draftId).then(result => ok(result));
   }
 
   @Put("recipe-drafts/:draftId")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(SaveRecipeDraftResultModel, "保存一个已有草稿")
   updateRecipeDraft(
     @Req() request: RequestWithUser,
-    @Param("draftId", new ParseUUIDPipe({ version: "4" })) draftId: string,
+    @Param("draftId", ParseIntPipe) draftId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateRecipeDraftDto
   ) {
     return this.recipeService
-      .updateRecipeDraft(request.user.userId, draftId, body.operationId, body.expectedVersion, toDraftContentInput(body.content))
+      .updateRecipeDraft(request.user.userId, draftId, operationId, body.expectedVersion, toDraftContentInput(body.content))
       .then(result => ok(result));
   }
 
   @Post("recipe-drafts/:draftId/delete")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DeleteRecipeDraftResultModel, "删除一个草稿")
   deleteRecipeDraft(
     @Req() request: RequestWithUser,
-    @Param("draftId", new ParseUUIDPipe({ version: "4" })) draftId: string,
+    @Param("draftId", ParseIntPipe) draftId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: DeleteRecipeDraftDto
   ) {
     return this.recipeService
-      .deleteRecipeDraft(request.user.userId, draftId, body.operationId, body.expectedVersion)
+      .deleteRecipeDraft(request.user.userId, draftId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 
   @Post("recipe-drafts/:draftId/publish")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(PublishRecipeDraftResultModel, "发布一个草稿到我的菜谱")
   publishRecipeDraft(
     @Req() request: RequestWithUser,
-    @Param("draftId", new ParseUUIDPipe({ version: "4" })) draftId: string,
+    @Param("draftId", ParseIntPipe) draftId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: PublishRecipeDraftDto
   ) {
     return this.recipeService
-      .publishRecipeDraft(request.user.userId, draftId, body.operationId, body.expectedVersion)
+      .publishRecipeDraft(request.user.userId, draftId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 
@@ -389,28 +433,35 @@ export class RecipeController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiOkModel(MyRecipeDetailModel, "读取我的一个已发布菜谱详情")
-  getMyRecipe(@Req() request: RequestWithUser, @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string) {
+  getMyRecipe(@Req() request: RequestWithUser, @Param("recipeId", ParseIntPipe) recipeId: number) {
     return this.recipeService.getMyRecipe(request.user.userId, recipeId).then(result => ok(result));
   }
 
   @Post("recipes/reorder")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkArray(MyRecipeSummaryModel, "重排某个分类下的我的菜谱")
-  reorderRecipes(@Req() request: RequestWithUser, @Body() body: ReorderRecipesDto) {
-    return this.recipeService.reorderRecipes(request.user.userId, body.categoryId, body.operationId, body.items).then(result => ok(result));
+  reorderRecipes(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderRecipesDto
+  ) {
+    return this.recipeService.reorderRecipes(request.user.userId, body.categoryId, operationId, body.items).then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/delete")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(DeleteRecipeResultModel, "删除我的一个已发布菜谱")
   deleteRecipe(
     @Req() request: RequestWithUser,
-    @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: DeleteRecipeDto
   ) {
-    return this.recipeService.deleteRecipe(request.user.userId, recipeId, body.operationId, body.expectedVersion).then(result => ok(result));
+    return this.recipeService.deleteRecipe(request.user.userId, recipeId, operationId, body.expectedVersion).then(result => ok(result));
   }
 
   @Get("collections")
@@ -437,7 +488,7 @@ export class RecipeController {
   @ApiOkModel(CollectedRecipeDetailModel, "读取我的一个收藏快照详情")
   getCollectionRecipe(
     @Req() request: RequestWithUser,
-    @Param("collectionRecipeId", new ParseUUIDPipe({ version: "4" })) collectionRecipeId: string
+    @Param("collectionRecipeId", ParseIntPipe) collectionRecipeId: number
   ) {
     return this.recipeService.getCollectionRecipe(request.user.userId, collectionRecipeId).then(result => ok(result));
   }
@@ -445,22 +496,29 @@ export class RecipeController {
   @Post("collections/recipes")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(SaveCollectionRecipeResultModel, "收藏一个灵感固定版本到我的合集")
-  collectRecipe(@Req() request: RequestWithUser, @Body() body: CreateCollectionRecipeDto) {
+  collectRecipe(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateCollectionRecipeDto
+  ) {
     return this.recipeService
-      .collectRecipe(request.user.userId, body.operationId, body.sourceRecipeId, body.sourceVersionId, body.sceneIds)
+      .collectRecipe(request.user.userId, operationId, body.sourceRecipeId, body.sourceVersionId, body.sceneIds)
       .then(result => ok(result));
   }
 
   @Post("recipes/:recipeId/report")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RecipeReportModel, "举报一个可见菜谱")
   reportRecipe(
     @Req() request: RequestWithUser,
-    @Param("recipeId", new ParseUUIDPipe({ version: "4" })) recipeId: string,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
     @Body() body: ReportRecipeDto
   ) {
-    return this.recipeService.reportRecipe(request.user.userId, recipeId, body.operationId, body.reason).then(result => ok(result));
+    return this.recipeService.reportRecipe(request.user.userId, recipeId, operationId, body.reason).then(result => ok(result));
   }
 }

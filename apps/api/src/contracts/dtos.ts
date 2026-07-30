@@ -13,7 +13,6 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
-  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -28,7 +27,7 @@ function trimItems(value: unknown) {
   return value.map(item => (typeof item === "string" ? item.trim() : item));
 }
 
-const resourceIdExample = "550e8400-e29b-41d4-a716-446655440000";
+const resourceIdExample = 1001;
 
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
@@ -148,9 +147,6 @@ export class UpdateTasteProfileDto {
 }
 
 export class OperationDto {
-  @ApiProperty({ example: "550e8400-e29b-41d4-a716-446655440000" })
-  @IsUUID()
-  operationId!: string;
 }
 
 export class CreateAdminUserDto extends OperationDto {
@@ -219,20 +215,26 @@ export class VersionedOperationDto extends OperationDto {
 
 export class DiningGroupMembersQueryDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  diningGroupId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  diningGroupId!: number;
 }
 
 export class CreateInviteDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  diningGroupId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  diningGroupId!: number;
 }
 
 export class RemoveDiningGroupMemberDto extends VersionedOperationDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  userId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  userId!: number;
 }
 
 export class PageQueryDto {
@@ -267,15 +269,19 @@ export class AdminDiningGroupQueryDto extends PageQueryDto {
 
 export class AdminUserEntitlementQueryDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  userId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  userId!: number;
 }
 
 export class RecipeListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
-  @IsUUID()
-  categoryId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 }
 
 export class RecipeDraftListQueryDto extends PageQueryDto {}
@@ -283,8 +289,10 @@ export class RecipeDraftListQueryDto extends PageQueryDto {}
 export class IngredientListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
-  @IsUUID()
-  categoryId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 
   @ApiPropertyOptional({ example: "ALL" })
   @IsOptional()
@@ -309,8 +317,10 @@ export class IngredientRecommendationListQueryDto extends PageQueryDto {}
 export class InspirationRecipeListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
-  @IsUUID()
-  categoryId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 
   @ApiPropertyOptional({ example: "RECOMMENDED" })
   @IsOptional()
@@ -331,8 +341,10 @@ export class InspirationRecipeListQueryDto extends PageQueryDto {
 export class CollectionRecipeListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
-  @IsUUID()
-  sceneId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sceneId?: number;
 }
 
 export class MealPlanQueryDto extends PageQueryDto {
@@ -385,8 +397,10 @@ export class UpdateRecipeSceneDto extends VersionedOperationDto {
 
 export class ReorderItemDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  id!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  id!: number;
 
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
@@ -417,8 +431,10 @@ export class ReorderRecipeScenesDto extends OperationDto {
 
 export class ReorderRecipesDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  categoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
 
   @ApiProperty({ type: [ReorderItemDto] })
   @IsArray()
@@ -451,12 +467,16 @@ export class CreateIngredientDto extends OperationDto {
   name!: string;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  categoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  defaultUnitId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  defaultUnitId!: number;
 }
 
 export class UpdateIngredientDto extends VersionedOperationDto {
@@ -468,12 +488,16 @@ export class UpdateIngredientDto extends VersionedOperationDto {
   name!: string;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  categoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  defaultUnitId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  defaultUnitId!: number;
 }
 
 export class RecommendIngredientDto extends OperationDto {}
@@ -491,8 +515,10 @@ export class RecipeAmountDto {
 
   @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.kind === "EXACT")
-  @IsUUID()
-  unitId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  unitId?: number;
 
   @ApiPropertyOptional({ example: "适量" })
   @ValidateIf(object => object.kind === "FUZZY")
@@ -502,14 +528,74 @@ export class RecipeAmountDto {
 
 export class RecipeIngredientDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  ingredientId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId!: number;
 
   @ApiProperty({ type: RecipeAmountDto })
   @IsDefined()
   @ValidateNested()
   @Type(() => RecipeAmountDto)
   amount!: RecipeAmountDto;
+}
+
+export class RecipeDraftIngredientDto {
+  @ApiProperty({ nullable: true, example: resourceIdExample })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId!: number | null;
+
+  @ApiProperty({ example: "番茄", maxLength: 64 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "2", maxLength: 32 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(32)
+  quantity!: string;
+
+  @ApiProperty({ nullable: true, example: resourceIdExample })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  unitId!: number | null;
+
+  @ApiProperty({ nullable: true, example: "适量" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(["适量", "少许", "按需"])
+  fuzzyText!: "适量" | "少许" | "按需" | null;
+
+  @ApiProperty({ nullable: true, example: resourceIdExample })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number | null;
+
+  @ApiProperty({ nullable: true, example: resourceIdExample })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  defaultUnitId!: number | null;
+
+  @ApiProperty({ nullable: true, example: "PERSONAL", enum: ["SYSTEM", "PERSONAL"] })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(["SYSTEM", "PERSONAL"])
+  source!: "SYSTEM" | "PERSONAL" | null;
 }
 
 export class RecipeStepDto {
@@ -538,15 +624,19 @@ export class RecipeDraftContentDto {
   @ApiProperty({ nullable: true, example: resourceIdExample })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
-  @IsUUID()
-  categoryId!: string | null;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number | null;
 
   @ApiProperty({ type: [String], maxItems: 50 })
   @IsArray()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID(undefined, { each: true })
-  sceneIds!: string[];
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  sceneIds!: number[];
 
   @ApiProperty({ nullable: true, minimum: 1, maximum: 20 })
   @IsDefined()
@@ -577,12 +667,12 @@ export class RecipeDraftContentDto {
   @MaxLength(1000)
   tips!: string | null;
 
-  @ApiProperty({ type: [RecipeIngredientDto] })
+  @ApiProperty({ type: [RecipeDraftIngredientDto] })
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => RecipeIngredientDto)
-  ingredients!: RecipeIngredientDto[];
+  @Type(() => RecipeDraftIngredientDto)
+  ingredients!: RecipeDraftIngredientDto[];
 
   @ApiProperty({ type: [RecipeStepDto] })
   @IsArray()
@@ -596,8 +686,10 @@ export class CreateRecipeDraftDto extends OperationDto {
   @ApiProperty({ nullable: true, example: resourceIdExample })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
-  @IsUUID()
-  recipeId!: string | null;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number | null;
 
   @ApiProperty({ type: RecipeDraftContentDto })
   @IsDefined()
@@ -622,20 +714,26 @@ export class DeleteRecipeDto extends VersionedOperationDto {}
 
 export class CreateCollectionRecipeDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  sourceRecipeId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceRecipeId!: number;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  sourceVersionId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceVersionId!: number;
 
   @ApiProperty({ type: [String], maxItems: 50 })
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(50)
   @ArrayUnique()
-  @IsUUID(undefined, { each: true })
-  sceneIds!: string[];
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  sceneIds!: number[];
 }
 
 export class ReportRecipeDto extends OperationDto {
@@ -655,8 +753,10 @@ export class CreateMealPlanDto extends OperationDto {
   mealSlot!: string;
 
   @ApiProperty()
-  @IsUUID()
-  recipeId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
@@ -681,8 +781,10 @@ export class CreateDiningEventDto extends OperationDto {
 
 export class InviteDiningGroupParticipantsDto extends OperationDto {
   @ApiProperty()
-  @IsUUID()
-  diningGroupId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  diningGroupId!: number;
 }
 
 export class RespondDiningEventDto extends OperationDto {
@@ -702,8 +804,10 @@ export class AcceptShareInviteDto extends OperationDto {
 
 export class ChooseBringRecipeDto extends OperationDto {
   @ApiProperty()
-  @IsUUID()
-  recipeId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
 }
 
 export class CreateFridgeItemDto extends OperationDto {
@@ -759,8 +863,10 @@ export class ShoppingItemQueryDto extends PageQueryDto {
 
 export class ShoppingGapQueryDto {
   @ApiProperty()
-  @IsUUID()
-  eventId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  eventId!: number;
 }
 
 export class UpdateShoppingStatusDto extends OperationDto {
@@ -775,8 +881,10 @@ export class ConsumeFridgeItemsDto extends OperationDto {
   @ArrayNotEmpty()
   @ArrayMaxSize(100)
   @ArrayUnique()
-  @IsUUID("4", { each: true })
-  itemIds!: string[];
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  itemIds!: number[];
 }
 
 export class AdminRecipeQueryDto extends PageQueryDto {
@@ -812,8 +920,10 @@ export class AdminIngredientQueryDto extends PageQueryDto {
 
   @ApiPropertyOptional({ example: resourceIdExample })
   @IsOptional()
-  @IsUUID()
-  categoryId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 
   @ApiPropertyOptional({ example: "ACTIVE", enum: ["ACTIVE", "DISABLED", "ALL"] })
   @IsOptional()
@@ -939,8 +1049,10 @@ export class AdminRecipeContentDto {
 
 export class UpdateAdminRecipeDto extends VersionedOperationDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  inspirationCategoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId!: number;
 
   @ApiProperty({ type: AdminRecipeContentDto })
   @IsDefined()
@@ -968,12 +1080,16 @@ export class AdminIngredientPayloadDto extends OperationDto {
   name!: string;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  categoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  defaultUnitId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  defaultUnitId!: number;
 }
 
 export class UpdateAdminIngredientDto extends VersionedOperationDto {
@@ -985,12 +1101,16 @@ export class UpdateAdminIngredientDto extends VersionedOperationDto {
   name!: string;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  categoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
 
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  defaultUnitId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  defaultUnitId!: number;
 }
 
 export class UpdateAdminIngredientImageDto extends VersionedOperationDto {}
@@ -1003,8 +1123,10 @@ export class SetAdminIngredientStatusDto extends VersionedOperationDto {
 
 export class ReorderAdminIngredientsDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
-  @IsUUID()
-  categoryId!: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
 
   @ApiProperty({ type: [ReorderItemDto] })
   @IsArray()
@@ -1039,18 +1161,24 @@ export class ReviewPendingIngredientDto extends VersionedOperationDto {
 
   @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.action !== "REJECT")
-  @IsUUID()
-  categoryId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 
   @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.action !== "REJECT")
-  @IsUUID()
-  defaultUnitId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  defaultUnitId?: number;
 
   @ApiPropertyOptional({ example: resourceIdExample })
   @ValidateIf(object => object.action === "APPROVE_MERGE")
-  @IsUUID()
-  targetIngredientId?: string;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetIngredientId?: number;
 
   @ApiPropertyOptional({ example: "NAME_NOT_CLEAR" })
   @ValidateIf(object => object.action === "REJECT")
