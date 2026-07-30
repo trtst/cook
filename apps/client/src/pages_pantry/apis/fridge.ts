@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, put, type PageResult, type UUID } from "@/apis/http";
+import { get, post, put, type PageResult, type OperationId, type UUID } from "@/apis/http";
 
 export interface FridgeItemSummary {
   id: UUID;
@@ -11,7 +11,7 @@ export interface FridgeItemSummary {
 }
 
 export interface FridgeItemRequest {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
   quantityText?: string | null;
   note?: string | null;
@@ -22,12 +22,16 @@ export const fridgeApi = {
     return get<PageResult<FridgeItemSummary>>(`${cfg.domain}/api/fridge-items`, { page, pageSize });
   },
   create(body: FridgeItemRequest) {
-    return post<FridgeItemSummary>(`${cfg.domain}/api/fridge-items`, body);
+    const { operationId, ...payload } = body;
+    return post<FridgeItemSummary>(`${cfg.domain}/api/fridge-items`, payload, { idempotencyKey: operationId });
   },
   update(itemId: UUID, body: FridgeItemRequest) {
-    return put<FridgeItemSummary>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(itemId)}`, body);
+    const { operationId, ...payload } = body;
+    return put<FridgeItemSummary>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(itemId)}`, payload, {
+      idempotencyKey: operationId
+    });
   },
-  consume(itemIds: UUID[], operationId: UUID) {
-    return post<PageResult<FridgeItemSummary>>(`${cfg.domain}/api/fridge-items/consume`, { itemIds, operationId });
+  consume(itemIds: UUID[], operationId: OperationId) {
+    return post<PageResult<FridgeItemSummary>>(`${cfg.domain}/api/fridge-items/consume`, { itemIds }, { idempotencyKey: operationId });
   }
 };

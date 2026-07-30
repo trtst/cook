@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type IsoDateTime, type UUID } from "@/apis/http";
+import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
 import type { RecipeContentSnapshot } from "@/apis/recipe";
 
 export interface SharePreviewResponse {
@@ -23,10 +23,11 @@ export const shareApi = {
       auth: false
     });
   },
-  acceptInvite(shareToken: string, operationId: UUID, guestName: string) {
-    return post<ShareAcceptResponse>(`${cfg.domain}/api/share/${encodeURIComponent(shareToken)}/accept`, {
-      operationId,
-      guestName
-    });
+  acceptInvite(shareToken: string, operationId: OperationId, guestName: string) {
+    return post<ShareAcceptResponse>(
+      `${cfg.domain}/api/share/${encodeURIComponent(shareToken)}/accept`,
+      { guestName },
+      { idempotencyKey: operationId }
+    );
   }
 };

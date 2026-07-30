@@ -90,7 +90,10 @@ export const userApi = {
 	 * 当前服务端能力未开放，调用方应按 `503` 做“开发中”处理。
 	 */
 	updateDisplay(body: UpdateUserDisplayRequest) {
-		return put<MeResponse>(`${cfg.domain}/api/users/me/display`, body);
+		const { operationId, ...payload } = body;
+		return put<MeResponse>(`${cfg.domain}/api/users/me/display`, payload, {
+			idempotencyKey: operationId
+		});
 	},
 	/**
 	 * 修改当前登录用户的密码。

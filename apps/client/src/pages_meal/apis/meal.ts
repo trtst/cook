@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type IsoDateTime, type PageResult, type UUID } from "@/apis/http";
+import { get, post, type IsoDateTime, type PageResult, type OperationId, type UUID } from "@/apis/http";
 import type { RecipeContentSnapshot } from "@/apis/recipe";
 
 export interface MealPlanSummary {
@@ -46,7 +46,7 @@ export interface MealPlanQuery {
 }
 
 export interface CreateMealPlanRequest {
-  operationId: UUID;
+  operationId: OperationId;
   planDate: string;
   mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
   recipeId: UUID;
@@ -54,7 +54,7 @@ export interface CreateMealPlanRequest {
 }
 
 export interface CreateDiningEventRequest {
-  operationId: UUID;
+  operationId: OperationId;
   scheduledAt: string;
   location?: string | null;
 }
@@ -64,30 +64,37 @@ export const mealApi = {
     return get<PageResult<MealPlanSummary>>(`${cfg.domain}/api/meal-plans`, { ...query });
   },
   createPlan(body: CreateMealPlanRequest) {
-    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans`, body);
+    const { operationId, ...payload } = body;
+    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans`, payload, { idempotencyKey: operationId });
   },
   createDiningEvent(planItemId: UUID, body: CreateDiningEventRequest) {
-    return post<DiningEventSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/dining-event`, body);
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/dining-event`, payload, {
+      idempotencyKey: operationId
+    });
   },
   getDiningEvent(eventId: UUID) {
     return get<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}`);
   },
-  inviteDiningGroup(eventId: UUID, diningGroupId: UUID, operationId: UUID) {
-    return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/invite-group`, {
-      diningGroupId,
-      operationId
-    });
+  inviteDiningGroup(eventId: UUID, diningGroupId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/invite-group`,
+      { diningGroupId },
+      { idempotencyKey: operationId }
+    );
   },
-  respondToDiningEvent(eventId: UUID, operationId: UUID, status: "ACCEPTED" | "DECLINED") {
-    return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/respond`, {
-      operationId,
-      status
-    });
+  respondToDiningEvent(eventId: UUID, operationId: OperationId, status: "ACCEPTED" | "DECLINED") {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/respond`,
+      { status },
+      { idempotencyKey: operationId }
+    );
   },
-  chooseBringRecipe(eventId: UUID, recipeId: UUID, operationId: UUID) {
-    return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/bring`, {
-      recipeId,
-      operationId
-    });
+  chooseBringRecipe(eventId: UUID, recipeId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/bring`,
+      { recipeId },
+      { idempotencyKey: operationId }
+    );
   }
 };

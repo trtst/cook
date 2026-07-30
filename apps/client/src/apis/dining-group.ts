@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type IsoDateTime, type UUID } from "./http";
+import { get, post, type IsoDateTime, type OperationId, type UUID } from "./http";
 import type { UserSummary } from "./user";
 
 export type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
@@ -76,7 +76,7 @@ export interface GetMyDiningGroupsResponse {
 
 export interface CreateInviteRequest {
   diningGroupId: UUID;
-  operationId: UUID;
+  operationId: OperationId;
 }
 
 export interface CreateInviteResult {
@@ -86,7 +86,7 @@ export interface CreateInviteResult {
 }
 
 export interface AcceptInviteRequest {
-  operationId: UUID;
+  operationId: OperationId;
 }
 
 export interface AcceptInviteResponse {
@@ -94,7 +94,7 @@ export interface AcceptInviteResponse {
 }
 
 export interface LeaveDiningGroupRequest {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
 }
 
@@ -135,20 +135,32 @@ export const diningGroupApi = {
    * 只生成邀请 token 和分享路径，不复制或迁移任何个人数据。
    */
   createInvite(body: CreateInviteRequest) {
-    return post<CreateInviteResult>(`${cfg.domain}/api/dining-group-invites`, body);
+    return post<CreateInviteResult>(
+      `${cfg.domain}/api/dining-group-invites`,
+      { diningGroupId: body.diningGroupId },
+      { idempotencyKey: body.operationId }
+    );
   },
   /**
    * 接受饭搭子邀请并建立成员关系。
    * 接受邀请不影响接受人的个人菜谱、冰箱、计划和购物清单。
    */
   acceptInvite(inviteToken: string, body: AcceptInviteRequest) {
-    return post<AcceptInviteResponse>(`${cfg.domain}/api/dining-group-invites/${encodeURIComponent(inviteToken)}/accept`, body);
+    return post<AcceptInviteResponse>(
+      `${cfg.domain}/api/dining-group-invites/${encodeURIComponent(inviteToken)}/accept`,
+      undefined,
+      { idempotencyKey: body.operationId }
+    );
   },
   /**
    * 当前用户退出指定饭搭子关系。
    * 只结束成员关系，不恢复旧空间或生成个人数据快照。
    */
   leave(diningGroupId: UUID, body: LeaveDiningGroupRequest) {
-    return post<LeaveDiningGroupResponse>(`${cfg.domain}/api/dining-groups/${encodeURIComponent(diningGroupId)}/leave`, body);
+    return post<LeaveDiningGroupResponse>(
+      `${cfg.domain}/api/dining-groups/${encodeURIComponent(String(diningGroupId))}/leave`,
+      { expectedVersion: body.expectedVersion },
+      { idempotencyKey: body.operationId }
+    );
   }
 };

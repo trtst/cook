@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type PageResult, type UUID } from "@/apis/http";
+import { get, post, type PageResult, type OperationId, type UUID } from "@/apis/http";
 
 export interface ShoppingItemSummary {
   id: UUID;
@@ -13,7 +13,7 @@ export interface ShoppingItemSummary {
 }
 
 export interface CreateShoppingItemRequest {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
   quantityText?: string | null;
   note?: string | null;
@@ -24,20 +24,22 @@ export const shoppingApi = {
     return get<PageResult<ShoppingItemSummary>>(`${cfg.domain}/api/shopping-items`, { status, page, pageSize });
   },
   create(body: CreateShoppingItemRequest) {
-    return post<ShoppingItemSummary>(`${cfg.domain}/api/shopping-items`, body);
+    const { operationId, ...payload } = body;
+    return post<ShoppingItemSummary>(`${cfg.domain}/api/shopping-items`, payload, { idempotencyKey: operationId });
   },
-  updateStatus(itemId: UUID, operationId: UUID, status: "OPEN" | "BOUGHT" | "DELETED") {
-    return post<ShoppingItemSummary>(`${cfg.domain}/api/shopping-items/${encodeURIComponent(itemId)}/status`, {
-      operationId,
-      status
-    });
+  updateStatus(itemId: UUID, operationId: OperationId, status: "OPEN" | "BOUGHT" | "DELETED") {
+    return post<ShoppingItemSummary>(
+      `${cfg.domain}/api/shopping-items/${encodeURIComponent(itemId)}/status`,
+      { status },
+      { idempotencyKey: operationId }
+    );
   },
   previewGap(eventId: UUID) {
     return get<ShoppingItemSummary[]>(`${cfg.domain}/api/shopping-gap`, { eventId });
   },
-  createEventGap(eventId: UUID, operationId: UUID) {
-    return post<ShoppingItemSummary[]>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/shopping-gap`, {
-      operationId
+  createEventGap(eventId: UUID, operationId: OperationId) {
+    return post<ShoppingItemSummary[]>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/shopping-gap`, undefined, {
+      idempotencyKey: operationId
     });
   }
 };

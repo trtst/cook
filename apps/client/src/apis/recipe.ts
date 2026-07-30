@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, put, type IsoDateTime, type PageResult, type UUID } from "./http";
+import { get, post, put, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
 
 export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
 export type RecipeDuration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
@@ -77,6 +77,17 @@ export interface RecipeIngredientInput {
 	amount: RecipeAmountInput;
 }
 
+export interface RecipeDraftIngredientInput {
+	ingredientId: UUID | null;
+	name: string;
+	quantity: string;
+	unitId: UUID | null;
+	fuzzyText: "适量" | "少许" | "按需" | null;
+	categoryId: UUID | null;
+	defaultUnitId: UUID | null;
+	source: IngredientSource | null;
+}
+
 export interface RecipeIngredientSnapshot {
 	ingredientId: UUID;
 	ingredientName: string;
@@ -109,7 +120,7 @@ export interface RecipeDraftContentInput {
 	difficulty: RecipeDifficulty | null;
 	duration: RecipeDuration | null;
 	tips: string | null;
-	ingredients: RecipeIngredientInput[];
+	ingredients: RecipeDraftIngredientInput[];
 	steps: RecipeStepSnapshot[];
 }
 
@@ -310,19 +321,19 @@ export interface CollectionRecipeQuery {
 }
 
 export interface CreateRecipeDraftRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	recipeId: UUID | null;
 	content: RecipeDraftContentInput;
 }
 
 export interface UpdateRecipeDraftRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	expectedVersion: number;
 	content: RecipeDraftContentInput;
 }
 
 export interface PublishRecipeDraftRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	expectedVersion: number;
 }
 
@@ -333,18 +344,18 @@ export interface RenameTagRequest extends PublishRecipeDraftRequest {
 }
 
 export interface CreateTagRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	name: string;
 }
 
 export interface CreateUnitRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	name: string;
 	type: UnitType;
 }
 
 export interface CreateIngredientRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	name: string;
 	categoryId: UUID;
 	defaultUnitId: UUID;
@@ -379,11 +390,11 @@ export interface IngredientRecommendationQuery {
 }
 
 export interface RecommendIngredientRequest {
-	operationId: UUID;
+	operationId: OperationId;
 }
 
 export interface SaveCollectionRecipeRequest {
-	operationId: UUID;
+	operationId: OperationId;
 	sourceRecipeId: UUID;
 	sourceVersionId: UUID;
 	sceneIds: UUID[];
@@ -393,36 +404,51 @@ export interface SaveCollectionRecipeResponse {
 	recipe: CollectedRecipeDetail;
 }
 
+function assertSaveRecipeDraftResponse(result: SaveRecipeDraftResponse) {
+	if (!Number.isInteger(Number(result.id)) || Number(result.id) < 1) {
+		throw new Error("草稿保存响应缺少草稿ID");
+	}
+	if (!Number.isInteger(result.version) || result.version < 1) {
+		throw new Error("草稿保存响应版本无效");
+	}
+	if (!result.updatedAt) {
+		throw new Error("草稿保存响应时间无效");
+	}
+	return result;
+}
+
 export const recipeApi = {
 	listCategories() {
 		return get<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories`);
 	},
 	createCategory(body: CreateTagRequest) {
-		return post<RecipeCategorySummary>(`${cfg.domain}/api/recipe-categories`, body);
+		return post<RecipeCategorySummary>(`${cfg.domain}/api/recipe-categories`, { name: body.name }, { idempotencyKey: body.operationId });
 	},
 	updateCategory(categoryId: UUID, body: RenameTagRequest) {
-		return put<RecipeCategorySummary>(`${cfg.domain}/api/recipe-categories/${encodeURIComponent(categoryId)}`, body);
+		return put<RecipeCategorySummary>(
+			`${cfg.domain}/api/recipe-categories/${encodeURIComponent(String(categoryId))}`,
+			{ expectedVersion: body.expectedVersion, name: body.name },
+			{ idempotencyKey: body.operationId }
+		);
 	},
-	reorderCategories(operationId: UUID, items: ReorderItem[]) {
-		return post<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories/reorder`, {
-			operationId,
-			items
-		});
+	reorderCategories(operationId: OperationId, items: ReorderItem[]) {
+		return post<RecipeCategorySummary[]>(`${cfg.domain}/api/recipe-categories/reorder`, { items }, { idempotencyKey: operationId });
 	},
 	listScenes() {
 		return get<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes`);
 	},
 	createScene(body: CreateTagRequest) {
-		return post<RecipeSceneSummary>(`${cfg.domain}/api/recipe-scenes`, body);
+		return post<RecipeSceneSummary>(`${cfg.domain}/api/recipe-scenes`, { name: body.name }, { idempotencyKey: body.operationId });
 	},
 	updateScene(sceneId: UUID, body: RenameTagRequest) {
-		return put<RecipeSceneSummary>(`${cfg.domain}/api/recipe-scenes/${encodeURIComponent(sceneId)}`, body);
+		return put<RecipeSceneSummary>(
+			`${cfg.domain}/api/recipe-scenes/${encodeURIComponent(String(sceneId))}`,
+			{ expectedVersion: body.expectedVersion, name: body.name },
+			{ idempotencyKey: body.operationId }
+		);
 	},
-	reorderScenes(operationId: UUID, items: ReorderItem[]) {
-		return post<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes/reorder`, {
-			operationId,
-			items
-		});
+	reorderScenes(operationId: OperationId, items: ReorderItem[]) {
+		return post<RecipeSceneSummary[]>(`${cfg.domain}/api/recipe-scenes/reorder`, { items }, { idempotencyKey: operationId });
 	},
 	listIngredientCategories() {
 		return get<IngredientCategorySummary[]>(`${cfg.domain}/api/ingredient-categories`);
@@ -431,15 +457,20 @@ export const recipeApi = {
 		return get<PageResult<IngredientSummary>>(`${cfg.domain}/api/ingredients`, { ...query });
 	},
 	createIngredient(body: CreateIngredientRequest) {
-		return post<IngredientSummary>(`${cfg.domain}/api/ingredients`, body);
+		const { operationId, ...payload } = body;
+		return post<IngredientSummary>(`${cfg.domain}/api/ingredients`, payload, { idempotencyKey: operationId });
 	},
 	updateIngredient(ingredientId: UUID, body: UpdateIngredientRequest) {
-		return put<IngredientSummary>(`${cfg.domain}/api/ingredients/${encodeURIComponent(ingredientId)}`, body);
+		const { operationId, ...payload } = body;
+		return put<IngredientSummary>(`${cfg.domain}/api/ingredients/${encodeURIComponent(String(ingredientId))}`, payload, {
+			idempotencyKey: operationId
+		});
 	},
 	recommendIngredient(ingredientId: UUID, body: RecommendIngredientRequest) {
 		return post<IngredientRecommendationSummary>(
-			`${cfg.domain}/api/ingredients/${encodeURIComponent(ingredientId)}/recommendations`,
-			body
+			`${cfg.domain}/api/ingredients/${encodeURIComponent(String(ingredientId))}/recommendations`,
+			undefined,
+			{ idempotencyKey: body.operationId }
 		);
 	},
 	listIngredientRecommendations(query: IngredientRecommendationQuery) {
@@ -449,31 +480,48 @@ export const recipeApi = {
 		return get<PageResult<UnitSummary>>(`${cfg.domain}/api/units`, { ...query });
 	},
 	createUnit(body: CreateUnitRequest) {
-		return post<UnitSummary>(`${cfg.domain}/api/units`, body);
+		const { operationId, ...payload } = body;
+		return post<UnitSummary>(`${cfg.domain}/api/units`, payload, { idempotencyKey: operationId });
 	},
 	listDrafts(query: RecipeDraftQuery) {
 		return get<PageResult<RecipeDraftSummary>>(`${cfg.domain}/api/recipe-drafts`, { ...query });
 	},
-	createDraft(body: CreateRecipeDraftRequest) {
-		return post<SaveRecipeDraftResponse>(`${cfg.domain}/api/recipe-drafts`, body);
+	async createDraft(body: CreateRecipeDraftRequest) {
+		const { operationId, ...payload } = body;
+		const result = await post<SaveRecipeDraftResponse>(`${cfg.domain}/api/recipe-drafts`, payload, { idempotencyKey: operationId });
+		return assertSaveRecipeDraftResponse(result);
 	},
 	getDraft(draftId: UUID) {
-		return get<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`);
+		return get<RecipeDraftDetail>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(String(draftId))}`);
 	},
-	updateDraft(draftId: UUID, body: UpdateRecipeDraftRequest) {
-		return put<SaveRecipeDraftResponse>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}`, body);
+	async updateDraft(draftId: UUID, body: UpdateRecipeDraftRequest) {
+		const { operationId, ...payload } = body;
+		const result = await put<SaveRecipeDraftResponse>(
+			`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(String(draftId))}`,
+			payload,
+			{ idempotencyKey: operationId }
+		);
+		return assertSaveRecipeDraftResponse(result);
 	},
 	deleteDraft(draftId: UUID, body: DeleteRecipeDraftRequest) {
-		return post<DeleteRecipeDraftResult>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}/delete`, body);
+		return post<DeleteRecipeDraftResult>(
+			`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(String(draftId))}/delete`,
+			{ expectedVersion: body.expectedVersion },
+			{ idempotencyKey: body.operationId }
+		);
 	},
 	publishDraft(draftId: UUID, body: PublishRecipeDraftRequest) {
-		return post<PublishRecipeDraftResult>(`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(draftId)}/publish`, body);
+		return post<PublishRecipeDraftResult>(
+			`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(String(draftId))}/publish`,
+			{ expectedVersion: body.expectedVersion },
+			{ idempotencyKey: body.operationId }
+		);
 	},
 	listMyRecipes(query: MyRecipeQuery) {
 		return get<PageResult<MyRecipeSummary>>(`${cfg.domain}/api/recipes`, { ...query });
 	},
 	getMyRecipe(recipeId: UUID) {
-		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}`);
+		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
 	},
 	listCollections() {
 		return get<CollectionListResponse>(`${cfg.domain}/api/collections`);
@@ -482,23 +530,21 @@ export const recipeApi = {
 		return get<PageResult<CollectedRecipeSummary>>(`${cfg.domain}/api/collections/recipes`, { ...query });
 	},
 	getCollectionRecipe(collectionRecipeId: UUID) {
-		return get<CollectedRecipeDetail>(`${cfg.domain}/api/collections/recipes/${encodeURIComponent(collectionRecipeId)}`);
+		return get<CollectedRecipeDetail>(`${cfg.domain}/api/collections/recipes/${encodeURIComponent(String(collectionRecipeId))}`);
 	},
 	collectRecipe(body: SaveCollectionRecipeRequest) {
-		return post<SaveCollectionRecipeResponse>(`${cfg.domain}/api/collections/recipes`, body);
+		const { operationId, ...payload } = body;
+		return post<SaveCollectionRecipeResponse>(`${cfg.domain}/api/collections/recipes`, payload, { idempotencyKey: operationId });
 	},
-	reorderRecipes(operationId: UUID, categoryId: UUID, items: ReorderItem[]) {
-		return post<MyRecipeSummary[]>(`${cfg.domain}/api/recipes/reorder`, {
-			operationId,
-			categoryId,
-			items
-		});
+	reorderRecipes(operationId: OperationId, categoryId: UUID, items: ReorderItem[]) {
+		return post<MyRecipeSummary[]>(`${cfg.domain}/api/recipes/reorder`, { categoryId, items }, { idempotencyKey: operationId });
 	},
-	deleteRecipe(recipeId: UUID, operationId: UUID, expectedVersion: number) {
-		return post<DeleteRecipeResult>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}/delete`, {
-			operationId,
-			expectedVersion
-		});
+	deleteRecipe(recipeId: UUID, operationId: OperationId, expectedVersion: number) {
+		return post<DeleteRecipeResult>(
+			`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}/delete`,
+			{ expectedVersion },
+			{ idempotencyKey: operationId }
+		);
 	},
 	listInspirationCategories() {
 		return get<InspirationCategorySummary[]>(`${cfg.domain}/api/inspiration-categories`, undefined, {
@@ -509,12 +555,13 @@ export const recipeApi = {
 		return get<PageResult<InspirationRecipeSummary>>(`${cfg.domain}/api/inspiration-recipes`, { ...query }, { auth: false });
 	},
 	getInspirationRecipe(recipeId: UUID) {
-		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(recipeId)}`, undefined, { auth: false });
+		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(String(recipeId))}`, undefined, { auth: false });
 	},
-	reportRecipe(recipeId: UUID, operationId: UUID, reason: string) {
-		return post<RecipeReportResult>(`${cfg.domain}/api/recipes/${encodeURIComponent(recipeId)}/report`, {
-			operationId,
-			reason
-		});
+	reportRecipe(recipeId: UUID, operationId: OperationId, reason: string) {
+		return post<RecipeReportResult>(
+			`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}/report`,
+			{ reason },
+			{ idempotencyKey: operationId }
+		);
 	}
 };

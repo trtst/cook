@@ -21,7 +21,8 @@ import {
 	type UploadFileOptions
 } from "./adapters/uni";
 
-export type UUID = string;
+export type UUID = number;
+export type OperationId = string;
 export type IsoDateTime = string;
 
 export interface PageQuery {
@@ -80,6 +81,20 @@ interface RequestOptions {
 	auth?: boolean;
 	query?: Record<string, string | number | boolean | null | undefined>;
 	body?: unknown;
+	headers?: Record<string, string>;
+	idempotencyKey?: OperationId;
+}
+
+function normalizeIdempotencyKey(value: string) {
+	const normalized = value.trim();
+	if (/^\d+$/.test(normalized)) return normalized;
+
+	let hash = 0n;
+	for (const char of normalized) {
+		hash = (hash * 131n + BigInt(char.charCodeAt(0))) % 1000000000000000000000000000000n;
+	}
+
+	return hash.toString().padStart(31, "0");
 }
 
 /**
@@ -125,12 +140,15 @@ async function clearUnauthorized(error: UnauthorizedError) {
 async function requestByMethod<T>(method: HttpMethod, url: string, options: RequestOptions = {}) {
 	const auth = options.auth ?? true;
 	const token = auth ? useSessionStore().token : "";
+	const idempotencyKey = options.idempotencyKey ? normalizeIdempotencyKey(options.idempotencyKey) : undefined;
 	const result = await uniRequestAdapter({
 		url: buildUrl(url, options.query),
 		method,
 		headers: {
 			"content-type": "application/json",
-			...(token ? { Authorization: `Bearer ${token}` } : {})
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+			...(options.headers ?? {})
 		},
 		body: options.body
 	});
