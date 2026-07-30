@@ -6,7 +6,7 @@
         <view
           v-for="item in tabs"
           :key="item.value"
-          class="nav-tabs__item"
+          class="nav-tabs__item font-medium"
           :class="{ 'nav-tabs__item--active': activeTab === item.value }"
           @click="switchTab(item.value)"
         >
@@ -28,32 +28,57 @@
             confirm-type="search"
             @confirm="searchCurrent"
           />
+          <text v-if="showClearKeyword" class="search-row__clear" @click="clearKeyword">清除</text>
         </view>
       </view>
 
       <view v-if="showStickyControls" class="sticky-wrap" :style="stickyStyle">
-        <scroll-view v-if="showCategoryBar" scroll-x class="category-scroll" show-scrollbar="false">
-          <view class="category-row">
+        <view v-if="showFilters" class="filter-overlay" @click="closeFilters" />
+        <view v-if="showCategoryBar" class="sticky-bar" :class="{ 'sticky-bar--inspiration': activeTab === 'inspiration' }">
+          <view class="category-fixed">
             <view
-              v-for="item in categoryItems"
-              :key="item.id"
               class="category-chip"
-              :class="{ 'category-chip--active': currentCategoryId === item.id }"
-              @click="changeCategory(item.id)"
+              :class="{ 'category-chip--active': currentCategoryId === firstCategoryItem.id }"
+              @click="changeCategory(firstCategoryItem.id)"
             >
-              <text class="category-chip__name">{{ item.name }}</text>
+              <text class="category-chip__name">{{ firstCategoryItem.name }}</text>
             </view>
           </view>
-        </scroll-view>
 
-        <view v-if="activeTab === 'inspiration'" class="tool-row">
-          <view class="tool-row__label">灵感广场</view>
-          <view class="tool-row__action" @click="toggleFilters">
-            <text>{{ showFilters ? "收起筛选" : "筛选" }}</text>
+          <scroll-view scroll-x class="category-scroll" show-scrollbar="false">
+            <view class="category-row">
+              <view
+                v-for="item in scrollCategoryItems"
+                :key="item.id"
+                class="category-chip"
+                :class="{ 'category-chip--active': currentCategoryId === item.id }"
+                @click="changeCategory(item.id)"
+              >
+                <text class="category-chip__name">{{ item.name }}</text>
+              </view>
+            </view>
+          </scroll-view>
+
+          <view v-if="activeTab === 'inspiration'" class="filter-trigger-wrap">
+            <view
+              class="filter-trigger"
+              :class="{ 'filter-trigger--active': showFilters || activeFilterCount > 0 }"
+              @click="toggleFilters"
+            >
+              <text class="filter-trigger__text">筛选</text>
+              <text class="cookfont icon-filter-list filter-trigger__icon" />
+              <view v-if="activeFilterCount > 0" class="filter-trigger__badge">
+                {{ activeFilterBadge }}
+              </view>
+            </view>
           </view>
         </view>
 
-        <view v-if="activeTab === 'inspiration' && showFilters" class="filter-panel">
+        <view
+          v-if="activeTab === 'inspiration'"
+          class="filter-drawer"
+          :class="{ 'filter-drawer--visible': showFilters }"
+        >
           <view class="filter-group">
             <text class="filter-group__title">排序</text>
             <view class="filter-group__chips">
@@ -61,7 +86,7 @@
                 v-for="item in sortItems"
                 :key="item.value"
                 class="filter-chip"
-                :class="{ 'filter-chip--active': inspirationSort === item.value }"
+                :class="{ 'filter-chip--active': filterSort === item.value }"
                 @click="changeSort(item.value)"
               >
                 {{ item.label }}
@@ -76,7 +101,7 @@
                 v-for="item in difficultyItems"
                 :key="item.value"
                 class="filter-chip"
-                :class="{ 'filter-chip--active': inspirationDifficulty === item.value }"
+                :class="{ 'filter-chip--active': filterDifficulty === item.value }"
                 @click="changeDifficulty(item.value)"
               >
                 {{ item.label }}
@@ -91,12 +116,17 @@
                 v-for="item in durationItems"
                 :key="item.value"
                 class="filter-chip"
-                :class="{ 'filter-chip--active': inspirationDuration === item.value }"
+                :class="{ 'filter-chip--active': filterDuration === item.value }"
                 @click="changeDuration(item.value)"
               >
                 {{ item.label }}
               </view>
             </view>
+          </view>
+
+          <view class="filter-actions">
+            <view class="filter-actions__button filter-actions__button--ghost" @click="resetFilters">重置</view>
+            <view class="filter-actions__button filter-actions__button--primary" @click="applyFilters">确定</view>
           </view>
         </view>
       </view>
@@ -108,7 +138,7 @@
         <view
           v-else-if="showRecipeEmpty"
           class="recipe-empty"
-          hover-class="recipe-empty--hover"
+          :hover-class="emptyStateClickable ? 'recipe-empty--hover' : ''"
           hover-stay-time="100"
           @click="handleEmptyClick"
         >
@@ -116,12 +146,6 @@
           <text class="recipe-empty__title">{{ emptyStateTitle }}</text>
           <text class="recipe-empty__description">{{ emptyStateDescription }}</text>
         </view>
-
-        <Empty
-          v-else-if="!cards.length && activeTab === 'inspiration'"
-          title="还没有灵感菜谱"
-          description="换个分类或筛选条件再看看。"
-        />
 
         <view v-else class="list">
           <view
@@ -133,13 +157,28 @@
             @click="openCard(item)"
           >
             <view class="recipe-card__cover">
-              <text class="recipe-card__cover-text">{{ item.title.slice(0, 1) }}</text>
+              <text v-if="item.coverTag" class="recipe-card__cover-tag">{{ item.coverTag }}</text>
+              <image
+                v-if="item.coverImageUrl"
+                class="recipe-card__cover-image"
+                :src="item.coverImageUrl"
+                mode="aspectFill"
+              />
+              <view v-else class="recipe-card__cover-fallback">
+                <text class="recipe-card__cover-text font-black">封面图</text>
+              </view>
             </view>
 
-            <view class="recipe-card__main">
+            <view class="recipe-card__body">
               <text class="recipe-card__title">{{ item.title }}</text>
-              <text class="recipe-card__meta">{{ item.meta }}</text>
-              <text class="recipe-card__sub">{{ item.subline }}</text>
+              <view class="recipe-card__info">
+                <view class="recipe-card__meta">
+                  <text class="cookfont icon-time recipe-card__meta-icon" />
+                  <text class="recipe-card__meta-text">{{ item.meta }}</text>
+                </view>
+                <text v-if="item.tag" class="recipe-card__tag">{{ item.tag }}</text>
+              </view>
+              <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
             </view>
           </view>
         </view>
@@ -157,91 +196,51 @@
         <text class="manage-fab__text">{{ fabText }}</text>
       </view>
 
-      <view v-if="sheetMode" class="action-sheet" @click="closeSheet">
-        <view class="action-sheet__mask" />
-        <view class="action-sheet__panel" @click.stop>
-          <view class="action-sheet__header">
-            <text class="action-sheet__title">{{ sheetTitle }}</text>
-            <text class="action-sheet__close" @click="closeSheet">×</text>
+      <SheetShell v-if="sheetMode" :visible="sheetVisible" @close="closeSheet">
+          <view class="sheet__header">
+            <text class="sheet__title">{{ sheetTitle }}</text>
+            <text class="cookfont icon-close sheet__close" @click="closeSheet" />
           </view>
 
-          <template v-if="sheetMode === 'my'">
-            <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openRecipeEditor">
-              <view class="action-card__icon">
-                <text class="action-card__icon-text">写</text>
-              </view>
-              <view class="action-card__main">
-                <text class="action-card__name">手动添加</text>
-                <text class="action-card__desc">逐项填写菜谱信息</text>
-              </view>
-              <text class="action-card__arrow">›</text>
+          <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openRecipeEditor">
+            <view class="action-card__icon">
+              <text class="action-card__icon-text">写</text>
             </view>
-
-            <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="goToInspiration">
-              <view class="action-card__icon">
-                <text class="action-card__icon-text">逛</text>
-              </view>
-              <view class="action-card__main">
-                <text class="action-card__name">从广场挑菜</text>
-                <text class="action-card__desc">切到灵感页挑选并收藏菜谱</text>
-              </view>
-              <text class="action-card__arrow">›</text>
+            <view class="action-card__main">
+              <text class="action-card__name">手动添加</text>
+              <text class="action-card__desc">逐项填写菜谱信息</text>
             </view>
+            <text class="action-card__arrow">›</text>
+          </view>
 
-            <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openManage">
-              <view class="action-card__icon">
-                <text class="action-card__icon-text">稿</text>
-              </view>
-              <view class="action-card__main">
-                <text class="action-card__name">草稿和管理</text>
-                <text class="action-card__desc">查看草稿箱并管理已发布菜谱</text>
-              </view>
-              <text class="action-card__arrow">›</text>
+          <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="goToInspiration">
+            <view class="action-card__icon">
+              <text class="action-card__icon-text">逛</text>
             </view>
-          </template>
-
-          <template v-else-if="sheetMode === 'collection'">
-            <view class="collection-sheet">
-              <text class="collection-sheet__hint">先创建一个合集，后续收藏灵感菜谱时就能直接加入。</text>
-              <input
-                v-model="collectionName"
-                class="collection-sheet__input"
-                maxlength="20"
-                placeholder="请输入合集名称"
-                :disabled="sheetSubmitting"
-              />
-
-              <view
-                class="collection-sheet__submit"
-                :class="{ 'collection-sheet__submit--disabled': sheetSubmitting }"
-                @click="createCollection"
-              >
-                {{ sheetSubmitting ? "创建中..." : "创建合集" }}
-              </view>
-
-              <view class="collection-sheet__ghost" @click="goToInspiration">
-                去灵感添加菜谱
-              </view>
+            <view class="action-card__main">
+              <text class="action-card__name">从广场挑菜</text>
+              <text class="action-card__desc">切到灵感页挑选并收藏菜谱</text>
             </view>
-          </template>
+            <text class="action-card__arrow">›</text>
+          </view>
 
-          <template v-else>
-            <view class="collection-sheet">
-              <text class="collection-sheet__hint">当前合集还没有菜谱，去灵感页收藏后就能加入到这里。</text>
-
-              <view class="collection-sheet__submit" @click="goToInspiration">
-                去灵感添加菜谱
-              </view>
+          <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openManage">
+            <view class="action-card__icon">
+              <text class="action-card__icon-text">稿</text>
             </view>
-          </template>
-        </view>
-      </view>
+            <view class="action-card__main">
+              <text class="action-card__name">草稿和管理</text>
+              <text class="action-card__desc">查看草稿箱并管理已发布菜谱</text>
+            </view>
+            <text class="action-card__arrow">›</text>
+          </view>
+      </SheetShell>
     </view>
   </Layout>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { onPageScroll, onShow } from "@dcloudio/uni-app";
 import emptyCollectionIllustration from "@/assets/recipe-page/empty-collection.svg";
 import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
@@ -261,18 +260,17 @@ import {
 	type RecipeDuration
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
-import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
-import { createOperationId } from "@/utils/operation-id";
 
 type RecipeTab = "my" | "inspiration" | "collection";
-type SheetMode = "" | "my" | "collection" | "collection-add";
+type SheetMode = "" | "my";
 
 interface CategoryItem {
 	id: UUID | "";
@@ -282,12 +280,28 @@ interface CategoryItem {
 interface CardItem {
 	id: UUID;
 	title: string;
+	coverImageUrl: string | null;
+	coverTag: string;
 	meta: string;
+	tag: string;
 	subline: string;
 	kind: "my" | "inspiration" | "collection";
 }
 
+function isSeedCoverUrl(value: string) {
+	return value.startsWith("https://example.com/recipe/") || value.startsWith("http://example.com/recipe/");
+}
+
+function resolveCoverImageUrl(value: string | null | undefined) {
+	const trimmed = typeof value === "string" ? value.trim() : "";
+	if (!trimmed || isSeedCoverUrl(trimmed)) {
+		return null;
+	}
+	return trimmed;
+}
+
 const pageStyle = usePageScrollStyle();
+const SHEET_ANIMATION_MS = 260;
 
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
@@ -333,15 +347,18 @@ const collectionSceneId = ref<UUID | "">("");
 const inspirationSort = ref<InspirationSort>("RECOMMENDED");
 const inspirationDifficulty = ref<RecipeDifficulty | "">("");
 const inspirationDuration = ref<RecipeDuration | "">("");
+const filterSort = ref<InspirationSort>("RECOMMENDED");
+const filterDifficulty = ref<RecipeDifficulty | "">("");
+const filterDuration = ref<RecipeDuration | "">("");
 const myRecipes = ref<MyRecipeSummary[]>([]);
 const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
 const loginIntentTab = ref<RecipeTab | null>(null);
 const sheetMode = ref<SheetMode>("");
-const collectionName = ref("");
-const sheetSubmitting = ref(false);
+const sheetVisible = ref(false);
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-page-sheet"));
 
 let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+let sheetTimer: ReturnType<typeof setTimeout> | null = null;
 
 const stickyStyle = computed(() => ({
 	top: `${navBarTotalHeight.value}px`
@@ -355,6 +372,8 @@ const categoryItems = computed<CategoryItem[]>(() => {
 	}
 	return [{ id: "", name: "全部" }, ...collectionScenes.value.map(item => ({ id: item.id, name: item.name }))];
 });
+const firstCategoryItem = computed<CategoryItem>(() => categoryItems.value[0] || { id: "", name: "全部" });
+const scrollCategoryItems = computed<CategoryItem[]>(() => categoryItems.value.slice(1));
 const currentCategoryId = computed(() => {
 	if (activeTab.value === "my") return myCategoryId.value;
 	if (activeTab.value === "inspiration") return inspirationCategoryId.value;
@@ -381,38 +400,49 @@ const showCategoryBar = computed(() => {
 const showStickyControls = computed(
 	() => showCategoryBar.value || activeTab.value === "inspiration"
 );
+const keywordText = computed(() => keyword.value.trim());
+const showClearKeyword = computed(() => activeTab.value !== "collection" && keywordText.value.length > 0);
+const activeFilterCount = computed(
+	() =>
+		Number(inspirationSort.value !== "RECOMMENDED") +
+		Number(Boolean(inspirationDifficulty.value)) +
+		Number(Boolean(inspirationDuration.value))
+);
+const activeFilterBadge = computed(() => (activeFilterCount.value > 9 ? "9+" : String(activeFilterCount.value)));
 watch(
-	() => Boolean(sheetMode.value),
+	() => Boolean(sheetMode.value) || showFilters.value,
 	(visible) => {
 		setPageLocked(visible);
 	},
 	{ immediate: true }
 );
 const showRecipeEmpty = computed(
-	() => activeTab.value === "my" || (activeTab.value === "collection" && !cards.value.length)
+	() =>
+		(activeTab.value === "my" && !cards.value.length) ||
+		(activeTab.value === "inspiration" && !cards.value.length) ||
+		(activeTab.value === "collection" && !cards.value.length)
 );
+const emptyStateClickable = computed(() => activeTab.value !== "inspiration");
 const emptyStateTitle = computed(() => {
 	if (activeTab.value === "my") return "添加你的第一道菜谱";
-	return collectionNeedsCreate.value ? "创建合集并添加菜谱" : `${selectedCollection.value?.name || "这个合集"}还没有菜谱`;
+	if (activeTab.value === "inspiration") return "暂时没找到合适的菜谱";
+	return collectionNeedsCreate.value ? "还没有合集菜谱" : `${selectedCollection.value?.name || "这个合集"}还没有菜谱`;
 });
 const emptyStateDescription = computed(() =>
 	activeTab.value === "my"
 		? "记录家常拿手菜、灵感改编和做法草稿，点一下就开始添加。"
+		: activeTab.value === "inspiration"
+			? "换个分类、关键词或筛选条件试试。"
 		: collectionNeedsCreate.value
-			? "先创建一个合集，后续可把灵感菜谱收藏进来统一整理。"
-			: "去灵感页收藏菜谱，或切换到别的合集看看。"
+			? "可以先手动添加菜谱，或去灵感页挑菜后再慢慢整理合集。"
+			: "去灵感页挑菜后即可加入这个合集，也可以先手动补录。"
 );
-const emptyStateArt = computed(() => (activeTab.value === "my" ? emptyStateIllustration : emptyCollectionIllustration));
-const sheetTitle = computed(() => {
-	if (sheetMode.value === "my") return "添加菜谱";
-	if (sheetMode.value === "collection") return "创建合集";
-	return "添加菜谱到合集";
-});
+const emptyStateArt = computed(() =>
+	activeTab.value === "collection" ? emptyCollectionIllustration : emptyStateIllustration
+);
+const sheetTitle = computed(() => "添加菜谱");
 const fabText = computed(() => {
-	if (activeTab.value === "collection") {
-		return collectionNeedsCreate.value ? "新建" : "添加";
-	}
-	return "管理";
+	return "添加";
 });
 
 onShow(() => {
@@ -423,6 +453,9 @@ watch(
 	() => sessionStore.isLoggedIn,
 	isLoggedIn => {
 		if (isLoggedIn && !loginIntentTab.value && activeTab.value !== "my") {
+			if (activeTab.value === "inspiration") {
+				resetInspirationFilters();
+			}
 			activeTab.value = "my";
 			keyword.value = "";
 			errorText.value = "";
@@ -444,6 +477,16 @@ watch(
 	}
 );
 
+watch(
+	keywordText,
+	(nextValue, previousValue) => {
+		if (activeTab.value === "collection") return;
+		if (!nextValue && previousValue) {
+			void loadActiveTab();
+		}
+	}
+);
+
 onPageScroll(() => {
 	if (activeTab.value === "inspiration") return;
 	fabHidden.value = true;
@@ -456,15 +499,20 @@ onPageScroll(() => {
 
 onUnmounted(() => {
 	if (scrollTimer) clearTimeout(scrollTimer);
+	if (sheetTimer) clearTimeout(sheetTimer);
 });
 
 function switchTab(tab: RecipeTab) {
 	if (activeTab.value === tab) return;
+	const previousTab = activeTab.value;
 	activeTab.value = tab;
 	errorText.value = "";
 	keyword.value = "";
 	closeSheet();
-	if (tab !== "inspiration") {
+	if (previousTab === "inspiration" && tab !== "inspiration") {
+		resetInspirationFilters();
+		showFilters.value = false;
+	} else if (tab !== "inspiration") {
 		showFilters.value = false;
 	}
 	void loadActiveTab();
@@ -483,30 +531,76 @@ function changeCategory(categoryId: UUID | "") {
 }
 
 function changeSort(value: InspirationSort) {
-	if (inspirationSort.value === value) return;
-	inspirationSort.value = value;
-	void loadActiveTab();
+	if (filterSort.value === value) return;
+	filterSort.value = value;
 }
 
 function changeDifficulty(value: RecipeDifficulty | "") {
-	if (inspirationDifficulty.value === value) return;
-	inspirationDifficulty.value = value;
-	void loadActiveTab();
+	if (filterDifficulty.value === value) return;
+	filterDifficulty.value = value;
 }
 
 function changeDuration(value: RecipeDuration | "") {
-	if (inspirationDuration.value === value) return;
-	inspirationDuration.value = value;
-	void loadActiveTab();
+	if (filterDuration.value === value) return;
+	filterDuration.value = value;
 }
 
 function toggleFilters() {
-	showFilters.value = !showFilters.value;
+	if (showFilters.value) {
+		closeFilters();
+		return;
+	}
+	syncFilterDraft();
+	showFilters.value = true;
 }
 
 function searchCurrent() {
 	if (activeTab.value === "collection") return;
 	void loadActiveTab();
+}
+
+function clearKeyword() {
+	if (!keyword.value) return;
+	keyword.value = "";
+}
+
+function closeFilters() {
+	showFilters.value = false;
+}
+
+function resetInspirationFilters() {
+	inspirationSort.value = "RECOMMENDED";
+	inspirationDifficulty.value = "";
+	inspirationDuration.value = "";
+	filterSort.value = "RECOMMENDED";
+	filterDifficulty.value = "";
+	filterDuration.value = "";
+}
+
+function syncFilterDraft() {
+	filterSort.value = inspirationSort.value;
+	filterDifficulty.value = inspirationDifficulty.value;
+	filterDuration.value = inspirationDuration.value;
+}
+
+function resetFilters() {
+	filterSort.value = "RECOMMENDED";
+	filterDifficulty.value = "";
+	filterDuration.value = "";
+}
+
+function applyFilters() {
+	const changed =
+		filterSort.value !== inspirationSort.value ||
+		filterDifficulty.value !== inspirationDifficulty.value ||
+		filterDuration.value !== inspirationDuration.value;
+	inspirationSort.value = filterSort.value;
+	inspirationDifficulty.value = filterDifficulty.value;
+	inspirationDuration.value = filterDuration.value;
+	showFilters.value = false;
+	if (changed) {
+		void loadActiveTab();
+	}
 }
 
 async function loadActiveTab() {
@@ -556,8 +650,8 @@ async function loadActiveTab() {
 			}
 			const result = await recipeApi.listMyRecipes({
 				page: 1,
-				pageSize: 20,
-				keyword: keyword.value.trim() || undefined,
+				pageSize: 50,
+				keyword: keywordText.value || undefined,
 				categoryId: myCategoryId.value || undefined
 			});
 			myRecipes.value = result.items;
@@ -570,7 +664,7 @@ async function loadActiveTab() {
 		const result = await recipeApi.listInspirationRecipes({
 			page: 1,
 			pageSize: 20,
-			keyword: keyword.value.trim() || undefined,
+			keyword: keywordText.value || undefined,
 			categoryId: inspirationCategoryId.value || undefined,
 			sort: inspirationSort.value,
 			difficulty: inspirationDifficulty.value || undefined,
@@ -596,36 +690,53 @@ function openManage() {
 }
 
 function handleFab() {
-	if (activeTab.value === "collection") {
-		closeSheet();
-		sheetMode.value = collectionNeedsCreate.value ? "collection" : "collection-add";
-		return;
+	openAddSheet();
+}
+
+function openAddSheet() {
+	if (sheetTimer) {
+		clearTimeout(sheetTimer);
+		sheetTimer = null;
 	}
-	openManage();
+	if (sheetMode.value === "my" && sheetVisible.value) return;
+	sheetMode.value = "my";
+	sheetVisible.value = false;
+	void nextTick(() => {
+		sheetVisible.value = true;
+	});
 }
 
 function closeSheet() {
-	sheetMode.value = "";
-	collectionName.value = "";
-	sheetSubmitting.value = false;
+	if (!sheetMode.value) return;
+	sheetVisible.value = false;
+	if (sheetTimer) {
+		clearTimeout(sheetTimer);
+	}
+	sheetTimer = setTimeout(() => {
+		sheetMode.value = "";
+		sheetTimer = null;
+	}, SHEET_ANIMATION_MS);
 }
 
 function handleEmptyClick() {
 	if (!sessionStore.isLoggedIn) {
 		loginIntentTab.value = activeTab.value;
 		loginModalStore.open(null, () => {
+			const intentTab = loginIntentTab.value;
 			loginIntentTab.value = null;
+			if (intentTab && intentTab !== "inspiration") {
+				openAddSheet();
+			}
 			void loadActiveTab();
 		});
 		return;
 	}
 
-	if (activeTab.value === "my") {
-		sheetMode.value = "my";
+	if (activeTab.value === "inspiration") {
 		return;
 	}
 
-	sheetMode.value = collectionNeedsCreate.value ? "collection" : "collection-add";
+	openAddSheet();
 }
 
 function openRecipeEditor() {
@@ -639,36 +750,6 @@ function goToInspiration() {
 	errorText.value = "";
 	showFilters.value = false;
 	void loadActiveTab();
-}
-
-async function createCollection() {
-	const name = collectionName.value.trim();
-	if (!name || sheetSubmitting.value) return;
-
-	sheetSubmitting.value = true;
-	try {
-		const scene = await recipeApi.createScene({
-			operationId: createOperationId(),
-			name
-		});
-		collectionScenes.value = [
-			...collectionScenes.value,
-			{
-				...scene,
-				recipeCount: 0,
-				updatedAt: null
-			}
-		];
-		collectionSceneId.value = scene.id;
-		closeSheet();
-		await uniPlatform.feedback.toast({ title: "合集已创建", icon: "success" }).catch(() => undefined);
-	} catch (error) {
-		await uniPlatform.feedback.toast({
-			title: error instanceof Error ? error.message : "创建失败",
-			icon: "none"
-		}).catch(() => undefined);
-		sheetSubmitting.value = false;
-	}
 }
 
 function formatDifficulty(value: RecipeDifficulty | null) {
@@ -691,8 +772,11 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 	return {
 		id: item.id,
 		title: item.title,
-		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
-		subline: `${item.category.name} · 更新于 ${item.updatedAt.slice(0, 10)}`,
+		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		coverTag: item.category.name,
+		meta: formatDuration(item.duration),
+		tag: "",
+		subline: "",
 		kind: "my"
 	};
 }
@@ -701,19 +785,24 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 	return {
 		id: item.id,
 		title: item.title,
+		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		coverTag: item.category.name,
 		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
-		subline: `${item.category.name} · ${item.likeCount} 赞 · ${item.collectCount} 收藏`,
+		tag: "",
+		subline: "",
 		kind: "inspiration"
 	};
 }
 
 function toCollectionCard(item: CollectedRecipeSummary): CardItem {
-	const sceneNames = item.scenes.map(scene => scene.name).join("、");
 	return {
 		id: item.id,
 		title: item.title,
-		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
-		subline: `${item.category.name} · ${sceneNames || "未归档"} · 收藏于 ${item.collectedAt.slice(0, 10)}`,
+		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
+		coverTag: "",
+		meta: formatDuration(item.duration),
+		tag: "",
+		subline: "",
 		kind: "collection"
 	};
 }
@@ -768,7 +857,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   left: -8rpx;
   z-index: -1;
   height: 18rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--theme-primary);
   opacity: 0.3;
   transform: rotate(-5deg);
@@ -784,7 +873,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   height: 80rpx;
   padding: 0 28rpx;
   border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   box-sizing: border-box;
@@ -810,25 +899,57 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   font-weight: var(--font-weight-medium);
 }
 
+.search-row__clear {
+  flex: 0 0 auto;
+  padding-left: 16rpx;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  line-height: 1;
+}
+
 :deep(.search-row__placeholder) {
   color: var(--color-text-tertiary);
 }
 
 .sticky-wrap {
   position: sticky;
-  z-index: 10;
+  z-index: 20;
   margin-top: 18rpx;
   padding-bottom: var(--space-sm);
   background: var(--color-page);
 }
 
+.filter-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: var(--color-surface-mask-medium);
+}
+
+.sticky-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 56rpx;
+  z-index: 0;
+}
+
+.category-fixed {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  padding-right: 16rpx;
+  background: var(--color-page);
+}
+
 .category-scroll {
+  flex: 1;
+  min-width: 0;
   white-space: nowrap;
 }
 
 .category-row,
-.filter-group__chips,
-.tool-row {
+.filter-group__chips {
   display: flex;
   gap: 16rpx;
 }
@@ -836,6 +957,10 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 .category-row {
   width: max-content;
   padding-right: 24rpx;
+}
+
+.sticky-bar--inspiration .category-row {
+  padding-right: 184rpx;
 }
 
 .category-chip,
@@ -847,7 +972,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   height: 56rpx;
   padding: 0 28rpx;
   border: 1rpx solid var(--color-divider);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted);
   box-sizing: border-box;
 }
@@ -873,34 +998,95 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   color: var(--color-primary-active);
 }
 
-.tool-row {
+.filter-trigger-wrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 18rpx;
+  padding-left: 28rpx;
+  background: linear-gradient(90deg, var(--color-surface-mask-weak), var(--color-page) 28%);
 }
 
-.tool-row__label {
-  color: var(--color-text);
+.filter-trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8rpx;
+  min-width: 88rpx;
+  height: 56rpx;
+  padding: 0 12rpx 0 6rpx;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
 }
 
-.tool-row__action {
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
+.filter-trigger--active {
+  color: var(--color-primary-active);
 }
 
-.filter-panel,
+.filter-trigger__text {
+  line-height: 1;
+}
+
+.filter-trigger__icon {
+  color: inherit;
+  font-size: 28rpx;
+  line-height: 1;
+}
+
+.filter-trigger__badge {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34rpx;
+  height: 34rpx;
+  padding: 0 8rpx;
+  border: 4rpx solid var(--color-page);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  box-sizing: border-box;
+  color: var(--color-primary-foreground);
+  font-size: 20rpx;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
 .notice,
 .recipe-card,
 .login-card {
   margin-top: var(--space-md);
 }
 
-.filter-panel {
+.filter-drawer {
+  position: absolute;
+  top: calc(100% + 10rpx);
+  right: 0;
+  z-index: 2;
+  width: 500rpx;
+  max-width: calc(100% - 40rpx);
   padding: var(--space-md);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  border-radius: var(--radius-xs);
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
+  box-shadow: var(--shadow-floating);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8rpx) scale(0.98);
+  transform-origin: top right;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.filter-drawer--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
 }
 
 .filter-group + .filter-group {
@@ -915,10 +1101,42 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   font-weight: var(--font-weight-semibold);
 }
 
+.filter-group__chips {
+  flex-wrap: wrap;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.filter-actions__button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 76rpx;
+  border-radius: var(--radius-pill);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.filter-actions__button--ghost {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.filter-actions__button--primary {
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+}
+
 .notice,
 .recipe-card {
   padding: var(--space-md);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
 }
 
@@ -1016,17 +1234,19 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 }
 
 .list {
-  margin-top: var(--space-md);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20rpx;
 }
 
 .recipe-card {
+  overflow: hidden;
   display: flex;
-  gap: var(--space-md);
-  align-items: center;
-}
-
-.recipe-card + .recipe-card {
-  margin-top: var(--space-sm);
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  box-shadow: 0 6rpx 14rpx rgba(57, 44, 31, 0.035);
 }
 
 .recipe-card--hover,
@@ -1035,45 +1255,124 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 }
 
 .recipe-card__cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.94) 0%, rgba(245, 238, 227, 0.96) 100%);
+}
+
+.recipe-card__cover-tag {
+  position: absolute;
+  top: 16rpx;
+  left: 16rpx;
+  z-index: 1;
+  max-width: calc(100% - 32rpx);
+  padding: 8rpx 14rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-mask-strong);
+  color: var(--color-text-secondary);
+  font-size: 20rpx;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipe-card__cover-image,
+.recipe-card__cover-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.recipe-card__cover-image {
+  display: block;
+}
+
+.recipe-card__cover-fallback {
   display: flex;
-  flex: 0 0 112rpx;
   align-items: center;
   justify-content: center;
-  width: 112rpx;
-  height: 112rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(135deg, var(--color-primary-soft), var(--color-surface-muted));
 }
 
 .recipe-card__cover-text {
-  color: var(--color-primary);
-  font-size: 42rpx;
+  color: var(--color-text-secondary);
+  opacity: 0.54;
+  font-size: 52rpx;
   font-weight: var(--font-weight-heavy);
 }
 
-.recipe-card__main {
+.recipe-card__body {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 12rpx;
+  padding: 22rpx 20rpx 24rpx;
+}
+
+.recipe-card__info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
   min-width: 0;
 }
 
 .recipe-card__title,
 .recipe-card__meta,
+.recipe-card__tag,
 .recipe-card__sub {
   display: block;
 }
 
 .recipe-card__title {
   color: var(--color-text);
-  font-size: var(--font-size-lg);
+  font-size: 30rpx;
   font-weight: var(--font-weight-semibold);
+  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .recipe-card__meta,
 .recipe-card__sub {
-  margin-top: 8rpx;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: 22rpx;
   line-height: 1.6;
+}
+
+.recipe-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.recipe-card__meta-icon {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.recipe-card__meta-text {
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+.recipe-card__tag {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .manage-fab {
@@ -1085,7 +1384,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   align-items: center;
   gap: 8rpx;
   padding: 14rpx 24rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-primary);
   color: var(--color-primary-foreground);
   box-shadow: var(--shadow-floating);
@@ -1108,47 +1407,23 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   transform: translateX(140%);
 }
 
-.action-sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 1300;
-}
-
-.action-sheet__mask {
-  position: absolute;
-  inset: 0;
-  background: var(--login-popup-backdrop-bg);
-  -webkit-backdrop-filter: blur(24rpx) saturate(145%);
-  backdrop-filter: blur(24rpx) saturate(145%);
-}
-
-.action-sheet__panel {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  padding: 36rpx 32rpx calc(40rpx + env(safe-area-inset-bottom));
-  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-  background: linear-gradient(180deg, var(--login-popup-sheet-overlay-start) 0%, var(--login-popup-sheet-overlay-end) 100%);
-  box-shadow: var(--login-popup-sheet-shadow);
-}
-
-.action-sheet__header {
+.sheet__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16rpx;
   margin-bottom: 20rpx;
 }
 
-.action-sheet__title {
+.sheet__title {
   color: var(--color-text);
-  font-size: 40rpx;
+  font-size: 38rpx;
   font-weight: var(--font-weight-heavy);
 }
 
-.action-sheet__close {
+.sheet__close {
   color: var(--color-text-tertiary);
-  font-size: 64rpx;
+  font-size: 36rpx;
   line-height: 1;
 }
 
@@ -1158,7 +1433,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   gap: 24rpx;
   padding: 24rpx;
   border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--color-surface-mask-medium);
 }
 
 .action-card + .action-card {
@@ -1214,55 +1489,5 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   color: var(--color-text-tertiary);
   font-size: 56rpx;
   line-height: 1;
-}
-
-.collection-sheet__hint {
-  display: block;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-loose);
-}
-
-.collection-sheet__input {
-  width: 100%;
-  height: 92rpx;
-  margin-top: 24rpx;
-  padding: 0 26rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.9);
-  box-sizing: border-box;
-  color: var(--color-text);
-  font-size: 28rpx;
-}
-
-.collection-sheet__submit,
-.collection-sheet__ghost {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  border-radius: var(--radius-pill);
-  font-size: 30rpx;
-}
-
-.collection-sheet__submit {
-  height: 96rpx;
-  margin-top: 24rpx;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-}
-
-.collection-sheet__submit--disabled {
-  opacity: 0.7;
-}
-
-.collection-sheet__ghost {
-  height: 88rpx;
-  margin-top: 16rpx;
-  border: 2rpx solid var(--login-popup-ghost-border);
-  background: var(--login-popup-ghost-bg);
-  color: var(--login-popup-ghost-text);
 }
 </style>

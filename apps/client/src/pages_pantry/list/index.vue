@@ -191,7 +191,7 @@ async function updateStatus(itemId: UUID, nextStatus: "BOUGHT" | "DELETED") {
 
 .filter-chip {
   padding: 12rpx 24rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
 }

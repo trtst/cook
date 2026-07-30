@@ -35,7 +35,7 @@
 .login__button {
   width: 100%;
   margin-top: 28rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     135deg,
     var(--button-primary-gradient-start) 0%,

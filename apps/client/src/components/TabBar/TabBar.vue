@@ -101,7 +101,7 @@ function switchTab(pagePath: string) {
   height: 108rpx;
   padding: 10rpx;
   border: 1rpx solid var(--color-border);
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-tabbar-bg);
   pointer-events: auto;
   -webkit-backdrop-filter: saturate(180%) blur(28rpx);
@@ -117,7 +117,7 @@ function switchTab(pagePath: string) {
   flex-direction: column;
   min-width: 0;
   height: 88rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   color: var(--color-text-tertiary);
 }
 

@@ -572,7 +572,7 @@ function stopMotionTimer() {
   z-index: 1;
   width: 100%;
   height: 96rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   font-size: 30rpx;
   line-height: 96rpx;
   text-align: center;
