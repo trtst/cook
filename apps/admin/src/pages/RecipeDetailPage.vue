@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, EditPen, Plus, Refresh } from "@element-plus/icons-vue";
+import { ArrowLeft, EditPen, Plus, Refresh, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   ingredientApi,
@@ -24,6 +24,7 @@ import { formatStatusText } from "@/utils/status";
 type Difficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
 type Duration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
 type FuzzyText = "适量" | "少许" | "按需";
+type CropScene = "COVER" | "STEP";
 
 interface EditIngredientRow {
   ingredientId: UUID | "";
@@ -39,8 +40,17 @@ interface EditIngredientRow {
       };
 }
 
+interface EditStepRow {
+  text: string;
+  imageUrl: string | null;
+  imageTempKey: string | null;
+  previewUrl: string | null;
+}
+
 interface EditFormState {
   inspirationCategoryId: UUID | "";
+  coverImageUrl: string | null;
+  coverImageTempKey: string | null;
   content: {
     name: string;
     story: string;
@@ -49,7 +59,7 @@ interface EditFormState {
     duration: Duration;
     tips: string;
     ingredients: EditIngredientRow[];
-    steps: Array<{ text: string }>;
+    steps: EditStepRow[];
   };
 }
 
@@ -58,6 +68,11 @@ interface IngredientOptionItem {
   label: string;
   disabled?: boolean;
 }
+
+const coverFrameWidth = 320;
+const coverFrameHeight = 240;
+const exportCoverWidth = 1200;
+const exportCoverHeight = 900;
 
 const difficultyOptions: Array<{ label: string; value: Difficulty }> = [
   { label: "新手友好", value: "BEGINNER" },
@@ -88,15 +103,48 @@ const router = useRouter();
 const loading = ref(false);
 const optionLoading = ref(false);
 const saving = ref(false);
+const imageSaving = ref(false);
 const editVisible = ref(false);
+const cropDialogVisible = ref(false);
+const coverPreviewUrl = ref<string | null>(null);
 const detail = ref<AdminRecipeDetail | null>(null);
 const inspirationCategories = ref<AdminInspirationCategorySummary[]>([]);
 const ingredientCategories = ref<AdminIngredientCategorySummary[]>([]);
 const ingredientOptions = ref<AdminIngredientSummary[]>([]);
 const unitOptions = ref<AdminUnitSummary[]>([]);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+const cropTarget = reactive({
+  scene: "COVER" as CropScene,
+  stepIndex: -1
+});
+
+const cropState = reactive({
+  sourceUrl: "",
+  sourceWidth: 0,
+  sourceHeight: 0,
+  frameWidth: coverFrameWidth,
+  frameHeight: coverFrameHeight,
+  outputWidth: exportCoverWidth,
+  outputHeight: exportCoverHeight,
+  scale: 1,
+  minScale: 1,
+  x: 0,
+  y: 0
+});
+
+const dragState = reactive({
+  active: false,
+  startX: 0,
+  startY: 0,
+  originX: 0,
+  originY: 0
+});
 
 const form = reactive<EditFormState>({
   inspirationCategoryId: "",
+  coverImageUrl: null,
+  coverImageTempKey: null,
   content: {
     name: "",
     story: "",
@@ -158,6 +206,29 @@ const unitOptionList = computed(() => {
   }
   return items;
 });
+
+const cropImageStyle = computed(() => ({
+  width: `${cropState.sourceWidth * cropState.scale}px`,
+  height: `${cropState.sourceHeight * cropState.scale}px`,
+  transform: `translate(${cropState.x}px, ${cropState.y}px)`
+}));
+
+function revokePreviewUrl(url: string | null | undefined) {
+  if (url?.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function replaceCoverPreviewUrl(nextUrl: string | null) {
+  revokePreviewUrl(coverPreviewUrl.value);
+  coverPreviewUrl.value = nextUrl;
+}
+
+function replaceStepPreviewUrl(step: EditStepRow | undefined, nextUrl: string | null) {
+  if (!step) return;
+  revokePreviewUrl(step.previewUrl);
+  step.previewUrl = nextUrl;
+}
 
 async function loadDetail() {
   loading.value = true;
@@ -234,7 +305,13 @@ function resetFormFromDetail() {
   if (!detail.value || !detail.value.inspirationCategory || !detail.value.content.difficulty || !detail.value.content.duration) {
     return;
   }
+  replaceCoverPreviewUrl(detail.value.coverImageUrl);
+  for (const step of form.content.steps) {
+    revokePreviewUrl(step.previewUrl);
+  }
   form.inspirationCategoryId = detail.value.inspirationCategory.id;
+  form.coverImageUrl = detail.value.coverImageUrl;
+  form.coverImageTempKey = null;
   form.content.name = detail.value.content.name;
   form.content.story = detail.value.content.story ?? "";
   form.content.baseServings = detail.value.content.baseServings;
@@ -255,7 +332,12 @@ function resetFormFromDetail() {
             text: item.amount.text
           }
   }));
-  form.content.steps = detail.value.content.steps.map(item => ({ text: item.text }));
+  form.content.steps = detail.value.content.steps.map(item => ({
+    text: item.text,
+    imageUrl: item.imageUrl,
+    imageTempKey: null,
+    previewUrl: item.imageUrl
+  }));
 }
 
 async function openEdit() {
@@ -278,7 +360,12 @@ function addIngredient() {
 }
 
 function addStep() {
-  form.content.steps.push({ text: "" });
+  form.content.steps.push({
+    text: "",
+    imageUrl: null,
+    imageTempKey: null,
+    previewUrl: null
+  });
 }
 
 function removeIngredient(index: number) {
@@ -286,7 +373,22 @@ function removeIngredient(index: number) {
 }
 
 function removeStep(index: number) {
+  revokePreviewUrl(form.content.steps[index]?.previewUrl);
   form.content.steps.splice(index, 1);
+}
+
+function clearCoverImage() {
+  form.coverImageUrl = null;
+  form.coverImageTempKey = null;
+  replaceCoverPreviewUrl(null);
+}
+
+function clearStepImage(index: number) {
+  const step = form.content.steps[index];
+  if (!step) return;
+  replaceStepPreviewUrl(step, null);
+  step.imageUrl = null;
+  step.imageTempKey = null;
 }
 
 function resolveEditId(value: UUID | ""): UUID | null {
@@ -333,7 +435,7 @@ function buildPayload(): UpdateAdminRecipePayload | null {
   }
   const inspirationCategoryId = resolveEditId(form.inspirationCategoryId);
   if (!inspirationCategoryId) {
-    ElMessage.error("请选择灵感分类");
+    ElMessage.error("请选择系统菜谱分类");
     return null;
   }
 
@@ -348,6 +450,8 @@ function buildPayload(): UpdateAdminRecipePayload | null {
     operationId: createOperationId(),
     expectedVersion: detail.value.version,
     inspirationCategoryId,
+    coverImageUrl: form.coverImageUrl,
+    coverImageTempKey: form.coverImageTempKey,
     content: {
       name: form.content.name.trim(),
       story: form.content.story.trim() ? form.content.story.trim() : null,
@@ -357,7 +461,9 @@ function buildPayload(): UpdateAdminRecipePayload | null {
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
       ingredients,
       steps: form.content.steps.map(item => ({
-        text: item.text
+        text: item.text,
+        imageUrl: item.imageUrl,
+        imageTempKey: item.imageTempKey
       }))
     } satisfies AdminRecipeContentInput
   };
@@ -369,7 +475,8 @@ async function saveEdit() {
   saving.value = true;
   try {
     detail.value = await recipeApi.update(detail.value.id, payload);
-    ElMessage.success("已保存菜谱正文");
+    resetFormFromDetail();
+    ElMessage.success("已保存系统菜谱正文");
     editVisible.value = false;
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "保存失败");
@@ -390,6 +497,198 @@ function formatDuration(value: AdminRecipeDetail["content"]["duration"]) {
   return value ? durationLabelMap[value] : "-";
 }
 
+function revokeCropSource() {
+  if (cropState.sourceUrl) {
+    URL.revokeObjectURL(cropState.sourceUrl);
+  }
+}
+
+function resetCropState() {
+  revokeCropSource();
+  cropState.sourceUrl = "";
+  cropState.sourceWidth = 0;
+  cropState.sourceHeight = 0;
+  cropState.frameWidth = coverFrameWidth;
+  cropState.frameHeight = coverFrameHeight;
+  cropState.outputWidth = exportCoverWidth;
+  cropState.outputHeight = exportCoverHeight;
+  cropState.scale = 1;
+  cropState.minScale = 1;
+  cropState.x = 0;
+  cropState.y = 0;
+  cropTarget.scene = "COVER";
+  cropTarget.stepIndex = -1;
+  dragState.active = false;
+}
+
+function clampCropPosition() {
+  const width = cropState.sourceWidth * cropState.scale;
+  const height = cropState.sourceHeight * cropState.scale;
+  const minX = cropState.frameWidth - width;
+  const minY = cropState.frameHeight - height;
+  cropState.x = Math.min(0, Math.max(minX, cropState.x));
+  cropState.y = Math.min(0, Math.max(minY, cropState.y));
+}
+
+function centerCropImage(width: number, height: number) {
+  cropState.minScale = Math.max(cropState.frameWidth / width, cropState.frameHeight / height);
+  cropState.scale = cropState.minScale;
+  cropState.x = (cropState.frameWidth - width * cropState.scale) / 2;
+  cropState.y = (cropState.frameHeight - height * cropState.scale) / 2;
+}
+
+function applyCropScene(scene: CropScene, width: number, height: number) {
+  cropTarget.scene = scene;
+  if (scene === "COVER") {
+    cropState.frameWidth = coverFrameWidth;
+    cropState.frameHeight = coverFrameHeight;
+    cropState.outputWidth = exportCoverWidth;
+    cropState.outputHeight = exportCoverHeight;
+    return;
+  }
+
+  const maxFrame = 320;
+  const ratio = width / height;
+  if (ratio >= 1) {
+    cropState.frameWidth = maxFrame;
+    cropState.frameHeight = Math.max(120, Math.round(maxFrame / ratio));
+    cropState.outputWidth = 1200;
+    cropState.outputHeight = Math.max(1, Math.round(1200 / ratio));
+  } else {
+    cropState.frameHeight = maxFrame;
+    cropState.frameWidth = Math.max(120, Math.round(maxFrame * ratio));
+    cropState.outputHeight = 1200;
+    cropState.outputWidth = Math.max(1, Math.round(1200 * ratio));
+  }
+}
+
+function chooseCoverFile() {
+  if (imageSaving.value) return;
+  cropTarget.scene = "COVER";
+  cropTarget.stepIndex = -1;
+  fileInput.value?.click();
+}
+
+function chooseStepFile(index: number) {
+  if (imageSaving.value) return;
+  cropTarget.scene = "STEP";
+  cropTarget.stepIndex = index;
+  fileInput.value?.click();
+}
+
+async function handleImageFileChange(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  target.value = "";
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    ElMessage.error("请选择图片文件");
+    return;
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(sourceUrl);
+    resetCropState();
+    cropState.sourceUrl = sourceUrl;
+    cropState.sourceWidth = image.naturalWidth || image.width;
+    cropState.sourceHeight = image.naturalHeight || image.height;
+    applyCropScene(cropTarget.scene, cropState.sourceWidth, cropState.sourceHeight);
+    centerCropImage(cropState.sourceWidth, cropState.sourceHeight);
+    cropDialogVisible.value = true;
+  } catch {
+    URL.revokeObjectURL(sourceUrl);
+    ElMessage.error("图片读取失败，请重试");
+  }
+}
+
+function loadImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
+}
+
+function beginCropDrag(event: PointerEvent) {
+  if (!cropState.sourceUrl) return;
+  dragState.active = true;
+  dragState.startX = event.clientX;
+  dragState.startY = event.clientY;
+  dragState.originX = cropState.x;
+  dragState.originY = cropState.y;
+}
+
+function handleCropDrag(event: PointerEvent) {
+  if (!dragState.active) return;
+  cropState.x = dragState.originX + event.clientX - dragState.startX;
+  cropState.y = dragState.originY + event.clientY - dragState.startY;
+  clampCropPosition();
+}
+
+function endCropDrag() {
+  dragState.active = false;
+}
+
+function updateCropScale(nextScale: number) {
+  const previousScale = cropState.scale;
+  if (!previousScale || !cropState.sourceWidth || !cropState.sourceHeight) return;
+  const centerX = (cropState.frameWidth / 2 - cropState.x) / previousScale;
+  const centerY = (cropState.frameHeight / 2 - cropState.y) / previousScale;
+  cropState.scale = nextScale;
+  cropState.x = cropState.frameWidth / 2 - centerX * nextScale;
+  cropState.y = cropState.frameHeight / 2 - centerY * nextScale;
+  clampCropPosition();
+}
+
+async function renderCropFile() {
+  const image = await loadImage(cropState.sourceUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = cropState.outputWidth;
+  canvas.height = cropState.outputHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("裁图失败");
+
+  const sourceX = Math.max(0, -cropState.x / cropState.scale);
+  const sourceY = Math.max(0, -cropState.y / cropState.scale);
+  const sourceWidth = cropState.frameWidth / cropState.scale;
+  const sourceHeight = cropState.frameHeight / cropState.scale;
+
+  context.clearRect(0, 0, cropState.outputWidth, cropState.outputHeight);
+  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, cropState.outputWidth, cropState.outputHeight);
+
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+  if (!blob) throw new Error("裁图失败");
+  return new File([blob], `recipe-${cropTarget.scene.toLowerCase()}.jpg`, { type: "image/jpeg" });
+}
+
+async function submitRecipeImage() {
+  if (imageSaving.value || !cropState.sourceUrl) return;
+  imageSaving.value = true;
+  try {
+    const file = await renderCropFile();
+    const result = await recipeApi.uploadImage(cropTarget.scene, file, createOperationId());
+    const previewUrl = URL.createObjectURL(file);
+    if (cropTarget.scene === "COVER") {
+      form.coverImageTempKey = result.image.tempKey;
+      replaceCoverPreviewUrl(previewUrl);
+    } else {
+      const step = form.content.steps[cropTarget.stepIndex];
+      if (!step) throw new Error("步骤不存在");
+      step.imageTempKey = result.image.tempKey;
+      replaceStepPreviewUrl(step, previewUrl);
+    }
+    cropDialogVisible.value = false;
+    resetCropState();
+    ElMessage.success(cropTarget.scene === "COVER" ? "封面图已更新" : "步骤图已更新");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "上传菜谱图片失败");
+  } finally {
+    imageSaving.value = false;
+  }
+}
+
 watch(
   () => recipeId.value,
   () => {
@@ -397,8 +696,22 @@ watch(
   }
 );
 
+watch(editVisible, value => {
+  if (!value && detail.value) {
+    resetFormFromDetail();
+  }
+});
+
 onMounted(() => {
   void loadDetail();
+});
+
+onBeforeUnmount(() => {
+  resetCropState();
+  replaceCoverPreviewUrl(null);
+  for (const step of form.content.steps) {
+    revokePreviewUrl(step.previewUrl);
+  }
 });
 </script>
 
@@ -420,6 +733,10 @@ onMounted(() => {
         <div class="table-panel">
           <div class="panel-heading">
             <h2>{{ detail.title }}</h2>
+          </div>
+          <div class="detail-cover">
+            <img v-if="detail.coverImageUrl" :src="detail.coverImageUrl" alt="系统菜谱封面图" class="detail-cover__image" />
+            <div v-else class="detail-cover__empty">当前未上传封面图</div>
           </div>
           <el-descriptions :column="2" border>
             <el-descriptions-item label="来源">{{ detail.ownerUid === null ? "系统" : "个人" }}</el-descriptions-item>
@@ -472,16 +789,18 @@ onMounted(() => {
           <div class="panel-heading">
             <h2>制作步骤</h2>
           </div>
-          <ol class="step-list">
-            <li v-for="(item, index) in detail.content.steps" :key="`${index}-${item.text}`">
-              {{ item.text }}
-            </li>
-          </ol>
+          <div class="detail-step-list">
+            <div v-for="(item, index) in detail.content.steps" :key="`${index}-${item.text}-${item.imageUrl ?? 'no-image'}`" class="detail-step-card">
+              <div class="detail-step-card__index">步骤 {{ index + 1 }}</div>
+              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`步骤 ${index + 1} 图片`" class="detail-step-card__image" />
+              <div class="multiline-text">{{ item.text || "仅步骤图" }}</div>
+            </div>
+          </div>
         </div>
       </template>
     </div>
 
-    <el-dialog v-model="editVisible" title="编辑系统菜谱正文" width="760px">
+    <el-dialog v-model="editVisible" title="编辑系统菜谱正文" width="960px">
       <div v-loading="optionLoading">
         <el-form label-position="top">
           <el-alert
@@ -497,6 +816,21 @@ onMounted(() => {
               <el-option v-for="item in inspirationCategories" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
           </el-form-item>
+
+          <el-form-item label="封面图">
+            <div class="image-editor">
+              <div class="image-editor__preview image-editor__preview--cover">
+                <img v-if="coverPreviewUrl" :src="coverPreviewUrl" alt="系统菜谱封面图" class="image-editor__image" />
+                <div v-else class="image-editor__empty">未上传封面图</div>
+              </div>
+              <div class="image-editor__actions">
+                <el-button type="primary" :icon="Upload" :loading="imageSaving" @click="chooseCoverFile">上传 / 替换封面</el-button>
+                <el-button v-if="coverPreviewUrl" @click="clearCoverImage">删除封面</el-button>
+                <div class="image-editor__hint">封面图上传前裁成 `4:3`，系统菜谱列表与详情统一展示封面图。</div>
+              </div>
+            </div>
+          </el-form-item>
+
           <el-form-item label="菜谱名称" required>
             <el-input v-model="form.content.name" maxlength="120" show-word-limit />
           </el-form-item>
@@ -534,10 +868,10 @@ onMounted(() => {
                   :disabled="option.disabled"
                 />
               </el-select>
-                <el-select
-                  :model-value="item.amount.kind"
-                  class="ingredient-row__kind"
-                  @update:model-value="
+              <el-select
+                :model-value="item.amount.kind"
+                class="ingredient-row__kind"
+                @update:model-value="
                   (value: 'EXACT' | 'FUZZY') =>
                     (form.content.ingredients[index].amount =
                       value === 'FUZZY'
@@ -566,9 +900,24 @@ onMounted(() => {
               <strong>制作步骤</strong>
               <el-button text :icon="Plus" @click="addStep">新增步骤</el-button>
             </div>
-            <div v-for="(item, index) in form.content.steps" :key="index" class="step-row">
-              <el-input v-model="item.text" type="textarea" :rows="2" maxlength="1000" show-word-limit />
-              <el-button text type="danger" @click="removeStep(index)">删除</el-button>
+            <div v-for="(item, index) in form.content.steps" :key="index" class="step-card">
+              <div class="step-card__body">
+                <el-input v-model="item.text" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+                <div class="step-card__image">
+                  <div class="step-card__preview">
+                    <img v-if="item.previewUrl" :src="item.previewUrl" :alt="`步骤 ${index + 1} 图片`" class="step-card__preview-image" />
+                    <div v-else class="step-card__empty">未上传步骤图</div>
+                  </div>
+                  <div class="step-card__actions">
+                    <el-button type="primary" link :icon="Upload" :loading="imageSaving" @click="chooseStepFile(index)">上传 / 替换步骤图</el-button>
+                    <el-button v-if="item.previewUrl" link @click="clearStepImage(index)">删除步骤图</el-button>
+                    <div class="step-card__hint">步骤图支持裁剪，但不锁定固定比例，详情展示保持原比例。</div>
+                  </div>
+                </div>
+              </div>
+              <div class="step-card__footer">
+                <el-button text type="danger" @click="removeStep(index)">删除步骤</el-button>
+              </div>
             </div>
           </div>
 
@@ -582,10 +931,74 @@ onMounted(() => {
         <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
       </template>
     </el-dialog>
+
+    <input ref="fileInput" class="hidden-file-input" type="file" accept="image/*" @change="handleImageFileChange" />
+
+    <el-dialog v-model="cropDialogVisible" :title="cropTarget.scene === 'COVER' ? '裁剪封面图' : '裁剪步骤图'" width="680px" @closed="resetCropState">
+      <div class="crop-dialog">
+        <div
+          class="crop-frame"
+          :style="{ width: `${cropState.frameWidth}px`, height: `${cropState.frameHeight}px` }"
+          @pointermove="handleCropDrag"
+          @pointerup="endCropDrag"
+          @pointerleave="endCropDrag"
+        >
+          <img
+            v-if="cropState.sourceUrl"
+            :src="cropState.sourceUrl"
+            :style="cropImageStyle"
+            class="crop-image"
+            draggable="false"
+            @pointerdown.prevent="beginCropDrag"
+          />
+        </div>
+        <el-slider
+          :model-value="cropState.scale"
+          :min="cropState.minScale"
+          :max="Math.max(cropState.minScale + 2, cropState.minScale * 3)"
+          :step="0.01"
+          @update:model-value="updateCropScale"
+        />
+        <div class="crop-dialog__hint">
+          {{ cropTarget.scene === "COVER" ? "封面固定 4:3" : "步骤图保持当前图片比例" }}
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="cropDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="imageSaving" @click="submitRecipeImage">确认裁剪并上传</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <style scoped lang="scss">
+.detail-cover {
+  overflow: hidden;
+  width: min(420px, 100%);
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #f8fafc;
+  aspect-ratio: 4 / 3;
+}
+
+.detail-cover__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.detail-cover__empty,
+.image-editor__empty,
+.step-card__empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
 .content-list {
   display: grid;
   gap: 12px;
@@ -601,11 +1014,29 @@ onMounted(() => {
   background: #fff;
 }
 
-.step-list {
-  margin: 0;
-  padding-left: 20px;
+.detail-step-list {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-step-card {
   display: grid;
   gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.detail-step-card__index {
+  font-weight: 600;
+  color: #111827;
+}
+
+.detail-step-card__image {
+  display: block;
+  max-width: min(420px, 100%);
+  border-radius: 14px;
 }
 
 .multiline-text {
@@ -617,10 +1048,6 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
-}
-
-.edit-warning {
-  margin-bottom: 16px;
 }
 
 .edit-section {
@@ -649,10 +1076,117 @@ onMounted(() => {
   width: 100%;
 }
 
-.step-row {
+.image-editor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
+}
+
+.image-editor__preview {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.image-editor__preview--cover {
+  aspect-ratio: 4 / 3;
+}
+
+.image-editor__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-editor__actions,
+.step-card__actions {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.image-editor__hint,
+.step-card__hint,
+.crop-dialog__hint {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.step-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.step-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 16px;
+}
+
+.step-card__preview {
+  overflow: hidden;
+  min-height: 140px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.step-card__preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.step-card__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.crop-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.crop-frame {
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) -12px 0 / 24px 24px,
+    linear-gradient(225deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) -12px 0 / 24px 24px,
+    linear-gradient(315deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
+    linear-gradient(45deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
+    #eef2f7;
+  touch-action: none;
+}
+
+.crop-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  user-select: none;
+  cursor: grab;
+}
+
+@media (max-width: 960px) {
+  .edit-grid,
+  .ingredient-row,
+  .image-editor,
+  .step-card__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

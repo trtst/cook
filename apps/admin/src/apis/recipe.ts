@@ -1,4 +1,4 @@
-import { requestData, type IsoDateTime, type PageQuery, type PageResult, type OperationId, type UUID } from "./http";
+import { requestData, uploadForm, type IsoDateTime, type PageQuery, type PageResult, type OperationId, type UUID } from "./http";
 
 export interface AdminRecipeSummary {
   id: UUID;
@@ -49,7 +49,22 @@ export interface AdminRecipeContentInput {
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
   tips: string | null;
   ingredients: RecipeIngredientInput[];
-  steps: Array<{ text: string }>;
+  steps: Array<{
+    text: string;
+    imageUrl: string | null;
+    imageTempKey: string | null;
+  }>;
+}
+
+export interface AdminRecipeImageUploadResult {
+  image: {
+    tempKey: string;
+    scene: "COVER" | "STEP";
+    contentType: string;
+    sizeBytes: number;
+    width: number;
+    height: number;
+  };
 }
 
 export interface AdminRecipeDetail {
@@ -86,7 +101,7 @@ export interface AdminRecipeDetail {
             text: "适量" | "少许" | "按需";
           };
     }>;
-    steps: Array<{ text: string }>;
+    steps: Array<{ text: string; imageUrl: string | null }>;
   };
   version: number;
   reportCount: number;
@@ -112,12 +127,16 @@ export interface UpdateAdminRecipePayload {
   operationId: OperationId;
   expectedVersion: number;
   inspirationCategoryId: UUID;
+  coverImageUrl: string | null;
+  coverImageTempKey: string | null;
   content: AdminRecipeContentInput;
 }
 
 export interface CreateAdminRecipePayload {
   operationId: OperationId;
   inspirationCategoryId: UUID;
+  coverImageUrl: string | null;
+  coverImageTempKey: string | null;
   content: AdminRecipeContentInput;
 }
 
@@ -181,6 +200,14 @@ export const recipeApi = {
   listPending(query: AdminPendingRecipeQuery) {
     return requestData<PageResult<AdminPendingRecipeSummary>>("/admin/pending-recipes", {
       query: { ...query }
+    });
+  },
+  uploadImage(scene: "COVER" | "STEP", file: File, operationId: OperationId) {
+    const formData = new FormData();
+    formData.append("scene", scene);
+    formData.append("file", file);
+    return uploadForm<AdminRecipeImageUploadResult>("/admin/recipe-images", formData, {
+      idempotencyKey: operationId
     });
   },
   create(body: CreateAdminRecipePayload) {
