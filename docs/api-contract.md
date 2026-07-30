@@ -41,9 +41,9 @@
 ## 统一格式
 
 ```ts
-type UUID = string;
+type UUID = number;
 type ResourceId = UUID;
-type OperationId = UUID;
+type OperationId = string;
 type IsoDateTime = string;
 
 interface ApiResponse<T> {
@@ -67,9 +67,9 @@ interface PageResult<T> {
 }
 ```
 
-所有时间使用 ISO 8601；数据库使用 `TIMESTAMPTZ(3)`。所有可重试写操作携带 UUID `operationId`。共享可变对象携带 `version`。
+所有时间使用 ISO 8601；数据库使用 `TIMESTAMPTZ(3)`。所有可重试写操作通过请求头 `Idempotency-Key` 携带纯数字字符串幂等键。共享可变对象携带 `version`。
 
-路径中的资源 ID 使用 UUID v4，格式错误统一返回 `400`。`inviteToken`、`shareToken` 和 `operationId` 等不透明凭证不是资源 ID，不使用资源 ID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回 `409`，客户端刷新详情后再决定是否重试。
+路径中的资源 ID 使用正整数，格式错误统一返回 `400`。`inviteToken`、`shareToken` 和 `Idempotency-Key` 等不透明凭证不是资源 ID，不使用资源 ID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回 `409`，客户端刷新详情后再决定是否重试。
 
 OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema；对象、数组和分页响应不得退化为无字段的 `object`。本文、服务端 OpenAPI 和各应用本地类型共同变更，不直接复用 Prisma Model。
 
@@ -93,7 +93,7 @@ OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema
 | `401` | 未登录或 token 失效 |
 | `403` | 已识别身份但没有权限 |
 | `404` | 资源不存在或无权得知资源存在 |
-| `409` | version、operationId 或并发状态冲突 |
+| `409` | version、幂等键或并发状态冲突 |
 | `429` | 请求过于频繁 |
 | `503` | 功能尚未开放 |
 
@@ -334,7 +334,6 @@ Auth: UserBearerAuth
 ```ts
 interface CreateInviteRequest {
   diningGroupId: UUID;
-  operationId: UUID;
 }
 
 interface CreateInviteResult {
@@ -355,7 +354,6 @@ Auth: UserBearerAuth
 
 ```ts
 interface AcceptInviteRequest {
-  operationId: UUID;
 }
 
 interface AcceptInviteResponse {
@@ -374,7 +372,6 @@ Auth: UserBearerAuth
 
 ```ts
 interface LeaveDiningGroupRequest {
-  operationId: UUID;
   expectedVersion: number;
 }
 
@@ -396,18 +393,16 @@ Auth: UserBearerAuth
 
 ```ts
 interface RemoveDiningGroupMemberRequest {
-  operationId: UUID;
   expectedVersion: number;
   userId: UUID;
 }
 
 interface DissolveDiningGroupRequest {
-  operationId: UUID;
   expectedVersion: number;
 }
 ```
 
-`leave`、`remove-member` 和 `dissolve` 都以 `GET /dining-groups` 返回的 `DiningGroupSummary.version` 作为预期版本。服务端在事务内锁定饭搭子并校验版本，成功变更后递增版本；相同幂等请求必须复用同一个 `operationId` 和 `expectedVersion`。
+`leave`、`remove-member` 和 `dissolve` 都以 `GET /dining-groups` 返回的 `DiningGroupSummary.version` 作为预期版本。服务端在事务内锁定饭搭子并校验版本，成功变更后递增版本；相同幂等请求必须复用同一个 `Idempotency-Key` 和 `expectedVersion`。
 
 ### 个人存储用量
 
@@ -461,7 +456,6 @@ POST /admin/pending-ingredients/{ingredientId}/review
 
 ```ts
 interface CreateAdminUserRequest {
-  operationId: UUID;
   phone: string;
   password: string;
   nickname?: string;
@@ -469,18 +463,15 @@ interface CreateAdminUserRequest {
 }
 
 interface UpdateAdminUserRequest {
-  operationId: UUID;
   phone?: string;
   nickname?: string;
 }
 
 interface SetAdminUserStatusRequest {
-  operationId: UUID;
   status: "ACTIVE" | "DISABLED";
 }
 
 interface ResetAdminUserPasswordRequest {
-  operationId: UUID;
   newPassword: string;
 }
 
@@ -555,7 +546,7 @@ POST /admin/recipes/{recipeId}/unblock
 POST /admin/recipe-reports/{reportId}/resolve
 ```
 
-`GET /admin/recipes` 只返回后台菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `keyword`、`status` 过滤；列表不再混入举报筛选、举报数和下架原因，排序统一按 `updatedAt desc`。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统灵感菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount` 和 `canEdit`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前灵感菜谱正文，且仅限 `ownerId = null`、当前仍挂灵感分类的菜谱；请求体必须携带 `operationId`、`expectedVersion`、`inspirationCategoryId` 和完整正文输入。保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText` 和 `inspirationCategoryId` 切到新版本，保证已收藏、已引用和历史固定版本不漂移。后台编辑正文时食材和单位只允许引用当前可选的系统食材与系统单位，不开放图片写入。
+`GET /admin/recipes` 只返回后台菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `keyword`、`status` 过滤；列表不再混入举报筛选、举报数和下架原因，排序统一按 `updatedAt desc`。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统灵感菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount` 和 `canEdit`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前灵感菜谱正文，且仅限 `ownerId = null`、当前仍挂灵感分类的菜谱；请求头必须携带 `Idempotency-Key`，请求体只提交 `expectedVersion`、`inspirationCategoryId` 和完整正文输入。保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText` 和 `inspirationCategoryId` 切到新版本，保证已收藏、已引用和历史固定版本不漂移。后台编辑正文时食材和单位只允许引用当前可选的系统食材与系统单位，不开放图片写入。
 
 ## 其他领域接口摘要
 
@@ -703,28 +694,34 @@ interface RecipeDraftContentInput {
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
   tips: string | null;
-  ingredients: RecipeIngredientInput[];
+  ingredients: Array<{
+    ingredientId: ResourceId | null;
+    name: string;
+    quantity: string;
+    unitId: ResourceId | null;
+    fuzzyText: "适量" | "少许" | "按需" | null;
+    categoryId: ResourceId | null;
+    defaultUnitId: ResourceId | null;
+    source: "SYSTEM" | "PERSONAL" | null;
+  }>;
   steps: Array<{ text: string }>;
 }
 ```
 
-草稿允许发布必填项暂时为空。发布时必须校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材和至少一个非空文本步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。R1 不接受图片字段，提交图片字段返回 `400`。
+保存草稿时仅强制校验 `content.name` 非空；其余发布必填项允许暂时为空。草稿里的分类、场景、食材和单位引用即使当前已失效，也不阻塞保存，原始输入继续保留在 `content` 里；详情里的 `category / scenes / ingredientRefs / unitRefs` 只回填当前仍能解析到的真实引用。发布时再统一校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材、精确用量必须同时具备正数数量和单位，以及至少一个非空文本步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。R1 不接受图片字段，提交图片字段返回 `400`。
 
 ```ts
 interface CreateRecipeDraftRequest {
-  operationId: OperationId;
   recipeId: ResourceId | null;
   content: RecipeDraftContentInput;
 }
 
 interface UpdateRecipeDraftRequest {
-  operationId: OperationId;
   expectedVersion: number;
   content: RecipeDraftContentInput;
 }
 
 interface PublishRecipeDraftRequest {
-  operationId: OperationId;
   expectedVersion: number;
 }
 
@@ -734,7 +731,6 @@ interface ReorderItem {
 }
 
 interface ReorderRecipesRequest {
-  operationId: OperationId;
   categoryId: ResourceId;
   items: ReorderItem[];
 }
@@ -851,7 +847,6 @@ interface CollectedRecipeDetail {
 }
 
 interface SaveCollectionRecipeRequest {
-  operationId: UUID;
   sourceRecipeId: UUID;
   sourceVersionId: UUID;
   sceneIds: UUID[];
@@ -929,7 +924,58 @@ POST /recipes/{recipeId}/delete
 
 `GET /recipes` 只返回本人已发布菜谱，支持分页、关键词和个人分类筛选。查询参数为 `page`、`pageSize`、`keyword` 和 `categoryId`。新建和编辑正文统一经过草稿发布，R1 不注册直接 `POST /recipes` 和 `PUT /recipes/{recipeId}`。
 
-`GET /collections` 返回当前用户的合集场景摘要。`items` 按场景返回 `recipeCount` 和最近更新时间；`totalCount` 返回该用户当前收藏主记录总条数，不是场景条数。`GET /collections/recipes` 返回当前用户收藏快照分页，支持 `page`、`pageSize` 和可选 `sceneId`；传 `sceneId` 时只返回该合集内容。`GET /collections/recipes/{collectionRecipeId}` 返回一个固定版本快照详情。`POST /collections/recipes` 只接收 `operationId`、`sourceRecipeId`、`sourceVersionId` 和 `sceneIds`，不接受前端传正文快照；`sceneIds` 必须是非空数组，至少选择一个合集场景。
+调用方不要再使用以下旧路径或旧参数：
+
+```text
+GET /recipes?scope=system
+GET /recipes?scope=mine
+POST /recipes/{recipeId}/import
+```
+
+当前现行链路固定为：
+
+```text
+GET /inspiration-recipes
+POST /recipe-drafts
+POST /recipe-drafts/{draftId}/publish
+GET /recipes
+POST /collections/recipes
+```
+
+写接口的幂等键统一通过请求头 `Idempotency-Key` 传递，请求体不再出现 `operationId` 字段。例如：
+
+```text
+POST /recipe-drafts
+Idempotency-Key: 172251000001
+```
+
+```json
+{
+  "recipeId": null,
+  "content": {
+    "name": "番茄炒蛋",
+    "story": null,
+    "categoryId": 1,
+    "sceneIds": [1],
+    "baseServings": 2,
+    "difficulty": "EASY",
+    "duration": "WITHIN_15",
+    "tips": "番茄最后下锅",
+    "ingredients": [
+      {
+        "ingredientId": 4001,
+        "amount": {
+          "kind": "FUZZY",
+          "text": "适量"
+        }
+      }
+    ],
+    "steps": [{ "text": "热锅下油后翻炒" }]
+  }
+}
+```
+
+`GET /collections` 返回当前用户的合集场景摘要。`items` 按场景返回 `recipeCount` 和最近更新时间；`totalCount` 返回该用户当前收藏主记录总条数，不是场景条数。`GET /collections/recipes` 返回当前用户收藏快照分页，支持 `page`、`pageSize` 和可选 `sceneId`；传 `sceneId` 时只返回该合集内容。`GET /collections/recipes/{collectionRecipeId}` 返回一个固定版本快照详情。`POST /collections/recipes` 通过请求头 `Idempotency-Key` 保证幂等，请求体只接收 `sourceRecipeId`、`sourceVersionId` 和 `sceneIds`，不接受前端传正文快照；`sceneIds` 必须是非空数组，至少选择一个合集场景。
 
 匿名灵感读取路径冻结为：
 

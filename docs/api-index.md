@@ -41,9 +41,26 @@
 | AdminUser | POST | `/admin/users/{userId}/reset-password` | 重置用户密码 |
 | AdminDiningGroup | GET | `/admin/dining-groups` | 饭搭子只读查询 |
 | AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员、关系和分域策略摘要 |
-| RecipeCandidate | GET/POST | `/recipes` | 旧候选查询/直接创建；R1 实现时删除直接创建 |
-| RecipeCandidate | GET/PUT | `/recipes/{recipeId}` | 旧候选读取/直接更新；R1 实现时删除直接更新 |
-| RecipeCandidate | POST | `/recipes/{recipeId}/import` | 旧候选导入；不作为收藏或升级契约 |
+| Inspiration | GET | `/inspiration-categories` | 匿名灵感分类列表 |
+| Inspiration | GET | `/inspiration-recipes` | 匿名灵感菜谱分页 |
+| Inspiration | GET | `/inspiration-recipes/{recipeId}` | 匿名灵感菜谱详情 |
+| Recipe | GET | `/recipe-categories` | 当前用户个人分类列表 |
+| Recipe | POST | `/recipe-categories` | 新建个人分类 |
+| Recipe | PUT | `/recipe-categories/{categoryId}` | 修改个人分类 |
+| Recipe | POST | `/recipe-categories/reorder` | 重排个人分类 |
+| Recipe | GET | `/recipe-scenes` | 当前用户个人场景列表 |
+| Recipe | POST | `/recipe-scenes` | 新建个人场景 |
+| Recipe | PUT | `/recipe-scenes/{sceneId}` | 修改个人场景 |
+| Recipe | POST | `/recipe-scenes/reorder` | 重排个人场景 |
+| Recipe | GET | `/recipe-drafts` | 当前用户草稿分页 |
+| Recipe | POST | `/recipe-drafts` | 首次保存草稿或创建编辑草稿 |
+| Recipe | GET | `/recipe-drafts/{draftId}` | 草稿详情 |
+| Recipe | PUT | `/recipe-drafts/{draftId}` | 保存已有草稿 |
+| Recipe | POST | `/recipe-drafts/{draftId}/delete` | 删除草稿 |
+| Recipe | POST | `/recipe-drafts/{draftId}/publish` | 发布草稿到“我的” |
+| Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
+| Recipe | GET | `/recipes/{recipeId}` | 当前用户已发布菜谱详情 |
+| Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
 | Collection | GET | `/collections` | 当前用户合集场景摘要 |
@@ -110,7 +127,6 @@
 
 | 模块 | 方法与路径 | 状态 |
 | --- | --- | --- |
-| RecipeCandidate | `POST /recipes`、`PUT /recipes/{recipeId}`、`POST /recipes/{recipeId}/import` | 仍是旧候选实现，待后续移除或替换 |
 | RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
 | InspirationGovernance | 用户推荐到灵感审核、点赞与收藏统计治理 | 已确认非本轮范围，待契约 |
 

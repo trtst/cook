@@ -172,10 +172,10 @@ R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。
 
 ### 分类与场景
 
-下文 `ResourceId` 表示资源 ID（当前仍为 UUID 字符串）；`operationId` 表示幂等键。
+下文 `ResourceId` 表示资源 ID（当前为正整数）；幂等键统一通过请求头 `Idempotency-Key` 传递。
 
 ```ts
-type UUID = string;
+type UUID = number;
 type ResourceId = UUID;
 type IsoDateTime = string;
 
@@ -192,7 +192,7 @@ interface RecipeSceneSummary {
 }
 ```
 
-排序值不返回客户端。列表顺序就是服务端事实，重排请求提交完整的 `id + expectedVersion` 数组和 `operationId`，服务端校验没有缺失、重复、越权或过期版本。
+排序值不返回客户端。列表顺序就是服务端事实，重排请求提交完整的 `id + expectedVersion` 数组，并通过请求头携带 `Idempotency-Key`；服务端校验没有缺失、重复、越权或过期版本。
 
 ### 食材用量
 
@@ -243,7 +243,6 @@ interface RecipeDraftContentInput {
 
 ```ts
 interface PublishRecipeDraftRequest {
-  operationId: UUID;
   expectedVersion: number;
 }
 ```
@@ -371,7 +370,7 @@ JSON 中食材用量互斥、步骤非空、数组长度和引用权限由服务
 
 ### 保存草稿
 
-1. 使用 `operationId` 幂等。
+1. 使用请求头 `Idempotency-Key` 幂等。
 2. 更新草稿提交 `expectedVersion`，冲突返回 `409`。
 3. 新建菜谱草稿时锁定用户额度事实，校验菜谱数量和预计空间后创建。
 4. 保存时重新计算草稿逻辑空间并更新账本。
@@ -414,7 +413,7 @@ R1 不增加推荐、点赞、收藏统计或全文检索专用索引。关键�
 2. `401`：我的、合集或写操作未登录。
 3. `403`：已登录但无权操作已知对象。
 4. `404`：对象不存在或调用方无权知道其存在；匿名灵感内容不可曝光时同样返回 `404`。
-5. `409`：`version`、`operationId`、排序集合、重名或并发额度冲突。
+5. `409`：`version`、`Idempotency-Key`、排序集合、重名或并发额度冲突。
 6. `503`：图片、点赞、灵感推荐审核或跨单位换算能力尚未开放。
 
 ## 十一、已确认决策

@@ -50,6 +50,11 @@ http://127.0.0.1:3100/api
 | POST | `/api/dining-group-invites` | `diningGroupApi.createInvite` | 创建关系邀请 |
 | POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroupApi.acceptInvite` | 接受邀请并建立关系 |
 | POST | `/api/dining-groups/{diningGroupId}/leave` | `diningGroupApi.leave` | 退出关系 |
+| GET | `/api/inspiration-recipes` | `recipeApi.listInspirationRecipes` | 匿名灵感菜谱分页 |
+| POST | `/api/recipe-drafts` | `recipeApi.createDraft` | 首次保存草稿 |
+| POST | `/api/recipe-drafts/{draftId}/publish` | `recipeApi.publishDraft` | 发布草稿到“我的” |
+| GET | `/api/recipes` | `recipeApi.listMyRecipes` | 我的已发布菜谱分页 |
+| POST | `/api/collections/recipes` | `recipeApi.collectRecipe` | 收藏灵感固定版本到合集 |
 | GET | `/api/admin/user-entitlements` | `userApi.getEntitlements` | 后台分域审计视图 |
 
 ## 1. 用户与会员
@@ -211,7 +216,7 @@ interface DiningGroupMembersResult {
 
 ### 2.3 邀请与退出
 
-所有写操作携带并复用 UUID `operationId`：
+所有写操作通过请求头 `Idempotency-Key` 携带并复用纯数字字符串幂等键：
 
 ```text
 POST /api/dining-group-invites
@@ -256,10 +261,98 @@ Auth: AdminBearerAuth
 
 该接口只用于 `SUPER_ADMIN` 审计，不是小程序共享快照。背景图能力当前在后台也固定显示为未开放。
 
-## 5. 客户端规则
+## 5. 菜谱调用示例
+
+现行菜谱主链路不是旧的 `scope=system/mine` 或 `/recipes/{recipeId}/import`。当前调用顺序固定为：
+
+```text
+匿名读取灵感 -> 保存草稿 -> 发布到“我的” -> 收藏灵感固定版本
+```
+
+### 5.1 匿名读取灵感
+
+```text
+GET /api/inspiration-recipes?page=1&pageSize=20
+Auth: none
+```
+
+### 5.2 首次保存草稿
+
+幂等键只走请求头，不再放在 body：
+
+```text
+POST /api/recipe-drafts
+Auth: UserBearerAuth
+Idempotency-Key: 172251000001
+```
+
+```json
+{
+  "recipeId": null,
+  "content": {
+    "name": "番茄炒蛋",
+    "story": null,
+    "categoryId": 1,
+    "sceneIds": [1],
+    "baseServings": 2,
+    "difficulty": "EASY",
+    "duration": "WITHIN_15",
+    "tips": "番茄最后下锅",
+    "ingredients": [
+      {
+        "ingredientId": 4001,
+        "name": "番茄",
+        "quantity": "",
+        "unitId": null,
+        "fuzzyText": "适量",
+        "categoryId": 301,
+        "defaultUnitId": 21,
+        "source": "SYSTEM"
+      }
+    ],
+    "steps": [{ "text": "热锅下油后翻炒" }]
+  }
+}
+```
+
+保存草稿时后端只强制校验标题非空；分类、场景、食材、单位引用即使已失效，也不会阻塞保存，原始输入会继续保留在草稿 `content` 中。草稿里的精确用量允许先保存为空数量或空单位；发布前再由 `recipeApi.publishDraft` 对完整性做严格校验。
+
+### 5.3 发布草稿到“我的”
+
+```text
+POST /api/recipe-drafts/1/publish
+Auth: UserBearerAuth
+Idempotency-Key: 172251000002
+```
+
+```json
+{
+  "expectedVersion": 2
+}
+```
+
+### 5.4 收藏灵感固定版本
+
+`sourceVersionId` 必须来自 `GET /api/inspiration-recipes/{recipeId}` 返回的 `contentVersionId`：
+
+```text
+POST /api/collections/recipes
+Auth: UserBearerAuth
+Idempotency-Key: 172251000003
+```
+
+```json
+{
+  "sourceRecipeId": 2001,
+  "sourceVersionId": 1001,
+  "sceneIds": [1]
+}
+```
+
+## 6. 客户端规则
 
 1. 小程序和后台分别通过本端 `apis/` 请求层调用接口，不跨应用导入类型。
 2. `401` 清理 session、用户资料和关系状态。
-3. 可重试写操作生成并复用 `operationId`，成功后再清除。
+3. 可重试写操作生成并复用 `Idempotency-Key`，成功后再清除。
 4. 会员事实只读 `/users/me.membership`；关系用量只读 `/dining-groups.usage`；存储只读 `/storage-usage`。
 5. 不使用旧字段兼容、多个字段 fallback 或本地拼装全局权益对象。
