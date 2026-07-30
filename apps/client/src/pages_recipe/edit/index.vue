@@ -34,19 +34,30 @@
       description="登录后才能选择食材、保存草稿和发布你自己的菜谱。"
       @success="handleLoginSuccess"
     />
-    <view v-else-if="loading" class="notice notice--floating">加载中...</view>
-    <view v-else-if="errorText" class="notice notice--floating" @click="loadPage">{{ errorText }}</view>
+    <view v-else-if="loading" class="notice notice--state" :style="noticeStyle">
+      <image class="notice__art" :src="loadingIllustration" mode="aspectFit" />
+      <text class="notice__title">正在准备菜谱</text>
+      <text class="notice__desc">草稿内容正在就位，马上就好。</text>
+    </view>
+    <view v-else-if="errorText" class="notice notice--state notice--error" :style="noticeStyle" @click="loadPage">
+      <image class="notice__art" :src="loadingIllustration" mode="aspectFit" />
+      <text class="notice__title">加载出了点问题</text>
+      <text class="notice__desc">{{ errorText }}</text>
+      <text class="notice__action">点一下重新加载</text>
+    </view>
 
     <view v-else class="edit-page">
         <view class="hero" :style="heroStyle">
           <view class="hero__cover">
-            <view class="hero__cover-fill">
-              <view class="hero__cover-copy">
-                <text class="hero__cover-title">菜谱封面图</text>
-                <text class="hero__cover-sub">4:3 封面图位置，当前版本先保留展示位。</text>
+            <image v-if="currentCoverImage" class="hero__image" :src="currentCoverImage" mode="aspectFill" />
+            <view v-else class="hero__cover-fill">
+              <view class="hero__cover-copy" @click="selectCoverImage">
+                <text class="hero__cover-title">菜谱封面图（4:3）</text>
+                <text class="hero__cover-sub">清晰的封面会让菜谱更容易被看到</text>
               </view>
-              <button v-if="showCoverButton" class="cover-button" @click="showCoverTip">更换封面图</button>
             </view>
+            <button class="cover-button" @click="selectCoverImage">{{ coverButtonText }}</button>
+            <text v-if="currentCoverImage" class="cover-clear" @click="clearCoverImage">删除封面图</text>
           </view>
         </view>
 
@@ -187,10 +198,12 @@
                 <view
                   class="step-card__image"
                   :class="{ 'step-card__image--filled': hasStepImage(row) }"
-                  @click="handleStepImages"
+                  @click="selectStepImage(row.localId)"
                 >
                   <template v-if="hasStepImage(row)">
-                    <text class="step-card__image-change">更换步骤图</text>
+                    <image class="step-card__preview" :src="getStepImageSrc(row)" mode="aspectFill" />
+                    <button class="step-card__image-change" @click.stop="selectStepImage(row.localId)">更换</button>
+                    <text class="step-card__image-remove" @click.stop="clearStepImage(row.localId)">删除</text>
                   </template>
                   <template v-else>
                     <text class="cookfont icon-add step-card__image-plus" />
@@ -274,7 +287,8 @@
                 >
                   <view class="step-sort-card__index">{{ formatStepIndex(index) }}</view>
                   <view class="step-sort-card__thumb">
-                    <text class="step-sort-card__thumb-text">暂无步骤图</text>
+                    <image v-if="getStepImageSrc(row)" class="step-sort-card__thumb-image" :src="getStepImageSrc(row)" mode="aspectFill" />
+                    <text v-else class="step-sort-card__thumb-text">暂无步骤图</text>
                   </view>
                   <view class="step-sort-card__copy">
                     <text class="step-sort-card__text">{{ getStepSortText(row.text) }}</text>
@@ -292,7 +306,13 @@
             <view class="step-sort-card step-sort-card--ghost">
               <view class="step-sort-card__index">{{ formatStepIndex(stepSortGhostIndex) }}</view>
               <view class="step-sort-card__thumb">
-                <text class="step-sort-card__thumb-text">暂无步骤图</text>
+                <image
+                  v-if="getStepImageSrc(stepSortGhostRow)"
+                  class="step-sort-card__thumb-image"
+                  :src="getStepImageSrc(stepSortGhostRow)"
+                  mode="aspectFill"
+                />
+                <text v-else class="step-sort-card__thumb-text">暂无步骤图</text>
               </view>
               <view class="step-sort-card__copy">
                 <text class="step-sort-card__text">{{ getStepSortText(stepSortGhostRow.text) }}</text>
@@ -301,9 +321,12 @@
           </view>
         </view>
 
-        <view v-if="sheetMode" class="sheet" :class="{ 'sheet--visible': sheetVisible }" @click.stop @touchmove.stop.prevent>
-          <view class="sheet__mask" @click.stop="closeSheet" />
-          <view class="sheet__panel" @click.stop>
+        <SheetShell
+          v-if="sheetMode"
+          :visible="sheetVisible"
+          :panel-style="{ padding: '34rpx 0 calc(42rpx + env(safe-area-inset-bottom))' }"
+          @close="closeSheet"
+        >
             <view class="sheet__header">
               <view class="sheet__title-row">
                 <text class="sheet__title">{{ sheetTitle }}</text>
@@ -558,7 +581,7 @@
 
                       <view v-if="ingredientCreateSection === 'unit'" class="ingredient-create__group">
                         <text class="ingredient-create__group-title">单位：</text>
-                        <view class="ingredient-grid ingredient-grid--create">
+                        <view class="ingredient-grid ingredient-grid--create ingredient-grid--unit">
                           <view
                             v-for="item in units"
                             :key="item.id"
@@ -770,14 +793,12 @@
                 <button class="sheet-apply" @click="applyAdvancedForm">确定</button>
               </view>
 
-              <view v-if="draftId || recipeId" class="sheet-section sheet-section--danger">
-                <view v-if="draftId" class="danger-action" @click="removeDraft">删除草稿</view>
+              <view v-if="recipeId" class="sheet-section sheet-section--danger">
                 <view v-if="recipeId" class="danger-action" @click="removeRecipe">删除菜谱</view>
               </view>
             </template>
 
-          </view>
-        </view>
+        </SheetShell>
 
         <view class="bottom-bar" :class="{ 'bottom-bar--hidden': formFieldFocused || stepSortVisible || ingredientDragging }">
           <button class="bar-button bar-button--primary bottom-bar__publish" :disabled="submitting" @click="publishDraft">发布这个菜谱</button>
@@ -788,7 +809,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
-import { onHide, onLoad, onPageScroll, onUnload } from "@dcloudio/uni-app";
+import { onHide, onLoad, onPageScroll, onShow, onUnload } from "@dcloudio/uni-app";
+import loadingIllustration from "@/assets/recipe-page/loading-state.svg";
 import {
   recipeApi,
   type IngredientCategorySummary,
@@ -803,11 +825,13 @@ import {
   type RecipeIngredientInput,
   type RecipeCategorySummary,
   type RecipeSceneSummary,
+  type UploadAssetScene,
   type UnitSummary
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -818,6 +842,13 @@ import {
   writeRecipeEditCacheItem
 } from "@/utils/recipe-edit-cache";
 import { restoreAppSession } from "@/utils/session";
+import {
+  clearRecipeCropSession,
+  readRecipeCropResult,
+  writeRecipeCropRequest,
+  type RecipeCropRequest,
+  type RecipeCropResult
+} from "@/utils/recipe-image-crop";
 import { useRecipePreviewStore } from "@/stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -842,7 +873,11 @@ interface IngredientRow {
 
 interface StepRow {
   localId: string;
+  slotKey: string;
   text: string;
+  uploadId: NullableResourceId;
+  imageUrl: string;
+  localImagePath: string;
 }
 
 interface RecipeEditCacheFormSnapshot {
@@ -850,6 +885,9 @@ interface RecipeEditCacheFormSnapshot {
   story: string;
   categoryId: NullableResourceId;
   sceneIds: ResourceId[];
+  coverUploadId: NullableResourceId;
+  coverImageUrl: string;
+  coverLocalImagePath: string;
   baseServingsText: string;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
@@ -868,7 +906,11 @@ interface RecipeEditCacheIngredientSnapshot {
 }
 
 interface RecipeEditCacheStepSnapshot {
+  slotKey: string;
   text: string;
+  uploadId: NullableResourceId;
+  imageUrl: string;
+  localImagePath: string;
 }
 
 interface RecipeEditCacheEntry {
@@ -878,6 +920,21 @@ interface RecipeEditCacheEntry {
   ingredientRows: RecipeEditCacheIngredientSnapshot[];
   stepRows: RecipeEditCacheStepSnapshot[];
 }
+
+type CropTarget =
+  | {
+      kind: "cover";
+    }
+  | {
+      kind: "step";
+      localId: string;
+      appendIfMissing: boolean;
+    };
+
+type CropTask = {
+  request: RecipeCropRequest;
+  target: CropTarget;
+};
 
 const pageStyle = usePageScrollStyle();
 
@@ -904,7 +961,11 @@ const STEP_SORT_GAP_RPX = 20;
 
 const recipeId = ref<OptionalResourceId>("");
 const draftId = ref<OptionalResourceId>("");
+const originVersionId = ref<NullableResourceId>(null);
+const originCoverImageUrl = ref("");
+const coverUploadId = ref<NullableResourceId>(null);
 const coverImageUrl = ref("");
+const coverLocalImagePath = ref("");
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
@@ -952,6 +1013,9 @@ let ingredientDragPressId = "";
 let ingredientDragPressTouchY = 0;
 let stepSortPressId = "";
 let stepSortPressTouchY = 0;
+const cropQueue = ref<CropTask[]>([]);
+const activeCropToken = ref("");
+let activeCropTarget: CropTarget | null = null;
 
 const categories = ref<RecipeCategorySummary[]>([]);
 const scenes = ref<RecipeSceneSummary[]>([]);
@@ -1043,10 +1107,15 @@ const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
 const heroStyle = computed(() => ({
   "--hero-header-offset": `${navBarTotalHeight.value}px`
 }));
-const showCoverButton = computed(() => Boolean(coverImageUrl.value));
+const currentCoverImage = computed(() => coverLocalImagePath.value || coverImageUrl.value);
+const coverButtonText = computed(() => (currentCoverImage.value ? "更换封面图" : "上传封面图"));
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
   opacity: navOpacity.value
+}));
+const noticeStyle = computed(() => ({
+  marginTop: `${navBarTotalHeight.value}px`,
+  minHeight: `calc(100vh - ${navBarTotalHeight.value}px)`
 }));
 const titleCount = computed(() => form.name.length);
 const storyCount = computed(() => form.story.length);
@@ -1246,6 +1315,10 @@ onHide(() => {
   flushRecipeEditCache();
 });
 
+onShow(() => {
+  void consumeCropResult();
+});
+
 onUnload(() => {
   flushRecipeEditCache();
   clearRecipeEditCacheTimer();
@@ -1259,6 +1332,12 @@ onUnload(() => {
     clearTimeout(ingredientSearchTimer);
     ingredientSearchTimer = null;
   }
+  if (activeCropToken.value) {
+    clearRecipeCropSession(activeCropToken.value);
+    activeCropToken.value = "";
+    activeCropTarget = null;
+  }
+  cropQueue.value = [];
 });
 
 watch(
@@ -1267,6 +1346,9 @@ watch(
     () => form.story,
     () => form.categoryId,
     () => [...form.sceneIds],
+    () => coverUploadId.value,
+    () => coverImageUrl.value,
+    () => coverLocalImagePath.value,
     () => form.baseServingsText,
     () => form.difficulty,
     () => form.duration,
@@ -1569,6 +1651,8 @@ async function loadPage() {
   if (loading.value) return;
   recipeEditCacheSuspended = true;
   clearRecipeEditCacheTimer();
+  const draftSeed = !draftId.value && !recipeId.value ? recipePreviewStore.draftSeed : null;
+  let usedDraftSeed = false;
   if (!sessionStore.restored) {
     await restoreAppSession();
   }
@@ -1618,6 +1702,28 @@ async function loadPage() {
       ingredientCategoriesLoaded.value = true;
       unitsLoaded.value = true;
       fillFromRecipe(recipe);
+    } else if (draftSeed?.content) {
+      const [categoryList, sceneList, ingredientCategoryList, ingredientResult, unitResult] = await Promise.all([
+        recipeApi.listCategories(),
+        recipeApi.listScenes(),
+        recipeApi.listIngredientCategories(),
+        recipeApi.listIngredients({ page: 1, pageSize: 100 }),
+        recipeApi.listUnits({ page: 1, pageSize: 100 })
+      ]);
+      categories.value = categoryList;
+      scenes.value = sceneList;
+      ingredientCategories.value = ingredientCategoryList;
+      applyEditRefs(ingredientResult.items, unitResult.items, {
+        ingredientRefs: [],
+        unitRefs: []
+      });
+      categoriesLoaded.value = true;
+      scenesLoaded.value = true;
+      ingredientCategoriesLoaded.value = true;
+      unitsLoaded.value = true;
+      fillForm(draftSeed.content);
+      recipePreviewStore.consumeDraftSeed();
+      usedDraftSeed = true;
     } else {
       categories.value = [];
       scenes.value = [];
@@ -1635,7 +1741,9 @@ async function loadPage() {
     }
 
     syncRecipeEditCacheBaseline();
-    await maybeRestoreRecipeEditCache();
+    if (!usedDraftSeed) {
+      await maybeRestoreRecipeEditCache();
+    }
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "页面加载失败";
   } finally {
@@ -1647,18 +1755,18 @@ async function loadPage() {
 function fillFromDraft(draft: RecipeDraftDetail) {
   draftVersion.value = draft.version;
   recipeId.value = draft.recipeId || recipeId.value;
-  coverImageUrl.value = "";
   fillForm(draft.content);
 }
 
 function fillFromRecipe(recipe: MyRecipeDetail) {
   recipeVersion.value = recipe.version;
-  coverImageUrl.value = recipe.coverImageUrl || "";
   const content: RecipeDraftContentInput = {
     name: recipe.content.name,
     story: recipe.content.story,
     categoryId: recipe.category.id,
     sceneIds: recipe.scenes.map(item => item.id),
+    coverUploadId: null,
+    coverImageUrl: recipe.coverImageUrl || null,
     baseServings: recipe.content.baseServings,
     difficulty: recipe.content.difficulty,
     duration: recipe.content.duration,
@@ -1673,7 +1781,12 @@ function fillFromRecipe(recipe: MyRecipeDetail) {
       defaultUnitId: item.amount.kind === "EXACT" ? item.amount.unitId : null,
       source: item.source
     })),
-    steps: recipe.content.steps
+    steps: recipe.content.steps.map(item => ({
+      slotKey: nextSlotKey(),
+      text: item.text,
+      uploadId: null,
+      imageUrl: item.imageUrl ?? null
+    }))
   };
   fillForm(content);
 }
@@ -1684,6 +1797,11 @@ function fillForm(content: RecipeDraftContentInput) {
   form.story = content.story || "";
   form.categoryId = content.categoryId;
   form.sceneIds = [...content.sceneIds];
+  originVersionId.value = content.originVersionId ?? null;
+  originCoverImageUrl.value = content.originCoverImageUrl || "";
+  coverUploadId.value = content.coverUploadId ?? null;
+  coverImageUrl.value = content.coverImageUrl || "";
+  coverLocalImagePath.value = "";
   form.baseServingsText = content.baseServings ? String(content.baseServings) : "";
   form.difficulty = content.difficulty;
   form.duration = content.duration;
@@ -1703,18 +1821,33 @@ function fillForm(content: RecipeDraftContentInput) {
       )
     : [];
   stepRows.value = content.steps.length
-    ? content.steps.map(item => createStepRow(item.text))
+    ? content.steps.map(item =>
+        createStepRow({
+          slotKey: item.slotKey,
+          text: item.text,
+          uploadId: item.uploadId ?? null,
+          imageUrl: item.imageUrl || ""
+        })
+      )
     : [createStepRow()];
 }
 
 function resetRows() {
+  originVersionId.value = null;
+  originCoverImageUrl.value = "";
+  coverUploadId.value = null;
   coverImageUrl.value = "";
+  coverLocalImagePath.value = "";
   ingredientRows.value = [];
   stepRows.value = [createStepRow()];
 }
 
-function hasStepImage(_row: StepRow) {
-  return false;
+function getStepImageSrc(row: StepRow) {
+  return row.localImagePath || row.imageUrl || "";
+}
+
+function hasStepImage(row: StepRow) {
+  return Boolean(getStepImageSrc(row));
 }
 
 function closeSheet() {
@@ -1790,6 +1923,7 @@ function openPreviewSheet() {
     title: form.name.trim() || "未命名菜谱",
     categoryName: categories.value.find(item => item.id === form.categoryId)?.name || null,
     sceneNames: scenes.value.filter(item => form.sceneIds.includes(item.id)).map(item => item.name),
+    coverImageUrl: currentCoverImage.value || null,
     content: {
       story: form.story.trim() || null,
       baseServings: form.baseServingsText.trim() ? Number(form.baseServingsText.trim()) : null,
@@ -1825,9 +1959,11 @@ function openPreviewSheet() {
         };
       }),
       steps: stepRows.value
-        .map(item => item.text.trim())
-        .filter(Boolean)
-        .map(text => ({ text }))
+        .filter(item => item.text.trim() || getStepImageSrc(item))
+        .map(item => ({
+          text: item.text.trim(),
+          imageUrl: getStepImageSrc(item) || null
+        }))
     }
   });
   void uniPlatform.navigation.navigateTo("/pages_recipe/detail/index?mode=preview");
@@ -2336,6 +2472,9 @@ function buildRecipeEditCachePayload(): Omit<RecipeEditCacheEntry, "savedAt"> {
       story: form.story,
       categoryId: form.categoryId,
       sceneIds: [...form.sceneIds],
+      coverUploadId: coverUploadId.value,
+      coverImageUrl: coverImageUrl.value,
+      coverLocalImagePath: coverLocalImagePath.value,
       baseServingsText: form.baseServingsText,
       difficulty: form.difficulty,
       duration: form.duration,
@@ -2352,7 +2491,11 @@ function buildRecipeEditCachePayload(): Omit<RecipeEditCacheEntry, "savedAt"> {
       source: row.source
     })),
     stepRows: stepRows.value.map(row => ({
-      text: row.text
+      slotKey: row.slotKey,
+      text: row.text,
+      uploadId: row.uploadId,
+      imageUrl: row.imageUrl,
+      localImagePath: row.localImagePath
     }))
   };
 }
@@ -2420,12 +2563,15 @@ function applyRecipeEditCacheEntry(entry: RecipeEditCacheEntry) {
   form.story = entry.form.story;
   form.categoryId = entry.form.categoryId;
   form.sceneIds = [...entry.form.sceneIds];
+  coverUploadId.value = entry.form.coverUploadId;
+  coverImageUrl.value = entry.form.coverImageUrl;
+  coverLocalImagePath.value = entry.form.coverLocalImagePath;
   form.baseServingsText = entry.form.baseServingsText;
   form.difficulty = entry.form.difficulty;
   form.duration = entry.form.duration;
   form.tips = entry.form.tips;
   ingredientRows.value = entry.ingredientRows.map(row => createIngredientRow(row));
-  stepRows.value = entry.stepRows.length ? entry.stepRows.map(row => createStepRow(row.text)) : [createStepRow()];
+  stepRows.value = entry.stepRows.length ? entry.stepRows.map(row => createStepRow(row)) : [createStepRow()];
 }
 
 function formatRecipeEditCacheSavedAt(savedAt: string) {
@@ -2479,30 +2625,11 @@ async function saveDraft() {
   const cacheItemKey = getRecipeEditCacheItemKey();
   submitting.value = true;
   try {
-    const content = await buildSaveContent();
-    if (draftId.value && draftVersion.value !== null) {
-      const result = await recipeApi.updateDraft(draftId.value, {
-        operationId: createOperationId(),
-        expectedVersion: draftVersion.value,
-        content
-      });
-      draftVersion.value = result.version;
-      removeCurrentRecipeEditCache(cacheItemKey);
-      syncRecipeEditCacheBaseline();
-      await uniPlatform.feedback.toast({ title: "草稿已保存", icon: "success" });
-      return;
-    }
-
-    const result = await recipeApi.createDraft({
-      operationId: createOperationId(),
-      recipeId: recipeId.value || null,
-      content
-    });
-    draftId.value = result.id;
-    draftVersion.value = result.version;
+    await syncDraftForSubmit();
     removeCurrentRecipeEditCache(cacheItemKey);
+    removeCurrentRecipeEditCache();
     syncRecipeEditCacheBaseline();
-    await uniPlatform.feedback.toast({ title: "草稿已创建", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "草稿已保存", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
   } finally {
@@ -2516,46 +2643,17 @@ async function publishDraft() {
   if (!(await validatePublishForm())) return;
   submitting.value = true;
   try {
-    if (!draftId.value || draftVersion.value === null) {
-      const content = await buildDraftContent();
-      const created = await recipeApi.createDraft({
-        operationId: createOperationId(),
-        recipeId: recipeId.value || null,
-        content
-      });
-      draftId.value = created.id;
-      draftVersion.value = created.version;
-    }
-
-    const result = await recipeApi.publishDraft(draftId.value, {
+    await syncDraftForSubmit();
+    const result = await recipeApi.publishDraft(draftId.value as ResourceId, {
       operationId: createOperationId(),
       expectedVersion: draftVersion.value as number
     });
     removeCurrentRecipeEditCache(cacheItemKey);
+    removeCurrentRecipeEditCache();
     await uniPlatform.feedback.toast({ title: "已发布", icon: "success" });
     void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(result.recipe.id))}&kind=my`);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "发布失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function removeDraft() {
-  if (!draftId.value || draftVersion.value === null || submitting.value) return;
-  const cacheItemKey = getRecipeEditCacheItemKey();
-  submitting.value = true;
-  try {
-    await recipeApi.deleteDraft(draftId.value, {
-      operationId: createOperationId(),
-      expectedVersion: draftVersion.value
-    });
-    removeCurrentRecipeEditCache(cacheItemKey);
-    await uniPlatform.feedback.toast({ title: "草稿已删除", icon: "success" });
-    closeSheet();
-    void uniPlatform.navigation.redirectTo("/pages_recipe/list/index?mode=drafts");
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "删除失败", icon: "none" });
   } finally {
     submitting.value = false;
   }
@@ -2578,12 +2676,261 @@ async function removeRecipe() {
   }
 }
 
-async function showCoverTip() {
-  await uniPlatform.feedback.toast({ title: "当前版本暂不支持封面上传", icon: "none" });
+function hasPendingLocalImages() {
+  return Boolean(coverLocalImagePath.value || stepRows.value.some(item => item.localImagePath));
+}
+
+function buildCropToken() {
+  return `recipe-crop-${createOperationId()}`;
+}
+
+function createCoverCropRequest(sourcePath: string): RecipeCropRequest {
+  return {
+    token: buildCropToken(),
+    title: "裁剪封面图",
+    sourcePath,
+    mode: "fixed",
+    aspectRatio: 4 / 3,
+    outputWidth: 1200,
+    outputHeight: 900,
+    maxWidth: 1200,
+    maxHeight: 900,
+    quality: 0.84,
+    fileType: "jpg"
+  };
+}
+
+function createStepCropRequest(sourcePath: string): RecipeCropRequest {
+  return {
+    token: buildCropToken(),
+    title: "裁剪步骤图",
+    sourcePath,
+    mode: "free",
+    aspectRatio: null,
+    outputWidth: null,
+    outputHeight: null,
+    maxWidth: 1280,
+    maxHeight: 1280,
+    quality: 0.8,
+    fileType: "jpg"
+  };
+}
+
+function queueCropTask(task: CropTask) {
+  cropQueue.value = [...cropQueue.value, task];
+  if (!activeCropToken.value) {
+    void openNextCropTask();
+  }
+}
+
+async function openNextCropTask() {
+  if (activeCropToken.value) return;
+  const [nextTask, ...rest] = cropQueue.value;
+  if (!nextTask) return;
+  cropQueue.value = rest;
+  activeCropToken.value = nextTask.request.token;
+  activeCropTarget = nextTask.target;
+  writeRecipeCropRequest(nextTask.request);
+  try {
+    await uniPlatform.navigation.navigateTo(
+      `/pages_recipe/crop/index?token=${encodeURIComponent(nextTask.request.token)}`
+    );
+  } catch (error) {
+    clearRecipeCropSession(nextTask.request.token);
+    activeCropToken.value = "";
+    activeCropTarget = null;
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "打开裁剪页失败", icon: "none" });
+  }
+}
+
+function applyCropResult(result: RecipeCropResult) {
+  if (!result.croppedPath || !activeCropTarget) return;
+  const target = activeCropTarget;
+  if (target.kind === "cover") {
+    coverUploadId.value = null;
+    coverImageUrl.value = "";
+    coverLocalImagePath.value = result.croppedPath;
+    return;
+  }
+
+  const existing = stepRows.value.find(item => item.localId === target.localId);
+  if (existing) {
+    existing.uploadId = null;
+    existing.imageUrl = "";
+    existing.localImagePath = result.croppedPath;
+    return;
+  }
+
+  if (target.appendIfMissing) {
+    stepRows.value = [
+      ...stepRows.value,
+      createStepRow({
+        text: "",
+        uploadId: null,
+        imageUrl: "",
+        localImagePath: result.croppedPath
+      })
+    ];
+  }
+}
+
+async function consumeCropResult() {
+  if (!activeCropToken.value) return;
+  const result = readRecipeCropResult(activeCropToken.value);
+  if (!result) return;
+  clearRecipeCropSession(activeCropToken.value);
+  if (result.status === "done") {
+    applyCropResult(result);
+  }
+  activeCropToken.value = "";
+  activeCropTarget = null;
+  await openNextCropTask();
+}
+
+async function selectCoverImage() {
+  try {
+    const [file] = await uniPlatform.media.chooseMedia({
+      count: 1,
+      mediaType: ["image"],
+      sourceType: ["album", "camera"],
+      sizeType: ["compressed"]
+    });
+    if (!file?.path) return;
+    queueCropTask({
+      request: createCoverCropRequest(file.path),
+      target: {
+        kind: "cover"
+      }
+    });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "选择封面图失败", icon: "none" });
+  }
+}
+
+function clearCoverImage() {
+  coverUploadId.value = null;
+  coverImageUrl.value = "";
+  coverLocalImagePath.value = "";
+}
+
+async function selectStepImage(localId: string) {
+  const row = stepRows.value.find(item => item.localId === localId);
+  if (!row) return;
+  try {
+    const [file] = await uniPlatform.media.chooseMedia({
+      count: 1,
+      mediaType: ["image"],
+      sourceType: ["album", "camera"],
+      sizeType: ["compressed"]
+    });
+    if (!file?.path) return;
+    queueCropTask({
+      request: createStepCropRequest(file.path),
+      target: {
+        kind: "step",
+        localId: row.localId,
+        appendIfMissing: false
+      }
+    });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "选择步骤图失败", icon: "none" });
+  }
+}
+
+function clearStepImage(localId: string) {
+  const row = stepRows.value.find(item => item.localId === localId);
+  if (!row) return;
+  row.uploadId = null;
+  row.imageUrl = "";
+  row.localImagePath = "";
 }
 
 async function handleStepImages() {
-  await uniPlatform.feedback.toast({ title: "当前版本暂不支持步骤图片上传", icon: "none" });
+  try {
+    const files = await uniPlatform.media.chooseMedia({
+      count: 9,
+      mediaType: ["image"],
+      sourceType: ["album", "camera"],
+      sizeType: ["compressed"]
+    });
+    if (!files.length) return;
+    files
+      .filter(file => file.path)
+      .forEach(file => {
+        queueCropTask({
+          request: createStepCropRequest(file.path),
+          target: {
+            kind: "step",
+            localId: "",
+            appendIfMissing: true
+          }
+        });
+      });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "选择步骤图失败", icon: "none" });
+  }
+}
+
+async function uploadPendingImages() {
+  if (!draftId.value) return;
+
+  if (coverLocalImagePath.value) {
+    const result = await recipeApi.uploadRecipeImage({
+      operationId: createOperationId(),
+      draftId: draftId.value,
+      scene: "RECIPE_COVER" satisfies UploadAssetScene,
+      slotKey: "cover",
+      filePath: coverLocalImagePath.value
+    });
+    coverUploadId.value = result.upload.id;
+    coverImageUrl.value = result.upload.imageUrl;
+    coverLocalImagePath.value = "";
+  }
+
+  for (const row of stepRows.value) {
+    if (!row.localImagePath) continue;
+    const result = await recipeApi.uploadRecipeImage({
+      operationId: createOperationId(),
+      draftId: draftId.value,
+      scene: "RECIPE_STEP" satisfies UploadAssetScene,
+      slotKey: row.slotKey,
+      filePath: row.localImagePath
+    });
+    row.uploadId = result.upload.id;
+    row.imageUrl = result.upload.imageUrl;
+    row.localImagePath = "";
+  }
+}
+
+async function syncDraftForSubmit() {
+  const hadDraft = Boolean(draftId.value && draftVersion.value !== null);
+  if (!hadDraft) {
+    const content = await buildDraftContent();
+    const created = await recipeApi.createDraft({
+      operationId: createOperationId(),
+      recipeId: recipeId.value || null,
+      content
+    });
+    draftId.value = created.id;
+    draftVersion.value = created.version;
+  }
+
+  const shouldUpload = hasPendingLocalImages();
+  if (shouldUpload) {
+    await uploadPendingImages();
+  }
+
+  if (!hadDraft && !shouldUpload) {
+    return;
+  }
+
+  const content = await buildSaveContent();
+  const updated = await recipeApi.updateDraft(draftId.value as ResourceId, {
+    operationId: createOperationId(),
+    expectedVersion: draftVersion.value as number,
+    content
+  });
+  draftVersion.value = updated.version;
 }
 
 async function openStepSort() {
@@ -2752,7 +3099,7 @@ async function validatePublishForm() {
     await uniPlatform.feedback.toast({ title: "请至少添加一个食材", icon: "none" });
     return false;
   }
-  if (!stepRows.value.some(item => item.text.trim())) {
+  if (!stepRows.value.some(item => item.text.trim() || getStepImageSrc(item))) {
     await uniPlatform.feedback.toast({ title: "请至少填写一个步骤", icon: "none" });
     return false;
   }
@@ -2767,6 +3114,10 @@ async function buildDraftContent(): Promise<RecipeDraftContentInput> {
     story: form.story.trim() || null,
     categoryId: form.categoryId || null,
     sceneIds: [...form.sceneIds],
+    originVersionId: originVersionId.value,
+    originCoverImageUrl: originCoverImageUrl.value || null,
+    coverUploadId: coverUploadId.value,
+    coverImageUrl: coverImageUrl.value || null,
     baseServings: form.baseServingsText ? Number(form.baseServingsText) : null,
     difficulty: form.difficulty,
     duration: form.duration,
@@ -2791,6 +3142,10 @@ async function buildSaveContent(): Promise<RecipeDraftContentInput> {
     story: form.story.trim() || null,
     categoryId: form.categoryId || null,
     sceneIds: [...form.sceneIds],
+    originVersionId: originVersionId.value,
+    originCoverImageUrl: originCoverImageUrl.value || null,
+    coverUploadId: coverUploadId.value,
+    coverImageUrl: coverImageUrl.value || null,
     baseServings: form.baseServingsText ? Number(form.baseServingsText) : null,
     difficulty: form.difficulty,
     duration: form.duration,
@@ -2802,9 +3157,13 @@ async function buildSaveContent(): Promise<RecipeDraftContentInput> {
 
 function buildStepItems() {
   return stepRows.value
-    .map(item => item.text.trim())
-    .filter(Boolean)
-    .map(text => ({ text }));
+    .filter(item => item.text.trim() || getStepImageSrc(item))
+    .map(item => ({
+      slotKey: item.slotKey,
+      text: item.text.trim(),
+      uploadId: item.uploadId || null,
+      imageUrl: item.imageUrl || null
+    }));
 }
 
 async function buildSaveIngredients(): Promise<RecipeDraftIngredientInput[]> {
@@ -3011,17 +3370,25 @@ function resetIngredientCreate() {
   ingredientCreateDraft.unitId = "";
 }
 
-function createStepRow(text = ""): StepRow {
+function createStepRow(partial: Partial<Omit<StepRow, "localId">> = {}): StepRow {
   return {
     localId: nextLocalId("step"),
-    text
+    slotKey: partial.slotKey || nextSlotKey(),
+    text: partial.text || "",
+    uploadId: partial.uploadId ?? null,
+    imageUrl: partial.imageUrl || "",
+    localImagePath: partial.localImagePath || ""
   };
 }
 
 function cloneStepRow(row: StepRow): StepRow {
   return {
     localId: row.localId,
-    text: row.text
+    slotKey: row.slotKey,
+    text: row.text,
+    uploadId: row.uploadId,
+    imageUrl: row.imageUrl,
+    localImagePath: row.localImagePath
   };
 }
 
@@ -3092,6 +3459,10 @@ function nextLocalId(prefix: string) {
   rowSeed += 1;
   return `${prefix}-${rowSeed}`;
 }
+
+function nextSlotKey() {
+  return nextLocalId("slot");
+}
 </script>
 
 <style scoped lang="scss">
@@ -3100,11 +3471,6 @@ function nextLocalId(prefix: string) {
   min-height: 100vh;
   padding-bottom: calc(148rpx + env(safe-area-inset-bottom));
   background: var(--entry-board-bg);
-}
-
-.notice--floating {
-  margin: 0 var(--space-page);
-  margin-top: 140rpx;
 }
 
 .edit-nav-backdrop {
@@ -3147,9 +3513,18 @@ function nextLocalId(prefix: string) {
 }
 
 .hero__cover {
+  position: relative;
   overflow: hidden;
   border-radius: 0;
   box-shadow: none;
+}
+
+.hero__image {
+  display: block;
+  width: 100%;
+  height: 75vw;
+  min-height: 420rpx;
+  max-height: 660rpx;
 }
 
 .hero__cover-fill {
@@ -3209,6 +3584,16 @@ function nextLocalId(prefix: string) {
   font-size: 20rpx;
   line-height: 50rpx;
   box-shadow: var(--entry-button-shadow);
+}
+
+.cover-clear {
+  position: absolute;
+  right: var(--space-page);
+  bottom: calc(var(--space-page) + 8rpx);
+  color: var(--color-white);
+  font-size: 24rpx;
+  line-height: 1.4;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.18);
 }
 
 .content {
@@ -3408,7 +3793,7 @@ function nextLocalId(prefix: string) {
 .chip,
 .mode-pill,
 .bar-button {
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
 }
 
 .panel__pill,
@@ -3581,7 +3966,7 @@ function nextLocalId(prefix: string) {
 
 .group-badge {
   padding: 8rpx 16rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-primary-soft);
   color: var(--entry-accent);
   font-size: 22rpx;
@@ -3690,7 +4075,7 @@ function nextLocalId(prefix: string) {
   min-width: 0;
   height: 70rpx;
   padding: 0 26rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   box-sizing: border-box;
   color: var(--color-text);
@@ -3863,6 +4248,10 @@ function nextLocalId(prefix: string) {
 }
 
 .ingredient-grid--create {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ingredient-grid--unit {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
@@ -3924,7 +4313,7 @@ function nextLocalId(prefix: string) {
 .ingredient-choice__badge {
   flex-shrink: 0;
   padding: 4rpx 12rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-primary-soft);
   color: var(--entry-accent);
   font-size: 20rpx;
@@ -4011,7 +4400,7 @@ function nextLocalId(prefix: string) {
   flex: 0 0 auto;
   gap: 10rpx;
   padding: 8rpx 16rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-primary-soft);
   color: var(--color-primary);
   font-size: 22rpx;
@@ -4125,7 +4514,7 @@ function nextLocalId(prefix: string) {
   width: 156rpx;
   height: 76rpx;
   border: 0;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -4153,7 +4542,7 @@ function nextLocalId(prefix: string) {
   min-width: 156rpx;
   height: 76rpx;
   margin-top: 20rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     135deg,
     var(--button-primary-gradient-start) 0%,
@@ -4215,11 +4604,19 @@ function nextLocalId(prefix: string) {
 }
 
 .step-card__image--filled {
+  overflow: hidden;
   align-items: flex-end;
   justify-content: flex-start;
   align-content: flex-end;
   padding: 22rpx;
   text-align: left;
+}
+
+.step-card__preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .step-card__image-plus {
@@ -4241,9 +4638,29 @@ function nextLocalId(prefix: string) {
 }
 
 .step-card__image-change {
+  position: absolute;
+  left: 22rpx;
+  bottom: 22rpx;
+  z-index: 1;
+  height: 50rpx;
+  padding: 0 15rpx;
+  border-radius: var(--radius-xs);
+  background: var(--entry-button-bg);
+  color: var(--entry-button-color);
+  font-size: 20rpx;
+  line-height: 50rpx;
+  box-shadow: var(--entry-button-shadow);
+}
+
+.step-card__image-remove {
+  position: absolute;
+  right: 22rpx;
+  bottom: 30rpx;
+  z-index: 1;
   color: var(--color-white);
   font-size: 24rpx;
   line-height: 1.4;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.18);
 }
 
 .step-card__field {
@@ -4404,6 +4821,7 @@ function nextLocalId(prefix: string) {
 }
 
 .step-sort-card__thumb {
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4412,6 +4830,12 @@ function nextLocalId(prefix: string) {
   flex: 0 0 100rpx;
   border-radius: var(--radius-xs);
   background: var(--color-surface-muted);
+}
+
+.step-sort-card__thumb-image {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .step-sort-card__thumb-text {
@@ -4463,7 +4887,7 @@ function nextLocalId(prefix: string) {
   height: 96rpx;
   padding: 0 34rpx;
   border: 0;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     135deg,
     var(--button-primary-gradient-start) 0%,
@@ -4494,50 +4918,6 @@ function nextLocalId(prefix: string) {
   transform: rotate(180deg);
 }
 
-.sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 1300;
-}
-
-.sheet__mask {
-  position: absolute;
-  inset: 0;
-  background: var(--login-popup-backdrop-bg);
-  -webkit-backdrop-filter: blur(10rpx) saturate(145%);
-  backdrop-filter: blur(10rpx) saturate(145%);
-  opacity: 0;
-  transition: opacity 220ms ease;
-}
-
-.sheet__panel {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  max-height: 82vh;
-  padding: 34rpx 0 calc(42rpx + env(safe-area-inset-bottom));
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
-  box-shadow: 0 -12rpx 60rpx rgba(59, 40, 21, 0.12);
-  overflow-y: auto;
-  opacity: 0.98;
-  transform: translateY(calc(100% + env(safe-area-inset-bottom)));
-  transition:
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 260ms ease;
-  will-change: transform, opacity;
-}
-
-.sheet--visible .sheet__mask {
-  opacity: 1;
-}
-
-.sheet--visible .sheet__panel {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 .sheet__title {
   color: var(--color-text);
   font-size: 38rpx;
@@ -4554,7 +4934,7 @@ function nextLocalId(prefix: string) {
 .sheet__title-tag {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-primary-soft);
   color: var(--color-primary);
   font-size: 22rpx;
@@ -4670,9 +5050,55 @@ function nextLocalId(prefix: string) {
 }
 
 .notice {
-  padding: var(--space-md);
-  border-radius: var(--radius-xs);
-  background: rgba(255, 255, 255, 0.88);
   color: var(--color-text-secondary);
+}
+
+.notice--state {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56rpx var(--space-page) calc(72rpx + env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.notice__art {
+  width: 420rpx;
+  height: 300rpx;
+}
+
+.notice__title,
+.notice__desc,
+.notice__action {
+  display: block;
+}
+
+.notice__title {
+  margin-top: 8rpx;
+  color: var(--color-text);
+  font-size: 36rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+}
+
+.notice__desc {
+  max-width: 520rpx;
+  margin-top: 16rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-loose);
+}
+
+.notice__action {
+  margin-top: 18rpx;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-normal);
+}
+
+.notice--error .notice__desc {
+  color: var(--color-text-tertiary);
 }
 </style>

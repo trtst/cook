@@ -420,7 +420,7 @@ async function submitEditor() {
 .recommend-card__status {
   flex-shrink: 0;
   padding: 8rpx 18rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   font-size: 22rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -461,7 +461,7 @@ async function submitEditor() {
   height: 76rpx;
   padding: 0 30rpx;
   border: 0;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   color: #fff;
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);

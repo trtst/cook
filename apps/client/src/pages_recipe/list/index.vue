@@ -42,7 +42,17 @@
             <text class="card__title">{{ item.title }}</text>
             <text class="card__meta">{{ item.meta }}</text>
           </view>
-          <text class="card__tail">{{ item.updatedAt.slice(0, 10) }}</text>
+          <view class="card__side">
+            <text class="card__tail">{{ item.updatedAt.slice(0, 10) }}</text>
+            <text
+              v-if="mode === 'drafts'"
+              class="card__danger"
+              :class="{ 'card__danger--disabled': deletingDraftId === item.id }"
+              @click.stop="removeDraft(item)"
+            >
+              {{ deletingDraftId === item.id ? "删除中..." : "删除草稿" }}
+            </text>
+          </view>
         </view>
       </view>
     </template>
@@ -60,6 +70,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
+import { createOperationId } from "@/utils/operation-id";
 
 type ListMode = "recipes" | "drafts";
 
@@ -79,6 +90,7 @@ const keyword = ref("");
 const loading = ref(false);
 const errorText = ref("");
 const items = ref<DisplayItem[]>([]);
+const deletingDraftId = ref<UUID | "">("");
 
 onLoad((query) => {
 	const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
@@ -132,11 +144,40 @@ function createRecipe() {
 }
 
 function openItem(item: DisplayItem) {
+	if (deletingDraftId.value && deletingDraftId.value === item.id) return;
 	if (mode.value === "recipes") {
 		void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.id))}&kind=my`);
 		return;
 	}
 	void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?draftId=${encodeURIComponent(String(item.id))}`);
+}
+
+async function removeDraft(item: DisplayItem) {
+	if (mode.value !== "drafts" || deletingDraftId.value) return;
+	const draft = item.raw as RecipeDraftSummary;
+	const confirmed = await uniPlatform.feedback.confirm({
+		title: "删除草稿",
+		content: `确定删除“${item.title}”吗？删除后无法恢复。`,
+		confirmText: "删除",
+		cancelText: "取消",
+		tone: "danger",
+		maskClosable: true
+	});
+	if (!confirmed) return;
+
+	deletingDraftId.value = item.id;
+	try {
+		await recipeApi.deleteDraft(item.id, {
+			operationId: createOperationId(),
+			expectedVersion: draft.version
+		});
+		items.value = items.value.filter(current => current.id !== item.id);
+		await uniPlatform.feedback.toast({ title: "草稿已删除", icon: "success" });
+	} catch (error) {
+		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "删除失败", icon: "none" });
+	} finally {
+		deletingDraftId.value = "";
+	}
 }
 
 function toRecipeItem(item: MyRecipeSummary): DisplayItem {
@@ -207,7 +248,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 
 .tab {
 	padding: 16rpx 26rpx;
-	border-radius: 999rpx;
+	border-radius: var(--radius-pill);
 	background: var(--color-surface-muted);
 	color: var(--color-text-secondary);
 	font-size: var(--font-size-sm);
@@ -261,6 +302,14 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	min-width: 0;
 }
 
+.card__side {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 12rpx;
+	margin-left: var(--space-sm);
+}
+
 .card__title,
 .card__meta {
 	display: block;
@@ -281,5 +330,15 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 .card__meta {
 	margin-top: 8rpx;
 	line-height: 1.6;
+}
+
+.card__danger {
+	color: var(--color-danger-text);
+	font-size: var(--font-size-sm);
+	line-height: 1.4;
+}
+
+.card__danger--disabled {
+	opacity: 0.56;
 }
 </style>

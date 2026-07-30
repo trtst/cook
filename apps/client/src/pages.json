@@ -54,6 +54,7 @@
         { "path": "list/index", "style": { "navigationBarTitleText": "菜谱列表", "navigationStyle": "custom" } },
         { "path": "detail/index", "style": { "navigationBarTitleText": "菜谱详情", "navigationStyle": "custom" } },
         { "path": "edit/index", "style": { "navigationBarTitleText": "编辑菜谱", "navigationStyle": "custom" } },
+        { "path": "crop/index", "style": { "navigationBarTitleText": "裁剪图片", "navigationStyle": "custom" } },
         { "path": "import/index", "style": { "navigationBarTitleText": "导入菜谱", "navigationStyle": "custom" } },
         { "path": "system/index", "style": { "navigationBarTitleText": "系统菜谱", "navigationStyle": "custom" } }
       ]

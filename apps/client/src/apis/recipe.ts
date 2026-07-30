@@ -1,11 +1,12 @@
 import { cfg } from "@/config";
-import { get, post, put, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
+import { get, post, put, uploadFile, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
 
 export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
 export type RecipeDuration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
 export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
 export type IngredientSource = "SYSTEM" | "PERSONAL";
 export type InspirationSort = "RECOMMENDED" | "LATEST";
+export type UploadAssetScene = "RECIPE_COVER" | "RECIPE_STEP";
 
 export type RecipeAmountInput =
 	| {
@@ -98,6 +99,14 @@ export interface RecipeIngredientSnapshot {
 
 export interface RecipeStepSnapshot {
 	text: string;
+	imageUrl: string | null;
+}
+
+export interface RecipeDraftStepInput {
+	slotKey: string;
+	text: string;
+	uploadId: UUID | null;
+	imageUrl?: string | null;
 }
 
 export interface RecipeContentSnapshot {
@@ -116,12 +125,35 @@ export interface RecipeDraftContentInput {
 	story: string | null;
 	categoryId: UUID | null;
 	sceneIds: UUID[];
+	originVersionId?: UUID | null;
+	originCoverImageUrl?: string | null;
+	coverUploadId: UUID | null;
+	coverImageUrl?: string | null;
 	baseServings: number | null;
 	difficulty: RecipeDifficulty | null;
 	duration: RecipeDuration | null;
 	tips: string | null;
 	ingredients: RecipeDraftIngredientInput[];
-	steps: RecipeStepSnapshot[];
+	steps: RecipeDraftStepInput[];
+}
+
+export interface UploadImageSummary {
+	id: UUID;
+	publicId: string;
+	scene: UploadAssetScene;
+	slotKey: string;
+	status: "TEMP" | "BOUND" | "DELETED";
+	imageUrl: string;
+	contentType: string;
+	sizeBytes: number;
+	width: number;
+	height: number;
+	createdAt: IsoDateTime;
+	expiresAt: IsoDateTime | null;
+}
+
+export interface UploadImageResponse {
+	upload: UploadImageSummary;
 }
 
 export interface RecipeDraftSummary {
@@ -174,10 +206,30 @@ export interface MyRecipeDetail {
 	content: RecipeContentSnapshot;
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
+	recommendation: RecipeRecommendationSummary | null;
 	status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
 	version: number;
 	createdAt: IsoDateTime;
 	updatedAt: IsoDateTime;
+}
+
+export type RecipeRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "WITHDRAWN";
+
+export interface RecipeRecommendationSummary {
+	id: UUID;
+	recipeId: UUID;
+	sourceVersionId: UUID;
+	recipeTitle: string;
+	curatedByName: string;
+	suggestedCategory: InspirationCategorySummary;
+	status: RecipeRecommendationStatus;
+	reviewNote: string | null;
+	adoptedRecipeId: UUID | null;
+	version: number;
+	createdAt: IsoDateTime;
+	updatedAt: IsoDateTime;
+	reviewedAt: IsoDateTime | null;
+	withdrawnAt: IsoDateTime | null;
 }
 
 export interface CollectionSceneSummary {
@@ -337,6 +389,14 @@ export interface PublishRecipeDraftRequest {
 	expectedVersion: number;
 }
 
+export interface UploadRecipeImageRequest {
+	operationId: OperationId;
+	draftId: UUID;
+	scene: UploadAssetScene;
+	slotKey: string;
+	filePath: string;
+}
+
 export interface DeleteRecipeDraftRequest extends PublishRecipeDraftRequest {}
 
 export interface RenameTagRequest extends PublishRecipeDraftRequest {
@@ -393,6 +453,16 @@ export interface RecommendIngredientRequest {
 	operationId: OperationId;
 }
 
+export interface RecommendRecipeRequest {
+	operationId: OperationId;
+	inspirationCategoryId: UUID;
+}
+
+export interface WithdrawRecipeRecommendationRequest {
+	operationId: OperationId;
+	expectedVersion: number;
+}
+
 export interface SaveCollectionRecipeRequest {
 	operationId: OperationId;
 	sourceRecipeId: UUID;
@@ -415,6 +485,24 @@ function assertSaveRecipeDraftResponse(result: SaveRecipeDraftResponse) {
 		throw new Error("草稿保存响应时间无效");
 	}
 	return result;
+}
+
+interface UploadApiResponse<T> {
+	code: number;
+	message: string;
+	data: T;
+	serverTime: IsoDateTime;
+}
+
+function isUploadApiResponse<T>(value: unknown): value is UploadApiResponse<T> {
+	if (typeof value !== "object" || value === null) return false;
+	const candidate = value as Partial<UploadApiResponse<T>>;
+	return (
+		typeof candidate.code === "number" &&
+		typeof candidate.message === "string" &&
+		typeof candidate.serverTime === "string" &&
+		"data" in candidate
+	);
 }
 
 export const recipeApi = {
@@ -503,6 +591,28 @@ export const recipeApi = {
 		);
 		return assertSaveRecipeDraftResponse(result);
 	},
+	async uploadRecipeImage(body: UploadRecipeImageRequest) {
+		const result = await uploadFile({
+			url: `${cfg.domain}/api/uploads/images`,
+			filePath: body.filePath,
+			name: "file",
+			headers: {
+				"Idempotency-Key": body.operationId
+			},
+			formData: {
+				draftId: body.draftId,
+				scene: body.scene,
+				slotKey: body.slotKey
+			}
+		});
+		if (!isUploadApiResponse<UploadImageResponse>(result.body)) {
+			throw new Error("图片上传响应格式不正确");
+		}
+		if (result.status < 200 || result.status >= 300 || result.body.code !== 0) {
+			throw new Error(result.body.message || "图片上传失败");
+		}
+		return result.body.data;
+	},
 	deleteDraft(draftId: UUID, body: DeleteRecipeDraftRequest) {
 		return post<DeleteRecipeDraftResult>(
 			`${cfg.domain}/api/recipe-drafts/${encodeURIComponent(String(draftId))}/delete`,
@@ -520,10 +630,23 @@ export const recipeApi = {
 	listMyRecipes(query: MyRecipeQuery) {
 		return get<PageResult<MyRecipeSummary>>(`${cfg.domain}/api/recipes`, { ...query });
 	},
-	getMyRecipe(recipeId: UUID) {
-		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
-	},
-	listCollections() {
+		getMyRecipe(recipeId: UUID) {
+			return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
+		},
+		recommendRecipe(recipeId: UUID, body: RecommendRecipeRequest) {
+			const { operationId, ...payload } = body;
+			return post<RecipeRecommendationSummary>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}/recommendations`, payload, {
+				idempotencyKey: operationId
+			});
+		},
+		withdrawRecipeRecommendation(recommendationId: UUID, body: WithdrawRecipeRecommendationRequest) {
+			return post<RecipeRecommendationSummary>(
+				`${cfg.domain}/api/recipe-recommendations/${encodeURIComponent(String(recommendationId))}/withdraw`,
+				{ expectedVersion: body.expectedVersion },
+				{ idempotencyKey: body.operationId }
+			);
+		},
+		listCollections() {
 		return get<CollectionListResponse>(`${cfg.domain}/api/collections`);
 	},
 	listCollectionRecipes(query: CollectionRecipeQuery) {

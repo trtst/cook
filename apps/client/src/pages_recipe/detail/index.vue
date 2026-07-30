@@ -16,7 +16,7 @@
           <view
             v-for="item in anchorTabs"
             :key="item.value"
-            class="detail-nav-tabs__item"
+            class="detail-nav-tabs__item font-medium"
             :class="{ 'detail-nav-tabs__item--active': activeAnchor === item.value }"
             @click="scrollToSection(item.value)"
           >
@@ -50,42 +50,53 @@
           </view>
         </view>
 
-        <view class="content">
-          <view class="summary-card">
-            <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
-            <text class="summary-card__story" :class="{ 'summary-card__story--placeholder': !detailContent.story }">
-              {{ detailContent.story || "暂未填写菜谱描述" }}
-            </text>
+        <view class="content" :class="{ 'content--with-actions': showStickyActions }">
+	          <view class="summary-card">
+	            <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
+	            <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
+	            <text v-if="curatedText" class="summary-card__curated">{{ curatedText }}</text>
 
-            <view v-if="detailCategoryName || detailSceneLabels.length" class="summary-card__facts">
-              <view v-if="detailCategoryName" class="summary-card__fact">
-                <text class="summary-card__fact-label">分类:</text>
-                <text class="summary-card__fact-value">{{ detailCategoryName }}</text>
-              </view>
-              <view v-if="detailSceneLabels.length" class="summary-card__fact summary-card__fact--scenes">
-                <text class="summary-card__fact-label">场景:</text>
-                <view class="summary-card__scene-list">
-                  <text v-for="item in detailSceneLabels" :key="item" class="summary-card__scene">{{ item }}</text>
+            <view v-if="detailFactText || showReportEntry" class="summary-card__facts">
+              <view class="summary-card__fact-row">
+                <view v-if="detailFactText" class="summary-card__fact-block">
+                  <text class="summary-card__fact-title">分类/场景</text>
+                  <text class="summary-card__fact-text">{{ detailFactText }}</text>
                 </view>
+                <text
+                  v-if="showReportEntry"
+                  class="summary-card__report-entry"
+                  hover-class="summary-card__report-entry--hover"
+                  hover-stay-time="100"
+                  @click="openReportSheet"
+                >
+                  举报
+                </text>
               </view>
             </view>
 
-            <view v-if="summaryMetaList.length" class="summary-card__meta">
-              <text v-for="item in summaryMetaList" :key="item" class="summary-card__meta-item">{{ item }}</text>
-            </view>
-
-            <view class="summary-info">
-              <view v-for="item in infoItems" :key="item.key" class="summary-info__item">
-                <view class="summary-info__icon" :class="[`summary-info__icon--${item.key}`, item.iconClass]" />
-                <text class="summary-info__label" :class="{ 'summary-info__label--muted': item.muted }">{{ item.label }}</text>
-              </view>
-            </view>
-          </view>
+	            <view class="summary-info">
+	              <view v-for="item in infoItems" :key="item.key" class="summary-info__item">
+	                <view class="summary-info__icon" :class="[`summary-info__icon--${item.key}`, item.iconClass]" />
+	                <text class="summary-info__label" :class="{ 'summary-info__label--muted': item.muted }">{{ item.label }}</text>
+	              </view>
+	            </view>
+	          </view>
 
           <view id="detail-ingredients" class="section section--first">
             <view class="section__head">
-              <text class="section__label">食材清单</text>
-              <text class="section__caption">{{ ingredientCountText }}</text>
+              <view class="section__head-main">
+                <text class="section__label">食材清单</text>
+                <text class="section__caption">{{ ingredientCountText }}</text>
+              </view>
+              <button
+                v-if="showShoppingEntry"
+                class="section__action"
+                :disabled="shoppingSubmitting"
+                @click="addToShoppingList"
+              >
+                <text class="cookfont icon-add-list section__action-icon" />
+                <text>{{ shoppingSubmitting ? "添加中..." : "添加清单" }}</text>
+              </button>
             </view>
             <view v-if="detailContent.ingredients.length" class="ingredient-list">
               <view
@@ -105,11 +116,11 @@
               <text class="section__label">步骤</text>
               <text class="section__caption">{{ stepCountText }}</text>
             </view>
-            <view v-if="detailContent.steps.length" class="step-list">
-              <view v-for="(item, index) in detailContent.steps" :key="index" class="step-card">
-                <text class="step-card__index">{{ `${index + 1}/${detailContent.steps.length}` }}</text>
-                <view class="step-card__cover" />
-                <text class="step-card__text">{{ item.text || "暂未填写步骤描述" }}</text>
+            <view v-if="detailSteps.length" class="step-list">
+              <view v-for="(item, index) in detailSteps" :key="index" class="step-card">
+                <text class="step-card__index">{{ `${index + 1}/${detailSteps.length}` }}</text>
+                <image v-if="item.imageUrl" class="step-card__cover-image" :src="item.imageUrl" mode="widthFix" />
+                <text v-if="hasStepText(item.text)" class="step-card__text">{{ item.text.trim() }}</text>
               </view>
             </view>
             <text v-else class="section__empty">暂未填写步骤</text>
@@ -122,85 +133,200 @@
             <text class="tips-text">{{ detailContent.tips }}</text>
           </view>
 
-          <view v-if="mode === 'published' && kind === 'inspiration' && showCollectPanel" class="section">
-            <text class="section__label">收藏到合集</text>
-            <text class="section__note">收藏会固定保存当前灵感版本快照。可一次加入 1 个或多个合集，已存在的归属会自动跳过。</text>
-
-            <template v-if="!sessionStore.isLoggedIn">
-              <button class="primary" @click="openLogin">打开登录</button>
-            </template>
-
-            <template v-else>
-              <view v-if="sceneLoading" class="panel-note">合集中...</view>
-              <view v-else-if="sceneError" class="panel-note" @click="loadScenes">{{ sceneError }}</view>
-              <template v-else>
-                <view v-if="scenes.length" class="chip-row">
-                  <view
-                    v-for="item in scenes"
-                    :key="item.id"
-                    class="chip"
-                    :class="{ 'chip--active': selectedSceneIds.includes(item.id) }"
-                    @click="toggleScene(item.id)"
-                  >
-                    {{ item.name }}
-                  </view>
-                </view>
-                <text v-else class="section__empty">你还没有合集，先创建一个再继续。</text>
-
-                <view class="create-row">
-                  <input
-                    v-model="sceneName"
-                    class="create-row__input"
-                    maxlength="20"
-                    placeholder="新建合集名称"
-                    :disabled="sceneSubmitting"
-                  />
-                  <button class="light create-row__button" :disabled="sceneSubmitting || !sceneName.trim()" @click="createScene">
-                    {{ sceneSubmitting ? "创建中" : "新建合集" }}
-                  </button>
-                </view>
-
-                <button class="secondary" :disabled="collecting || !selectedSceneIds.length" @click="collectRecipe">
-                  {{ collecting ? "处理中..." : "确认收藏" }}
-                </button>
-              </template>
-            </template>
-          </view>
-
-          <view v-if="mode === 'published' && kind === 'inspiration' && sessionStore.isLoggedIn" class="section">
-            <text class="section__label">举报说明</text>
-            <textarea
-              v-model="reportReason"
-              class="report-box"
-              maxlength="255"
-              placeholder="仅在违规、侵权或明显不当时提交举报"
-            />
-            <button class="danger" :disabled="submitting || !reportReason.trim()" @click="handleReport">提交举报</button>
-          </view>
         </view>
       </view>
+
+      <view
+        v-if="showStickyActions"
+        class="detail-actions-shell"
+        :class="{ 'detail-actions-shell--visible': detailActionsVisible }"
+      >
+        <view class="detail-actions" :class="{ 'detail-actions--visible': detailActionsVisible }">
+          <button class="detail-actions__item" open-type="share">
+            <view class="cookfont icon-share detail-actions__icon" />
+            <view class="detail-actions__text">分享</view>
+          </button>
+          <template v-if="kind === 'inspiration'">
+            <button class="detail-actions__item" @click="handleAdaptRecipe">
+              <view class="cookfont icon-edit detail-actions__icon" />
+              <view class="detail-actions__text">改编</view>
+            </button>
+            <button class="detail-actions__item" @click="openAddSheet">
+              <view class="cookfont icon-add-owner detail-actions__icon" />
+              <view class="detail-actions__text">添加到我的</view>
+            </button>
+          </template>
+          <template v-else-if="kind === 'my'">
+            <button
+              class="detail-actions__item"
+              :class="{ 'detail-actions__item--disabled': recommendActionDisabled }"
+              :disabled="recommendActionDisabled"
+              @click="openRecommendSheet"
+            >
+              <view class="cookfont icon-recommend detail-actions__icon" />
+              <view class="detail-actions__text">{{ recommendActionLabel }}</view>
+            </button>
+          </template>
+        </view>
+      </view>
+
+		      <SheetShell v-if="showAddSheet" :visible="addSheetVisible" @close="closeAddSheet">
+          <view class="sheet__header">
+            <text class="sheet__title">添加到我的</text>
+            <text class="cookfont icon-close sheet__close" @click="closeAddSheet" />
+          </view>
+
+          <text class="sheet__note">至少选择一个。选个人分类会带着当前菜谱内容进入“我的”，选合集会固定保存当前灵感版本。</text>
+
+          <view v-if="addSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
+          <view v-else-if="addSheetError" class="panel-note panel-note--sheet" @click="loadAddOptions(true)">{{ addSheetError }}</view>
+          <template v-else>
+            <view class="sheet-section">
+              <text class="sheet-section__title">个人分类</text>
+              <view v-if="categories.length" class="chip-row">
+                <view
+                  v-for="item in categories"
+                  :key="item.id"
+                  class="chip"
+                  :class="{ 'chip--active': selectedCategoryId === item.id }"
+                  @click="toggleCategory(item.id)"
+                >
+                  {{ item.name }}
+                </view>
+              </view>
+              <text v-else class="sheet-section__hint">还没有个人分类，可先只选合集。</text>
+            </view>
+
+            <view class="sheet-section">
+              <text class="sheet-section__title">合集</text>
+              <view v-if="scenes.length" class="chip-row">
+                <view
+                  v-for="item in scenes"
+                  :key="item.id"
+                  class="chip"
+                  :class="{ 'chip--active': selectedSceneIds.includes(item.id) }"
+                  @click="toggleScene(item.id)"
+                >
+                  {{ item.name }}
+                </view>
+              </view>
+              <text v-else class="sheet-section__hint">还没有合集，可先只选个人分类。</text>
+            </view>
+
+            <view class="sheet-actions">
+              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="addSheetSubmitting" @click="resetAddSelection">重置</button>
+              <button
+                class="sheet-actions__button sheet-actions__button--confirm"
+                :disabled="addSheetSubmitting || !canSubmitAddSheet"
+                @click="confirmAddSheet"
+              >
+                {{ addSheetSubmitting ? "处理中..." : "确定" }}
+              </button>
+            </view>
+          </template>
+		      </SheetShell>
+
+		      <SheetShell v-if="showRecommendSheet" :visible="recommendSheetVisible" @close="closeRecommendSheet">
+		          <view class="sheet__header">
+		            <text class="sheet__title">投稿灵感</text>
+		            <text class="cookfont icon-close sheet__close" @click="closeRecommendSheet" />
+	          </view>
+
+	          <text class="sheet__note">选择一个建议的系统分类。审核通过后，会收录到灵感里，个人菜谱仍保留在“我的”中。</text>
+
+	          <view v-if="recommendSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
+	          <view v-else-if="recommendSheetError" class="panel-note panel-note--sheet" @click="loadRecommendCategories(true)">{{ recommendSheetError }}</view>
+	          <template v-else>
+	            <view class="sheet-section">
+	              <text class="sheet-section__title">系统菜谱分类</text>
+	              <view v-if="recommendCategories.length" class="chip-row">
+	                <view
+	                  v-for="item in recommendCategories"
+	                  :key="item.id"
+	                  class="chip"
+	                  :class="{ 'chip--active': selectedRecommendCategoryId === item.id }"
+	                  @click="selectedRecommendCategoryId = item.id"
+	                >
+	                  {{ item.name }}
+	                </view>
+	              </view>
+	              <text v-else class="sheet-section__hint">当前还没有可选的系统菜谱分类。</text>
+	            </view>
+
+		            <view class="sheet-actions">
+		              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="recommendSubmitting" @click="closeRecommendSheet">取消</button>
+	              <button
+	                class="sheet-actions__button sheet-actions__button--confirm"
+	                :disabled="recommendSubmitting || !selectedRecommendCategoryId"
+	                @click="handleRecommendRecipe"
+	              >
+	                {{ recommendSubmitting ? "提交中..." : "投稿" }}
+	              </button>
+		            </view>
+		          </template>
+		      </SheetShell>
+
+		      <SheetShell v-if="showReportSheet" :visible="reportSheetVisible" @close="closeReportSheet">
+          <view class="sheet__header">
+            <text class="sheet__title">举报菜谱</text>
+            <text class="cookfont icon-close sheet__close" @click="closeReportSheet" />
+          </view>
+
+          <text class="report-sheet__note">如果这份菜谱让你觉得不合适，可以选一个最接近的原因告诉我们；选“其他”时再补充几句说明就可以。</text>
+
+          <picker :range="reportReasonOptions" range-key="label" @change="handleReasonChange">
+            <view class="report-picker">
+              <text class="report-picker__label">举报原因</text>
+              <view class="report-picker__value">
+                <text
+                  class="report-picker__text"
+                  :class="{ 'report-picker__text--placeholder': !selectedReportReasonLabel }"
+                >
+                  {{ selectedReportReasonLabel || "请选择原因" }}
+                </text>
+                <text class="cookfont icon-arrow-right report-picker__icon" />
+              </view>
+            </view>
+          </picker>
+
+          <textarea
+            v-if="needsReportDetail"
+            v-model="reportReason"
+            class="report-box"
+            maxlength="255"
+            placeholder="请填写具体说明"
+          />
+          <button class="danger" :disabled="submitting || !canSubmitReport" @click="handleReport">提交举报</button>
+		      </SheetShell>
     </template>
   </Layout>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
-import { onHide, onLoad, onPageScroll, onUnload } from "@dcloudio/uni-app";
+import { computed, nextTick, ref, watch } from "vue";
+import { onHide, onLoad, onPageScroll, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
-import {
-  recipeApi,
-  type CollectedRecipeDetail,
-  type InspirationRecipeDetail,
-  type MyRecipeDetail,
-  type RecipeAmountSnapshot,
-  type RecipeContentSnapshot,
-  type RecipeDifficulty,
-  type RecipeDuration,
-  type RecipeSceneSummary
-} from "@/apis/recipe";
+	import {
+		recipeApi,
+		type CollectedRecipeDetail,
+		type InspirationCategorySummary,
+		type InspirationRecipeDetail,
+		type MyRecipeDetail,
+		type RecipeAmountSnapshot,
+		type RecipeCategorySummary,
+		type RecipeContentSnapshot,
+		type RecipeDifficulty,
+		type RecipeDraftContentInput,
+		type RecipeDuration,
+		type RecipeRecommendationSummary,
+		type RecipeSceneSummary
+	} from "@/apis/recipe";
+import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -221,7 +347,21 @@ interface InfoItem {
   muted?: boolean;
 }
 
+interface ReportReasonOption {
+  value: "AD" | "FALSE" | "INFRINGEMENT" | "ILLEGAL" | "OTHER";
+  label: string;
+}
+
 const pageStyle = usePageScrollStyle();
+const SHEET_ANIMATION_MS = 260;
+const DETAIL_ACTIONS_SHOW_OFFSET = 24;
+const reportReasonOptions: ReportReasonOption[] = [
+  { value: "AD", label: "广告营销" },
+  { value: "FALSE", label: "内容不实" },
+  { value: "INFRINGEMENT", label: "侵犯权益" },
+  { value: "ILLEGAL", label: "违法违规" },
+  { value: "OTHER", label: "其他" }
+];
 
 const anchorTabs = [
   { value: "ingredients" as const, label: "食材" },
@@ -241,21 +381,37 @@ const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
 const reportReason = ref("");
-const showCollectPanel = ref(false);
-const sceneLoading = ref(false);
-const sceneSubmitting = ref(false);
-const collecting = ref(false);
-const sceneError = ref("");
-const sceneName = ref("");
+const showReportSheet = ref(false);
+const reportSheetVisible = ref(false);
+const showAddSheet = ref(false);
+const addSheetVisible = ref(false);
+const showRecommendSheet = ref(false);
+const recommendSheetVisible = ref(false);
+const selectedReportReason = ref<ReportReasonOption["value"] | "">("");
+const addSheetLoading = ref(false);
+const addSheetSubmitting = ref(false);
+const addSheetError = ref("");
+const recommendSheetLoading = ref(false);
+const recommendSubmitting = ref(false);
+const recommendSheetError = ref("");
+const shoppingSubmitting = ref(false);
+const categories = ref<RecipeCategorySummary[]>([]);
 const scenes = ref<RecipeSceneSummary[]>([]);
+const recommendCategories = ref<InspirationCategorySummary[]>([]);
+const selectedCategoryId = ref<UUID | "">("");
 const selectedSceneIds = ref<UUID[]>([]);
+const selectedRecommendCategoryId = ref<UUID | "">("");
 const navOpacity = ref(0);
 const scrollTop = ref(0);
 const titleThreshold = ref(Number.POSITIVE_INFINITY);
 const ingredientTop = ref(0);
 const stepTop = ref(Number.POSITIVE_INFINITY);
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-detail-report-sheet"));
 
 let measureTimer: ReturnType<typeof setTimeout> | null = null;
+let reportSheetTimer: ReturnType<typeof setTimeout> | null = null;
+let addSheetTimer: ReturnType<typeof setTimeout> | null = null;
+let recommendSheetTimer: ReturnType<typeof setTimeout> | null = null;
 
 const previewDetail = computed(() => {
   if (mode.value !== "preview" || !detail.value) return null;
@@ -268,12 +424,16 @@ const publishedDetail = computed(() => {
 });
 
 const inspirationDetail = computed(() => {
-  if (mode.value !== "published" || kind.value !== "inspiration" || !detail.value) return null;
-  return detail.value as InspirationRecipeDetail;
+	if (mode.value !== "published" || kind.value !== "inspiration" || !detail.value) return null;
+	return detail.value as InspirationRecipeDetail;
+});
+const myDetail = computed(() => {
+	if (mode.value !== "published" || kind.value !== "my" || !detail.value) return null;
+	return detail.value as MyRecipeDetail;
 });
 
 const detailTitle = computed(() => detail.value?.title || "");
-const coverImageUrl = computed(() => publishedDetail.value?.coverImageUrl || "");
+const coverImageUrl = computed(() => previewDetail.value?.coverImageUrl || publishedDetail.value?.coverImageUrl || "");
 const navTopOffset = computed(() => `${navBarTotalHeight.value}px`);
 const heroStyle = computed(() => ({
   "--hero-header-offset": navTopOffset.value
@@ -321,6 +481,64 @@ const detailSceneNames = computed(() => {
 });
 
 const detailSceneLabels = computed(() => detailSceneNames.value.map(item => limitSceneName(item)).filter(Boolean));
+const detailStory = computed(() => detailContent.value.story?.trim() || "");
+const currentRecommendation = computed(() => myDetail.value?.recommendation ?? null);
+const curatedText = computed(() => (inspirationDetail.value?.curatedByName ? `由${inspirationDetail.value.curatedByName}整理` : ""));
+const canOpenRecommendSheet = computed(() => {
+	const status = currentRecommendation.value?.status;
+	return !status || status === "REJECTED" || status === "WITHDRAWN";
+});
+const recommendActionText = computed(() => {
+	if (currentRecommendation.value?.status === "REJECTED") return "修改后重新投稿";
+	if (currentRecommendation.value?.status === "WITHDRAWN") return "重新投稿";
+	return "投稿灵感";
+});
+const detailSteps = computed(() => detailContent.value.steps.filter(item => Boolean(item.imageUrl || hasStepText(item.text))));
+const showReportEntry = computed(() => mode.value === "published" && kind.value === "inspiration" && sessionStore.isLoggedIn);
+const selectedReportReasonLabel = computed(
+  () => reportReasonOptions.find(item => item.value === selectedReportReason.value)?.label || ""
+);
+const needsReportDetail = computed(() => selectedReportReason.value === "OTHER");
+const canSubmitReport = computed(() => {
+  if (!selectedReportReason.value) return false;
+  if (!needsReportDetail.value) return true;
+  return Boolean(reportReason.value.trim());
+});
+const recommendActionLabel = computed(() => {
+	const status = currentRecommendation.value?.status;
+	if (status === "PENDING") return "审核中";
+	if (status === "ADOPTED") return "已收录";
+	if (status === "REJECTED") return "重新投稿";
+	if (status === "WITHDRAWN") return "重新投稿";
+	return "投稿灵感";
+});
+const recommendActionDisabled = computed(() => {
+	const status = currentRecommendation.value?.status;
+	return status === "PENDING" || status === "ADOPTED";
+});
+const showStickyActions = computed(
+  () => mode.value === "published" && (kind.value === "inspiration" || kind.value === "my") && Boolean(detail.value)
+);
+const detailActionsVisible = computed(
+  () =>
+    showStickyActions.value &&
+    scrollTop.value > DETAIL_ACTIONS_SHOW_OFFSET &&
+    !showAddSheet.value &&
+    !showReportSheet.value &&
+    !showRecommendSheet.value
+);
+const showShoppingEntry = computed(() => mode.value === "published" && detailContent.value.ingredients.length > 0);
+const canSubmitAddSheet = computed(() => Boolean(selectedCategoryId.value || selectedSceneIds.value.length));
+const detailFactText = computed(() => {
+  const parts: string[] = [];
+  if (detailCategoryName.value) {
+    parts.push(detailCategoryName.value);
+  }
+  if (detailSceneLabels.value.length) {
+    parts.push(detailSceneLabels.value.map(item => `#${item}`).join(" "));
+  }
+  return parts.join("  ·  ");
+});
 
 function formatDuration(value: RecipeDuration | null) {
   if (value === "WITHIN_15") return "15分钟内";
@@ -341,33 +559,8 @@ const difficultyText = computed(() => {
   return difficulty ? labelMap[difficulty] : "";
 });
 
-const metaLine = computed(() => {
-  if (!detail.value) return "";
-  if (previewDetail.value) {
-    return "";
-  }
-  if (!publishedDetail.value) {
-    return "";
-  }
-  if (kind.value === "my") {
-    return `我的菜谱 · 更新于 ${publishedDetail.value.updatedAt.slice(0, 10)}`;
-  }
-  if (kind.value === "collection") {
-    const collectionDetail = publishedDetail.value as CollectedRecipeDetail;
-    return `合集快照 · 收藏于 ${collectionDetail.collectedAt.slice(0, 10)}`;
-  }
-  return `灵感菜谱 · 更新于 ${inspirationDetail.value?.updatedAt.slice(0, 10) || ""}`;
-});
-
-const sourceLine = computed(() => {
-  if (!inspirationDetail.value?.curatedByName) return "";
-  return `由${inspirationDetail.value.curatedByName}整理`;
-});
-
-const summaryMetaList = computed(() => [sourceLine.value, metaLine.value].filter(Boolean));
-
 const ingredientCountText = computed(() => `${detailContent.value.ingredients.length}项食材`);
-const stepCountText = computed(() => `${detailContent.value.steps.length}个步骤`);
+const stepCountText = computed(() => `${detailSteps.value.length}个步骤`);
 const durationText = computed(() => formatDuration(detailContent.value.duration));
 
 const infoItems = computed<InfoItem[]>(() => [
@@ -404,6 +597,14 @@ function parseQueryId(value: unknown): UUID | "" {
   return Number.isInteger(decoded) && decoded > 0 ? decoded : "";
 }
 
+function hasStepText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+watch([showReportSheet, showAddSheet, showRecommendSheet], ([reportVisible, addVisible, recommendVisible]) => {
+  setPageLocked(reportVisible || addVisible || recommendVisible);
+}, { immediate: true });
+
 onLoad((query) => {
   const rawKind = Array.isArray(query?.kind) ? query.kind[0] : query?.kind;
   const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
@@ -435,10 +636,30 @@ onHide(() => {
 
 onUnload(() => {
   clearMeasureTimer();
-  if (mode.value === "preview") {
-    recipePreviewStore.clearPreview();
-  }
+	if (reportSheetTimer) {
+		clearTimeout(reportSheetTimer);
+		reportSheetTimer = null;
+	}
+	if (addSheetTimer) {
+		clearTimeout(addSheetTimer);
+		addSheetTimer = null;
+	}
+	if (recommendSheetTimer) {
+		clearTimeout(recommendSheetTimer);
+		recommendSheetTimer = null;
+	}
+	if (mode.value === "preview") {
+		recipePreviewStore.clearPreview();
+	}
 });
+
+onShareAppMessage(() => ({
+  title: detailTitle.value || "菜谱分享",
+  path: recipeId.value
+    ? `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${kind.value}&mode=${mode.value}`
+    : "/pages/recipe/index",
+  imageUrl: coverImageUrl.value || undefined
+}));
 
 async function loadDetail() {
   if (!recipeId.value || loading.value || mode.value !== "published") return;
@@ -495,21 +716,6 @@ function goBack() {
   void uniPlatform.navigation.navigateBack();
 }
 
-function editRecipe() {
-  if (!recipeId.value) return;
-      void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
-}
-
-function backToEdit() {
-  void uniPlatform.navigation.navigateBack();
-}
-
-async function copyRecipeName() {
-  if (!detailTitle.value) return;
-  await uniPlatform.clipboard.set(detailTitle.value);
-  await uniPlatform.feedback.toast({ title: "已复制", icon: "success" });
-}
-
 function scrollToSection(section: AnchorKey) {
   const top = section === "steps" ? stepTop.value : ingredientTop.value;
   void uniPlatform.navigation.pageScrollTo({
@@ -518,77 +724,290 @@ function scrollToSection(section: AnchorKey) {
   });
 }
 
-function toggleCollectPanel() {
-  if (!sessionStore.isLoggedIn) {
-    openLogin();
-    return;
-  }
-  showCollectPanel.value = !showCollectPanel.value;
-  if (showCollectPanel.value) {
-    void loadScenes();
-  }
+function openLogin(afterLogin?: () => void) {
+  loginModalStore.open(null, afterLogin);
 }
 
-function openLogin() {
-  loginModalStore.open(null, () => {
-    showCollectPanel.value = true;
-    void loadScenes();
+function openReportSheet() {
+  if (!showReportEntry.value) return;
+  if (reportSheetTimer) {
+    clearTimeout(reportSheetTimer);
+    reportSheetTimer = null;
+  }
+  if (showReportSheet.value) {
+    reportSheetVisible.value = true;
+    return;
+  }
+  showReportSheet.value = true;
+  reportSheetVisible.value = false;
+  void nextTick(() => {
+    reportSheetVisible.value = true;
   });
 }
 
-async function loadScenes() {
-  if (!sessionStore.isLoggedIn || sceneLoading.value) return;
-  sceneLoading.value = true;
-  sceneError.value = "";
+function closeReportSheet() {
+  if (!showReportSheet.value) return;
+  reportSheetVisible.value = false;
+  if (reportSheetTimer) {
+    clearTimeout(reportSheetTimer);
+  }
+  reportSheetTimer = setTimeout(() => {
+    showReportSheet.value = false;
+    reportSheetTimer = null;
+  }, SHEET_ANIMATION_MS);
+}
+
+function handleReasonChange(event: { detail?: { value?: number | string } }) {
+  const raw = event.detail?.value;
+  const index = typeof raw === "string" ? Number(raw) : Number(raw ?? NaN);
+  if (!Number.isInteger(index) || index < 0) return;
+  const option = reportReasonOptions[index];
+  if (!option) return;
+  selectedReportReason.value = option.value;
+  if (option.value !== "OTHER") {
+    reportReason.value = "";
+  }
+}
+
+function buildReportPayload() {
+  if (!selectedReportReasonLabel.value) return "";
+  if (!needsReportDetail.value) return selectedReportReasonLabel.value;
+  return reportReason.value.trim() ? `${selectedReportReasonLabel.value}：${reportReason.value.trim()}` : "";
+}
+
+async function loadAddOptions(force = false) {
+  if (!sessionStore.isLoggedIn || (addSheetLoading.value && !force)) return;
+  addSheetLoading.value = true;
+  addSheetError.value = "";
   try {
-    scenes.value = await recipeApi.listScenes();
-    selectedSceneIds.value = selectedSceneIds.value.filter(sceneId => scenes.value.some(item => item.id === sceneId));
-    if (!selectedSceneIds.value.length && scenes.value.length) {
-      selectedSceneIds.value = [scenes.value[0].id];
+    const [categoryList, sceneList] = await Promise.all([
+      recipeApi.listCategories(),
+      recipeApi.listScenes()
+    ]);
+    categories.value = categoryList;
+    scenes.value = sceneList;
+    if (selectedCategoryId.value && !categories.value.some(item => item.id === selectedCategoryId.value)) {
+      selectedCategoryId.value = "";
     }
+    selectedSceneIds.value = selectedSceneIds.value.filter(sceneId => scenes.value.some(item => item.id === sceneId));
   } catch (error) {
-    sceneError.value = error instanceof Error ? error.message : "合集加载失败";
+    addSheetError.value = error instanceof Error ? error.message : "分类加载失败";
   } finally {
-    sceneLoading.value = false;
+    addSheetLoading.value = false;
   }
 }
 
-async function createScene() {
-  const name = sceneName.value.trim();
-  if (!name || sceneSubmitting.value) return;
-  sceneSubmitting.value = true;
-  try {
-    const scene = await recipeApi.createScene({
-      operationId: createOperationId(),
-      name
-    });
-    scenes.value = [...scenes.value, scene];
-    selectedSceneIds.value = [...selectedSceneIds.value, scene.id];
-    sceneName.value = "";
-    await uniPlatform.feedback.toast({ title: "合集已创建", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
-  } finally {
-    sceneSubmitting.value = false;
-  }
+function resetAddSelection() {
+  selectedCategoryId.value = "";
+  selectedSceneIds.value = [];
 }
 
-async function collectRecipe() {
-  if (!inspirationDetail.value || !selectedSceneIds.value.length || collecting.value) return;
-  collecting.value = true;
-  try {
-    await recipeApi.collectRecipe({
-      operationId: createOperationId(),
-      sourceRecipeId: inspirationDetail.value.id,
-      sourceVersionId: inspirationDetail.value.contentVersionId,
-      sceneIds: selectedSceneIds.value
+function openAddSheet() {
+  if (!showStickyActions.value || kind.value !== "inspiration") return;
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openAddSheet();
     });
-    showCollectPanel.value = false;
-    await uniPlatform.feedback.toast({ title: "已收藏到合集", icon: "success" });
+    return;
+  }
+  resetAddSelection();
+  if (addSheetTimer) {
+    clearTimeout(addSheetTimer);
+    addSheetTimer = null;
+  }
+  if (showAddSheet.value) {
+    addSheetVisible.value = true;
+  } else {
+    showAddSheet.value = true;
+    addSheetVisible.value = false;
+    void nextTick(() => {
+      addSheetVisible.value = true;
+    });
+  }
+	void loadAddOptions(true);
+}
+
+async function loadRecommendCategories(force = false) {
+	if (recommendSheetLoading.value && !force) return;
+	recommendSheetLoading.value = true;
+	recommendSheetError.value = "";
+	try {
+		recommendCategories.value = await recipeApi.listInspirationCategories();
+		if (selectedRecommendCategoryId.value && !recommendCategories.value.some(item => item.id === selectedRecommendCategoryId.value)) {
+			selectedRecommendCategoryId.value = "";
+		}
+		if (!selectedRecommendCategoryId.value) {
+			selectedRecommendCategoryId.value =
+				currentRecommendation.value?.suggestedCategory.id ||
+				recommendCategories.value[0]?.id ||
+				"";
+		}
+	} catch (error) {
+		recommendSheetError.value = error instanceof Error ? error.message : "分类加载失败";
+	} finally {
+		recommendSheetLoading.value = false;
+	}
+}
+
+function syncMyRecommendation(next: RecipeRecommendationSummary | null) {
+	if (!myDetail.value) return;
+	detail.value = {
+		...myDetail.value,
+		recommendation: next
+	};
+}
+
+function openRecommendSheet() {
+	if (!myDetail.value || !canOpenRecommendSheet.value) return;
+	selectedRecommendCategoryId.value = currentRecommendation.value?.suggestedCategory.id || "";
+	if (recommendSheetTimer) {
+		clearTimeout(recommendSheetTimer);
+		recommendSheetTimer = null;
+	}
+	if (showRecommendSheet.value) {
+		recommendSheetVisible.value = true;
+	} else {
+		showRecommendSheet.value = true;
+		recommendSheetVisible.value = false;
+		void nextTick(() => {
+			recommendSheetVisible.value = true;
+		});
+	}
+	void loadRecommendCategories(true);
+}
+
+function closeRecommendSheet() {
+	if (!showRecommendSheet.value) return;
+	recommendSheetVisible.value = false;
+	if (recommendSheetTimer) {
+		clearTimeout(recommendSheetTimer);
+	}
+	recommendSheetTimer = setTimeout(() => {
+		showRecommendSheet.value = false;
+		recommendSheetTimer = null;
+	}, SHEET_ANIMATION_MS);
+}
+
+function closeAddSheet() {
+  if (!showAddSheet.value) return;
+  addSheetVisible.value = false;
+  if (addSheetTimer) {
+    clearTimeout(addSheetTimer);
+  }
+  addSheetTimer = setTimeout(() => {
+    showAddSheet.value = false;
+    addSheetTimer = null;
+	}, SHEET_ANIMATION_MS);
+}
+
+async function handleRecommendRecipe() {
+	if (!recipeId.value || !selectedRecommendCategoryId.value || recommendSubmitting.value) return;
+	recommendSubmitting.value = true;
+	try {
+		const result = await recipeApi.recommendRecipe(recipeId.value, {
+			operationId: createOperationId(),
+			inspirationCategoryId: selectedRecommendCategoryId.value
+		});
+		syncMyRecommendation(result);
+		closeRecommendSheet();
+		await uniPlatform.feedback.toast({ title: "已提交投稿", icon: "success" });
+	} catch (error) {
+		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "投稿失败", icon: "none" });
+	} finally {
+		recommendSubmitting.value = false;
+	}
+}
+
+function toggleCategory(categoryId: UUID) {
+  selectedCategoryId.value = selectedCategoryId.value === categoryId ? "" : categoryId;
+}
+
+async function collectIntoScenes(sceneIds: UUID[]) {
+  if (!inspirationDetail.value || !sceneIds.length) return;
+  await recipeApi.collectRecipe({
+    operationId: createOperationId(),
+    sourceRecipeId: inspirationDetail.value.id,
+    sourceVersionId: inspirationDetail.value.contentVersionId,
+    sceneIds
+  });
+}
+
+function buildDraftSeedContent(categoryId: UUID | null, sceneIds: UUID[]) {
+  if (!inspirationDetail.value) return null;
+  const contentSnapshot = inspirationDetail.value.content;
+  const slotSeed = Date.now();
+  const content: RecipeDraftContentInput = {
+    name: detailTitle.value || contentSnapshot.name || "未命名菜谱",
+    story: contentSnapshot.story,
+    categoryId,
+    sceneIds,
+    originVersionId: inspirationDetail.value.contentVersionId,
+    originCoverImageUrl: coverImageUrl.value || null,
+    coverUploadId: null,
+    coverImageUrl: coverImageUrl.value || null,
+    baseServings: contentSnapshot.baseServings ?? null,
+    difficulty: contentSnapshot.difficulty,
+    duration: contentSnapshot.duration,
+    tips: contentSnapshot.tips,
+    ingredients: contentSnapshot.ingredients.map(item => ({
+      ingredientId: item.ingredientId,
+      name: item.ingredientName,
+      quantity: item.amount.kind === "EXACT" ? item.amount.quantity : "",
+      unitId: item.amount.kind === "EXACT" ? item.amount.unitId : null,
+      fuzzyText: item.amount.kind === "FUZZY" ? item.amount.text : null,
+      categoryId: item.categoryId,
+      defaultUnitId: item.amount.kind === "EXACT" ? item.amount.unitId : null,
+      source: item.source
+    })),
+    steps: contentSnapshot.steps.map((item, index) => ({
+      slotKey: `detail-${slotSeed}-${index + 1}`,
+      text: item.text,
+      uploadId: null,
+      imageUrl: item.imageUrl ?? null
+    }))
+  };
+  return content;
+}
+
+async function handleAdaptRecipe() {
+  if (!showStickyActions.value || kind.value !== "inspiration") return;
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      void handleAdaptRecipe();
+    });
+    return;
+  }
+  const content = buildDraftSeedContent(null, []);
+  if (!content) return;
+  recipePreviewStore.setDraftSeed({ content });
+  void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
+}
+
+async function confirmAddSheet() {
+  if (!inspirationDetail.value || addSheetSubmitting.value || !canSubmitAddSheet.value) return;
+  addSheetSubmitting.value = true;
+  try {
+    if (selectedSceneIds.value.length) {
+      await collectIntoScenes(selectedSceneIds.value);
+    }
+    if (selectedCategoryId.value) {
+      const content = buildDraftSeedContent(selectedCategoryId.value, selectedSceneIds.value);
+      if (!content) return;
+      recipePreviewStore.setDraftSeed({ content });
+      closeAddSheet();
+      await uniPlatform.feedback.toast({
+        title: selectedSceneIds.value.length ? "已加入合集，继续完善到我的" : "已带入我的菜谱",
+        icon: "success"
+      });
+      void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
+      return;
+    }
+    closeAddSheet();
+    await uniPlatform.feedback.toast({ title: "已加入合集", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "收藏失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
   } finally {
-    collecting.value = false;
+    addSheetSubmitting.value = false;
   }
 }
 
@@ -600,12 +1019,42 @@ function toggleScene(sceneId: UUID) {
   selectedSceneIds.value = [...selectedSceneIds.value, sceneId];
 }
 
+async function addToShoppingList() {
+  if (!showShoppingEntry.value || shoppingSubmitting.value) return;
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      void addToShoppingList();
+    });
+    return;
+  }
+  shoppingSubmitting.value = true;
+  try {
+    await Promise.all(
+      detailContent.value.ingredients.map(item =>
+        shoppingApi.create({
+          operationId: createOperationId(),
+          name: item.ingredientName,
+          quantityText: formatAmount(item.amount)
+        })
+      )
+    );
+    await uniPlatform.feedback.toast({ title: "已添加到购物清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
+}
+
 async function handleReport() {
-  if (!recipeId.value || mode.value !== "published" || submitting.value || !reportReason.value.trim()) return;
+  const reasonText = buildReportPayload();
+  if (!recipeId.value || mode.value !== "published" || submitting.value || !reasonText) return;
   submitting.value = true;
   try {
-    await recipeApi.reportRecipe(recipeId.value, createOperationId(), reportReason.value.trim());
+    await recipeApi.reportRecipe(recipeId.value, createOperationId(), reasonText);
+    selectedReportReason.value = "";
     reportReason.value = "";
+    closeReportSheet();
     await uniPlatform.feedback.toast({ title: "举报已提交", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "举报失败", icon: "none" });
@@ -704,7 +1153,7 @@ function limitSceneName(value: string) {
   left: -6rpx;
   z-index: -1;
   height: 16rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--theme-primary);
   opacity: 0.3;
   transform: rotate(-5deg);
@@ -798,13 +1247,16 @@ function limitSceneName(value: string) {
   border-radius: 36rpx 36rpx 0 0;
 }
 
+.content--with-actions {
+  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
+}
+
 .summary-card {
   padding: 0 32rpx 24rpx;
 }
 
 .summary-card__title,
-.summary-card__story,
-.summary-card__meta-item {
+.summary-card__story {
   display: block;
 }
 
@@ -822,61 +1274,57 @@ function limitSceneName(value: string) {
   line-height: 1.8;
 }
 
-.summary-card__story--placeholder {
-  color: rgba(111, 98, 86, 0.66);
+.summary-card__curated {
+  display: block;
+  margin-top: 14rpx;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .summary-card__facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx 32rpx;
   margin-top: 24rpx;
 }
 
-.summary-card__fact,
-.summary-card__scene-list {
+.summary-card__fact-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx 14rpx;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24rpx;
 }
 
-.summary-card__fact {
+.summary-card__fact-block {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8rpx;
   min-width: 0;
 }
 
-.summary-card__fact--scenes {
-  flex: 1;
-}
-
-.summary-card__fact-label,
-.summary-card__fact-value,
-.summary-card__scene {
+.summary-card__fact-title,
+.summary-card__fact-text,
+.summary-card__report-entry {
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
 
-.summary-card__fact-label {
+.summary-card__fact-title {
   color: var(--color-text-tertiary);
 }
 
-.summary-card__fact-value,
-.summary-card__scene {
+.summary-card__fact-text {
   color: var(--color-text-secondary);
 }
 
-.summary-card__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx 20rpx;
-  margin-top: 18rpx;
+.summary-card__report-entry {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  opacity: 0.78;
 }
 
-.summary-card__meta-item {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
-  line-height: 1.6;
+.summary-card__report-entry--hover {
+  opacity: 0.56;
 }
 
 .summary-info {
@@ -946,6 +1394,13 @@ function limitSceneName(value: string) {
   margin-bottom: 24rpx;
 }
 
+.section__head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+  min-width: 0;
+}
+
 .section__label {
   color: var(--color-text);
   font-size: 34rpx;
@@ -957,6 +1412,31 @@ function limitSceneName(value: string) {
   color: var(--color-text-tertiary);
   font-size: 24rpx;
   line-height: 1.2;
+}
+
+.section__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--theme-primary);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+.section__action::after {
+  border: 0;
+}
+
+.section__action-icon {
+  color: inherit;
+  font-size: 26rpx;
+  line-height: 1;
 }
 
 .section__note,
@@ -977,7 +1457,7 @@ function limitSceneName(value: string) {
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
-  padding: 22rpx 24rpx;
+  padding: 22rpx 0;
 }
 
 .ingredient-row + .ingredient-row {
@@ -1018,12 +1498,12 @@ function limitSceneName(value: string) {
   line-height: 1.2;
 }
 
-.step-card__cover {
+.step-card__cover-image {
+  display: block;
+  width: 100%;
   margin-top: 16rpx;
-  height: 320rpx;
   border-radius: 20rpx;
-  background:
-    linear-gradient(160deg, rgba(255, 247, 240, 0.98) 0%, rgba(244, 228, 212, 0.98) 100%);
+  overflow: hidden;
 }
 
 .step-card__text {
@@ -1033,7 +1513,6 @@ function limitSceneName(value: string) {
   line-height: 1.8;
 }
 
-.create-row,
 .chip-row {
   display: flex;
   gap: var(--space-sm);
@@ -1046,7 +1525,7 @@ function limitSceneName(value: string) {
 
 .chip {
   padding: 14rpx 24rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
@@ -1065,22 +1544,8 @@ function limitSceneName(value: string) {
   font-size: var(--font-size-sm);
 }
 
-.create-row {
-  margin-top: var(--space-md);
-  align-items: center;
-}
-
-.create-row__input {
-  flex: 1;
-  min-width: 0;
-  padding: 20rpx 24rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-}
-
-.create-row__button {
-  flex: 0 0 auto;
+.panel-note--sheet {
+  margin-top: 24rpx;
 }
 
 .report-box {
@@ -1092,6 +1557,240 @@ function limitSceneName(value: string) {
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   box-sizing: border-box;
+}
+
+.sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.sheet__title {
+  color: var(--color-text);
+  font-size: 38rpx;
+  font-weight: var(--font-weight-heavy);
+}
+
+.sheet__close {
+  color: var(--color-text-tertiary);
+  font-size: 36rpx;
+  line-height: 1;
+}
+
+.sheet__note {
+  display: block;
+  margin-top: 18rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+}
+
+.sheet-section {
+  margin-top: 28rpx;
+}
+
+.sheet-section__title {
+  display: block;
+  margin-bottom: 18rpx;
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
+}
+
+.sheet-section__hint {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.sheet-actions__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 156rpx;
+  height: 76rpx;
+  border: 0;
+  border-radius: var(--radius-pill);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.sheet-actions__button::after {
+  border: 0;
+}
+
+.sheet-actions__button--confirm {
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+}
+
+.sheet-actions__button--cancel {
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--color-text-secondary);
+}
+
+.detail-actions-shell {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1200;
+  height: calc(152rpx + env(safe-area-inset-bottom));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.detail-actions-shell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--color-tabbar-bg);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
+  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
+  backdrop-filter: saturate(180%) blur(22rpx);
+  pointer-events: none;
+  content: "";
+}
+
+.detail-actions-shell--visible {
+  opacity: 1;
+}
+
+.detail-actions {
+  position: absolute;
+  right: 24rpx;
+  bottom: calc(24rpx + env(safe-area-inset-bottom));
+  left: 24rpx;
+  z-index: 1;
+  display: flex;
+  gap: 16rpx;
+  padding: 10rpx;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-tabbar-bg);
+  overflow: hidden;
+  pointer-events: auto;
+  -webkit-backdrop-filter: saturate(180%) blur(28rpx);
+  backdrop-filter: saturate(180%) blur(28rpx);
+  transform: translateY(calc(100% + env(safe-area-inset-bottom) + 40rpx));
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 320ms ease;
+}
+
+.detail-actions--visible {
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.detail-actions__item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  min-height: 88rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.detail-actions__item::after {
+  border: 0;
+}
+
+.detail-actions__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34rpx;
+  height: 34rpx;
+  flex: 0 0 34rpx;
+  color: inherit;
+  font-size: 34rpx;
+  line-height: 1;
+}
+
+.detail-actions__text {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.detail-actions__item--disabled {
+  opacity: 0.52;
+}
+
+.report-sheet__note {
+  display: block;
+  margin-top: 18rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+}
+
+.report-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 24rpx;
+  padding: 24rpx 28rpx;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.report-picker__label {
+  color: var(--color-text);
+  font-size: 28rpx;
+  line-height: 1.4;
+}
+
+.report-picker__value {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.report-picker__text {
+  color: var(--color-text);
+  font-size: 26rpx;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.report-picker__text--placeholder,
+.report-picker__icon {
+  color: var(--color-text-tertiary);
 }
 
 .primary,
@@ -1119,7 +1818,8 @@ function limitSceneName(value: string) {
 
 .danger {
   margin-top: var(--space-md);
-  background: var(--color-danger);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
 }
 </style>

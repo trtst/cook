@@ -80,6 +80,14 @@ interface ClientPlatform {
 	clipboard: {
 		set(data: string): Promise<void>;
 	};
+	media: {
+		chooseImage(options?: ChooseImageOptions): Promise<ChooseImageResult[]>;
+		chooseMedia(options?: ChooseMediaOptions): Promise<ChooseMediaResult[]>;
+		getImageInfo(src: string): Promise<ImageInfoResult>;
+		previewImage(options: PreviewImageOptions): Promise<void>;
+		createCanvasContext(canvasId: string, component?: unknown): UniApp.CanvasContext;
+		canvasToTempFilePath(options: CanvasToTempFileOptions, component?: unknown): Promise<CanvasToTempFileResult>;
+	};
 }
 
 interface MenuButtonRect {
@@ -124,6 +132,74 @@ interface ElementRect {
 	height: number;
 }
 
+interface ChooseImageCropOptions {
+	width: number;
+	height: number;
+	quality?: number;
+}
+
+interface ChooseImageOptions {
+	count?: number;
+	sourceType?: Array<"album" | "camera">;
+	sizeType?: Array<"original" | "compressed">;
+	crop?: ChooseImageCropOptions | null;
+}
+
+interface ChooseImageResult {
+	path: string;
+	size: number;
+	width?: number;
+	height?: number;
+}
+
+interface ChooseMediaOptions {
+	count?: number;
+	mediaType?: Array<"image" | "video">;
+	sourceType?: Array<"album" | "camera">;
+	sizeType?: Array<"original" | "compressed">;
+	camera?: "front" | "back";
+	maxDuration?: number;
+}
+
+interface ChooseMediaResult {
+	path: string;
+	size: number;
+	width?: number;
+	height?: number;
+	fileType?: "image" | "video";
+	thumbTempFilePath?: string;
+	duration?: number;
+}
+
+interface ImageInfoResult {
+	path?: string;
+	width: number;
+	height: number;
+	type?: string;
+	orientation?: string;
+}
+
+interface PreviewImageOptions {
+	urls: string[];
+	current?: string;
+}
+
+interface CanvasToTempFileOptions {
+	canvasId: string;
+	x?: number;
+	y?: number;
+	width: number;
+	height: number;
+	destWidth?: number;
+	destHeight?: number;
+	fileType?: "jpg" | "png";
+	quality?: number;
+}
+
+interface CanvasToTempFileResult {
+	tempFilePath: string;
+}
+
 type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 interface UniSystemApi {
@@ -152,6 +228,9 @@ export const APP_STORAGE_KEYS = Object.freeze({
 	theme: buildStorageKey("theme"),
 	systemInfoSnapshot: buildStorageKey("system_info_snapshot"),
 	userProfile: buildStorageKey("user_profile"),
+	recipeCrop(token: string) {
+		return buildStorageKey(`recipe_crop_${String(token || "").trim()}`);
+	},
 	recipeEdit(uid: number | string) {
 		return buildStorageKey(`recipe_edit_${String(uid || "").trim()}`);
 	}
@@ -238,6 +317,129 @@ function setClipboardData(data: string) {
 			success: () => resolve(),
 			fail: reject
 		});
+	});
+}
+
+function chooseImage(options: ChooseImageOptions = {}) {
+	return callUni<ChooseImageResult[]>((resolve, reject) => {
+		const chooseOptions = {
+			count: options.count ?? 1,
+			sourceType: options.sourceType ?? ["album"],
+			sizeType: options.sizeType ?? ["compressed"],
+			crop: options.crop
+				? {
+						width: options.crop.width,
+						height: options.crop.height,
+						quality: options.crop.quality ?? 90,
+						resize: true
+				  }
+				: undefined,
+			success: (result: {
+				tempFilePaths?: string[];
+				tempFiles?: Array<{ path?: string; size?: number; width?: number; height?: number }>;
+			}) => {
+				const files =
+					result.tempFiles?.map((item) => ({
+						path: item.path || "",
+						size: Number(item.size || 0),
+						width: item.width,
+						height: item.height
+					})) ??
+					(result.tempFilePaths ?? []).map((path) => ({
+						path,
+						size: 0
+					}));
+				resolve(files.filter((item) => item.path));
+			},
+			fail: reject
+		};
+
+		(uni.chooseImage as unknown as (payload: typeof chooseOptions) => void)(chooseOptions);
+	});
+}
+
+function chooseMedia(options: ChooseMediaOptions = {}) {
+	return callUni<ChooseMediaResult[]>((resolve, reject) => {
+		uni.chooseMedia({
+			count: options.count ?? 1,
+			mediaType: options.mediaType ?? ["image"],
+			sourceType: options.sourceType ?? ["album", "camera"],
+			sizeType: options.sizeType ?? ["compressed"],
+			camera: options.camera ?? "back",
+			maxDuration: options.maxDuration ?? 30,
+			success: (result: {
+				tempFiles?: Array<{
+					tempFilePath?: string;
+					size?: number;
+					width?: number;
+					height?: number;
+					fileType?: "image" | "video";
+					thumbTempFilePath?: string;
+					duration?: number;
+				}>;
+			}) => {
+				resolve(
+					(result.tempFiles ?? [])
+						.map((item) => ({
+							path: item.tempFilePath || "",
+							size: Number(item.size || 0),
+							width: item.width,
+							height: item.height,
+							fileType: item.fileType,
+							thumbTempFilePath: item.thumbTempFilePath,
+							duration: item.duration
+						}))
+						.filter((item) => item.path)
+				);
+			},
+			fail: reject
+		});
+	});
+}
+
+function getImageInfo(src: string) {
+	return callUni<ImageInfoResult>((resolve, reject) => {
+		uni.getImageInfo({
+			src,
+			success: (result) => resolve(result as ImageInfoResult),
+			fail: reject
+		});
+	});
+}
+
+function previewImage(options: PreviewImageOptions) {
+	return callUni<void>((resolve, reject) => {
+		uni.previewImage({
+			urls: options.urls,
+			current: options.current,
+			success: () => resolve(),
+			fail: reject
+		});
+	});
+}
+
+function createCanvasContext(canvasId: string, component?: unknown) {
+	return uni.createCanvasContext(canvasId, component as never);
+}
+
+function canvasToTempFilePath(options: CanvasToTempFileOptions, component?: unknown) {
+	return callUni<CanvasToTempFileResult>((resolve, reject) => {
+		uni.canvasToTempFilePath(
+			{
+				canvasId: options.canvasId,
+				x: options.x ?? 0,
+				y: options.y ?? 0,
+				width: options.width,
+				height: options.height,
+				destWidth: options.destWidth ?? options.width,
+				destHeight: options.destHeight ?? options.height,
+				fileType: options.fileType ?? "jpg",
+				quality: options.quality ?? 0.9,
+				success: (result) => resolve({ tempFilePath: result.tempFilePath }),
+				fail: reject
+			},
+			component as never
+		);
 	});
 }
 
@@ -372,5 +574,13 @@ export const uniPlatform: ClientPlatform = {
 	},
 	clipboard: {
 		set: setClipboardData
+	},
+	media: {
+		chooseImage,
+		chooseMedia,
+		getImageInfo,
+		previewImage,
+		createCanvasContext,
+		canvasToTempFilePath
 	}
 };
