@@ -6,12 +6,16 @@ export function buildSearchKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
-export function normalizeRecipeDraftContent(content: RecipeDraftContentInput): RecipeDraftContentInput {
+export function cleanDraftContent(content: RecipeDraftContentInput): RecipeDraftContentInput {
   return {
     name: content.name.trim(),
     story: content.story?.trim() || null,
     categoryId: content.categoryId,
     sceneIds: Array.from(new Set(content.sceneIds)),
+    originVersionId: content.originVersionId ?? null,
+    originCoverImageUrl: content.originCoverImageUrl?.trim() || null,
+    coverUploadId: content.coverUploadId ?? null,
+    coverImageUrl: content.coverImageUrl ?? null,
     baseServings: content.baseServings ?? null,
     difficulty: content.difficulty ?? null,
     duration: content.duration ?? null,
@@ -27,7 +31,10 @@ export function normalizeRecipeDraftContent(content: RecipeDraftContentInput): R
       source: item.source ?? null
     })),
     steps: content.steps.map(item => ({
-      text: item.text.trim()
+      slotKey: item.slotKey.trim(),
+      text: item.text.trim(),
+      uploadId: item.uploadId ?? null,
+      imageUrl: item.imageUrl ?? null
     }))
   };
 }
@@ -66,6 +73,7 @@ export function versionToContent(version: {
   ingredientsJson: unknown;
   stepsJson: unknown;
 }): RecipeContentSnapshot {
+  const steps = fromJson<Array<{ text: string; imageUrl?: string | null }>>(version.stepsJson);
   return {
     name: version.name,
     story: version.story,
@@ -74,7 +82,10 @@ export function versionToContent(version: {
     duration: version.duration as RecipeContentSnapshot["duration"],
     tips: version.tips,
     ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
-    steps: fromJson<RecipeContentSnapshot["steps"]>(version.stepsJson)
+    steps: steps.map(item => ({
+      text: item.text,
+      imageUrl: item.imageUrl ?? null
+    }))
   };
 }
 

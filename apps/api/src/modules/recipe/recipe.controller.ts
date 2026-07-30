@@ -13,25 +13,27 @@ import {
   CollectionRecipeListQueryDto,
   DeleteRecipeDraftDto,
   DeleteRecipeDto,
-  IngredientListQueryDto,
-  InspirationRecipeListQueryDto,
-  OperationDto,
-  PublishRecipeDraftDto,
-  RecommendIngredientDto,
-  RecipeCategoryNameDto,
-  RecipeDraftListQueryDto,
-  RecipeListQueryDto,
-  RecipeSceneNameDto,
-  ReorderRecipeCategoriesDto,
-  ReorderRecipesDto,
-  ReorderRecipeScenesDto,
-  ReportRecipeDto,
-  UnitListQueryDto,
-  UpdateRecipeCategoryDto,
-  UpdateIngredientDto,
-  UpdateRecipeDraftDto,
-  UpdateRecipeSceneDto
-} from "../../contracts/dtos";
+    IngredientListQueryDto,
+    InspirationRecipeListQueryDto,
+    OperationDto,
+    PublishRecipeDraftDto,
+    RecommendIngredientDto,
+    RecommendRecipeDto,
+    RecipeCategoryNameDto,
+    RecipeDraftListQueryDto,
+    RecipeListQueryDto,
+    RecipeSceneNameDto,
+    ReorderRecipeCategoriesDto,
+    ReorderRecipesDto,
+    ReorderRecipeScenesDto,
+    ReportRecipeDto,
+    UnitListQueryDto,
+    UpdateRecipeCategoryDto,
+    UpdateIngredientDto,
+    UpdateRecipeDraftDto,
+    UpdateRecipeSceneDto,
+    WithdrawRecipeRecommendationDto
+  } from "../../contracts/dtos";
 import {
   ApiOkArray,
   ApiOkModel,
@@ -45,12 +47,13 @@ import {
   IngredientRecommendationModel,
   IngredientModel,
   InspirationCategoryModel,
-  InspirationRecipeDetailModel,
-  InspirationRecipeSummaryModel,
-  MyRecipeDetailModel,
-  MyRecipeSummaryModel,
-  PublishRecipeDraftResultModel,
-  RecipeCategoryModel,
+    InspirationRecipeDetailModel,
+    InspirationRecipeSummaryModel,
+    MyRecipeDetailModel,
+    MyRecipeSummaryModel,
+    PublishRecipeDraftResultModel,
+    RecipeRecommendationModel,
+    RecipeCategoryModel,
   RecipeDraftDetailModel,
   RecipeDraftSummaryModel,
   RecipeReportModel,
@@ -82,6 +85,10 @@ function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRe
     story: content.story,
     categoryId: content.categoryId,
     sceneIds: content.sceneIds,
+    originVersionId: content.originVersionId ?? null,
+    originCoverImageUrl: content.originCoverImageUrl ?? null,
+    coverUploadId: content.coverUploadId,
+    coverImageUrl: content.coverImageUrl,
     baseServings: content.baseServings,
     difficulty: content.difficulty as RecipeDraftContentInput["difficulty"],
     duration: content.duration as RecipeDraftContentInput["duration"],
@@ -97,7 +104,10 @@ function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRe
       source: item.source
     })),
     steps: content.steps.map(item => ({
-      text: item.text
+      slotKey: item.slotKey,
+      text: item.text,
+      uploadId: item.uploadId,
+      imageUrl: item.imageUrl
     }))
   };
 }
@@ -435,6 +445,38 @@ export class RecipeController {
   @ApiOkModel(MyRecipeDetailModel, "读取我的一个已发布菜谱详情")
   getMyRecipe(@Req() request: RequestWithUser, @Param("recipeId", ParseIntPipe) recipeId: number) {
     return this.recipeService.getMyRecipe(request.user.userId, recipeId).then(result => ok(result));
+  }
+
+  @Post("recipes/:recipeId/recommendations")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecipeRecommendationModel, "推荐我的已发布菜谱进入系统菜谱审核")
+  recommendRecipe(
+    @Req() request: RequestWithUser,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: RecommendRecipeDto
+  ) {
+    return this.recipeService
+      .recommendRecipe(request.user.userId, recipeId, operationId, body.inspirationCategoryId)
+      .then(result => ok(result));
+  }
+
+  @Post("recipe-recommendations/:recommendationId/withdraw")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecipeRecommendationModel, "撤回一个待审核中的菜谱推荐")
+  withdrawRecipeRecommendation(
+    @Req() request: RequestWithUser,
+    @Param("recommendationId", ParseIntPipe) recommendationId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: WithdrawRecipeRecommendationDto
+  ) {
+    return this.recipeService
+      .withdrawRecipeRecommendation(request.user.userId, recommendationId, operationId, body.expectedVersion)
+      .then(result => ok(result));
   }
 
   @Post("recipes/reorder")

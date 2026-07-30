@@ -336,6 +336,15 @@ export class InspirationCategoryModel {
   @ApiProperty(nullableString) iconKey!: string | null;
 }
 
+export class AdminInspirationCategoryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty(nullableString) iconKey!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
 export class IngredientCategoryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
@@ -396,6 +405,7 @@ export class RecipeIngredientModel {
 
 export class RecipeStepModel {
   @ApiProperty({ type: String }) text!: string;
+  @ApiProperty(nullableString) imageUrl!: string | null;
 }
 
 export class RecipeContentModel {
@@ -432,17 +442,47 @@ export class RecipeDraftIngredientModel {
   @ApiProperty({ type: String, nullable: true, enum: ["SYSTEM", "PERSONAL"] }) source!: string | null;
 }
 
+export class RecipeDraftStepModel {
+  @ApiProperty({ type: String }) slotKey!: string;
+  @ApiProperty({ type: String }) text!: string;
+  @ApiProperty({ ...uuid, nullable: true }) uploadId!: string | null;
+  @ApiProperty(nullableString) imageUrl!: string | null;
+}
+
 export class RecipeDraftContentModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) story!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
   @ApiProperty({ type: [Number] }) sceneIds!: string[];
+  @ApiProperty({ ...uuid, nullable: true }) originVersionId!: string | null;
+  @ApiProperty(nullableString) originCoverImageUrl!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) coverUploadId!: string | null;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 20 }) baseServings!: number | null;
   @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) tips!: string | null;
   @ApiProperty({ type: [RecipeDraftIngredientModel] }) ingredients!: RecipeDraftIngredientModel[];
-  @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
+  @ApiProperty({ type: [RecipeDraftStepModel] }) steps!: RecipeDraftStepModel[];
+}
+
+export class UploadImageModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) publicId!: string;
+  @ApiProperty({ type: String, enum: ["RECIPE_COVER", "RECIPE_STEP"] }) scene!: string;
+  @ApiProperty({ type: String }) slotKey!: string;
+  @ApiProperty({ type: String, enum: ["TEMP", "BOUND", "DELETED"] }) status!: string;
+  @ApiProperty({ type: String }) imageUrl!: string;
+  @ApiProperty({ type: String }) contentType!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) sizeBytes!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) width!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) height!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) expiresAt!: string | null;
+}
+
+export class UploadImageResultModel {
+  @ApiProperty({ type: UploadImageModel }) upload!: UploadImageModel;
 }
 
 export class RecipeDraftSummaryModel {
@@ -495,6 +535,7 @@ export class MyRecipeDetailModel {
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
+  @ApiProperty({ type: () => RecipeRecommendationModel, nullable: true }) recommendation!: RecipeRecommendationModel | null;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
@@ -586,6 +627,23 @@ export class InspirationRecipeDetailModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class RecipeRecommendationModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
+  @ApiProperty({ type: String }) recipeTitle!: string;
+  @ApiProperty({ type: String }) curatedByName!: string;
+  @ApiProperty({ type: InspirationCategoryModel }) suggestedCategory!: InspirationCategoryModel;
+  @ApiProperty({ type: String, enum: ["PENDING", "REJECTED", "ADOPTED", "WITHDRAWN"] }) status!: string;
+  @ApiProperty(nullableString) reviewNote!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) adoptedRecipeId!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) reviewedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) withdrawnAt!: string | null;
+}
+
 export class RecipeReportModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) recipeId!: string;
@@ -600,6 +658,8 @@ export class AdminRecipeModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
+  @ApiProperty(uuid) inspirationCategoryId!: string;
+  @ApiProperty({ type: String }) inspirationCategoryName!: string;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: Number, nullable: true }) ownerUid!: number | null;
 }
@@ -635,6 +695,33 @@ export class AdminRecipeDetailModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class AdminIngredientSuggestionUserModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Number }) uid!: number;
+  @ApiProperty(nullableString) nickname!: string | null;
+}
+
+export class AdminPendingRecipeModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty({ type: String }) recipeTitle!: string;
+  @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
+  @ApiProperty({ type: InspirationCategoryModel }) suggestedCategory!: InspirationCategoryModel;
+  @ApiProperty({ type: RecipeCategoryModel, nullable: true }) personalCategory!: RecipeCategoryModel | null;
+  @ApiProperty({ type: () => AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminReviewPendingRecipeResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["APPROVED", "REJECTED"] }) status!: string;
+  @ApiProperty(dateTime) reviewedAt!: string;
+  @ApiProperty({ ...uuid, nullable: true }) targetRecipeId!: string | null;
+}
+
 export class AdminIngredientCategoryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) code!: string;
@@ -657,12 +744,6 @@ export class AdminIngredientModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
-export class AdminIngredientSuggestionUserModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: Number }) uid!: number;
-  @ApiProperty(nullableString) nickname!: string | null;
-}
-
 export class AdminPendingIngredientModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
@@ -674,7 +755,7 @@ export class AdminPendingIngredientModel {
   @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
-  @ApiProperty({ type: AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
+  @ApiProperty({ type: () => AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
 }
 
 export class AdminReviewPendingIngredientResultModel {

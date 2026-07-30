@@ -7,11 +7,14 @@ import type { RequestWithAdmin } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import {
+  AdminInspirationCategoryNameDto,
+  AdminInspirationCategoryQueryDto,
   AdminIngredientCategoryNameDto,
   AdminIngredientCategoryQueryDto,
   AdminIngredientPayloadDto,
-  AdminPendingIngredientQueryDto,
-  AdminIngredientQueryDto,
+    AdminPendingIngredientQueryDto,
+    AdminPendingRecipeQueryDto,
+    AdminIngredientQueryDto,
   AdminUnitPayloadDto,
   AdminDiningGroupQueryDto,
   AdminLoginDto,
@@ -20,18 +23,22 @@ import {
   AdminRecipeReportQueryDto,
   AdminUserEntitlementQueryDto,
   BlockRecipeDto,
+  CreateAdminRecipeDto,
   CreateAdminUserDto,
   DeleteAdminUnitDto,
   OperationDto,
   PageQueryDto,
+  ReorderAdminInspirationCategoriesDto,
   ReorderAdminIngredientCategoriesDto,
   ReorderAdminIngredientsDto,
   ReorderAdminUnitsDto,
-  ReviewPendingIngredientDto,
+    ReviewPendingIngredientDto,
+    ReviewPendingRecipeDto,
   ResetAdminUserPasswordDto,
   ResolveRecipeReportDto,
   SetAdminIngredientStatusDto,
   SetAdminUserStatusDto,
+  UpdateAdminInspirationCategoryDto,
   UpdateAdminRecipeDto,
   UpdateAdminUnitDto,
   UpdateAdminIngredientCategoryDto,
@@ -42,11 +49,14 @@ import {
 import {
   AdminDashboardSummaryModel,
   AdminDeleteUnitResultModel,
+  AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
   AdminIngredientModel,
-  AdminPendingIngredientModel,
-  AdminRecipeDetailModel,
-  AdminReviewPendingIngredientResultModel,
+    AdminPendingIngredientModel,
+    AdminPendingRecipeModel,
+    AdminRecipeDetailModel,
+    AdminReviewPendingRecipeResultModel,
+    AdminReviewPendingIngredientResultModel,
   AdminUnitModel,
   AdminUserRecipeDomainOverviewModel,
   AdminDiningGroupModel,
@@ -92,7 +102,8 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
             }
     })),
     steps: content.steps.map(item => ({
-      text: item.text
+      text: item.text,
+      imageUrl: null
     }))
   };
 }
@@ -266,9 +277,38 @@ export class AdminController {
   @Get("recipes")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(AdminRecipeModel, "后台菜谱治理列表")
+  @ApiOkPage(AdminRecipeModel, "后台系统菜谱列表")
   listRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeQueryDto) {
-    return this.adminService.listRecipes(query.page, query.pageSize, query.keyword, query.status, request.admin.adminId).then(result => ok(result));
+    return this.adminService
+      .listRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Get("pending-recipes")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminPendingRecipeModel, "后台待审核个人菜谱推荐列表")
+  listPendingRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminPendingRecipeQueryDto) {
+    return this.adminService.listPendingRecipes(query.page, query.pageSize, query.keyword, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipes")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeDetailModel, "后台新增系统菜谱")
+  createRecipe(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateAdminRecipeDto
+  ) {
+    return this.adminService
+      .createRecipe(request.admin.adminId, {
+        operationId,
+        inspirationCategoryId: body.inspirationCategoryId,
+        content: toAdminRecipeContentInput(body.content)
+      })
+      .then(result => ok(result));
   }
 
   @Get("recipes/:recipeId")
@@ -297,6 +337,74 @@ export class AdminController {
         inspirationCategoryId: body.inspirationCategoryId,
         content: toAdminRecipeContentInput(body.content)
       })
+      .then(result => ok(result));
+  }
+
+  @Post("pending-recipes/:recommendationId/review")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminReviewPendingRecipeResultModel, "后台审核一个待收录的个人菜谱推荐")
+  reviewPendingRecipe(
+    @Req() request: RequestWithAdmin,
+    @Param("recommendationId", ParseIntPipe) recommendationId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReviewPendingRecipeDto
+  ) {
+    return this.adminService
+      .reviewPendingRecipe(recommendationId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Get("inspiration-categories")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkArray(AdminInspirationCategoryModel, "后台系统菜谱分类列表")
+  listInspirationCategories(@Req() request: RequestWithAdmin, @Query() query: AdminInspirationCategoryQueryDto) {
+    return this.adminService.listInspirationCategories(query.keyword, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("inspiration-categories")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminInspirationCategoryModel, "后台新建系统菜谱分类")
+  createInspirationCategory(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminInspirationCategoryNameDto
+  ) {
+    return this.adminService.createInspirationCategory({ ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("inspiration-categories/:categoryId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminInspirationCategoryModel, "后台编辑系统菜谱分类")
+  updateInspirationCategory(
+    @Req() request: RequestWithAdmin,
+    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateAdminInspirationCategoryDto
+  ) {
+    return this.adminService
+      .updateInspirationCategory(categoryId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Post("inspiration-categories/reorder")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkArray(AdminInspirationCategoryModel, "后台重排系统菜谱分类")
+  reorderInspirationCategories(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReorderAdminInspirationCategoriesDto
+  ) {
+    return this.adminService
+      .reorderInspirationCategories(operationId, body.items, request.admin.adminId)
       .then(result => ok(result));
   }
 

@@ -631,7 +631,8 @@ async function seedSystemIngredients(
               searchKey,
               categoryId: category.id,
               defaultUnitId: unit.id,
-              systemSortOrder: null
+              systemSortOrder: null,
+              displaySortOrder: null
             },
             select: {
               id: true,
@@ -647,7 +648,8 @@ async function seedSystemIngredients(
               searchKey,
               categoryId: category.id,
               defaultUnitId: unit.id,
-              systemSortOrder: null
+              systemSortOrder: null,
+              displaySortOrder: null
             },
             select: {
               id: true,
@@ -705,6 +707,34 @@ async function seedSystemIngredients(
       )
     );
   }
+
+  const globalOrderedIds = (
+    await prisma.ingredient.findMany({
+      where: {
+        ownerId: null
+      },
+      select: { id: true },
+      orderBy: [{ category: { sortOrder: "asc" } }, { systemSortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }]
+    })
+  ).map(item => item.id);
+
+  await prisma.$transaction(
+    globalOrderedIds.map((id, index) =>
+      prisma.ingredient.update({
+        where: { id },
+        data: { displaySortOrder: 100000 + index }
+      })
+    )
+  );
+
+  await prisma.$transaction(
+    globalOrderedIds.map((id, index) =>
+      prisma.ingredient.update({
+        where: { id },
+        data: { displaySortOrder: index }
+      })
+    )
+  );
 
   return ingredientMap;
 }
@@ -888,7 +918,7 @@ async function seedRecipes(
     ],
     steps: [{ text: "番茄切块" }, { text: "鸡蛋炒散后和番茄一起翻炒" }],
     duration: "WITHIN_15",
-    images: [{ key: "cover", url: "https://example.com/recipe/tomato-egg.jpg", sizeBytes: 128000 }]
+    images: []
   });
 
   const potatoVersion = await upsertRecipeVersion(1002, null, {
@@ -927,7 +957,7 @@ async function seedRecipes(
     ],
     steps: [{ text: "牛肉焯水" }, { text: "土豆与牛肉一起焖煮" }],
     duration: "BETWEEN_30_60",
-    images: [{ key: "cover", url: "https://example.com/recipe/beef-potato.jpg", sizeBytes: 156000 }]
+    images: []
   });
 
   const ownerVersion = await upsertRecipeVersion(1003, ownerUserId, {
@@ -966,7 +996,7 @@ async function seedRecipes(
     ],
     steps: [{ text: "肉丝上浆" }, { text: "大火快炒" }],
     duration: "BETWEEN_15_30",
-    images: [{ key: "cover", url: "https://example.com/recipe/pepper-pork.jpg", sizeBytes: 118000 }]
+    images: []
   });
 
   await prisma.recipe.upsert({
@@ -978,7 +1008,7 @@ async function seedRecipes(
       currentVersionId: tomatoVersion.id,
       title: tomatoVersion.name,
       searchText: tomatoVersion.searchText,
-      coverImageUrl: "https://example.com/recipe/tomato-egg.jpg",
+      coverImageUrl: null,
       status: "ACTIVE",
       blockedReason: null,
       blockedAt: null,
@@ -993,7 +1023,7 @@ async function seedRecipes(
       currentVersionId: tomatoVersion.id,
       title: tomatoVersion.name,
       searchText: tomatoVersion.searchText,
-      coverImageUrl: "https://example.com/recipe/tomato-egg.jpg"
+      coverImageUrl: null
     }
   });
 
@@ -1006,7 +1036,7 @@ async function seedRecipes(
       currentVersionId: potatoVersion.id,
       title: potatoVersion.name,
       searchText: potatoVersion.searchText,
-      coverImageUrl: "https://example.com/recipe/beef-potato.jpg",
+      coverImageUrl: null,
       status: "ACTIVE",
       blockedReason: null,
       blockedAt: null,
@@ -1021,7 +1051,7 @@ async function seedRecipes(
       currentVersionId: potatoVersion.id,
       title: potatoVersion.name,
       searchText: potatoVersion.searchText,
-      coverImageUrl: "https://example.com/recipe/beef-potato.jpg"
+      coverImageUrl: null
     }
   });
 
@@ -1034,7 +1064,7 @@ async function seedRecipes(
       currentVersionId: ownerVersion.id,
       title: ownerVersion.name,
       searchText: ownerVersion.searchText,
-      coverImageUrl: "https://example.com/recipe/pepper-pork.jpg",
+      coverImageUrl: null,
       status: "ACTIVE",
       blockedReason: null,
       blockedAt: null,
@@ -1049,7 +1079,7 @@ async function seedRecipes(
       currentVersionId: ownerVersion.id,
       title: ownerVersion.name,
       searchText: ownerVersion.searchText,
-      coverImageUrl: "https://example.com/recipe/pepper-pork.jpg"
+      coverImageUrl: null
     }
   });
 }

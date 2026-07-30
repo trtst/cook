@@ -396,6 +396,8 @@ export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "
 export type IngredientSource = "SYSTEM" | "PERSONAL";
 export type InspirationSort = "RECOMMENDED" | "LATEST";
 export type IngredientRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
+export type UploadAssetScene = "RECIPE_COVER" | "RECIPE_STEP";
+export type UploadAssetStatus = "TEMP" | "BOUND" | "DELETED";
 
 export type RecipeAmountInput =
   | {
@@ -437,6 +439,15 @@ export interface InspirationCategorySummary {
   id: UUID;
   name: string;
   iconKey: string | null;
+}
+
+export interface AdminInspirationCategorySummary {
+  id: UUID;
+  name: string;
+  iconKey: string | null;
+  version: number;
+  recipeCount: number;
+  updatedAt: IsoDateTime;
 }
 
 export interface IngredientCategorySummary {
@@ -483,6 +494,25 @@ export interface RecommendIngredientRequest {
   operationId: OperationId;
 }
 
+export interface UploadImageSummary {
+  id: UUID;
+  publicId: string;
+  scene: UploadAssetScene;
+  slotKey: string;
+  status: UploadAssetStatus;
+  imageUrl: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+  createdAt: IsoDateTime;
+  expiresAt: IsoDateTime | null;
+}
+
+export interface UploadImageResponse {
+  upload: UploadImageSummary;
+}
+
 export interface RecipeIngredientInput {
   ingredientId: UUID;
   amount: RecipeAmountInput;
@@ -509,6 +539,14 @@ export interface RecipeIngredientSnapshot {
 
 export interface RecipeStepSnapshot {
   text: string;
+  imageUrl: string | null;
+}
+
+export interface RecipeDraftStepInput {
+  slotKey: string;
+  text: string;
+  uploadId: UUID | null;
+  imageUrl?: string | null;
 }
 
 export interface RecipeContentSnapshot {
@@ -527,12 +565,16 @@ export interface RecipeDraftContentInput {
   story: string | null;
   categoryId: UUID | null;
   sceneIds: UUID[];
+  originVersionId?: UUID | null;
+  originCoverImageUrl?: string | null;
+  coverUploadId: UUID | null;
+  coverImageUrl?: string | null;
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
   tips: string | null;
   ingredients: RecipeDraftIngredientInput[];
-  steps: RecipeStepSnapshot[];
+  steps: RecipeDraftStepInput[];
 }
 
 export interface AdminRecipeContentInput {
@@ -606,10 +648,30 @@ export interface MyRecipeDetail {
   content: RecipeContentSnapshot;
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
+  recommendation: RecipeRecommendationSummary | null;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+}
+
+export type RecipeRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "WITHDRAWN";
+
+export interface RecipeRecommendationSummary {
+  id: UUID;
+  recipeId: UUID;
+  sourceVersionId: UUID;
+  recipeTitle: string;
+  curatedByName: string;
+  suggestedCategory: InspirationCategorySummary;
+  status: RecipeRecommendationStatus;
+  reviewNote: string | null;
+  adoptedRecipeId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  reviewedAt: IsoDateTime | null;
+  withdrawnAt: IsoDateTime | null;
 }
 
 export interface CollectionSceneSummary {
@@ -713,6 +775,8 @@ export interface AdminRecipeSummary {
   title: string;
   coverImageUrl: string | null;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  inspirationCategoryId: UUID;
+  inspirationCategoryName: string;
   updatedAt: IsoDateTime;
   ownerUid: number | null;
 }
@@ -742,6 +806,62 @@ export interface UpdateAdminRecipeRequest {
   expectedVersion: number;
   inspirationCategoryId: UUID;
   content: AdminRecipeContentInput;
+}
+
+export interface CreateAdminRecipeRequest {
+  operationId: OperationId;
+  inspirationCategoryId: UUID;
+  content: AdminRecipeContentInput;
+}
+
+export interface RecommendRecipeRequest {
+  operationId: OperationId;
+  inspirationCategoryId: UUID;
+}
+
+export interface WithdrawRecipeRecommendationRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
+export interface AdminInspirationCategoryPayloadRequest {
+  operationId: OperationId;
+  name: string;
+}
+
+export interface UpdateAdminInspirationCategoryRequest extends AdminInspirationCategoryPayloadRequest {
+  expectedVersion: number;
+}
+
+export interface AdminPendingRecipeSummary {
+  id: UUID;
+  recipeId: UUID;
+  recipeTitle: string;
+  contentVersionId: UUID;
+  version: number;
+  status: "PENDING";
+  suggestedCategory: InspirationCategorySummary;
+  personalCategory: RecipeCategorySummary | null;
+  user: AdminIngredientSuggestionUser;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export type AdminRecipeReviewAction = "APPROVE" | "REJECT";
+
+export interface AdminReviewPendingRecipeRequest {
+  operationId: OperationId;
+  action: AdminRecipeReviewAction;
+  expectedVersion: number;
+  inspirationCategoryId?: UUID;
+  reason?: string;
+}
+
+export interface AdminReviewPendingRecipeResult {
+  id: UUID;
+  status: "APPROVED" | "REJECTED";
+  reviewedAt: IsoDateTime;
+  targetRecipeId: UUID | null;
 }
 
 export interface AdminIngredientCategorySummary {

@@ -502,6 +502,16 @@ export class UpdateIngredientDto extends VersionedOperationDto {
 
 export class RecommendIngredientDto extends OperationDto {}
 
+export class RecommendRecipeDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId!: number;
+}
+
+export class WithdrawRecipeRecommendationDto extends VersionedOperationDto {}
+
 export class RecipeAmountDto {
   @ApiProperty({ example: "EXACT" })
   @IsIn(["EXACT", "FUZZY"])
@@ -606,6 +616,37 @@ export class RecipeStepDto {
   text!: string;
 }
 
+export class RecipeDraftStepDto {
+  @ApiProperty({ example: "step-1" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotKey!: string;
+
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(1000)
+  text!: string;
+
+  @ApiProperty({ nullable: true, example: resourceIdExample })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  uploadId!: number | null;
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  imageUrl!: string | null;
+}
+
 export class RecipeDraftContentDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -637,6 +678,38 @@ export class RecipeDraftContentDto {
   @IsInt({ each: true })
   @Min(1, { each: true })
   sceneIds!: number[];
+
+  @ApiPropertyOptional({ nullable: true, example: resourceIdExample })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  originVersionId?: number | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 512 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  originCoverImageUrl?: string | null;
+
+  @ApiProperty({ nullable: true, example: resourceIdExample })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  coverUploadId!: number | null;
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  coverImageUrl!: string | null;
 
   @ApiProperty({ nullable: true, minimum: 1, maximum: 20 })
   @IsDefined()
@@ -674,12 +747,31 @@ export class RecipeDraftContentDto {
   @Type(() => RecipeDraftIngredientDto)
   ingredients!: RecipeDraftIngredientDto[];
 
-  @ApiProperty({ type: [RecipeStepDto] })
+  @ApiProperty({ type: [RecipeDraftStepDto] })
   @IsArray()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => RecipeStepDto)
-  steps!: RecipeStepDto[];
+  @Type(() => RecipeDraftStepDto)
+  steps!: RecipeDraftStepDto[];
+}
+
+export class UploadRecipeImageDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  draftId!: number;
+
+  @ApiProperty({ example: "RECIPE_STEP", enum: ["RECIPE_COVER", "RECIPE_STEP"] })
+  @IsIn(["RECIPE_COVER", "RECIPE_STEP"])
+  scene!: "RECIPE_COVER" | "RECIPE_STEP";
+
+  @ApiProperty({ example: "step-1" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotKey!: string;
 }
 
 export class CreateRecipeDraftDto extends OperationDto {
@@ -888,6 +980,13 @@ export class ConsumeFridgeItemsDto extends OperationDto {
 }
 
 export class AdminRecipeQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
+
   @ApiPropertyOptional({ example: "ACTIVE" })
   @IsOptional()
   @IsIn(["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"])
@@ -899,6 +998,17 @@ export class AdminRecipeReportQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["OPEN", "RESOLVED"])
   status?: string;
+}
+
+export class AdminPendingRecipeQueryDto extends PageQueryDto {}
+
+export class AdminInspirationCategoryQueryDto {
+  @ApiPropertyOptional({ example: "家常快手" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(20)
+  keyword?: string;
 }
 
 export class AdminIngredientCategoryQueryDto {
@@ -1061,6 +1171,70 @@ export class UpdateAdminRecipeDto extends VersionedOperationDto {
   content!: AdminRecipeContentDto;
 }
 
+export class CreateAdminRecipeDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId!: number;
+
+  @ApiProperty({ type: AdminRecipeContentDto })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => AdminRecipeContentDto)
+  content!: AdminRecipeContentDto;
+}
+
+export class ReviewPendingRecipeDto extends VersionedOperationDto {
+  @ApiProperty({ example: "APPROVE", enum: ["APPROVE", "REJECT"] })
+  @IsIn(["APPROVE", "REJECT"])
+  action!: "APPROVE" | "REJECT";
+
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId?: number;
+
+  @ApiPropertyOptional({ maxLength: 255, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}
+
+export class AdminInspirationCategoryNameDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class UpdateAdminInspirationCategoryDto extends VersionedOperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class ReorderAdminInspirationCategoriesDto extends OperationDto {
+  @ApiProperty({ type: [ReorderItemDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ReorderItemDto)
+  items!: ReorderItemDto[];
+}
+
 export class ReorderAdminIngredientCategoriesDto extends OperationDto {
   @ApiProperty({ type: [ReorderItemDto] })
   @IsArray()
@@ -1122,11 +1296,12 @@ export class SetAdminIngredientStatusDto extends VersionedOperationDto {
 }
 
 export class ReorderAdminIngredientsDto extends OperationDto {
-  @ApiProperty({ example: resourceIdExample })
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  categoryId!: number;
+  categoryId?: number;
 
   @ApiProperty({ type: [ReorderItemDto] })
   @IsArray()

@@ -95,6 +95,13 @@ enum RecipeReportStatus {
   RESOLVED
 }
 
+enum RecipeRecommendationStatus {
+  PENDING
+  REJECTED
+  ADOPTED
+  WITHDRAWN
+}
+
 enum UnitType {
   WEIGHT
   VOLUME
@@ -166,6 +173,21 @@ enum StorageLedgerModule {
   PROFILE_ASSET
 }
 
+enum UploadAssetType {
+  RECIPE
+}
+
+enum UploadAssetScene {
+  RECIPE_COVER
+  RECIPE_STEP
+}
+
+enum UploadAssetStatus {
+  TEMP
+  BOUND
+  DELETED
+}
+
 model AdminAccount {
   id           Int                @id @default(autoincrement())
   username     String             @unique @db.VarChar(64)
@@ -210,6 +232,7 @@ model User {
   recipeDrafts              RecipeDraft[]
   recipeVersions            RecipeContentVersion[]     @relation("RecipeContentAuthor")
   recipeReports             RecipeReport[]             @relation("RecipeReportReporter")
+  recipeRecommendations    RecipeRecommendation[]
   recipeCollections         RecipeCollection[]
   ingredients               Ingredient[]               @relation("IngredientOwner")
   ingredientRecommendations IngredientRecommendation[]
@@ -220,6 +243,7 @@ model User {
   fridgeItems               FridgeItem[]
   shoppingItems             ShoppingItem[]
   storageLedger             StorageLedger[]
+  uploadAssets              UploadAsset[]
 
   @@index([createdAt])
   @@map("users")
@@ -377,10 +401,12 @@ model InspirationCategory {
   name      String   @db.VarChar(20)
   iconKey   String?  @map("icon_key") @db.VarChar(64)
   sortOrder Int      @default(0) @map("sort_order")
+  version   Int      @default(1)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  recipes Recipe[]
+  recipes               Recipe[]               @relation("RecipeInspirationCategory")
+  recipeRecommendations RecipeRecommendation[] @relation("RecipeRecommendationCategory")
 
   @@unique([name])
   @@unique([sortOrder])
@@ -438,6 +464,7 @@ model Ingredient {
   searchKey       String           @map("search_key") @db.VarChar(80)
   status          IngredientStatus @default(ACTIVE)
   systemSortOrder Int?             @map("system_sort_order")
+  displaySortOrder Int?            @map("display_sort_order")
   imageUpdatedAt  DateTime?        @map("image_updated_at") @db.Timestamptz(3)
   version         Int              @default(1)
   createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -451,8 +478,9 @@ model Ingredient {
   recommendations       IngredientRecommendation[] @relation("IngredientRecommendationSource")
   targetRecommendations IngredientRecommendation[] @relation("IngredientRecommendationTarget")
 
-  /// PostgreSQL partial unique indexes for active system sort order and ingredient name scope are kept in hand-written SQL migrations.
+  /// PostgreSQL partial unique indexes for active system/category sort order, global display order, and ingredient name scope are kept in hand-written SQL migrations.
   @@index([ownerId, status, categoryId, systemSortOrder, id])
+  @@index([ownerId, status, displaySortOrder, id])
   @@index([ownerId, status, categoryId, searchKey, id])
   @@map("ingredients")
 }
@@ -502,10 +530,13 @@ model RecipeContentVersion {
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   createdByUser           User?                    @relation("RecipeContentAuthor", fields: [createdByUserId], references: [id])
+  recommendations         RecipeRecommendation[]   @relation("RecipeRecommendationVersion")
+  originRecipes           Recipe[]                 @relation("RecipeOriginVersion")
   currentRecipes          Recipe[]                 @relation("RecipeCurrentVersion")
   collections             RecipeCollection[]       @relation("RecipeCollectionVersion")
   mealPlans               MealPlanItem[]           @relation("MealPlanRecipeVersion")
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
+  uploadAssets            UploadAsset[]
 
   @@index([name])
   @@index([createdByUserId, createdAt])
@@ -518,9 +549,12 @@ model Recipe {
   categoryId            Int?         @map("category_id")
   inspirationCategoryId Int?         @map("inspiration_category_id")
   currentVersionId      Int          @map("current_version_id")
+  originVersionId       Int?         @map("origin_version_id")
+  originCoverImageUrl   String?      @map("origin_cover_image_url") @db.VarChar(512)
   title                 String       @db.VarChar(120)
   searchText            String       @map("search_text") @db.Text
   coverImageUrl         String?      @map("cover_image_url") @db.VarChar(512)
+  curatedByName         String?      @map("curated_by_name") @db.VarChar(64)
   status                RecipeStatus @default(ACTIVE)
   blockedReason         String?      @map("blocked_reason") @db.VarChar(255)
   blockedAt             DateTime?    @map("blocked_at") @db.Timestamptz(3)
@@ -536,9 +570,12 @@ model Recipe {
 
   owner                   User?                    @relation("RecipeOwner", fields: [ownerId], references: [id])
   category                RecipeCategory?          @relation(fields: [categoryId], references: [id])
-  inspirationCategory     InspirationCategory?     @relation(fields: [inspirationCategoryId], references: [id])
+  inspirationCategory     InspirationCategory?     @relation("RecipeInspirationCategory", fields: [inspirationCategoryId], references: [id])
   currentVersion          RecipeContentVersion     @relation("RecipeCurrentVersion", fields: [currentVersionId], references: [id])
+  originVersion           RecipeContentVersion?    @relation("RecipeOriginVersion", fields: [originVersionId], references: [id], onDelete: SetNull)
   reports                 RecipeReport[]
+  recommendations         RecipeRecommendation[]   @relation("RecipeRecommendationSource")
+  adoptedRecommendations  RecipeRecommendation[]   @relation("RecipeRecommendationAdopted")
   sceneLinks              RecipeSceneLink[]
   collections             RecipeCollection[]       @relation("RecipeCollectionSource")
   draft                   RecipeDraft?
@@ -548,6 +585,7 @@ model Recipe {
   @@index([ownerId, status, categoryId, sortOrder, id])
   @@index([inspirationCategoryId, status, updatedAt, id])
   @@index([ownerId, status, updatedAt])
+  @@index([ownerId, originVersionId])
   @@map("recipes")
 }
 
@@ -614,9 +652,41 @@ model RecipeDraft {
   recipe   Recipe?            @relation(fields: [recipeId], references: [id], onDelete: Cascade)
   category RecipeCategory?    @relation(fields: [categoryId], references: [id])
   scenes   RecipeDraftScene[]
+  uploads  UploadAsset[]
 
   @@index([userId, updatedAt, id])
   @@map("recipe_drafts")
+}
+
+model UploadAsset {
+  id              Int               @id @default(autoincrement())
+  publicId        String            @unique @map("public_id") @db.VarChar(36)
+  userId          Int               @map("user_id")
+  draftId         Int?              @map("draft_id")
+  recipeVersionId Int?              @map("recipe_version_id")
+  type            UploadAssetType
+  scene           UploadAssetScene
+  slotKey         String            @map("slot_key") @db.VarChar(64)
+  storageKey      String            @map("storage_key") @db.VarChar(512)
+  contentType     String            @map("content_type") @db.VarChar(64)
+  sizeBytes       Int               @map("size_bytes")
+  width           Int
+  height          Int
+  sourceHash      String            @map("source_hash") @db.VarChar(64)
+  status          UploadAssetStatus @default(TEMP)
+  expiresAt       DateTime?         @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  draft         RecipeDraft?          @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  recipeVersion RecipeContentVersion? @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, scene, slotKey])
+  @@index([userId, status, updatedAt])
+  @@index([draftId, status, updatedAt])
+  @@index([recipeVersionId])
+  @@map("upload_assets")
 }
 
 model RecipeDraftScene {
@@ -649,6 +719,37 @@ model RecipeReport {
   @@index([status, createdAt])
   @@index([recipeId, status])
   @@map("recipe_reports")
+}
+
+model RecipeRecommendation {
+  id                  Int                       @id @default(autoincrement())
+  recipeId            Int                       @map("recipe_id")
+  userId              Int                       @map("user_id")
+  sourceVersionId     Int                       @map("source_version_id")
+  suggestedCategoryId Int                       @map("suggested_category_id")
+  status              RecipeRecommendationStatus @default(PENDING)
+  recipeTitle         String                    @map("recipe_title") @db.VarChar(120)
+  curatedByName       String                    @map("curated_by_name") @db.VarChar(64)
+  suggestedCategoryName String                  @map("suggested_category_name") @db.VarChar(20)
+  reviewNote          String?                   @map("review_note") @db.VarChar(255)
+  adoptedRecipeId     Int?                      @unique @map("adopted_recipe_id")
+  reviewedAt          DateTime?                 @map("reviewed_at") @db.Timestamptz(3)
+  withdrawnAt         DateTime?                 @map("withdrawn_at") @db.Timestamptz(3)
+  version             Int                       @default(1)
+  createdAt           DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipe             Recipe                @relation("RecipeRecommendationSource", fields: [recipeId], references: [id], onDelete: Cascade)
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceVersion      RecipeContentVersion  @relation("RecipeRecommendationVersion", fields: [sourceVersionId], references: [id], onDelete: Cascade)
+  suggestedCategory  InspirationCategory   @relation("RecipeRecommendationCategory", fields: [suggestedCategoryId], references: [id])
+  adoptedRecipe      Recipe?               @relation("RecipeRecommendationAdopted", fields: [adoptedRecipeId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([recipeId, createdAt])
+  @@index([status, createdAt])
+  @@index([suggestedCategoryId, createdAt])
+  @@map("recipe_recommendations")
 }
 
 model MealPlanItem {

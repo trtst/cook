@@ -13,10 +13,11 @@ import { EntitlementModule } from "./entitlement/entitlement.module";
 import { MealModule } from "./meal/meal.module";
 import { PantryModule } from "./pantry/pantry.module";
 import { RecipeModule } from "./recipe/recipe.module";
+import { UploadModule } from "./upload/upload.module";
 import { UserModule } from "./user/user.module";
 
 @Module({
-  imports: [CoreModule, AdminModule, AppConfigModule, AuthModule, DiningGroupModule, EntitlementModule, RecipeModule, MealModule, PantryModule, UserModule],
+  imports: [CoreModule, AdminModule, AppConfigModule, AuthModule, DiningGroupModule, EntitlementModule, RecipeModule, UploadModule, MealModule, PantryModule, UserModule],
   providers: [
     AdminAuthGuard,
     LoginRateLimitGuard,

@@ -12,15 +12,20 @@ import { Prisma, type DiningGroupStatus, type RecipeStatus } from "@prisma/clien
 import type {
   AdminRecipeContentInput,
   AdminDashboardSummary,
-  AdminRecipeDetail,
-  AdminDeleteUnitResult,
+    AdminInspirationCategoryPayloadRequest,
+    AdminInspirationCategorySummary,
+    AdminPendingRecipeSummary,
+    AdminRecipeDetail,
+    AdminDeleteUnitResult,
   AdminIngredientCategoryPayloadRequest,
   AdminIngredientRejectReasonCode,
   AdminIngredientCategorySummary,
   AdminIngredientPayloadRequest,
   AdminPendingIngredientSummary,
-  AdminReviewPendingIngredientRequest,
-  AdminReviewPendingIngredientResult,
+    AdminReviewPendingIngredientRequest,
+    AdminReviewPendingIngredientResult,
+    AdminReviewPendingRecipeRequest,
+    AdminReviewPendingRecipeResult,
   AdminIngredientSummary,
   SetAdminIngredientStatusRequest,
   AdminUnitPayloadRequest,
@@ -32,6 +37,7 @@ import type {
   CollectionListResponse,
   CollectionSceneSummary,
   CollectedRecipeSummary,
+  CreateAdminRecipeRequest,
   CreateAdminUserRequest,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
@@ -52,6 +58,7 @@ import type {
   StorageUsageSummary,
   UnitSummary,
   UpdateAdminUnitRequest,
+  UpdateAdminInspirationCategoryRequest,
   UpdateAdminIngredientCategoryRequest,
   UpdateAdminIngredientRequest,
   UpdateAdminRecipeRequest,
@@ -178,6 +185,7 @@ type AdminCollectionRow = Prisma.RecipeCollectionGetPayload<{
   };
 }>;
 
+type AdminInspirationCategoryRow = Prisma.InspirationCategoryGetPayload<Record<string, never>>;
 type AdminIngredientCategoryRow = Prisma.IngredientCategoryGetPayload<Record<string, never>>;
 type AdminIngredientRow = Prisma.IngredientGetPayload<{
   include: {
@@ -200,6 +208,24 @@ type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
         defaultUnit: true;
       };
     };
+  };
+}>;
+type AdminPendingRecipeRow = Prisma.RecipeRecommendationGetPayload<{
+  include: {
+    recipe: {
+      include: {
+        owner: {
+          select: {
+            id: true;
+            uid: true;
+            nickname: true;
+          };
+        };
+        category: true;
+      };
+    };
+    sourceVersion: true;
+    suggestedCategory: true;
   };
 }>;
 
@@ -258,6 +284,20 @@ function toAdminIngredientCategorySummary(category: AdminIngredientCategoryRow, 
     isSelectable: category.isSelectable,
     version: category.version,
     ingredientCount,
+    updatedAt: toIsoDate(category.updatedAt)
+  };
+}
+
+function toAdminInspirationCategorySummary(
+  category: AdminInspirationCategoryRow,
+  recipeCount: number
+): AdminInspirationCategorySummary {
+  return {
+    id: category.id,
+    name: category.name,
+    iconKey: category.iconKey,
+    version: category.version,
+    recipeCount,
     updatedAt: toIsoDate(category.updatedAt)
   };
 }
@@ -342,6 +382,26 @@ function toAdminPendingIngredientSummary(row: AdminPendingIngredientRow): AdminP
       uid: row.ingredient.owner?.uid ?? 0,
       nickname: row.ingredient.owner?.nickname ?? null
     }
+  };
+}
+
+function toAdminPendingRecipeSummary(row: AdminPendingRecipeRow): AdminPendingRecipeSummary {
+  return {
+    id: row.id,
+    recipeId: row.recipeId,
+    recipeTitle: row.recipeTitle,
+    contentVersionId: row.sourceVersionId,
+    version: row.version,
+    status: "PENDING",
+    suggestedCategory: toInspirationCategorySummary(row.suggestedCategory),
+    personalCategory: row.recipe.category ? toRecipeCategorySummary(row.recipe.category) : null,
+    user: {
+      id: row.recipe.owner?.id ?? row.userId,
+      uid: row.recipe.owner?.uid ?? 0,
+      nickname: row.recipe.owner?.nickname ?? null
+    },
+    createdAt: toIsoDate(row.createdAt),
+    updatedAt: toIsoDate(row.updatedAt)
   };
 }
 
@@ -1572,7 +1632,7 @@ export class AdminService {
     };
     const orderBy = categoryId
       ? ([{ systemSortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[])
-      : ([{ category: { sortOrder: "asc" } }, { systemSortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[]);
+      : ([{ displaySortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[]);
     const [items, total] = await this.prisma.$transaction([
       this.prisma.ingredient.findMany({
         where,
@@ -1619,6 +1679,7 @@ export class AdminService {
         const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
         await this.assertSystemIngredientNameAvailable(tx, searchKey, null);
         const systemSortOrder = await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+        const displaySortOrder = await this.nextSystemIngredientDisplaySortOrder(tx);
         const ingredient = await tx.ingredient.create({
           data: {
             ownerId: null,
@@ -1627,7 +1688,8 @@ export class AdminService {
             defaultUnitId: unit.id,
             name,
             searchKey,
-            systemSortOrder
+            systemSortOrder,
+            displaySortOrder
           },
           include: {
             category: true,
@@ -1768,6 +1830,8 @@ export class AdminService {
                   status: body.status,
                   systemSortOrder:
                     body.status === "ACTIVE" ? await this.nextSystemIngredientSortOrder(tx, ingredient.categoryId) : ingredient.systemSortOrder,
+                  displaySortOrder:
+                    body.status === "ACTIVE" ? await this.nextSystemIngredientDisplaySortOrder(tx) : ingredient.displaySortOrder,
                   version: { increment: 1 }
                 },
                 include: {
@@ -1965,7 +2029,7 @@ export class AdminService {
   }
 
   async reorderIngredients(
-    categoryId: UUID,
+    categoryId: UUID | undefined,
     operationId: OperationId,
     items: ReorderItem[],
     adminId: UUID
@@ -1982,34 +2046,40 @@ export class AdminService {
       );
       if (repeated) return repeated;
       await startAdminIdempotentOperation(tx, operationId, "admin-ingredient:reorder", adminId, requestHash);
+      if (categoryId) {
+        await this.requireIngredientCategory(tx, categoryId);
+      }
 
-      await this.requireIngredientCategory(tx, categoryId);
       const all = await tx.ingredient.findMany({
         where: {
           ownerId: null,
           status: "ACTIVE",
-          categoryId
+          ...(categoryId ? { categoryId } : {})
         },
         include: {
           category: true,
           defaultUnit: true
         },
-        orderBy: [{ systemSortOrder: "asc" }, { createdAt: "asc" }]
+        orderBy: categoryId ? [{ systemSortOrder: "asc" }, { createdAt: "asc" }] : [{ displaySortOrder: "asc" }, { createdAt: "asc" }]
       });
       this.assertReorderScope(all, items, "系统食材");
-      await this.writeSystemIngredientSortOrder(tx, items.map(item => item.id), categoryId);
+      if (categoryId) {
+        await this.writeSystemIngredientSortOrder(tx, items.map(item => item.id), categoryId);
+      } else {
+        await this.writeSystemIngredientDisplaySortOrder(tx, items.map(item => item.id));
+      }
 
       const updated = await tx.ingredient.findMany({
         where: {
           ownerId: null,
           status: "ACTIVE",
-          categoryId
+          ...(categoryId ? { categoryId } : {})
         },
         include: {
           category: true,
           defaultUnit: true
         },
-        orderBy: [{ systemSortOrder: "asc" }, { createdAt: "asc" }]
+        orderBy: categoryId ? [{ systemSortOrder: "asc" }, { createdAt: "asc" }] : [{ displaySortOrder: "asc" }, { createdAt: "asc" }]
       });
       const result = updated.map(toAdminIngredientSummary);
       await tx.auditEvent.create({
@@ -2017,9 +2087,13 @@ export class AdminService {
           actorType: "ADMIN",
           actorAdminId: adminId,
           action: "INGREDIENT_REORDERED",
-          objectType: "INGREDIENT_CATEGORY",
-          objectId: categoryId,
-          payload: { ids: items.map(item => item.id) }
+          objectType: categoryId ? "INGREDIENT_CATEGORY" : "INGREDIENT",
+          objectId: categoryId ?? null,
+          payload: {
+            scope: categoryId ? "CATEGORY" : "ALL",
+            categoryId: categoryId ?? null,
+            ids: items.map(item => item.id)
+          }
         }
       });
       await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient:reorder", adminId, requestHash, result);
@@ -2081,6 +2155,70 @@ export class AdminService {
 
     return {
       items: items.map(toAdminPendingIngredientSummary),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async listPendingRecipes(page: number, pageSize: number, keyword: string | undefined, adminId: UUID): Promise<PageResult<AdminPendingRecipeSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedKeyword = keyword?.trim();
+    const uidKeyword = normalizedKeyword && /^\d+$/.test(normalizedKeyword) ? Number(normalizedKeyword) : null;
+    const where: Prisma.RecipeRecommendationWhereInput = {
+      status: "PENDING",
+      recipe: {
+        is: {
+          ownerId: {
+            not: null
+          },
+          status: "ACTIVE"
+        }
+      },
+      ...(normalizedKeyword
+        ? {
+            OR: [
+              { recipeTitle: { contains: normalizedKeyword, mode: "insensitive" } },
+              { suggestedCategoryName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { recipe: { is: { category: { is: { name: { contains: normalizedKeyword, mode: "insensitive" } } } } } },
+              { user: { is: { nickname: { contains: normalizedKeyword, mode: "insensitive" } } } },
+              ...(uidKeyword === null ? [] : [{ recipe: { is: { owner: { is: { uid: uidKeyword } } } } }])
+            ]
+          }
+        : {})
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipeRecommendation.findMany({
+        where,
+        include: {
+          recipe: {
+            include: {
+              owner: {
+                select: {
+                  id: true,
+                  uid: true,
+                  nickname: true
+                }
+              },
+              category: true
+            }
+          },
+          sourceVersion: true,
+          suggestedCategory: true
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.recipeRecommendation.count({ where })
+    ]);
+
+    return {
+      items: items.map(toAdminPendingRecipeSummary),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
@@ -2236,6 +2374,8 @@ export class AdminService {
               duplicate.categoryId === body.categoryId
                 ? duplicate.systemSortOrder
                 : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+            const displaySortOrder =
+              duplicate.status === "ACTIVE" ? duplicate.displaySortOrder : await this.nextSystemIngredientDisplaySortOrder(tx);
             const updatedTarget = await tx.ingredient.update({
               where: { id: duplicate.id },
               data: {
@@ -2245,6 +2385,7 @@ export class AdminService {
                 categoryId: body.categoryId,
                 defaultUnitId: unit.id,
                 systemSortOrder: nextSortOrder,
+                displaySortOrder,
                 version: { increment: 1 }
               },
               include: {
@@ -2283,6 +2424,10 @@ export class AdminService {
               current.categoryId === body.categoryId && current.ownerId === null
                 ? current.systemSortOrder
                 : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
+            const displaySortOrder =
+              current.ownerId === null && current.status === "ACTIVE"
+                ? current.displaySortOrder
+                : await this.nextSystemIngredientDisplaySortOrder(tx);
             const updatedIngredient = await tx.ingredient.update({
               where: { id: ingredientId },
               data: {
@@ -2294,6 +2439,7 @@ export class AdminService {
                 categoryId: body.categoryId,
                 defaultUnitId: unit.id,
                 systemSortOrder: nextSortOrder,
+                displaySortOrder,
                 version: { increment: 1 }
               },
               include: {
@@ -2352,11 +2498,149 @@ export class AdminService {
     }
   }
 
+  async reviewPendingRecipe(
+    recommendationId: UUID,
+    body: AdminReviewPendingRecipeRequest,
+    adminId: UUID
+  ): Promise<AdminReviewPendingRecipeResult> {
+    await this.requireSuperAdmin(adminId);
+    const reviewNote = body.reason?.trim() || null;
+    const requestHash = JSON.stringify({
+      recommendationId,
+      action: body.action,
+      expectedVersion: body.expectedVersion,
+      inspirationCategoryId: body.inspirationCategoryId ?? null,
+      reviewNote
+    });
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "recipe_recommendations" WHERE "id" = ${recommendationId} FOR UPDATE`;
+        const recommendation = await this.requirePendingRecipeRecommendation(tx, recommendationId);
+        const repeated = await getAdminIdempotentResult<AdminReviewPendingRecipeResult>(
+          tx,
+          body.operationId,
+          "admin-pending-recipe:review",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        if (recommendation.version !== body.expectedVersion) {
+          throw new ConflictException("推荐记录已更新，请刷新后重试");
+        }
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-pending-recipe:review", adminId, requestHash);
+
+        const now = new Date();
+        if (body.action === "REJECT") {
+          await tx.recipeRecommendation.update({
+            where: { id: recommendation.id },
+            data: {
+              status: "REJECTED",
+              reviewNote,
+              reviewedAt: now,
+              version: { increment: 1 }
+            }
+          });
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "RECIPE_RECOMMENDATION_REVIEWED",
+              objectType: "RECIPE_RECOMMENDATION",
+              objectId: recommendation.id,
+              payload: {
+                action: body.action,
+                recipeId: recommendation.recipeId,
+                sourceVersionId: recommendation.sourceVersionId,
+                reason: reviewNote
+              }
+            }
+          });
+          const result = {
+            id: recommendation.id,
+            status: "REJECTED",
+            reviewedAt: toIsoDate(now),
+            targetRecipeId: null
+          } satisfies AdminReviewPendingRecipeResult;
+          await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-recipe:review", adminId, requestHash, result);
+          return result;
+        }
+
+        if (!body.inspirationCategoryId) throw new BadRequestException("请选择系统菜谱分类");
+        const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
+        const sourceContent = versionToContent(recommendation.sourceVersion);
+        this.assertAdminRecipeContent(sourceContent);
+
+        const nextVersion = await tx.recipeContentVersion.create({
+          data: this.buildAdminRecipeVersionCreateInput(sourceContent)
+        });
+
+        const created = await tx.recipe.create({
+          data: {
+            ownerId: null,
+            categoryId: null,
+            inspirationCategoryId: inspirationCategory.id,
+            currentVersionId: nextVersion.id,
+            title: sourceContent.name,
+            searchText: buildRecipeSearchText(sourceContent),
+            coverImageUrl: recommendation.recipe.coverImageUrl,
+            curatedByName: recommendation.curatedByName
+          }
+        });
+
+        await tx.recipeRecommendation.update({
+          where: { id: recommendation.id },
+          data: {
+            status: "ADOPTED",
+            suggestedCategoryId: inspirationCategory.id,
+            suggestedCategoryName: inspirationCategory.name,
+            reviewNote,
+            adoptedRecipeId: created.id,
+            reviewedAt: now,
+            version: { increment: 1 }
+          }
+        });
+
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "RECIPE_RECOMMENDATION_REVIEWED",
+            objectType: "RECIPE_RECOMMENDATION",
+            objectId: recommendation.id,
+            payload: {
+              action: body.action,
+              recipeId: recommendation.recipeId,
+              sourceVersionId: recommendation.sourceVersionId,
+              inspirationCategoryId: inspirationCategory.id,
+              targetRecipeId: created.id,
+              reviewNote
+            }
+          }
+        });
+
+        const result = {
+          id: recommendation.id,
+          status: "APPROVED",
+          reviewedAt: toIsoDate(now),
+          targetRecipeId: created.id
+        } satisfies AdminReviewPendingRecipeResult;
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-recipe:review", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("当前推荐已被处理或该版本已收录，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
   async listRecipes(
     page: number,
     pageSize: number,
     keyword?: string,
     status?: string,
+    categoryId?: UUID,
     adminId?: UUID
   ): Promise<PageResult<AdminRecipeSummary>> {
     if (!adminId) throw new ForbiddenException("无权执行该操作");
@@ -2367,15 +2651,18 @@ export class AdminService {
     const normalizedStatus = status?.trim();
 
     if (normalizedStatus && !["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"].includes(normalizedStatus)) {
-      throw new BadRequestException("菜谱状态参数错误");
+      throw new BadRequestException("系统菜谱状态参数错误");
     }
 
     const where: Prisma.RecipeWhereInput = {
+      ownerId: null,
+      inspirationCategoryId: {
+        ...(categoryId ? { equals: categoryId } : { not: null })
+      },
       ...(keyword
         ? {
             searchText: {
-              contains: keyword,
-              mode: "insensitive"
+              contains: buildSearchKey(keyword)
             }
           }
         : {}),
@@ -2388,7 +2675,8 @@ export class AdminService {
         include: {
           owner: {
             select: { uid: true }
-          }
+          },
+          inspirationCategory: true
         },
         orderBy: [{ updatedAt: "desc" }],
         skip,
@@ -2404,6 +2692,281 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async createRecipe(adminId: UUID, body: CreateAdminRecipeRequest): Promise<AdminRecipeDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({
+      inspirationCategoryId: body.inspirationCategoryId,
+      content: body.content
+    });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeDetail>(tx, body.operationId, "admin-recipe:create", adminId, requestHash);
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe:create", adminId, requestHash);
+
+      const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
+      const content = await this.buildAdminRecipeContent(tx, body.content);
+      this.assertAdminRecipeContent(content);
+
+      const nextVersion = await tx.recipeContentVersion.create({
+        data: this.buildAdminRecipeVersionCreateInput(content)
+      });
+
+      const created = await tx.recipe.create({
+        data: {
+          ownerId: null,
+          categoryId: null,
+          inspirationCategoryId: inspirationCategory.id,
+          currentVersionId: nextVersion.id,
+          title: content.name,
+          searchText: buildRecipeSearchText(content),
+          coverImageUrl: null
+        },
+        include: {
+          owner: {
+            select: { uid: true }
+          },
+          category: true,
+          inspirationCategory: true,
+          currentVersion: true
+        }
+      });
+
+      const result = this.toAdminRecipeDetail(created);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_CREATED",
+          objectType: "RECIPE",
+          objectId: created.id,
+          payload: {
+            source: "SYSTEM",
+            inspirationCategoryId: inspirationCategory.id,
+            contentVersionId: nextVersion.id
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-recipe:create", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async listInspirationCategories(keyword: string | undefined, adminId: UUID): Promise<AdminInspirationCategorySummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedKeyword = keyword?.trim();
+    const where: Prisma.InspirationCategoryWhereInput = normalizedKeyword
+      ? {
+          name: {
+            contains: normalizedKeyword,
+            mode: "insensitive"
+          }
+        }
+      : {};
+    const categories = await this.prisma.inspirationCategory.findMany({
+      where,
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+    });
+    if (!categories.length) return [];
+
+    const counts = await this.prisma.recipe.groupBy({
+      by: ["inspirationCategoryId"],
+      where: {
+        ownerId: null,
+        inspirationCategoryId: {
+          in: categories.map(item => item.id)
+        }
+      },
+      _count: {
+        _all: true
+      }
+    });
+    const countMap = new Map(counts.map(item => [item.inspirationCategoryId ?? 0, item._count._all]));
+    return categories.map(category => toAdminInspirationCategorySummary(category, countMap.get(category.id) ?? 0));
+  }
+
+  async createInspirationCategory(body: AdminInspirationCategoryPayloadRequest, adminId: UUID): Promise<AdminInspirationCategorySummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const requestHash = name;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminInspirationCategorySummary>(
+          tx,
+          body.operationId,
+          "admin-inspiration-category:create",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-inspiration-category:create", adminId, requestHash);
+        await this.assertInspirationCategoryNameAvailable(tx, name, null);
+        const sortOrder = await this.nextInspirationCategorySortOrder(tx);
+        const category = await tx.inspirationCategory.create({
+          data: {
+            name,
+            iconKey: null,
+            sortOrder
+          }
+        });
+        const result = toAdminInspirationCategorySummary(category, 0);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INSPIRATION_CATEGORY_CREATED",
+            objectType: "INSPIRATION_CATEGORY",
+            objectId: category.id,
+            payload: { name }
+          }
+        });
+        await completeAdminIdempotentOperation(
+          tx,
+          body.operationId,
+          "admin-inspiration-category:create",
+          adminId,
+          requestHash,
+          result
+        );
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统菜谱分类名称已存在，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async updateInspirationCategory(
+    categoryId: UUID,
+    body: UpdateAdminInspirationCategoryRequest,
+    adminId: UUID
+  ): Promise<AdminInspirationCategorySummary> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name.trim();
+    const requestHash = `${categoryId}:${body.expectedVersion}:${name}`;
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminInspirationCategorySummary>(
+          tx,
+          body.operationId,
+          "admin-inspiration-category:update",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-inspiration-category:update", adminId, requestHash);
+
+        const category = await this.requireInspirationCategory(tx, categoryId);
+        if (category.version !== body.expectedVersion) throw new ConflictException("系统菜谱分类已被更新，请刷新后重试");
+        await this.assertInspirationCategoryNameAvailable(tx, name, categoryId);
+
+        const updated = await tx.inspirationCategory.update({
+          where: { id: categoryId },
+          data: {
+            name,
+            version: { increment: 1 }
+          }
+        });
+        const recipeCount = await tx.recipe.count({
+          where: {
+            ownerId: null,
+            inspirationCategoryId: categoryId
+          }
+        });
+        const result = toAdminInspirationCategorySummary(updated, recipeCount);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INSPIRATION_CATEGORY_UPDATED",
+            objectType: "INSPIRATION_CATEGORY",
+            objectId: categoryId,
+            payload: { name }
+          }
+        });
+        await completeAdminIdempotentOperation(
+          tx,
+          body.operationId,
+          "admin-inspiration-category:update",
+          adminId,
+          requestHash,
+          result
+        );
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统菜谱分类名称已存在，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async reorderInspirationCategories(
+    operationId: OperationId,
+    items: ReorderItem[],
+    adminId: UUID
+  ): Promise<AdminInspirationCategorySummary[]> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify(items);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminInspirationCategorySummary[]>(
+        tx,
+        operationId,
+        "admin-inspiration-category:reorder",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-inspiration-category:reorder", adminId, requestHash);
+
+      const all = await tx.inspirationCategory.findMany({
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+      });
+      this.assertReorderScope(all, items, "系统菜谱分类");
+      await this.writeInspirationCategorySortOrder(tx, items.map(item => item.id));
+
+      const [updated, counts] = await Promise.all([
+        tx.inspirationCategory.findMany({
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]
+        }),
+        tx.recipe.groupBy({
+          by: ["inspirationCategoryId"],
+          where: {
+            ownerId: null,
+            inspirationCategoryId: {
+              in: items.map(item => item.id)
+            }
+          },
+          _count: { _all: true }
+        })
+      ]);
+      const countMap = new Map(counts.map(item => [item.inspirationCategoryId ?? 0, item._count._all]));
+      const result = updated.map(category => toAdminInspirationCategorySummary(category, countMap.get(category.id) ?? 0));
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INSPIRATION_CATEGORY_REORDERED",
+          objectType: "INSPIRATION_CATEGORY",
+          objectId: updated[0]?.id ?? null,
+          payload: { ids: items.map(item => item.id) }
+        }
+      });
+      await completeAdminIdempotentOperation(
+        tx,
+        operationId,
+        "admin-inspiration-category:reorder",
+        adminId,
+        requestHash,
+        result
+      );
+      return result;
+    });
   }
 
   async getRecipeDetail(recipeId: UUID, adminId: UUID): Promise<AdminRecipeDetail> {
@@ -2500,10 +3063,7 @@ export class AdminService {
         throw new ConflictException("菜谱版本已更新，请刷新后重试");
       }
 
-      const inspirationCategory = await tx.inspirationCategory.findUnique({
-        where: { id: body.inspirationCategoryId }
-      });
-      if (!inspirationCategory) throw new NotFoundException("灵感分类不存在");
+      const inspirationCategory = await this.requireInspirationCategory(tx, body.inspirationCategoryId);
 
       const content = await this.buildAdminRecipeContent(tx, body.content);
       this.assertAdminRecipeContent(content);
@@ -2569,17 +3129,20 @@ export class AdminService {
       await startAdminIdempotentOperation(tx, operationId, "admin-recipe:block", adminId, requestHash);
 
       const changed = await tx.recipe.updateMany({
-        where: { id: recipeId, status: "ACTIVE" },
+        where: { id: recipeId, ownerId: null, inspirationCategoryId: { not: null }, status: "ACTIVE" },
         data: {
           status: "BLOCKED",
           blockedReason: normalizedReason,
           blockedAt: new Date()
         }
       });
-      if (changed.count === 0) throw new ConflictException("只有正常菜谱可以下架");
+      if (changed.count === 0) throw new ConflictException("只有正常系统菜谱可以下架");
       const recipe = await tx.recipe.findUniqueOrThrow({
         where: { id: recipeId },
-        include: { owner: { select: { uid: true } } }
+        include: {
+          owner: { select: { uid: true } },
+          inspirationCategory: true
+        }
       });
       const result = this.toAdminRecipeSummary(recipe);
       await tx.auditEvent.create({
@@ -2612,17 +3175,20 @@ export class AdminService {
       await startAdminIdempotentOperation(tx, operationId, "admin-recipe:unblock", adminId, requestHash);
 
       const changed = await tx.recipe.updateMany({
-        where: { id: recipeId, status: "BLOCKED" },
+        where: { id: recipeId, ownerId: null, inspirationCategoryId: { not: null }, status: "BLOCKED" },
         data: {
           status: "ACTIVE",
           blockedReason: null,
           blockedAt: null
         }
       });
-      if (changed.count === 0) throw new ConflictException("只有已下架菜谱可以恢复");
+      if (changed.count === 0) throw new ConflictException("只有已下架系统菜谱可以恢复");
       const recipe = await tx.recipe.findUniqueOrThrow({
         where: { id: recipeId },
-        include: { owner: { select: { uid: true } } }
+        include: {
+          owner: { select: { uid: true } },
+          inspirationCategory: true
+        }
       });
       const result = this.toAdminRecipeSummary(recipe);
       await tx.auditEvent.create({
@@ -2703,14 +3269,21 @@ export class AdminService {
     title: string;
     coverImageUrl: string | null;
     status: RecipeStatus;
+    inspirationCategoryId: UUID | null;
+    inspirationCategory?: { id: UUID; name: string } | null;
     updatedAt: Date;
     owner?: { uid: number } | null;
   }): AdminRecipeSummary {
+    if (!recipe.inspirationCategoryId || !recipe.inspirationCategory) {
+      throw new NotFoundException("系统菜谱分类不存在");
+    }
     return {
       id: recipe.id,
       title: recipe.title,
       coverImageUrl: recipe.coverImageUrl,
       status: recipe.status,
+      inspirationCategoryId: recipe.inspirationCategoryId,
+      inspirationCategoryName: recipe.inspirationCategory.name,
       updatedAt: toIsoDate(recipe.updatedAt),
       ownerUid: recipe.owner?.uid ?? null
     };
@@ -2744,7 +3317,9 @@ export class AdminService {
       throw new BadRequestException("基准人数必须为 1 到 20");
     }
     if (content.ingredients.length === 0) throw new BadRequestException("至少需要一个食材");
-    if (!content.steps.some(item => item.text.trim())) throw new BadRequestException("至少需要一个制作步骤");
+    if (!content.steps.some(item => item.text.trim() || item.imageUrl?.trim())) {
+      throw new BadRequestException("至少需要一个制作步骤");
+    }
     for (const item of content.ingredients) {
       if (item.amount.kind === "EXACT") {
         if (!item.amount.quantity.trim() || Number(item.amount.quantity) <= 0) {
@@ -2823,7 +3398,9 @@ export class AdminService {
           }
         };
       }),
-      steps: content.steps.filter(item => item.text.trim()).map(item => ({ text: item.text.trim() }))
+      steps: content.steps
+        .filter(item => item.text.trim())
+        .map(item => ({ text: item.text.trim(), imageUrl: null }))
     };
   }
 
@@ -2925,6 +3502,14 @@ export class AdminService {
     return category;
   }
 
+  private async requireInspirationCategory(tx: Prisma.TransactionClient, categoryId: UUID) {
+    const category = await tx.inspirationCategory.findUnique({
+      where: { id: categoryId }
+    });
+    if (!category) throw new NotFoundException("系统菜谱分类不存在");
+    return category;
+  }
+
   private async requireSelectableIngredientCategory(tx: Prisma.TransactionClient, categoryId: UUID) {
     const category = await this.requireIngredientCategory(tx, categoryId);
     if (!category.isSelectable) {
@@ -2985,6 +3570,16 @@ export class AdminService {
     if (existing) throw new ConflictException("食材分类名称已存在");
   }
 
+  private async assertInspirationCategoryNameAvailable(tx: Prisma.TransactionClient, name: string, categoryId: UUID | null) {
+    const existing = await tx.inspirationCategory.findFirst({
+      where: {
+        name,
+        ...(categoryId ? { NOT: { id: categoryId } } : {})
+      }
+    });
+    if (existing) throw new ConflictException("系统菜谱分类名称已存在");
+  }
+
   private async assertSystemIngredientNameAvailable(tx: Prisma.TransactionClient, searchKey: string, ingredientId: UUID | null) {
     const existing = await tx.ingredient.findFirst({
       where: {
@@ -3026,8 +3621,45 @@ export class AdminService {
     return recommendation;
   }
 
+  private async requirePendingRecipeRecommendation(tx: Prisma.TransactionClient, recommendationId: UUID) {
+    const recommendation = await tx.recipeRecommendation.findFirst({
+      where: {
+        id: recommendationId,
+        status: "PENDING"
+      },
+      include: {
+        recipe: {
+          include: {
+            owner: {
+              select: {
+                id: true,
+                uid: true,
+                nickname: true
+              }
+            },
+            category: true
+          }
+        },
+        sourceVersion: true,
+        suggestedCategory: true
+      }
+    });
+    if (!recommendation || !recommendation.recipe.ownerId || recommendation.recipe.status !== "ACTIVE") {
+      throw new NotFoundException("待审核个人菜谱不存在");
+    }
+    return recommendation;
+  }
+
   private async nextIngredientCategorySortOrder(tx: Prisma.TransactionClient) {
     const last = await tx.ingredientCategory.findFirst({
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true }
+    });
+    return (last?.sortOrder ?? -1) + 1;
+  }
+
+  private async nextInspirationCategorySortOrder(tx: Prisma.TransactionClient) {
+    const last = await tx.inspirationCategory.findFirst({
       orderBy: { sortOrder: "desc" },
       select: { sortOrder: true }
     });
@@ -3045,6 +3677,18 @@ export class AdminService {
       select: { systemSortOrder: true }
     });
     return (last?.systemSortOrder ?? -1) + 1;
+  }
+
+  private async nextSystemIngredientDisplaySortOrder(tx: Prisma.TransactionClient) {
+    const last = await tx.ingredient.findFirst({
+      where: {
+        ownerId: null,
+        status: "ACTIVE"
+      },
+      orderBy: { displaySortOrder: "desc" },
+      select: { displaySortOrder: true }
+    });
+    return (last?.displaySortOrder ?? -1) + 1;
   }
 
   private async nextSystemUnitSortOrder(tx: Prisma.TransactionClient, type: UnitSummary["type"]) {
@@ -3087,6 +3731,24 @@ export class AdminService {
     }
   }
 
+  private async writeInspirationCategorySortOrder(tx: Prisma.TransactionClient, ids: UUID[]) {
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.inspirationCategory.update({
+        where: { id: ids[index] },
+        data: { sortOrder: -(index + 1) * 1000 }
+      });
+    }
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.inspirationCategory.update({
+        where: { id: ids[index] },
+        data: {
+          sortOrder: index,
+          version: { increment: 1 }
+        }
+      });
+    }
+  }
+
   private async writeSystemIngredientSortOrder(tx: Prisma.TransactionClient, ids: UUID[], categoryId: UUID) {
     for (let index = 0; index < ids.length; index += 1) {
       await tx.ingredient.updateMany({
@@ -3111,6 +3773,34 @@ export class AdminService {
         },
         data: {
           systemSortOrder: index,
+          version: { increment: 1 }
+        }
+      });
+    }
+  }
+
+  private async writeSystemIngredientDisplaySortOrder(tx: Prisma.TransactionClient, ids: UUID[]) {
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.ingredient.updateMany({
+        where: {
+          id: ids[index],
+          ownerId: null,
+          status: "ACTIVE"
+        },
+        data: {
+          displaySortOrder: -(index + 1) * 1000
+        }
+      });
+    }
+    for (let index = 0; index < ids.length; index += 1) {
+      await tx.ingredient.updateMany({
+        where: {
+          id: ids[index],
+          ownerId: null,
+          status: "ACTIVE"
+        },
+        data: {
+          displaySortOrder: index,
           version: { increment: 1 }
         }
       });
@@ -3248,7 +3938,6 @@ export class AdminService {
         }
       }
     }
-
     throw new BadRequestException("创建用户失败，请稍后重试");
   }
 
