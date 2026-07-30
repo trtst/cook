@@ -118,7 +118,10 @@
             </view>
             <view v-if="detailSteps.length" class="step-list">
               <view v-for="(item, index) in detailSteps" :key="index" class="step-card">
-                <text class="step-card__index">{{ `${index + 1}/${detailSteps.length}` }}</text>
+                <text class="step-card__index font-medium">
+                  <text class="step-card__index-current font-black">{{ index + 1 }} </text>
+                  <text class="step-card__index-total">{{ `/ ${detailSteps.length}` }}</text>
+                </text>
                 <image v-if="item.imageUrl" class="step-card__cover-image" :src="item.imageUrl" mode="widthFix" />
                 <text v-if="hasStepText(item.text)" class="step-card__text">{{ item.text.trim() }}</text>
               </view>
@@ -1492,10 +1495,26 @@ function limitSceneName(value: string) {
 }
 
 .step-card__index {
-  color: var(--detail-step-index-color);
+  color: var(--color-text);
   font-size: 24rpx;
+  line-height: 1;
+}
+
+.step-card__index-current,
+.step-card__index-total {
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.step-card__index-current {
+  font-size: 36rpx;
+  padding-right: 10rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 1.2;
+}
+
+.step-card__index-total {
+  font-size: 28rpx;
+  font-weight: var(--font-weight-medium);
 }
 
 .step-card__cover-image {

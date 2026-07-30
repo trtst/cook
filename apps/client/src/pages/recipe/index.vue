@@ -176,7 +176,10 @@
                   <text class="cookfont icon-time recipe-card__meta-icon" />
                   <text class="recipe-card__meta-text">{{ item.meta }}</text>
                 </view>
-                <text v-if="item.tag" class="recipe-card__tag">{{ item.tag }}</text>
+                <view v-if="item.tag" class="recipe-card__tag" :class="{ 'recipe-card__tag--metric': item.kind === 'inspiration' }">
+                  <text v-if="item.kind === 'inspiration'" class="cookfont icon-collect recipe-card__tag-icon" />
+                  <text>{{ item.tag }}</text>
+                </view>
               </view>
               <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
             </view>
@@ -768,6 +771,12 @@ function formatDuration(value: RecipeDuration | null) {
 	return "未设时长";
 }
 
+function formatMetricCount(value: number) {
+	if (value <= 999) return "";
+	if (value < 10000) return `${Math.floor(value / 100) / 10}`.replace(/\.0$/, "") + "k";
+	return `${Math.floor(value / 1000) / 10}`.replace(/\.0$/, "") + "w";
+}
+
 function toMyCard(item: MyRecipeSummary): CardItem {
 	return {
 		id: item.id,
@@ -787,8 +796,8 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		coverTag: item.category.name,
-		meta: `${formatDifficulty(item.difficulty)} · ${formatDuration(item.duration)}`,
-		tag: "",
+		meta: formatDuration(item.duration),
+		tag: formatMetricCount(item.collectCount),
 		subline: "",
 		kind: "inspiration"
 	};
@@ -914,8 +923,8 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 .sticky-wrap {
   position: sticky;
   z-index: 20;
-  margin-top: 18rpx;
-  padding-bottom: var(--space-sm);
+  margin-top: 20rpx;
+  padding-bottom: 20rpx;
   background: var(--color-page);
 }
 
@@ -1060,7 +1069,6 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 }
 
 .notice,
-.recipe-card,
 .login-card {
   margin-top: var(--space-md);
 }
@@ -1365,6 +1373,9 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 }
 
 .recipe-card__tag {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
   flex: 0 0 auto;
   max-width: 40%;
   overflow: hidden;
@@ -1373,6 +1384,18 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recipe-card__tag--metric {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+.recipe-card__tag-icon {
+  color: inherit;
+  font-size: 20rpx;
+  line-height: 1;
 }
 
 .manage-fab {
