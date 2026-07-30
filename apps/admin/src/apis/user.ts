@@ -1,4 +1,4 @@
-import { requestData, type IsoDateTime, type PageQuery, type PageResult, type UUID } from "./http";
+import { requestData, type IsoDateTime, type PageQuery, type PageResult, type OperationId, type UUID } from "./http";
 
 export interface UserProfile {
   id: UUID;
@@ -16,7 +16,7 @@ export interface AdminListUsersQuery extends PageQuery {
 }
 
 export interface CreateAdminUserRequest {
-  operationId: UUID;
+  operationId: OperationId;
   phone: string;
   password: string;
   nickname?: string;
@@ -24,18 +24,18 @@ export interface CreateAdminUserRequest {
 }
 
 export interface UpdateAdminUserRequest {
-  operationId: UUID;
+  operationId: OperationId;
   phone?: string;
   nickname?: string;
 }
 
 export interface SetAdminUserStatusRequest {
-  operationId: UUID;
+  operationId: OperationId;
   status: "ACTIVE" | "DISABLED";
 }
 
 export interface ResetAdminUserPasswordRequest {
-  operationId: UUID;
+  operationId: OperationId;
   newPassword: string;
 }
 
@@ -126,27 +126,35 @@ export const userApi = {
     });
   },
   create(body: CreateAdminUserRequest) {
+    const { operationId, ...payload } = body;
     return requestData<UserProfile>("/admin/users", {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   update(userId: UUID, body: UpdateAdminUserRequest) {
-    return requestData<UserProfile>(`/admin/users/${userId}`, {
+    const { operationId, ...payload } = body;
+    return requestData<UserProfile>(`/admin/users/${encodeURIComponent(String(userId))}`, {
       method: "PUT",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   setStatus(userId: UUID, body: SetAdminUserStatusRequest) {
-    return requestData<UserProfile>(`/admin/users/${userId}/status`, {
+    const { operationId, ...payload } = body;
+    return requestData<UserProfile>(`/admin/users/${encodeURIComponent(String(userId))}/status`, {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   resetPassword(userId: UUID, body: ResetAdminUserPasswordRequest) {
-    return requestData<AdminResetUserPasswordResponse>(`/admin/users/${userId}/reset-password`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminResetUserPasswordResponse>(`/admin/users/${encodeURIComponent(String(userId))}/reset-password`, {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   getEntitlements(userId: UUID) {

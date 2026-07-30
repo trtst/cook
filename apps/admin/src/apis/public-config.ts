@@ -14,14 +14,15 @@ export const publicConfigApi = {
   },
   uploadLoginImage(file: File, operationId: string) {
     const formData = new FormData();
-    formData.append("operationId", operationId);
     formData.append("file", file);
-    return uploadForm<AppConfigResponse>("/admin/app-config/login-image", formData);
+    return uploadForm<AppConfigResponse>("/admin/app-config/login-image", formData, {
+      idempotencyKey: operationId
+    });
   },
   clearLoginImage(operationId: string) {
     return requestData<AppConfigResponse>("/admin/app-config/login-image", {
       method: "DELETE",
-      body: { operationId }
+      idempotencyKey: operationId
     });
   }
 };

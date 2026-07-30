@@ -3,6 +3,8 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { Plus, Refresh } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ingredientApi, type AdminUnitSummary } from "@/apis/ingredient";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 
 type UnitDialogMode = "create" | "edit";
 
@@ -25,8 +27,8 @@ const loading = ref(false);
 const saving = ref(false);
 const dialogVisible = ref(false);
 const dialogMode = ref<UnitDialogMode>("create");
-const editingUnitId = ref<string | null>(null);
-const draggingUnitId = ref<string>("");
+const editingUnitId = ref<UUID | null>(null);
+const draggingUnitId = ref<UUID | "">("");
 const draggingType = ref<AdminUnitSummary["type"] | "">("");
 const units = ref<AdminUnitSummary[]>([]);
 
@@ -100,7 +102,7 @@ function handleDragStart(event: DragEvent, row: AdminUnitSummary) {
   draggingType.value = row.type;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", row.id);
+    event.dataTransfer.setData("text/plain", String(row.id));
   }
 }
 
@@ -128,7 +130,7 @@ async function applyUnitOrder(type: AdminUnitSummary["type"], nextList: AdminUni
   try {
     units.value = await ingredientApi.reorderUnits(
       type,
-      crypto.randomUUID(),
+      createOperationId(),
       nextList.map(item => ({
         id: item.id,
         expectedVersion: item.version
@@ -165,7 +167,7 @@ async function submitUnit() {
   try {
     if (dialogMode.value === "create") {
       await ingredientApi.createUnit({
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         name,
         type: form.type
       });
@@ -177,7 +179,7 @@ async function submitUnit() {
         return;
       }
       await ingredientApi.updateUnit(editingUnitId.value, {
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         expectedVersion: current.version,
         name,
         type: form.type
@@ -202,7 +204,7 @@ async function removeUnit(row: AdminUnitSummary) {
       cancelButtonText: "取消"
     });
     await ingredientApi.deleteUnit(row.id, {
-      operationId: crypto.randomUUID(),
+      operationId: createOperationId(),
       expectedVersion: row.version
     });
     ElMessage.success("系统单位已删除");

@@ -3,13 +3,14 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { Plus, Refresh, Search } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { ApiClientError } from "@/apis/http";
+import { ApiClientError, type UUID } from "@/apis/http";
 import {
   userApi,
   type AdminUserEntitlementResponse,
   type UserProfile
 } from "@/apis/user";
 import { useSessionStore } from "@/stores/session";
+import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
 type UserStatus = "ACTIVE" | "DISABLED";
@@ -25,7 +26,7 @@ const entitlementError = ref("");
 const userDialogVisible = ref(false);
 const userDialogMode = ref<UserFormMode>("create");
 const userSaving = ref(false);
-const editingUserId = ref<string | null>(null);
+const editingUserId = ref<UUID | null>(null);
 const resetPasswordVisible = ref(false);
 const resetPasswordSaving = ref(false);
 const resetPasswordUser = ref<UserProfile | null>(null);
@@ -198,7 +199,7 @@ async function submitUser() {
   try {
     if (userDialogMode.value === "create") {
       await userApi.create({
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         phone,
         password: userForm.password.trim(),
         nickname: nickname || undefined,
@@ -208,7 +209,7 @@ async function submitUser() {
       ElMessage.success("用户已创建");
     } else {
       await userApi.update(editingUserId.value!, {
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         phone,
         nickname
       });
@@ -247,7 +248,7 @@ async function submitResetPassword() {
   resetPasswordSaving.value = true;
   try {
     await userApi.resetPassword(resetPasswordUser.value.id, {
-      operationId: crypto.randomUUID(),
+      operationId: createOperationId(),
       newPassword: resetPasswordDraft.value.trim()
     });
     resetPasswordVisible.value = false;
@@ -275,7 +276,7 @@ async function toggleUserStatus(row: UserProfile, status: UserStatus) {
 
   try {
     await userApi.setStatus(row.id, {
-      operationId: crypto.randomUUID(),
+      operationId: createOperationId(),
       status
     });
     ElMessage.success(`已${actionText}`);

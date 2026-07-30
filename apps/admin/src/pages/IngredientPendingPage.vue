@@ -11,6 +11,8 @@ import {
   type AdminPendingIngredientSummary,
   type AdminUnitSummary
 } from "@/apis/ingredient";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
 const actionLabelMap: Record<AdminIngredientReviewAction, string> = {
@@ -80,9 +82,9 @@ const query = reactive({
 const form = reactive({
   action: "APPROVE_CREATE" as AdminIngredientReviewAction,
   name: "",
-  categoryId: "",
-  defaultUnitId: "",
-  targetIngredientId: "",
+  categoryId: "" as UUID | "",
+  defaultUnitId: "" as UUID | "",
+  targetIngredientId: "" as UUID | "",
   rejectReasonCode: "" as AdminIngredientRejectReasonCode | "",
   reason: ""
 });
@@ -222,7 +224,7 @@ function buildPayload() {
       return null;
     }
     return {
-      operationId: crypto.randomUUID(),
+      operationId: createOperationId(),
       action: form.action,
       expectedVersion: currentRow.value.version,
       rejectReasonCode: form.rejectReasonCode,
@@ -248,14 +250,18 @@ function buildPayload() {
     return null;
   }
 
+  const categoryId = form.categoryId;
+  const defaultUnitId = form.defaultUnitId;
+  const targetIngredientId = form.action === "APPROVE_MERGE" ? form.targetIngredientId || undefined : undefined;
+
   return {
-    operationId: crypto.randomUUID(),
+    operationId: createOperationId(),
     action: form.action,
     expectedVersion: currentRow.value.version,
     name,
-    categoryId: form.categoryId,
-    defaultUnitId: form.defaultUnitId,
-    targetIngredientId: form.action === "APPROVE_MERGE" ? form.targetIngredientId : undefined,
+    categoryId,
+    defaultUnitId,
+    targetIngredientId,
     reason: form.reason.trim() || undefined
   };
 }

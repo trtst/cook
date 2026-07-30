@@ -1,4 +1,4 @@
-import { requestData, uploadForm, type IsoDateTime, type PageResult, type UUID } from "./http";
+import { requestData, uploadForm, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
 
 export interface UnitSummary {
   id: UUID;
@@ -70,7 +70,7 @@ export interface AdminPendingIngredientSummary {
 }
 
 export interface AdminReviewPendingIngredientPayload {
-  operationId: UUID;
+  operationId: OperationId;
   action: AdminIngredientReviewAction;
   expectedVersion: number;
   name?: string;
@@ -89,7 +89,7 @@ export interface AdminReviewPendingIngredientResult {
 }
 
 export interface IngredientCategoryPayload {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
 }
 
@@ -98,7 +98,7 @@ export interface UpdateIngredientCategoryPayload extends IngredientCategoryPaylo
 }
 
 export interface IngredientPayload {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
   categoryId: UUID;
   defaultUnitId: UUID;
@@ -109,7 +109,7 @@ export interface UpdateIngredientPayload extends IngredientPayload {
 }
 
 export interface UnitPayload {
-  operationId: UUID;
+  operationId: OperationId;
   name: string;
   type: AdminUnitSummary["type"];
 }
@@ -119,12 +119,12 @@ export interface UpdateUnitPayload extends UnitPayload {
 }
 
 export interface DeleteUnitPayload {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
 }
 
 export interface UpdateIngredientStatusPayload {
-  operationId: UUID;
+  operationId: OperationId;
   expectedVersion: number;
   status: "ACTIVE" | "DISABLED";
 }
@@ -155,52 +155,62 @@ export const ingredientApi = {
     });
   },
   createCategory(body: IngredientCategoryPayload) {
+    const { operationId, ...payload } = body;
     return requestData<AdminIngredientCategorySummary>("/admin/ingredient-categories", {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   updateCategory(categoryId: UUID, body: UpdateIngredientCategoryPayload) {
-    return requestData<AdminIngredientCategorySummary>(`/admin/ingredient-categories/${encodeURIComponent(categoryId)}`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminIngredientCategorySummary>(`/admin/ingredient-categories/${encodeURIComponent(String(categoryId))}`, {
       method: "PUT",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
-  reorderCategories(operationId: UUID, items: ReorderItem[]) {
+  reorderCategories(operationId: OperationId, items: ReorderItem[]) {
     return requestData<AdminIngredientCategorySummary[]>("/admin/ingredient-categories/reorder", {
       method: "POST",
-      body: { operationId, items }
+      body: { items },
+      idempotencyKey: operationId
     });
   },
   listUnits() {
     return requestData<AdminUnitSummary[]>("/admin/units");
   },
   createUnit(body: UnitPayload) {
+    const { operationId, ...payload } = body;
     return requestData<AdminUnitSummary>("/admin/units", {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   updateUnit(unitId: UUID, body: UpdateUnitPayload) {
-    return requestData<AdminUnitSummary>(`/admin/units/${encodeURIComponent(unitId)}`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminUnitSummary>(`/admin/units/${encodeURIComponent(String(unitId))}`, {
       method: "PUT",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   deleteUnit(unitId: UUID, body: DeleteUnitPayload) {
-    return requestData<{ unitId: UUID; deletedAt: IsoDateTime }>(`/admin/units/${encodeURIComponent(unitId)}`, {
+    return requestData<{ unitId: UUID; deletedAt: IsoDateTime }>(`/admin/units/${encodeURIComponent(String(unitId))}`, {
       method: "DELETE",
-      body
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
     });
   },
-  reorderUnits(type: AdminUnitSummary["type"], operationId: UUID, items: ReorderItem[]) {
+  reorderUnits(type: AdminUnitSummary["type"], operationId: OperationId, items: ReorderItem[]) {
     return requestData<AdminUnitSummary[]>("/admin/units/reorder", {
       method: "POST",
       body: {
         type,
-        operationId,
         items
-      }
+      },
+      idempotencyKey: operationId
     });
   },
   listIngredients(query: AdminIngredientListQuery) {
@@ -215,47 +225,52 @@ export const ingredientApi = {
     });
   },
   createIngredient(body: IngredientPayload) {
+    const { operationId, ...payload } = body;
     return requestData<AdminIngredientSummary>("/admin/ingredients", {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   updateIngredient(ingredientId: UUID, body: UpdateIngredientPayload) {
-    return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(ingredientId)}`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}`, {
       method: "PUT",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
   setIngredientStatus(ingredientId: UUID, body: UpdateIngredientStatusPayload) {
-    return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(ingredientId)}/status`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}/status`, {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   },
-  uploadIngredientImage(ingredientId: UUID, file: File, operationId: UUID, expectedVersion: number) {
+  uploadIngredientImage(ingredientId: UUID, file: File, operationId: OperationId, expectedVersion: number) {
     const formData = new FormData();
-    formData.append("operationId", operationId);
     formData.append("expectedVersion", String(expectedVersion));
     formData.append("file", file);
-    return uploadForm<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(ingredientId)}/image`, formData);
-  },
-  clearIngredientImage(ingredientId: UUID, operationId: UUID, expectedVersion: number) {
-    return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(ingredientId)}/image`, {
-      method: "DELETE",
-      body: {
-        operationId,
-        expectedVersion
-      }
+    return uploadForm<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}/image`, formData, {
+      idempotencyKey: operationId
     });
   },
-  reorderIngredients(categoryId: UUID, operationId: UUID, items: ReorderItem[]) {
+  clearIngredientImage(ingredientId: UUID, operationId: OperationId, expectedVersion: number) {
+    return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}/image`, {
+      method: "DELETE",
+      body: { expectedVersion },
+      idempotencyKey: operationId
+    });
+  },
+  reorderIngredients(categoryId: UUID, operationId: OperationId, items: ReorderItem[]) {
     return requestData<AdminIngredientSummary[]>("/admin/ingredients/reorder", {
       method: "POST",
       body: {
         categoryId,
-        operationId,
         items
-      }
+      },
+      idempotencyKey: operationId
     });
   },
   listPendingIngredients(query: AdminPendingIngredientListQuery) {
@@ -268,9 +283,11 @@ export const ingredientApi = {
     });
   },
   reviewPendingIngredient(ingredientId: UUID, body: AdminReviewPendingIngredientPayload) {
-    return requestData<AdminReviewPendingIngredientResult>(`/admin/pending-ingredients/${encodeURIComponent(ingredientId)}/review`, {
+    const { operationId, ...payload } = body;
+    return requestData<AdminReviewPendingIngredientResult>(`/admin/pending-ingredients/${encodeURIComponent(String(ingredientId))}/review`, {
       method: "POST",
-      body
+      body: payload,
+      idempotencyKey: operationId
     });
   }
 };

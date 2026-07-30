@@ -1,7 +1,8 @@
 import { useSessionStore } from "@/stores/session";
 import { adminAppConfig } from "./config";
 
-export type UUID = string;
+export type UUID = number;
+export type OperationId = string;
 export type IsoDateTime = string;
 
 export interface PageQuery {
@@ -57,10 +58,24 @@ interface RequestOptions {
   auth?: boolean;
   query?: Record<string, string | number | boolean | null | undefined>;
   body?: unknown;
+  headers?: Record<string, string>;
+  idempotencyKey?: OperationId;
 }
 
 function getRequestId() {
   return crypto.randomUUID();
+}
+
+function normalizeIdempotencyKey(value: string) {
+  const normalized = value.trim();
+  if (/^\d+$/.test(normalized)) return normalized;
+
+  let hash = 0n;
+  for (const char of normalized) {
+    hash = (hash * 131n + BigInt(char.charCodeAt(0))) % 1000000000000000000000000000000n;
+  }
+
+  return hash.toString().padStart(31, "0");
 }
 
 function buildUrl(path: string, query?: RequestOptions["query"]) {
@@ -111,6 +126,7 @@ function clearUnauthorized() {
 export async function requestData<T>(path: string, options: RequestOptions = {}) {
   const auth = options.auth ?? true;
   const token = auth ? useSessionStore().token : null;
+  const idempotencyKey = options.idempotencyKey ? normalizeIdempotencyKey(options.idempotencyKey) : undefined;
   const response = await fetch(buildUrl(path, options.query), {
     method: options.method ?? "GET",
     headers: {
@@ -119,7 +135,9 @@ export async function requestData<T>(path: string, options: RequestOptions = {})
       "X-Admin-Build": String(adminAppConfig.appBuild),
       "X-Platform": "admin-web",
       "X-Request-Id": getRequestId(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      ...(options.headers ?? {})
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     cache: "no-store",
@@ -152,7 +170,7 @@ export async function requestData<T>(path: string, options: RequestOptions = {})
   return body.data;
 }
 
-export async function uploadForm<T>(path: string, formData: FormData, options: Pick<RequestOptions, "auth"> = {}) {
+export async function uploadForm<T>(path: string, formData: FormData, options: Pick<RequestOptions, "auth" | "idempotencyKey" | "headers"> = {}) {
   const auth = options.auth ?? true;
   const token = auth ? useSessionStore().token : null;
   const response = await fetch(buildUrl(path), {
@@ -162,7 +180,9 @@ export async function uploadForm<T>(path: string, formData: FormData, options: P
       "X-Admin-Build": String(adminAppConfig.appBuild),
       "X-Platform": "admin-web",
       "X-Request-Id": getRequestId(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.idempotencyKey ? { "Idempotency-Key": normalizeIdempotencyKey(options.idempotencyKey) } : {}),
+      ...(options.headers ?? {})
     },
     body: formData,
     cache: "no-store",

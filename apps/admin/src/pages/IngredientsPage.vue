@@ -3,11 +3,13 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(false);
 const saving = ref(false);
 const dialogVisible = ref(false);
-const editingCategoryId = ref<string | null>(null);
+const editingCategoryId = ref<UUID | null>(null);
 const categories = ref<AdminIngredientCategorySummary[]>([]);
 
 const query = reactive({
@@ -61,7 +63,7 @@ async function submitCategory() {
         return;
       }
       await ingredientApi.updateCategory(editingCategoryId.value, {
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         expectedVersion: current.version,
         name
       });
@@ -88,7 +90,7 @@ async function applyCategoryOrder(nextList: AdminIngredientCategorySummary[]) {
   categories.value = nextList;
   try {
     categories.value = await ingredientApi.reorderCategories(
-      crypto.randomUUID(),
+      createOperationId(),
       nextList.map(item => ({
         id: item.id,
         expectedVersion: item.version

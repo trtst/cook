@@ -8,6 +8,8 @@ import {
   type AdminIngredientSummary,
   type AdminUnitSummary
 } from "@/apis/ingredient";
+import type { UUID } from "@/apis/http";
+import { createOperationId } from "@/utils/operation-id";
 
 type IngredientDialogMode = "create" | "edit";
 type IngredientStatusFilter = "ACTIVE" | "DISABLED" | "ALL";
@@ -34,7 +36,7 @@ const dialogVisible = ref(false);
 const batchDialogVisible = ref(false);
 const cropDialogVisible = ref(false);
 const dialogMode = ref<IngredientDialogMode>("create");
-const editingIngredientId = ref<string | null>(null);
+const editingIngredientId = ref<UUID | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const categories = ref<AdminIngredientCategorySummary[]>([]);
 const ingredients = ref<AdminIngredientSummary[]>([]);
@@ -42,7 +44,7 @@ const units = ref<AdminUnitSummary[]>([]);
 const total = ref(0);
 const page = ref(1);
 const hasMoreIngredients = ref(false);
-const draggingIngredientId = ref("");
+const draggingIngredientId = ref<UUID | "">("");
 const loadMoreRef = ref<HTMLElement | null>(null);
 
 let loadMoreObserver: IntersectionObserver | null = null;
@@ -50,23 +52,23 @@ let ingredientsRequest = 0;
 
 const query = reactive({
   keyword: "",
-  categoryId: "",
+  categoryId: "" as UUID | "",
   status: "ACTIVE" as IngredientStatusFilter
 });
 
 const form = reactive({
   name: "",
-  categoryId: "",
-  defaultUnitId: ""
+  categoryId: "" as UUID | "",
+  defaultUnitId: "" as UUID | ""
 });
 
 const batchForm = reactive({
-  categoryId: "",
+  categoryId: "" as UUID | "",
   text: ""
 });
 
 const cropTarget = reactive({
-  ingredientId: "",
+  ingredientId: "" as UUID | "",
   expectedVersion: 0,
   ingredientName: ""
 });
@@ -239,7 +241,7 @@ async function loadPage() {
   }
 }
 
-async function selectCategory(categoryId: string) {
+async function selectCategory(categoryId: UUID) {
   if (query.categoryId === categoryId) return;
   query.categoryId = categoryId;
   query.keyword = "";
@@ -319,7 +321,7 @@ async function submitIngredient() {
   try {
     if (dialogMode.value === "create") {
       await ingredientApi.createIngredient({
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         name,
         categoryId: form.categoryId,
         defaultUnitId: form.defaultUnitId
@@ -332,7 +334,7 @@ async function submitIngredient() {
         return;
       }
       await ingredientApi.updateIngredient(editingIngredientId.value, {
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         expectedVersion: current.version,
         name,
         categoryId: form.categoryId,
@@ -366,7 +368,7 @@ function parseBatchText() {
     return null;
   }
 
-  const items: Array<{ name: string; defaultUnitId: string }> = [];
+  const items: Array<{ name: string; defaultUnitId: UUID }> = [];
   const seen = new Set<string>();
   for (const { line, index } of lines) {
     const parts = line.split(/[,\uFF0C\t]/).map(item => item.trim()).filter(Boolean);
@@ -410,7 +412,7 @@ async function submitBatchIngredients() {
   try {
     for (const item of parsed.items) {
       await ingredientApi.createIngredient({
-        operationId: crypto.randomUUID(),
+        operationId: createOperationId(),
         name: item.name,
         categoryId: parsed.categoryId,
         defaultUnitId: item.defaultUnitId
@@ -447,7 +449,7 @@ async function applyIngredientOrder(nextList: AdminIngredientSummary[]) {
   try {
     await ingredientApi.reorderIngredients(
       query.categoryId,
-      crypto.randomUUID(),
+      createOperationId(),
       nextList.map(item => ({
         id: item.id,
         expectedVersion: item.version
@@ -476,7 +478,7 @@ function handleIngredientDragStart(event: DragEvent, row: AdminIngredientSummary
   draggingIngredientId.value = row.id;
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", row.id);
+    event.dataTransfer.setData("text/plain", String(row.id));
   }
 }
 
@@ -608,7 +610,7 @@ async function submitIngredientImage() {
     await ingredientApi.uploadIngredientImage(
       cropTarget.ingredientId,
       file,
-      crypto.randomUUID(),
+      createOperationId(),
       cropTarget.expectedVersion
     );
     cropDialogVisible.value = false;
@@ -640,7 +642,7 @@ async function toggleIngredientStatus(row: AdminIngredientSummary, status: "ACTI
   saving.value = true;
   try {
     await ingredientApi.setIngredientStatus(row.id, {
-      operationId: crypto.randomUUID(),
+      operationId: createOperationId(),
       expectedVersion: row.version,
       status
     });

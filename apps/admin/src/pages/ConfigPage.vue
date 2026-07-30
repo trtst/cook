@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { Delete, Picture, Refresh, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { publicConfigApi } from "@/apis/public-config";
+import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(false);
 const uploading = ref(false);
@@ -38,7 +39,7 @@ async function handleFileChange(event: Event) {
 
   uploading.value = true;
   try {
-    const result = await publicConfigApi.uploadLoginImage(file, crypto.randomUUID());
+    const result = await publicConfigApi.uploadLoginImage(file, createOperationId());
     imageUrl.value = result.login.imageUrl || "";
     imageVersion.value = Date.now();
     ElMessage.success("登录图已更新");
@@ -62,7 +63,7 @@ async function clearImage() {
 
   uploading.value = true;
   try {
-    const result = await publicConfigApi.clearLoginImage(crypto.randomUUID());
+    const result = await publicConfigApi.clearLoginImage(createOperationId());
     imageUrl.value = result.login.imageUrl || "";
     imageVersion.value = Date.now();
     ElMessage.success("已恢复默认图");
