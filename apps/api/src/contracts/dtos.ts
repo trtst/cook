@@ -614,6 +614,24 @@ export class RecipeStepDto {
   @IsString()
   @MaxLength(1000)
   text!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  imageUrl!: string | null;
+}
+
+export class AdminRecipeStepDto extends RecipeStepDto {
+  @ApiProperty({ nullable: true, maxLength: 128 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  imageTempKey!: string | null;
 }
 
 export class RecipeDraftStepDto {
@@ -1148,13 +1166,13 @@ export class AdminRecipeContentDto {
   @Type(() => RecipeIngredientDto)
   ingredients!: RecipeIngredientDto[];
 
-  @ApiProperty({ type: [RecipeStepDto] })
+  @ApiProperty({ type: [AdminRecipeStepDto] })
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => RecipeStepDto)
-  steps!: RecipeStepDto[];
+  @Type(() => AdminRecipeStepDto)
+  steps!: AdminRecipeStepDto[];
 }
 
 export class UpdateAdminRecipeDto extends VersionedOperationDto {
@@ -1163,6 +1181,22 @@ export class UpdateAdminRecipeDto extends VersionedOperationDto {
   @IsInt()
   @Min(1)
   inspirationCategoryId!: number;
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  coverImageUrl!: string | null;
+
+  @ApiProperty({ nullable: true, maxLength: 128 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  coverImageTempKey!: string | null;
 
   @ApiProperty({ type: AdminRecipeContentDto })
   @IsDefined()
@@ -1178,11 +1212,33 @@ export class CreateAdminRecipeDto extends OperationDto {
   @Min(1)
   inspirationCategoryId!: number;
 
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  coverImageUrl!: string | null;
+
+  @ApiProperty({ nullable: true, maxLength: 128 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  coverImageTempKey!: string | null;
+
   @ApiProperty({ type: AdminRecipeContentDto })
   @IsDefined()
   @ValidateNested()
   @Type(() => AdminRecipeContentDto)
   content!: AdminRecipeContentDto;
+}
+
+export class UploadAdminRecipeImageDto {
+  @ApiProperty({ example: "COVER", enum: ["COVER", "STEP"] })
+  @IsIn(["COVER", "STEP"])
+  scene!: "COVER" | "STEP";
 }
 
 export class ReviewPendingRecipeDto extends VersionedOperationDto {

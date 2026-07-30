@@ -485,6 +485,19 @@ export class UploadImageResultModel {
   @ApiProperty({ type: UploadImageModel }) upload!: UploadImageModel;
 }
 
+export class AdminRecipeImageUploadModel {
+  @ApiProperty({ type: String }) tempKey!: string;
+  @ApiProperty({ type: String, enum: ["COVER", "STEP"] }) scene!: string;
+  @ApiProperty({ type: String }) contentType!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) sizeBytes!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) width!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) height!: number;
+}
+
+export class AdminRecipeImageUploadResultModel {
+  @ApiProperty({ type: AdminRecipeImageUploadModel }) image!: AdminRecipeImageUploadModel;
+}
+
 export class RecipeDraftSummaryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;

@@ -1,13 +1,16 @@
 import { Module } from "@nestjs/common";
+import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { EntitlementModule } from "../entitlement/entitlement.module";
 import { AdminController } from "../auth/admin.controller";
+import { AdminRecipeImageController, AdminRecipeImagePublicController } from "./admin-recipe-image.controller";
+import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { AdminService } from "./admin.service";
 import { IngredientImageService } from "./ingredient-image.service";
 
 @Module({
   imports: [EntitlementModule],
-  controllers: [AdminController],
-  providers: [AdminService, IngredientImageService],
-  exports: [IngredientImageService]
+  controllers: [AdminController, AdminRecipeImageController, AdminRecipeImagePublicController],
+  providers: [AdminService, IngredientImageService, AdminRecipeImageService, SuperAdminGuard],
+  exports: [IngredientImageService, AdminRecipeImageService]
 })
 export class AdminModule {}

@@ -103,7 +103,8 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
     })),
     steps: content.steps.map(item => ({
       text: item.text,
-      imageUrl: null
+      imageUrl: item.imageUrl,
+      imageTempKey: item.imageTempKey
     }))
   };
 }
@@ -298,14 +299,16 @@ export class AdminController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminRecipeDetailModel, "后台新增系统菜谱")
   createRecipe(
-    @Req() request: RequestWithAdmin,
+    @Req() request: RequestWithAdmin & AssetRequest,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateAdminRecipeDto
   ) {
     return this.adminService
-      .createRecipe(request.admin.adminId, {
+      .createRecipe(request, request.admin.adminId, {
         operationId,
         inspirationCategoryId: body.inspirationCategoryId,
+        coverImageUrl: body.coverImageUrl,
+        coverImageTempKey: body.coverImageTempKey,
         content: toAdminRecipeContentInput(body.content)
       })
       .then(result => ok(result));
@@ -325,16 +328,18 @@ export class AdminController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminRecipeDetailModel, "后台编辑一个灵感菜谱正文")
   updateRecipe(
-    @Req() request: RequestWithAdmin,
+    @Req() request: RequestWithAdmin & AssetRequest,
     @Param("recipeId", ParseIntPipe) recipeId: number,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminRecipeDto
   ) {
     return this.adminService
-      .updateRecipe(recipeId, request.admin.adminId, {
+      .updateRecipe(request, recipeId, request.admin.adminId, {
         operationId,
         expectedVersion: body.expectedVersion,
         inspirationCategoryId: body.inspirationCategoryId,
+        coverImageUrl: body.coverImageUrl,
+        coverImageTempKey: body.coverImageTempKey,
         content: toAdminRecipeContentInput(body.content)
       })
       .then(result => ok(result));

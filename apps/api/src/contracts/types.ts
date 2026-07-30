@@ -513,6 +513,21 @@ export interface UploadImageResponse {
   upload: UploadImageSummary;
 }
 
+export type AdminRecipeImageScene = "COVER" | "STEP";
+
+export interface AdminRecipeImageUploadSummary {
+  tempKey: string;
+  scene: AdminRecipeImageScene;
+  contentType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+}
+
+export interface AdminRecipeImageUploadResponse {
+  image: AdminRecipeImageUploadSummary;
+}
+
 export interface RecipeIngredientInput {
   ingredientId: UUID;
   amount: RecipeAmountInput;
@@ -540,6 +555,12 @@ export interface RecipeIngredientSnapshot {
 export interface RecipeStepSnapshot {
   text: string;
   imageUrl: string | null;
+}
+
+export interface AdminRecipeStepInput {
+  text: string;
+  imageUrl: string | null;
+  imageTempKey: string | null;
 }
 
 export interface RecipeDraftStepInput {
@@ -585,7 +606,7 @@ export interface AdminRecipeContentInput {
   duration: RecipeDuration;
   tips: string | null;
   ingredients: RecipeIngredientInput[];
-  steps: RecipeStepSnapshot[];
+  steps: AdminRecipeStepInput[];
 }
 
 export interface ReorderItem {
@@ -805,12 +826,16 @@ export interface UpdateAdminRecipeRequest {
   operationId: OperationId;
   expectedVersion: number;
   inspirationCategoryId: UUID;
+  coverImageUrl: string | null;
+  coverImageTempKey: string | null;
   content: AdminRecipeContentInput;
 }
 
 export interface CreateAdminRecipeRequest {
   operationId: OperationId;
   inspirationCategoryId: UUID;
+  coverImageUrl: string | null;
+  coverImageTempKey: string | null;
   content: AdminRecipeContentInput;
 }
 
