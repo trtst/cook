@@ -10,7 +10,13 @@ const router = useRouter();
 const session = useSessionStore();
 
 const activeMenu = computed(() => {
-  if (route.path.startsWith("/recipes/") && route.path !== "/recipes/list" && route.path !== "/recipes/reports") {
+  if (
+    route.path.startsWith("/recipes/") &&
+    route.path !== "/recipes/list" &&
+    route.path !== "/recipes/reports" &&
+    route.path !== "/recipes/categories" &&
+    route.path !== "/recipes/pending"
+  ) {
     return "/recipes/list";
   }
   return route.path;
@@ -64,7 +70,9 @@ function logout() {
             <el-icon><Files /></el-icon>
             <span>菜谱治理</span>
           </template>
-          <el-menu-item index="/recipes/list">菜谱列表</el-menu-item>
+          <el-menu-item index="/recipes/categories">系统菜谱分类</el-menu-item>
+          <el-menu-item index="/recipes/list">系统菜谱</el-menu-item>
+          <el-menu-item index="/recipes/pending">待审核个人菜谱</el-menu-item>
           <el-menu-item index="/recipes/reports">菜谱举报</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="/ingredients">

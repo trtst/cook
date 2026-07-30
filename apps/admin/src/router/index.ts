@@ -55,10 +55,28 @@ const router = createRouter({
           redirect: "/recipes/list"
         },
         {
+          path: "recipes/categories",
+          name: "recipe-categories",
+          component: () => import("@/pages/RecipeCategoriesPage.vue"),
+          meta: { title: "系统菜谱分类" }
+        },
+        {
           path: "recipes/list",
           name: "recipe-list",
           component: () => import("@/pages/RecipesPage.vue"),
-          meta: { title: "菜谱列表" }
+          meta: { title: "系统菜谱" }
+        },
+        {
+          path: "recipes/pending",
+          name: "recipe-pending",
+          component: () => import("@/pages/RecipePendingPage.vue"),
+          meta: { title: "待审核个人菜谱" }
+        },
+        {
+          path: "recipes/create",
+          name: "recipe-create",
+          component: () => import("@/pages/RecipeCreatePage.vue"),
+          meta: { title: "新增系统菜谱" }
         },
         {
           path: "recipes/reports",

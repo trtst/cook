@@ -116,6 +116,12 @@ const unitNameMap = computed(() => {
 });
 
 const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
+const allIngredientCount = computed(() => categories.value.reduce((sum, item) => sum + item.ingredientCount, 0));
+const isAllView = computed(() => !query.categoryId);
+const currentScopeName = computed(() => {
+  if (!query.categoryId) return "全部食材";
+  return categories.value.find(item => item.id === query.categoryId)?.name || "当前分类";
+});
 
 const categoryFormOptions = computed(() => {
   const options = selectableCategories.value.slice();
@@ -180,8 +186,8 @@ function centerCropImage(width: number, height: number) {
 
 async function loadCategories() {
   categories.value = await ingredientApi.listCategories();
-  if (!query.categoryId || !categories.value.some(item => item.id === query.categoryId)) {
-    query.categoryId = selectableCategories.value[0]?.id || categories.value[0]?.id || "";
+  if (query.categoryId && !categories.value.some(item => item.id === query.categoryId)) {
+    query.categoryId = "";
   }
   if (!form.categoryId) {
     form.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
@@ -199,13 +205,6 @@ async function loadUnits() {
 }
 
 async function loadIngredients(reset = true) {
-  if (!query.categoryId) {
-    ingredients.value = [];
-    total.value = 0;
-    page.value = 1;
-    hasMoreIngredients.value = false;
-    return;
-  }
   const requestId = ++ingredientsRequest;
   const nextPage = reset ? 1 : page.value + 1;
   loading.value = true;
@@ -213,7 +212,7 @@ async function loadIngredients(reset = true) {
     const result = await ingredientApi.listIngredients({
       page: nextPage,
       pageSize,
-      categoryId: query.categoryId,
+      categoryId: query.categoryId || undefined,
       keyword: query.keyword.trim() || undefined,
       status: query.status
     });
@@ -241,7 +240,7 @@ async function loadPage() {
   }
 }
 
-async function selectCategory(categoryId: UUID) {
+async function selectCategory(categoryId: UUID | "") {
   if (query.categoryId === categoryId) return;
   query.categoryId = categoryId;
   query.keyword = "";
@@ -300,7 +299,7 @@ function openBatchDialog() {
 }
 
 function canSortIngredients() {
-  return query.status === "ACTIVE" && Boolean(query.categoryId) && !query.keyword.trim() && !hasMoreIngredients.value;
+  return query.status === "ACTIVE" && !query.keyword.trim() && !hasMoreIngredients.value;
 }
 
 async function submitIngredient() {
@@ -443,12 +442,11 @@ function reorderList<T>(items: T[], fromIndex: number, toIndex: number) {
 }
 
 async function applyIngredientOrder(nextList: AdminIngredientSummary[]) {
-  if (!query.categoryId) return;
   const previousList = ingredients.value.slice();
   ingredients.value = nextList;
   try {
     await ingredientApi.reorderIngredients(
-      query.categoryId,
+      query.categoryId || undefined,
       createOperationId(),
       nextList.map(item => ({
         id: item.id,
@@ -465,7 +463,7 @@ async function applyIngredientOrder(nextList: AdminIngredientSummary[]) {
 }
 
 function handleIngredientDragStart(event: DragEvent, row: AdminIngredientSummary) {
-  if (!query.categoryId || query.status !== "ACTIVE" || query.keyword.trim()) {
+  if (query.status !== "ACTIVE" || query.keyword.trim()) {
     event.preventDefault();
     ElMessage.error("筛选中不能拖拽排序，请先清空关键词");
     return;
@@ -686,7 +684,7 @@ watch(
     <div class="toolbar-panel page-toolbar">
       <div class="page-title-block">
         <strong>系统食材</strong>
-        <div class="page-subtitle">按分类维护系统食材，支持单个新增、批量导入、图片后传和分类内排序。</div>
+        <div class="page-subtitle">支持按真实分类维护系统食材，并通过“全部食材”统一控制前台展示顺序。</div>
       </div>
       <div class="toolbar-spacer" />
       <el-select v-model="query.status" class="toolbar-select" placeholder="状态" @change="changeStatus">
@@ -697,8 +695,7 @@ watch(
       <el-input
         v-model="query.keyword"
         class="toolbar-search toolbar-search--wide"
-        :placeholder="query.categoryId ? '在当前分类内筛选食材' : '请选择分类'"
-        :disabled="!query.categoryId"
+        :placeholder="isAllView ? '在全部食材内筛选食材' : '在当前分类内筛选食材'"
         clearable
         @clear="loadIngredients"
         @keyup.enter="loadIngredients"
@@ -711,6 +708,15 @@ watch(
     <div class="ingredient-layout">
       <aside class="category-panel table-panel">
         <div class="category-panel__title">食材分类</div>
+        <button
+          type="button"
+          class="category-item"
+          :class="{ 'category-item--active': isAllView }"
+          @click="selectCategory('')"
+        >
+          <span class="category-item__name">全部食材</span>
+          <span class="category-item__count">{{ allIngredientCount }}</span>
+        </button>
         <button
           v-for="item in categories"
           :key="item.id"
@@ -756,7 +762,10 @@ watch(
             <div class="ingredient-card__body">
               <div class="ingredient-card__main">
                 <div class="ingredient-card__name">{{ row.name }}</div>
-                <div class="ingredient-card__unit">{{ row.defaultUnit.name }}</div>
+                <div class="ingredient-card__meta">
+                  <span class="ingredient-card__category">{{ row.categoryName }}</span>
+                  <span class="ingredient-card__unit">{{ row.defaultUnit.name }}</span>
+                </div>
               </div>
             </div>
             <div class="ingredient-card__actions">
@@ -773,9 +782,9 @@ watch(
           </div>
         </div>
         <div class="ingredient-table-panel__footer">
-          <div class="table-hint">当前分类共 {{ total }} 条。下滑继续按服务端分页加载；仅“启用中 + 无关键词 + 已加载完整分类”支持拖拽排序。</div>
+          <div class="table-hint">{{ currentScopeName }}共 {{ total }} 条。下滑继续按服务端分页加载；仅“启用中 + 无关键词 + 已加载完整列表”支持拖拽排序。</div>
           <div v-if="hasMoreIngredients" ref="loadMoreRef" class="ingredient-load-more">下滑继续加载更多</div>
-          <div v-else class="ingredient-load-more ingredient-load-more--end">当前分类已全部加载</div>
+          <div v-else class="ingredient-load-more ingredient-load-more--end">{{ currentScopeName }}已全部加载</div>
         </div>
       </div>
     </div>
@@ -1070,9 +1079,7 @@ watch(
 }
 
 .ingredient-card__main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 12px;
 }
 
@@ -1083,11 +1090,24 @@ watch(
   line-height: 1.35;
 }
 
+.ingredient-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .ingredient-card__unit {
   color: #9a3412;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.ingredient-card__category {
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .ingredient-card__status {

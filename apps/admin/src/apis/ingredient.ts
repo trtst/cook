@@ -263,7 +263,7 @@ export const ingredientApi = {
       idempotencyKey: operationId
     });
   },
-  reorderIngredients(categoryId: UUID, operationId: OperationId, items: ReorderItem[]) {
+  reorderIngredients(categoryId: UUID | undefined, operationId: OperationId, items: ReorderItem[]) {
     return requestData<AdminIngredientSummary[]>("/admin/ingredients/reorder", {
       method: "POST",
       body: {

@@ -406,9 +406,9 @@ onMounted(() => {
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
       <div class="page-title-block">
-        <el-button text :icon="ArrowLeft" @click="goBack">返回菜谱列表</el-button>
-        <strong>菜谱详情</strong>
-        <div class="page-subtitle">查看当前固定版本正文。仅灵感菜谱支持后台直接编辑。</div>
+        <el-button text :icon="ArrowLeft" @click="goBack">返回系统菜谱</el-button>
+        <strong>系统菜谱详情</strong>
+        <div class="page-subtitle">查看当前固定版本正文。仅系统菜谱支持后台直接编辑。</div>
       </div>
       <div class="toolbar-spacer" />
       <el-button :icon="Refresh" @click="loadDetail">刷新</el-button>
@@ -422,10 +422,10 @@ onMounted(() => {
             <h2>{{ detail.title }}</h2>
           </div>
           <el-descriptions :column="2" border>
-            <el-descriptions-item label="来源">{{ detail.ownerUid === null ? "灵感" : "个人" }}</el-descriptions-item>
+            <el-descriptions-item label="来源">{{ detail.ownerUid === null ? "系统" : "个人" }}</el-descriptions-item>
             <el-descriptions-item label="状态">{{ formatStatusText(detail.status) }}</el-descriptions-item>
             <el-descriptions-item label="持有人 UID">{{ detail.ownerUid ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="灵感分类">{{ detail.inspirationCategory?.name ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="系统菜谱分类">{{ detail.inspirationCategory?.name ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="个人分类">{{ detail.personalCategory?.name ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="当前版本 ID">{{ detail.contentVersionId }}</el-descriptions-item>
             <el-descriptions-item label="举报数">{{ detail.reportCount }}</el-descriptions-item>
@@ -481,7 +481,7 @@ onMounted(() => {
       </template>
     </div>
 
-    <el-dialog v-model="editVisible" title="编辑灵感菜谱正文" width="760px">
+    <el-dialog v-model="editVisible" title="编辑系统菜谱正文" width="760px">
       <div v-loading="optionLoading">
         <el-form label-position="top">
           <el-alert
@@ -492,8 +492,8 @@ onMounted(() => {
             show-icon
             :title="`当前正文包含已下架或不可选的系统食材：${invalidIngredientNames.join('、')}。保存前请先替换。`"
           />
-          <el-form-item label="灵感分类" required>
-            <el-select v-model="form.inspirationCategoryId" placeholder="请选择灵感分类">
+          <el-form-item label="系统菜谱分类" required>
+            <el-select v-model="form.inspirationCategoryId" placeholder="请选择系统菜谱分类">
               <el-option v-for="item in inspirationCategories" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
           </el-form-item>
