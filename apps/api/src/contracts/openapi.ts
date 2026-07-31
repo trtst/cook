@@ -847,6 +847,8 @@ export class MealPlanModel {
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
   @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
   @ApiProperty(dateTime) createdAt!: string;

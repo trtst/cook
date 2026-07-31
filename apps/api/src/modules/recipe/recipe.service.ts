@@ -1309,6 +1309,130 @@ export class RecipeService {
     return this.toMyRecipeDetail(this.prisma, userId, recipe);
   }
 
+  async createMyRecipeFromInspiration(
+    userId: UUID,
+    operationId: OperationId,
+    sourceRecipeId: UUID,
+    sourceVersionId: UUID,
+    categoryId: UUID,
+    sceneIds: UUID[]
+  ): Promise<PublishRecipeDraftResponse> {
+    const normalizedSceneIds = Array.from(new Set(sceneIds)).sort();
+    const requestHash = JSON.stringify({ sourceRecipeId, sourceVersionId, categoryId, sceneIds: normalizedSceneIds });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<PublishRecipeDraftResponse>(
+        tx,
+        operationId,
+        "recipe:create-from-inspiration",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "recipe:create-from-inspiration", userId, null, requestHash);
+
+      const category = await this.requireOwnedCategory(tx, userId, categoryId);
+      if (normalizedSceneIds.length > 0) {
+        const scenes = await tx.recipeScene.findMany({
+          where: {
+            userId,
+            id: { in: normalizedSceneIds }
+          },
+          select: { id: true }
+        });
+        if (scenes.length !== normalizedSceneIds.length) {
+          throw new NotFoundException("场景不存在");
+        }
+      }
+
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${sourceRecipeId} FOR UPDATE`;
+      const sourceRecipe = await tx.recipe.findFirst({
+        where: {
+          id: sourceRecipeId,
+          ownerId: null,
+          status: "ACTIVE"
+        },
+        include: {
+          owner: { select: { uid: true, nickname: true } },
+          category: true,
+          inspirationCategory: true,
+          currentVersion: true,
+          sceneLinks: {
+            include: {
+              scene: true
+            }
+          }
+        }
+      });
+      if (!sourceRecipe || !sourceRecipe.inspirationCategory) {
+        throw new NotFoundException("灵感菜谱不存在");
+      }
+      if (sourceRecipe.currentVersionId !== sourceVersionId) {
+        throw new ConflictException("灵感版本已更新，请刷新后重试");
+      }
+
+      const existing = await tx.recipe.findFirst({
+        where: {
+          ownerId: userId,
+          originVersionId: sourceVersionId,
+          status: { in: activeRecipeStatuses }
+        },
+        include: {
+          owner: { select: { uid: true, nickname: true } },
+          category: true,
+          inspirationCategory: true,
+          currentVersion: true,
+          sceneLinks: {
+            include: {
+              scene: true
+            }
+          }
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+      });
+      if (existing) {
+        const result = {
+          recipe: await this.toMyRecipeDetail(tx, userId, existing)
+        } satisfies PublishRecipeDraftResponse;
+        await completeIdempotentOperation(tx, operationId, "recipe:create-from-inspiration", userId, null, requestHash, result);
+        return result;
+      }
+
+      const recipeBytes = await this.getRecipeBytes(tx, sourceRecipe);
+      await this.assertRecipeQuota(tx, userId, 1);
+      await this.assertStorageDelta(tx, userId, recipeBytes);
+      const sortOrder = await this.nextRecipeSortOrder(tx, userId, category.id);
+      const created = await tx.recipe.create({
+        data: {
+          ownerId: userId,
+          categoryId: category.id,
+          currentVersionId: sourceRecipe.currentVersionId,
+          originVersionId: sourceVersionId,
+          originCoverImageUrl: normalizeRecipeImageUrl(sourceRecipe.coverImageUrl),
+          title: sourceRecipe.title,
+          searchText: sourceRecipe.searchText,
+          coverImageUrl: normalizeRecipeImageUrl(sourceRecipe.coverImageUrl),
+          sortOrder
+        }
+      });
+      if (normalizedSceneIds.length > 0) {
+        await tx.recipeSceneLink.createMany({
+          data: normalizedSceneIds.map(sceneId => ({
+            recipeId: created.id,
+            sceneId
+          }))
+        });
+      }
+      await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), recipeBytes);
+      const recipe = await this.loadOwnedRecipe(tx, userId, created.id);
+      const result = {
+        recipe: await this.toMyRecipeDetail(tx, userId, recipe)
+      } satisfies PublishRecipeDraftResponse;
+      await completeIdempotentOperation(tx, operationId, "recipe:create-from-inspiration", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   async recommendRecipe(userId: UUID, recipeId: UUID, operationId: OperationId, inspirationCategoryId: UUID): Promise<RecipeRecommendationSummary> {
     const requestHash = `${recipeId}:${inspirationCategoryId}`;
     return this.prisma.$transaction(async tx => {
@@ -1497,6 +1621,7 @@ export class RecipeService {
     userId: UUID,
     page: number,
     pageSize: number,
+    keyword?: string,
     sceneId?: UUID
   ): Promise<PageResult<CollectedRecipeSummary>> {
     if (sceneId) {
@@ -1507,6 +1632,7 @@ export class RecipeService {
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const where: Prisma.RecipeCollectionWhereInput = {
       userId,
+      ...(keyword ? { sourceVersion: { searchText: { contains: buildSearchKey(keyword) } } } : {}),
       ...(sceneId ? { sceneLinks: { some: { sceneId } } } : {})
     };
     const [items, total] = await this.prisma.$transaction([

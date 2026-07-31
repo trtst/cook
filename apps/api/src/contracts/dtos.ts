@@ -1087,6 +1087,35 @@ export class PublishRecipeDraftDto extends VersionedOperationDto {}
 
 export class DeleteRecipeDto extends VersionedOperationDto {}
 
+export class CreateMyRecipeFromInspirationDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceRecipeId!: number;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceVersionId!: number;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  sceneIds!: number[];
+}
+
 export class CreateCollectionRecipeDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)
@@ -1154,6 +1183,8 @@ export class CreateDiningEventDto extends OperationDto {
   location?: string | null;
 }
 
+export class CompleteMealPlanDto extends OperationDto {}
+
 export class InviteDiningGroupParticipantsDto extends OperationDto {
   @ApiProperty()
   @Type(() => Number)
@@ -1167,6 +1198,8 @@ export class RespondDiningEventDto extends OperationDto {
   @IsIn(["ACCEPTED", "DECLINED"])
   status!: string;
 }
+
+export class CompleteDiningEventDto extends OperationDto {}
 
 export class AcceptShareInviteDto extends OperationDto {
   @ApiProperty()

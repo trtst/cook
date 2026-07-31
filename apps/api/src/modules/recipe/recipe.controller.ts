@@ -5,6 +5,7 @@ import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
+  CreateMyRecipeFromInspirationDto,
   CreateIngredientDto,
   CreateIngredientFeedbackDto,
   IngredientRecommendationListQueryDto,
@@ -470,6 +471,28 @@ export class RecipeController {
     return this.recipeService.getMyRecipe(request.user.userId, recipeId).then(result => ok(result));
   }
 
+  @Post("recipes/from-inspiration")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(PublishRecipeDraftResultModel, "从灵感详情直接加入我的菜谱")
+  createMyRecipeFromInspiration(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateMyRecipeFromInspirationDto
+  ) {
+    return this.recipeService
+      .createMyRecipeFromInspiration(
+        request.user.userId,
+        operationId,
+        body.sourceRecipeId,
+        body.sourceVersionId,
+        body.categoryId,
+        body.sceneIds
+      )
+      .then(result => ok(result));
+  }
+
   @Post("recipes/:recipeId/recommendations")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -543,7 +566,7 @@ export class RecipeController {
   @ApiOkPage(CollectedRecipeSummaryModel, "分页读取我的合集内容")
   listCollectionRecipes(@Req() request: RequestWithUser, @Query() query: CollectionRecipeListQueryDto) {
     return this.recipeService
-      .listCollectionRecipes(request.user.userId, query.page, query.pageSize, query.sceneId)
+      .listCollectionRecipes(request.user.userId, query.page, query.pageSize, query.keyword, query.sceneId)
       .then(result => ok(result));
   }
 

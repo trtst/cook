@@ -1017,6 +1017,8 @@ export interface MealPlanSummary {
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
+  status: "PLANNED" | "COMPLETED";
+  completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
   createdAt: IsoDateTime;
@@ -1037,7 +1039,7 @@ export interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
-  status: "PLANNED" | "CONFIRMED" | "CANCELLED";
+  status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   planItemId: UUID | null;
   diningGroupId: UUID | null;
   menu: RecipeContentSnapshot;

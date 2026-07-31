@@ -7,6 +7,8 @@ import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AcceptShareInviteDto,
   ChooseBringRecipeDto,
+  CompleteDiningEventDto,
+  CompleteMealPlanDto,
   CreateDiningEventDto,
   CreateMealPlanDto,
   InviteDiningGroupParticipantsDto,
@@ -44,6 +46,20 @@ export class MealController {
     return this.mealService
       .createMealPlan(request.user.userId, operationId, body.planDate, body.mealSlot, body.recipeId, body.note)
       .then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/complete")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanModel, "计划拥有者完成一个餐次")
+  completeMealPlan(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CompleteMealPlanDto
+  ) {
+    return this.mealService.completeMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
   }
 
   @Post("meal-plans/:planItemId/dining-event")
@@ -116,6 +132,20 @@ export class MealController {
     return this.mealService
       .chooseBringRecipe(request.user.userId, eventId, body.recipeId, operationId)
       .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/complete")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "饭局发起人完成一场饭局")
+  completeDiningEvent(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CompleteDiningEventDto
+  ) {
+    return this.mealService.completeDiningEvent(request.user.userId, eventId, operationId).then(result => ok(result));
   }
 
   @Get("share/:shareToken/preview")

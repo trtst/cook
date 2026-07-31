@@ -40,7 +40,13 @@ export function cleanDraftContent(content: RecipeDraftContentInput): RecipeDraft
 }
 
 export function buildDraftSearchText(content: RecipeDraftContentInput) {
-  return [content.name, content.story ?? ""].join(" ").trim();
+  return [
+    content.name,
+    content.story ?? "",
+    ...content.ingredients.map(item => item.name).filter(name => Boolean(name.trim()))
+  ]
+    .join(" ")
+    .trim();
 }
 
 export function buildRecipeSearchText(content: RecipeContentSnapshot) {
