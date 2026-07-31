@@ -128,7 +128,7 @@
               </view>
               <text class="medal-card__label">我的勋章</text>
               <view class="medal-card__count-line">
-                <text class="medal-card__count">--</text>
+                <text class="medal-card__count">{{ medalCount === null ? "--" : medalCount }}</text>
                 <text class="medal-card__unit">枚</text>
               </view>
             </view>
@@ -392,7 +392,6 @@ import cookingSkillsIcon from "@/assets/me-actions/cooking-skills.svg";
 import cookwareIcon from "@/assets/me-actions/cookware.svg";
 import diningEventIcon from "@/assets/me-actions/dining-event.svg";
 import feedbackIcon from "@/assets/me-actions/feedback.svg";
-import ingredientCatalogIcon from "@/assets/me-actions/ingredient-catalog.svg";
 import kitchenPrepIcon from "@/assets/me-actions/kitchen-prep.svg";
 import logoutIcon from "@/assets/me-actions/logout.svg";
 import mealPlanIcon from "@/assets/me-actions/meal-plan.svg";
@@ -401,10 +400,10 @@ import pantryIcon from "@/assets/me-actions/pantry.svg";
 import passwordIcon from "@/assets/me-actions/password.svg";
 import privacyIcon from "@/assets/me-actions/privacy.svg";
 import recipeSkillsIcon from "@/assets/me-actions/recipe-skills.svg";
-import remindersIcon from "@/assets/me-actions/reminders.svg";
 import shoppingListIcon from "@/assets/me-actions/shopping-list.svg";
 import tasteIcon from "@/assets/me-actions/taste.svg";
 import themeIcon from "@/assets/me-actions/theme.svg";
+import { medalApi } from "@/apis/medal";
 import { userApi } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -457,6 +456,7 @@ const profileEditorOpen = ref(false);
 const profileSaving = ref(false);
 const passwordEditorOpen = ref(false);
 const passwordSaving = ref(false);
+const medalCount = ref<number | null>(null);
 const profileNameDraft = ref("");
 const profileEditErrorText = ref("");
 const currentPasswordDraft = ref("");
@@ -469,6 +469,7 @@ const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profil
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
+let loadMedalsPromise: Promise<void> | null = null;
 
 const currentRelation = computed(() => diningGroupStore.currentRelationSummary);
 const relationUsage = computed(() => diningGroupStore.relationUsage);
@@ -554,10 +555,10 @@ const coreEntries: PageEntry[] = [
 
 const personalEntries: PageEntry[] = [
   {
-    title: "消息通知",
+    title: "通知中心",
     iconSrc: notificationsIcon,
-    description: "饭局邀请、计划进度和系统消息",
-    disabledText: "消息通知"
+    description: "推荐审核、饭局邀请、计划进度和系统消息",
+    url: "/pages_me/recommend/index"
   },
   {
     title: "我的口味",
@@ -566,22 +567,10 @@ const personalEntries: PageEntry[] = [
     url: "/pages_me/taste/index"
   },
   {
-    title: "我的推荐",
-    iconSrc: ingredientCatalogIcon,
-    description: "查看食材推荐审核结果，已拒绝可修改后重新推荐",
-    url: "/pages_me/recommend/index"
-  },
-  {
-    title: "分类与单位",
+    title: "食材与单位",
     iconSrc: categoriesUnitsIcon,
-    description: "蔬果菌菇、肉禽蛋、水产海鲜｜克、千克、斤、升、个",
-    disabledText: "分类与单位"
-  },
-  {
-    title: "食材",
-    iconSrc: ingredientCatalogIcon,
-    description: "土豆、小葱等基础食材资料",
-    disabledText: "食材资料"
+    description: "创建菜谱时会用到的食材分类、常用食材和单位",
+    url: "/pages_me/ingredient-units/index"
   },
   {
     title: "厨具",
@@ -593,16 +582,16 @@ const personalEntries: PageEntry[] = [
 
 const knowledgeEntries: PageEntry[] = [
   {
-    title: "烹饪技巧",
-    iconSrc: cookingSkillsIcon,
-    description: "火候与做法",
-    disabledText: "烹饪技巧"
-  },
-  {
     title: "厨房准备",
     iconSrc: kitchenPrepIcon,
     description: "备菜与收纳",
     disabledText: "厨房准备"
+  },
+  {
+    title: "烹饪技巧",
+    iconSrc: cookingSkillsIcon,
+    description: "火候与做法",
+    disabledText: "烹饪技巧"
   },
   {
     title: "食谱技巧",
@@ -627,11 +616,6 @@ const supportSettingEntries: PageEntry[] = [
     iconSrc: privacyIcon,
     description: "清除本地资料缓存和菜谱编辑缓存",
     action: "clear-cache"
-  },
-  {
-    title: "消息提醒",
-    iconSrc: remindersIcon,
-    disabledText: "消息提醒"
   },
   {
     title: "隐私保护",
@@ -695,12 +679,13 @@ async function syncPageState() {
   }
 
   if (sessionStore.isLoggedIn) {
-    await loadMe();
+    await Promise.allSettled([loadMe(), loadMedals()]);
     return;
   }
 
   profileLoading.value = false;
   loadErrorText.value = "";
+  medalCount.value = null;
 }
 
 async function loadMe() {
@@ -748,6 +733,29 @@ async function doLoadMe() {
   }
 
   profileLoading.value = false;
+}
+
+async function loadMedals() {
+  if (!sessionStore.isLoggedIn) return;
+  if (loadMedalsPromise) {
+    await loadMedalsPromise;
+    return;
+  }
+
+  loadMedalsPromise = doLoadMedals().finally(() => {
+    loadMedalsPromise = null;
+  });
+
+  await loadMedalsPromise;
+}
+
+async function doLoadMedals() {
+  try {
+    const result = await medalApi.getCurrent();
+    medalCount.value = result.earnedCount;
+  } catch {
+    medalCount.value = null;
+  }
 }
 
 async function handleSkinChange(skin: ThemeSkin) {
@@ -804,7 +812,7 @@ function handleProfileAction() {
 }
 
 function handleMedalClick() {
-  requireLogin(() => showComingSoon("勋章墙"));
+  requireLogin(() => navigateTo("/pages_me/medal/index"));
 }
 
 function requireLogin(action: () => void) {
@@ -915,6 +923,7 @@ async function handleLogout() {
   closePasswordEditor();
   await clearUserSessionState();
   loadErrorText.value = "";
+  medalCount.value = null;
   await uniPlatform.feedback.toast({
     title: "已退出登录",
     icon: "success"
@@ -990,10 +999,8 @@ function getPasswordErrorText(error: unknown) {
 
 .me-page {
   --me-card-shadow: var(--shadow-card);
-
   min-height: 100vh;
   min-height: 100dvh;
-  padding-bottom: calc(132rpx + env(safe-area-inset-bottom));
   background: var(--color-page);
 }
 

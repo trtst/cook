@@ -36,8 +36,11 @@
     {
       "root": "pages_me",
       "pages": [
+        { "path": "medal/index", "style": { "navigationBarTitleText": "我的勋章", "navigationStyle": "custom" } },
+        { "path": "medal-detail/index", "style": { "navigationBarTitleText": "勋章详情", "navigationStyle": "custom" } },
         { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } },
-        { "path": "recommend/index", "style": { "navigationBarTitleText": "我的推荐", "navigationStyle": "custom" } }
+        { "path": "recommend/index", "style": { "navigationBarTitleText": "通知中心", "navigationStyle": "custom" } },
+        { "path": "ingredient-units/index", "style": { "navigationBarTitleText": "食材与单位", "navigationStyle": "custom" } }
       ]
     },
     {

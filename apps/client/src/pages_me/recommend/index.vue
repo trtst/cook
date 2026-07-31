@@ -1,60 +1,77 @@
 <template>
   <page-meta :page-style="pageStyle" />
-  <Layout title="我的推荐" full-screen>
-    <view class="recommend-page">
-      <view class="recommend-tip">
-        <text class="recommend-tip__title">食材推荐记录</text>
-        <text class="recommend-tip__desc">这里只看食材推荐。已拒绝的记录可修改个人食材后重新推荐。</text>
+  <Layout title="通知中心" full-screen>
+    <view class="notification-page">
+      <view class="notification-hero">
+        <text class="notification-hero__title">通知中心</text>
+        <text class="notification-hero__desc">这里统一查看推荐审核、饭局邀请、计划进度和系统消息。</text>
       </view>
 
-      <view v-if="loading && !items.length" class="notice">加载中...</view>
-      <view v-else-if="errorText && !items.length" class="notice notice--error" @click="loadPage">{{ errorText }}</view>
-      <view v-else-if="!items.length" class="empty-state">
-        <text class="empty-state__title">还没有推荐记录</text>
-        <text class="empty-state__desc">你在菜谱编辑里推荐个人食材后，会在这里看到审核结果。</text>
+      <view class="notification-panel">
+        <view class="notification-panel__head">
+          <text class="notification-panel__title">系统提醒</text>
+          <text class="notification-panel__badge">逐步接入</text>
+        </view>
+        <text class="notification-panel__desc">饭局邀请、计划进度和系统消息会陆续收口到这里。当前先开放推荐审核记录。</text>
       </view>
-      <view v-else class="recommend-list">
-        <view v-if="errorText" class="inline-notice" @click="loadPage">
-          <text>{{ errorText }}</text>
-          <text class="inline-notice__action">重试</text>
+
+      <view class="notification-section">
+        <view class="notification-section__head">
+          <view>
+            <text class="notification-section__title">推荐审核</text>
+            <text class="notification-section__desc">当前先支持食材推荐。后续食谱、单位等推荐也会并到这里。</text>
+          </view>
         </view>
 
-        <view v-for="item in items" :key="item.id" class="recommend-card">
-          <view class="recommend-card__head">
-            <view>
-              <text class="recommend-card__name">{{ item.ingredientName }}</text>
-              <text class="recommend-card__meta">{{ item.category.name }} · {{ item.defaultUnit.name }}</text>
+        <view v-if="loading && !items.length" class="notice">加载中...</view>
+        <view v-else-if="errorText && !items.length" class="notice notice--error" @click="loadPage">{{ errorText }}</view>
+        <view v-else-if="!items.length" class="empty-state">
+          <text class="empty-state__title">还没有推荐审核</text>
+          <text class="empty-state__desc">你在菜谱编辑里推荐个人食材后，会先在这里看到审核结果。</text>
+        </view>
+        <view v-else class="recommend-list">
+          <view v-if="errorText" class="inline-notice" @click="loadPage">
+            <text>{{ errorText }}</text>
+            <text class="inline-notice__action">重试</text>
+          </view>
+
+          <view v-for="item in items" :key="item.id" class="recommend-card">
+            <view class="recommend-card__head">
+              <view>
+                <text class="recommend-card__name">{{ item.ingredientName }}</text>
+                <text class="recommend-card__meta">{{ item.category.name }} · {{ item.defaultUnit.name }}</text>
+              </view>
+              <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
+                {{ statusText(item.status) }}
+              </text>
             </view>
-            <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
-              {{ statusText(item.status) }}
+
+            <text class="recommend-card__time">推荐时间 {{ formatTime(item.createdAt) }}</text>
+
+            <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
+            <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
+              <text class="recommend-card__desc">
+                {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
+              </text>
+              <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+            </view>
+            <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
+              已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
             </text>
-          </view>
-
-          <text class="recommend-card__time">推荐时间 {{ formatTime(item.createdAt) }}</text>
-
-          <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
-          <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
-            <text class="recommend-card__desc">
-              {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
+            <text v-else class="recommend-card__desc">
+              已归并到现有系统食材{{ item.mergedIngredient ? `：${item.mergedIngredient.name}` : "" }}
             </text>
-            <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
-          </view>
-          <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
-            已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
-          </text>
-          <text v-else class="recommend-card__desc">
-            已归并到现有系统食材{{ item.mergedIngredient ? `：${item.mergedIngredient.name}` : "" }}
-          </text>
 
-          <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
-            <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
+            <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
+              <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
+            </view>
           </view>
-        </view>
 
-        <view class="recommend-footer">
-          <text v-if="loadingMore">加载更多中...</text>
-          <text v-else-if="hasNext" class="recommend-footer__action" @click="loadMore">点击加载更多</text>
-          <text v-else>没有更多了</text>
+          <view class="recommend-footer">
+            <text v-if="loadingMore">加载更多中...</text>
+            <text v-else-if="hasNext" class="recommend-footer__action" @click="loadMore">点击加载更多</text>
+            <text v-else>没有更多了</text>
+          </view>
         </view>
       </view>
 
@@ -321,7 +338,7 @@ async function submitEditor() {
 </script>
 
 <style scoped lang="scss">
-.recommend-page {
+.notification-page {
   min-height: 100vh;
   min-height: 100dvh;
   padding: var(--space-page);
@@ -329,7 +346,9 @@ async function submitEditor() {
   background: var(--color-page);
 }
 
-.recommend-tip,
+.notification-hero,
+.notification-panel,
+.notification-section,
 .recommend-card,
 .editor-panel,
 .empty-state,
@@ -340,7 +359,9 @@ async function submitEditor() {
   box-shadow: var(--shadow-card);
 }
 
-.recommend-tip,
+.notification-hero,
+.notification-panel,
+.notification-section,
 .empty-state,
 .notice,
 .inline-notice,
@@ -349,14 +370,18 @@ async function submitEditor() {
   padding: 28rpx;
 }
 
-.recommend-tip {
+.notification-hero,
+.notification-panel,
+.notification-section {
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 10rpx;
   margin-bottom: 24rpx;
 }
 
-.recommend-tip__title,
+.notification-hero__title,
+.notification-panel__title,
+.notification-section__title,
 .recommend-card__name,
 .editor-panel__title,
 .empty-state__title {
@@ -365,7 +390,9 @@ async function submitEditor() {
   font-weight: var(--font-weight-semibold);
 }
 
-.recommend-tip__desc,
+.notification-hero__desc,
+.notification-panel__desc,
+.notification-section__desc,
 .recommend-card__meta,
 .recommend-card__time,
 .recommend-card__desc,
@@ -375,6 +402,24 @@ async function submitEditor() {
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
+}
+
+.notification-panel__head,
+.notification-section__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.notification-panel__badge {
+  flex-shrink: 0;
+  padding: 8rpx 18rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  font-weight: var(--font-weight-semibold);
 }
 
 .recommend-list {

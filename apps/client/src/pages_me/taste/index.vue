@@ -1,22 +1,27 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout title="我的口味">
+    <template #navbar-center>
+      <text class="taste-navbar__title">我的口味</text>
+    </template>
+
     <view class="taste-page">
-      <Login
+      <RecipeEmptyState
         v-if="!sessionStore.isLoggedIn"
-        title="登录后维护口味"
-        description="登录后可以保存本人的口味、忌口和过敏信息。"
-        @success="loadTaste"
+        class="taste-empty"
+        :art="tasteEmptyArt"
+        title="登录后记录你的口味"
+        description="把过敏、严格忌口、不喜欢和偏好记在这里。点一下开始登录，这些信息只归你本人所有。"
+        clickable
+        @click="openLogin"
       />
 
       <template v-else>
-        <view class="taste-card">
-          <view class="taste-card__header">
-            <view class="taste-card__copy">
-              <text class="taste-card__title">我的口味</text>
-              <text class="taste-card__description">这些信息只归本人所有。</text>
+        <view class="taste-shell">
+          <view class="taste-head">
+            <view class="taste-head__copy">
+              <text class="taste-head__description">这些信息只归本人所有。可用逗号、顿号、分号或换行分隔多个条目。</text>
             </view>
-            <button class="taste-card__reload" :disabled="loading || saving" @click="loadTaste">刷新</button>
           </view>
 
           <view v-if="loading" class="taste-status">
@@ -30,19 +35,25 @@
 
           <view v-else class="taste-form">
             <view v-for="field in tasteFields" :key="field.key" class="taste-field">
-              <text class="taste-field__label">{{ field.label }}</text>
+              <view class="taste-field__head">
+                <text class="taste-field__label">{{ field.label }}</text>
+                <text class="taste-field__hint">例如 {{ field.placeholder }}</text>
+              </view>
               <textarea
                 v-model="tasteText[field.key]"
                 class="taste-field__textarea"
                 auto-height
                 maxlength="200"
-                :placeholder="field.placeholder"
+                :placeholder="`例如 ${field.placeholder}`"
                 :disabled="saving"
               />
             </view>
 
             <view class="taste-field">
-              <text class="taste-field__label">备注</text>
+              <view class="taste-field__head">
+                <text class="taste-field__label">备注</text>
+                <text class="taste-field__hint">补充你的饮食习惯</text>
+              </view>
               <textarea
                 v-model="noteText"
                 class="taste-field__textarea taste-field__textarea--note"
@@ -53,6 +64,7 @@
               />
             </view>
 
+            <text class="taste-form__tip">这些内容只保存给你自己，不会自动共享给其他成员。</text>
             <text v-if="saveErrorText" class="taste-form__error">{{ saveErrorText }}</text>
             <button class="taste-form__button" :loading="saving" :disabled="saving" @click="saveTaste">保存</button>
           </view>
@@ -65,17 +77,20 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { reactive, ref } from "vue";
+import tasteEmptyArt from "@/assets/me-page/taste-empty-state.svg";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
+import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 
 type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "flavorPreferences";
 
 const pageStyle = usePageScrollStyle();
 
+const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const loading = ref(false);
 const saving = ref(false);
@@ -124,6 +139,12 @@ onShow(() => {
     void loadTaste();
   }
 });
+
+function openLogin() {
+  loginModalStore.open(null, () => {
+    void loadTaste();
+  });
+}
 
 async function loadTaste() {
   if (!sessionStore.isLoggedIn || loading.value) return;
@@ -188,55 +209,55 @@ function readItems(text: string) {
 </script>
 
 <style scoped lang="scss">
+.taste-navbar__title {
+  overflow: hidden;
+  max-width: 420rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .taste-page {
   padding-bottom: var(--space-lg);
 }
 
-.taste-card {
-  padding: var(--space-lg);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+.taste-empty {
+  margin-top: var(--space-sm);
 }
 
-.taste-card__header {
+.taste-shell {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
+  flex-direction: column;
 }
 
-.taste-card__copy {
+.taste-head {
+  padding: 8rpx 0 var(--space-md);
+}
+
+.taste-head__copy {
   flex: 1;
   min-width: 0;
 }
 
-.taste-card__title,
-.taste-card__description {
+.taste-head__description {
   display: block;
 }
 
-.taste-card__title {
-  color: var(--color-text);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-tight);
-}
-
-.taste-card__description {
-  margin-top: var(--space-xs);
+.taste-head__description {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
-.taste-card__reload,
 .taste-status__button {
   flex: 0 0 auto;
   min-height: 60rpx;
   padding: 0 20rpx;
   border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   color: var(--color-primary);
   font-size: var(--font-size-sm);
@@ -248,7 +269,7 @@ function readItems(text: string) {
   align-items: center;
   justify-content: space-between;
   min-height: 120rpx;
-  margin-top: var(--space-lg);
+  margin-top: var(--space-sm);
   padding: 0 var(--space-md);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
@@ -260,36 +281,59 @@ function readItems(text: string) {
 }
 
 .taste-form {
-  margin-top: var(--space-lg);
-}
-
-.taste-field + .taste-field {
   margin-top: var(--space-md);
 }
 
+.taste-field + .taste-field {
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
+  border-top: 1rpx solid var(--color-border-light);
+}
+
+.taste-field__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
 .taste-field__label {
-  display: block;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
 }
 
+.taste-field__hint {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
 .taste-field__textarea {
   box-sizing: border-box;
   width: 100%;
-  min-height: 92rpx;
+  min-height: 84rpx;
   margin-top: var(--space-sm);
-  padding: 22rpx var(--space-md);
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-md);
+  padding: 20rpx var(--space-md);
+  border: 0;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted);
+  box-shadow: inset 0 0 0 1rpx var(--color-border);
   color: var(--color-text);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
 }
 
 .taste-field__textarea--note {
-  min-height: 132rpx;
+  min-height: 124rpx;
+}
+
+.taste-form__tip {
+  display: block;
+  margin-top: var(--space-lg);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 .taste-form__error {
@@ -300,12 +344,23 @@ function readItems(text: string) {
 }
 
 .taste-form__button {
-  min-height: var(--size-button-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 96rpx;
   margin-top: var(--space-lg);
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
+  padding: 0 34rpx;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  font-size: 32rpx;
+  font-weight: var(--font-weight-heavy);
 }
 </style>
