@@ -494,6 +494,20 @@ export interface RecommendIngredientRequest {
   operationId: OperationId;
 }
 
+export interface CreateIngredientFeedbackRequest {
+  operationId: OperationId;
+  name: string;
+  categoryId: UUID;
+  note?: string;
+}
+
+export interface IngredientFeedbackResult {
+  id: UUID;
+  ingredientId: UUID;
+  status: "PENDING";
+  createdAt: IsoDateTime;
+}
+
 export interface UploadImageSummary {
   id: UUID;
   publicId: string;
@@ -936,6 +950,39 @@ export interface AdminReviewPendingIngredientResult {
   status: "APPROVED" | "REJECTED";
   reviewedAt: IsoDateTime;
   targetIngredientId: UUID | null;
+}
+
+export interface AdminPendingIngredientFeedbackSummary {
+  id: UUID;
+  ingredientId: UUID;
+  ingredientVersion: number;
+  ingredientName: string;
+  categoryId: UUID;
+  categoryName: string;
+  suggestedName: string;
+  suggestedCategoryId: UUID;
+  suggestedCategoryName: string;
+  note: string | null;
+  status: "PENDING";
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  user: AdminIngredientSuggestionUser;
+}
+
+export interface AdminReviewIngredientFeedbackRequest {
+  operationId: OperationId;
+  action: "APPROVE" | "REJECT";
+  expectedVersion: number;
+  name?: string;
+  categoryId?: UUID;
+  reason?: string;
+}
+
+export interface AdminReviewIngredientFeedbackResult {
+  id: UUID;
+  ingredientId: UUID;
+  status: "APPROVED" | "REJECTED";
+  reviewedAt: IsoDateTime;
 }
 
 export interface AdminUnitSummary {

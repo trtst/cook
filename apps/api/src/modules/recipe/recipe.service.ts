@@ -18,6 +18,7 @@ import type {
   DeleteRecipeDraftResponse,
   DeleteRecipeResponse,
   IngredientCategorySummary,
+  IngredientFeedbackResult,
   IngredientRecommendationSummary,
   IngredientSummary,
   InspirationCategorySummary,
@@ -127,6 +128,7 @@ type IngredientRecommendationRow = Prisma.IngredientRecommendationGetPayload<{
     };
   };
 }>;
+type IngredientFeedbackRow = Prisma.IngredientFeedbackGetPayload<Record<string, never>>;
 
 type RecipeRecommendationRow = Prisma.RecipeRecommendationGetPayload<{
   include: {
@@ -349,6 +351,15 @@ function toIngredientRecommendationSummary(
     createdAt: toIsoDate(record.createdAt),
     updatedAt: toIsoDate(record.updatedAt),
     reviewedAt: record.reviewedAt ? toIsoDate(record.reviewedAt) : null
+  };
+}
+
+function toIngredientFeedbackResult(record: IngredientFeedbackRow): IngredientFeedbackResult {
+  return {
+    id: record.id,
+    ingredientId: record.ingredientId,
+    status: "PENDING",
+    createdAt: toIsoDate(record.createdAt)
   };
 }
 
@@ -765,6 +776,80 @@ export class RecipeService {
 
       const result = toIngredientRecommendationSummary(recommendation, item => this.buildIngredientImageUrl(request, item));
       await completeIdempotentOperation(tx, operationId, "ingredient:recommend", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async createIngredientFeedback(
+    userId: UUID,
+    ingredientId: UUID,
+    body: {
+      operationId: OperationId;
+      name: string;
+      categoryId: UUID;
+      note?: string;
+    }
+  ): Promise<IngredientFeedbackResult> {
+    const normalizedName = body.name.trim();
+    const normalizedNote = body.note?.trim() || null;
+    const requestHash = JSON.stringify({
+      ingredientId,
+      name: normalizedName,
+      categoryId: body.categoryId,
+      note: normalizedNote
+    });
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
+      const ingredient = await tx.ingredient.findFirst({
+        where: {
+          id: ingredientId,
+          ownerId: null,
+          status: "ACTIVE",
+          category: {
+            is: {
+              isSelectable: true
+            }
+          }
+        }
+      });
+      if (!ingredient) throw new NotFoundException("系统食材不存在");
+      const repeated = await getIdempotentResult<IngredientFeedbackResult>(
+        tx,
+        body.operationId,
+        "ingredient:feedback",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, body.operationId, "ingredient:feedback", userId, null, requestHash);
+
+      if (!normalizedName) throw new BadRequestException("食材名称不能为空");
+      const category = await this.requireSelectableIngredientCategory(tx, body.categoryId);
+      const changedName = normalizedName !== ingredient.name;
+      const changedCategory = body.categoryId !== ingredient.categoryId;
+      if (!changedName && !changedCategory && !normalizedNote) {
+        throw new BadRequestException("请至少修改名字、分类，或补充备注");
+      }
+      await this.assertIngredientFeedbackAvailable(tx, userId, ingredientId);
+
+      const feedback = await tx.ingredientFeedback.create({
+        data: {
+          ingredientId: ingredient.id,
+          userId,
+          status: "PENDING",
+          ingredientVersion: ingredient.version,
+          ingredientName: ingredient.name,
+          categoryId: ingredient.categoryId,
+          categoryName: (await this.requireIngredientCategory(tx, ingredient.categoryId)).name,
+          suggestedName: normalizedName,
+          suggestedCategoryId: category.id,
+          suggestedCategoryName: category.name,
+          note: normalizedNote
+        }
+      });
+      const result = toIngredientFeedbackResult(feedback);
+      await completeIdempotentOperation(tx, body.operationId, "ingredient:feedback", userId, null, requestHash, result);
       return result;
     });
   }
@@ -2681,6 +2766,18 @@ export class RecipeService {
       select: { id: true }
     });
     if (pending) throw new ConflictException("该食材已在审核中");
+  }
+
+  private async assertIngredientFeedbackAvailable(tx: RecipeDb, userId: UUID, ingredientId: UUID) {
+    const pending = await tx.ingredientFeedback.findFirst({
+      where: {
+        userId,
+        ingredientId,
+        status: "PENDING"
+      },
+      select: { id: true }
+    });
+    if (pending) throw new ConflictException("你已提交过这份食材的纠错，请等待审核");
   }
 
   private async loadIngredientRecommendationStatusMap(

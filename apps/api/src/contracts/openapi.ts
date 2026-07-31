@@ -385,6 +385,13 @@ export class IngredientRecommendationModel {
   @ApiProperty({ ...dateTime, nullable: true }) reviewedAt!: string | null;
 }
 
+export class IngredientFeedbackResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
+  @ApiProperty(dateTime) createdAt!: string;
+}
+
 export class RecipeAmountModel {
   @ApiProperty({ type: String, enum: ["EXACT", "FUZZY"] }) kind!: string;
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
@@ -776,6 +783,30 @@ export class AdminReviewPendingIngredientResultModel {
   @ApiProperty({ type: String, enum: ["APPROVED", "REJECTED"] }) status!: string;
   @ApiProperty(dateTime) reviewedAt!: string;
   @ApiProperty({ ...uuid, nullable: true }) targetIngredientId!: string | null;
+}
+
+export class AdminPendingIngredientFeedbackModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) ingredientVersion!: number;
+  @ApiProperty({ type: String }) ingredientName!: string;
+  @ApiProperty(uuid) categoryId!: string;
+  @ApiProperty({ type: String }) categoryName!: string;
+  @ApiProperty({ type: String }) suggestedName!: string;
+  @ApiProperty(uuid) suggestedCategoryId!: string;
+  @ApiProperty({ type: String }) suggestedCategoryName!: string;
+  @ApiProperty(nullableString) note!: string | null;
+  @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: () => AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
+}
+
+export class AdminReviewIngredientFeedbackResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: String, enum: ["APPROVED", "REJECTED"] }) status!: string;
+  @ApiProperty(dateTime) reviewedAt!: string;
 }
 
 export class AdminUnitModel {

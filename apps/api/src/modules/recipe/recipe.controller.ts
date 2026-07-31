@@ -6,6 +6,7 @@ import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   CreateIngredientDto,
+  CreateIngredientFeedbackDto,
   IngredientRecommendationListQueryDto,
   CreateCollectionRecipeDto,
   CreateRecipeDraftDto,
@@ -44,6 +45,7 @@ import {
   DeleteRecipeDraftResultModel,
   DeleteRecipeResultModel,
   IngredientCategoryModel,
+  IngredientFeedbackResultModel,
   IngredientRecommendationModel,
   IngredientModel,
   InspirationCategoryModel,
@@ -315,6 +317,27 @@ export class RecipeController {
     @Body() body: RecommendIngredientDto
   ) {
     return this.recipeService.recommendIngredient(toAssetRequest(request), request.user.userId, ingredientId, operationId).then(result => ok(result));
+  }
+
+  @Post("ingredients/:ingredientId/feedbacks")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(IngredientFeedbackResultModel, "提交系统食材纠错反馈")
+  createIngredientFeedback(
+    @Req() request: RequestWithUser,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateIngredientFeedbackDto
+  ) {
+    return this.recipeService
+      .createIngredientFeedback(request.user.userId, ingredientId, {
+        operationId,
+        name: body.name,
+        categoryId: body.categoryId,
+        note: body.note
+      })
+      .then(result => ok(result));
   }
 
   @Get("ingredient-recommendations")

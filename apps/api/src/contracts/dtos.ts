@@ -745,6 +745,28 @@ export class UpdateIngredientDto extends VersionedOperationDto {
 
 export class RecommendIngredientDto extends OperationDto {}
 
+export class CreateIngredientFeedbackDto extends OperationDto {
+  @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  note?: string;
+}
+
 export class RecommendRecipeDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)
@@ -1620,6 +1642,15 @@ export class AdminPendingIngredientQueryDto extends PageQueryDto {
   declare keyword?: string;
 }
 
+export class AdminPendingIngredientFeedbackQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "香菜" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(64)
+  declare keyword?: string;
+}
+
 export class ReviewPendingIngredientDto extends VersionedOperationDto {
   @ApiProperty({ example: "APPROVE_CREATE" })
   @IsIn(["APPROVE_CREATE", "APPROVE_MERGE", "REJECT"])
@@ -1658,6 +1689,34 @@ export class ReviewPendingIngredientDto extends VersionedOperationDto {
   @ValidateIf(object => object.action === "REJECT")
   @IsIn(["NAME_NOT_CLEAR", "NAME_HAS_BRAND", "CATEGORY_NOT_FIT", "UNIT_NOT_FIT", "OUT_OF_SCOPE", "OTHER"])
   rejectReasonCode?: "NAME_NOT_CLEAR" | "NAME_HAS_BRAND" | "CATEGORY_NOT_FIT" | "UNIT_NOT_FIT" | "OUT_OF_SCOPE" | "OTHER";
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}
+
+export class ReviewIngredientFeedbackDto extends VersionedOperationDto {
+  @ApiProperty({ example: "APPROVE" })
+  @IsIn(["APPROVE", "REJECT"])
+  action!: "APPROVE" | "REJECT";
+
+  @ApiPropertyOptional()
+  @ValidateIf(object => object.action === "APPROVE")
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name?: string;
+
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @ValidateIf(object => object.action === "APPROVE")
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoryId?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

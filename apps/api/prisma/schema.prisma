@@ -125,6 +125,12 @@ enum IngredientRecommendationStatus {
   MERGED
 }
 
+enum IngredientFeedbackStatus {
+  PENDING
+  REJECTED
+  ADOPTED
+}
+
 enum MealSlot {
   BREAKFAST
   LUNCH
@@ -258,6 +264,7 @@ model User {
   recipeCollections         RecipeCollection[]
   ingredients               Ingredient[]               @relation("IngredientOwner")
   ingredientRecommendations IngredientRecommendation[]
+  ingredientFeedbacks       IngredientFeedback[]
   units                     Unit[]                     @relation("UnitOwner")
   mealPlans                 MealPlanItem[]
   diningEvents              DiningEvent[]              @relation("DiningEventOwner")
@@ -448,7 +455,9 @@ model IngredientCategory {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  ingredients Ingredient[]
+  ingredients         Ingredient[]
+  feedbacks           IngredientFeedback[] @relation("IngredientFeedbackCategory")
+  suggestedFeedbacks  IngredientFeedback[] @relation("IngredientFeedbackSuggestedCategory")
 
   @@unique([code])
   @@unique([name])
@@ -500,6 +509,7 @@ model Ingredient {
   mergedFrom            Ingredient[]               @relation("IngredientMergedTo")
   recommendations       IngredientRecommendation[] @relation("IngredientRecommendationSource")
   targetRecommendations IngredientRecommendation[] @relation("IngredientRecommendationTarget")
+  feedbacks             IngredientFeedback[]
 
   /// PostgreSQL partial unique indexes for active system/category sort order, global display order, and ingredient name scope are kept in hand-written SQL migrations.
   @@index([ownerId, status, categoryId, systemSortOrder, id])
@@ -534,6 +544,35 @@ model IngredientRecommendation {
   @@index([ingredientId, createdAt])
   @@index([status, createdAt])
   @@map("ingredient_recommendations")
+}
+
+model IngredientFeedback {
+  id                    Int                      @id @default(autoincrement())
+  ingredientId          Int                      @map("ingredient_id")
+  userId                Int                      @map("user_id")
+  status                IngredientFeedbackStatus @default(PENDING)
+  ingredientVersion     Int                      @map("ingredient_version")
+  ingredientName        String                   @map("ingredient_name") @db.VarChar(64)
+  categoryId            Int                      @map("category_id")
+  categoryName          String                   @map("category_name") @db.VarChar(20)
+  suggestedName         String                   @map("suggested_name") @db.VarChar(64)
+  suggestedCategoryId   Int                      @map("suggested_category_id")
+  suggestedCategoryName String                   @map("suggested_category_name") @db.VarChar(20)
+  note                  String?                  @db.VarChar(255)
+  reviewNote            String?                  @map("review_note") @db.VarChar(255)
+  reviewedAt            DateTime?                @map("reviewed_at") @db.Timestamptz(3)
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ingredient         Ingredient         @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category           IngredientCategory @relation("IngredientFeedbackCategory", fields: [categoryId], references: [id])
+  suggestedCategory  IngredientCategory @relation("IngredientFeedbackSuggestedCategory", fields: [suggestedCategoryId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([ingredientId, createdAt])
+  @@index([status, createdAt])
+  @@map("ingredient_feedbacks")
 }
 
 model RecipeContentVersion {

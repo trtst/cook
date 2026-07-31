@@ -14,6 +14,7 @@ import {
   AdminIngredientCategoryNameDto,
   AdminIngredientCategoryQueryDto,
   AdminIngredientPayloadDto,
+  AdminPendingIngredientFeedbackQueryDto,
     AdminPendingIngredientQueryDto,
     AdminPendingRecipeQueryDto,
     AdminIngredientQueryDto,
@@ -35,6 +36,7 @@ import {
   ReorderAdminIngredientCategoriesDto,
   ReorderAdminIngredientsDto,
   ReorderAdminUnitsDto,
+    ReviewIngredientFeedbackDto,
     ReviewPendingIngredientDto,
     ReviewPendingRecipeDto,
   ResetAdminUserPasswordDto,
@@ -58,9 +60,11 @@ import {
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
   AdminIngredientModel,
+    AdminPendingIngredientFeedbackModel,
     AdminPendingIngredientModel,
     AdminPendingRecipeModel,
     AdminRecipeDetailModel,
+    AdminReviewIngredientFeedbackResultModel,
     AdminReviewPendingRecipeResultModel,
     AdminReviewPendingIngredientResultModel,
   AdminUnitModel,
@@ -708,6 +712,16 @@ export class AdminController {
       .then(result => ok(result));
   }
 
+  @Get("ingredient-feedbacks")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminPendingIngredientFeedbackModel, "后台待审核食材纠错列表")
+  listPendingIngredientFeedbacks(@Req() request: RequestWithAdmin, @Query() query: AdminPendingIngredientFeedbackQueryDto) {
+    return this.adminService
+      .listPendingIngredientFeedbacks(query.page, query.pageSize, query.keyword, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
   @Post("pending-ingredients/:ingredientId/review")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -720,6 +734,20 @@ export class AdminController {
     @Body() body: ReviewPendingIngredientDto
   ) {
     return this.adminService.reviewPendingIngredient(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("ingredient-feedbacks/:feedbackId/review")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminReviewIngredientFeedbackResultModel, "后台审核食材纠错")
+  reviewIngredientFeedback(
+    @Req() request: RequestWithAdmin,
+    @Param("feedbackId", ParseIntPipe) feedbackId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReviewIngredientFeedbackDto
+  ) {
+    return this.adminService.reviewIngredientFeedback(feedbackId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("recipe-reports")

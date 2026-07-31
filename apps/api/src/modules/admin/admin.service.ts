@@ -20,8 +20,11 @@ import type {
   AdminIngredientCategoryPayloadRequest,
   AdminIngredientRejectReasonCode,
   AdminIngredientCategorySummary,
+  AdminPendingIngredientFeedbackSummary,
   AdminIngredientPayloadRequest,
   AdminPendingIngredientSummary,
+  AdminReviewIngredientFeedbackRequest,
+  AdminReviewIngredientFeedbackResult,
     AdminReviewPendingIngredientRequest,
     AdminReviewPendingIngredientResult,
     AdminReviewPendingRecipeRequest,
@@ -217,6 +220,22 @@ type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
     };
   };
 }>;
+type AdminPendingIngredientFeedbackRow = Prisma.IngredientFeedbackGetPayload<{
+  include: {
+    ingredient: {
+      include: {
+        category: true;
+        owner: {
+          select: {
+            id: true;
+            uid: true;
+            nickname: true;
+          };
+        };
+      };
+    };
+  };
+}>;
 type AdminPendingRecipeRow = Prisma.RecipeRecommendationGetPayload<{
   include: {
     recipe: {
@@ -381,6 +400,29 @@ function toAdminPendingIngredientSummary(row: AdminPendingIngredientRow): AdminP
     categoryName: row.categoryName,
     defaultUnitId: row.ingredient.defaultUnitId,
     defaultUnitName: row.defaultUnitName,
+    status: "PENDING",
+    createdAt: toIsoDate(row.createdAt),
+    updatedAt: toIsoDate(row.updatedAt),
+    user: {
+      id: row.ingredient.owner?.id ?? row.userId,
+      uid: row.ingredient.owner?.uid ?? 0,
+      nickname: row.ingredient.owner?.nickname ?? null
+    }
+  };
+}
+
+function toAdminPendingIngredientFeedbackSummary(row: AdminPendingIngredientFeedbackRow): AdminPendingIngredientFeedbackSummary {
+  return {
+    id: row.id,
+    ingredientId: row.ingredientId,
+    ingredientVersion: row.ingredient.version,
+    ingredientName: row.ingredient.name,
+    categoryId: row.ingredient.categoryId,
+    categoryName: row.ingredient.category.name,
+    suggestedName: row.suggestedName,
+    suggestedCategoryId: row.suggestedCategoryId,
+    suggestedCategoryName: row.suggestedCategoryName,
+    note: row.note,
     status: "PENDING",
     createdAt: toIsoDate(row.createdAt),
     updatedAt: toIsoDate(row.updatedAt),
@@ -2173,6 +2215,74 @@ export class AdminService {
     };
   }
 
+  async listPendingIngredientFeedbacks(
+    page: number,
+    pageSize: number,
+    keyword: string | undefined,
+    adminId: UUID
+  ): Promise<PageResult<AdminPendingIngredientFeedbackSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedKeyword = keyword?.trim();
+    const uidKeyword = normalizedKeyword && /^\d+$/.test(normalizedKeyword) ? Number(normalizedKeyword) : null;
+    const where: Prisma.IngredientFeedbackWhereInput = {
+      status: "PENDING",
+      ingredient: {
+        is: {
+          ownerId: null,
+          status: {
+            in: ["ACTIVE", "DISABLED"]
+          }
+        }
+      },
+      ...(normalizedKeyword
+        ? {
+            OR: [
+              { ingredientName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { suggestedName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { categoryName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { suggestedCategoryName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { note: { contains: normalizedKeyword, mode: "insensitive" } },
+              { user: { is: { nickname: { contains: normalizedKeyword, mode: "insensitive" } } } },
+              ...(uidKeyword === null ? [] : [{ user: { is: { uid: uidKeyword } } }])
+            ]
+          }
+        : {})
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.ingredientFeedback.findMany({
+        where,
+        include: {
+          ingredient: {
+            include: {
+              category: true,
+              owner: {
+                select: {
+                  id: true,
+                  uid: true,
+                  nickname: true
+                }
+              }
+            }
+          }
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.ingredientFeedback.count({ where })
+    ]);
+    return {
+      items: items.map(toAdminPendingIngredientFeedbackSummary),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
   async listPendingRecipes(page: number, pageSize: number, keyword: string | undefined, adminId: UUID): Promise<PageResult<AdminPendingRecipeSummary>> {
     await this.requireSuperAdmin(adminId);
     const normalizedPage = toPositiveInt(page, 1);
@@ -2505,6 +2615,135 @@ export class AdminService {
     } catch (error) {
       if (isUniqueConstraintError(error)) {
         throw new ConflictException("系统食材名称或排序已冲突，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
+  async reviewIngredientFeedback(
+    feedbackId: UUID,
+    body: AdminReviewIngredientFeedbackRequest,
+    adminId: UUID
+  ): Promise<AdminReviewIngredientFeedbackResult> {
+    await this.requireSuperAdmin(adminId);
+    const name = body.name?.trim() || "";
+    const reviewNote = body.reason?.trim() || null;
+    const requestHash = JSON.stringify({
+      feedbackId,
+      action: body.action,
+      expectedVersion: body.expectedVersion,
+      name,
+      categoryId: body.categoryId ?? null,
+      reason: reviewNote
+    });
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "ingredient_feedbacks" WHERE "id" = ${feedbackId} FOR UPDATE`;
+        const feedback = await this.requirePendingIngredientFeedback(tx, feedbackId);
+        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${feedback.ingredientId} FOR UPDATE`;
+        const ingredient = await this.requireSystemIngredient(tx, feedback.ingredientId, true);
+        const repeated = await getAdminIdempotentResult<AdminReviewIngredientFeedbackResult>(
+          tx,
+          body.operationId,
+          "admin-ingredient-feedback:review",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        if (ingredient.version !== body.expectedVersion) {
+          throw new ConflictException("食材已被更新，请刷新后重试");
+        }
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-feedback:review", adminId, requestHash);
+
+        const now = new Date();
+        if (body.action === "REJECT") {
+          await tx.ingredientFeedback.update({
+            where: { id: feedback.id },
+            data: {
+              status: "REJECTED",
+              reviewNote,
+              reviewedAt: now
+            }
+          });
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "INGREDIENT_FEEDBACK_REVIEWED",
+              objectType: "INGREDIENT",
+              objectId: ingredient.id,
+              payload: {
+                feedbackId,
+                action: body.action,
+                reason: reviewNote
+              }
+            }
+          });
+          const result = {
+            id: feedback.id,
+            ingredientId: ingredient.id,
+            status: "REJECTED",
+            reviewedAt: toIsoDate(now)
+          } satisfies AdminReviewIngredientFeedbackResult;
+          await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-feedback:review", adminId, requestHash, result);
+          return result;
+        }
+
+        if (!name) throw new BadRequestException("食材名称不能为空");
+        if (!body.categoryId) throw new BadRequestException("请选择分类");
+        const searchKey = buildSearchKey(name);
+        const category = await this.requireSelectableIngredientCategory(tx, body.categoryId);
+        await this.assertSystemIngredientNameAvailable(tx, searchKey, ingredient.id);
+        const nextSortOrder =
+          ingredient.categoryId === category.id
+            ? ingredient.systemSortOrder
+            : await this.nextSystemIngredientSortOrder(tx, category.id);
+        await tx.ingredient.update({
+          where: { id: ingredient.id },
+          data: {
+            name,
+            searchKey,
+            categoryId: category.id,
+            systemSortOrder: nextSortOrder,
+            version: { increment: 1 }
+          }
+        });
+        await tx.ingredientFeedback.update({
+          where: { id: feedback.id },
+          data: {
+            status: "ADOPTED",
+            reviewNote,
+            reviewedAt: now
+          }
+        });
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "INGREDIENT_FEEDBACK_REVIEWED",
+            objectType: "INGREDIENT",
+            objectId: ingredient.id,
+            payload: {
+              feedbackId,
+              action: body.action,
+              name,
+              categoryId: category.id,
+              reason: reviewNote
+            }
+          }
+        });
+        const result = {
+          id: feedback.id,
+          ingredientId: ingredient.id,
+          status: "APPROVED",
+          reviewedAt: toIsoDate(now)
+        } satisfies AdminReviewIngredientFeedbackResult;
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-feedback:review", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统食材名称已存在，请刷新后重试");
       }
       throw error;
     }
@@ -3779,6 +4018,33 @@ export class AdminService {
       throw new NotFoundException("待审核个人食材不存在");
     }
     return recommendation;
+  }
+
+  private async requirePendingIngredientFeedback(tx: Prisma.TransactionClient, feedbackId: UUID) {
+    const feedback = await tx.ingredientFeedback.findFirst({
+      where: {
+        id: feedbackId,
+        status: "PENDING"
+      },
+      include: {
+        ingredient: {
+          include: {
+            category: true,
+            owner: {
+              select: {
+                id: true,
+                uid: true,
+                nickname: true
+              }
+            }
+          }
+        }
+      }
+    });
+    if (!feedback || feedback.ingredient.ownerId !== null || !["ACTIVE", "DISABLED"].includes(feedback.ingredient.status)) {
+      throw new NotFoundException("待审核食材纠错不存在");
+    }
+    return feedback;
   }
 
   private async requirePendingRecipeRecommendation(tx: Prisma.TransactionClient, recommendationId: UUID) {
