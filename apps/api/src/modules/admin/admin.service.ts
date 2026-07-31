@@ -76,6 +76,7 @@ import { AdminTokenService } from "../../common/security/admin-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { buildRecipeSearchText, buildSearchKey, contentSizeBytes, toJson, versionToContent } from "../recipe/recipe-content";
+import { MedalService } from "../user/medal.service";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { IngredientImageService } from "./ingredient-image.service";
 
@@ -423,7 +424,9 @@ export class AdminService {
     @Inject(AdminRecipeImageService)
     private readonly adminRecipeImageService: AdminRecipeImageService,
     @Inject(IngredientImageService)
-    private readonly ingredientImageService: IngredientImageService
+    private readonly ingredientImageService: IngredientImageService,
+    @Inject(MedalService)
+    private readonly medalService: MedalService
   ) {}
 
   async login(body: AdminLoginRequest) {
@@ -2481,6 +2484,7 @@ export class AdminService {
           reviewedAt: toIsoDate(now),
           targetIngredientId
         } satisfies AdminReviewPendingIngredientResult;
+        await this.medalService.awardRecommendationContribution(tx, recommendation.userId, now);
         await tx.auditEvent.create({
           data: {
             actorType: "ADMIN",
@@ -2632,6 +2636,7 @@ export class AdminService {
           reviewedAt: toIsoDate(now),
           targetRecipeId: created.id
         } satisfies AdminReviewPendingRecipeResult;
+        await this.medalService.awardRecommendationContribution(tx, recommendation.userId, now);
         await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-recipe:review", adminId, requestHash, result);
         return result;
       });

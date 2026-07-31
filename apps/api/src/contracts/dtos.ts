@@ -28,6 +28,21 @@ function trimItems(value: unknown) {
 }
 
 const resourceIdExample = 1001;
+const medalRuleValues = [
+  "MEAL_COMPLETION",
+  "DINING_EVENT_COMPLETION",
+  "GROUP_MEAL_COMPLETION",
+  "FULL_LOOP_COMPLETION",
+  "RECOMMENDATION_ADOPTED_TOTAL"
+] as const;
+const medalCategoryValues = [
+  "MEAL_CHECKIN",
+  "DINING_COLLABORATION",
+  "HOLIDAY_LIMITED",
+  "RECOMMENDATION_CONTRIBUTION"
+] as const;
+const medalStatusValues = ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] as const;
+const editableMedalStatusValues = ["DRAFT", "LISTED", "UNLISTED"] as const;
 
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
@@ -258,6 +273,234 @@ export class PageQueryDto {
   @IsString()
   @MaxLength(120)
   keyword?: string;
+}
+
+export class AdminMedalTemplateQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ enum: medalStatusValues })
+  @IsOptional()
+  @IsIn(medalStatusValues)
+  status?: "DRAFT" | "LISTED" | "UNLISTED" | "ARCHIVED";
+
+  @ApiPropertyOptional({ enum: medalCategoryValues })
+  @IsOptional()
+  @IsIn(medalCategoryValues)
+  category?: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED";
+}
+
+class MedalTemplateFieldsDto {
+  @ApiProperty({ enum: medalCategoryValues })
+  @IsIn(medalCategoryValues)
+  category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED";
+
+  @ApiProperty({ example: "开火第一餐" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "第一次把自己安排的一餐真正做完吃成。" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  description!: string;
+
+  @ApiProperty({ example: "完成任意一个自己的计划餐次。" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  condition!: string;
+
+  @ApiProperty({ example: "PLAN" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  @Matches(/^[A-Z][A-Z0-9_]*$/)
+  iconKey!: string;
+
+  @ApiPropertyOptional({ minimum: 0, default: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isLimited!: boolean;
+
+  @ApiProperty({ nullable: true, example: "2026-10-01T00:00:00.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  startAt!: string | null;
+
+  @ApiProperty({ nullable: true, example: "2026-10-07T23:59:59.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  endAt!: string | null;
+}
+
+export class CreateAdminMedalTemplateDto extends OperationDto {
+  @ApiProperty({ example: "FIRST_COMPLETED_MEAL" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(64)
+  @Matches(/^[A-Z][A-Z0-9_]*$/)
+  code!: string;
+
+  @ApiProperty({ enum: medalRuleValues })
+  @IsIn(medalRuleValues)
+  awardRule!:
+    | "MEAL_COMPLETION"
+    | "DINING_EVENT_COMPLETION"
+    | "GROUP_MEAL_COMPLETION"
+    | "FULL_LOOP_COMPLETION"
+    | "RECOMMENDATION_ADOPTED_TOTAL";
+
+  @ApiProperty({ enum: editableMedalStatusValues, required: false })
+  @IsOptional()
+  @IsIn(editableMedalStatusValues)
+  status?: "DRAFT" | "LISTED" | "UNLISTED";
+
+  @ApiProperty({ enum: medalCategoryValues })
+  @IsIn(medalCategoryValues)
+  category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
+
+  @ApiProperty({ example: "开火第一餐" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "第一次把自己安排的一餐真正做完吃成。" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  description!: string;
+
+  @ApiProperty({ example: "完成任意一个自己的计划餐次。" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  condition!: string;
+
+  @ApiProperty({ example: "PLAN" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  @Matches(/^[A-Z][A-Z0-9_]*$/)
+  iconKey!: string;
+
+  @ApiPropertyOptional({ minimum: 0, default: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetCount?: number;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isLimited!: boolean;
+
+  @ApiProperty({ nullable: true, example: "2026-10-01T00:00:00.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  startAt!: string | null;
+
+  @ApiProperty({ nullable: true, example: "2026-10-07T23:59:59.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  endAt!: string | null;
+}
+
+export class UpdateAdminMedalTemplateDto extends VersionedOperationDto {
+  @ApiProperty({ enum: medalCategoryValues })
+  @IsIn(medalCategoryValues)
+  category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
+
+  @ApiProperty({ example: "开火第一餐" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ example: "第一次把自己安排的一餐真正做完吃成。" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  description!: string;
+
+  @ApiProperty({ example: "完成任意一个自己的计划餐次。" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  condition!: string;
+
+  @ApiProperty({ example: "PLAN" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  @Matches(/^[A-Z][A-Z0-9_]*$/)
+  iconKey!: string;
+
+  @ApiPropertyOptional({ minimum: 0, default: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
+  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetCount?: number;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isLimited!: boolean;
+
+  @ApiProperty({ nullable: true, example: "2026-10-01T00:00:00.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  startAt!: string | null;
+
+  @ApiProperty({ nullable: true, example: "2026-10-07T23:59:59.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  endAt!: string | null;
+}
+
+export class SetAdminMedalTemplateStatusDto extends VersionedOperationDto {
+  @ApiProperty({ enum: medalStatusValues })
+  @IsIn(medalStatusValues)
+  status!: "DRAFT" | "LISTED" | "UNLISTED" | "ARCHIVED";
 }
 
 export class AdminDiningGroupQueryDto extends PageQueryDto {

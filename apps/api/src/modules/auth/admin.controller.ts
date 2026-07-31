@@ -6,7 +6,9 @@ import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
+import { SuperAdminGuard } from "../../common/super-admin.guard";
 import {
+  AdminMedalTemplateQueryDto,
   AdminInspirationCategoryNameDto,
   AdminInspirationCategoryQueryDto,
   AdminIngredientCategoryNameDto,
@@ -24,6 +26,7 @@ import {
   AdminUserEntitlementQueryDto,
   BlockRecipeDto,
   CreateAdminRecipeDto,
+  CreateAdminMedalTemplateDto,
   CreateAdminUserDto,
   DeleteAdminUnitDto,
   OperationDto,
@@ -37,8 +40,10 @@ import {
   ResetAdminUserPasswordDto,
   ResolveRecipeReportDto,
   SetAdminIngredientStatusDto,
+  SetAdminMedalTemplateStatusDto,
   SetAdminUserStatusDto,
   UpdateAdminInspirationCategoryDto,
+  UpdateAdminMedalTemplateDto,
   UpdateAdminRecipeDto,
   UpdateAdminUnitDto,
   UpdateAdminIngredientCategoryDto,
@@ -48,6 +53,7 @@ import {
 } from "../../contracts/dtos";
 import {
   AdminDashboardSummaryModel,
+  AdminMedalTemplateModel,
   AdminDeleteUnitResultModel,
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
@@ -75,6 +81,7 @@ import {
   UserProfileModel
 } from "../../contracts/openapi";
 import type { AdminRecipeContentInput, UnitType } from "../../contracts/types";
+import { MedalService } from "../user/medal.service";
 import { AdminService } from "../admin/admin.service";
 
 type AssetRequest = { protocol?: string; get?: (name: string) => string | undefined };
@@ -112,7 +119,10 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
 @ApiTags("admin")
 @Controller("admin")
 export class AdminController {
-  constructor(@Inject(AdminService) private readonly adminService: AdminService) {}
+  constructor(
+    @Inject(AdminService) private readonly adminService: AdminService,
+    @Inject(MedalService) private readonly medalService: MedalService
+  ) {}
 
   @Post("auth/login")
   @UseGuards(LoginRateLimitGuard)
@@ -127,6 +137,59 @@ export class AdminController {
   @ApiOkModel(AdminDashboardSummaryModel, "后台首页摘要")
   getDashboardSummary(@Req() request: RequestWithAdmin) {
     return this.adminService.getDashboardSummary(request.admin.adminId).then(result => ok(result));
+  }
+
+  @Get("medal-templates")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminMedalTemplateModel, "后台勋章模板列表")
+  listMedalTemplates(@Query() query: AdminMedalTemplateQueryDto) {
+    return this.medalService
+      .listTemplates(query.page, query.pageSize, query.keyword, query.status, query.category)
+      .then(result => ok(result));
+  }
+
+  @Post("medal-templates")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateModel, "后台新增勋章模板")
+  createMedalTemplate(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateAdminMedalTemplateDto
+  ) {
+    return this.medalService.createTemplate({ ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("medal-templates/:templateId")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateModel, "后台编辑勋章模板")
+  updateMedalTemplate(
+    @Req() request: RequestWithAdmin,
+    @Param("templateId", ParseIntPipe) templateId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateAdminMedalTemplateDto
+  ) {
+    return this.medalService.updateTemplate(templateId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("medal-templates/:templateId/status")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateModel, "后台切换勋章模板状态")
+  setMedalTemplateStatus(
+    @Req() request: RequestWithAdmin,
+    @Param("templateId", ParseIntPipe) templateId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetAdminMedalTemplateStatusDto
+  ) {
+    return this.medalService
+      .setTemplateStatus(templateId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
   }
 
   @Get("users")

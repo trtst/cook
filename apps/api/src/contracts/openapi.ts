@@ -836,13 +836,83 @@ export class DiningEventModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(dateTime) scheduledAt!: string;
   @ApiProperty(nullableString) location!: string | null;
-  @ApiProperty({ type: String, enum: ["PLANNED", "CONFIRMED", "CANCELLED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["PLANNED", "CONFIRMED", "CANCELLED", "COMPLETED"] }) status!: string;
   @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) diningGroupId!: string | null;
   @ApiProperty({ type: RecipeContentModel }) menu!: RecipeContentModel;
   @ApiProperty({ type: [DiningEventParticipantModel] }) participants!: DiningEventParticipantModel[];
   @ApiProperty(nullableString) shareTokenPath!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class UserMedalModel {
+  @ApiProperty({ type: String })
+  code!: string;
+
+  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION"] })
+  awardRule!: string;
+
+  @ApiProperty({ type: String })
+  iconKey!: string;
+
+  @ApiProperty({ type: String, enum: ["MEAL_CHECKIN", "DINING_COLLABORATION", "HOLIDAY_LIMITED", "RECOMMENDATION_CONTRIBUTION"] })
+  category!: string;
+
+  @ApiProperty({ type: String })
+  categoryName!: string;
+
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty({ type: String }) condition!: string;
+  @ApiProperty({ type: Boolean }) earned!: boolean;
+  @ApiProperty({ type: Boolean }) isLimited!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) startAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) endAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) awardedAt!: string | null;
+}
+
+export class MedalCategorySummaryModel {
+  @ApiProperty({ type: String, enum: ["MEAL_CHECKIN", "DINING_COLLABORATION", "HOLIDAY_LIMITED", "RECOMMENDATION_CONTRIBUTION"] })
+  key!: string;
+
+  @ApiProperty({ type: String })
+  name!: string;
+
+  @ApiProperty({ type: Number, minimum: 0 })
+  totalCount!: number;
+
+  @ApiProperty({ type: Number, minimum: 0 })
+  earnedCount!: number;
+}
+
+export class MedalWallModel {
+  @ApiProperty({ type: Number, minimum: 0 }) earnedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;
+  @ApiProperty({ type: [MedalCategorySummaryModel] }) categories!: MedalCategorySummaryModel[];
+  @ApiProperty({ type: [UserMedalModel] }) items!: UserMedalModel[];
+}
+
+export class AdminMedalTemplateModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) code!: string;
+  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "RECOMMENDATION_ADOPTED_TOTAL"] })
+  awardRule!: string;
+  @ApiProperty({ type: String, enum: ["MEAL_CHECKIN", "DINING_COLLABORATION", "HOLIDAY_LIMITED", "RECOMMENDATION_CONTRIBUTION"] }) category!: string;
+  @ApiProperty({ type: String }) categoryName!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty({ type: String }) condition!: string;
+  @ApiProperty({ type: String }) iconKey!: string;
+  @ApiProperty({ type: String, enum: ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) targetCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
+  @ApiProperty({ type: Boolean }) isLimited!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) startAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) endAt!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
 }
 
 export class ShareMenuModel {

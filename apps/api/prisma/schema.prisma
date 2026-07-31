@@ -173,6 +173,28 @@ enum StorageLedgerModule {
   PROFILE_ASSET
 }
 
+enum MedalAwardRule {
+  MEAL_COMPLETION
+  DINING_EVENT_COMPLETION
+  GROUP_MEAL_COMPLETION
+  FULL_LOOP_COMPLETION
+  RECOMMENDATION_ADOPTED_TOTAL
+}
+
+enum MedalCategory {
+  MEAL_CHECKIN
+  DINING_COLLABORATION
+  HOLIDAY_LIMITED
+  RECOMMENDATION_CONTRIBUTION
+}
+
+enum MedalTemplateStatus {
+  DRAFT
+  LISTED
+  UNLISTED
+  ARCHIVED
+}
+
 enum UploadAssetType {
   RECIPE
 }
@@ -244,6 +266,7 @@ model User {
   shoppingItems             ShoppingItem[]
   storageLedger             StorageLedger[]
   uploadAssets              UploadAsset[]
+  userMedals                UserMedal[]
 
   @@index([createdAt])
   @@map("users")
@@ -861,6 +884,46 @@ model ShoppingItem {
   @@index([userId, status, updatedAt])
   @@index([userId, sourceType, sourceKey])
   @@map("shopping_items")
+}
+
+model MedalTemplate {
+  id          Int                 @id @default(autoincrement())
+  code        String              @unique @db.VarChar(64)
+  awardRule   MedalAwardRule      @map("award_rule")
+  category    MedalCategory
+  name        String              @db.VarChar(64)
+  description String              @db.VarChar(255)
+  condition   String              @db.VarChar(255)
+  iconKey     String              @map("icon_key") @db.VarChar(32)
+  status      MedalTemplateStatus @default(DRAFT)
+  targetCount Int                 @default(1) @map("target_count")
+  sortOrder   Int                 @default(0) @map("sort_order")
+  isLimited   Boolean             @default(false) @map("is_limited")
+  startAt     DateTime?           @map("start_at") @db.Timestamptz(3)
+  endAt       DateTime?           @map("end_at") @db.Timestamptz(3)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  userMedals UserMedal[]
+
+  @@index([status, category, sortOrder])
+  @@index([awardRule, status, targetCount])
+  @@map("medal_templates")
+}
+
+model UserMedal {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  code      String   @db.VarChar(64)
+  awardedAt DateTime @default(now()) @map("awarded_at") @db.Timestamptz(3)
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template MedalTemplate @relation(fields: [code], references: [code], onDelete: Restrict)
+
+  @@unique([userId, code])
+  @@index([userId, awardedAt])
+  @@map("user_medals")
 }
 
 model StorageLedger {

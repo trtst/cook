@@ -5,10 +5,11 @@ import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import { ChangeCurrentPasswordDto, UpdateCurrentUserDto, UpdateTasteProfileDto, UpdateUserDisplayDto } from "../../contracts/dtos";
-import { ApiOkModel, ChangePasswordResultModel, MeResponseModel, TasteProfileModel } from "../../contracts/openapi";
+import { ApiOkModel, ChangePasswordResultModel, MedalWallModel, MeResponseModel, TasteProfileModel } from "../../contracts/openapi";
 import { AuthService } from "../auth/auth.service";
 import { CurrentUserService } from "./current-user.service";
 import { DisplayService } from "./display.service";
+import { MedalService } from "./medal.service";
 import { TasteProfileService } from "./taste-profile.service";
 
 @ApiTags("users")
@@ -20,6 +21,7 @@ export class UserController {
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(CurrentUserService) private readonly currentUserService: CurrentUserService,
     @Inject(DisplayService) private readonly displayService: DisplayService,
+    @Inject(MedalService) private readonly medalService: MedalService,
     @Inject(TasteProfileService) private readonly tasteProfileService: TasteProfileService
   ) {}
 
@@ -39,6 +41,12 @@ export class UserController {
   @ApiOkModel(ChangePasswordResultModel, "修改当前用户登录密码")
   updateCurrentPassword(@Req() request: RequestWithUser, @Body() body: ChangeCurrentPasswordDto) {
     return this.authService.updateCurrentPassword(request.user.userId, body).then(result => ok(result));
+  }
+
+  @Get("me/medals")
+  @ApiOkModel(MedalWallModel, "当前用户的勋章墙摘要")
+  getCurrentMedals(@Req() request: RequestWithUser) {
+    return this.medalService.getCurrent(request.user.userId).then(result => ok(result));
   }
 
   @Get("me/taste-profile")

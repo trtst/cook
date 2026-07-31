@@ -996,7 +996,119 @@ export interface DiningEventSummary {
   menu: RecipeContentSnapshot;
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
+  completedAt: IsoDateTime | null;
   createdAt: IsoDateTime;
+}
+
+export type MedalAwardRule =
+  | "MEAL_COMPLETION"
+  | "DINING_EVENT_COMPLETION"
+  | "GROUP_MEAL_COMPLETION"
+  | "FULL_LOOP_COMPLETION"
+  | "RECOMMENDATION_ADOPTED_TOTAL";
+
+export type MedalCategory =
+  | "MEAL_CHECKIN"
+  | "DINING_COLLABORATION"
+  | "HOLIDAY_LIMITED"
+  | "RECOMMENDATION_CONTRIBUTION";
+export type MedalTemplateStatus = "DRAFT" | "LISTED" | "UNLISTED" | "ARCHIVED";
+
+export interface MedalCategorySummary {
+  key: MedalCategory;
+  name: string;
+  totalCount: number;
+  earnedCount: number;
+}
+
+export interface UserMedalSummary {
+  code: string;
+  awardRule: MedalAwardRule;
+  iconKey: string;
+  category: MedalCategory;
+  categoryName: string;
+  name: string;
+  description: string;
+  condition: string;
+  earned: boolean;
+  isLimited: boolean;
+  startAt: IsoDateTime | null;
+  endAt: IsoDateTime | null;
+  awardedAt: IsoDateTime | null;
+}
+
+export interface MedalWallResponse {
+  earnedCount: number;
+  totalCount: number;
+  categories: MedalCategorySummary[];
+  items: UserMedalSummary[];
+}
+
+export interface AdminMedalTemplateSummary {
+  id: UUID;
+  code: string;
+  awardRule: MedalAwardRule;
+  category: MedalCategory;
+  categoryName: string;
+  name: string;
+  description: string;
+  condition: string;
+  iconKey: string;
+  status: MedalTemplateStatus;
+  targetCount: number;
+  sortOrder: number;
+  isLimited: boolean;
+  startAt: IsoDateTime | null;
+  endAt: IsoDateTime | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminMedalTemplateQuery {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  status?: MedalTemplateStatus;
+  category?: MedalCategory;
+}
+
+export interface CreateAdminMedalTemplateRequest {
+  operationId: OperationId;
+  code: string;
+  awardRule: MedalAwardRule;
+  category: MedalCategory;
+  name: string;
+  description: string;
+  condition: string;
+  iconKey: string;
+  status?: Exclude<MedalTemplateStatus, "ARCHIVED">;
+  targetCount?: number;
+  sortOrder?: number;
+  isLimited: boolean;
+  startAt: IsoDateTime | null;
+  endAt: IsoDateTime | null;
+}
+
+export interface UpdateAdminMedalTemplateRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  category: MedalCategory;
+  name: string;
+  description: string;
+  condition: string;
+  iconKey: string;
+  targetCount?: number;
+  sortOrder?: number;
+  isLimited: boolean;
+  startAt: IsoDateTime | null;
+  endAt: IsoDateTime | null;
+}
+
+export interface SetAdminMedalTemplateStatusRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  status: MedalTemplateStatus;
 }
 
 export interface FridgeItemSummary {
