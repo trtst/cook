@@ -51,6 +51,12 @@ const router = createRouter({
           meta: { title: "饭搭子查询" }
         },
         {
+          path: "medals",
+          name: "medals",
+          component: () => import("@/pages/MedalTemplatesPage.vue"),
+          meta: { title: "勋章治理" }
+        },
+        {
           path: "recipes",
           redirect: "/recipes/list"
         },

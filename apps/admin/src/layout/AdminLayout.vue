@@ -65,6 +65,10 @@ function logout() {
           <el-icon><DataAnalysis /></el-icon>
           <span>饭搭子查询</span>
         </el-menu-item>
+        <el-menu-item index="/medals">
+          <el-icon><Files /></el-icon>
+          <span>勋章治理</span>
+        </el-menu-item>
         <el-sub-menu index="/recipes">
           <template #title>
             <el-icon><Files /></el-icon>
