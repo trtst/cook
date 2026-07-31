@@ -90,7 +90,7 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 - User profile and home background image upload remain deferred. User responses keep nullable URL fields and capability flags, and those user-background fields currently return `null` and `false`. The admin-managed login popup image is a separate `app-config` surface, not a generic asset-management reopening.
 - Deferred business decisions and known risks are tracked in `plans/business-development-todo.md`. That list prevents omissions but does not confirm a contract.
 - Disabled until a separate contract is confirmed: generic public-user discovery outside the reviewed Inspiration flow and Worker/Outbox runtime behavior.
-- Target but not contracted: non-monetary activities, achievements, and medal wall. The client may show a Me-page entry placeholder, but no API, DTO, schema, reward, or admin surface may be added until completion facts and contracts are frozen.
+- In development: the medal wall slice is contracted. It stays non-monetary, user-owned, and derived only from server-confirmed meal, dining-event, shopping, and adopted recommendation facts. Admin may manage medal templates and visibility, but must not issue user medals manually. Broader activities and achievements remain unfrozen; do not add ranking, progress-center, or reward surfaces without a separate contract.
 - Reserved: Points, meal tickets, receipt scanning, OCR, AI, owner transfer, and generic fine-grained permission management. Do not add placeholder services or client entry points.
 
 ## Domain Rules

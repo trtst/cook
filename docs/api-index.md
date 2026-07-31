@@ -19,6 +19,7 @@
 | Auth | POST | `/auth/login` | 手机号密码登录 |
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
 | User | GET | `/users/me` | 当前用户资料、展示设置和会员事实 |
+| User | GET | `/users/me/medals` | 当前用户勋章墙、分类与获得状态摘要 |
 | User | PUT | `/users/me` | 更新当前用户昵称和头像 |
 | User | PUT | `/users/me/display` | 背景图能力预留，当前固定返回 `503` |
 | User | PUT | `/users/me/password` | 修改当前用户登录密码 |
@@ -34,6 +35,10 @@
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/dissolve` | 主理人解散饭搭子 |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
 | AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
+| AdminMedal | GET | `/admin/medal-templates` | 后台勋章模板分页列表 |
+| AdminMedal | POST | `/admin/medal-templates` | 后台新增勋章模板 |
+| AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
+| AdminMedal | POST | `/admin/medal-templates/{templateId}/status` | 后台切换勋章模板状态 |
 | AdminUser | GET | `/admin/users` | 用户查询 |
 | AdminUser | POST | `/admin/users` | 新增用户 |
 | AdminUser | PUT | `/admin/users/{userId}` | 更新用户昵称或手机号 |
@@ -59,6 +64,7 @@
 | Recipe | POST | `/recipe-drafts/{draftId}/delete` | 删除草稿 |
 | Recipe | POST | `/recipe-drafts/{draftId}/publish` | 发布草稿到“我的” |
 | Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
+| Recipe | POST | `/recipes/from-inspiration` | 从灵感详情直接加入“我的” |
 | Recipe | GET | `/recipes/{recipeId}` | 当前用户已发布菜谱详情 |
 | Recipe | POST | `/recipes/{recipeId}/recommendations` | 推荐当前个人菜谱到系统菜谱审核 |
 | Recipe | POST | `/recipe-recommendations/{recommendationId}/withdraw` | 撤回待审核的菜谱推荐 |
@@ -92,6 +98,8 @@
 | AdminIngredient | POST | `/admin/ingredients/reorder` | 后台重排系统食材 |
 | AdminIngredient | GET | `/admin/pending-ingredients` | 后台待审核个人食材分页列表 |
 | AdminIngredient | POST | `/admin/pending-ingredients/{ingredientId}/review` | 后台审核个人食材推荐 |
+| AdminIngredient | GET | `/admin/ingredient-feedbacks` | 后台待审核系统食材纠错分页列表 |
+| AdminIngredient | POST | `/admin/ingredient-feedbacks/{feedbackId}/review` | 后台审核系统食材纠错 |
 | AdminRecipe | GET | `/admin/inspiration-categories` | 后台系统菜谱分类列表 |
 | AdminRecipe | POST | `/admin/inspiration-categories` | 后台新建系统菜谱分类 |
 | AdminRecipe | PUT | `/admin/inspiration-categories/{categoryId}` | 后台编辑系统菜谱分类 |
@@ -101,15 +109,18 @@
 | Ingredient | POST | `/ingredients` | 新建个人食材 |
 | Ingredient | PUT | `/ingredients/{ingredientId}` | 编辑个人食材 |
 | Ingredient | POST | `/ingredients/{ingredientId}/recommendations` | 显式推荐个人食材入系统库 |
+| Ingredient | POST | `/ingredients/{ingredientId}/feedbacks` | 提交系统食材纠错 |
 | Ingredient | GET | `/ingredient-recommendations` | 分页查询我的食材推荐记录 |
 | Unit | GET | `/units` | 分页查询系统/本人单位 |
 | Unit | POST | `/units` | 新建个人单位 |
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划 |
+| Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
 | DiningEvent | GET | `/dining-events/{eventId}` | 饭局详情 |
 | DiningEvent | POST | `/dining-events/{eventId}/invite-group` | 邀请饭搭子成员 |
 | DiningEvent | POST | `/dining-events/{eventId}/respond` | 回应饭局 |
 | DiningEvent | POST | `/dining-events/{eventId}/bring` | 选择带菜 |
+| DiningEvent | POST | `/dining-events/{eventId}/complete` | 完成一场饭局 |
 | Share | GET | `/share/{shareToken}/preview` | 饭局分享预览 |
 | Share | POST | `/share/{shareToken}/accept` | 以临时参与人接受分享 |
 | Fridge | GET/POST | `/fridge-items` | 查询或创建个人冰箱条目 |
@@ -142,7 +153,7 @@
 | 模块 | 路径 | 缺失内容 |
 | --- | --- | --- |
 | Membership | 待冻结 | 订单、补差、回调和到期选择 |
-| Activity / Achievement | 待冻结 | 服务端完成事实、成就规则和勋章墙摘要 |
+| Activity / Achievement | 部分已实现 | 勋章模板治理、勋章墙分类详情、完成餐次/饭局/采购闭环勋章与推荐贡献勋章已实现；更广活动与成就系统仍待冻结 |
 
 ## 暂不创建
 

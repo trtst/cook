@@ -197,7 +197,7 @@ V1 模块状态：
 | Entitlement / Membership / Storage | In Development | 收藏和草稿计量口径已确认；全量重算算法和真实计量仍待设计验收 |
 | Background Asset | Deferred | 接口保留空值和 `false`，不实现上传和资产管理 |
 | Payment | Deferred | 价格、周期和升级规则确认后再开发 |
-| Activity / Achievement | Deferred | 当前只允许客户端入口占位，不创建 API、Schema 和后台能力 |
+| Activity / Achievement | In Development | 当前开放非货币勋章墙：依赖服务端完成餐次、完成饭局、采购闭环和推荐审核收录事实；后台只管理勋章模板上下架与展示信息，不开放后台发放、排行榜或任务中心 |
 | Point / Ticket / OCR / AI | Reserved | 当前不创建业务入口或占位服务 |
 
 尚未进入业务确认的问题统一记录在 `plans/business-development-todo.md`。清单用于防遗漏，不等于契约确认。
