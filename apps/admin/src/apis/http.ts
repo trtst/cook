@@ -1,4 +1,5 @@
 import { useSessionStore } from "@/stores/session";
+import { createOperationId } from "@/utils/operation-id";
 import { adminAppConfig } from "./config";
 
 export type UUID = number;
@@ -63,7 +64,7 @@ interface RequestOptions {
 }
 
 function getRequestId() {
-  return crypto.randomUUID();
+  return createOperationId();
 }
 
 function normalizeIdempotencyKey(value: string) {
