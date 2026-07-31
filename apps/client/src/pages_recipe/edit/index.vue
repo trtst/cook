@@ -793,9 +793,6 @@
                 <button class="sheet-apply" @click="applyAdvancedForm">确定</button>
               </view>
 
-              <view v-if="recipeId" class="sheet-section sheet-section--danger">
-                <view v-if="recipeId" class="danger-action" @click="removeRecipe">删除菜谱</view>
-              </view>
             </template>
 
         </SheetShell>
@@ -848,8 +845,8 @@ import {
   writeRecipeCropRequest,
   type RecipeCropRequest,
   type RecipeCropResult
-} from "@/utils/recipe-image-crop";
-import { useRecipePreviewStore } from "@/stores/recipe-preview";
+} from "../utils/recipe-image-crop";
+import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -2591,6 +2588,10 @@ async function maybeRestoreRecipeEditCache() {
   if (!uid) return;
 
   const cacheItemKey = getRecipeEditCacheItemKey();
+  if (recipeId.value) {
+    removeRecipeEditCacheItem(uid, cacheItemKey);
+    return;
+  }
   const entry = readRecipeEditCacheItem<RecipeEditCacheEntry>(uid, cacheItemKey);
   if (!entry) return;
 
@@ -2654,23 +2655,6 @@ async function publishDraft() {
     void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(result.recipe.id))}&kind=my`);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "发布失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function removeRecipe() {
-  if (!recipeId.value || recipeVersion.value === null || submitting.value) return;
-  const cacheItemKey = getRecipeEditCacheItemKey();
-  submitting.value = true;
-  try {
-    await recipeApi.deleteRecipe(recipeId.value, createOperationId(), recipeVersion.value);
-    removeCurrentRecipeEditCache(cacheItemKey);
-    await uniPlatform.feedback.toast({ title: "菜谱已删除", icon: "success" });
-    closeSheet();
-    void uniPlatform.navigation.redirectTo("/pages_recipe/list/index");
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "删除失败", icon: "none" });
   } finally {
     submitting.value = false;
   }

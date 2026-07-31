@@ -17,19 +17,11 @@
 
     <view class="recipe-page">
       <view class="search-row">
-        <view class="search-row__field" :class="{ 'search-row__field--disabled': activeTab === 'collection' }">
-          <image class="search-row__icon" :src="searchIcon" mode="aspectFit" />
-          <input
-            v-model="keyword"
-            class="search-row__input"
-            :disabled="activeTab === 'collection'"
-            placeholder="搜索菜谱、食材"
-            placeholder-class="search-row__placeholder"
-            confirm-type="search"
-            @confirm="searchCurrent"
-          />
-          <text v-if="showClearKeyword" class="search-row__clear" @click="clearKeyword">清除</text>
-        </view>
+        <RecipeSearchBar
+          v-model="keyword"
+          @confirm="searchCurrent"
+          @clear="clearKeyword"
+        />
       </view>
 
       <view v-if="showStickyControls" class="sticky-wrap" :style="stickyStyle">
@@ -135,17 +127,14 @@
         <view v-if="errorText" class="notice" @click="loadActiveTab">{{ errorText }}</view>
         <view v-else-if="loading" class="notice">加载中...</view>
 
-        <view
+        <RecipeEmptyState
           v-else-if="showRecipeEmpty"
-          class="recipe-empty"
-          :hover-class="emptyStateClickable ? 'recipe-empty--hover' : ''"
-          hover-stay-time="100"
+          :art="emptyStateArt"
+          :title="emptyStateTitle"
+          :description="emptyStateDescription"
+          :clickable="emptyStateClickable"
           @click="handleEmptyClick"
-        >
-          <image class="recipe-empty__art" :src="emptyStateArt" mode="aspectFit" />
-          <text class="recipe-empty__title">{{ emptyStateTitle }}</text>
-          <text class="recipe-empty__description">{{ emptyStateDescription }}</text>
-        </view>
+        />
 
         <view v-else class="list">
           <view
@@ -248,7 +237,6 @@ import { onPageScroll, onShow } from "@dcloudio/uni-app";
 import emptyCollectionIllustration from "@/assets/recipe-page/empty-collection.svg";
 import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
 import manageIcon from "@/assets/recipe-page/manage.svg";
-import searchIcon from "@/assets/recipe-page/search.svg";
 import {
 	recipeApi,
 	type CollectionSceneSummary,
@@ -264,6 +252,8 @@ import {
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import Layout from "@/components/Layout/Layout.vue";
+import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
+import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -404,7 +394,6 @@ const showStickyControls = computed(
 	() => showCategoryBar.value || activeTab.value === "inspiration"
 );
 const keywordText = computed(() => keyword.value.trim());
-const showClearKeyword = computed(() => activeTab.value !== "collection" && keywordText.value.length > 0);
 const activeFilterCount = computed(
 	() =>
 		Number(inspirationSort.value !== "RECOMMENDED") +
@@ -483,7 +472,6 @@ watch(
 watch(
 	keywordText,
 	(nextValue, previousValue) => {
-		if (activeTab.value === "collection") return;
 		if (!nextValue && previousValue) {
 			void loadActiveTab();
 		}
@@ -558,7 +546,6 @@ function toggleFilters() {
 }
 
 function searchCurrent() {
-	if (activeTab.value === "collection") return;
 	void loadActiveTab();
 }
 
@@ -627,6 +614,7 @@ async function loadActiveTab() {
 				const list = await recipeApi.listCollectionRecipes({
 					page: 1,
 					pageSize: 20,
+					keyword: keywordText.value || undefined,
 					sceneId: collectionSceneId.value || undefined
 				});
 				collectionRecipes.value = list.items;
@@ -876,50 +864,6 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   margin-top: 12rpx;
 }
 
-.search-row__field {
-  display: flex;
-  align-items: center;
-  height: 80rpx;
-  padding: 0 28rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-  box-sizing: border-box;
-}
-
-.search-row__field--disabled {
-  opacity: 0.7;
-}
-
-.search-row__icon {
-  flex: 0 0 48rpx;
-  width: 48rpx;
-  height: 48rpx;
-}
-
-.search-row__input {
-  flex: 1;
-  min-width: 0;
-  height: 80rpx;
-  padding: 0 0 0 16rpx;
-  color: var(--color-text);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-medium);
-}
-
-.search-row__clear {
-  flex: 0 0 auto;
-  padding-left: 16rpx;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
-  line-height: 1;
-}
-
-:deep(.search-row__placeholder) {
-  color: var(--color-text-tertiary);
-}
-
 .sticky-wrap {
   position: sticky;
   z-index: 20;
@@ -1146,47 +1090,6 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   padding: var(--space-md);
   border-radius: var(--radius-xs);
   background: var(--color-surface);
-}
-
-.recipe-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: var(--space-md);
-  padding: 40rpx 28rpx 44rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: 36rpx;
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--entry-board-bg) 100%);
-  text-align: center;
-}
-
-.recipe-empty--hover {
-  opacity: 0.9;
-}
-
-.recipe-empty__art {
-  width: 420rpx;
-  height: 300rpx;
-}
-
-.recipe-empty__title,
-.recipe-empty__description {
-  display: block;
-}
-
-.recipe-empty__title {
-  margin-top: 8rpx;
-  color: var(--color-text);
-  font-size: 36rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: var(--line-height-tight);
-}
-
-.recipe-empty__description {
-  margin-top: 14rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-loose);
 }
 
 .collection-board {

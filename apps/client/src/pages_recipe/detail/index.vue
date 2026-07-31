@@ -54,8 +54,6 @@
 	          <view class="summary-card">
 	            <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
 	            <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
-	            <text v-if="curatedText" class="summary-card__curated">{{ curatedText }}</text>
-
             <view v-if="detailFactText || showReportEntry" class="summary-card__facts">
               <view class="summary-card__fact-row">
                 <view v-if="detailFactText" class="summary-card__fact-block">
@@ -74,12 +72,13 @@
               </view>
             </view>
 
-	            <view class="summary-info">
-	              <view v-for="item in infoItems" :key="item.key" class="summary-info__item">
-	                <view class="summary-info__icon" :class="[`summary-info__icon--${item.key}`, item.iconClass]" />
-	                <text class="summary-info__label" :class="{ 'summary-info__label--muted': item.muted }">{{ item.label }}</text>
-	              </view>
-	            </view>
+		            <view class="summary-info">
+		              <view v-for="item in infoItems" :key="item.key" class="summary-info__item">
+		                <view class="summary-info__icon" :class="[`summary-info__icon--${item.key}`, item.iconClass]" />
+		                <text class="summary-info__label" :class="{ 'summary-info__label--muted': item.muted }">{{ item.label }}</text>
+		              </view>
+		            </view>
+
 	          </view>
 
           <view id="detail-ingredients" class="section section--first">
@@ -129,14 +128,16 @@
             <text v-else class="section__empty">暂未填写步骤</text>
           </view>
 
-          <view v-if="detailContent.tips" class="section">
-            <view class="section__head">
-              <text class="section__label">小贴士</text>
-            </view>
-            <text class="tips-text">{{ detailContent.tips }}</text>
-          </view>
+	          <view v-if="detailContent.tips" class="section">
+	            <view class="section__head">
+	              <text class="section__label">小贴士</text>
+	            </view>
+	            <text class="tips-text">{{ detailContent.tips }}</text>
+	          </view>
 
-        </view>
+            <text v-if="curatedText" class="detail-curated">{{ curatedText }}</text>
+
+	        </view>
       </view>
 
       <view
@@ -160,6 +161,10 @@
             </button>
           </template>
           <template v-else-if="kind === 'my'">
+            <button class="detail-actions__item" @click="handleEditRecipe">
+              <view class="cookfont icon-edit detail-actions__icon" />
+              <view class="detail-actions__text">编辑</view>
+            </button>
             <button
               class="detail-actions__item"
               :class="{ 'detail-actions__item--disabled': recommendActionDisabled }"
@@ -324,7 +329,7 @@ import type { UUID } from "@/apis/http";
 		type RecipeRecommendationSummary,
 		type RecipeSceneSummary
 	} from "@/apis/recipe";
-import { shoppingApi } from "@/apis/shopping";
+import { shoppingApi } from "../apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -333,7 +338,7 @@ import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
-import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "@/stores/recipe-preview";
+import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -486,7 +491,12 @@ const detailSceneNames = computed(() => {
 const detailSceneLabels = computed(() => detailSceneNames.value.map(item => limitSceneName(item)).filter(Boolean));
 const detailStory = computed(() => detailContent.value.story?.trim() || "");
 const currentRecommendation = computed(() => myDetail.value?.recommendation ?? null);
-const curatedText = computed(() => (inspirationDetail.value?.curatedByName ? `由${inspirationDetail.value.curatedByName}整理` : ""));
+const curatedText = computed(() => {
+  const name = inspirationDetail.value?.curatedByName?.trim();
+  if (!name) return "";
+  const dateText = inspirationDetail.value?.updatedAt?.slice(0, 10) || "";
+  return dateText ? `由${name}整理 · ${dateText}` : `由${name}整理`;
+});
 const canOpenRecommendSheet = computed(() => {
 	const status = currentRecommendation.value?.status;
 	return !status || status === "REJECTED" || status === "WITHDRAWN";
@@ -986,23 +996,32 @@ async function handleAdaptRecipe() {
   void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
 }
 
+function handleEditRecipe() {
+  if (!showStickyActions.value || kind.value !== "my" || !recipeId.value) return;
+  void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
+}
+
 async function confirmAddSheet() {
   if (!inspirationDetail.value || addSheetSubmitting.value || !canSubmitAddSheet.value) return;
   addSheetSubmitting.value = true;
   try {
-    if (selectedSceneIds.value.length) {
-      await collectIntoScenes(selectedSceneIds.value);
+    const sceneIds = [...selectedSceneIds.value];
+    if (sceneIds.length) {
+      await collectIntoScenes(sceneIds);
     }
     if (selectedCategoryId.value) {
-      const content = buildDraftSeedContent(selectedCategoryId.value, selectedSceneIds.value);
-      if (!content) return;
-      recipePreviewStore.setDraftSeed({ content });
+      await recipeApi.createMyRecipeFromInspiration({
+        operationId: createOperationId(),
+        sourceRecipeId: inspirationDetail.value.id,
+        sourceVersionId: inspirationDetail.value.contentVersionId,
+        categoryId: selectedCategoryId.value,
+        sceneIds
+      });
       closeAddSheet();
       await uniPlatform.feedback.toast({
-        title: selectedSceneIds.value.length ? "已加入合集，继续完善到我的" : "已带入我的菜谱",
+        title: sceneIds.length ? "已加入合集并添加到我的" : "已添加到我的",
         icon: "success"
       });
-      void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
       return;
     }
     closeAddSheet();
@@ -1277,14 +1296,6 @@ function limitSceneName(value: string) {
   line-height: 1.8;
 }
 
-.summary-card__curated {
-  display: block;
-  margin-top: 14rpx;
-  color: var(--color-text-tertiary);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
 .summary-card__facts {
   margin-top: 24rpx;
 }
@@ -1451,6 +1462,14 @@ function limitSceneName(value: string) {
   line-height: 1.8;
 }
 
+.detail-curated {
+  display: block;
+  margin: 8rpx 32rpx 0;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
 .ingredient-list {
   overflow: hidden;
 }
@@ -1503,6 +1522,7 @@ function limitSceneName(value: string) {
 .step-card__index-current,
 .step-card__index-total {
   display: inline-block;
+  font-style: italic;
   vertical-align: baseline;
 }
 
@@ -1513,7 +1533,7 @@ function limitSceneName(value: string) {
 }
 
 .step-card__index-total {
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: var(--font-weight-medium);
 }
 

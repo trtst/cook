@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type PageResult, type OperationId, type UUID } from "@/apis/http";
+import { get, post, type OperationId, type PageResult, type UUID } from "@/apis/http";
 
 export interface ShoppingItemSummary {
   id: UUID;

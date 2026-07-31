@@ -9,6 +9,8 @@ export interface MealPlanSummary {
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
+  status: "PLANNED" | "COMPLETED";
+  completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
   createdAt: IsoDateTime;
@@ -29,12 +31,13 @@ export interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
-  status: "PLANNED" | "CONFIRMED" | "CANCELLED";
+  status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   planItemId: UUID | null;
   diningGroupId: UUID | null;
   menu: RecipeContentSnapshot;
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
+  completedAt: IsoDateTime | null;
   createdAt: IsoDateTime;
 }
 
@@ -67,6 +70,13 @@ export const mealApi = {
     const { operationId, ...payload } = body;
     return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans`, payload, { idempotencyKey: operationId });
   },
+  completePlan(planItemId: UUID, operationId: OperationId) {
+    return post<MealPlanSummary>(
+      `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/complete`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
   createDiningEvent(planItemId: UUID, body: CreateDiningEventRequest) {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/dining-event`, payload, {
@@ -94,6 +104,13 @@ export const mealApi = {
     return post<DiningEventSummary>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/bring`,
       { recipeId },
+      { idempotencyKey: operationId }
+    );
+  },
+  completeDiningEvent(eventId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/complete`,
+      undefined,
       { idempotencyKey: operationId }
     );
   }

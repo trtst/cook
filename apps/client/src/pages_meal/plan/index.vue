@@ -41,22 +41,35 @@
       <view v-if="loading" class="notice">加载中...</view>
 
       <view v-for="item in plans" :key="item.id" class="section">
-        <text class="section__title">{{ item.planDate }} · {{ slotText(item.mealSlot) }}</text>
+        <view class="section__heading">
+          <text class="section__title">{{ item.planDate }} · {{ slotText(item.mealSlot) }}</text>
+          <text class="section__status" :class="{ 'section__status--done': item.status === 'COMPLETED' }">
+            {{ item.status === "COMPLETED" ? "已完成用餐" : "待开饭" }}
+          </text>
+        </view>
         <text class="section__hint">{{ item.title }}</text>
+        <text v-if="item.completedAt" class="section__meta">完成时间：{{ formatDateTime(item.completedAt) }}</text>
 
         <template v-if="item.hasDiningEvent && item.diningEventId">
           <button class="secondary" @click="loadEvent(item.id, item.diningEventId)">查看饭局</button>
         </template>
-        <template v-else>
+        <template v-else-if="item.status !== 'COMPLETED'">
           <input v-model="eventTime" class="input" placeholder="饭局时间，例如 2026-07-23T19:00:00.000Z" />
           <input v-model="eventLocation" class="input" placeholder="地点，例如 家里" />
           <button class="secondary" :disabled="submitting" @click="createEvent(item.id)">发起饭局</button>
         </template>
+        <text v-else class="section__meta">已完成用餐的餐次不能再发起饭局。</text>
 
         <view v-if="eventMap[item.id]" class="event-box">
           <text class="event-box__title">饭局：{{ eventMap[item.id].title }}</text>
           <text class="event-box__meta">{{ eventMap[item.id].scheduledAt }}</text>
           <text class="event-box__meta">{{ eventMap[item.id].location || "未填写地点" }}</text>
+          <text class="event-box__meta">
+            {{ eventMap[item.id].status === "COMPLETED" ? "饭局已完成" : "饭局进行中" }}
+          </text>
+          <text v-if="eventMap[item.id].completedAt" class="event-box__meta">
+            完成时间：{{ formatDateTime(eventMap[item.id].completedAt) }}
+          </text>
           <button
             v-if="diningGroupStore.currentDiningGroupId"
             class="secondary"
@@ -64,6 +77,14 @@
             @click="inviteGroup(item.id, eventMap[item.id].id)"
           >
             邀请当前饭搭子
+          </button>
+          <button
+            v-if="eventMap[item.id].status !== 'COMPLETED'"
+            class="secondary"
+            :disabled="submitting"
+            @click="completeEvent(item.id, eventMap[item.id].id)"
+          >
+            完成饭局
           </button>
           <text v-if="eventMap[item.id].shareTokenPath" class="event-box__meta">{{ eventMap[item.id].shareTokenPath }}</text>
 
@@ -74,6 +95,15 @@
             </view>
           </view>
         </view>
+
+        <button
+          v-if="item.status !== 'COMPLETED'"
+          class="primary section__complete"
+          :disabled="submitting"
+          @click="completePlan(item.id)"
+        >
+          完成用餐
+        </button>
       </view>
     </template>
   </Layout>
@@ -207,10 +237,44 @@ async function inviteGroup(planItemId: UUID, eventId: UUID) {
   }
 }
 
+async function completeEvent(planItemId: UUID, eventId: UUID) {
+  if (submitting.value) return;
+  submitting.value = true;
+  try {
+    const result = await mealApi.completeDiningEvent(eventId, createOperationId());
+    eventMap.value = { ...eventMap.value, [planItemId]: result };
+    await uniPlatform.feedback.toast({ title: "饭局已完成", icon: "success" });
+    await loadPage();
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "完成失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function completePlan(planItemId: UUID) {
+  if (submitting.value) return;
+  submitting.value = true;
+  try {
+    await mealApi.completePlan(planItemId, createOperationId());
+    await uniPlatform.feedback.toast({ title: "已完成用餐", icon: "success" });
+    await loadPage();
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "完成失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
 function slotText(slot: "BREAKFAST" | "LUNCH" | "DINNER") {
   if (slot === "BREAKFAST") return "早餐";
   if (slot === "LUNCH") return "午餐";
   return "晚餐";
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "--";
+  return value.replace("T", " ").slice(0, 16);
 }
 </script>
 
@@ -228,9 +292,17 @@ function slotText(slot: "BREAKFAST" | "LUNCH" | "DINNER") {
 
 .section__title,
 .section__hint,
+.section__meta,
 .event-box__title,
 .event-box__meta {
   display: block;
+}
+
+.section__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
 }
 
 .section__title,
@@ -238,6 +310,30 @@ function slotText(slot: "BREAKFAST" | "LUNCH" | "DINNER") {
   color: var(--color-text);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
+}
+
+.section__status {
+  flex-shrink: 0;
+  padding: 8rpx 16rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.section__status--done {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.section__meta,
+.event-box__meta,
+.section__hint {
+  margin-top: var(--space-xs);
+}
+
+.section__complete {
+  margin-top: var(--space-sm);
 }
 
 .section__hint,

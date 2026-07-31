@@ -123,7 +123,7 @@ import {
   writeRecipeCropResult,
   type RecipeCropMode,
   type RecipeCropRequest
-} from "@/utils/recipe-image-crop";
+} from "../utils/recipe-image-crop";
 
 type DragEdge = "" | "move" | "top" | "right" | "bottom" | "left" | "rightBottom";
 
