@@ -119,6 +119,12 @@ const router = createRouter({
           meta: { title: "待审核个人食材" }
         },
         {
+          path: "ingredients/feedbacks",
+          name: "ingredient-feedbacks",
+          component: () => import("@/pages/IngredientFeedbackPage.vue"),
+          meta: { title: "待审核食材纠错" }
+        },
+        {
           path: "ingredients/units",
           name: "ingredient-units",
           component: () => import("@/pages/UnitsPage.vue"),

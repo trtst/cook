@@ -69,6 +69,23 @@ export interface AdminPendingIngredientSummary {
   user: AdminIngredientSuggestionUser;
 }
 
+export interface AdminPendingIngredientFeedbackSummary {
+  id: UUID;
+  ingredientId: UUID;
+  ingredientVersion: number;
+  ingredientName: string;
+  categoryId: UUID;
+  categoryName: string;
+  suggestedName: string;
+  suggestedCategoryId: UUID;
+  suggestedCategoryName: string;
+  note: string | null;
+  status: "PENDING";
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  user: AdminIngredientSuggestionUser;
+}
+
 export interface AdminReviewPendingIngredientPayload {
   operationId: OperationId;
   action: AdminIngredientReviewAction;
@@ -86,6 +103,22 @@ export interface AdminReviewPendingIngredientResult {
   status: "APPROVED" | "REJECTED";
   reviewedAt: IsoDateTime;
   targetIngredientId: UUID | null;
+}
+
+export interface AdminReviewIngredientFeedbackPayload {
+  operationId: OperationId;
+  action: "APPROVE" | "REJECT";
+  expectedVersion: number;
+  name?: string;
+  categoryId?: UUID;
+  reason?: string;
+}
+
+export interface AdminReviewIngredientFeedbackResult {
+  id: UUID;
+  ingredientId: UUID;
+  status: "APPROVED" | "REJECTED";
+  reviewedAt: IsoDateTime;
 }
 
 export interface IngredientCategoryPayload {
@@ -143,6 +176,12 @@ export interface AdminIngredientListQuery {
 }
 
 export interface AdminPendingIngredientListQuery {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+}
+
+export interface AdminIngredientFeedbackListQuery {
   page: number;
   pageSize: number;
   keyword?: string;
@@ -282,9 +321,26 @@ export const ingredientApi = {
       }
     });
   },
+  listIngredientFeedbacks(query: AdminIngredientFeedbackListQuery) {
+    return requestData<PageResult<AdminPendingIngredientFeedbackSummary>>("/admin/ingredient-feedbacks", {
+      query: {
+        page: query.page,
+        pageSize: query.pageSize,
+        keyword: query?.keyword
+      }
+    });
+  },
   reviewPendingIngredient(ingredientId: UUID, body: AdminReviewPendingIngredientPayload) {
     const { operationId, ...payload } = body;
     return requestData<AdminReviewPendingIngredientResult>(`/admin/pending-ingredients/${encodeURIComponent(String(ingredientId))}/review`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  reviewIngredientFeedback(feedbackId: UUID, body: AdminReviewIngredientFeedbackPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminReviewIngredientFeedbackResult>(`/admin/ingredient-feedbacks/${encodeURIComponent(String(feedbackId))}/review`, {
       method: "POST",
       body: payload,
       idempotencyKey: operationId
