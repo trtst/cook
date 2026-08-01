@@ -1665,6 +1665,14 @@ export class RecipeImportStepDto {
   @IsString()
   @MaxLength(128)
   imageKey!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 128 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  imageTempKey!: string | null;
 }
 
 export class RecipeImportRecipeBodyDto {
@@ -1735,6 +1743,14 @@ export class RecipeImportRecipeBodyDto {
   @IsString()
   @MaxLength(128)
   coverImageKey!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 128 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  coverImageTempKey!: string | null;
 
   @ApiProperty({ type: [RecipeImportIngredientDto] })
   @IsArray()

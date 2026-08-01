@@ -442,7 +442,7 @@ function buildItemIssues(recipeBody: RecipeImportRecipeBody, images: RecipeImpor
 
   recipeBody.steps.forEach((item, index) => {
     const rowLabel = `steps.${index}`;
-    if (!item.text.trim() && !item.imageKey) {
+    if (!item.text.trim() && !item.imageKey && !item.imageTempKey) {
       errorItems.push({ field: rowLabel, message: `第 ${index + 1} 步缺少正文或图片` });
     }
     if (item.imageKey && !imageMap.has(item.imageKey)) {
@@ -450,7 +450,7 @@ function buildItemIssues(recipeBody: RecipeImportRecipeBody, images: RecipeImpor
     }
   });
 
-  if (recipeBody.coverImageKey) {
+  if (recipeBody.coverImageKey && !recipeBody.coverImageTempKey) {
     const cover = imageMap.get(recipeBody.coverImageKey);
     if (!cover) {
       errorItems.push({ field: "coverImageKey", message: "封面图片不存在" });
@@ -557,14 +557,15 @@ export function parseMarkdownSource(source: SourceFile, defaultCategoryId: numbe
     inspirationCategoryId: defaultCategoryId,
     title: cleanTitle,
     story,
-    baseServings: pickBaseServings(calcText),
+    baseServings: pickBaseServings(calcText) ?? 1,
     difficulty: pickDifficulty(difficultyText),
     duration: pickDuration(`${story ?? ""} ${introText}`),
     estimatedCalories: pickCalories(caloriesText),
     tips: tipLines.join("\n") || null,
     coverImageKey: imageFiles.find(item => canUseAsCover(item.width, item.height))?.key ?? null,
+    coverImageTempKey: null,
     ingredients: ingredientLines.map(line => parseIngredientLine(line, refs)),
-    steps: stepLines.map(line => ({ text: line, imageKey: null }))
+    steps: stepLines.map(line => ({ text: line, imageKey: null, imageTempKey: null }))
   };
 
   const imageSummary: RecipeImportImageSummary[] = imageFiles.map(item => ({

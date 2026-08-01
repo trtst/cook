@@ -141,6 +141,7 @@ function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody
     estimatedCalories: content.estimatedCalories ?? null,
     tips: content.tips,
     coverImageKey: content.coverImageKey,
+    coverImageTempKey: content.coverImageTempKey,
     ingredients: content.ingredients.map(item => ({
       line: item.line,
       ingredientName: item.ingredientName,
@@ -153,7 +154,8 @@ function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody
     })),
     steps: content.steps.map(item => ({
       text: item.text,
-      imageKey: item.imageKey ?? null
+      imageKey: item.imageKey ?? null,
+      imageTempKey: item.imageTempKey ?? null
     }))
   };
 }

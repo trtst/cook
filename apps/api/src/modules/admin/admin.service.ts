@@ -53,6 +53,7 @@ import type {
   RecipeContentSnapshot,
   RecipeDraftSummary,
   RecipeImportIssue,
+  RecipeImportImageSummary,
   RecipeImportJobDetail,
   RecipeImportJobSummary,
   RecipeImportItemDetail,
@@ -3264,8 +3265,8 @@ export class AdminService {
       }
 
       const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
-      const nextRecipeBody = this.prepareRecipeImportBody(body.recipeBody);
-      const nextState = rebuildItemState(nextRecipeBody, rawBody.images);
+      const nextRecipeBody = await this.prepareRecipeImportBody(tx, body.recipeBody);
+      const nextState = await this.buildRecipeImportItemState(tx, nextRecipeBody, rawBody.images);
       const updateResult = await tx.recipeImportItem.updateMany({
         where: { id: itemId, version: body.expectedVersion },
         data: {
@@ -3329,6 +3330,7 @@ export class AdminService {
     await this.requireSuperAdmin(adminId);
     const requestHash = `${itemId}:${body.expectedVersion}`;
     const publishedStorageKeys: string[] = [];
+    const tempImageKeys: string[] = [];
 
     try {
       const nextItemId = await this.prisma.$transaction(async tx => {
@@ -3353,7 +3355,7 @@ export class AdminService {
 
         const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
         const recipeBody = fromJson<RecipeImportRecipeBody>(currentItem.recipeBodyJson);
-        const nextState = rebuildItemState(recipeBody, rawBody.images);
+        const nextState = await this.buildRecipeImportItemState(tx, recipeBody, rawBody.images);
         if (nextState.errorItems.length > 0) {
           throw new BadRequestException("导入条目还有未补全字段，请先保存修正");
         }
@@ -3363,7 +3365,12 @@ export class AdminService {
 
         const imageMap = new Map(rawBody.images.map(image => [image.key, image]));
         let coverImageUrl: string | null = null;
-        if (recipeBody.coverImageKey) {
+        if (recipeBody.coverImageTempKey) {
+          const published = await this.adminRecipeImageService.publishTempImage(request, "COVER", recipeBody.coverImageTempKey);
+          tempImageKeys.push(recipeBody.coverImageTempKey);
+          publishedStorageKeys.push(published.storageKey);
+          coverImageUrl = published.imageUrl;
+        } else if (recipeBody.coverImageKey) {
           const image = imageMap.get(recipeBody.coverImageKey);
           if (!image) {
             throw new BadRequestException("封面图片不存在");
@@ -3376,6 +3383,13 @@ export class AdminService {
 
         const stepImageUrls: Array<string | null> = [];
         for (const step of recipeBody.steps) {
+          if (step.imageTempKey) {
+            const published = await this.adminRecipeImageService.publishTempImage(request, "STEP", step.imageTempKey);
+            tempImageKeys.push(step.imageTempKey);
+            publishedStorageKeys.push(published.storageKey);
+            stepImageUrls.push(published.imageUrl);
+            continue;
+          }
           if (!step.imageKey) {
             stepImageUrls.push(null);
             continue;
@@ -3491,6 +3505,8 @@ export class AdminService {
     } catch (error) {
       await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys);
       throw error;
+    } finally {
+      await this.adminRecipeImageService.discardTempImages(tempImageKeys);
     }
   }
 
@@ -4287,17 +4303,18 @@ export class AdminService {
     };
   }
 
-  private prepareRecipeImportBody(body: RecipeImportRecipeBody): RecipeImportRecipeBody {
-    return {
+  private async prepareRecipeImportBody(tx: Prisma.TransactionClient, body: RecipeImportRecipeBody): Promise<RecipeImportRecipeBody> {
+    const nextBody: RecipeImportRecipeBody = {
       inspirationCategoryId: body.inspirationCategoryId ?? null,
       title: body.title.trim(),
       story: body.story?.trim() || null,
-      baseServings: body.baseServings ?? null,
+      baseServings: body.baseServings ?? 1,
       difficulty: body.difficulty ?? null,
       duration: body.duration ?? null,
       estimatedCalories: body.estimatedCalories ?? null,
       tips: body.tips?.trim() || null,
       coverImageKey: body.coverImageKey?.trim() || null,
+      coverImageTempKey: body.coverImageTempKey?.trim() || null,
       ingredients: body.ingredients.map(item => ({
         line: item.line.trim(),
         ingredientName: item.ingredientName.trim(),
@@ -4310,9 +4327,119 @@ export class AdminService {
       })),
       steps: body.steps.map(item => ({
         text: item.text.trim(),
-        imageKey: item.imageKey?.trim() || null
+        imageKey: item.imageKey?.trim() || null,
+        imageTempKey: item.imageTempKey?.trim() || null
       }))
     };
+    nextBody.ingredients = await this.materializeImportIngredients(tx, nextBody.ingredients);
+    return nextBody;
+  }
+
+  private async buildRecipeImportItemState(
+    tx: Prisma.TransactionClient,
+    recipeBody: RecipeImportRecipeBody,
+    images: RecipeImportImageSummary[]
+  ) {
+    const nextState = rebuildItemState(recipeBody, images);
+    const ingredientIds = Array.from(new Set(recipeBody.ingredients.map(item => item.ingredientId).filter((value): value is UUID => value !== null)));
+    if (!ingredientIds.length) {
+      return nextState;
+    }
+    const ingredientRows = await tx.ingredient.findMany({
+      where: {
+        id: { in: ingredientIds },
+        ownerId: null,
+        status: {
+          in: ["ACTIVE", "DISABLED"]
+        }
+      },
+      include: {
+        category: true
+      }
+    });
+    const ingredientMap = new Map(ingredientRows.map(item => [item.id, item]));
+    recipeBody.ingredients.forEach((item, index) => {
+      if (!item.ingredientId) return;
+      const ingredient = ingredientMap.get(item.ingredientId);
+      const rowLabel = `ingredients.${index}.ingredientId`;
+      if (!ingredient || ingredient.status !== "ACTIVE") {
+        nextState.errorItems.push({ field: rowLabel, message: `第 ${index + 1} 行食材不存在或已下架` });
+        return;
+      }
+      if (!ingredient.category.isSelectable) {
+        nextState.errorItems.push({ field: rowLabel, message: `第 ${index + 1} 行食材仍在待归类，请先到食材管理完成归类` });
+      }
+    });
+    return nextState;
+  }
+
+  private async materializeImportIngredients(
+    tx: Prisma.TransactionClient,
+    ingredients: RecipeImportRecipeBody["ingredients"]
+  ): Promise<RecipeImportRecipeBody["ingredients"]> {
+    const unclassifiedCategory = await this.requireImportIngredientCategory(tx);
+    const nextRows: RecipeImportRecipeBody["ingredients"] = [];
+    for (const item of ingredients) {
+      if (item.ingredientId || item.fuzzyText || !item.unitId || !item.ingredientName.trim()) {
+        nextRows.push(item);
+        continue;
+      }
+      const searchKey = buildSearchKey(item.ingredientName);
+      const existing = await tx.ingredient.findFirst({
+        where: {
+          ownerId: null,
+          status: {
+            in: ["ACTIVE", "DISABLED"]
+          },
+          searchKey
+        },
+        include: {
+          category: true
+        }
+      });
+      if (existing) {
+        const activeIngredient =
+          existing.status === "ACTIVE"
+            ? existing
+            : await tx.ingredient.update({
+                where: { id: existing.id },
+                data: {
+                  status: "ACTIVE",
+                  systemSortOrder: existing.systemSortOrder ?? (await this.nextSystemIngredientSortOrder(tx, existing.categoryId)),
+                  displaySortOrder: existing.displaySortOrder ?? (await this.nextSystemIngredientDisplaySortOrder(tx))
+                },
+                include: {
+                  category: true
+                }
+              });
+        nextRows.push({
+          ...item,
+          ingredientId: activeIngredient.id,
+          ingredientName: activeIngredient.name
+        });
+        continue;
+      }
+      const unit = await this.requireSystemUnit(tx, item.unitId);
+      const created = await tx.ingredient.create({
+        data: {
+          ownerId: null,
+          status: "ACTIVE",
+          categoryId: unclassifiedCategory.id,
+          defaultUnitId: unit.id,
+          name: item.ingredientName,
+          searchKey,
+          systemSortOrder: await this.nextSystemIngredientSortOrder(tx, unclassifiedCategory.id),
+          displaySortOrder: await this.nextSystemIngredientDisplaySortOrder(tx)
+        }
+      });
+      nextRows.push({
+        ...item,
+        ingredientId: created.id,
+        ingredientName: created.name,
+        unitText: unit.name
+      });
+    }
+    return nextRows;
   }
 
   private async writeRecipeImportJobStats(tx: Prisma.TransactionClient, jobId: UUID) {
@@ -4654,6 +4781,18 @@ export class AdminService {
     const category = await this.requireIngredientCategory(tx, categoryId);
     if (!category.isSelectable) {
       throw new BadRequestException("该分类仅用于系统兜底，不能直接选择");
+    }
+    return category;
+  }
+
+  private async requireImportIngredientCategory(tx: Prisma.TransactionClient) {
+    const category = await tx.ingredientCategory.findFirst({
+      where: {
+        code: "UNCLASSIFIED"
+      }
+    });
+    if (!category) {
+      throw new NotFoundException("待归类食材分类不存在");
     }
     return category;
   }

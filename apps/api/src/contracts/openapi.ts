@@ -769,6 +769,7 @@ export class RecipeImportIngredientModel {
 export class RecipeImportStepModel {
   @ApiProperty({ type: String }) text!: string;
   @ApiProperty({ type: String, nullable: true }) imageKey!: string | null;
+  @ApiProperty({ type: String, nullable: true }) imageTempKey!: string | null;
 }
 
 export class RecipeImportRecipeBodyModel {
@@ -781,6 +782,7 @@ export class RecipeImportRecipeBodyModel {
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: String, nullable: true }) tips!: string | null;
   @ApiProperty({ type: String, nullable: true }) coverImageKey!: string | null;
+  @ApiProperty({ type: String, nullable: true }) coverImageTempKey!: string | null;
   @ApiProperty({ type: [RecipeImportIngredientModel] }) ingredients!: RecipeImportIngredientModel[];
   @ApiProperty({ type: [RecipeImportStepModel] }) steps!: RecipeImportStepModel[];
 }

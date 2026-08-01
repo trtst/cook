@@ -894,6 +894,7 @@ export interface RecipeImportIngredientDraft {
 export interface RecipeImportStepDraft {
   text: string;
   imageKey: string | null;
+  imageTempKey: string | null;
 }
 
 export interface RecipeImportParsedBody {
@@ -918,6 +919,7 @@ export interface RecipeImportRecipeBody {
   estimatedCalories: number | null;
   tips: string | null;
   coverImageKey: string | null;
+  coverImageTempKey: string | null;
   ingredients: RecipeImportIngredientDraft[];
   steps: RecipeImportStepDraft[];
 }
