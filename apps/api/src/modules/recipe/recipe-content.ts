@@ -53,6 +53,12 @@ export function buildRecipeSearchText(content: RecipeContentSnapshot) {
   return [content.name, content.story ?? "", ...content.ingredients.map(item => item.ingredientName)].join(" ").trim();
 }
 
+export function draftCoverImageUrl(value: unknown) {
+  const content = fromJson<{ coverImageUrl?: string | null }>(value);
+  const coverImageUrl = content.coverImageUrl?.trim();
+  return coverImageUrl || null;
+}
+
 export function draftSizeBytes(content: RecipeDraftContentInput) {
   return sizeOfJson(content);
 }
@@ -75,6 +81,7 @@ export function versionToContent(version: {
   baseServings: number;
   difficulty: string | null;
   duration: string | null;
+  estimatedCalories?: number | null;
   tips: string | null;
   ingredientsJson: unknown;
   stepsJson: unknown;
@@ -86,6 +93,7 @@ export function versionToContent(version: {
     baseServings: version.baseServings,
     difficulty: version.difficulty as RecipeContentSnapshot["difficulty"],
     duration: version.duration as RecipeContentSnapshot["duration"],
+    estimatedCalories: version.estimatedCalories ?? null,
     tips: version.tips,
     ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
     steps: steps.map(item => ({

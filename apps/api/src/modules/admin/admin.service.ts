@@ -41,6 +41,7 @@ import type {
   CollectionSceneSummary,
   CollectedRecipeSummary,
   CreateAdminRecipeRequest,
+  CreateRecipeImportJobRequest,
   CreateAdminUserRequest,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
@@ -51,6 +52,14 @@ import type {
   RecipeCategorySummary,
   RecipeContentSnapshot,
   RecipeDraftSummary,
+  RecipeImportIssue,
+  RecipeImportJobDetail,
+  RecipeImportJobSummary,
+  RecipeImportItemDetail,
+  RecipeImportItemSummary,
+  RecipeImportParsedBody,
+  RecipeImportRawBody,
+  RecipeImportRecipeBody,
   RecipeIngredientInput,
   RecipeSceneSummary,
   RecipeReportSummary,
@@ -64,10 +73,12 @@ import type {
   UpdateAdminInspirationCategoryRequest,
   UpdateAdminIngredientCategoryRequest,
   UpdateAdminIngredientRequest,
+  UpdateRecipeImportItemRequest,
   UpdateAdminRecipeRequest,
   UpdateAdminUserRequest,
   UserProfile,
-  UUID
+  UUID,
+  PublishRecipeImportItemRequest
 } from "../../contracts/types";
 import { PrismaService } from "../../common/prisma.service";
 import {
@@ -78,10 +89,21 @@ import {
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
-import { buildRecipeSearchText, buildSearchKey, contentSizeBytes, toJson, versionToContent } from "../recipe/recipe-content";
+import { buildRecipeSearchText, buildSearchKey, contentSizeBytes, draftCoverImageUrl, fromJson, toJson, versionToContent } from "../recipe/recipe-content";
 import { MedalService } from "../user/medal.service";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { IngredientImageService } from "./ingredient-image.service";
+import {
+  buildIngredientRefs,
+  buildUnitRefs,
+  parseMarkdownSource,
+  readImageBuffer,
+  readImageDataUrl,
+  readMarkdownSources,
+  readSourceImages,
+  rebuildItemState,
+  writeImportImages
+} from "./recipe-import-markdown";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -254,6 +276,8 @@ type AdminPendingRecipeRow = Prisma.RecipeRecommendationGetPayload<{
     suggestedCategory: true;
   };
 }>;
+type RecipeImportJobRow = Prisma.RecipeImportJobGetPayload<Record<string, never>>;
+type RecipeImportItemRow = Prisma.RecipeImportItemGetPayload<Record<string, never>>;
 
 function toRecipeCategorySummary(category: { id: UUID; name: string; version: number }): RecipeCategorySummary {
   return {
@@ -2887,6 +2911,589 @@ export class AdminService {
     }
   }
 
+  async createRecipeImportJob(
+    file: { originalname?: string; buffer?: Buffer; size?: number },
+    adminId: UUID,
+    body: CreateRecipeImportJobRequest
+  ): Promise<RecipeImportJobSummary> {
+    await this.requireSuperAdmin(adminId);
+    if (!file.buffer || !file.originalname || !file.size) {
+      throw new BadRequestException("请上传 markdown 或 zip 文件");
+    }
+    const sourceName = file.originalname;
+
+    const sources = readMarkdownSources(sourceName, file.buffer);
+    if (sources.length === 0) {
+      throw new BadRequestException("压缩包内未找到 markdown 文件");
+    }
+    const fileHash = createHash("sha256").update(file.buffer).digest("hex");
+    const requestHash = `${body.sourceType}:${body.inspirationCategoryId ?? 0}:${sourceName}:${file.size}:${fileHash}`;
+    let jobId: UUID | null = null;
+    let startedRecordId: UUID | null = null;
+
+    const repeated = await this.prisma.$transaction(async tx => {
+      const result = await getAdminIdempotentResult<RecipeImportJobSummary>(tx, body.operationId, "admin-recipe-import:create", adminId, requestHash);
+      if (result) {
+        return result;
+      }
+
+      const existing = await tx.idempotencyRecord.findFirst({
+        where: {
+          operationId: body.operationId,
+          operationType: "admin-recipe-import:create",
+          adminId
+        },
+        orderBy: { createdAt: "asc" }
+      });
+      if (existing?.status === "PROCESSING") {
+        throw new ConflictException("导入任务创建中，请稍后刷新");
+      }
+      if (existing?.status === "FAILED") {
+        await tx.idempotencyRecord.deleteMany({
+          where: {
+            operationId: body.operationId,
+            operationType: "admin-recipe-import:create",
+            adminId,
+            status: "FAILED"
+          }
+        });
+      }
+
+      const started = await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe-import:create", adminId, requestHash);
+      startedRecordId = started.id;
+      const job = await tx.recipeImportJob.create({
+        data: {
+          sourceType: body.sourceType,
+          sourceName,
+          status: "RUNNING",
+          createdByAdminId: adminId
+        }
+      });
+      jobId = job.id;
+      return null;
+    });
+    if (repeated) {
+      return repeated;
+    }
+    if (!jobId) {
+      throw new ConflictException("导入任务创建失败，请重试");
+    }
+
+    try {
+      const [ingredientRows, unitRows] = await Promise.all([
+        this.prisma.ingredient.findMany({
+          where: {
+            ownerId: null,
+            status: "ACTIVE",
+            category: {
+              is: {
+                isSelectable: true
+              }
+            }
+          },
+          select: {
+            id: true,
+            name: true,
+            categoryId: true
+          }
+        }),
+        this.prisma.unit.findMany({
+          where: {
+            ownerId: null
+          },
+          select: {
+            id: true,
+            name: true
+          }
+        })
+      ]);
+      const refs = {
+        ingredientByName: buildIngredientRefs(ingredientRows),
+        unitByName: buildUnitRefs(unitRows)
+      };
+
+      for (let index = 0; index < sources.length; index += 1) {
+        const source = sources[index];
+        try {
+          const parsed = parseMarkdownSource(source, body.inspirationCategoryId, refs);
+          const assetState = await writeImportImages(jobId, index + 1, parsed.imageFiles);
+          await this.prisma.recipeImportItem.create({
+            data: {
+              jobId,
+              sourcePath: source.sourcePath,
+              title: parsed.recipeBody.title.trim() || parsed.parsedBody.titleLine || null,
+              status: parsed.errorItems.length > 0 ? "NEEDS_FIX" : "READY",
+              rawBodyJson: toJson({
+                ...parsed.rawBody,
+                assetFolder: assetState.assetFolder,
+                images: assetState.images
+              }),
+              parsedBodyJson: toJson(parsed.parsedBody),
+              recipeBodyJson: toJson(parsed.recipeBody),
+              errorJson: toJson(parsed.errorItems),
+              warnJson: toJson(parsed.warnItems)
+            }
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "解析 markdown 失败";
+          await this.prisma.recipeImportItem.create({
+            data: {
+              jobId,
+              sourcePath: source.sourcePath,
+              title: null,
+              status: "FAILED",
+              rawBodyJson: toJson({
+                sourcePath: source.sourcePath,
+                markdown: source.markdown,
+                assetFolder: `job-${jobId}/item-${index + 1}`,
+                images: []
+              }),
+              parsedBodyJson: toJson({
+                titleLine: null,
+                story: null,
+                baseServingsText: null,
+                difficultyText: null,
+                durationText: null,
+                caloriesText: null,
+                ingredientLines: [],
+                stepLines: [],
+                tipLines: []
+              }),
+              recipeBodyJson: toJson({
+                inspirationCategoryId: body.inspirationCategoryId,
+                title: "",
+                story: null,
+                baseServings: null,
+                difficulty: null,
+                duration: null,
+                estimatedCalories: null,
+                tips: null,
+                coverImageKey: null,
+                ingredients: [],
+                steps: []
+              }),
+              errorJson: toJson([{ field: null, message }]),
+              warnJson: toJson([])
+            }
+          });
+        }
+      }
+
+      let result: RecipeImportJobSummary | null = null;
+      await this.prisma.$transaction(async tx => {
+        await this.writeRecipeImportJobStats(tx, jobId as UUID);
+        const nextJob = await tx.recipeImportJob.findUnique({
+          where: { id: jobId as UUID }
+        });
+        if (!nextJob) {
+          throw new NotFoundException("导入任务不存在");
+        }
+        result = this.toRecipeImportJobSummary(nextJob);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "RECIPE_IMPORT_JOB_CREATED",
+            objectType: "RECIPE_IMPORT_JOB",
+            objectId: jobId,
+            payload: {
+              sourceName: nextJob.sourceName,
+              sourceType: nextJob.sourceType,
+              totalCount: sources.length
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(
+          tx,
+          body.operationId,
+          "admin-recipe-import:create",
+          adminId,
+          requestHash,
+          result as RecipeImportJobSummary
+        );
+      });
+      if (!result) {
+        throw new NotFoundException("导入任务不存在");
+      }
+      return result;
+    } catch (error) {
+      await this.prisma.$transaction(async tx => {
+        if (jobId) {
+          await tx.recipeImportJob.update({
+            where: { id: jobId },
+            data: {
+              status: "FAILED"
+            }
+          });
+        }
+        if (startedRecordId) {
+          await tx.idempotencyRecord.deleteMany({
+            where: {
+              id: startedRecordId,
+              status: "PROCESSING"
+            }
+          });
+        }
+      });
+      throw error;
+    }
+  }
+
+  async listRecipeImportJobs(
+    page: number,
+    pageSize: number,
+    status: string | undefined,
+    adminId: UUID
+  ): Promise<PageResult<RecipeImportJobSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const nextPage = toPositiveInt(page, 1);
+    const nextPageSize = toPositiveInt(pageSize, 20);
+    const skip = (nextPage - 1) * nextPageSize;
+    const statusText = status?.trim();
+    if (statusText && !["PENDING", "RUNNING", "READY", "FAILED", "COMPLETED"].includes(statusText)) {
+      throw new BadRequestException("导入任务状态参数错误");
+    }
+
+    const where: Prisma.RecipeImportJobWhereInput = statusText ? { status: statusText as RecipeImportJobRow["status"] } : {};
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipeImportJob.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        skip,
+        take: nextPageSize
+      }),
+      this.prisma.recipeImportJob.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => this.toRecipeImportJobSummary(item)),
+      page: nextPage,
+      pageSize: nextPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async getRecipeImportJobDetail(
+    jobId: UUID,
+    page: number,
+    pageSize: number,
+    status: string | undefined,
+    adminId: UUID
+  ): Promise<RecipeImportJobDetail> {
+    await this.requireSuperAdmin(adminId);
+    const nextPage = toPositiveInt(page, 1);
+    const nextPageSize = toPositiveInt(pageSize, 20);
+    const skip = (nextPage - 1) * nextPageSize;
+    const statusText = status?.trim();
+    if (statusText && !["PENDING_PARSE", "NEEDS_FIX", "READY", "PUBLISHING", "PUBLISHED", "FAILED"].includes(statusText)) {
+      throw new BadRequestException("导入条目状态参数错误");
+    }
+
+    const job = await this.prisma.recipeImportJob.findUnique({
+      where: { id: jobId }
+    });
+    if (!job) {
+      throw new NotFoundException("导入任务不存在");
+    }
+
+    const itemWhere: Prisma.RecipeImportItemWhereInput = {
+      jobId,
+      ...(statusText ? { status: statusText as RecipeImportItemRow["status"] } : {})
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipeImportItem.findMany({
+        where: itemWhere,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        skip,
+        take: nextPageSize
+      }),
+      this.prisma.recipeImportItem.count({ where: itemWhere })
+    ]);
+
+    return {
+      ...this.toRecipeImportJobSummary(job),
+      items: {
+        items: items.map(item => this.toRecipeImportItemSummary(item)),
+        page: nextPage,
+        pageSize: nextPageSize,
+        total,
+        hasNext: skip + items.length < total
+      }
+    };
+  }
+
+  async getRecipeImportItemDetail(itemId: UUID, adminId: UUID): Promise<RecipeImportItemDetail> {
+    await this.requireSuperAdmin(adminId);
+    const item = await this.prisma.recipeImportItem.findUnique({
+      where: { id: itemId }
+    });
+    if (!item) {
+      throw new NotFoundException("导入条目不存在");
+    }
+    return this.buildRecipeImportItemDetail(item);
+  }
+
+  async updateRecipeImportItem(
+    itemId: UUID,
+    adminId: UUID,
+    body: UpdateRecipeImportItemRequest
+  ): Promise<RecipeImportItemDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = JSON.stringify({
+      itemId,
+      expectedVersion: body.expectedVersion,
+      recipeBody: body.recipeBody
+    });
+
+    const nextItemId = await this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<RecipeImportItemSummary>(tx, body.operationId, "admin-recipe-import:update", adminId, requestHash);
+      if (repeated) {
+        return repeated.id;
+      }
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe-import:update", adminId, requestHash);
+
+      const currentItem = await tx.recipeImportItem.findUnique({
+        where: { id: itemId }
+      });
+      if (!currentItem) {
+        throw new NotFoundException("导入条目不存在");
+      }
+      if (currentItem.version !== body.expectedVersion) {
+        throw new ConflictException("导入条目已被更新，请刷新后重试");
+      }
+
+      const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
+      const nextRecipeBody = this.prepareRecipeImportBody(body.recipeBody);
+      const nextState = rebuildItemState(nextRecipeBody, rawBody.images);
+      const updateResult = await tx.recipeImportItem.updateMany({
+        where: { id: itemId, version: body.expectedVersion },
+        data: {
+          title: nextRecipeBody.title.trim() || null,
+          status: nextState.errorItems.length > 0 ? "NEEDS_FIX" : "READY",
+          recipeBodyJson: toJson(nextRecipeBody),
+          errorJson: toJson(nextState.errorItems),
+          warnJson: toJson(nextState.warnItems),
+          version: { increment: 1 }
+        }
+      });
+      if (updateResult.count !== 1) {
+        throw new ConflictException("导入条目已被更新，请刷新后重试");
+      }
+      const updated = await tx.recipeImportItem.findUnique({
+        where: { id: itemId }
+      });
+      if (!updated) {
+        throw new NotFoundException("导入条目不存在");
+      }
+      await this.writeRecipeImportJobStats(tx, updated.jobId);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_IMPORT_ITEM_UPDATED",
+          objectType: "RECIPE_IMPORT_ITEM",
+          objectId: updated.id,
+          payload: {
+            jobId: updated.jobId,
+            status: updated.status
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(
+        tx,
+        body.operationId,
+        "admin-recipe-import:update",
+        adminId,
+        requestHash,
+        this.toRecipeImportItemSummary(updated)
+      );
+      return updated.id;
+    });
+
+    const nextItem = await this.prisma.recipeImportItem.findUnique({
+      where: { id: nextItemId }
+    });
+    if (!nextItem) {
+      throw new NotFoundException("导入条目不存在");
+    }
+    return this.buildRecipeImportItemDetail(nextItem);
+  }
+
+  async publishRecipeImportItem(
+    request: { protocol?: string; get?: (name: string) => string | undefined },
+    itemId: UUID,
+    adminId: UUID,
+    body: PublishRecipeImportItemRequest
+  ): Promise<RecipeImportItemDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${itemId}:${body.expectedVersion}`;
+    const publishedStorageKeys: string[] = [];
+
+    try {
+      const nextItemId = await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<RecipeImportItemSummary>(tx, body.operationId, "admin-recipe-import:publish", adminId, requestHash);
+        if (repeated) {
+          return repeated.id;
+        }
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-recipe-import:publish", adminId, requestHash);
+
+        const currentItem = await tx.recipeImportItem.findUnique({
+          where: { id: itemId }
+        });
+        if (!currentItem) {
+          throw new NotFoundException("导入条目不存在");
+        }
+        if (currentItem.version !== body.expectedVersion) {
+          throw new ConflictException("导入条目已被更新，请刷新后重试");
+        }
+        if (currentItem.status === "PUBLISHED" && currentItem.recipeId) {
+          throw new ConflictException("该导入条目已发布");
+        }
+
+        const rawBody = fromJson<RecipeImportRawBody>(currentItem.rawBodyJson);
+        const recipeBody = fromJson<RecipeImportRecipeBody>(currentItem.recipeBodyJson);
+        const nextState = rebuildItemState(recipeBody, rawBody.images);
+        if (nextState.errorItems.length > 0) {
+          throw new BadRequestException("导入条目还有未补全字段，请先保存修正");
+        }
+        if (!recipeBody.inspirationCategoryId) {
+          throw new BadRequestException("请选择系统菜谱分类");
+        }
+
+        const imageMap = new Map(rawBody.images.map(image => [image.key, image]));
+        let coverImageUrl: string | null = null;
+        if (recipeBody.coverImageKey) {
+          const image = imageMap.get(recipeBody.coverImageKey);
+          if (!image) {
+            throw new BadRequestException("封面图片不存在");
+          }
+          const buffer = await readImageBuffer(rawBody.assetFolder, image.fileName);
+          const published = await this.adminRecipeImageService.publishImageBuffer(request, "COVER", buffer);
+          publishedStorageKeys.push(published.storageKey);
+          coverImageUrl = published.imageUrl;
+        }
+
+        const stepImageUrls: Array<string | null> = [];
+        for (const step of recipeBody.steps) {
+          if (!step.imageKey) {
+            stepImageUrls.push(null);
+            continue;
+          }
+          const image = imageMap.get(step.imageKey);
+          if (!image) {
+            throw new BadRequestException("步骤图片不存在");
+          }
+          const buffer = await readImageBuffer(rawBody.assetFolder, image.fileName);
+          const published = await this.adminRecipeImageService.publishImageBuffer(request, "STEP", buffer);
+          publishedStorageKeys.push(published.storageKey);
+          stepImageUrls.push(published.imageUrl);
+        }
+
+        const contentInput: AdminRecipeContentInput = {
+          name: recipeBody.title.trim(),
+          story: recipeBody.story,
+          baseServings: recipeBody.baseServings as number,
+          difficulty: recipeBody.difficulty as AdminRecipeContentInput["difficulty"],
+          duration: recipeBody.duration as AdminRecipeContentInput["duration"],
+          estimatedCalories: recipeBody.estimatedCalories,
+          tips: recipeBody.tips,
+          ingredients: recipeBody.ingredients.map(item => ({
+            ingredientId: item.ingredientId as number,
+            amount: item.fuzzyText
+              ? {
+                  kind: "FUZZY",
+                  text: item.fuzzyText
+                }
+              : {
+                  kind: "EXACT",
+                  quantity: item.quantity ?? "",
+                  unitId: item.unitId as number
+                }
+          })),
+          steps: recipeBody.steps.map((step, index) => ({
+            text: step.text,
+            imageUrl: stepImageUrls[index] ?? null,
+            imageTempKey: null
+          }))
+        };
+
+        const inspirationCategory = await this.requireInspirationCategory(tx, recipeBody.inspirationCategoryId);
+        const content = await this.buildAdminRecipeContent(tx, contentInput, stepImageUrls);
+        this.assertAdminRecipeContent(content);
+
+        const nextVersion = await tx.recipeContentVersion.create({
+          data: this.buildAdminRecipeVersionCreateInput(content, coverImageUrl)
+        });
+        const recipe = await tx.recipe.create({
+          data: {
+            ownerId: null,
+            categoryId: null,
+            inspirationCategoryId: inspirationCategory.id,
+            currentVersionId: nextVersion.id,
+            title: content.name,
+            searchText: buildRecipeSearchText(content),
+            coverImageUrl
+          }
+        });
+        const updateResult = await tx.recipeImportItem.updateMany({
+          where: { id: itemId, version: body.expectedVersion },
+          data: {
+            status: "PUBLISHED",
+            recipeId: recipe.id,
+            errorJson: toJson(nextState.errorItems),
+            warnJson: toJson(nextState.warnItems),
+            version: { increment: 1 }
+          }
+        });
+        if (updateResult.count !== 1) {
+          throw new ConflictException("导入条目已被更新，请刷新后重试");
+        }
+        const updated = await tx.recipeImportItem.findUnique({
+          where: { id: itemId }
+        });
+        if (!updated) {
+          throw new NotFoundException("导入条目不存在");
+        }
+        await this.writeRecipeImportJobStats(tx, updated.jobId);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "RECIPE_IMPORT_ITEM_PUBLISHED",
+            objectType: "RECIPE_IMPORT_ITEM",
+            objectId: updated.id,
+            payload: {
+              jobId: updated.jobId,
+              recipeId: recipe.id,
+              contentVersionId: nextVersion.id
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(
+          tx,
+          body.operationId,
+          "admin-recipe-import:publish",
+          adminId,
+          requestHash,
+          this.toRecipeImportItemSummary(updated)
+        );
+        return updated.id;
+      });
+
+      const nextItem = await this.prisma.recipeImportItem.findUnique({
+        where: { id: nextItemId }
+      });
+      if (!nextItem) {
+        throw new NotFoundException("导入条目不存在");
+      }
+      return this.buildRecipeImportItemDetail(nextItem);
+    } catch (error) {
+      await this.adminRecipeImageService.removePublishedImages(publishedStorageKeys);
+      throw error;
+    }
+  }
+
   async listRecipes(
     page: number,
     pageSize: number,
@@ -3614,6 +4221,137 @@ export class AdminService {
     };
   }
 
+  private toRecipeImportJobSummary(job: RecipeImportJobRow): RecipeImportJobSummary {
+    return {
+      id: job.id,
+      sourceType: job.sourceType,
+      sourceName: job.sourceName,
+      status: job.status,
+      totalCount: job.totalCount,
+      readyCount: job.readyCount,
+      needsFixCount: job.needsFixCount,
+      failedCount: job.failedCount,
+      createdByAdminId: job.createdByAdminId,
+      createdAt: toIsoDate(job.createdAt),
+      updatedAt: toIsoDate(job.updatedAt)
+    };
+  }
+
+  private toRecipeImportItemSummary(item: RecipeImportItemRow): RecipeImportItemSummary {
+    const errorItems = fromJson<RecipeImportIssue[]>(item.errorJson);
+    const warnItems = fromJson<RecipeImportIssue[]>(item.warnJson);
+    return {
+      id: item.id,
+      jobId: item.jobId,
+      sourcePath: item.sourcePath,
+      title: item.title,
+      status: item.status,
+      errorCount: errorItems.length,
+      warnCount: warnItems.length,
+      recipeId: item.recipeId,
+      version: item.version,
+      createdAt: toIsoDate(item.createdAt),
+      updatedAt: toIsoDate(item.updatedAt)
+    };
+  }
+
+  private async buildRecipeImportItemDetail(item: RecipeImportItemRow): Promise<RecipeImportItemDetail> {
+    const rawBody = fromJson<RecipeImportRawBody>(item.rawBodyJson);
+    const parsedBody = fromJson<RecipeImportParsedBody>(item.parsedBodyJson);
+    const recipeBody = fromJson<RecipeImportRecipeBody>(item.recipeBodyJson);
+    const errorItems = fromJson<RecipeImportIssue[]>(item.errorJson);
+    const warnItems = fromJson<RecipeImportIssue[]>(item.warnJson);
+    const sourceImages = await Promise.all(
+      readSourceImages(rawBody).map(async image => ({
+        ...image,
+        dataUrl: await readImageDataUrl(rawBody.assetFolder, image.fileName)
+      }))
+    );
+
+    return {
+      id: item.id,
+      jobId: item.jobId,
+      sourcePath: item.sourcePath,
+      title: item.title,
+      status: item.status,
+      rawBody,
+      parsedBody,
+      recipeBody,
+      errorItems,
+      warnItems,
+      sourceImages,
+      recipeId: item.recipeId,
+      version: item.version,
+      createdAt: toIsoDate(item.createdAt),
+      updatedAt: toIsoDate(item.updatedAt)
+    };
+  }
+
+  private prepareRecipeImportBody(body: RecipeImportRecipeBody): RecipeImportRecipeBody {
+    return {
+      inspirationCategoryId: body.inspirationCategoryId ?? null,
+      title: body.title.trim(),
+      story: body.story?.trim() || null,
+      baseServings: body.baseServings ?? null,
+      difficulty: body.difficulty ?? null,
+      duration: body.duration ?? null,
+      estimatedCalories: body.estimatedCalories ?? null,
+      tips: body.tips?.trim() || null,
+      coverImageKey: body.coverImageKey?.trim() || null,
+      ingredients: body.ingredients.map(item => ({
+        line: item.line.trim(),
+        ingredientName: item.ingredientName.trim(),
+        ingredientId: item.ingredientId ?? null,
+        quantity: item.quantity?.trim() || null,
+        unitText: item.unitText?.trim() || null,
+        unitId: item.unitId ?? null,
+        fuzzyText: item.fuzzyText ?? null,
+        note: item.note?.trim() || null
+      })),
+      steps: body.steps.map(item => ({
+        text: item.text.trim(),
+        imageKey: item.imageKey?.trim() || null
+      }))
+    };
+  }
+
+  private async writeRecipeImportJobStats(tx: Prisma.TransactionClient, jobId: UUID) {
+    const rows = await tx.recipeImportItem.groupBy({
+      by: ["status"],
+      where: { jobId },
+      _count: {
+        _all: true
+      }
+    });
+    const countMap = new Map(rows.map(item => [item.status, item._count._all]));
+    const totalCount = Array.from(countMap.values()).reduce((sum, count) => sum + count, 0);
+    const readyCount = countMap.get("READY") ?? 0;
+    const needsFixCount = countMap.get("NEEDS_FIX") ?? 0;
+    const failedCount = countMap.get("FAILED") ?? 0;
+    const runningCount = (countMap.get("PENDING_PARSE") ?? 0) + (countMap.get("PUBLISHING") ?? 0);
+    const publishedCount = countMap.get("PUBLISHED") ?? 0;
+
+    let status: RecipeImportJobRow["status"] = "READY";
+    if (totalCount === 0 || failedCount === totalCount) {
+      status = "FAILED";
+    } else if (runningCount > 0) {
+      status = "RUNNING";
+    } else if (readyCount === 0 && needsFixCount === 0 && publishedCount + failedCount === totalCount) {
+      status = "COMPLETED";
+    }
+
+    await tx.recipeImportJob.update({
+      where: { id: jobId },
+      data: {
+        status,
+        totalCount,
+        readyCount,
+        needsFixCount,
+        failedCount
+      }
+    });
+  }
+
   private assertAdminRecipeContent(content: RecipeContentSnapshot) {
     if (!content.name.trim()) throw new BadRequestException("菜谱名称不能为空");
     if (content.baseServings < 1 || content.baseServings > 20) {
@@ -3673,6 +4411,7 @@ export class AdminService {
       baseServings: content.baseServings,
       difficulty: content.difficulty,
       duration: content.duration,
+      estimatedCalories: content.estimatedCalories,
       tips: content.tips?.trim() || null,
       ingredients: content.ingredients.map(item => {
         const ingredient = ingredientMap.get(item.ingredientId);
@@ -3725,6 +4464,7 @@ export class AdminService {
       baseServings: content.baseServings,
       difficulty: content.difficulty,
       duration: content.duration,
+      estimatedCalories: content.estimatedCalories,
       tips: content.tips,
       ingredientsJson: toJson(content.ingredients),
       stepsJson: toJson(content.steps),
@@ -3839,6 +4579,7 @@ export class AdminService {
       id: draft.id,
       recipeId: draft.recipeId,
       title: draft.title,
+      coverImageUrl: draftCoverImageUrl(draft.contentJson),
       category: draft.category ? toRecipeCategorySummary(draft.category) : null,
       version: draft.version,
       updatedAt: toIsoDate(draft.updatedAt)

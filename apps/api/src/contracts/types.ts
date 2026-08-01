@@ -590,6 +590,7 @@ export interface RecipeContentSnapshot {
   baseServings: number;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  estimatedCalories: number | null;
   tips: string | null;
   ingredients: RecipeIngredientSnapshot[];
   steps: RecipeStepSnapshot[];
@@ -618,6 +619,7 @@ export interface AdminRecipeContentInput {
   baseServings: number;
   difficulty: RecipeDifficulty;
   duration: RecipeDuration;
+  estimatedCalories: number | null;
   tips: string | null;
   ingredients: RecipeIngredientInput[];
   steps: AdminRecipeStepInput[];
@@ -632,6 +634,7 @@ export interface RecipeDraftSummary {
   id: UUID;
   recipeId: UUID | null;
   title: string | null;
+  coverImageUrl: string | null;
   category: RecipeCategorySummary | null;
   version: number;
   updatedAt: IsoDateTime;
@@ -851,6 +854,144 @@ export interface CreateAdminRecipeRequest {
   coverImageUrl: string | null;
   coverImageTempKey: string | null;
   content: AdminRecipeContentInput;
+}
+
+export type RecipeImportSourceType = "MARKDOWN" | "EXCEL";
+export type RecipeImportJobStatus = "PENDING" | "RUNNING" | "READY" | "FAILED" | "COMPLETED";
+export type RecipeImportItemStatus = "PENDING_PARSE" | "NEEDS_FIX" | "READY" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+
+export interface RecipeImportIssue {
+  field: string | null;
+  message: string;
+}
+
+export interface RecipeImportImageSummary {
+  key: string;
+  alt: string | null;
+  fileName: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface RecipeImportRawBody {
+  sourcePath: string;
+  markdown: string;
+  assetFolder: string;
+  images: RecipeImportImageSummary[];
+}
+
+export interface RecipeImportIngredientDraft {
+  line: string;
+  ingredientName: string;
+  ingredientId: UUID | null;
+  quantity: string | null;
+  unitText: string | null;
+  unitId: UUID | null;
+  fuzzyText: "适量" | "少许" | "按需" | null;
+  note: string | null;
+}
+
+export interface RecipeImportStepDraft {
+  text: string;
+  imageKey: string | null;
+}
+
+export interface RecipeImportParsedBody {
+  titleLine: string | null;
+  story: string | null;
+  baseServingsText: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
+  caloriesText: string | null;
+  ingredientLines: string[];
+  stepLines: string[];
+  tipLines: string[];
+}
+
+export interface RecipeImportRecipeBody {
+  inspirationCategoryId: UUID | null;
+  title: string;
+  story: string | null;
+  baseServings: number | null;
+  difficulty: RecipeDifficulty | null;
+  duration: RecipeDuration | null;
+  estimatedCalories: number | null;
+  tips: string | null;
+  coverImageKey: string | null;
+  ingredients: RecipeImportIngredientDraft[];
+  steps: RecipeImportStepDraft[];
+}
+
+export interface RecipeImportJobSummary {
+  id: UUID;
+  sourceType: RecipeImportSourceType;
+  sourceName: string;
+  status: RecipeImportJobStatus;
+  totalCount: number;
+  readyCount: number;
+  needsFixCount: number;
+  failedCount: number;
+  createdByAdminId: UUID;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface RecipeImportItemSummary {
+  id: UUID;
+  jobId: UUID;
+  sourcePath: string;
+  title: string | null;
+  status: RecipeImportItemStatus;
+  errorCount: number;
+  warnCount: number;
+  recipeId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface RecipeImportJobDetail extends RecipeImportJobSummary {
+  items: PageResult<RecipeImportItemSummary>;
+}
+
+export interface RecipeImportItemPreviewImage extends RecipeImportImageSummary {
+  dataUrl: string;
+  canUseAsCover: boolean;
+}
+
+export interface RecipeImportItemDetail {
+  id: UUID;
+  jobId: UUID;
+  sourcePath: string;
+  title: string | null;
+  status: RecipeImportItemStatus;
+  rawBody: RecipeImportRawBody;
+  parsedBody: RecipeImportParsedBody;
+  recipeBody: RecipeImportRecipeBody;
+  errorItems: RecipeImportIssue[];
+  warnItems: RecipeImportIssue[];
+  sourceImages: RecipeImportItemPreviewImage[];
+  recipeId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface CreateRecipeImportJobRequest {
+  operationId: OperationId;
+  sourceType: "MARKDOWN";
+  inspirationCategoryId: UUID | null;
+}
+
+export interface UpdateRecipeImportItemRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  recipeBody: RecipeImportRecipeBody;
+}
+
+export interface PublishRecipeImportItemRequest {
+  operationId: OperationId;
+  expectedVersion: number;
 }
 
 export interface RecommendRecipeRequest {

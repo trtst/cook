@@ -136,7 +136,7 @@ R1 不提供删除场景接口。菜谱与场景的关联由草稿发布统一�
 | `POST` | `/recipe-drafts/{draftId}/delete` | 删除草稿并释放对应数量/空间 |
 | `POST` | `/recipe-drafts/{draftId}/publish` | 校验完整内容并发布到“我的” |
 
-预览使用当前页面表单状态，不增加预览 API。首次保存已有菜谱编辑草稿时，请求携带该菜谱 ID；服务端存在有效编辑草稿时返回已有草稿，不重复创建。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`；只有 `GET /recipe-drafts/{draftId}` 继续返回完整详情。
+预览使用当前页面表单状态，不增加预览 API。首次保存已有菜谱编辑草稿时，请求携带该菜谱 ID；服务端存在有效编辑草稿时返回已有草稿，不重复创建。`GET /recipe-drafts` 摘要补充 `coverImageUrl`，用于草稿箱列表直接显示当前草稿封面；`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`；只有 `GET /recipe-drafts/{draftId}` 继续返回完整详情。
 
 ### 我的菜谱
 

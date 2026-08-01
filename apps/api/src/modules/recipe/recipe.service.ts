@@ -54,6 +54,7 @@ import {
   buildSearchKey,
   cleanDraftContent,
   contentSizeBytes,
+  draftCoverImageUrl,
   draftSizeBytes,
   formatRecipeAmount,
   fromJson,
@@ -368,6 +369,7 @@ function toDraftSummary(draft: DraftRow): RecipeDraftSummary {
     id: draft.id,
     recipeId: draft.recipeId,
     title: draft.title,
+    coverImageUrl: draftCoverImageUrl(draft.contentJson),
     category: draft.category ? toRecipeCategorySummary(draft.category) : null,
     version: draft.version,
     updatedAt: toIsoDate(draft.updatedAt)
@@ -2555,6 +2557,7 @@ export class RecipeService {
       baseServings: content.baseServings as number,
       difficulty: content.difficulty,
       duration: content.duration ?? null,
+      estimatedCalories: null,
       tips: content.tips?.trim() || null,
       ingredients: content.ingredients.map(item => {
         if (!item.ingredientId) throw new BadRequestException("请重新选择食材");
@@ -2611,6 +2614,7 @@ export class RecipeService {
       baseServings: content.baseServings,
       difficulty: content.difficulty ?? undefined,
       duration: content.duration ?? undefined,
+      estimatedCalories: content.estimatedCalories,
       tips: content.tips,
       ingredientsJson: toJson(content.ingredients),
       stepsJson: toJson(content.steps),

@@ -916,6 +916,7 @@ interface RecipeDraftSummary {
   id: ResourceId;
   recipeId: ResourceId | null;
   title: string | null;
+  coverImageUrl: string | null;
   category: RecipeCategorySummary | null;
   version: number;
   updatedAt: IsoDateTime;
@@ -951,7 +952,7 @@ interface PublishRecipeDraftResponse {
 }
 ```
 
-`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 返回 `SaveRecipeDraftResponse`，不再复用 `RecipeDraftDetail`。`GET /recipe-drafts/{draftId}` 继续返回完整 `RecipeDraftDetail`，供编辑页补齐历史食材和历史单位引用。
+`GET /recipe-drafts` 的摘要补充 `coverImageUrl`，用于草稿箱列表优先显示当前草稿封面；`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 返回 `SaveRecipeDraftResponse`，不再复用 `RecipeDraftDetail`。`GET /recipe-drafts/{draftId}` 继续返回完整 `RecipeDraftDetail`，供编辑页补齐历史食材和历史单位引用。
 
 分类和场景重排提交完整作用域的 `ReorderItem[]`，分类内菜谱重排提交 `ReorderRecipesRequest`。三者都不得缺失、重复或混入越权 ID。服务端锁定最小作用域并逐项比较版本，冲突返回 `409`。
 

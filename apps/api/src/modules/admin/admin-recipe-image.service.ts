@@ -201,6 +201,11 @@ export class AdminRecipeImageService {
     } catch {
       throw new BadRequestException("图片上传状态已失效，请重新上传");
     }
+    const published = await this.publishImageBuffer(request, scene, buffer);
+    return published;
+  }
+
+  async publishImageBuffer(request: RequestLike, scene: AdminRecipeImageScene, buffer: Buffer) {
     const meta = detectImageMeta({ buffer, size: buffer.length });
     assertSceneMeta(scene, meta);
 
@@ -208,7 +213,7 @@ export class AdminRecipeImageService {
     const storageKey = join("admin-recipe-images", fileName);
     const finalPath = this.getFinalPath(fileName);
     await mkdir(this.getFinalDir(), { recursive: true });
-    await copyFile(tempPath, finalPath);
+    await writeFile(finalPath, buffer);
     return {
       fileName,
       storageKey,

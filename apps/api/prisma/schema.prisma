@@ -222,6 +222,28 @@ enum UploadAssetStatus {
   DELETED
 }
 
+enum RecipeImportSourceType {
+  MARKDOWN
+  EXCEL
+}
+
+enum RecipeImportJobStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+  COMPLETED
+}
+
+enum RecipeImportItemStatus {
+  PENDING_PARSE
+  NEEDS_FIX
+  READY
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
 model AdminAccount {
   id           Int                @id @default(autoincrement())
   username     String             @unique @db.VarChar(64)
@@ -234,6 +256,7 @@ model AdminAccount {
 
   idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordAdmin")
   auditEvents        AuditEvent[]        @relation("AuditEventAdmin")
+  recipeImportJobs   RecipeImportJob[]
 
   @@map("admin_accounts")
 }
@@ -589,6 +612,7 @@ model RecipeContentVersion {
   baseServings     Int               @map("base_servings")
   difficulty       RecipeDifficulty?
   duration         RecipeDuration?
+  estimatedCalories Int?             @map("estimated_calories")
   tips             String?           @db.VarChar(1000)
   ingredientsJson  Json              @map("ingredients_json")
   stepsJson        Json              @map("steps_json")
@@ -609,6 +633,51 @@ model RecipeContentVersion {
   @@index([name])
   @@index([createdByUserId, createdAt])
   @@map("recipe_content_versions")
+}
+
+model RecipeImportJob {
+  id               Int                  @id @default(autoincrement())
+  sourceType       RecipeImportSourceType @map("source_type")
+  sourceName       String               @map("source_name") @db.VarChar(255)
+  status           RecipeImportJobStatus @default(PENDING)
+  totalCount       Int                  @default(0) @map("total_count")
+  readyCount       Int                  @default(0) @map("ready_count")
+  needsFixCount    Int                  @default(0) @map("needs_fix_count")
+  failedCount      Int                  @default(0) @map("failed_count")
+  createdByAdminId Int                  @map("created_by_admin_id")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdByAdmin AdminAccount       @relation(fields: [createdByAdminId], references: [id], onDelete: Cascade)
+  items          RecipeImportItem[]
+
+  @@index([status, updatedAt])
+  @@index([createdByAdminId, updatedAt])
+  @@map("recipe_import_jobs")
+}
+
+model RecipeImportItem {
+  id             Int                   @id @default(autoincrement())
+  jobId          Int                   @map("job_id")
+  sourcePath     String                @map("source_path") @db.VarChar(512)
+  title          String?               @db.VarChar(120)
+  status         RecipeImportItemStatus @default(PENDING_PARSE)
+  rawBodyJson    Json                  @map("raw_body_json")
+  parsedBodyJson Json                  @map("parsed_body_json")
+  recipeBodyJson Json                  @map("recipe_body_json")
+  errorJson      Json                  @map("error_json")
+  warnJson       Json                  @map("warn_json")
+  recipeId       Int?                  @map("recipe_id")
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  job    RecipeImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  recipe Recipe?         @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, status, updatedAt])
+  @@index([recipeId])
+  @@map("recipe_import_items")
 }
 
 model Recipe {
@@ -646,6 +715,7 @@ model Recipe {
   adoptedRecommendations  RecipeRecommendation[]   @relation("RecipeRecommendationAdopted")
   sceneLinks              RecipeSceneLink[]
   collections             RecipeCollection[]       @relation("RecipeCollectionSource")
+  importItems             RecipeImportItem[]
   draft                   RecipeDraft?
   mealPlans               MealPlanItem[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")

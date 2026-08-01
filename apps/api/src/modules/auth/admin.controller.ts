@@ -15,7 +15,7 @@ import {
   AdminIngredientCategoryQueryDto,
   AdminIngredientPayloadDto,
   AdminPendingIngredientFeedbackQueryDto,
-    AdminPendingIngredientQueryDto,
+  AdminPendingIngredientQueryDto,
     AdminPendingRecipeQueryDto,
     AdminIngredientQueryDto,
   AdminUnitPayloadDto,
@@ -29,13 +29,17 @@ import {
   CreateAdminRecipeDto,
   CreateAdminMedalTemplateDto,
   CreateAdminUserDto,
+  CreateRecipeImportMarkdownJobDto,
   DeleteAdminUnitDto,
   OperationDto,
   PageQueryDto,
+  PublishRecipeImportItemDto,
   ReorderAdminInspirationCategoriesDto,
   ReorderAdminIngredientCategoriesDto,
   ReorderAdminIngredientsDto,
   ReorderAdminUnitsDto,
+  RecipeImportItemQueryDto,
+  RecipeImportJobQueryDto,
     ReviewIngredientFeedbackDto,
     ReviewPendingIngredientDto,
     ReviewPendingRecipeDto,
@@ -51,6 +55,7 @@ import {
   UpdateAdminIngredientCategoryDto,
   UpdateAdminIngredientImageDto,
   UpdateAdminIngredientDto,
+  UpdateRecipeImportItemDto,
   UpdateAdminUserDto
 } from "../../contracts/dtos";
 import {
@@ -64,10 +69,14 @@ import {
     AdminPendingIngredientModel,
     AdminPendingRecipeModel,
     AdminRecipeDetailModel,
-    AdminReviewIngredientFeedbackResultModel,
+  AdminReviewIngredientFeedbackResultModel,
     AdminReviewPendingRecipeResultModel,
     AdminReviewPendingIngredientResultModel,
   AdminUnitModel,
+  RecipeImportItemDetailModel,
+  RecipeImportItemModel,
+  RecipeImportJobDetailModel,
+  RecipeImportJobModel,
   AdminUserRecipeDomainOverviewModel,
   AdminDiningGroupModel,
   AdminLoginResultModel,
@@ -84,7 +93,7 @@ import {
   RecipeDraftSummaryModel,
   UserProfileModel
 } from "../../contracts/openapi";
-import type { AdminRecipeContentInput, UnitType } from "../../contracts/types";
+import type { AdminRecipeContentInput, RecipeImportRecipeBody, UnitType } from "../../contracts/types";
 import { MedalService } from "../user/medal.service";
 import { AdminService } from "../admin/admin.service";
 
@@ -97,6 +106,7 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
     baseServings: content.baseServings,
     difficulty: content.difficulty as AdminRecipeContentInput["difficulty"],
     duration: content.duration as AdminRecipeContentInput["duration"],
+    estimatedCalories: content.estimatedCalories,
     tips: content.tips,
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
@@ -116,6 +126,34 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
       text: item.text,
       imageUrl: item.imageUrl,
       imageTempKey: item.imageTempKey
+    }))
+  };
+}
+
+function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody"]): RecipeImportRecipeBody {
+  return {
+    inspirationCategoryId: content.inspirationCategoryId ?? null,
+    title: content.title,
+    story: content.story,
+    baseServings: content.baseServings ?? null,
+    difficulty: content.difficulty as RecipeImportRecipeBody["difficulty"],
+    duration: content.duration as RecipeImportRecipeBody["duration"],
+    estimatedCalories: content.estimatedCalories ?? null,
+    tips: content.tips,
+    coverImageKey: content.coverImageKey,
+    ingredients: content.ingredients.map(item => ({
+      line: item.line,
+      ingredientName: item.ingredientName,
+      ingredientId: item.ingredientId ?? null,
+      quantity: item.quantity ?? null,
+      unitText: item.unitText ?? null,
+      unitId: item.unitId ?? null,
+      fuzzyText: item.fuzzyText ?? null,
+      note: item.note ?? null
+    })),
+    steps: content.steps.map(item => ({
+      text: item.text,
+      imageKey: item.imageKey ?? null
     }))
   };
 }
@@ -349,6 +387,99 @@ export class AdminController {
   listRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeQueryDto) {
     return this.adminService
       .listRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Post("recipe-import-jobs/markdown")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
+  @ApiConsumes("multipart/form-data")
+  @ApiOkModel(RecipeImportJobModel, "后台创建 markdown 导入任务")
+  createRecipeImportJob(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateRecipeImportMarkdownJobDto,
+    @UploadedFile() file?: { originalname?: string; buffer?: Buffer; size?: number }
+  ) {
+    return this.adminService
+      .createRecipeImportJob(file ?? {}, request.admin.adminId, {
+        operationId,
+        sourceType: "MARKDOWN",
+        inspirationCategoryId: body.inspirationCategoryId ?? null
+      })
+      .then(result => ok(result));
+  }
+
+  @Get("recipe-import-jobs")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(RecipeImportJobModel, "后台导入任务列表")
+  listRecipeImportJobs(@Req() request: RequestWithAdmin, @Query() query: RecipeImportJobQueryDto) {
+    return this.adminService
+      .listRecipeImportJobs(query.page, query.pageSize, query.status, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Get("recipe-import-jobs/:jobId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(RecipeImportJobDetailModel, "后台导入任务详情")
+  getRecipeImportJobDetail(
+    @Req() request: RequestWithAdmin,
+    @Param("jobId", ParseIntPipe) jobId: number,
+    @Query() query: RecipeImportItemQueryDto
+  ) {
+    return this.adminService
+      .getRecipeImportJobDetail(jobId, query.page, query.pageSize, query.status, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Get("recipe-import-items/:itemId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(RecipeImportItemDetailModel, "后台导入条目详情")
+  getRecipeImportItemDetail(@Req() request: RequestWithAdmin, @Param("itemId", ParseIntPipe) itemId: number) {
+    return this.adminService.getRecipeImportItemDetail(itemId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("recipe-import-items/:itemId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecipeImportItemDetailModel, "后台保存导入条目修正")
+  updateRecipeImportItem(
+    @Req() request: RequestWithAdmin,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateRecipeImportItemDto
+  ) {
+    return this.adminService
+      .updateRecipeImportItem(itemId, request.admin.adminId, {
+        operationId,
+        expectedVersion: body.expectedVersion,
+        recipeBody: toRecipeImportRecipeBody(body.recipeBody)
+      })
+      .then(result => ok(result));
+  }
+
+  @Post("recipe-import-items/:itemId/publish")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecipeImportItemDetailModel, "后台发布导入条目到系统菜谱")
+  publishRecipeImportItem(
+    @Req() request: RequestWithAdmin & AssetRequest,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: PublishRecipeImportItemDto
+  ) {
+    return this.adminService
+      .publishRecipeImportItem(request, itemId, request.admin.adminId, {
+        operationId,
+        expectedVersion: body.expectedVersion
+      })
       .then(result => ok(result));
   }
 
