@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(false);
@@ -14,6 +14,9 @@ const categories = ref<AdminIngredientCategorySummary[]>([]);
 
 const query = reactive({
   keyword: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadCategories();
 });
 
 const form = reactive({
@@ -123,13 +126,7 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>系统食材分类</strong>
-        <div class="page-subtitle">正式分类已固定，只维护排序、名称微调，以及隐藏兜底分类“待归类”。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="筛选分类" clearable />
-      <el-button :icon="Refresh" @click="loadCategories">刷新</el-button>
     </div>
 
     <div class="table-panel">

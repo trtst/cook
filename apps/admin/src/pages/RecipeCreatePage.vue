@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ArrowLeft, Plus, Refresh, Upload } from "@element-plus/icons-vue";
+import { ArrowLeft, Plus, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   ingredientApi,
@@ -17,6 +17,7 @@ import {
   type RecipeIngredientInput
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 type Difficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
@@ -77,6 +78,9 @@ const ingredientCategories = ref<AdminIngredientCategorySummary[]>([]);
 const ingredientOptions = ref<AdminIngredientSummary[]>([]);
 const unitOptions = ref<AdminUnitSummary[]>([]);
 const fileInput = ref<HTMLInputElement | null>(null);
+useAdminHeaderRefresh(() => {
+  void loadOptions();
+});
 
 const cropTarget = reactive({
   scene: "COVER" as CropScene,
@@ -115,6 +119,7 @@ const form = reactive({
     baseServings: 1,
     difficulty: "BEGINNER" as Difficulty,
     duration: "WITHIN_15" as Duration,
+    estimatedCalories: null as number | null,
     tips: "",
     ingredients: [] as EditIngredientRow[],
     steps: [] as EditStepRow[]
@@ -154,6 +159,7 @@ function resetForm() {
   form.content.baseServings = 1;
   form.content.difficulty = "BEGINNER";
   form.content.duration = "WITHIN_15";
+  form.content.estimatedCalories = null;
   form.content.tips = "";
   form.content.ingredients = [];
   form.content.steps = [];
@@ -384,6 +390,7 @@ function buildPayload(): CreateAdminRecipePayload | null {
       baseServings: form.content.baseServings,
       difficulty: form.content.difficulty,
       duration: form.content.duration,
+      estimatedCalories: form.content.estimatedCalories,
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
       ingredients,
       steps: form.content.steps.map(item => ({
@@ -557,13 +564,8 @@ onBeforeUnmount(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <el-button text :icon="ArrowLeft" @click="goBack">返回系统菜谱</el-button>
-        <strong>新增系统菜谱</strong>
-        <div class="page-subtitle">后台直接创建一条新的系统菜谱，正文只允许引用系统分类、系统食材和系统单位。</div>
-      </div>
+      <el-button text :icon="ArrowLeft" @click="goBack">返回系统菜谱</el-button>
       <div class="toolbar-spacer" />
-      <el-button :icon="Refresh" @click="loadOptions">刷新</el-button>
       <el-button type="primary" :loading="saving" @click="saveRecipe">创建系统菜谱</el-button>
     </div>
 
@@ -609,6 +611,9 @@ onBeforeUnmount(() => {
             <el-select v-model="form.content.duration">
               <el-option v-for="item in durationOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="预估卡路里">
+            <el-input-number v-model="form.content.estimatedCalories" :min="0" :max="20000" :step="10" />
           </el-form-item>
         </div>
 

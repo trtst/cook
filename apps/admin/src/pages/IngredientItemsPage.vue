@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { Plus, Refresh, Upload } from "@element-plus/icons-vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { Plus, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   ingredientApi,
@@ -9,6 +9,7 @@ import {
   type AdminUnitSummary
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 type IngredientDialogMode = "create" | "edit";
@@ -16,8 +17,6 @@ type IngredientStatusFilter = "ACTIVE" | "DISABLED" | "ALL";
 
 const cropFrameSize = 240;
 const exportImageSize = 50;
-const pageSize = 15;
-
 const unitTypeLabelMap: Record<AdminUnitSummary["type"], string> = {
   WEIGHT: "重量",
   VOLUME: "体积",
@@ -42,15 +41,12 @@ const categories = ref<AdminIngredientCategorySummary[]>([]);
 const ingredients = ref<AdminIngredientSummary[]>([]);
 const units = ref<AdminUnitSummary[]>([]);
 const total = ref(0);
-const page = ref(1);
-const hasMoreIngredients = ref(false);
 const draggingIngredientId = ref<UUID | "">("");
-const loadMoreRef = ref<HTMLElement | null>(null);
-
-let loadMoreObserver: IntersectionObserver | null = null;
 let ingredientsRequest = 0;
 
 const query = reactive({
+  page: 1,
+  pageSize: 20,
   keyword: "",
   categoryId: "" as UUID | "",
   status: "ACTIVE" as IngredientStatusFilter
@@ -118,6 +114,9 @@ const unitNameMap = computed(() => {
 const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
 const allIngredientCount = computed(() => categories.value.reduce((sum, item) => sum + item.ingredientCount, 0));
 const isAllView = computed(() => !query.categoryId);
+useAdminHeaderRefresh(() => {
+  void loadPage();
+});
 const currentScopeName = computed(() => {
   if (!query.categoryId) return "全部食材";
   return categories.value.find(item => item.id === query.categoryId)?.name || "当前分类";
@@ -204,23 +203,20 @@ async function loadUnits() {
   }
 }
 
-async function loadIngredients(reset = true) {
+async function loadIngredients() {
   const requestId = ++ingredientsRequest;
-  const nextPage = reset ? 1 : page.value + 1;
   loading.value = true;
   try {
     const result = await ingredientApi.listIngredients({
-      page: nextPage,
-      pageSize,
+      page: query.page,
+      pageSize: query.pageSize,
       categoryId: query.categoryId || undefined,
       keyword: query.keyword.trim() || undefined,
       status: query.status
     });
     if (requestId !== ingredientsRequest) return;
-    ingredients.value = reset ? result.items : [...ingredients.value, ...result.items];
+    ingredients.value = result.items;
     total.value = result.total;
-    page.value = result.page;
-    hasMoreIngredients.value = result.hasNext;
   } catch (error) {
     if (requestId !== ingredientsRequest) return;
     ElMessage.error(error instanceof Error ? error.message : "加载系统食材失败");
@@ -243,39 +239,14 @@ async function loadPage() {
 async function selectCategory(categoryId: UUID | "") {
   if (query.categoryId === categoryId) return;
   query.categoryId = categoryId;
+  query.page = 1;
   query.keyword = "";
   await loadIngredients();
 }
 
 async function changeStatus(status: IngredientStatusFilter) {
+  query.page = 1;
   await loadIngredients();
-}
-
-function loadMoreIngredients() {
-  if (loading.value || !hasMoreIngredients.value) return;
-  void loadIngredients(false);
-}
-
-function stopLoadMoreObserver() {
-  if (!loadMoreObserver) return;
-  loadMoreObserver.disconnect();
-  loadMoreObserver = null;
-}
-
-function startLoadMoreObserver() {
-  stopLoadMoreObserver();
-  if (!loadMoreRef.value || !hasMoreIngredients.value) return;
-  loadMoreObserver = new IntersectionObserver(
-    entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        loadMoreIngredients();
-      }
-    },
-    {
-      rootMargin: "120px 0px"
-    }
-  );
-  loadMoreObserver.observe(loadMoreRef.value);
 }
 
 function openCreateIngredient() {
@@ -299,7 +270,7 @@ function openBatchDialog() {
 }
 
 function canSortIngredients() {
-  return query.status === "ACTIVE" && !query.keyword.trim() && !hasMoreIngredients.value;
+  return query.status === "ACTIVE" && !query.keyword.trim() && total.value <= query.pageSize;
 }
 
 async function submitIngredient() {
@@ -468,9 +439,9 @@ function handleIngredientDragStart(event: DragEvent, row: AdminIngredientSummary
     ElMessage.error("筛选中不能拖拽排序，请先清空关键词");
     return;
   }
-  if (hasMoreIngredients.value) {
+  if (total.value > query.pageSize) {
     event.preventDefault();
-    ElMessage.error("请先加载完整分类后再排序");
+    ElMessage.error("当前分类超过单页上限，请缩小范围后再排序");
     return;
   }
   draggingIngredientId.value = row.id;
@@ -657,36 +628,19 @@ onMounted(() => {
   void loadPage();
 });
 
-onBeforeUnmount(() => {
-  stopLoadMoreObserver();
-});
-
 watch(
   ingredients,
   items => {
-  if (!items.some(item => item.id === draggingIngredientId.value)) {
-    draggingIngredientId.value = "";
+    if (!items.some(item => item.id === draggingIngredientId.value)) {
+      draggingIngredientId.value = "";
+    }
   }
-  }
-);
-
-watch(
-  () => [hasMoreIngredients.value, loading.value, ingredients.value.length],
-  () => {
-    void nextTick(startLoadMoreObserver);
-  },
-  { flush: "post" }
 );
 </script>
 
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>系统食材</strong>
-        <div class="page-subtitle">支持按真实分类维护系统食材，并通过“全部食材”统一控制前台展示顺序。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-select v-model="query.status" class="toolbar-select" placeholder="状态" @change="changeStatus">
         <el-option label="启用中" value="ACTIVE" />
         <el-option label="已下架" value="DISABLED" />
@@ -697,17 +651,22 @@ watch(
         class="toolbar-search toolbar-search--wide"
         :placeholder="isAllView ? '在全部食材内筛选食材' : '在当前分类内筛选食材'"
         clearable
-        @clear="loadIngredients"
-        @keyup.enter="loadIngredients"
+        @clear="
+          query.page = 1;
+          loadIngredients();
+        "
+        @keyup.enter="
+          query.page = 1;
+          loadIngredients();
+        "
       />
       <el-button type="primary" :icon="Plus" @click="openCreateIngredient">新增系统食材</el-button>
       <el-button @click="openBatchDialog">批量导入</el-button>
-      <el-button :icon="Refresh" @click="loadIngredients">刷新</el-button>
     </div>
 
-    <div class="ingredient-layout">
-      <aside class="category-panel table-panel">
-        <div class="category-panel__title">食材分类</div>
+    <div class="category-panel table-panel">
+      <div class="category-panel__title">食材分类</div>
+      <div class="category-panel__list">
         <button
           type="button"
           class="category-item"
@@ -731,9 +690,10 @@ watch(
           </span>
           <span class="category-item__count">{{ item.ingredientCount }}</span>
         </button>
-      </aside>
+      </div>
+    </div>
 
-      <div class="table-panel ingredient-table-panel">
+    <div class="table-panel ingredient-table-panel">
         <div v-loading="loading" class="ingredient-card-grid">
           <div
             v-for="row in ingredients"
@@ -782,11 +742,21 @@ watch(
           </div>
         </div>
         <div class="ingredient-table-panel__footer">
-          <div class="table-hint">{{ currentScopeName }}共 {{ total }} 条。下滑继续按服务端分页加载；仅“启用中 + 无关键词 + 已加载完整列表”支持拖拽排序。</div>
-          <div v-if="hasMoreIngredients" ref="loadMoreRef" class="ingredient-load-more">下滑继续加载更多</div>
-          <div v-else class="ingredient-load-more ingredient-load-more--end">{{ currentScopeName }}已全部加载</div>
+          <div class="table-hint">{{ currentScopeName }}共 {{ total }} 条；仅“启用中 + 无关键词 + 当前分类总数不超过单页上限”支持拖拽排序。</div>
+          <el-pagination
+            v-model:current-page="query.page"
+            v-model:page-size="query.pageSize"
+            background
+            layout="total, sizes, prev, pager, next"
+            :total="total"
+            :page-sizes="[20, 50, 100]"
+            @current-change="loadIngredients"
+            @size-change="
+              query.page = 1;
+              loadIngredients();
+            "
+          />
         </div>
-      </div>
     </div>
 
     <el-dialog
@@ -903,56 +873,67 @@ watch(
   justify-content: center;
 }
 
-.ingredient-layout {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-
 .category-panel {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  position: sticky;
-  top: 0;
+  align-items: center;
+  gap: 18px;
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
 
 .category-panel__title {
-  color: #374151;
-  font-size: 14px;
+  flex: none;
+  color: #1f1f1f;
+  font-size: 16px;
   font-weight: 700;
+}
+
+.category-panel__list {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.category-panel__list::-webkit-scrollbar {
+  display: none;
 }
 
 .category-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  background: #ffffff;
-  color: #374151;
+  gap: 6px;
+  flex: none;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #57534e;
   cursor: pointer;
-  transition: 0.2s ease;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .category-item:hover {
-  border-color: #d1d5db;
-  background: #f9fafb;
+  color: #7c5f22;
+  background: #fbf7ed;
 }
 
 .category-item--active {
-  border-color: #f59e0b;
+  border-bottom-color: #c89b38;
   background: #fff7ed;
-  color: #9a3412;
+  color: #7c5f22;
 }
 
 .category-item__name {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -967,7 +948,7 @@ watch(
 }
 
 .category-item__count {
-  min-width: 28px;
+  min-width: 24px;
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.06);
@@ -1136,22 +1117,11 @@ watch(
 
 .ingredient-table-panel__footer {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
   margin-top: 14px;
-}
-
-.ingredient-load-more {
-  width: 100%;
-  padding: 10px 0 4px;
-  color: #6b7280;
-  font-size: 12px;
-  text-align: center;
-}
-
-.ingredient-load-more--end {
-  color: #9ca3af;
 }
 
 .ingredient-thumb__image,
@@ -1263,18 +1233,4 @@ watch(
   border: 0;
 }
 
-@media (max-width: 1080px) {
-  .ingredient-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .category-panel {
-    position: static;
-  }
-
-  .ingredient-table-panel__footer {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
 </style>

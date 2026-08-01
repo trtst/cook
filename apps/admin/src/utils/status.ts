@@ -12,6 +12,14 @@ const statusTextMap = {
   PENDING: "待审核",
   APPROVED: "已通过",
   REJECTED: "已拒绝",
+  READY: "可发布",
+  RUNNING: "处理中",
+  FAILED: "失败",
+  COMPLETED: "已完成",
+  NEEDS_FIX: "待补全",
+  PUBLISHED: "已发布",
+  PUBLISHING: "发布中",
+  PENDING_PARSE: "待解析",
   ALL: "全部"
 } as const;
 

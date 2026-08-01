@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, EditPen, Plus, Refresh, Upload } from "@element-plus/icons-vue";
+import { ArrowLeft, EditPen, Plus, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   ingredientApi,
@@ -18,6 +18,7 @@ import {
   type UpdateAdminRecipePayload
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -57,6 +58,7 @@ interface EditFormState {
     baseServings: number;
     difficulty: Difficulty;
     duration: Duration;
+    estimatedCalories: number | null;
     tips: string;
     ingredients: EditIngredientRow[];
     steps: EditStepRow[];
@@ -106,6 +108,10 @@ const saving = ref(false);
 const imageSaving = ref(false);
 const editVisible = ref(false);
 const cropDialogVisible = ref(false);
+
+useAdminHeaderRefresh(() => {
+  void loadDetail();
+});
 const coverPreviewUrl = ref<string | null>(null);
 const detail = ref<AdminRecipeDetail | null>(null);
 const inspirationCategories = ref<AdminInspirationCategorySummary[]>([]);
@@ -151,6 +157,7 @@ const form = reactive<EditFormState>({
     baseServings: 1,
     difficulty: "BEGINNER",
     duration: "WITHIN_15",
+    estimatedCalories: null,
     tips: "",
     ingredients: [],
     steps: []
@@ -317,6 +324,7 @@ function resetFormFromDetail() {
   form.content.baseServings = detail.value.content.baseServings;
   form.content.difficulty = detail.value.content.difficulty;
   form.content.duration = detail.value.content.duration;
+  form.content.estimatedCalories = detail.value.content.estimatedCalories;
   form.content.tips = detail.value.content.tips ?? "";
   form.content.ingredients = detail.value.content.ingredients.map(item => ({
     ingredientId: item.ingredientId,
@@ -458,6 +466,7 @@ function buildPayload(): UpdateAdminRecipePayload | null {
       baseServings: form.content.baseServings,
       difficulty: form.content.difficulty,
       duration: form.content.duration,
+      estimatedCalories: form.content.estimatedCalories,
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
       ingredients,
       steps: form.content.steps.map(item => ({
@@ -717,15 +726,10 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="page-stack">
-    <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <el-button text :icon="ArrowLeft" @click="goBack">返回系统菜谱</el-button>
-        <strong>系统菜谱详情</strong>
-        <div class="page-subtitle">查看当前固定版本正文。仅系统菜谱支持后台直接编辑。</div>
-      </div>
+    <div class="toolbar-panel detail-toolbar">
+      <el-button text :icon="ArrowLeft" @click="goBack">返回系统菜谱</el-button>
       <div class="toolbar-spacer" />
-      <el-button :icon="Refresh" @click="loadDetail">刷新</el-button>
-      <el-button v-if="detail?.canEdit" type="primary" :icon="EditPen" @click="openEdit">编辑正文</el-button>
+      <el-button v-if="detail?.canEdit" class="detail-toolbar__action" type="primary" :icon="EditPen" @click="openEdit">编辑正文</el-button>
     </div>
 
     <div v-loading="loading" class="page-stack">
@@ -745,6 +749,7 @@ onBeforeUnmount(() => {
             <el-descriptions-item label="系统菜谱分类">{{ detail.inspirationCategory?.name ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="个人分类">{{ detail.personalCategory?.name ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="当前版本 ID">{{ detail.contentVersionId }}</el-descriptions-item>
+            <el-descriptions-item label="预估卡路里">{{ detail.content.estimatedCalories ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="举报数">{{ detail.reportCount }}</el-descriptions-item>
             <el-descriptions-item label="下架原因">{{ detail.blockedReason ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="点赞数">{{ detail.likeCount }}</el-descriptions-item>
@@ -850,6 +855,9 @@ onBeforeUnmount(() => {
               <el-select v-model="form.content.duration">
                 <el-option v-for="item in durationOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
+            </el-form-item>
+            <el-form-item label="预估卡路里">
+              <el-input-number v-model="form.content.estimatedCalories" :min="0" :max="20000" :step="10" />
             </el-form-item>
           </div>
 
@@ -972,13 +980,26 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
+.detail-toolbar__action {
+  border-color: #c89b38;
+  background: #c89b38;
+  color: #fff;
+}
+
+.detail-toolbar__action:hover,
+.detail-toolbar__action:focus-visible {
+  border-color: #d4ad57;
+  background: #d4ad57;
+  color: #fff;
+}
+
 .detail-cover {
   overflow: hidden;
   width: min(420px, 100%);
   margin-bottom: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 18px;
-  background: #f8fafc;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
+  background: #f7f5ef;
   aspect-ratio: 4 / 3;
 }
 
@@ -995,7 +1016,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   min-height: 160px;
-  color: #94a3b8;
+  color: #8b7f6a;
   font-size: 13px;
 }
 
@@ -1009,8 +1030,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 12px 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
   background: #fff;
 }
 
@@ -1023,20 +1044,20 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
   background: #fff;
 }
 
 .detail-step-card__index {
   font-weight: 600;
-  color: #111827;
+  color: #1f1f1f;
 }
 
 .detail-step-card__image {
   display: block;
   max-width: min(420px, 100%);
-  border-radius: 14px;
+  border-radius: 6px;
 }
 
 .multiline-text {
@@ -1085,9 +1106,9 @@ onBeforeUnmount(() => {
 
 .image-editor__preview {
   overflow: hidden;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #f8fafc;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
+  background: #f7f5ef;
 }
 
 .image-editor__preview--cover {
@@ -1111,7 +1132,7 @@ onBeforeUnmount(() => {
 .image-editor__hint,
 .step-card__hint,
 .crop-dialog__hint {
-  color: #64748b;
+  color: #78716c;
   font-size: 12px;
   line-height: 1.6;
 }
@@ -1120,8 +1141,8 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
   background: #fff;
 }
 
@@ -1134,9 +1155,9 @@ onBeforeUnmount(() => {
 .step-card__preview {
   overflow: hidden;
   min-height: 140px;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  background: #f8fafc;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
+  background: #f7f5ef;
 }
 
 .step-card__preview-image {
@@ -1163,13 +1184,13 @@ onBeforeUnmount(() => {
   position: relative;
   overflow: hidden;
   margin: 0 auto;
-  border-radius: 16px;
+  border-radius: 6px;
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) -12px 0 / 24px 24px,
     linear-gradient(225deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) -12px 0 / 24px 24px,
     linear-gradient(315deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
     linear-gradient(45deg, rgba(15, 23, 42, 0.08) 25%, transparent 25%) 0 0 / 24px 24px,
-    #eef2f7;
+    #f1efe9;
   touch-action: none;
 }
 

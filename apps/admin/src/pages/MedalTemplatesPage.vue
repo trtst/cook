@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Plus, Refresh } from "@element-plus/icons-vue";
+import { Plus } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   medalApi,
@@ -10,6 +10,7 @@ import {
   type MedalTemplateStatus
 } from "@/apis/medal";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 type DialogMode = "create" | "edit";
@@ -90,6 +91,9 @@ const form = reactive({
   isLimited: false,
   startAt: null as string | null,
   endAt: null as string | null
+});
+useAdminHeaderRefresh(() => {
+  void loadList();
 });
 
 const dialogTitle = computed(() => (dialogMode.value === "create" ? "新增勋章模板" : "编辑勋章模板"));
@@ -296,11 +300,6 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>勋章治理</strong>
-        <div class="page-subtitle">维护勋章模板的类别、规则、阈值、活动时间和上下架状态。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="搜索编码 / 名称 / 简介" clearable @keyup.enter="handleSearch" />
       <el-select v-model="query.category" clearable placeholder="类别" style="width: 160px" @change="handleSearch">
         <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
@@ -309,7 +308,6 @@ onMounted(() => {
         <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
       <el-button type="primary" :icon="Plus" @click="openCreate">新增勋章</el-button>
-      <el-button :icon="Refresh" @click="loadList">刷新</el-button>
     </div>
 
     <div class="work-panel" v-loading="loading">

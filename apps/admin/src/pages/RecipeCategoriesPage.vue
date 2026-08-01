@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Plus, Refresh } from "@element-plus/icons-vue";
+import { Plus } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { recipeApi, type AdminInspirationCategorySummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(false);
@@ -15,6 +16,9 @@ const categories = ref<AdminInspirationCategorySummary[]>([]);
 
 const query = reactive({
   keyword: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadCategories();
 });
 
 const form = reactive({
@@ -138,14 +142,8 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>系统菜谱分类</strong>
-        <div class="page-subtitle">维护系统菜谱的正式分类，只管理名称和排序，不在这里处理导入或推荐审核。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="筛选分类" clearable />
       <el-button type="primary" :icon="Plus" @click="openCreateCategory">新增分类</el-button>
-      <el-button :icon="Refresh" @click="loadCategories">刷新</el-button>
     </div>
 
     <div class="table-panel">

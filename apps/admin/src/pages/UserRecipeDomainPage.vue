@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, Refresh } from "@element-plus/icons-vue";
+import { ArrowLeft } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   userRecipeApi,
@@ -11,6 +11,7 @@ import {
   type AdminUserPublishedRecipe
 } from "@/apis/user-recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh, useAdminHeaderTitle } from "@/composables/useAdminHeader";
 
 type RecipeDomainTab = "published" | "drafts" | "collections";
 
@@ -55,6 +56,10 @@ const userId = computed<UUID | null>(() => parseRouteId(route.params.userId));
 const pageTitle = computed(() => {
   if (!overview.value) return "用户菜谱域";
   return overview.value.user.nickname ? `${overview.value.user.nickname} 的菜谱域` : `UID ${overview.value.user.uid} 的菜谱域`;
+});
+useAdminHeaderTitle(pageTitle);
+useAdminHeaderRefresh(() => {
+  void refreshCurrent();
 });
 
 const publishedLabel = computed(() => buildTabLabel("已发布", overview.value?.publishedCount));
@@ -276,16 +281,12 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
+    <div class="page-note">
+      用户 ID {{ overview?.user.id || userId }}<template v-if="overview?.user.uid"> · UID {{ overview.user.uid }}</template>
+    </div>
     <div class="toolbar-panel page-toolbar">
       <el-button :icon="ArrowLeft" @click="backToUsers">返回用户列表</el-button>
-      <div class="page-title-block">
-        <strong>{{ pageTitle }}</strong>
-        <span class="page-subtitle">
-          用户 ID {{ overview?.user.id || userId }}<template v-if="overview?.user.uid"> · UID {{ overview.user.uid }}</template>
-        </span>
-      </div>
       <div class="toolbar-spacer" />
-      <el-button :icon="Refresh" @click="refreshCurrent">刷新</el-button>
     </div>
 
     <div class="table-panel">

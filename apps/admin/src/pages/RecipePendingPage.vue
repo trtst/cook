@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   recipeApi,
@@ -9,6 +8,7 @@ import {
   type AdminPendingRecipeSummary
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -34,6 +34,9 @@ const form = reactive({
   action: "APPROVE" as ReviewAction,
   inspirationCategoryId: "" as UUID | "",
   reason: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadPage();
 });
 
 const needApproveCategory = computed(() => form.action === "APPROVE");
@@ -145,11 +148,6 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>待审核个人菜谱</strong>
-        <div class="page-subtitle">审核用户推荐到系统菜谱的个人菜谱；本期只做通过/拒绝，并在通过时选择归入的系统分类。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input
         v-model="query.keyword"
         class="toolbar-search"
@@ -164,7 +162,6 @@ onMounted(() => {
           loadPendingItems();
         "
       />
-      <el-button :icon="Refresh" @click="loadPage">刷新</el-button>
     </div>
 
     <div class="table-panel">

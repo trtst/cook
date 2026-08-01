@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   ingredientApi,
@@ -8,6 +7,7 @@ import {
   type AdminPendingIngredientFeedbackSummary
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -33,6 +33,9 @@ const form = reactive({
   name: "",
   categoryId: "" as UUID | "",
   reason: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadPage();
 });
 
 const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
@@ -158,11 +161,6 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>待审核食材纠错</strong>
-        <div class="page-subtitle">查看用户对系统食材提交的名字、分类纠错，并决定采纳或驳回。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input
         v-model="query.keyword"
         class="toolbar-search"
@@ -177,7 +175,6 @@ onMounted(() => {
           loadFeedbacks();
         "
       />
-      <el-button :icon="Refresh" @click="loadPage">刷新</el-button>
     </div>
 
     <div class="table-panel">

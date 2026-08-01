@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
-import { Refresh, Search } from "@element-plus/icons-vue";
+import { Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   diningGroupApi,
   type AdminDiningGroupSummary,
   type DiningGroupStatus
 } from "@/apis/dining-group";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatStatusText } from "@/utils/status";
 const loading = ref(false);
 const diningGroups = ref<AdminDiningGroupSummary[]>([]);
@@ -23,6 +24,9 @@ const query = reactive<{
   pageSize: 20,
   keyword: "",
   status: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadDiningGroups();
 });
 
 async function loadDiningGroups() {
@@ -73,7 +77,6 @@ onMounted(loadDiningGroups);
         <el-option :label="formatStatusText('ARCHIVED')" value="ARCHIVED" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
-      <el-button :icon="Refresh" @click="loadDiningGroups">刷新</el-button>
     </div>
 
     <div class="table-panel">

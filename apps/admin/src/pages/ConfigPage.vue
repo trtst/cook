@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Delete, Picture, Refresh, Upload } from "@element-plus/icons-vue";
+import { Delete, Picture, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { publicConfigApi } from "@/apis/public-config";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(false);
@@ -12,6 +13,9 @@ const imageUrl = ref("");
 const imageVersion = ref(0);
 
 const previewUrl = computed(() => (imageUrl.value ? `${imageUrl.value}${imageUrl.value.includes("?") ? "&" : "?"}t=${imageVersion.value}` : ""));
+useAdminHeaderRefresh(() => {
+  void loadConfig();
+});
 
 async function loadConfig() {
   loading.value = true;
@@ -83,7 +87,6 @@ onMounted(() => {
   <section class="page-stack">
     <div class="toolbar-panel">
       <el-button type="primary" :icon="Upload" :loading="uploading" @click="chooseFile">上传 / 替换登录图</el-button>
-      <el-button :icon="Refresh" :loading="loading" @click="loadConfig">刷新</el-button>
       <el-button :icon="Delete" :disabled="!imageUrl || uploading" @click="clearImage">清空恢复默认</el-button>
       <input ref="fileInput" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp" @change="handleFileChange" />
     </div>

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { resolveAdminHeaderTitle } from "@/composables/useAdminHeader";
 import { ADMIN_APP_NAME } from "@/config/app";
 import AdminLayout from "@/layout/AdminLayout.vue";
 import { useSessionStore } from "@/stores/session";
@@ -73,6 +74,24 @@ const router = createRouter({
           meta: { title: "系统菜谱" }
         },
         {
+          path: "recipes/imports",
+          name: "recipe-import-jobs",
+          component: () => import("@/pages/RecipeImportJobsPage.vue"),
+          meta: { title: "菜谱导入中心" }
+        },
+        {
+          path: "recipes/imports/:jobId",
+          name: "recipe-import-job-detail",
+          component: () => import("@/pages/RecipeImportJobDetailPage.vue"),
+          meta: { title: "导入任务详情" }
+        },
+        {
+          path: "recipes/import-items/:itemId",
+          name: "recipe-import-item-detail",
+          component: () => import("@/pages/RecipeImportItemPage.vue"),
+          meta: { title: "导入条目修正" }
+        },
+        {
           path: "recipes/pending",
           name: "recipe-pending",
           component: () => import("@/pages/RecipePendingPage.vue"),
@@ -94,7 +113,7 @@ const router = createRouter({
           path: "recipes/:recipeId",
           name: "recipe-detail",
           component: () => import("@/pages/RecipeDetailPage.vue"),
-          meta: { title: "菜谱详情" }
+          meta: { title: "系统菜谱详情" }
         },
         {
           path: "ingredients",
@@ -142,7 +161,8 @@ const router = createRouter({
 });
 
 router.beforeEach(to => {
-  document.title = to.meta.title ? `${String(to.meta.title)} | ${ADMIN_APP_NAME}` : ADMIN_APP_NAME;
+  const pageTitle = resolveAdminHeaderTitle(to.meta.title);
+  document.title = pageTitle ? `${pageTitle} | ${ADMIN_APP_NAME}` : ADMIN_APP_NAME;
 
   const session = useSessionStore();
   if (!session.isLoggedIn && session.token) {

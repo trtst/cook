@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { Plus, Refresh } from "@element-plus/icons-vue";
+import { Plus } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ingredientApi, type AdminUnitSummary } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 type UnitDialogMode = "create" | "edit";
@@ -34,6 +35,9 @@ const units = ref<AdminUnitSummary[]>([]);
 
 const query = reactive({
   keyword: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadUnits();
 });
 
 const form = reactive({
@@ -223,14 +227,8 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>单位</strong>
-        <div class="page-subtitle">维护系统单位，供系统食材和后续分组下拉选择复用。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input v-model="query.keyword" class="toolbar-search" placeholder="筛选单位" clearable />
       <el-button type="primary" :icon="Plus" @click="openCreateUnit">新增单位</el-button>
-      <el-button :icon="Refresh" @click="loadUnits">刷新</el-button>
     </div>
 
     <div class="work-panel units-board" v-loading="loading">

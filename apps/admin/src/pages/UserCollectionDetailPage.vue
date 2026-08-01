@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, Refresh } from "@element-plus/icons-vue";
+import { ArrowLeft } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   userRecipeApi,
@@ -10,6 +10,7 @@ import {
   type AdminUserCollectionSummary
 } from "@/apis/user-recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh, useAdminHeaderTitle } from "@/composables/useAdminHeader";
 
 const route = useRoute();
 const router = useRouter();
@@ -38,6 +39,10 @@ const collectionId = computed<UUID | null>(() => parseRouteId(route.params.colle
 const pageTitle = computed(() => {
   if (!collection.value) return "合集内容";
   return `${collection.value.name} · 合集内容`;
+});
+useAdminHeaderTitle(pageTitle);
+useAdminHeaderRefresh(() => {
+  void loadDetail();
 });
 
 function getUserId() {
@@ -149,14 +154,10 @@ onMounted(loadDetail);
 
 <template>
   <section class="page-stack">
+    <div class="page-note">合集 ID {{ collection?.id || collectionId }}</div>
     <div class="toolbar-panel page-toolbar">
       <el-button :icon="ArrowLeft" @click="backToRecipeDomain">返回合集列表</el-button>
-      <div class="page-title-block">
-        <strong>{{ pageTitle }}</strong>
-        <span class="page-subtitle">合集 ID {{ collection?.id || collectionId }}</span>
-      </div>
       <div class="toolbar-spacer" />
-      <el-button :icon="Refresh" @click="loadDetail">刷新</el-button>
     </div>
 
     <div class="table-panel">

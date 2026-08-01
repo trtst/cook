@@ -47,6 +47,7 @@ export interface AdminRecipeContentInput {
   baseServings: number;
   difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
+  estimatedCalories: number | null;
   tips: string | null;
   ingredients: RecipeIngredientInput[];
   steps: Array<{
@@ -82,6 +83,7 @@ export interface AdminRecipeDetail {
     baseServings: number;
     difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | null;
     duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
+    estimatedCalories: number | null;
     tips: string | null;
     ingredients: Array<{
       ingredientId: UUID;
@@ -191,6 +193,143 @@ export interface AdminReviewPendingRecipeResult {
   targetRecipeId: UUID | null;
 }
 
+export interface RecipeImportIssue {
+  field: string | null;
+  message: string;
+}
+
+export interface RecipeImportImageSummary {
+  key: string;
+  alt: string | null;
+  fileName: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface RecipeImportRawBody {
+  sourcePath: string;
+  markdown: string;
+  assetFolder: string;
+  images: RecipeImportImageSummary[];
+}
+
+export interface RecipeImportParsedBody {
+  titleLine: string | null;
+  story: string | null;
+  baseServingsText: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
+  caloriesText: string | null;
+  ingredientLines: string[];
+  stepLines: string[];
+  tipLines: string[];
+}
+
+export interface RecipeImportIngredientDraft {
+  line: string;
+  ingredientName: string;
+  ingredientId: UUID | null;
+  quantity: string | null;
+  unitText: string | null;
+  unitId: UUID | null;
+  fuzzyText: "适量" | "少许" | "按需" | null;
+  note: string | null;
+}
+
+export interface RecipeImportStepDraft {
+  text: string;
+  imageKey: string | null;
+}
+
+export interface RecipeImportRecipeBody {
+  inspirationCategoryId: UUID | null;
+  title: string;
+  story: string | null;
+  baseServings: number | null;
+  difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | null;
+  duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
+  estimatedCalories: number | null;
+  tips: string | null;
+  coverImageKey: string | null;
+  ingredients: RecipeImportIngredientDraft[];
+  steps: RecipeImportStepDraft[];
+}
+
+export interface RecipeImportJobSummary {
+  id: UUID;
+  sourceType: "MARKDOWN" | "EXCEL";
+  sourceName: string;
+  status: "PENDING" | "RUNNING" | "READY" | "FAILED" | "COMPLETED";
+  totalCount: number;
+  readyCount: number;
+  needsFixCount: number;
+  failedCount: number;
+  createdByAdminId: UUID;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface RecipeImportItemSummary {
+  id: UUID;
+  jobId: UUID;
+  sourcePath: string;
+  title: string | null;
+  status: "PENDING_PARSE" | "NEEDS_FIX" | "READY" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+  errorCount: number;
+  warnCount: number;
+  recipeId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface RecipeImportJobDetail extends RecipeImportJobSummary {
+  items: PageResult<RecipeImportItemSummary>;
+}
+
+export interface RecipeImportItemDetail {
+  id: UUID;
+  jobId: UUID;
+  sourcePath: string;
+  title: string | null;
+  status: "PENDING_PARSE" | "NEEDS_FIX" | "READY" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+  rawBody: RecipeImportRawBody;
+  parsedBody: RecipeImportParsedBody;
+  recipeBody: RecipeImportRecipeBody;
+  errorItems: RecipeImportIssue[];
+  warnItems: RecipeImportIssue[];
+  sourceImages: Array<RecipeImportImageSummary & { dataUrl: string; canUseAsCover: boolean }>;
+  recipeId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface RecipeImportJobQuery extends PageQuery {
+  status?: RecipeImportJobSummary["status"];
+}
+
+export interface RecipeImportItemQuery extends PageQuery {
+  status?: RecipeImportItemSummary["status"];
+}
+
+export interface CreateRecipeImportJobPayload {
+  operationId: OperationId;
+  inspirationCategoryId?: UUID | null;
+  file: File;
+}
+
+export interface UpdateRecipeImportItemPayload {
+  operationId: OperationId;
+  expectedVersion: number;
+  recipeBody: RecipeImportRecipeBody;
+}
+
+export interface PublishRecipeImportItemPayload {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
 export const recipeApi = {
   list(query: AdminRecipeQuery) {
     return requestData<PageResult<AdminRecipeSummary>>("/admin/recipes", {
@@ -232,6 +371,45 @@ export const recipeApi = {
   reviewPending(recommendationId: UUID, body: AdminReviewPendingRecipePayload) {
     const { operationId, ...payload } = body;
     return requestData<AdminReviewPendingRecipeResult>(`/admin/pending-recipes/${encodeURIComponent(String(recommendationId))}/review`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  createImportJob(body: CreateRecipeImportJobPayload) {
+    const formData = new FormData();
+    formData.append("file", body.file);
+    if (body.inspirationCategoryId !== undefined && body.inspirationCategoryId !== null) {
+      formData.append("inspirationCategoryId", String(body.inspirationCategoryId));
+    }
+    return uploadForm<RecipeImportJobSummary>("/admin/recipe-import-jobs/markdown", formData, {
+      idempotencyKey: body.operationId
+    });
+  },
+  listImportJobs(query: RecipeImportJobQuery) {
+    return requestData<PageResult<RecipeImportJobSummary>>("/admin/recipe-import-jobs", {
+      query: { ...query }
+    });
+  },
+  getImportJobDetail(jobId: UUID, query: RecipeImportItemQuery) {
+    return requestData<RecipeImportJobDetail>(`/admin/recipe-import-jobs/${encodeURIComponent(String(jobId))}`, {
+      query: { ...query }
+    });
+  },
+  getImportItemDetail(itemId: UUID) {
+    return requestData<RecipeImportItemDetail>(`/admin/recipe-import-items/${encodeURIComponent(String(itemId))}`);
+  },
+  updateImportItem(itemId: UUID, body: UpdateRecipeImportItemPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<RecipeImportItemDetail>(`/admin/recipe-import-items/${encodeURIComponent(String(itemId))}`, {
+      method: "PUT",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  publishImportItem(itemId: UUID, body: PublishRecipeImportItemPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<RecipeImportItemDetail>(`/admin/recipe-import-items/${encodeURIComponent(String(itemId))}/publish`, {
       method: "POST",
       body: payload,
       idempotencyKey: operationId

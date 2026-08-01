@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
-import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   ingredientApi,
@@ -12,6 +11,7 @@ import {
   type AdminUnitSummary
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -87,6 +87,9 @@ const form = reactive({
   targetIngredientId: "" as UUID | "",
   rejectReasonCode: "" as AdminIngredientRejectReasonCode | "",
   reason: ""
+});
+useAdminHeaderRefresh(() => {
+  void loadPage();
 });
 
 const targetOptions = computed(() => mergeOptions.value);
@@ -323,11 +326,6 @@ onUnmounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>待审核个人食材</strong>
-        <div class="page-subtitle">查看用户显式推荐的个人食材，并执行通过为系统食材、归并或拒绝。</div>
-      </div>
-      <div class="toolbar-spacer" />
       <el-input
         v-model="query.keyword"
         class="toolbar-search"
@@ -342,7 +340,6 @@ onUnmounted(() => {
           loadPendingItems();
         "
       />
-      <el-button :icon="Refresh" @click="loadPage">刷新</el-button>
     </div>
 
     <div class="table-panel">

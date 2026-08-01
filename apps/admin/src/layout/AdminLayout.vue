@@ -1,13 +1,30 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataAnalysis, Files, ForkSpoon, House, Setting, SwitchButton, User } from "@element-plus/icons-vue";
+import { DataAnalysis, Files, ForkSpoon, House, Refresh, Setting, SwitchButton, User } from "@element-plus/icons-vue";
+import { resolveAdminHeaderTitle, useAdminHeaderState } from "@/composables/useAdminHeader";
 import { ADMIN_APP_NAME } from "@/config/app";
 import { useSessionStore } from "@/stores/session";
 
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
+const headerState = useAdminHeaderState();
+const headerTitle = computed(() => {
+  const sharedTitle = resolveAdminHeaderTitle(headerState.title.value);
+  if (sharedTitle) return sharedTitle;
+
+  const routeTitle = resolveAdminHeaderTitle(route.meta.title);
+  if (routeTitle) return routeTitle;
+
+  for (let index = route.matched.length - 1; index >= 0; index -= 1) {
+    const matchedTitle = resolveAdminHeaderTitle(route.matched[index]?.meta?.title);
+    if (matchedTitle) return matchedTitle;
+  }
+
+  return "";
+});
+const hasHeaderRefresh = computed(() => Boolean(headerState.refresh.value));
 
 const activeMenu = computed(() => {
   if (
@@ -15,8 +32,12 @@ const activeMenu = computed(() => {
     route.path !== "/recipes/list" &&
     route.path !== "/recipes/reports" &&
     route.path !== "/recipes/categories" &&
+    route.path !== "/recipes/imports" &&
     route.path !== "/recipes/pending"
   ) {
+    if (route.path.startsWith("/recipes/imports") || route.path.startsWith("/recipes/import-items")) {
+      return "/recipes/imports";
+    }
     return "/recipes/list";
   }
   return route.path;
@@ -37,6 +58,10 @@ function logout() {
   session.clearSession();
   router.replace("/login");
 }
+
+function triggerHeaderRefresh() {
+  void headerState.refresh.value?.();
+}
 </script>
 
 <template>
@@ -46,10 +71,7 @@ function logout() {
         <div class="brand-mark">
           <el-icon><ForkSpoon /></el-icon>
         </div>
-        <div>
-          <div class="brand-title">{{ ADMIN_APP_NAME }}</div>
-          <div class="brand-subtitle">Content Ops</div>
-        </div>
+        <div class="brand-title">{{ ADMIN_APP_NAME }}</div>
       </div>
 
       <el-menu :default-active="activeMenu" :default-openeds="openedMenus" router class="side-menu">
@@ -76,6 +98,7 @@ function logout() {
           </template>
           <el-menu-item index="/recipes/categories">系统菜谱分类</el-menu-item>
           <el-menu-item index="/recipes/list">系统菜谱</el-menu-item>
+          <el-menu-item index="/recipes/imports">菜谱导入中心</el-menu-item>
           <el-menu-item index="/recipes/pending">待审核个人菜谱</el-menu-item>
           <el-menu-item index="/recipes/reports">菜谱举报</el-menu-item>
         </el-sub-menu>
@@ -99,7 +122,10 @@ function logout() {
 
     <el-container>
       <el-header class="admin-header">
-        <div class="page-title">{{ route.meta.title }}</div>
+        <div class="page-title-wrap">
+          <div class="page-title">{{ headerTitle }}</div>
+          <el-button v-if="hasHeaderRefresh" class="header-refresh" type="primary" :icon="Refresh" @click="triggerHeaderRefresh" />
+        </div>
         <div class="header-actions">
           <span class="admin-name">{{ adminName }}</span>
           <el-button :icon="SwitchButton" text bg @click="logout">退出</el-button>

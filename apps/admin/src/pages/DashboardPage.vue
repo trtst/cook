@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { dashboardApi, type AdminDashboardSummary } from "@/apis/dashboard";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatStatusText } from "@/utils/status";
 
 const router = useRouter();
+useAdminHeaderRefresh(() => {
+  void loadSummary();
+});
 const loading = ref(false);
 const summary = ref<AdminDashboardSummary | null>(null);
 
@@ -136,15 +139,6 @@ onMounted(() => {
 
 <template>
   <section class="page-stack">
-    <div class="toolbar-panel page-toolbar">
-      <div class="page-title-block">
-        <strong>运营看板</strong>
-        <div class="page-subtitle">首页聚合当前待处理内容、平台概览和食材治理基础数据。</div>
-      </div>
-      <div class="toolbar-spacer" />
-      <el-button :icon="Refresh" @click="loadSummary">刷新</el-button>
-    </div>
-
     <div v-loading="loading" class="page-stack">
       <div v-if="summary" class="dashboard-top-grid">
         <button

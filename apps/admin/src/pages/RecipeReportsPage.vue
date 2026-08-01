@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Refresh, Search } from "@element-plus/icons-vue";
+import { Search } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { recipeApi, type RecipeReportSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -18,6 +19,9 @@ const query = reactive({
   page: 1,
   pageSize: 20,
   status: "" as "" | "OPEN" | "RESOLVED"
+});
+useAdminHeaderRefresh(() => {
+  void loadReports();
 });
 
 async function loadReports() {
@@ -72,7 +76,6 @@ function openDetail(recipeId: UUID) {
         <el-option :label="formatStatusText('RESOLVED')" value="RESOLVED" />
       </el-select>
       <el-button type="primary" :icon="Search" @click="search">查询举报</el-button>
-      <el-button :icon="Refresh" @click="loadReports">刷新举报</el-button>
     </div>
 
     <div class="table-panel">

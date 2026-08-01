@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Plus, Refresh, Search } from "@element-plus/icons-vue";
+import { Plus, Search } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { ApiClientError, type UUID } from "@/apis/http";
 import {
@@ -9,6 +9,7 @@ import {
   type AdminUserEntitlementResponse,
   type UserProfile
 } from "@/apis/user";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
@@ -33,6 +34,9 @@ const resetPasswordUser = ref<UserProfile | null>(null);
 const resetPasswordDraft = ref("");
 const router = useRouter();
 const sessionStore = useSessionStore();
+useAdminHeaderRefresh(() => {
+  void loadUsers();
+});
 const canViewRecipeDomain = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
 const canViewEntitlements = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
 const canManageUsers = computed(() => sessionStore.admin?.roles.includes("SUPER_ADMIN") ?? false);
@@ -304,7 +308,6 @@ onMounted(loadUsers);
         @keyup.enter="search"
       />
       <el-button type="primary" :icon="Search" @click="search">查询</el-button>
-      <el-button :icon="Refresh" @click="loadUsers">刷新</el-button>
       <el-button v-if="canManageUsers" type="success" :icon="Plus" @click="openCreateUser">新增用户</el-button>
     </div>
 
