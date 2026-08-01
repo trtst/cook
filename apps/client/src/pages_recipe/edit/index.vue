@@ -49,7 +49,7 @@
     <view v-else class="edit-page">
         <view class="hero" :style="heroStyle">
           <view class="hero__cover">
-            <image v-if="currentCoverImage" class="hero__image" :src="currentCoverImage" mode="aspectFill" />
+            <image v-if="currentCoverImage" :key="currentCoverImage" class="hero__image" :src="currentCoverImage" mode="aspectFill" />
             <view v-else class="hero__cover-fill">
               <view class="hero__cover-copy" @click="selectCoverImage">
                 <text class="hero__cover-title">菜谱封面图（4:3）</text>
@@ -129,6 +129,7 @@
                   class="ingredient-line__field ingredient-line__field--name"
                   maxlength="30"
                   placeholder="食材"
+                  placeholder-class="ingredient-line__input-placeholder"
                   @focus="handleFormFieldFocus"
                   @blur="handleFormFieldBlur"
                 />
@@ -139,6 +140,7 @@
                   type="digit"
                   confirm-type="done"
                   placeholder="数量"
+                  placeholder-class="ingredient-line__input-placeholder"
                   @focus="handleFormFieldFocus"
                   @blur="handleFormFieldBlur"
                   @input="handleQuantityInput(row.localId)"
@@ -201,7 +203,7 @@
                   @click="selectStepImage(row.localId)"
                 >
                   <template v-if="hasStepImage(row)">
-                    <image class="step-card__preview" :src="getStepImageSrc(row)" mode="aspectFill" />
+                    <image :key="getStepImageSrc(row)" class="step-card__preview" :src="getStepImageSrc(row)" mode="aspectFill" />
                     <button class="step-card__image-change" @click.stop="selectStepImage(row.localId)">更换</button>
                     <text class="step-card__image-remove" @click.stop="clearStepImage(row.localId)">删除</text>
                   </template>
@@ -324,32 +326,25 @@
         <SheetShell
           v-if="sheetMode"
           :visible="sheetVisible"
-          :panel-style="{ padding: '34rpx 0 calc(42rpx + env(safe-area-inset-bottom))' }"
+          :title="sheetTitle"
+          body-padding="none"
           @close="closeSheet"
+          @after-close="handleSheetAfterClose"
         >
-            <view class="sheet__header">
-              <view class="sheet__title-row">
-                <text class="sheet__title">{{ sheetTitle }}</text>
-                <text v-if="sheetTitleTag" class="sheet__title-tag">{{ sheetTitleTag }}</text>
-              </view>
-              <text class="cookfont icon-close sheet__close" @click="closeSheet" />
-            </view>
+            <template v-if="sheetTitleTag" #title-extra>
+              <text class="sheet__title-tag">{{ sheetTitleTag }}</text>
+            </template>
 
             <template v-if="sheetMode === 'ingredient'">
               <text class="ingredient-picker__hint">{{ ingredientHintText }}</text>
 
               <view v-if="!ingredientCreateVisible" class="sheet-search">
-                <input
+                <RecipeSearchBar
                   v-model="ingredientKeyword"
-                  class="sheet-search__input"
-                  maxlength="30"
+                  class="sheet-search__bar"
                   placeholder="搜索食材名称"
-                  placeholder-class="sheet-search__placeholder"
-                />
-                <text
-                  v-if="ingredientSearchMode"
-                  class="cookfont icon-close sheet-search__close"
-                  @click="exitIngredientSearch"
+                  @confirm="dismissSheetKeyboard"
+                  @clear="exitIngredientSearch"
                 />
               </view>
 
@@ -664,7 +659,10 @@
             <template v-else-if="sheetMode === 'advanced'">
               <view class="sheet-section">
                 <view class="sheet-section__head">
-                  <text class="sheet-section__title">个人分类</text>
+                  <view class="sheet-section__meta">
+                    <text class="sheet-section__title">个人分类</text>
+                    <text class="sheet-section__tag">最多4字</text>
+                  </view>
                   <view class="sheet-section__action" @click="toggleCategoryCreator">
                     {{ showCategoryCreator ? "取消" : "添加分类" }}
                   </view>
@@ -701,7 +699,10 @@
 
               <view class="sheet-section">
                 <view class="sheet-section__head">
-                  <text class="sheet-section__title">个人场景</text>
+                  <view class="sheet-section__meta">
+                    <text class="sheet-section__title">个人场景</text>
+                    <text class="sheet-section__tag">最多6字</text>
+                  </view>
                   <view class="sheet-section__action" @click="toggleSceneCreator">
                     {{ showSceneCreator ? "取消" : "添加场景" }}
                   </view>
@@ -758,7 +759,7 @@
                     :key="item.value"
                     class="chip"
                     :class="{ 'chip--active': advancedForm.difficulty === item.value }"
-                    @click="advancedForm.difficulty = advancedForm.difficulty === item.value ? null : item.value"
+                    @click="toggleAdvancedDifficulty(item.value)"
                   >
                     {{ item.label }}
                   </view>
@@ -773,7 +774,7 @@
                     :key="item.value"
                     class="chip"
                     :class="{ 'chip--active': advancedForm.duration === item.value }"
-                    @click="advancedForm.duration = advancedForm.duration === item.value ? null : item.value"
+                    @click="toggleAdvancedDuration(item.value)"
                   >
                     {{ item.label }}
                   </view>
@@ -828,6 +829,7 @@ import {
 import type { UUID } from "@/apis/http";
 import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -846,6 +848,7 @@ import {
   type RecipeCropRequest,
   type RecipeCropResult
 } from "../utils/recipe-image-crop";
+import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -994,7 +997,6 @@ const sheetVisible = ref(false);
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-edit-sheet"));
 
 let rowSeed = 0;
-let sheetTimer: ReturnType<typeof setTimeout> | null = null;
 let stepSortTimer: ReturnType<typeof setTimeout> | null = null;
 let stepSortPressTimer: ReturnType<typeof setTimeout> | null = null;
 let ingredientDragPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1388,7 +1390,7 @@ watch(
 );
 
 watch(
-  () => Boolean(sheetMode.value),
+  () => sheetVisible.value,
   (visible) => {
     setPageLocked(visible || stepSortVisible.value || ingredientDragging.value);
   },
@@ -1398,14 +1400,14 @@ watch(
 watch(
   () => stepSortVisible.value,
   (visible) => {
-    setPageLocked(Boolean(sheetMode.value) || visible || ingredientDragging.value);
+    setPageLocked(sheetVisible.value || visible || ingredientDragging.value);
   }
 );
 
 watch(
   () => ingredientDragging.value,
   (visible) => {
-    setPageLocked(Boolean(sheetMode.value) || stepSortVisible.value || visible);
+    setPageLocked(sheetVisible.value || stepSortVisible.value || visible);
   }
 );
 
@@ -1856,21 +1858,9 @@ function closeSheet() {
     resetIngredientCreate();
   }
   sheetVisible.value = false;
-  if (sheetTimer) {
-    clearTimeout(sheetTimer);
-  }
-  sheetTimer = setTimeout(() => {
-    sheetMode.value = "";
-    activeUnitRowId.value = "";
-    sheetTimer = null;
-  }, SHEET_ANIMATION_MS);
 }
 
 function openSheet(mode: SheetMode) {
-  if (sheetTimer) {
-    clearTimeout(sheetTimer);
-    sheetTimer = null;
-  }
   if (sheetMode.value) {
     sheetMode.value = mode;
     sheetVisible.value = true;
@@ -1881,6 +1871,11 @@ function openSheet(mode: SheetMode) {
   void nextTick(() => {
     sheetVisible.value = true;
   });
+}
+
+function handleSheetAfterClose() {
+  sheetMode.value = "";
+  activeUnitRowId.value = "";
 }
 
 async function openIngredientSheet() {
@@ -1984,7 +1979,6 @@ function dismissSheetKeyboard() {
 }
 
 function exitIngredientSearch() {
-  if (!ingredientSearchMode.value) return;
   dismissSheetKeyboard();
   ingredientKeyword.value = "";
 }
@@ -2250,6 +2244,7 @@ async function createCategoryTag() {
     });
     categories.value = [...categories.value, category];
     advancedForm.categoryId = category.id;
+    markRecipeHomeDirty(["my"]);
     categoryDraftName.value = "";
     showCategoryCreator.value = false;
     await uniPlatform.feedback.toast({ title: "分类已添加", icon: "success" });
@@ -2275,6 +2270,7 @@ async function createSceneTag() {
     });
     scenes.value = [...scenes.value, scene];
     advancedForm.sceneIds = [...advancedForm.sceneIds, scene.id];
+    markRecipeHomeDirty(["collection"]);
     sceneDraftName.value = "";
     showSceneCreator.value = false;
     await uniPlatform.feedback.toast({ title: "场景已添加", icon: "success" });
@@ -2289,6 +2285,16 @@ function handleBaseServingsChange(event: Event) {
   const detail = (event as { detail?: { value?: number | string } }).detail;
   const value = typeof detail?.value === "number" ? detail.value : Number(detail?.value || 0);
   advancedForm.baseServingsText = baseServingsOptions[value] || "1";
+}
+
+function toggleAdvancedDifficulty(value: RecipeDifficulty) {
+  dismissSheetKeyboard();
+  advancedForm.difficulty = advancedForm.difficulty === value ? null : value;
+}
+
+function toggleAdvancedDuration(value: RecipeDuration) {
+  dismissSheetKeyboard();
+  advancedForm.duration = advancedForm.duration === value ? null : value;
 }
 
 function applyAdvancedForm() {
@@ -2630,6 +2636,7 @@ async function saveDraft() {
     removeCurrentRecipeEditCache(cacheItemKey);
     removeCurrentRecipeEditCache();
     syncRecipeEditCacheBaseline();
+    markRecipeManageDirty(["drafts"]);
     await uniPlatform.feedback.toast({ title: "草稿已保存", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
@@ -2651,6 +2658,8 @@ async function publishDraft() {
     });
     removeCurrentRecipeEditCache(cacheItemKey);
     removeCurrentRecipeEditCache();
+    markRecipeHomeDirty(["my"]);
+    markRecipeManageDirty(["recipes", "drafts"]);
     await uniPlatform.feedback.toast({ title: "已发布", icon: "success" });
     void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(result.recipe.id))}&kind=my`);
   } catch (error) {
@@ -2737,11 +2746,13 @@ function applyCropResult(result: RecipeCropResult) {
     return;
   }
 
-  const existing = stepRows.value.find(item => item.localId === target.localId);
-  if (existing) {
-    existing.uploadId = null;
-    existing.imageUrl = "";
-    existing.localImagePath = result.croppedPath;
+  if (
+    patchStepRow(target.localId, {
+      uploadId: null,
+      imageUrl: "",
+      localImagePath: result.croppedPath
+    })
+  ) {
     return;
   }
 
@@ -2822,11 +2833,11 @@ async function selectStepImage(localId: string) {
 }
 
 function clearStepImage(localId: string) {
-  const row = stepRows.value.find(item => item.localId === localId);
-  if (!row) return;
-  row.uploadId = null;
-  row.imageUrl = "";
-  row.localImagePath = "";
+  patchStepRow(localId, {
+    uploadId: null,
+    imageUrl: "",
+    localImagePath: ""
+  });
 }
 
 async function handleStepImages() {
@@ -2872,17 +2883,20 @@ async function uploadPendingImages() {
   }
 
   for (const row of stepRows.value) {
-    if (!row.localImagePath) continue;
+    const localImagePath = row.localImagePath;
+    if (!localImagePath) continue;
     const result = await recipeApi.uploadRecipeImage({
       operationId: createOperationId(),
       draftId: draftId.value,
       scene: "RECIPE_STEP" satisfies UploadAssetScene,
       slotKey: row.slotKey,
-      filePath: row.localImagePath
+      filePath: localImagePath
     });
-    row.uploadId = result.upload.id;
-    row.imageUrl = result.upload.imageUrl;
-    row.localImagePath = "";
+    patchStepRow(row.localId, {
+      uploadId: result.upload.id,
+      imageUrl: result.upload.imageUrl,
+      localImagePath: ""
+    });
   }
 }
 
@@ -3376,6 +3390,18 @@ function cloneStepRow(row: StepRow): StepRow {
   };
 }
 
+function patchStepRow(localId: string, patch: Partial<Omit<StepRow, "localId">>) {
+  const index = stepRows.value.findIndex(item => item.localId === localId);
+  if (index < 0) return false;
+  const next = [...stepRows.value];
+  next[index] = {
+    ...next[index],
+    ...patch
+  };
+  stepRows.value = next;
+  return true;
+}
+
 function normalizeText(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
@@ -3656,7 +3682,6 @@ function nextSlotKey() {
 .panel__head,
 .ingredient-card__head,
 .step-card__head,
-.sheet__header,
 .editor-grid,
 .mode-row,
 .chip-row,
@@ -3670,7 +3695,6 @@ function nextSlotKey() {
 .panel__head,
 .ingredient-card__head,
 .step-card__head,
-.sheet__header,
 .advanced-row {
   justify-content: space-between;
 }
@@ -3689,13 +3713,8 @@ function nextSlotKey() {
 
 .ingredient-card__head,
 .step-card__head,
-.sheet__header,
 .advanced-row {
   align-items: center;
-}
-
-.sheet__header {
-  padding: 0 var(--space-page);
 }
 
 .panel__meta {
@@ -3879,6 +3898,10 @@ function nextSlotKey() {
   color: var(--color-text-tertiary);
 }
 
+:deep(.ingredient-line__input-placeholder) {
+  color: var(--color-text-tertiary);
+}
+
 .ingredient-line__remove {
   display: flex;
   align-items: center;
@@ -4020,6 +4043,20 @@ function nextSlotKey() {
   margin-bottom: 12rpx;
 }
 
+.sheet-section__meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.sheet-section__tag {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
 .sheet-section__action {
   color: var(--color-primary);
   font-size: 24rpx;
@@ -4054,33 +4091,9 @@ function nextSlotKey() {
   margin-top: 18rpx;
 }
 
-.sheet-search__input {
+.sheet-search__bar {
   flex: 1;
   min-width: 0;
-  height: 70rpx;
-  padding: 0 26rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
-  box-sizing: border-box;
-  color: var(--color-text);
-  font-size: 28rpx;
-}
-
-:deep(.sheet-search__placeholder) {
-  color: var(--color-text-tertiary);
-}
-
-.sheet-search__close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 56rpx;
-  height: 56rpx;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
 }
 
 .ingredient-picker__hint {
@@ -4488,6 +4501,12 @@ function nextSlotKey() {
   justify-content: flex-end;
   gap: 16rpx;
   margin-top: 22rpx;
+}
+
+.ingredient-create__footer .sheet-cancel,
+.ingredient-create__footer .sheet-confirm {
+  flex: 1 1 0;
+  width: auto;
 }
 
 .sheet-cancel,
@@ -4902,19 +4921,6 @@ function nextSlotKey() {
   transform: rotate(180deg);
 }
 
-.sheet__title {
-  color: var(--color-text);
-  font-size: 38rpx;
-  font-weight: var(--font-weight-heavy);
-}
-
-.sheet__title-row {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  min-width: 0;
-}
-
 .sheet__title-tag {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
@@ -4924,11 +4930,6 @@ function nextSlotKey() {
   font-size: 22rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
-}
-
-.sheet__close {
-  color: var(--color-text-secondary);
-  font-size: 42rpx;
 }
 
 .sheet-option {

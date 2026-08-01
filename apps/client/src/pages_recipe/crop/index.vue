@@ -69,6 +69,27 @@
             />
 
             <view
+              class="crop-box__handle crop-box__handle--lt"
+              @touchstart.stop="startResize($event, 'leftTop')"
+              @touchmove.stop.prevent="handleResize"
+              @touchend.stop="stopDrag"
+              @touchcancel.stop="stopDrag"
+            />
+            <view
+              class="crop-box__handle crop-box__handle--rt"
+              @touchstart.stop="startResize($event, 'rightTop')"
+              @touchmove.stop.prevent="handleResize"
+              @touchend.stop="stopDrag"
+              @touchcancel.stop="stopDrag"
+            />
+            <view
+              class="crop-box__handle crop-box__handle--lb"
+              @touchstart.stop="startResize($event, 'leftBottom')"
+              @touchmove.stop.prevent="handleResize"
+              @touchend.stop="stopDrag"
+              @touchcancel.stop="stopDrag"
+            />
+            <view
               class="crop-box__handle crop-box__handle--rb"
               @touchstart.stop="startResize($event, 'rightBottom')"
               @touchmove.stop.prevent="handleResize"
@@ -125,12 +146,24 @@ import {
   type RecipeCropRequest
 } from "../utils/recipe-image-crop";
 
-type DragEdge = "" | "move" | "top" | "right" | "bottom" | "left" | "rightBottom";
+type DragEdge =
+  | ""
+  | "move"
+  | "top"
+  | "right"
+  | "bottom"
+  | "left"
+  | "leftTop"
+  | "rightTop"
+  | "leftBottom"
+  | "rightBottom";
 
 const CANVAS_ID = "recipe-crop-canvas";
 const MIN_BOX_RPX = 120;
-const FOOTER_RPX = 320;
 const FRAME_PADDING = 10;
+const ACTIONS_RPX = 136;
+const TIP_RPX = 92;
+const RATIO_TABS_RPX = 92;
 
 const ratioOptions = [
   { key: "4:3", label: "4:3", ratio: 4 / 3 },
@@ -140,7 +173,7 @@ const ratioOptions = [
 ] as const;
 
 const pageStyle = usePageScrollStyle();
-const { navBarTotalHeight, systemInfo } = useSystemInfo();
+const { navBarTotalHeight, safeAreaBottom, systemInfo } = useSystemInfo();
 const instance = getCurrentInstance();
 
 const token = ref("");
@@ -192,13 +225,18 @@ const canFreeResize = computed(() => cropMode.value === "free" && !activeAspectR
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`
 }));
+const windowHeight = computed(() => systemInfo.value.windowHeight || 667);
+const footerReserveHeight = computed(() => {
+  const ratioHeight = showRatioPresets.value ? rpxToPx(RATIO_TABS_RPX) : 0;
+  return rpxToPx(ACTIONS_RPX + TIP_RPX) + ratioHeight + safeAreaBottom.value;
+});
 const cropPageStyle = computed(() => ({
-  minHeight: `${Math.max(0, (systemInfo.value.windowHeight || 667) - navBarTotalHeight.value)}px`,
-  marginTop: `${navBarTotalHeight.value}px`
+  height: `${windowHeight.value}px`,
+  paddingTop: `${navBarTotalHeight.value}px`,
+  boxSizing: "border-box" as const
 }));
 const cropStageHeight = computed(() => {
-  const windowHeight = systemInfo.value.windowHeight || 667;
-  return Math.max(360, windowHeight - navBarTotalHeight.value - rpxToPx(FOOTER_RPX));
+  return Math.max(320, windowHeight.value - navBarTotalHeight.value - footerReserveHeight.value);
 });
 const cropStageStyle = computed(() => ({
   height: `${cropStageHeight.value}px`
@@ -269,7 +307,7 @@ async function loadSource(path: string) {
   errorText.value = "";
   try {
     const info = await uniPlatform.media.getImageInfo(path);
-    image.src = path;
+    image.src = info.path || path;
     image.naturalWidth = info.width;
     image.naturalHeight = info.height;
     fitImage();
@@ -282,8 +320,8 @@ async function loadSource(path: string) {
 }
 
 function fitImage() {
-  const areaWidth = Math.max(280, (systemInfo.value.windowWidth || 375) - FRAME_PADDING);
-  const areaHeight = Math.max(280, cropStageHeight.value - FRAME_PADDING);
+  const areaWidth = Math.max(280, (systemInfo.value.windowWidth || 375) - FRAME_PADDING * 2);
+  const areaHeight = Math.max(280, cropStageHeight.value - FRAME_PADDING * 2);
   const ratio = image.naturalWidth / image.naturalHeight;
 
   let displayWidth = areaWidth;
@@ -296,8 +334,8 @@ function fitImage() {
 
   image.displayWidth = displayWidth;
   image.displayHeight = displayHeight;
-  image.left = (areaWidth - displayWidth) / 2;
-  image.top = (areaHeight - displayHeight) / 2;
+  image.left = FRAME_PADDING + (areaWidth - displayWidth) / 2;
+  image.top = FRAME_PADDING + (areaHeight - displayHeight) / 2;
 }
 
 function initCropBox() {
@@ -388,28 +426,88 @@ function handleResize(event: Event) {
   const deltaX = point.x - startTouchX;
   const deltaY = point.y - startTouchY;
 
-  if (activeAspectRatio.value && dragEdge === "rightBottom") {
-    resizeFixed(deltaX);
+  if (
+    activeAspectRatio.value &&
+    (dragEdge === "leftTop" ||
+      dragEdge === "rightTop" ||
+      dragEdge === "leftBottom" ||
+      dragEdge === "rightBottom")
+  ) {
+    resizeFixed(dragEdge, deltaX, deltaY);
     return;
   }
 
   resizeFree(deltaX, deltaY);
 }
 
-function resizeFixed(deltaX: number) {
+function resizeFixed(edge: Extract<DragEdge, "leftTop" | "rightTop" | "leftBottom" | "rightBottom">, deltaX: number, deltaY: number) {
   if (!activeAspectRatio.value) return;
   const minWidth = minBoxWidth();
   const startWidth = image.displayWidth - startBox.left - startBox.right;
-  const maxWidth = Math.min(
-    image.displayWidth - startBox.left,
-    (image.displayHeight - startBox.top) * activeAspectRatio.value
-  );
-  const nextWidth = clampNumber(startWidth + deltaX, minWidth, maxWidth);
+  const changeFromX =
+    edge === "leftTop" || edge === "leftBottom"
+      ? -deltaX
+      : deltaX;
+  const changeFromY =
+    edge === "leftTop" || edge === "rightTop"
+      ? -deltaY * activeAspectRatio.value
+      : deltaY * activeAspectRatio.value;
+  const deltaWidth = Math.abs(changeFromX) >= Math.abs(changeFromY) ? changeFromX : changeFromY;
+
+  let maxWidth = 0;
+  if (edge === "rightBottom") {
+    maxWidth = Math.min(
+      image.displayWidth - startBox.left,
+      (image.displayHeight - startBox.top) * activeAspectRatio.value
+    );
+  } else if (edge === "leftTop") {
+    maxWidth = Math.min(
+      image.displayWidth - startBox.right,
+      (image.displayHeight - startBox.bottom) * activeAspectRatio.value
+    );
+  } else if (edge === "rightTop") {
+    maxWidth = Math.min(
+      image.displayWidth - startBox.left,
+      (image.displayHeight - startBox.bottom) * activeAspectRatio.value
+    );
+  } else {
+    maxWidth = Math.min(
+      image.displayWidth - startBox.right,
+      (image.displayHeight - startBox.top) * activeAspectRatio.value
+    );
+  }
+
+  const nextWidth = clampNumber(startWidth + deltaWidth, minWidth, maxWidth);
   const nextHeight = nextWidth / activeAspectRatio.value;
-  crop.right = image.displayWidth - startBox.left - nextWidth;
-  crop.bottom = image.displayHeight - startBox.top - nextHeight;
-  crop.left = startBox.left;
+
+  if (edge === "rightBottom") {
+    crop.left = startBox.left;
+    crop.top = startBox.top;
+    crop.right = image.displayWidth - startBox.left - nextWidth;
+    crop.bottom = image.displayHeight - startBox.top - nextHeight;
+    return;
+  }
+
+  if (edge === "leftTop") {
+    crop.right = startBox.right;
+    crop.bottom = startBox.bottom;
+    crop.left = image.displayWidth - startBox.right - nextWidth;
+    crop.top = image.displayHeight - startBox.bottom - nextHeight;
+    return;
+  }
+
+  if (edge === "rightTop") {
+    crop.left = startBox.left;
+    crop.bottom = startBox.bottom;
+    crop.right = image.displayWidth - startBox.left - nextWidth;
+    crop.top = image.displayHeight - startBox.bottom - nextHeight;
+    return;
+  }
+
+  crop.right = startBox.right;
   crop.top = startBox.top;
+  crop.left = image.displayWidth - startBox.right - nextWidth;
+  crop.bottom = image.displayHeight - startBox.top - nextHeight;
 }
 
 function resizeFree(deltaX: number, deltaY: number) {
@@ -438,6 +536,24 @@ function resizeFree(deltaX: number, deltaY: number) {
 
   if (dragEdge === "rightBottom") {
     crop.right = clampNumber(startBox.right - deltaX, 0, image.displayWidth - startBox.left - minWidth);
+    crop.bottom = clampNumber(startBox.bottom - deltaY, 0, image.displayHeight - startBox.top - minHeight);
+    return;
+  }
+
+  if (dragEdge === "leftTop") {
+    crop.left = clampNumber(startBox.left + deltaX, 0, image.displayWidth - startBox.right - minWidth);
+    crop.top = clampNumber(startBox.top + deltaY, 0, image.displayHeight - startBox.bottom - minHeight);
+    return;
+  }
+
+  if (dragEdge === "rightTop") {
+    crop.right = clampNumber(startBox.right - deltaX, 0, image.displayWidth - startBox.left - minWidth);
+    crop.top = clampNumber(startBox.top + deltaY, 0, image.displayHeight - startBox.bottom - minHeight);
+    return;
+  }
+
+  if (dragEdge === "leftBottom") {
+    crop.left = clampNumber(startBox.left + deltaX, 0, image.displayWidth - startBox.right - minWidth);
     crop.bottom = clampNumber(startBox.bottom - deltaY, 0, image.displayHeight - startBox.top - minHeight);
   }
 }
@@ -510,12 +626,27 @@ async function exportCrop() {
     },
     instance?.proxy
   );
+  const readyPath = await resolveReadyCropPath(file.tempFilePath);
 
   return {
-    path: file.tempFilePath,
+    path: readyPath,
     width: exportSize.width,
     height: exportSize.height
   };
+}
+
+async function resolveReadyCropPath(tempFilePath: string) {
+  const retryDelays = [0, 40, 120, 240];
+  for (const delay of retryDelays) {
+    if (delay > 0) {
+      await wait(delay);
+    }
+    try {
+      const info = await uniPlatform.media.getImageInfo(tempFilePath);
+      return info.path || tempFilePath;
+    } catch {}
+  }
+  return tempFilePath;
 }
 
 function resolveSourceRect() {
@@ -565,12 +696,19 @@ function rpxToPx(value: number) {
   const width = systemInfo.value.windowWidth || 375;
   return (width * value) / 750;
 }
+
+function wait(delay: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), delay);
+  });
+}
 </script>
 
 <style scoped lang="scss">
 .crop-page {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: #0c0f12;
 }
 
@@ -587,6 +725,7 @@ function rpxToPx(value: number) {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
   padding: 0 48rpx;
   color: rgba(247, 244, 238, 0.92);
   background: #0c0f12;
@@ -601,6 +740,7 @@ function rpxToPx(value: number) {
 .crop-stage {
   position: relative;
   overflow: hidden;
+  flex: 0 0 auto;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%),
     #050607;
@@ -708,6 +848,27 @@ function rpxToPx(value: number) {
   height: 54rpx;
 }
 
+.crop-box__handle--lt {
+  top: -22rpx;
+  left: -22rpx;
+  border-top: 6rpx solid #ffffff;
+  border-left: 6rpx solid #ffffff;
+}
+
+.crop-box__handle--rt {
+  top: -22rpx;
+  right: -22rpx;
+  border-top: 6rpx solid #ffffff;
+  border-right: 6rpx solid #ffffff;
+}
+
+.crop-box__handle--lb {
+  bottom: -22rpx;
+  left: -22rpx;
+  border-bottom: 6rpx solid #ffffff;
+  border-left: 6rpx solid #ffffff;
+}
+
 .crop-box__handle--rb {
   right: -22rpx;
   bottom: -22rpx;
@@ -753,6 +914,7 @@ function rpxToPx(value: number) {
   display: flex;
   gap: 18rpx;
   padding: 16rpx 24rpx calc(36rpx + env(safe-area-inset-bottom));
+  margin-top: auto;
 }
 
 .crop-actions__button {

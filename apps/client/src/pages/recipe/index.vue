@@ -15,166 +15,203 @@
       </view>
     </template>
 
-    <view class="recipe-page">
-      <view class="search-row">
-        <RecipeSearchBar
-          v-model="keyword"
-          @confirm="searchCurrent"
-          @clear="clearKeyword"
-        />
-      </view>
-
-      <view v-if="showStickyControls" class="sticky-wrap" :style="stickyStyle">
-        <view v-if="showFilters" class="filter-overlay" @click="closeFilters" />
-        <view v-if="showCategoryBar" class="sticky-bar" :class="{ 'sticky-bar--inspiration': activeTab === 'inspiration' }">
-          <view class="category-fixed">
-            <view
-              class="category-chip"
-              :class="{ 'category-chip--active': currentCategoryId === firstCategoryItem.id }"
-              @click="changeCategory(firstCategoryItem.id)"
-            >
-              <text class="category-chip__name">{{ firstCategoryItem.name }}</text>
-            </view>
-          </view>
-
-          <scroll-view scroll-x class="category-scroll" show-scrollbar="false">
-            <view class="category-row">
-              <view
-                v-for="item in scrollCategoryItems"
-                :key="item.id"
-                class="category-chip"
-                :class="{ 'category-chip--active': currentCategoryId === item.id }"
-                @click="changeCategory(item.id)"
-              >
-                <text class="category-chip__name">{{ item.name }}</text>
-              </view>
-            </view>
-          </scroll-view>
-
-          <view v-if="activeTab === 'inspiration'" class="filter-trigger-wrap">
-            <view
-              class="filter-trigger"
-              :class="{ 'filter-trigger--active': showFilters || activeFilterCount > 0 }"
-              @click="toggleFilters"
-            >
-              <text class="filter-trigger__text">筛选</text>
-              <text class="cookfont icon-filter-list filter-trigger__icon" />
-              <view v-if="activeFilterCount > 0" class="filter-trigger__badge">
-                {{ activeFilterBadge }}
-              </view>
-            </view>
+    <view id="recipe-page" class="recipe-page" :style="pageBodyStyle">
+      <view id="recipe-fixed-panel" class="recipe-fixed-panel" :style="fixedPanelStyle">
+        <view class="search-row">
+          <view class="search-row__inner">
+            <RecipeSearchBar
+              v-model="keyword"
+              @confirm="searchCurrent"
+              @clear="clearKeyword"
+            />
           </view>
         </view>
 
-        <view
-          v-if="activeTab === 'inspiration'"
-          class="filter-drawer"
-          :class="{ 'filter-drawer--visible': showFilters }"
-        >
-          <view class="filter-group">
-            <text class="filter-group__title">排序</text>
-            <view class="filter-group__chips">
-              <view
-                v-for="item in sortItems"
-                :key="item.value"
-                class="filter-chip"
-                :class="{ 'filter-chip--active': filterSort === item.value }"
-                @click="changeSort(item.value)"
-              >
-                {{ item.label }}
-              </view>
-            </view>
-          </view>
-
-          <view class="filter-group">
-            <text class="filter-group__title">难度</text>
-            <view class="filter-group__chips">
-              <view
-                v-for="item in difficultyItems"
-                :key="item.value"
-                class="filter-chip"
-                :class="{ 'filter-chip--active': filterDifficulty === item.value }"
-                @click="changeDifficulty(item.value)"
-              >
-                {{ item.label }}
-              </view>
-            </view>
-          </view>
-
-          <view class="filter-group">
-            <text class="filter-group__title">时长</text>
-            <view class="filter-group__chips">
-              <view
-                v-for="item in durationItems"
-                :key="item.value"
-                class="filter-chip"
-                :class="{ 'filter-chip--active': filterDuration === item.value }"
-                @click="changeDuration(item.value)"
-              >
-                {{ item.label }}
-              </view>
-            </view>
-          </view>
-
-          <view class="filter-actions">
-            <view class="filter-actions__button filter-actions__button--ghost" @click="resetFilters">重置</view>
-            <view class="filter-actions__button filter-actions__button--primary" @click="applyFilters">确定</view>
-          </view>
-        </view>
-      </view>
-
-      <template>
-        <view v-if="errorText" class="notice" @click="loadActiveTab">{{ errorText }}</view>
-        <view v-else-if="loading" class="notice">加载中...</view>
-
-        <RecipeEmptyState
-          v-else-if="showRecipeEmpty"
-          :art="emptyStateArt"
-          :title="emptyStateTitle"
-          :description="emptyStateDescription"
-          :clickable="emptyStateClickable"
-          @click="handleEmptyClick"
-        />
-
-        <view v-else class="list">
+        <view v-if="showStickyControls" class="sticky-wrap">
+          <view v-if="showFilters" class="filter-overlay" @click="closeFilters" />
           <view
-            v-for="item in cards"
-            :key="item.id"
-            class="recipe-card"
-            hover-class="recipe-card--hover"
-            hover-stay-time="100"
-            @click="openCard(item)"
+            v-if="showCategoryBar"
+            class="sticky-bar"
+            :class="{ 'sticky-bar--inspiration': activeTab === 'inspiration' }"
           >
-            <view class="recipe-card__cover">
-              <text v-if="item.coverTag" class="recipe-card__cover-tag">{{ item.coverTag }}</text>
-              <image
-                v-if="item.coverImageUrl"
-                class="recipe-card__cover-image"
-                :src="item.coverImageUrl"
-                mode="aspectFill"
-              />
-              <view v-else class="recipe-card__cover-fallback">
-                <text class="recipe-card__cover-text font-black">封面图</text>
+            <view class="category-fixed">
+              <view
+                class="category-chip"
+                :class="{ 'category-chip--active': currentCategoryId === firstCategoryItem.id }"
+                @click="changeCategory(firstCategoryItem.id)"
+              >
+                <text class="category-chip__name">{{ firstCategoryItem.name }}</text>
               </view>
             </view>
 
-            <view class="recipe-card__body">
-              <text class="recipe-card__title">{{ item.title }}</text>
-              <view class="recipe-card__info">
-                <view class="recipe-card__meta">
-                  <text class="cookfont icon-time recipe-card__meta-icon" />
-                  <text class="recipe-card__meta-text">{{ item.meta }}</text>
-                </view>
-                <view v-if="item.tag" class="recipe-card__tag" :class="{ 'recipe-card__tag--metric': item.kind === 'inspiration' }">
-                  <text v-if="item.kind === 'inspiration'" class="cookfont icon-collect recipe-card__tag-icon" />
-                  <text>{{ item.tag }}</text>
+            <scroll-view scroll-x class="category-scroll" show-scrollbar="false">
+              <view class="category-row">
+                <view
+                  v-for="item in scrollCategoryItems"
+                  :key="item.id"
+                  class="category-chip"
+                  :class="{ 'category-chip--active': currentCategoryId === item.id }"
+                  @click="changeCategory(item.id)"
+                >
+                  <text class="category-chip__name">{{ item.name }}</text>
                 </view>
               </view>
-              <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
+            </scroll-view>
+
+            <view v-if="activeTab === 'inspiration'" class="filter-trigger-wrap">
+              <view
+                class="filter-trigger"
+                :class="{ 'filter-trigger--active': showFilters || activeFilterCount > 0 }"
+                @click="toggleFilters"
+              >
+                <text class="filter-trigger__text">筛选</text>
+                <text class="cookfont icon-filter-list filter-trigger__icon" />
+                <view v-if="activeFilterCount > 0" class="filter-trigger__badge">
+                  {{ activeFilterBadge }}
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view
+            v-if="activeTab === 'inspiration'"
+            class="filter-drawer"
+            :class="{ 'filter-drawer--visible': showFilters }"
+          >
+            <view class="filter-group">
+              <text class="filter-group__title">排序</text>
+              <view class="filter-group__chips">
+                <view
+                  v-for="item in sortItems"
+                  :key="item.value"
+                  class="filter-chip"
+                  :class="{ 'filter-chip--active': filterSort === item.value }"
+                  @click="changeSort(item.value)"
+                >
+                  {{ item.label }}
+                </view>
+              </view>
+            </view>
+
+            <view class="filter-group">
+              <text class="filter-group__title">难度</text>
+              <view class="filter-group__chips">
+                <view
+                  v-for="item in difficultyItems"
+                  :key="item.value"
+                  class="filter-chip"
+                  :class="{ 'filter-chip--active': filterDifficulty === item.value }"
+                  @click="changeDifficulty(item.value)"
+                >
+                  {{ item.label }}
+                </view>
+              </view>
+            </view>
+
+            <view class="filter-group">
+              <text class="filter-group__title">时长</text>
+              <view class="filter-group__chips">
+                <view
+                  v-for="item in durationItems"
+                  :key="item.value"
+                  class="filter-chip"
+                  :class="{ 'filter-chip--active': filterDuration === item.value }"
+                  @click="changeDuration(item.value)"
+                >
+                  {{ item.label }}
+                </view>
+              </view>
+            </view>
+
+            <view class="filter-actions">
+              <view class="filter-actions__button filter-actions__button--ghost" @click="resetFilters">重置</view>
+              <view class="filter-actions__button filter-actions__button--primary" @click="applyFilters">确定</view>
             </view>
           </view>
         </view>
-      </template>
+      </view>
+
+      <view class="recipe-scroll-wrap" :style="scrollWrapStyle">
+        <RecipeSearchLoading
+          :pull-distance="pullDistance"
+          :refreshing="refreshing"
+          :show-success="showSuccess"
+          :refresher-text="refresherText"
+          :threshold="refresherThreshold"
+          :loading="inlineLoading"
+          :loading-text="inlineLoadingText"
+        />
+
+        <scroll-view
+          scroll-y
+          class="recipe-scroll"
+          refresher-enabled
+          refresher-default-style="none"
+          :show-scrollbar="false"
+          :refresher-threshold="refresherThreshold"
+          :refresher-triggered="refresherTriggered"
+          :lower-threshold="120"
+          @scroll="handleListScroll"
+          @scrolltolower="loadMoreActiveTab"
+          @refresherpulling="onRefresherPulling"
+          @refresherrefresh="handleRefresherRefresh"
+          @refresherrestore="onRefresherRestore"
+          @refresherabort="onRefresherRestore"
+        >
+          <view v-if="errorText" class="notice" @click="retryLoadActiveTab">{{ errorText }}</view>
+          <view v-else-if="loading && !cards.length" class="notice">加载中...</view>
+
+          <RecipeEmptyState
+            v-else-if="showRecipeEmpty"
+            :art="emptyStateArt"
+            :title="emptyStateTitle"
+            :description="emptyStateDescription"
+            :clickable="emptyStateClickable"
+            @click="handleEmptyClick"
+          />
+
+          <view v-else class="list">
+            <view
+              v-for="item in cards"
+              :key="item.id"
+              class="recipe-card"
+              hover-class="recipe-card--hover"
+              hover-stay-time="100"
+              @click="openCard(item)"
+            >
+              <view class="recipe-card__cover">
+                <text v-if="item.coverTag" class="recipe-card__cover-tag">{{ item.coverTag }}</text>
+                <image
+                  v-if="item.coverImageUrl"
+                  class="recipe-card__cover-image"
+                  :src="item.coverImageUrl"
+                  mode="aspectFill"
+                />
+                <view v-else class="recipe-card__cover-fallback">
+                  <text class="recipe-card__cover-text font-black">封面图</text>
+                </view>
+              </view>
+
+              <view class="recipe-card__body">
+                <text class="recipe-card__title">{{ item.title }}</text>
+                <view class="recipe-card__info">
+                  <view class="recipe-card__meta">
+                    <text class="cookfont icon-time recipe-card__meta-icon" />
+                    <text class="recipe-card__meta-text">{{ item.meta }}</text>
+                  </view>
+                  <view v-if="item.tag" class="recipe-card__tag" :class="{ 'recipe-card__tag--metric': item.kind === 'inspiration' }">
+                    <text v-if="item.kind === 'inspiration'" class="cookfont icon-collect recipe-card__tag-icon" />
+                    <text>{{ item.tag }}</text>
+                  </view>
+                </view>
+                <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
+              </view>
+            </view>
+
+            <view v-if="showFooter" class="list-footer">{{ footerText }}</view>
+          </view>
+        </scroll-view>
+      </view>
 
       <view
         v-if="sessionStore.isLoggedIn && activeTab !== 'inspiration'"
@@ -188,44 +225,45 @@
         <text class="manage-fab__text">{{ fabText }}</text>
       </view>
 
-      <SheetShell v-if="sheetMode" :visible="sheetVisible" @close="closeSheet">
-          <view class="sheet__header">
-            <text class="sheet__title">{{ sheetTitle }}</text>
-            <text class="cookfont icon-close sheet__close" @click="closeSheet" />
+      <SheetShell
+        v-if="sheetMode"
+        :visible="sheetVisible"
+        title="添加菜谱"
+        @close="closeSheet"
+        @after-close="handleSheetAfterClose"
+      >
+        <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openRecipeEditor">
+          <view class="action-card__icon">
+            <text class="action-card__icon-text">写</text>
           </view>
+          <view class="action-card__main">
+            <text class="action-card__name">手动添加</text>
+            <text class="action-card__desc">逐项填写菜谱信息</text>
+          </view>
+          <text class="action-card__arrow">›</text>
+        </view>
 
-          <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openRecipeEditor">
-            <view class="action-card__icon">
-              <text class="action-card__icon-text">写</text>
-            </view>
-            <view class="action-card__main">
-              <text class="action-card__name">手动添加</text>
-              <text class="action-card__desc">逐项填写菜谱信息</text>
-            </view>
-            <text class="action-card__arrow">›</text>
+        <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="goToInspiration">
+          <view class="action-card__icon">
+            <text class="action-card__icon-text">逛</text>
           </view>
+          <view class="action-card__main">
+            <text class="action-card__name">从广场挑菜</text>
+            <text class="action-card__desc">切到灵感页挑选并收藏菜谱</text>
+          </view>
+          <text class="action-card__arrow">›</text>
+        </view>
 
-          <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="goToInspiration">
-            <view class="action-card__icon">
-              <text class="action-card__icon-text">逛</text>
-            </view>
-            <view class="action-card__main">
-              <text class="action-card__name">从广场挑菜</text>
-              <text class="action-card__desc">切到灵感页挑选并收藏菜谱</text>
-            </view>
-            <text class="action-card__arrow">›</text>
+        <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openManage">
+          <view class="action-card__icon">
+            <text class="action-card__icon-text">稿</text>
           </view>
-
-          <view class="action-card" hover-class="action-card--hover" hover-stay-time="100" @click="openManage">
-            <view class="action-card__icon">
-              <text class="action-card__icon-text">稿</text>
-            </view>
-            <view class="action-card__main">
-              <text class="action-card__name">草稿和管理</text>
-              <text class="action-card__desc">查看草稿箱并管理已发布菜谱</text>
-            </view>
-            <text class="action-card__arrow">›</text>
+          <view class="action-card__main">
+            <text class="action-card__name">草稿和管理</text>
+            <text class="action-card__desc">查看草稿箱并管理已发布菜谱</text>
           </view>
+          <text class="action-card__arrow">›</text>
+        </view>
       </SheetShell>
     </view>
   </Layout>
@@ -233,7 +271,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
-import { onPageScroll, onShow } from "@dcloudio/uni-app";
+import { onHide, onShow } from "@dcloudio/uni-app";
 import emptyCollectionIllustration from "@/assets/recipe-page/empty-collection.svg";
 import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
 import manageIcon from "@/assets/recipe-page/manage.svg";
@@ -253,17 +291,22 @@ import {
 import type { UUID } from "@/apis/http";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
+import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useFixedPanelLayout } from "@/composables/useFixedPanelLayout";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
+import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 
 type RecipeTab = "my" | "inspiration" | "collection";
 type SheetMode = "" | "my";
+type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
 
 interface CategoryItem {
 	id: UUID | "";
@@ -294,11 +337,23 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
-const SHEET_ANIMATION_MS = 260;
-
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
-const { navBarTotalHeight } = useSystemInfo();
+const { navBarTotalHeight, tabBarHeight } = useSystemInfo();
+
+const pageSizeMap: Record<RecipeTab, number> = {
+	my: 20,
+	inspiration: 20,
+	collection: 20
+};
+const loadingTips = [
+	"帮你翻一翻今天想吃什么",
+	"灶台预热中，马上端上来",
+	"灵感下锅中，先闻闻香气",
+	"锅铲翻两下，菜谱就到了",
+	"替你把常做菜再拢一遍",
+	"先备好食材，马上开炒"
+];
 
 const tabs = [
 	{ value: "my" as const, label: "我的" },
@@ -328,6 +383,7 @@ const activeTab = ref<RecipeTab>(sessionStore.isLoggedIn ? "my" : "inspiration")
 const keyword = ref("");
 const showFilters = ref(false);
 const loading = ref(false);
+const loadingMore = ref(false);
 const errorText = ref("");
 const fabHidden = ref(false);
 const myCategories = ref<RecipeCategorySummary[]>([]);
@@ -348,13 +404,51 @@ const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
 const loginIntentTab = ref<RecipeTab | null>(null);
 const sheetMode = ref<SheetMode>("");
 const sheetVisible = ref(false);
+const loadedVersions = ref<Record<RecipeTab, number | null>>({
+	my: null,
+	inspiration: null,
+	collection: null
+});
+const loadedKeywords = ref<Record<RecipeTab, string>>({
+	my: "",
+	inspiration: "",
+	collection: ""
+});
+const tabPage = ref<Record<RecipeTab, number>>({
+	my: 0,
+	inspiration: 0,
+	collection: 0
+});
+const tabHasNext = ref<Record<RecipeTab, boolean>>({
+	my: false,
+	inspiration: false,
+	collection: false
+});
+const loadSource = ref<LoadSource>("idle");
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-page-sheet"));
+const {
+	threshold: refresherThreshold,
+	pullDistance,
+	refreshing,
+	showSuccess,
+	refresherText,
+	refresherTriggered,
+	onRefresherPulling,
+	onRefresherRefresh,
+	onRefreshComplete,
+	onRefresherRestore
+} = useCustomRefresher({
+	text: {
+		pulling: "下拉刷新菜谱",
+		canRelease: loadingTips,
+		success: "刷新成功"
+	}
+});
 
 let scrollTimer: ReturnType<typeof setTimeout> | null = null;
-let sheetTimer: ReturnType<typeof setTimeout> | null = null;
 
-const stickyStyle = computed(() => ({
-	top: `${navBarTotalHeight.value}px`
+const pageBodyStyle = computed(() => ({
+	height: `calc(100vh - ${navBarTotalHeight.value + tabBarHeight.value}px)`
 }));
 const categoryItems = computed<CategoryItem[]>(() => {
 	if (activeTab.value === "my") {
@@ -373,8 +467,8 @@ const currentCategoryId = computed(() => {
 	return collectionSceneId.value;
 });
 const selectedCollection = computed(() => {
-	if (!collectionScenes.value.length) return null;
-	return collectionScenes.value.find(item => item.id === collectionSceneId.value) || collectionScenes.value[0];
+	if (!collectionScenes.value.length || !collectionSceneId.value) return null;
+	return collectionScenes.value.find(item => item.id === collectionSceneId.value) || null;
 });
 const cards = computed<CardItem[]>(() => {
 	if (activeTab.value === "my") return myRecipes.value.map(toMyCard);
@@ -402,7 +496,7 @@ const activeFilterCount = computed(
 );
 const activeFilterBadge = computed(() => (activeFilterCount.value > 9 ? "9+" : String(activeFilterCount.value)));
 watch(
-	() => Boolean(sheetMode.value) || showFilters.value,
+	() => sheetVisible.value || showFilters.value,
 	(visible) => {
 		setPageLocked(visible);
 	},
@@ -432,13 +526,36 @@ const emptyStateDescription = computed(() =>
 const emptyStateArt = computed(() =>
 	activeTab.value === "collection" ? emptyCollectionIllustration : emptyStateIllustration
 );
-const sheetTitle = computed(() => "添加菜谱");
 const fabText = computed(() => {
 	return "添加";
+});
+const currentHasNext = computed(() => tabHasNext.value[activeTab.value]);
+const footerText = computed(() => {
+	if (loadingMore.value) return "加载更多中...";
+	return currentHasNext.value ? "上滑继续加载" : "没有更多了";
+});
+const showFooter = computed(() => cards.value.length > 0 && !errorText.value);
+const inlineLoading = computed(() => loading.value && cards.value.length > 0 && loadSource.value !== "refresh");
+const inlineLoadingText = computed(() => {
+	if (loadSource.value === "search") {
+		return ["搜一搜这口想吃的", "帮你翻找菜谱和食材", "锅里翻找中，马上出结果"];
+	}
+	return loadingTips;
+});
+const { panelStyle: fixedPanelStyle, contentStyle: scrollWrapStyle, syncPanel: syncFixedPanel } = useFixedPanelLayout({
+	panelId: "recipe-fixed-panel",
+	topPx: navBarTotalHeight,
+	watchSources: [activeTab, showStickyControls, showCategoryBar, showFilters, () => categoryItems.value.length]
 });
 
 onShow(() => {
 	void loadActiveTab();
+	void syncFixedPanel();
+});
+
+onHide(() => {
+	showFilters.value = false;
+	closeSheet(true);
 });
 
 watch(
@@ -456,7 +573,7 @@ watch(
 		if (!isLoggedIn) {
 			closeSheet();
 		}
-		void loadActiveTab();
+		void loadActiveTab({ force: true, source: "switch" });
 	}
 );
 
@@ -473,12 +590,11 @@ watch(
 	keywordText,
 	(nextValue, previousValue) => {
 		if (!nextValue && previousValue) {
-			void loadActiveTab();
+			void loadActiveTab({ force: true, source: "search" });
 		}
 	}
 );
-
-onPageScroll(() => {
+function handleListScroll() {
 	if (activeTab.value === "inspiration") return;
 	fabHidden.value = true;
 	if (scrollTimer) clearTimeout(scrollTimer);
@@ -486,11 +602,10 @@ onPageScroll(() => {
 		fabHidden.value = false;
 		scrollTimer = null;
 	}, 180);
-});
+}
 
 onUnmounted(() => {
 	if (scrollTimer) clearTimeout(scrollTimer);
-	if (sheetTimer) clearTimeout(sheetTimer);
 });
 
 function switchTab(tab: RecipeTab) {
@@ -506,7 +621,7 @@ function switchTab(tab: RecipeTab) {
 	} else if (tab !== "inspiration") {
 		showFilters.value = false;
 	}
-	void loadActiveTab();
+	void loadActiveTab({ source: "switch" });
 }
 
 function changeCategory(categoryId: UUID | "") {
@@ -518,7 +633,7 @@ function changeCategory(categoryId: UUID | "") {
 	} else {
 		collectionSceneId.value = categoryId;
 	}
-	void loadActiveTab();
+	void loadActiveTab({ force: true, source: "switch" });
 }
 
 function changeSort(value: InspirationSort) {
@@ -546,7 +661,11 @@ function toggleFilters() {
 }
 
 function searchCurrent() {
-	void loadActiveTab();
+	void loadActiveTab({ force: true, source: "search" });
+}
+
+function retryLoadActiveTab() {
+	void loadActiveTab({ force: true, source: "retry" });
 }
 
 function clearKeyword() {
@@ -589,72 +708,125 @@ function applyFilters() {
 	inspirationDuration.value = filterDuration.value;
 	showFilters.value = false;
 	if (changed) {
-		void loadActiveTab();
+		void loadActiveTab({ force: true, source: "switch" });
 	}
 }
 
-async function loadActiveTab() {
-	if (loading.value) return;
-	errorText.value = "";
+function getHomeScope(tab: RecipeTab) {
+	if (tab === "my") return "home-my" as const;
+	if (tab === "inspiration") return "home-inspiration" as const;
+	return "home-collection" as const;
+}
 
-	if (activeTab.value === "collection") {
+function syncTabLoadState(tab: RecipeTab) {
+	loadedVersions.value[tab] = getRecipeViewVersion(getHomeScope(tab));
+	loadedKeywords.value[tab] = keywordText.value;
+}
+
+function shouldLoadTab(tab: RecipeTab, force = false) {
+	if (force) return true;
+	return (
+		loadedVersions.value[tab] !== getRecipeViewVersion(getHomeScope(tab)) ||
+		loadedKeywords.value[tab] !== keywordText.value
+	);
+}
+
+async function loadActiveTab(options: { force?: boolean; source?: LoadSource } = {}) {
+	const source = options.source ?? "initial";
+	const currentTab = activeTab.value;
+	if (loading.value || loadingMore.value || !shouldLoadTab(currentTab, options.force)) return false;
+	errorText.value = "";
+	loadSource.value = source;
+	let success = false;
+
+	if (currentTab === "collection") {
 		if (sessionStore.isLoggedIn) {
 			loading.value = true;
 			try {
-				const result = await recipeApi.listCollections();
-				collectionScenes.value = result.items;
-				if (collectionScenes.value.length && !collectionScenes.value.some(item => item.id === collectionSceneId.value)) {
-					collectionSceneId.value = collectionScenes.value[0].id;
+				if (!collectionScenes.value.length || source === "refresh") {
+					const result = await recipeApi.listCollections();
+					collectionScenes.value = result.items;
+					if (collectionSceneId.value && !collectionScenes.value.some(item => item.id === collectionSceneId.value)) {
+						collectionSceneId.value = collectionScenes.value[0]?.id || "";
+					}
 				}
 				if (!collectionScenes.value.length) {
 					collectionSceneId.value = "";
 					collectionRecipes.value = [];
-					return;
+					tabPage.value.collection = 1;
+					tabHasNext.value.collection = false;
+					syncTabLoadState(currentTab);
+					success = true;
+					return success;
 				}
 				const list = await recipeApi.listCollectionRecipes({
 					page: 1,
-					pageSize: 20,
+					pageSize: pageSizeMap.collection,
 					keyword: keywordText.value || undefined,
 					sceneId: collectionSceneId.value || undefined
 				});
 				collectionRecipes.value = list.items;
+				tabPage.value.collection = list.page;
+				tabHasNext.value.collection = list.hasNext;
+				syncTabLoadState(currentTab);
+				success = true;
 			} catch (error) {
 				errorText.value = error instanceof Error ? error.message : "合集加载失败";
 				collectionRecipes.value = [];
+				tabPage.value.collection = 0;
+				tabHasNext.value.collection = false;
 			} finally {
 				loading.value = false;
+				loadSource.value = "idle";
 			}
 		} else {
 			collectionScenes.value = [];
 			collectionSceneId.value = "";
 			collectionRecipes.value = [];
+			tabPage.value.collection = 0;
+			tabHasNext.value.collection = false;
+			syncTabLoadState(currentTab);
+			loadSource.value = "idle";
+			success = true;
 		}
-		return;
+		return success;
 	}
 
 	loading.value = true;
 	try {
-		if (activeTab.value === "my") {
-			if (!sessionStore.isLoggedIn) return;
-			if (!myCategories.value.length) {
+		if (currentTab === "my") {
+			if (!sessionStore.isLoggedIn) {
+				myCategories.value = [];
+				myRecipes.value = [];
+				tabPage.value.my = 0;
+				tabHasNext.value.my = false;
+				syncTabLoadState(currentTab);
+				success = true;
+				return success;
+			}
+			if (!myCategories.value.length || source === "refresh") {
 				myCategories.value = await recipeApi.listCategories();
 			}
 			const result = await recipeApi.listMyRecipes({
 				page: 1,
-				pageSize: 50,
+				pageSize: pageSizeMap.my,
 				keyword: keywordText.value || undefined,
 				categoryId: myCategoryId.value || undefined
 			});
 			myRecipes.value = result.items;
-			return;
+			tabPage.value.my = result.page;
+			tabHasNext.value.my = result.hasNext;
+			syncTabLoadState(currentTab);
+			success = true;
+			return success;
 		}
 
-		if (!inspirationCategories.value.length) {
+		if (!inspirationCategories.value.length || source === "refresh") {
 			inspirationCategories.value = await recipeApi.listInspirationCategories();
 		}
 		const result = await recipeApi.listInspirationRecipes({
 			page: 1,
-			pageSize: 20,
+			pageSize: pageSizeMap.inspiration,
 			keyword: keywordText.value || undefined,
 			categoryId: inspirationCategoryId.value || undefined,
 			sort: inspirationSort.value,
@@ -662,10 +834,91 @@ async function loadActiveTab() {
 			duration: inspirationDuration.value || undefined
 		});
 		inspirationRecipes.value = result.items;
+		tabPage.value.inspiration = result.page;
+		tabHasNext.value.inspiration = result.hasNext;
+		syncTabLoadState(currentTab);
+		success = true;
 	} catch (error) {
 		errorText.value = error instanceof Error ? error.message : "菜谱加载失败";
 	} finally {
 		loading.value = false;
+		loadSource.value = "idle";
+	}
+	return success;
+}
+
+async function loadMoreActiveTab() {
+	const currentTab = activeTab.value;
+	if (loading.value || loadingMore.value || !tabHasNext.value[currentTab]) return;
+
+	loadingMore.value = true;
+	errorText.value = "";
+
+	try {
+		if (currentTab === "my") {
+			if (!sessionStore.isLoggedIn) return;
+			const result = await recipeApi.listMyRecipes({
+				page: tabPage.value.my + 1,
+				pageSize: pageSizeMap.my,
+				keyword: keywordText.value || undefined,
+				categoryId: myCategoryId.value || undefined
+			});
+			myRecipes.value = [...myRecipes.value, ...result.items];
+			tabPage.value.my = result.page;
+			tabHasNext.value.my = result.hasNext;
+			syncTabLoadState(currentTab);
+			return;
+		}
+
+		if (currentTab === "collection") {
+			if (!sessionStore.isLoggedIn) return;
+			const result = await recipeApi.listCollectionRecipes({
+				page: tabPage.value.collection + 1,
+				pageSize: pageSizeMap.collection,
+				keyword: keywordText.value || undefined,
+				sceneId: collectionSceneId.value || undefined
+			});
+			collectionRecipes.value = [...collectionRecipes.value, ...result.items];
+			tabPage.value.collection = result.page;
+			tabHasNext.value.collection = result.hasNext;
+			syncTabLoadState(currentTab);
+			return;
+		}
+
+		const result = await recipeApi.listInspirationRecipes({
+			page: tabPage.value.inspiration + 1,
+			pageSize: pageSizeMap.inspiration,
+			keyword: keywordText.value || undefined,
+			categoryId: inspirationCategoryId.value || undefined,
+			sort: inspirationSort.value,
+			difficulty: inspirationDifficulty.value || undefined,
+			duration: inspirationDuration.value || undefined
+		});
+		inspirationRecipes.value = [...inspirationRecipes.value, ...result.items];
+		tabPage.value.inspiration = result.page;
+		tabHasNext.value.inspiration = result.hasNext;
+		syncTabLoadState(currentTab);
+	} catch (error) {
+		errorText.value = error instanceof Error ? error.message : "加载更多失败";
+	} finally {
+		loadingMore.value = false;
+	}
+}
+
+async function handleRefresherRefresh() {
+	const shouldRefresh = onRefresherRefresh();
+	if (!shouldRefresh) {
+		onRefresherRestore();
+		return;
+	}
+
+	try {
+		const success = await loadActiveTab({ force: true, source: "refresh" });
+		if (success) {
+			await onRefreshComplete();
+		}
+	} finally {
+		onRefresherRestore();
 	}
 }
 
@@ -685,10 +938,6 @@ function handleFab() {
 }
 
 function openAddSheet() {
-	if (sheetTimer) {
-		clearTimeout(sheetTimer);
-		sheetTimer = null;
-	}
 	if (sheetMode.value === "my" && sheetVisible.value) return;
 	sheetMode.value = "my";
 	sheetVisible.value = false;
@@ -697,16 +946,16 @@ function openAddSheet() {
 	});
 }
 
-function closeSheet() {
+function closeSheet(immediate = false) {
 	if (!sheetMode.value) return;
 	sheetVisible.value = false;
-	if (sheetTimer) {
-		clearTimeout(sheetTimer);
-	}
-	sheetTimer = setTimeout(() => {
+	if (immediate) {
 		sheetMode.value = "";
-		sheetTimer = null;
-	}, SHEET_ANIMATION_MS);
+	}
+}
+
+function handleSheetAfterClose() {
+	sheetMode.value = "";
 }
 
 function handleEmptyClick() {
@@ -718,7 +967,7 @@ function handleEmptyClick() {
 			if (intentTab && intentTab !== "inspiration") {
 				openAddSheet();
 			}
-			void loadActiveTab();
+			void loadActiveTab({ force: true, source: "switch" });
 		});
 		return;
 	}
@@ -731,7 +980,7 @@ function handleEmptyClick() {
 }
 
 function openRecipeEditor() {
-	closeSheet();
+	closeSheet(true);
 	void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
 }
 
@@ -740,7 +989,7 @@ function goToInspiration() {
 	activeTab.value = "inspiration";
 	errorText.value = "";
 	showFilters.value = false;
-	void loadActiveTab();
+	void loadActiveTab({ source: "switch" });
 }
 
 function formatDifficulty(value: RecipeDifficulty | null) {
@@ -808,18 +1057,10 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 <style scoped lang="scss">
 .recipe-page {
   position: relative;
-  padding: 10rpx var(--space-page) calc(140rpx + env(safe-area-inset-bottom));
-}
-
-.recipe-page::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 12rpx;
-  background: var(--color-page);
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .nav-tabs {
@@ -860,16 +1101,48 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   transform: rotate(-5deg);
 }
 
+.recipe-fixed-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  box-sizing: border-box;
+  padding: 10rpx var(--space-page) 0;
+  background: var(--color-page);
+}
+
 .search-row {
+  flex: none;
   margin-top: 12rpx;
 }
 
+.search-row__inner {
+  min-width: 0;
+}
+
 .sticky-wrap {
-  position: sticky;
-  z-index: 20;
+  position: relative;
+  z-index: 2;
+  flex: none;
   margin-top: 20rpx;
-  padding-bottom: 20rpx;
+  padding-bottom: 16rpx;
   background: var(--color-page);
+}
+
+.recipe-scroll {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
+.recipe-scroll-wrap {
+  display: flex;
+  position: relative;
+  width: 100%;
+  flex: none;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--space-page);
 }
 
 .filter-overlay {
@@ -1148,6 +1421,16 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20rpx;
+  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
+}
+
+.list-footer {
+  grid-column: 1 / -1;
+  padding: 12rpx 0 8rpx;
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .recipe-card {
@@ -1331,26 +1614,6 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 .manage-fab--hidden {
   opacity: 0;
   transform: translateX(140%);
-}
-
-.sheet__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
-.sheet__title {
-  color: var(--color-text);
-  font-size: 38rpx;
-  font-weight: var(--font-weight-heavy);
-}
-
-.sheet__close {
-  color: var(--color-text-tertiary);
-  font-size: 36rpx;
-  line-height: 1;
 }
 
 .action-card {

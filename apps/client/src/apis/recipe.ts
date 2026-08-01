@@ -167,6 +167,7 @@ export interface RecipeDraftSummary {
 	id: UUID;
 	recipeId: UUID | null;
 	title: string | null;
+	coverImageUrl: string | null;
 	category: RecipeCategorySummary | null;
 	version: number;
 	updatedAt: IsoDateTime;

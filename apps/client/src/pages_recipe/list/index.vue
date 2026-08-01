@@ -21,7 +21,7 @@
       @success="handleLoginSuccess"
     />
 
-    <view v-else class="list-page">
+    <view v-else class="list-page" :style="pageBodyStyle">
       <view class="search-row">
         <RecipeSearchBar
           v-model="keyword"
@@ -31,55 +31,85 @@
         />
       </view>
 
-      <view v-if="errorText" class="notice" @click="loadList">{{ errorText }}</view>
-      <view v-if="loading" class="notice">加载中...</view>
-      <RecipeEmptyState
-        v-else-if="!items.length"
-        :art="emptyStateIllustration"
-        :title="mode === 'recipes' ? '还没有我的菜谱' : '草稿箱还是空的'"
-        :description="mode === 'recipes' ? '先新建一份属于你的菜谱，常做的家常菜和灵感改编都可以记在这里。' : '编辑页存下的草稿会先出现在这里，整理好后再继续发布。'"
-      />
+      <view class="list-scroll-wrap">
+        <RecipeSearchLoading
+          :pull-distance="pullDistance"
+          :refreshing="refreshing"
+          :show-success="showSuccess"
+          :refresher-text="refresherText"
+          :threshold="refresherThreshold"
+          :loading="inlineLoading"
+          :loading-text="inlineLoadingText"
+        />
 
-      <view v-else class="list">
-        <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
-          <view class="card__cover">
-            <image
-              v-if="item.coverImageUrl"
-              class="card__cover-image"
-              :src="item.coverImageUrl"
-              mode="aspectFill"
-            />
-            <view v-else class="card__cover-fallback">
-              <text class="card__cover-text font-black">{{ mode === "drafts" ? "草稿" : "封面" }}</text>
-            </view>
-          </view>
-          <view class="card__body">
-            <text class="card__title">{{ item.title }}</text>
-            <view class="card__foot">
-              <text class="card__meta">{{ item.meta }}</text>
-              <view class="card__action-row">
-                <text v-if="mode === 'recipes'" class="card__tail">{{ item.updatedAt.slice(0, 10) }}</text>
-                <text
-                  class="card__danger"
-                  :class="{
-                    'card__danger--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
-                  }"
-                  @click.stop="mode === 'drafts' ? removeDraft(item) : removeRecipe(item)"
-                >
-                  {{
-                    mode === "drafts"
-                      ? deletingDraftId === item.id
-                        ? "删除中..."
-                        : "删除草稿"
-                      : deletingRecipeId === item.id
-                        ? "删除中..."
-                        : "删除"
-                  }}
-                </text>
+        <scroll-view
+          scroll-y
+          class="list-scroll"
+          refresher-enabled
+          refresher-default-style="none"
+          :show-scrollbar="false"
+          :refresher-threshold="refresherThreshold"
+          :refresher-triggered="refresherTriggered"
+          :lower-threshold="120"
+          @scrolltolower="loadMore"
+          @refresherpulling="onRefresherPulling"
+          @refresherrefresh="handleRefresherRefresh"
+          @refresherrestore="onRefresherRestore"
+          @refresherabort="onRefresherRestore"
+        >
+          <view v-if="errorText" class="notice" @click="retryLoadList">{{ errorText }}</view>
+          <view v-else-if="loading && !items.length" class="notice">加载中...</view>
+          <RecipeEmptyState
+            v-else-if="!items.length"
+            :art="emptyStateIllustration"
+            :title="mode === 'recipes' ? '还没有我的菜谱' : '草稿箱还是空的'"
+            :description="mode === 'recipes' ? '先新建一份属于你的菜谱，常做的家常菜和灵感改编都可以记在这里。' : '编辑页存下的草稿会先出现在这里，整理好后再继续发布。'"
+          />
+
+          <view v-else class="list">
+            <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
+              <view class="card__cover">
+                <image
+                  v-if="item.coverImageUrl"
+                  class="card__cover-image"
+                  :src="item.coverImageUrl"
+                  mode="aspectFill"
+                />
+                <view v-else class="card__cover-fallback">
+                  <text v-if="mode !== 'drafts'" class="card__cover-text font-black">封面</text>
+                </view>
+              </view>
+              <view class="card__body">
+                <text class="card__title">{{ item.title }}</text>
+                <view class="card__foot">
+                  <text class="card__meta">{{ item.meta }}</text>
+                  <view class="card__action-row">
+                    <text class="card__tail">{{ item.updatedAtText }}</text>
+                    <text
+                      class="card__danger"
+                      :class="{
+                        'card__danger--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
+                      }"
+                      @click.stop="mode === 'drafts' ? removeDraft(item) : removeRecipe(item)"
+                    >
+                      {{
+                        mode === "drafts"
+                          ? deletingDraftId === item.id
+                            ? "删除中..."
+                            : "删除草稿"
+                          : deletingRecipeId === item.id
+                            ? "删除中..."
+                            : "删除"
+                      }}
+                    </text>
+                  </view>
+                </view>
               </view>
             </view>
+
+            <view v-if="showFooter" class="list-footer">{{ footerText }}</view>
           </view>
-        </view>
+        </scroll-view>
       </view>
     </view>
   </Layout>
@@ -92,15 +122,20 @@ import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
-import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
-import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
-import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
+import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
+import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
+import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useSystemInfo } from "@/composables/useSystemInfo";
+import { getRecipeViewVersion, markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 type ListMode = "recipes" | "drafts";
+type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
 
 interface DisplayItem {
 	id: UUID;
@@ -108,6 +143,7 @@ interface DisplayItem {
 	coverImageUrl: string | null;
 	meta: string;
 	updatedAt: string;
+	updatedAtText: string;
 	raw: MyRecipeSummary | RecipeDraftSummary;
 }
 
@@ -124,16 +160,81 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
-
+const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
+const loadingTips = [
+	"帮你翻翻最近做过的菜",
+	"先把常做菜端上桌",
+	"草稿本翻页中，马上就好",
+	"替你把这顿饭重新理一遍",
+	"锅里翻找中，马上出结果",
+	"灶台预热中，列表马上更新"
+];
+
 const mode = ref<ListMode>("recipes");
 const keyword = ref("");
 const loading = ref(false);
+const loadingMore = ref(false);
 const errorText = ref("");
-const items = ref<DisplayItem[]>([]);
+const cachedItems = ref<Record<ListMode, DisplayItem[]>>({
+	recipes: [],
+	drafts: []
+});
+const loadedVersions = ref<Record<ListMode, number | null>>({
+	recipes: null,
+	drafts: null
+});
+const loadedKeywords = ref<Record<ListMode, string>>({
+	recipes: "",
+	drafts: ""
+});
+const loadedPages = ref<Record<ListMode, number>>({
+	recipes: 0,
+	drafts: 0
+});
+const hasNextMap = ref<Record<ListMode, boolean>>({
+	recipes: false,
+	drafts: false
+});
+const loadSource = ref<LoadSource>("idle");
 const deletingDraftId = ref<UUID | "">("");
 const deletingRecipeId = ref<UUID | "">("");
 const keywordText = computed(() => keyword.value.trim());
+const items = computed(() => cachedItems.value[mode.value]);
+const pageBodyStyle = computed(() => ({
+	height: `calc(100vh - ${navBarTotalHeight.value}px)`
+}));
+const currentHasNext = computed(() => hasNextMap.value[mode.value]);
+const footerText = computed(() => {
+	if (loadingMore.value) return "加载更多中...";
+	return currentHasNext.value ? "上滑继续加载" : "没有更多了";
+});
+const showFooter = computed(() => items.value.length > 0 && !errorText.value);
+const inlineLoading = computed(() => loading.value && items.value.length > 0 && loadSource.value !== "refresh");
+const inlineLoadingText = computed(() => {
+	if (loadSource.value === "search") {
+		return ["搜一搜你的菜谱草稿", "帮你翻找菜谱和食材", "先帮你从草稿本里找找"];
+	}
+	return loadingTips;
+});
+const {
+	threshold: refresherThreshold,
+	pullDistance,
+	refreshing,
+	showSuccess,
+	refresherText,
+	refresherTriggered,
+	onRefresherPulling,
+	onRefresherRefresh,
+	onRefreshComplete,
+	onRefresherRestore
+} = useCustomRefresher({
+	text: {
+		pulling: "下拉刷新菜谱",
+		canRelease: loadingTips,
+		success: "刷新成功"
+	}
+});
 
 onLoad((query) => {
 	const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
@@ -147,18 +248,19 @@ onShow(() => {
 
 watch(keywordText, (nextValue, previousValue) => {
 	if (!nextValue && previousValue && sessionStore.isLoggedIn) {
-		void loadList();
+		void loadList({ force: true, source: "search" });
 	}
 });
 
 function handleLoginSuccess() {
-	void loadList();
+	void loadList({ force: true, source: "switch" });
 }
 
 function switchMode(nextMode: ListMode) {
 	if (mode.value === nextMode) return;
 	mode.value = nextMode;
-	void loadList();
+	errorText.value = "";
+	void loadList({ source: "switch" });
 }
 
 function clearKeyword() {
@@ -166,30 +268,115 @@ function clearKeyword() {
 	keyword.value = "";
 }
 
-async function loadList() {
-	if (!sessionStore.isLoggedIn || loading.value) return;
+function retryLoadList() {
+	void loadList({ force: true, source: "retry" });
+}
+
+function getManageScope(currentMode: ListMode) {
+	return currentMode === "recipes" ? "manage-recipes" as const : "manage-drafts" as const;
+}
+
+function syncModeLoadState(currentMode: ListMode) {
+	loadedVersions.value[currentMode] = getRecipeViewVersion(getManageScope(currentMode));
+	loadedKeywords.value[currentMode] = keywordText.value;
+}
+
+function shouldLoadMode(currentMode: ListMode, force = false) {
+	if (force) return true;
+	return (
+		loadedVersions.value[currentMode] !== getRecipeViewVersion(getManageScope(currentMode)) ||
+		loadedKeywords.value[currentMode] !== keywordText.value
+	);
+}
+
+async function loadList(options: { force?: boolean; source?: LoadSource } = {}) {
+	const currentMode = mode.value;
+	const source = options.source ?? "initial";
+	if (!sessionStore.isLoggedIn || loading.value || loadingMore.value || !shouldLoadMode(currentMode, options.force)) return false;
 	loading.value = true;
+	loadSource.value = source;
 	errorText.value = "";
+	let success = false;
 	try {
-		if (mode.value === "recipes") {
+		if (currentMode === "recipes") {
 			const result = await recipeApi.listMyRecipes({
 				page: 1,
-				pageSize: 50,
+				pageSize: 20,
 				keyword: keywordText.value || undefined
 			});
-			items.value = result.items.map(toRecipeItem);
+			cachedItems.value[currentMode] = result.items.map(toRecipeItem);
+			loadedPages.value[currentMode] = result.page;
+			hasNextMap.value[currentMode] = result.hasNext;
 		} else {
 			const result = await recipeApi.listDrafts({
 				page: 1,
-				pageSize: 50,
+				pageSize: 20,
 				keyword: keywordText.value || undefined
 			});
-			items.value = result.items.map(toDraftItem);
+			cachedItems.value[currentMode] = result.items.map(toDraftItem);
+			loadedPages.value[currentMode] = result.page;
+			hasNextMap.value[currentMode] = result.hasNext;
 		}
+		syncModeLoadState(currentMode);
+		success = true;
 	} catch (error) {
 		errorText.value = error instanceof Error ? error.message : "列表加载失败";
 	} finally {
 		loading.value = false;
+		loadSource.value = "idle";
+	}
+	return success;
+}
+
+async function loadMore() {
+	const currentMode = mode.value;
+	if (!sessionStore.isLoggedIn || loading.value || loadingMore.value || !hasNextMap.value[currentMode]) return;
+
+	loadingMore.value = true;
+	errorText.value = "";
+
+	try {
+		if (currentMode === "recipes") {
+			const result = await recipeApi.listMyRecipes({
+				page: loadedPages.value[currentMode] + 1,
+				pageSize: 20,
+				keyword: keywordText.value || undefined
+			});
+			cachedItems.value[currentMode] = [...cachedItems.value[currentMode], ...result.items.map(toRecipeItem)];
+			loadedPages.value[currentMode] = result.page;
+			hasNextMap.value[currentMode] = result.hasNext;
+		} else {
+			const result = await recipeApi.listDrafts({
+				page: loadedPages.value[currentMode] + 1,
+				pageSize: 20,
+				keyword: keywordText.value || undefined
+			});
+			cachedItems.value[currentMode] = [...cachedItems.value[currentMode], ...result.items.map(toDraftItem)];
+			loadedPages.value[currentMode] = result.page;
+			hasNextMap.value[currentMode] = result.hasNext;
+		}
+		syncModeLoadState(currentMode);
+	} catch (error) {
+		errorText.value = error instanceof Error ? error.message : "加载更多失败";
+	} finally {
+		loadingMore.value = false;
+	}
+}
+
+async function handleRefresherRefresh() {
+	const shouldRefresh = onRefresherRefresh();
+	if (!shouldRefresh) {
+		onRefresherRestore();
+		return;
+	}
+
+	try {
+		const success = await loadList({ force: true, source: "refresh" });
+		if (success) {
+			await onRefreshComplete();
+		}
+	} finally {
+		onRefresherRestore();
 	}
 }
 
@@ -230,7 +417,10 @@ async function removeRecipe(item: DisplayItem) {
 	deletingRecipeId.value = item.id;
 	try {
 		await recipeApi.deleteRecipe(item.id, createOperationId(), recipe.version);
-		items.value = items.value.filter(current => current.id !== item.id);
+		cachedItems.value.recipes = cachedItems.value.recipes.filter(current => current.id !== item.id);
+		markRecipeHomeDirty(["my"]);
+		markRecipeManageDirty(["recipes"]);
+		syncModeLoadState("recipes");
 		await uniPlatform.feedback.toast({ title: "菜谱已删除", icon: "success" });
 	} catch (error) {
 		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "删除失败", icon: "none" });
@@ -258,7 +448,9 @@ async function removeDraft(item: DisplayItem) {
 			operationId: createOperationId(),
 			expectedVersion: draft.version
 		});
-		items.value = items.value.filter(current => current.id !== item.id);
+		cachedItems.value.drafts = cachedItems.value.drafts.filter(current => current.id !== item.id);
+		markRecipeManageDirty(["drafts"]);
+		syncModeLoadState("drafts");
 		await uniPlatform.feedback.toast({ title: "草稿已删除", icon: "success" });
 	} catch (error) {
 		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "删除失败", icon: "none" });
@@ -294,6 +486,7 @@ function toRecipeItem(item: MyRecipeSummary): DisplayItem {
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		meta: `${item.category.name} · ${difficultyText} · ${durationText}`,
 		updatedAt: item.updatedAt,
+		updatedAtText: formatDateTime(item.updatedAt),
 		raw: item
 	};
 }
@@ -302,11 +495,33 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	return {
 		id: item.id,
 		title: item.title || "未命名草稿",
-		coverImageUrl: null,
+		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		meta: `${item.category?.name ?? "未选分类"} · 草稿版本 ${item.version}`,
 		updatedAt: item.updatedAt,
+		updatedAtText: formatDateTime(item.updatedAt),
 		raw: item
 	};
+}
+
+function formatDateTime(value: string) {
+	const trimmed = value.trim();
+	if (!trimmed) return "";
+	const normalized = trimmed.replace("T", " ").replace(/\.\d+Z?$/, "").replace(/Z$/, "").trim();
+	const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+	if (match) {
+		return `${match[1]} ${match[2]}`;
+	}
+	const parsed = new Date(trimmed);
+	if (Number.isNaN(parsed.getTime())) {
+		return normalized.slice(0, 19);
+	}
+	const year = parsed.getFullYear();
+	const month = String(parsed.getMonth() + 1).padStart(2, "0");
+	const day = String(parsed.getDate()).padStart(2, "0");
+	const hour = String(parsed.getHours()).padStart(2, "0");
+	const minute = String(parsed.getMinutes()).padStart(2, "0");
+	const second = String(parsed.getSeconds()).padStart(2, "0");
+	return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 </script>
 
@@ -390,8 +605,21 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 }
 
 .list-page {
-	min-height: 100vh;
-	padding: 10rpx var(--space-page) calc(40rpx + env(safe-area-inset-bottom));
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: 10rpx var(--space-page) 0;
+}
+
+.list-scroll {
+	flex: 1;
+	min-height: 0;
+}
+
+.list-scroll-wrap {
+	position: relative;
+	flex: 1;
+	min-height: 0;
 }
 
 .notice {
@@ -404,6 +632,15 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 
 .list {
 	margin-top: var(--space-md);
+	padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.list-footer {
+	padding: 12rpx 0 calc(12rpx + env(safe-area-inset-bottom));
+	color: var(--color-text-tertiary);
+	font-size: 22rpx;
+	line-height: 1.5;
+	text-align: center;
 }
 
 .card {

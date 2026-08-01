@@ -178,19 +178,42 @@
         </view>
       </view>
 
-		      <SheetShell v-if="showAddSheet" :visible="addSheetVisible" @close="closeAddSheet">
-          <view class="sheet__header">
-            <text class="sheet__title">添加到我的</text>
-            <text class="cookfont icon-close sheet__close" @click="closeAddSheet" />
-          </view>
-
-          <text class="sheet__note">至少选择一个。选个人分类会带着当前菜谱内容进入“我的”，选合集会固定保存当前灵感版本。</text>
-
+      <SheetShell
+        v-if="kind === 'inspiration'"
+        :visible="addSheetVisible"
+        title="添加到我的"
+        subtitle="至少选择一个。选个人分类会带着当前菜谱内容进入“我的”，选合集会固定保存当前灵感版本。"
+        @close="closeAddSheet"
+      >
           <view v-if="addSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
           <view v-else-if="addSheetError" class="panel-note panel-note--sheet" @click="loadAddOptions(true)">{{ addSheetError }}</view>
           <template v-else>
             <view class="sheet-section">
-              <text class="sheet-section__title">个人分类</text>
+              <view class="sheet-section__head">
+                <view class="sheet-section__meta">
+                  <text class="sheet-section__title">个人分类</text>
+                  <text class="sheet-section__tag">最多4字</text>
+                </view>
+                <view class="sheet-section__action" @click="toggleAddCategoryCreator">
+                  {{ showAddCategoryCreator ? "取消" : "创建" }}
+                </view>
+              </view>
+              <view v-if="showAddCategoryCreator" class="sheet-creator">
+                <input
+                  v-model="addCategoryDraftName"
+                  class="sheet-creator__input"
+                  maxlength="4"
+                  placeholder="输入分类名称"
+                  :disabled="addCategorySubmitting"
+                />
+                <button
+                  class="sheet-creator__button"
+                  :disabled="addCategorySubmitting || !addCategoryDraftName.trim()"
+                  @click="createAddCategoryTag"
+                >
+                  {{ addCategorySubmitting ? "创建中" : "确定" }}
+                </button>
+              </view>
               <view v-if="categories.length" class="chip-row">
                 <view
                   v-for="item in categories"
@@ -206,7 +229,31 @@
             </view>
 
             <view class="sheet-section">
-              <text class="sheet-section__title">合集</text>
+              <view class="sheet-section__head">
+                <view class="sheet-section__meta">
+                  <text class="sheet-section__title">合集</text>
+                  <text class="sheet-section__tag">最多6字</text>
+                </view>
+                <view class="sheet-section__action" @click="toggleAddSceneCreator">
+                  {{ showAddSceneCreator ? "取消" : "创建" }}
+                </view>
+              </view>
+              <view v-if="showAddSceneCreator" class="sheet-creator">
+                <input
+                  v-model="addSceneDraftName"
+                  class="sheet-creator__input"
+                  maxlength="6"
+                  placeholder="输入合集名称"
+                  :disabled="addSceneSubmitting"
+                />
+                <button
+                  class="sheet-creator__button"
+                  :disabled="addSceneSubmitting || !addSceneDraftName.trim()"
+                  @click="createAddSceneTag"
+                >
+                  {{ addSceneSubmitting ? "创建中" : "确定" }}
+                </button>
+              </view>
               <view v-if="scenes.length" class="chip-row">
                 <view
                   v-for="item in scenes"
@@ -221,8 +268,10 @@
               <text v-else class="sheet-section__hint">还没有合集，可先只选个人分类。</text>
             </view>
 
+          </template>
+          <template #footer>
             <view class="sheet-actions">
-              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="addSheetSubmitting" @click="resetAddSelection">重置</button>
+              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="addSheetSubmitting" @click="closeAddSheet">取消</button>
               <button
                 class="sheet-actions__button sheet-actions__button--confirm"
                 :disabled="addSheetSubmitting || !canSubmitAddSheet"
@@ -232,16 +281,15 @@
               </button>
             </view>
           </template>
-		      </SheetShell>
+      </SheetShell>
 
-		      <SheetShell v-if="showRecommendSheet" :visible="recommendSheetVisible" @close="closeRecommendSheet">
-		          <view class="sheet__header">
-		            <text class="sheet__title">投稿灵感</text>
-		            <text class="cookfont icon-close sheet__close" @click="closeRecommendSheet" />
-	          </view>
-
-	          <text class="sheet__note">选择一个建议的系统分类。审核通过后，会收录到灵感里，个人菜谱仍保留在“我的”中。</text>
-
+      <SheetShell
+        v-if="kind === 'my'"
+        :visible="recommendSheetVisible"
+        title="投稿灵感"
+        subtitle="选择一个建议的系统分类。审核通过后，会收录到灵感里，个人菜谱仍保留在“我的”中。"
+        @close="closeRecommendSheet"
+      >
 	          <view v-if="recommendSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
 	          <view v-else-if="recommendSheetError" class="panel-note panel-note--sheet" @click="loadRecommendCategories(true)">{{ recommendSheetError }}</view>
 	          <template v-else>
@@ -260,28 +308,28 @@
 	              </view>
 	              <text v-else class="sheet-section__hint">当前还没有可选的系统菜谱分类。</text>
 	            </view>
+	          </template>
+          <template #footer>
+            <view class="sheet-actions">
+              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="recommendSubmitting" @click="closeRecommendSheet">取消</button>
+              <button
+                class="sheet-actions__button sheet-actions__button--confirm"
+                :disabled="recommendSubmitting || !selectedRecommendCategoryId"
+                @click="handleRecommendRecipe"
+              >
+                {{ recommendSubmitting ? "提交中..." : "投稿" }}
+              </button>
+            </view>
+          </template>
+      </SheetShell>
 
-		            <view class="sheet-actions">
-		              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="recommendSubmitting" @click="closeRecommendSheet">取消</button>
-	              <button
-	                class="sheet-actions__button sheet-actions__button--confirm"
-	                :disabled="recommendSubmitting || !selectedRecommendCategoryId"
-	                @click="handleRecommendRecipe"
-	              >
-	                {{ recommendSubmitting ? "提交中..." : "投稿" }}
-	              </button>
-		            </view>
-		          </template>
-		      </SheetShell>
-
-		      <SheetShell v-if="showReportSheet" :visible="reportSheetVisible" @close="closeReportSheet">
-          <view class="sheet__header">
-            <text class="sheet__title">举报菜谱</text>
-            <text class="cookfont icon-close sheet__close" @click="closeReportSheet" />
-          </view>
-
-          <text class="report-sheet__note">如果这份菜谱让你觉得不合适，可以选一个最接近的原因告诉我们；选“其他”时再补充几句说明就可以。</text>
-
+      <SheetShell
+        v-if="kind === 'inspiration'"
+        :visible="reportSheetVisible"
+        title="举报菜谱"
+        subtitle="如果这份菜谱让你觉得不合适，可以选一个最接近的原因告诉我们；选“其他”时再补充几句说明就可以。"
+        @close="closeReportSheet"
+      >
           <picker :range="reportReasonOptions" range-key="label" @change="handleReasonChange">
             <view class="report-picker">
               <text class="report-picker__label">举报原因</text>
@@ -305,7 +353,7 @@
             placeholder="请填写具体说明"
           />
           <button class="danger" :disabled="submitting || !canSubmitReport" @click="handleReport">提交举报</button>
-		      </SheetShell>
+      </SheetShell>
     </template>
   </Layout>
 </template>
@@ -336,6 +384,7 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
@@ -360,8 +409,19 @@ interface ReportReasonOption {
   label: string;
 }
 
+function isSeedCoverUrl(value: string) {
+  return value.startsWith("https://example.com/recipe/") || value.startsWith("http://example.com/recipe/");
+}
+
+function resolveCoverImageUrl(value: string | null | undefined) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!trimmed || isSeedCoverUrl(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
 const pageStyle = usePageScrollStyle();
-const SHEET_ANIMATION_MS = 260;
 const DETAIL_ACTIONS_SHOW_OFFSET = 24;
 const reportReasonOptions: ReportReasonOption[] = [
   { value: "AD", label: "广告营销" },
@@ -389,11 +449,8 @@ const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
 const reportReason = ref("");
-const showReportSheet = ref(false);
 const reportSheetVisible = ref(false);
-const showAddSheet = ref(false);
 const addSheetVisible = ref(false);
-const showRecommendSheet = ref(false);
 const recommendSheetVisible = ref(false);
 const selectedReportReason = ref<ReportReasonOption["value"] | "">("");
 const addSheetLoading = ref(false);
@@ -409,6 +466,12 @@ const recommendCategories = ref<InspirationCategorySummary[]>([]);
 const selectedCategoryId = ref<UUID | "">("");
 const selectedSceneIds = ref<UUID[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
+const showAddCategoryCreator = ref(false);
+const showAddSceneCreator = ref(false);
+const addCategoryDraftName = ref("");
+const addSceneDraftName = ref("");
+const addCategorySubmitting = ref(false);
+const addSceneSubmitting = ref(false);
 const navOpacity = ref(0);
 const scrollTop = ref(0);
 const titleThreshold = ref(Number.POSITIVE_INFINITY);
@@ -417,9 +480,6 @@ const stepTop = ref(Number.POSITIVE_INFINITY);
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-detail-report-sheet"));
 
 let measureTimer: ReturnType<typeof setTimeout> | null = null;
-let reportSheetTimer: ReturnType<typeof setTimeout> | null = null;
-let addSheetTimer: ReturnType<typeof setTimeout> | null = null;
-let recommendSheetTimer: ReturnType<typeof setTimeout> | null = null;
 
 const previewDetail = computed(() => {
   if (mode.value !== "preview" || !detail.value) return null;
@@ -441,7 +501,9 @@ const myDetail = computed(() => {
 });
 
 const detailTitle = computed(() => detail.value?.title || "");
-const coverImageUrl = computed(() => previewDetail.value?.coverImageUrl || publishedDetail.value?.coverImageUrl || "");
+const coverImageUrl = computed(() =>
+  resolveCoverImageUrl(previewDetail.value?.coverImageUrl || publishedDetail.value?.coverImageUrl || "")
+);
 const navTopOffset = computed(() => `${navBarTotalHeight.value}px`);
 const heroStyle = computed(() => ({
   "--hero-header-offset": navTopOffset.value
@@ -536,9 +598,9 @@ const detailActionsVisible = computed(
   () =>
     showStickyActions.value &&
     scrollTop.value > DETAIL_ACTIONS_SHOW_OFFSET &&
-    !showAddSheet.value &&
-    !showReportSheet.value &&
-    !showRecommendSheet.value
+    !addSheetVisible.value &&
+    !reportSheetVisible.value &&
+    !recommendSheetVisible.value
 );
 const showShoppingEntry = computed(() => mode.value === "published" && detailContent.value.ingredients.length > 0);
 const canSubmitAddSheet = computed(() => Boolean(selectedCategoryId.value || selectedSceneIds.value.length));
@@ -614,7 +676,7 @@ function hasStepText(value: string | null | undefined) {
   return Boolean(value?.trim());
 }
 
-watch([showReportSheet, showAddSheet, showRecommendSheet], ([reportVisible, addVisible, recommendVisible]) => {
+watch([reportSheetVisible, addSheetVisible, recommendSheetVisible], ([reportVisible, addVisible, recommendVisible]) => {
   setPageLocked(reportVisible || addVisible || recommendVisible);
 }, { immediate: true });
 
@@ -649,18 +711,6 @@ onHide(() => {
 
 onUnload(() => {
   clearMeasureTimer();
-	if (reportSheetTimer) {
-		clearTimeout(reportSheetTimer);
-		reportSheetTimer = null;
-	}
-	if (addSheetTimer) {
-		clearTimeout(addSheetTimer);
-		addSheetTimer = null;
-	}
-	if (recommendSheetTimer) {
-		clearTimeout(recommendSheetTimer);
-		recommendSheetTimer = null;
-	}
 	if (mode.value === "preview") {
 		recipePreviewStore.clearPreview();
 	}
@@ -743,31 +793,11 @@ function openLogin(afterLogin?: () => void) {
 
 function openReportSheet() {
   if (!showReportEntry.value) return;
-  if (reportSheetTimer) {
-    clearTimeout(reportSheetTimer);
-    reportSheetTimer = null;
-  }
-  if (showReportSheet.value) {
-    reportSheetVisible.value = true;
-    return;
-  }
-  showReportSheet.value = true;
-  reportSheetVisible.value = false;
-  void nextTick(() => {
-    reportSheetVisible.value = true;
-  });
+  reportSheetVisible.value = true;
 }
 
 function closeReportSheet() {
-  if (!showReportSheet.value) return;
   reportSheetVisible.value = false;
-  if (reportSheetTimer) {
-    clearTimeout(reportSheetTimer);
-  }
-  reportSheetTimer = setTimeout(() => {
-    showReportSheet.value = false;
-    reportSheetTimer = null;
-  }, SHEET_ANIMATION_MS);
 }
 
 function handleReasonChange(event: { detail?: { value?: number | string } }) {
@@ -815,6 +845,81 @@ function resetAddSelection() {
   selectedSceneIds.value = [];
 }
 
+function resetAddCreatorState() {
+  showAddCategoryCreator.value = false;
+  showAddSceneCreator.value = false;
+  addCategoryDraftName.value = "";
+  addSceneDraftName.value = "";
+  addCategorySubmitting.value = false;
+  addSceneSubmitting.value = false;
+}
+
+function toggleAddCategoryCreator() {
+  showAddCategoryCreator.value = !showAddCategoryCreator.value;
+  if (!showAddCategoryCreator.value) {
+    addCategoryDraftName.value = "";
+  }
+}
+
+function toggleAddSceneCreator() {
+  showAddSceneCreator.value = !showAddSceneCreator.value;
+  if (!showAddSceneCreator.value) {
+    addSceneDraftName.value = "";
+  }
+}
+
+async function createAddCategoryTag() {
+  const name = addCategoryDraftName.value.trim();
+  if (!name || addCategorySubmitting.value) return;
+  if (name.length > 4) {
+    await uniPlatform.feedback.toast({ title: "分类最多4个字", icon: "none" });
+    return;
+  }
+  addCategorySubmitting.value = true;
+  try {
+    const created = await recipeApi.createCategory({
+      operationId: createOperationId(),
+      name
+    });
+    categories.value = [...categories.value, created];
+    selectedCategoryId.value = created.id;
+    markRecipeHomeDirty(["my"]);
+    addCategoryDraftName.value = "";
+    showAddCategoryCreator.value = false;
+    await uniPlatform.feedback.toast({ title: "分类已创建", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
+  } finally {
+    addCategorySubmitting.value = false;
+  }
+}
+
+async function createAddSceneTag() {
+  const name = addSceneDraftName.value.trim();
+  if (!name || addSceneSubmitting.value) return;
+  if (name.length > 6) {
+    await uniPlatform.feedback.toast({ title: "合集最多6个字", icon: "none" });
+    return;
+  }
+  addSceneSubmitting.value = true;
+  try {
+    const created = await recipeApi.createScene({
+      operationId: createOperationId(),
+      name
+    });
+    scenes.value = [...scenes.value, created];
+    selectedSceneIds.value = [...selectedSceneIds.value, created.id];
+    markRecipeHomeDirty(["collection"]);
+    addSceneDraftName.value = "";
+    showAddSceneCreator.value = false;
+    await uniPlatform.feedback.toast({ title: "合集已创建", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建合集失败", icon: "none" });
+  } finally {
+    addSceneSubmitting.value = false;
+  }
+}
+
 function openAddSheet() {
   if (!showStickyActions.value || kind.value !== "inspiration") return;
   if (!sessionStore.isLoggedIn) {
@@ -824,19 +929,8 @@ function openAddSheet() {
     return;
   }
   resetAddSelection();
-  if (addSheetTimer) {
-    clearTimeout(addSheetTimer);
-    addSheetTimer = null;
-  }
-  if (showAddSheet.value) {
-    addSheetVisible.value = true;
-  } else {
-    showAddSheet.value = true;
-    addSheetVisible.value = false;
-    void nextTick(() => {
-      addSheetVisible.value = true;
-    });
-  }
+  resetAddCreatorState();
+  addSheetVisible.value = true;
 	void loadAddOptions(true);
 }
 
@@ -873,44 +967,17 @@ function syncMyRecommendation(next: RecipeRecommendationSummary | null) {
 function openRecommendSheet() {
 	if (!myDetail.value || !canOpenRecommendSheet.value) return;
 	selectedRecommendCategoryId.value = currentRecommendation.value?.suggestedCategory.id || "";
-	if (recommendSheetTimer) {
-		clearTimeout(recommendSheetTimer);
-		recommendSheetTimer = null;
-	}
-	if (showRecommendSheet.value) {
-		recommendSheetVisible.value = true;
-	} else {
-		showRecommendSheet.value = true;
-		recommendSheetVisible.value = false;
-		void nextTick(() => {
-			recommendSheetVisible.value = true;
-		});
-	}
+	recommendSheetVisible.value = true;
 	void loadRecommendCategories(true);
 }
 
 function closeRecommendSheet() {
-	if (!showRecommendSheet.value) return;
 	recommendSheetVisible.value = false;
-	if (recommendSheetTimer) {
-		clearTimeout(recommendSheetTimer);
-	}
-	recommendSheetTimer = setTimeout(() => {
-		showRecommendSheet.value = false;
-		recommendSheetTimer = null;
-	}, SHEET_ANIMATION_MS);
 }
 
 function closeAddSheet() {
-  if (!showAddSheet.value) return;
   addSheetVisible.value = false;
-  if (addSheetTimer) {
-    clearTimeout(addSheetTimer);
-  }
-  addSheetTimer = setTimeout(() => {
-    showAddSheet.value = false;
-    addSheetTimer = null;
-	}, SHEET_ANIMATION_MS);
+  resetAddCreatorState();
 }
 
 async function handleRecommendRecipe() {
@@ -1017,6 +1084,11 @@ async function confirmAddSheet() {
         categoryId: selectedCategoryId.value,
         sceneIds
       });
+      markRecipeHomeDirty(["my"]);
+      markRecipeManageDirty(["recipes"]);
+      if (sceneIds.length) {
+        markRecipeHomeDirty(["collection"]);
+      }
       closeAddSheet();
       await uniPlatform.feedback.toast({
         title: sceneIds.length ? "已加入合集并添加到我的" : "已添加到我的",
@@ -1024,6 +1096,7 @@ async function confirmAddSheet() {
       });
       return;
     }
+    markRecipeHomeDirty(["collection"]);
     closeAddSheet();
     await uniPlatform.feedback.toast({ title: "已加入合集", icon: "success" });
   } catch (error) {
@@ -1598,44 +1671,45 @@ function limitSceneName(value: string) {
   box-sizing: border-box;
 }
 
-.sheet__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.sheet__title {
-  color: var(--color-text);
-  font-size: 38rpx;
-  font-weight: var(--font-weight-heavy);
-}
-
-.sheet__close {
-  color: var(--color-text-tertiary);
-  font-size: 36rpx;
-  line-height: 1;
-}
-
-.sheet__note {
-  display: block;
-  margin-top: 18rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.7;
-}
-
 .sheet-section {
   margin-top: 28rpx;
 }
 
-.sheet-section__title {
-  display: block;
+.sheet-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
   margin-bottom: 18rpx;
+}
+
+.sheet-section__meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.sheet-section__title {
   color: var(--color-text);
   font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.4;
+}
+
+.sheet-section__tag {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.sheet-section__action {
+  flex: 0 0 auto;
+  color: var(--color-primary);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
 }
 
 .sheet-section__hint {
@@ -1645,9 +1719,45 @@ function limitSceneName(value: string) {
   line-height: 1.6;
 }
 
+.sheet-creator {
+  display: flex;
+  gap: 14rpx;
+  margin-bottom: 18rpx;
+}
+
+.sheet-creator__input {
+  flex: 1;
+  height: 76rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  box-sizing: border-box;
+  color: var(--color-text);
+  font-size: 26rpx;
+}
+
+.sheet-creator__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 132rpx;
+  height: 76rpx;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
 .sheet-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 16rpx;
   margin-top: 22rpx;
 }
@@ -1656,8 +1766,9 @@ function limitSceneName(value: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 156rpx;
-  height: 76rpx;
+  flex: 1;
+  min-height: 88rpx;
+  height: 88rpx;
   border: 0;
   border-radius: var(--radius-pill);
   font-size: 26rpx;
@@ -1785,14 +1896,6 @@ function limitSceneName(value: string) {
 
 .detail-actions__item--disabled {
   opacity: 0.52;
-}
-
-.report-sheet__note {
-  display: block;
-  margin-top: 18rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.7;
 }
 
 .report-picker {

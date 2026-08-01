@@ -47,33 +47,25 @@
           </view>
         </view>
 
-        <SheetShell v-if="showNoticeSheet" :visible="noticeVisible" @close="closeNotice">
-          <template #default="{ close }">
-            <view class="sheet">
-              <view class="sheet__head">
-                <text class="sheet__title">勋章说明</text>
-                <text class="cookfont icon-close sheet__close" @click="close" />
-              </view>
-              <view class="sheet__body">
-                <view class="sheet__row">
-                  <text class="sheet__label">获取条件</text>
-                  <text class="sheet__value">{{ item.condition }}</text>
-                </view>
-                <view class="sheet__row">
-                  <text class="sheet__label">所属类别</text>
-                  <text class="sheet__value">{{ item.categoryName }}</text>
-                </view>
-                <view v-if="item.isLimited" class="sheet__row">
-                  <text class="sheet__label">活动时间</text>
-                  <text class="sheet__value">{{ formatMedalRange(item) }}</text>
-                </view>
-                <view class="sheet__row">
-                  <text class="sheet__label">获得时间</text>
-                  <text class="sheet__value">{{ item.earned ? formatMedalDate(item.awardedAt) : "尚未获得" }}</text>
-                </view>
-              </view>
+        <SheetShell :visible="noticeVisible" title="勋章说明" @close="closeNotice">
+          <view class="sheet__body">
+            <view class="sheet__row">
+              <text class="sheet__label">获取条件</text>
+              <text class="sheet__value">{{ item.condition }}</text>
             </view>
-          </template>
+            <view class="sheet__row">
+              <text class="sheet__label">所属类别</text>
+              <text class="sheet__value">{{ item.categoryName }}</text>
+            </view>
+            <view v-if="item.isLimited" class="sheet__row">
+              <text class="sheet__label">活动时间</text>
+              <text class="sheet__value">{{ formatMedalRange(item) }}</text>
+            </view>
+            <view class="sheet__row">
+              <text class="sheet__label">获得时间</text>
+              <text class="sheet__value">{{ item.earned ? formatMedalDate(item.awardedAt) : "尚未获得" }}</text>
+            </view>
+          </view>
         </SheetShell>
       </template>
     </template>
@@ -81,25 +73,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { medalApi, type UserMedalSummary } from "@/apis/medal";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
-import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSessionStore } from "@/stores/session";
 import { formatMedalDate, formatMedalRange, getMedalIconClass } from "@/pages_me/medal/present";
 
 const pageStyle = usePageScrollStyle();
+const { setLocked: setPageLocked } = usePageScrollLock(Symbol("medal-detail-sheet"));
 const sessionStore = useSessionStore();
 const loading = ref(false);
 const errorText = ref("");
 const medalCode = ref("");
 const item = ref<UserMedalSummary | null>(null);
-const showNoticeSheet = ref(false);
 const noticeVisible = ref(false);
-let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(
+  () => noticeVisible.value,
+  visible => {
+    setPageLocked(visible);
+  },
+  { immediate: true }
+);
 
 const footerText = computed(() => {
   if (!item.value) return "--";
@@ -113,13 +112,6 @@ onLoad(query => {
 onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadDetail();
-});
-
-onBeforeUnmount(() => {
-  if (noticeTimer) {
-    clearTimeout(noticeTimer);
-    noticeTimer = null;
-  }
 });
 
 async function loadDetail() {
@@ -149,25 +141,11 @@ async function loadDetail() {
 
 function openNotice() {
   if (!item.value) return;
-  if (noticeTimer) {
-    clearTimeout(noticeTimer);
-    noticeTimer = null;
-  }
-  showNoticeSheet.value = true;
-  setTimeout(() => {
-    noticeVisible.value = true;
-  }, 16);
+  noticeVisible.value = true;
 }
 
 function closeNotice() {
   noticeVisible.value = false;
-  if (noticeTimer) {
-    clearTimeout(noticeTimer);
-  }
-  noticeTimer = setTimeout(() => {
-    showNoticeSheet.value = false;
-    noticeTimer = null;
-  }, 260);
 }
 </script>
 
@@ -329,25 +307,7 @@ function closeNotice() {
   flex-shrink: 0;
 }
 
-.sheet__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-}
-
-.sheet__title {
-  color: var(--color-text);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet__close {
-  color: var(--color-text-secondary);
-  font-size: 34rpx;
-}
-
 .sheet__body {
-  margin-top: var(--space-md);
+  padding-top: 0;
 }
 </style>
