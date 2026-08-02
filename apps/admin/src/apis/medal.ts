@@ -1,4 +1,4 @@
-import { requestData, type IsoDateTime, type OperationId, type PageQuery, type PageResult, type UUID } from "./http";
+import { requestData, uploadForm, type IsoDateTime, type OperationId, type PageQuery, type PageResult, type UUID } from "./http";
 
 export type MedalAwardRule =
   | "MEAL_COMPLETION"
@@ -14,6 +14,7 @@ export type MedalCategory =
   | "HOLIDAY_LIMITED";
 
 export type MedalTemplateStatus = "DRAFT" | "LISTED" | "UNLISTED" | "ARCHIVED";
+export type MedalImageType = "earned" | "locked";
 
 export interface AdminMedalTemplateSummary {
   id: UUID;
@@ -25,6 +26,9 @@ export interface AdminMedalTemplateSummary {
   description: string;
   condition: string;
   iconKey: string;
+  imageUrl: string | null;
+  earnedImageUrl: string | null;
+  lockedImageUrl: string | null;
   status: MedalTemplateStatus;
   targetCount: number;
   sortOrder: number;
@@ -44,13 +48,11 @@ export interface AdminMedalTemplateQuery extends PageQuery {
 
 export interface CreateAdminMedalTemplatePayload {
   operationId: OperationId;
-  code: string;
   awardRule: MedalAwardRule;
   category: MedalCategory;
   name: string;
   description: string;
   condition: string;
-  iconKey: string;
   status?: "DRAFT" | "LISTED" | "UNLISTED";
   targetCount?: number;
   sortOrder?: number;
@@ -66,7 +68,6 @@ export interface UpdateAdminMedalTemplatePayload {
   name: string;
   description: string;
   condition: string;
-  iconKey: string;
   targetCount?: number;
   sortOrder?: number;
   isLimited: boolean;
@@ -78,6 +79,11 @@ export interface SetAdminMedalTemplateStatusPayload {
   operationId: OperationId;
   expectedVersion: number;
   status: MedalTemplateStatus;
+}
+
+export interface UpdateAdminMedalTemplateImagePayload {
+  operationId: OperationId;
+  expectedVersion: number;
 }
 
 export const medalApi = {
@@ -109,5 +115,27 @@ export const medalApi = {
       body: payload,
       idempotencyKey: operationId
     });
+  },
+  uploadImage(templateId: UUID, imageType: MedalImageType, file: File, body: UpdateAdminMedalTemplateImagePayload) {
+    const formData = new FormData();
+    formData.append("expectedVersion", String(body.expectedVersion));
+    formData.append("file", file);
+    return uploadForm<AdminMedalTemplateSummary>(
+      `/admin/medal-templates/${encodeURIComponent(String(templateId))}/image/${encodeURIComponent(imageType)}`,
+      formData,
+      {
+        idempotencyKey: body.operationId
+      }
+    );
+  },
+  clearImage(templateId: UUID, imageType: MedalImageType, body: UpdateAdminMedalTemplateImagePayload) {
+    return requestData<AdminMedalTemplateSummary>(
+      `/admin/medal-templates/${encodeURIComponent(String(templateId))}/image/${encodeURIComponent(imageType)}`,
+      {
+        method: "DELETE",
+        body: { expectedVersion: body.expectedVersion },
+        idempotencyKey: body.operationId
+      }
+    );
   }
 };
