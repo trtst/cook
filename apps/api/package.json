@@ -21,6 +21,7 @@
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",
     "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts",
     "verify:meal-pantry-flow": "tsx scripts/verify-meal-pantry-flow.ts",
+    "verify:meal-poll-flow": "tsx scripts/verify-meal-poll-flow.ts",
     "verify:openapi": "tsx scripts/verify-openapi.ts",
     "verify:recipe-flow": "tsx scripts/verify-recipe-flow.ts",
     "verify:taste-profile-flow": "tsx scripts/verify-taste-profile-flow.ts"

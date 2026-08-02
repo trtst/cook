@@ -6,16 +6,35 @@ import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AcceptShareInviteDto,
+  ClaimCookDto,
   ChooseBringRecipeDto,
   CompleteDiningEventDto,
+  ConfirmMealPollDto,
   CompleteMealPlanDto,
+  CreateDiningMemoryShareDto,
+  CreateMealPollDto,
   CreateDiningEventDto,
   CreateMealPlanDto,
+  DiningGroupActivitiesQueryDto,
   InviteDiningGroupParticipantsDto,
+  MealPollListQueryDto,
   MealPlanQueryDto,
-  RespondDiningEventDto
+  RespondDiningEventDto,
+  VoteMealPollDto
 } from "../../contracts/dtos";
-import { ApiOkModel, ApiOkPage, DiningEventModel, MealPlanModel, SharePreviewModel } from "../../contracts/openapi";
+import {
+  ApiOkArray,
+  ApiOkModel,
+  ApiOkPage,
+  DiningMemorySharePreviewModel,
+  DiningMemoryShareSnapshotModel,
+  DiningEventModel,
+  DiningGroupActivityModel,
+  MealPlanModel,
+  MealPollDetailModel,
+  MealPollModel,
+  SharePreviewModel
+} from "../../contracts/openapi";
 import { MealService } from "./meal.service";
 
 @ApiTags("meal")
@@ -30,6 +49,97 @@ export class MealController {
   listMealPlans(@Req() request: RequestWithUser, @Query() query: MealPlanQueryDto) {
     return this.mealService
       .listMealPlans(request.user.userId, query.page, query.pageSize, query.from, query.to)
+      .then(result => ok(result));
+  }
+
+  @Get("meal-polls")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkArray(MealPollModel, "读取当前饭搭子的点菜征集摘要列表")
+  listMealPolls(@Req() request: RequestWithUser, @Query() query: MealPollListQueryDto) {
+    return this.mealService
+      .listMealPolls(request.user.userId, query.diningGroupId, query.status, query.planDate, query.mealSlot, query.limit)
+      .then(result => ok(result));
+  }
+
+  @Post("meal-polls")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPollDetailModel, "发起一条饭搭子点菜征集")
+  createMealPoll(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateMealPollDto
+  ) {
+    return this.mealService
+      .createMealPoll(
+        request.user.userId,
+        operationId,
+        body.diningGroupId,
+        body.planDate,
+        body.mealSlot,
+        body.deadlineAt,
+        body.choiceLimit,
+        body.note,
+        body.candidateRecipeVersionIds
+      )
+      .then(result => ok(result));
+  }
+
+  @Get("meal-polls/:pollId")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(MealPollDetailModel, "读取点菜征集详情")
+  getMealPoll(@Req() request: RequestWithUser, @Param("pollId", ParseIntPipe) pollId: number) {
+    return this.mealService.getMealPoll(request.user.userId, pollId).then(result => ok(result));
+  }
+
+  @Post("meal-polls/:pollId/vote")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPollDetailModel, "提交或覆盖当前成员的点菜回应")
+  voteMealPoll(
+    @Req() request: RequestWithUser,
+    @Param("pollId", ParseIntPipe) pollId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: VoteMealPollDto
+  ) {
+    return this.mealService
+      .voteMealPoll(
+        request.user.userId,
+        pollId,
+        operationId,
+        body.expectedVersion,
+        body.selectedCandidateIds,
+        body.suggestionTitle,
+        body.note
+      )
+      .then(result => ok(result));
+  }
+
+  @Post("meal-polls/:pollId/confirm")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPollDetailModel, "确认最终菜单并生成或更新餐次与饭局")
+  confirmMealPoll(
+    @Req() request: RequestWithUser,
+    @Param("pollId", ParseIntPipe) pollId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ConfirmMealPollDto
+  ) {
+    return this.mealService
+      .confirmMealPoll(
+        request.user.userId,
+        pollId,
+        operationId,
+        body.expectedVersion,
+        body.finalRecipeVersionIds,
+        body.scheduledAt,
+        body.location
+      )
       .then(result => ok(result));
   }
 
@@ -86,6 +196,16 @@ export class MealController {
     return this.mealService.getDiningEvent(request.user.userId, eventId).then(result => ok(result));
   }
 
+  @Get("dining-group-activities")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkArray(DiningGroupActivityModel, "读取当前饭搭子最近轻动态")
+  listDiningGroupActivities(@Req() request: RequestWithUser, @Query() query: DiningGroupActivitiesQueryDto) {
+    return this.mealService
+      .listDiningGroupActivities(request.user.userId, query.diningGroupId, query.limit)
+      .then(result => ok(result));
+  }
+
   @Post("dining-events/:eventId/invite-group")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -134,6 +254,22 @@ export class MealController {
       .then(result => ok(result));
   }
 
+  @Post("dining-events/:eventId/cook")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "认领或释放一道菜的掌勺人")
+  claimCook(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ClaimCookDto
+  ) {
+    return this.mealService
+      .claimCook(request.user.userId, eventId, operationId, body.expectedVersion, body.menuItemId, body.action)
+      .then(result => ok(result));
+  }
+
   @Post("dining-events/:eventId/complete")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -148,10 +284,38 @@ export class MealController {
     return this.mealService.completeDiningEvent(request.user.userId, eventId, operationId).then(result => ok(result));
   }
 
+  @Post("dining-events/:eventId/memory-shares")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningMemoryShareSnapshotModel, "生成一张饭搭子卡不可变分享快照")
+  createDiningMemoryShare(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateDiningMemoryShareDto
+  ) {
+    return this.mealService
+      .createDiningMemoryShare(
+        request.user.userId,
+        eventId,
+        operationId,
+        body.showParticipants ?? true,
+        body.caption ?? null
+      )
+      .then(result => ok(result));
+  }
+
   @Get("share/:shareToken/preview")
   @ApiOkModel(SharePreviewModel, "饭局分享预览，只返回白名单字段")
   getSharePreview(@Param("shareToken") shareToken: string) {
     return this.mealService.getSharePreview(shareToken).then(result => ok(result));
+  }
+
+  @Get("memory-shares/:shareToken/preview")
+  @ApiOkModel(DiningMemorySharePreviewModel, "饭搭子卡分享预览，只返回不可变白名单快照")
+  getDiningMemorySharePreview(@Param("shareToken") shareToken: string) {
+    return this.mealService.getDiningMemorySharePreview(shareToken).then(result => ok(result));
   }
 
   @Post("share/:shareToken/accept")
