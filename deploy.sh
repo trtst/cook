@@ -20,7 +20,7 @@ Usage:
 Notes:
   - 需在服务器项目根目录执行，或直接执行 /srv/cook/deploy.sh
   - 默认会执行 git pull、pnpm install
-  - api 模式会执行 Prisma migrate deploy 并重启 cook-api
+  - api 模式会先执行 Prisma Client generate，再执行 migrate deploy 并重启 cook-api
   - admin 模式会重新构建后台并重启 nginx
 EOF
 }
@@ -36,6 +36,9 @@ run_install() {
 }
 
 deploy_api() {
+  log "prisma generate"
+  pnpm --filter @next-meal/api prisma:generate
+
   log "prisma migrate deploy"
   pnpm --filter @next-meal/api exec prisma migrate deploy
 
