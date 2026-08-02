@@ -25,11 +25,15 @@ export interface UserMedalSummary {
   code: string;
   awardRule: MedalAwardRule;
   iconKey: string;
+  imageUrl: string | null;
+  earnedImageUrl: string | null;
+  lockedImageUrl: string | null;
   category: MedalCategory;
   categoryName: string;
   name: string;
   description: string;
   condition: string;
+  earnedUserCount: number;
   earned: boolean;
   isLimited: boolean;
   startAt: IsoDateTime | null;
