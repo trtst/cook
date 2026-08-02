@@ -62,7 +62,7 @@
 
         <view v-if="eventMap[item.id]" class="event-box">
           <text class="event-box__title">饭局：{{ eventMap[item.id].title }}</text>
-          <text class="event-box__meta">{{ eventMap[item.id].scheduledAt }}</text>
+          <text class="event-box__meta">{{ formatDateTime(eventMap[item.id].scheduledAt) }}</text>
           <text class="event-box__meta">{{ eventMap[item.id].location || "未填写地点" }}</text>
           <text class="event-box__meta">
             {{ eventMap[item.id].status === "COMPLETED" ? "饭局已完成" : "饭局进行中" }}
@@ -86,7 +86,35 @@
           >
             完成饭局
           </button>
-          <text v-if="eventMap[item.id].shareTokenPath" class="event-box__meta">{{ eventMap[item.id].shareTokenPath }}</text>
+          <button
+            v-if="eventMap[item.id].completedAt"
+            class="secondary"
+            :disabled="submitting"
+            @click="openMemory(eventMap[item.id].id)"
+          >
+            查看饭搭子卡
+          </button>
+          <text v-if="eventMap[item.id].shareTokenPath" class="event-box__meta">分享预览：{{ eventMap[item.id].shareTokenPath }}</text>
+
+          <view v-if="eventMap[item.id].menuItems.length" class="menu-list">
+            <text class="menu-list__title">我来做</text>
+            <view v-for="menuItem in eventMap[item.id].menuItems" :key="menuItem.id" class="menu-row">
+              <view class="menu-row__main">
+                <text class="menu-row__name">{{ menuItem.title }}</text>
+                <text class="menu-row__meta">
+                  {{ resolveCookMeta(menuItem.cookName, menuItem.cookUserUid) }}
+                </text>
+              </view>
+              <button
+                v-if="canShowCookAction(eventMap[item.id], menuItem.cookUserUid)"
+                class="secondary menu-row__action"
+                :disabled="submitting || isCookPending(menuItem.id)"
+                @click="toggleCookClaim(item.id, eventMap[item.id], menuItem)"
+              >
+                {{ isCookPending(menuItem.id) ? "提交中" : resolveCookActionText(menuItem.cookUserUid) }}
+              </button>
+            </view>
+          </view>
 
           <view v-if="eventMap[item.id].participants.length" class="participant-list">
             <view v-for="participant in eventMap[item.id].participants" :key="participant.id" class="participant-row">
@@ -111,8 +139,8 @@
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { ref } from "vue";
-import type { UUID } from "@/apis/http";
+import { ref, watch } from "vue";
+import { ApiClientError, type UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -139,6 +167,7 @@ const planDate = ref("2026-07-23");
 const mealSlot = ref<"BREAKFAST" | "LUNCH" | "DINNER">("DINNER");
 const eventTime = ref("2026-07-23T19:00:00.000Z");
 const eventLocation = ref("家里");
+const cookOperationMap = ref<Record<string, string>>({});
 
 const mealSlots = [
   { value: "BREAKFAST" as const, label: "早餐" },
@@ -150,6 +179,15 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadPage();
 });
+
+watch(
+  () => sessionStore.isLoggedIn,
+  isLoggedIn => {
+    if (!isLoggedIn) {
+      clearPageState();
+    }
+  }
+);
 
 async function loadPage() {
   if (!sessionStore.isLoggedIn || loading.value) return;
@@ -252,6 +290,44 @@ async function completeEvent(planItemId: UUID, eventId: UUID) {
   }
 }
 
+async function toggleCookClaim(
+  planItemId: UUID,
+  event: DiningEventSummary,
+  menuItem: DiningEventSummary["menuItems"][number]
+) {
+  if (submitting.value) return;
+
+  const action = menuItem.cookUserUid === sessionStore.uid ? "RELEASE" : "CLAIM";
+  cookOperationMap.value = {
+    ...cookOperationMap.value,
+    [String(menuItem.id)]: cookOperationMap.value[String(menuItem.id)] || createOperationId()
+  };
+
+  submitting.value = true;
+  try {
+    const result = await mealApi.claimCook(event.id, {
+      operationId: cookOperationMap.value[String(menuItem.id)],
+      expectedVersion: menuItem.version,
+      menuItemId: menuItem.id,
+      action
+    });
+    eventMap.value = { ...eventMap.value, [String(planItemId)]: result };
+    await uniPlatform.feedback.toast({ title: action === "CLAIM" ? "已认领这道菜" : "已取消认领", icon: "success" });
+  } catch (error) {
+    if (error instanceof ApiClientError && error.code === 409) {
+      await loadEvent(planItemId, event.id);
+      await uniPlatform.feedback.toast({ title: "掌勺状态已更新，已为你刷新", icon: "none" });
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });
+    }
+  } finally {
+    submitting.value = false;
+    cookOperationMap.value = Object.fromEntries(
+      Object.entries(cookOperationMap.value).filter(([key]) => key !== String(menuItem.id))
+    );
+  }
+}
+
 async function completePlan(planItemId: UUID) {
   if (submitting.value) return;
   submitting.value = true;
@@ -275,6 +351,38 @@ function slotText(slot: "BREAKFAST" | "LUNCH" | "DINNER") {
 function formatDateTime(value: string | null) {
   if (!value) return "--";
   return value.replace("T", " ").slice(0, 16);
+}
+
+function resolveCookMeta(cookName: string | null, cookUserUid: number | null) {
+  if (cookUserUid === sessionStore.uid) return "我来做";
+  if (cookName) return `${cookName} 已认领`;
+  if (cookUserUid) return `UID ${cookUserUid} 已认领`;
+  return "待认领";
+}
+
+function canShowCookAction(event: DiningEventSummary, cookUserUid: number | null) {
+  if (event.status === "COMPLETED") return false;
+  return cookUserUid === null || cookUserUid === sessionStore.uid;
+}
+
+function resolveCookActionText(cookUserUid: number | null) {
+  return cookUserUid === sessionStore.uid ? "取消认领" : "我来做";
+}
+
+function isCookPending(menuItemId: UUID) {
+  return Boolean(cookOperationMap.value[String(menuItemId)]);
+}
+
+function openMemory(eventId: UUID) {
+  void uniPlatform.navigation.navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(eventId))}`);
+}
+
+function clearPageState() {
+  recipes.value = [];
+  plans.value = [];
+  eventMap.value = {};
+  errorText.value = "";
+  cookOperationMap.value = {};
 }
 </script>
 
@@ -401,6 +509,56 @@ function formatDateTime(value: string | null) {
   padding: var(--space-md);
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
+}
+
+.menu-list {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1rpx solid var(--color-border-light);
+}
+
+.menu-list__title,
+.menu-row__name,
+.menu-row__meta {
+  display: block;
+}
+
+.menu-list__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  padding: 16rpx 18rpx;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.menu-row__main {
+  min-width: 0;
+}
+
+.menu-row__name {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.menu-row__meta {
+  margin-top: 6rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.menu-row__action {
+  flex-shrink: 0;
+  margin-top: 0;
 }
 
 .participant-list {

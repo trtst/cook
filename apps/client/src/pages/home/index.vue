@@ -39,6 +39,11 @@
       </view>
 
       <view class="table-content">
+        <view v-if="sessionStore.isLoggedIn && loadErrorText" class="home-notice" @click="loadHome(true)">
+          <text class="home-notice__text">{{ loadErrorText }}</text>
+          <text class="home-notice__action">重试</text>
+        </view>
+
         <view class="feature-board">
           <view class="feature-card feature-card--main" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_meal/plan/index')">
             <view class="feature-card__copy">
@@ -87,50 +92,90 @@
           </view>
         </view>
 
-        <view v-if="hasMealPlan" class="decision-card" hover-class="decision-card--hover" hover-stay-time="100" @click="navigateTo('/pages_meal/plan/index')">
+        <view
+          v-if="activePoll"
+          class="decision-card"
+          hover-class="decision-card--hover"
+          hover-stay-time="100"
+          @click="navigateTo(`/pages_meal/poll/index?pollId=${encodeURIComponent(String(activePoll.id))}`)"
+        >
           <view class="decision-card__header">
             <view>
-              <text class="decision-card__label">饭局安排</text>
-              <text class="decision-card__title">先把今晚定下来</text>
+              <text class="decision-card__label">当前征集</text>
+              <text class="decision-card__title">{{ activePoll.title }}</text>
             </view>
             <view class="decision-card__badge">
-              <text class="decision-card__badge-text">征集中</text>
+              <text class="decision-card__badge-text">{{ pollStatusText }}</text>
             </view>
           </view>
 
-          <view class="candidate-list">
-            <view v-for="item in mealCandidates" :key="item.name" class="candidate-item">
-              <view class="candidate-item__rank">
-                <text class="candidate-item__rank-text">{{ item.rank }}</text>
-              </view>
-              <view class="candidate-item__main">
-                <text class="candidate-item__name">{{ item.name }}</text>
-                <text class="candidate-item__meta">{{ item.meta }}</text>
-              </view>
-              <text class="candidate-item__votes">{{ item.votes }}</text>
+          <view class="decision-summary">
+            <view class="decision-summary__item">
+              <text class="decision-summary__label">餐次</text>
+              <text class="decision-summary__value">{{ formatMealSlot(activePoll.mealSlot) }}</text>
+            </view>
+            <view class="decision-summary__item">
+              <text class="decision-summary__label">候选菜</text>
+              <text class="decision-summary__value">{{ activePoll.candidateCount }} 道</text>
+            </view>
+            <view class="decision-summary__item">
+              <text class="decision-summary__label">已回应</text>
+              <text class="decision-summary__value">{{ activePoll.responseCount }} 人</text>
             </view>
           </view>
 
           <view class="decision-progress">
             <view class="decision-progress__track">
-              <view class="decision-progress__value" />
+              <view class="decision-progress__value" :style="{ width: progressWidth }" />
             </view>
-            <text class="decision-progress__text">待表态</text>
+            <text class="decision-progress__text">{{ progressText }}</text>
           </view>
 
           <view class="decision-card__footer">
-            <text class="decision-card__hint">确认后继续看缺什么</text>
-            <text class="decision-card__action">去确认</text>
+            <text class="decision-card__hint">{{ activePoll.note || "大家先投票，主理人再确认最终菜单。" }}</text>
+            <text class="decision-card__action">查看征集</text>
           </view>
         </view>
 
         <view class="table-section">
           <view class="section-heading">
             <text class="section-heading__title">饭局动静</text>
-            <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">全部</text>
+            <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">去征集</text>
           </view>
           <view class="family-feed">
-            <Empty title="暂无饭局动静" description="有新的点菜、饭局或购物变化时会显示在这里。" />
+            <Empty
+              v-if="!sessionStore.isLoggedIn"
+              title="登录后看饭局动静"
+              description="点菜征集、菜单确认和谁来做都会显示在这里。"
+            />
+            <Empty
+              v-else-if="homeLoading && !activityItems.length"
+              title="正在同步饭局动静"
+              description="稍等一下，最近 3 到 5 条轻动态会出现在这里。"
+            />
+            <Empty
+              v-else-if="!activityItems.length"
+              title="暂无饭局动静"
+              description="有新的点菜、确认菜单或分工更新时会显示在这里。"
+            />
+            <view
+              v-for="item in activityItems"
+              v-else
+              :key="item.id"
+              class="feed-item"
+              hover-class="feed-item--hover"
+              hover-stay-time="100"
+              @click="handleActivityClick(item)"
+            >
+              <view class="feed-item__avatar" :class="resolveActivityTone(item.kind)">
+                <text class="feed-item__avatar-text">{{ resolveActivityTag(item.kind) }}</text>
+              </view>
+              <view class="feed-item__content">
+                <text class="feed-item__title">{{ item.title }}</text>
+                <text class="feed-item__description">{{ resolveActivityFallback(item.kind) }}</text>
+              </view>
+              <text class="feed-item__time">{{ formatShortTime(item.createdAt) }}</text>
+            </view>
           </view>
         </view>
 
@@ -161,16 +206,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import { computed, ref, watch } from "vue";
 import askIcon from "@/assets/home-actions/ask.svg";
 import gapIcon from "@/assets/home-actions/gap.svg";
 import randomIcon from "@/assets/home-actions/random.svg";
 import wishIcon from "@/assets/home-actions/wish.svg";
+import { pollApi, type DiningGroupActivityKind, type DiningGroupActivitySummary, type MealPollSummary } from "@/apis/poll";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { useTheme } from "@/composables/useTheme";
 import { APP_NAME } from "@/config";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
@@ -184,6 +230,12 @@ const { navBarTotalHeight } = useSystemInfo();
 const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const homeLoading = ref(false);
+const loadErrorText = ref("");
+const pollItems = ref<MealPollSummary[]>([]);
+const activityItems = ref<DiningGroupActivitySummary[]>([]);
+let homeLoadPromise: Promise<void> | null = null;
+let homeLoadSeq = 0;
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
@@ -203,16 +255,33 @@ const memberCountText = computed(() => {
   return `${count} 人参与关系`;
 });
 const memberCountValue = computed(() => diningGroupStore.currentDiningGroup?.memberCount ?? "--");
-const hasMealPlan = false;
-const mealCandidates: Array<{ rank: string; name: string; meta: string; votes: string }> = [];
+const activePoll = computed(() => pollItems.value[0] ?? null);
+const progressWidth = computed(() => {
+  const memberCount = diningGroupStore.currentDiningGroup?.memberCount ?? 0;
+  if (!activePoll.value || memberCount <= 0) return "0%";
+  return `${Math.min(100, Math.round((activePoll.value.responseCount / memberCount) * 100))}%`;
+});
+const progressText = computed(() => {
+  if (!activePoll.value) return "暂无征集";
+  const memberCount = diningGroupStore.currentDiningGroup?.memberCount ?? 0;
+  if (memberCount <= 0) return `${activePoll.value.responseCount} 人已回应`;
+  return `${activePoll.value.responseCount}/${memberCount} 人已回应`;
+});
+const pollStatusText = computed(() => {
+  if (!activePoll.value) return "";
+  if (activePoll.value.status === "CONFIRMED") return "已确认";
+  if (activePoll.value.status === "COMPLETED") return "已完成";
+  if (activePoll.value.status === "CLOSED") return "已截止";
+  return "征集中";
+});
 
 const heroTitle = computed(() => {
   if (!sessionStore.isLoggedIn) return `${APP_NAME}从这里开始`;
-  return hasMealPlan ? "饭局待确认" : "今晚谁来定菜？";
+  return activePoll.value ? "这一顿大家一起定" : "今晚谁来定菜？";
 });
 const heroDescription = computed(() =>
-  hasMealPlan
-    ? "有待确认的饭局安排。"
+  activePoll.value
+    ? `${formatMealSlot(activePoll.value.mealSlot)} · ${formatShortTime(activePoll.value.deadlineAt)} 截止`
     : sessionStore.isLoggedIn
       ? "还没安排饭局，先记想吃或发起点菜。"
       : "登录后同步你的饭搭子关系、计划、购物清单和食材。"
@@ -248,6 +317,180 @@ const quickActions = [
     className: "quick-action--soft"
   }
 ];
+
+onShow(() => {
+  void loadHome();
+});
+
+watch(
+  () => sessionStore.isLoggedIn,
+  isLoggedIn => {
+    if (!isLoggedIn) clearHomeState();
+  }
+);
+
+watch(
+  () => diningGroupStore.currentDiningGroupId,
+  (nextId, prevId) => {
+    if (nextId === prevId) return;
+    clearHomeState();
+    if (sessionStore.isLoggedIn && nextId) {
+      void loadHome();
+    }
+  }
+);
+
+async function loadHome(force = false) {
+  if (!sessionStore.isLoggedIn) {
+    clearHomeState();
+    return;
+  }
+
+  if (!diningGroupStore.currentDiningGroupId || force) {
+    try {
+      await diningGroupStore.refreshCurrent();
+    } catch (error) {
+      loadErrorText.value = error instanceof Error ? error.message : "饭搭子加载失败";
+    }
+  }
+
+  const diningGroupId = diningGroupStore.currentDiningGroupId;
+  if (!diningGroupId) {
+    clearHomeState();
+    return;
+  }
+
+  if (homeLoadPromise) {
+    await homeLoadPromise;
+    return;
+  }
+
+  const seq = ++homeLoadSeq;
+  homeLoading.value = true;
+  loadErrorText.value = "";
+  homeLoadPromise = Promise.allSettled([
+    pollApi.list({ diningGroupId, status: "OPEN", limit: 3 }),
+    pollApi.listActivities({ diningGroupId, limit: 5 })
+  ])
+    .then(([pollResult, activityResult]) => {
+      if (seq !== homeLoadSeq || diningGroupStore.currentDiningGroupId !== diningGroupId) return;
+
+      if (pollResult.status === "fulfilled") {
+        pollItems.value = pollResult.value;
+      } else {
+        pollItems.value = [];
+        loadErrorText.value = pollResult.reason instanceof Error ? pollResult.reason.message : "征集加载失败";
+      }
+
+      if (activityResult.status === "fulfilled") {
+        activityItems.value = activityResult.value;
+      } else {
+        activityItems.value = [];
+        loadErrorText.value ||= activityResult.reason instanceof Error ? activityResult.reason.message : "动态加载失败";
+      }
+    })
+    .finally(() => {
+      if (seq === homeLoadSeq) homeLoading.value = false;
+      homeLoadPromise = null;
+    });
+
+  await homeLoadPromise;
+}
+
+function clearHomeState() {
+  pollItems.value = [];
+  activityItems.value = [];
+  homeLoading.value = false;
+  loadErrorText.value = "";
+}
+
+function formatMealSlot(slot: MealPollSummary["mealSlot"]) {
+  if (slot === "BREAKFAST") return "早餐";
+  if (slot === "LUNCH") return "午餐";
+  return "晚餐";
+}
+
+function formatShortTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${month}-${day} ${hours}:${minutes}`;
+}
+
+function resolveActivityTone(kind: DiningGroupActivityKind) {
+  if (kind === "MENU_CONFIRMED" || kind === "MEAL_COMPLETED" || kind === "MEMORY_CREATED") return "feed-item__avatar--rose";
+  if (kind === "COOK_CLAIMED" || kind === "BRING_UPDATED" || kind === "MEMBER_JOINED") return "feed-item__avatar--green";
+  return "feed-item__avatar--blue";
+}
+
+function resolveActivityTag(kind: DiningGroupActivityKind) {
+  if (kind === "MENU_CONFIRMED") return "定";
+  if (kind === "COOK_CLAIMED") return "做";
+  if (kind === "BRING_UPDATED") return "带";
+  if (kind === "MEAL_COMPLETED") return "饭";
+  if (kind === "MEMORY_CREATED") return "卡";
+  if (kind === "MEMBER_JOINED" || kind === "INVITE_PENDING") return "人";
+  return "投";
+}
+
+function resolveActivityFallback(kind: DiningGroupActivityKind) {
+  if (kind === "POLL_OPENED") return "有人发起了新的点菜征集。";
+  if (kind === "POLL_VOTED") return "有人已经选好了想吃的菜。";
+  if (kind === "POLL_SUGGESTED") return "有人补充了一道候选菜。";
+  if (kind === "POLL_NOTED") return "有人留下了这顿饭的备注。";
+  if (kind === "MENU_CONFIRMED") return "这一顿的最终菜单已经定下来了。";
+  if (kind === "COOK_CLAIMED") return "有人认领了这道菜的掌勺。";
+  if (kind === "BRING_UPDATED") return "有人更新了自己要带的菜。";
+  if (kind === "MEAL_COMPLETED") return "这一顿已经吃完，可以留下一张饭搭子卡。";
+  if (kind === "MEMORY_CREATED") return "有人生成了一张新的饭搭子卡。";
+  if (kind === "MEMBER_JOINED") return "新的饭搭子已经加入。";
+  return "有成员正在等待加入。";
+}
+
+function handleActivityClick(item: DiningGroupActivitySummary) {
+  if (item.kind === "MEMORY_CREATED") {
+    if (item.detail?.startsWith("/pages_share/memory/index?token=")) {
+      navigateTo(item.detail);
+      return;
+    }
+
+    if (item.diningEventId) {
+      navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(item.diningEventId))}`);
+      return;
+    }
+  }
+
+  if (item.kind === "MENU_CONFIRMED" && item.pollId) {
+    navigateTo(`/pages_meal/result/index?pollId=${encodeURIComponent(String(item.pollId))}`);
+    return;
+  }
+
+  if (item.kind === "MEAL_COMPLETED" && item.diningEventId) {
+    navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(item.diningEventId))}`);
+    return;
+  }
+
+  if (item.pollId) {
+    navigateTo(`/pages_meal/poll/index?pollId=${encodeURIComponent(String(item.pollId))}`);
+    return;
+  }
+
+  if (item.planItemId) {
+    navigateTo("/pages_meal/plan/index");
+    return;
+  }
+
+  if (item.diningEventId) {
+    navigateTo("/pages_meal/plan/index");
+    return;
+  }
+
+  navigateTo("/pages_restaurant/members/index");
+}
 
 function navigateTo(url: string) {
   void uniPlatform.navigation.navigateTo(url);
@@ -670,6 +913,27 @@ function navigateTo(url: string) {
   font-weight: var(--font-weight-heavy);
   line-height: var(--line-height-tight);
   text-align: center;
+}
+
+.home-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+  padding: 22rpx 24rpx;
+  border-radius: var(--radius-card);
+  background: rgba(255, 243, 219, 0.96);
+  color: #8b4d12;
+}
+
+.home-notice__text,
+.home-notice__action {
+  display: block;
+  font-size: var(--font-size-sm);
+}
+
+.home-notice__action {
+  font-weight: var(--font-weight-heavy);
 }
 
 .decision-card,

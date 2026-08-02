@@ -19,6 +19,8 @@ export interface MealPlanSummary {
 export interface DiningEventParticipantSummary {
   id: UUID;
   userUid: number | null;
+  displayName: string | null;
+  avatarUrl: string | null;
   guestName: string | null;
   sourceType: "DINING_GROUP" | "SHARE";
   status: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED";
@@ -32,12 +34,25 @@ export interface DiningEventSummary {
   scheduledAt: IsoDateTime;
   location: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  organizerUid: number | null;
+  organizerName: string | null;
+  organizerAvatarUrl: string | null;
   planItemId: UUID | null;
   diningGroupId: UUID | null;
   menu: RecipeContentSnapshot;
+  menuItems: Array<{
+    id: UUID;
+    recipeId: UUID | null;
+    recipeVersionId: UUID;
+    title: string;
+    cookUserUid: number | null;
+    cookName: string | null;
+    version: number;
+  }>;
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
+  version: number;
   createdAt: IsoDateTime;
 }
 
@@ -60,6 +75,13 @@ export interface CreateDiningEventRequest {
   operationId: OperationId;
   scheduledAt: string;
   location?: string | null;
+}
+
+export interface ClaimCookRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  menuItemId: UUID;
+  action: "CLAIM" | "RELEASE";
 }
 
 export const mealApi = {
@@ -106,6 +128,12 @@ export const mealApi = {
       { recipeId },
       { idempotencyKey: operationId }
     );
+  },
+  claimCook(eventId: UUID, body: ClaimCookRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/cook`, payload, {
+      idempotencyKey: operationId
+    });
   },
   completeDiningEvent(eventId: UUID, operationId: OperationId) {
     return post<DiningEventSummary>(
