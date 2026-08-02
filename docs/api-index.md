@@ -39,6 +39,8 @@
 | AdminMedal | POST | `/admin/medal-templates` | 后台新增勋章模板 |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/status` | 后台切换勋章模板状态 |
+| AdminMedal | POST | `/admin/medal-templates/{templateId}/image/{imageType}` | 后台上传或替换勋章图片，`imageType=earned/locked`，当前支持 `JPG/PNG/WEBP/SVG` |
+| AdminMedal | DELETE | `/admin/medal-templates/{templateId}/image/{imageType}` | 后台清空勋章图片，`imageType=earned/locked` |
 | AdminUser | GET | `/admin/users` | 用户查询 |
 | AdminUser | POST | `/admin/users` | 新增用户 |
 | AdminUser | PUT | `/admin/users/{userId}` | 更新用户昵称或手机号 |
@@ -115,14 +117,23 @@
 | Unit | POST | `/units` | 新建个人单位 |
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
+| MealPoll | GET | `/meal-polls` | 查询当前饭搭子的点菜征集摘要列表 |
+| MealPoll | POST | `/meal-polls` | 发起点菜征集 |
+| MealPoll | GET | `/meal-polls/{pollId}` | 点菜征集详情与结果汇总 |
+| MealPoll | POST | `/meal-polls/{pollId}/vote` | 当前成员提交或覆盖自己的征集回应 |
+| MealPoll | POST | `/meal-polls/{pollId}/confirm` | 关闭征集并确认最终菜单 |
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
+| DiningGroupActivity | GET | `/dining-group-activities` | 查询当前饭搭子最近轻动态 |
 | DiningEvent | GET | `/dining-events/{eventId}` | 饭局详情 |
+| DiningEvent | POST | `/dining-events/{eventId}/cook` | 对已确认菜单执行“我来做”认领或释放 |
+| DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张不可变饭搭子卡快照 |
 | DiningEvent | POST | `/dining-events/{eventId}/invite-group` | 邀请饭搭子成员 |
 | DiningEvent | POST | `/dining-events/{eventId}/respond` | 回应饭局 |
 | DiningEvent | POST | `/dining-events/{eventId}/bring` | 选择带菜 |
 | DiningEvent | POST | `/dining-events/{eventId}/complete` | 完成一场饭局 |
 | Share | GET | `/share/{shareToken}/preview` | 饭局分享预览 |
 | Share | POST | `/share/{shareToken}/accept` | 以临时参与人接受分享 |
+| Share | GET | `/memory-shares/{shareToken}/preview` | 读取公开饭搭子卡快照 |
 | Fridge | GET/POST | `/fridge-items` | 查询或创建个人冰箱条目 |
 | Fridge | PUT | `/fridge-items/{itemId}` | 更新个人冰箱条目 |
 | Fridge | POST | `/fridge-items/consume` | 消耗个人冰箱条目 |

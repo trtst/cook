@@ -12,6 +12,8 @@ import { DisplayService } from "./display.service";
 import { MedalService } from "./medal.service";
 import { TasteProfileService } from "./taste-profile.service";
 
+type AssetRequest = { protocol?: string; get?: (name: string) => string | undefined };
+
 @ApiTags("users")
 @Controller("users")
 @UseGuards(UserAuthGuard)
@@ -45,8 +47,8 @@ export class UserController {
 
   @Get("me/medals")
   @ApiOkModel(MedalWallModel, "当前用户的勋章墙摘要")
-  getCurrentMedals(@Req() request: RequestWithUser) {
-    return this.medalService.getCurrent(request.user.userId).then(result => ok(result));
+  getCurrentMedals(@Req() request: RequestWithUser & AssetRequest) {
+    return this.medalService.getCurrent(request, request.user.userId).then(result => ok(result));
   }
 
   @Get("me/taste-profile")

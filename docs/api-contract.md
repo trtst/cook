@@ -298,7 +298,7 @@ interface ChangeCurrentPasswordResult {
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 
-`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / category / categoryName / name / description / condition / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。
+`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
 ### 本人饭搭子关系
 
@@ -515,9 +515,11 @@ GET  /admin/medal-templates
 POST /admin/medal-templates
 PUT  /admin/medal-templates/{templateId}
 POST /admin/medal-templates/{templateId}/status
+POST /admin/medal-templates/{templateId}/image/{imageType}
+DELETE /admin/medal-templates/{templateId}/image/{imageType}
 ```
 
-这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
+这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 负责单独治理勋章图片，其中 `imageType` 仅允许 `earned / locked`。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
 
 后台系统食材治理本轮新增：
 
@@ -600,8 +602,17 @@ GET  /users/me/medals
 GET  /meal-plans
 POST /meal-plans
 POST /meal-plans/{planItemId}/complete
+GET  /meal-polls
+POST /meal-polls
+GET  /meal-polls/{pollId}
+POST /meal-polls/{pollId}/vote
+POST /meal-polls/{pollId}/confirm
+POST /dining-events/{eventId}/memory-shares
+GET  /memory-shares/{shareToken}/preview
 POST /meal-plans/{planItemId}/dining-event
+GET  /dining-group-activities
 GET  /dining-events/{eventId}
+POST /dining-events/{eventId}/cook
 POST /dining-events/{eventId}/invite-group
 POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
@@ -615,17 +626,33 @@ POST /dining-events/{eventId}/shopping-gap
 
 ```ts
 type MealPlanStatus = "PLANNED" | "COMPLETED";
+type MealSlot = "BREAKFAST" | "LUNCH" | "DINNER";
+type MealPollStatus = "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
+type MealPollCandidateStatus = "ACTIVE" | "PENDING" | "REJECTED";
+type ActivityState = "PENDING" | "DONE" | "EXPIRED";
 type MedalAwardRule =
   | "MEAL_COMPLETION"
   | "DINING_EVENT_COMPLETION"
   | "GROUP_MEAL_COMPLETION"
   | "FULL_LOOP_COMPLETION"
   | "RECOMMENDATION_ADOPTED_TOTAL";
+type DiningGroupActivityKind =
+  | "POLL_OPENED"
+  | "POLL_VOTED"
+  | "POLL_SUGGESTED"
+  | "POLL_NOTED"
+  | "MENU_CONFIRMED"
+  | "COOK_CLAIMED"
+  | "BRING_UPDATED"
+  | "MEAL_COMPLETED"
+  | "MEMORY_CREATED"
+  | "MEMBER_JOINED"
+  | "INVITE_PENDING";
 
 interface MealPlanSummary {
   id: UUID;
   planDate: string;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot: MealSlot;
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
@@ -646,6 +673,74 @@ interface DiningEventParticipantSummary {
   bringRecipeTitle: string | null;
 }
 
+interface MealPollSummary {
+  id: UUID;
+  diningGroupId: UUID;
+  title: string;
+  planDate: string;
+  mealSlot: MealSlot;
+  status: MealPollStatus;
+  deadlineAt: IsoDateTime;
+  choiceLimit: number;
+  note: string | null;
+  candidateCount: number;
+  responseCount: number;
+  confirmedPlanItemId: UUID | null;
+  confirmedDiningEventId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+}
+
+interface MealPollCandidateSummary {
+  id: UUID;
+  recipeId: UUID | null;
+  recipeVersionId: UUID | null;
+  title: string;
+  coverUrl: string | null;
+  status: MealPollCandidateStatus;
+  sourceType: "RECIPE" | "SUGGESTION";
+  suggestedByUid: number | null;
+  voteCount: number;
+}
+
+interface MealPollResponseSummary {
+  id: UUID;
+  userUid: number;
+  selectedCandidateIds: UUID[];
+  suggestionCandidateId: UUID | null;
+  note: string | null;
+  respondedAt: IsoDateTime;
+}
+
+interface MealPollDetail extends MealPollSummary {
+  candidates: MealPollCandidateSummary[];
+  responses: MealPollResponseSummary[];
+}
+
+interface DiningGroupActivitySummary {
+  id: UUID;
+  diningGroupId: UUID;
+  kind: DiningGroupActivityKind;
+  state: ActivityState;
+  actorUid: number | null;
+  actorName: string | null;
+  title: string;
+  detail: string | null;
+  pollId: UUID | null;
+  planItemId: UUID | null;
+  diningEventId: UUID | null;
+  createdAt: IsoDateTime;
+}
+
+interface DiningEventMenuItemSummary {
+  id: UUID;
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  title: string;
+  cookUserUid: number | null;
+  cookName: string | null;
+}
+
 interface DiningEventSummary {
   id: UUID;
   title: string;
@@ -655,6 +750,7 @@ interface DiningEventSummary {
   planItemId: UUID | null;
   diningGroupId: UUID | null;
   menu: RecipeContentSnapshot;
+  menuItems: DiningEventMenuItemSummary[];
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
@@ -666,6 +762,7 @@ interface UserMedalSummary {
   name: string;
   description: string;
   condition: string;
+  earnedUserCount: number;
   earned: boolean;
   awardedAt: IsoDateTime | null;
 }
@@ -679,7 +776,82 @@ interface MedalWallResponse {
 
 `POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但已经完成的餐次不允许再被覆盖。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。
 
-`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
+`GET /meal-polls` 返回当前饭搭子下的征集摘要列表，当前只支持按 `diningGroupId / status / planDate / mealSlot / limit` 过滤；首页和征集入口只读取摘要，不返回成员逐条回应。`POST /meal-polls` 用于由 `OWNER / ADMIN` 发起一条新的点菜征集，请求体只接收：
+
+```ts
+interface CreateMealPollRequest {
+  diningGroupId: UUID;
+  planDate: string;
+  mealSlot: MealSlot;
+  deadlineAt: IsoDateTime;
+  choiceLimit: number;
+  note: string | null;
+  candidateRecipeVersionIds: UUID[];
+}
+```
+
+当前每个饭搭子同一 `planDate + mealSlot` 只允许一条有效征集；`choiceLimit` 当前固定 `1~3` 且在创建时实例冻结；候选菜必须解析到固定 `recipeVersionId`，不能直接提交自由文本菜名。
+
+`GET /meal-polls/{pollId}` 返回 `MealPollDetail`。`POST /meal-polls/{pollId}/vote` 由当前成员提交或覆盖自己的一份回应，请求体只接收：
+
+```ts
+interface VoteMealPollRequest {
+  expectedVersion: number;
+  selectedCandidateIds: UUID[];
+  suggestionTitle: string | null;
+  note: string | null;
+}
+```
+
+同一成员对同一征集只有一份有效回应；重复提交覆盖自己的旧回应；`suggestionTitle` 只是建议菜名，不直接进入最终菜单；截止后提交返回明确失败，不静默丢弃。
+
+`POST /meal-polls/{pollId}/confirm` 由 `OWNER / ADMIN` 关闭征集、汇总回应并确认最终菜单，请求体只接收：
+
+```ts
+interface ConfirmMealPollRequest {
+  expectedVersion: number;
+  finalRecipeVersionIds: UUID[];
+  scheduledAt: IsoDateTime | null;
+  location: string | null;
+}
+```
+
+该接口必须在同一事务内完成“关闭征集 -> 汇总回应 -> 生成或更新当前餐次的 `MealPlanItem` -> 生成或更新对应 `DiningEvent`”。最终菜单中的每一项都必须能落到固定 `recipeVersionId`；未匹配的自由文本建议必须在确认前被显式忽略或映射到真实菜谱版本，不得混入最终菜单。
+
+`GET /dining-group-activities` 返回当前饭搭子最近 `3~5` 条轻动态，只服务首页卡片，不提供完整历史翻页。动态是结构化事项摘要，不是聊天消息；不得返回冰箱、购物、过敏、忌口、内部备注或未采用候选菜等隐私字段。
+
+`POST /dining-events/{eventId}/cook` 用于对已确认菜单中的单道菜执行“我来做”认领或释放，请求体只接收：
+
+```ts
+interface ClaimCookRequest {
+  expectedVersion: number;
+  menuItemId: UUID;
+  action: "CLAIM" | "RELEASE";
+}
+```
+
+`menuItemId` 必须属于该饭局当前已确认菜单；`CLAIM` 表示当前操作者认领该菜；`RELEASE` 只能释放自己已认领的菜，或由发起人按后续权限规则释放。同一道菜同一时刻只有一位有效认领人；并发冲突返回 `409`。该接口只改写菜级责任人，不改写个人购物、冰箱或菜谱所有权。
+
+`POST /dining-events/{eventId}/bring` 继续用于“我带菜”，不新增并行写路径。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
+
+`POST /dining-events/{eventId}/memory-shares` 用于在已完成饭局上生成一张不可变饭搭子卡快照。当前只允许饭局发起人调用，请求体只接收：
+
+```ts
+interface CreateDiningMemoryShareRequest {
+  showParticipants: boolean;
+  caption: string | null;
+}
+```
+
+该接口必须满足：
+
+1. 饭局必须已经 `COMPLETED`，且已经冻结最终菜单。
+2. 只允许当前饭局发起人生成，不给其他参与成员开放代生成路径。
+3. `showParticipants=false` 时公开快照不得返回任何成员摘要。
+4. 每次生成都会固化为新的 `snapshotVersion`，后续饭局改动不会回写到历史快照。
+5. 快照只允许包含 `title / planDate / mealSlot / menuItems(title, coverUrl, cookName) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。
+
+`GET /memory-shares/{shareToken}/preview` 是饭搭子卡的公开读取路径，无需登录，只返回上述不可变白名单快照；不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
 
 `GET /users/me/medals` 当前按模板返回可见勋章，不再写死在接口层。服务端当前只根据真实完成事实和真实审核收录事实自动点亮，包括：
 
@@ -689,7 +861,7 @@ interface MedalWallResponse {
 - `FULL_LOOP_COMPLETION`：完成饭局、事件采购已买、最终完成用餐的完整闭环累计达到模板阈值。
 - `RECOMMENDATION_ADOPTED_TOTAL`：推荐收录累计达到模板阈值，当前只统计菜谱推荐审核通过和食材推荐审核通过或归并。
 
-当前勋章接口不返回任务进度、差几次、会员加成、排行榜、分享奖励或后台发放状态。勋章只能由服务端在完成餐次、完成饭局或后台审核通过推荐事务里派生；客户端不得提交任何“点亮勋章”字段。
+当前勋章接口不返回任务进度、差几次、会员加成、排行榜、分享奖励或后台发放状态。勋章图片改为后台独立上传，后台可分别维护 `earnedImageUrl / lockedImageUrl` 两张图；用户侧优先按获得状态读取对应图片，没有对应图片时才回退到另一张图，再回退到现有 `iconKey` 展示。公开资源接口会按原始文件类型返回 `image/png / image/jpeg / image/webp / image/svg+xml`；微信小程序场景下，勋章若使用 `SVG`，继续走后台公开 URL，由页面 `<image>` 直接加载网络资源。勋章只能由服务端在完成餐次、完成饭局或后台审核通过推荐事务里派生；客户端不得提交任何“点亮勋章”字段。
 
 ### 菜谱
 

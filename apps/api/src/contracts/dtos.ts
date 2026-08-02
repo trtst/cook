@@ -284,13 +284,13 @@ export class AdminMedalTemplateQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ enum: medalCategoryValues })
   @IsOptional()
   @IsIn(medalCategoryValues)
-  category?: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED";
+  category?: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
 }
 
 class MedalTemplateFieldsDto {
   @ApiProperty({ enum: medalCategoryValues })
   @IsIn(medalCategoryValues)
-  category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED";
+  category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
 
   @ApiProperty({ example: "开火第一餐" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -312,14 +312,6 @@ class MedalTemplateFieldsDto {
   @MinLength(1)
   @MaxLength(255)
   condition!: string;
-
-  @ApiProperty({ example: "PLAN" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(32)
-  @Matches(/^[A-Z][A-Z0-9_]*$/)
-  iconKey!: string;
 
   @ApiPropertyOptional({ minimum: 0, default: 0 })
   @IsOptional()
@@ -346,14 +338,6 @@ class MedalTemplateFieldsDto {
 }
 
 export class CreateAdminMedalTemplateDto extends OperationDto {
-  @ApiProperty({ example: "FIRST_COMPLETED_MEAL" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(2)
-  @MaxLength(64)
-  @Matches(/^[A-Z][A-Z0-9_]*$/)
-  code!: string;
-
   @ApiProperty({ enum: medalRuleValues })
   @IsIn(medalRuleValues)
   awardRule!:
@@ -392,14 +376,6 @@ export class CreateAdminMedalTemplateDto extends OperationDto {
   @MinLength(1)
   @MaxLength(255)
   condition!: string;
-
-  @ApiProperty({ example: "PLAN" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(32)
-  @Matches(/^[A-Z][A-Z0-9_]*$/)
-  iconKey!: string;
 
   @ApiPropertyOptional({ minimum: 0, default: 0 })
   @IsOptional()
@@ -458,14 +434,6 @@ export class UpdateAdminMedalTemplateDto extends VersionedOperationDto {
   @MaxLength(255)
   condition!: string;
 
-  @ApiProperty({ example: "PLAN" })
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(32)
-  @Matches(/^[A-Z][A-Z0-9_]*$/)
-  iconKey!: string;
-
   @ApiPropertyOptional({ minimum: 0, default: 0 })
   @IsOptional()
   @Type(() => Number)
@@ -502,6 +470,8 @@ export class SetAdminMedalTemplateStatusDto extends VersionedOperationDto {
   @IsIn(medalStatusValues)
   status!: "DRAFT" | "LISTED" | "UNLISTED" | "ARCHIVED";
 }
+
+export class UpdateAdminMedalTemplateImageDto extends VersionedOperationDto {}
 
 export class AdminDiningGroupQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: "ACTIVE" })
@@ -1183,6 +1153,152 @@ export class CreateDiningEventDto extends OperationDto {
   location?: string | null;
 }
 
+export class MealPollListQueryDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  diningGroupId!: number;
+
+  @ApiPropertyOptional({ enum: ["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"] })
+  @IsOptional()
+  @IsIn(["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"])
+  status?: "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
+
+  @ApiPropertyOptional({ example: "2026-08-02" })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  planDate?: string;
+
+  @ApiPropertyOptional({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
+  @IsOptional()
+  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
+  mealSlot?: "BREAKFAST" | "LUNCH" | "DINNER";
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 20, default: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  limit?: number;
+}
+
+export class DiningGroupActivitiesQueryDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  diningGroupId!: number;
+
+  @ApiPropertyOptional({ minimum: 3, maximum: 5, default: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(3)
+  @Max(5)
+  limit?: number;
+}
+
+export class CreateMealPollDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  diningGroupId!: number;
+
+  @ApiProperty({ example: "2026-08-02" })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  planDate!: string;
+
+  @ApiProperty({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
+  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
+  mealSlot!: "BREAKFAST" | "LUNCH" | "DINNER";
+
+  @ApiProperty({ example: "2026-08-02T10:30:00.000Z" })
+  @IsISO8601({ strict: true })
+  deadlineAt!: string;
+
+  @ApiProperty({ minimum: 1, maximum: 3 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  choiceLimit!: number;
+
+  @ApiProperty({ nullable: true, maxLength: 255 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(255)
+  note!: string | null;
+
+  @ApiProperty({ type: [Number], maxItems: 20 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  candidateRecipeVersionIds!: number[];
+}
+
+export class VoteMealPollDto extends VersionedOperationDto {
+  @ApiProperty({ type: [Number], maxItems: 3 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  selectedCandidateIds!: number[];
+
+  @ApiProperty({ nullable: true, maxLength: 120 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  suggestionTitle!: string | null;
+
+  @ApiProperty({ nullable: true, maxLength: 255 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  note!: string | null;
+}
+
+export class ConfirmMealPollDto extends VersionedOperationDto {
+  @ApiProperty({ type: [Number], maxItems: 20 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  finalRecipeVersionIds!: number[];
+
+  @ApiProperty({ nullable: true, example: "2026-08-02T18:30:00.000Z" })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true })
+  scheduledAt!: string | null;
+
+  @ApiProperty({ nullable: true, maxLength: 255 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  location!: string | null;
+}
+
 export class CompleteMealPlanDto extends OperationDto {}
 
 export class InviteDiningGroupParticipantsDto extends OperationDto {
@@ -1200,6 +1316,32 @@ export class RespondDiningEventDto extends OperationDto {
 }
 
 export class CompleteDiningEventDto extends OperationDto {}
+
+export class ClaimCookDto extends VersionedOperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  menuItemId!: number;
+
+  @ApiProperty({ enum: ["CLAIM", "RELEASE"] })
+  @IsIn(["CLAIM", "RELEASE"])
+  action!: "CLAIM" | "RELEASE";
+}
+
+export class CreateDiningMemoryShareDto extends OperationDto {
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @IsBoolean()
+  showParticipants?: boolean;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 120 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(120)
+  caption?: string | null;
+}
 
 export class AcceptShareInviteDto extends OperationDto {
   @ApiProperty()

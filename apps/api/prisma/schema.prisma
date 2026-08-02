@@ -161,6 +161,44 @@ enum DiningEventParticipantStatus {
   REMOVED
 }
 
+enum MealPollStatus {
+  OPEN
+  CLOSED
+  CONFIRMED
+  COMPLETED
+}
+
+enum MealPollCandidateSourceType {
+  RECIPE
+  SUGGESTION
+}
+
+enum MealPollCandidateStatus {
+  ACTIVE
+  PENDING
+  REJECTED
+}
+
+enum ActivityState {
+  PENDING
+  DONE
+  EXPIRED
+}
+
+enum DiningGroupActivityKind {
+  POLL_OPENED
+  POLL_VOTED
+  POLL_SUGGESTED
+  POLL_NOTED
+  MENU_CONFIRMED
+  COOK_CLAIMED
+  BRING_UPDATED
+  MEAL_COMPLETED
+  MEMORY_CREATED
+  MEMBER_JOINED
+  INVITE_PENDING
+}
+
 enum ShoppingStatus {
   OPEN
   BOUGHT
@@ -296,8 +334,14 @@ model User {
   ingredientFeedbacks       IngredientFeedback[]
   units                     Unit[]                     @relation("UnitOwner")
   mealPlans                 MealPlanItem[]
+  mealPolls                 MealPoll[]                @relation("MealPollCreator")
+  mealPollSuggestions       MealPollCandidate[]       @relation("MealPollCandidateSuggester")
+  mealPollResponses         MealPollResponse[]
   diningEvents              DiningEvent[]              @relation("DiningEventOwner")
   diningEventParticipants   DiningEventParticipant[]   @relation("DiningEventParticipantUser")
+  diningEventCookItems      DiningEventMenuItem[]      @relation("DiningEventMenuItemCook")
+  diningEventMemoryShares   DiningEventMemoryShare[]   @relation("DiningEventMemoryShareCreator")
+  diningGroupActivities     DiningGroupActivity[]      @relation("DiningGroupActivityActor")
   fridgeItems               FridgeItem[]
   shoppingItems             ShoppingItem[]
   storageLedger             StorageLedger[]
@@ -337,7 +381,10 @@ model DiningGroup {
   invites            DiningGroupInvite[]
   idempotencyRecords IdempotencyRecord[]
   auditEvents        AuditEvent[]
+  mealPolls          MealPoll[]
+  activities         DiningGroupActivity[]
   diningEvents       DiningEvent[]
+  diningEventMemoryShares DiningEventMemoryShare[]
 
   @@index([status, createdAt])
   @@index([name])
@@ -627,7 +674,9 @@ model RecipeContentVersion {
   currentRecipes          Recipe[]                 @relation("RecipeCurrentVersion")
   collections             RecipeCollection[]       @relation("RecipeCollectionVersion")
   mealPlans               MealPlanItem[]           @relation("MealPlanRecipeVersion")
+  mealPollCandidates      MealPollCandidate[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
+  diningEventMenuItems    DiningEventMenuItem[]
   uploadAssets            UploadAsset[]
 
   @@index([name])
@@ -909,6 +958,8 @@ model MealPlanItem {
   recipe        Recipe?              @relation(fields: [recipeId], references: [id])
   recipeVersion RecipeContentVersion @relation("MealPlanRecipeVersion", fields: [recipeVersionId], references: [id])
   diningEvent   DiningEvent?
+  confirmedPolls MealPoll[]          @relation("MealPollConfirmedPlanItem")
+  activities    DiningGroupActivity[]
 
   @@unique([userId, planDate, mealSlot])
   @@index([userId, planDate])
@@ -935,7 +986,11 @@ model DiningEvent {
   user         User                     @relation("DiningEventOwner", fields: [userId], references: [id], onDelete: Cascade)
   mealPlanItem MealPlanItem?            @relation(fields: [mealPlanItemId], references: [id])
   diningGroup  DiningGroup?             @relation(fields: [diningGroupId], references: [id])
+  confirmedPolls MealPoll[]             @relation("MealPollConfirmedDiningEvent")
+  activities   DiningGroupActivity[]
+  menuItems    DiningEventMenuItem[]
   participants DiningEventParticipant[]
+  memoryShares DiningEventMemoryShare[]
 
   @@index([userId, scheduledAt])
   @@index([diningGroupId, scheduledAt])
@@ -963,6 +1018,163 @@ model DiningEventParticipant {
   @@index([diningEventId, status])
   @@index([userId, status])
   @@map("dining_event_participants")
+}
+
+model DiningEventMemoryShare {
+  id                   Int       @id @default(autoincrement())
+  diningEventId        Int       @map("dining_event_id")
+  diningGroupId        Int?      @map("dining_group_id")
+  createdByUserId      Int       @map("created_by_user_id")
+  snapshotVersion      Int       @map("snapshot_version")
+  title                String    @db.VarChar(120)
+  planDate             DateTime? @map("plan_date") @db.Date
+  mealSlot             MealSlot? @map("meal_slot")
+  menuItemsSnapshot    Json      @map("menu_items_snapshot")
+  participantsSnapshot Json      @map("participants_snapshot")
+  caption              String?   @db.VarChar(120)
+  showParticipants     Boolean   @default(true) @map("show_participants")
+  shareTokenHash       String    @unique @map("share_token_hash") @db.VarChar(128)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  diningEvent DiningEvent  @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+  diningGroup DiningGroup? @relation(fields: [diningGroupId], references: [id], onDelete: SetNull)
+  createdBy   User         @relation("DiningEventMemoryShareCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([diningEventId, snapshotVersion])
+  @@index([createdByUserId, createdAt])
+  @@index([diningGroupId, createdAt])
+  @@map("dining_event_memory_shares")
+}
+
+model MealPoll {
+  id              Int            @id @default(autoincrement())
+  diningGroupId   Int            @map("dining_group_id")
+  createdByUserId Int            @map("created_by_user_id")
+  confirmedPlanItemId Int?       @unique @map("confirmed_plan_item_id")
+  confirmedDiningEventId Int?    @unique @map("confirmed_dining_event_id")
+  planDate        DateTime       @map("plan_date") @db.Date
+  mealSlot        MealSlot       @map("meal_slot")
+  deadlineAt      DateTime       @map("deadline_at") @db.Timestamptz(3)
+  choiceLimit     Int            @map("choice_limit")
+  note            String?        @db.VarChar(255)
+  status          MealPollStatus @default(OPEN)
+  version         Int            @default(1)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningGroup           DiningGroup   @relation(fields: [diningGroupId], references: [id])
+  createdBy             User          @relation("MealPollCreator", fields: [createdByUserId], references: [id])
+  confirmedPlanItem     MealPlanItem? @relation("MealPollConfirmedPlanItem", fields: [confirmedPlanItemId], references: [id])
+  confirmedDiningEvent  DiningEvent?  @relation("MealPollConfirmedDiningEvent", fields: [confirmedDiningEventId], references: [id])
+  candidates            MealPollCandidate[]
+  responses             MealPollResponse[]
+  activities            DiningGroupActivity[]
+
+  @@unique([diningGroupId, planDate, mealSlot])
+  @@index([diningGroupId, status, deadlineAt])
+  @@index([diningGroupId, planDate(sort: Desc), mealSlot])
+  @@index([createdByUserId, createdAt])
+  @@map("meal_polls")
+}
+
+model MealPollCandidate {
+  id                Int                         @id @default(autoincrement())
+  pollId            Int                         @map("poll_id")
+  recipeVersionId   Int?                        @map("recipe_version_id")
+  title             String                      @db.VarChar(120)
+  sourceType        MealPollCandidateSourceType @map("source_type")
+  status            MealPollCandidateStatus     @default(ACTIVE)
+  suggestedByUserId Int?                        @map("suggested_by_user_id")
+  createdAt         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  poll          MealPoll               @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  recipeVersion RecipeContentVersion?  @relation(fields: [recipeVersionId], references: [id])
+  suggestedBy   User?                  @relation("MealPollCandidateSuggester", fields: [suggestedByUserId], references: [id])
+  responseItems MealPollResponseItem[]
+
+  @@index([pollId, status, id])
+  @@index([recipeVersionId])
+  @@index([suggestedByUserId, createdAt])
+  @@map("meal_poll_candidates")
+}
+
+model MealPollResponse {
+  id          Int      @id @default(autoincrement())
+  pollId       Int      @map("poll_id")
+  userId       Int      @map("user_id")
+  note         String?  @db.VarChar(255)
+  respondedAt  DateTime @map("responded_at") @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  poll  MealPoll               @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealPollResponseItem[]
+
+  @@unique([pollId, userId])
+  @@index([pollId, respondedAt(sort: Desc)])
+  @@index([userId, respondedAt(sort: Desc)])
+  @@map("meal_poll_responses")
+}
+
+model MealPollResponseItem {
+  id          Int @id @default(autoincrement())
+  responseId  Int @map("response_id")
+  candidateId Int @map("candidate_id")
+
+  response  MealPollResponse  @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  candidate MealPollCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, candidateId])
+  @@index([candidateId])
+  @@map("meal_poll_response_items")
+}
+
+model DiningGroupActivity {
+  id            Int                      @id @default(autoincrement())
+  diningGroupId Int                      @map("dining_group_id")
+  kind          DiningGroupActivityKind
+  state         ActivityState            @default(PENDING)
+  actorUserId   Int?                     @map("actor_user_id")
+  title         String                   @db.VarChar(120)
+  detail        String?                  @db.VarChar(255)
+  pollId        Int?                     @map("poll_id")
+  planItemId    Int?                     @map("plan_item_id")
+  diningEventId Int?                     @map("dining_event_id")
+  dedupeKey     String                   @map("dedupe_key") @db.VarChar(120)
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  diningGroup DiningGroup   @relation(fields: [diningGroupId], references: [id])
+  actor       User?         @relation("DiningGroupActivityActor", fields: [actorUserId], references: [id])
+  poll        MealPoll?     @relation(fields: [pollId], references: [id])
+  planItem    MealPlanItem? @relation(fields: [planItemId], references: [id])
+  diningEvent DiningEvent?  @relation(fields: [diningEventId], references: [id])
+
+  @@unique([diningGroupId, dedupeKey])
+  @@index([diningGroupId, createdAt(sort: Desc)])
+  @@map("dining_group_activities")
+}
+
+model DiningEventMenuItem {
+  id              Int      @id @default(autoincrement())
+  diningEventId   Int      @map("dining_event_id")
+  recipeVersionId Int      @map("recipe_version_id")
+  title           String   @db.VarChar(120)
+  cookUserId      Int?     @map("cook_user_id")
+  version         Int      @default(1)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningEvent   DiningEvent          @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id])
+  cookUser      User?                @relation("DiningEventMenuItemCook", fields: [cookUserId], references: [id])
+
+  @@index([diningEventId, sortOrder])
+  @@index([diningEventId, cookUserId])
+  @@index([cookUserId, updatedAt])
+  @@map("dining_event_menu_items")
 }
 
 model FridgeItem {
@@ -1019,6 +1231,8 @@ model MedalTemplate {
   isLimited   Boolean             @default(false) @map("is_limited")
   startAt     DateTime?           @map("start_at") @db.Timestamptz(3)
   endAt       DateTime?           @map("end_at") @db.Timestamptz(3)
+  earnedImageUpdatedAt DateTime?  @map("earned_image_updated_at") @db.Timestamptz(3)
+  lockedImageUpdatedAt DateTime?  @map("locked_image_updated_at") @db.Timestamptz(3)
   version     Int                 @default(1)
   createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)

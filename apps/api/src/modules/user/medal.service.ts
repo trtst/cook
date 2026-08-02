@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type MedalAwardRule, type MedalTemplate } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
@@ -18,8 +19,10 @@ import type {
   UpdateAdminMedalTemplateRequest,
   UUID
 } from "../../contracts/types";
+import { MedalImageService, type MedalImageType } from "./medal-image.service";
 
 type MedalDb = Prisma.TransactionClient | PrismaService;
+type AssetRequest = { protocol?: string; get?: (name: string) => string | undefined };
 
 const orderedCategories: MedalCategory[] = [
   "MEAL_CHECKIN",
@@ -36,6 +39,13 @@ const categoryNameMap: Record<MedalCategory, string> = {
 };
 
 const visibleHistoryStatuses = ["LISTED", "UNLISTED", "ARCHIVED"] as const;
+const awardRuleIconKeyMap: Record<MedalAwardRule, string> = {
+  MEAL_COMPLETION: "PLAN",
+  DINING_EVENT_COMPLETION: "DINING_EVENT",
+  GROUP_MEAL_COMPLETION: "GROUP",
+  FULL_LOOP_COMPLETION: "SHOPPING",
+  RECOMMENDATION_ADOPTED_TOTAL: "RECOMMEND"
+};
 
 function toIsoDate(value: Date | null) {
   return value ? value.toISOString() : null;
@@ -53,6 +63,10 @@ function normalizeCode(value: string) {
   return value.trim().toUpperCase();
 }
 
+function generateTemplateCode() {
+  return normalizeCode(`MEDAL_${randomUUID().replace(/-/g, "")}`);
+}
+
 function parseOptionalDateTime(value: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -67,7 +81,6 @@ function parseTemplateFields<T extends {
   name: string;
   description: string;
   condition: string;
-  iconKey: string;
   targetCount?: number;
   sortOrder?: number;
   isLimited: boolean;
@@ -77,13 +90,11 @@ function parseTemplateFields<T extends {
   const name = body.name.trim();
   const description = body.description.trim();
   const condition = body.condition.trim();
-  const iconKey = body.iconKey.trim().toUpperCase();
   const targetCount = toPositiveInt(body.targetCount, 1);
   const sortOrder = typeof body.sortOrder === "number" && Number.isInteger(body.sortOrder) && body.sortOrder >= 0 ? body.sortOrder : 0;
   if (!name) throw new BadRequestException("勋章名称不能为空");
   if (!description) throw new BadRequestException("勋章简介不能为空");
   if (!condition) throw new BadRequestException("勋章获取条件不能为空");
-  if (!iconKey) throw new BadRequestException("勋章图标标识不能为空");
 
   const startAt = body.isLimited ? parseOptionalDateTime(body.startAt) : null;
   const endAt = body.isLimited ? parseOptionalDateTime(body.endAt) : null;
@@ -96,7 +107,6 @@ function parseTemplateFields<T extends {
     name,
     description,
     condition,
-    iconKey,
     targetCount,
     sortOrder,
     isLimited: body.isLimited,
@@ -105,7 +115,18 @@ function parseTemplateFields<T extends {
   };
 }
 
-function toAdminTemplateSummary(template: MedalTemplate): AdminMedalTemplateSummary {
+function getTemplateImageUpdate(imageType: MedalImageType, updatedAt: Date | null): Pick<MedalTemplate, never> & {
+  earnedImageUpdatedAt?: Date | null;
+  lockedImageUpdatedAt?: Date | null;
+} {
+  return imageType === "earned" ? { earnedImageUpdatedAt: updatedAt } : { lockedImageUpdatedAt: updatedAt };
+}
+
+function toAdminTemplateSummary(
+  template: MedalTemplate,
+  request: AssetRequest,
+  medalImageService: MedalImageService
+): AdminMedalTemplateSummary {
   return {
     id: template.id,
     code: template.code,
@@ -116,6 +137,9 @@ function toAdminTemplateSummary(template: MedalTemplate): AdminMedalTemplateSumm
     description: template.description,
     condition: template.condition,
     iconKey: template.iconKey,
+    imageUrl: medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
+    earnedImageUrl: medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
+    lockedImageUrl: medalImageService.buildImageUrl(request, template.id, "locked", template.lockedImageUpdatedAt),
     status: template.status,
     targetCount: template.targetCount,
     sortOrder: template.sortOrder,
@@ -130,9 +154,12 @@ function toAdminTemplateSummary(template: MedalTemplate): AdminMedalTemplateSumm
 
 @Injectable()
 export class MedalService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(MedalImageService) private readonly medalImageService: MedalImageService
+  ) {}
 
-  async getCurrent(userId: UUID): Promise<MedalWallResponse> {
+  async getCurrent(request: AssetRequest, userId: UUID): Promise<MedalWallResponse> {
     const medals = await this.prisma.userMedal.findMany({
       where: { userId },
       orderBy: [{ awardedAt: "asc" }, { id: "asc" }]
@@ -156,6 +183,20 @@ export class MedalService {
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }]
     });
+    const countRows = templates.length
+      ? await this.prisma.userMedal.groupBy({
+          by: ["code"],
+          where: {
+            code: {
+              in: templates.map(item => item.code)
+            }
+          },
+          _count: {
+            _all: true
+          }
+        })
+      : [];
+    const earnedUserCountMap = new Map(countRows.map(item => [item.code, item._count._all]));
 
     const items = templates.map(template => {
       const earned = earnedMap.get(template.code) ?? null;
@@ -163,11 +204,15 @@ export class MedalService {
         code: template.code,
         awardRule: template.awardRule,
         iconKey: template.iconKey,
+        imageUrl: this.medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
+        earnedImageUrl: this.medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
+        lockedImageUrl: this.medalImageService.buildImageUrl(request, template.id, "locked", template.lockedImageUpdatedAt),
         category: template.category,
         categoryName: categoryNameMap[template.category],
         name: template.name,
         description: template.description,
         condition: template.condition,
+        earnedUserCount: earnedUserCountMap.get(template.code) ?? 0,
         earned: Boolean(earned),
         isLimited: template.isLimited,
         startAt: toIsoDate(template.startAt),
@@ -197,6 +242,7 @@ export class MedalService {
   }
 
   async listTemplates(
+    request: AssetRequest,
     page: number,
     pageSize: number,
     keyword: string | undefined,
@@ -232,7 +278,7 @@ export class MedalService {
     ]);
 
     return {
-      items: items.map(toAdminTemplateSummary),
+      items: items.map(item => toAdminTemplateSummary(item, request, this.medalImageService)),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
@@ -240,12 +286,11 @@ export class MedalService {
     };
   }
 
-  async createTemplate(body: CreateAdminMedalTemplateRequest, adminId: UUID): Promise<AdminMedalTemplateSummary> {
-    const code = normalizeCode(body.code);
+  async createTemplate(request: AssetRequest, body: CreateAdminMedalTemplateRequest, adminId: UUID): Promise<AdminMedalTemplateSummary> {
+    const code = generateTemplateCode();
     const fields = parseTemplateFields(body);
     const status = body.status ?? "DRAFT";
     const requestHash = JSON.stringify({
-      code,
       awardRule: body.awardRule,
       status,
       ...fields
@@ -271,7 +316,7 @@ export class MedalService {
             name: fields.name,
             description: fields.description,
             condition: fields.condition,
-            iconKey: fields.iconKey,
+            iconKey: awardRuleIconKeyMap[body.awardRule],
             status,
             targetCount: fields.targetCount,
             sortOrder: fields.sortOrder,
@@ -280,7 +325,7 @@ export class MedalService {
             endAt: fields.endAt
           }
         });
-        const result = toAdminTemplateSummary(created);
+        const result = toAdminTemplateSummary(created, request, this.medalImageService);
         await tx.auditEvent.create({
           data: {
             actorType: "ADMIN",
@@ -300,13 +345,14 @@ export class MedalService {
       });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
-        throw new ConflictException("勋章编码已存在，请刷新后重试");
+        throw new ConflictException("勋章模板创建冲突，请刷新后重试");
       }
       throw error;
     }
   }
 
   async updateTemplate(
+    request: AssetRequest,
     templateId: UUID,
     body: UpdateAdminMedalTemplateRequest,
     adminId: UUID
@@ -341,7 +387,6 @@ export class MedalService {
           name: fields.name,
           description: fields.description,
           condition: fields.condition,
-          iconKey: fields.iconKey,
           targetCount: fields.targetCount,
           sortOrder: fields.sortOrder,
           isLimited: fields.isLimited,
@@ -350,7 +395,7 @@ export class MedalService {
           version: { increment: 1 }
         }
       });
-      const result = toAdminTemplateSummary(updated);
+      const result = toAdminTemplateSummary(updated, request, this.medalImageService);
       await tx.auditEvent.create({
         data: {
           actorType: "ADMIN",
@@ -370,6 +415,7 @@ export class MedalService {
   }
 
   async setTemplateStatus(
+    request: AssetRequest,
     templateId: UUID,
     body: SetAdminMedalTemplateStatusRequest,
     adminId: UUID
@@ -401,7 +447,7 @@ export class MedalService {
                 version: { increment: 1 }
               }
             });
-      const result = toAdminTemplateSummary(updated);
+      const result = toAdminTemplateSummary(updated, request, this.medalImageService);
       await tx.auditEvent.create({
         data: {
           actorType: "ADMIN",
@@ -418,6 +464,152 @@ export class MedalService {
       await completeAdminIdempotentOperation(tx, body.operationId, "admin-medal-template:set-status", adminId, requestHash, result);
       return result;
     });
+  }
+
+  async uploadTemplateImage(
+    request: AssetRequest,
+    templateId: UUID,
+    imageType: MedalImageType,
+    operationId: string,
+    expectedVersion: number,
+    file: { buffer?: Buffer; size?: number } | undefined,
+    adminId: UUID
+  ): Promise<AdminMedalTemplateSummary> {
+    const fileHash = file?.buffer ? createHash("sha256").update(file.buffer).digest("hex") : "missing";
+    const requestHash = `${templateId}:${imageType}:${expectedVersion}:${fileHash}`;
+    const staged = await this.medalImageService.stageImageUpload(templateId, imageType, file);
+    let backupImagePath: string | null = null;
+    let replaced = false;
+
+    try {
+      const result = await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminMedalTemplateSummary>(
+          tx,
+          operationId,
+          "admin-medal-template:upload-image",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, operationId, "admin-medal-template:upload-image", adminId, requestHash);
+
+        const template = await this.requireTemplate(tx, templateId);
+        if (template.version !== expectedVersion) {
+          throw new ConflictException("勋章模板已被更新，请刷新后重试");
+        }
+
+        backupImagePath = await this.medalImageService.replaceStagedImage(templateId, imageType, staged.tempPath, staged.kind);
+        replaced = true;
+
+        const updated = await tx.medalTemplate.update({
+          where: { id: templateId },
+          data: {
+            ...getTemplateImageUpdate(imageType, new Date()),
+            version: { increment: 1 }
+          }
+        });
+        const result = toAdminTemplateSummary(updated, request, this.medalImageService);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "MEDAL_TEMPLATE_IMAGE_UPDATED",
+            objectType: "MEDAL_TEMPLATE",
+            objectId: templateId,
+            payload: {
+              code: template.code,
+              imageType,
+              fileHash
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, operationId, "admin-medal-template:upload-image", adminId, requestHash, result);
+        return result;
+      });
+
+      if (replaced) {
+        await this.medalImageService.finalizeReplacedImage(backupImagePath);
+      } else {
+        await this.medalImageService.discardStagedImage(staged.tempPath);
+      }
+      return result;
+    } catch (error) {
+      if (replaced) {
+        await this.medalImageService.rollbackReplacedImage(templateId, imageType, backupImagePath);
+      } else {
+        await this.medalImageService.discardStagedImage(staged.tempPath);
+      }
+      throw error;
+    }
+  }
+
+  async clearTemplateImage(
+    request: AssetRequest,
+    templateId: UUID,
+    imageType: MedalImageType,
+    operationId: string,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminMedalTemplateSummary> {
+    const requestHash = `${templateId}:${imageType}:${expectedVersion}:clear`;
+    let backupImagePath: string | null = null;
+    let cleared = false;
+
+    try {
+      const result = await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminMedalTemplateSummary>(
+          tx,
+          operationId,
+          "admin-medal-template:clear-image",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, operationId, "admin-medal-template:clear-image", adminId, requestHash);
+
+        const template = await this.requireTemplate(tx, templateId);
+        if (template.version !== expectedVersion) {
+          throw new ConflictException("勋章模板已被更新，请刷新后重试");
+        }
+
+        backupImagePath = await this.medalImageService.stageClearImage(templateId, imageType);
+        cleared = true;
+
+        const updated = await tx.medalTemplate.update({
+          where: { id: templateId },
+          data: {
+            ...getTemplateImageUpdate(imageType, null),
+            version: { increment: 1 }
+          }
+        });
+        const result = toAdminTemplateSummary(updated, request, this.medalImageService);
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "MEDAL_TEMPLATE_IMAGE_CLEARED",
+            objectType: "MEDAL_TEMPLATE",
+            objectId: templateId,
+            payload: {
+              code: template.code,
+              imageType
+            }
+          }
+        });
+        await completeAdminIdempotentOperation(tx, operationId, "admin-medal-template:clear-image", adminId, requestHash, result);
+        return result;
+      });
+
+      if (cleared) {
+        await this.medalImageService.finalizeClearedImage(backupImagePath);
+      }
+      return result;
+    } catch (error) {
+      if (cleared) {
+        await this.medalImageService.rollbackClearedImage(templateId, backupImagePath);
+      }
+      throw error;
+    }
   }
 
   async awardMealCompletion(

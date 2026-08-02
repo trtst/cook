@@ -996,11 +996,83 @@ export class MealPlanModel {
 export class DiningEventParticipantModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: Number, nullable: true }) userUid!: number | null;
+  @ApiProperty(nullableString) displayName!: string | null;
+  @ApiProperty(nullableString) avatarUrl!: string | null;
   @ApiProperty(nullableString) guestName!: string | null;
   @ApiProperty({ type: String, enum: ["DINING_GROUP", "SHARE"] }) sourceType!: string;
   @ApiProperty({ type: String, enum: ["INVITED", "ACCEPTED", "DECLINED", "REMOVED"] }) status!: string;
   @ApiProperty({ ...uuid, nullable: true }) bringRecipeId!: string | null;
   @ApiProperty(nullableString) bringRecipeTitle!: string | null;
+}
+
+export class MealPollModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) diningGroupId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, format: "date" }) planDate!: string;
+  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "DINNER"] }) mealSlot!: string;
+  @ApiProperty({ type: String, enum: ["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"] }) status!: string;
+  @ApiProperty(dateTime) deadlineAt!: string;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 3 }) choiceLimit!: number;
+  @ApiProperty(nullableString) note!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) candidateCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) responseCount!: number;
+  @ApiProperty({ ...uuid, nullable: true }) confirmedPlanItemId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) confirmedDiningEventId!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class MealPollCandidateModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) recipeVersionId!: string | null;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "PENDING", "REJECTED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["RECIPE", "SUGGESTION"] }) sourceType!: string;
+  @ApiProperty({ type: Number, nullable: true }) suggestedByUid!: number | null;
+  @ApiProperty({ type: Number, minimum: 0 }) voteCount!: number;
+}
+
+export class MealPollResponseModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Number }) userUid!: number;
+  @ApiProperty({ type: [Number] }) selectedCandidateIds!: string[];
+  @ApiProperty({ ...uuid, nullable: true }) suggestionCandidateId!: string | null;
+  @ApiProperty(nullableString) note!: string | null;
+  @ApiProperty(dateTime) respondedAt!: string;
+}
+
+export class MealPollDetailModel extends MealPollModel {
+  @ApiProperty({ type: [MealPollCandidateModel] }) candidates!: MealPollCandidateModel[];
+  @ApiProperty({ type: [MealPollResponseModel] }) responses!: MealPollResponseModel[];
+}
+
+export class DiningGroupActivityModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) diningGroupId!: string;
+  @ApiProperty({ type: String, enum: ["POLL_OPENED", "POLL_VOTED", "POLL_SUGGESTED", "POLL_NOTED", "MENU_CONFIRMED", "COOK_CLAIMED", "BRING_UPDATED", "MEAL_COMPLETED", "MEMORY_CREATED", "MEMBER_JOINED", "INVITE_PENDING"] })
+  kind!: string;
+  @ApiProperty({ type: String, enum: ["PENDING", "DONE", "EXPIRED"] }) state!: string;
+  @ApiProperty({ type: Number, nullable: true }) actorUid!: number | null;
+  @ApiProperty(nullableString) actorName!: string | null;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) detail!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) pollId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
+  @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class DiningEventMenuItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: Number, nullable: true }) cookUserUid!: number | null;
+  @ApiProperty(nullableString) cookName!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 
 export class DiningEventModel {
@@ -1009,24 +1081,67 @@ export class DiningEventModel {
   @ApiProperty(dateTime) scheduledAt!: string;
   @ApiProperty(nullableString) location!: string | null;
   @ApiProperty({ type: String, enum: ["PLANNED", "CONFIRMED", "CANCELLED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ type: Number, nullable: true }) organizerUid!: number | null;
+  @ApiProperty(nullableString) organizerName!: string | null;
+  @ApiProperty(nullableString) organizerAvatarUrl!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) diningGroupId!: string | null;
   @ApiProperty({ type: RecipeContentModel }) menu!: RecipeContentModel;
+  @ApiProperty({ type: [DiningEventMenuItemModel] }) menuItems!: DiningEventMenuItemModel[];
   @ApiProperty({ type: [DiningEventParticipantModel] }) participants!: DiningEventParticipantModel[];
   @ApiProperty(nullableString) shareTokenPath!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class DiningMemoryShareMenuItemModel {
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverUrl!: string | null;
+  @ApiProperty(nullableString) cookName!: string | null;
+}
+
+export class DiningMemoryShareParticipantModel {
+  @ApiProperty({ type: String }) displayName!: string;
+  @ApiProperty(nullableString) avatarUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["ORGANIZER", "PARTICIPANT", "GUEST"] }) role!: string;
+}
+
+export class DiningMemorySharePreviewModel {
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, nullable: true }) planDate!: string | null;
+  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "DINNER"], nullable: true }) mealSlot!: string | null;
+  @ApiProperty({ type: [DiningMemoryShareMenuItemModel] }) menuItems!: DiningMemoryShareMenuItemModel[];
+  @ApiProperty({ type: [DiningMemoryShareParticipantModel] }) participants!: DiningMemoryShareParticipantModel[];
+  @ApiProperty(nullableString) caption!: string | null;
+  @ApiProperty(dateTime) sharedAt!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) snapshotVersion!: number;
+}
+
+export class DiningMemoryShareSnapshotModel extends DiningMemorySharePreviewModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) diningEventId!: string;
+  @ApiProperty({ type: String }) sharePath!: string;
 }
 
 export class UserMedalModel {
   @ApiProperty({ type: String })
   code!: string;
 
-  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION"] })
+  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "RECOMMENDATION_ADOPTED_TOTAL"] })
   awardRule!: string;
 
   @ApiProperty({ type: String })
   iconKey!: string;
+
+  @ApiProperty(nullableString)
+  imageUrl!: string | null;
+
+  @ApiProperty(nullableString)
+  earnedImageUrl!: string | null;
+
+  @ApiProperty(nullableString)
+  lockedImageUrl!: string | null;
 
   @ApiProperty({ type: String, enum: ["MEAL_CHECKIN", "DINING_COLLABORATION", "HOLIDAY_LIMITED", "RECOMMENDATION_CONTRIBUTION"] })
   category!: string;
@@ -1037,6 +1152,7 @@ export class UserMedalModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty({ type: String }) condition!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) earnedUserCount!: number;
   @ApiProperty({ type: Boolean }) earned!: boolean;
   @ApiProperty({ type: Boolean }) isLimited!: boolean;
   @ApiProperty({ ...dateTime, nullable: true }) startAt!: string | null;
@@ -1076,6 +1192,9 @@ export class AdminMedalTemplateModel {
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty({ type: String }) condition!: string;
   @ApiProperty({ type: String }) iconKey!: string;
+  @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty(nullableString) earnedImageUrl!: string | null;
+  @ApiProperty(nullableString) lockedImageUrl!: string | null;
   @ApiProperty({ type: String, enum: ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) targetCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;

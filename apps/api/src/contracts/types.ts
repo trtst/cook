@@ -1170,11 +1170,98 @@ export interface MealPlanSummary {
 export interface DiningEventParticipantSummary {
   id: UUID;
   userUid: number | null;
+  displayName: string | null;
+  avatarUrl: string | null;
   guestName: string | null;
   sourceType: "DINING_GROUP" | "SHARE";
   status: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED";
   bringRecipeId: UUID | null;
   bringRecipeTitle: string | null;
+}
+
+export type MealPollStatus = "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
+export type MealPollCandidateStatus = "ACTIVE" | "PENDING" | "REJECTED";
+export type ActivityState = "PENDING" | "DONE" | "EXPIRED";
+export type DiningGroupActivityKind =
+  | "POLL_OPENED"
+  | "POLL_VOTED"
+  | "POLL_SUGGESTED"
+  | "POLL_NOTED"
+  | "MENU_CONFIRMED"
+  | "COOK_CLAIMED"
+  | "BRING_UPDATED"
+  | "MEAL_COMPLETED"
+  | "MEMORY_CREATED"
+  | "MEMBER_JOINED"
+  | "INVITE_PENDING";
+
+export interface MealPollSummary {
+  id: UUID;
+  diningGroupId: UUID;
+  title: string;
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  status: MealPollStatus;
+  deadlineAt: IsoDateTime;
+  choiceLimit: number;
+  note: string | null;
+  candidateCount: number;
+  responseCount: number;
+  confirmedPlanItemId: UUID | null;
+  confirmedDiningEventId: UUID | null;
+  version: number;
+  createdAt: IsoDateTime;
+}
+
+export interface MealPollCandidateSummary {
+  id: UUID;
+  recipeId: UUID | null;
+  recipeVersionId: UUID | null;
+  title: string;
+  coverUrl: string | null;
+  status: MealPollCandidateStatus;
+  sourceType: "RECIPE" | "SUGGESTION";
+  suggestedByUid: number | null;
+  voteCount: number;
+}
+
+export interface MealPollResponseSummary {
+  id: UUID;
+  userUid: number;
+  selectedCandidateIds: UUID[];
+  suggestionCandidateId: UUID | null;
+  note: string | null;
+  respondedAt: IsoDateTime;
+}
+
+export interface MealPollDetail extends MealPollSummary {
+  candidates: MealPollCandidateSummary[];
+  responses: MealPollResponseSummary[];
+}
+
+export interface DiningGroupActivitySummary {
+  id: UUID;
+  diningGroupId: UUID;
+  kind: DiningGroupActivityKind;
+  state: ActivityState;
+  actorUid: number | null;
+  actorName: string | null;
+  title: string;
+  detail: string | null;
+  pollId: UUID | null;
+  planItemId: UUID | null;
+  diningEventId: UUID | null;
+  createdAt: IsoDateTime;
+}
+
+export interface DiningEventMenuItemSummary {
+  id: UUID;
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  title: string;
+  cookUserUid: number | null;
+  cookName: string | null;
+  version: number;
 }
 
 export interface DiningEventSummary {
@@ -1183,13 +1270,100 @@ export interface DiningEventSummary {
   scheduledAt: IsoDateTime;
   location: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  organizerUid: number | null;
+  organizerName: string | null;
+  organizerAvatarUrl: string | null;
   planItemId: UUID | null;
   diningGroupId: UUID | null;
   menu: RecipeContentSnapshot;
+  menuItems: DiningEventMenuItemSummary[];
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
+  version: number;
   createdAt: IsoDateTime;
+}
+
+export interface DiningMemoryShareMenuItem {
+  title: string;
+  coverUrl: string | null;
+  cookName: string | null;
+}
+
+export interface DiningMemoryShareParticipant {
+  displayName: string;
+  avatarUrl: string | null;
+  role: "ORGANIZER" | "PARTICIPANT" | "GUEST";
+}
+
+export interface DiningMemorySharePreview {
+  title: string;
+  planDate: string | null;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER" | null;
+  menuItems: DiningMemoryShareMenuItem[];
+  participants: DiningMemoryShareParticipant[];
+  caption: string | null;
+  sharedAt: IsoDateTime;
+  snapshotVersion: number;
+}
+
+export interface DiningMemoryShareSnapshot extends DiningMemorySharePreview {
+  id: UUID;
+  diningEventId: UUID;
+  sharePath: string;
+}
+
+export interface MealPollListQuery {
+  diningGroupId: UUID;
+  status?: MealPollStatus;
+  planDate?: string;
+  mealSlot?: "BREAKFAST" | "LUNCH" | "DINNER";
+  limit?: number;
+}
+
+export interface DiningGroupActivitiesQuery {
+  diningGroupId: UUID;
+  limit?: number;
+}
+
+export interface CreateMealPollRequest {
+  operationId: OperationId;
+  diningGroupId: UUID;
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  deadlineAt: IsoDateTime;
+  choiceLimit: number;
+  note: string | null;
+  candidateRecipeVersionIds: UUID[];
+}
+
+export interface VoteMealPollRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  selectedCandidateIds: UUID[];
+  suggestionTitle: string | null;
+  note: string | null;
+}
+
+export interface ConfirmMealPollRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  finalRecipeVersionIds: UUID[];
+  scheduledAt: IsoDateTime | null;
+  location: string | null;
+}
+
+export interface ClaimCookRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  menuItemId: UUID;
+  action: "CLAIM" | "RELEASE";
+}
+
+export interface CreateDiningMemoryShareRequest {
+  operationId: OperationId;
+  showParticipants: boolean;
+  caption: string | null;
 }
 
 export type MedalAwardRule =
@@ -1217,11 +1391,15 @@ export interface UserMedalSummary {
   code: string;
   awardRule: MedalAwardRule;
   iconKey: string;
+  imageUrl: string | null;
+  earnedImageUrl: string | null;
+  lockedImageUrl: string | null;
   category: MedalCategory;
   categoryName: string;
   name: string;
   description: string;
   condition: string;
+  earnedUserCount: number;
   earned: boolean;
   isLimited: boolean;
   startAt: IsoDateTime | null;
@@ -1246,6 +1424,9 @@ export interface AdminMedalTemplateSummary {
   description: string;
   condition: string;
   iconKey: string;
+  imageUrl: string | null;
+  earnedImageUrl: string | null;
+  lockedImageUrl: string | null;
   status: MedalTemplateStatus;
   targetCount: number;
   sortOrder: number;
@@ -1267,13 +1448,11 @@ export interface AdminMedalTemplateQuery {
 
 export interface CreateAdminMedalTemplateRequest {
   operationId: OperationId;
-  code: string;
   awardRule: MedalAwardRule;
   category: MedalCategory;
   name: string;
   description: string;
   condition: string;
-  iconKey: string;
   status?: Exclude<MedalTemplateStatus, "ARCHIVED">;
   targetCount?: number;
   sortOrder?: number;
@@ -1289,7 +1468,6 @@ export interface UpdateAdminMedalTemplateRequest {
   name: string;
   description: string;
   condition: string;
-  iconKey: string;
   targetCount?: number;
   sortOrder?: number;
   isLimited: boolean;
@@ -1301,6 +1479,11 @@ export interface SetAdminMedalTemplateStatusRequest {
   operationId: OperationId;
   expectedVersion: number;
   status: MedalTemplateStatus;
+}
+
+export interface UpdateAdminMedalTemplateImageRequest {
+  operationId: OperationId;
+  expectedVersion: number;
 }
 
 export interface FridgeItemSummary {

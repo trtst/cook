@@ -55,6 +55,7 @@ import {
   UpdateAdminIngredientCategoryDto,
   UpdateAdminIngredientImageDto,
   UpdateAdminIngredientDto,
+  UpdateAdminMedalTemplateImageDto,
   UpdateRecipeImportItemDto,
   UpdateAdminUserDto
 } from "../../contracts/dtos";
@@ -94,6 +95,7 @@ import {
   UserProfileModel
 } from "../../contracts/openapi";
 import type { AdminRecipeContentInput, RecipeImportRecipeBody, UnitType } from "../../contracts/types";
+import type { MedalImageType } from "../user/medal-image.service";
 import { MedalService } from "../user/medal.service";
 import { AdminService } from "../admin/admin.service";
 
@@ -187,9 +189,9 @@ export class AdminController {
   @UseGuards(AdminAuthGuard, SuperAdminGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiOkPage(AdminMedalTemplateModel, "后台勋章模板列表")
-  listMedalTemplates(@Query() query: AdminMedalTemplateQueryDto) {
+  listMedalTemplates(@Req() request: RequestWithAdmin & AssetRequest, @Query() query: AdminMedalTemplateQueryDto) {
     return this.medalService
-      .listTemplates(query.page, query.pageSize, query.keyword, query.status, query.category)
+      .listTemplates(request, query.page, query.pageSize, query.keyword, query.status, query.category)
       .then(result => ok(result));
   }
 
@@ -199,11 +201,11 @@ export class AdminController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminMedalTemplateModel, "后台新增勋章模板")
   createMedalTemplate(
-    @Req() request: RequestWithAdmin,
+    @Req() request: RequestWithAdmin & AssetRequest,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateAdminMedalTemplateDto
   ) {
-    return this.medalService.createTemplate({ ...body, operationId }, request.admin.adminId).then(result => ok(result));
+    return this.medalService.createTemplate(request, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Put("medal-templates/:templateId")
@@ -212,12 +214,12 @@ export class AdminController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminMedalTemplateModel, "后台编辑勋章模板")
   updateMedalTemplate(
-    @Req() request: RequestWithAdmin,
+    @Req() request: RequestWithAdmin & AssetRequest,
     @Param("templateId", ParseIntPipe) templateId: number,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateAdminMedalTemplateDto
   ) {
-    return this.medalService.updateTemplate(templateId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+    return this.medalService.updateTemplate(request, templateId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("medal-templates/:templateId/status")
@@ -226,13 +228,50 @@ export class AdminController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminMedalTemplateModel, "后台切换勋章模板状态")
   setMedalTemplateStatus(
-    @Req() request: RequestWithAdmin,
+    @Req() request: RequestWithAdmin & AssetRequest,
     @Param("templateId", ParseIntPipe) templateId: number,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: SetAdminMedalTemplateStatusDto
   ) {
     return this.medalService
-      .setTemplateStatus(templateId, { ...body, operationId }, request.admin.adminId)
+      .setTemplateStatus(request, templateId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Post("medal-templates/:templateId/image/:imageType")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @ApiConsumes("multipart/form-data")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateModel, "上传或替换勋章图片")
+  uploadMedalTemplateImage(
+    @Req() request: RequestWithAdmin & AssetRequest,
+    @Param("templateId", ParseIntPipe) templateId: number,
+    @Param("imageType") imageType: MedalImageType,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateAdminMedalTemplateImageDto,
+    @UploadedFile() file?: { buffer?: Buffer; size?: number }
+  ) {
+    return this.medalService
+      .uploadTemplateImage(request, templateId, imageType, operationId, body.expectedVersion, file, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Delete("medal-templates/:templateId/image/:imageType")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateModel, "清空勋章图片")
+  clearMedalTemplateImage(
+    @Req() request: RequestWithAdmin & AssetRequest,
+    @Param("templateId", ParseIntPipe) templateId: number,
+    @Param("imageType") imageType: MedalImageType,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateAdminMedalTemplateImageDto
+  ) {
+    return this.medalService
+      .clearTemplateImage(request, templateId, imageType, operationId, body.expectedVersion, request.admin.adminId)
       .then(result => ok(result));
   }
 
