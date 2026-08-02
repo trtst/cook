@@ -228,6 +228,160 @@ POST /api/dining-groups/{diningGroupId}/dissolve
 
 接受邀请只建立成员关系；退出、移除和解散只结束关系。以上操作都不迁移、不复制、不冻结、不恢复个人数据。
 
+### 2.4 协作与轻动态
+
+当前饭搭子协作主链路新增：
+
+```text
+GET  /api/meal-polls
+POST /api/meal-polls
+GET  /api/meal-polls/{pollId}
+POST /api/meal-polls/{pollId}/vote
+POST /api/meal-polls/{pollId}/confirm
+GET  /api/dining-group-activities
+POST /api/dining-events/{eventId}/cook
+POST /api/dining-events/{eventId}/memory-shares
+GET  /api/memory-shares/{shareToken}/preview
+```
+
+#### 点菜征集
+
+`GET /api/meal-polls` 只返回当前饭搭子的征集摘要列表。当前支持的查询参数是：
+
+```ts
+{
+  diningGroupId: UUID;
+  status?: "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
+  planDate?: string;
+  mealSlot?: "BREAKFAST" | "LUNCH" | "DINNER";
+  limit?: number;
+}
+```
+
+首页和征集入口只读取摘要，不返回成员逐条回应。
+
+`POST /api/meal-polls` 用于由 `OWNER / ADMIN` 发起征集。请求体：
+
+```ts
+interface CreateMealPollRequest {
+  diningGroupId: UUID;
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  deadlineAt: IsoDateTime;
+  choiceLimit: number;
+  note: string | null;
+  candidateRecipeVersionIds: UUID[];
+}
+```
+
+约束：
+
+1. 同一饭搭子、同一 `planDate + mealSlot` 只允许一条有效征集。
+2. `choiceLimit` 当前固定 `1~3`，并在创建时冻结。
+3. 候选菜必须能落到固定 `recipeVersionId`。
+
+`GET /api/meal-polls/{pollId}` 返回 `MealPollDetail`，用于征集详情与结果汇总。`POST /api/meal-polls/{pollId}/vote` 用于当前成员提交或覆盖自己的一份回应。请求体：
+
+```ts
+interface VoteMealPollRequest {
+  expectedVersion: number;
+  selectedCandidateIds: UUID[];
+  suggestionTitle: string | null;
+  note: string | null;
+}
+```
+
+`suggestionTitle` 只是建议菜名，不直接进入最终菜单。截止后提交返回明确失败，不静默丢弃。
+
+`POST /api/meal-polls/{pollId}/confirm` 用于关闭征集、汇总回应并确认最终菜单。请求体：
+
+```ts
+interface ConfirmMealPollRequest {
+  expectedVersion: number;
+  finalRecipeVersionIds: UUID[];
+  scheduledAt: IsoDateTime | null;
+  location: string | null;
+}
+```
+
+该接口会同事务完成“关闭征集 -> 汇总回应 -> 生成或更新当前餐次 -> 生成或更新对应饭局”。客户端不再拆成“先确认计划，再单独建饭局”的两步。
+
+#### 首页轻动态
+
+`GET /api/dining-group-activities?diningGroupId=<diningGroupId>&limit=5` 返回当前饭搭子最近 `3~5` 条结构化事项摘要，只服务首页轻动态卡片，不提供完整历史翻页，也不是聊天记录。
+
+动态只允许返回：
+
+1. 发起征集。
+2. 成员选择。
+3. 建议补菜。
+4. 成员备注。
+5. 菜单确认。
+6. “我来做”认领。
+7. “我带菜”更新。
+8. 餐次完成。
+9. 饭搭子卡生成。
+10. 成员加入或待加入占位。
+
+动态不得混入冰箱、购物明细、过敏、忌口、内部备注、未采用候选菜或投票明细。
+
+#### 我来做
+
+`POST /api/dining-events/{eventId}/cook` 用于对已确认菜单中的单道菜执行“我来做”认领或释放。请求体：
+
+```ts
+interface ClaimCookRequest {
+  expectedVersion: number;
+  menuItemId: UUID;
+  action: "CLAIM" | "RELEASE";
+}
+```
+
+同一道菜同一时刻只允许一位有效认领人；并发冲突返回 `409`。该接口只改写菜级责任人，不改写购物、库存或菜谱所有权。
+
+#### 饭搭子卡快照
+
+`POST /api/dining-events/{eventId}/memory-shares` 用于在已完成饭局上生成一张不可变饭搭子卡。请求体：
+
+```ts
+interface CreateDiningMemoryShareRequest {
+  showParticipants: boolean;
+  caption: string | null;
+}
+```
+
+当前客户端接入约束：
+
+1. 只有饭局主理人可生成，其他成员只读公开快照。
+2. 饭局未完成时，页面只能展示生成前预览，不能真正生成公开卡片。
+3. `showParticipants` 只控制是否公开成员摘要，不影响饭局真实参与数据。
+4. `caption` 最长 `120` 个字符，传空字符串时应先裁剪为 `null`。
+
+`GET /api/memory-shares/{shareToken}/preview` 用于读取公开饭搭子卡，不要求登录。返回字段只允许包含：
+
+```ts
+interface DiningMemorySharePreview {
+  title: string;
+  planDate: string | null;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER" | null;
+  menuItems: Array<{
+    title: string;
+    coverUrl: string | null;
+    cookName: string | null;
+  }>;
+  participants: Array<{
+    displayName: string;
+    avatarUrl: string | null;
+    role: "ORGANIZER" | "PARTICIPANT" | "GUEST";
+  }>;
+  caption: string | null;
+  sharedAt: IsoDateTime;
+  snapshotVersion: number;
+}
+```
+
+客户端不得把饭局详情页里的实时参与人 UID、投票明细、带菜备注、购物或冰箱信息拼进公开卡片；公开预览只能信任快照接口返回的白名单字段。
+
 ## 3. 个人存储
 
 ```text
