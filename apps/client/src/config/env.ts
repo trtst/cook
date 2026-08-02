@@ -9,7 +9,7 @@ export type CookFrom = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmo
  * 业务 API 模块现在直接拼完整地址，例如 `${cfg.domain}/api/auth/login`，
  * 所以这里需要一个稳定的“去掉 /api 后缀”的默认域名。
  */
-const defaultApiUrl = import.meta.env.VITE_API_BASE_URL ?? "https://api.trtst.com/api";
+const defaultApiUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const defaultDomain = defaultApiUrl.replace(/\/api\/?$/i, "");
 
 export const cfg = {
