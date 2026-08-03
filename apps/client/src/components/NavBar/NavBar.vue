@@ -120,6 +120,10 @@ function handleLeftClick() {
   background: transparent;
 }
 
+:global(.theme-dark) .navbar__fixed--transparent {
+  background: var(--color-surface-mask-strong);
+}
+
 .navbar__inner {
   --navbar-side-width: 44px;
 

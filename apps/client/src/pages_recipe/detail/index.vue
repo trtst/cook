@@ -1192,8 +1192,9 @@ function limitSceneName(value: string) {
   left: 0;
   right: 0;
   z-index: 9;
-  background: rgba(255, 250, 244, 0.94);
+  background: var(--color-page);
   pointer-events: none;
+  transition: opacity 160ms ease;
 }
 
 .detail-nav {
@@ -1446,7 +1447,7 @@ function limitSceneName(value: string) {
   width: auto;
   height: auto;
   font-size: 40rpx;
-  color: rgba(69, 61, 54, 0.88);
+  color: var(--color-text);
 }
 
 .summary-info__label {

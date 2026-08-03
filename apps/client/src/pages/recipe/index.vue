@@ -1421,7 +1421,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20rpx;
-  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .list-footer {
