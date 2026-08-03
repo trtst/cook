@@ -124,8 +124,11 @@
       </view>
 
       <canvas
-        canvas-id="recipe-crop-canvas"
+        :key="currentCanvasId"
+        :canvas-id="currentCanvasId"
         class="crop-canvas"
+        :width="canvasSize.width"
+        :height="canvasSize.height"
         :style="canvasStyle"
       />
     </view>
@@ -140,11 +143,11 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import {
-  readRecipeCropRequest,
-  writeRecipeCropResult,
-  type RecipeCropMode,
-  type RecipeCropRequest
-} from "../utils/recipe-image-crop";
+  readImageCropRequest,
+  writeImageCropResult,
+  type ImageCropMode,
+  type ImageCropRequest
+} from "@/utils/image-crop";
 
 type DragEdge =
   | ""
@@ -164,6 +167,7 @@ const FRAME_PADDING = 10;
 const ACTIONS_RPX = 136;
 const TIP_RPX = 92;
 const RATIO_TABS_RPX = 92;
+const CANVAS_DRAW_SETTLE_MS = 80;
 
 const ratioOptions = [
   { key: "4:3", label: "4:3", ratio: 4 / 3 },
@@ -180,7 +184,7 @@ const token = ref("");
 const loading = ref(true);
 const exporting = ref(false);
 const errorText = ref("");
-const cropRequest = ref<RecipeCropRequest | null>(null);
+const cropRequest = ref<ImageCropRequest | null>(null);
 const finished = ref(false);
 const activeRatioKey = ref<(typeof ratioOptions)[number]["key"]>("4:3");
 
@@ -212,7 +216,8 @@ let startTouchY = 0;
 let startBox = { left: 0, top: 0, right: 0, bottom: 0 };
 
 const cropTitle = computed(() => cropRequest.value?.title || "裁剪图片");
-const cropMode = computed<RecipeCropMode>(() => cropRequest.value?.mode || "free");
+const currentCanvasId = computed(() => (token.value ? `${CANVAS_ID}-${token.value}` : CANVAS_ID));
+const cropMode = computed<ImageCropMode>(() => cropRequest.value?.mode || "free");
 const showRatioPresets = computed(() => cropMode.value === "free");
 const activeAspectRatio = computed(() => {
   if (cropMode.value === "fixed") {
@@ -272,7 +277,7 @@ onLoad((query) => {
 
 onUnload(() => {
   if (finished.value || !token.value) return;
-  writeRecipeCropResult({
+  writeImageCropResult({
     token: token.value,
     status: "cancel",
     croppedPath: null,
@@ -287,7 +292,8 @@ async function loadRequest() {
     loading.value = false;
     return;
   }
-  const request = readRecipeCropRequest(token.value);
+  resetCropState();
+  const request = readImageCropRequest(token.value);
   if (!request) {
     errorText.value = "裁剪任务已失效，请重新选择图片";
     loading.value = false;
@@ -299,6 +305,7 @@ async function loadRequest() {
 
 async function reloadSource() {
   if (!cropRequest.value?.sourcePath) return;
+  resetCropState();
   await loadSource(cropRequest.value.sourcePath);
 }
 
@@ -307,7 +314,7 @@ async function loadSource(path: string) {
   errorText.value = "";
   try {
     const info = await uniPlatform.media.getImageInfo(path);
-    image.src = info.path || path;
+    image.src = preferLocalImagePath(path, info.path);
     image.naturalWidth = info.width;
     image.naturalHeight = info.height;
     fitImage();
@@ -572,7 +579,7 @@ async function finishCrop() {
   exporting.value = true;
   try {
     const result = await exportCrop();
-    writeRecipeCropResult({
+    writeImageCropResult({
       token: token.value,
       status: "done",
       croppedPath: result.path,
@@ -592,33 +599,35 @@ async function exportCrop() {
   if (!cropRequest.value) throw new Error("裁剪参数缺失");
   const sourceRect = resolveSourceRect();
   const exportSize = resolveExportSize(sourceRect.width, sourceRect.height);
-  canvasSize.width = exportSize.width;
-  canvasSize.height = exportSize.height;
+  const canvasScale = resolveCanvasScale(image.naturalWidth, image.naturalHeight);
+  canvasSize.width = Math.max(1, Math.round(image.naturalWidth * canvasScale));
+  canvasSize.height = Math.max(1, Math.round(image.naturalHeight * canvasScale));
+  const canvasCrop = {
+    x: Math.max(0, Math.round(sourceRect.x * canvasScale)),
+    y: Math.max(0, Math.round(sourceRect.y * canvasScale)),
+    width: Math.max(1, Math.round(sourceRect.width * canvasScale)),
+    height: Math.max(1, Math.round(sourceRect.height * canvasScale))
+  };
   await nextTick();
 
-  const context = uniPlatform.media.createCanvasContext(CANVAS_ID, instance?.proxy);
-  context.clearRect(0, 0, exportSize.width, exportSize.height);
-  context.drawImage(
-    image.src,
-    sourceRect.x,
-    sourceRect.y,
-    sourceRect.width,
-    sourceRect.height,
-    0,
-    0,
-    exportSize.width,
-    exportSize.height
-  );
+  const context = uniPlatform.media.createCanvasContext(currentCanvasId.value, instance?.proxy);
+  context.clearRect(0, 0, canvasSize.width, canvasSize.height);
+  // 先按原图等比缩放后的尺寸完整绘制，再由 `canvasToTempFilePath`
+  // 按同一坐标系直接截取，避免旧版 canvas 在源图裁剪或展示尺寸缩放时只导出一角。
+  context.drawImage(image.src, 0, 0, canvasSize.width, canvasSize.height);
 
   await new Promise<void>((resolve) => {
     context.draw(false, () => resolve());
   });
+  await wait(CANVAS_DRAW_SETTLE_MS);
 
   const file = await uniPlatform.media.canvasToTempFilePath(
     {
-      canvasId: CANVAS_ID,
-      width: exportSize.width,
-      height: exportSize.height,
+      canvasId: currentCanvasId.value,
+      x: canvasCrop.x,
+      y: canvasCrop.y,
+      width: canvasCrop.width,
+      height: canvasCrop.height,
       destWidth: exportSize.width,
       destHeight: exportSize.height,
       fileType: cropRequest.value.fileType,
@@ -626,13 +635,18 @@ async function exportCrop() {
     },
     instance?.proxy
   );
-  const readyPath = await resolveReadyCropPath(file.tempFilePath);
+  const readyPath = await persistCropPath(file.tempFilePath);
 
   return {
     path: readyPath,
     width: exportSize.width,
     height: exportSize.height
   };
+}
+
+async function persistCropPath(tempFilePath: string) {
+  const saved = await uniPlatform.media.saveFile(tempFilePath);
+  return resolveReadyCropPath(saved.savedFilePath);
 }
 
 async function resolveReadyCropPath(tempFilePath: string) {
@@ -643,10 +657,22 @@ async function resolveReadyCropPath(tempFilePath: string) {
     }
     try {
       const info = await uniPlatform.media.getImageInfo(tempFilePath);
-      return info.path || tempFilePath;
+      return preferLocalImagePath(tempFilePath, info.path);
     } catch {}
   }
   return tempFilePath;
+}
+
+function preferLocalImagePath(fallbackPath: string, candidatePath?: string) {
+  const readyPath = typeof candidatePath === "string" ? candidatePath.trim() : "";
+  if (!readyPath || isLocalTempBridgePath(readyPath)) {
+    return fallbackPath;
+  }
+  return readyPath;
+}
+
+function isLocalTempBridgePath(path: string) {
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost):\d+\/.*\/tmp\//i.test(path);
 }
 
 function resolveSourceRect() {
@@ -677,6 +703,12 @@ function resolveExportSize(sourceWidth: number, sourceHeight: number) {
   };
 }
 
+function resolveCanvasScale(width: number, height: number) {
+  const maxSide = Math.max(width, height);
+  if (maxSide <= 2048) return 1;
+  return 2048 / maxSide;
+}
+
 function minBoxWidth() {
   if (activeAspectRatio.value) {
     return minBoxHeight() * activeAspectRatio.value;
@@ -701,6 +733,27 @@ function wait(delay: number) {
   return new Promise<void>((resolve) => {
     setTimeout(() => resolve(), delay);
   });
+}
+
+function resetCropState() {
+  activeRatioKey.value = "4:3";
+  image.src = "";
+  image.naturalWidth = 0;
+  image.naturalHeight = 0;
+  image.displayWidth = 0;
+  image.displayHeight = 0;
+  image.left = 0;
+  image.top = 0;
+  crop.left = 0;
+  crop.top = 0;
+  crop.right = 0;
+  crop.bottom = 0;
+  canvasSize.width = 1;
+  canvasSize.height = 1;
+  dragEdge = "";
+  startTouchX = 0;
+  startTouchY = 0;
+  startBox = { left: 0, top: 0, right: 0, bottom: 0 };
 }
 </script>
 

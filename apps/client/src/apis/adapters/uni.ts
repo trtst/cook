@@ -50,6 +50,12 @@ export interface DownloadFileResult {
 	tempFilePath: string;
 }
 
+type UniSystemInfoSyncApi = typeof uni & {
+	getSystemInfoSync?: () => {
+		platform?: string;
+	};
+};
+
 /**
  * 只接受项目明确允许的来源枚举，避免把任意环境变量内容直接透传到请求头里。
  */
@@ -76,6 +82,38 @@ function detectCookFrom(): CookFrom | null {
 
 function getCookFrom() {
 	return readCookFrom(cfg.cookFrom) ?? detectCookFrom() ?? "mini_program";
+}
+
+function readMiniProgramPlatform() {
+	try {
+		return ((uni as UniSystemInfoSyncApi).getSystemInfoSync?.().platform ?? "").toLowerCase();
+	} catch {
+		return "";
+	}
+}
+
+function isRealMiniProgramDevice() {
+	return getCookFrom() === "mini_program" && readMiniProgramPlatform() !== "devtools";
+}
+
+function isLocalhostHost(hostname: string) {
+	const host = hostname.trim().toLowerCase();
+	return host === "localhost" || host === "::1" || host.startsWith("127.");
+}
+
+function assertMiniProgramUploadUrl(url: string) {
+	if (!isRealMiniProgramDevice()) return;
+
+	let hostname = "";
+	try {
+		hostname = new URL(url).hostname;
+	} catch {
+		return;
+	}
+
+	if (!isLocalhostHost(hostname)) return;
+
+	throw new Error("真机上传不能直连 127.0.0.1/localhost，请把 VITE_API_BASE_URL 改成手机可访问的局域网 IP 或 HTTPS 域名");
 }
 
 /**
@@ -141,9 +179,11 @@ export function uniRequestAdapter(request: ApiRequest): Promise<ApiRequestResult
  * 不提前把不确定的 domain 入口暴露给所有调用方。
  */
 export function uploadFile(options: UploadFileOptions): Promise<FileResult> {
+	const url = buildUrl(options.url);
+	assertMiniProgramUploadUrl(url);
 	return new Promise((resolve, reject) => {
 		uni.uploadFile({
-			url: buildUrl(options.url),
+			url,
 			filePath: options.filePath,
 			name: options.name,
 			header: buildHeaders(options.headers ?? {}),

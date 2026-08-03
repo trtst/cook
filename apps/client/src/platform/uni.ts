@@ -85,6 +85,8 @@ interface ClientPlatform {
 		chooseMedia(options?: ChooseMediaOptions): Promise<ChooseMediaResult[]>;
 		getImageInfo(src: string): Promise<ImageInfoResult>;
 		previewImage(options: PreviewImageOptions): Promise<void>;
+		saveFile(tempFilePath: string): Promise<SaveFileResult>;
+		removeSavedFile(filePath: string): Promise<void>;
 		createCanvasContext(canvasId: string, component?: unknown): UniApp.CanvasContext;
 		canvasToTempFilePath(options: CanvasToTempFileOptions, component?: unknown): Promise<CanvasToTempFileResult>;
 	};
@@ -200,6 +202,10 @@ interface CanvasToTempFileResult {
 	tempFilePath: string;
 }
 
+interface SaveFileResult {
+	savedFilePath: string;
+}
+
 type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 interface UniSystemApi {
@@ -228,8 +234,8 @@ export const APP_STORAGE_KEYS = Object.freeze({
 	theme: buildStorageKey("theme"),
 	systemInfoSnapshot: buildStorageKey("system_info_snapshot"),
 	userProfile: buildStorageKey("user_profile"),
-	recipeCrop(token: string) {
-		return buildStorageKey(`recipe_crop_${String(token || "").trim()}`);
+	imageCrop(token: string) {
+		return buildStorageKey(`image_crop_${String(token || "").trim()}`);
 	},
 	recipeEdit(uid: number | string) {
 		return buildStorageKey(`recipe_edit_${String(uid || "").trim()}`);
@@ -418,6 +424,26 @@ function previewImage(options: PreviewImageOptions) {
 	});
 }
 
+function saveFile(tempFilePath: string) {
+	return callUni<SaveFileResult>((resolve, reject) => {
+		uni.saveFile({
+			tempFilePath,
+			success: (result) => resolve({ savedFilePath: result.savedFilePath }),
+			fail: reject
+		});
+	});
+}
+
+function removeSavedFile(filePath: string) {
+	return callUni<void>((resolve, reject) => {
+		uni.removeSavedFile({
+			filePath,
+			success: () => resolve(),
+			fail: reject
+		});
+	});
+}
+
 function createCanvasContext(canvasId: string, component?: unknown) {
 	return uni.createCanvasContext(canvasId, component as never);
 }
@@ -580,6 +606,8 @@ export const uniPlatform: ClientPlatform = {
 		chooseMedia,
 		getImageInfo,
 		previewImage,
+		saveFile,
+		removeSavedFile,
 		createCanvasContext,
 		canvasToTempFilePath
 	}
