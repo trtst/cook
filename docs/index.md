@@ -45,13 +45,15 @@
    - 范围写法、不做项、交付口径和边界确认规则。
 16. `components.md`
    - 前端组件准入、拆分边界、命名和输入输出规则。
-17. `runbook.md`
+17. `client-image.md`
+   - 客户端图片选择、裁剪、本地预览、延迟上传、本地清理和后续头像接入约定。
+18. `runbook.md`
    - 启动、调试、验证、三端联合开发流程、联调和交付说明。
-18. `apps/worker/README.md`
+19. `apps/worker/README.md`
    - Worker 禁用态骨架、命令和 V1 不启动异步任务边界。
-19. `docs/cook/`
+20. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
-20. `plans/business-development-todo.md`
+21. `plans/business-development-todo.md`
    - 记录后续业务开发必须重新确认的问题；只防遗漏，不作为已确认契约。
 
 ## 文档地图
@@ -88,6 +90,8 @@
   - 需求边界、明确不做项和交付口径。
 - `components.md`
   - 共享组件准入、命名、`props` 和事件规则。
+- `client-image.md`
+  - 客户端图片选择、裁剪、本地预览、延迟上传、本地文件清理和后续头像接入约定。
 - `runbook.md`
   - 启动基线、调试顺序、三端联合开发流程、联调清单和交付说明。
 - `../apps/worker/README.md`
