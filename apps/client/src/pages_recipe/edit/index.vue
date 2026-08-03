@@ -48,17 +48,16 @@
 
     <view v-else class="edit-page">
         <view class="hero" :style="heroStyle">
-          <view class="hero__cover">
-            <image v-if="currentCoverImage" :key="currentCoverImage" class="hero__image" :src="currentCoverImage" mode="aspectFill" />
-            <view v-else class="hero__cover-fill">
-              <view class="hero__cover-copy" @click="selectCoverImage">
-                <text class="hero__cover-title">菜谱封面图（4:3）</text>
-                <text class="hero__cover-sub">清晰的封面会让菜谱更容易被看到</text>
-              </view>
-            </view>
-            <button class="cover-button" @click="selectCoverImage">{{ coverButtonText }}</button>
-            <text v-if="currentCoverImage" class="cover-clear" @click="clearCoverImage">删除封面图</text>
-          </view>
+          <ImageField
+            class="hero__cover"
+            variant="cover"
+            :image-src="currentCoverImage"
+            title="菜谱封面图（4:3）"
+            description="清晰的封面会让菜谱更容易被看到"
+            :button-text="coverButtonText"
+            @select="selectCoverImage"
+            @clear="clearCoverImage"
+          />
         </view>
 
         <view class="content">
@@ -197,22 +196,16 @@
                   <text class="step-card__remove" @click="removeStepRow(row.localId)">删除</text>
                 </view>
 
-                <view
+                <ImageField
                   class="step-card__image"
-                  :class="{ 'step-card__image--filled': hasStepImage(row) }"
-                  @click="selectStepImage(row.localId)"
-                >
-                  <template v-if="hasStepImage(row)">
-                    <image :key="getStepImageSrc(row)" class="step-card__preview" :src="getStepImageSrc(row)" mode="aspectFill" />
-                    <button class="step-card__image-change" @click.stop="selectStepImage(row.localId)">更换</button>
-                    <text class="step-card__image-remove" @click.stop="clearStepImage(row.localId)">删除</text>
-                  </template>
-                  <template v-else>
-                    <text class="cookfont icon-add step-card__image-plus" />
-                    <text class="step-card__image-label">步骤图</text>
-                    <text class="step-card__image-tip">清晰的步骤会让菜谱更受欢迎</text>
-                  </template>
-                </view>
+                  variant="card"
+                  :image-src="getStepImageSrc(row)"
+                  title="步骤图"
+                  description="清晰的步骤会让菜谱更受欢迎"
+                  button-text="更换"
+                  @select="selectStepImage(row.localId)"
+                  @clear="clearStepImage(row.localId)"
+                />
 
                 <view class="step-card__field">
                   <textarea
@@ -376,11 +369,7 @@
               </view>
 
               <view class="ingredient-stage">
-                <view
-                  class="ingredient-stage__track"
-                  :class="{ 'ingredient-stage__track--create': ingredientCreateVisible }"
-                >
-                  <view class="ingredient-stage__pane">
+                <view v-show="!ingredientCreateVisible" class="ingredient-stage__pane">
                     <template v-if="ingredientSearchMode">
                       <view v-if="ingredientSearchLoading && !searchedIngredients.length" class="ingredient-picker__empty ingredient-picker__empty--create">
                         <text class="ingredient-picker__empty-text">加载中...</text>
@@ -519,9 +508,9 @@
                         确认
                       </button>
                     </view>
-                  </view>
+                </view>
 
-                  <view class="ingredient-stage__pane">
+                <view v-show="ingredientCreateVisible" class="ingredient-stage__pane">
                     <view class="ingredient-create">
                       <view class="ingredient-create__summary">
                         <view class="ingredient-create__card ingredient-create__card--field">
@@ -600,7 +589,6 @@
                         {{ ingredientCreateDraft.id ? "保存" : "确定" }}
                       </button>
                     </view>
-                  </view>
                 </view>
               </view>
             </template>
@@ -831,24 +819,24 @@ import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { useImageCropFlow } from "@/composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
+import {
+  imageCropPresets,
+  releaseImageFile,
+  type ImageCropResult
+} from "@/utils/image-crop";
 import {
   readRecipeEditCacheItem,
   removeRecipeEditCacheItem,
   writeRecipeEditCacheItem
 } from "@/utils/recipe-edit-cache";
 import { restoreAppSession } from "@/utils/session";
-import {
-  clearRecipeCropSession,
-  readRecipeCropResult,
-  writeRecipeCropRequest,
-  type RecipeCropRequest,
-  type RecipeCropResult
-} from "../utils/recipe-image-crop";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
+import ImageField from "../components/ImageField.vue";
 import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -931,11 +919,6 @@ type CropTarget =
       appendIfMissing: boolean;
     };
 
-type CropTask = {
-  request: RecipeCropRequest;
-  target: CropTarget;
-};
-
 const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
@@ -1012,9 +995,6 @@ let ingredientDragPressId = "";
 let ingredientDragPressTouchY = 0;
 let stepSortPressId = "";
 let stepSortPressTouchY = 0;
-const cropQueue = ref<CropTask[]>([]);
-const activeCropToken = ref("");
-let activeCropTarget: CropTarget | null = null;
 
 const categories = ref<RecipeCategorySummary[]>([]);
 const scenes = ref<RecipeSceneSummary[]>([]);
@@ -1051,6 +1031,19 @@ const ingredientCreateDraft = reactive({
   name: "",
   categoryId: "" as OptionalResourceId,
   unitId: "" as OptionalResourceId
+});
+
+const {
+  queueCrop,
+  queueCrops,
+  consumeCropResult,
+  clearCropQueue
+} = useImageCropFlow<CropTarget>({
+  tokenPrefix: "recipe-crop",
+  onApply: applyCropResult,
+  async onOpenError(error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "打开裁剪页失败", icon: "none" });
+  }
 });
 
 const form = reactive({
@@ -1331,12 +1324,7 @@ onUnload(() => {
     clearTimeout(ingredientSearchTimer);
     ingredientSearchTimer = null;
   }
-  if (activeCropToken.value) {
-    clearRecipeCropSession(activeCropToken.value);
-    activeCropToken.value = "";
-    activeCropTarget = null;
-  }
-  cropQueue.value = [];
+  clearCropQueue();
 });
 
 watch(
@@ -1843,10 +1831,6 @@ function resetRows() {
 
 function getStepImageSrc(row: StepRow) {
   return row.localImagePath || row.imageUrl || "";
-}
-
-function hasStepImage(row: StepRow) {
-  return Boolean(getStepImageSrc(row));
 }
 
 function closeSheet() {
@@ -2673,86 +2657,43 @@ function hasPendingLocalImages() {
   return Boolean(coverLocalImagePath.value || stepRows.value.some(item => item.localImagePath));
 }
 
-function buildCropToken() {
-  return `recipe-crop-${createOperationId()}`;
-}
-
-function createCoverCropRequest(sourcePath: string): RecipeCropRequest {
-  return {
-    token: buildCropToken(),
-    title: "裁剪封面图",
-    sourcePath,
-    mode: "fixed",
-    aspectRatio: 4 / 3,
-    outputWidth: 1200,
-    outputHeight: 900,
-    maxWidth: 1200,
-    maxHeight: 900,
-    quality: 0.84,
-    fileType: "jpg"
-  };
-}
-
-function createStepCropRequest(sourcePath: string): RecipeCropRequest {
-  return {
-    token: buildCropToken(),
-    title: "裁剪步骤图",
-    sourcePath,
-    mode: "free",
-    aspectRatio: null,
-    outputWidth: null,
-    outputHeight: null,
-    maxWidth: 1280,
-    maxHeight: 1280,
-    quality: 0.8,
-    fileType: "jpg"
-  };
-}
-
-function queueCropTask(task: CropTask) {
-  cropQueue.value = [...cropQueue.value, task];
-  if (!activeCropToken.value) {
-    void openNextCropTask();
-  }
-}
-
-async function openNextCropTask() {
-  if (activeCropToken.value) return;
-  const [nextTask, ...rest] = cropQueue.value;
-  if (!nextTask) return;
-  cropQueue.value = rest;
-  activeCropToken.value = nextTask.request.token;
-  activeCropTarget = nextTask.target;
-  writeRecipeCropRequest(nextTask.request);
-  try {
-    await uniPlatform.navigation.navigateTo(
-      `/pages_recipe/crop/index?token=${encodeURIComponent(nextTask.request.token)}`
-    );
-  } catch (error) {
-    clearRecipeCropSession(nextTask.request.token);
-    activeCropToken.value = "";
-    activeCropTarget = null;
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "打开裁剪页失败", icon: "none" });
-  }
-}
-
-function applyCropResult(result: RecipeCropResult) {
-  if (!result.croppedPath || !activeCropTarget) return;
-  const target = activeCropTarget;
+async function applyCropResult(result: ImageCropResult, target: CropTarget) {
+  if (!result.croppedPath) return;
   if (target.kind === "cover") {
+    const previousLocalPath = coverLocalImagePath.value;
     coverUploadId.value = null;
     coverImageUrl.value = "";
+    if (previousLocalPath) {
+      coverLocalImagePath.value = "";
+      await nextTick();
+    }
     coverLocalImagePath.value = result.croppedPath;
+    if (previousLocalPath && previousLocalPath !== result.croppedPath) {
+      releaseImageFile(previousLocalPath);
+    }
     return;
   }
 
+  const currentRow = stepRows.value.find(item => item.localId === target.localId);
+  const previousLocalPath = currentRow?.localImagePath || "";
   if (
     patchStepRow(target.localId, {
       uploadId: null,
       imageUrl: "",
-      localImagePath: result.croppedPath
+      localImagePath: previousLocalPath ? "" : result.croppedPath
     })
   ) {
+    if (previousLocalPath) {
+      await nextTick();
+      patchStepRow(target.localId, {
+        uploadId: null,
+        imageUrl: "",
+        localImagePath: result.croppedPath
+      });
+      if (previousLocalPath !== result.croppedPath) {
+        releaseImageFile(previousLocalPath);
+      }
+    }
     return;
   }
 
@@ -2769,19 +2710,6 @@ function applyCropResult(result: RecipeCropResult) {
   }
 }
 
-async function consumeCropResult() {
-  if (!activeCropToken.value) return;
-  const result = readRecipeCropResult(activeCropToken.value);
-  if (!result) return;
-  clearRecipeCropSession(activeCropToken.value);
-  if (result.status === "done") {
-    applyCropResult(result);
-  }
-  activeCropToken.value = "";
-  activeCropTarget = null;
-  await openNextCropTask();
-}
-
 async function selectCoverImage() {
   try {
     const [file] = await uniPlatform.media.chooseMedia({
@@ -2791,8 +2719,9 @@ async function selectCoverImage() {
       sizeType: ["compressed"]
     });
     if (!file?.path) return;
-    queueCropTask({
-      request: createCoverCropRequest(file.path),
+    queueCrop({
+      sourcePath: file.path,
+      policy: imageCropPresets.recipeCover,
       target: {
         kind: "cover"
       }
@@ -2803,6 +2732,7 @@ async function selectCoverImage() {
 }
 
 function clearCoverImage() {
+  releaseImageFile(coverLocalImagePath.value);
   coverUploadId.value = null;
   coverImageUrl.value = "";
   coverLocalImagePath.value = "";
@@ -2819,8 +2749,9 @@ async function selectStepImage(localId: string) {
       sizeType: ["compressed"]
     });
     if (!file?.path) return;
-    queueCropTask({
-      request: createStepCropRequest(file.path),
+    queueCrop({
+      sourcePath: file.path,
+      policy: imageCropPresets.recipeStep,
       target: {
         kind: "step",
         localId: row.localId,
@@ -2833,6 +2764,8 @@ async function selectStepImage(localId: string) {
 }
 
 function clearStepImage(localId: string) {
+  const row = stepRows.value.find(item => item.localId === localId);
+  releaseImageFile(row?.localImagePath || "");
   patchStepRow(localId, {
     uploadId: null,
     imageUrl: "",
@@ -2849,18 +2782,19 @@ async function handleStepImages() {
       sizeType: ["compressed"]
     });
     if (!files.length) return;
-    files
-      .filter(file => file.path)
-      .forEach(file => {
-        queueCropTask({
-          request: createStepCropRequest(file.path),
+    queueCrops(
+      files
+        .filter(file => file.path)
+        .map(file => ({
+          sourcePath: file.path,
+          policy: imageCropPresets.recipeStep,
           target: {
-            kind: "step",
+            kind: "step" as const,
             localId: "",
             appendIfMissing: true
           }
-        });
-      });
+        }))
+    );
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "选择步骤图失败", icon: "none" });
   }
@@ -2870,16 +2804,18 @@ async function uploadPendingImages() {
   if (!draftId.value) return;
 
   if (coverLocalImagePath.value) {
+    const localCoverPath = coverLocalImagePath.value;
     const result = await recipeApi.uploadRecipeImage({
       operationId: createOperationId(),
       draftId: draftId.value,
       scene: "RECIPE_COVER" satisfies UploadAssetScene,
       slotKey: "cover",
-      filePath: coverLocalImagePath.value
+      filePath: localCoverPath
     });
     coverUploadId.value = result.upload.id;
     coverImageUrl.value = result.upload.imageUrl;
     coverLocalImagePath.value = "";
+    releaseImageFile(localCoverPath);
   }
 
   for (const row of stepRows.value) {
@@ -2897,6 +2833,7 @@ async function uploadPendingImages() {
       imageUrl: result.upload.imageUrl,
       localImagePath: ""
     });
+    releaseImageFile(localImagePath);
   }
 }
 
@@ -3529,83 +3466,6 @@ function nextSlotKey() {
   box-shadow: none;
 }
 
-.hero__image {
-  display: block;
-  width: 100%;
-  height: 75vw;
-  min-height: 420rpx;
-  max-height: 660rpx;
-}
-
-.hero__cover-fill {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  padding: 36rpx;
-  padding-top: calc(75% - 36rpx);
-  background:
-    linear-gradient(140deg, var(--entry-side-mint-bg) 0%, var(--entry-board-bg) 48%, var(--entry-photo-bg) 100%),
-    linear-gradient(180deg, var(--color-surface-mask-weak) 0%, var(--color-surface-mask-medium) 100%);
-}
-
-.hero__cover-copy {
-  position: absolute;
-  right: 36rpx;
-  left: 36rpx;
-  top: var(--hero-header-offset);
-  bottom: 138rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.hero__cover-title,
-.hero__cover-sub {
-  display: block;
-}
-
-.hero__cover-title {
-  color: var(--entry-ink);
-  font-size: 34rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.2;
-}
-
-.hero__cover-sub {
-  color: var(--entry-side-muted-text);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
-.cover-button {
-  position: absolute;
-  left: var(--space-page);
-  bottom: var(--space-page);
-  height: 50rpx;
-  padding: 0 15rpx;
-  border-radius: var(--radius-xs);
-  background: var(--entry-button-bg);
-  color: var(--entry-button-color);
-  font-size: 20rpx;
-  line-height: 50rpx;
-  box-shadow: var(--entry-button-shadow);
-}
-
-.cover-clear {
-  position: absolute;
-  right: var(--space-page);
-  bottom: calc(var(--space-page) + 8rpx);
-  color: var(--color-white);
-  font-size: 24rpx;
-  line-height: 1.4;
-  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.18);
-}
-
 .content {
   padding: 28rpx var(--space-page) 0;
 }
@@ -3761,10 +3621,7 @@ function nextSlotKey() {
 .editor-field__label,
 .group-badge,
 .ingredient-card__title,
-.step-card__title,
-.step-card__image-plus,
-.step-card__image-label,
-.step-card__image-tip {
+.step-card__title {
   display: block;
 }
 
@@ -4162,22 +4019,13 @@ function nextSlotKey() {
   margin-top: 20rpx;
 }
 
-.ingredient-stage__track {
-  display: flex;
-  width: 200%;
-  transition: transform 0.24s ease;
-}
-
-.ingredient-stage__track--create {
-  transform: translateX(-50%);
-}
-
 .ingredient-stage__pane {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 50%;
-  flex: 0 0 50%;
+  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 0 var(--space-page);
   box-sizing: border-box;
 }
@@ -4591,79 +4439,7 @@ function nextSlotKey() {
 }
 
 .step-card__image {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  align-content: center;
-  gap: 10rpx;
-  min-height: 300rpx;
   margin-top: 18rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  text-align: center;
-}
-
-.step-card__image--filled {
-  overflow: hidden;
-  align-items: flex-end;
-  justify-content: flex-start;
-  align-content: flex-end;
-  padding: 22rpx;
-  text-align: left;
-}
-
-.step-card__preview {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.step-card__image-plus {
-  font-size: 36rpx;
-  font-weight: var(--font-weight-medium);
-  color: inherit;
-}
-
-.step-card__image-label {
-  font-size: 30rpx;
-  font-weight: var(--font-weight-medium);
-  color: inherit;
-}
-
-.step-card__image-tip {
-  width: 100%;
-  margin-top: 4rpx;
-  font-size: 24rpx;
-}
-
-.step-card__image-change {
-  position: absolute;
-  left: 22rpx;
-  bottom: 22rpx;
-  z-index: 1;
-  height: 50rpx;
-  padding: 0 15rpx;
-  border-radius: var(--radius-xs);
-  background: var(--entry-button-bg);
-  color: var(--entry-button-color);
-  font-size: 20rpx;
-  line-height: 50rpx;
-  box-shadow: var(--entry-button-shadow);
-}
-
-.step-card__image-remove {
-  position: absolute;
-  right: 22rpx;
-  bottom: 30rpx;
-  z-index: 1;
-  color: var(--color-white);
-  font-size: 24rpx;
-  line-height: 1.4;
-  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.18);
 }
 
 .step-card__field {
