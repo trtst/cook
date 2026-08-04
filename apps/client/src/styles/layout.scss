@@ -1,0 +1,16 @@
+/*
+ * 全局布局度量变量。
+ *
+ * 这里集中放页面壳、导航栏、TabBar、安全区这类运行期布局 token，
+ * 避免页面继续散写 152rpx 这类魔法值。
+ */
+page {
+  --tabbar-panel-height: 108rpx;
+  --tabbar-bottom-gap: 18rpx;
+  --tabbar-top-fade-gap: 26rpx;
+  --tabbar-shell-height: calc(
+    var(--tabbar-panel-height) +
+    var(--tabbar-bottom-gap) +
+    var(--tabbar-top-fade-gap)
+  );
+}

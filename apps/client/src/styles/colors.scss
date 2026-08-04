@@ -41,6 +41,7 @@ page {
   --color-tabbar-bg: rgba(255, 250, 245, 0.9);
   --shadow-card: 0 12rpx 32rpx rgba(101, 133, 122, 0.1);
   --shadow-floating: 0 -8rpx 28rpx rgba(101, 133, 122, 0.1);
+  --shadow-tabbar: 0 6rpx 18rpx rgba(101, 133, 122, 0.08);
   color-scheme: light;
 }
 
@@ -146,6 +147,7 @@ page,
     --color-tabbar-bg: rgba(24, 32, 29, 0.9);
     --shadow-card: 0 12rpx 32rpx rgba(0, 0, 0, 0.24);
     --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.28);
+    --shadow-tabbar: 0 6rpx 18rpx rgba(0, 0, 0, 0.18);
     color-scheme: dark;
   }
 }
@@ -179,6 +181,7 @@ page,
   --color-tabbar-bg: rgba(24, 32, 29, 0.9);
   --shadow-card: 0 12rpx 32rpx rgba(0, 0, 0, 0.24);
   --shadow-floating: 0 -8rpx 28rpx rgba(0, 0, 0, 0.28);
+  --shadow-tabbar: 0 6rpx 18rpx rgba(0, 0, 0, 0.18);
   color-scheme: dark;
 }
 

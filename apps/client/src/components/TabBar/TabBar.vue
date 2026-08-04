@@ -75,7 +75,7 @@ function switchTab(pagePath: string) {
   bottom: 0;
   left: 0;
   z-index: 900;
-  height: calc(152rpx + env(safe-area-inset-bottom));
+  height: calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom));
   pointer-events: none;
 }
 
@@ -94,15 +94,15 @@ function switchTab(pagePath: string) {
 .tabbar {
   position: absolute;
   right: 28rpx;
-  bottom: calc(18rpx + env(safe-area-inset-bottom));
+  bottom: calc(var(--tabbar-bottom-gap) + env(safe-area-inset-bottom));
   left: 28rpx;
   z-index: 1;
   display: flex;
-  height: 108rpx;
+  height: var(--tabbar-panel-height);
   padding: 10rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-tabbar-bg);
+  box-shadow: var(--shadow-tabbar);
   pointer-events: auto;
   -webkit-backdrop-filter: saturate(180%) blur(28rpx);
   backdrop-filter: saturate(180%) blur(28rpx);

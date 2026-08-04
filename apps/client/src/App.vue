@@ -8,20 +8,21 @@ import { initTheme } from "@/composables/useTheme";
 import { restoreAppSession } from "@/utils/session";
 
 onLaunch(() => {
-  initSystemInfo();
-  initTheme();
-  void useSettingsStore().restore();
-  void useAppConfigStore().load().catch(() => undefined);
-  void restoreAppSession();
+	initSystemInfo();
+	initTheme();
+	void useSettingsStore().restore();
+	void useAppConfigStore().load().catch(() => undefined);
+	void restoreAppSession();
 });
 
 onShow(() => {
-  void refreshSessionIfNeeded().catch(() => undefined);
+	void refreshSessionIfNeeded().catch(() => undefined);
 });
 </script>
 
 <style lang="scss">
 @use "@/styles/colors.scss";
+@use "@/styles/layout.scss";
 @use "@/assets/fonts/font.scss";
 @use "@/themes/skins.scss";
 
@@ -30,7 +31,7 @@ onShow(() => {
 /* Black / Heavy / 900 */
 @font-face {
 	font-family: 'SC-Black';
-	font-display: block ;
+	font-display: block;
 	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCBlack.ttf") format("truetype");
 	font-weight: 900;
 	font-style: normal;
@@ -40,7 +41,7 @@ onShow(() => {
 /* Bold / 700 */
 @font-face {
 	font-family: 'SC-Bold';
-	font-display: block ;
+	font-display: block;
 	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCBold.ttf") format("truetype");
 	font-weight: 700;
 	font-style: normal;
@@ -50,7 +51,7 @@ onShow(() => {
 /* Medium / 500 */
 @font-face {
 	font-family: 'SC-Medium';
-	font-display: block ;
+	font-display: block;
 	src: url("https://static.yueniuzq.com/static/font/NotoSerifSCMedium.ttf") format("truetype");
 	font-weight: 500;
 	font-style: normal;
@@ -60,19 +61,29 @@ onShow(() => {
 .font-black {
 	font-family: 'SC-Black';
 }
+
 .font-bold {
 	font-family: 'SC-Bold';
 }
+
 .font-medium {
 	font-family: 'SC-Medium';
 }
 
 
 page {
-  min-height: 100%;
-  background: var(--color-page);
-  color: var(--color-text);
-  font-family: var(--font-family-base);
+	height: 100vh;
+	overflow: hidden;
+	background: var(--color-page);
+	color: var(--color-text);
+	font-family: var(--font-family-base);
+}
+
+::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+	color: transparent;
+	display: none;
 }
 
 view,
@@ -80,6 +91,6 @@ text,
 button,
 input,
 textarea {
-  box-sizing: border-box;
+	box-sizing: border-box;
 }
 </style>
