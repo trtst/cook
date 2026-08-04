@@ -47,6 +47,7 @@
     </view>
 
     <view v-else class="edit-page">
+      <scroll-view scroll-y class="edit-scroll" show-scrollbar="false" @scroll="handleEditScroll">
         <view class="hero" :style="heroStyle">
           <ImageField
             class="hero__cover"
@@ -244,6 +245,7 @@
             </view>
           </view>
         </view>
+      </scroll-view>
 
         <view v-if="stepSortVisible" class="step-sort" :class="{ 'step-sort--open': stepSortOpen }">
           <view class="step-sort__mask" @click="cancelStepSort" />
@@ -369,7 +371,7 @@
               </view>
 
               <view class="ingredient-stage">
-                <view v-show="!ingredientCreateVisible" class="ingredient-stage__pane">
+                <view v-if="!ingredientCreateVisible" class="ingredient-stage__pane">
                     <template v-if="ingredientSearchMode">
                       <view v-if="ingredientSearchLoading && !searchedIngredients.length" class="ingredient-picker__empty ingredient-picker__empty--create">
                         <text class="ingredient-picker__empty-text">加载中...</text>
@@ -510,7 +512,7 @@
                     </view>
                 </view>
 
-                <view v-show="ingredientCreateVisible" class="ingredient-stage__pane">
+                <view v-else class="ingredient-stage__pane">
                     <view class="ingredient-create">
                       <view class="ingredient-create__summary">
                         <view class="ingredient-create__card ingredient-create__card--field">
@@ -795,7 +797,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
-import { onHide, onLoad, onPageScroll, onShow, onUnload } from "@dcloudio/uni-app";
+import { onHide, onLoad, onShow, onUnload } from "@dcloudio/uni-app";
 import loadingIllustration from "@/assets/recipe-page/loading-state.svg";
 import {
   recipeApi,
@@ -1299,9 +1301,10 @@ onLoad((query) => {
   void loadPage();
 });
 
-onPageScroll((event) => {
-  navOpacity.value = Math.max(0, Math.min(1, event.scrollTop / NAV_FADE_RANGE));
-});
+function handleEditScroll(event: { detail?: { scrollTop?: number } }) {
+  const scrollTop = event.detail?.scrollTop ?? 0;
+  navOpacity.value = Math.max(0, Math.min(1, scrollTop / NAV_FADE_RANGE));
+}
 
 onHide(() => {
   flushRecipeEditCache();
@@ -3415,9 +3418,18 @@ function nextSlotKey() {
 <style scoped lang="scss">
 .edit-page {
   position: relative;
-  min-height: 100vh;
-  padding-bottom: calc(148rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background: var(--entry-board-bg);
+}
+
+.edit-scroll {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
 }
 
 .edit-nav-backdrop {
@@ -3467,7 +3479,7 @@ function nextSlotKey() {
 }
 
 .content {
-  padding: 28rpx var(--space-page) 0;
+  padding: 28rpx var(--space-page) calc(148rpx + env(safe-area-inset-bottom));
 }
 
 .title-block__field {
@@ -4271,6 +4283,7 @@ function nextSlotKey() {
   display: flex;
   flex-direction: column;
   gap: 18rpx;
+  min-height: 620rpx;
 }
 
 .ingredient-create__summary {

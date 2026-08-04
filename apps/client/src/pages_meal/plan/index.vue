@@ -138,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ref, watch } from "vue";
 import { ApiClientError, type UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
@@ -174,6 +174,13 @@ const mealSlots = [
   { value: "LUNCH" as const, label: "午餐" },
   { value: "DINNER" as const, label: "晚餐" }
 ];
+
+onLoad((query) => {
+  const nextRecipeId = parseQueryId(query?.recipeId);
+  if (nextRecipeId) {
+    selectedRecipeId.value = nextRecipeId;
+  }
+});
 
 onShow(() => {
   if (!sessionStore.isLoggedIn) return;
@@ -375,6 +382,12 @@ function isCookPending(menuItemId: UUID) {
 
 function openMemory(eventId: UUID) {
   void uniPlatform.navigation.navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(eventId))}`);
+}
+
+function parseQueryId(value: unknown): UUID | "" {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const decoded = typeof raw === "string" ? Number(decodeURIComponent(raw)) : Number(raw);
+  return Number.isInteger(decoded) && decoded > 0 ? decoded : "";
 }
 
 function clearPageState() {

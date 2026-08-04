@@ -21,7 +21,7 @@
       @success="handleLoginSuccess"
     />
 
-    <view v-else class="list-page" :style="pageBodyStyle">
+    <view v-else class="list-page">
       <view class="search-row">
         <RecipeSearchBar
           v-model="keyword"
@@ -128,7 +128,6 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { useSystemInfo } from "@/composables/useSystemInfo";
 import { getRecipeViewVersion, markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -160,7 +159,6 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
-const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loadingTips = [
 	"帮你翻翻最近做过的菜",
@@ -201,9 +199,6 @@ const deletingDraftId = ref<UUID | "">("");
 const deletingRecipeId = ref<UUID | "">("");
 const keywordText = computed(() => keyword.value.trim());
 const items = computed(() => cachedItems.value[mode.value]);
-const pageBodyStyle = computed(() => ({
-	height: `calc(100vh - ${navBarTotalHeight.value}px)`
-}));
 const currentHasNext = computed(() => hasNextMap.value[mode.value]);
 const footerText = computed(() => {
 	if (loadingMore.value) return "加载更多中...";
@@ -542,7 +537,6 @@ function formatDateTime(value: string) {
 .list-nav__back {
 	display: flex;
 	align-items: center;
-	justify-content: center;
 	width: 64rpx;
 	height: 64rpx;
 	color: var(--color-text);
@@ -601,14 +595,16 @@ function formatDateTime(value: string) {
 }
 
 .search-row {
-	margin-top: 12rpx;
+	padding: 10rpx var(--space-page) 0;
 }
 
 .list-page {
 	display: flex;
 	flex-direction: column;
+	flex: 1;
+	height: 100%;
 	min-height: 0;
-	padding: 10rpx var(--space-page) 0;
+	overflow: hidden;
 }
 
 .list-scroll {
@@ -617,9 +613,11 @@ function formatDateTime(value: string) {
 }
 
 .list-scroll-wrap {
+	display: flex;
 	position: relative;
 	flex: 1;
 	min-height: 0;
+	overflow: hidden;
 }
 
 .notice {
@@ -631,12 +629,11 @@ function formatDateTime(value: string) {
 }
 
 .list {
-	margin-top: var(--space-md);
-	padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+	padding: 20rpx var(--space-page) calc(40rpx + env(safe-area-inset-bottom));
 }
 
 .list-footer {
-	padding: 12rpx 0 calc(12rpx + env(safe-area-inset-bottom));
+	padding: 12rpx 0;
 	color: var(--color-text-tertiary);
 	font-size: 22rpx;
 	line-height: 1.5;

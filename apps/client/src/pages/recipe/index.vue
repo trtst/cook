@@ -15,8 +15,8 @@
       </view>
     </template>
 
-    <view id="recipe-page" class="recipe-page" :style="pageBodyStyle">
-      <view id="recipe-fixed-panel" class="recipe-fixed-panel" :style="fixedPanelStyle">
+    <view class="recipe-page">
+      <view class="recipe-head">
         <view class="search-row">
           <view class="search-row__inner">
             <RecipeSearchBar
@@ -131,7 +131,7 @@
         </view>
       </view>
 
-      <view class="recipe-scroll-wrap" :style="scrollWrapStyle">
+      <view class="recipe-scroll-wrap">
         <RecipeSearchLoading
           :pull-distance="pullDistance"
           :refreshing="refreshing"
@@ -295,10 +295,8 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
-import { useFixedPanelLayout } from "@/composables/useFixedPanelLayout";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
-import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -339,7 +337,6 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 const pageStyle = usePageScrollStyle();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
-const { navBarTotalHeight, tabBarHeight } = useSystemInfo();
 
 const pageSizeMap: Record<RecipeTab, number> = {
 	my: 20,
@@ -446,10 +443,6 @@ const {
 });
 
 let scrollTimer: ReturnType<typeof setTimeout> | null = null;
-
-const pageBodyStyle = computed(() => ({
-	height: `calc(100vh - ${navBarTotalHeight.value + tabBarHeight.value}px)`
-}));
 const categoryItems = computed<CategoryItem[]>(() => {
 	if (activeTab.value === "my") {
 		return [{ id: "", name: "全部" }, ...myCategories.value.map(item => ({ id: item.id, name: item.name }))];
@@ -542,15 +535,8 @@ const inlineLoadingText = computed(() => {
 	}
 	return loadingTips;
 });
-const { panelStyle: fixedPanelStyle, contentStyle: scrollWrapStyle, syncPanel: syncFixedPanel } = useFixedPanelLayout({
-	panelId: "recipe-fixed-panel",
-	topPx: navBarTotalHeight,
-	watchSources: [activeTab, showStickyControls, showCategoryBar, showFilters, () => categoryItems.value.length]
-});
-
 onShow(() => {
 	void loadActiveTab();
-	void syncFixedPanel();
 });
 
 onHide(() => {
@@ -1059,6 +1045,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -1101,10 +1088,8 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   transform: rotate(-5deg);
 }
 
-.recipe-fixed-panel {
-  position: fixed;
-  left: 0;
-  right: 0;
+.recipe-head {
+  position: relative;
   z-index: 25;
   box-sizing: border-box;
   padding: 10rpx var(--space-page) 0;
@@ -1131,15 +1116,13 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 
 .recipe-scroll {
   flex: 1;
-  height: 100%;
   min-height: 0;
 }
 
 .recipe-scroll-wrap {
   display: flex;
   position: relative;
-  width: 100%;
-  flex: none;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   padding: 0 var(--space-page);
@@ -1421,7 +1404,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20rpx;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: calc(24rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
 }
 
 .list-footer {

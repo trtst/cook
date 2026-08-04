@@ -38,106 +38,155 @@
 
     <template v-else>
       <view class="detail-page">
-        <view class="hero" :style="heroStyle">
-          <view class="hero__cover">
-            <image v-if="coverImageUrl" class="hero__image" :src="coverImageUrl" mode="aspectFill" />
-            <view v-else class="hero__cover-fill">
-              <view class="hero__cover-copy">
-                <text class="hero__cover-title">菜谱封面图</text>
-                <text class="hero__cover-sub">4:3 封面图位置，当前版本先保留展示位。</text>
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <view class="content" :class="{ 'content--with-actions': showStickyActions }">
-	          <view class="summary-card">
-	            <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
-	            <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
-            <view v-if="detailFactText || showReportEntry" class="summary-card__facts">
-              <view class="summary-card__fact-row">
-                <view v-if="detailFactText" class="summary-card__fact-block">
-                  <text class="summary-card__fact-title">分类/场景</text>
-                  <text class="summary-card__fact-text">{{ detailFactText }}</text>
+        <scroll-view
+          id="detail-scroll"
+          scroll-y
+          scroll-with-animation
+          class="detail-scroll"
+          :scroll-top="detailScrollTop"
+          show-scrollbar="false"
+          @scroll="handleDetailScroll"
+        >
+          <view class="detail-scroll-body">
+            <view class="hero" :style="heroStyle">
+              <view class="hero__cover">
+                <image v-if="coverImageUrl" class="hero__image" :src="coverImageUrl" mode="aspectFill" />
+                <view v-else class="hero__cover-fill">
+                  <view class="hero__cover-copy">
+                    <text class="hero__cover-title">菜谱封面图</text>
+                    <text class="hero__cover-sub">4:3 封面图位置，当前版本先保留展示位。</text>
+                  </view>
                 </view>
-                <text
-                  v-if="showReportEntry"
-                  class="summary-card__report-entry"
-                  hover-class="summary-card__report-entry--hover"
-                  hover-stay-time="100"
-                  @click="openReportSheet"
-                >
-                  举报
-                </text>
               </view>
             </view>
 
-		            <view class="summary-info">
-		              <view v-for="item in infoItems" :key="item.key" class="summary-info__item">
-		                <view class="summary-info__icon" :class="[`summary-info__icon--${item.key}`, item.iconClass]" />
-		                <text class="summary-info__label" :class="{ 'summary-info__label--muted': item.muted }">{{ item.label }}</text>
+            <view class="content" :class="{ 'content--with-actions': showStickyActions }">
+	            <view class="summary-card">
+	              <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
+	              <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
+              <view v-if="detailFactText || showReportEntry || showRecommendEntry" class="summary-card__facts">
+                <view class="summary-card__fact-row">
+                  <view v-if="detailFactText" class="summary-card__fact-block">
+                    <text class="summary-card__fact-title">分类/场景</text>
+                    <text class="summary-card__fact-text">{{ detailFactText }}</text>
+                  </view>
+                  <text
+                    v-if="showReportEntry"
+                    class="summary-card__report-entry"
+                    hover-class="summary-card__report-entry--hover"
+                    hover-stay-time="100"
+                    @click="openReportSheet"
+                  >
+                    举报
+                  </text>
+                  <view
+                    v-else-if="showRecommendEntry"
+                    class="summary-card__recommend-entry"
+                    :class="recommendEntryClass"
+                    hover-class="summary-card__recommend-entry--hover"
+                    hover-stay-time="100"
+                    @click="openRecommendSheet"
+                  >
+                    <text class="cookfont icon-recommend summary-card__recommend-entry-icon" />
+                    <text>{{ recommendActionLabel }}</text>
+                  </view>
+                </view>
+              </view>
+
+		              <view class="summary-info">
+		                <view v-for="item in infoItems" :key="item.key" class="summary-info__item">
+		                  <view class="summary-info__icon" :class="[`summary-info__icon--${item.key}`, item.iconClass]" />
+		                  <text class="summary-info__label" :class="{ 'summary-info__label--muted': item.muted }">{{ item.label }}</text>
+		                </view>
 		              </view>
-		            </view>
 
-	          </view>
-
-          <view id="detail-ingredients" class="section section--first">
-            <view class="section__head">
-              <view class="section__head-main">
-                <text class="section__label">食材清单</text>
-                <text class="section__caption">{{ ingredientCountText }}</text>
-              </view>
-              <button
-                v-if="showShoppingEntry"
-                class="section__action"
-                :disabled="shoppingSubmitting"
-                @click="addToShoppingList"
-              >
-                <text class="cookfont icon-add-list section__action-icon" />
-                <text>{{ shoppingSubmitting ? "添加中..." : "添加清单" }}</text>
-              </button>
-            </view>
-            <view v-if="detailContent.ingredients.length" class="ingredient-list">
-              <view
-                v-for="item in detailContent.ingredients"
-                :key="`${item.ingredientId}-${item.ingredientName}`"
-                class="ingredient-row"
-              >
-                <text class="ingredient-row__name">{{ item.ingredientName }}</text>
-                <text class="ingredient-row__amount">{{ formatAmount(item.amount) }}</text>
-              </view>
-            </view>
-            <text v-else class="section__empty">暂未添加食材</text>
-          </view>
-
-          <view id="detail-steps" class="section">
-            <view class="section__head">
-              <text class="section__label">步骤</text>
-              <text class="section__caption">{{ stepCountText }}</text>
-            </view>
-            <view v-if="detailSteps.length" class="step-list">
-              <view v-for="(item, index) in detailSteps" :key="index" class="step-card">
-                <text class="step-card__index font-medium">
-                  <text class="step-card__index-current font-black">{{ index + 1 }} </text>
-                  <text class="step-card__index-total">{{ `/ ${detailSteps.length}` }}</text>
-                </text>
-                <image v-if="item.imageUrl" class="step-card__cover-image" :src="item.imageUrl" mode="widthFix" />
-                <text v-if="hasStepText(item.text)" class="step-card__text">{{ item.text.trim() }}</text>
-              </view>
-            </view>
-            <text v-else class="section__empty">暂未填写步骤</text>
-          </view>
-
-	          <view v-if="detailContent.tips" class="section">
-	            <view class="section__head">
-	              <text class="section__label">小贴士</text>
 	            </view>
-	            <text class="tips-text">{{ detailContent.tips }}</text>
-	          </view>
 
-            <text v-if="curatedText" class="detail-curated">{{ curatedText }}</text>
+              <view id="detail-ingredients" class="section section--first">
+                <view class="section__head">
+                  <view class="section__head-main">
+                    <text class="section__label">食材清单</text>
+                    <text class="section__caption">{{ ingredientCountText }}</text>
+                  </view>
+                  <button
+                    v-if="showShoppingEntry"
+                    class="section__action"
+                    :disabled="shoppingSubmitting"
+                    @click="addToShoppingList"
+                  >
+                    <text class="cookfont icon-add-list section__action-icon" />
+                    <text>{{ shoppingSubmitting ? "添加中..." : "添加清单" }}</text>
+                  </button>
+                </view>
+                <view v-if="detailContent.ingredients.length" class="ingredient-list">
+                  <view
+                    v-for="item in detailContent.ingredients"
+                    :key="`${item.ingredientId}-${item.ingredientName}`"
+                    class="ingredient-row"
+                  >
+                    <text class="ingredient-row__name">{{ item.ingredientName }}</text>
+                    <text class="ingredient-row__amount">{{ formatAmount(item.amount) }}</text>
+                  </view>
+                </view>
+                <text v-else class="section__empty">暂未添加食材</text>
+              </view>
 
-	        </view>
+              <view id="detail-steps" class="section">
+                <view class="section__head">
+                  <text class="section__label">步骤</text>
+                  <text class="section__caption">{{ stepCountText }}</text>
+                </view>
+                <view v-if="detailSteps.length" class="step-list">
+                  <view v-for="(item, index) in detailSteps" :key="index" class="step-card">
+                    <text class="step-card__index font-medium">
+                      <text class="step-card__index-current font-black">{{ index + 1 }} </text>
+                      <text class="step-card__index-total">{{ `/ ${detailSteps.length}` }}</text>
+                    </text>
+                    <image v-if="item.imageUrl" class="step-card__cover-image" :src="item.imageUrl" mode="widthFix" />
+                    <text v-if="hasStepText(item.text)" class="step-card__text">{{ item.text.trim() }}</text>
+                  </view>
+                </view>
+                <text v-else class="section__empty">暂未填写步骤</text>
+              </view>
+
+	            <view v-if="detailContent.tips" class="section">
+	              <view class="section__head">
+	                <text class="section__label">小贴士</text>
+	              </view>
+	              <text class="tips-text">{{ detailContent.tips }}</text>
+	            </view>
+
+              <text v-if="curatedText" class="detail-curated">{{ curatedText }}</text>
+
+	              <view v-if="showInlineDetailActions" class="detail-inline-actions">
+	                <button class="detail-inline-actions__item" open-type="share">
+	                  <view class="cookfont detail-inline-actions__icon icon-share" />
+	                  <view class="detail-inline-actions__text">分享</view>
+	                </button>
+                <template v-if="isExternalDetail">
+	                  <button class="detail-inline-actions__item" @click="handleAdaptRecipe">
+	                    <view class="cookfont detail-inline-actions__icon icon-edit" />
+	                    <view class="detail-inline-actions__text">改编</view>
+	                  </button>
+	                  <button class="detail-inline-actions__item" @click="openAddSheet">
+	                    <view class="cookfont detail-inline-actions__icon icon-add-owner" />
+                    <view class="detail-inline-actions__text">{{ addActionLabel }}</view>
+                  </button>
+                </template>
+                  <template v-else-if="isOwnedDetail">
+	                    <button class="detail-inline-actions__item" @click="handleEditRecipe">
+	                      <view class="cookfont detail-inline-actions__icon icon-edit" />
+	                      <view class="detail-inline-actions__text">编辑</view>
+	                    </button>
+	                    <button class="detail-inline-actions__item" @click="handleAddPlan">
+	                      <view class="cookfont detail-inline-actions__icon icon-add-plan" />
+	                      <view class="detail-inline-actions__text">加入计划</view>
+	                    </button>
+	                  </template>
+	                </view>
+            </view>
+          </view>
+        </scroll-view>
       </view>
 
       <view
@@ -150,39 +199,34 @@
             <view class="cookfont icon-share detail-actions__icon" />
             <view class="detail-actions__text">分享</view>
           </button>
-          <template v-if="kind === 'inspiration'">
+          <template v-if="isExternalDetail">
             <button class="detail-actions__item" @click="handleAdaptRecipe">
               <view class="cookfont icon-edit detail-actions__icon" />
               <view class="detail-actions__text">改编</view>
             </button>
             <button class="detail-actions__item" @click="openAddSheet">
               <view class="cookfont icon-add-owner detail-actions__icon" />
-              <view class="detail-actions__text">添加到我的</view>
+              <view class="detail-actions__text">{{ addActionLabel }}</view>
             </button>
           </template>
-          <template v-else-if="kind === 'my'">
+          <template v-else-if="isOwnedDetail">
             <button class="detail-actions__item" @click="handleEditRecipe">
               <view class="cookfont icon-edit detail-actions__icon" />
               <view class="detail-actions__text">编辑</view>
             </button>
-            <button
-              class="detail-actions__item"
-              :class="{ 'detail-actions__item--disabled': recommendActionDisabled }"
-              :disabled="recommendActionDisabled"
-              @click="openRecommendSheet"
-            >
-              <view class="cookfont icon-recommend detail-actions__icon" />
-              <view class="detail-actions__text">{{ recommendActionLabel }}</view>
+            <button class="detail-actions__item" @click="handleAddPlan">
+              <view class="cookfont icon-add-plan detail-actions__icon" />
+              <view class="detail-actions__text">加入计划</view>
             </button>
           </template>
         </view>
       </view>
 
       <SheetShell
-        v-if="kind === 'inspiration'"
+        v-if="isExternalDetail"
         :visible="addSheetVisible"
-        title="添加到我的"
-        subtitle="至少选择一个。选个人分类会带着当前菜谱内容进入“我的”，选合集会固定保存当前灵感版本。"
+        :title="addSheetTitle"
+        :subtitle="addSheetSubtitle"
         @close="closeAddSheet"
       >
           <view v-if="addSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
@@ -225,10 +269,10 @@
                   {{ item.name }}
                 </view>
               </view>
-              <text v-else class="sheet-section__hint">还没有个人分类，可先只选合集。</text>
+              <text v-else class="sheet-section__hint">{{ addCategoryHint }}</text>
             </view>
 
-            <view class="sheet-section">
+            <view v-if="showAddSceneSection" class="sheet-section">
               <view class="sheet-section__head">
                 <view class="sheet-section__meta">
                   <text class="sheet-section__title">合集</text>
@@ -324,7 +368,7 @@
       </SheetShell>
 
       <SheetShell
-        v-if="kind === 'inspiration'"
+        v-if="isExternalDetail"
         :visible="reportSheetVisible"
         title="举报菜谱"
         subtitle="如果这份菜谱让你觉得不合适，可以选一个最接近的原因告诉我们；选“其他”时再补充几句说明就可以。"
@@ -360,7 +404,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { onHide, onLoad, onPageScroll, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
+import { onHide, onLoad, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 	import {
 		recipeApi,
@@ -474,6 +518,7 @@ const addCategorySubmitting = ref(false);
 const addSceneSubmitting = ref(false);
 const navOpacity = ref(0);
 const scrollTop = ref(0);
+const detailScrollTop = ref(0);
 const titleThreshold = ref(Number.POSITIVE_INFINITY);
 const ingredientTop = ref(0);
 const stepTop = ref(Number.POSITIVE_INFINITY);
@@ -494,6 +539,10 @@ const publishedDetail = computed(() => {
 const inspirationDetail = computed(() => {
 	if (mode.value !== "published" || kind.value !== "inspiration" || !detail.value) return null;
 	return detail.value as InspirationRecipeDetail;
+});
+const collectionDetail = computed(() => {
+	if (mode.value !== "published" || kind.value !== "collection" || !detail.value) return null;
+	return detail.value as CollectedRecipeDetail;
 });
 const myDetail = computed(() => {
 	if (mode.value !== "published" || kind.value !== "my" || !detail.value) return null;
@@ -553,6 +602,24 @@ const detailSceneNames = computed(() => {
 const detailSceneLabels = computed(() => detailSceneNames.value.map(item => limitSceneName(item)).filter(Boolean));
 const detailStory = computed(() => detailContent.value.story?.trim() || "");
 const currentRecommendation = computed(() => myDetail.value?.recommendation ?? null);
+const externalDetail = computed(() => inspirationDetail.value || collectionDetail.value);
+const externalRecipeRef = computed(() => {
+  if (inspirationDetail.value) {
+    return {
+      sourceRecipeId: inspirationDetail.value.id,
+      sourceVersionId: inspirationDetail.value.contentVersionId,
+      sceneIds: [] as UUID[]
+    };
+  }
+  if (collectionDetail.value) {
+    return {
+      sourceRecipeId: collectionDetail.value.sourceRecipeId,
+      sourceVersionId: collectionDetail.value.contentVersionId,
+      sceneIds: collectionDetail.value.scenes.map(item => item.id)
+    };
+  }
+  return null;
+});
 const curatedText = computed(() => {
   const name = inspirationDetail.value?.curatedByName?.trim();
   if (!name) return "";
@@ -569,7 +636,9 @@ const recommendActionText = computed(() => {
 	return "投稿灵感";
 });
 const detailSteps = computed(() => detailContent.value.steps.filter(item => Boolean(item.imageUrl || hasStepText(item.text))));
-const showReportEntry = computed(() => mode.value === "published" && kind.value === "inspiration" && sessionStore.isLoggedIn);
+const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(detail.value));
+const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
+const showReportEntry = computed(() => isExternalDetail.value && sessionStore.isLoggedIn);
 const selectedReportReasonLabel = computed(
   () => reportReasonOptions.find(item => item.value === selectedReportReason.value)?.label || ""
 );
@@ -591,8 +660,30 @@ const recommendActionDisabled = computed(() => {
 	const status = currentRecommendation.value?.status;
 	return status === "PENDING" || status === "ADOPTED";
 });
+const addActionLabel = computed(() => (kind.value === "collection" ? "升级为我的" : "添加到我的"));
+const addSheetTitle = computed(() => addActionLabel.value);
+const addSheetSubtitle = computed(() => {
+  if (kind.value === "collection") {
+    return "选择一个个人分类，当前合集场景会随这份固定版本一起保留到“我的”。";
+  }
+  return "至少选择一个。选个人分类会带着当前菜谱内容进入“我的”，选合集会固定保存当前灵感版本。";
+});
+const addCategoryHint = computed(() =>
+  kind.value === "collection" ? "还没有个人分类，先创建一个分类再升级为“我的”。" : "还没有个人分类，可先只选合集。"
+);
+const showAddSceneSection = computed(() => kind.value === "inspiration");
+const recommendEntryClass = computed(() => {
+  const status = currentRecommendation.value?.status;
+  if (status === "ADOPTED") return "summary-card__recommend-entry summary-card__recommend-entry--adopted";
+  if (status === "PENDING") return "summary-card__recommend-entry summary-card__recommend-entry--pending";
+  if (status === "REJECTED" || status === "WITHDRAWN") {
+    return "summary-card__recommend-entry summary-card__recommend-entry--retry";
+  }
+  return "summary-card__recommend-entry summary-card__recommend-entry--default";
+});
+const showRecommendEntry = computed(() => isOwnedDetail.value);
 const showStickyActions = computed(
-  () => mode.value === "published" && (kind.value === "inspiration" || kind.value === "my") && Boolean(detail.value)
+  () => mode.value === "published" && (isExternalDetail.value || isOwnedDetail.value)
 );
 const detailActionsVisible = computed(
   () =>
@@ -602,8 +693,14 @@ const detailActionsVisible = computed(
     !reportSheetVisible.value &&
     !recommendSheetVisible.value
 );
+const showInlineDetailActions = computed(() => showStickyActions.value && !detailActionsVisible.value);
 const showShoppingEntry = computed(() => mode.value === "published" && detailContent.value.ingredients.length > 0);
-const canSubmitAddSheet = computed(() => Boolean(selectedCategoryId.value || selectedSceneIds.value.length));
+const canSubmitAddSheet = computed(() => {
+  if (kind.value === "collection") {
+    return Boolean(selectedCategoryId.value);
+  }
+  return Boolean(selectedCategoryId.value || selectedSceneIds.value.length);
+});
 const detailFactText = computed(() => {
   const parts: string[] = [];
   if (detailCategoryName.value) {
@@ -698,10 +795,11 @@ onLoad((query) => {
   }
 });
 
-onPageScroll((event) => {
-  scrollTop.value = event.scrollTop;
-  navOpacity.value = Math.max(0, Math.min(1, event.scrollTop / NAV_FADE_RANGE));
-});
+function handleDetailScroll(event: { detail?: { scrollTop?: number } }) {
+  const nextScrollTop = event.detail?.scrollTop ?? 0;
+  scrollTop.value = nextScrollTop;
+  navOpacity.value = Math.max(0, Math.min(1, nextScrollTop / NAV_FADE_RANGE));
+}
 
 onHide(() => {
   if (mode.value === "preview") {
@@ -756,22 +854,32 @@ function clearMeasureTimer() {
   measureTimer = null;
 }
 
+function setDetailScrollTop(nextScrollTop: number) {
+  const target = Math.max(0, nextScrollTop);
+  // `scroll-view` 只有在绑定值变化时才会重新触发滚动命令。
+  detailScrollTop.value = target === detailScrollTop.value ? target + 0.1 : target;
+}
+
 async function updateAnchorMetrics() {
   await nextTick();
-  const [titleRect, ingredientRect, stepRect] = await Promise.all([
+  const [scrollRect, titleRect, ingredientRect, stepRect] = await Promise.all([
+    uniPlatform.system.measure("#detail-scroll"),
     uniPlatform.system.measure("#detail-title"),
     uniPlatform.system.measure("#detail-ingredients"),
     uniPlatform.system.measure("#detail-steps")
   ]);
 
+  if (!scrollRect) return;
+  const currentScrollTop = scrollTop.value;
+
   if (titleRect) {
-    titleThreshold.value = Math.max(0, titleRect.bottom - navBarTotalHeight.value - 16);
+    titleThreshold.value = Math.max(0, titleRect.bottom - scrollRect.top + currentScrollTop - navBarTotalHeight.value - 16);
   }
   if (ingredientRect) {
-    ingredientTop.value = Math.max(0, ingredientRect.top - 20);
+    ingredientTop.value = Math.max(0, ingredientRect.top - scrollRect.top + currentScrollTop - 20);
   }
   if (stepRect) {
-    stepTop.value = Math.max(0, stepRect.top - 20);
+    stepTop.value = Math.max(0, stepRect.top - scrollRect.top + currentScrollTop - 20);
   }
 }
 
@@ -781,10 +889,7 @@ function goBack() {
 
 function scrollToSection(section: AnchorKey) {
   const top = section === "steps" ? stepTop.value : ingredientTop.value;
-  void uniPlatform.navigation.pageScrollTo({
-    scrollTop: Math.max(0, top - navBarTotalHeight.value - 18),
-    duration: 260
-  });
+  setDetailScrollTop(top - navBarTotalHeight.value - 18);
 }
 
 function openLogin(afterLogin?: () => void) {
@@ -842,7 +947,7 @@ async function loadAddOptions(force = false) {
 
 function resetAddSelection() {
   selectedCategoryId.value = "";
-  selectedSceneIds.value = [];
+  selectedSceneIds.value = kind.value === "collection" ? [...(externalRecipeRef.value?.sceneIds || [])] : [];
 }
 
 function resetAddCreatorState() {
@@ -921,7 +1026,7 @@ async function createAddSceneTag() {
 }
 
 function openAddSheet() {
-  if (!showStickyActions.value || kind.value !== "inspiration") return;
+  if (!showStickyActions.value || !isExternalDetail.value) return;
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
       openAddSheet();
@@ -1003,25 +1108,25 @@ function toggleCategory(categoryId: UUID) {
 }
 
 async function collectIntoScenes(sceneIds: UUID[]) {
-  if (!inspirationDetail.value || !sceneIds.length) return;
+  if (!externalRecipeRef.value || !sceneIds.length) return;
   await recipeApi.collectRecipe({
     operationId: createOperationId(),
-    sourceRecipeId: inspirationDetail.value.id,
-    sourceVersionId: inspirationDetail.value.contentVersionId,
+    sourceRecipeId: externalRecipeRef.value.sourceRecipeId,
+    sourceVersionId: externalRecipeRef.value.sourceVersionId,
     sceneIds
   });
 }
 
 function buildDraftSeedContent(categoryId: UUID | null, sceneIds: UUID[]) {
-  if (!inspirationDetail.value) return null;
-  const contentSnapshot = inspirationDetail.value.content;
+  if (!externalDetail.value || !externalRecipeRef.value) return null;
+  const contentSnapshot = externalDetail.value.content;
   const slotSeed = Date.now();
   const content: RecipeDraftContentInput = {
     name: detailTitle.value || contentSnapshot.name || "未命名菜谱",
     story: contentSnapshot.story,
     categoryId,
     sceneIds,
-    originVersionId: inspirationDetail.value.contentVersionId,
+    originVersionId: externalRecipeRef.value.sourceVersionId,
     originCoverImageUrl: coverImageUrl.value || null,
     coverUploadId: null,
     coverImageUrl: coverImageUrl.value || null,
@@ -1050,7 +1155,7 @@ function buildDraftSeedContent(categoryId: UUID | null, sceneIds: UUID[]) {
 }
 
 async function handleAdaptRecipe() {
-  if (!showStickyActions.value || kind.value !== "inspiration") return;
+  if (!showStickyActions.value || !isExternalDetail.value) return;
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
       void handleAdaptRecipe();
@@ -1068,30 +1173,35 @@ function handleEditRecipe() {
   void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
 }
 
+function handleAddPlan() {
+  if (!showStickyActions.value || kind.value !== "my" || !recipeId.value) return;
+  void uniPlatform.navigation.navigateTo(`/pages_meal/plan/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
+}
+
 async function confirmAddSheet() {
-  if (!inspirationDetail.value || addSheetSubmitting.value || !canSubmitAddSheet.value) return;
+  if (!externalRecipeRef.value || addSheetSubmitting.value || !canSubmitAddSheet.value) return;
   addSheetSubmitting.value = true;
   try {
-    const sceneIds = [...selectedSceneIds.value];
-    if (sceneIds.length) {
+    const sceneIds = showAddSceneSection.value ? [...selectedSceneIds.value] : [...externalRecipeRef.value.sceneIds];
+    if (showAddSceneSection.value && sceneIds.length) {
       await collectIntoScenes(sceneIds);
     }
     if (selectedCategoryId.value) {
       await recipeApi.createMyRecipeFromInspiration({
         operationId: createOperationId(),
-        sourceRecipeId: inspirationDetail.value.id,
-        sourceVersionId: inspirationDetail.value.contentVersionId,
+        sourceRecipeId: externalRecipeRef.value.sourceRecipeId,
+        sourceVersionId: externalRecipeRef.value.sourceVersionId,
         categoryId: selectedCategoryId.value,
         sceneIds
       });
       markRecipeHomeDirty(["my"]);
       markRecipeManageDirty(["recipes"]);
-      if (sceneIds.length) {
+      if (showAddSceneSection.value && sceneIds.length) {
         markRecipeHomeDirty(["collection"]);
       }
       closeAddSheet();
       await uniPlatform.feedback.toast({
-        title: sceneIds.length ? "已加入合集并添加到我的" : "已添加到我的",
+        title: kind.value === "collection" ? "已升级为我的" : sceneIds.length ? "已加入合集并添加到我的" : "已添加到我的",
         icon: "success"
       });
       return;
@@ -1143,10 +1253,11 @@ async function addToShoppingList() {
 
 async function handleReport() {
   const reasonText = buildReportPayload();
-  if (!recipeId.value || mode.value !== "published" || submitting.value || !reasonText) return;
+  const targetRecipeId = kind.value === "collection" ? collectionDetail.value?.sourceRecipeId || "" : recipeId.value;
+  if (!targetRecipeId || mode.value !== "published" || submitting.value || !reasonText) return;
   submitting.value = true;
   try {
-    await recipeApi.reportRecipe(recipeId.value, createOperationId(), reasonText);
+    await recipeApi.reportRecipe(targetRecipeId, createOperationId(), reasonText);
     selectedReportReason.value = "";
     reportReason.value = "";
     closeReportSheet();
@@ -1259,10 +1370,24 @@ function limitSceneName(value: string) {
   --detail-step-index-color: var(--color-text-tertiary);
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(circle at top left, var(--entry-side-aqua-bg) 0%, transparent 34%),
     linear-gradient(180deg, var(--entry-board-bg) 0%, var(--color-page) 260rpx);
+}
+
+.detail-scroll {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+}
+
+.detail-scroll-body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .hero {
@@ -1391,7 +1516,8 @@ function limitSceneName(value: string) {
 
 .summary-card__fact-title,
 .summary-card__fact-text,
-.summary-card__report-entry {
+.summary-card__report-entry,
+.summary-card__recommend-entry {
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
@@ -1405,13 +1531,47 @@ function limitSceneName(value: string) {
   color: var(--color-text-secondary);
 }
 
-.summary-card__report-entry {
+.summary-card__report-entry,
+.summary-card__recommend-entry {
   flex: 0 0 auto;
   color: var(--color-text-tertiary);
   opacity: 0.78;
 }
 
-.summary-card__report-entry--hover {
+.summary-card__recommend-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.summary-card__recommend-entry-icon {
+  color: inherit;
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.summary-card__recommend-entry--default {
+  color: var(--color-text);
+  opacity: 1;
+}
+
+.summary-card__recommend-entry--retry {
+  color: var(--color-text);
+  opacity: 0.82;
+}
+
+.summary-card__recommend-entry--pending {
+  color: var(--color-text-secondary);
+  opacity: 0.78;
+}
+
+.summary-card__recommend-entry--adopted {
+  color: var(--color-text-tertiary);
+  opacity: 0.72;
+}
+
+.summary-card__report-entry--hover,
+.summary-card__recommend-entry--hover {
   opacity: 0.56;
 }
 
@@ -1897,6 +2057,56 @@ function limitSceneName(value: string) {
 
 .detail-actions__item--disabled {
   opacity: 0.52;
+}
+
+.detail-inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 28rpx;
+  margin-top: 28rpx;
+  padding: 0 32rpx;
+}
+
+.detail-inline-actions__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10rpx;
+  flex: 0 0 auto;
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+}
+
+.detail-inline-actions__item::after {
+  border: 0;
+}
+
+.detail-inline-actions__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30rpx;
+  height: 30rpx;
+  flex: 0 0 30rpx;
+  color: inherit;
+  font-size: 30rpx;
+  line-height: 1;
+}
+
+.detail-inline-actions__text {
+  display: flex;
+  align-items: center;
+  color: inherit;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .report-picker {
