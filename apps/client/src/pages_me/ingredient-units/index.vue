@@ -18,7 +18,7 @@
       </view>
     </template>
 
-    <view class="ingredient-units-page" :style="pageBodyStyle">
+    <view class="ingredient-units-page">
       <RecipeEmptyState
         v-if="!sessionStore.isLoggedIn"
         class="page-empty"
@@ -30,12 +30,7 @@
       />
 
       <template v-else>
-        <view
-          v-if="showFixedPanel"
-          id="ingredient-fixed-panel"
-          class="ingredient-fixed-panel"
-          :style="fixedPanelStyle"
-        >
+        <view v-if="showFixedPanel" class="ingredient-page-head">
           <view class="search-row">
             <view class="search-row__inner">
               <RecipeSearchBar
@@ -66,7 +61,7 @@
           </view>
         </view>
 
-        <view class="list-scroll-wrap" :style="scrollWrapStyle">
+        <view class="list-scroll-wrap">
           <RecipeSearchLoading
             :pull-distance="pullDistance"
             :refreshing="refreshing"
@@ -308,9 +303,7 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
-import { useFixedPanelLayout } from "@/composables/useFixedPanelLayout";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
@@ -322,7 +315,6 @@ type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry"
 
 const pageStyle = usePageScrollStyle();
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("ingredient-units-sheet"));
-const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const loadingTips = [
@@ -390,9 +382,6 @@ const feedbackForm = reactive({
   note: ""
 });
 
-const pageBodyStyle = computed(() => ({
-  height: `calc(100vh - ${navBarTotalHeight.value}px)`
-}));
 const showFixedPanel = computed(() => activeTab.value === "ingredient");
 const showIngredientCategoryBar = computed(
   () => activeTab.value === "ingredient" && !ingredientSearchKeyword.value && categories.value.length > 0
@@ -427,11 +416,6 @@ const inlineLoadingText = computed(() => {
     return ["搜一搜这味食材", "帮你翻找食材和单位", "厨房抽屉里找一找"];
   }
   return loadingTips;
-});
-const { panelStyle: fixedPanelStyle, contentStyle: scrollWrapStyle, syncPanel: syncFixedPanel } = useFixedPanelLayout({
-  panelId: "ingredient-fixed-panel",
-  topPx: navBarTotalHeight,
-  watchSources: [activeTab, showFixedPanel, showIngredientCategoryBar, ingredientSearchKeyword, () => categories.value.length]
 });
 const showRecommendFab = computed(() => activeTab.value === "unit" || !isIngredientSearchMode.value);
 const sheetTitle = computed(() => {
@@ -479,7 +463,6 @@ onShow(() => {
     return;
   }
   void loadActiveTab();
-  void syncFixedPanel();
 });
 
 watch(
@@ -875,6 +858,8 @@ async function handleRefresherRefresh() {
 .ingredient-units-page {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   background: var(--color-page);
@@ -903,10 +888,8 @@ async function handleRefresherRefresh() {
   font-weight: var(--font-weight-semibold);
 }
 
-.ingredient-fixed-panel {
-  position: fixed;
-  left: 0;
-  right: 0;
+.ingredient-page-head {
+  position: relative;
   z-index: 25;
   box-sizing: border-box;
   padding: 10rpx var(--space-page) 0;
@@ -923,7 +906,6 @@ async function handleRefresherRefresh() {
 .header-tabs__back {
   display: flex;
   align-items: center;
-  justify-content: center;
   width: 64rpx;
   height: 64rpx;
   color: var(--color-text);
@@ -986,7 +968,7 @@ async function handleRefresherRefresh() {
   display: flex;
   position: relative;
   width: 100%;
-  flex: none;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
   padding: 0 var(--space-page);
@@ -1096,12 +1078,9 @@ async function handleRefresherRefresh() {
 
 .list {
   padding-top: 20rpx;
-  padding-bottom: calc(184rpx + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.list--unit {
-  margin-top: 20rpx;
-}
 
 .ingredient-grid {
   display: grid;

@@ -1,75 +1,78 @@
 <template>
   <page-meta :page-style="pageStyle" />
-  <Layout title="我的口味">
+  <Layout title="我的口味" full-screen>
     <template #navbar-center>
       <text class="taste-navbar__title">我的口味</text>
     </template>
 
     <view class="taste-page">
-      <RecipeEmptyState
-        v-if="!sessionStore.isLoggedIn"
-        class="taste-empty"
-        :art="tasteEmptyArt"
-        title="登录后记录你的口味"
-        description="把过敏、严格忌口、不喜欢和偏好记在这里。点一下开始登录，这些信息只归你本人所有。"
-        clickable
-        @click="openLogin"
-      />
+      <scroll-view scroll-y class="taste-scroll" show-scrollbar="false">
+        <view class="taste-scroll__body">
+          <RecipeEmptyState
+            v-if="!sessionStore.isLoggedIn"
+            class="taste-empty"
+            :art="tasteEmptyArt"
+            title="登录后记录你的口味"
+            description="把过敏、严格忌口、不喜欢和偏好记在这里。点一下开始登录，这些信息只归你本人所有。"
+            clickable
+            @click="openLogin"
+          />
 
-      <template v-else>
-        <view class="taste-shell">
-          <view class="taste-head">
-            <view class="taste-head__copy">
-              <text class="taste-head__description">这些信息只归本人所有。可用逗号、顿号、分号或换行分隔多个条目。</text>
-            </view>
-          </view>
-
-          <view v-if="loading" class="taste-status">
-            <text class="taste-status__text">加载中</text>
-          </view>
-
-          <view v-else-if="loadErrorText" class="taste-status">
-            <text class="taste-status__text">{{ loadErrorText }}</text>
-            <button class="taste-status__button" :disabled="saving" @click="loadTaste">重新加载</button>
-          </view>
-
-          <view v-else class="taste-form">
-            <view v-for="field in tasteFields" :key="field.key" class="taste-field">
-              <view class="taste-field__head">
-                <text class="taste-field__label">{{ field.label }}</text>
-                <text class="taste-field__hint">例如 {{ field.placeholder }}</text>
+          <template v-else>
+            <view class="taste-shell">
+              <view class="taste-head">
+                <view class="taste-head__copy">
+                  <text class="taste-head__description">这些信息只归本人所有。可用逗号、顿号、分号或换行分隔多个条目。</text>
+                </view>
               </view>
-              <textarea
-                v-model="tasteText[field.key]"
-                class="taste-field__textarea"
-                auto-height
-                maxlength="200"
-                :placeholder="`例如 ${field.placeholder}`"
-                :disabled="saving"
-              />
-            </view>
 
-            <view class="taste-field">
-              <view class="taste-field__head">
-                <text class="taste-field__label">备注</text>
-                <text class="taste-field__hint">补充你的饮食习惯</text>
+              <view v-if="loading" class="taste-status">
+                <text class="taste-status__text">加载中</text>
               </view>
-              <textarea
-                v-model="noteText"
-                class="taste-field__textarea taste-field__textarea--note"
-                auto-height
-                maxlength="300"
-                placeholder="例如少油、喜欢清淡"
-                :disabled="saving"
-              />
-            </view>
 
-            <text class="taste-form__tip">这些内容只保存给你自己，不会自动共享给其他成员。</text>
-            <text v-if="saveErrorText" class="taste-form__error">{{ saveErrorText }}</text>
-            <button class="taste-form__button" :loading="saving" :disabled="saving" @click="saveTaste">保存</button>
-          </view>
+              <view v-else-if="loadErrorText" class="taste-status">
+                <text class="taste-status__text">{{ loadErrorText }}</text>
+                <button class="taste-status__button" :disabled="saving" @click="loadTaste">重新加载</button>
+              </view>
+
+              <view v-else class="taste-form">
+                <view v-for="field in tasteFields" :key="field.key" class="taste-field">
+                  <view class="taste-field__head">
+                    <text class="taste-field__label">{{ field.label }}</text>
+                    <text class="taste-field__hint">例如 {{ field.placeholder }}</text>
+                  </view>
+                  <textarea
+                    v-model="tasteText[field.key]"
+                    class="taste-field__textarea"
+                    auto-height
+                    :placeholder="`例如 ${field.placeholder}`"
+                    :disabled="saving"
+                  />
+                </view>
+
+                <view class="taste-field">
+                  <view class="taste-field__head">
+                    <text class="taste-field__label">备注</text>
+                    <text class="taste-field__hint">补充你的饮食习惯</text>
+                  </view>
+                  <textarea
+                    v-model="noteText"
+                    class="taste-field__textarea taste-field__textarea--note"
+                    auto-height
+                    maxlength="300"
+                    placeholder="例如少油、喜欢清淡"
+                    :disabled="saving"
+                  />
+                </view>
+
+                <text class="taste-form__tip">这些内容只保存给你自己，不会自动共享给其他成员。</text>
+                <text v-if="saveErrorText" class="taste-form__error">{{ saveErrorText }}</text>
+                <button class="taste-form__button" :loading="saving" :disabled="saving" @click="saveTaste">保存</button>
+              </view>
+            </view>
+          </template>
         </view>
-      </template>
+      </scroll-view>
     </view>
   </Layout>
 </template>
@@ -78,6 +81,7 @@
 import { onShow } from "@dcloudio/uni-app";
 import { reactive, ref } from "vue";
 import tasteEmptyArt from "@/assets/me-page/taste-empty-state.svg";
+import { ApiClientError, UnauthorizedError } from "@/apis/http";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
@@ -87,8 +91,11 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 
 type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "flavorPreferences";
+type TasteField = { key: TasteListKey; label: string; placeholder: string };
 
 const pageStyle = usePageScrollStyle();
+const tasteItemMaxLength = 64;
+const tasteItemMaxCount = 50;
 
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
@@ -104,7 +111,7 @@ const tasteText = reactive<Record<TasteListKey, string>>({
   dislikedIngredients: "",
   flavorPreferences: ""
 });
-const tasteFields: Array<{ key: TasteListKey; label: string; placeholder: string }> = [
+const tasteFields: TasteField[] = [
   {
     key: "allergies",
     label: "过敏",
@@ -171,16 +178,12 @@ async function loadTaste() {
 async function saveTaste() {
   if (saving.value) return;
 
-  saving.value = true;
   saveErrorText.value = "";
 
-  const payload: UpdateTasteProfileRequest = {
-    allergies: readItems(tasteText.allergies),
-    strictDislikes: readItems(tasteText.strictDislikes),
-    dislikedIngredients: readItems(tasteText.dislikedIngredients),
-    flavorPreferences: readItems(tasteText.flavorPreferences),
-    note: noteText.value.trim() || null
-  };
+  const payload = buildPayload();
+  if (!payload) return;
+
+  saving.value = true;
 
   try {
     const profile = await userApi.updateTasteProfile(payload);
@@ -191,7 +194,7 @@ async function saveTaste() {
     noteText.value = profile.note ?? "";
     loaded.value = true;
   } catch (error) {
-    saveErrorText.value = error instanceof Error ? error.message : "保存失败";
+    saveErrorText.value = getSaveErrorText(error);
     return;
   } finally {
     saving.value = false;
@@ -205,6 +208,54 @@ function readItems(text: string) {
     .split(/[\n,，、;；]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function buildPayload(): UpdateTasteProfileRequest | null {
+  const payload: UpdateTasteProfileRequest = {
+    allergies: [],
+    strictDislikes: [],
+    dislikedIngredients: [],
+    flavorPreferences: [],
+    note: noteText.value.trim() || null
+  };
+
+  for (const field of tasteFields) {
+    const items = readItems(tasteText[field.key]);
+    const errorText = validateItems(field, items);
+    if (errorText) {
+      saveErrorText.value = errorText;
+      return null;
+    }
+
+    payload[field.key] = items;
+  }
+
+  return payload;
+}
+
+function validateItems(field: TasteField, items: string[]) {
+  if (items.length > tasteItemMaxCount) return `${field.label}最多填写 ${tasteItemMaxCount} 项`;
+
+  const overLimitItem = items.find((item) => item.length > tasteItemMaxLength);
+  if (overLimitItem) {
+    return `${field.label}内容最多${tasteItemMaxLength}个字符`;
+  }
+
+  return "";
+}
+
+function getSaveErrorText(error: unknown) {
+  if (error instanceof UnauthorizedError) return "登录已失效，请重新登录";
+
+  if (error instanceof ApiClientError) {
+    if (error.message.includes("最多 50 项")) return "单个分类最多填写 50 项";
+    if (error.message.includes("最多 64")) return "内容最多64个字符";
+    if (error.message.includes("不能重复")) return "同一分类里不要重复填写";
+    if (error.message.includes("不能包含空项")) return "请删除空白条目后再保存";
+    return "保存失败，请检查输入后重试";
+  }
+
+  return "保存失败，请稍后重试";
 }
 </script>
 
@@ -221,7 +272,20 @@ function readItems(text: string) {
 }
 
 .taste-page {
-  padding-bottom: var(--space-lg);
+  display: flex;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.taste-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.taste-scroll__body {
+  padding: 20rpx var(--space-page) calc(20rpx + env(safe-area-inset-bottom));
 }
 
 .taste-empty {
@@ -285,7 +349,6 @@ function readItems(text: string) {
 }
 
 .taste-field + .taste-field {
-  margin-top: var(--space-lg);
   padding-top: var(--space-lg);
   border-top: 1rpx solid var(--color-border-light);
 }
