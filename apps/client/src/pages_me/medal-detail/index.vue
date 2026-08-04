@@ -8,33 +8,37 @@
     <Login v-if="!sessionStore.isLoggedIn" title="登录后查看勋章详情" description="勋章说明和获得状态只对你自己开放。" />
 
     <template v-else>
-      <view v-if="errorText" class="notice" @click="loadDetail">{{ errorText }}</view>
-      <view v-else-if="loading" class="notice">加载中...</view>
+      <view class="detail-page">
+        <scroll-view scroll-y class="detail-scroll" show-scrollbar="false">
+          <view class="detail-scroll__body" :class="{ 'detail-scroll__body--with-footer': !!item }">
+            <view v-if="errorText" class="notice" @click="loadDetail">{{ errorText }}</view>
+            <view v-else-if="loading" class="notice">加载中...</view>
 
-      <template v-else-if="item">
-        <view class="detail-page">
-          <view class="hero-card" :class="{ 'hero-card--locked': !item.earned }">
-            <view class="hero-card__badge-shell">
-              <view class="hero-card__badge">
-                <image v-if="resolveMedalImageUrl(item)" class="hero-card__image" :src="resolveMedalImageUrl(item) || ''" mode="aspectFit" />
-                <text v-else class="cookfont hero-card__icon" :class="getMedalIconClass(item.iconKey)" />
+            <template v-else-if="item">
+              <view class="hero-card" :class="{ 'hero-card--locked': !item.earned }">
+                <view class="hero-card__badge-shell">
+                  <view class="hero-card__badge">
+                    <image v-if="resolveMedalImageUrl(item)" class="hero-card__image" :src="resolveMedalImageUrl(item) || ''" mode="aspectFit" />
+                    <text v-else class="cookfont hero-card__icon" :class="getMedalIconClass(item.iconKey)" />
+                  </view>
+                  <view class="hero-card__badge-base" />
+                </view>
+                <text class="hero-card__name">{{ item.name }}</text>
+                <view class="hero-card__meta">
+                  <view class="hero-card__pill">{{ item.categoryName }}</view>
+                  <view v-if="item.isLimited" class="hero-card__pill hero-card__pill--limited">限定</view>
+                  <view class="hero-card__pill" :class="item.earned ? 'hero-card__pill--earned' : 'hero-card__pill--locked'">
+                    {{ statusText }}
+                  </view>
+                  <SharePillButton />
+                </view>
+                <text class="hero-card__desc">{{ item.description }}</text>
               </view>
-              <view class="hero-card__badge-base" />
-            </view>
-            <text class="hero-card__name">{{ item.name }}</text>
-            <view class="hero-card__meta">
-              <view class="hero-card__pill">{{ item.categoryName }}</view>
-              <view v-if="item.isLimited" class="hero-card__pill hero-card__pill--limited">限定</view>
-              <view class="hero-card__pill" :class="item.earned ? 'hero-card__pill--earned' : 'hero-card__pill--locked'">
-                {{ statusText }}
-              </view>
-              <SharePillButton />
-            </view>
-            <text class="hero-card__desc">{{ item.description }}</text>
+            </template>
           </view>
-        </view>
+        </scroll-view>
 
-        <view class="detail-footer">
+        <view v-if="item" class="detail-footer">
           <view class="detail-footer__status">
             <text v-if="item.earned" class="detail-footer__value">- {{ earnedAtText }}获得 -</text>
             <text v-if="item.earnedUserCount > 0" class="detail-footer__hint">已有{{ item.earnedUserCount }}人获得。</text>
@@ -45,7 +49,7 @@
           </view>
         </view>
 
-        <SheetShell :visible="noticeVisible" title="勋章说明" @close="closeNotice">
+        <SheetShell v-if="item" :visible="noticeVisible" title="勋章说明" @close="closeNotice">
           <view class="sheet__body">
             <view class="sheet__row">
               <text class="sheet__label">获取条件</text>
@@ -65,7 +69,7 @@
             </view>
           </view>
         </SheetShell>
-      </template>
+      </view>
     </template>
   </Layout>
 </template>
@@ -161,9 +165,30 @@ function closeNotice() {
   font-weight: var(--font-weight-bold);
 }
 
+.detail-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.detail-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.detail-scroll__body {
+  height: 100%;
+}
+
+.detail-scroll__body--with-footer {
+  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+}
+
 .notice,
 .hero-card {
-  margin: var(--space-md) var(--space-page) 0;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
@@ -174,6 +199,7 @@ function closeNotice() {
 }
 
 .hero-card {
+  padding-top: 100rpx;
   text-align: center;
   background: transparent;
 }

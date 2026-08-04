@@ -1,83 +1,98 @@
 <template>
   <page-meta :page-style="pageStyle" />
-  <Layout title="我的勋章">
+  <Layout
+    title=""
+    full-screen
+    :navbar-transparent="sessionStore.isLoggedIn"
+    :navbar-placeholder="!sessionStore.isLoggedIn"
+  >
+    <template #navbar-center>
+      <text class="medal-navbar__title" :style="navTitleStyle">我的勋章墙</text>
+    </template>
+
     <Login v-if="!sessionStore.isLoggedIn" title="登录后查看勋章墙" description="勋章只记录你真实完成和真实贡献的做饭事实。" />
 
     <template v-else>
-      <view class="hero-card">
-        <text class="cookfont hero-card__laurel hero-card__laurel--left hero-card__tone icon-medal-left" />
+      <view class="medal-nav-backdrop" :style="navBackdropStyle" />
 
-        <view class="hero-card__content">
-          <text class="hero-card__title hero-card__tone">我的勋章墙</text>
-          <text class="hero-card__slogan hero-card__tone">认真做饭，也值得被记录</text>
-        </view>
+      <view class="medal-page">
+        <scroll-view scroll-y class="medal-scroll" show-scrollbar="false" @scroll="handleScroll">
+          <view class="hero-card" :style="scrollStyle">
+            <text class="cookfont hero-card__laurel hero-card__laurel--left hero-card__tone icon-medal-left" />
 
-        <view class="hero-card__count-block">
-          <text class="hero-card__count hero-card__tone">{{ wall?.earnedCount ?? "--" }}</text>
-        </view>
-
-        <text class="cookfont hero-card__laurel hero-card__laurel--right hero-card__tone icon-medal-right" />
-      </view>
-
-      <view v-if="errorText" class="notice" @click="loadWall">{{ errorText }}</view>
-      <view v-else-if="loading" class="notice">加载中...</view>
-
-      <template v-else>
-        <view v-if="showCategoryBar" class="sticky-wrap" :style="stickyStyle">
-          <view class="sticky-bar">
-            <view class="category-fixed">
-              <view
-                class="category-chip"
-                :class="{ 'category-chip--active': activeCategory === firstTab.key }"
-                @click="changeCategory(firstTab.key)"
-              >
-                <text class="category-chip__name">{{ firstTab.name }}</text>
-                <text class="category-chip__meta">{{ firstTab.earnedCount }}/{{ firstTab.totalCount }}</text>
-              </view>
+            <view class="hero-card__content">
+              <text class="hero-card__title hero-card__tone">我的勋章墙</text>
+              <text class="hero-card__slogan hero-card__tone">认真做饭，也值得被记录</text>
             </view>
 
-            <scroll-view scroll-x class="category-scroll" show-scrollbar="false">
-              <view class="category-row">
-                <view
-                  v-for="tab in scrollTabs"
-                  :key="tab.key"
-                  class="category-chip"
-                  :class="{ 'category-chip--active': activeCategory === tab.key }"
-                  @click="changeCategory(tab.key)"
-                >
-                  <text class="category-chip__name">{{ tab.name }}</text>
-                  <text class="category-chip__meta">{{ tab.earnedCount }}/{{ tab.totalCount }}</text>
+            <view class="hero-card__count-block">
+              <text class="hero-card__count hero-card__tone">{{ wall?.earnedCount ?? "--" }}</text>
+            </view>
+
+            <text class="cookfont hero-card__laurel hero-card__laurel--right hero-card__tone icon-medal-right" />
+          </view>
+
+          <view v-if="errorText" class="notice" @click="loadWall">{{ errorText }}</view>
+          <view v-else-if="loading" class="notice">加载中...</view>
+
+          <template v-else>
+            <view v-if="showCategoryBar" class="sticky-wrap" :style="stickyStyle">
+              <view class="sticky-bar">
+                <view class="category-fixed">
+                  <view
+                    class="category-chip"
+                    :class="{ 'category-chip--active': activeCategory === firstTab.key }"
+                    @click="changeCategory(firstTab.key)"
+                  >
+                    <text class="category-chip__name">{{ firstTab.name }}</text>
+                    <text class="category-chip__meta">{{ firstTab.earnedCount }}/{{ firstTab.totalCount }}</text>
+                  </view>
                 </view>
-              </view>
-            </scroll-view>
-          </view>
-        </view>
 
-        <view v-if="filteredItems.length" class="medal-grid">
-          <view
-            v-for="item in filteredItems"
-            :key="item.code"
-            class="medal-card"
-            :class="{ 'medal-card--earned': item.earned, 'medal-card--locked': !item.earned }"
-            @click="openDetail(item.code)"
-          >
-            <view class="medal-card__badge-shell">
-              <view class="medal-card__badge">
-                <image v-if="resolveMedalImageUrl(item)" class="medal-card__image" :src="resolveMedalImageUrl(item) || ''" mode="aspectFit" />
-                <text v-else class="cookfont medal-card__icon" :class="getMedalIconClass(item.iconKey)" />
+                <scroll-view scroll-x class="category-scroll" show-scrollbar="false">
+                  <view class="category-row">
+                    <view
+                      v-for="tab in scrollTabs"
+                      :key="tab.key"
+                      class="category-chip"
+                      :class="{ 'category-chip--active': activeCategory === tab.key }"
+                      @click="changeCategory(tab.key)"
+                    >
+                      <text class="category-chip__name">{{ tab.name }}</text>
+                      <text class="category-chip__meta">{{ tab.earnedCount }}/{{ tab.totalCount }}</text>
+                    </view>
+                  </view>
+                </scroll-view>
               </view>
             </view>
-            <text class="medal-card__name">{{ item.name }}</text>
-            <text class="medal-card__tag" :class="getTagClass(item)">{{ formatMedalState(item) }}</text>
-            <text class="medal-card__meta">{{ formatMedalStateHint(item) }}</text>
-          </view>
-        </view>
 
-        <view v-else class="empty-card">
-          <text class="empty-card__title">这一类勋章还在整理中</text>
-          <text class="empty-card__desc">先看看别的分类，或者稍后再回来。</text>
-        </view>
-      </template>
+            <view v-if="filteredItems.length" class="medal-grid">
+              <view
+                v-for="item in filteredItems"
+                :key="item.code"
+                class="medal-card"
+                :class="{ 'medal-card--earned': item.earned, 'medal-card--locked': !item.earned }"
+                @click="openDetail(item.code)"
+              >
+                <view class="medal-card__badge-shell">
+                  <view class="medal-card__badge">
+                    <image v-if="resolveMedalImageUrl(item)" class="medal-card__image" :src="resolveMedalImageUrl(item) || ''" mode="aspectFit" />
+                    <text v-else class="cookfont medal-card__icon" :class="getMedalIconClass(item.iconKey)" />
+                  </view>
+                </view>
+                <text class="medal-card__name">{{ item.name }}</text>
+                <text class="medal-card__tag" :class="getTagClass(item)">{{ formatMedalState(item) }}</text>
+                <text class="medal-card__meta">{{ formatMedalStateHint(item) }}</text>
+              </view>
+            </view>
+
+            <view v-else class="empty-card">
+              <text class="empty-card__title">这一类勋章还在整理中</text>
+              <text class="empty-card__desc">先看看别的分类，或者稍后再回来。</text>
+            </view>
+          </template>
+        </scroll-view>
+      </view>
     </template>
   </Layout>
 </template>
@@ -94,6 +109,8 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatMedalState, formatMedalStateHint, getMedalIconClass, resolveMedalImageUrl } from "./present";
 
+const NAV_FADE_DISTANCE = 96;
+
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
@@ -101,6 +118,22 @@ const loading = ref(false);
 const errorText = ref("");
 const wall = ref<MedalWallResponse | null>(null);
 const activeCategory = ref<"ALL" | string>("ALL");
+const scrollTop = ref(0);
+
+const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
+const navTitleStyle = computed(() => ({
+  opacity: sessionStore.isLoggedIn ? `${navProgress.value}` : "1"
+}));
+const navBackdropStyle = computed(() => ({
+  height: `${navBarTotalHeight.value}px`,
+  opacity: `${navProgress.value}`
+}));
+const scrollStyle = computed(() => ({
+  paddingTop: `${navBarTotalHeight.value}px`
+}));
+const stickyStyle = computed(() => ({
+  top: `${navBarTotalHeight.value}px`
+}));
 
 const tabs = computed(() => [
   {
@@ -119,9 +152,6 @@ const tabs = computed(() => [
 const showCategoryBar = computed(() => tabs.value.length > 1);
 const firstTab = computed(() => tabs.value[0] || { key: "ALL", name: "全部", earnedCount: 0, totalCount: 0 });
 const scrollTabs = computed(() => tabs.value.slice(1));
-const stickyStyle = computed(() => ({
-  top: `${navBarTotalHeight.value}px`
-}));
 
 const filteredItems = computed(() => {
   const items = wall.value?.items ?? [];
@@ -161,6 +191,10 @@ function changeCategory(categoryKey: string) {
   activeCategory.value = categoryKey;
 }
 
+function handleScroll(event: { detail: { scrollTop?: number } }) {
+  scrollTop.value = event.detail.scrollTop ?? 0;
+}
+
 function getTagClass(item: { earned: boolean; isLimited: boolean }) {
   if (item.earned) return "medal-card__tag--earned";
   if (item.isLimited) return "medal-card__tag--limited";
@@ -169,6 +203,41 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
 </script>
 
 <style scoped lang="scss">
+.medal-navbar__title {
+  overflow: hidden;
+  max-width: 420rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 180ms ease;
+}
+
+.medal-nav-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 790;
+  background: var(--color-page);
+  pointer-events: none;
+}
+
+.medal-page {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.medal-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
 .hero-card,
 .notice,
 .empty-card,
@@ -189,6 +258,7 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
   justify-content: center;
   gap: 20rpx;
   min-height: 208rpx;
+  margin: 20rpx var(--space-page) 0;
   overflow: hidden;
 }
 
@@ -252,13 +322,15 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
 
 .notice,
 .empty-card {
+  margin-right: var(--space-page);
+  margin-left: var(--space-page);
   margin-top: var(--space-md);
 }
 
 .sticky-wrap {
   position: sticky;
   z-index: 20;
-  margin: var(--space-md) calc(var(--space-page) * -1) 0;
+  margin-top: var(--space-md);
   padding: 0 var(--space-page) 16rpx;
   background: var(--color-page);
 }
@@ -332,6 +404,8 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-page);
   margin-top: var(--space-md);
+  margin-right: var(--space-page);
+  margin-left: var(--space-page);
 }
 
 .medal-card {
