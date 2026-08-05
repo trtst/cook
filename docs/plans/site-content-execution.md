@@ -115,6 +115,238 @@
 - `apps/api`：第二阶段待开发
 - `apps/admin`：第二阶段待开发
 
+## 第一阶段 PC 部署要求
+
+当前官网是独立的 `apps/site` 静态前端，不跟 `apps/admin` 共用构建产物。
+
+部署要求先收口为最小闭环：
+
+- 构建命令使用 `pnpm build:site`
+- 产物目录为 `apps/site/dist`
+- 服务器需要把 `apps/site/dist` 作为站点根目录发布
+- 路由采用 Vue Router `history` 模式，服务端必须把非静态资源请求回退到 `index.html`
+
+如果服务器使用 nginx，至少要满足这类回退语义：
+
+```nginx
+location / {
+  try_files $uri $uri/ /index.html;
+}
+```
+
+否则首页虽然能打开，但像 `/privacy`、`/faq`、`/guides/kitchen-prep` 这类直达 URL 会在刷新或直接访问时返回 404。
+
+按当前仓库部署脚本的默认执行目录 `/srv/cook`，如果官网域名使用 `https://www.trtst.com`，可先按下面这份 nginx 示例落地：
+
+- 仓库内可直接复用的配置文件：`deploy/nginx/site.trtst.com.conf`
+
+```nginx
+server {
+  listen 80;
+  listen [::]:80;
+  server_name www.trtst.com;
+
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name www.trtst.com;
+
+  root /srv/cook/apps/site/dist;
+  index index.html;
+
+  ssl_certificate /etc/letsencrypt/live/www.trtst.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/www.trtst.com/privkey.pem;
+
+  location /assets/ {
+    try_files $uri =404;
+    access_log off;
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800, immutable";
+  }
+
+  location = /favicon.ico {
+    try_files $uri =404;
+    access_log off;
+    expires 1d;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+```
+
+如果还要把裸域 `trtst.com` 也统一跳到 `www.trtst.com`，再补一段跳转即可：
+
+```nginx
+server {
+  listen 80;
+  listen [::]:80;
+  server_name trtst.com;
+
+  return 301 https://www.trtst.com$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name trtst.com;
+
+  ssl_certificate /etc/letsencrypt/live/www.trtst.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/www.trtst.com/privkey.pem;
+
+  return 301 https://www.trtst.com$request_uri;
+}
+```
+
+上线前至少确认这 4 项：
+
+- `pnpm build:site` 后 `apps/site/dist/index.html` 已生成
+- nginx `root` 指向真实发布目录，而不是仓库源码目录
+- `ssl_certificate` 和 `ssl_certificate_key` 已替换成服务器真实证书路径
+- `https://www.trtst.com/privacy`、`https://www.trtst.com/faq` 这类直达路由可直接访问且刷新不 404
+
+## `www.trtst.com` 正式上线步骤清单
+
+下面这份步骤默认服务器项目目录就是 `/srv/cook`，官网仍沿用当前仓库内的 `apps/site` 构建产物。
+
+### 首次上线
+
+1. 登录服务器并进入项目目录
+
+```bash
+cd /srv/cook
+```
+
+2. 拉取最新代码并安装依赖
+
+```bash
+git pull
+pnpm install
+```
+
+3. 构建官网静态站点
+
+```bash
+pnpm build:site
+```
+
+4. 确认产物已生成
+
+```bash
+ls /srv/cook/apps/site/dist
+```
+
+5. 放置 nginx 配置
+
+- 仓库内示例文件：`deploy/nginx/site.trtst.com.conf`
+- 将其复制到服务器 nginx 配置目录，例如：
+
+```bash
+cp /srv/cook/deploy/nginx/site.trtst.com.conf /etc/nginx/conf.d/site.trtst.com.conf
+```
+
+6. 按服务器真实证书路径修改下面两项
+
+- `ssl_certificate`
+- `ssl_certificate_key`
+
+7. 校验 nginx 配置并重载
+
+```bash
+nginx -t
+systemctl reload nginx
+```
+
+8. 首次上线后做直连检查
+
+```bash
+curl -I https://www.trtst.com/
+curl -I https://www.trtst.com/privacy
+curl -I https://www.trtst.com/faq
+```
+
+验收口径：
+
+- 首页返回 `200`
+- `/privacy`、`/faq` 直达返回 `200`
+- 刷新上述页面不出现 nginx `404`
+- `http://www.trtst.com` 自动跳到 `https://www.trtst.com`
+- 如果启用裸域跳转，`https://trtst.com` 自动跳到 `https://www.trtst.com`
+
+### 后续发版
+
+如果 nginx 配置和证书都已经稳定，后续只需要执行官网发布链路即可：
+
+```bash
+cd /srv/cook
+./deploy.sh site
+```
+
+如果本次同时发布 api、admin、site，则执行：
+
+```bash
+cd /srv/cook
+./deploy.sh full
+```
+
+### 出问题时先查这 5 项
+
+1. `apps/site/dist/index.html` 是否是本次最新构建产物
+2. nginx `root` 是否仍指向 `/srv/cook/apps/site/dist`
+3. `systemctl reload nginx` 前是否已经 `nginx -t`
+4. 证书路径是否真实存在且域名匹配 `www.trtst.com`
+5. 若首页能开但子路由 404，优先检查 `try_files $uri $uri/ /index.html`
+
+## 服务器执行命令版
+
+如果你现在就是在服务器上手动执行，可以直接按下面顺序跑。
+
+### 首次上线命令版
+
+```bash
+cd /srv/cook
+git pull
+pnpm install
+pnpm build:site
+ls /srv/cook/apps/site/dist
+cp /srv/cook/deploy/nginx/site.trtst.com.conf /etc/nginx/conf.d/site.trtst.com.conf
+vim /etc/nginx/conf.d/site.trtst.com.conf
+nginx -t
+systemctl reload nginx
+curl -I https://www.trtst.com/
+curl -I https://www.trtst.com/privacy
+curl -I https://www.trtst.com/faq
+```
+
+执行时只需要人工确认 2 件事：
+
+1. 在 `vim /etc/nginx/conf.d/site.trtst.com.conf` 里把证书路径改成服务器真实路径
+2. 如果 nginx 配置目录不是 `/etc/nginx/conf.d`，把 `cp` 目标路径换成你的真实目录
+
+### 后续仅发官网命令版
+
+```bash
+cd /srv/cook
+./deploy.sh site
+curl -I https://www.trtst.com/
+curl -I https://www.trtst.com/privacy
+curl -I https://www.trtst.com/faq
+```
+
+### 同时发 api、admin、site 命令版
+
+```bash
+cd /srv/cook
+./deploy.sh full
+curl -I https://www.trtst.com/
+curl -I https://www.trtst.com/privacy
+curl -I https://www.trtst.com/faq
+```
+
 ## 信息架构
 
 ### 1. 官网层
