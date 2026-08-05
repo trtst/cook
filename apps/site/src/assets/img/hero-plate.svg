@@ -1,0 +1,69 @@
+<svg width="960" height="760" viewBox="0 0 960 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="plateGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(484 348) rotate(90) scale(276 276)">
+      <stop stop-color="#FFFDF7"/>
+      <stop offset="1" stop-color="#EBF0E4"/>
+    </radialGradient>
+    <radialGradient id="plateGlass" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(422 250) rotate(52) scale(208 190)">
+      <stop stop-color="white" stop-opacity="0.96"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="leafA" x1="226" y1="520" x2="454" y2="222" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B8E45"/>
+      <stop offset="1" stop-color="#9FD26A"/>
+    </linearGradient>
+    <linearGradient id="leafB" x1="560" y1="512" x2="686" y2="214" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3E7C3D"/>
+      <stop offset="1" stop-color="#7BBB68"/>
+    </linearGradient>
+    <linearGradient id="leafC" x1="320" y1="548" x2="594" y2="282" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#477B38"/>
+      <stop offset="1" stop-color="#93CF76"/>
+    </linearGradient>
+    <radialGradient id="tomatoA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0.35 0.28) scale(1 1)">
+      <stop stop-color="#FFB49E"/>
+      <stop offset="1" stop-color="#FF6A43"/>
+    </radialGradient>
+    <radialGradient id="lemonA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(0.32 0.26) scale(1 1)">
+      <stop stop-color="#FFF0B0"/>
+      <stop offset="1" stop-color="#F4CD55"/>
+    </radialGradient>
+    <filter id="shadowSoft" x="50" y="94" width="860" height="592" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="28"/>
+      <feGaussianBlur stdDeviation="28"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.458824 0 0 0 0 0.486275 0 0 0 0 0.329412 0 0 0 0.18 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+  <ellipse cx="494" cy="612" rx="264" ry="44" fill="#D9E1CD" fill-opacity="0.48"/>
+  <g filter="url(#shadowSoft)">
+    <ellipse cx="484" cy="334" rx="286" ry="230" fill="url(#plateGlow)"/>
+    <ellipse cx="484" cy="334" rx="242" ry="196" fill="#FAFBF5"/>
+    <ellipse cx="484" cy="334" rx="286" ry="230" fill="url(#plateGlass)"/>
+    <path d="M318 390C261 360 262 298 334 264C376 244 443 256 476 308C504 350 496 414 432 440C390 458 352 440 318 390Z" fill="url(#leafA)"/>
+    <path d="M552 424C510 368 532 284 610 258C672 238 722 284 710 350C698 420 614 476 552 424Z" fill="url(#leafB)"/>
+    <path d="M374 518C310 474 322 396 414 364C492 338 584 382 614 458C640 524 566 576 490 566C446 560 412 542 374 518Z" fill="url(#leafC)"/>
+    <path d="M420 274C446 304 438 354 402 390" stroke="#D4F1BF" stroke-width="10" stroke-linecap="round"/>
+    <path d="M596 276C620 308 612 360 574 404" stroke="#CFE7B0" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="370" cy="314" r="54" fill="#FF6F49"/>
+    <circle cx="370" cy="314" r="38" fill="#FFD0B8"/>
+    <circle cx="370" cy="314" r="28" fill="#FF9A7E"/>
+    <circle cx="618" cy="350" r="58" fill="#FF7C52"/>
+    <circle cx="618" cy="350" r="42" fill="#FFD5BE"/>
+    <circle cx="618" cy="350" r="30" fill="#FFA285"/>
+    <path d="M540 250C566 230 612 236 650 268C680 294 688 336 664 360C634 390 590 390 548 358C506 326 500 280 540 250Z" fill="#FFE897"/>
+    <path d="M545 260C568 244 607 248 639 276C664 298 672 330 653 350C629 374 591 374 555 348C520 322 513 282 545 260Z" fill="#FFEFB8"/>
+    <path d="M463 470C514 430 592 426 654 454C688 470 690 510 654 530C594 564 506 562 452 532C416 512 420 484 463 470Z" fill="#E89840"/>
+    <path d="M476 474C520 444 584 442 634 462C664 474 666 502 638 520C586 550 522 550 474 526C444 512 442 492 476 474Z" fill="#F3A74C"/>
+    <path d="M544 456C564 476 560 508 532 532" stroke="#FFD38A" stroke-width="10" stroke-linecap="round"/>
+    <path d="M742 220C780 222 816 248 832 284C848 320 830 344 792 342C752 340 710 310 700 276C690 242 708 218 742 220Z" fill="#FFE5A7"/>
+    <path d="M744 228C776 230 804 252 818 280C830 306 816 326 784 326C750 326 716 302 706 274C698 248 714 226 744 228Z" fill="#FFF1BE"/>
+    <path d="M240 252C274 250 310 274 334 316C352 350 350 384 324 398C296 414 254 402 224 366C194 332 194 286 240 252Z" fill="#78B45C"/>
+    <path d="M254 268C280 262 310 282 328 314C342 338 340 364 322 374C300 388 266 380 242 352C220 324 220 286 254 268Z" fill="#96D16D"/>
+    <path d="M740 210C756 192 786 190 812 208" stroke="white" stroke-width="12" stroke-linecap="round" stroke-opacity="0.72"/>
+    <path d="M310 254C332 228 374 218 404 230" stroke="white" stroke-width="14" stroke-linecap="round" stroke-opacity="0.54"/>
+  </g>
+</svg>

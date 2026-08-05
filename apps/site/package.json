@@ -1,0 +1,24 @@
+{
+  "name": "@next-meal/site",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.22.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "type-check": "vue-tsc --noEmit -p tsconfig.json",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "vue": "3.4.21",
+    "vue-router": "4.4.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "@vitejs/plugin-vue": "5.0.4",
+    "sass": "1.101.0",
+    "typescript": "5.9.3",
+    "vite": "5.2.8",
+    "vue-tsc": "3.3.7"
+  }
+}
