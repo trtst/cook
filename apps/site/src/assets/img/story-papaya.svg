@@ -1,0 +1,36 @@
+<svg width="520" height="420" viewBox="0 0 520 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pSkin" x1="202" y1="76" x2="378" y2="290" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B7D883"/>
+      <stop offset="1" stop-color="#789F60"/>
+    </linearGradient>
+    <radialGradient id="pFlesh" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 176) rotate(48) scale(136 108)">
+      <stop stop-color="#FFE2A5"/>
+      <stop offset=".6" stop-color="#F8A856"/>
+      <stop offset="1" stop-color="#E97E44"/>
+    </radialGradient>
+    <linearGradient id="pLeaf" x1="328" y1="92" x2="430" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CFE1A2"/>
+      <stop offset="1" stop-color="#86A866"/>
+    </linearGradient>
+    <filter id="pShadow" x="146" y="94" width="270" height="234" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <ellipse cx="278" cy="286" rx="112" ry="22" fill="#D0A06A" fill-opacity=".18" filter="url(#pShadow)"/>
+  <path d="M198 82C256 58 334 86 380 166C360 246 302 296 228 286C176 246 164 148 198 82Z" fill="url(#pSkin)" stroke="#996243" stroke-opacity=".66" stroke-width="3.4" stroke-linejoin="round"/>
+  <path d="M230 104C274 88 322 112 352 164C340 220 298 258 244 250C212 222 206 152 230 104Z" fill="url(#pFlesh)" stroke="#AF6D40" stroke-opacity=".48" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M270 138C290 132 314 136 328 154C322 190 302 210 276 208C256 190 254 156 270 138Z" fill="#452E1F" fill-opacity=".08"/>
+  <circle cx="274" cy="150" r="6.6" fill="#423022"/>
+  <circle cx="288" cy="160" r="6.2" fill="#4A3626"/>
+  <circle cx="300" cy="172" r="6" fill="#3F2F22"/>
+  <circle cx="308" cy="186" r="5.8" fill="#4B3727"/>
+  <circle cx="286" cy="182" r="6.4" fill="#3F3023"/>
+  <circle cx="268" cy="174" r="6" fill="#4A3526"/>
+  <circle cx="292" cy="198" r="5.4" fill="#3F3021"/>
+  <path d="M332 118C364 98 402 98 432 126C404 150 370 160 340 150C328 140 326 128 332 118Z" fill="url(#pLeaf)" stroke="#996243" stroke-opacity=".56" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M350 84C374 74 400 76 424 94C404 110 382 118 360 114C350 106 348 94 350 84Z" fill="url(#pLeaf)" stroke="#996243" stroke-opacity=".5" stroke-width="2.8" stroke-linejoin="round"/>
+  <path d="M224 126C238 118 252 116 264 120" stroke="#FFF4DE" stroke-width="7" stroke-linecap="round" stroke-opacity=".52"/>
+  <circle cx="212" cy="266" r="4" fill="#E7B685" fill-opacity=".44"/>
+  <circle cx="196" cy="250" r="2.6" fill="#E7B685" fill-opacity=".58"/>
+</svg>

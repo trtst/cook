@@ -1,0 +1,22 @@
+<svg width="520" height="420" viewBox="0 0 520 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pbWood2" x1="146" y1="160" x2="348" y2="278" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0BC84"/>
+      <stop offset="1" stop-color="#B57A4D"/>
+    </linearGradient>
+    <filter id="pbShadow2" x="100" y="124" width="318" height="220" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <ellipse cx="252" cy="300" rx="118" ry="20" fill="#9B7755" fill-opacity=".16" filter="url(#pbShadow2)"/>
+  <circle cx="198" cy="178" r="38" fill="#F8D578" stroke="#A06139" stroke-opacity=".44" stroke-width="2.8"/>
+  <circle cx="254" cy="170" r="32" fill="#C2DA9B" stroke="#A06139" stroke-opacity=".34" stroke-width="2.4"/>
+  <rect x="296" y="132" width="42" height="82" rx="14" fill="#EDE6CD" stroke="#A06139" stroke-opacity=".24" stroke-width="2.2"/>
+  <path d="M172 170C162 144 180 122 210 116C236 118 252 136 248 158" stroke="#B98754" stroke-width="12" stroke-linecap="round"/>
+  <path d="M146 188H360V234C338 258 176 258 146 234V188Z" fill="url(#pbWood2)" stroke="#9C6545" stroke-opacity=".54" stroke-width="3"/>
+  <path d="M166 214H342" stroke="#F8E8C6" stroke-width="9" stroke-linecap="round" stroke-opacity=".48"/>
+  <path d="M150 210C188 228 320 228 356 210" stroke="#A56D40" stroke-width="7" stroke-linecap="round" stroke-opacity=".4"/>
+  <path d="M186 144C206 132 226 134 242 148" stroke="#8FAE72" stroke-width="5" stroke-linecap="round"/>
+  <path d="M240 136C266 124 292 126 316 146" stroke="#8FAE72" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="118" cy="194" r="3.8" fill="#D38F4A" fill-opacity=".5"/>
+</svg>

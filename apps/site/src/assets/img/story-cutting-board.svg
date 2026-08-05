@@ -1,0 +1,26 @@
+<svg width="520" height="420" viewBox="0 0 520 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cbWood" x1="156" y1="126" x2="352" y2="298" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0D2A1"/>
+      <stop offset="1" stop-color="#C89158"/>
+    </linearGradient>
+    <linearGradient id="cbKnife" x1="176" y1="162" x2="302" y2="226" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FAF8F2"/>
+      <stop offset="1" stop-color="#D6CFBF"/>
+    </linearGradient>
+    <filter id="cbShadow" x="116" y="114" width="304" height="224" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <ellipse cx="260" cy="302" rx="116" ry="20" fill="#A07A57" fill-opacity=".16" filter="url(#cbShadow)"/>
+  <rect x="156" y="126" width="208" height="152" rx="34" fill="url(#cbWood)" stroke="#9A6545" stroke-opacity=".58" stroke-width="3.2"/>
+  <rect x="322" y="150" width="28" height="114" rx="14" fill="#BA7F4A" stroke="#9A6545" stroke-opacity=".42" stroke-width="2.4"/>
+  <path d="M176 214L274 166C286 160 300 170 298 184L212 228C202 232 190 226 176 214Z" fill="url(#cbKnife)" stroke="#8F6A56" stroke-opacity=".34" stroke-width="2.4" stroke-linejoin="round"/>
+  <rect x="284" y="168" width="62" height="20" rx="10" transform="rotate(24 284 168)" fill="#936856"/>
+  <path d="M188 254C210 238 236 234 266 244" stroke="#8CB06B" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="208" cy="250" r="10" fill="#AED087" stroke="#956243" stroke-opacity=".28" stroke-width="2"/>
+  <circle cx="232" cy="244" r="10" fill="#AED087" stroke="#956243" stroke-opacity=".28" stroke-width="2"/>
+  <circle cx="256" cy="246" r="10" fill="#AED087" stroke="#956243" stroke-opacity=".28" stroke-width="2"/>
+  <circle cx="280" cy="254" r="10" fill="#AED087" stroke="#956243" stroke-opacity=".28" stroke-width="2"/>
+  <path d="M184 150C214 142 246 144 274 154" stroke="#FFF7E9" stroke-width="7" stroke-linecap="round" stroke-opacity=".46"/>
+</svg>

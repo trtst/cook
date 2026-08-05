@@ -1,0 +1,27 @@
+<svg width="520" height="420" viewBox="0 0 520 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="skBody2" x1="102" y1="108" x2="356" y2="286" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B7C6A9"/>
+      <stop offset="1" stop-color="#667961"/>
+    </linearGradient>
+    <linearGradient id="skInside2" x1="126" y1="134" x2="302" y2="270" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6F0E0"/>
+      <stop offset="1" stop-color="#D9CFB7"/>
+    </linearGradient>
+    <linearGradient id="skHandle2" x1="328" y1="164" x2="458" y2="138" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E2C487"/>
+      <stop offset="1" stop-color="#BB8B4F"/>
+    </linearGradient>
+    <filter id="skShadow2" x="52" y="100" width="414" height="214" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+  <ellipse cx="242" cy="252" rx="154" ry="22" fill="#9A815C" fill-opacity=".16" filter="url(#skShadow2)"/>
+  <path d="M116 156C154 120 232 110 308 130C348 142 370 170 370 206C330 240 246 256 172 244C124 236 96 210 92 180C96 172 104 164 116 156Z" fill="url(#skBody2)" stroke="#986445" stroke-opacity=".58" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M130 168C162 140 226 132 292 146C326 156 344 176 344 202C312 226 248 236 188 228C148 222 122 204 116 184C118 178 122 172 130 168Z" fill="url(#skInside2)" stroke="#986445" stroke-opacity=".42" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M330 168C370 152 418 148 458 158C444 174 416 186 376 196C354 190 340 182 330 168Z" fill="url(#skHandle2)" stroke="#986445" stroke-opacity=".46" stroke-width="2.8" stroke-linejoin="round"/>
+  <circle cx="350" cy="172" r="7.8" fill="#946F41"/>
+  <circle cx="372" cy="168" r="6.8" fill="#946F41"/>
+  <path d="M168 180C196 166 228 162 266 164" stroke="#FFF8EE" stroke-opacity=".48" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="106" cy="152" r="3.4" fill="#D49150" fill-opacity=".52"/>
+</svg>
