@@ -324,6 +324,7 @@ interface PageEntry {
 	disabledText?: string;
 	description?: string;
 	action?: "logout" | "change-password" | "clear-cache";
+	requiresLogin?: boolean;
 }
 
 const pageStyle = usePageScrollStyle();
@@ -480,19 +481,22 @@ const knowledgeEntries: PageEntry[] = [
 		title: "厨房准备",
 		iconSrc: kitchenPrepIcon,
 		description: "备菜与收纳",
-		disabledText: "厨房准备"
+		url: "/pages_web/content/index?slug=kitchen-prep",
+		requiresLogin: false
 	},
 	{
 		title: "烹饪技巧",
 		iconSrc: cookingSkillsIcon,
 		description: "火候与做法",
-		disabledText: "烹饪技巧"
+		url: "/pages_web/content/index?slug=cooking-skills",
+		requiresLogin: false
 	},
 	{
 		title: "食谱技巧",
 		iconSrc: recipeSkillsIcon,
 		description: "配方与替换",
-		disabledText: "食谱技巧"
+		url: "/pages_web/content/index?slug=recipe-skills",
+		requiresLogin: false
 	}
 ];
 
@@ -515,17 +519,21 @@ const supportSettingEntries: PageEntry[] = [
 	{
 		title: "隐私保护",
 		iconSrc: privacyIcon,
-		disabledText: "隐私保护"
+		url: "/pages_web/content/index?slug=privacy",
+		requiresLogin: false
 	},
 	{
 		title: "帮助与反馈",
 		iconSrc: feedbackIcon,
-		disabledText: "帮助与反馈"
+		description: "常见问题与当前内容说明",
+		url: "/pages_web/content/index?slug=faq",
+		requiresLogin: false
 	},
 	{
 		title: `关于${APP_NAME}`,
 		iconSrc: aboutIcon,
-		disabledText: `关于${APP_NAME}`
+		url: "/pages_web/content/index?slug=about",
+		requiresLogin: false
 	}
 ];
 
@@ -687,14 +695,21 @@ function handleEntryClick(entry: PageEntry) {
 		return;
 	}
 
-	requireLogin(() => {
+	const openEntry = () => {
 		if (entry.url) {
 			navigateTo(entry.url);
 			return;
 		}
 
 		showComingSoon(entry.disabledText || entry.title);
-	});
+	};
+
+	if (entry.requiresLogin === false) {
+		openEntry();
+		return;
+	}
+
+	requireLogin(openEntry);
 }
 
 function handleProfileAction() {
@@ -940,21 +955,6 @@ function getPasswordErrorText(error: unknown) {
 	width: 360rpx;
 	height: 240rpx;
 	transform: rotate(16deg);
-}
-
-.profile-hero--ripple {
-	background:
-		radial-gradient(ellipse at 50% -8%, var(--entry-board-bg) 0, transparent 42%),
-		radial-gradient(circle at 88% 36%, var(--entry-side-mint-bg) 0, transparent 28%),
-		linear-gradient(158deg, var(--entry-primary-bg), var(--entry-side-aqua-bg));
-}
-
-.profile-hero--ripple::before {
-	top: 72rpx;
-	right: -60rpx;
-	width: 420rpx;
-	height: 180rpx;
-	transform: rotate(-8deg);
 }
 
 .profile-hero__cover {

@@ -40,6 +40,7 @@
         { "path": "medal-detail/index", "style": { "navigationBarTitleText": "勋章详情", "navigationStyle": "custom" } },
         { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } },
         { "path": "recommend/index", "style": { "navigationBarTitleText": "通知中心", "navigationStyle": "custom" } },
+        { "path": "recommend-detail/index", "style": { "navigationBarTitleText": "通知详情", "navigationStyle": "custom" } },
         { "path": "ingredient-units/index", "style": { "navigationBarTitleText": "食材与单位", "navigationStyle": "custom" } }
       ]
     },
@@ -89,6 +90,12 @@
         { "path": "preview/index", "style": { "navigationBarTitleText": "分享预览", "navigationStyle": "custom" } },
         { "path": "import/index", "style": { "navigationBarTitleText": "导入分享", "navigationStyle": "custom" } },
         { "path": "memory/index", "style": { "navigationBarTitleText": "饭搭子卡", "navigationStyle": "custom" } }
+      ]
+    },
+    {
+      "root": "pages_web",
+      "pages": [
+        { "path": "content/index", "style": { "navigationBarTitleText": "内容中心" } }
       ]
     }
   ],

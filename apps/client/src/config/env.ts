@@ -11,10 +11,12 @@ export type CookFrom = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmo
  */
 const defaultApiUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const defaultDomain = defaultApiUrl.replace(/\/api\/?$/i, "");
+const defaultSiteUrl = import.meta.env.VITE_SITE_URL ?? "http://127.0.0.1:5176";
 
 export const cfg = {
 	apiUrl: defaultApiUrl,
 	domain: import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
+	siteUrl: defaultSiteUrl,
 	/**
 	 * 默认所有业务都走 `domain`。
 	 * 只有像认证网关这类确实可能单独拆出的场景，才额外提供专用覆盖项。
