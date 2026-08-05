@@ -12,6 +12,7 @@
 ## 记录项
 
 | 日期 | 改动 | 影响文件 | 验证 |
+| 2026-08-05 | 将小程序“关于炊火记”入口的 `web-view` 地址显式切到 `https://www.trtst.com/about`：`site-content` 的 `about` 改为绝对地址，并让通用内容 URL 构造兼容绝对 URL，避免该入口继续依赖 `VITE_SITE_URL` 或本地默认站点地址 | `apps/client/src/config/site-content.ts`、`docs/plans/minor_change_log.md` | `pnpm --filter @next-meal/client type-check`、`git diff --check -- apps/client/src/config/site-content.ts docs/plans/minor_change_log.md` |
 | 2026-08-05 | 给 `www.trtst.com` 官网部署文档补“服务器执行命令版”：把首次上线、后续仅发官网、同时发 `api/admin/site` 三段命令直接展开，减少服务器侧手工拼步骤的成本 | `docs/plans/site-content-execution.md`、`docs/plans/minor_change_log.md` | `git diff --check -- docs/plans/site-content-execution.md docs/plans/minor_change_log.md` |
 | 2026-08-05 | 补齐 `www.trtst.com` 官网的正式上线步骤清单：在执行文档内新增“首次上线 / 后续发版 / 故障排查”三段操作说明，明确 `/srv/cook` 下的拉代码、构建 `apps/site`、复制 nginx 配置、校验证书、重载 nginx 与 `./deploy.sh site/full` 用法，方便服务器侧直接照单执行 | `docs/plans/site-content-execution.md`、`docs/plans/minor_change_log.md` | `git diff --check -- docs/plans/site-content-execution.md docs/plans/minor_change_log.md` |
 | 2026-08-05 | 将官网 `www.trtst.com` 的 nginx 示例固化为独立配置文件：新增 `deploy/nginx/site.trtst.com.conf`，包含 `www` 站点、裸域跳转、HTTPS 证书占位、静态资源缓存和 SPA 路由回退；执行文档同步改为优先引用仓库内配置文件 | `deploy/nginx/site.trtst.com.conf`、`docs/plans/site-content-execution.md`、`docs/plans/minor_change_log.md` | `git diff --check -- deploy/nginx/site.trtst.com.conf docs/plans/site-content-execution.md docs/plans/minor_change_log.md` |

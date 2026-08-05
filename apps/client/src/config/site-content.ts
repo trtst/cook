@@ -18,7 +18,7 @@ interface SiteContentMeta {
 }
 
 const siteContentMap: Record<SiteContentSlug, SiteContentMeta> = {
-  about: { title: "关于炊火记", path: "/about" },
+  about: { title: "关于炊火记", path: "https://www.trtst.com/about" },
   privacy: { title: "隐私政策", path: "/privacy" },
   terms: { title: "用户协议", path: "/terms" },
   faq: { title: "常见问题", path: "/faq" },
@@ -37,6 +37,10 @@ export function resolveSiteContent(slug: string | undefined) {
 
 export function buildSiteContentUrl(slug: SiteContentSlug) {
   const meta = siteContentMap[slug];
+  if (/^https?:\/\//u.test(meta.path)) {
+    return meta.path;
+  }
+
   const baseUrl = cfg.siteUrl.replace(/\/+$/u, "");
   return `${baseUrl}${meta.path}?source=mini_program`;
 }
