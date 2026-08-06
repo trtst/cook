@@ -12,3 +12,4 @@ apps/*/.env
 packages/*/.env
 apps/api/var/
 apps/api/var/app-assets/
+.run-logs/

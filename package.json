@@ -18,6 +18,11 @@
     "api:build": "pnpm build:api",
     "client:dev:mp-weixin": "pnpm dev:client",
     "client:build:mp-weixin": "pnpm build:client",
+    "start": "bash scripts/local/start-all.sh",
+    "restart": "bash scripts/local/restart-all.sh",
+    "stop": "bash scripts/local/stop-all.sh",
+    "status": "bash scripts/local/status-all.sh",
+    "build": "bash scripts/local/build-all.sh",
     "check": "pnpm type-check"
   },
   "pnpm": {

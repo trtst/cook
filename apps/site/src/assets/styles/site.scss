@@ -139,7 +139,6 @@ button {
   gap: 24px;
   padding: 16px clamp(22px, 3vw, 42px) 18px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--page-bg-elevated) 68%, transparent);
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
 }

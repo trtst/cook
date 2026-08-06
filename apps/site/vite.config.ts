@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: env.VITE_DEV_HOST || "127.0.0.1",
       port: readPort(env.VITE_DEV_PORT, 5176),
+      strictPort: true,
       watch: {
         usePolling: true,
         interval: 120,
