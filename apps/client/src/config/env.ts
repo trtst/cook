@@ -1,27 +1,26 @@
 import { APP_VERSION } from "./app";
+import { ENV_PROFILES, type AppMode } from "./env_profiles";
 
 export type CookFrom = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 /**
- * 从完整 API 地址里反推出纯域名。
- *
- * 当前默认 `VITE_API_BASE_URL` 形如 `http://host:port/api`。
- * 业务 API 模块现在直接拼完整地址，例如 `${cfg.domain}/api/auth/login`，
- * 所以这里需要一个稳定的“去掉 /api 后缀”的默认域名。
+ * 请求地址切换统一收口在配置层。
+ * 如果要在开发环境和正式环境间切换，只改这里的 `mode`；
+ * 不再让 `VITE_API_BASE_URL / VITE_API_DOMAIN / VITE_AUTH_DOMAIN` 成为第二套真相来源。
  */
-const defaultApiUrl = import.meta.env.VITE_API_BASE_URL ?? "https://api.trtst.com/api";
-const defaultDomain = defaultApiUrl.replace(/\/api\/?$/i, "");
-const defaultSiteUrl = import.meta.env.VITE_SITE_URL ?? "http://127.0.0.1:5176";
+const mode: AppMode = "dev";       // "dev" | "prod"
+const profile = ENV_PROFILES[mode];
 
 export const cfg = {
-	apiUrl: defaultApiUrl,
-	domain: import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
-	siteUrl: defaultSiteUrl,
+	mode,
+	apiUrl: profile.apiUrl,
+	domain: profile.domain,
+	siteUrl: profile.siteUrl,
 	/**
 	 * 默认所有业务都走 `domain`。
 	 * 只有像认证网关这类确实可能单独拆出的场景，才额外提供专用覆盖项。
 	 */
-	authDomain: import.meta.env.VITE_AUTH_DOMAIN ?? import.meta.env.VITE_API_DOMAIN ?? defaultDomain,
+	authDomain: profile.authDomain,
 	cookFrom: import.meta.env.VITE_COOK_FROM,
 	cookVersion: import.meta.env.VITE_COOK_VERSION ?? APP_VERSION
 };

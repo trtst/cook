@@ -97,12 +97,18 @@
       "pages": [
         { "path": "content/index", "style": { "navigationBarTitleText": "内容中心" } }
       ]
+    },
+    {
+      "root": "pages_home",
+      "pages": [
+        { "path": "topic/index", "style": { "navigationBarTitleText": "本周灵感", "navigationStyle": "custom" } }
+      ]
     }
   ],
   "preloadRule": {
     "pages/home/index": {
       "network": "all",
-      "packages": ["pages_recipe", "pages_meal"]
+      "packages": ["pages_recipe", "pages_meal", "pages_home"]
     }
   },
   "tabBar": {

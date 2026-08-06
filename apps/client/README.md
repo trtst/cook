@@ -18,15 +18,17 @@ pnpm lint
 pnpm build:mp-weixin
 ```
 
-## 环境变量
+## 请求环境切换
 
-复制 `.env.example` 为本地 `.env` 后再按环境填写。
+请求地址通过 `src/config/env.ts` 的 `mode` 切换，地址映射集中放在 `src/config/env_profiles.ts`：
 
-本地真实 API 联调：
-
-```bash
-VITE_API_BASE_URL=http://127.0.0.1:3100/api pnpm build:mp-weixin
+```ts
+const mode: AppMode = "dev"; // dev, prod
 ```
+
+- `dev` 默认走 `http://127.0.0.1:3100/api` 和 `http://127.0.0.1:5176`
+- `prod` 默认走 `https://api.trtst.com/api` 和 `https://www.trtst.com`
+- 小程序真机不能直连 `127.0.0.1`；如果要真机联调，把 `dev.apiUrl / dev.domain / dev.authDomain` 改成手机可访问的局域网 IP 或 HTTPS 域名
 
 小程序端不再内置 mock 请求通道。没有本地数据时，先启动 API 并执行 seed，或通过真实创建接口生成数据。
 
@@ -41,7 +43,7 @@ X-Cook-Version: 0.1.0
 
 全局客户端配置在 `src/config/`。API 根层只放业务接口入口；`src/apis/adapters/uni.ts` 负责 `uni.request`、`uni.uploadFile`、`uni.downloadFile` 平台封装，`src/apis/http.ts` 负责 token、401 和对业务侧导出上传下载方法。
 
-本地可用环境变量覆盖：
+保留的环境变量：
 
 ```bash
 VITE_COOK_FROM=mini_program

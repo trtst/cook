@@ -14,6 +14,12 @@ import { buildSiteContentUrl, resolveSiteContent, type SiteContentSlug } from "@
 const pageUrl = ref("");
 
 onLoad((query) => {
+  const directUrl = typeof query?.url === "string" ? decodeURIComponent(query.url) : "";
+  if (/^https:\/\//iu.test(directUrl)) {
+    pageUrl.value = directUrl;
+    return;
+  }
+
   const slug = typeof query?.slug === "string" ? query.slug : "";
   const meta = resolveSiteContent(slug);
   if (!meta) {

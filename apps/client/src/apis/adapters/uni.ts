@@ -113,7 +113,7 @@ function assertMiniProgramUploadUrl(url: string) {
 
 	if (!isLocalhostHost(hostname)) return;
 
-	throw new Error("真机上传不能直连 127.0.0.1/localhost，请把 VITE_API_BASE_URL 改成手机可访问的局域网 IP 或 HTTPS 域名");
+	throw new Error("真机上传不能直连 127.0.0.1/localhost，请把 src/config/env_profiles.ts 里的 dev.apiUrl 改成手机可访问的局域网 IP 或 HTTPS 域名");
 }
 
 /**

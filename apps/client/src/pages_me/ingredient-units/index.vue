@@ -1217,9 +1217,9 @@ async function handleRefresherRefresh() {
   z-index: 40;
   display: inline-flex;
   align-items: center;
-  gap: 10rpx;
-  height: 84rpx;
-  padding: 0 30rpx;
+  justify-content: center;
+  width: 90rpx;
+  height: 90rpx;
   border-radius: var(--radius-pill);
   background: linear-gradient(
     135deg,
@@ -1235,7 +1235,6 @@ async function handleRefresherRefresh() {
 }
 
 .recommend-fab__icon {
-  font-size: 24rpx;
   line-height: 1;
   color: currentColor;
 }

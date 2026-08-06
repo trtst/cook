@@ -15,206 +15,266 @@
         <text class="restaurant-bar__name">{{ restaurantName }}</text>
       </view>
     </template>
-    <view class="table-page">
-      <view class="table-hero" :style="heroStyle">
-        <view class="hero-main">
-          <view class="hero-copy">
-            <text class="hero-copy__eyebrow">{{ memberCountText }}</text>
-            <text class="hero-copy__title">{{ heroTitle }}</text>
-            <text class="hero-copy__description">{{ heroDescription }}</text>
-          </view>
-
-          <view class="table-scene">
-            <view class="table-scene__cloth" />
-            <view class="table-scene__plate">
-              <view class="table-scene__rice" />
-              <view class="table-scene__leaf table-scene__leaf--left" />
-              <view class="table-scene__leaf table-scene__leaf--right" />
-              <view class="table-scene__egg" />
+    <view class="home-nav-backdrop" :style="navBackdropStyle" />
+    <scroll-view class="table-scroll" scroll-y :show-scrollbar="false" @scroll="handleHomeScroll">
+      <view class="table-page">
+        <view class="table-hero" :style="heroStyle">
+          <view class="hero-main">
+            <view class="hero-copy">
+              <text class="hero-copy__eyebrow">{{ memberCountText }}</text>
+              <text class="hero-copy__title">{{ heroTitle }}</text>
+              <text class="hero-copy__description">{{ heroDescription }}</text>
             </view>
-            <view class="table-scene__bowl" />
-            <view class="table-scene__cup" />
+
+            <view class="table-scene">
+              <view class="table-scene__cloth" />
+              <view class="table-scene__plate">
+                <view class="table-scene__rice" />
+                <view class="table-scene__leaf table-scene__leaf--left" />
+                <view class="table-scene__leaf table-scene__leaf--right" />
+                <view class="table-scene__egg" />
+              </view>
+              <view class="table-scene__bowl" />
+              <view class="table-scene__cup" />
+            </view>
           </view>
         </view>
-      </view>
 
-      <view class="table-content">
-        <view v-if="sessionStore.isLoggedIn && loadErrorText" class="home-notice" @click="loadHome(true)">
-          <text class="home-notice__text">{{ loadErrorText }}</text>
-          <text class="home-notice__action">重试</text>
-        </view>
+        <view class="table-content">
+          <view v-if="sessionStore.isLoggedIn && loadErrorText" class="home-notice" @click="loadHome(true)">
+            <text class="home-notice__text">{{ loadErrorText }}</text>
+            <text class="home-notice__action">重试</text>
+          </view>
 
-        <view class="feature-board">
-          <view class="feature-card feature-card--main" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_meal/plan/index')">
-            <view class="feature-card__copy">
-              <text class="feature-card__title">饭局</text>
-              <text class="feature-card__subtitle">今晚吃啥先定个方向</text>
+          <view v-if="homeEntriesErrorText && !hasFeatureEntries && !hasQuickEntries" class="home-notice" @click="loadHomeEntries(true)">
+            <text class="home-notice__text">{{ homeEntriesErrorText }}</text>
+            <text class="home-notice__action">重试</text>
+          </view>
+
+          <view v-if="hasFeatureEntries" class="feature-board">
+            <view class="feature-card feature-card--main" hover-class="feature-card--hover" hover-stay-time="100" @click="openHomeEntry(mainFeatureCard)">
+              <view class="feature-card__copy">
+                <text class="feature-card__title">{{ mainFeatureCard?.title }}</text>
+                <text class="feature-card__subtitle">{{ mainFeatureCard?.subtitle }}</text>
+              </view>
+              <view class="feature-card__art feature-card__art--meal">
+                <image
+                  v-if="mainFeatureCard?.imageUrl"
+                  class="feature-card__art-image"
+                  :src="mainFeatureCard.imageUrl"
+                  mode="aspectFill"
+                />
+                <view v-else class="feature-card__plate">
+                  <view class="feature-card__food" />
+                </view>
+              </view>
             </view>
-            <view class="feature-card__art feature-card__art--meal">
-              <view class="feature-card__plate">
-                <view class="feature-card__food" />
+
+            <view class="feature-side">
+              <view
+                v-for="item in sideFeatureCards"
+                :key="item.id"
+                class="feature-card feature-card--side"
+                :class="resolveSideCardClass(item.placement)"
+                hover-class="feature-card--hover"
+                hover-stay-time="100"
+                @click="openHomeEntry(item)"
+              >
+                <text class="feature-card__title">{{ item.title }}</text>
+                <text class="feature-card__subtitle">{{ item.subtitle }}</text>
+                <view class="feature-card__mini feature-card__mini--members">
+                  <image
+                    v-if="item.imageUrl"
+                    class="feature-card__mini-image"
+                    :src="item.imageUrl"
+                    mode="aspectFit"
+                  />
+                  <text v-else-if="item.badgeText" class="feature-card__mini-text">{{ item.badgeText }}</text>
+                  <view v-else class="feature-card__mini-dot" />
+                </view>
+              </view>
+            </view>
+          </view>
+          <view v-else-if="showFeatureEntriesSkeleton" class="feature-board">
+            <view class="feature-card feature-card--main feature-card--skeleton">
+              <view class="feature-card__copy feature-card__copy--skeleton">
+                <Skeleton width="160rpx" height="30rpx" />
+                <Skeleton width="220rpx" height="22rpx" />
+              </view>
+              <view class="feature-card__art feature-card__art--skeleton">
+                <Skeleton width="100%" height="160rpx" radius="var(--radius-xs)" />
+              </view>
+            </view>
+            <view class="feature-side">
+              <view class="feature-card feature-card--side feature-card--mint feature-card--skeleton">
+                <view class="feature-card__copy feature-card__copy--skeleton">
+                  <Skeleton width="120rpx" height="30rpx" />
+                  <Skeleton width="170rpx" height="22rpx" />
+                </view>
+                <view class="feature-card__mini feature-card__mini--skeleton">
+                  <Skeleton width="100%" height="100%" radius="18rpx" />
+                </view>
+              </view>
+              <view class="feature-card feature-card--side feature-card--green feature-card--skeleton">
+                <view class="feature-card__copy feature-card__copy--skeleton">
+                  <Skeleton width="120rpx" height="30rpx" />
+                  <Skeleton width="170rpx" height="22rpx" />
+                </view>
+                <view class="feature-card__mini feature-card__mini--skeleton">
+                  <Skeleton width="100%" height="100%" radius="18rpx" />
+                </view>
               </view>
             </view>
           </view>
 
-          <view class="feature-side">
-            <view class="feature-card feature-card--side feature-card--mint" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/members/index')">
-              <text class="feature-card__title">成员</text>
-              <text class="feature-card__subtitle">一起吃饭的人</text>
-              <view class="feature-card__mini feature-card__mini--members">
-                <text class="feature-card__mini-text">{{ memberCountValue }}</text>
-              </view>
-            </view>
-
-            <view class="feature-card feature-card--side feature-card--green" hover-class="feature-card--hover" hover-stay-time="100" @click="navigateTo('/pages_recipe/list/index')">
-              <text class="feature-card__title">常吃</text>
-              <text class="feature-card__subtitle">顺手复做</text>
-              <view class="feature-card__mini feature-card__mini--recipe">
-                <view class="feature-card__mini-dot" />
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <view class="action-dock">
-          <view
-            v-for="item in quickActions"
-            :key="item.title"
-            class="dock-action"
-            hover-class="dock-action--hover"
-            hover-stay-time="100"
-            @click="navigateTo(item.url)"
-          >
-            <view class="dock-action__icon" :class="item.className">
-              <image class="dock-action__image" :src="item.iconSrc" mode="aspectFit" />
-            </view>
-            <text class="dock-action__title">{{ item.title }}</text>
-          </view>
-        </view>
-
-        <view
-          v-if="activePoll"
-          class="decision-card"
-          hover-class="decision-card--hover"
-          hover-stay-time="100"
-          @click="navigateTo(`/pages_meal/poll/index?pollId=${encodeURIComponent(String(activePoll.id))}`)"
-        >
-          <view class="decision-card__header">
-            <view>
-              <text class="decision-card__label">当前征集</text>
-              <text class="decision-card__title">{{ activePoll.title }}</text>
-            </view>
-            <view class="decision-card__badge">
-              <text class="decision-card__badge-text">{{ pollStatusText }}</text>
-            </view>
-          </view>
-
-          <view class="decision-summary">
-            <view class="decision-summary__item">
-              <text class="decision-summary__label">餐次</text>
-              <text class="decision-summary__value">{{ formatMealSlot(activePoll.mealSlot) }}</text>
-            </view>
-            <view class="decision-summary__item">
-              <text class="decision-summary__label">候选菜</text>
-              <text class="decision-summary__value">{{ activePoll.candidateCount }} 道</text>
-            </view>
-            <view class="decision-summary__item">
-              <text class="decision-summary__label">已回应</text>
-              <text class="decision-summary__value">{{ activePoll.responseCount }} 人</text>
-            </view>
-          </view>
-
-          <view class="decision-progress">
-            <view class="decision-progress__track">
-              <view class="decision-progress__value" :style="{ width: progressWidth }" />
-            </view>
-            <text class="decision-progress__text">{{ progressText }}</text>
-          </view>
-
-          <view class="decision-card__footer">
-            <text class="decision-card__hint">{{ activePoll.note || "大家先投票，主理人再确认最终菜单。" }}</text>
-            <text class="decision-card__action">查看征集</text>
-          </view>
-        </view>
-
-        <view class="table-section">
-          <view class="section-heading">
-            <text class="section-heading__title">饭局动静</text>
-            <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">去征集</text>
-          </view>
-          <view class="family-feed">
-            <Empty
-              v-if="!sessionStore.isLoggedIn"
-              title="登录后看饭局动静"
-              description="点菜征集、菜单确认和谁来做都会显示在这里。"
-            />
-            <Empty
-              v-else-if="homeLoading && !activityItems.length"
-              title="正在同步饭局动静"
-              description="稍等一下，最近 3 到 5 条轻动态会出现在这里。"
-            />
-            <Empty
-              v-else-if="!activityItems.length"
-              title="暂无饭局动静"
-              description="有新的点菜、确认菜单或分工更新时会显示在这里。"
-            />
+          <view v-if="hasQuickEntries" class="action-dock">
             <view
-              v-for="item in activityItems"
-              v-else
+              v-for="item in quickEntryItems"
               :key="item.id"
-              class="feed-item"
-              hover-class="feed-item--hover"
+              class="dock-action"
+              hover-class="dock-action--hover"
               hover-stay-time="100"
-              @click="handleActivityClick(item)"
+              @click="openHomeEntry(item)"
             >
-              <view class="feed-item__avatar" :class="resolveActivityTone(item.kind)">
-                <text class="feed-item__avatar-text">{{ resolveActivityTag(item.kind) }}</text>
+              <view class="dock-action__icon" :class="resolveQuickEntryClass(item.placement)">
+                <image v-if="item.imageUrl" class="dock-action__image" :src="item.imageUrl" mode="aspectFit" />
+                <text v-else-if="item.badgeText" class="dock-action__badge">{{ item.badgeText }}</text>
+                <view v-else class="dock-action__dot" />
               </view>
-              <view class="feed-item__content">
-                <text class="feed-item__title">{{ item.title }}</text>
-                <text class="feed-item__description">{{ resolveActivityFallback(item.kind) }}</text>
-              </view>
-              <text class="feed-item__time">{{ formatShortTime(item.createdAt) }}</text>
+              <text class="dock-action__title">{{ item.title }}</text>
             </view>
           </view>
-        </view>
-
-        <view class="pantry-panel">
-          <view class="pantry-panel__header">
-            <view>
-              <text class="pantry-panel__label">买菜和冰箱</text>
-              <text class="pantry-panel__title">个人清单和冰箱</text>
+          <view v-else-if="showQuickEntriesSkeleton" class="action-dock">
+            <view v-for="placement in quickEntryPlacementList" :key="placement" class="dock-action dock-action--skeleton">
+              <view class="dock-action__icon" :class="resolveQuickEntryClass(placement)">
+                <Skeleton width="64rpx" height="64rpx" radius="20rpx" />
+              </view>
+              <Skeleton width="72rpx" height="24rpx" radius="var(--radius-pill)" />
             </view>
-            <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去买菜</text>
           </view>
 
-          <view class="pantry-list">
-            <Empty title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
-          </view>
-        </view>
+          <view
+            v-if="activePoll"
+            class="decision-card"
+            hover-class="decision-card--hover"
+            hover-stay-time="100"
+            @click="navigateTo(`/pages_meal/poll/index?pollId=${encodeURIComponent(String(activePoll.id))}`)"
+          >
+            <view class="decision-card__header">
+              <view>
+                <text class="decision-card__label">当前征集</text>
+                <text class="decision-card__title">{{ activePoll.title }}</text>
+              </view>
+              <view class="decision-card__badge">
+                <text class="decision-card__badge-text">{{ pollStatusText }}</text>
+              </view>
+            </view>
 
-        <view class="table-section table-section--recipes">
-          <view class="section-heading">
-            <text class="section-heading__title">常吃清单</text>
-            <text class="section-heading__action" @click="navigateTo('/pages_recipe/list/index')">菜谱</text>
+            <view class="decision-summary">
+              <view class="decision-summary__item">
+                <text class="decision-summary__label">餐次</text>
+                <text class="decision-summary__value">{{ formatMealSlot(activePoll.mealSlot) }}</text>
+              </view>
+              <view class="decision-summary__item">
+                <text class="decision-summary__label">候选菜</text>
+                <text class="decision-summary__value">{{ activePoll.candidateCount }} 道</text>
+              </view>
+              <view class="decision-summary__item">
+                <text class="decision-summary__label">已回应</text>
+                <text class="decision-summary__value">{{ activePoll.responseCount }} 人</text>
+              </view>
+            </view>
+
+            <view class="decision-progress">
+              <view class="decision-progress__track">
+                <view class="decision-progress__value" :style="{ width: progressWidth }" />
+              </view>
+              <text class="decision-progress__text">{{ progressText }}</text>
+            </view>
+
+            <view class="decision-card__footer">
+              <text class="decision-card__hint">{{ activePoll.note || "大家先投票，主理人再确认最终菜单。" }}</text>
+              <text class="decision-card__action">查看征集</text>
+            </view>
           </view>
-          <Empty title="暂无常吃菜谱" description="保存或复做菜谱后会显示在这里。" />
+
+          <view class="table-section">
+            <view class="section-heading">
+              <text class="section-heading__title">饭局动静</text>
+              <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">去征集</text>
+            </view>
+            <view class="family-feed">
+              <Empty
+                v-if="!sessionStore.isLoggedIn"
+                title="登录后看饭局动静"
+                description="点菜征集、菜单确认和谁来做都会显示在这里。"
+              />
+              <Empty
+                v-else-if="homeLoading && !activityItems.length"
+                title="正在同步饭局动静"
+                description="稍等一下，最近 3 到 5 条轻动态会出现在这里。"
+              />
+              <Empty
+                v-else-if="!activityItems.length"
+                title="暂无饭局动静"
+                description="有新的点菜、确认菜单或分工更新时会显示在这里。"
+              />
+              <view
+                v-for="item in activityItems"
+                v-else
+                :key="item.id"
+                class="feed-item"
+                hover-class="feed-item--hover"
+                hover-stay-time="100"
+                @click="handleActivityClick(item)"
+              >
+                <view class="feed-item__avatar" :class="resolveActivityTone(item.kind)">
+                  <text class="feed-item__avatar-text">{{ resolveActivityTag(item.kind) }}</text>
+                </view>
+                <view class="feed-item__content">
+                  <text class="feed-item__title">{{ item.title }}</text>
+                  <text class="feed-item__description">{{ resolveActivityFallback(item.kind) }}</text>
+                </view>
+                <text class="feed-item__time">{{ formatShortTime(item.createdAt) }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="pantry-panel">
+            <view class="pantry-panel__header">
+              <view>
+                <text class="pantry-panel__label">买菜和冰箱</text>
+                <text class="pantry-panel__title">个人清单和冰箱</text>
+              </view>
+              <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去买菜</text>
+            </view>
+
+            <view class="pantry-list">
+              <Empty title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
+            </view>
+          </view>
+
+          <view class="table-section table-section--recipes">
+            <view class="section-heading">
+              <text class="section-heading__title">常吃清单</text>
+              <text class="section-heading__action" @click="navigateTo('/pages/recipe/index')">菜谱</text>
+            </view>
+            <Empty title="暂无常吃菜谱" description="保存或复做菜谱后会显示在这里。" />
+          </view>
         </view>
       </view>
-    </view>
+    </scroll-view>
   </Layout>
 </template>
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
-import askIcon from "@/assets/home-actions/ask.svg";
-import gapIcon from "@/assets/home-actions/gap.svg";
-import randomIcon from "@/assets/home-actions/random.svg";
-import wishIcon from "@/assets/home-actions/wish.svg";
+import { homeApi, type HomeEntryItem, type HomeEntryPlacement } from "@/apis/home";
 import { pollApi, type DiningGroupActivityKind, type DiningGroupActivitySummary, type MealPollSummary } from "@/apis/poll";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { APP_NAME } from "@/config";
@@ -226,6 +286,7 @@ import { useUserStore } from "@/stores/user";
 const pageStyle = usePageScrollStyle();
 
 const HOME_NAV_GAP = 16;
+const HOME_NAV_FADE_DISTANCE = 96;
 const { navBarTotalHeight } = useSystemInfo();
 const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
@@ -234,7 +295,13 @@ const homeLoading = ref(false);
 const loadErrorText = ref("");
 const pollItems = ref<MealPollSummary[]>([]);
 const activityItems = ref<DiningGroupActivitySummary[]>([]);
+const homeScrollTop = ref(0);
+const homeEntriesLoading = ref(false);
+const homeEntriesErrorText = ref("");
+const featureEntryItems = ref<HomeEntryItem[]>([]);
+const quickEntryItems = ref<HomeEntryItem[]>([]);
 let homeLoadPromise: Promise<void> | null = null;
+let homeEntriesLoadPromise: Promise<void> | null = null;
 let homeLoadSeq = 0;
 
 const heroStyle = computed(() => ({
@@ -242,6 +309,11 @@ const heroStyle = computed(() => ({
   backgroundImage: userStore.profile?.display?.homeBackgroundUrl ? `url(${userStore.profile.display.homeBackgroundUrl})` : undefined,
   backgroundSize: userStore.profile?.display?.homeBackgroundUrl ? "cover" : undefined,
   backgroundPosition: userStore.profile?.display?.homeBackgroundUrl ? "center" : undefined
+}));
+const navProgress = computed(() => Math.min(1, Math.max(0, homeScrollTop.value / HOME_NAV_FADE_DISTANCE)));
+const navBackdropStyle = computed(() => ({
+  height: `${navBarTotalHeight.value}px`,
+  opacity: `${navProgress.value}`
 }));
 
 const restaurantName = computed(() => {
@@ -256,6 +328,17 @@ const memberCountText = computed(() => {
 });
 const memberCountValue = computed(() => diningGroupStore.currentDiningGroup?.memberCount ?? "--");
 const activePoll = computed(() => pollItems.value[0] ?? null);
+const mainFeatureCard = computed(() => featureEntryItems.value.find(item => item.placement === "MAIN") ?? null);
+const sideFeatureCards = computed(() =>
+  featureEntryItems.value
+    .filter(item => item.placement === "SIDE_TOP" || item.placement === "SIDE_BOTTOM")
+    .sort((left, right) => (left.placement === "SIDE_TOP" ? 0 : 1) - (right.placement === "SIDE_TOP" ? 0 : 1))
+);
+const quickEntryPlacementList: HomeEntryPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
+const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideFeatureCards.value.length === 2);
+const hasQuickEntries = computed(() => quickEntryItems.value.length === 4);
+const showFeatureEntriesSkeleton = computed(() => homeEntriesLoading.value && !hasFeatureEntries.value && !homeEntriesErrorText.value);
+const showQuickEntriesSkeleton = computed(() => homeEntriesLoading.value && !hasQuickEntries.value && !homeEntriesErrorText.value);
 const progressWidth = computed(() => {
   const memberCount = diningGroupStore.currentDiningGroup?.memberCount ?? 0;
   if (!activePoll.value || memberCount <= 0) return "0%";
@@ -287,38 +370,8 @@ const heroDescription = computed(() =>
       : "登录后同步你的饭搭子关系、计划、购物清单和食材。"
 );
 
-const quickActions = [
-  {
-    title: "我想吃",
-    subtitle: "先记一口",
-    iconSrc: wishIcon,
-    url: "/pages_meal/wish/index",
-    className: "quick-action--primary"
-  },
-  {
-    title: "问大家",
-    subtitle: "问问大家",
-    iconSrc: askIcon,
-    url: "/pages_meal/poll/index",
-    className: "quick-action--mint"
-  },
-  {
-    title: "随机",
-    subtitle: "不纠结",
-    iconSrc: randomIcon,
-    url: "/pages_meal/random/index",
-    className: "quick-action--aqua"
-  },
-  {
-    title: "缺什么",
-    subtitle: "买菜前看",
-    iconSrc: gapIcon,
-    url: "/pages_pantry/gap/index",
-    className: "quick-action--soft"
-  }
-];
-
 onShow(() => {
+  void loadHomeEntries();
   void loadHome();
 });
 
@@ -397,6 +450,47 @@ async function loadHome(force = false) {
   await homeLoadPromise;
 }
 
+async function loadHomeEntries(force = false) {
+  if (homeEntriesLoadPromise) {
+    await homeEntriesLoadPromise;
+    return;
+  }
+
+  if (!force && hasFeatureEntries.value && hasQuickEntries.value) return;
+
+  homeEntriesLoading.value = true;
+  if (force) {
+    homeEntriesErrorText.value = "";
+  }
+
+  homeEntriesLoadPromise = homeApi
+    .getHomeEntries()
+    .then(result => {
+      featureEntryItems.value = result.items.filter(
+        item => item.placement === "MAIN" || item.placement === "SIDE_TOP" || item.placement === "SIDE_BOTTOM"
+      );
+      quickEntryItems.value = result.items.filter(
+        item => item.placement === "QUICK_1" || item.placement === "QUICK_2" || item.placement === "QUICK_3" || item.placement === "QUICK_4"
+      );
+      homeEntriesErrorText.value = "";
+    })
+    .catch(error => {
+      if (!hasFeatureEntries.value) {
+        featureEntryItems.value = [];
+      }
+      if (!hasQuickEntries.value) {
+        quickEntryItems.value = [];
+      }
+      homeEntriesErrorText.value = error instanceof Error ? error.message : "首页快捷入口加载失败";
+    })
+    .finally(() => {
+      homeEntriesLoading.value = false;
+      homeEntriesLoadPromise = null;
+    });
+
+  await homeEntriesLoadPromise;
+}
+
 function clearHomeState() {
   pollItems.value = [];
   activityItems.value = [];
@@ -451,6 +545,33 @@ function resolveActivityFallback(kind: DiningGroupActivityKind) {
   return "有成员正在等待加入。";
 }
 
+function resolveSideCardClass(placement: HomeEntryItem["placement"]) {
+  return placement === "SIDE_TOP" ? "feature-card--mint" : "feature-card--green";
+}
+
+function resolveQuickEntryClass(placement: HomeEntryPlacement) {
+  if (placement === "QUICK_1") return "quick-action--primary";
+  if (placement === "QUICK_2") return "quick-action--mint";
+  if (placement === "QUICK_3") return "quick-action--aqua";
+  return "quick-action--soft";
+}
+
+function openHomeEntry(item: HomeEntryItem | null) {
+  if (!item) return;
+
+  if (item.targetType === "WEB_VIEW") {
+    if (!/^https:\/\//iu.test(item.targetValue)) return;
+    navigateTo(`/pages_web/content/index?url=${encodeURIComponent(item.targetValue)}`);
+    return;
+  }
+
+  navigateTo(item.targetValue);
+}
+
+function handleHomeScroll(event: { detail?: { scrollTop?: number } }) {
+  homeScrollTop.value = event.detail?.scrollTop ?? 0;
+}
+
 function handleActivityClick(item: DiningGroupActivitySummary) {
   if (item.kind === "MEMORY_CREATED") {
     if (item.detail?.startsWith("/pages_share/memory/index?token=")) {
@@ -498,8 +619,29 @@ function navigateTo(url: string) {
 </script>
 
 <style scoped lang="scss">
+.home-nav-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 799;
+  overflow: hidden;
+  border-bottom: 1rpx solid var(--color-border);
+  background: var(--color-tabbar-bg);
+  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  pointer-events: none;
+  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
+  backdrop-filter: saturate(180%) blur(22rpx);
+  transition: opacity 180ms ease;
+}
+
+.table-scroll {
+  height: 100%;
+  background: var(--color-page);
+}
+
 .table-page {
-  min-height: 100vh;
+  min-height: 100%;
   padding-bottom: var(--space-page);
 }
 
@@ -731,19 +873,18 @@ function navigateTo(url: string) {
 
 .feature-board {
   display: flex;
-  gap: 14rpx;
+  gap: 20rpx;
 }
 
 .feature-card {
   position: relative;
   overflow: hidden;
-  border-radius: var(--entry-card-radius);
+  border-radius: var(--radius-xs);
 }
 
 .feature-card--main {
   flex: 1 1 0;
-  min-height: 292rpx;
-  padding: 24rpx 22rpx;
+  padding: 20rpx;
   background: var(--entry-primary-bg);
 }
 
@@ -751,13 +892,13 @@ function navigateTo(url: string) {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
-  gap: 14rpx;
+  gap: 20rpx;
 }
 
 .feature-card--side {
   flex: 1;
-  min-height: 139rpx;
-  padding: 20rpx 18rpx;
+  min-height: 140rpx;
+  padding: 20rpx;
 }
 
 .feature-card--mint {
@@ -779,26 +920,33 @@ function navigateTo(url: string) {
   color: var(--entry-ink);
   font-size: 28rpx;
   font-weight: var(--font-weight-heavy);
-  line-height: var(--line-height-tight);
+  line-height: 1;
 }
 
 .feature-card__subtitle {
-  margin-top: 8rpx;
+  margin-top: 10rpx;
   color: var(--entry-muted-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-normal);
+  line-height: 1;
 }
 
 .feature-card__art {
   position: absolute;
-  right: 22rpx;
-  bottom: 44rpx;
-  left: 22rpx;
-  height: 132rpx;
-  border-radius: var(--radius-md);
+  right: 20rpx;
+  bottom: 20rpx;
+  left: 20rpx;
+  height: 160rpx;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
   background: var(--entry-photo-bg);
   box-shadow: var(--entry-photo-shadow);
+}
+
+.feature-card__art-image,
+.feature-card__mini-image {
+  width: 100%;
+  height: 100%;
 }
 
 .feature-card__plate {
@@ -829,21 +977,40 @@ function navigateTo(url: string) {
 
 .feature-card__mini {
   position: absolute;
-  right: 18rpx;
-  bottom: 14rpx;
+  right: 10rpx;
+  bottom: 10rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 54rpx;
-  height: 54rpx;
-  border: 5rpx solid var(--entry-outline);
-  border-radius: 18rpx;
-  background: var(--entry-photo-bg);
+  width: 100rpx;
+  height: 100rpx;
   transform: rotate(-7deg);
 }
 
-.feature-card__mini--members {
-  border-radius: var(--radius-pill);
+
+.feature-card--skeleton {
+  pointer-events: none;
+}
+
+.feature-card__copy--skeleton {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.feature-card__art--skeleton {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.feature-card__mini--skeleton {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .feature-card__mini-text {
@@ -874,6 +1041,10 @@ function navigateTo(url: string) {
   min-width: 0;
 }
 
+.dock-action--skeleton {
+  pointer-events: none;
+}
+
 .dock-action__icon {
   display: flex;
   align-items: center;
@@ -901,8 +1072,23 @@ function navigateTo(url: string) {
 }
 
 .dock-action__image {
-  width: 54rpx;
-  height: 54rpx;
+  width: 100%;
+  height: 100%;
+}
+
+.dock-action__badge {
+  color: var(--entry-ink);
+  font-size: 28rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+}
+
+.dock-action__dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: var(--radius-pill);
+  background: var(--entry-food-yellow);
+  box-shadow: 10rpx -10rpx 0 -3rpx var(--entry-accent);
 }
 
 .dock-action__title {
