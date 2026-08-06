@@ -27,6 +27,12 @@ const headerTitle = computed(() => {
 const hasHeaderRefresh = computed(() => Boolean(headerState.refresh.value));
 
 const activeMenu = computed(() => {
+  if (route.path.startsWith("/operations/")) {
+    if (route.path.startsWith("/operations/weekly-topic/editor")) {
+      return "/operations/weekly-topic";
+    }
+    return route.path;
+  }
   if (
     route.path.startsWith("/recipes/") &&
     route.path !== "/recipes/list" &&
@@ -49,6 +55,9 @@ const openedMenus = computed(() => {
   }
   if (route.path.startsWith("/ingredients")) {
     menus.push("/ingredients");
+  }
+  if (route.path.startsWith("/operations")) {
+    menus.push("/operations");
   }
   return menus;
 });
@@ -79,6 +88,17 @@ function triggerHeaderRefresh() {
           <el-icon><House /></el-icon>
           <span>首页</span>
         </el-menu-item>
+        <el-sub-menu index="/operations">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>运营</span>
+          </template>
+          <el-menu-item index="/operations/app-home">小程序首页</el-menu-item>
+          <el-menu-item index="/operations/weekly-topic">本周灵感</el-menu-item>
+          <el-menu-item index="/operations/site-home">官网首页</el-menu-item>
+          <el-menu-item index="/operations/pre-meal">餐前准备</el-menu-item>
+          <el-menu-item index="/operations/kitchen-knowledge">厨房知识</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/users">
           <el-icon><User /></el-icon>
           <span>用户查询</span>

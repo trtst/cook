@@ -28,6 +28,54 @@ const router = createRouter({
           meta: { title: "运营看板" }
         },
         {
+          path: "home-feature-board",
+          redirect: "/operations/app-home"
+        },
+        {
+          path: "home-entries",
+          redirect: "/operations/app-home"
+        },
+        {
+          path: "operations",
+          redirect: "/operations/app-home"
+        },
+        {
+          path: "operations/app-home",
+          name: "operations-app-home",
+          component: () => import("@/pages/HomeEntriesPage.vue"),
+          meta: { title: "小程序首页" }
+        },
+        {
+          path: "operations/weekly-topic",
+          name: "operations-weekly-topic",
+          component: () => import("@/pages/HomeTopicsPage.vue"),
+          meta: { title: "本周灵感" }
+        },
+        {
+          path: "operations/weekly-topic/editor",
+          name: "operations-weekly-topic-editor",
+          component: () => import("@/pages/HomeTopicEditorPage.vue"),
+          meta: { title: "编辑本周灵感" }
+        },
+        {
+          path: "operations/site-home",
+          name: "operations-site-home",
+          component: () => import("@/pages/OperationPlaceholderPage.vue"),
+          meta: { title: "官网首页", operationPage: "site-home" }
+        },
+        {
+          path: "operations/pre-meal",
+          name: "operations-pre-meal",
+          component: () => import("@/pages/OperationPlaceholderPage.vue"),
+          meta: { title: "餐前准备", operationPage: "pre-meal" }
+        },
+        {
+          path: "operations/kitchen-knowledge",
+          name: "operations-kitchen-knowledge",
+          component: () => import("@/pages/OperationPlaceholderPage.vue"),
+          meta: { title: "厨房知识", operationPage: "kitchen-knowledge" }
+        },
+        {
           path: "users",
           name: "users",
           component: () => import("@/pages/UsersPage.vue"),

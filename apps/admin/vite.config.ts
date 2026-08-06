@@ -28,7 +28,8 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: env.VITE_DEV_HOST || "127.0.0.1",
-      port: readPort(env.VITE_DEV_PORT, 5174)
+      port: readPort(env.VITE_DEV_PORT, 5174),
+      strictPort: true
     },
     build: {
       rollupOptions: {
