@@ -238,6 +238,7 @@ POST /auth/login
 POST /auth/code-login
 POST /auth/refresh
 GET  /app-config
+GET  /home-entries
 GET  /users/me
 GET  /users/me/medals
 PUT  /users/me
@@ -279,6 +280,149 @@ interface AppConfigResponse {
   };
 }
 
+type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
+type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
+
+interface HomeEntryItem {
+  id: string;
+  placement: HomeEntryPlacement;
+  title: string;
+  subtitle: string | null;
+  targetType: HomeEntryTargetType;
+  targetValue: string;
+  imageUrl: string | null;
+  badgeText: string | null;
+}
+
+interface HomeEntriesResponse {
+  items: HomeEntryItem[];
+}
+
+interface HomeEntryPageTarget {
+  label: string;
+  value: string;
+}
+
+interface AdminHomeEntryItem extends HomeEntryItem {
+  version: number;
+}
+
+interface AdminHomeEntriesResponse {
+  items: AdminHomeEntryItem[];
+  pageTargets: HomeEntryPageTarget[];
+}
+
+interface UpdateHomeEntryItemRequest {
+  placement: HomeEntryPlacement;
+  title: string;
+  subtitle: string | null;
+  targetType: HomeEntryTargetType;
+  targetValue: string;
+  imageUrl: string | null;
+  badgeText: string | null;
+  expectedVersion: number;
+}
+
+interface UpdateHomeEntriesRequest {
+  items: UpdateHomeEntryItemRequest[];
+}
+
+type HomeTopicType =
+  | "WEEKEND_GATHERING"
+  | "QUICK_AFTER_WORK"
+  | "HOME_STYLE"
+  | "ONE_PERSON"
+  | "BREAKFAST"
+  | "LIGHT_DINNER";
+
+interface HomeTopicTypeOption {
+  label: string;
+  value: HomeTopicType;
+}
+
+interface HomeTopicRecipeItem {
+  id: UUID;
+  sort: number;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  duration: RecipeDuration | null;
+  category: InspirationCategorySummary;
+  likeCount: number;
+  collectCount: number;
+  updatedAt: IsoDateTime;
+}
+
+interface HomeTopicHistoryItem {
+  id: UUID;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  issueNo: number;
+  description: string;
+  coverImageUrl: string | null;
+  recipeCount: number;
+  publishedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface HomeTopicDetail {
+  id: UUID;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  issueNo: number;
+  description: string;
+  coverImageUrl: string | null;
+  recipeCount: number;
+  publishedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  items: HomeTopicRecipeItem[];
+  history: HomeTopicHistoryItem[];
+}
+
+interface HomeTopicCurrentResponse {
+  topic: HomeTopicDetail | null;
+}
+
+interface HomeTopicDetailResponse {
+  topic: HomeTopicDetail;
+}
+
+interface AdminHomeTopicItem {
+  id: UUID;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  status: "LISTED" | "UNLISTED";
+  issueNo: number;
+  description: string;
+  coverImageUrl: string | null;
+  recipeCount: number;
+  publishedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  items: HomeTopicRecipeItem[];
+  version: number;
+}
+
+interface AdminHomeTopicsResponse {
+  topics: AdminHomeTopicItem[];
+  recTypes: HomeTopicTypeOption[];
+}
+
+interface CreateHomeTopicRequest {
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  issueNo: number;
+  description: string;
+  recipeIds: UUID[];
+}
+
+interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {
+  expectedVersion: number;
+}
+
 interface UpdateCurrentUserRequest {
   nickname?: string;
   avatarUrl?: string;
@@ -297,6 +441,10 @@ interface ChangeCurrentPasswordResult {
 `POST /auth/code-login` 是当前客户端主登录入口。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
+
+`GET /home-entries` 只返回小程序首页 7 个快捷入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 只服务入口内部视觉区或图标区，不是整张完成海报；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN / SIDE_TOP / SIDE_BOTTOM` 用于首屏 3 卡，`QUICK_1 ... QUICK_4` 用于 action-dock 四格快捷入口；客户端按 `placement` 自己拆出上 3 卡和下 4 格。
+
+`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回 `404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sort / title / coverImageUrl / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
 
 `GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
@@ -427,8 +575,12 @@ POST /admin/users/{userId}/reset-password
 GET  /admin/dining-groups
 GET  /admin/user-entitlements?userId={userId}
 GET  /admin/app-config
+GET  /admin/home-entries
 POST /admin/app-config/login-image
 DELETE /admin/app-config/login-image
+PUT  /admin/home-entries
+POST /admin/home-entries/{placement}/image
+DELETE /admin/home-entries/{placement}/image
 GET  /admin/medal-templates
 POST /admin/medal-templates
 PUT  /admin/medal-templates/{templateId}
@@ -507,6 +659,10 @@ interface AdminUserEntitlementResponse {
 用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。它是后台审计视图，按领域分段返回，不作为小程序的聚合契约。背景图能力当前统一返回 `false`。
 
 `GET /admin/app-config`、`POST /admin/app-config/login-image` 和 `DELETE /admin/app-config/login-image` 共同维护登录弹窗图片。它们只服务这一条已确认配置，不扩成通用配置中心或通用素材库。上传成功和清空成功都返回最新 `AppConfigResponse`。
+
+`GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
+
+`GET /admin/home-topics`、`GET /admin/home-topics/recipes`、`POST /admin/home-topics`、`PUT /admin/home-topics/{topicId}`、`POST /admin/home-topics/{topicId}/status`、`POST /admin/home-topics/{topicId}/image` 和 `DELETE /admin/home-topics/{topicId}/image` 共同维护“运营 / 本周灵感”。后台读取接口返回 `topics + recTypes`：`topics` 返回全部专题，并额外携带 `status` 供后台做列表、预览和上架状态切换；`LISTED` 表示前台可见，`UNLISTED` 表示仅后台可见；`recTypes` 返回当前允许的推荐类别枚举与中文文案。`GET /admin/home-topics/recipes` 只搜索可曝光的灵感菜谱，当前最多返回 `20` 条，供后台把菜谱加入本期推荐。`POST /admin/home-topics` 和 `PUT /admin/home-topics/{topicId}` 只写入基础信息和推荐菜谱顺序，请求体固定提交 `title / subTitle / recType / issueNo / description / recipeIds`；`recipeIds` 当前至少 `3` 个，且同一次提交内不得重复，不再限制最多条数。新建专题默认写成 `UNLISTED`，由后台确认后再通过 `POST /admin/home-topics/{topicId}/status` 显式上架；切状态请求体固定提交 `status + expectedVersion`。封面图不混进专题写 DTO，统一走单独上传/清空接口，并通过 `expectedVersion` 防并发覆盖。专题当前没有草稿态、定时发布、专题收藏或专题推荐统计；历史专题长期保留，但下架后不会继续出现在前台当前专题和往期滑卡里。
 
 后台勋章治理当前新增：
 

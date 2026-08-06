@@ -18,6 +18,9 @@
 | --- | --- | --- | --- |
 | Auth | POST | `/auth/login` | 手机号密码登录 |
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
+| Home | GET | `/home-entries` | 小程序首页 7 个快捷入口配置，统一返回按布局顺序排序的 `items` 数组 |
+| HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
+| HomeTopic | GET | `/home-topics/{topicId}` | 指定本周灵感专题页 |
 | User | GET | `/users/me` | 当前用户资料、展示设置和会员事实 |
 | User | GET | `/users/me/medals` | 当前用户勋章墙、分类与获得状态摘要 |
 | User | PUT | `/users/me` | 更新当前用户昵称和头像 |
@@ -35,6 +38,17 @@
 | DiningGroup | POST | `/dining-groups/{diningGroupId}/dissolve` | 主理人解散饭搭子 |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
 | AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
+| AdminHome | GET | `/admin/home-entries` | 后台读取小程序首页 7 个快捷入口配置和站内页白名单 |
+| AdminHome | PUT | `/admin/home-entries` | 后台按提交的 `items` 保存小程序首页快捷入口配置，支持单卡或多卡一起保存 |
+| AdminHome | POST | `/admin/home-entries/{placement}/image` | 后台上传或替换指定首页快捷入口图片 |
+| AdminHome | DELETE | `/admin/home-entries/{placement}/image` | 后台清空指定首页快捷入口图片 |
+| AdminHomeTopic | GET | `/admin/home-topics` | 后台读取本周灵感专题列表与类别选项 |
+| AdminHomeTopic | GET | `/admin/home-topics/recipes` | 后台搜索可加入专题的灵感菜谱 |
+| AdminHomeTopic | POST | `/admin/home-topics` | 后台新建本周灵感专题 |
+| AdminHomeTopic | PUT | `/admin/home-topics/{topicId}` | 后台更新本周灵感专题 |
+| AdminHomeTopic | POST | `/admin/home-topics/{topicId}/status` | 后台切换本周灵感专题上架状态 |
+| AdminHomeTopic | POST | `/admin/home-topics/{topicId}/image` | 后台上传或替换专题封面图 |
+| AdminHomeTopic | DELETE | `/admin/home-topics/{topicId}/image` | 后台清空专题封面图 |
 | AdminMedal | GET | `/admin/medal-templates` | 后台勋章模板分页列表 |
 | AdminMedal | POST | `/admin/medal-templates` | 后台新增勋章模板 |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |

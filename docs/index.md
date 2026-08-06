@@ -55,6 +55,10 @@
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
 21. `plans/business-development-todo.md`
    - 记录后续业务开发必须重新确认的问题；只防遗漏，不作为已确认契约。
+22. `plans/engineering-todo.md`
+   - 记录后续工程治理待办，例如命名规则清理和检查门禁；只防遗漏，不替代具体执行单。
+23. `plans/home-weekly-topic-execution.md`
+   - 首页“本周灵感”专题页执行单，覆盖后台维护、首页跳转、专题页展示和计划页导流闭环。
 
 ## 文档地图
 
@@ -114,6 +118,10 @@
   - 当前 API 与数据库边界审计基线；接口、字段和约束整改按此文执行。
 - `plans/business-development-todo.md`
   - 后续业务问题、触发时机和确认门禁，不直接规定接口或数据库约束。
+- `plans/engineering-todo.md`
+  - 后续工程治理问题、分批改造入口和检查门禁，不替代具体模块执行单。
+- `plans/home-weekly-topic-execution.md`
+  - 首页“本周灵感”专题页的业务边界、最小接口、最小表和验收门禁。
 - `plans/engineering-foundation-fix.md`
   - 2026-07-24 幂等、管理员审计、迁移验证和模块状态收口的实际执行记录。
 - `plans/site-content-execution.md`
