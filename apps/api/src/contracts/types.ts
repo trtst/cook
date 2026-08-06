@@ -91,6 +91,163 @@ export interface AppConfigResponse {
   login: LoginImageConfig;
 }
 
+export type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
+export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
+
+export interface HomeEntryItem {
+  id: string;
+  placement: HomeEntryPlacement;
+  title: string;
+  subtitle: string | null;
+  targetType: HomeEntryTargetType;
+  targetValue: string;
+  imageUrl: string | null;
+  badgeText: string | null;
+}
+
+export interface HomeEntriesResponse {
+  items: HomeEntryItem[];
+}
+
+export interface AdminHomeEntryItem extends HomeEntryItem {
+  version: number;
+}
+
+export interface HomeEntryPageTarget {
+  label: string;
+  value: string;
+}
+
+export interface AdminHomeEntriesResponse {
+  items: AdminHomeEntryItem[];
+  pageTargets: HomeEntryPageTarget[];
+}
+
+export interface UpdateHomeEntryItemRequest {
+  placement: HomeEntryPlacement;
+  title: string;
+  subtitle: string | null;
+  targetType: HomeEntryTargetType;
+  targetValue: string;
+  imageUrl: string | null;
+  badgeText: string | null;
+  expectedVersion: number;
+}
+
+export interface UpdateHomeEntriesRequest {
+  items: UpdateHomeEntryItemRequest[];
+}
+
+export type HomeTopicType =
+  | "WEEKEND_GATHERING"
+  | "QUICK_AFTER_WORK"
+  | "HOME_STYLE"
+  | "ONE_PERSON"
+  | "BREAKFAST"
+  | "LIGHT_DINNER";
+export type HomeTopicStatus = "LISTED" | "UNLISTED";
+
+export interface HomeTopicTypeOption {
+  label: string;
+  value: HomeTopicType;
+}
+
+export interface HomeTopicRecipeItem {
+  id: UUID;
+  sort: number;
+  title: string;
+  coverImageUrl: string | null;
+  difficulty: RecipeDifficulty | null;
+  duration: RecipeDuration | null;
+  category: InspirationCategorySummary;
+  likeCount: number;
+  collectCount: number;
+  updatedAt: IsoDateTime;
+}
+
+export interface HomeTopicHistoryItem {
+  id: UUID;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  issueNo: number;
+  description: string;
+  coverImageUrl: string | null;
+  recipeCount: number;
+  publishedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface HomeTopicDetail {
+  id: UUID;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  issueNo: number;
+  description: string;
+  coverImageUrl: string | null;
+  recipeCount: number;
+  publishedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  items: HomeTopicRecipeItem[];
+  history: HomeTopicHistoryItem[];
+}
+
+export interface HomeTopicCurrentResponse {
+  topic: HomeTopicDetail | null;
+}
+
+export interface HomeTopicDetailResponse {
+  topic: HomeTopicDetail;
+}
+
+export interface AdminHomeTopicItem {
+  id: UUID;
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  status: HomeTopicStatus;
+  issueNo: number;
+  description: string;
+  coverImageUrl: string | null;
+  recipeCount: number;
+  publishedAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  items: HomeTopicRecipeItem[];
+  version: number;
+}
+
+export interface AdminHomeTopicsResponse {
+  topics: AdminHomeTopicItem[];
+  recTypes: HomeTopicTypeOption[];
+}
+
+export interface CreateHomeTopicRequest {
+  title: string;
+  subTitle: string | null;
+  recType: HomeTopicType;
+  issueNo: number;
+  description: string;
+  recipeIds: UUID[];
+}
+
+export interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {
+  expectedVersion: number;
+}
+
+export interface SetHomeTopicStatusRequest {
+  status: HomeTopicStatus;
+  expectedVersion: number;
+}
+
+export interface HomeTopicRecipeQuery {
+  keyword?: string;
+}
+
+export interface HomeTopicRecipeSearchResponse {
+  items: HomeTopicRecipeItem[];
+}
+
 export interface UpdateCurrentUserRequest {
   nickname?: string;
   avatarUrl?: string;

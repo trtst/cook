@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform, Type } from "class-transformer";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayNotEmpty,
   ArrayUnique,
   IsBoolean,
@@ -25,6 +26,10 @@ import {
 function trimItems(value: unknown) {
   if (!Array.isArray(value)) return value;
   return value.map(item => (typeof item === "string" ? item.trim() : item));
+}
+
+function trimString(value: unknown) {
+  return typeof value === "string" ? value.trim() : value;
 }
 
 const resourceIdExample = 1001;
@@ -219,6 +224,159 @@ export class ResetAdminUserPasswordDto extends OperationDto {
 }
 
 export class UpdateLoginImageDto extends OperationDto {}
+
+export class UpdateHomeEntryItemDto {
+  @ApiProperty({ enum: ["MAIN", "SIDE_TOP", "SIDE_BOTTOM", "QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] })
+  @IsIn(["MAIN", "SIDE_TOP", "SIDE_BOTTOM", "QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"])
+  placement!: "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
+
+  @ApiProperty({ maxLength: 20 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  title!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 40 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(40)
+  subtitle!: string | null;
+
+  @ApiProperty({ enum: ["PAGE", "WEB_VIEW"] })
+  @IsIn(["PAGE", "WEB_VIEW"])
+  targetType!: "PAGE" | "WEB_VIEW";
+
+  @ApiProperty({ maxLength: 512 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(512)
+  targetValue!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(512)
+  imageUrl!: string | null;
+
+  @ApiProperty({ nullable: true, maxLength: 8 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(8)
+  badgeText!: string | null;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class UpdateHomeEntriesDto extends OperationDto {
+  @ApiProperty({ type: [UpdateHomeEntryItemDto], minItems: 1, maxItems: 7 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(7)
+  @ArrayUnique(item => (typeof item === "object" && item && "placement" in item ? (item as { placement?: unknown }).placement : item))
+  @ValidateNested({ each: true })
+  @Type(() => UpdateHomeEntryItemDto)
+  items!: UpdateHomeEntryItemDto[];
+}
+
+export class UpdateHomeEntryImageDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class HomeTopicRecipeQueryDto {
+  @ApiPropertyOptional({ maxLength: 40 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(40)
+  keyword?: string;
+}
+
+export class CreateHomeTopicDto extends OperationDto {
+  @ApiProperty({ maxLength: 20 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  title!: string;
+
+  @ApiProperty({ nullable: true, maxLength: 40 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(40)
+  subTitle!: string | null;
+
+  @ApiProperty({ enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
+  @IsIn(["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"])
+  recType!: "WEEKEND_GATHERING" | "QUICK_AFTER_WORK" | "HOME_STYLE" | "ONE_PERSON" | "BREAKFAST" | "LIGHT_DINNER";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  issueNo!: number;
+
+  @ApiProperty({ maxLength: 120 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  description!: string;
+
+  @ApiProperty({ type: [Number], minItems: 3 })
+  @IsArray()
+  @ArrayMinSize(3)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
+}
+
+export class UpdateHomeTopicDto extends CreateHomeTopicDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class SetHomeTopicStatusDto extends OperationDto {
+  @ApiProperty({ enum: ["LISTED", "UNLISTED"] })
+  @IsIn(["LISTED", "UNLISTED"])
+  status!: "LISTED" | "UNLISTED";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class UpdateHomeTopicImageDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
 
 export class VersionedOperationDto extends OperationDto {
   @ApiProperty({ minimum: 1 })

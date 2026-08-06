@@ -212,6 +212,35 @@ enum ShoppingSourceType {
   BRING
 }
 
+enum HomeFeatureBoardPlacement {
+  MAIN
+  SIDE_TOP
+  SIDE_BOTTOM
+  QUICK_1
+  QUICK_2
+  QUICK_3
+  QUICK_4
+}
+
+enum HomeFeatureBoardTargetType {
+  PAGE
+  WEB_VIEW
+}
+
+enum HomeTopicType {
+  WEEKEND_GATHERING
+  QUICK_AFTER_WORK
+  HOME_STYLE
+  ONE_PERSON
+  BREAKFAST
+  LIGHT_DINNER
+}
+
+enum HomeTopicStatus {
+  LISTED
+  UNLISTED
+}
+
 enum StorageLedgerModule {
   RECIPE
   FRIDGE
@@ -297,6 +326,58 @@ model AdminAccount {
   recipeImportJobs   RecipeImportJob[]
 
   @@map("admin_accounts")
+}
+
+model HomeFeatureBoardCard {
+  placement   HomeFeatureBoardPlacement  @id
+  title       String                     @db.VarChar(20)
+  subtitle    String?                    @db.VarChar(40)
+  targetType  HomeFeatureBoardTargetType @map("target_type")
+  targetValue String                     @map("target_value") @db.VarChar(512)
+  artImageUrl String?                    @map("art_image_url") @db.VarChar(512)
+  badgeText   String?                    @map("badge_text") @db.VarChar(8)
+  version     Int                        @default(1)
+  createdAt   DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("home_feature_board_cards")
+}
+
+model HomeTopic {
+  id            Int             @id @default(autoincrement())
+  title         String          @db.VarChar(20)
+  subTitle      String?         @map("sub_title") @db.VarChar(40)
+  recType       HomeTopicType   @map("rec_type")
+  status        HomeTopicStatus @default(UNLISTED)
+  issueNo       Int             @unique @map("issue_no")
+  description   String          @db.VarChar(120)
+  coverImageUrl String?         @map("cover_image_url") @db.VarChar(512)
+  publishedAt   DateTime        @map("published_at") @db.Timestamptz(3)
+  version       Int             @default(1)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  items HomeTopicItem[]
+
+  @@index([status, publishedAt, id])
+  @@map("home_topics")
+}
+
+model HomeTopicItem {
+  id        Int      @id @default(autoincrement())
+  topicId    Int      @map("topic_id")
+  recipeId   Int      @map("recipe_id")
+  sortOrder  Int      @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  topic  HomeTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  recipe Recipe    @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+
+  @@unique([topicId, recipeId])
+  @@unique([topicId, sortOrder])
+  @@index([topicId, sortOrder, id])
+  @@map("home_topic_items")
 }
 
 model User {
@@ -768,6 +849,7 @@ model Recipe {
   draft                   RecipeDraft?
   mealPlans               MealPlanItem[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
+  homeTopicItems          HomeTopicItem[]
 
   @@index([ownerId, status, categoryId, sortOrder, id])
   @@index([inspirationCategoryId, status, updatedAt, id])

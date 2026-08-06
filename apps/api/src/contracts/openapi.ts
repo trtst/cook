@@ -83,6 +83,35 @@ export class AppConfigResponseModel {
   @ApiProperty({ type: LoginImageConfigModel }) login!: LoginImageConfigModel;
 }
 
+export class HomeEntryItemModel {
+  @ApiProperty({ type: String }) id!: string;
+  @ApiProperty({ type: String, enum: ["MAIN", "SIDE_TOP", "SIDE_BOTTOM", "QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] }) placement!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, nullable: true }) subtitle!: string | null;
+  @ApiProperty({ type: String, enum: ["PAGE", "WEB_VIEW"] }) targetType!: string;
+  @ApiProperty({ type: String }) targetValue!: string;
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true }) badgeText!: string | null;
+}
+
+export class HomeEntriesResponseModel {
+  @ApiProperty({ type: [HomeEntryItemModel] }) items!: HomeEntryItemModel[];
+}
+
+export class AdminHomeEntryItemModel extends HomeEntryItemModel {
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+}
+
+export class HomeEntryPageTargetModel {
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: String }) value!: string;
+}
+
+export class AdminHomeEntriesResponseModel {
+  @ApiProperty({ type: [AdminHomeEntryItemModel] }) items!: AdminHomeEntryItemModel[];
+  @ApiProperty({ type: [HomeEntryPageTargetModel] }) pageTargets!: HomeEntryPageTargetModel[];
+}
+
 export class AdminIdentityModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) username!: string;
@@ -334,6 +363,90 @@ export class InspirationCategoryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) iconKey!: string | null;
+}
+
+export class HomeTopicTypeOptionModel {
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
+  value!: string;
+}
+
+export class HomeTopicRecipeItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) sort!: number;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
+  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class HomeTopicHistoryItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) subTitle!: string | null;
+  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
+  recType!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty(dateTime) publishedAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class HomeTopicDetailModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) subTitle!: string | null;
+  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
+  recType!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty(dateTime) publishedAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: [HomeTopicRecipeItemModel] }) items!: HomeTopicRecipeItemModel[];
+  @ApiProperty({ type: [HomeTopicHistoryItemModel] }) history!: HomeTopicHistoryItemModel[];
+}
+
+export class HomeTopicCurrentResponseModel {
+  @ApiProperty({ type: HomeTopicDetailModel, nullable: true }) topic!: HomeTopicDetailModel | null;
+}
+
+export class HomeTopicDetailResponseModel {
+  @ApiProperty({ type: HomeTopicDetailModel }) topic!: HomeTopicDetailModel;
+}
+
+export class HomeTopicRecipeSearchResponseModel {
+  @ApiProperty({ type: [HomeTopicRecipeItemModel] }) items!: HomeTopicRecipeItemModel[];
+}
+
+export class AdminHomeTopicItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) subTitle!: string | null;
+  @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
+  recType!: string;
+  @ApiProperty({ type: String, enum: ["LISTED", "UNLISTED"] })
+  status!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) recipeCount!: number;
+  @ApiProperty(dateTime) publishedAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: [HomeTopicRecipeItemModel] }) items!: HomeTopicRecipeItemModel[];
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+}
+
+export class AdminHomeTopicsResponseModel {
+  @ApiProperty({ type: [AdminHomeTopicItemModel] }) topics!: AdminHomeTopicItemModel[];
+  @ApiProperty({ type: [HomeTopicTypeOptionModel] }) recTypes!: HomeTopicTypeOptionModel[];
 }
 
 export class AdminInspirationCategoryModel {
