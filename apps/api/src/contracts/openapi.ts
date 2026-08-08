@@ -373,11 +373,16 @@ export class HomeTopicTypeOptionModel {
 
 export class HomeTopicRecipeItemModel {
   @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
   @ApiProperty({ type: Number, minimum: 1 }) sort!: number;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
+  @ApiProperty(nullableString) recommendNote!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty(nullableString) difficultyText!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
@@ -390,6 +395,7 @@ export class HomeTopicHistoryItemModel {
   @ApiProperty(nullableString) subTitle!: string | null;
   @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
   recType!: string;
+  @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
@@ -404,6 +410,7 @@ export class HomeTopicDetailModel {
   @ApiProperty(nullableString) subTitle!: string | null;
   @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
   recType!: string;
+  @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
   @ApiProperty({ type: String }) description!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;

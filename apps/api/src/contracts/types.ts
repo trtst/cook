@@ -154,11 +154,16 @@ export interface HomeTopicTypeOption {
 
 export interface HomeTopicRecipeItem {
   id: UUID;
+  sourceVersionId: UUID;
   sort: number;
   title: string;
   coverImageUrl: string | null;
+  ownedRecipeId: UUID | null;
+  recommendNote: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -170,6 +175,7 @@ export interface HomeTopicHistoryItem {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -183,6 +189,7 @@ export interface HomeTopicDetail {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -206,6 +213,7 @@ export interface AdminHomeTopicItem {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   status: HomeTopicStatus;
   issueNo: number;
   description: string;

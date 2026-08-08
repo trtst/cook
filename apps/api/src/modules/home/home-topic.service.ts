@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { HomeTopicStatus as TopicStatus, HomeTopicType as TopicType, Prisma } from "@prisma/client";
+import { recipeDifficultyText, recipeDurationText, topicTypeOptions, topicTypeText } from "../../common/display-text";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
+import { UserTokenService } from "../../common/security/user-token.service";
 import type {
   AdminHomeTopicItem,
   AdminHomeTopicsResponse,
@@ -29,16 +31,19 @@ type TopicDb = Prisma.TransactionClient | PrismaService;
 type RequestLike = {
   protocol?: string;
   get?: (name: string) => string | undefined;
+  headers?: {
+    authorization?: string;
+  };
 };
 
 type TopicRow = Prisma.HomeTopicGetPayload<{
   include: {
     items: {
       include: {
+        sourceVersion: true;
         recipe: {
           include: {
             inspirationCategory: true;
-            currentVersion: true;
           };
         };
       };
@@ -53,14 +58,8 @@ type RecipeRow = Prisma.RecipeGetPayload<{
   };
 }>;
 
-const topicTypes: HomeTopicTypeOption[] = [
-  { label: "周末聚餐", value: "WEEKEND_GATHERING" },
-  { label: "下班快做", value: "QUICK_AFTER_WORK" },
-  { label: "家常下饭", value: "HOME_STYLE" },
-  { label: "一人食", value: "ONE_PERSON" },
-  { label: "早餐灵感", value: "BREAKFAST" },
-  { label: "轻松一餐", value: "LIGHT_DINNER" }
-];
+const topicTypes: HomeTopicTypeOption[] = topicTypeOptions;
+const activeOwnedRecipeStatus = "ACTIVE";
 const topicImagePath = /^\/api\/public-assets\/home-topics\/\d+$/i;
 const recipeWhere: Prisma.RecipeWhereInput = {
   ownerId: null,
@@ -89,14 +88,16 @@ function isTopicImagePath(value: string | null | undefined) {
 export class HomeTopicService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(HomeTopicImageService) private readonly imageService: HomeTopicImageService
+    @Inject(HomeTopicImageService) private readonly imageService: HomeTopicImageService,
+    @Inject(UserTokenService) private readonly userTokenService: UserTokenService
   ) {}
 
   async getCurrentTopic(request: RequestLike): Promise<HomeTopicCurrentResponse> {
     const topics = await this.listPublicTopics(this.prisma);
     const current = topics[0];
+    const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current ? current.items.map(item => item.sourceVersionId) : []);
     return {
-      topic: current ? this.toTopicDetail(request, current, topics) : null
+      topic: current ? this.toTopicDetail(request, current, topics, ownedRecipeMap) : null
     };
   }
 
@@ -106,8 +107,9 @@ export class HomeTopicService {
     if (!current) {
       throw new NotFoundException("本周灵感专题不存在");
     }
+    const ownedRecipeMap = await this.loadOwnedRecipeMap(request, current.items.map(item => item.sourceVersionId));
     return {
-      topic: this.toTopicDetail(request, current, topics)
+      topic: this.toTopicDetail(request, current, topics, ownedRecipeMap)
     };
   }
 
@@ -141,7 +143,7 @@ export class HomeTopicService {
       take: 20
     });
     return {
-      items: items.map((item, index) => this.toTopicRecipe(item, index + 1))
+      items: items.map((item, index) => this.toSearchRecipe(item, index + 1))
     };
   }
 
@@ -154,7 +156,7 @@ export class HomeTopicService {
       if (repeated) return repeated;
 
       await startAdminIdempotentOperation(tx, operationId, "admin-home-topics:create", adminId, requestHash);
-      const recipes = await this.loadRecipes(tx, data.recipeIds);
+      const recipes = await this.loadRecipes(tx, data.items.map(item => item.recipeId));
 
       try {
         await tx.homeTopic.create({
@@ -171,7 +173,9 @@ export class HomeTopicService {
               createMany: {
                 data: recipes.map((item, index) => ({
                   recipeId: item.id,
-                  sortOrder: index + 1
+                  sourceVersionId: item.currentVersionId,
+                  sortOrder: index + 1,
+                  recommendNote: data.items[index]?.recommendNote ?? null
                 }))
               }
             }
@@ -243,7 +247,8 @@ export class HomeTopicService {
         throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
       }
 
-      const recipes = await this.loadRecipes(tx, data.recipeIds);
+      const recipes = await this.loadRecipes(tx, data.items.map(item => item.recipeId));
+      const sourceVersionMap = new Map(current.items.map(item => [item.recipeId, item.sourceVersionId]));
       try {
         await tx.homeTopic.update({
           where: { id: topicId },
@@ -259,7 +264,9 @@ export class HomeTopicService {
               createMany: {
                 data: recipes.map((item, index) => ({
                   recipeId: item.id,
-                  sortOrder: index + 1
+                  sourceVersionId: sourceVersionMap.get(item.id) ?? item.currentVersionId,
+                  sortOrder: index + 1,
+                  recommendNote: data.items[index]?.recommendNote ?? null
                 }))
               }
             }
@@ -392,10 +399,10 @@ export class HomeTopicService {
         items: {
           where: { recipe: recipeWhere },
           include: {
+            sourceVersion: true,
             recipe: {
               include: {
-                inspirationCategory: true,
-                currentVersion: true
+                inspirationCategory: true
               }
             }
           },
@@ -412,10 +419,10 @@ export class HomeTopicService {
         items: {
           where: { recipe: recipeWhere },
           include: {
+            sourceVersion: true,
             recipe: {
               include: {
-                inspirationCategory: true,
-                currentVersion: true
+                inspirationCategory: true
               }
             }
           },
@@ -433,10 +440,10 @@ export class HomeTopicService {
         items: {
           where: { recipe: recipeWhere },
           include: {
+            sourceVersion: true,
             recipe: {
               include: {
-                inspirationCategory: true,
-                currentVersion: true
+                inspirationCategory: true
               }
             }
           },
@@ -485,11 +492,14 @@ export class HomeTopicService {
       recType: body.recType,
       issueNo: body.issueNo,
       description: body.description.trim(),
-      recipeIds: body.recipeIds
+      items: body.items.map(item => ({
+        recipeId: item.recipeId,
+        recommendNote: cleanText(item.recommendNote)
+      }))
     };
   }
 
-  private toTopicDetail(request: RequestLike, topic: TopicRow, allTopics: TopicRow[]): HomeTopicDetail {
+  private toTopicDetail(request: RequestLike, topic: TopicRow, allTopics: TopicRow[], ownedRecipeMap: Map<UUID, UUID>): HomeTopicDetail {
     const currentIndex = allTopics.findIndex(item => item.id === topic.id);
     const historyItems = currentIndex >= 0 ? allTopics.slice(currentIndex + 1) : allTopics.filter(item => item.id !== topic.id);
 
@@ -498,13 +508,16 @@ export class HomeTopicService {
       title: topic.title,
       subTitle: topic.subTitle,
       recType: topic.recType as HomeTopicType,
+      recTypeText: topicTypeText(topic.recType as HomeTopicType),
       issueNo: topic.issueNo,
       description: topic.description,
       coverImageUrl: this.resolveImageUrl(request, topic.coverImageUrl, topic.updatedAt),
       recipeCount: topic.items.length,
       publishedAt: toIso(topic.publishedAt),
       updatedAt: toIso(topic.updatedAt),
-      items: topic.items.map(item => this.toTopicRecipe(item.recipe, item.sortOrder)),
+      items: topic.items.map(item =>
+        this.toTopicRecipe(item, ownedRecipeMap.get(item.sourceVersionId) ?? null)
+      ),
       history: historyItems.map(item => this.toHistoryItem(request, item))
     };
   }
@@ -515,6 +528,7 @@ export class HomeTopicService {
       title: topic.title,
       subTitle: topic.subTitle,
       recType: topic.recType as HomeTopicType,
+      recTypeText: topicTypeText(topic.recType as HomeTopicType),
       status: topic.status as HomeTopicStatus,
       issueNo: topic.issueNo,
       description: topic.description,
@@ -522,7 +536,7 @@ export class HomeTopicService {
       recipeCount: topic.items.length,
       publishedAt: toIso(topic.publishedAt),
       updatedAt: toIso(topic.updatedAt),
-      items: topic.items.map(item => this.toTopicRecipe(item.recipe, item.sortOrder)),
+      items: topic.items.map(item => this.toTopicRecipe(item, null)),
       version: topic.version
     };
   }
@@ -533,6 +547,7 @@ export class HomeTopicService {
       title: topic.title,
       subTitle: topic.subTitle,
       recType: topic.recType as HomeTopicType,
+      recTypeText: topicTypeText(topic.recType as HomeTopicType),
       issueNo: topic.issueNo,
       description: topic.description,
       coverImageUrl: this.resolveImageUrl(request, topic.coverImageUrl, topic.updatedAt),
@@ -542,15 +557,46 @@ export class HomeTopicService {
     };
   }
 
-  private toTopicRecipe(recipe: RecipeRow, sort: number): HomeTopicRecipeItem {
+  private toTopicRecipe(item: TopicRow["items"][number], ownedRecipeId: UUID | null): HomeTopicRecipeItem {
+    const category = item.recipe.inspirationCategory;
+    const sourceVersion = item.sourceVersion;
+    return {
+      id: item.recipe.id,
+      sourceVersionId: item.sourceVersionId,
+      sort: item.sortOrder,
+      title: sourceVersion.name,
+      coverImageUrl: item.recipe.coverImageUrl,
+      ownedRecipeId,
+      recommendNote: item.recommendNote ?? null,
+      difficulty: (sourceVersion.difficulty ?? null) as RecipeDifficulty | null,
+      duration: (sourceVersion.duration ?? null) as RecipeDuration | null,
+      difficultyText: recipeDifficultyText((sourceVersion.difficulty ?? null) as RecipeDifficulty | null),
+      durationText: recipeDurationText((sourceVersion.duration ?? null) as RecipeDuration | null),
+      category: {
+        id: category!.id,
+        name: category!.name,
+        iconKey: category!.iconKey ?? null
+      },
+      likeCount: item.recipe.likeCount,
+      collectCount: item.recipe.collectCount,
+      updatedAt: toIso(sourceVersion.createdAt)
+    };
+  }
+
+  private toSearchRecipe(recipe: RecipeRow, sort: number): HomeTopicRecipeItem {
     const category = recipe.inspirationCategory;
     return {
       id: recipe.id,
+      sourceVersionId: recipe.currentVersionId,
       sort,
       title: recipe.title,
       coverImageUrl: recipe.coverImageUrl,
+      ownedRecipeId: null,
+      recommendNote: null,
       difficulty: (recipe.currentVersion.difficulty ?? null) as RecipeDifficulty | null,
       duration: (recipe.currentVersion.duration ?? null) as RecipeDuration | null,
+      difficultyText: recipeDifficultyText((recipe.currentVersion.difficulty ?? null) as RecipeDifficulty | null),
+      durationText: recipeDurationText((recipe.currentVersion.duration ?? null) as RecipeDuration | null),
       category: {
         id: category!.id,
         name: category!.name,
@@ -560,6 +606,51 @@ export class HomeTopicService {
       collectCount: recipe.collectCount,
       updatedAt: toIso(recipe.updatedAt)
     };
+  }
+
+  private async loadOwnedRecipeMap(request: RequestLike, sourceVersionIds: UUID[]) {
+    const userId = await this.resolveOptionalUserId(request);
+    if (!userId || !sourceVersionIds.length) return new Map<UUID, UUID>();
+
+    const ownedItems = await this.prisma.recipe.findMany({
+      where: {
+        ownerId: userId,
+        status: activeOwnedRecipeStatus,
+        originVersionId: { in: Array.from(new Set(sourceVersionIds)) }
+      },
+      select: {
+        id: true,
+        originVersionId: true,
+        updatedAt: true
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+    });
+
+    const result = new Map<UUID, UUID>();
+    for (const item of ownedItems) {
+      if (!item.originVersionId || result.has(item.originVersionId)) continue;
+      result.set(item.originVersionId, item.id);
+    }
+    return result;
+  }
+
+  private async resolveOptionalUserId(request: RequestLike) {
+    const token = readBearerToken(request.headers?.authorization);
+    if (!token) return null;
+
+    try {
+      const payload = this.userTokenService.verifyToken(token);
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { status: true, sessionVersion: true }
+      });
+      if (!user || user.status !== "ACTIVE" || user.sessionVersion !== payload.ver) {
+        return null;
+      }
+      return payload.sub;
+    } catch {
+      return null;
+    }
   }
 
   private resolveImageUrl(request: RequestLike, value: string | null, updatedAt: Date) {
@@ -584,4 +675,12 @@ export class HomeTopicService {
     }
     throw error;
   }
+}
+
+function readBearerToken(authorization?: string) {
+  if (!authorization?.startsWith("Bearer ")) {
+    return "";
+  }
+
+  return authorization.slice("Bearer ".length).trim();
 }

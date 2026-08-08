@@ -8,6 +8,9 @@ import { HomeTopicService } from "./home-topic.service";
 type TopicRequest = {
   protocol?: string;
   get?: (name: string) => string | undefined;
+  headers?: {
+    authorization?: string;
+  };
 };
 
 type ResponseLike = Writable & {

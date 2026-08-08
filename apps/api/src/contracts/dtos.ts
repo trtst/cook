@@ -307,6 +307,22 @@ export class HomeTopicRecipeQueryDto {
   keyword?: string;
 }
 
+export class HomeTopicPickDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ nullable: true, maxLength: 60 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(60)
+  recommendNote!: string | null;
+}
+
 export class CreateHomeTopicDto extends OperationDto {
   @ApiProperty({ maxLength: 20 })
   @Transform(({ value }) => trimString(value))
@@ -340,14 +356,13 @@ export class CreateHomeTopicDto extends OperationDto {
   @MaxLength(120)
   description!: string;
 
-  @ApiProperty({ type: [Number], minItems: 3 })
+  @ApiProperty({ type: [HomeTopicPickDto], minItems: 3 })
   @IsArray()
   @ArrayMinSize(3)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  recipeIds!: number[];
+  @ArrayUnique((item: HomeTopicPickDto) => item.recipeId)
+  @ValidateNested({ each: true })
+  @Type(() => HomeTopicPickDto)
+  items!: HomeTopicPickDto[];
 }
 
 export class UpdateHomeTopicDto extends CreateHomeTopicDto {

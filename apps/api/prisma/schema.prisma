@@ -364,19 +364,23 @@ model HomeTopic {
 }
 
 model HomeTopicItem {
-  id        Int      @id @default(autoincrement())
-  topicId    Int      @map("topic_id")
-  recipeId   Int      @map("recipe_id")
-  sortOrder  Int      @map("sort_order")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id              Int      @id @default(autoincrement())
+  topicId         Int      @map("topic_id")
+  recipeId        Int      @map("recipe_id")
+  sourceVersionId Int      @map("source_version_id")
+  sortOrder       Int      @map("sort_order")
+  recommendNote String? @map("recommend_note") @db.VarChar(60)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  topic  HomeTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  recipe Recipe    @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  topic         HomeTopic            @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  recipe        Recipe               @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  sourceVersion RecipeContentVersion @relation("HomeTopicItemSourceVersion", fields: [sourceVersionId], references: [id], onDelete: Restrict)
 
   @@unique([topicId, recipeId])
   @@unique([topicId, sortOrder])
   @@index([topicId, sortOrder, id])
+  @@index([sourceVersionId])
   @@map("home_topic_items")
 }
 
