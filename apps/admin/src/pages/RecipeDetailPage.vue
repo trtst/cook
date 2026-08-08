@@ -20,10 +20,11 @@ import {
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
+import { difficultyOptions, difficultyText, durationOptions, durationText } from "@/utils/recipe-meta";
 import { formatStatusText } from "@/utils/status";
 
-type Difficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
-type Duration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
+type Difficulty = AdminRecipeContentInput["difficulty"];
+type Duration = AdminRecipeContentInput["duration"];
 type FuzzyText = "适量" | "少许" | "按需";
 type CropScene = "COVER" | "STEP";
 
@@ -75,28 +76,6 @@ const coverFrameWidth = 320;
 const coverFrameHeight = 240;
 const exportCoverWidth = 1200;
 const exportCoverHeight = 900;
-
-const difficultyOptions: Array<{ label: string; value: Difficulty }> = [
-  { label: "新手友好", value: "BEGINNER" },
-  { label: "轻松上手", value: "EASY" },
-  { label: "需要经验", value: "SKILLED" },
-  { label: "进阶挑战", value: "CHALLENGING" }
-];
-
-const durationOptions: Array<{ label: string; value: Duration }> = [
-  { label: "15 分钟内", value: "WITHIN_15" },
-  { label: "15~30 分钟", value: "BETWEEN_15_30" },
-  { label: "30~60 分钟", value: "BETWEEN_30_60" },
-  { label: "1 小时以上", value: "OVER_60" }
-];
-
-const difficultyLabelMap: Record<Difficulty, string> = Object.fromEntries(
-  difficultyOptions.map(item => [item.value, item.label])
-) as Record<Difficulty, string>;
-
-const durationLabelMap: Record<Duration, string> = Object.fromEntries(
-  durationOptions.map(item => [item.value, item.label])
-) as Record<Duration, string>;
 
 const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
 
@@ -498,14 +477,6 @@ function goBack() {
   void router.push("/recipes/list");
 }
 
-function formatDifficulty(value: AdminRecipeDetail["content"]["difficulty"]) {
-  return value ? difficultyLabelMap[value] : "-";
-}
-
-function formatDuration(value: AdminRecipeDetail["content"]["duration"]) {
-  return value ? durationLabelMap[value] : "-";
-}
-
 function revokeCropSource() {
   if (cropState.sourceUrl) {
     URL.revokeObjectURL(cropState.sourceUrl);
@@ -766,8 +737,8 @@ onBeforeUnmount(() => {
           <el-descriptions :column="2" border>
             <el-descriptions-item label="菜谱名称">{{ detail.content.name }}</el-descriptions-item>
             <el-descriptions-item label="基准人数">{{ detail.content.baseServings }} 人</el-descriptions-item>
-            <el-descriptions-item label="难度">{{ formatDifficulty(detail.content.difficulty) }}</el-descriptions-item>
-            <el-descriptions-item label="时长">{{ formatDuration(detail.content.duration) }}</el-descriptions-item>
+            <el-descriptions-item label="难度">{{ detail.difficultyText || difficultyText(detail.content.difficulty) }}</el-descriptions-item>
+            <el-descriptions-item label="时长">{{ detail.durationText || durationText(detail.content.duration) }}</el-descriptions-item>
             <el-descriptions-item label="故事" :span="2">
               <div class="multiline-text">{{ detail.content.story || "-" }}</div>
             </el-descriptions-item>

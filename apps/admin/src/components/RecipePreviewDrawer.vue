@@ -35,22 +35,6 @@ watch(
   { immediate: true }
 );
 
-function formatDifficulty(value: AdminRecipeDetail["content"]["difficulty"]) {
-  if (value === "BEGINNER") return "新手友好";
-  if (value === "EASY") return "轻松上手";
-  if (value === "SKILLED") return "需要经验";
-  if (value === "CHALLENGING") return "进阶挑战";
-  return "难度待补";
-}
-
-function formatDuration(value: AdminRecipeDetail["content"]["duration"]) {
-  if (value === "WITHIN_15") return "15 分钟内";
-  if (value === "BETWEEN_15_30") return "15~30 分钟";
-  if (value === "BETWEEN_30_60") return "30~60 分钟";
-  if (value === "OVER_60") return "1 小时以上";
-  return "时长待补";
-}
-
 function formatAmount(amount: AdminRecipeDetail["content"]["ingredients"][number]["amount"]) {
   if (amount.kind === "FUZZY") return amount.text;
   return `${amount.quantity}${amount.unitName}`;
@@ -109,8 +93,8 @@ function handleClose() {
 
             <div class="recipe-preview__facts">
               <span>{{ detail.content.baseServings }} 人份</span>
-              <span>{{ formatDifficulty(detail.content.difficulty) }}</span>
-              <span>{{ formatDuration(detail.content.duration) }}</span>
+              <span>{{ detail.difficultyText || "难度待补" }}</span>
+              <span>{{ detail.durationText || "时长待补" }}</span>
               <span>点赞 {{ detail.likeCount }}</span>
               <span>收藏 {{ detail.collectCount }}</span>
             </div>

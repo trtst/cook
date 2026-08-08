@@ -12,6 +12,7 @@ import {
 } from "@/apis/user-recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh, useAdminHeaderTitle } from "@/composables/useAdminHeader";
+import { formatDateDay } from "@/utils/date";
 
 type RecipeDomainTab = "published" | "drafts" | "collections";
 
@@ -77,10 +78,6 @@ function buildTabLabel(label: string, count?: number) {
 
 function formatMetric(value?: number | null) {
   return typeof value === "number" ? String(value) : "-";
-}
-
-function formatDate(value?: string | null) {
-  return value || "-";
 }
 
 function formatCategory(category?: { name: string } | null) {
@@ -308,17 +305,17 @@ onMounted(() => {
       <div class="metric-panel">
         <span class="metric-label">已发布菜谱</span>
         <strong>{{ formatMetric(overview.publishedCount) }}</strong>
-        <span class="metric-label">最近更新时间 {{ formatDate(overview.latestPublishedAt) }}</span>
+        <span class="metric-label">最近更新时间 {{ formatDateDay(overview.latestPublishedAt) }}</span>
       </div>
       <div class="metric-panel">
         <span class="metric-label">草稿数量</span>
         <strong>{{ formatMetric(overview.draftCount) }}</strong>
-        <span class="metric-label">最近更新时间 {{ formatDate(overview.latestDraftAt) }}</span>
+        <span class="metric-label">最近更新时间 {{ formatDateDay(overview.latestDraftAt) }}</span>
       </div>
       <div class="metric-panel">
         <span class="metric-label">收藏条数</span>
         <strong>{{ formatMetric(overview.collectionCount) }}</strong>
-        <span class="metric-label">最近更新时间 {{ formatDate(overview.latestCollectionAt) }}</span>
+        <span class="metric-label">最近更新时间 {{ formatDateDay(overview.latestCollectionAt) }}</span>
       </div>
     </div>
 

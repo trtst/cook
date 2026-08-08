@@ -19,9 +19,10 @@ import {
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
+import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 
-type Difficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
-type Duration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
+type Difficulty = AdminRecipeContentInput["difficulty"];
+type Duration = AdminRecipeContentInput["duration"];
 type FuzzyText = "适量" | "少许" | "按需";
 type CropScene = "COVER" | "STEP";
 
@@ -50,20 +51,6 @@ const coverFrameWidth = 320;
 const coverFrameHeight = 240;
 const exportCoverWidth = 1200;
 const exportCoverHeight = 900;
-
-const difficultyOptions: Array<{ label: string; value: Difficulty }> = [
-  { label: "新手友好", value: "BEGINNER" },
-  { label: "轻松上手", value: "EASY" },
-  { label: "需要经验", value: "SKILLED" },
-  { label: "进阶挑战", value: "CHALLENGING" }
-];
-
-const durationOptions: Array<{ label: string; value: Duration }> = [
-  { label: "15 分钟内", value: "WITHIN_15" },
-  { label: "15~30 分钟", value: "BETWEEN_15_30" },
-  { label: "30~60 分钟", value: "BETWEEN_30_60" },
-  { label: "1 小时以上", value: "OVER_60" }
-];
 
 const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
 

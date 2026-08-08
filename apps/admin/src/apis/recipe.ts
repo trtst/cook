@@ -76,6 +76,8 @@ export interface AdminRecipeDetail {
   ownerUid: number | null;
   personalCategory: { id: UUID; name: string; version: number } | null;
   inspirationCategory: AdminInspirationCategorySummary | null;
+  difficultyText: string | null;
+  durationText: string | null;
   contentVersionId: UUID;
   content: {
     name: string;
