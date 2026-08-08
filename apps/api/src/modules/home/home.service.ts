@@ -42,6 +42,7 @@ const pageTargets: HomeEntryPageTarget[] = [
   { label: "采购缺口", value: "/pages_pantry/gap/index" },
   { label: "食材与采购", value: "/pages_pantry/index/index" },
   { label: "本周灵感", value: "/pages_home/topic/index" },
+  { label: "餐桌话题", value: "/pages_home/table-topic/index" },
   { label: "菜谱", value: "/pages/recipe/index" },
   { label: "我的菜谱管理", value: "/pages_recipe/list/index" }
 ];
@@ -67,8 +68,8 @@ const defaultCards: Record<HomeFeatureBoardPlacement, Omit<HomeCardInput, "place
   SIDE_BOTTOM: {
     title: "餐桌话题",
     subtitle: "看看最近吃什么",
-    targetType: "WEB_VIEW",
-    targetValue: "https://www.trtst.com/scenes",
+    targetType: "PAGE",
+    targetValue: "/pages_home/table-topic/index",
     artImageUrl: null,
     badgeText: "题"
   },

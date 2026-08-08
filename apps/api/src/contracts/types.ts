@@ -138,6 +138,72 @@ export interface UpdateHomeEntriesRequest {
   items: UpdateHomeEntryItemRequest[];
 }
 
+export type TableTopicStatus = "LISTED" | "UNLISTED";
+export type TableTopicTargetType = "PAGE" | "WEB_VIEW";
+
+export interface TableTopicListItem {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  activityAt: IsoDateTime;
+  participantCount: number;
+}
+
+export interface TableTopicDetail {
+  id: UUID;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  activityAt: IsoDateTime;
+  participantCount: number;
+  joined: boolean;
+  targetType: TableTopicTargetType;
+  targetValue: string | null;
+}
+
+export interface TableTopicListResponse {
+  items: TableTopicListItem[];
+}
+
+export interface TableTopicDetailResponse {
+  topic: TableTopicDetail;
+}
+
+export interface AdminTableTopicItem {
+  id: UUID;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  activityAt: IsoDateTime;
+  participantCount: number;
+  targetType: TableTopicTargetType;
+  targetValue: string | null;
+  status: TableTopicStatus;
+  version: number;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminTableTopicsResponse {
+  topics: AdminTableTopicItem[];
+}
+
+export interface CreateTableTopicRequest {
+  title: string;
+  summary: string;
+  activityAt: IsoDateTime;
+  targetType: TableTopicTargetType;
+  targetValue: string | null;
+}
+
+export interface UpdateTableTopicRequest extends CreateTableTopicRequest {
+  expectedVersion: number;
+}
+
+export interface SetTableTopicStatusRequest {
+  status: TableTopicStatus;
+  expectedVersion: number;
+}
+
 export type HomeTopicType =
   | "WEEKEND_GATHERING"
   | "QUICK_AFTER_WORK"

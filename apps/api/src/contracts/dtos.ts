@@ -298,6 +298,66 @@ export class UpdateHomeEntryImageDto extends OperationDto {
   expectedVersion!: number;
 }
 
+export class CreateTableTopicDto extends OperationDto {
+  @ApiProperty({ maxLength: 30 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(30)
+  title!: string;
+
+  @ApiProperty({ maxLength: 240 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(240)
+  summary!: string;
+
+  @ApiProperty({ format: "date-time" })
+  @IsISO8601()
+  activityAt!: string;
+
+  @ApiProperty({ enum: ["PAGE", "WEB_VIEW"] })
+  @IsIn(["PAGE", "WEB_VIEW"])
+  targetType!: "PAGE" | "WEB_VIEW";
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @Transform(({ value }) => trimString(value))
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(512)
+  targetValue!: string | null;
+}
+
+export class UpdateTableTopicDto extends CreateTableTopicDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class SetTableTopicStatusDto extends OperationDto {
+  @ApiProperty({ enum: ["LISTED", "UNLISTED"] })
+  @IsIn(["LISTED", "UNLISTED"])
+  status!: "LISTED" | "UNLISTED";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class UpdateTableTopicImageDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class HomeTopicRecipeQueryDto {
   @ApiPropertyOptional({ maxLength: 40 })
   @IsOptional()

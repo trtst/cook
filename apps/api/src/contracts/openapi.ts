@@ -112,6 +112,39 @@ export class AdminHomeEntriesResponseModel {
   @ApiProperty({ type: [HomeEntryPageTargetModel] }) pageTargets!: HomeEntryPageTargetModel[];
 }
 
+export class TableTopicListItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty(dateTime) activityAt!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) participantCount!: number;
+}
+
+export class TableTopicListResponseModel {
+  @ApiProperty({ type: [TableTopicListItemModel] }) items!: TableTopicListItemModel[];
+}
+
+export class TableTopicDetailModel extends TableTopicListItemModel {
+  @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty({ type: Boolean }) joined!: boolean;
+  @ApiProperty({ type: String, enum: ["PAGE", "WEB_VIEW"] }) targetType!: string;
+  @ApiProperty({ type: String, nullable: true }) targetValue!: string | null;
+}
+
+export class TableTopicDetailResponseModel {
+  @ApiProperty({ type: TableTopicDetailModel }) topic!: TableTopicDetailModel;
+}
+
+export class AdminTableTopicItemModel extends TableTopicDetailModel {
+  @ApiProperty({ type: String, enum: ["LISTED", "UNLISTED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminTableTopicsResponseModel {
+  @ApiProperty({ type: [AdminTableTopicItemModel] }) topics!: AdminTableTopicItemModel[];
+}
+
 export class AdminIdentityModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) username!: string;
@@ -439,6 +472,7 @@ export class AdminHomeTopicItemModel {
   @ApiProperty(nullableString) subTitle!: string | null;
   @ApiProperty({ type: String, enum: ["WEEKEND_GATHERING", "QUICK_AFTER_WORK", "HOME_STYLE", "ONE_PERSON", "BREAKFAST", "LIGHT_DINNER"] })
   recType!: string;
+  @ApiProperty({ type: String }) recTypeText!: string;
   @ApiProperty({ type: String, enum: ["LISTED", "UNLISTED"] })
   status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) issueNo!: number;
