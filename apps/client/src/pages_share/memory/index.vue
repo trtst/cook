@@ -123,13 +123,13 @@
 import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
+import { mealApi, type DiningEventSummary } from "@/apis/meal";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
-import { mealApi, type DiningEventSummary } from "@/pages_meal/apis/meal";
 import {
   shareApi,
   type MemoryShareParticipant,
@@ -137,6 +137,7 @@ import {
   type MemoryShareSnapshotResponse
 } from "@/pages_share/apis/share";
 import { useSessionStore } from "@/stores/session";
+import { formatDateTimeMinute } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type PageMode = "empty" | "event" | "token";
@@ -200,13 +201,13 @@ const primaryMeta = computed(() => {
   }
 
   if (!eventDetail.value) return "";
-  const parts = [formatDateTime(eventDetail.value.scheduledAt), eventDetail.value.location];
+  const parts = [formatDateTimeMinute(eventDetail.value.scheduledAt), eventDetail.value.location];
   return parts.filter(Boolean).join(" · ");
 });
 
 const secondaryMeta = computed(() => {
   if (!cardData.value?.sharedAt || !cardData.value.snapshotVersion) return "";
-  return `分享于 ${formatDateTime(cardData.value.sharedAt)} · 第 ${cardData.value.snapshotVersion} 版`;
+  return `分享于 ${formatDateTimeMinute(cardData.value.sharedAt)} · 第 ${cardData.value.snapshotVersion} 版`;
 });
 
 const participantHintText = computed(() => {
@@ -408,18 +409,6 @@ function formatMealSlot(value: "BREAKFAST" | "LUNCH" | "DINNER") {
   if (value === "BREAKFAST") return "早餐";
   if (value === "LUNCH") return "午餐";
   return "晚餐";
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
 function toCardView(source: MemorySharePreviewResponse): MemoryCardView {

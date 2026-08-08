@@ -8,7 +8,7 @@
     <view class="taste-page">
       <scroll-view scroll-y class="taste-scroll" show-scrollbar="false">
         <view class="taste-scroll__body">
-          <RecipeEmptyState
+          <Empty
             v-if="!sessionStore.isLoggedIn"
             class="taste-empty"
             :art="tasteEmptyArt"
@@ -83,8 +83,8 @@ import { reactive, ref } from "vue";
 import tasteEmptyArt from "@/assets/me-page/taste-empty-state.svg";
 import { ApiClientError, UnauthorizedError } from "@/apis/http";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";

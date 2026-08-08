@@ -59,7 +59,7 @@
         >
           <view v-if="errorText" class="notice" @click="retryLoadList">{{ errorText }}</view>
           <view v-else-if="loading && !items.length" class="notice">加载中...</view>
-          <RecipeEmptyState
+          <Empty
             v-else-if="!items.length"
             :art="emptyStateIllustration"
             :title="mode === 'recipes' ? '还没有我的菜谱' : '草稿箱还是空的'"
@@ -121,9 +121,9 @@ import { computed, ref, watch } from "vue";
 import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
-import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
@@ -131,6 +131,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { getRecipeViewVersion, markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
+import { formatDateTimeSecond } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type ListMode = "recipes" | "drafts";
@@ -455,33 +456,13 @@ async function removeDraft(item: DisplayItem) {
 }
 
 function toRecipeItem(item: MyRecipeSummary): DisplayItem {
-	const difficultyText =
-		item.difficulty === "BEGINNER"
-			? "新手友好"
-			: item.difficulty === "EASY"
-				? "轻松上手"
-				: item.difficulty === "SKILLED"
-					? "需要经验"
-					: item.difficulty === "CHALLENGING"
-						? "进阶挑战"
-						: "未设置难度";
-	const durationText =
-		item.duration === "WITHIN_15"
-			? "15分钟内"
-			: item.duration === "BETWEEN_15_30"
-				? "15~30分钟"
-				: item.duration === "BETWEEN_30_60"
-					? "30~60分钟"
-					: item.duration === "OVER_60"
-						? "1小时以上"
-						: "未设置时长";
 	return {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		meta: `${item.category.name} · ${difficultyText} · ${durationText}`,
+		meta: `${item.category.name} · ${item.difficultyText || "未设置难度"} · ${item.durationText || "未设置时长"}`,
 		updatedAt: item.updatedAt,
-		updatedAtText: formatDateTime(item.updatedAt),
+		updatedAtText: formatDateTimeSecond(item.updatedAt),
 		raw: item
 	};
 }
@@ -493,30 +474,9 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		meta: `${item.category?.name ?? "未选分类"} · 草稿版本 ${item.version}`,
 		updatedAt: item.updatedAt,
-		updatedAtText: formatDateTime(item.updatedAt),
+		updatedAtText: formatDateTimeSecond(item.updatedAt),
 		raw: item
 	};
-}
-
-function formatDateTime(value: string) {
-	const trimmed = value.trim();
-	if (!trimmed) return "";
-	const normalized = trimmed.replace("T", " ").replace(/\.\d+Z?$/, "").replace(/Z$/, "").trim();
-	const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
-	if (match) {
-		return `${match[1]} ${match[2]}`;
-	}
-	const parsed = new Date(trimmed);
-	if (Number.isNaN(parsed.getTime())) {
-		return normalized.slice(0, 19);
-	}
-	const year = parsed.getFullYear();
-	const month = String(parsed.getMonth() + 1).padStart(2, "0");
-	const day = String(parsed.getDate()).padStart(2, "0");
-	const hour = String(parsed.getHours()).padStart(2, "0");
-	const minute = String(parsed.getMinutes()).padStart(2, "0");
-	const second = String(parsed.getSeconds()).padStart(2, "0");
-	return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 </script>
 

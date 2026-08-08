@@ -222,110 +222,20 @@
         </view>
       </view>
 
-      <SheetShell
+      <RecipeAddSheet
         v-if="isExternalDetail"
         :visible="addSheetVisible"
         :title="addSheetTitle"
         :subtitle="addSheetSubtitle"
+        :category-hint="addCategoryHint"
+        :scene-hint="'还没有合集，可先只选个人分类。'"
+        :show-scene-section="showAddSceneSection"
+        :require-category="kind === 'collection'"
+        :initial-scene-ids="kind === 'collection' ? externalRecipeRef?.sceneIds || [] : []"
+        :submitting="addSheetSubmitting"
         @close="closeAddSheet"
-      >
-          <view v-if="addSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
-          <view v-else-if="addSheetError" class="panel-note panel-note--sheet" @click="loadAddOptions(true)">{{ addSheetError }}</view>
-          <template v-else>
-            <view class="sheet-section">
-              <view class="sheet-section__head">
-                <view class="sheet-section__meta">
-                  <text class="sheet-section__title">个人分类</text>
-                  <text class="sheet-section__tag">最多4字</text>
-                </view>
-                <view class="sheet-section__action" @click="toggleAddCategoryCreator">
-                  {{ showAddCategoryCreator ? "取消" : "创建" }}
-                </view>
-              </view>
-              <view v-if="showAddCategoryCreator" class="sheet-creator">
-                <input
-                  v-model="addCategoryDraftName"
-                  class="sheet-creator__input"
-                  maxlength="4"
-                  placeholder="输入分类名称"
-                  :disabled="addCategorySubmitting"
-                />
-                <button
-                  class="sheet-creator__button"
-                  :disabled="addCategorySubmitting || !addCategoryDraftName.trim()"
-                  @click="createAddCategoryTag"
-                >
-                  {{ addCategorySubmitting ? "创建中" : "确定" }}
-                </button>
-              </view>
-              <view v-if="categories.length" class="chip-row">
-                <view
-                  v-for="item in categories"
-                  :key="item.id"
-                  class="chip"
-                  :class="{ 'chip--active': selectedCategoryId === item.id }"
-                  @click="toggleCategory(item.id)"
-                >
-                  {{ item.name }}
-                </view>
-              </view>
-              <text v-else class="sheet-section__hint">{{ addCategoryHint }}</text>
-            </view>
-
-            <view v-if="showAddSceneSection" class="sheet-section">
-              <view class="sheet-section__head">
-                <view class="sheet-section__meta">
-                  <text class="sheet-section__title">合集</text>
-                  <text class="sheet-section__tag">最多6字</text>
-                </view>
-                <view class="sheet-section__action" @click="toggleAddSceneCreator">
-                  {{ showAddSceneCreator ? "取消" : "创建" }}
-                </view>
-              </view>
-              <view v-if="showAddSceneCreator" class="sheet-creator">
-                <input
-                  v-model="addSceneDraftName"
-                  class="sheet-creator__input"
-                  maxlength="6"
-                  placeholder="输入合集名称"
-                  :disabled="addSceneSubmitting"
-                />
-                <button
-                  class="sheet-creator__button"
-                  :disabled="addSceneSubmitting || !addSceneDraftName.trim()"
-                  @click="createAddSceneTag"
-                >
-                  {{ addSceneSubmitting ? "创建中" : "确定" }}
-                </button>
-              </view>
-              <view v-if="scenes.length" class="chip-row">
-                <view
-                  v-for="item in scenes"
-                  :key="item.id"
-                  class="chip"
-                  :class="{ 'chip--active': selectedSceneIds.includes(item.id) }"
-                  @click="toggleScene(item.id)"
-                >
-                  {{ item.name }}
-                </view>
-              </view>
-              <text v-else class="sheet-section__hint">还没有合集，可先只选个人分类。</text>
-            </view>
-
-          </template>
-          <template #footer>
-            <view class="sheet-actions">
-              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="addSheetSubmitting" @click="closeAddSheet">取消</button>
-              <button
-                class="sheet-actions__button sheet-actions__button--confirm"
-                :disabled="addSheetSubmitting || !canSubmitAddSheet"
-                @click="confirmAddSheet"
-              >
-                {{ addSheetSubmitting ? "处理中..." : "确定" }}
-              </button>
-            </view>
-          </template>
-      </SheetShell>
+        @confirm="confirmAddSheet"
+      />
 
       <SheetShell
         v-if="kind === 'my'"
@@ -406,24 +316,21 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
-	import {
-		recipeApi,
-		type CollectedRecipeDetail,
-		type InspirationCategorySummary,
-		type InspirationRecipeDetail,
-		type MyRecipeDetail,
-		type RecipeAmountSnapshot,
-		type RecipeCategorySummary,
-		type RecipeContentSnapshot,
-		type RecipeDifficulty,
-		type RecipeDraftContentInput,
-		type RecipeDuration,
-		type RecipeRecommendationSummary,
-		type RecipeSceneSummary
-	} from "@/apis/recipe";
+import {
+  recipeApi,
+  type CollectedRecipeDetail,
+  type InspirationCategorySummary,
+  type InspirationRecipeDetail,
+  type MyRecipeDetail,
+  type RecipeAmountSnapshot,
+  type RecipeContentSnapshot,
+  type RecipeDraftContentInput,
+  type RecipeRecommendationSummary
+} from "@/apis/recipe";
 import { shoppingApi } from "../apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -434,6 +341,7 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
 
 type DetailKind = "my" | "inspiration" | "collection";
 type DetailMode = "published" | "preview";
@@ -497,25 +405,13 @@ const reportSheetVisible = ref(false);
 const addSheetVisible = ref(false);
 const recommendSheetVisible = ref(false);
 const selectedReportReason = ref<ReportReasonOption["value"] | "">("");
-const addSheetLoading = ref(false);
 const addSheetSubmitting = ref(false);
-const addSheetError = ref("");
 const recommendSheetLoading = ref(false);
 const recommendSubmitting = ref(false);
 const recommendSheetError = ref("");
 const shoppingSubmitting = ref(false);
-const categories = ref<RecipeCategorySummary[]>([]);
-const scenes = ref<RecipeSceneSummary[]>([]);
 const recommendCategories = ref<InspirationCategorySummary[]>([]);
-const selectedCategoryId = ref<UUID | "">("");
-const selectedSceneIds = ref<UUID[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
-const showAddCategoryCreator = ref(false);
-const showAddSceneCreator = ref(false);
-const addCategoryDraftName = ref("");
-const addSceneDraftName = ref("");
-const addCategorySubmitting = ref(false);
-const addSceneSubmitting = ref(false);
 const navOpacity = ref(0);
 const scrollTop = ref(0);
 const detailScrollTop = ref(0);
@@ -695,12 +591,6 @@ const detailActionsVisible = computed(
 );
 const showInlineDetailActions = computed(() => showStickyActions.value && !detailActionsVisible.value);
 const showShoppingEntry = computed(() => mode.value === "published" && detailContent.value.ingredients.length > 0);
-const canSubmitAddSheet = computed(() => {
-  if (kind.value === "collection") {
-    return Boolean(selectedCategoryId.value);
-  }
-  return Boolean(selectedCategoryId.value || selectedSceneIds.value.length);
-});
 const detailFactText = computed(() => {
   const parts: string[] = [];
   if (detailCategoryName.value) {
@@ -712,41 +602,31 @@ const detailFactText = computed(() => {
   return parts.join("  ·  ");
 });
 
-function formatDuration(value: RecipeDuration | null) {
-  if (value === "WITHIN_15") return "15分钟内";
-  if (value === "BETWEEN_15_30") return "15~30分钟";
-  if (value === "BETWEEN_30_60") return "30~60分钟";
-  if (value === "OVER_60") return "1小时以上";
-  return "";
-}
-
-const difficultyText = computed(() => {
-  const difficulty = detailContent.value.difficulty;
-  const labelMap: Record<RecipeDifficulty, string> = {
-    BEGINNER: "新手友好",
-    EASY: "轻松上手",
-    SKILLED: "需要经验",
-    CHALLENGING: "进阶挑战"
-  };
-  return difficulty ? labelMap[difficulty] : "";
-});
-
 const ingredientCountText = computed(() => `${detailContent.value.ingredients.length}项食材`);
 const stepCountText = computed(() => `${detailSteps.value.length}个步骤`);
-const durationText = computed(() => formatDuration(detailContent.value.duration));
+const detailDifficultyText = computed(() => {
+  const serverText =
+    mode.value === "published" && detail.value && "difficultyText" in detail.value ? detail.value.difficultyText : null;
+  return serverText || recipeDifficultyText(detailContent.value.difficulty);
+});
+const detailDurationText = computed(() => {
+  const serverText =
+    mode.value === "published" && detail.value && "durationText" in detail.value ? detail.value.durationText : null;
+  return serverText || recipeDurationText(detailContent.value.duration);
+});
 
 const infoItems = computed<InfoItem[]>(() => [
   {
     key: "time",
-    label: durationText.value || "未设时长",
+    label: detailDurationText.value || "未设时长",
     iconClass: "cookfont icon-time",
-    muted: !durationText.value
+    muted: !detailDurationText.value
   },
   {
     key: "difficulty",
-    label: difficultyText.value || "未设难度",
+    label: detailDifficultyText.value || "未设难度",
     iconClass: "cookfont icon-difficulty",
-    muted: !difficultyText.value
+    muted: !detailDifficultyText.value
   },
   {
     key: "ingredients",
@@ -923,108 +803,6 @@ function buildReportPayload() {
   return reportReason.value.trim() ? `${selectedReportReasonLabel.value}：${reportReason.value.trim()}` : "";
 }
 
-async function loadAddOptions(force = false) {
-  if (!sessionStore.isLoggedIn || (addSheetLoading.value && !force)) return;
-  addSheetLoading.value = true;
-  addSheetError.value = "";
-  try {
-    const [categoryList, sceneList] = await Promise.all([
-      recipeApi.listCategories(),
-      recipeApi.listScenes()
-    ]);
-    categories.value = categoryList;
-    scenes.value = sceneList;
-    if (selectedCategoryId.value && !categories.value.some(item => item.id === selectedCategoryId.value)) {
-      selectedCategoryId.value = "";
-    }
-    selectedSceneIds.value = selectedSceneIds.value.filter(sceneId => scenes.value.some(item => item.id === sceneId));
-  } catch (error) {
-    addSheetError.value = error instanceof Error ? error.message : "分类加载失败";
-  } finally {
-    addSheetLoading.value = false;
-  }
-}
-
-function resetAddSelection() {
-  selectedCategoryId.value = "";
-  selectedSceneIds.value = kind.value === "collection" ? [...(externalRecipeRef.value?.sceneIds || [])] : [];
-}
-
-function resetAddCreatorState() {
-  showAddCategoryCreator.value = false;
-  showAddSceneCreator.value = false;
-  addCategoryDraftName.value = "";
-  addSceneDraftName.value = "";
-  addCategorySubmitting.value = false;
-  addSceneSubmitting.value = false;
-}
-
-function toggleAddCategoryCreator() {
-  showAddCategoryCreator.value = !showAddCategoryCreator.value;
-  if (!showAddCategoryCreator.value) {
-    addCategoryDraftName.value = "";
-  }
-}
-
-function toggleAddSceneCreator() {
-  showAddSceneCreator.value = !showAddSceneCreator.value;
-  if (!showAddSceneCreator.value) {
-    addSceneDraftName.value = "";
-  }
-}
-
-async function createAddCategoryTag() {
-  const name = addCategoryDraftName.value.trim();
-  if (!name || addCategorySubmitting.value) return;
-  if (name.length > 4) {
-    await uniPlatform.feedback.toast({ title: "分类最多4个字", icon: "none" });
-    return;
-  }
-  addCategorySubmitting.value = true;
-  try {
-    const created = await recipeApi.createCategory({
-      operationId: createOperationId(),
-      name
-    });
-    categories.value = [...categories.value, created];
-    selectedCategoryId.value = created.id;
-    markRecipeHomeDirty(["my"]);
-    addCategoryDraftName.value = "";
-    showAddCategoryCreator.value = false;
-    await uniPlatform.feedback.toast({ title: "分类已创建", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
-  } finally {
-    addCategorySubmitting.value = false;
-  }
-}
-
-async function createAddSceneTag() {
-  const name = addSceneDraftName.value.trim();
-  if (!name || addSceneSubmitting.value) return;
-  if (name.length > 6) {
-    await uniPlatform.feedback.toast({ title: "合集最多6个字", icon: "none" });
-    return;
-  }
-  addSceneSubmitting.value = true;
-  try {
-    const created = await recipeApi.createScene({
-      operationId: createOperationId(),
-      name
-    });
-    scenes.value = [...scenes.value, created];
-    selectedSceneIds.value = [...selectedSceneIds.value, created.id];
-    markRecipeHomeDirty(["collection"]);
-    addSceneDraftName.value = "";
-    showAddSceneCreator.value = false;
-    await uniPlatform.feedback.toast({ title: "合集已创建", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建合集失败", icon: "none" });
-  } finally {
-    addSceneSubmitting.value = false;
-  }
-}
-
 function openAddSheet() {
   if (!showStickyActions.value || !isExternalDetail.value) return;
   if (!sessionStore.isLoggedIn) {
@@ -1033,10 +811,7 @@ function openAddSheet() {
     });
     return;
   }
-  resetAddSelection();
-  resetAddCreatorState();
   addSheetVisible.value = true;
-	void loadAddOptions(true);
 }
 
 async function loadRecommendCategories(force = false) {
@@ -1082,7 +857,6 @@ function closeRecommendSheet() {
 
 function closeAddSheet() {
   addSheetVisible.value = false;
-  resetAddCreatorState();
 }
 
 async function handleRecommendRecipe() {
@@ -1101,10 +875,6 @@ async function handleRecommendRecipe() {
 	} finally {
 		recommendSubmitting.value = false;
 	}
-}
-
-function toggleCategory(categoryId: UUID) {
-  selectedCategoryId.value = selectedCategoryId.value === categoryId ? "" : categoryId;
 }
 
 async function collectIntoScenes(sceneIds: UUID[]) {
@@ -1178,20 +948,20 @@ function handleAddPlan() {
   void uniPlatform.navigation.navigateTo(`/pages_meal/plan/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
 }
 
-async function confirmAddSheet() {
-  if (!externalRecipeRef.value || addSheetSubmitting.value || !canSubmitAddSheet.value) return;
+async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[] }) {
+  if (!externalRecipeRef.value || addSheetSubmitting.value) return;
   addSheetSubmitting.value = true;
   try {
-    const sceneIds = showAddSceneSection.value ? [...selectedSceneIds.value] : [...externalRecipeRef.value.sceneIds];
+    const sceneIds = showAddSceneSection.value ? [...payload.sceneIds] : [...externalRecipeRef.value.sceneIds];
     if (showAddSceneSection.value && sceneIds.length) {
       await collectIntoScenes(sceneIds);
     }
-    if (selectedCategoryId.value) {
+    if (payload.categoryId) {
       await recipeApi.createMyRecipeFromInspiration({
         operationId: createOperationId(),
         sourceRecipeId: externalRecipeRef.value.sourceRecipeId,
         sourceVersionId: externalRecipeRef.value.sourceVersionId,
-        categoryId: selectedCategoryId.value,
+        categoryId: payload.categoryId,
         sceneIds
       });
       markRecipeHomeDirty(["my"]);
@@ -1214,14 +984,6 @@ async function confirmAddSheet() {
   } finally {
     addSheetSubmitting.value = false;
   }
-}
-
-function toggleScene(sceneId: UUID) {
-  if (selectedSceneIds.value.includes(sceneId)) {
-    selectedSceneIds.value = selectedSceneIds.value.filter(item => item !== sceneId);
-    return;
-  }
-  selectedSceneIds.value = [...selectedSceneIds.value, sceneId];
 }
 
 async function addToShoppingList() {

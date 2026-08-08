@@ -48,7 +48,10 @@
           </text>
         </view>
         <text class="section__hint">{{ item.title }}</text>
-        <text v-if="item.completedAt" class="section__meta">完成时间：{{ formatDateTime(item.completedAt) }}</text>
+        <text v-if="item.menuItems.length > 1" class="section__meta">
+          {{ item.menuItems.map(menuItem => menuItem.title).join(" · ") }}
+        </text>
+        <text v-if="item.completedAt" class="section__meta">完成时间：{{ formatDateTimeMinute(item.completedAt, "--") }}</text>
 
         <template v-if="item.hasDiningEvent && item.diningEventId">
           <button class="secondary" @click="loadEvent(item.id, item.diningEventId)">查看饭局</button>
@@ -62,13 +65,13 @@
 
         <view v-if="eventMap[item.id]" class="event-box">
           <text class="event-box__title">饭局：{{ eventMap[item.id].title }}</text>
-          <text class="event-box__meta">{{ formatDateTime(eventMap[item.id].scheduledAt) }}</text>
+          <text class="event-box__meta">{{ formatDateTimeMinute(eventMap[item.id].scheduledAt, "--") }}</text>
           <text class="event-box__meta">{{ eventMap[item.id].location || "未填写地点" }}</text>
           <text class="event-box__meta">
             {{ eventMap[item.id].status === "COMPLETED" ? "饭局已完成" : "饭局进行中" }}
           </text>
           <text v-if="eventMap[item.id].completedAt" class="event-box__meta">
-            完成时间：{{ formatDateTime(eventMap[item.id].completedAt) }}
+            完成时间：{{ formatDateTimeMinute(eventMap[item.id].completedAt, "--") }}
           </text>
           <button
             v-if="diningGroupStore.currentDiningGroupId"
@@ -141,15 +144,16 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ref, watch } from "vue";
 import { ApiClientError, type UUID } from "@/apis/http";
+import { mealApi, type DiningEventSummary, type MealPlanSummary } from "@/apis/meal";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Login from "@/components/Login/Login.vue";
-import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
+import { formatDateTimeMinute } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
@@ -225,7 +229,7 @@ async function createPlan() {
       operationId: createOperationId(),
       planDate: planDate.value,
       mealSlot: mealSlot.value,
-      recipeId: selectedRecipeId.value
+      recipeIds: [selectedRecipeId.value]
     });
     await uniPlatform.feedback.toast({ title: "餐次已保存", icon: "success" });
     await loadPage();
@@ -353,11 +357,6 @@ function slotText(slot: "BREAKFAST" | "LUNCH" | "DINNER") {
   if (slot === "BREAKFAST") return "早餐";
   if (slot === "LUNCH") return "午餐";
   return "晚餐";
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return "--";
-  return value.replace("T", " ").slice(0, 16);
 }
 
 function resolveCookMeta(cookName: string | null, cookUserUid: number | null) {

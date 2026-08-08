@@ -47,7 +47,7 @@
                 <text class="poll-card__title">{{ item.title }}</text>
                 <text class="poll-card__meta">{{ item.planDate }} · {{ formatMealSlot(item.mealSlot) }} · {{ formatStatus(item.status) }}</text>
               </view>
-              <text class="poll-card__deadline">{{ formatShortTime(item.deadlineAt) }} 截止</text>
+              <text class="poll-card__deadline">{{ formatHourMinute(item.deadlineAt) }} 截止</text>
             </view>
 
             <view class="poll-card__stats">
@@ -79,7 +79,7 @@
             <view class="detail-grid">
               <view class="detail-grid__item">
                 <text class="detail-grid__label">截止时间</text>
-                <text class="detail-grid__value">{{ formatDateTime(currentPoll.deadlineAt) }}</text>
+                <text class="detail-grid__value">{{ formatMonthDayMinute(currentPoll.deadlineAt) }}</text>
               </view>
               <view class="detail-grid__item">
                 <text class="detail-grid__label">已回应</text>
@@ -193,6 +193,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
+import { formatHourMinute, formatMonthDayMinute } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
@@ -547,26 +548,6 @@ function formatStatus(status: MealPollStatus) {
   if (status === "CLOSED") return "已截止";
   if (status === "CONFIRMED") return "已确认";
   return "已完成";
-}
-
-function formatShortTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${month}-${day} ${hours}:${minutes}`;
 }
 
 function openResult(targetPollId: UUID) {

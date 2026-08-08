@@ -199,6 +199,8 @@ export interface MyRecipeSummary {
 	coverImageUrl: string | null;
 	difficulty: RecipeDifficulty | null;
 	duration: RecipeDuration | null;
+	difficultyText: string | null;
+	durationText: string | null;
 	category: RecipeCategorySummary;
 	version: number;
 	updatedAt: IsoDateTime;
@@ -208,6 +210,8 @@ export interface MyRecipeDetail {
 	id: UUID;
 	title: string;
 	coverImageUrl: string | null;
+	difficultyText: string | null;
+	durationText: string | null;
 	category: RecipeCategorySummary;
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
@@ -260,6 +264,8 @@ export interface CollectedRecipeSummary {
 	coverImageUrl: string | null;
 	difficulty: RecipeDifficulty | null;
 	duration: RecipeDuration | null;
+	difficultyText: string | null;
+	durationText: string | null;
 	category: InspirationCategorySummary;
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
@@ -272,6 +278,8 @@ export interface CollectedRecipeDetail {
 	sourceRecipeId: UUID;
 	title: string;
 	coverImageUrl: string | null;
+	difficultyText: string | null;
+	durationText: string | null;
 	category: InspirationCategorySummary;
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
@@ -286,6 +294,8 @@ export interface InspirationRecipeSummary {
 	coverImageUrl: string | null;
 	difficulty: RecipeDifficulty | null;
 	duration: RecipeDuration | null;
+	difficultyText: string | null;
+	durationText: string | null;
 	category: InspirationCategorySummary;
 	likeCount: number;
 	collectCount: number;
@@ -296,6 +306,8 @@ export interface InspirationRecipeDetail {
 	id: UUID;
 	title: string;
 	coverImageUrl: string | null;
+	difficultyText: string | null;
+	durationText: string | null;
 	category: InspirationCategorySummary;
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;

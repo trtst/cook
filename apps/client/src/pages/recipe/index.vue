@@ -161,7 +161,7 @@
           <view v-if="errorText" class="notice" @click="retryLoadActiveTab">{{ errorText }}</view>
           <view v-else-if="loading && !cards.length" class="notice">加载中...</view>
 
-          <RecipeEmptyState
+          <Empty
             v-else-if="showRecipeEmpty"
             :art="emptyStateArt"
             :title="emptyStateTitle"
@@ -289,8 +289,8 @@ import {
 	type RecipeDuration
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -301,6 +301,8 @@ import { uniPlatform } from "@/platform/uni";
 import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { formatDateTimeSecond } from "@/utils/date";
+import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 
 type RecipeTab = "my" | "inspiration" | "collection";
 type SheetMode = "" | "my";
@@ -361,20 +363,8 @@ const sortItems = [
 	{ value: "RECOMMENDED" as const, label: "推荐" },
 	{ value: "LATEST" as const, label: "最新" }
 ];
-const difficultyItems = [
-	{ value: "" as const, label: "全部" },
-	{ value: "BEGINNER" as const, label: "新手友好" },
-	{ value: "EASY" as const, label: "轻松上手" },
-	{ value: "SKILLED" as const, label: "需要经验" },
-	{ value: "CHALLENGING" as const, label: "进阶挑战" }
-];
-const durationItems = [
-	{ value: "" as const, label: "全部" },
-	{ value: "WITHIN_15" as const, label: "15分钟内" },
-	{ value: "BETWEEN_15_30" as const, label: "15~30分钟" },
-	{ value: "BETWEEN_30_60" as const, label: "30~60分钟" },
-	{ value: "OVER_60" as const, label: "1小时以上" }
-];
+const difficultyItems = [{ value: "" as const, label: "全部" }, ...difficultyOptions];
+const durationItems = [{ value: "" as const, label: "全部" }, ...durationOptions];
 
 const activeTab = ref<RecipeTab>(sessionStore.isLoggedIn ? "my" : "inspiration");
 const keyword = ref("");
@@ -978,22 +968,6 @@ function goToInspiration() {
 	void loadActiveTab({ source: "switch" });
 }
 
-function formatDifficulty(value: RecipeDifficulty | null) {
-	if (value === "BEGINNER") return "新手友好";
-	if (value === "EASY") return "轻松上手";
-	if (value === "SKILLED") return "需要经验";
-	if (value === "CHALLENGING") return "进阶挑战";
-	return "未设难度";
-}
-
-function formatDuration(value: RecipeDuration | null) {
-	if (value === "WITHIN_15") return "15分钟内";
-	if (value === "BETWEEN_15_30") return "15~30分钟";
-	if (value === "BETWEEN_30_60") return "30~60分钟";
-	if (value === "OVER_60") return "1小时以上";
-	return "未设时长";
-}
-
 function formatMetricCount(value: number) {
 	if (value <= 999) return "";
 	if (value < 10000) return `${Math.floor(value / 100) / 10}`.replace(/\.0$/, "") + "k";
@@ -1006,7 +980,7 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		coverTag: item.category.name,
-		meta: formatDuration(item.duration),
+		meta: item.durationText || "未设时长",
 		tag: "",
 		subline: "",
 		kind: "my"
@@ -1019,7 +993,7 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		coverTag: item.category.name,
-		meta: formatDuration(item.duration),
+		meta: item.durationText || "未设时长",
 		tag: formatMetricCount(item.collectCount),
 		subline: "",
 		kind: "inspiration"
@@ -1032,7 +1006,7 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		coverTag: "",
-		meta: formatDuration(item.duration),
+		meta: item.durationText || "未设时长",
 		tag: "",
 		subline: "",
 		kind: "collection"

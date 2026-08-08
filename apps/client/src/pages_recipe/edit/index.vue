@@ -745,7 +745,7 @@
                 <text class="sheet-section__title">难度</text>
                 <view class="chip-row">
                   <view
-                    v-for="item in difficulties"
+                    v-for="item in difficultyOptions"
                     :key="item.value"
                     class="chip"
                     :class="{ 'chip--active': advancedForm.difficulty === item.value }"
@@ -760,7 +760,7 @@
                 <text class="sheet-section__title">烹饪时长</text>
                 <view class="chip-row">
                   <view
-                    v-for="item in durations"
+                    v-for="item in durationOptions"
                     :key="item.value"
                     class="chip"
                     :class="{ 'chip--active': advancedForm.duration === item.value }"
@@ -842,6 +842,12 @@ import ImageField from "../components/ImageField.vue";
 import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+import {
+  difficultyOptions,
+  difficultyText as recipeDifficultyText,
+  durationOptions,
+  durationText as recipeDurationText
+} from "@/utils/recipe-meta";
 
 type FuzzyAmount = "适量" | "少许" | "按需";
 type SheetMode = "" | "ingredient" | "unit" | "advanced";
@@ -1074,18 +1080,6 @@ const sceneDraftName = ref("");
 const categorySubmitting = ref(false);
 const sceneSubmitting = ref(false);
 
-const difficulties = [
-  { value: "BEGINNER" as const, label: "新手友好" },
-  { value: "EASY" as const, label: "轻松上手" },
-  { value: "SKILLED" as const, label: "需要经验" },
-  { value: "CHALLENGING" as const, label: "进阶挑战" }
-];
-const durations = [
-  { value: "WITHIN_15" as const, label: "15分钟内" },
-  { value: "BETWEEN_15_30" as const, label: "15~30分钟" },
-  { value: "BETWEEN_30_60" as const, label: "30~60分钟" },
-  { value: "OVER_60" as const, label: "1小时以上" }
-];
 const fuzzyAmounts: FuzzyAmount[] = ["适量", "少许", "按需"];
 const baseServingsOptions = Array.from({ length: 10 }, (_, index) => `${index + 1}`);
 const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
@@ -1213,10 +1207,10 @@ const filteredUnitGroups = computed(() => {
   }));
 });
 const difficultyText = computed(() => {
-  return difficulties.find(item => item.value === form.difficulty)?.label || "未设置";
+  return recipeDifficultyText(form.difficulty, "未设置");
 });
 const durationText = computed(() => {
-  return durations.find(item => item.value === form.duration)?.label || "未设置";
+  return recipeDurationText(form.duration, "未设置");
 });
 const baseServingsIndex = computed(() => {
   const value = Number(advancedForm.baseServingsText || "1");
@@ -1243,7 +1237,7 @@ const advancedItems = computed(() => {
   if (form.baseServingsText.trim()) {
     items.push(`${form.baseServingsText.trim()} 人`);
   }
-  const difficultyName = difficulties.find(item => item.value === form.difficulty)?.label;
+  const difficultyName = recipeDifficultyText(form.difficulty);
   if (difficultyName) {
     items.push(difficultyName);
   }

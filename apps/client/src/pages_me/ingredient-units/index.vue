@@ -19,7 +19,7 @@
     </template>
 
     <view class="ingredient-units-page">
-      <RecipeEmptyState
+      <Empty
         v-if="!sessionStore.isLoggedIn"
         class="page-empty"
         :art="emptyStateIllustration"
@@ -88,7 +88,7 @@
             <view v-if="activeErrorText" class="notice notice--error" @click="retryLoadActiveTab">{{ activeErrorText }}</view>
             <view v-else-if="activeLoading && !hasActiveItems" class="notice">加载中...</view>
             <view v-else-if="activeTab === 'ingredient' && !ingredients.length" class="empty-panel">
-              <RecipeEmptyState
+              <Empty
                 :art="emptyStateIllustration"
                 :title="ingredientEmptyTitle"
                 :description="ingredientEmptyDescription"
@@ -297,8 +297,8 @@ import { onShow } from "@dcloudio/uni-app";
 import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
 import { recipeApi, type IngredientCategorySummary, type IngredientSummary, type UnitSummary, type UnitType } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import RecipeEmptyState from "@/components/Recipe/RecipeEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
