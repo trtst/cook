@@ -9,6 +9,7 @@ import {
   UnauthorizedException
 } from "@nestjs/common";
 import { Prisma, type DiningGroupStatus, type RecipeStatus } from "@prisma/client";
+import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import type {
   AdminRecipeContentInput,
   AdminDashboardSummary,
@@ -4216,6 +4217,7 @@ export class AdminService {
   }
 
   private toAdminRecipeDetail(recipe: AdminRecipeRow): AdminRecipeDetail {
+    const content = versionToContent(recipe.currentVersion);
     return {
       id: recipe.id,
       title: recipe.title,
@@ -4224,8 +4226,10 @@ export class AdminService {
       ownerUid: recipe.owner?.uid ?? null,
       personalCategory: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
       inspirationCategory: recipe.inspirationCategory ? toInspirationCategorySummary(recipe.inspirationCategory) : null,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       contentVersionId: recipe.currentVersionId,
-      content: versionToContent(recipe.currentVersion),
+      content,
       version: recipe.version,
       reportCount: recipe.reportCount,
       blockedReason: recipe.blockedReason,
@@ -4695,6 +4699,8 @@ export class AdminService {
       coverImageUrl: recipe.coverImageUrl,
       difficulty: content.difficulty,
       duration: content.duration,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toRecipeCategorySummary(recipe.category!),
       version: recipe.version,
       updatedAt: toIsoDate(recipe.updatedAt)
@@ -4722,6 +4728,8 @@ export class AdminService {
       coverImageUrl: collection.sourceRecipe.coverImageUrl,
       difficulty: content.difficulty,
       duration: content.duration,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(collection.sourceRecipe.inspirationCategory!),
       scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: collection.sourceVersionId,

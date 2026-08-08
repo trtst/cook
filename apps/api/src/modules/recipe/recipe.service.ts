@@ -7,6 +7,7 @@ import {
   NotFoundException
 } from "@nestjs/common";
 import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
+import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
@@ -2247,6 +2248,8 @@ export class RecipeService {
       coverImageUrl: recipe.coverImageUrl,
       difficulty: content.difficulty,
       duration: content.duration,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
       version: recipe.version,
       updatedAt: toIsoDate(recipe.updatedAt)
@@ -2263,6 +2266,8 @@ export class RecipeService {
       id: recipe.id,
       title: recipe.title,
       coverImageUrl: recipe.coverImageUrl,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
       scenes: recipe.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: recipe.currentVersionId,
@@ -2401,6 +2406,8 @@ export class RecipeService {
       coverImageUrl: collection.sourceRecipe.coverImageUrl,
       difficulty: content.difficulty,
       duration: content.duration,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(
         collection.sourceRecipe.inspirationCategory as NonNullable<CollectionRow["sourceRecipe"]["inspirationCategory"]>
       ),
@@ -2412,17 +2419,20 @@ export class RecipeService {
   }
 
   private toCollectedRecipeDetail(collection: CollectionRow): CollectedRecipeDetail {
+    const content = versionToContent(collection.sourceVersion);
     return {
       id: collection.id,
       sourceRecipeId: collection.sourceRecipeId,
       title: collection.sourceVersion.name,
       coverImageUrl: collection.sourceRecipe.coverImageUrl,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(
         collection.sourceRecipe.inspirationCategory as NonNullable<CollectionRow["sourceRecipe"]["inspirationCategory"]>
       ),
       scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: collection.sourceVersionId,
-      content: versionToContent(collection.sourceVersion),
+      content,
       collectedAt: toIsoDate(collection.createdAt),
       updatedAt: toIsoDate(collection.updatedAt)
     };
@@ -2436,6 +2446,8 @@ export class RecipeService {
       coverImageUrl: recipe.coverImageUrl,
       difficulty: content.difficulty,
       duration: content.duration,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
@@ -2444,13 +2456,16 @@ export class RecipeService {
   }
 
   private toInspirationRecipeDetail(recipe: RecipeRow): InspirationRecipeDetail {
+    const content = versionToContent(recipe.currentVersion);
     return {
       id: recipe.id,
       title: recipe.title,
       coverImageUrl: recipe.coverImageUrl,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
       contentVersionId: recipe.currentVersionId,
-      content: versionToContent(recipe.currentVersion),
+      content,
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       curatedByName: recipe.curatedByName,

@@ -897,7 +897,7 @@ model Recipe {
   collections             RecipeCollection[]       @relation("RecipeCollectionSource")
   importItems             RecipeImportItem[]
   draft                   RecipeDraft?
-  mealPlans               MealPlanItem[]
+  mealPlanDishes          MealPlanDish[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
   homeTopicItems          HomeTopicItem[]
 
@@ -1072,30 +1072,46 @@ model RecipeRecommendation {
 }
 
 model MealPlanItem {
-  id              Int      @id @default(autoincrement())
-  userId          Int      @map("user_id")
-  planDate        DateTime @map("plan_date") @db.Date
-  mealSlot        MealSlot @map("meal_slot")
-  recipeId        Int?     @map("recipe_id")
-  recipeVersionId Int      @map("recipe_version_id")
-  menuSnapshot    Json     @map("menu_snapshot")
-  note            String?  @db.VarChar(255)
-  status          MealPlanStatus @default(PLANNED)
-  completedAt     DateTime? @map("completed_at") @db.Timestamptz(3)
-  version         Int      @default(1)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id           Int            @id @default(autoincrement())
+  userId       Int            @map("user_id")
+  planDate     DateTime       @map("plan_date") @db.Date
+  mealSlot     MealSlot       @map("meal_slot")
+  menuSnapshot Json           @map("menu_snapshot")
+  note         String?        @db.VarChar(255)
+  status       MealPlanStatus @default(PLANNED)
+  completedAt  DateTime?      @map("completed_at") @db.Timestamptz(3)
+  version      Int            @default(1)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  recipe        Recipe?              @relation(fields: [recipeId], references: [id])
-  recipeVersion RecipeContentVersion @relation("MealPlanRecipeVersion", fields: [recipeVersionId], references: [id])
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dishes        MealPlanDish[]
   diningEvent   DiningEvent?
-  confirmedPolls MealPoll[]          @relation("MealPollConfirmedPlanItem")
+  confirmedPolls MealPoll[]           @relation("MealPollConfirmedPlanItem")
   activities    DiningGroupActivity[]
 
   @@unique([userId, planDate, mealSlot])
   @@index([userId, planDate])
   @@map("meal_plan_items")
+}
+
+model MealPlanDish {
+  id              Int      @id @default(autoincrement())
+  planItemId      Int      @map("plan_item_id")
+  recipeId        Int?     @map("recipe_id")
+  recipeVersionId Int      @map("recipe_version_id")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  planItem      MealPlanItem         @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+  recipe        Recipe?              @relation(fields: [recipeId], references: [id])
+  recipeVersion RecipeContentVersion @relation("MealPlanDishVersion", fields: [recipeVersionId], references: [id])
+
+  @@index([planItemId, sortOrder])
+  @@index([recipeId])
+  @@index([recipeVersionId])
+  @@map("meal_plan_dishes")
 }
 
 model DiningEvent {

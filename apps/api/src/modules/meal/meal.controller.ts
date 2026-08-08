@@ -154,7 +154,7 @@ export class MealController {
     @Body() body: CreateMealPlanDto
   ) {
     return this.mealService
-      .createMealPlan(request.user.userId, operationId, body.planDate, body.mealSlot, body.recipeId, body.note)
+      .createMealPlan(request.user.userId, operationId, body.planDate, body.mealSlot, body.recipeIds, body.note)
       .then(result => ok(result));
   }
 

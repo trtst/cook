@@ -296,13 +296,18 @@ export interface AdminHomeTopicsResponse {
   recTypes: HomeTopicTypeOption[];
 }
 
+export interface HomeTopicPickInput {
+  recipeId: UUID;
+  recommendNote: string | null;
+}
+
 export interface CreateHomeTopicRequest {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
   issueNo: number;
   description: string;
-  recipeIds: UUID[];
+  items: HomeTopicPickInput[];
 }
 
 export interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {
@@ -902,6 +907,8 @@ export interface MyRecipeSummary {
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: RecipeCategorySummary;
   version: number;
   updatedAt: IsoDateTime;
@@ -911,6 +918,8 @@ export interface MyRecipeDetail {
   id: UUID;
   title: string;
   coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: RecipeCategorySummary;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -963,6 +972,8 @@ export interface CollectedRecipeSummary {
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -975,6 +986,8 @@ export interface CollectedRecipeDetail {
   sourceRecipeId: UUID;
   title: string;
   coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -1011,6 +1024,8 @@ export interface InspirationRecipeSummary {
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -1021,6 +1036,8 @@ export interface InspirationRecipeDetail {
   id: UUID;
   title: string;
   coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
@@ -1058,6 +1075,8 @@ export interface AdminRecipeDetail {
   ownerUid: number | null;
   personalCategory: RecipeCategorySummary | null;
   inspirationCategory: InspirationCategorySummary | null;
+  difficultyText: string | null;
+  durationText: string | null;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   version: number;
@@ -1388,14 +1407,20 @@ export interface MealPlanSummary {
   id: UUID;
   planDate: string;
   mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
-  recipeId: UUID | null;
-  recipeVersionId: UUID;
   title: string;
+  menuItems: MealPlanMenuItemSummary[];
   status: "PLANNED" | "COMPLETED";
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
   createdAt: IsoDateTime;
+}
+
+export interface MealPlanMenuItemSummary {
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  title: string;
+  sortOrder: number;
 }
 
 export interface DiningEventParticipantSummary {

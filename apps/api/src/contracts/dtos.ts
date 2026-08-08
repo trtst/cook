@@ -1359,11 +1359,15 @@ export class CreateMealPlanDto extends OperationDto {
   @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
   mealSlot!: string;
 
-  @ApiProperty()
+  @ApiProperty({ type: [String], maxItems: 20 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  recipeId!: number;
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()

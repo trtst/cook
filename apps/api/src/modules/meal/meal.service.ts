@@ -30,12 +30,6 @@ import { EntitlementService } from "../entitlement/entitlement.service";
 import { fromJson, toJson, versionToContent } from "../recipe/recipe-content";
 import { MedalService } from "../user/medal.service";
 
-type MealPlanRow = Prisma.MealPlanItemGetPayload<{
-  include: {
-    diningEvent: true;
-  };
-}>;
-
 type DiningEventRow = Prisma.DiningEventGetPayload<{
   include: {
     user: { select: { uid: true; nickname: true; avatarUrl: true } };
@@ -108,6 +102,24 @@ type ActivityRow = Prisma.DiningGroupActivityGetPayload<{
 type DiningEventMemoryShareRow = Prisma.DiningEventMemoryShareGetPayload<{}>;
 
 type MealDb = Prisma.TransactionClient | PrismaService;
+
+const mealPlanInclude = {
+  diningEvent: true,
+  dishes: {
+    include: {
+      recipeVersion: {
+        select: {
+          name: true
+        }
+      }
+    },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+  }
+} satisfies Prisma.MealPlanItemInclude;
+
+type MealPlanRow = Prisma.MealPlanItemGetPayload<{
+  include: typeof mealPlanInclude;
+}>;
 
 type ResolvedMenuVersion = {
   recipeId: UUID | null;
@@ -265,9 +277,7 @@ export class MealService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.mealPlanItem.findMany({
         where,
-        include: {
-          diningEvent: true
-        },
+        include: mealPlanInclude,
         orderBy: [{ planDate: "asc" }, { mealSlot: "asc" }],
         skip,
         take: normalizedPageSize
@@ -732,22 +742,21 @@ export class MealService {
     operationId: OperationId,
     planDate: string,
     mealSlot: string,
-    recipeId: UUID,
+    recipeIds: UUID[],
     note?: string | null
   ) {
     return this.prisma.$transaction(async tx => {
       const slot = normalizeMealSlot(mealSlot);
-      const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
-      const recipeVersion = await this.resolveRecipeVersion(tx, recipe);
-      const menu = this.getEffectiveRecipeContent(recipe);
+      const menus = await this.resolveOwnedMenus(tx, userId, recipeIds);
+      const menuSnapshot = buildMenuSnapshot(menus);
       const normalizedNote = normalizeOptionalText(note);
       const normalizedPlanDate = parseDateOnly(planDate);
-      const requestHash = `${planDate}:${slot}:${recipeId}:${normalizedNote ?? ""}`;
+      const requestHash = `${planDate}:${slot}:${recipeIds.join(",")}:${normalizedNote ?? ""}`;
       const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:create", userId, null, requestHash);
       if (repeated) return repeated;
 
       await startIdempotentOperation(tx, operationId, "meal-plan:create", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, menu, note: normalizedNote }));
+      await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, menu: menuSnapshot, note: normalizedNote }));
 
       const existing = await tx.mealPlanItem.findUnique({
         where: {
@@ -757,27 +766,20 @@ export class MealService {
             mealSlot: slot
           }
         },
-        include: {
-          diningEvent: true
-        }
+        include: mealPlanInclude
       });
 
       if (existing?.status === "COMPLETED") {
         throw new ConflictException("已完成餐次不能修改");
       }
 
-      const item = existing
+      const planItem = existing
         ? await tx.mealPlanItem.update({
             where: { id: existing.id },
             data: {
-              recipeId,
-              recipeVersionId: recipeVersion.id,
-              menuSnapshot: toJson(menu),
+              menuSnapshot: toJson(menuSnapshot),
               note: normalizedNote,
               version: { increment: 1 }
-            },
-            include: {
-              diningEvent: true
             }
           })
         : await tx.mealPlanItem.create({
@@ -785,16 +787,13 @@ export class MealService {
               userId,
               planDate: normalizedPlanDate,
               mealSlot: slot,
-              recipeId,
-              recipeVersionId: recipeVersion.id,
-              menuSnapshot: toJson(menu),
+              menuSnapshot: toJson(menuSnapshot),
               note: normalizedNote
-            },
-            include: {
-              diningEvent: true
             }
           });
 
+      await this.replaceMealPlanDishes(tx, planItem.id, menus);
+      const item = await this.getMealPlanOrThrow(tx, planItem.id);
       await upsertStorageLedger(tx, userId, "MEAL", item.id, sizeOfJson(item));
       const result = this.toMealPlanSummary(item);
       await completeIdempotentOperation(tx, operationId, "meal-plan:create", userId, null, requestHash, result);
@@ -811,7 +810,7 @@ export class MealService {
 
       const current = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
-        include: { diningEvent: true }
+        include: mealPlanInclude
       });
       if (!current || current.userId !== userId) throw new NotFoundException("计划不存在");
 
@@ -825,7 +824,7 @@ export class MealService {
                 completedAt: new Date(),
                 version: { increment: 1 }
               },
-              include: { diningEvent: true }
+              include: mealPlanInclude
             });
 
       if (current.status !== "COMPLETED" && item.completedAt) {
@@ -842,7 +841,7 @@ export class MealService {
     return this.prisma.$transaction(async tx => {
       const plan = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
-        include: { diningEvent: true }
+        include: mealPlanInclude
       });
       if (!plan || plan.userId !== userId) throw new NotFoundException("计划不存在");
       if (plan.status === "COMPLETED") throw new ConflictException("已完成餐次不能再发起饭局");
@@ -870,13 +869,11 @@ export class MealService {
           shareTokenHash: hashText(shareToken),
           shareTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           menuItems: {
-            create: [
-              {
-                recipeVersionId: plan.recipeVersionId,
-                title: menu.name,
-                sortOrder: 0
-              }
-            ]
+            create: plan.dishes.map(item => ({
+              recipeVersionId: item.recipeVersionId,
+              title: item.recipeVersion.name,
+              sortOrder: item.sortOrder
+            }))
           }
         }
       });
@@ -1453,9 +1450,13 @@ export class MealService {
       id: item.id,
       planDate: item.planDate.toISOString().slice(0, 10),
       mealSlot: item.mealSlot,
-      recipeId: item.recipeId,
-      recipeVersionId: item.recipeVersionId,
       title: menu.name,
+      menuItems: item.dishes.map(dish => ({
+        recipeId: dish.recipeId,
+        recipeVersionId: dish.recipeVersionId,
+        title: dish.recipeVersion.name,
+        sortOrder: dish.sortOrder
+      })),
       status: item.status,
       completedAt: item.completedAt ? toIsoDate(item.completedAt) : null,
       hasDiningEvent: Boolean(item.diningEvent),
@@ -1654,6 +1655,22 @@ export class MealService {
     return recipe.currentVersion;
   }
 
+  private async resolveOwnedMenus(tx: Prisma.TransactionClient, userId: UUID, recipeIds: UUID[]): Promise<ResolvedMenuVersion[]> {
+    const menus: ResolvedMenuVersion[] = [];
+    for (const recipeId of recipeIds) {
+      const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
+      const recipeVersion = await this.resolveRecipeVersion(tx, recipe);
+      menus.push({
+        recipeId: recipe.id,
+        recipeVersionId: recipeVersion.id,
+        coverUrl: recipe.coverImageUrl ?? null,
+        title: recipe.title,
+        content: this.getEffectiveRecipeContent(recipe)
+      });
+    }
+    return menus;
+  }
+
   private async resolveMenuVersions(tx: Prisma.TransactionClient, recipeVersionIds: UUID[]): Promise<ResolvedMenuVersion[]> {
     const versions = await tx.recipeContentVersion.findMany({
       where: { id: { in: recipeVersionIds } },
@@ -1728,6 +1745,29 @@ export class MealService {
       throw new NotFoundException("菜谱不存在");
     }
     return recipe;
+  }
+
+  private async replaceMealPlanDishes(tx: Prisma.TransactionClient, planItemId: UUID, menus: ResolvedMenuVersion[]) {
+    await tx.mealPlanDish.deleteMany({
+      where: { planItemId }
+    });
+    await tx.mealPlanDish.createMany({
+      data: menus.map((item, index) => ({
+        planItemId,
+        recipeId: item.recipeId,
+        recipeVersionId: item.recipeVersionId,
+        sortOrder: index
+      }))
+    });
+  }
+
+  private async getMealPlanOrThrow(tx: Prisma.TransactionClient, planItemId: UUID) {
+    const plan = await tx.mealPlanItem.findUnique({
+      where: { id: planItemId },
+      include: mealPlanInclude
+    });
+    if (!plan) throw new NotFoundException("计划不存在");
+    return plan;
   }
 
   private async requireActiveMembership(db: MealDb, userId: UUID, diningGroupId: UUID) {
@@ -1846,25 +1886,17 @@ export class MealService {
           mealSlot: poll.mealSlot
         }
       },
-      include: {
-        diningEvent: true
-      }
+      include: mealPlanInclude
     });
     if (existing?.status === "COMPLETED") throw new ConflictException("已完成餐次不能再被征集确认覆盖");
 
-    const primary = menus[0];
-    const plan = existing
+    const planItem = existing
       ? await tx.mealPlanItem.update({
           where: { id: existing.id },
           data: {
-            recipeId: primary.recipeId,
-            recipeVersionId: primary.recipeVersionId,
             menuSnapshot: toJson(menuSnapshot),
             note: poll.note,
             version: { increment: 1 }
-          },
-          include: {
-            diningEvent: true
           }
         })
       : await tx.mealPlanItem.create({
@@ -1872,16 +1904,13 @@ export class MealService {
             userId: poll.createdByUserId,
             planDate: poll.planDate,
             mealSlot: poll.mealSlot,
-            recipeId: primary.recipeId,
-            recipeVersionId: primary.recipeVersionId,
             menuSnapshot: toJson(menuSnapshot),
             note: poll.note
-          },
-          include: {
-            diningEvent: true
           }
         });
 
+    await this.replaceMealPlanDishes(tx, planItem.id, menus);
+    const plan = await this.getMealPlanOrThrow(tx, planItem.id);
     await upsertStorageLedger(tx, poll.createdByUserId, "MEAL", plan.id, sizeOfJson(plan));
     return plan;
   }

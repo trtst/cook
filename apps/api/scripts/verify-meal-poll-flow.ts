@@ -138,9 +138,13 @@ interface MealPlanSummary {
   id: UUID;
   planDate: string;
   mealSlot: MealSlot;
-  recipeId: UUID | null;
-  recipeVersionId: UUID;
   title: string;
+  menuItems: Array<{
+    recipeId: UUID | null;
+    recipeVersionId: UUID;
+    title: string;
+    sortOrder: number;
+  }>;
   status: "PLANNED" | "COMPLETED";
   completedAt: string | null;
   hasDiningEvent: boolean;

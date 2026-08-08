@@ -217,7 +217,7 @@ async function main() {
     body: JSON.stringify({
       planDate,
       mealSlot: "DINNER",
-      recipeId: ownerRecipe.id
+      recipeIds: [ownerRecipe.id]
     })
   });
   assert(mealPlan.title.length > 0, "meal plan should use fixed menu snapshot");
