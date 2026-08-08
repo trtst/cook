@@ -15,11 +15,9 @@
       <view id="topic-top" class="topic-body">
         <view v-if="loading && !topic" class="topic-state">加载中...</view>
         <view v-else-if="errorText" class="topic-state topic-state--error" @click="reload">{{ errorText }}</view>
-        <Empty
-          v-else-if="!topic"
-          title="本周灵感还在准备中"
-          description="运营整理好本期菜单后，这里会先放出本周推荐。"
-        />
+        <view v-else-if="!topic" class="topic-empty" :style="emptyStyle">
+          <Empty title="本周灵感还在准备中" description="运营整理好本期菜单后，这里会先放出本周推荐。" />
+        </view>
 
         <template v-else>
           <view class="topic-backdrop">
@@ -40,14 +38,14 @@
 
               <view class="topic-summary__main">
                 <view class="topic-summary__meta">
-                  <text class="topic-chip">{{ recTypeText(topic.recType) }}</text>
+                  <text class="topic-chip">{{ topic.recTypeText }}</text>
                   <text class="topic-chip topic-chip--soft">第 {{ topic.issueNo }} 期</text>
                 </view>
                 <text class="topic-summary__title">{{ topic.title }}</text>
                 <text v-if="topic.subTitle" class="topic-summary__sub">{{ topic.subTitle }}</text>
                 <view class="topic-summary__stats">
                   <text class="topic-summary__stat">{{ topic.recipeCount }} 道推荐</text>
-                  <text class="topic-summary__stat">{{ formatDate(topic.updatedAt) }} 更新</text>
+                  <text class="topic-summary__stat">{{ formatMonthDay(topic.updatedAt) }} 更新</text>
                 </view>
               </view>
             </view>
@@ -64,26 +62,60 @@
 
               <view class="recipe-list">
                 <view
-                  v-for="item in topic.items"
+                  v-for="(item, index) in topic.items"
                   :key="item.id"
-                  class="recipe-card"
+                  :class="['recipe-card', index % 2 === 1 ? 'recipe-card--reverse' : '']"
                   hover-class="recipe-card--hover"
                   hover-stay-time="100"
                   @click="openRecipe(item.id)"
                 >
-                  <image v-if="item.coverImageUrl" class="recipe-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-                  <view v-else class="recipe-card__cover recipe-card__cover--empty">
-                    <text class="recipe-card__cover-text">封面图</text>
-                  </view>
-
-                  <view class="recipe-card__body">
-                    <view class="recipe-card__top">
-                      <text class="recipe-card__sort">0{{ item.sort }}</text>
-                      <text class="recipe-card__title">{{ item.title }}</text>
+                  <view class="recipe-card__layout">
+                    <view class="recipe-card__rail">
+                      <text class="recipe-card__part">PART</text>
+                      <text class="recipe-card__sort">{{ formatSort(item.sort) }}</text>
+                      <view class="recipe-card__meta-group">
+                        <text class="recipe-card__meta-pill">{{ item.difficultyText || "难度待补" }}</text>
+                        <text class="recipe-card__meta-pill">{{ item.durationText || "时长待补" }}</text>
+                      </view>
                     </view>
-                    <text class="recipe-card__meta">{{ item.category.name }} · {{ formatDuration(item.duration) }}</text>
-                    <text class="recipe-card__meta">{{ formatDifficulty(item.difficulty) }}</text>
+
+                    <view class="recipe-card__content">
+                      <image v-if="item.coverImageUrl" class="recipe-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
+                      <view v-else class="recipe-card__cover recipe-card__cover--empty">
+                        <text class="recipe-card__cover-text">封面图</text>
+                      </view>
+
+                      <view class="recipe-card__footer">
+                        <view class="recipe-card__title-block">
+                          <text class="recipe-card__title">{{ item.title }}</text>
+                          <text v-if="item.recommendNote" class="recipe-card__note">{{ item.recommendNote }}</text>
+                        </view>
+
+                        <view
+                          :class="[
+                            'recipe-card__action',
+                            item.ownedRecipeId
+                              ? isQueued(item)
+                                ? 'recipe-card__action--queued'
+                                : 'recipe-card__action--ready'
+                              : 'recipe-card__action--guide'
+                          ]"
+                          @click.stop="handleRecipeAction(item)"
+                        >
+                          <text :class="['cookfont', 'recipe-card__action-icon', recipeActionIcon(item)]" />
+                          <text>{{ recipeActionText(item) }}</text>
+                        </view>
+                      </view>
+                    </view>
                   </view>
+                </view>
+              </view>
+
+              <view class="recipe-note">
+                <text class="cookfont icon-notice recipe-note__icon" />
+                <view class="recipe-note__body">
+                  <text class="recipe-note__line">未加入“我的菜谱”的菜，需要先添加，之后才能安排到计划。</text>
+                  <text class="recipe-note__line recipe-note__line--soft">本期有喜欢的菜可以先收下，再慢慢安排。</text>
                 </view>
               </view>
             </view>
@@ -122,59 +154,110 @@
       </view>
     </scroll-view>
 
-    <view v-if="topic?.items.length" class="recommend-fab" hover-class="recommend-fab--hover" hover-stay-time="100" @click="openPlanSheet">
-      <text class="cookfont icon-add-plan recommend-fab__icon" />
+    <view v-if="queuedItems.length" class="plan-queue" hover-class="plan-queue--hover" hover-stay-time="100" @click="openPlanSheet">
+      <text class="cookfont icon-add-plan plan-queue__icon" />
+      <text class="plan-queue__label">开始安排</text>
+      <view class="plan-queue__badge">
+        <text class="plan-queue__badge-text">{{ queuedItems.length }}</text>
+      </view>
     </view>
 
     <SheetShell
-      v-if="sheetMounted && topic"
+      v-if="sheetMounted"
       :visible="sheetVisible"
-      title="加入我的计划"
-      subtitle="先挑一道这期想安排的菜，下一步继续去计划页定时间。"
+      title="安排这批菜"
+      :subtitle="planSheetSubtitle"
       @close="closePlanSheet"
       @after-close="handleSheetAfterClose"
     >
-      <view class="sheet-list">
-        <view
-          v-for="item in topic.items"
-          :key="item.id"
-          class="sheet-card"
-          hover-class="sheet-card--hover"
-          hover-stay-time="100"
-          @click="pickRecipe(item.id)"
-        >
-          <image v-if="item.coverImageUrl" class="sheet-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-          <view v-else class="sheet-card__cover sheet-card__cover--empty">
-            <text class="sheet-card__cover-text">封面图</text>
-          </view>
+      <template #title-extra>
+        <text class="plan-sheet__title-extra">{{ queuedItems.length }}道</text>
+      </template>
 
-          <view class="sheet-card__body">
-            <text class="sheet-card__title">{{ item.title }}</text>
-            <text class="sheet-card__meta">{{ item.category.name }} · {{ formatDuration(item.duration) }}</text>
-          </view>
+      <view class="plan-sheet">
+        <view class="plan-sheet__section">
+          <text class="plan-sheet__section-label">安排到哪天</text>
+          <picker mode="date" :value="planDate" :start="today" @change="handlePlanDateChange">
+            <view class="plan-sheet__field">
+              <text class="plan-sheet__field-value">{{ formatPlanDate(planDate) }}</text>
+              <text class="plan-sheet__field-arrow">更换日期</text>
+            </view>
+          </picker>
+        </view>
 
-          <text class="sheet-card__action">安排这道</text>
+        <view class="plan-sheet__section">
+          <text class="plan-sheet__section-label">安排到哪餐</text>
+          <view class="plan-sheet__slot-row">
+            <view
+              v-for="item in mealSlots"
+              :key="item.value"
+              :class="['plan-sheet__slot', mealSlot === item.value ? 'plan-sheet__slot--active' : '']"
+              @click="mealSlot = item.value"
+            >
+              {{ item.label }}
+            </view>
+          </view>
         </view>
       </view>
+
+      <template #footer>
+        <view
+          :class="['plan-sheet__submit', planSubmitting ? 'plan-sheet__submit--disabled' : '']"
+          @click="submitPlan"
+        >
+          {{ planSubmitting ? "安排中..." : "确认安排" }}
+        </view>
+      </template>
     </SheetShell>
+
+    <RecipeAddSheet
+      v-if="currentAddItem"
+      :visible="addSheetVisible"
+      :title="addSheetTitle"
+      :subtitle="addSheetSubtitle"
+      :category-hint="addCategoryHint"
+      :scene-hint="'还没有合集，不选也可以直接加入待安排。'"
+      :show-scene-section="true"
+      :require-category="true"
+      :submitting="addSheetSubmitting"
+      @close="closeAddSheet"
+      @confirm="confirmAddSheet"
+    />
   </Layout>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { onLoad } from "@dcloudio/uni-app";
-import { homeApi, type HomeTopicDetail, type HomeTopicType } from "@/apis/home";
+import { onLoad, onShow } from "@dcloudio/uni-app";
+import type { UUID } from "@/apis/http";
+import { homeApi, type HomeTopicDetail } from "@/apis/home";
+import { mealApi } from "@/apis/meal";
+import { recipeApi } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { useLoginModalStore } from "@/stores/login-modal";
+import { useSessionStore } from "@/stores/session";
+import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
+import { formatMonthDay, formatPlanDate, formatSort, todayText } from "@/utils/date";
+import { isTopicQueued } from "@/utils/home-topic";
+import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
 const { navBarTotalHeight } = useSystemInfo();
+const sessionStore = useSessionStore();
+const loginModalStore = useLoginModalStore();
 const NAV_FADE_DISTANCE = 96;
+const mealSlots = [
+  { value: "BREAKFAST" as const, label: "早餐" },
+  { value: "LUNCH" as const, label: "午餐" },
+  { value: "DINNER" as const, label: "晚餐" }
+];
 
 const loading = ref(false);
 const errorText = ref("");
@@ -184,11 +267,20 @@ const scrollAnchor = ref("");
 const scrollTop = ref(0);
 const sheetMounted = ref(false);
 const sheetVisible = ref(false);
+const addSheetVisible = ref(false);
+const addSheetSubmitting = ref(false);
+const currentAddItemId = ref<number | null>(null);
+const queuedIds = ref<number[]>([]);
+const planSubmitting = ref(false);
+const today = todayText();
+const planDate = ref(todayText());
+const mealSlot = ref<"BREAKFAST" | "LUNCH" | "DINNER">("DINNER");
+const shouldRefreshOnShow = ref(false);
 
 watch(
-  () => sheetVisible.value,
-  visible => {
-    setLocked(visible);
+  () => [sheetVisible.value, addSheetVisible.value],
+  ([planVisible, addVisible]) => {
+    setLocked(planVisible || addVisible);
   },
   { immediate: true }
 );
@@ -203,10 +295,24 @@ const heroStyle = computed(() => {
 const contentStyle = computed(() => ({
   paddingTop: `calc(${navBarTotalHeight.value}px + 24rpx)`
 }));
+const emptyStyle = computed(() => ({
+  paddingTop: `calc(${navBarTotalHeight.value}px + 32rpx)`
+}));
 
 const navTitle = computed(() => topic.value?.title || "本周灵感");
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const visibleHistory = computed(() => topic.value?.history.slice(0, 5) ?? []);
+const queuedItems = computed(() => {
+  const itemMap = new Set(queuedIds.value);
+  return (topic.value?.items ?? []).filter(item => itemMap.has(item.id) && item.ownedRecipeId);
+});
+const currentAddItem = computed(() => (topic.value?.items ?? []).find(item => item.id === currentAddItemId.value) ?? null);
+const planSheetSubtitle = computed(() => {
+  return "选好日期和餐次后，待安排里的菜会一起进入这个计划。";
+});
+const addSheetTitle = computed(() => "添加到我的");
+const addSheetSubtitle = computed(() => "先选个人分类，可选合集。确认后会自动进入待安排。");
+const addCategoryHint = computed(() => "还没有个人分类，先创建一个分类再加入。");
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
   opacity: `${navProgress.value}`
@@ -222,40 +328,35 @@ onLoad(query => {
   void loadTopic();
 });
 
-function recTypeText(value: HomeTopicType) {
-  if (value === "WEEKEND_GATHERING") return "周末聚餐";
-  if (value === "QUICK_AFTER_WORK") return "下班快做";
-  if (value === "HOME_STYLE") return "家常下饭";
-  if (value === "ONE_PERSON") return "一人食";
-  if (value === "BREAKFAST") return "早餐灵感";
-  return "轻松一餐";
+onShow(() => {
+  if (!shouldRefreshOnShow.value) return;
+  shouldRefreshOnShow.value = false;
+  void loadTopic(topicId.value, false);
+});
+
+function isQueued(item: HomeTopicDetail["items"][number]) {
+  return isTopicQueued(item.id, queuedIds.value);
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${month}-${day}`;
+function recipeActionText(item: HomeTopicDetail["items"][number]) {
+  if (!item.ownedRecipeId) return "先加入";
+  return isQueued(item) ? "待安排" : "加入计划";
 }
 
-function formatDuration(value: HomeTopicDetail["items"][number]["duration"]) {
-  if (value === "WITHIN_15") return "15 分钟内";
-  if (value === "BETWEEN_15_30") return "15~30 分钟";
-  if (value === "BETWEEN_30_60") return "30~60 分钟";
-  if (value === "OVER_60") return "1 小时以上";
-  return "时长待补";
+function recipeActionIcon(item: HomeTopicDetail["items"][number]) {
+  if (!item.ownedRecipeId) return "icon-add-owner";
+  return isQueued(item) ? "icon-add-plan" : "icon-add-list";
 }
 
-function formatDifficulty(value: HomeTopicDetail["items"][number]["difficulty"]) {
-  if (value === "BEGINNER") return "新手友好";
-  if (value === "EASY") return "轻松上手";
-  if (value === "SKILLED") return "需要经验";
-  if (value === "CHALLENGING") return "进阶挑战";
-  return "难度待补";
+function syncQueuedItems(nextTopic: HomeTopicDetail | null) {
+  const validIds = new Set((nextTopic?.items ?? []).filter(item => item.ownedRecipeId).map(item => item.id));
+  queuedIds.value = queuedIds.value.filter(itemId => validIds.has(itemId));
+  if (!queuedIds.value.length) {
+    closePlanSheet();
+  }
 }
 
-async function loadTopic(nextId = topicId.value) {
+async function loadTopic(nextId = topicId.value, resetScroll = true) {
   loading.value = true;
   try {
     if (nextId > 0) {
@@ -267,10 +368,14 @@ async function loadTopic(nextId = topicId.value) {
       topic.value = result.topic;
       topicId.value = result.topic?.id ?? 0;
     }
+    syncQueuedItems(topic.value);
     errorText.value = "";
-    jumpTop();
+    if (resetScroll) {
+      jumpTop();
+    }
   } catch (error) {
     topic.value = null;
+    syncQueuedItems(null);
     errorText.value = error instanceof Error ? error.message : "加载本周灵感失败";
   } finally {
     loading.value = false;
@@ -292,7 +397,8 @@ function handleTopicScroll(event: { detail?: { scrollTop?: number } }) {
   scrollTop.value = event.detail?.scrollTop ?? 0;
 }
 
-function openRecipe(recipeId: number) {
+function openRecipe(recipeId: number, refreshOnShow = true) {
+  shouldRefreshOnShow.value = refreshOnShow;
   void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipeId))}&kind=inspiration`);
 }
 
@@ -302,8 +408,93 @@ function openHistory(nextId: number) {
   void loadTopic(nextId);
 }
 
+function handleRecipeAction(item: HomeTopicDetail["items"][number]) {
+  if (!item.ownedRecipeId) {
+    openAddSheet(item);
+    return;
+  }
+  if (isQueued(item)) {
+    queuedIds.value = queuedIds.value.filter(itemId => itemId !== item.id);
+    if (!queuedIds.value.length) {
+      closePlanSheet();
+    }
+    return;
+  }
+  queuedIds.value = [...queuedIds.value, item.id];
+}
+
+function openLogin(afterLogin?: () => void) {
+  loginModalStore.open(null, afterLogin);
+}
+
+function openAddSheet(item: HomeTopicDetail["items"][number]) {
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openAddSheet(item);
+    });
+    return;
+  }
+  currentAddItemId.value = item.id;
+  addSheetVisible.value = true;
+}
+
+function closeAddSheet() {
+  addSheetVisible.value = false;
+  currentAddItemId.value = null;
+}
+
+async function collectIntoScenes(item: HomeTopicDetail["items"][number], sceneIds: UUID[]) {
+  if (!sceneIds.length) return;
+  await recipeApi.collectRecipe({
+    operationId: createOperationId(),
+    sourceRecipeId: item.id,
+    sourceVersionId: item.sourceVersionId,
+    sceneIds
+  });
+}
+
+function syncOwnedRecipe(itemId: number, ownedRecipeId: number) {
+  if (!topic.value) return;
+  topic.value = {
+    ...topic.value,
+    items: topic.value.items.map(item => (item.id === itemId ? { ...item, ownedRecipeId } : item))
+  };
+}
+
+async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[] }) {
+  const item = currentAddItem.value;
+  if (!item || !payload.categoryId || addSheetSubmitting.value) return;
+  addSheetSubmitting.value = true;
+  try {
+    const sceneIds = [...payload.sceneIds];
+    if (sceneIds.length) {
+      await collectIntoScenes(item, sceneIds);
+      markRecipeHomeDirty(["collection"]);
+    }
+    const result = await recipeApi.createMyRecipeFromInspiration({
+      operationId: createOperationId(),
+      sourceRecipeId: item.id,
+      sourceVersionId: item.sourceVersionId,
+      categoryId: payload.categoryId,
+      sceneIds
+    });
+    syncOwnedRecipe(item.id, result.recipe.id);
+    if (!queuedIds.value.includes(item.id)) {
+      queuedIds.value = [...queuedIds.value, item.id];
+    }
+    markRecipeHomeDirty(["my"]);
+    markRecipeManageDirty(["recipes"]);
+    closeAddSheet();
+    await uniPlatform.feedback.toast({ title: "已添加到我的，并加入待安排", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+  } finally {
+    addSheetSubmitting.value = false;
+  }
+}
+
 function openPlanSheet() {
-  if (!topic.value?.items.length) return;
+  if (!queuedItems.value.length) return;
   sheetMounted.value = true;
   sheetVisible.value = false;
   void nextTick(() => {
@@ -319,9 +510,31 @@ function handleSheetAfterClose() {
   sheetMounted.value = false;
 }
 
-function pickRecipe(recipeId: number) {
-  closePlanSheet();
-  void uniPlatform.navigation.navigateTo(`/pages_meal/plan/index?recipeId=${encodeURIComponent(String(recipeId))}`);
+function handlePlanDateChange(event: { detail?: { value?: string } }) {
+  const nextValue = event.detail?.value;
+  if (!nextValue) return;
+  planDate.value = nextValue;
+}
+
+async function submitPlan() {
+  const recipeIds = queuedItems.value.map(item => item.ownedRecipeId).filter((item): item is UUID => Boolean(item));
+  if (!recipeIds.length || planSubmitting.value) return;
+  planSubmitting.value = true;
+  try {
+    await mealApi.createPlan({
+      operationId: createOperationId(),
+      planDate: planDate.value,
+      mealSlot: mealSlot.value,
+      recipeIds
+    });
+    queuedIds.value = [];
+    closePlanSheet();
+    await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "安排失败", icon: "none" });
+  } finally {
+    planSubmitting.value = false;
+  }
 }
 </script>
 
@@ -370,7 +583,7 @@ function pickRecipe(recipeId: number) {
 .topic-state {
   margin: 24rpx;
   padding: 28rpx 24rpx;
-  border-radius: 28rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 26rpx;
@@ -379,6 +592,22 @@ function pickRecipe(recipeId: number) {
 
 .topic-state--error {
   color: var(--color-primary);
+}
+
+.topic-empty {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding-right: var(--space-page);
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
+  padding-left: var(--space-page);
+}
+
+.topic-empty :deep(.empty-state) {
+  width: 100%;
+  border-radius: var(--radius-xs);
+  box-shadow: 0 14rpx 36rpx var(--color-surface-mask-weak);
 }
 
 .topic-backdrop {
@@ -527,12 +756,56 @@ function pickRecipe(recipeId: number) {
 }
 
 .topic-section {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 20rpx;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 20rpx var(--space-page) 0;
+  overflow: hidden;
   background: var(--color-page);
+  isolation: isolate;
+}
+
+.topic-section::before,
+.topic-section::after {
+  content: "";
+  position: absolute;
+  top: 96rpx;
+  width: 360rpx;
+  height: 520rpx;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(24rpx);
+  z-index: 0;
+}
+
+.topic-section::before {
+  left: -168rpx;
+  opacity: 0.92;
+  background:
+    radial-gradient(circle at 68% 14%, var(--color-primary-soft) 0%, transparent 34%),
+    radial-gradient(circle at 22% 34%, var(--color-primary-soft) 0%, transparent 38%),
+    radial-gradient(circle at 60% 58%, var(--color-primary-soft) 0%, transparent 36%),
+    radial-gradient(circle at 28% 84%, var(--color-primary-soft) 0%, transparent 32%);
+}
+
+.topic-section::after {
+  right: -176rpx;
+  top: 188rpx;
+  opacity: 0.84;
+  background:
+    radial-gradient(circle at 34% 12%, var(--color-primary-soft) 0%, transparent 34%),
+    radial-gradient(circle at 76% 36%, var(--color-primary-soft) 0%, transparent 38%),
+    radial-gradient(circle at 36% 62%, var(--color-primary-soft) 0%, transparent 36%),
+    radial-gradient(circle at 70% 86%, var(--color-primary-soft) 0%, transparent 34%);
+}
+
+.topic-section > .topic-section__head,
+.topic-section > .recipe-list,
+.topic-section > .history-scroll {
+  position: relative;
+  z-index: 1;
 }
 
 .topic-section + .topic-section {
@@ -543,6 +816,7 @@ function pickRecipe(recipeId: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 20rpx 0 40rpx;
 }
 
 .topic-section__title {
@@ -559,30 +833,92 @@ function pickRecipe(recipeId: number) {
 .recipe-list {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 80rpx;
 }
 
 .recipe-card {
-  display: flex;
-  gap: 18rpx;
-  padding: 18rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: 28rpx;
-  background: var(--color-surface);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  width: calc(100% - 36rpx);
+  padding-bottom: 40rpx;
+  transition: transform 0.18s ease;
+}
+
+.recipe-card--reverse {
+  align-self: flex-end;
 }
 
 .recipe-card--hover {
   transform: translateY(-2rpx);
 }
 
-.recipe-card__cover {
-  width: 176rpx;
-  height: 132rpx;
+.recipe-card__layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 20rpx;
+}
+
+.recipe-card--reverse .recipe-card__layout {
+  flex-direction: row-reverse;
+}
+
+.recipe-card__rail {
+  width: 184rpx;
   flex: 0 0 auto;
-  border-radius: 22rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 18rpx;
+  color: var(--color-text);
+}
+
+.recipe-card__part {
+  letter-spacing: 4rpx;
+  font-size: 18rpx;
+  line-height: 1;
+}
+
+.recipe-card__sort {
+  margin-top: 10rpx;
+  font-size: 56rpx;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.recipe-card__meta-group {
+  margin-top: 18rpx;
+  display: flex;
+  flex-direction: row;
+  gap: 18rpx;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.recipe-card__meta-pill {
+  padding: 0;
+  color: var(--color-text-secondary);
+  font-size: 18rpx;
+  line-height: 1.4;
+  text-align: center;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 4rpx;
+}
+
+.recipe-card__content {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.recipe-card__cover {
+  width: 100%;
+  height: 400rpx;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   background: var(--color-surface-muted);
+  box-shadow: 0 18rpx 38rpx var(--color-surface-mask-weak);
 }
 
 .recipe-card__cover--empty {
@@ -596,37 +932,94 @@ function pickRecipe(recipeId: number) {
   font-size: 24rpx;
 }
 
-.recipe-card__body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10rpx;
-  min-width: 0;
-}
-
-.recipe-card__top {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.recipe-card__sort {
-  color: var(--color-primary);
-  font-size: 22rpx;
-  font-weight: 700;
-}
-
 .recipe-card__title {
   color: var(--color-text);
-  font-size: 29rpx;
+  font-size: 34rpx;
   font-weight: 700;
+  line-height: 50rpx;
 }
 
-.recipe-card__meta {
+.recipe-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.recipe-card__title-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.recipe-card__note {
   color: var(--color-text-secondary);
-  font-size: 24rpx;
+  font-size: 22rpx;
   line-height: 1.6;
+}
+
+.recipe-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  height: 50rpx;
+  padding: 0 10rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.recipe-card__action-icon {
+  font-size: 26rpx;
+  line-height: 1;
+}
+
+.recipe-card__action--guide {
+  color: var(--color-text-secondary);
+}
+
+.recipe-card__action--ready {
+  color: var(--color-text-secondary);
+}
+
+.recipe-card__action--queued {
+  color: var(--color-primary);
+}
+
+.recipe-note {
+  margin-top: 44rpx;
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+  padding: 8rpx 0 0;
+}
+
+.recipe-note__icon {
+  flex: 0 0 auto;
+  margin-top: 8rpx;
+  color: var(--color-primary);
+  opacity: 0.54;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.recipe-note__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.recipe-note__line {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.7;
+}
+
+.recipe-note__line--soft {
+  color: var(--color-text-tertiary);
 }
 
 .history-scroll {
@@ -712,16 +1105,217 @@ function pickRecipe(recipeId: number) {
   white-space: nowrap;
 }
 
-.recommend-fab {
-  position: fixed;
-  right: 32rpx;
-  bottom: calc(52rpx + env(safe-area-inset-bottom));
-  z-index: 40;
+.panel-note {
+  padding: 28rpx 24rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.panel-note--sheet {
+  margin-bottom: 12rpx;
+}
+
+.add-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  padding-bottom: 12rpx;
+}
+
+.add-sheet__card {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 18rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  box-shadow: 0 12rpx 30rpx var(--color-surface-mask-weak);
+}
+
+.add-sheet__cover {
+  width: 144rpx;
+  height: 112rpx;
+  flex: 0 0 auto;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+
+.add-sheet__cover--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-sheet__cover-text {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+}
+
+.add-sheet__body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.add-sheet__title {
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.add-sheet__meta {
+  color: var(--color-text-secondary);
+  font-size: 23rpx;
+  line-height: 1.5;
+}
+
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.sheet-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.sheet-section__meta {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.sheet-section__title {
+  color: var(--color-text);
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.sheet-section__tag {
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+}
+
+.sheet-section__action {
+  color: var(--color-primary);
+  font-size: 24rpx;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sheet-section__hint {
+  color: var(--color-text-secondary);
+  font-size: 23rpx;
+  line-height: 1.6;
+}
+
+.sheet-creator {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.sheet-creator__input {
+  flex: 1;
+  min-width: 0;
+  height: 84rpx;
+  padding: 0 24rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 26rpx;
+}
+
+.sheet-creator__button {
+  flex: 0 0 auto;
+  height: 84rpx;
+  padding: 0 28rpx;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 84rpx;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 90rpx;
-  height: 90rpx;
+  min-width: 112rpx;
+  min-height: 72rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.chip--active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.sheet-actions__button {
+  flex: 1;
+  height: 92rpx;
+  border: none;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 92rpx;
+}
+
+.sheet-actions__button--cancel {
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.sheet-actions__button--confirm {
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+}
+
+.plan-queue {
+  position: fixed;
+  right: 28rpx;
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  height: 92rpx;
+  padding: 0 28rpx;
   border-radius: var(--radius-pill);
   background: linear-gradient(
     135deg,
@@ -732,77 +1326,128 @@ function pickRecipe(recipeId: number) {
   color: var(--button-primary-text);
 }
 
-.recommend-fab--hover {
+.plan-queue--hover {
   opacity: 0.92;
 }
 
-.recommend-fab__icon {
+.plan-queue__icon {
   line-height: 1;
   color: currentColor;
 }
 
-.sheet-list {
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-  padding-bottom: env(safe-area-inset-bottom);
+.plan-queue__label {
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.sheet-card {
+.plan-queue__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40rpx;
+  height: 40rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.plan-queue__badge-text {
+  color: currentColor;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.plan-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  padding-bottom: 12rpx;
+}
+
+.plan-sheet__title-extra {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.plan-sheet__section {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.plan-sheet__section-label {
+  color: var(--color-text);
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.plan-sheet__field {
   display: flex;
   align-items: center;
-  gap: 18rpx;
-  padding: 18rpx;
-  border-radius: 24rpx;
+  justify-content: space-between;
+  gap: 20rpx;
+  min-height: 92rpx;
+  padding: 0 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
 }
 
-.sheet-card--hover {
-  background: var(--color-surface-muted);
+.plan-sheet__field-value {
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: 600;
 }
 
-.sheet-card__cover {
-  width: 128rpx;
-  height: 96rpx;
-  flex: 0 0 auto;
-  border-radius: 18rpx;
-  overflow: hidden;
-  background: var(--color-surface-muted);
+.plan-sheet__field-arrow {
+  color: var(--color-primary);
+  font-size: 24rpx;
 }
 
-.sheet-card__cover--empty {
+.plan-sheet__slot-row {
+  display: flex;
+  gap: 14rpx;
+}
+
+.plan-sheet__slot {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.sheet-card__cover-text {
+  height: 84rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
   color: var(--color-text-secondary);
-  font-size: 22rpx;
+  font-size: 26rpx;
+  font-weight: 600;
 }
 
-.sheet-card__body {
+.plan-sheet__slot--active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.plan-sheet__submit {
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 8rpx;
-  min-width: 0;
-}
-
-.sheet-card__title {
-  color: var(--color-text);
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 92rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
   font-size: 28rpx;
   font-weight: 700;
 }
 
-.sheet-card__meta {
-  color: var(--color-text-secondary);
-  font-size: 23rpx;
-}
-
-.sheet-card__action {
-  color: var(--color-primary);
-  font-size: 24rpx;
-  font-weight: 700;
+.plan-sheet__submit--disabled {
+  opacity: 0.68;
 }
 </style>

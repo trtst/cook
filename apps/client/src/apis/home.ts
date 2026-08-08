@@ -29,11 +29,16 @@ export type HomeTopicType =
 
 export interface HomeTopicRecipeItem {
   id: number;
+  sourceVersionId: number;
   sort: number;
   title: string;
   coverImageUrl: string | null;
+  ownedRecipeId: number | null;
+  recommendNote: string | null;
   difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | null;
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: {
     id: number;
     name: string;
@@ -49,6 +54,7 @@ export interface HomeTopicHistoryItem {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -62,6 +68,7 @@ export interface HomeTopicDetail {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -85,11 +92,9 @@ export const homeApi = {
     return get<HomeEntriesResponse>(`${cfg.domain}/api/home-entries`, undefined, { auth: false });
   },
   getCurrentTopic() {
-    return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`, undefined, { auth: false });
+    return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`);
   },
   getTopic(topicId: number) {
-    return get<HomeTopicDetailResponse>(`${cfg.domain}/api/home-topics/${encodeURIComponent(String(topicId))}`, undefined, {
-      auth: false
-    });
+    return get<HomeTopicDetailResponse>(`${cfg.domain}/api/home-topics/${encodeURIComponent(String(topicId))}`);
   }
 };
