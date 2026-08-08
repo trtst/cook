@@ -59,6 +59,12 @@
    - 记录后续工程治理待办，例如命名规则清理和检查门禁；只防遗漏，不替代具体执行单。
 23. `plans/home-weekly-topic-execution.md`
    - 首页“本周灵感”专题页执行单，覆盖后台维护、首页跳转、专题页展示和计划页导流闭环。
+24. `plans/table-topic-execution.md`
+   - 首页“餐桌话题”列表与详情执行单，覆盖历次话题倒序、真实参与数和后台持续新建闭环。
+25. `plans/home-action-dock-execution.md`
+   - 首页四宫格执行单，冻结 `我想吃 / 问大家 / 随机 / 缺什么` 的固定四宫格定位、首页卡片规则和四个入口的首屏结构。
+26. `plans/display-format-owner-audit.md`
+   - 当前展示映射、格式化函数和页面辅助判断的散点审计基线，用于后续治理与 owner 收口。
 
 ## 文档地图
 
@@ -122,6 +128,12 @@
   - 后续工程治理问题、分批改造入口和检查门禁，不替代具体模块执行单。
 - `plans/home-weekly-topic-execution.md`
   - 首页“本周灵感”专题页的业务边界、最小接口、最小表和验收门禁。
+- `plans/table-topic-execution.md`
+  - 首页“餐桌话题”列表与详情的业务边界、真实参与数口径、最小接口和最小表约束。
+- `plans/home-action-dock-execution.md`
+  - 首页四宫格的产品边界、固定顺序、卡片规则和四个入口的场景首页要求。
+- `plans/display-format-owner-audit.md`
+  - 当前 `client/admin` 展示映射、格式化函数和页面辅助判断的散点清单与风险基线。
 - `plans/engineering-foundation-fix.md`
   - 2026-07-24 幂等、管理员审计、迁移验证和模块状态收口的实际执行记录。
 - `plans/site-content-execution.md`

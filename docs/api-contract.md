@@ -340,13 +340,19 @@ interface HomeTopicTypeOption {
   value: HomeTopicType;
 }
 
+纯展示读接口如果已经由服务端统一 owner 文案，继续返回稳定 key 供识别，同时额外返回独立中文展示字段；选择器、筛选器和写接口仍以稳定 key 或 `value + label` 结构为准，不复用同一个字段同时承载 key 和中文文案。
+
 interface HomeTopicRecipeItem {
   id: UUID;
   sort: number;
   title: string;
   coverImageUrl: string | null;
+  ownedRecipeId: UUID | null;
+  recommendNote: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -358,6 +364,7 @@ interface HomeTopicHistoryItem {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -371,6 +378,7 @@ interface HomeTopicDetail {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   issueNo: number;
   description: string;
   coverImageUrl: string | null;
@@ -394,6 +402,7 @@ interface AdminHomeTopicItem {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   status: "LISTED" | "UNLISTED";
   issueNo: number;
   description: string;
@@ -410,13 +419,18 @@ interface AdminHomeTopicsResponse {
   recTypes: HomeTopicTypeOption[];
 }
 
+interface HomeTopicPickInput {
+  recipeId: UUID;
+  recommendNote: string | null;
+}
+
 interface CreateHomeTopicRequest {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
   issueNo: number;
   description: string;
-  recipeIds: UUID[];
+  items: HomeTopicPickInput[];
 }
 
 interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {
@@ -444,7 +458,9 @@ interface ChangeCurrentPasswordResult {
 
 `GET /home-entries` 只返回小程序首页 7 个快捷入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 只服务入口内部视觉区或图标区，不是整张完成海报；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN / SIDE_TOP / SIDE_BOTTOM` 用于首屏 3 卡，`QUICK_1 ... QUICK_4` 用于 action-dock 四格快捷入口；客户端按 `placement` 自己拆出上 3 卡和下 4 格。
 
-`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回 `404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sort / title / coverImageUrl / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
+`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回 `404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
+
+`GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回 `404`。
 
 `GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
@@ -662,7 +678,9 @@ interface AdminUserEntitlementResponse {
 
 `GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
 
-`GET /admin/home-topics`、`GET /admin/home-topics/recipes`、`POST /admin/home-topics`、`PUT /admin/home-topics/{topicId}`、`POST /admin/home-topics/{topicId}/status`、`POST /admin/home-topics/{topicId}/image` 和 `DELETE /admin/home-topics/{topicId}/image` 共同维护“运营 / 本周灵感”。后台读取接口返回 `topics + recTypes`：`topics` 返回全部专题，并额外携带 `status` 供后台做列表、预览和上架状态切换；`LISTED` 表示前台可见，`UNLISTED` 表示仅后台可见；`recTypes` 返回当前允许的推荐类别枚举与中文文案。`GET /admin/home-topics/recipes` 只搜索可曝光的灵感菜谱，当前最多返回 `20` 条，供后台把菜谱加入本期推荐。`POST /admin/home-topics` 和 `PUT /admin/home-topics/{topicId}` 只写入基础信息和推荐菜谱顺序，请求体固定提交 `title / subTitle / recType / issueNo / description / recipeIds`；`recipeIds` 当前至少 `3` 个，且同一次提交内不得重复，不再限制最多条数。新建专题默认写成 `UNLISTED`，由后台确认后再通过 `POST /admin/home-topics/{topicId}/status` 显式上架；切状态请求体固定提交 `status + expectedVersion`。封面图不混进专题写 DTO，统一走单独上传/清空接口，并通过 `expectedVersion` 防并发覆盖。专题当前没有草稿态、定时发布、专题收藏或专题推荐统计；历史专题长期保留，但下架后不会继续出现在前台当前专题和往期滑卡里。
+`GET /admin/home-topics`、`GET /admin/home-topics/recipes`、`POST /admin/home-topics`、`PUT /admin/home-topics/{topicId}`、`POST /admin/home-topics/{topicId}/status`、`POST /admin/home-topics/{topicId}/image` 和 `DELETE /admin/home-topics/{topicId}/image` 共同维护“运营 / 本周灵感”。后台读取接口返回 `topics + recTypes`：`topics` 返回全部专题，并额外携带 `status` 供后台做列表、预览和上架状态切换；`LISTED` 表示前台可见，`UNLISTED` 表示仅后台可见；`recTypes` 返回当前允许的推荐类别枚举与中文文案。`GET /admin/home-topics/recipes` 只搜索可曝光的灵感菜谱，当前最多返回 `20` 条，供后台把菜谱加入本期推荐。`POST /admin/home-topics` 和 `PUT /admin/home-topics/{topicId}` 只写入基础信息和推荐菜谱顺序，请求体固定提交 `title / subTitle / recType / issueNo / description / items`；`items` 当前至少 `3` 条，每条固定提交 `recipeId + recommendNote`，其中 `recommendNote` 可空，表示这道菜在本期专题推荐里的可选推荐说明；同一次提交内不得重复提交同一 `recipeId`，不再限制最多条数。前台专题详情和后台专题详情都返回每道菜的 `recommendNote`，有值才显示。新建专题默认写成 `UNLISTED`，由后台确认后再通过 `POST /admin/home-topics/{topicId}/status` 显式上架；切状态请求体固定提交 `status + expectedVersion`。封面图不混进专题写 DTO，统一走单独上传/清空接口，并通过 `expectedVersion` 防并发覆盖。专题当前没有草稿态、定时发布、专题收藏或专题推荐统计；历史专题长期保留，但下架后不会继续出现在前台当前专题和往期滑卡里。
+
+`GET /admin/table-topics`、`POST /admin/table-topics`、`PUT /admin/table-topics/{topicId}`、`POST /admin/table-topics/{topicId}/status`、`POST /admin/table-topics/{topicId}/image` 和 `DELETE /admin/table-topics/{topicId}/image` 共同维护“运营 / 餐桌话题”。后台读取接口只返回 `topics` 数组；每项固定包含 `id / title / summary / coverImageUrl / activityAt / participantCount / targetType / targetValue / status / version / updatedAt`。`participantCount` 是服务端根据 `table_topic_participants` 真实计数返回，后台不可手改。`POST /admin/table-topics` 与 `PUT /admin/table-topics/{topicId}` 当前只写基础信息和详情承接目标，请求体固定提交 `title / summary / activityAt / targetType / targetValue`；`title` 最多 `30` 字，`summary` 最多 `240` 字。`targetType = PAGE` 时，`targetValue` 为空表示只使用小程序原生详情页，非空时必须以 `/` 开头；`targetType = WEB_VIEW` 时，`targetValue` 必须是以 `https://` 开头的 H5 地址。新建话题默认写成 `UNLISTED`，由后台确认后再通过 `POST /admin/table-topics/{topicId}/status` 显式上架。封面图继续走单独上传 / 清空接口，并通过 `expectedVersion` 防并发覆盖。后台当前不提供取消参与、手工补人数或历史回滚能力。
 
 后台勋章治理当前新增：
 
@@ -809,14 +827,20 @@ interface MealPlanSummary {
   id: UUID;
   planDate: string;
   mealSlot: MealSlot;
-  recipeId: UUID | null;
-  recipeVersionId: UUID;
   title: string;
+  menuItems: MealPlanMenuItemSummary[];
   status: MealPlanStatus;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
   createdAt: IsoDateTime;
+}
+
+interface MealPlanMenuItemSummary {
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  title: string;
+  sortOrder: number;
 }
 
 interface DiningEventParticipantSummary {
@@ -930,7 +954,18 @@ interface MedalWallResponse {
 }
 ```
 
-`POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但已经完成的餐次不允许再被覆盖。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。
+`POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但当前一个餐次可同时承载多道菜；请求体固定提交：
+
+```ts
+interface CreateMealPlanRequest {
+  planDate: string;
+  mealSlot: MealSlot;
+  recipeIds: UUID[];
+  note?: string | null;
+}
+```
+
+同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；重复提交同一餐次时，服务端按本次 `recipeIds` 整体覆盖该餐次的菜单子项，不再逐道追加。已经完成的餐次不允许再被覆盖。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。
 
 `GET /meal-polls` 返回当前饭搭子下的征集摘要列表，当前只支持按 `diningGroupId / status / planDate / mealSlot / limit` 过滤；首页和征集入口只读取摘要，不返回成员逐条回应。`POST /meal-polls` 用于由 `OWNER / ADMIN` 发起一条新的点菜征集，请求体只接收：
 
@@ -1291,6 +1326,8 @@ interface MyRecipeSummary {
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: { id: UUID; name: string; version: number };
   version: number;
   updatedAt: IsoDateTime;
@@ -1300,6 +1337,8 @@ interface MyRecipeDetail {
   id: UUID;
   title: string;
   coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: RecipeCategorySummary;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -1332,6 +1371,8 @@ interface CollectedRecipeSummary {
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -1344,6 +1385,8 @@ interface CollectedRecipeDetail {
   sourceRecipeId: UUID;
   title: string;
   coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -1368,6 +1411,8 @@ interface InspirationRecipeSummary {
   coverImageUrl: string | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -1378,6 +1423,8 @@ interface InspirationRecipeDetail {
   id: UUID;
   title: string;
   coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: InspirationCategorySummary;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;

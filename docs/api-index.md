@@ -21,6 +21,9 @@
 | Home | GET | `/home-entries` | 小程序首页 7 个快捷入口配置，统一返回按布局顺序排序的 `items` 数组 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
 | HomeTopic | GET | `/home-topics/{topicId}` | 指定本周灵感专题页 |
+| TableTopic | GET | `/table-topics` | 餐桌话题列表，按活动时间倒序返回历次话题摘要 |
+| TableTopic | GET | `/table-topics/{topicId}` | 指定餐桌话题详情，公开返回是否已参与需依赖可选用户 token |
+| TableTopic | POST | `/table-topics/{topicId}/participate` | 当前用户参与一个餐桌话题，同一用户只记一次 |
 | User | GET | `/users/me` | 当前用户资料、展示设置和会员事实 |
 | User | GET | `/users/me/medals` | 当前用户勋章墙、分类与获得状态摘要 |
 | User | PUT | `/users/me` | 更新当前用户昵称和头像 |
@@ -49,6 +52,12 @@
 | AdminHomeTopic | POST | `/admin/home-topics/{topicId}/status` | 后台切换本周灵感专题上架状态 |
 | AdminHomeTopic | POST | `/admin/home-topics/{topicId}/image` | 后台上传或替换专题封面图 |
 | AdminHomeTopic | DELETE | `/admin/home-topics/{topicId}/image` | 后台清空专题封面图 |
+| AdminTableTopic | GET | `/admin/table-topics` | 后台读取餐桌话题列表 |
+| AdminTableTopic | POST | `/admin/table-topics` | 后台新建餐桌话题 |
+| AdminTableTopic | PUT | `/admin/table-topics/{topicId}` | 后台更新餐桌话题 |
+| AdminTableTopic | POST | `/admin/table-topics/{topicId}/status` | 后台切换餐桌话题上架状态 |
+| AdminTableTopic | POST | `/admin/table-topics/{topicId}/image` | 后台上传或替换话题封面图 |
+| AdminTableTopic | DELETE | `/admin/table-topics/{topicId}/image` | 后台清空话题封面图 |
 | AdminMedal | GET | `/admin/medal-templates` | 后台勋章模板分页列表 |
 | AdminMedal | POST | `/admin/medal-templates` | 后台新增勋章模板 |
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
