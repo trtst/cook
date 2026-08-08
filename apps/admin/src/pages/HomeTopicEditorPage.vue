@@ -17,7 +17,7 @@ import { adminAppConfig } from "@/apis/config";
 import RecipePreviewDrawer from "@/components/RecipePreviewDrawer.vue";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
-
+import { difficultyText, durationText } from "@/utils/recipe-meta";
 type TopicForm = {
   id: number | null;
   version: number;
@@ -181,22 +181,6 @@ function getCoverUrl(item: { coverImageUrl: string; version: number }) {
   return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}t=${item.version}`;
 }
 
-function formatDuration(value: HomeTopicRecipeItem["duration"]) {
-  if (value === "WITHIN_15") return "15 分钟内";
-  if (value === "BETWEEN_15_30") return "15~30 分钟";
-  if (value === "BETWEEN_30_60") return "30~60 分钟";
-  if (value === "OVER_60") return "1 小时以上";
-  return "时长待补";
-}
-
-function formatDifficulty(value: HomeTopicRecipeItem["difficulty"]) {
-  if (value === "BEGINNER") return "新手友好";
-  if (value === "EASY") return "轻松上手";
-  if (value === "SKILLED") return "需要经验";
-  if (value === "CHALLENGING") return "进阶挑战";
-  return "难度待补";
-}
-
 function topicStatusText(status: HomeTopicStatus) {
   return status === "LISTED" ? "已上架" : "未上架";
 }
@@ -241,7 +225,10 @@ function saveBody(): CreateHomeTopicRequest {
     recType: current.recType,
     issueNo: current.issueNo,
     description: current.description.trim(),
-    recipeIds: current.items.map(item => item.id)
+    items: current.items.map(item => ({
+      recipeId: item.id,
+      recommendNote: item.recommendNote?.trim() || null
+    }))
   };
 }
 
@@ -365,7 +352,8 @@ function addRecipe(item: HomeTopicRecipeItem) {
   }
   current.items.push({
     ...item,
-    sort: current.items.length + 1
+    sort: current.items.length + 1,
+    recommendNote: item.recommendNote ?? null
   });
 }
 
@@ -561,7 +549,7 @@ onMounted(() => {
                   <div class="search-card__main">
                     <span class="search-card__title">{{ item.title }}</span>
                     <p>ID {{ item.id }} · {{ item.category.name }}</p>
-                    <p>{{ formatDifficulty(item.difficulty) }} · {{ formatDuration(item.duration) }}</p>
+                    <p>{{ item.difficultyText || difficultyText(item.difficulty, "难度待补") }} · {{ item.durationText || durationText(item.duration, "时长待补") }}</p>
                   </div>
                   <el-button
                     plain
@@ -580,7 +568,7 @@ onMounted(() => {
             <div class="recipe-panel__header">
               <div>
                 <h6>本期推荐</h6>
-                <p>每行展示 5 道已选菜谱。当前顺序就是前台展示顺序，后续可继续扩成拖拽排序。</p>
+                <p>当前顺序就是前台展示顺序。每道菜可选填一条推荐说明，前台有值才显示。</p>
               </div>
               <span>{{ form.items.length }} 道</span>
             </div>
@@ -600,6 +588,15 @@ onMounted(() => {
                 </div>
                 <div class="picked-tile__body">
                   <span class="picked-tile__title">{{ item.title }}</span>
+                  <el-input
+                    v-model="item.recommendNote"
+                    type="textarea"
+                    :rows="3"
+                    maxlength="60"
+                    resize="none"
+                    placeholder="推荐说明（选填）"
+                    @click.stop
+                  />
                   <div class="picked-tile__sort">
                     <el-button circle size="small" :icon="ArrowLeft" :disabled="index === 0" @click.stop="moveRecipe(index, -1)" />
                     <el-button

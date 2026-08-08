@@ -19,8 +19,11 @@ export interface HomeTopicRecipeItem {
   sort: number;
   title: string;
   coverImageUrl: string | null;
+  recommendNote: string | null;
   difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | null;
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
+  difficultyText: string | null;
+  durationText: string | null;
   category: {
     id: UUID;
     name: string;
@@ -36,6 +39,7 @@ export interface AdminHomeTopicItem {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
+  recTypeText: string;
   status: HomeTopicStatus;
   issueNo: number;
   description: string;
@@ -56,13 +60,18 @@ export interface HomeTopicRecipeSearchResponse {
   items: HomeTopicRecipeItem[];
 }
 
+export interface HomeTopicPickInput {
+  recipeId: UUID;
+  recommendNote: string | null;
+}
+
 export interface CreateHomeTopicRequest {
   title: string;
   subTitle: string | null;
   recType: HomeTopicType;
   issueNo: number;
   description: string;
-  recipeIds: UUID[];
+  items: HomeTopicPickInput[];
 }
 
 export interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {

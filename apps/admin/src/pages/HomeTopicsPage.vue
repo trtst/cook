@@ -6,6 +6,7 @@ import { useRouter } from "vue-router";
 import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTimeMinute } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(true);
@@ -58,26 +59,6 @@ function getTopicCover(item: { coverImageUrl: string | null; version: number }) 
   if (!raw) return "";
   const baseUrl = raw.startsWith("/") ? new URL(raw, apiOrigin).toString() : raw;
   return `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}t=${item.version}`;
-}
-
-function formatTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hour = `${date.getHours()}`.padStart(2, "0");
-  const minute = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day} ${hour}:${minute}`;
-}
-
-function recTypeText(value: AdminHomeTopicItem["recType"]) {
-  if (value === "WEEKEND_GATHERING") return "周末聚餐";
-  if (value === "QUICK_AFTER_WORK") return "下班快做";
-  if (value === "HOME_STYLE") return "家常下饭";
-  if (value === "ONE_PERSON") return "一人食";
-  if (value === "BREAKFAST") return "早餐灵感";
-  return "轻松一餐";
 }
 
 function topicStatusText(status: HomeTopicStatus) {
@@ -174,7 +155,7 @@ onMounted(() => {
             </div>
             <p v-if="item.subTitle" class="topic-row__sub">{{ item.subTitle }}</p>
             <p class="topic-row__meta">
-              第 {{ item.issueNo }} 期 · {{ recTypeText(item.recType) }} · {{ item.items.length }} 道菜 · 更新于 {{ formatTime(item.updatedAt) }}
+              第 {{ item.issueNo }} 期 · {{ item.recTypeText }} · {{ item.items.length }} 道菜 · 更新于 {{ formatDateTimeMinute(item.updatedAt) }}
             </p>
           </div>
 
