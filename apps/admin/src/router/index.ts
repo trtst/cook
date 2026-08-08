@@ -58,6 +58,18 @@ const router = createRouter({
           meta: { title: "编辑本周灵感" }
         },
         {
+          path: "operations/table-topic",
+          name: "operations-table-topic",
+          component: () => import("@/pages/TableTopicsPage.vue"),
+          meta: { title: "餐桌话题" }
+        },
+        {
+          path: "operations/table-topic/editor",
+          name: "operations-table-topic-editor",
+          component: () => import("@/pages/TableTopicEditorPage.vue"),
+          meta: { title: "编辑餐桌话题" }
+        },
+        {
           path: "operations/site-home",
           name: "operations-site-home",
           component: () => import("@/pages/OperationPlaceholderPage.vue"),

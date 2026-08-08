@@ -31,6 +31,9 @@ const activeMenu = computed(() => {
     if (route.path.startsWith("/operations/weekly-topic/editor")) {
       return "/operations/weekly-topic";
     }
+    if (route.path.startsWith("/operations/table-topic/editor")) {
+      return "/operations/table-topic";
+    }
     return route.path;
   }
   if (
@@ -95,6 +98,7 @@ function triggerHeaderRefresh() {
           </template>
           <el-menu-item index="/operations/app-home">小程序首页</el-menu-item>
           <el-menu-item index="/operations/weekly-topic">本周灵感</el-menu-item>
+          <el-menu-item index="/operations/table-topic">餐桌话题</el-menu-item>
           <el-menu-item index="/operations/site-home">官网首页</el-menu-item>
           <el-menu-item index="/operations/pre-meal">餐前准备</el-menu-item>
           <el-menu-item index="/operations/kitchen-knowledge">厨房知识</el-menu-item>
