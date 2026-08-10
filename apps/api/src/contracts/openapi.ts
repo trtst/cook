@@ -99,6 +99,7 @@ export class HomeEntriesResponseModel {
 }
 
 export class AdminHomeEntryItemModel extends HomeEntryItemModel {
+  @ApiProperty({ type: String, enum: ["LISTED", "UNLISTED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 

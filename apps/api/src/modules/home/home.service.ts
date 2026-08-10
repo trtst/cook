@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { type HomeFeatureBoardCard, type HomeFeatureBoardPlacement, type HomeFeatureBoardTargetType, Prisma } from "@prisma/client";
+import { type HomeEntryStatus, type HomeFeatureBoardCard, type HomeFeatureBoardPlacement, type HomeFeatureBoardTargetType, Prisma } from "@prisma/client";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type {
@@ -10,6 +10,7 @@ import type {
   HomeEntryItem,
   HomeEntryPageTarget,
   OperationId,
+  SetHomeEntryStatusRequest,
   UUID,
   UpdateHomeEntriesRequest
 } from "../../contracts/types";
@@ -130,6 +131,10 @@ function getPlacementLabel(placement: HomeFeatureBoardPlacement) {
   return "快捷入口 4";
 }
 
+function isQuickPlacement(placement: HomeFeatureBoardPlacement) {
+  return quickPlacements.includes(placement);
+}
+
 function assertHomeTarget(item: { placement: HomeFeatureBoardPlacement; targetType: HomeFeatureBoardTargetType; targetValue: string }) {
   if (item.targetType === "PAGE") {
     if (!pageTargetSet.has(item.targetValue)) {
@@ -153,7 +158,13 @@ export class HomeService {
   async getHomeEntries(request: RequestLike): Promise<HomeEntriesResponse> {
     const items = await this.listCards();
     return {
-      items: allPlacements.map(placement => this.toPublicItem(request, this.requireMappedCard(items, placement)))
+      items: [
+        ...featurePlacements.map(placement => this.toPublicItem(request, this.requireMappedCard(items, placement))),
+        ...quickPlacements
+          .map(placement => this.requireMappedCard(items, placement))
+          .filter(item => item.status === "LISTED")
+          .map(item => this.toPublicItem(request, item))
+      ]
     };
   }
 
@@ -213,6 +224,51 @@ export class HomeService {
 
       const result = await this.getAdminEntries(tx);
       await completeAdminIdempotentOperation(tx, operationId, "admin-home-entries:update", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async setAdminHomeEntryStatus(
+    adminId: UUID,
+    operationId: OperationId,
+    placement: HomeFeatureBoardPlacement,
+    body: SetHomeEntryStatusRequest
+  ): Promise<AdminHomeEntryItem> {
+    if (!isQuickPlacement(placement)) {
+      throw new BadRequestException("只有首页四宫格入口支持上架和下架");
+    }
+
+    const requestHash = hashText(JSON.stringify({ placement, status: body.status, expectedVersion: body.expectedVersion }));
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminHomeEntryItem>(
+        tx,
+        operationId,
+        "admin-home-entries:status",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+
+      await startAdminIdempotentOperation(tx, operationId, "admin-home-entries:status", adminId, requestHash);
+
+      const current = await this.requireCard(tx, placement);
+      if (current.version !== body.expectedVersion) {
+        throw new ConflictException(`${getPlacementLabel(placement)}已被更新，请刷新后重试`);
+      }
+
+      const updated =
+        current.status === body.status
+          ? current
+          : await tx.homeFeatureBoardCard.update({
+              where: { placement },
+              data: {
+                status: body.status,
+                version: { increment: 1 }
+              }
+            });
+
+      const result = this.toAdminItem(updated);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-home-entries:status", adminId, requestHash, result);
       return result;
     });
   }
@@ -353,6 +409,7 @@ export class HomeService {
     await db.homeFeatureBoardCard.createMany({
       data: allPlacements.map(placement => ({
         placement,
+        status: "LISTED" as HomeEntryStatus,
         ...defaultCards[placement]
       })),
       skipDuplicates: true
@@ -426,6 +483,7 @@ export class HomeService {
       placement: item.placement,
       title: item.title,
       subtitle: item.subtitle,
+      status: item.status,
       targetType: item.targetType,
       targetValue: item.targetValue,
       imageUrl: item.artImageUrl,

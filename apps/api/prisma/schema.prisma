@@ -227,6 +227,11 @@ enum HomeFeatureBoardTargetType {
   WEB_VIEW
 }
 
+enum HomeEntryStatus {
+  LISTED
+  UNLISTED
+}
+
 enum HomeTopicType {
   WEEKEND_GATHERING
   QUICK_AFTER_WORK
@@ -342,6 +347,7 @@ model HomeFeatureBoardCard {
   placement   HomeFeatureBoardPlacement  @id
   title       String                     @db.VarChar(20)
   subtitle    String?                    @db.VarChar(40)
+  status      HomeEntryStatus            @default(LISTED)
   targetType  HomeFeatureBoardTargetType @map("target_type")
   targetValue String                     @map("target_value") @db.VarChar(512)
   artImageUrl String?                    @map("art_image_url") @db.VarChar(512)

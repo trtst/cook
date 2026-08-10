@@ -6,7 +6,7 @@ import { ok } from "../../common/api-response";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { UpdateHomeEntriesDto, UpdateHomeEntryImageDto } from "../../contracts/dtos";
+import { SetHomeEntryStatusDto, UpdateHomeEntriesDto, UpdateHomeEntryImageDto } from "../../contracts/dtos";
 import { AdminHomeEntriesResponseModel, AdminHomeEntryItemModel, ApiOkModel } from "../../contracts/openapi";
 import { HomeService } from "./home.service";
 
@@ -47,6 +47,20 @@ export class AdminHomeController {
     @Body() body: UpdateHomeEntriesDto
   ) {
     return this.homeService.updateAdminHomeEntries(request.admin.adminId, operationId, body).then(result => ok(result));
+  }
+
+  @Post(":placement/status")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminHomeEntryItemModel, "切换首页四宫格入口上架状态")
+  setHomeEntryStatus(
+    @Req() request: RequestWithAdmin,
+    @Param("placement") placement: string,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetHomeEntryStatusDto
+  ) {
+    return this.homeService
+      .setAdminHomeEntryStatus(request.admin.adminId, operationId, parsePlacement(placement), body)
+      .then(result => ok(result));
   }
 
   @Post(":placement/image")

@@ -298,6 +298,18 @@ export class UpdateHomeEntryImageDto extends OperationDto {
   expectedVersion!: number;
 }
 
+export class SetHomeEntryStatusDto extends OperationDto {
+  @ApiProperty({ enum: ["LISTED", "UNLISTED"] })
+  @IsIn(["LISTED", "UNLISTED"])
+  status!: "LISTED" | "UNLISTED";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class CreateTableTopicDto extends OperationDto {
   @ApiProperty({ maxLength: 30 })
   @Transform(({ value }) => trimString(value))

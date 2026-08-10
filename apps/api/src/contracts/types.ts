@@ -93,6 +93,7 @@ export interface AppConfigResponse {
 
 export type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
+export type HomeEntryStatus = "LISTED" | "UNLISTED";
 
 export interface HomeEntryItem {
   id: string;
@@ -110,6 +111,7 @@ export interface HomeEntriesResponse {
 }
 
 export interface AdminHomeEntryItem extends HomeEntryItem {
+  status: HomeEntryStatus;
   version: number;
 }
 
@@ -136,6 +138,11 @@ export interface UpdateHomeEntryItemRequest {
 
 export interface UpdateHomeEntriesRequest {
   items: UpdateHomeEntryItemRequest[];
+}
+
+export interface SetHomeEntryStatusRequest {
+  status: HomeEntryStatus;
+  expectedVersion: number;
 }
 
 export type TableTopicStatus = "LISTED" | "UNLISTED";
