@@ -233,6 +233,7 @@ export class MyDiningGroupsModel {
 export class DiningGroupMemberModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) diningGroupId!: string;
+  @ApiProperty(uuid) userId!: string;
   @ApiProperty({ type: UserSummaryModel }) user!: UserSummaryModel;
   @ApiProperty({ type: String, enum: ["OWNER", "ADMIN", "MEMBER"] }) role!: string;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RESTRICTED", "ENDED"] }) status!: string;
@@ -1408,8 +1409,159 @@ export class ShoppingItemModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) quantityText!: string | null;
   @ApiProperty(nullableString) note!: string | null;
-  @ApiProperty({ type: String, enum: ["MANUAL", "PLAN", "EVENT", "BRING"] }) sourceType!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) sourceCount!: number;
+  @ApiProperty({ type: [String] }) sourceTitles!: string[];
+  @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING"] }) sourceType!: string;
   @ApiProperty(nullableString) sourceKey!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "BOUGHT", "DELETED"] }) status!: string;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class ShoppingListStatusCountModel {
+  @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) count!: number;
+}
+
+export class ShoppingListSummaryResponseModel {
+  @ApiProperty({ type: [ShoppingListStatusCountModel] }) statuses!: ShoppingListStatusCountModel[];
+  @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) defaultStatus!: string;
+}
+
+export class ShoppingListSummaryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["OWNER", "COLLABORATOR"] }) role!: string;
+  @ApiProperty({ type: Number }) ownerUid!: number;
+  @ApiProperty(nullableString) ownerNickname!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) memberCount!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) memberLimit!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) pendingInviteCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) progressDoneCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) progressTotalCount!: number;
+  @ApiProperty({ type: Boolean }) hasActiveShareLink!: boolean;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) voidedAt!: string | null;
+}
+
+export class ShoppingListPageResponseModel {
+  @ApiProperty({ type: [ShoppingListSummaryModel] }) items!: ShoppingListSummaryModel[];
+}
+
+export class ShoppingListInviteSummaryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) listId!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number }) ownerUid!: number;
+  @ApiProperty(nullableString) ownerNickname!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) memberCount!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) memberLimit!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) itemCount!: number;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["PENDING", "ACCEPTED", "DECLINED", "REVOKED"] }) inviteStatus!: string;
+  @ApiProperty({ type: Boolean }) canJoin!: boolean;
+  @ApiProperty(dateTime) invitedAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) handledAt!: string | null;
+}
+
+export class ShoppingListInvitePageResponseModel {
+  @ApiProperty({ type: [ShoppingListInviteSummaryModel] }) items!: ShoppingListInviteSummaryModel[];
+}
+
+export class ShoppingListInviteActionModel {
+  @ApiProperty(uuid) inviteId!: string;
+  @ApiProperty({ type: String, enum: ["PENDING", "ACCEPTED", "DECLINED", "REVOKED"] }) status!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class ShoppingItemSourceSummaryModel {
+  @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING"] }) sourceType!: string;
+  @ApiProperty(nullableString) title!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) sourceVersionId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
+  @ApiProperty(nullableString) sourceBatchKey!: string | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) addCount!: number | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) servings!: number | null;
+}
+
+export class ShoppingListDetailItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty(nullableString) quantityText!: string | null;
+  @ApiProperty(nullableString) note!: string | null;
+  @ApiProperty({ type: String, enum: ["OPEN", "CHECKED", "REMOVED"] }) status!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) checkedAt!: string | null;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: [ShoppingItemSourceSummaryModel] }) sources!: ShoppingItemSourceSummaryModel[];
+}
+
+export class ShoppingListCollaboratorModel {
+  @ApiProperty(uuid) userId!: string;
+  @ApiProperty({ type: String, enum: ["OWNER", "COLLABORATOR"] }) role!: string;
+  @ApiProperty(dateTime) joinedAt!: string;
+  @ApiProperty({ type: UserSummaryModel }) user!: UserSummaryModel;
+}
+
+export class ShoppingListDetailModel extends ShoppingListSummaryModel {
+  @ApiProperty({ type: [ShoppingListCollaboratorModel] }) collaborators!: ShoppingListCollaboratorModel[];
+  @ApiProperty({ type: [ShoppingListDetailItemModel] }) items!: ShoppingListDetailItemModel[];
+}
+
+export class ShoppingShareLinkModel {
+  @ApiProperty({ type: String }) shareToken!: string;
+  @ApiProperty({ type: String }) shareUrl!: string;
+}
+
+export class ShoppingSharePreviewModel {
+  @ApiProperty(uuid) listId!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number }) ownerUid!: number;
+  @ApiProperty(nullableString) ownerNickname!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) memberCount!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) memberLimit!: number;
+  @ApiProperty({ type: Boolean }) joined!: boolean;
+  @ApiProperty({ type: Boolean }) canJoin!: boolean;
+  @ApiProperty({ type: Number, minimum: 0 }) itemCount!: number;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) status!: string;
+}
+
+export class ShoppingIngredientGroupModel {
+  @ApiProperty({ type: String }) key!: string;
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: [String] }) quantityLines!: string[];
+  @ApiProperty({ type: Number, minimum: 1 }) recipeCount!: number;
+  @ApiProperty({ type: [String] }) recipeTitles!: string[];
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class ShoppingRecipeIngredientGroupModel {
+  @ApiProperty({ type: String }) key!: string;
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: [String] }) quantityLines!: string[];
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class ShoppingRecipeGroupModel {
+  @ApiProperty({ type: String }) key!: string;
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty(uuid) sourceVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) addCount!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) totalServings!: number;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: [ShoppingRecipeIngredientGroupModel] }) items!: ShoppingRecipeIngredientGroupModel[];
+}
+
+export class ShoppingBoardModel {
+  @ApiProperty({ type: [ShoppingIngredientGroupModel] }) ingredientGroups!: ShoppingIngredientGroupModel[];
+  @ApiProperty({ type: [ShoppingRecipeGroupModel] }) recipeGroups!: ShoppingRecipeGroupModel[];
+  @ApiProperty({ type: [ShoppingItemModel] }) otherItems!: ShoppingItemModel[];
 }

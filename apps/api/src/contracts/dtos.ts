@@ -1653,6 +1653,20 @@ export class CreateShoppingItemDto extends OperationDto {
   note?: string | null;
 }
 
+export class CreateRecipeShoppingItemsDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceVersionId!: number;
+}
+
 export class ShoppingItemQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: "OPEN" })
   @IsOptional()
@@ -1660,15 +1674,221 @@ export class ShoppingItemQueryDto extends PageQueryDto {
   status?: string;
 }
 
-export class ShoppingGapQueryDto {
-  @ApiProperty()
+export class ShoppingListQueryDto extends OperationDto {
+  @ApiPropertyOptional({ example: "ACTIVE" })
+  @IsOptional()
+  @IsIn(["ACTIVE", "COMPLETED", "VOIDED"])
+  status?: string;
+}
+
+export class ShoppingListInviteQueryDto {
+  @ApiPropertyOptional({ example: "ALL", enum: ["ALL", "PENDING", "RESOLVED"] })
+  @IsOptional()
+  @IsIn(["ALL", "PENDING", "RESOLVED"])
+  filter?: string;
+}
+
+export class CreateShoppingListDto extends OperationDto {
+  @ApiPropertyOptional({ nullable: true, maxLength: 20 })
+  @Transform(({ value }) => trimString(value))
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(20)
+  name?: string | null;
+}
+
+export class RenameShoppingListDto extends OperationDto {
+  @ApiProperty({ example: 1 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  eventId!: number;
+  version!: number;
+
+  @ApiProperty({ maxLength: 20 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(20)
+  name!: string;
+}
+
+export class CreateShoppingListItemDto extends OperationDto {
+  @ApiProperty({ maxLength: 120 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  name!: string;
+
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId?: number | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 64 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(64)
+  quantityText?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 255 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(255)
+  note?: string | null;
+}
+
+export class AddRecipeToShoppingListDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sourceVersionId!: number;
+}
+
+export class UpdateShoppingListItemCheckDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  checked!: boolean;
+}
+
+export class RemoveShoppingListItemDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class UpdateShoppingListStatusDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class CompleteShoppingListEntryDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  itemId!: number;
+
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  store!: boolean;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 64 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(64)
+  quantityText?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, example: 7 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(3650)
+  expireDays?: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  expireAt?: string | null;
+}
+
+export class CompleteShoppingListDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ type: [CompleteShoppingListEntryDto] })
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CompleteShoppingListEntryDto)
+  entries!: CompleteShoppingListEntryDto[];
+}
+
+export class ShareShoppingListMembersDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ type: [Number] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  targetUserIds!: number[];
+}
+
+export class RemoveShoppingListMemberDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class LeaveShoppingListDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+}
+
+export class DeleteShoppingListDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
 }
 
 export class UpdateShoppingStatusDto extends OperationDto {
+  @ApiProperty({ example: "BOUGHT" })
+  @IsIn(["OPEN", "BOUGHT", "DELETED"])
+  status!: string;
+}
+
+export class UpdateShoppingGroupStatusDto extends OperationDto {
+  @ApiProperty({ example: "ingredient:1" })
+  @IsString()
+  @MaxLength(160)
+  targetKey!: string;
+
   @ApiProperty({ example: "BOUGHT" })
   @IsIn(["OPEN", "BOUGHT", "DELETED"])
   status!: string;

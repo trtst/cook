@@ -720,6 +720,7 @@ export class DiningGroupService {
     return {
       id: member.id,
       diningGroupId: member.diningGroupId,
+      userId: member.userId,
       user: {
         uid: member.user.uid,
         nickname: member.user.nickname,

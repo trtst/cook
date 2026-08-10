@@ -22,6 +22,18 @@ export const policy = {
     PRO: 6,
     ULTRA: 11
   },
+  shoppingListMemberLimit: {
+    FREE: 2,
+    PLUS: 4,
+    PRO: 6,
+    ULTRA: 11
+  },
+  shoppingListInviteMessageDays: {
+    FREE: 7,
+    PLUS: 7,
+    PRO: 7,
+    ULTRA: 7
+  },
   recipeLimit: {
     FREE: 50,
     PLUS: 120,

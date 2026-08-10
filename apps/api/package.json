@@ -24,6 +24,7 @@
     "verify:meal-poll-flow": "tsx scripts/verify-meal-poll-flow.ts",
     "verify:openapi": "tsx scripts/verify-openapi.ts",
     "verify:recipe-flow": "tsx scripts/verify-recipe-flow.ts",
+    "verify:shopping-list-shared-flow": "tsx scripts/verify-shopping-list-shared-flow.ts",
     "verify:taste-profile-flow": "tsx scripts/verify-taste-profile-flow.ts"
   },
   "dependencies": {

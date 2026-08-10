@@ -276,8 +276,9 @@ async function main() {
   });
   assert(shareAccept.participants.some(item => item.guestName === "外部来客"), "share accept should append external participant");
 
-  const forbiddenGap = await request<unknown>(`/shopping-gap?eventId=${event.id}`, {
-    headers: memberAuth
+  const forbiddenGap = await request<unknown>(`/dining-events/${event.id}/shopping-gap`, {
+    method: "POST",
+    headers: withIdempotencyKey(memberAuth)
   });
   assert(forbiddenGap.status === 404, "non-owner should not preview owner shopping gap");
 
@@ -298,10 +299,11 @@ async function main() {
     })
   });
 
-  const gapPreview = await requestData<ShoppingItemSummary[]>(`/shopping-gap?eventId=${event.id}`, {
+  const gapPreview = await requestData<ShoppingItemSummary[]>(`/shopping-gap`, {
     headers: ownerAuth
   });
   assert(gapPreview.some(item => expectedGapNames.includes(item.name)), "event gap should compare event menu with personal fridge");
+  assert(gapPreview.some(item => item.sourceTitles.includes(event.title)), "gap preview should expose owning event titles");
 
   const gapCreate = await requestData<ShoppingItemSummary[]>(`/dining-events/${event.id}/shopping-gap`, {
     method: "POST",

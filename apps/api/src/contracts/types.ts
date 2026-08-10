@@ -405,6 +405,7 @@ export interface DiningGroupSummary {
 export interface DiningGroupMemberSummary {
   id: UUID;
   diningGroupId: UUID;
+  userId: UUID;
   user: UserSummary;
   role: DiningGroupRole;
   status: LongTermMemberStatus;
@@ -1763,10 +1764,259 @@ export interface ShoppingItemSummary {
   name: string;
   quantityText: string | null;
   note: string | null;
-  sourceType: "MANUAL" | "PLAN" | "EVENT" | "BRING";
+  sourceCount: number;
+  sourceTitles: string[];
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
   sourceKey: string | null;
   status: "OPEN" | "BOUGHT" | "DELETED";
   updatedAt: IsoDateTime;
+}
+
+export type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
+export type ShoppingListRole = "OWNER" | "COLLABORATOR";
+export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
+export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
+export type ShoppingListItemStatus = "OPEN" | "CHECKED" | "REMOVED";
+
+export interface ShoppingListStatusCount {
+  status: ShoppingListStatus;
+  count: number;
+}
+
+export interface ShoppingListSummaryResponse {
+  statuses: ShoppingListStatusCount[];
+  defaultStatus: ShoppingListStatus;
+}
+
+export interface ShoppingListSummary {
+  id: UUID;
+  name: string;
+  status: ShoppingListStatus;
+  role: ShoppingListRole;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  pendingInviteCount: number;
+  progressDoneCount: number;
+  progressTotalCount: number;
+  hasActiveShareLink: boolean;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  completedAt: IsoDateTime | null;
+  voidedAt: IsoDateTime | null;
+}
+
+export interface ShoppingListPageResponse {
+  items: ShoppingListSummary[];
+}
+
+export interface ShoppingListInviteSummary {
+  id: UUID;
+  listId: UUID;
+  name: string;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  itemCount: number;
+  status: ShoppingListStatus;
+  inviteStatus: ShoppingListInviteStatus;
+  canJoin: boolean;
+  invitedAt: IsoDateTime;
+  handledAt: IsoDateTime | null;
+}
+
+export interface ShoppingListInvitePageResponse {
+  items: ShoppingListInviteSummary[];
+}
+
+export interface ShoppingItemSourceSummary {
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  title: string | null;
+  recipeId: UUID | null;
+  sourceVersionId: UUID | null;
+  planItemId: UUID | null;
+  diningEventId: UUID | null;
+  sourceBatchKey: string | null;
+  addCount: number | null;
+  servings: number | null;
+}
+
+export interface ShoppingListDetailItem {
+  id: UUID;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  note: string | null;
+  status: ShoppingListItemStatus;
+  checkedAt: IsoDateTime | null;
+  updatedAt: IsoDateTime;
+  sources: ShoppingItemSourceSummary[];
+}
+
+export interface ShoppingListCollaborator {
+  userId: UUID;
+  role: ShoppingListRole;
+  joinedAt: IsoDateTime;
+  user: UserSummary;
+}
+
+export interface ShoppingListDetail extends ShoppingListSummary {
+  collaborators: ShoppingListCollaborator[];
+  items: ShoppingListDetailItem[];
+}
+
+export interface CreateShoppingListRequest {
+  operationId: OperationId;
+  name: string | null;
+}
+
+export interface RenameShoppingListRequest {
+  operationId: OperationId;
+  version: number;
+  name: string;
+}
+
+export interface CreateShoppingListItemRequest {
+  operationId: OperationId;
+  name: string;
+  ingredientId: UUID | null;
+  quantityText: string | null;
+  note: string | null;
+}
+
+export interface AddRecipeToShoppingListRequest {
+  operationId: OperationId;
+  recipeId: UUID;
+  sourceVersionId: UUID;
+}
+
+export interface UpdateShoppingListItemCheckRequest {
+  operationId: OperationId;
+  version: number;
+  checked: boolean;
+}
+
+export interface RemoveShoppingListItemRequest {
+  operationId: OperationId;
+  version: number;
+}
+
+export interface UpdateShoppingListStatusRequest {
+  operationId: OperationId;
+  version: number;
+}
+
+export interface DeleteShoppingListRequest {
+  operationId: OperationId;
+  version: number;
+}
+
+export interface CompleteShoppingListEntryRequest {
+  itemId: UUID;
+  store: boolean;
+  quantityText: string | null;
+  expireDays: number | null;
+  expireAt: string | null;
+}
+
+export interface CompleteShoppingListRequest {
+  operationId: OperationId;
+  version: number;
+  entries: CompleteShoppingListEntryRequest[];
+}
+
+export interface ShareShoppingListLinkResponse {
+  shareToken: string;
+  shareUrl: string;
+}
+
+export interface ShareShoppingListMembersRequest {
+  operationId: OperationId;
+  version: number;
+  targetUserIds: UUID[];
+}
+
+export interface RemoveShoppingListMemberRequest {
+  operationId: OperationId;
+  version: number;
+}
+
+export interface LeaveShoppingListRequest {
+  operationId: OperationId;
+  version: number;
+}
+
+export interface UpdateShoppingListInviteRequest {
+  operationId: OperationId;
+}
+
+export interface ShoppingListInviteActionResponse {
+  inviteId: UUID;
+  status: ShoppingListInviteStatus;
+  updatedAt: IsoDateTime;
+}
+
+export interface ShoppingSharePreview {
+  listId: UUID;
+  name: string;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  joined: boolean;
+  canJoin: boolean;
+  itemCount: number;
+  status: ShoppingListStatus;
+}
+
+export interface ShoppingIngredientGroup {
+  key: string;
+  ingredientId: UUID;
+  name: string;
+  quantityLines: string[];
+  recipeCount: number;
+  recipeTitles: string[];
+  updatedAt: IsoDateTime;
+}
+
+export interface ShoppingRecipeIngredientGroup {
+  key: string;
+  ingredientId: UUID;
+  name: string;
+  quantityLines: string[];
+  updatedAt: IsoDateTime;
+}
+
+export interface ShoppingRecipeGroup {
+  key: string;
+  recipeId: UUID;
+  sourceVersionId: UUID;
+  title: string;
+  addCount: number;
+  totalServings: number;
+  updatedAt: IsoDateTime;
+  items: ShoppingRecipeIngredientGroup[];
+}
+
+export interface ShoppingBoardResponse {
+  ingredientGroups: ShoppingIngredientGroup[];
+  recipeGroups: ShoppingRecipeGroup[];
+  otherItems: ShoppingItemSummary[];
+}
+
+export interface CreateRecipeShoppingItemsRequest {
+  operationId: OperationId;
+  recipeId: UUID;
+  sourceVersionId: UUID;
+}
+
+export interface UpdateShoppingGroupStatusRequest {
+  operationId: OperationId;
+  targetKey: string;
+  status: "OPEN" | "BOUGHT" | "DELETED";
 }
 
 export interface SharePreviewResponse {
