@@ -40,6 +40,7 @@ export interface DiningGroupSummary {
 export interface DiningGroupMemberSummary {
   id: UUID;
   diningGroupId: UUID;
+  userId: UUID;
   user: UserSummary;
   role: DiningGroupRole;
   status: LongTermMemberStatus;

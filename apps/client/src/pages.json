@@ -80,6 +80,7 @@
         { "path": "item-edit/index", "style": { "navigationBarTitleText": "编辑食材", "navigationStyle": "custom" } },
         { "path": "gap/index", "style": { "navigationBarTitleText": "食材缺口", "navigationStyle": "custom" } },
         { "path": "list/index", "style": { "navigationBarTitleText": "购物清单", "navigationStyle": "custom" } },
+        { "path": "list-detail/index", "style": { "navigationBarTitleText": "清单详情", "navigationStyle": "custom" } },
         { "path": "supermarket/index", "style": { "navigationBarTitleText": "超市模式", "navigationStyle": "custom" } },
         { "path": "history/index", "style": { "navigationBarTitleText": "采购记录", "navigationStyle": "custom" } }
       ]

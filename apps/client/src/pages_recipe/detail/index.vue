@@ -278,6 +278,59 @@
       </SheetShell>
 
       <SheetShell
+        :visible="shoppingSheetVisible"
+        title="加入购物清单"
+        subtitle="先选一张采购中的清单，也可以现场新建空白清单。"
+        @close="closeShoppingSheet"
+        @after-close="handleShoppingSheetAfterClose"
+      >
+        <view class="sheet-section">
+          <text class="sheet-section__title">采购中清单</text>
+          <view v-if="shoppingListLoading" class="panel-note panel-note--sheet">加载中...</view>
+          <view v-else-if="shoppingListError" class="panel-note panel-note--sheet" @click="loadShoppingLists(true)">{{ shoppingListError }}</view>
+          <view v-else-if="shoppingLists.length" class="shopping-list-grid">
+            <view
+              v-for="item in shoppingLists"
+              :key="item.id"
+              class="shopping-list-option"
+              :class="{ 'shopping-list-option--active': selectedShoppingListId === item.id }"
+              @click="selectedShoppingListId = item.id"
+            >
+              <text class="shopping-list-option__title">{{ item.name }}</text>
+              <text class="shopping-list-option__meta">{{ item.progressDoneCount }}/{{ item.progressTotalCount }} · {{ item.memberCount }} 人</text>
+            </view>
+          </view>
+          <text v-else class="sheet-section__hint">还没有采购中的清单，先新建一张空白清单。</text>
+        </view>
+
+        <view class="sheet-section">
+          <text class="sheet-section__title">新建空白清单</text>
+          <view class="shopping-create">
+            <input
+              v-model="shoppingCreateName"
+              class="shopping-create__input"
+              maxlength="30"
+              placeholder="清单名可不填，系统会自动生成"
+            />
+            <view class="shopping-create__button" @click="createShoppingList">新建</view>
+          </view>
+        </view>
+
+        <template #footer>
+          <view class="sheet-actions">
+            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeShoppingSheet">取消</button>
+            <button
+              class="sheet-actions__button sheet-actions__button--confirm"
+              :disabled="shoppingSubmitting || !selectedShoppingListId"
+              @click="confirmAddToShoppingList"
+            >
+              {{ shoppingSubmitting ? "加入中..." : "确认加入" }}
+            </button>
+          </view>
+        </template>
+      </SheetShell>
+
+      <SheetShell
         v-if="isExternalDetail"
         :visible="reportSheetVisible"
         title="举报菜谱"
@@ -327,7 +380,7 @@ import {
   type RecipeDraftContentInput,
   type RecipeRecommendationSummary
 } from "@/apis/recipe";
-import { shoppingApi } from "../apis/shopping";
+import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
@@ -410,6 +463,12 @@ const recommendSheetLoading = ref(false);
 const recommendSubmitting = ref(false);
 const recommendSheetError = ref("");
 const shoppingSubmitting = ref(false);
+const shoppingSheetVisible = ref(false);
+const shoppingListLoading = ref(false);
+const shoppingListError = ref("");
+const shoppingLists = ref<ShoppingListSummary[]>([]);
+const selectedShoppingListId = ref<UUID | "">("");
+const shoppingCreateName = ref("");
 const recommendCategories = ref<InspirationCategorySummary[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
 const navOpacity = ref(0);
@@ -526,11 +585,6 @@ const canOpenRecommendSheet = computed(() => {
 	const status = currentRecommendation.value?.status;
 	return !status || status === "REJECTED" || status === "WITHDRAWN";
 });
-const recommendActionText = computed(() => {
-	if (currentRecommendation.value?.status === "REJECTED") return "修改后重新投稿";
-	if (currentRecommendation.value?.status === "WITHDRAWN") return "重新投稿";
-	return "投稿灵感";
-});
 const detailSteps = computed(() => detailContent.value.steps.filter(item => Boolean(item.imageUrl || hasStepText(item.text))));
 const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(detail.value));
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
@@ -551,10 +605,6 @@ const recommendActionLabel = computed(() => {
 	if (status === "REJECTED") return "重新投稿";
 	if (status === "WITHDRAWN") return "重新投稿";
 	return "投稿灵感";
-});
-const recommendActionDisabled = computed(() => {
-	const status = currentRecommendation.value?.status;
-	return status === "PENDING" || status === "ADOPTED";
 });
 const addActionLabel = computed(() => (kind.value === "collection" ? "升级为我的" : "添加到我的"));
 const addSheetTitle = computed(() => addActionLabel.value);
@@ -859,6 +909,92 @@ function closeAddSheet() {
   addSheetVisible.value = false;
 }
 
+function closeShoppingSheet() {
+  shoppingSheetVisible.value = false;
+}
+
+function handleShoppingSheetAfterClose() {
+  shoppingListError.value = "";
+  shoppingCreateName.value = "";
+}
+
+async function loadShoppingLists(force = false) {
+  if (shoppingListLoading.value && !force) return;
+  shoppingListLoading.value = true;
+  shoppingListError.value = "";
+  try {
+    shoppingLists.value = await shoppingApi.listActive();
+    if (selectedShoppingListId.value && !shoppingLists.value.some(item => item.id === selectedShoppingListId.value)) {
+      selectedShoppingListId.value = "";
+    }
+    if (!selectedShoppingListId.value) {
+      selectedShoppingListId.value = shoppingLists.value[0]?.id || "";
+    }
+  } catch (error) {
+    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
+  } finally {
+    shoppingListLoading.value = false;
+  }
+}
+
+function resolveShoppingSource() {
+  if (kind.value === "collection") {
+    if (!collectionDetail.value) return null;
+    return {
+      recipeId: collectionDetail.value.sourceRecipeId,
+      sourceVersionId: collectionDetail.value.contentVersionId
+    };
+  }
+  if (!publishedDetail.value) return null;
+  return {
+    recipeId: publishedDetail.value.id,
+    sourceVersionId: publishedDetail.value.contentVersionId
+  };
+}
+
+async function openShoppingSheet() {
+  await loadShoppingLists(true);
+  shoppingSheetVisible.value = true;
+}
+
+async function createShoppingList() {
+  if (shoppingSubmitting.value) return;
+  shoppingSubmitting.value = true;
+  try {
+    const created = await shoppingApi.createList({
+      operationId: createOperationId(),
+      name: shoppingCreateName.value.trim() || null
+    });
+    shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
+    selectedShoppingListId.value = created.id;
+    shoppingCreateName.value = "";
+    await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
+}
+
+async function confirmAddToShoppingList() {
+  const source = resolveShoppingSource();
+  if (!source || !selectedShoppingListId.value || shoppingSubmitting.value) return;
+  shoppingSubmitting.value = true;
+  try {
+    await shoppingApi.addRecipeToList(selectedShoppingListId.value, {
+      operationId: createOperationId(),
+      recipeId: source.recipeId,
+      sourceVersionId: source.sourceVersionId
+    });
+    closeShoppingSheet();
+    await uniPlatform.feedback.toast({ title: "已加入购物清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
+}
+
 async function handleRecommendRecipe() {
 	if (!recipeId.value || !selectedRecommendCategoryId.value || recommendSubmitting.value) return;
 	recommendSubmitting.value = true;
@@ -994,22 +1130,14 @@ async function addToShoppingList() {
     });
     return;
   }
-  shoppingSubmitting.value = true;
+  if (!resolveShoppingSource()) {
+    await uniPlatform.feedback.toast({ title: "当前菜谱暂不支持加入购物清单", icon: "none" });
+    return;
+  }
   try {
-    await Promise.all(
-      detailContent.value.ingredients.map(item =>
-        shoppingApi.create({
-          operationId: createOperationId(),
-          name: item.ingredientName,
-          quantityText: formatAmount(item.amount)
-        })
-      )
-    );
-    await uniPlatform.feedback.toast({ title: "已添加到购物清单", icon: "success" });
+    await openShoppingSheet();
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "清单加载失败", icon: "none" });
   }
 }
 
@@ -1640,6 +1768,79 @@ function limitSceneName(value: string) {
   color: var(--color-text-tertiary);
   font-size: 24rpx;
   line-height: 1.6;
+}
+
+.shopping-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.shopping-list-option {
+  padding: 20rpx 22rpx;
+  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.shopping-list-option--active {
+  border-color: rgba(47, 111, 78, 0.22);
+  background: rgba(47, 111, 78, 0.08);
+}
+
+.shopping-list-option__title,
+.shopping-list-option__meta {
+  display: block;
+}
+
+.shopping-list-option__title {
+  color: var(--color-text);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.shopping-list-option__meta {
+  margin-top: 8rpx;
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+}
+
+.shopping-create {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.shopping-create__input {
+  flex: 1;
+  min-width: 0;
+  height: 76rpx;
+  padding: 0 22rpx;
+  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  box-sizing: border-box;
+  color: var(--color-text);
+  font-size: 26rpx;
+}
+
+.shopping-create__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 132rpx;
+  height: 76rpx;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    135deg,
+    var(--button-primary-gradient-start) 0%,
+    var(--button-primary-gradient-end) 100%
+  );
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
 }
 
 .sheet-creator {

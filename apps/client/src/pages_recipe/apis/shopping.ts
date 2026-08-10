@@ -1,45 +1,32 @@
-import { cfg } from "@/config";
-import { get, post, type OperationId, type PageResult, type UUID } from "@/apis/http";
+import type { OperationId, UUID } from "@/apis/http";
+import {
+  shoppingApi as pantryShoppingApi,
+  type ShoppingListDetail,
+  type ShoppingListSummary
+} from "@/apis/shopping";
 
-export interface ShoppingItemSummary {
-  id: UUID;
-  name: string;
-  quantityText: string | null;
-  note: string | null;
-  sourceType: "MANUAL" | "PLAN" | "EVENT" | "BRING";
-  sourceKey: string | null;
-  status: "OPEN" | "BOUGHT" | "DELETED";
-  updatedAt: string;
+export type { ShoppingListSummary };
+
+export interface CreateRecipeShoppingListRequest {
+  operationId: OperationId;
+  name: string | null;
 }
 
-export interface CreateShoppingItemRequest {
+export interface AddRecipeToShoppingListRequest {
   operationId: OperationId;
-  name: string;
-  quantityText?: string | null;
-  note?: string | null;
+  recipeId: UUID;
+  sourceVersionId: UUID;
 }
 
 export const shoppingApi = {
-  list(status?: "OPEN" | "BOUGHT" | "DELETED", page = 1, pageSize = 50) {
-    return get<PageResult<ShoppingItemSummary>>(`${cfg.domain}/api/shopping-items`, { status, page, pageSize });
+  async listActive() {
+    const result = await pantryShoppingApi.listLists("ACTIVE");
+    return result.items;
   },
-  create(body: CreateShoppingItemRequest) {
-    const { operationId, ...payload } = body;
-    return post<ShoppingItemSummary>(`${cfg.domain}/api/shopping-items`, payload, { idempotencyKey: operationId });
+  createList(body: CreateRecipeShoppingListRequest) {
+    return pantryShoppingApi.createList(body);
   },
-  updateStatus(itemId: UUID, operationId: OperationId, status: "OPEN" | "BOUGHT" | "DELETED") {
-    return post<ShoppingItemSummary>(
-      `${cfg.domain}/api/shopping-items/${encodeURIComponent(itemId)}/status`,
-      { status },
-      { idempotencyKey: operationId }
-    );
-  },
-  previewGap(eventId: UUID) {
-    return get<ShoppingItemSummary[]>(`${cfg.domain}/api/shopping-gap`, { eventId });
-  },
-  createEventGap(eventId: UUID, operationId: OperationId) {
-    return post<ShoppingItemSummary[]>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/shopping-gap`, undefined, {
-      idempotencyKey: operationId
-    });
+  addRecipeToList(listId: UUID, body: AddRecipeToShoppingListRequest): Promise<ShoppingListDetail> {
+    return pantryShoppingApi.addRecipeToList(listId, body);
   }
 };

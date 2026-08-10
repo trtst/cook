@@ -28,6 +28,14 @@ export const useLoginModalStore = defineStore("login-modal", {
 			this.openImageUrl = appConfigStore.loginImageUrl;
 			this.visible = true;
 			this.openSeed += 1;
+
+			if (appConfigStore.loaded) return;
+
+			const currentSeed = this.openSeed;
+			void appConfigStore.load().then(() => {
+				if (!this.visible || this.openSeed !== currentSeed) return;
+				this.openImageUrl = appConfigStore.loginImageUrl;
+			});
 		},
 		openPhoneMode() {
 			this.mode = "phone";
