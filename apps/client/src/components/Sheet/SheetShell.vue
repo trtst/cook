@@ -143,7 +143,7 @@ function handlePanelTransitionEnd(event: Event) {
   max-height: 82vh;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
-  box-shadow: 0 -12rpx 60rpx rgba(59, 40, 21, 0.12);
+  box-shadow: var(--login-popup-sheet-shadow, var(--shadow-floating));
   overflow: hidden;
   opacity: 0.98;
   transform: translateY(calc(100% + env(safe-area-inset-bottom)));

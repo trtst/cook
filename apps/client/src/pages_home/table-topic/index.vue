@@ -255,7 +255,7 @@ function openTopic(topicId: number) {
 .topic-card__meta-dot {
   width: 8rpx;
   height: 8rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: rgba(107, 114, 128, 0.48);
 }
 </style>

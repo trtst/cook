@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onLaunch, onShow } from "@dcloudio/uni-app";
 import { refreshSessionIfNeeded } from "@/apis/auth";
-import { useAppConfigStore } from "@/stores/app-config";
 import { useSettingsStore } from "@/stores/settings";
 import { initSystemInfo } from "@/composables/useSystemInfo";
 import { initTheme } from "@/composables/useTheme";
@@ -11,7 +10,6 @@ onLaunch(() => {
 	initSystemInfo();
 	initTheme();
 	void useSettingsStore().restore();
-	void useAppConfigStore().load().catch(() => undefined);
 	void restoreAppSession();
 });
 

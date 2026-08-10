@@ -47,12 +47,13 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { recipeApi, type IngredientRecommendationSummary } from "@/apis/recipe";
+import { shoppingApi, type ShoppingListInviteSummary } from "@/apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 
-type MessageTypeKey = "ingredient";
+type MessageTypeKey = "ingredient" | "shoppingInvite";
 type ReadState = Partial<Record<MessageTypeKey, string>>;
 
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
@@ -66,26 +67,32 @@ const messageTabs = [
     name: "推荐审核",
     icon: "icon-recommend",
     tone: "recommend"
+  },
+  {
+    key: "shoppingInvite",
+    name: "清单协作",
+    icon: "icon-shopping",
+    tone: "shopping"
   }
 ] as const satisfies Array<{
   key: MessageTypeKey;
   name: string;
   icon: string;
-  tone: "recommend";
+  tone: "recommend" | "shopping";
 }>;
 
 const loading = ref(false);
 const errorText = ref("");
-const items = ref<IngredientRecommendationSummary[]>([]);
+const ingredientItems = ref<IngredientRecommendationSummary[]>([]);
+const shoppingInvites = ref<ShoppingListInviteSummary[]>([]);
 const readState = ref<ReadState>(uniPlatform.storage.getSync<ReadState>(READ_STORAGE_KEY) ?? {});
 
 const messageGroups = computed(() =>
   messageTabs.map(item => {
-    const latest = getLatestItem();
-    const latestTime = latest ? getItemSortTime(latest) : "";
+    const latestTime = getLatestTime(item.key);
     return {
       ...item,
-      preview: buildGroupPreview(latest),
+      preview: buildGroupPreview(item.key),
       timeText: latestTime ? formatListTime(latestTime) : "",
       hasUnread: Boolean(latestTime) && latestTime !== (readState.value[item.key] ?? "")
     };
@@ -119,8 +126,24 @@ async function doLoadPage() {
   loading.value = true;
   errorText.value = "";
   try {
-    const result = await recipeApi.listIngredientRecommendations({ page: 1, pageSize: 20 });
-    items.value = result.items;
+    const [ingredientResult, inviteResult] = await Promise.allSettled([
+      recipeApi.listIngredientRecommendations({ page: 1, pageSize: 20 }),
+      shoppingApi.listInvites("ALL")
+    ]);
+
+    if (ingredientResult.status === "fulfilled") {
+      ingredientItems.value = ingredientResult.value.items;
+    } else {
+      ingredientItems.value = [];
+      errorText.value ||= ingredientResult.reason instanceof Error ? ingredientResult.reason.message : "加载失败，请重试";
+    }
+
+    if (inviteResult.status === "fulfilled") {
+      shoppingInvites.value = inviteResult.value.items;
+    } else {
+      shoppingInvites.value = [];
+      errorText.value ||= inviteResult.reason instanceof Error ? inviteResult.reason.message : "加载失败，请重试";
+    }
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "加载失败，请重试";
   } finally {
@@ -132,16 +155,45 @@ function getItemSortTime(item: IngredientRecommendationSummary) {
   return item.reviewedAt || item.updatedAt || item.createdAt;
 }
 
-function getLatestItem() {
-  return items.value.reduce<IngredientRecommendationSummary | null>((latest, item) => {
+function getLatestIngredient() {
+  return ingredientItems.value.reduce<IngredientRecommendationSummary | null>((latest, item) => {
     if (!latest) return item;
     return new Date(getItemSortTime(item)).getTime() > new Date(getItemSortTime(latest)).getTime() ? item : latest;
   }, null);
 }
 
-function buildGroupPreview(item: IngredientRecommendationSummary | null) {
-  if (loading.value && !items.value.length) return "正在同步推荐审核记录";
-  if (errorText.value && !items.value.length) return "记录加载失败，点击进入后可重试";
+function getLatestInvite() {
+  return shoppingInvites.value.reduce<ShoppingListInviteSummary | null>((latest, item) => {
+    if (!latest) return item;
+    return new Date(getInviteSortTime(item)).getTime() > new Date(getInviteSortTime(latest)).getTime() ? item : latest;
+  }, null);
+}
+
+function getInviteSortTime(item: ShoppingListInviteSummary) {
+  return item.handledAt || item.invitedAt;
+}
+
+function getLatestTime(type: MessageTypeKey) {
+  if (type === "shoppingInvite") return getLatestInvite() ? getInviteSortTime(getLatestInvite() as ShoppingListInviteSummary) : "";
+  return getLatestIngredient() ? getItemSortTime(getLatestIngredient() as IngredientRecommendationSummary) : "";
+}
+
+function buildGroupPreview(type: MessageTypeKey) {
+  if (type === "shoppingInvite") {
+    if (loading.value && !shoppingInvites.value.length) return "正在同步清单协作邀请";
+    if (errorText.value && !shoppingInvites.value.length) return "邀请加载失败，点击进入后可重试";
+    const latest = getLatestInvite();
+    if (!latest) return "饭搭子分享给你的清单邀请会先收口到这里";
+    const ownerName = latest.ownerNickname || `UID ${latest.ownerUid}`;
+    if (latest.inviteStatus === "ACCEPTED") return `你已加入“${latest.name}”，可继续和 ${ownerName} 一起维护`;
+    if (latest.inviteStatus === "DECLINED") return `你已忽略 ${ownerName} 发来的“${latest.name}”协作邀请`;
+    if (latest.canJoin) return `${ownerName} 邀请你一起维护“${latest.name}”`;
+    return `“${latest.name}”当前协作者已满，暂时不能加入`;
+  }
+
+  const item = getLatestIngredient();
+  if (loading.value && !ingredientItems.value.length) return "正在同步推荐审核记录";
+  if (errorText.value && !ingredientItems.value.length) return "记录加载失败，点击进入后可重试";
   if (!item) return "食材推荐审核动态会先收口到这里";
   if (item.status === "PENDING") return `“${item.ingredientName}”正在审核中`;
   if (item.status === "REJECTED") return item.reviewNote || `“${item.ingredientName}”审核未通过`;
@@ -158,8 +210,7 @@ function formatListTime(value: string) {
 }
 
 function markTypeRead(type: MessageTypeKey) {
-  const latest = getLatestItem();
-  const latestTime = latest ? getItemSortTime(latest) : "";
+  const latestTime = getLatestTime(type);
   readState.value = {
     ...readState.value,
     [type]: latestTime
@@ -259,6 +310,13 @@ function handleBack() {
     radial-gradient(circle at 18% 18%, var(--entry-side-mint-bg) 0, transparent 58%),
     radial-gradient(circle at 86% 10%, var(--entry-side-aqua-bg) 0, transparent 52%),
     linear-gradient(148deg, var(--entry-primary-bg), var(--entry-board-bg));
+}
+
+.category-card__icon-shell--shopping {
+  background:
+    radial-gradient(circle at 20% 20%, var(--entry-side-aqua-bg) 0, transparent 54%),
+    radial-gradient(circle at 78% 18%, rgba(255, 196, 122, 0.52) 0, transparent 50%),
+    linear-gradient(148deg, var(--entry-side-mint-bg), var(--entry-board-bg));
 }
 
 .category-card__icon {

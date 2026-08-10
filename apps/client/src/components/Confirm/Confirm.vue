@@ -95,7 +95,7 @@ function acceptConfirm() {
   max-width: 620rpx;
   overflow: hidden;
   border: 1rpx solid var(--color-border);
-  border-radius: var(--radius-xs);
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   opacity: 0;
@@ -169,19 +169,19 @@ function acceptConfirm() {
 .confirm-card__actions {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 18rpx;
   padding: 0 34rpx 34rpx;
 }
 
 .confirm-card__button {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 70rpx;
   border: 0;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
 }

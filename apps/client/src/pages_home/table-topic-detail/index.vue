@@ -337,7 +337,7 @@ function openTopicTarget() {
   align-items: center;
   justify-content: center;
   min-height: 88rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: linear-gradient(135deg, #f07f35, #d8602a);
   color: #fff;
   font-size: 30rpx;
@@ -358,7 +358,7 @@ function openTopicTarget() {
   justify-content: center;
   min-height: 84rpx;
   border: 2rpx solid rgba(47, 111, 78, 0.18);
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   color: #2f6f4e;
   font-size: 28rpx;
   font-weight: 600;

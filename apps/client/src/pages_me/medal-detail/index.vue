@@ -229,7 +229,7 @@ function closeNotice() {
   width: 180rpx;
   height: 26rpx;
   margin-top: -22rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, var(--color-divider) 100%);
   box-shadow:
     0 8rpx 18rpx rgba(44, 35, 30, 0.06),

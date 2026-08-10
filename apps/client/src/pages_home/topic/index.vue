@@ -1263,7 +1263,7 @@ async function submitPlan() {
   min-width: 112rpx;
   min-height: 72rpx;
   padding: 0 24rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 24rpx;
@@ -1285,7 +1285,7 @@ async function submitPlan() {
   flex: 1;
   height: 92rpx;
   border: none;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   font-size: 28rpx;
   font-weight: 700;
   line-height: 92rpx;
@@ -1348,7 +1348,7 @@ async function submitPlan() {
   min-width: 40rpx;
   height: 40rpx;
   padding: 0 10rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.22);
 }
 
@@ -1435,7 +1435,7 @@ async function submitPlan() {
   justify-content: center;
   width: 100%;
   height: 92rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: linear-gradient(
     135deg,
     var(--button-primary-gradient-start) 0%,

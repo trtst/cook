@@ -459,7 +459,7 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
   display: inline-flex;
   margin-top: 12rpx;
   padding: 6rpx 14rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
   font-size: 20rpx;

@@ -386,7 +386,7 @@ function confirm() {
   min-width: 112rpx;
   min-height: 72rpx;
   padding: 0 24rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 24rpx;
