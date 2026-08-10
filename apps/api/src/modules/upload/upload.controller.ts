@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { ApiBearerAuth, ApiConsumes, ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Writable } from "node:stream";
@@ -49,6 +49,15 @@ export class UploadPublicController {
   @Get("recipe-images/:publicId")
   async getRecipeImage(@Param("publicId") publicId: string, @Res() response: ResponseLike) {
     const asset = await this.uploadService.getRecipeImageAsset(publicId);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "public, max-age=300");
+    asset.stream.pipe(response);
+  }
+
+  @Get("dining-group-covers/:diningGroupId")
+  async getDiningGroupCover(@Param("diningGroupId", ParseIntPipe) diningGroupId: number, @Res() response: ResponseLike) {
+    const asset = await this.uploadService.getDiningGroupCoverAsset(diningGroupId);
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");

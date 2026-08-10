@@ -205,13 +205,22 @@ export class UserSummaryModel {
 export class DiningGroupSummaryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String, nullable: true }) description!: string | null;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: Number }) ownerUid!: number;
   @ApiProperty({ type: Boolean }) isOwned!: boolean;
+  @ApiProperty({ type: Boolean }) canManageCover!: boolean;
   @ApiProperty({ type: String, enum: ["OWNER", "ADMIN", "MEMBER"] }) myRole!: string;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RESTRICTED", "ENDED"] }) myStatus!: string;
   @ApiProperty({ type: String, nullable: true }) myStatusReason!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) createdDays!: number;
   @ApiProperty({ type: Number, minimum: 0 }) memberCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) memberLimit!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) pollCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) diningEventCount!: number;
+  @ApiProperty({ type: Boolean }) hasAttention!: boolean;
+  @ApiProperty({ type: String, nullable: true }) latestActivityTitle!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) latestActivityAt!: string | null;
   @ApiProperty({ type: String, enum: ["NORMAL", "OVER_MEMBER_LIMIT"] }) state!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
@@ -270,7 +279,19 @@ export class CreateInviteResultModel {
   @ApiProperty(dateTime) expiresAt!: string;
 }
 
+export class CreateDiningGroupResultModel {
+  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
+}
+
 export class AcceptInviteResultModel {
+  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
+}
+
+export class UpdateDiningGroupResultModel {
+  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
+}
+
+export class UpdateDiningGroupCoverResultModel {
   @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
 }
 

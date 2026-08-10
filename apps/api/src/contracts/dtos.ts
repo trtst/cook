@@ -481,6 +481,47 @@ export class DiningGroupMembersQueryDto {
   diningGroupId!: number;
 }
 
+class DiningGroupFieldsDto extends OperationDto {
+  @ApiProperty({ example: "小满家的饭搭子" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  name!: string;
+
+  @ApiPropertyOptional({ nullable: true, example: "一起商量这一周要吃什么。" })
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(120)
+  description!: string | null;
+}
+
+export class CreateDiningGroupDto extends DiningGroupFieldsDto {
+}
+
+export class UpdateDiningGroupDto extends DiningGroupFieldsDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class UpdateDiningGroupCoverDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class CreateInviteDto extends OperationDto {
   @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)

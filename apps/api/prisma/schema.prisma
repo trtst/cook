@@ -531,14 +531,17 @@ model UserTasteProfile {
 }
 
 model DiningGroup {
-  id         Int               @id @default(autoincrement())
-  name       String            @db.VarChar(80)
-  ownerId    Int               @unique @map("owner_id")
-  status     DiningGroupStatus @default(ACTIVE)
-  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
-  version    Int               @default(1)
-  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id               Int               @id @default(autoincrement())
+  name             String            @db.VarChar(80)
+  description      String?           @db.VarChar(120)
+  coverStorageKey  String?           @map("cover_storage_key") @db.VarChar(255)
+  coverContentType String?           @map("cover_content_type") @db.VarChar(64)
+  ownerId          Int               @unique @map("owner_id")
+  status           DiningGroupStatus @default(ACTIVE)
+  archivedAt       DateTime?         @map("archived_at") @db.Timestamptz(3)
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   owner              User                @relation("DiningGroupOwner", fields: [ownerId], references: [id])
   members            DiningGroupMember[]

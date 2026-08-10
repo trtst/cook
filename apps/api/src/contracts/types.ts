@@ -389,13 +389,22 @@ export type StorageModule =
 export interface DiningGroupSummary {
   id: UUID;
   name: string;
+  description: string | null;
+  coverImageUrl: string | null;
   ownerUid: number;
   isOwned: boolean;
+  canManageCover: boolean;
   myRole: DiningGroupRole;
   myStatus: LongTermMemberStatus;
   myStatusReason: LongTermMemberStatusReason | null;
+  createdDays: number;
   memberCount: number;
   memberLimit: number;
+  pollCount: number;
+  diningEventCount: number;
+  hasAttention: boolean;
+  latestActivityTitle: string | null;
+  latestActivityAt: IsoDateTime | null;
   state: RelationshipState;
   version: number;
   createdAt: IsoDateTime;
@@ -464,6 +473,19 @@ export interface GetMyDiningGroupsResponse {
   usage: DiningGroupUsageSummary;
 }
 
+export interface CreateDiningGroupRequest {
+  name: string;
+  description: string | null;
+}
+
+export interface UpdateDiningGroupRequest extends CreateDiningGroupRequest {
+  expectedVersion: number;
+}
+
+export interface CreateDiningGroupResponse {
+  diningGroup: DiningGroupSummary;
+}
+
 export interface DiningGroupMembersResult {
   diningGroupId: UUID;
   members: DiningGroupMemberSummary[];
@@ -476,6 +498,14 @@ export interface CreateInviteResult {
 }
 
 export interface AcceptInviteResponse {
+  diningGroup: DiningGroupSummary;
+}
+
+export interface UpdateDiningGroupResponse {
+  diningGroup: DiningGroupSummary;
+}
+
+export interface UpdateDiningGroupCoverResponse {
   diningGroup: DiningGroupSummary;
 }
 

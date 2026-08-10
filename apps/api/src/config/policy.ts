@@ -100,6 +100,12 @@ export const policy = {
       PLUS: false,
       PRO: true,
       ULTRA: true
+    },
+    diningGroupCover: {
+      FREE: false,
+      PLUS: false,
+      PRO: true,
+      ULTRA: true
     }
   },
   inviteExpiresMs: 24 * 60 * 60 * 1000
