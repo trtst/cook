@@ -46,7 +46,7 @@
             <text class="home-notice__action">重试</text>
           </view>
 
-          <view v-if="homeEntriesErrorText && !hasFeatureEntries && !hasQuickEntries" class="home-notice" @click="loadHomeEntries(true)">
+          <view v-if="showHomeEntriesNotice" class="home-notice" @click="loadHomeEntries(true)">
             <text class="home-notice__text">{{ homeEntriesErrorText }}</text>
             <text class="home-notice__action">重试</text>
           </view>
@@ -287,6 +287,7 @@ const pageStyle = usePageScrollStyle();
 
 const HOME_NAV_GAP = 16;
 const HOME_NAV_FADE_DISTANCE = 96;
+const HOME_REQUEST_BLOCKED_TEXT = "请求未发出或被小程序环境拦截：";
 const { navBarTotalHeight } = useSystemInfo();
 const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
@@ -297,6 +298,7 @@ const pollItems = ref<MealPollSummary[]>([]);
 const activityItems = ref<DiningGroupActivitySummary[]>([]);
 const homeScrollTop = ref(0);
 const homeEntriesLoading = ref(false);
+const homeEntriesLoaded = ref(false);
 const homeEntriesErrorText = ref("");
 const featureEntryItems = ref<HomeEntryItem[]>([]);
 const quickEntryItems = ref<HomeEntryItem[]>([]);
@@ -336,9 +338,13 @@ const sideFeatureCards = computed(() =>
 );
 const quickEntryPlacementList: HomeEntryPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
 const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideFeatureCards.value.length === 2);
-const hasQuickEntries = computed(() => quickEntryItems.value.length === 4);
-const showFeatureEntriesSkeleton = computed(() => homeEntriesLoading.value && !hasFeatureEntries.value && !homeEntriesErrorText.value);
-const showQuickEntriesSkeleton = computed(() => homeEntriesLoading.value && !hasQuickEntries.value && !homeEntriesErrorText.value);
+const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
+const homeEntriesRequestBlocked = computed(() => homeEntriesErrorText.value.startsWith(HOME_REQUEST_BLOCKED_TEXT));
+const showHomeEntriesNotice = computed(
+  () => Boolean(homeEntriesErrorText.value) && !homeEntriesRequestBlocked.value && !hasFeatureEntries.value && !hasQuickEntries.value
+);
+const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
+const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const progressWidth = computed(() => {
   const memberCount = diningGroupStore.currentDiningGroup?.memberCount ?? 0;
   if (!activePoll.value || memberCount <= 0) return "0%";
@@ -456,7 +462,7 @@ async function loadHomeEntries(force = false) {
     return;
   }
 
-  if (!force && hasFeatureEntries.value && hasQuickEntries.value) return;
+  if (!force && homeEntriesLoaded.value) return;
 
   homeEntriesLoading.value = true;
   if (force) {
@@ -472,6 +478,7 @@ async function loadHomeEntries(force = false) {
       quickEntryItems.value = result.items.filter(
         item => item.placement === "QUICK_1" || item.placement === "QUICK_2" || item.placement === "QUICK_3" || item.placement === "QUICK_4"
       );
+      homeEntriesLoaded.value = true;
       homeEntriesErrorText.value = "";
     })
     .catch(error => {
@@ -481,6 +488,7 @@ async function loadHomeEntries(force = false) {
       if (!hasQuickEntries.value) {
         quickEntryItems.value = [];
       }
+      homeEntriesLoaded.value = hasFeatureEntries.value || hasQuickEntries.value;
       homeEntriesErrorText.value = error instanceof Error ? error.message : "首页快捷入口加载失败";
     })
     .finally(() => {
@@ -1028,9 +1036,8 @@ function navigateTo(url: string) {
 }
 
 .action-dock {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8rpx;
+  display: flex;
+  justify-content: space-evenly;
   margin-top: 32rpx;
 }
 
