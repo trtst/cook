@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | Auth | POST | `/auth/login` | 手机号密码登录 |
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
-| Home | GET | `/home-entries` | 小程序首页 7 个快捷入口配置，统一返回按布局顺序排序的 `items` 数组 |
+| Home | GET | `/home-entries` | 小程序首页入口配置：固定返回 3 张首屏主卡，四宫格只返回当前已上架入口，统一按布局顺序排序 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
 | HomeTopic | GET | `/home-topics/{topicId}` | 指定本周灵感专题页 |
 | TableTopic | GET | `/table-topics` | 餐桌话题列表，按活动时间倒序返回历次话题摘要 |
@@ -43,6 +43,7 @@
 | AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
 | AdminHome | GET | `/admin/home-entries` | 后台读取小程序首页 7 个快捷入口配置和站内页白名单 |
 | AdminHome | PUT | `/admin/home-entries` | 后台按提交的 `items` 保存小程序首页快捷入口配置，支持单卡或多卡一起保存 |
+| AdminHome | POST | `/admin/home-entries/{placement}/status` | 后台切换首页四宫格入口上架状态 |
 | AdminHome | POST | `/admin/home-entries/{placement}/image` | 后台上传或替换指定首页快捷入口图片 |
 | AdminHome | DELETE | `/admin/home-entries/{placement}/image` | 后台清空指定首页快捷入口图片 |
 | AdminHomeTopic | GET | `/admin/home-topics` | 后台读取本周灵感专题列表与类别选项 |
@@ -160,9 +161,12 @@
 | Fridge | GET/POST | `/fridge-items` | 查询或创建个人冰箱条目 |
 | Fridge | PUT | `/fridge-items/{itemId}` | 更新个人冰箱条目 |
 | Fridge | POST | `/fridge-items/consume` | 消耗个人冰箱条目 |
-| Shopping | GET/POST | `/shopping-items` | 查询或创建个人购物条目 |
-| Shopping | POST | `/shopping-items/{itemId}/status` | 更新购物状态 |
-| Shopping | GET | `/shopping-gap` | 查询个人购物缺口 |
+| Shopping | GET/POST | `/shopping-items` | 查询或创建当前用户个人购物事实，供超市模式和采购记录使用 |
+| Shopping | GET | `/shopping-items/board` | 读取现有旧购物页聚合板，后续将被共享清单首页替代 |
+| Shopping | POST | `/shopping-items/from-recipe` | 把一份可读菜谱固定版本写入旧购物事实链路 |
+| Shopping | POST | `/shopping-items/{itemId}/status` | 更新个人购物事实状态，供旧超市模式兼容使用 |
+| Shopping | POST | `/shopping-items/group-status` | 更新旧购物页聚合板分组状态 |
+| Shopping | GET | `/shopping-gap` | 查询当前用户待处理饭局汇总缺口 |
 | Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局购物缺口 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |
 | AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
@@ -188,6 +192,7 @@
 | --- | --- | --- |
 | Membership | 待冻结 | 订单、补差、回调和到期选择 |
 | Activity / Achievement | 部分已实现 | 勋章模板治理、勋章墙分类详情、完成餐次/饭局/采购闭环勋章与推荐贡献勋章已实现；更广活动与成就系统仍待冻结 |
+| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、分享链接/饭搭子共享、完成清单入库、删除已完成/已作废清单和版本冲突语义已接入主链路 |
 
 ## 暂不创建
 

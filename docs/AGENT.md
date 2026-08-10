@@ -76,12 +76,12 @@ Build the confirmed personal-data meal loop:
 1. A user may own one dining group and join additional dining groups within the personal plan limit.
 2. Dining-group membership never freezes, switches, merges, or migrates personal data.
 3. Recipes use My / Inspiration / Collections: editable personal recipes, reviewed inspiration versions, and read-only saved fixed versions. Imports use a fixed base version plus user overrides.
-4. Fridge and shopping data are user-owned and never become long-term shared objects.
+4. Fridge data are user-owned and never become long-term shared objects; shopping lists stay user-owned but may allow confirmed per-list collaboration.
 5. Sparse weekly plans remain personal; dining events handle invitations, participants, menus, and bring-a-dish coordination.
 6. Personal Free/Plus/Pro/Ultra plans control recipes, storage, images, variants, recycle bin, dining-group growth, and personalization.
 7. Admin supports user management, entitlement inspection, relationship inspection, configuration, basic audit, ingredient review, and the content-safety and manual-review surface required by Inspiration recipes.
 
-V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner transfer, chat, comments, follows, delivery, price comparison, fine-grained inventory accounting, shared fridge, shared shopping, or a generic permission center.
+V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner transfer, chat, comments, follows, delivery, price comparison, fine-grained inventory accounting, shared fridge, or a generic permission center.
 
 ## Module State
 

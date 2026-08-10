@@ -199,6 +199,7 @@ interface GetMyDiningGroupsResponse {
 interface DiningGroupMemberSummary {
   id: UUID;
   diningGroupId: UUID;
+  userId: UUID;
   user: UserSummary;
   role: DiningGroupRole;
   status: LongTermMemberStatus;
@@ -282,6 +283,7 @@ interface AppConfigResponse {
 
 type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
+type HomeEntryStatus = "LISTED" | "UNLISTED";
 
 interface HomeEntryItem {
   id: string;
@@ -304,6 +306,7 @@ interface HomeEntryPageTarget {
 }
 
 interface AdminHomeEntryItem extends HomeEntryItem {
+  status: HomeEntryStatus;
   version: number;
 }
 
@@ -325,6 +328,11 @@ interface UpdateHomeEntryItemRequest {
 
 interface UpdateHomeEntriesRequest {
   items: UpdateHomeEntryItemRequest[];
+}
+
+interface SetHomeEntryStatusRequest {
+  status: HomeEntryStatus;
+  expectedVersion: number;
 }
 
 type HomeTopicType =
@@ -456,7 +464,7 @@ interface ChangeCurrentPasswordResult {
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 
-`GET /home-entries` 只返回小程序首页 7 个快捷入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 只服务入口内部视觉区或图标区，不是整张完成海报；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN / SIDE_TOP / SIDE_BOTTOM` 用于首屏 3 卡，`QUICK_1 ... QUICK_4` 用于 action-dock 四格快捷入口；客户端按 `placement` 自己拆出上 3 卡和下 4 格。
+`GET /home-entries` 只返回小程序首页入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 只服务入口内部视觉区或图标区，不是整张完成海报；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN / SIDE_TOP / SIDE_BOTTOM` 固定用于首屏 3 卡并始终返回，`QUICK_1 ... QUICK_4` 固定对应首页四宫格 4 个坑位，但公开接口只返回当前 `LISTED` 的四宫格入口；客户端仍按 `placement` 自己拆出上 3 卡和下方快捷入口。
 
 `GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回 `404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
 
@@ -595,6 +603,7 @@ GET  /admin/home-entries
 POST /admin/app-config/login-image
 DELETE /admin/app-config/login-image
 PUT  /admin/home-entries
+POST /admin/home-entries/{placement}/status
 POST /admin/home-entries/{placement}/image
 DELETE /admin/home-entries/{placement}/image
 GET  /admin/medal-templates
@@ -676,7 +685,7 @@ interface AdminUserEntitlementResponse {
 
 `GET /admin/app-config`、`POST /admin/app-config/login-image` 和 `DELETE /admin/app-config/login-image` 共同维护登录弹窗图片。它们只服务这一条已确认配置，不扩成通用配置中心或通用素材库。上传成功和清空成功都返回最新 `AppConfigResponse`。
 
-`GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
+`GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/status`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。`POST /admin/home-entries/{placement}/status` 当前只允许 `QUICK_1 ... QUICK_4`，请求体固定提交 `status + expectedVersion`；`LISTED` 表示该四宫格入口会出现在首页，`UNLISTED` 表示该坑位仍保留配置但不在首页展示，主卡 `MAIN / SIDE_TOP / SIDE_BOTTOM` 不支持下架。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
 
 `GET /admin/home-topics`、`GET /admin/home-topics/recipes`、`POST /admin/home-topics`、`PUT /admin/home-topics/{topicId}`、`POST /admin/home-topics/{topicId}/status`、`POST /admin/home-topics/{topicId}/image` 和 `DELETE /admin/home-topics/{topicId}/image` 共同维护“运营 / 本周灵感”。后台读取接口返回 `topics + recTypes`：`topics` 返回全部专题，并额外携带 `status` 供后台做列表、预览和上架状态切换；`LISTED` 表示前台可见，`UNLISTED` 表示仅后台可见；`recTypes` 返回当前允许的推荐类别枚举与中文文案。`GET /admin/home-topics/recipes` 只搜索可曝光的灵感菜谱，当前最多返回 `20` 条，供后台把菜谱加入本期推荐。`POST /admin/home-topics` 和 `PUT /admin/home-topics/{topicId}` 只写入基础信息和推荐菜谱顺序，请求体固定提交 `title / subTitle / recType / issueNo / description / items`；`items` 当前至少 `3` 条，每条固定提交 `recipeId + recommendNote`，其中 `recommendNote` 可空，表示这道菜在本期专题推荐里的可选推荐说明；同一次提交内不得重复提交同一 `recipeId`，不再限制最多条数。前台专题详情和后台专题详情都返回每道菜的 `recommendNote`，有值才显示。新建专题默认写成 `UNLISTED`，由后台确认后再通过 `POST /admin/home-topics/{topicId}/status` 显式上架；切状态请求体固定提交 `status + expectedVersion`。封面图不混进专题写 DTO，统一走单独上传/清空接口，并通过 `expectedVersion` 防并发覆盖。专题当前没有草稿态、定时发布、专题收藏或专题推荐统计；历史专题长期保留，但下架后不会继续出现在前台当前专题和往期滑卡里。
 
@@ -793,7 +802,34 @@ POST /dining-events/{eventId}/bring
 POST /dining-events/{eventId}/complete
 GET  /shopping-items
 POST /shopping-items
+GET  /shopping-items/board
+POST /shopping-items/from-recipe
 POST /shopping-items/{itemId}/status
+POST /shopping-items/group-status
+GET  /shopping-lists/summary
+GET  /shopping-lists
+POST /shopping-lists
+GET  /shopping-lists/{listId}
+POST /shopping-lists/{listId}/rename
+POST /shopping-lists/{listId}/items
+POST /shopping-lists/{listId}/items/from-recipe
+POST /shopping-lists/{listId}/items/{itemId}/check
+POST /shopping-lists/{listId}/items/{itemId}/remove
+POST /shopping-lists/{listId}/void
+POST /shopping-lists/{listId}/restore
+POST /shopping-lists/{listId}/copy
+POST /shopping-lists/{listId}/delete
+POST /shopping-lists/{listId}/complete
+POST /shopping-lists/{listId}/share-link
+POST /shopping-lists/{listId}/share-link/disable
+POST /shopping-lists/{listId}/share-members
+POST /shopping-lists/{listId}/members/{memberUserId}/remove
+GET  /shopping-list-invites
+POST /shopping-list-invites/{inviteId}/accept
+POST /shopping-list-invites/{inviteId}/decline
+POST /shopping-lists/{listId}/leave
+GET  /shopping-shares/{shareToken}
+POST /shopping-shares/{shareToken}/join
 GET  /shopping-gap
 POST /dining-events/{eventId}/shopping-gap
 ```
@@ -966,6 +1002,324 @@ interface CreateMealPlanRequest {
 ```
 
 同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；重复提交同一餐次时，服务端按本次 `recipeIds` 整体覆盖该餐次的菜单子项，不再逐道追加。已经完成的餐次不允许再被覆盖。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。
+
+购物域当前改成“共享清单头 + 清单项”模型。`/shopping-items` 不再承担购物首页职责，只保留为个人购物事实查询接口，供超市模式、采购历史和底层兼容读取使用。购物清单首页与详情改读新的 `/shopping-lists*` 契约。
+
+`ShoppingItemSummary` 当前统一返回：
+
+```ts
+interface ShoppingItemSummary {
+  id: UUID;
+  listId: UUID;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  note: string | null;
+  sourceCount: number;
+  sourceTitles: string[];
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  sourceKey: string | null;
+  status: "OPEN" | "CHECKED" | "REMOVED";
+  checkedAt: IsoDateTime | null;
+  updatedAt: IsoDateTime;
+}
+
+type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
+type ShoppingListRole = "OWNER" | "COLLABORATOR";
+
+interface ShoppingListStatusCount {
+  status: ShoppingListStatus;
+  count: number;
+}
+
+interface ShoppingListSummary {
+  id: UUID;
+  name: string;
+  status: ShoppingListStatus;
+  role: ShoppingListRole;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  progressDoneCount: number;
+  progressTotalCount: number;
+  hasActiveShareLink: boolean;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  completedAt: IsoDateTime | null;
+  voidedAt: IsoDateTime | null;
+}
+
+interface ShoppingItemSourceSummary {
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  title: string | null;
+  recipeId: UUID | null;
+  sourceVersionId: UUID | null;
+  planItemId: UUID | null;
+  diningEventId: UUID | null;
+  sourceBatchKey: string | null;
+  addCount: number | null;
+  servings: number | null;
+}
+
+interface ShoppingListDetailItem {
+  id: UUID;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  note: string | null;
+  status: "OPEN" | "CHECKED" | "REMOVED";
+  checkedAt: IsoDateTime | null;
+  updatedAt: IsoDateTime;
+  sources: ShoppingItemSourceSummary[];
+}
+
+interface ShoppingListCollaborator {
+  userId: UUID;
+  role: "OWNER" | "COLLABORATOR";
+  joinedAt: IsoDateTime;
+  user: {
+    uid: number;
+    nickname: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+interface ShoppingListDetail extends ShoppingListSummary {
+  collaborators: ShoppingListCollaborator[];
+  items: ShoppingListDetailItem[];
+}
+```
+
+`GET /shopping-lists/summary` 返回购物首页顶部 3 张状态卡片所需的统计：
+
+```ts
+interface ShoppingListSummaryResponse {
+  statuses: ShoppingListStatusCount[];
+  defaultStatus: ShoppingListStatus;
+}
+```
+
+`GET /shopping-lists?status=ACTIVE|COMPLETED|VOIDED` 返回当前用户可见的清单列表：
+
+```ts
+interface ShoppingListPageResponse {
+  items: ShoppingListSummary[];
+}
+```
+
+`POST /shopping-lists` 只创建空白清单：
+
+```ts
+interface CreateShoppingListRequest {
+  name: string | null;
+}
+```
+
+服务端可在 `name = null` 时生成默认标题；购物清单没有“订单模板”或“整单一键买完”概念。清单名当前统一限制为最多 `20` 个字。
+
+`GET /shopping-lists/{listId}` 返回单张清单详情，当前默认按食材项聚合展示，不强制提供“按菜谱 / 按食材”双视图。每个食材项必须保留来源摘要，至少能表达它来自哪些菜谱、计划或饭局。
+
+`POST /shopping-lists/{listId}/rename` 只允许清单创建者调用：
+
+```ts
+interface RenameShoppingListRequest {
+  version: number;
+  name: string;
+}
+```
+
+`POST /shopping-lists/{listId}/items` 只用于向指定清单手动增加食材项：
+
+```ts
+interface CreateShoppingListItemRequest {
+  name: string;
+  ingredientId: UUID | null;
+  quantityText: string | null;
+  note: string | null;
+}
+```
+
+`POST /shopping-lists/{listId}/items/from-recipe` 把一份当前用户可读的固定菜谱版本写入该清单：
+
+```ts
+interface AddRecipeToShoppingListRequest {
+  recipeId: UUID;
+  sourceVersionId: UUID;
+}
+```
+
+同一道菜再次加入同一张清单时，不覆盖旧来源批次；服务端保留 `sourceBatchKey`，以便详情页统计 `addCount` 和累计人份。
+
+`POST /shopping-lists/{listId}/items/{itemId}/check` 用于勾选或取消采购完成：
+
+```ts
+interface UpdateShoppingListItemCheckRequest {
+  version: number;
+  checked: boolean;
+}
+```
+
+`POST /shopping-lists/{listId}/items/{itemId}/remove` 用于把食材项从当前有效采购项中移除，不抹掉来源事实：
+
+```ts
+interface RemoveShoppingListItemRequest {
+  version: number;
+}
+```
+
+`POST /shopping-lists/{listId}/members/{memberUserId}/remove` 只允许清单创建者在 `ACTIVE` 状态下移除一个已加入的普通协作者；创建者本人和 `OWNER` 角色当前不能通过这条路径移除：
+
+```ts
+interface RemoveShoppingListMemberRequest {
+  version: number;
+}
+```
+
+`GET /shopping-items` 继续只返回当前用户自己的平铺购物条目，供超市模式、采购记录和简单列表使用。它不再作为购物清单首页的主数据源。
+
+`POST /shopping-items`、`GET /shopping-items/board`、`POST /shopping-items/from-recipe`、`POST /shopping-items/{itemId}/status` 和 `POST /shopping-items/group-status` 当前保留为旧个人购物事实和旧聚合板写链路，供现有超市模式、历史页面和旧购物页兼容使用；共享购物清单主链路统一迁移到 `/shopping-lists*` 后，再整体评估是否下线这些兼容路径。当前不再为这些旧路径扩展共享清单语义。
+
+购物清单状态流转：
+
+1. `ACTIVE`：采购中，可编辑、可共享、可勾选完成、可作废。
+2. `COMPLETED`：已完成，可复制和删除。
+3. `VOIDED`：已作废，可恢复、复制和删除。
+
+`POST /shopping-lists/{listId}/void` 和 `POST /shopping-lists/{listId}/restore` 当前只接收并发控制字段：
+
+```ts
+interface UpdateShoppingListStatusRequest {
+  version: number;
+}
+```
+
+`POST /shopping-lists/{listId}/copy` 会复制当前清单的有效食材项，并生成一张新的 `ACTIVE` 清单；若操作者是协作者，复制结果默认归该操作者个人所有，不继承原协作成员。
+
+`POST /shopping-lists/{listId}/delete` 只允许清单创建者删除 `COMPLETED / VOIDED` 清单，当前也只接收并发控制字段：
+
+```ts
+interface DeleteShoppingListRequest {
+  version: number;
+}
+```
+
+删除后，这张清单及其清单项不再出现在共享清单首页、旧购物记录页或超市模式兼容链路里；已入库的冰箱事实保留，但来源引用允许因源清单删除而置空。
+
+`POST /shopping-lists/{listId}/complete` 不是简单改状态，而是“完成采购并入库”的事务操作。完成前必须先进入入库确认：
+
+```ts
+interface CompleteShoppingListRequest {
+  version: number;
+  entries: Array<{
+    itemId: UUID;
+    store: boolean;
+    quantityText: string | null;
+    expireDays: number | null;
+    expireAt: string | null;
+  }>;
+}
+```
+
+完成规则：
+
+1. 默认只允许把当前清单中 `CHECKED` 的食材项带入入库确认。
+2. 每一项只处理 `是否入库`、`数量` 和 `到期时间`；当前不要求生产日期。
+3. 若 `expireDays = null` 且 `expireAt = null`，服务端按默认 `7 天` 推导到期时间。
+4. 只有 `store = true` 的项会生成新的个人冰箱事实，并保留 `sourceShoppingListId/sourceShoppingItemId`。
+5. 同一事务内完成“清单状态改为 `COMPLETED` + 选中项入库 + 审计记录”。
+
+共享规则：
+
+1. 清单分享支持链接和饭搭子成员邀请两种入口。
+2. 共享加入必须要求登录，不开放匿名协作编辑。
+3. 首版角色只分 `OWNER` 与 `COLLABORATOR`，不建设管理员。
+4. 创建者可改名、分享、移除成员、完成、作废、恢复、删除和复制清单。
+5. 协作者可勾选完成、取消完成、添加食材、删除食材、从菜谱加入、退出和复制清单。
+6. 协作者上限按“总人数”计算，包含创建者本人；普通用户当前最多 `2` 人协作。
+7. 发出饭搭子邀请或好友链接不预占名额，只有真正加入成功时才占坑。
+8. 满员后旧成员不受影响，但新成员不能继续加入；移除成员后名额重新释放。
+
+```ts
+interface ShareShoppingListLinkResponse {
+  shareToken: string;
+  shareUrl: string;
+}
+
+interface ShareShoppingListMembersRequest {
+  version: number;
+  targetUserIds: UUID[];
+}
+
+interface ShoppingListInviteSummary {
+  id: UUID;
+  listId: UUID;
+  name: string;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  itemCount: number;
+  status: ShoppingListStatus;
+  inviteStatus: "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
+  canJoin: boolean;
+  invitedAt: IsoDateTime;
+  handledAt: IsoDateTime | null;
+}
+
+interface ShoppingListInvitePageResponse {
+  items: ShoppingListInviteSummary[];
+}
+
+interface ShoppingListInviteActionResponse {
+  inviteId: UUID;
+  status: "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
+  updatedAt: IsoDateTime;
+}
+
+interface LeaveShoppingListRequest {
+  version: number;
+}
+```
+
+`GET /shopping-shares/{shareToken}` 返回一张可加入共享清单的最小预览：
+
+```ts
+interface ShoppingSharePreview {
+  listId: UUID;
+  name: string;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  joined: boolean;
+  canJoin: boolean;
+  itemCount: number;
+  status: ShoppingListStatus;
+}
+```
+
+`POST /shopping-shares/{shareToken}/join` 只在登录后建立新的协作者关系；若当前已是成员则返回幂等成功，若协作者名额已满则返回冲突错误。
+
+`GET /shopping-list-invites` 默认仍只返回当前登录用户待确认且对应清单仍为 `ACTIVE` 的邀请卡片，供购物清单首页的“待确认共享”直接使用。通知中心可通过 `filter` 读取真实邀请历史：
+
+1. `filter=ALL`：返回当前用户最近 `7` 天内的清单协作消息，包含 `PENDING / ACCEPTED / DECLINED`。
+2. `filter=PENDING`：返回最近 `7` 天内仍待处理、且对应清单仍为 `ACTIVE` 的邀请。
+3. `filter=RESOLVED`：返回最近 `7` 天内已处理的邀请，当前包含 `ACCEPTED / DECLINED`。
+
+`handledAt` 在 `ACCEPTED / DECLINED` 时返回处理时间，否则为 `null`。`POST /shopping-list-invites/{inviteId}/accept` 由被邀请人确认加入；若用户已经通过好友链接先加入同一张清单，服务端会把这条待确认邀请同步结清为 `ACCEPTED`，避免首页继续残留旧卡片。`POST /shopping-list-invites/{inviteId}/decline` 只把当前邀请标记为 `DECLINED`，不影响该清单后续重新发起新邀请。
+
+`GET /shopping-gap` 当前返回“当前用户待处理饭局”的汇总缺口，不再要求先选某一场饭局；页面可以直接按食材平铺展示，并通过 `sourceTitles` 标记这条缺口关联了哪些饭局。`POST /dining-events/{eventId}/shopping-gap` 仍保持单饭局写入本人购物清单的职责，不扩成整包写入所有饭局。
+
+缺口合并规则当前保持：
+
+1. 只围绕当前用户自己的冰箱来判断缺口。
+2. 相同食材只有在相同精确单位下才自动合并数量。
+3. `sourceCount` 返回该条缺口实际覆盖了几道菜。
+4. 模糊用量保持逐项提示，不自动相加成虚假的精确数量。
+
+共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回 `409`，提示客户端刷新后重试。
 
 `GET /meal-polls` 返回当前饭搭子下的征集摘要列表，当前只支持按 `diningGroupId / status / planDate / mealSlot / limit` 过滤；首页和征集入口只读取摘要，不返回成员逐条回应。`POST /meal-polls` 用于由 `OWNER / ADMIN` 发起一条新的点菜征集，请求体只接收：
 
