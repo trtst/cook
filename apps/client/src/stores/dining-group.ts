@@ -1,9 +1,13 @@
 import { defineStore } from "pinia";
 import type {
+	CreateDiningGroupResponse,
 	CreateInviteResult,
 	DiningGroupMemberSummary,
 	DiningGroupSummary,
-	DiningGroupUsageSummary
+	DiningGroupUsageSummary,
+	DissolveDiningGroupResponse,
+	UpdateDiningGroupCoverResponse,
+	UpdateDiningGroupResponse
 } from "@/apis/dining-group";
 import { diningGroupApi } from "@/apis/dining-group";
 import type { OperationId, UUID } from "@/apis/http";
@@ -40,6 +44,7 @@ export const useDiningGroupStore = defineStore("dining-group", {
 			return {
 				id: currentDiningGroup.id,
 				name: currentDiningGroup.name,
+				description: currentDiningGroup.description,
 				myRole: currentDiningGroup.myRole,
 				memberCount: currentDiningGroup.memberCount,
 				memberLimit: currentDiningGroup.memberLimit,
@@ -70,6 +75,17 @@ export const useDiningGroupStore = defineStore("dining-group", {
 
 			await refreshCurrentPromise;
 		},
+		async createDiningGroup(
+			name: string,
+			description: string | null,
+			operationId: OperationId = createOperationId()
+		): Promise<CreateDiningGroupResponse> {
+			const result = await diningGroupApi.create({ name, description, operationId });
+			await this.refreshCurrent();
+			this.selectedDiningGroupId = result.diningGroup.id;
+			this.members = [];
+			return result;
+		},
 		// Creates an invite for one dining group.
 		// Operation id defaults here so pages can stay focused on their own flow.
 		async createInvite(diningGroupId: UUID, operationId: OperationId = createOperationId()): Promise<CreateInviteResult> {
@@ -92,6 +108,41 @@ export const useDiningGroupStore = defineStore("dining-group", {
 			this.members = [];
 			return result;
 		},
+		async updateCurrentDiningGroup(
+			name: string,
+			description: string | null,
+			operationId: OperationId = createOperationId()
+		): Promise<UpdateDiningGroupResponse | null> {
+			const currentDiningGroup = this.currentDiningGroup;
+			if (!currentDiningGroup) return null;
+
+			const result = await diningGroupApi.update(currentDiningGroup.id, {
+				name,
+				description,
+				expectedVersion: currentDiningGroup.version,
+				operationId
+			});
+			await this.refreshCurrent();
+			this.selectedDiningGroupId = result.diningGroup.id;
+			return result;
+		},
+		async updateCurrentDiningGroupCover(
+			filePath: string,
+			operationId: OperationId = createOperationId()
+		): Promise<UpdateDiningGroupCoverResponse | null> {
+			const currentDiningGroup = this.currentDiningGroup;
+			if (!currentDiningGroup) return null;
+
+			const result = await diningGroupApi.updateCover({
+				diningGroupId: currentDiningGroup.id,
+				expectedVersion: currentDiningGroup.version,
+				filePath,
+				operationId
+			});
+			await this.refreshCurrent();
+			this.selectedDiningGroupId = result.diningGroup.id;
+			return result;
+		},
 		// Leaves the currently selected group using optimistic version check from the current summary.
 		async leaveCurrent(operationId: OperationId = createOperationId()) {
 			const diningGroupId = this.currentDiningGroupId;
@@ -99,6 +150,19 @@ export const useDiningGroupStore = defineStore("dining-group", {
 			if (!diningGroupId || !currentDiningGroup) return null;
 
 			const result = await diningGroupApi.leave(diningGroupId, {
+				operationId,
+				expectedVersion: currentDiningGroup.version
+			});
+			await this.refreshCurrent();
+			this.members = [];
+			return result;
+		},
+		async dissolveCurrent(operationId: OperationId = createOperationId()): Promise<DissolveDiningGroupResponse | null> {
+			const diningGroupId = this.currentDiningGroupId;
+			const currentDiningGroup = this.currentDiningGroup;
+			if (!diningGroupId || !currentDiningGroup) return null;
+
+			const result = await diningGroupApi.dissolve(diningGroupId, {
 				operationId,
 				expectedVersion: currentDiningGroup.version
 			});

@@ -85,7 +85,10 @@
 								<text class="dining-card__count">{{ diningGroupCountText }}</text>
 								<text class="dining-card__current">{{ diningGroupCurrentText }}</text>
 							</view>
-							<text v-else class="dining-card__invite">{{ diningGroupInviteText }}</text>
+							<template v-else>
+								<text class="dining-card__status">未开启</text>
+								<text class="dining-card__invite">{{ diningGroupInviteText }}</text>
+							</template>
 						</view>
 
 						<view class="medal-card" hover-class="is-pressed" hover-stay-time="100"
@@ -402,7 +405,7 @@ const diningGroupCurrentText = computed(() => {
 	return `当前：${currentRelation.value.name} · ${getRoleText(currentRelation.value.myRole)}`;
 });
 const diningGroupInviteText = computed(() => {
-	return "把链接分享给饭搭子，点开就能加入。";
+	return "开启后可以邀请饭搭子一起定下一顿吃什么。";
 });
 const currentThemeText = computed(() => {
 	const modeLabel = themeModeLabels[themeMode.value];
@@ -1232,19 +1235,27 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .dining-card__description,
-.dining-card__invite {
+.dining-card__invite,
+.dining-card__status {
 	display: block;
-	color: var(--color-text-tertiary);
 	font-size: var(--font-size-xs);
 	line-height: 1.5;
 }
 
 .dining-card__description {
+	color: var(--color-text-tertiary);
 	margin-top: 8rpx;
 }
 
-.dining-card__invite {
+.dining-card__status {
 	margin-top: 26rpx;
+	color: var(--color-primary);
+	font-weight: var(--font-weight-bold);
+}
+
+.dining-card__invite {
+	margin-top: 8rpx;
+	color: var(--color-text-tertiary);
 }
 
 .dining-card__summary {
