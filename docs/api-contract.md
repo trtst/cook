@@ -481,6 +481,63 @@ Auth: UserBearerAuth
 
 返回 `GetMyDiningGroupsResponse`。`items` 是本人主理和加入的有效关系，`usage` 只表达关系域计数和上限，不返回会员、菜谱、存储或展示设置。
 
+`DiningGroupSummary` 当前固定返回：
+
+```ts
+interface DiningGroupSummary {
+  id: UUID;
+  name: string;
+  description: string | null;
+  coverImageUrl: string | null;
+  ownerUid: number;
+  isOwned: boolean;
+  canManageCover: boolean;
+  myRole: "OWNER" | "ADMIN" | "MEMBER";
+  myStatus: "ACTIVE" | "RESTRICTED" | "ENDED";
+  myStatusReason: LongTermMemberStatusReason | null;
+  createdDays: number;
+  memberCount: number;
+  memberLimit: number;
+  pollCount: number;
+  diningEventCount: number;
+  hasAttention: boolean;
+  latestActivityTitle: string | null;
+  latestActivityAt: IsoDateTime | null;
+  state: "NORMAL" | "OVER_MEMBER_LIMIT";
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+```
+
+新用户默认不自动创建饭搭子；`items.length = 0` 表示当前账号尚未开启饭搭子，而不是加载失败。
+
+### 开启饭搭子
+
+```text
+POST /dining-groups
+Auth: UserBearerAuth
+```
+
+```ts
+interface CreateDiningGroupRequest {
+  name: string;
+  description: string | null;
+}
+
+interface CreateDiningGroupResponse {
+  diningGroup: DiningGroupSummary;
+}
+```
+
+该接口用于用户在饭搭子页显式开启饭搭子时创建自己主理的第一个关系。服务端必须校验：
+
+1. 当前用户状态有效。
+2. 当前用户昵称已存在；昵称为空时拒绝开启。
+3. 当前用户还没有自己主理的饭搭子。
+
+成功后同一事务创建 `DiningGroup + OWNER 成员关系 + 审计/Outbox`。`description` 可空，空字符串入库前统一折叠为 `null`。
+
 ### 成员列表
 
 ```text
@@ -496,6 +553,48 @@ interface DiningGroupMembersResult {
 ```
 
 只有该饭搭子的有效成员可以读取完整成员列表。
+
+### 更新饭搭子
+
+```text
+PUT /dining-groups/{diningGroupId}
+Auth: UserBearerAuth
+```
+
+```ts
+interface UpdateDiningGroupRequest {
+  name: string;
+  description: string | null;
+  expectedVersion: number;
+}
+
+interface UpdateDiningGroupResponse {
+  diningGroup: DiningGroupSummary;
+}
+```
+
+只有当前饭搭子的 `OWNER` 可以更新名称和简介。服务端在事务内锁定目标饭搭子、校验成员身份和 `expectedVersion`，成功变更后递增版本；空字符串简介入库前统一折叠为 `null`。
+
+### 更新饭搭子主页主图
+
+```text
+POST /dining-groups/{diningGroupId}/cover
+Auth: UserBearerAuth
+Content-Type: multipart/form-data
+```
+
+```ts
+interface UpdateDiningGroupCoverRequest {
+  expectedVersion: number;
+  file: File;
+}
+
+interface UpdateDiningGroupCoverResponse {
+  diningGroup: DiningGroupSummary;
+}
+```
+
+当前只有 `OWNER` 且个人套餐为 `Pro / Ultra` 时可以上传或替换主页主图。服务端同样会锁定饭搭子并校验 `expectedVersion`；主图文件计入主理人的 `PROFILE_ASSET` 空间，解散饭搭子时同步释放主图记录和文件。
 
 ### 创建邀请
 
@@ -575,7 +674,7 @@ interface DissolveDiningGroupRequest {
 }
 ```
 
-`leave`、`remove-member` 和 `dissolve` 都以 `GET /dining-groups` 返回的 `DiningGroupSummary.version` 作为预期版本。服务端在事务内锁定饭搭子并校验版本，成功变更后递增版本；相同幂等请求必须复用同一个 `Idempotency-Key` 和 `expectedVersion`。
+`PUT /dining-groups/{diningGroupId}`、`POST /dining-groups/{diningGroupId}/cover`、`leave`、`remove-member` 和 `dissolve` 都以 `GET /dining-groups` 返回的 `DiningGroupSummary.version` 作为预期版本。服务端在事务内锁定饭搭子并校验版本，成功变更后递增版本；相同幂等请求必须复用同一个 `Idempotency-Key` 和 `expectedVersion`。
 
 ### 个人存储用量
 

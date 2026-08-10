@@ -32,7 +32,10 @@
 | User | GET | `/users/me/taste-profile` | 当前用户口味与安全资料 |
 | User | PUT | `/users/me/taste-profile` | 更新当前用户口味与安全资料 |
 | DiningGroup | GET | `/dining-groups` | 本人饭搭子关系列表和关系域用量 |
+| DiningGroup | POST | `/dining-groups` | 显式开启并创建本人主理的首个饭搭子 |
 | DiningGroup | GET | `/dining-group-members` | 指定饭搭子成员 |
+| DiningGroup | PUT | `/dining-groups/{diningGroupId}` | 主理人更新当前饭搭子名称和简介 |
+| DiningGroup | POST | `/dining-groups/{diningGroupId}/cover` | 主理人上传或替换饭搭子主页主图 |
 | Storage | GET | `/storage-usage` | 个人逻辑空间模块明细 |
 | DiningGroupInvite | POST | `/dining-group-invites` | 创建单次长期邀请 |
 | DiningGroupInvite | POST | `/dining-group-invites/{inviteToken}/accept` | 接受邀请并建立关系 |

@@ -45,7 +45,9 @@ http://127.0.0.1:3100/api
 | GET | `/api/users/me/taste-profile` | `userApi.getTasteProfile` | 本人口味与安全资料 |
 | PUT | `/api/users/me/taste-profile` | `userApi.updateTasteProfile` | 更新本人口味与安全资料 |
 | GET | `/api/dining-groups` | `diningGroupApi.getMine` | 关系列表和关系用量 |
+| POST | `/api/dining-groups` | `diningGroupApi.create` | 显式开启并创建本人主理的首个饭搭子 |
 | GET | `/api/dining-group-members` | `diningGroupApi.listMembers` | 指定关系的成员列表 |
+| PUT | `/api/dining-groups/{diningGroupId}` | `diningGroupApi.update` | 更新当前饭搭子名称和简介 |
 | GET | `/api/storage-usage` | `diningGroupApi.getStorageUsage` | 个人存储用量 |
 | POST | `/api/dining-group-invites` | `diningGroupApi.createInvite` | 创建关系邀请 |
 | POST | `/api/dining-group-invites/{inviteToken}/accept` | `diningGroupApi.acceptInvite` | 接受邀请并建立关系 |
@@ -194,6 +196,14 @@ interface GetMyDiningGroupsResponse {
 
 `items` 只返回本人主理或加入的有效关系。`usage` 只属于关系域，不包含会员详情、存储用量、菜谱配额或展示设置。
 
+`DiningGroupSummary` 当前还会返回：
+
+1. `description`：饭搭子简介。
+2. `coverImageUrl`：当前主页主图；未上传时返回 `null`。
+3. `canManageCover`：当前调用人是否可以管理主图；当前只会对主理人的 `Pro / Ultra` 返回 `true`。
+4. `createdDays / memberCount / pollCount / diningEventCount`：饭搭子主页聚合摘要。
+5. `hasAttention / latestActivityTitle / latestActivityAt`：关系切换卡片和悬浮切换入口使用的轻提醒字段。
+
 客户端可以保存当前页面选中的 `diningGroupId`，但它只是 UI 选择，不是数据空间切换，也不得改变菜谱、冰箱、计划或购物数据的 `userId` 归属。
 
 ### 2.2 成员列表
@@ -214,7 +224,62 @@ interface DiningGroupMembersResult {
 
 调用人必须是该饭搭子的有效成员。
 
-### 2.3 邀请与退出
+### 2.3 开启与编辑
+
+所有写操作通过请求头 `Idempotency-Key` 携带并复用纯数字字符串幂等键：
+
+```text
+POST /api/dining-groups
+PUT /api/dining-groups/{diningGroupId}
+```
+
+创建请求体：
+
+```ts
+interface CreateDiningGroupRequest {
+  name: string;
+  description: string | null;
+}
+```
+
+更新请求体：
+
+```ts
+interface UpdateDiningGroupRequest extends CreateDiningGroupRequest {
+  expectedVersion: number;
+}
+```
+
+开启只在用户显式进入饭搭子页并提交表单后发生；新用户默认不自动创建饭搭子。更新只允许当前主理人修改名称和简介。
+
+### 2.4 主页主图
+
+所有写操作通过请求头 `Idempotency-Key` 携带并复用纯数字字符串幂等键：
+
+```text
+POST /api/dining-groups/{diningGroupId}/cover
+```
+
+请求体为 `multipart/form-data`：
+
+```ts
+interface UpdateDiningGroupCoverRequest {
+  expectedVersion: number;
+  file: File;
+}
+```
+
+返回：
+
+```ts
+interface UpdateDiningGroupCoverResponse {
+  diningGroup: DiningGroupSummary;
+}
+```
+
+当前只有 `OWNER` 且个人套餐为 `Pro / Ultra` 时允许上传或替换主页主图。主图计入主理人的个人空间，未开放删除重置接口；需要再次变更时继续走替换上传。
+
+### 2.5 邀请与退出
 
 所有写操作通过请求头 `Idempotency-Key` 携带并复用纯数字字符串幂等键：
 
@@ -228,7 +293,7 @@ POST /api/dining-groups/{diningGroupId}/dissolve
 
 接受邀请只建立成员关系；退出、移除和解散只结束关系。以上操作都不迁移、不复制、不冻结、不恢复个人数据。
 
-### 2.4 协作与轻动态
+### 2.5 协作与轻动态
 
 当前饭搭子协作主链路新增：
 
