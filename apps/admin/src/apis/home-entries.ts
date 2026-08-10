@@ -2,12 +2,14 @@ import { requestData, uploadForm, type OperationId } from "./http";
 
 export type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
+export type HomeEntryStatus = "LISTED" | "UNLISTED";
 
 export interface AdminHomeEntryItem {
   id: string;
   placement: HomeEntryPlacement;
   title: string;
   subtitle: string | null;
+  status: HomeEntryStatus;
   targetType: HomeEntryTargetType;
   targetValue: string;
   imageUrl: string | null;
@@ -59,6 +61,13 @@ export const homeEntriesApi = {
     return requestData<AdminHomeEntryItem>(`/admin/home-entries/${encodeURIComponent(placement)}/image`, {
       method: "DELETE",
       body: { expectedVersion },
+      idempotencyKey: operationId
+    });
+  },
+  setEntryStatus(placement: HomeEntryPlacement, status: HomeEntryStatus, operationId: OperationId, expectedVersion: number) {
+    return requestData<AdminHomeEntryItem>(`/admin/home-entries/${encodeURIComponent(placement)}/status`, {
+      method: "POST",
+      body: { status, expectedVersion },
       idempotencyKey: operationId
     });
   }

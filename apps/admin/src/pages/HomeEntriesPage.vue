@@ -2,7 +2,15 @@
 import { computed, onMounted, ref } from "vue";
 import { Delete, Picture } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { homeEntriesApi, type AdminHomeEntriesResponse, type AdminHomeEntryItem, type HomeEntryPageTarget, type HomeEntryPlacement, type HomeEntryTargetType } from "@/apis/home-entries";
+import {
+  homeEntriesApi,
+  type AdminHomeEntriesResponse,
+  type AdminHomeEntryItem,
+  type HomeEntryPageTarget,
+  type HomeEntryPlacement,
+  type HomeEntryStatus,
+  type HomeEntryTargetType
+} from "@/apis/home-entries";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
@@ -13,6 +21,7 @@ type HomeEntryFormItem = {
   version: number;
   title: string;
   subtitle: string;
+  status: HomeEntryStatus;
   targetType: HomeEntryTargetType;
   targetValue: string;
   imageUrl: string;
@@ -25,6 +34,7 @@ const allPlacements: HomeEntryPlacement[] = [...featureOrder, ...quickOrder];
 
 const loading = ref(true);
 const saveBusyPlacement = ref<HomeEntryPlacement | null>(null);
+const statusBusyPlacement = ref<HomeEntryPlacement | null>(null);
 const imageSavingPlacement = ref<HomeEntryPlacement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedPlacement = ref<HomeEntryPlacement | null>(null);
@@ -66,6 +76,7 @@ const itemMap = computed(() => new Map(items.value.map(item => [item.placement, 
 const pageReady = computed(() => allPlacements.every(placement => itemMap.value.has(placement)));
 const featureItems = computed(() => (pageReady.value ? featureOrder.map(placement => itemMap.value.get(placement)!) : []));
 const quickItems = computed(() => (pageReady.value ? quickOrder.map(placement => itemMap.value.get(placement)!) : []));
+const listedQuickItems = computed(() => quickItems.value.filter(item => item.status === "LISTED"));
 const orderedItems = computed(() => [...featureItems.value, ...quickItems.value]);
 
 useAdminHeaderRefresh(() => {
@@ -102,6 +113,14 @@ function resolvePreviewClass(placement: HomeEntryPlacement) {
   return "entry-preview-shell--soft";
 }
 
+function entryStatusText(status: HomeEntryStatus) {
+  return status === "LISTED" ? "已上架" : "已下架";
+}
+
+function entryStatusActionText(status: HomeEntryStatus) {
+  return status === "LISTED" ? "下架" : "上架";
+}
+
 function mapFormItem(item: AdminHomeEntryItem): HomeEntryFormItem {
   return {
     id: item.id,
@@ -109,6 +128,7 @@ function mapFormItem(item: AdminHomeEntryItem): HomeEntryFormItem {
     version: item.version,
     title: item.title,
     subtitle: item.subtitle || "",
+    status: item.status,
     targetType: item.targetType,
     targetValue: item.targetValue,
     imageUrl: item.imageUrl || "",
@@ -125,7 +145,21 @@ function patchItemImage(item: AdminHomeEntryItem) {
   const target = items.value.find(entry => entry.placement === item.placement);
   if (!target) return;
   target.version = item.version;
+  target.status = item.status;
   target.imageUrl = item.imageUrl || "";
+}
+
+function patchItem(item: AdminHomeEntryItem) {
+  const target = items.value.find(entry => entry.placement === item.placement);
+  if (!target) return;
+  target.version = item.version;
+  target.title = item.title;
+  target.subtitle = item.subtitle || "";
+  target.status = item.status;
+  target.targetType = item.targetType;
+  target.targetValue = item.targetValue;
+  target.imageUrl = item.imageUrl || "";
+  target.badgeText = item.badgeText || "";
 }
 
 function getPreviewUrl(item: HomeEntryFormItem) {
@@ -261,6 +295,20 @@ async function saveItem(item: HomeEntryFormItem) {
     ElMessage.error(error instanceof Error ? error.message : "保存首页快捷入口失败");
   } finally {
     saveBusyPlacement.value = null;
+  }
+}
+
+async function toggleStatus(item: HomeEntryFormItem) {
+  const nextStatus: HomeEntryStatus = item.status === "LISTED" ? "UNLISTED" : "LISTED";
+  statusBusyPlacement.value = item.placement;
+  try {
+    const result = await homeEntriesApi.setEntryStatus(item.placement, nextStatus, createOperationId(), item.version);
+    patchItem(result);
+    ElMessage.success(result.status === "LISTED" ? "入口已上架" : "入口已下架");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "切换入口状态失败");
+  } finally {
+    statusBusyPlacement.value = null;
   }
 }
 
@@ -427,7 +475,7 @@ onMounted(() => {
 
               <div class="preview-stage">
                 <div class="dock-preview">
-                  <article v-for="item in quickItems" :key="item.placement" class="dock-preview__item">
+                  <article v-for="item in listedQuickItems" :key="item.placement" class="dock-preview__item">
                     <div class="dock-preview__icon" :class="resolvePreviewClass(item.placement)">
                       <button class="media-upload media-upload--quick" type="button" @click="chooseImageFile(item.placement)">
                         <img
@@ -452,6 +500,7 @@ onMounted(() => {
                     </div>
                     <span class="dock-preview__title">{{ item.title || "请输入标题" }}</span>
                   </article>
+                  <div v-if="!listedQuickItems.length" class="dock-preview__empty">当前没有已上架的四宫格入口</div>
                 </div>
               </div>
 
@@ -459,7 +508,12 @@ onMounted(() => {
                 <article v-for="item in quickItems" :key="item.placement" class="editor-card">
                   <div class="editor-card__header">
                     <div class="editor-card__title-row">
-                      <h6>{{ placementMeta[item.placement].label }}</h6>
+                      <div class="editor-card__title-stack">
+                        <h6>{{ placementMeta[item.placement].label }}</h6>
+                        <span class="editor-card__status" :class="{ 'editor-card__status--listed': item.status === 'LISTED' }">
+                          {{ entryStatusText(item.status) }}
+                        </span>
+                      </div>
                       <span class="entry-card__version">版本 {{ item.version }}</span>
                     </div>
                     <div>
@@ -490,9 +544,16 @@ onMounted(() => {
 
                     <div class="entry-form__actions">
                       <el-button
+                        :loading="statusBusyPlacement === item.placement"
+                        :disabled="saveBusyPlacement === item.placement || imageSavingPlacement === item.placement"
+                        @click="toggleStatus(item)"
+                      >
+                        {{ entryStatusActionText(item.status) }}
+                      </el-button>
+                      <el-button
                         type="primary"
                         :loading="saveBusyPlacement === item.placement"
-                        :disabled="imageSavingPlacement === item.placement"
+                        :disabled="imageSavingPlacement === item.placement || statusBusyPlacement === item.placement"
                         @click="saveItem(item)"
                       >
                         保存
@@ -564,6 +625,28 @@ onMounted(() => {
   margin: 0;
   color: #6b7280;
   line-height: 1.5;
+}
+
+.editor-card__title-stack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-card__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #fff4df;
+  color: #a16207;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.editor-card__status--listed {
+  background: #e8f7ee;
+  color: #166534;
 }
 
 .preview-stage {
@@ -703,6 +786,13 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.dock-preview__empty {
+  grid-column: 1 / -1;
+  padding: 20px 0;
+  color: #6b7280;
+  text-align: center;
 }
 
 .dock-preview__item {
