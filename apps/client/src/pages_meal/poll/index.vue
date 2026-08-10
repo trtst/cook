@@ -228,7 +228,7 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
-import { formatHourMinute, formatMonthDayMinute } from "@/utils/date";
+import { formatHourMinute, formatMonthDayMinute } from "../utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();

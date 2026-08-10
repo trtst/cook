@@ -355,7 +355,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMonthDay } from "@/utils/date";
+import { formatMonthDay } from "../utils/date";
 import ShoppingCompleteSheet from "../components/ShoppingCompleteSheet.vue";
 import { type ShoppingCompleteEntry, toShoppingCompleteEntries } from "../components/shopping-complete-sheet";
 import {

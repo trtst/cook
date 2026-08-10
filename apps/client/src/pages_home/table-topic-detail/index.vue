@@ -73,9 +73,9 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { uniPlatform } from "@/platform/uni";
-import { tableTopicsApi, type TableTopicDetail } from "@/apis/table-topics";
+import { tableTopicsApi, type TableTopicDetail } from "../apis/table-topics";
 import { createOperationId } from "@/utils/operation-id";
-import { formatDateTimeMinute } from "@/utils/date";
+import { formatDateTimeMinute } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();

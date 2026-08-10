@@ -821,7 +821,7 @@ import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
-import { useImageCropFlow } from "@/composables/useImageCropFlow";
+import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -830,7 +830,7 @@ import {
   imageCropPresets,
   releaseImageFile,
   type ImageCropResult
-} from "@/utils/image-crop";
+} from "../utils/image-crop";
 import {
   readRecipeEditCacheItem,
   removeRecipeEditCacheItem,

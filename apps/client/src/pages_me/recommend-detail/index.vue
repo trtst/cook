@@ -243,7 +243,7 @@ import {
   type UnitSummary
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
-import { shoppingApi, type ShoppingListInviteFilter, type ShoppingListInviteSummary } from "@/apis/shopping";
+import { shoppingApi, type ShoppingListInviteFilter, type ShoppingListInviteSummary } from "../apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";

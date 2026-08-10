@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
-import { buildSiteContentUrl, resolveSiteContent, type SiteContentSlug } from "@/config/site-content";
+import { buildSiteContentUrl, resolveSiteContent, type SiteContentSlug } from "../config/site-content";
 
 const pageUrl = ref("");
 

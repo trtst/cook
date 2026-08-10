@@ -47,7 +47,7 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { recipeApi, type IngredientRecommendationSummary } from "@/apis/recipe";
-import { shoppingApi, type ShoppingListInviteSummary } from "@/apis/shopping";
+import { shoppingApi, type ShoppingListInviteSummary } from "../apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";

@@ -131,7 +131,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { getRecipeViewVersion, markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
-import { formatDateTimeSecond } from "@/utils/date";
+import { formatDateTimeSecond } from "../utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type ListMode = "recipes" | "drafts";

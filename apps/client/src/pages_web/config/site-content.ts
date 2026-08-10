@@ -1,4 +1,4 @@
-import { cfg } from "./env";
+import { cfg } from "@/config/env";
 
 export type SiteContentSlug =
   | "about"

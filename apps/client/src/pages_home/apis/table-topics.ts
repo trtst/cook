@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post } from "./http";
+import { get, post } from "@/apis/http";
 
 export type TableTopicTargetType = "PAGE" | "WEB_VIEW";
 
@@ -18,11 +18,11 @@ export interface TableTopicDetail extends TableTopicListItem {
   targetValue: string | null;
 }
 
-export interface TableTopicListResponse {
+interface TableTopicListResponse {
   items: TableTopicListItem[];
 }
 
-export interface TableTopicDetailResponse {
+interface TableTopicDetailResponse {
   topic: TableTopicDetail;
 }
 

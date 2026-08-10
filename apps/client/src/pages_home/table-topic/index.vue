@@ -59,8 +59,8 @@ import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
-import { tableTopicsApi, type TableTopicListItem } from "@/apis/table-topics";
-import { formatDateTimeMinute } from "@/utils/date";
+import { tableTopicsApi, type TableTopicListItem } from "../apis/table-topics";
+import { formatDateTimeMinute } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();

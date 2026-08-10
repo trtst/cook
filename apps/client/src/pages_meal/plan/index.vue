@@ -144,7 +144,7 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ref, watch } from "vue";
 import { ApiClientError, type UUID } from "@/apis/http";
-import { mealApi, type DiningEventSummary, type MealPlanSummary } from "@/apis/meal";
+import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -153,7 +153,7 @@ import Login from "@/components/Login/Login.vue";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
-import { formatDateTimeMinute } from "@/utils/date";
+import { formatDateTimeMinute } from "../utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();

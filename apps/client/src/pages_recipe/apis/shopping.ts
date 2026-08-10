@@ -1,11 +1,19 @@
-import type { OperationId, UUID } from "@/apis/http";
-import {
-  shoppingApi as pantryShoppingApi,
-  type ShoppingListDetail,
-  type ShoppingListSummary
-} from "@/apis/shopping";
+import { cfg } from "@/config";
+import { get, post, type OperationId, type UUID } from "@/apis/http";
 
-export type { ShoppingListSummary };
+export interface ShoppingListSummary {
+  id: UUID;
+  name: string;
+  memberCount: number;
+  progressDoneCount: number;
+  progressTotalCount: number;
+}
+
+export interface ShoppingListDetail extends ShoppingListSummary {}
+
+interface ShoppingListPageResponse {
+  items: ShoppingListSummary[];
+}
 
 export interface CreateRecipeShoppingListRequest {
   operationId: OperationId;
@@ -20,13 +28,19 @@ export interface AddRecipeToShoppingListRequest {
 
 export const shoppingApi = {
   async listActive() {
-    const result = await pantryShoppingApi.listLists("ACTIVE");
+    const result = await get<ShoppingListPageResponse>(`${cfg.domain}/api/shopping-lists`, { status: "ACTIVE" });
     return result.items;
   },
   createList(body: CreateRecipeShoppingListRequest) {
-    return pantryShoppingApi.createList(body);
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(`${cfg.domain}/api/shopping-lists`, payload, { idempotencyKey: operationId });
   },
   addRecipeToList(listId: UUID, body: AddRecipeToShoppingListRequest): Promise<ShoppingListDetail> {
-    return pantryShoppingApi.addRecipeToList(listId, body);
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(
+      `${cfg.domain}/api/shopping-lists/${encodeURIComponent(String(listId))}/items/from-recipe`,
+      payload,
+      { idempotencyKey: operationId }
+    );
   }
 };

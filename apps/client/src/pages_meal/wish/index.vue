@@ -115,7 +115,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { formatHourMinute } from "@/utils/date";
+import { formatHourMinute } from "../utils/date";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";

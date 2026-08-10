@@ -301,7 +301,7 @@ import { uniPlatform } from "@/platform/uni";
 import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
-import { formatDateTimeSecond } from "@/utils/date";
+import { formatDateTimeSecond } from "./date";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 
 type RecipeTab = "my" | "inspiration" | "collection";

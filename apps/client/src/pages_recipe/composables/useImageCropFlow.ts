@@ -7,7 +7,7 @@ import {
   writeImageCropRequest,
   type ImageCropPolicy,
   type ImageCropResult
-} from "@/utils/image-crop";
+} from "../utils/image-crop";
 
 type CropTask<TTarget> = {
   sourcePath: string;

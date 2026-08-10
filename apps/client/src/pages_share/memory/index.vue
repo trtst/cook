@@ -123,7 +123,7 @@
 import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
-import { mealApi, type DiningEventSummary } from "@/apis/meal";
+import { mealApi, type DiningEventSummary } from "../apis/meal";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
@@ -137,7 +137,7 @@ import {
   type MemoryShareSnapshotResponse
 } from "@/pages_share/apis/share";
 import { useSessionStore } from "@/stores/session";
-import { formatDateTimeMinute } from "@/utils/date";
+import { formatDateTimeMinute } from "../utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type PageMode = "empty" | "event" | "token";
