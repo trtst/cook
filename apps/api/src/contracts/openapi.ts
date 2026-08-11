@@ -1174,6 +1174,7 @@ export class MealPlanMenuItemModel {
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) servings!: number | null;
   @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
 }
 

@@ -109,7 +109,8 @@ const mealPlanInclude = {
     include: {
       recipeVersion: {
         select: {
-          name: true
+          name: true,
+          baseServings: true
         }
       }
     },
@@ -1455,6 +1456,7 @@ export class MealService {
         recipeId: dish.recipeId,
         recipeVersionId: dish.recipeVersionId,
         title: dish.recipeVersion.name,
+        servings: dish.recipeVersion.baseServings ?? null,
         sortOrder: dish.sortOrder
       })),
       status: item.status,
