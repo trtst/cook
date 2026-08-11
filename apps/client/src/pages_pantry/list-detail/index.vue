@@ -1275,7 +1275,6 @@ async function leaveList() {
 .source-pill,
 .day-chip,
 .mini-pill,
-.action-pill,
 .sheet-actions__button {
   border-radius: var(--radius-pill);
 }
@@ -1345,7 +1344,6 @@ async function leaveList() {
   margin-top: 22rpx;
 }
 
-.action-pill,
 .mini-pill,
 .sheet-actions__button,
 .search-box__button {
@@ -1353,7 +1351,6 @@ async function leaveList() {
   font-size: var(--font-size-sm);
 }
 
-.action-pill,
 .search-box__button,
 .sheet-actions__button--cancel,
 .mini-pill {
@@ -1361,18 +1358,15 @@ async function leaveList() {
   color: var(--color-text);
 }
 
-.action-pill,
 .sheet-actions__button {
   min-width: 168rpx;
 }
 
-.action-pill--primary,
 .sheet-actions__button--confirm {
   background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
   color: var(--button-primary-text);
 }
 
-.action-pill--danger,
 .mini-pill--danger {
   background: var(--color-danger-soft);
   color: var(--color-danger-text);

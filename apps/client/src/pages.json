@@ -67,6 +67,7 @@
       "root": "pages_meal",
       "pages": [
         { "path": "plan/index", "style": { "navigationBarTitleText": "下一餐计划", "navigationStyle": "custom" } },
+        { "path": "event/index", "style": { "navigationBarTitleText": "饭局", "navigationStyle": "custom" } },
         { "path": "poll/index", "style": { "navigationBarTitleText": "点菜征集", "navigationStyle": "custom" } },
         { "path": "wish/index", "style": { "navigationBarTitleText": "想吃池", "navigationStyle": "custom" } },
         { "path": "random/index", "style": { "navigationBarTitleText": "随机一下", "navigationStyle": "custom" } },

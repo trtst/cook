@@ -1,11 +1,13 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type PageResult, type OperationId, type UUID } from "@/apis/http";
 import type { RecipeContentSnapshot } from "@/apis/recipe";
+import { addDays, formatDateOnly } from "../utils/date";
 
 export interface MealPlanMenuItemSummary {
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
+  servings: number | null;
   sortOrder: number;
 }
 
@@ -149,3 +151,9 @@ export const mealApi = {
     );
   }
 };
+
+export function listWeekPlans(weekStart: Date) {
+  const from = formatDateOnly(weekStart);
+  const to = formatDateOnly(addDays(weekStart, 6));
+  return mealApi.listPlans({ from, to });
+}

@@ -1309,7 +1309,6 @@ async function joinShare() {
 }
 
 .list-card__title {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   color: var(--color-text);
@@ -1410,38 +1409,6 @@ async function joinShare() {
   flex-wrap: wrap;
   margin-top: 22rpx;
   justify-content: flex-end;
-}
-
-.action-pill,
-.sheet-actions__button {
-  margin: 0;
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-sm);
-}
-
-.action-pill {
-  min-width: 168rpx;
-  padding: 0 22rpx;
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.action-pill--muted {
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
-}
-
-.action-pill--subtle {
-  color: var(--color-text-secondary);
-}
-
-.action-pill--primary {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
-  color: var(--button-primary-text);
-}
-
-.action-pill--danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
 }
 
 .create-fab {
