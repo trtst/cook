@@ -975,6 +975,7 @@ interface MealPlanMenuItemSummary {
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
+  servings: number | null;
   sortOrder: number;
 }
 
