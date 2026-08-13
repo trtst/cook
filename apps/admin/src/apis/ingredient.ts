@@ -3,14 +3,14 @@ import { requestData, uploadForm, type IsoDateTime, type PageResult, type Operat
 export interface UnitSummary {
   id: UUID;
   name: string;
-  type: "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
+  type: "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
   source: "SYSTEM" | "PERSONAL";
 }
 
 export interface AdminUnitSummary {
   id: UUID;
   name: string;
-  type: "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
+  type: "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
   source: "SYSTEM";
   version: number;
   updatedAt: IsoDateTime;
@@ -34,6 +34,10 @@ export interface AdminIngredientSummary {
   categoryId: UUID;
   categoryName: string;
   defaultUnit: UnitSummary;
+  proteinType: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+  aliases: string[];
   imageUrl: string | null;
   updatedAt: IsoDateTime;
 }
@@ -86,6 +90,17 @@ export interface AdminPendingIngredientFeedbackSummary {
   user: AdminIngredientSuggestionUser;
 }
 
+export interface AdminPendingUnitRecommendationSummary {
+  id: UUID;
+  name: string;
+  type: "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
+  version: number;
+  status: "PENDING";
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  user: AdminIngredientSuggestionUser;
+}
+
 export interface AdminReviewPendingIngredientPayload {
   operationId: OperationId;
   action: AdminIngredientReviewAction;
@@ -121,6 +136,22 @@ export interface AdminReviewIngredientFeedbackResult {
   reviewedAt: IsoDateTime;
 }
 
+export interface AdminReviewPendingUnitRecommendationPayload {
+  operationId: OperationId;
+  action: "APPROVE" | "REJECT";
+  expectedVersion: number;
+  name?: string;
+  type?: AdminUnitSummary["type"];
+  reason?: string;
+}
+
+export interface AdminReviewPendingUnitRecommendationResult {
+  id: UUID;
+  status: "APPROVED" | "REJECTED";
+  reviewedAt: IsoDateTime;
+  targetUnitId: UUID | null;
+}
+
 export interface IngredientCategoryPayload {
   operationId: OperationId;
   name: string;
@@ -135,6 +166,10 @@ export interface IngredientPayload {
   name: string;
   categoryId: UUID;
   defaultUnitId: UUID;
+  proteinType?: AdminIngredientSummary["proteinType"];
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+  aliases: string[];
 }
 
 export interface UpdateIngredientPayload extends IngredientPayload {
@@ -173,6 +208,7 @@ export interface AdminIngredientListQuery {
   categoryId?: UUID;
   keyword?: string;
   status?: "ACTIVE" | "DISABLED" | "ALL";
+  factStatus?: "ALL" | "MISSING";
 }
 
 export interface AdminPendingIngredientListQuery {
@@ -182,6 +218,12 @@ export interface AdminPendingIngredientListQuery {
 }
 
 export interface AdminIngredientFeedbackListQuery {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+}
+
+export interface AdminPendingUnitRecommendationListQuery {
   page: number;
   pageSize: number;
   keyword?: string;
@@ -252,6 +294,26 @@ export const ingredientApi = {
       idempotencyKey: operationId
     });
   },
+  listPendingUnits(query: AdminPendingUnitRecommendationListQuery) {
+    return requestData<PageResult<AdminPendingUnitRecommendationSummary>>("/admin/pending-units", {
+      query: {
+        page: query.page,
+        pageSize: query.pageSize,
+        keyword: query?.keyword
+      }
+    });
+  },
+  reviewPendingUnit(recommendationId: UUID, body: AdminReviewPendingUnitRecommendationPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminReviewPendingUnitRecommendationResult>(
+      `/admin/pending-units/${encodeURIComponent(String(recommendationId))}/review`,
+      {
+        method: "POST",
+        body: payload,
+        idempotencyKey: operationId
+      }
+    );
+  },
   listIngredients(query: AdminIngredientListQuery) {
     return requestData<PageResult<AdminIngredientSummary>>("/admin/ingredients", {
       query: {
@@ -259,7 +321,8 @@ export const ingredientApi = {
         pageSize: query.pageSize,
         categoryId: query?.categoryId,
         keyword: query?.keyword,
-        status: query?.status
+        status: query?.status,
+        factStatus: query?.factStatus
       }
     });
   },

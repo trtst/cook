@@ -98,7 +98,7 @@ export interface AdminRecipeDetail {
             quantity: string;
             unitId: UUID;
             unitName: string;
-            unitType: "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
+            unitType: "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
           }
         | {
             kind: "FUZZY";

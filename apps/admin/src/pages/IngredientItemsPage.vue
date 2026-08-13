@@ -14,18 +14,40 @@ import { createOperationId } from "@/utils/operation-id";
 
 type IngredientDialogMode = "create" | "edit";
 type IngredientStatusFilter = "ACTIVE" | "DISABLED" | "ALL";
+type IngredientFactFilter = "ALL" | "MISSING";
+type IngredientProteinType = NonNullable<AdminIngredientSummary["proteinType"]>;
 
 const cropFrameSize = 240;
 const exportImageSize = 50;
 const unitTypeLabelMap: Record<AdminUnitSummary["type"], string> = {
   WEIGHT: "重量",
   VOLUME: "体积",
-  COUNT: "数量",
-  SHAPE: "形态",
-  CONTAINER: "容器",
-  PACKAGE: "包装",
-  OTHER: "其他"
+  COMMON: "常用",
+  PACKAGE: "包装"
 };
+const proteinTypeLabelMap: Record<IngredientProteinType, string> = {
+  PORK: "猪肉",
+  CHICKEN: "鸡肉",
+  BEEF: "牛肉",
+  LAMB: "羊肉",
+  DUCK: "鸭肉",
+  SEAFOOD: "海鲜",
+  EGG: "鸡蛋",
+  TOFU: "豆腐",
+  NONE: "无主蛋白"
+};
+const proteinTypeOptions: Array<{ label: string; value: IngredientProteinType | "" }> = [
+  { label: "不标注", value: "" },
+  { label: "猪肉", value: "PORK" },
+  { label: "鸡肉", value: "CHICKEN" },
+  { label: "牛肉", value: "BEEF" },
+  { label: "羊肉", value: "LAMB" },
+  { label: "鸭肉", value: "DUCK" },
+  { label: "海鲜", value: "SEAFOOD" },
+  { label: "鸡蛋", value: "EGG" },
+  { label: "豆腐", value: "TOFU" },
+  { label: "无主蛋白", value: "NONE" }
+];
 
 const loading = ref(false);
 const saving = ref(false);
@@ -49,13 +71,18 @@ const query = reactive({
   pageSize: 20,
   keyword: "",
   categoryId: "" as UUID | "",
-  status: "ACTIVE" as IngredientStatusFilter
+  status: "ACTIVE" as IngredientStatusFilter,
+  factStatus: "ALL" as IngredientFactFilter
 });
 
 const form = reactive({
   name: "",
   categoryId: "" as UUID | "",
-  defaultUnitId: "" as UUID | ""
+  defaultUnitId: "" as UUID | "",
+  proteinType: "" as IngredientProteinType | "",
+  isStaple: false,
+  isSpicyIngredient: false,
+  aliasesText: ""
 });
 
 const batchForm = reactive({
@@ -142,6 +169,10 @@ function resetForm() {
   form.name = "";
   form.categoryId = selectableCategories.value.find(item => item.id === query.categoryId)?.id || selectableCategories.value[0]?.id || "";
   form.defaultUnitId = units.value[0]?.id || "";
+  form.proteinType = "";
+  form.isStaple = false;
+  form.isSpicyIngredient = false;
+  form.aliasesText = "";
   editingIngredientId.value = null;
 }
 
@@ -212,7 +243,8 @@ async function loadIngredients() {
       pageSize: query.pageSize,
       categoryId: query.categoryId || undefined,
       keyword: query.keyword.trim() || undefined,
-      status: query.status
+      status: query.status,
+      factStatus: query.factStatus
     });
     if (requestId !== ingredientsRequest) return;
     ingredients.value = result.items;
@@ -249,6 +281,11 @@ async function changeStatus(status: IngredientStatusFilter) {
   await loadIngredients();
 }
 
+async function changeFactStatus() {
+  query.page = 1;
+  await loadIngredients();
+}
+
 function openCreateIngredient() {
   dialogMode.value = "create";
   resetForm();
@@ -261,6 +298,10 @@ function openEditIngredient(row: AdminIngredientSummary) {
   form.name = row.name;
   form.categoryId = row.categoryId;
   form.defaultUnitId = row.defaultUnit.id;
+  form.proteinType = row.proteinType || "";
+  form.isStaple = row.isStaple;
+  form.isSpicyIngredient = row.isSpicyIngredient;
+  form.aliasesText = row.aliases.join("，");
   dialogVisible.value = true;
 }
 
@@ -270,11 +311,39 @@ function openBatchDialog() {
 }
 
 function canSortIngredients() {
-  return query.status === "ACTIVE" && !query.keyword.trim() && total.value <= query.pageSize;
+  return query.status === "ACTIVE" && query.factStatus === "ALL" && !query.keyword.trim() && total.value <= query.pageSize;
+}
+
+function inferIngredientTagGaps(row: AdminIngredientSummary) {
+  const gaps: string[] = [];
+  const name = row.name.trim();
+  if (!row.proteinType) {
+    if (/(鸡蛋|鸭蛋|鹅蛋|鹌鹑蛋|皮蛋)/.test(name)) gaps.push("主蛋白");
+    else if (/(豆腐|豆干|豆皮|腐竹|千张|豆腐泡|豆腐乳)/.test(name)) gaps.push("主蛋白");
+    else if (/(猪肉|五花肉|排骨|里脊|猪蹄|猪肝|腊肠|肉末|肉丝|肉片)/.test(name)) gaps.push("主蛋白");
+    else if (/(鸡肉|鸡腿|鸡翅|鸡胸|鸡爪|鸡丁|鸡胗)/.test(name)) gaps.push("主蛋白");
+    else if (/(牛肉|牛腩|肥牛|牛排)/.test(name)) gaps.push("主蛋白");
+    else if (/(羊肉|羊排)/.test(name)) gaps.push("主蛋白");
+    else if (/(鸭肉|鸭腿|鸭翅|鸭血)/.test(name)) gaps.push("主蛋白");
+    else if (/(鱼|虾|虾仁|蟹|贝|蛤|蚝|鲍鱼|鱿鱼|墨鱼|三文鱼|海鲜)/.test(name)) gaps.push("主蛋白");
+  }
+  if (!row.isStaple && row.categoryName === "米面杂粮") gaps.push("主食");
+  if (!row.isSpicyIngredient && /(辣椒|小米辣|青椒|尖椒|杭椒|线椒|朝天椒|二荆条|剁椒|泡椒|豆瓣酱|辣酱|辣椒面|辣椒粉|干辣椒)/.test(name)) {
+    gaps.push("辣味");
+  }
+  return gaps;
 }
 
 async function submitIngredient() {
   const name = form.name.trim();
+  const aliases = Array.from(
+    new Set(
+      form.aliasesText
+        .split(/[,\uFF0C\n]/)
+        .map(item => item.trim())
+        .filter(Boolean)
+    )
+  );
   if (!name) {
     ElMessage.error("请输入食材名称");
     return;
@@ -294,7 +363,11 @@ async function submitIngredient() {
         operationId: createOperationId(),
         name,
         categoryId: form.categoryId,
-        defaultUnitId: form.defaultUnitId
+        defaultUnitId: form.defaultUnitId,
+        proteinType: form.proteinType || null,
+        isStaple: form.isStaple,
+        isSpicyIngredient: form.isSpicyIngredient,
+        aliases
       });
       ElMessage.success("系统食材已创建");
     } else if (editingIngredientId.value) {
@@ -308,7 +381,11 @@ async function submitIngredient() {
         expectedVersion: current.version,
         name,
         categoryId: form.categoryId,
-        defaultUnitId: form.defaultUnitId
+        defaultUnitId: form.defaultUnitId,
+        proteinType: form.proteinType || null,
+        isStaple: form.isStaple,
+        isSpicyIngredient: form.isSpicyIngredient,
+        aliases
       });
       ElMessage.success("系统食材已更新");
     }
@@ -385,7 +462,10 @@ async function submitBatchIngredients() {
         operationId: createOperationId(),
         name: item.name,
         categoryId: parsed.categoryId,
-        defaultUnitId: item.defaultUnitId
+        defaultUnitId: item.defaultUnitId,
+        isStaple: false,
+        isSpicyIngredient: false,
+        aliases: []
       });
       createdCount += 1;
     }
@@ -520,6 +600,17 @@ function loadImage(url: string) {
   });
 }
 
+function formatIngredientFacts(row: AdminIngredientSummary) {
+  const facts: string[] = [];
+  if (row.proteinType) {
+    facts.push(`主蛋白：${proteinTypeLabelMap[row.proteinType]}`);
+  }
+  if (row.isStaple) facts.push("主食");
+  if (row.isSpicyIngredient) facts.push("辣味食材");
+  if (row.aliases.length) facts.push(`别名：${row.aliases.join("、")}`);
+  return facts;
+}
+
 function beginCropDrag(event: PointerEvent) {
   if (!cropState.sourceUrl) return;
   dragState.active = true;
@@ -646,6 +737,10 @@ watch(
         <el-option label="已下架" value="DISABLED" />
         <el-option label="全部" value="ALL" />
       </el-select>
+      <el-select v-model="query.factStatus" class="toolbar-select" placeholder="标签补录" @change="changeFactStatus">
+        <el-option label="全部标签状态" value="ALL" />
+        <el-option label="建议补录" value="MISSING" />
+      </el-select>
       <el-input
         v-model="query.keyword"
         class="toolbar-search toolbar-search--wide"
@@ -726,6 +821,12 @@ watch(
                   <span class="ingredient-card__category">{{ row.categoryName }}</span>
                   <span class="ingredient-card__unit">{{ row.defaultUnit.name }}</span>
                 </div>
+                <div v-if="formatIngredientFacts(row).length" class="ingredient-card__facts">
+                  {{ formatIngredientFacts(row).join(" · ") }}
+                </div>
+                <div v-if="inferIngredientTagGaps(row).length" class="ingredient-card__gaps">
+                  建议补：{{ inferIngredientTagGaps(row).join(" / ") }}
+                </div>
               </div>
             </div>
             <div class="ingredient-card__actions">
@@ -742,7 +843,11 @@ watch(
           </div>
         </div>
         <div class="ingredient-table-panel__footer">
-          <div class="table-hint">{{ currentScopeName }}共 {{ total }} 条；仅“启用中 + 无关键词 + 当前分类总数不超过单页上限”支持拖拽排序。</div>
+          <div class="table-hint">
+            {{ currentScopeName }}共 {{ total }} 条
+            <template v-if="query.factStatus === 'MISSING'">；当前只显示建议优先补录标签的系统食材</template>
+            <template v-else>；仅“启用中 + 无关键词 + 当前分类总数不超过单页上限”支持拖拽排序。</template>
+          </div>
           <el-pagination
             v-model:current-page="query.page"
             v-model:page-size="query.pageSize"
@@ -780,6 +885,25 @@ watch(
               <el-option v-for="item in group.items" :key="item.id" :label="item.name" :value="item.id" />
             </el-option-group>
           </el-select>
+        </el-form-item>
+        <el-form-item label="主蛋白">
+          <el-select v-model="form.proteinType" placeholder="可不标注">
+            <el-option v-for="item in proteinTypeOptions" :key="item.label" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="补充属性">
+          <div class="ingredient-flags">
+            <el-checkbox v-model="form.isStaple">这是主食类食材</el-checkbox>
+            <el-checkbox v-model="form.isSpicyIngredient">这是辣味食材</el-checkbox>
+          </div>
+        </el-form-item>
+        <el-form-item label="别名">
+          <el-input
+            v-model="form.aliasesText"
+            maxlength="200"
+            placeholder="可选，多个别名用逗号分隔，例如：西红柿，番茄"
+          />
+          <div class="table-hint">用于后台治理和后续自动识别，不直接作为前台展示文案。</div>
         </el-form-item>
         <el-form-item v-if="dialogMode === 'edit'" label="食材图片">
           <div class="edit-image-panel">
@@ -920,6 +1044,27 @@ watch(
 .category-item:hover {
   color: #7c5f22;
   background: #fbf7ed;
+}
+
+.ingredient-card__facts {
+  margin-top: 6px;
+  color: #78716c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ingredient-card__gaps {
+  margin-top: 6px;
+  color: #b45309;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.ingredient-flags {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .category-item--active {
