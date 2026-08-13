@@ -1,5 +1,6 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type OperationId, type UUID } from "./http";
+import type { MealSlot } from "@/utils/meal-slot";
 
 export type MealPollStatus = "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
 export type MealPollCandidateStatus = "ACTIVE" | "PENDING" | "REJECTED";
@@ -22,7 +23,7 @@ export interface MealPollSummary {
   diningGroupId: UUID;
   title: string;
   planDate: string;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot: MealSlot;
   status: MealPollStatus;
   deadlineAt: IsoDateTime;
   choiceLimit: number;
@@ -80,7 +81,7 @@ export interface MealPollListQuery {
   diningGroupId: UUID;
   status?: MealPollStatus;
   planDate?: string;
-  mealSlot?: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot?: MealSlot;
   limit?: number;
 }
 
@@ -93,7 +94,7 @@ export interface CreateMealPollRequest {
   operationId: OperationId;
   diningGroupId: UUID;
   planDate: string;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot: MealSlot;
   deadlineAt: IsoDateTime;
   choiceLimit: number;
   note: string | null;

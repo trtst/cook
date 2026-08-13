@@ -137,6 +137,7 @@ import SharePillButton from "@/components/Share/SharePillButton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
+import { formatMealSlot, type MealSlot } from "@/utils/meal-slot";
 import { formatDateTimeMinute } from "../utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -145,7 +146,7 @@ type PageMode = "empty" | "event" | "token";
 interface MemoryCardView {
   title: string;
   planDate: string | null;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER" | null;
+  mealSlot: MealSlot | null;
   menuItems: Array<{
     title: string;
     coverUrl: string | null;
@@ -403,12 +404,6 @@ function formatParticipantRole(role: MemoryShareParticipant["role"]) {
   if (role === "ORGANIZER") return "主理人";
   if (role === "PARTICIPANT") return "饭搭子";
   return "来客";
-}
-
-function formatMealSlot(value: "BREAKFAST" | "LUNCH" | "DINNER") {
-  if (value === "BREAKFAST") return "早餐";
-  if (value === "LUNCH") return "午餐";
-  return "晚餐";
 }
 
 function toCardView(source: MemorySharePreviewResponse): MemoryCardView {

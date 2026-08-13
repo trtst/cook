@@ -92,25 +92,10 @@
               </view>
               <view v-else-if="loading && !refreshing" class="notice">正在同步这一周的计划...</view>
 
-              <view v-if="!recipeOptions.length && !loadingRecipes" class="recipe-empty">
-                <Empty title="还没有我的菜谱" description="先去菜谱页准备几道常做菜，再回来安排这一周。" />
-                <view class="recipe-empty__action" hover-class="recipe-empty__action--hover" hover-stay-time="100" @click="openRecipeHome">
-                  去我的菜谱
-                </view>
-              </view>
-
-              <view v-else-if="!selectedPlanCount" class="day-empty">
+              <view v-if="!selectedPlanCount" class="day-empty">
                 <text class="day-empty__title">这一天还没有安排</text>
-                <text class="day-empty__desc">先给这一天加一条安排，或者把上周同一天的安排带过来。</text>
+                <text class="day-empty__desc">从菜谱详情或周刊加入计划，也可以把上周同一天的安排带过来。</text>
                 <view class="day-empty__actions">
-                  <view
-                    class="day-empty__action action-pill action-pill--primary"
-                    hover-class="action-pill--hover"
-                    hover-stay-time="100"
-                    @click="openCreateEditor()"
-                  >
-                    添加安排
-                  </view>
                   <view
                     class="day-empty__action action-pill action-pill--muted action-pill--subtle"
                     :class="copyBusy ? 'day-empty__action--disabled' : ''"
@@ -120,19 +105,11 @@
                   >
                     {{ copyBusy ? "复制中..." : "复制上周计划" }}
                   </view>
-                  <view
-                    class="day-empty__action action-pill action-pill--muted action-pill--subtle"
-                    hover-class="action-pill--hover"
-                    hover-stay-time="100"
-                    @click="openRecipeHome"
-                  >
-                    看看我的菜谱
-                  </view>
                 </view>
               </view>
 
               <view class="meal-list">
-                <view v-for="plan in selectedPlans" :key="plan.id" class="meal-card">
+                <view v-for="plan in selectedPlans" :key="plan.id" class="meal-card" hover-class="meal-card--hover" hover-stay-time="100" @click="openPlanDetail(plan)">
                   <view class="meal-card__head">
                     <view class="meal-card__label-row">
                       <text class="meal-card__slot-badge">{{ slotLabel(plan.mealSlot) }}</text>
@@ -154,52 +131,13 @@
                           :class="['meal-card__menu-chip', item.recipeId ? 'meal-card__menu-chip--link' : '']"
                           :hover-class="item.recipeId ? 'meal-card__menu-chip--hover' : ''"
                           hover-stay-time="100"
-                          @click="openRecipeDetail(item.recipeId)"
+                          @click.stop="openRecipeDetail(item.recipeId)"
                         >
                           <text class="meal-card__menu-name">{{ item.title }}</text>
                           <view class="meal-card__menu-line" />
                           <text v-if="item.servings" class="meal-card__menu-count">{{ item.servings }}人份</text>
                         </view>
                       </view>
-                    </view>
-                  </view>
-
-                  <view class="meal-card__actions">
-                    <view
-                      v-if="plan.hasDiningEvent && plan.diningEventId"
-                      class="action-pill action-pill--muted action-pill--subtle"
-                      hover-class="action-pill--hover"
-                      hover-stay-time="100"
-                      @click="openEventDetail(plan)"
-                    >
-                      查看饭局
-                    </view>
-                    <view
-                      v-else-if="plan.status !== 'COMPLETED'"
-                      class="action-pill action-pill--muted action-pill--subtle"
-                      hover-class="action-pill--hover"
-                      hover-stay-time="100"
-                      @click="openEventCreate(plan)"
-                    >
-                      发起饭局
-                    </view>
-                    <view
-                      v-if="plan.status !== 'COMPLETED'"
-                      class="action-pill action-pill--muted"
-                      hover-class="action-pill--hover"
-                      hover-stay-time="100"
-                      @click="openEditor(plan.mealSlot, plan)"
-                    >
-                      调整菜谱
-                    </view>
-                    <view
-                      v-if="plan.status !== 'COMPLETED'"
-                      class="action-pill action-pill--primary"
-                      hover-class="action-pill--hover"
-                      hover-stay-time="100"
-                      @click="markPlanDone(plan)"
-                    >
-                      标记完成
                     </view>
                   </view>
                 </view>
@@ -228,86 +166,6 @@
           </view>
         </view>
       </view>
-
-      <SheetShell
-        v-if="sheetMounted"
-        :visible="sheetVisible"
-        :title="sheetTitle"
-        :subtitle="sheetSubtitle"
-        @close="closeSheet"
-        @after-close="handleSheetAfterClose"
-      >
-        <template #title-extra>
-          <text class="sheet-count">{{ selectedRecipeIds.length }}道</text>
-        </template>
-
-        <view class="editor-sheet">
-          <view class="editor-sheet__summary">
-            <text class="editor-sheet__summary-date">{{ selectedDateTitle }}</text>
-            <text class="editor-sheet__summary-slot">{{ slotLabel(editingSlot) }}</text>
-          </view>
-
-          <view v-if="!editingPlanId" class="editor-sheet__section">
-            <text class="editor-sheet__section-label">这条安排是</text>
-            <view class="editor-sheet__slot-row">
-              <view
-                v-for="item in editorSlotOptions"
-                :key="item.value"
-                :class="['editor-sheet__slot', editingSlot === item.value ? 'editor-sheet__slot--active' : '']"
-                @click="editingSlot = item.value"
-              >
-                {{ item.label }}
-              </view>
-            </view>
-          </view>
-
-          <view v-if="!recipeOptions.length" class="editor-sheet__empty">
-            <Empty title="还没有可安排的菜谱" description="先去“我的菜谱”创建几道常做菜，再回来安排这一餐。" />
-            <view class="editor-sheet__empty-action" hover-class="editor-sheet__empty-action--hover" hover-stay-time="100" @click="openRecipeHome">
-              去我的菜谱
-            </view>
-          </view>
-
-          <view v-else class="editor-sheet__list">
-            <view
-              v-for="recipe in recipeOptions"
-              :key="recipe.id"
-              :class="['recipe-option', isRecipeSelected(recipe.id) ? 'recipe-option--selected' : '']"
-              hover-class="recipe-option--hover"
-              hover-stay-time="100"
-              @click="toggleRecipe(recipe.id)"
-            >
-              <image v-if="recipe.coverImageUrl" class="recipe-option__cover" :src="recipe.coverImageUrl" mode="aspectFill" />
-              <view v-else class="recipe-option__cover recipe-option__cover--empty">
-                <text class="recipe-option__cover-text">菜谱</text>
-              </view>
-
-              <view class="recipe-option__main">
-                <text class="recipe-option__name">{{ recipe.title }}</text>
-                <text class="recipe-option__meta">
-                  {{ [recipe.difficultyText, recipe.durationText].filter(Boolean).join(" · ") || "先加入这顿饭，后续再细调" }}
-                </text>
-              </view>
-
-              <view class="recipe-option__check">
-                <view :class="['recipe-option__check-dot', isRecipeSelected(recipe.id) ? 'recipe-option__check-dot--selected' : '']" />
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <template #footer>
-          <view
-            :class="[
-              'editor-submit',
-              submitting || !selectedRecipeIds.length || !recipeOptions.length ? 'editor-submit--disabled' : ''
-            ]"
-            @click="submitPlan"
-          >
-            {{ submitting ? "保存中..." : editingPlanId ? "保存这顿饭" : "安排这顿饭" }}
-          </view>
-        </template>
-      </SheetShell>
 
       <SheetShell
         v-if="sortSheetMounted"
@@ -387,8 +245,7 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
-import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
-import Empty from "@/components/Empty/Empty.vue";
+import { recipeApi } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
@@ -398,6 +255,11 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+import {
+  formatMealSlot,
+  mealSlotOrder,
+  type MealSlot
+} from "@/utils/meal-slot";
 import { listWeekPlans, mealApi, type MealPlanSummary } from "../apis/meal";
 import {
   addDays,
@@ -410,11 +272,10 @@ import {
   todayText
 } from "../utils/date";
 import { clampNumber, readTouchY } from "../utils/gesture";
-import { dedupeIds, isUuid, parseQueryId } from "../utils/id";
+import { dedupeIds, isUuid } from "../utils/id";
 import { getPlanSortRowSpan as resolvePlanSortRowSpan, movePlanRow } from "../utils/plan";
 
-type MealSlot = "BREAKFAST" | "LUNCH" | "DINNER";
-type FabActionKey = "create" | "copy" | "sort" | "recipe";
+type FabActionKey = "copy" | "sort";
 type FabActionTone = "primary" | "surface" | "warning";
 
 interface WeekPanelDay {
@@ -464,11 +325,8 @@ const FAB_ACTION_POINT_MAP: Record<number, Array<{ x: number; y: number }>> = {
   ]
 };
 const PLAN_LOADING_TIPS = ["刷新这一周安排", "把最近的做饭计划拉下来", "看看这周有没有新安排"];
-const recipeOptions = ref<MyRecipeSummary[]>([]);
 const plans = ref<MealPlanSummary[]>([]);
 const loading = ref(false);
-const loadingRecipes = ref(false);
-const submitting = ref(false);
 const copyBusy = ref(false);
 const errorText = ref("");
 const selectedDate = ref(today);
@@ -477,13 +335,6 @@ const weekSwiperDuration = ref(WEEK_SWIPER_DURATION_MS);
 const previewDate = ref("");
 const loadedOnce = ref(false);
 const planLoadSeq = ref(0);
-const sheetMounted = ref(false);
-const sheetVisible = ref(false);
-const editingSlot = ref<MealSlot>("DINNER");
-const editingPlanId = ref<UUID | "">("");
-const selectedRecipeIds = ref<UUID[]>([]);
-const pendingRecipeId = ref<UUID | "">("");
-const recipeQueryHandled = ref(false);
 const weekRangeStart = ref(buildWeekRangeStart(startOfWeek(parseDateOnly(today)), WEEK_PANEL_MID));
 const weekPanelOverride = ref<Date[] | null>(null);
 const weekSilentReset = ref(false);
@@ -528,11 +379,6 @@ const {
   }
 });
 
-const MEAL_SLOTS: Array<{ value: MealSlot; label: string }> = [
-  { value: "BREAKFAST", label: "早餐" },
-  { value: "LUNCH", label: "午餐" },
-  { value: "DINNER", label: "晚餐" }
-];
 const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 const selectedWeekStart = computed(() => startOfWeek(parseDateOnly(selectedDate.value)));
@@ -567,21 +413,12 @@ const selectedDatePlanMap = computed(() => planMap.value.get(selectedDate.value)
 const selectedPlans = computed(() => sortPlans(Array.from(selectedDatePlanMap.value.values()), selectedDate.value));
 const selectedPlanCount = computed(() => selectedPlans.value.length);
 const canSortPlans = computed(() => selectedPlanCount.value > 1);
-const availableSlots = computed(() => MEAL_SLOTS.filter(item => !selectedDatePlanMap.value.has(item.value)));
-const canAddPlan = computed(() => availableSlots.value.length > 0);
-const editorSlotOptions = computed(() => (editingPlanId.value ? MEAL_SLOTS.filter(item => item.value === editingSlot.value) : availableSlots.value));
-const hasContentCards = computed(() => Boolean(errorText.value || selectedPlanCount.value || !recipeOptions.value.length || loading.value));
+const hasContentCards = computed(() => Boolean(errorText.value || selectedPlanCount.value || loading.value));
 const inlineLoading = computed(() => loading.value && hasContentCards.value && !refreshing.value);
 const inlineLoadingText = computed(() => PLAN_LOADING_TIPS);
-
-const weekPanels = computed<WeekPanel[]>(() => {
-  return weekPanelStarts.value.map(weekStart => buildWeekPanel(weekStart));
-});
+const weekPanels = computed<WeekPanel[]>(() => weekPanelStarts.value.map(weekStart => buildWeekPanel(weekStart)));
 const fabActionItems = computed<Array<{ key: FabActionKey; label: string; tone: FabActionTone }>>(() => {
   const items: Array<{ key: FabActionKey; label: string; tone: FabActionTone }> = [];
-  if (canAddPlan.value) {
-    items.push({ key: "create", label: "添加安排", tone: "primary" });
-  }
   items.push({
     key: "copy",
     label: copyBusy.value ? "复制中..." : "复制上周",
@@ -590,14 +427,8 @@ const fabActionItems = computed<Array<{ key: FabActionKey; label: string; tone: 
   if (canSortPlans.value) {
     items.push({ key: "sort", label: "调整顺序", tone: "surface" });
   }
-  items.push({ key: "recipe", label: "去看菜谱", tone: "surface" });
   return items;
 });
-
-const sheetTitle = computed(() => (editingPlanId.value ? "调整这顿饭" : "安排这顿饭"));
-const sheetSubtitle = computed(() =>
-  editingPlanId.value ? "保存后会整体覆盖这顿饭当前菜单。" : "从“我的菜谱”里多选几道，先把这一餐定下来。"
-);
 const planSortDragging = computed(() => Boolean(planSortDraggingId.value));
 const planSortGhostPlan = computed(() => planSortRows.value.find(item => item.id === planSortDraggingId.value) ?? null);
 const planSortGhostIndex = computed(() => {
@@ -611,9 +442,10 @@ const planSortGhostStyle = computed(() => ({
 }));
 
 onLoad(query => {
-  const nextRecipeId = parseQueryId(query?.recipeId);
-  if (nextRecipeId) {
-    pendingRecipeId.value = nextRecipeId;
+  const nextDate = Array.isArray(query?.date) ? query.date[0] : query?.date;
+  if (typeof nextDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(decodeURIComponent(nextDate))) {
+    selectedDate.value = decodeURIComponent(nextDate);
+    weekRangeStart.value = buildWeekRangeStart(startOfWeek(parseDateOnly(selectedDate.value)), WEEK_PANEL_MID);
   }
 });
 
@@ -642,15 +474,6 @@ watch(
 );
 
 watch(
-  () => sheetVisible.value,
-  visible => {
-    if (visible) {
-      fabExpanded.value = false;
-    }
-  }
-);
-
-watch(
   () => sortSheetVisible.value,
   visible => {
     if (visible) {
@@ -661,31 +484,8 @@ watch(
 
 async function loadPage() {
   planOrderMap.value = readPlanOrderState();
-  await Promise.all([loadRecipeOptions(), loadWeekPlans()]);
+  await loadWeekPlans();
   loadedOnce.value = true;
-  void handlePendingRecipeIntent();
-}
-
-async function loadRecipeOptions() {
-  if (!sessionStore.isLoggedIn || loadingRecipes.value) return;
-  loadingRecipes.value = true;
-  try {
-    let page = 1;
-    let hasNext = true;
-    const items: MyRecipeSummary[] = [];
-    while (hasNext) {
-      const result = await recipeApi.listMyRecipes({ page, pageSize: 100 });
-      items.push(...result.items);
-      hasNext = result.hasNext;
-      page += 1;
-    }
-    recipeOptions.value = items;
-    selectedRecipeIds.value = selectedRecipeIds.value.filter(id => items.some(recipe => recipe.id === id));
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "菜谱加载失败", icon: "none" });
-  } finally {
-    loadingRecipes.value = false;
-  }
 }
 
 async function loadWeekPlans() {
@@ -710,7 +510,7 @@ async function loadWeekPlans() {
 async function handleRefresherRefresh() {
   if (!onRefresherRefresh()) return;
   try {
-    await Promise.all([loadRecipeOptions(), loadWeekPlans()]);
+    await loadWeekPlans();
   } finally {
     await onRefreshComplete();
   }
@@ -782,41 +582,6 @@ function goMonth(offset: -1 | 1) {
   });
 }
 
-function openCreateEditor(preferredSlot: MealSlot | null = "DINNER", extraRecipeIds: UUID[] = []) {
-  closeFab();
-  if (!recipeOptions.value.length) {
-    openRecipeHome();
-    return;
-  }
-  const nextSlot = resolvePreferredSlot(preferredSlot);
-  if (!nextSlot) {
-    void uniPlatform.feedback.toast({ title: "这一天的安排已经排满了", icon: "none" });
-    return;
-  }
-  openEditor(nextSlot, null, extraRecipeIds);
-}
-
-function openEditor(slot: MealSlot, plan: MealPlanSummary | null = null, extraRecipeIds: UUID[] = []) {
-  editingSlot.value = plan?.mealSlot ?? slot;
-  editingPlanId.value = plan?.id ?? "";
-  const existingIds = plan ? plan.menuItems.map(item => item.recipeId).filter(isUuid) : [];
-  selectedRecipeIds.value = dedupeRecipeIds([...existingIds, ...extraRecipeIds]);
-  sheetMounted.value = true;
-  nextTick(() => {
-    sheetVisible.value = true;
-  });
-}
-
-function closeSheet() {
-  sheetVisible.value = false;
-}
-
-function handleSheetAfterClose() {
-  sheetMounted.value = false;
-  selectedRecipeIds.value = [];
-  editingPlanId.value = "";
-}
-
 async function openSortSheet() {
   closeFab();
   if (selectedPlans.value.length <= 1) return;
@@ -845,60 +610,10 @@ function confirmSortSheet() {
   closeSortSheet();
 }
 
-function toggleRecipe(recipeId: UUID) {
-  const exists = selectedRecipeIds.value.includes(recipeId);
-  selectedRecipeIds.value = exists
-    ? selectedRecipeIds.value.filter(id => id !== recipeId)
-    : sortRecipeIdsByOption([...selectedRecipeIds.value, recipeId]);
-}
-
-function isRecipeSelected(recipeId: UUID) {
-  return selectedRecipeIds.value.includes(recipeId);
-}
-
-async function submitPlan() {
-  if (!selectedRecipeIds.value.length || submitting.value) return;
-  submitting.value = true;
-  try {
-    await mealApi.createPlan({
-      operationId: createOperationId(),
-      planDate: selectedDate.value,
-      mealSlot: editingSlot.value,
-      recipeIds: selectedRecipeIds.value
-    });
-    await uniPlatform.feedback.toast({ title: editingPlanId.value ? "这顿饭已更新" : "这顿饭已安排", icon: "success" });
-    closeSheet();
-    await loadWeekPlans();
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function markPlanDone(plan: MealPlanSummary) {
-  if (submitting.value) return;
-  const confirmed = await uniPlatform.feedback.confirm({
-    title: "标记完成",
-    content: `确认把${slotLabel(plan.mealSlot)}这顿饭标记为已完成吗？`
-  });
-  if (!confirmed) return;
-
-  submitting.value = true;
-  try {
-    await mealApi.completePlan(plan.id, createOperationId());
-    await uniPlatform.feedback.toast({ title: "已标记完成", icon: "success" });
-    await loadWeekPlans();
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
 async function copyPreviousWeek() {
   if (copyBusy.value) return;
-  const previousWeekStart = addDays(selectedWeekStart.value, -7);
+  const selectedWeekStart = addDays(parseDateOnly(selectedDate.value), -parseDateOnly(selectedDate.value).getDay());
+  const previousWeekStart = addDays(selectedWeekStart, -7);
 
   copyBusy.value = true;
   try {
@@ -933,15 +648,31 @@ async function copyPreviousWeek() {
     });
     if (!confirmed) return;
 
+    const recipeMap = new Map<UUID, { id: UUID; contentVersionId: UUID }>();
+    const recipeIds = Array.from(new Set(copyCandidates.flatMap(item => item.menuItems.map(menuItem => menuItem.recipeId).filter(isUuid))));
+    const recipes = await Promise.all(recipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
+    recipes.forEach(recipe => recipeMap.set(recipe.id, recipe));
     for (const item of copyCandidates) {
       const targetDate = formatDateOnly(addDays(parseDateOnly(item.planDate), 7));
-      const recipeIds = item.menuItems.map(menuItem => menuItem.recipeId).filter(isUuid);
-      if (!recipeIds.length) continue;
+      const menuItems = item.menuItems.map((menuItem, index) => {
+        const recipe = menuItem.recipeId ? recipeMap.get(menuItem.recipeId) : null;
+        if (!recipe) return null;
+        return {
+          slotType: menuItem.slotType,
+          sortOrder: index,
+          recipeId: recipe.id,
+          recipeVersionId: recipe.contentVersionId,
+          purchaseState: menuItem.purchaseState
+        };
+      });
+      if (menuItems.some(menuItem => menuItem === null)) continue;
+      const resolvedMenuItems = menuItems.filter((menuItem): menuItem is NonNullable<typeof menuItem> => Boolean(menuItem));
       await mealApi.createPlan({
         operationId: createOperationId(),
         planDate: targetDate,
         mealSlot: item.mealSlot,
-        recipeIds
+        expectedVersion: null,
+        menuItems: resolvedMenuItems
       });
     }
 
@@ -954,32 +685,14 @@ async function copyPreviousWeek() {
   }
 }
 
-function openRecipeHome() {
-  closeFab();
-  void uniPlatform.navigation.switchTab("/pages/recipe/index");
-}
-
 function openRecipeDetail(recipeId: UUID | null) {
   if (!isUuid(recipeId)) return;
   void uniPlatform.navigation.navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipeId))}&kind=my`);
 }
 
-function openEventCreate(plan: MealPlanSummary) {
-  const title = encodeURIComponent(plan.title);
-  const planDate = encodeURIComponent(plan.planDate);
-  const mealSlot = encodeURIComponent(plan.mealSlot);
+function openPlanDetail(plan: MealPlanSummary) {
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/event/index?planItemId=${encodeURIComponent(String(plan.id))}&planDate=${planDate}&mealSlot=${mealSlot}&title=${title}`
-  );
-}
-
-function openEventDetail(plan: MealPlanSummary) {
-  if (!plan.diningEventId) return;
-  const title = encodeURIComponent(plan.title);
-  const planDate = encodeURIComponent(plan.planDate);
-  const mealSlot = encodeURIComponent(plan.mealSlot);
-  void uniPlatform.navigation.navigateTo(
-    `/pages_meal/event/index?eventId=${encodeURIComponent(String(plan.diningEventId))}&planItemId=${encodeURIComponent(String(plan.id))}&planDate=${planDate}&mealSlot=${mealSlot}&title=${title}`
+    `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(plan.id))}&planDate=${encodeURIComponent(plan.planDate)}`
   );
 }
 
@@ -996,42 +709,11 @@ function planDiningText(plan: MealPlanSummary) {
 }
 
 function slotLabel(slot: MealSlot) {
-  return MEAL_SLOTS.find(item => item.value === slot)?.label || "这顿饭";
-}
-
-async function handlePendingRecipeIntent() {
-  if (recipeQueryHandled.value || !pendingRecipeId.value) return;
-  const recipeId = pendingRecipeId.value;
-  recipeQueryHandled.value = true;
-  pendingRecipeId.value = "";
-  if (!recipeOptions.value.some(item => item.id === recipeId)) return;
-  if (selectedDatePlanMap.value.get("DINNER")) {
-    openEditor("DINNER", selectedDatePlanMap.value.get("DINNER") ?? null, [recipeId]);
-    return;
-  }
-  openCreateEditor("DINNER", [recipeId]);
-}
-
-function sortRecipeIdsByOption(ids: UUID[]) {
-  const orderMap = new Map(recipeOptions.value.map((item, index) => [item.id, index]));
-  return dedupeRecipeIds(ids).sort((left, right) => (orderMap.get(left) ?? Number.MAX_SAFE_INTEGER) - (orderMap.get(right) ?? Number.MAX_SAFE_INTEGER));
-}
-
-function dedupeRecipeIds(ids: UUID[]) {
-  return Array.from(new Set(ids.filter(isUuid)));
-}
-
-function resolvePreferredSlot(preferredSlot: MealSlot | null) {
-  if (preferredSlot && availableSlots.value.some(item => item.value === preferredSlot)) {
-    return preferredSlot;
-  }
-  return availableSlots.value[0]?.value ?? null;
+  return formatMealSlot(slot);
 }
 
 function slotOrder(slot: MealSlot) {
-  if (slot === "BREAKFAST") return 0;
-  if (slot === "LUNCH") return 1;
-  return 2;
+  return mealSlotOrder(slot);
 }
 
 function buildCopyConfirm(copiedCount: number, skippedExisting: number, skippedInvalid: number) {
@@ -1229,10 +911,6 @@ function closeFab() {
 }
 
 function handleFabAction(key: FabActionKey) {
-  if (key === "create") {
-    openCreateEditor();
-    return;
-  }
   if (key === "copy") {
     if (copyBusy.value) return;
     closeFab();
@@ -1244,7 +922,6 @@ function handleFabAction(key: FabActionKey) {
     void openSortSheet();
     return;
   }
-  openRecipeHome();
 }
 
 function buildFabActionStyle(index: number, total: number) {
@@ -1255,18 +932,11 @@ function buildFabActionStyle(index: number, total: number) {
 }
 
 function clearPageState() {
-  recipeOptions.value = [];
   plans.value = [];
   loading.value = false;
-  loadingRecipes.value = false;
-  submitting.value = false;
   copyBusy.value = false;
   errorText.value = "";
   selectedDate.value = today;
-  selectedRecipeIds.value = [];
-  editingPlanId.value = "";
-  sheetVisible.value = false;
-  sheetMounted.value = false;
   loadedOnce.value = false;
   previewDate.value = "";
   weekRangeStart.value = buildWeekRangeStart(startOfWeek(parseDateOnly(today)), WEEK_PANEL_MID);
@@ -1477,7 +1147,6 @@ function clearPageState() {
 
 .notice,
 .day-empty,
-.recipe-empty,
 .meal-card {
   border: 1rpx solid var(--plan-card-border);
   border-radius: var(--plan-card-radius);
@@ -1490,11 +1159,6 @@ function clearPageState() {
   padding: 28rpx;
   color: var(--color-text-secondary);
   font-size: 24rpx;
-}
-
-.recipe-empty {
-  margin-top: 24rpx;
-  padding: 24rpx;
 }
 
 .day-empty {
@@ -1528,25 +1192,6 @@ function clearPageState() {
   min-width: 188rpx;
 }
 
-.recipe-empty__action,
-.editor-sheet__empty-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 16rpx;
-  padding: 24rpx;
-  border-radius: var(--radius-md);
-  background: var(--plan-tag-accent-bg);
-  color: var(--color-primary);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.recipe-empty__action--hover,
-.editor-sheet__empty-action--hover {
-  transform: scale(0.99);
-}
-
 .meal-list {
   display: flex;
   flex-direction: column;
@@ -1563,6 +1208,11 @@ function clearPageState() {
   border-radius: var(--radius-xs);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+}
+
+.meal-card--hover {
+  transform: translateY(-2rpx);
+  opacity: 0.96;
 }
 
 .meal-card__head {
@@ -1786,169 +1436,6 @@ function clearPageState() {
     opacity: 1;
     transform: translate(var(--fab-x), var(--fab-y)) scale(1);
   }
-}
-
-.sheet-count {
-  color: var(--color-primary);
-  font-size: 24rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.editor-sheet__summary {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  padding: 8rpx 0 14rpx;
-}
-
-.editor-sheet__summary-date {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.editor-sheet__summary-slot {
-  padding: 8rpx 16rpx;
-  border-radius: 999rpx;
-  background: rgba(244, 108, 83, 0.08);
-  color: var(--color-primary);
-  font-size: 22rpx;
-}
-
-.editor-sheet__section {
-  margin-bottom: 18rpx;
-}
-
-.editor-sheet__section-label {
-  display: block;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-}
-
-.editor-sheet__slot-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 12rpx;
-}
-
-.editor-sheet__slot {
-  padding: 16rpx 24rpx;
-  border-radius: 999rpx;
-  background: rgba(215, 198, 173, 0.24);
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-}
-
-.editor-sheet__slot--active {
-  background: rgba(244, 108, 83, 0.12);
-  color: var(--color-primary);
-}
-
-.editor-sheet__list {
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-}
-
-.recipe-option {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 20rpx;
-  border: 2rpx solid rgba(215, 198, 173, 0.6);
-  border-radius: 24rpx;
-  background: rgba(255, 252, 246, 0.82);
-}
-
-.recipe-option--hover {
-  transform: translateY(-2rpx);
-}
-
-.recipe-option--selected {
-  border-color: rgba(244, 108, 83, 0.55);
-  background: rgba(244, 108, 83, 0.06);
-  box-shadow: 0 14rpx 34rpx rgba(244, 108, 83, 0.08);
-}
-
-.recipe-option__cover {
-  flex: 0 0 auto;
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 20rpx;
-  background: #f0e7db;
-}
-
-.recipe-option__cover--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.recipe-option__cover-text {
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-}
-
-.recipe-option__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.recipe-option__name {
-  display: block;
-  color: var(--color-text);
-  font-size: 28rpx;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.5;
-}
-
-.recipe-option__meta {
-  display: block;
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.6;
-}
-
-.recipe-option__check {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 999rpx;
-  border: 2rpx solid rgba(244, 108, 83, 0.35);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.recipe-option__check-dot {
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 999rpx;
-  background: transparent;
-}
-
-.recipe-option__check-dot--selected {
-  background: var(--color-primary);
-}
-
-.editor-submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 8rpx 0 24rpx;
-  padding: 28rpx 24rpx calc(28rpx + env(safe-area-inset-bottom));
-  border-radius: 24rpx;
-  background: linear-gradient(135deg, var(--color-primary) 0%, #f98565 100%);
-  color: var(--color-primary-foreground);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-heavy);
-}
-
-.editor-submit--disabled {
-  opacity: 0.52;
 }
 
 .plan-sort {

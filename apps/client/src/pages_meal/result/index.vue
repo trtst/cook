@@ -108,6 +108,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
+import { formatMealSlot } from "@/utils/meal-slot";
 
 const pageStyle = usePageScrollStyle();
 const sessionStore = useSessionStore();
@@ -192,12 +193,6 @@ async function loadPage(force = false) {
 function clearPageState() {
   pollDetail.value = null;
   errorText.value = "";
-}
-
-function formatMealSlot(slot: "BREAKFAST" | "LUNCH" | "DINNER") {
-  if (slot === "BREAKFAST") return "早餐";
-  if (slot === "LUNCH") return "午餐";
-  return "晚餐";
 }
 
 function formatStatus(status: MealPollStatus) {

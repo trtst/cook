@@ -168,9 +168,9 @@
 	                    <view class="cookfont detail-inline-actions__icon icon-edit" />
 	                    <view class="detail-inline-actions__text">改编</view>
 	                  </button>
-	                  <button class="detail-inline-actions__item" @click="openAddSheet">
-	                    <view class="cookfont detail-inline-actions__icon icon-add-owner" />
-                    <view class="detail-inline-actions__text">{{ addActionLabel }}</view>
+	                  <button class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
+	                    <view class="cookfont detail-inline-actions__icon" :class="externalPrimaryActionIcon" />
+                    <view class="detail-inline-actions__text">{{ externalPrimaryActionLabel }}</view>
                   </button>
                 </template>
                   <template v-else-if="isOwnedDetail">
@@ -204,9 +204,9 @@
               <view class="cookfont icon-edit detail-actions__icon" />
               <view class="detail-actions__text">改编</view>
             </button>
-            <button class="detail-actions__item" @click="openAddSheet">
-              <view class="cookfont icon-add-owner detail-actions__icon" />
-              <view class="detail-actions__text">{{ addActionLabel }}</view>
+            <button class="detail-actions__item" @click="handleExternalPrimaryAction">
+              <view class="cookfont detail-actions__icon" :class="externalPrimaryActionIcon" />
+              <view class="detail-actions__text">{{ externalPrimaryActionLabel }}</view>
             </button>
           </template>
           <template v-else-if="isOwnedDetail">
@@ -275,6 +275,54 @@
               </button>
             </view>
           </template>
+      </SheetShell>
+
+      <SheetShell
+        :visible="planSheetVisible"
+        title="加入计划"
+        subtitle="选好日期和餐次后，这道菜会加入对应的安排。"
+        @close="closePlanSheet"
+      >
+        <view class="plan-sheet">
+          <view class="plan-sheet__section">
+            <view class="plan-sheet__head">
+              <text class="plan-sheet__label">安排到哪天</text>
+              <text class="plan-sheet__date">{{ formatPlanDate(planDate) }}</text>
+            </view>
+            <MealMonthCalendar
+              :selected-date="planDate"
+              :month-date="planMonth"
+              :marks="planMarks"
+              :min-date="planStartDate"
+              @select="handlePlanDateSelect"
+              @month-change="handlePlanMonthChange"
+            />
+            <text class="plan-sheet__hint">小圆点代表早中晚，`+` 代表还有下午茶或夜宵安排。</text>
+          </view>
+
+          <view class="plan-sheet__section">
+            <text class="plan-sheet__label">安排到哪餐</text>
+            <view class="plan-sheet__slot-row">
+              <view
+                v-for="item in planMealSlots"
+                :key="item.value"
+                :class="['plan-sheet__slot', planMealSlot === item.value ? 'plan-sheet__slot--active' : '']"
+                @click="planMealSlot = item.value"
+              >
+                {{ item.label }}
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <template #footer>
+          <view class="sheet-actions">
+            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="planSubmitting" @click="closePlanSheet">取消</button>
+            <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="planSubmitting" @click="submitPlanSheet">
+              {{ planSubmitting ? "加入中..." : "确认加入" }}
+            </button>
+          </view>
+        </template>
       </SheetShell>
 
       <SheetShell
@@ -369,6 +417,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
+import { mealApi } from "@/apis/meal";
 import {
   recipeApi,
   type CollectedRecipeDetail,
@@ -383,6 +432,7 @@ import {
 import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -394,7 +444,16 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+import {
+  appendMealSlotToMark,
+  createEmptyMealCalendarMark,
+  MEAL_SLOT_OPTIONS,
+  type MealCalendarMark,
+  type MealSlot
+} from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
+import { addDays, formatDateOnly, parseDateOnly } from "@/pages_meal/utils/date";
+import { todayText } from "@/pages_home/utils/date";
 
 type DetailKind = "my" | "inspiration" | "collection";
 type DetailMode = "published" | "preview";
@@ -456,12 +515,14 @@ const errorText = ref("");
 const reportReason = ref("");
 const reportSheetVisible = ref(false);
 const addSheetVisible = ref(false);
+const planSheetVisible = ref(false);
 const recommendSheetVisible = ref(false);
 const selectedReportReason = ref<ReportReasonOption["value"] | "">("");
 const addSheetSubmitting = ref(false);
 const recommendSheetLoading = ref(false);
 const recommendSubmitting = ref(false);
 const recommendSheetError = ref("");
+const planSubmitting = ref(false);
 const shoppingSubmitting = ref(false);
 const shoppingSheetVisible = ref(false);
 const shoppingListLoading = ref(false);
@@ -471,6 +532,12 @@ const selectedShoppingListId = ref<UUID | "">("");
 const shoppingCreateName = ref("");
 const recommendCategories = ref<InspirationCategorySummary[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
+const planStartDate = todayText();
+const planDate = ref(todayText());
+const planMonth = ref(buildMonthAnchor(planDate.value));
+const planMarks = ref<Record<string, MealCalendarMark>>({});
+const planMealSlot = ref<MealSlot>("DINNER");
+const planMarksSeq = ref(0);
 const navOpacity = ref(0);
 const scrollTop = ref(0);
 const detailScrollTop = ref(0);
@@ -558,6 +625,7 @@ const detailSceneLabels = computed(() => detailSceneNames.value.map(item => limi
 const detailStory = computed(() => detailContent.value.story?.trim() || "");
 const currentRecommendation = computed(() => myDetail.value?.recommendation ?? null);
 const externalDetail = computed(() => inspirationDetail.value || collectionDetail.value);
+const linkedOwnedRecipeId = computed(() => inspirationDetail.value?.ownedRecipeId || "");
 const externalRecipeRef = computed(() => {
   if (inspirationDetail.value) {
     return {
@@ -588,6 +656,10 @@ const canOpenRecommendSheet = computed(() => {
 const detailSteps = computed(() => detailContent.value.steps.filter(item => Boolean(item.imageUrl || hasStepText(item.text))));
 const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(detail.value));
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
+const planRecipeId = computed<UUID | "">(() => {
+  if (isOwnedDetail.value) return recipeId.value;
+  return linkedOwnedRecipeId.value || "";
+});
 const showReportEntry = computed(() => isExternalDetail.value && sessionStore.isLoggedIn);
 const selectedReportReasonLabel = computed(
   () => reportReasonOptions.find(item => item.value === selectedReportReason.value)?.label || ""
@@ -607,6 +679,14 @@ const recommendActionLabel = computed(() => {
 	return "投稿灵感";
 });
 const addActionLabel = computed(() => (kind.value === "collection" ? "升级为我的" : "添加到我的"));
+const externalPrimaryActionLabel = computed(() => {
+  if (planRecipeId.value && kind.value === "inspiration") return "加入计划";
+  return addActionLabel.value;
+});
+const externalPrimaryActionIcon = computed(() => {
+  if (planRecipeId.value && kind.value === "inspiration") return "icon-add-plan";
+  return "icon-add-owner";
+});
 const addSheetTitle = computed(() => addActionLabel.value);
 const addSheetSubtitle = computed(() => {
   if (kind.value === "collection") {
@@ -703,8 +783,10 @@ function hasStepText(value: string | null | undefined) {
   return Boolean(value?.trim());
 }
 
-watch([reportSheetVisible, addSheetVisible, recommendSheetVisible], ([reportVisible, addVisible, recommendVisible]) => {
-  setPageLocked(reportVisible || addVisible || recommendVisible);
+const planMealSlots = MEAL_SLOT_OPTIONS;
+
+watch([reportSheetVisible, addSheetVisible, recommendSheetVisible, planSheetVisible], ([reportVisible, addVisible, recommendVisible, planVisible]) => {
+  setPageLocked(reportVisible || addVisible || recommendVisible || planVisible);
 }, { immediate: true });
 
 onLoad((query) => {
@@ -864,6 +946,14 @@ function openAddSheet() {
   addSheetVisible.value = true;
 }
 
+function handleExternalPrimaryAction() {
+  if (planRecipeId.value && kind.value === "inspiration") {
+    openPlanSheet();
+    return;
+  }
+  openAddSheet();
+}
+
 async function loadRecommendCategories(force = false) {
 	if (recommendSheetLoading.value && !force) return;
 	recommendSheetLoading.value = true;
@@ -907,6 +997,41 @@ function closeRecommendSheet() {
 
 function closeAddSheet() {
   addSheetVisible.value = false;
+}
+
+function openPlanSheet() {
+  if (!planRecipeId.value || planSubmitting.value) return;
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openPlanSheet();
+    });
+    return;
+  }
+  planDate.value = todayText();
+  planMonth.value = buildMonthAnchor(planDate.value);
+  planMealSlot.value = "DINNER";
+  planSheetVisible.value = true;
+  void loadPlanMarks(planMonth.value);
+}
+
+function closePlanSheet() {
+  planSheetVisible.value = false;
+}
+
+function handlePlanDateSelect(date: string) {
+  planDate.value = date;
+  const nextMonth = buildMonthAnchor(date);
+  if (nextMonth !== planMonth.value) {
+    planMonth.value = nextMonth;
+    void loadPlanMarks(nextMonth);
+  }
+}
+
+function handlePlanMonthChange(nextMonthDate: string) {
+  const nextMonth = buildMonthAnchor(nextMonthDate);
+  if (nextMonth === planMonth.value) return;
+  planMonth.value = nextMonth;
+  void loadPlanMarks(nextMonth);
 }
 
 function closeShoppingSheet() {
@@ -1080,20 +1205,21 @@ function handleEditRecipe() {
 }
 
 function handleAddPlan() {
-  if (!showStickyActions.value || kind.value !== "my" || !recipeId.value) return;
-  void uniPlatform.navigation.navigateTo(`/pages_meal/plan/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
+  if (!showStickyActions.value || !planRecipeId.value) return;
+  openPlanSheet();
 }
 
 async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[] }) {
   if (!externalRecipeRef.value || addSheetSubmitting.value) return;
   addSheetSubmitting.value = true;
   try {
+    const sourceKind = kind.value;
     const sceneIds = showAddSceneSection.value ? [...payload.sceneIds] : [...externalRecipeRef.value.sceneIds];
     if (showAddSceneSection.value && sceneIds.length) {
       await collectIntoScenes(sceneIds);
     }
     if (payload.categoryId) {
-      await recipeApi.createMyRecipeFromInspiration({
+      const result = await recipeApi.createMyRecipeFromInspiration({
         operationId: createOperationId(),
         sourceRecipeId: externalRecipeRef.value.sourceRecipeId,
         sourceVersionId: externalRecipeRef.value.sourceVersionId,
@@ -1106,8 +1232,12 @@ async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[
         markRecipeHomeDirty(["collection"]);
       }
       closeAddSheet();
+      recipeId.value = result.recipe.id;
+      kind.value = "my";
+      detail.value = result.recipe;
+      scheduleMeasure();
       await uniPlatform.feedback.toast({
-        title: kind.value === "collection" ? "已升级为我的" : sceneIds.length ? "已加入合集并添加到我的" : "已添加到我的",
+        title: sourceKind === "collection" ? "已升级为我的" : sceneIds.length ? "已加入合集并添加到我的" : "已添加到我的",
         icon: "success"
       });
       return;
@@ -1141,6 +1271,51 @@ async function addToShoppingList() {
   }
 }
 
+async function submitPlanSheet() {
+  if (!planRecipeId.value || planSubmitting.value) return;
+  planSubmitting.value = true;
+  try {
+    const plans = await mealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
+    const plan = plans.items.find(item => item.mealSlot === planMealSlot.value) ?? null;
+    const existingItems = plan?.menuItems ?? [];
+    const recipeIds = [...existingItems.map(item => item.recipeId), planRecipeId.value].filter(
+      (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
+    );
+    const recipes = await Promise.all(recipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
+    const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
+    const menuItems = recipeIds.map((recipeId, index) => {
+      const recipe = recipeMap.get(recipeId);
+      const existing = existingItems.find(item => item.recipeId === recipeId) ?? null;
+      if (!recipe) return null;
+      return {
+        slotType: existing?.slotType ?? null,
+        sortOrder: index,
+        recipeId: recipe.id,
+        recipeVersionId: recipe.contentVersionId,
+        purchaseState: existing?.purchaseState ?? "READY"
+      };
+    });
+    if (menuItems.some(item => item === null)) {
+      await uniPlatform.feedback.toast({ title: "当前计划包含已变化的菜谱，请刷新后重试", icon: "none" });
+      return;
+    }
+    const resolvedMenuItems = menuItems.filter((item): item is NonNullable<typeof item> => Boolean(item));
+    await mealApi.createPlan({
+      operationId: createOperationId(),
+      planDate: planDate.value,
+      mealSlot: planMealSlot.value,
+      expectedVersion: plan?.version ?? null,
+      menuItems: resolvedMenuItems
+    });
+    closePlanSheet();
+    await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入计划失败", icon: "none" });
+  } finally {
+    planSubmitting.value = false;
+  }
+}
+
 async function handleReport() {
   const reasonText = buildReportPayload();
   const targetRecipeId = kind.value === "collection" ? collectionDetail.value?.sourceRecipeId || "" : recipeId.value;
@@ -1168,10 +1343,46 @@ function formatAmount(amount: RecipeAmountSnapshot | RecipePreviewAmount) {
   return `${quantity}${unitName}`.trim() || "未填用量";
 }
 
+async function loadPlanMarks(monthDate = planMonth.value) {
+  const seq = ++planMarksSeq.value;
+  try {
+    const monthStart = parseDateOnly(monthDate);
+    const rangeStart = addDays(monthStart, -monthStart.getDay());
+    const rangeEnd = addDays(rangeStart, 41);
+    const items = await mealApi.listAllPlans({
+      from: formatDateOnly(rangeStart),
+      to: formatDateOnly(rangeEnd)
+    });
+    if (seq !== planMarksSeq.value) return;
+    const marks: Record<string, MealCalendarMark> = {};
+    for (const item of items) {
+      const current = marks[item.planDate] ?? createEmptyMealCalendarMark();
+      appendMealSlotToMark(current, item.mealSlot);
+      marks[item.planDate] = current;
+    }
+    planMarks.value = marks;
+  } catch {
+    if (seq === planMarksSeq.value) {
+      planMarks.value = {};
+    }
+  }
+}
+
+function buildMonthAnchor(dateText: string) {
+  const date = parseDateOnly(dateText);
+  return formatDateOnly(new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0));
+}
+
 function limitSceneName(value: string) {
   const name = value.trim();
   if (!name) return "";
   return name.slice(0, 6);
+}
+
+function formatPlanDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [, month, day] = value.split("-");
+  return `${Number(month)}月${Number(day)}日`;
 }
 </script>
 
@@ -1841,6 +2052,67 @@ function limitSceneName(value: string) {
   color: var(--button-primary-text);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
+}
+
+.plan-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.plan-sheet__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.plan-sheet__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.plan-sheet__label {
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-sheet__date {
+  color: var(--color-text);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-sheet__hint {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.plan-sheet__slot-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.plan-sheet__slot {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 84rpx;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface-muted) 78%, var(--color-surface));
+  color: var(--color-text-secondary);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-sheet__slot--active {
+  background: color-mix(in srgb, var(--theme-primary) 18%, var(--color-surface));
+  color: var(--theme-primary);
 }
 
 .sheet-creator {

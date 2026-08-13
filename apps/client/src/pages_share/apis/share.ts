@@ -1,6 +1,7 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
 import type { RecipeContentSnapshot } from "@/apis/recipe";
+import type { MealSlot } from "@/utils/meal-slot";
 
 export interface SharePreviewResponse {
   title: string;
@@ -25,7 +26,7 @@ export interface MemoryShareParticipant {
 export interface MemorySharePreviewResponse {
   title: string;
   planDate: string | null;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER" | null;
+  mealSlot: MealSlot | null;
   menuItems: MemoryShareMenuItem[];
   participants: MemoryShareParticipant[];
   caption: string | null;

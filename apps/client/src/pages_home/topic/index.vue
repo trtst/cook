@@ -176,13 +176,19 @@
 
       <view class="plan-sheet">
         <view class="plan-sheet__section">
-          <text class="plan-sheet__section-label">安排到哪天</text>
-          <picker mode="date" :value="planDate" :start="today" @change="handlePlanDateChange">
-            <view class="plan-sheet__field">
-              <text class="plan-sheet__field-value">{{ formatPlanDate(planDate) }}</text>
-              <text class="plan-sheet__field-arrow">更换日期</text>
-            </view>
-          </picker>
+          <view class="plan-sheet__head">
+            <text class="plan-sheet__section-label">安排到哪天</text>
+            <text class="plan-sheet__date">{{ formatPlanDate(planDate) }}</text>
+          </view>
+          <MealMonthCalendar
+            :selected-date="planDate"
+            :month-date="planMonth"
+            :marks="planMarks"
+            :min-date="today"
+            @select="handlePlanDateSelect"
+            @month-change="handlePlanMonthChange"
+          />
+          <text class="plan-sheet__hint">小圆点代表早中晚，`+` 代表还有下午茶或夜宵安排。</text>
         </view>
 
         <view class="plan-sheet__section">
@@ -231,10 +237,11 @@ import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import { homeApi, type HomeTopicDetail } from "@/apis/home";
-import { mealApi } from "../apis/meal";
+import { mealApi as commonMealApi } from "@/apis/meal";
 import { recipeApi } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -246,6 +253,14 @@ import { uniPlatform } from "@/platform/uni";
 import { formatMonthDay, formatPlanDate, formatSort, todayText } from "../utils/date";
 import { isTopicQueued } from "../utils/home-topic";
 import { createOperationId } from "@/utils/operation-id";
+import {
+  appendMealSlotToMark,
+  createEmptyMealCalendarMark,
+  MEAL_SLOT_OPTIONS,
+  type MealCalendarMark,
+  type MealSlot
+} from "@/utils/meal-slot";
+import { addDays, formatDateOnly, parseDateOnly } from "@/pages_meal/utils/date";
 
 const pageStyle = usePageScrollStyle();
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
@@ -253,11 +268,7 @@ const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
 const NAV_FADE_DISTANCE = 96;
-const mealSlots = [
-  { value: "BREAKFAST" as const, label: "早餐" },
-  { value: "LUNCH" as const, label: "午餐" },
-  { value: "DINNER" as const, label: "晚餐" }
-];
+const mealSlots = MEAL_SLOT_OPTIONS;
 
 const loading = ref(false);
 const errorText = ref("");
@@ -274,7 +285,10 @@ const queuedIds = ref<number[]>([]);
 const planSubmitting = ref(false);
 const today = todayText();
 const planDate = ref(todayText());
-const mealSlot = ref<"BREAKFAST" | "LUNCH" | "DINNER">("DINNER");
+const planMonth = ref(buildMonthAnchor(planDate.value));
+const planMarks = ref<Record<string, MealCalendarMark>>({});
+const mealSlot = ref<MealSlot>("DINNER");
+const planMarksSeq = ref(0);
 const shouldRefreshOnShow = ref(false);
 
 watch(
@@ -495,11 +509,15 @@ async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[
 
 function openPlanSheet() {
   if (!queuedItems.value.length) return;
+  planDate.value = todayText();
+  planMonth.value = buildMonthAnchor(planDate.value);
+  mealSlot.value = "DINNER";
   sheetMounted.value = true;
   sheetVisible.value = false;
   void nextTick(() => {
     sheetVisible.value = true;
   });
+  void loadPlanMarks(planMonth.value);
 }
 
 function closePlanSheet() {
@@ -510,10 +528,20 @@ function handleSheetAfterClose() {
   sheetMounted.value = false;
 }
 
-function handlePlanDateChange(event: { detail?: { value?: string } }) {
-  const nextValue = event.detail?.value;
-  if (!nextValue) return;
-  planDate.value = nextValue;
+function handlePlanDateSelect(date: string) {
+  planDate.value = date;
+  const nextMonth = buildMonthAnchor(date);
+  if (nextMonth !== planMonth.value) {
+    planMonth.value = nextMonth;
+    void loadPlanMarks(nextMonth);
+  }
+}
+
+function handlePlanMonthChange(nextMonthDate: string) {
+  const nextMonth = buildMonthAnchor(nextMonthDate);
+  if (nextMonth === planMonth.value) return;
+  planMonth.value = nextMonth;
+  void loadPlanMarks(nextMonth);
 }
 
 async function submitPlan() {
@@ -521,11 +549,38 @@ async function submitPlan() {
   if (!recipeIds.length || planSubmitting.value) return;
   planSubmitting.value = true;
   try {
-    await mealApi.createPlan({
+    const plans = await commonMealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
+    const currentPlan = plans.items.find(item => item.mealSlot === mealSlot.value) ?? null;
+    const existingItems = currentPlan?.menuItems ?? [];
+    const targetRecipeIds = [...existingItems.map(item => item.recipeId), ...recipeIds].filter(
+      (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
+    );
+    const recipes = await Promise.all(targetRecipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
+    const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
+    const menuItems = targetRecipeIds
+      .map((recipeId, index) => {
+        const recipe = recipeMap.get(recipeId);
+        if (!recipe) return null;
+        const existing = existingItems.find(item => item.recipeId === recipeId) ?? null;
+        return {
+          slotType: existing?.slotType ?? null,
+          sortOrder: index,
+          recipeId: recipe.id,
+          recipeVersionId: recipe.contentVersionId,
+          purchaseState: existing?.purchaseState ?? "READY"
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
+    if (menuItems.length !== targetRecipeIds.length) {
+      await uniPlatform.feedback.toast({ title: "当前计划或待安排菜谱已变化，请刷新后重试", icon: "none" });
+      return;
+    }
+    await commonMealApi.createPlan({
       operationId: createOperationId(),
       planDate: planDate.value,
       mealSlot: mealSlot.value,
-      recipeIds
+      expectedVersion: currentPlan?.version ?? null,
+      menuItems
     });
     queuedIds.value = [];
     closePlanSheet();
@@ -535,6 +590,36 @@ async function submitPlan() {
   } finally {
     planSubmitting.value = false;
   }
+}
+
+async function loadPlanMarks(monthDate = planMonth.value) {
+  const seq = ++planMarksSeq.value;
+  try {
+    const monthStart = parseDateOnly(monthDate);
+    const rangeStart = addDays(monthStart, -monthStart.getDay());
+    const rangeEnd = addDays(rangeStart, 41);
+    const items = await commonMealApi.listAllPlans({
+      from: formatDateOnly(rangeStart),
+      to: formatDateOnly(rangeEnd)
+    });
+    if (seq !== planMarksSeq.value) return;
+    const marks: Record<string, MealCalendarMark> = {};
+    for (const item of items) {
+      const current = marks[item.planDate] ?? createEmptyMealCalendarMark();
+      appendMealSlotToMark(current, item.mealSlot);
+      marks[item.planDate] = current;
+    }
+    planMarks.value = marks;
+  } catch {
+    if (seq === planMarksSeq.value) {
+      planMarks.value = {};
+    }
+  }
+}
+
+function buildMonthAnchor(dateText: string) {
+  const date = parseDateOnly(dateText);
+  return formatDateOnly(new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0));
 }
 </script>
 
@@ -1378,36 +1463,34 @@ async function submitPlan() {
   gap: 14rpx;
 }
 
+.plan-sheet__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
 .plan-sheet__section-label {
   color: var(--color-text);
   font-size: 26rpx;
   font-weight: 700;
 }
 
-.plan-sheet__field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  min-height: 92rpx;
-  padding: 0 24rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-}
-
-.plan-sheet__field-value {
+.plan-sheet__date {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
 }
 
-.plan-sheet__field-arrow {
-  color: var(--color-primary);
+.plan-sheet__hint {
+  color: var(--color-text-secondary);
   font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .plan-sheet__slot-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14rpx;
 }
 
