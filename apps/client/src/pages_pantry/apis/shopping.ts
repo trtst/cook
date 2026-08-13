@@ -8,7 +8,7 @@ export interface ShoppingItemSummary {
   note: string | null;
   sourceCount: number;
   sourceTitles: string[];
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   sourceKey: string | null;
   status: "OPEN" | "BOUGHT" | "DELETED";
   updatedAt: IsoDateTime;
@@ -123,7 +123,7 @@ export interface ShoppingListInvitePageResponse {
 }
 
 export interface ShoppingItemSourceSummary {
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   title: string | null;
   recipeId: UUID | null;
   sourceVersionId: UUID | null;

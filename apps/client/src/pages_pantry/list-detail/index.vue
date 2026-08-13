@@ -574,7 +574,7 @@ function goBack() {
 }
 
 function sourceLabel(
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING",
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU",
   title: string | null,
   addCount: number | null,
   servings: number | null
@@ -587,6 +587,7 @@ function sourceLabel(
   if (sourceType === "PLAN") return title || "下一餐计划";
   if (sourceType === "EVENT") return title || "饭局缺口";
   if (sourceType === "BRING") return title || "带菜清单";
+  if (sourceType === "RANDOM_MENU") return title || "随机菜单缺口";
   return title || "手动补充";
 }
 
