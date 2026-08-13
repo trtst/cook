@@ -9,6 +9,7 @@ import {
 import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
+import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
@@ -44,6 +45,7 @@ import type {
   SaveRecipeDraftResponse,
   OperationId,
   UUID,
+  UnitRecommendationSummary,
   UnitSummary
 } from "../../contracts/types";
 import { IngredientImageService } from "../admin/ingredient-image.service";
@@ -63,6 +65,7 @@ import {
   versionToContent
 } from "./recipe-content";
 import { replaceDraftIngredient, replaceRecipeIngredient } from "./ingredient-reference";
+import { replaceAutoRecipeVersionTags } from "./recipe-version-tags";
 
 type RecipeDb = Prisma.TransactionClient | PrismaService;
 
@@ -131,6 +134,11 @@ type IngredientRecommendationRow = Prisma.IngredientRecommendationGetPayload<{
   };
 }>;
 type IngredientFeedbackRow = Prisma.IngredientFeedbackGetPayload<Record<string, never>>;
+type UnitRecommendationRow = Prisma.UnitRecommendationGetPayload<{
+  include: {
+    targetUnit: true;
+  };
+}>;
 
 type RecipeRecommendationRow = Prisma.RecipeRecommendationGetPayload<{
   include: {
@@ -152,6 +160,9 @@ type EditRefs = {
 type RequestLike = {
   protocol?: string;
   get?: (name: string) => string | undefined;
+  headers?: {
+    authorization?: string;
+  };
 };
 
 type VersionImageState = {
@@ -200,6 +211,13 @@ function extractRecipeImagePublicId(imageUrl: string | null | undefined) {
   } catch {
     return match[1];
   }
+}
+
+function readBearerToken(authorization?: string) {
+  if (!authorization?.startsWith("Bearer ")) {
+    return "";
+  }
+  return authorization.slice("Bearer ".length).trim();
 }
 
 function toRecipeCategorySummary(category: RecipeCategoryRow): RecipeCategorySummary {
@@ -356,6 +374,21 @@ function toIngredientRecommendationSummary(
   };
 }
 
+function toUnitRecommendationSummary(record: UnitRecommendationRow): UnitRecommendationSummary {
+  return {
+    id: record.id,
+    unitName: record.unitName,
+    unitType: record.unitType,
+    status: record.status,
+    reviewNote: record.reviewNote,
+    reviewAdvice: record.reviewAdvice,
+    targetUnit: record.targetUnit ? toUnitSummary(record.targetUnit) : null,
+    createdAt: toIsoDate(record.createdAt),
+    updatedAt: toIsoDate(record.updatedAt),
+    reviewedAt: record.reviewedAt ? toIsoDate(record.reviewedAt) : null
+  };
+}
+
 function toIngredientFeedbackResult(record: IngredientFeedbackRow): IngredientFeedbackResult {
   return {
     id: record.id,
@@ -383,7 +416,8 @@ export class RecipeService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
     @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService,
-    @Inject(UploadService) private readonly uploadService: UploadService
+    @Inject(UploadService) private readonly uploadService: UploadService,
+    @Inject(UserTokenService) private readonly userTokenService: UserTokenService
   ) {}
 
   async listRecipeCategories(userId: UUID) {
@@ -900,6 +934,36 @@ export class RecipeService {
     };
   }
 
+  async listUnitRecommendations(userId: UUID, page: number, pageSize: number): Promise<PageResult<UnitRecommendationSummary>> {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const where: Prisma.UnitRecommendationWhereInput = {
+      userId
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.unitRecommendation.findMany({
+        where,
+        include: {
+          targetUnit: true
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.unitRecommendation.count({ where })
+    ]);
+
+    return {
+      items: items.map(toUnitRecommendationSummary),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
   async listUnits(userId: UUID, page: number, pageSize: number, keyword?: string, type?: string, source?: string): Promise<PageResult<UnitSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
@@ -929,25 +993,38 @@ export class RecipeService {
     };
   }
 
-  async createUnit(userId: UUID, operationId: OperationId, name: string, type: UnitSummary["type"]) {
+  async createUnit(userId: UUID, operationId: OperationId, name: string, type: UnitSummary["type"]): Promise<UnitRecommendationSummary> {
     const normalizedName = name.trim();
     const searchKey = buildSearchKey(normalizedName);
     const requestHash = `${type}:${searchKey}`;
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<UnitSummary>(tx, operationId, "unit:create", userId, null, requestHash);
+      const repeated = await getIdempotentResult<UnitRecommendationSummary>(tx, operationId, "unit:recommend", userId, null, requestHash);
       if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "unit:create", userId, null, requestHash);
-      await this.assertUnitNameAvailable(tx, userId, searchKey);
-      const unit = await tx.unit.create({
-        data: {
-          ownerId: userId,
-          type,
-          name: normalizedName,
+      await startIdempotentOperation(tx, operationId, "unit:recommend", userId, null, requestHash);
+      await this.assertUnitRecommendationAvailable(tx, userId, searchKey);
+      const target = await tx.unit.findFirst({
+        where: {
+          ownerId: null,
           searchKey
         }
       });
-      const result = toUnitSummary(unit);
-      await completeIdempotentOperation(tx, operationId, "unit:create", userId, null, requestHash, result);
+      const recommendation = await tx.unitRecommendation.create({
+        data: {
+          userId,
+          unitName: normalizedName,
+          unitType: type,
+          searchKey,
+          status: target ? "MERGED" : "PENDING",
+          reviewNote: target ? "系统单位已存在，已直接归并" : null,
+          targetUnitId: target?.id ?? null,
+          reviewedAt: target ? new Date() : null
+        },
+        include: {
+          targetUnit: true
+        }
+      });
+      const result = toUnitRecommendationSummary(recommendation);
+      await completeIdempotentOperation(tx, operationId, "unit:recommend", userId, null, requestHash, result);
       return result;
     });
   }
@@ -1194,6 +1271,7 @@ export class RecipeService {
         const version = await tx.recipeContentVersion.create({
           data: this.buildVersionCreateInput(userId, recipeContent, versionImages)
         });
+        await replaceAutoRecipeVersionTags(tx, version.id, recipeContent);
         await this.uploadService.bindDraftUploads(tx, draftId, version.id, Array.from(uploadIds));
         await tx.recipeSceneLink.deleteMany({ where: { recipeId: currentRecipe.id } });
         if (content.sceneIds.length > 0) {
@@ -1222,6 +1300,7 @@ export class RecipeService {
         const version = await tx.recipeContentVersion.create({
           data: this.buildVersionCreateInput(userId, recipeContent, versionImages)
         });
+        await replaceAutoRecipeVersionTags(tx, version.id, recipeContent);
         const origin = this.readOriginContent(content);
         await this.uploadService.bindDraftUploads(tx, draftId, version.id, Array.from(uploadIds));
         const sortOrder = await this.nextRecipeSortOrder(tx, userId, category.id);
@@ -1925,7 +2004,7 @@ export class RecipeService {
     };
   }
 
-  async getInspirationRecipe(recipeId: UUID) {
+  async getInspirationRecipe(recipeId: UUID, request?: RequestLike) {
     const recipe = await this.prisma.recipe.findFirst({
       where: {
         id: recipeId,
@@ -1942,7 +2021,9 @@ export class RecipeService {
       }
     });
     if (!recipe || !recipe.inspirationCategory) throw new NotFoundException("灵感菜谱不存在");
-    return this.toInspirationRecipeDetail(recipe);
+    const userId = request ? await this.resolveOptionalUserId(request) : null;
+    const ownedRecipeId = userId ? await this.findOwnedRecipeIdByOriginVersion(userId, recipe.currentVersionId) : null;
+    return this.toInspirationRecipeDetail(recipe, ownedRecipeId);
   }
 
   async reportRecipe(userId: UUID, recipeId: UUID, operationId: OperationId, reason: string): Promise<RecipeReportSummary> {
@@ -2251,6 +2332,7 @@ export class RecipeService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
+      contentVersionId: recipe.currentVersionId,
       version: recipe.version,
       updatedAt: toIsoDate(recipe.updatedAt)
     };
@@ -2455,7 +2537,7 @@ export class RecipeService {
     };
   }
 
-  private toInspirationRecipeDetail(recipe: RecipeRow): InspirationRecipeDetail {
+  private toInspirationRecipeDetail(recipe: RecipeRow, ownedRecipeId: UUID | null = null): InspirationRecipeDetail {
     const content = versionToContent(recipe.currentVersion);
     return {
       id: recipe.id,
@@ -2468,9 +2550,42 @@ export class RecipeService {
       content,
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
+      ownedRecipeId,
       curatedByName: recipe.curatedByName,
       updatedAt: toIsoDate(recipe.updatedAt)
     };
+  }
+
+  private async resolveOptionalUserId(request: RequestLike) {
+    const token = readBearerToken(request.headers?.authorization);
+    if (!token) return null;
+
+    try {
+      const payload = this.userTokenService.verifyToken(token);
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { status: true, sessionVersion: true }
+      });
+      if (!user || user.status !== "ACTIVE" || user.sessionVersion !== payload.ver) {
+        return null;
+      }
+      return payload.sub;
+    } catch {
+      return null;
+    }
+  }
+
+  private async findOwnedRecipeIdByOriginVersion(userId: UUID, sourceVersionId: UUID) {
+    const ownedRecipe = await this.prisma.recipe.findFirst({
+      where: {
+        ownerId: userId,
+        originVersionId: sourceVersionId,
+        status: { in: activeRecipeStatuses }
+      },
+      select: { id: true },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+    });
+    return ownedRecipe?.id ?? null;
   }
 
   private assertDraftTitle(content: RecipeDraftContentInput) {
@@ -2867,14 +2982,16 @@ export class RecipeService {
     if (existing) throw new ConflictException("场景名称已存在");
   }
 
-  private async assertUnitNameAvailable(tx: RecipeDb, userId: UUID, searchKey: string) {
-    const existing = await tx.unit.findFirst({
+  private async assertUnitRecommendationAvailable(tx: RecipeDb, userId: UUID, searchKey: string) {
+    const pending = await tx.unitRecommendation.findFirst({
       where: {
-        ownerId: userId,
-        searchKey
-      }
+        userId,
+        searchKey,
+        status: "PENDING"
+      },
+      select: { id: true }
     });
-    if (existing) throw new ConflictException("单位名称已存在");
+    if (pending) throw new ConflictException("该单位建议已在审核中");
   }
 
   private async assertIngredientNameAvailable(tx: RecipeDb, userId: UUID, searchKey: string, ingredientId: UUID | null) {
@@ -3146,9 +3263,12 @@ export class RecipeService {
   }
 
   private buildUnitOwnerWhere(userId: UUID, source?: string): Prisma.UnitWhereInput {
-    if (source === "SYSTEM") return { ownerId: null };
+    const systemWhere: Prisma.UnitWhereInput = { ownerId: null };
+    if (!source || source === "SYSTEM") return systemWhere;
     if (source === "PERSONAL") return { ownerId: userId };
-    return { OR: [{ ownerId: null }, { ownerId: userId }] };
+    return {
+      OR: [systemWhere, { ownerId: userId }]
+    };
   }
 
   private buildIngredientImageUrl(

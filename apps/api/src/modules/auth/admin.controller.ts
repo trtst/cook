@@ -16,6 +16,7 @@ import {
   AdminIngredientPayloadDto,
   AdminPendingIngredientFeedbackQueryDto,
   AdminPendingIngredientQueryDto,
+  AdminPendingUnitRecommendationQueryDto,
     AdminPendingRecipeQueryDto,
     AdminIngredientQueryDto,
   AdminUnitPayloadDto,
@@ -42,6 +43,7 @@ import {
   RecipeImportJobQueryDto,
     ReviewIngredientFeedbackDto,
     ReviewPendingIngredientDto,
+    ReviewPendingUnitRecommendationDto,
     ReviewPendingRecipeDto,
   ResetAdminUserPasswordDto,
   ResolveRecipeReportDto,
@@ -66,13 +68,15 @@ import {
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
   AdminIngredientModel,
-    AdminPendingIngredientFeedbackModel,
+  AdminPendingIngredientFeedbackModel,
     AdminPendingIngredientModel,
+    AdminPendingUnitRecommendationModel,
     AdminPendingRecipeModel,
     AdminRecipeDetailModel,
   AdminReviewIngredientFeedbackResultModel,
     AdminReviewPendingRecipeResultModel,
     AdminReviewPendingIngredientResultModel,
+    AdminReviewPendingUnitRecommendationResultModel,
   AdminUnitModel,
   RecipeImportItemDetailModel,
   RecipeImportItemModel,
@@ -711,7 +715,7 @@ export class AdminController {
     @Query() query: AdminIngredientQueryDto
   ) {
     return this.adminService
-      .listIngredients(request, query.page, query.pageSize, query.categoryId, query.keyword, query.status, request.admin.adminId)
+      .listIngredients(request, query.page, query.pageSize, query.categoryId, query.keyword, query.status, query.factStatus, request.admin.adminId)
       .then(result => ok(result));
   }
 
@@ -780,6 +784,32 @@ export class AdminController {
   ) {
     return this.adminService
       .reorderSystemUnits(body.type as UnitType, operationId, body.items, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Get("pending-units")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminPendingUnitRecommendationModel, "后台待审核单位建议列表")
+  listPendingUnits(@Req() request: RequestWithAdmin, @Query() query: AdminPendingUnitRecommendationQueryDto) {
+    return this.adminService
+      .listPendingUnitRecommendations(query.page, query.pageSize, query.keyword, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Post("pending-units/:recommendationId/review")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminReviewPendingUnitRecommendationResultModel, "后台审核单位建议")
+  reviewPendingUnit(
+    @Req() request: RequestWithAdmin,
+    @Param("recommendationId", ParseIntPipe) recommendationId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ReviewPendingUnitRecommendationDto
+  ) {
+    return this.adminService
+      .reviewPendingUnitRecommendation(recommendationId, { ...body, operationId, type: body.type as UnitType | undefined }, request.admin.adminId)
       .then(result => ok(result));
   }
 

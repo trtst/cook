@@ -90,6 +90,54 @@ enum RecipeDuration {
   OVER_60
 }
 
+enum RecipeSlotType {
+  MEAT
+  VEGETABLE
+  SOUP
+  STAPLE
+  BREAKFAST_STAPLE
+  BREAKFAST_PROTEIN
+  BREAKFAST_SIDE
+}
+
+enum RecipeProteinType {
+  PORK
+  CHICKEN
+  BEEF
+  LAMB
+  DUCK
+  FISH
+  NONE
+}
+
+enum IngredientProteinType {
+  PORK
+  CHICKEN
+  BEEF
+  LAMB
+  DUCK
+  SEAFOOD
+  EGG
+  TOFU
+  NONE
+}
+
+enum RecipeVersionTagCode {
+  DISH_ROLE
+  MEAL_TYPE
+  MAIN_PROTEIN_TYPE
+  PRIMARY_INGREDIENT
+  FLAVOR_PROFILE
+  SPICE_LEVEL
+}
+
+enum RecipeVersionTagSource {
+  AUTO
+  USER
+  OPS
+  AI
+}
+
 enum RecipeReportStatus {
   OPEN
   RESOLVED
@@ -105,11 +153,8 @@ enum RecipeRecommendationStatus {
 enum UnitType {
   WEIGHT
   VOLUME
-  COUNT
-  SHAPE
-  CONTAINER
+  COMMON
   PACKAGE
-  OTHER
 }
 
 enum IngredientStatus {
@@ -131,15 +176,29 @@ enum IngredientFeedbackStatus {
   ADOPTED
 }
 
+enum UnitRecommendationStatus {
+  PENDING
+  REJECTED
+  ADOPTED
+  MERGED
+}
+
 enum MealSlot {
   BREAKFAST
   LUNCH
+  AFTERNOON_TEA
   DINNER
+  LATE_NIGHT
 }
 
 enum MealPlanStatus {
   PLANNED
   COMPLETED
+}
+
+enum MealPlanDishPurchaseState {
+  READY
+  PENDING
 }
 
 enum DiningEventStatus {
@@ -229,6 +288,7 @@ enum ShoppingSourceType {
   PLAN
   EVENT
   BRING
+  RANDOM_MENU
 }
 
 enum HomeFeatureBoardPlacement {
@@ -487,6 +547,7 @@ model User {
   ingredientRecommendations IngredientRecommendation[]
   ingredientFeedbacks       IngredientFeedback[]
   units                     Unit[]                     @relation("UnitOwner")
+  unitRecommendations       UnitRecommendation[]
   mealPlans                 MealPlanItem[]
   mealPolls                 MealPoll[]                @relation("MealPollCreator")
   mealPollSuggestions       MealPollCandidate[]       @relation("MealPollCandidateSuggester")
@@ -722,11 +783,36 @@ model Unit {
 
   owner              User?        @relation("UnitOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   defaultIngredients Ingredient[] @relation("IngredientDefaultUnit")
+  targetRecommendations UnitRecommendation[] @relation("UnitRecommendationTarget")
 
   /// PostgreSQL partial unique indexes for system/personal unit names are kept in hand-written SQL migrations.
   @@index([ownerId, type, searchKey, id])
   @@index([ownerId, type, systemSortOrder, id])
   @@map("units")
+}
+
+model UnitRecommendation {
+  id           Int                      @id @default(autoincrement())
+  userId       Int                      @map("user_id")
+  unitName     String                   @map("unit_name") @db.VarChar(16)
+  unitType     UnitType                 @map("unit_type")
+  searchKey    String                   @map("search_key") @db.VarChar(32)
+  status       UnitRecommendationStatus @default(PENDING)
+  reviewNote   String?                  @map("review_note") @db.VarChar(255)
+  reviewAdvice String?                  @map("review_advice") @db.VarChar(255)
+  targetUnitId Int?                     @map("target_unit_id")
+  reviewedAt   DateTime?                @map("reviewed_at") @db.Timestamptz(3)
+  version      Int                      @default(1)
+  createdAt    DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetUnit Unit? @relation("UnitRecommendationTarget", fields: [targetUnitId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([searchKey])
+  @@map("unit_recommendations")
 }
 
 model Ingredient {
@@ -737,6 +823,10 @@ model Ingredient {
   mergedToId      Int?             @map("merged_to_id")
   name            String           @db.VarChar(64)
   searchKey       String           @map("search_key") @db.VarChar(80)
+  proteinType     IngredientProteinType? @map("protein_type")
+  isStaple        Boolean          @default(false) @map("is_staple")
+  isSpicyIngredient Boolean        @default(false) @map("is_spicy_ingredient")
+  aliases         String[]         @default([]) @db.VarChar(32)
   status          IngredientStatus @default(ACTIVE)
   systemSortOrder Int?             @map("system_sort_order")
   displaySortOrder Int?            @map("display_sort_order")
@@ -821,21 +911,21 @@ model IngredientFeedback {
 }
 
 model RecipeContentVersion {
-  id               Int               @id @default(autoincrement())
-  createdByUserId  Int?              @map("created_by_user_id")
-  name             String            @db.VarChar(120)
-  story            String?           @db.VarChar(2000)
-  baseServings     Int               @map("base_servings")
-  difficulty       RecipeDifficulty?
-  duration         RecipeDuration?
-  estimatedCalories Int?             @map("estimated_calories")
-  tips             String?           @db.VarChar(1000)
-  ingredientsJson  Json              @map("ingredients_json")
-  stepsJson        Json              @map("steps_json")
-  imagesJson       Json              @map("images_json")
-  searchText       String            @map("search_text") @db.Text
-  contentSizeBytes Int               @default(0) @map("content_size_bytes")
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                Int                 @id @default(autoincrement())
+  createdByUserId   Int?                @map("created_by_user_id")
+  name              String              @db.VarChar(120)
+  story             String?             @db.VarChar(2000)
+  baseServings      Int                 @map("base_servings")
+  difficulty        RecipeDifficulty?
+  duration          RecipeDuration?
+  estimatedCalories Int?                @map("estimated_calories")
+  tips              String?             @db.VarChar(1000)
+  ingredientsJson   Json                @map("ingredients_json")
+  stepsJson         Json                @map("steps_json")
+  imagesJson        Json                @map("images_json")
+  searchText        String              @map("search_text") @db.Text
+  contentSizeBytes  Int                 @default(0) @map("content_size_bytes")
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
 
   createdByUser           User?                    @relation("RecipeContentAuthor", fields: [createdByUserId], references: [id])
   recommendations         RecipeRecommendation[]   @relation("RecipeRecommendationVersion")
@@ -849,10 +939,31 @@ model RecipeContentVersion {
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
   diningEventMenuItems    DiningEventMenuItem[]
   uploadAssets            UploadAsset[]
+  versionTags             RecipeVersionTag[]
 
   @@index([name])
   @@index([createdByUserId, createdAt])
   @@map("recipe_content_versions")
+}
+
+model RecipeVersionTag {
+  id              Int                  @id @default(autoincrement())
+  recipeVersionId Int                  @map("recipe_version_id")
+  tagCode         RecipeVersionTagCode @map("tag_code")
+  tagValue        String               @map("tag_value") @db.VarChar(64)
+  source          RecipeVersionTagSource @default(AUTO)
+  confidence      Decimal?             @db.Decimal(4, 3)
+  sortOrder       Int?                 @map("sort_order")
+  isLocked        Boolean              @default(false) @map("is_locked")
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeVersionId, tagCode, tagValue, source])
+  @@index([recipeVersionId, tagCode, sortOrder, id])
+  @@index([tagCode, tagValue, recipeVersionId])
+  @@map("recipe_version_tags")
 }
 
 model RecipeImportJob {
@@ -1127,6 +1238,7 @@ model MealPlanItem {
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   dishes        MealPlanDish[]
+  cookAssistant MealPlanCookAssistant?
   diningEvent   DiningEvent?
   confirmedPolls MealPoll[]           @relation("MealPollConfirmedPlanItem")
   activities    DiningGroupActivity[]
@@ -1137,13 +1249,15 @@ model MealPlanItem {
 }
 
 model MealPlanDish {
-  id              Int      @id @default(autoincrement())
-  planItemId      Int      @map("plan_item_id")
-  recipeId        Int?     @map("recipe_id")
-  recipeVersionId Int      @map("recipe_version_id")
-  sortOrder       Int      @default(0) @map("sort_order")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id              Int                       @id @default(autoincrement())
+  planItemId      Int                       @map("plan_item_id")
+  recipeId        Int?                      @map("recipe_id")
+  recipeVersionId Int                       @map("recipe_version_id")
+  slotType        RecipeSlotType?           @map("slot_type")
+  purchaseState   MealPlanDishPurchaseState @default(READY) @map("purchase_state")
+  sortOrder       Int                       @default(0) @map("sort_order")
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   planItem      MealPlanItem         @relation(fields: [planItemId], references: [id], onDelete: Cascade)
   recipe        Recipe?              @relation(fields: [recipeId], references: [id])
@@ -1153,6 +1267,20 @@ model MealPlanDish {
   @@index([recipeId])
   @@index([recipeVersionId])
   @@map("meal_plan_dishes")
+}
+
+model MealPlanCookAssistant {
+  id          Int      @id @default(autoincrement())
+  planItemId  Int      @unique @map("plan_item_id")
+  menuDigest  String   @map("menu_digest") @db.VarChar(128)
+  snapshot    Json     @map("snapshot")
+  generatedAt DateTime @map("generated_at") @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  planItem MealPlanItem @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+
+  @@map("meal_plan_cook_assistants")
 }
 
 model DiningEvent {

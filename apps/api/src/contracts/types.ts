@@ -2,6 +2,7 @@ export type UUID = number;
 export type ResourceId = UUID;
 export type OperationId = string;
 export type IsoDateTime = string;
+export type MealSlot = "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
 
 export interface ApiResponse<T> {
   code: number;
@@ -616,6 +617,10 @@ export interface AdminIngredientPayloadRequest {
   name: string;
   categoryId: UUID;
   defaultUnitId: UUID;
+  proteinType?: IngredientProteinType | null;
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+  aliases?: string[];
 }
 
 export interface UpdateAdminIngredientRequest extends AdminIngredientPayloadRequest {
@@ -649,6 +654,33 @@ export interface AdminReviewPendingIngredientRequest {
   reason?: string;
 }
 
+export interface AdminPendingUnitRecommendationSummary {
+  id: UUID;
+  name: string;
+  type: UnitType;
+  version: number;
+  status: "PENDING";
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  user: Pick<UserProfile, "id" | "uid" | "nickname">;
+}
+
+export interface AdminReviewPendingUnitRecommendationRequest {
+  operationId: OperationId;
+  action: "APPROVE" | "REJECT";
+  expectedVersion: number;
+  name?: string;
+  type?: UnitType;
+  reason?: string;
+}
+
+export interface AdminReviewPendingUnitRecommendationResult {
+  id: UUID;
+  status: "APPROVED" | "REJECTED";
+  reviewedAt: IsoDateTime;
+  targetUnitId: UUID | null;
+}
+
 export interface AdminUnitPayloadRequest {
   operationId: OperationId;
   name: string;
@@ -666,10 +698,31 @@ export interface AdminResetUserPasswordResponse {
 
 export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
 export type RecipeDuration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
-export type UnitType = "WEIGHT" | "VOLUME" | "COUNT" | "SHAPE" | "CONTAINER" | "PACKAGE" | "OTHER";
+export type RecipeSlotType =
+  | "MEAT"
+  | "VEGETABLE"
+  | "SOUP"
+  | "STAPLE"
+  | "BREAKFAST_STAPLE"
+  | "BREAKFAST_PROTEIN"
+  | "BREAKFAST_SIDE";
+export type RecipeProteinType = "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "NONE";
+export type IngredientProteinType =
+  | "PORK"
+  | "CHICKEN"
+  | "BEEF"
+  | "LAMB"
+  | "DUCK"
+  | "SEAFOOD"
+  | "EGG"
+  | "TOFU"
+  | "NONE";
+export type MealPlanDishPurchaseState = "READY" | "PENDING";
+export type UnitType = "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
 export type IngredientSource = "SYSTEM" | "PERSONAL";
 export type InspirationSort = "RECOMMENDED" | "LATEST";
 export type IngredientRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
+export type UnitRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "MERGED";
 export type UploadAssetScene = "RECIPE_COVER" | "RECIPE_STEP";
 export type UploadAssetStatus = "TEMP" | "BOUND" | "DELETED";
 
@@ -764,8 +817,32 @@ export interface IngredientRecommendationSummary {
   reviewedAt: IsoDateTime | null;
 }
 
+export interface UnitRecommendationSummary {
+  id: UUID;
+  unitName: string;
+  unitType: UnitType;
+  status: UnitRecommendationStatus;
+  reviewNote: string | null;
+  reviewAdvice: string | null;
+  targetUnit: UnitSummary | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  reviewedAt: IsoDateTime | null;
+}
+
 export interface RecommendIngredientRequest {
   operationId: OperationId;
+}
+
+export interface RecommendUnitRequest {
+  operationId: OperationId;
+  name: string;
+  type: UnitType;
+}
+
+export interface UnitRecommendationQuery {
+  page?: number;
+  pageSize?: number;
 }
 
 export interface CreateIngredientFeedbackRequest {
@@ -948,6 +1025,7 @@ export interface MyRecipeSummary {
   difficultyText: string | null;
   durationText: string | null;
   category: RecipeCategorySummary;
+  contentVersionId: UUID;
   version: number;
   updatedAt: IsoDateTime;
 }
@@ -1081,6 +1159,7 @@ export interface InspirationRecipeDetail {
   content: RecipeContentSnapshot;
   likeCount: number;
   collectCount: number;
+  ownedRecipeId: UUID | null;
   curatedByName: string | null;
   updatedAt: IsoDateTime;
 }
@@ -1352,6 +1431,10 @@ export interface AdminIngredientSummary {
   categoryId: UUID;
   categoryName: string;
   defaultUnit: UnitSummary;
+  proteinType: IngredientProteinType | null;
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+  aliases: string[];
   imageUrl: string | null;
   updatedAt: IsoDateTime;
 }
@@ -1416,6 +1499,173 @@ export interface AdminReviewIngredientFeedbackResult {
   reviewedAt: IsoDateTime;
 }
 
+export interface CreateMealPlanMenuItemRequest {
+  slotType: RecipeSlotType | null;
+  sortOrder: number;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  purchaseState: MealPlanDishPurchaseState;
+}
+
+export interface CreateMealPlanRequest {
+  operationId: OperationId;
+  planDate: string;
+  mealSlot: MealSlot;
+  expectedVersion?: number | null;
+  menuItems: CreateMealPlanMenuItemRequest[];
+  note?: string | null;
+}
+
+export interface RandomSlotPlan {
+  meatCount: number;
+  vegetableCount: number;
+  soupCount: number;
+  stapleCount: number;
+  breakfastStapleCount: number;
+  breakfastProteinCount: number;
+  breakfastSideCount: number;
+}
+
+export type RandomMenuWarningCode = "INSUFFICIENT_CANDIDATES" | "PARTIAL_MENU";
+export type RandomFridgeFit = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+export type RandomReplaceConstraintKind = "FLAVOR" | "DURATION" | "INGREDIENT" | "AVOID_INGREDIENT";
+
+export interface RandomMenuWarning {
+  code: RandomMenuWarningCode;
+  message: string;
+  slotTypes: RecipeSlotType[];
+}
+
+export interface RandomMenuItem {
+  slotId: string;
+  slotType: RecipeSlotType;
+  slotIndex: number;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  title: string;
+  coverUrl: string | null;
+  servings: number | null;
+  duration: RecipeDuration | null;
+  durationText: string | null;
+  estimatedCalories: number | null;
+  flavorTags: string[];
+  mainProteinType: RecipeProteinType | null;
+  fridgeFit: RandomFridgeFit;
+}
+
+export interface GenerateRandomMenuRequest {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  fridgePreferred: boolean;
+  slotPlan?: RandomSlotPlan | null;
+}
+
+export interface RandomMenuResponse {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  fridgePreferred: boolean;
+  slotPlan: RandomSlotPlan;
+  items: RandomMenuItem[];
+  warnings: RandomMenuWarning[];
+  generatedAt: IsoDateTime;
+}
+
+export interface ReplaceRandomMenuCurrentItem {
+  slotId: string;
+  slotType: RecipeSlotType;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+}
+
+export interface RandomReplaceConstraint {
+  kind: RandomReplaceConstraintKind;
+  value?: string | null;
+  ingredientId?: UUID | null;
+  ingredientName?: string | null;
+}
+
+export interface ReplaceRandomMenuSlotRequest {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  fridgePreferred: boolean;
+  slotPlan: RandomSlotPlan;
+  currentItems: ReplaceRandomMenuCurrentItem[];
+  targetSlotId: string;
+  targetSlotType: RecipeSlotType;
+  replaceConstraints: RandomReplaceConstraint[];
+  rejectedRecipeVersionIds: UUID[];
+  requestSeq: number;
+}
+
+export interface ReplaceRandomMenuSlotResponse {
+  requestSeq: number;
+  slot: RandomMenuItem | null;
+  warning: RandomMenuWarning | null;
+}
+
+export interface RandomGapInventoryDecision {
+  slotId: string;
+  ingredientId?: UUID | null;
+  ingredientName: string;
+  decision: "HAS" | "MISSING";
+}
+
+export interface RandomGapCheckItem {
+  slotId: string;
+  slotType: RecipeSlotType;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+}
+
+export interface CheckRandomMenuGapRequest {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  items: RandomGapCheckItem[];
+  inventoryDecisions: RandomGapInventoryDecision[];
+}
+
+export type RandomGapStatus = "OK" | "PARTIAL" | "MISSING" | "UNKNOWN";
+export type RandomGapInventoryStatus = "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN";
+
+export interface RandomGapIngredient {
+  decisionKey: string;
+  ingredientId: UUID | null;
+  ingredientName: string;
+  quantityText: string | null;
+  inventoryStatus: RandomGapInventoryStatus;
+  purchasable: boolean;
+}
+
+export interface RandomGapItem {
+  slotId: string;
+  slotType: RecipeSlotType;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  recipeName: string;
+  status: RandomGapStatus;
+  missingIngredients: RandomGapIngredient[];
+  actions: {
+    canKeep: boolean;
+    canReplace: boolean;
+    canRemove: boolean;
+    canAddToShopping: boolean;
+  };
+  unresolvedUnknownCount: number;
+}
+
+export interface RandomGapSummary {
+  okCount: number;
+  partialCount: number;
+  missingCount: number;
+  unknownCount: number;
+}
+
+export interface CheckRandomMenuGapResponse {
+  items: RandomGapItem[];
+  summary: RandomGapSummary;
+  canCreatePlan: boolean;
+}
+
 export interface AdminUnitSummary {
   id: UUID;
   name: string;
@@ -1444,14 +1694,49 @@ export interface AdminUserRecipeDomainOverview {
 export interface MealPlanSummary {
   id: UUID;
   planDate: string;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot: MealSlot;
   title: string;
   menuItems: MealPlanMenuItemSummary[];
   status: "PLANNED" | "COMPLETED";
+  version: number;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
   createdAt: IsoDateTime;
+}
+
+export interface MealPlanCookAssistantTask {
+  title: string;
+  detail: string;
+  dishTitles: string[];
+}
+
+export interface MealPlanCookAssistantTimelineStep {
+  order: number;
+  title: string;
+  detail: string;
+  dishTitles: string[];
+  parallelKey: string | null;
+}
+
+export interface MealPlanCookAssistantSummary {
+  dishCount: number;
+  prepTaskCount: number;
+  timelineStepCount: number;
+  totalDurationText: string | null;
+  suggestedStartTime: string | null;
+  notes: string[];
+}
+
+export interface MealPlanCookAssistant {
+  planItemId: UUID;
+  hasSnapshot: boolean;
+  isStale: boolean;
+  generatedAt: IsoDateTime | null;
+  summary: MealPlanCookAssistantSummary;
+  prepTasks: MealPlanCookAssistantTask[];
+  cookTimeline: MealPlanCookAssistantTimelineStep[];
+  serveTasks: MealPlanCookAssistantTask[];
 }
 
 export interface MealPlanMenuItemSummary {
@@ -1459,6 +1744,8 @@ export interface MealPlanMenuItemSummary {
   recipeVersionId: UUID;
   title: string;
   servings: number | null;
+  slotType: RecipeSlotType | null;
+  purchaseState: MealPlanDishPurchaseState;
   sortOrder: number;
 }
 
@@ -1495,7 +1782,7 @@ export interface MealPollSummary {
   diningGroupId: UUID;
   title: string;
   planDate: string;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot: MealSlot;
   status: MealPollStatus;
   deadlineAt: IsoDateTime;
   choiceLimit: number;
@@ -1594,7 +1881,7 @@ export interface DiningMemoryShareParticipant {
 export interface DiningMemorySharePreview {
   title: string;
   planDate: string | null;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER" | null;
+  mealSlot: MealSlot | null;
   menuItems: DiningMemoryShareMenuItem[];
   participants: DiningMemoryShareParticipant[];
   caption: string | null;
@@ -1612,7 +1899,7 @@ export interface MealPollListQuery {
   diningGroupId: UUID;
   status?: MealPollStatus;
   planDate?: string;
-  mealSlot?: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot?: MealSlot;
   limit?: number;
 }
 
@@ -1625,7 +1912,7 @@ export interface CreateMealPollRequest {
   operationId: OperationId;
   diningGroupId: UUID;
   planDate: string;
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  mealSlot: MealSlot;
   deadlineAt: IsoDateTime;
   choiceLimit: number;
   note: string | null;
@@ -1797,7 +2084,7 @@ export interface ShoppingItemSummary {
   note: string | null;
   sourceCount: number;
   sourceTitles: string[];
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   sourceKey: string | null;
   status: "OPEN" | "BOUGHT" | "DELETED";
   updatedAt: IsoDateTime;
@@ -1864,7 +2151,7 @@ export interface ShoppingListInvitePageResponse {
 }
 
 export interface ShoppingItemSourceSummary {
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   title: string | null;
   recipeId: UUID | null;
   sourceVersionId: UUID | null;
@@ -1922,6 +2209,24 @@ export interface AddRecipeToShoppingListRequest {
   operationId: OperationId;
   recipeId: UUID;
   sourceVersionId: UUID;
+}
+
+export interface CreateRandomMenuShoppingIngredientRequest {
+  ingredientId?: UUID | null;
+  ingredientName: string;
+  quantityText: string | null;
+}
+
+export interface CreateRandomMenuShoppingItemRequest {
+  slotId: string;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  ingredients: CreateRandomMenuShoppingIngredientRequest[];
+}
+
+export interface CreateRandomMenuShoppingItemsRequest {
+  operationId: OperationId;
+  items: CreateRandomMenuShoppingItemRequest[];
 }
 
 export interface UpdateShoppingListItemCheckRequest {

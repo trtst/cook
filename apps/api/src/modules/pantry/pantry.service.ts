@@ -14,6 +14,7 @@ import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperat
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
   CompleteShoppingListEntryRequest,
+  CreateRandomMenuShoppingItemRequest,
   FridgeItemSummary,
   ShoppingListCollaborator,
   ShoppingListInviteActionResponse,
@@ -82,6 +83,10 @@ function addDays(base: Date, days: number) {
   return result;
 }
 
+function normalizeNameKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
 type GapEvent = {
   id: UUID;
   title: string;
@@ -114,7 +119,7 @@ type ShoppingRow = {
   name: string;
   quantityText: string | null;
   note: string | null;
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   sourceKey: string | null;
   sourceRecipeId: UUID | null;
   sourceRecipeVersionId: UUID | null;
@@ -1664,6 +1669,146 @@ export class PantryService {
     });
   }
 
+  async createRandomMenuShoppingItems(
+    userId: UUID,
+    operationId: OperationId,
+    items: CreateRandomMenuShoppingItemRequest[]
+  ): Promise<ShoppingItemSummary[]> {
+    if (!items.length) {
+      throw new BadRequestException("当前缺口不能为空");
+    }
+    const normalizedItems = items.map(item => ({
+      slotId: item.slotId.trim(),
+      recipeId: item.recipeId,
+      recipeVersionId: item.recipeVersionId,
+      ingredients: item.ingredients.map(ingredient => ({
+        ingredientId: ingredient.ingredientId ?? null,
+        ingredientName: ingredient.ingredientName.trim(),
+        quantityText: ingredient.quantityText?.trim() || null
+      }))
+    }));
+    const ingredientTotal = normalizedItems.reduce((sum, item) => sum + item.ingredients.length, 0);
+    if (ingredientTotal < 1 || ingredientTotal > 80) {
+      throw new BadRequestException("缺口食材数量参数错误");
+    }
+    if (normalizedItems.some(item => !item.slotId || item.ingredients.some(ingredient => !ingredient.ingredientName))) {
+      throw new BadRequestException("缺口食材参数错误");
+    }
+
+    const requestHash = JSON.stringify(normalizedItems);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<ShoppingItemSummary[]>(
+        tx,
+        operationId,
+        "shopping:create:random-menu",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "shopping:create:random-menu", userId, null, requestHash);
+
+      const recipes = await tx.recipe.findMany({
+        where: {
+          id: { in: normalizedItems.map(item => item.recipeId) },
+          ownerId: userId,
+          status: "ACTIVE"
+        },
+        select: {
+          id: true,
+          title: true,
+          currentVersionId: true
+        }
+      });
+      const recipeMap = new Map(recipes.map(item => [item.id, item]));
+      normalizedItems.forEach(item => {
+        const recipe = recipeMap.get(item.recipeId);
+        if (!recipe || recipe.currentVersionId !== item.recipeVersionId) {
+          throw new NotFoundException("菜谱不存在");
+        }
+      });
+
+      const listId = await this.resolveLegacyTargetListId(tx, userId);
+      const batchKey = String(operationId);
+      const sizeBytes = normalizedItems.reduce((sum, item) => {
+        const recipe = recipeMap.get(item.recipeId)!;
+        return (
+          sum +
+          item.ingredients.reduce(
+            (innerSum, ingredient, index) =>
+              innerSum +
+              sizeOfJson({
+                userId,
+                listId,
+                name: ingredient.ingredientName,
+                quantityText: ingredient.quantityText,
+                note: recipe.title,
+                sourceType: "RANDOM_MENU",
+                sourceKey: `${item.recipeId}:${item.recipeVersionId}:${batchKey}:${item.slotId}:${index + 1}`,
+                sourceRecipeId: null,
+                sourceRecipeVersionId: null,
+                sourceRecipeTitle: null,
+                sourceBaseServings: null,
+                sourceBatchKey: null,
+                sourceIngredientSort: null,
+                ingredientId: null,
+                amountJson: null
+              }),
+            0
+          )
+        );
+      }, 0);
+      await this.assertStorageWritable(tx, userId, sizeBytes);
+
+      const results: ShoppingItemSummary[] = [];
+      for (const item of normalizedItems) {
+        const recipe = recipeMap.get(item.recipeId)!;
+        for (let index = 0; index < item.ingredients.length; index += 1) {
+          const ingredient = item.ingredients[index]!;
+          const sourceKey = `${item.recipeId}:${item.recipeVersionId}:${batchKey}:${item.slotId}:${index + 1}`;
+          const existing = await tx.shoppingItem.findFirst({
+            where: {
+              userId,
+              sourceType: "RANDOM_MENU",
+              sourceKey,
+              status: "OPEN"
+            }
+          });
+          const next =
+            existing ??
+            (await tx.shoppingItem.create({
+              data: {
+                userId,
+                listId,
+                name: ingredient.ingredientName,
+                quantityText: ingredient.quantityText,
+                note: recipe.title,
+                sourceType: "RANDOM_MENU",
+                sourceKey
+              }
+            }));
+          if (!existing) {
+            await upsertStorageLedger(tx, userId, "SHOPPING", next.id, sizeOfJson(next));
+          }
+          results.push({
+            ...this.toShoppingItemSummary(next),
+            sourceTitles: [recipe.title]
+          });
+        }
+      }
+
+      await tx.shoppingList.update({
+        where: { id: listId },
+        data: {
+          version: { increment: 1 }
+        }
+      });
+
+      await completeIdempotentOperation(tx, operationId, "shopping:create:random-menu", userId, null, requestHash, results);
+      return results;
+    });
+  }
+
   async updateShoppingStatus(userId: UUID, itemId: UUID, operationId: OperationId, status: string) {
     const normalizedStatus = normalizeShoppingStatus(status);
     const requestHash = `${itemId}:${normalizedStatus}`;
@@ -2332,7 +2477,7 @@ export class PantryService {
   }
 
   private toShoppingItemSourceSummary(item: {
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
     note: string | null;
     sourceKey: string | null;
     sourceRecipeId: UUID | null;
@@ -2363,7 +2508,7 @@ export class PantryService {
     status: "OPEN" | "BOUGHT" | "DELETED";
     checkedAt: Date | null;
     updatedAt: Date;
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
     sourceKey: string | null;
     sourceRecipeId: UUID | null;
     sourceRecipeVersionId: UUID | null;
@@ -2958,7 +3103,7 @@ export class PantryService {
     name: string;
     quantityText: string | null;
     note: string | null;
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
     sourceKey: string | null;
     sourceRecipeId: UUID | null;
     sourceRecipeVersionId: UUID | null;
@@ -2999,7 +3144,7 @@ export class PantryService {
     name: string;
     quantityText: string | null;
     note: string | null;
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING";
+    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
     sourceKey: string | null;
     status: "OPEN" | "BOUGHT" | "DELETED";
     updatedAt: Date;

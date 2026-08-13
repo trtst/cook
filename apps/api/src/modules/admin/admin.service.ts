@@ -15,6 +15,7 @@ import type {
   AdminDashboardSummary,
     AdminInspirationCategoryPayloadRequest,
     AdminInspirationCategorySummary,
+    AdminPendingUnitRecommendationSummary,
     AdminPendingRecipeSummary,
     AdminRecipeDetail,
     AdminDeleteUnitResult,
@@ -28,6 +29,8 @@ import type {
   AdminReviewIngredientFeedbackResult,
     AdminReviewPendingIngredientRequest,
     AdminReviewPendingIngredientResult,
+    AdminReviewPendingUnitRecommendationRequest,
+    AdminReviewPendingUnitRecommendationResult,
     AdminReviewPendingRecipeRequest,
     AdminReviewPendingRecipeResult,
   AdminIngredientSummary,
@@ -46,6 +49,7 @@ import type {
   CreateAdminUserRequest,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
+  IngredientProteinType,
   InspirationCategorySummary,
   MyRecipeSummary,
   PageResult,
@@ -92,6 +96,8 @@ import { AdminTokenService } from "../../common/security/admin-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { buildRecipeSearchText, buildSearchKey, contentSizeBytes, draftCoverImageUrl, fromJson, toJson, versionToContent } from "../recipe/recipe-content";
+import { inferIngredientTagFacts } from "../recipe/ingredient-tag-facts";
+import { replaceAutoRecipeVersionTags } from "../recipe/recipe-version-tags";
 import { MedalService } from "../user/medal.service";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { IngredientImageService } from "./ingredient-image.service";
@@ -109,6 +115,24 @@ import {
 
 function toIsoDate(value: Date) {
   return value.toISOString();
+}
+
+function hasIngredientTagFactGap(item: {
+  name: string;
+  category: { code: string };
+  proteinType: IngredientProteinType | null;
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+}) {
+  const inferred = inferIngredientTagFacts({
+    name: item.name,
+    categoryCode: item.category.code
+  });
+  return (
+    (Boolean(inferred.proteinType) && !item.proteinType) ||
+    (inferred.isStaple && !item.isStaple) ||
+    (inferred.isSpicyIngredient && !item.isSpicyIngredient)
+  );
 }
 
 const ingredientRejectChoiceMap: Record<AdminIngredientRejectReasonCode, { reason: string; advice: string }> = {
@@ -155,6 +179,19 @@ function isUniqueConstraintError(error: unknown) {
 function normalizeImageUrl(value: string | null | undefined) {
   const normalized = value?.trim();
   return normalized || null;
+}
+
+function normalizeIngredientAliases(name: string, aliases: string[] | undefined) {
+  const trimmedName = name.trim();
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of aliases ?? []) {
+    const value = item.trim();
+    if (!value || value === trimmedName || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
 }
 
 function toUserProfile(user: {
@@ -260,6 +297,18 @@ type AdminPendingIngredientFeedbackRow = Prisma.IngredientFeedbackGetPayload<{
     };
   };
 }>;
+type AdminPendingUnitRecommendationRow = Prisma.UnitRecommendationGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        uid: true;
+        nickname: true;
+      };
+    };
+    targetUnit: true;
+  };
+}>;
 type AdminPendingRecipeRow = Prisma.RecipeRecommendationGetPayload<{
   include: {
     recipe: {
@@ -363,6 +412,10 @@ function toAdminIngredientSummary(ingredient: AdminIngredientRow): AdminIngredie
     categoryId: ingredient.categoryId,
     categoryName: ingredient.category.name,
     defaultUnit: toUnitSummary(ingredient.defaultUnit),
+    proteinType: ingredient.proteinType as IngredientProteinType | null,
+    isStaple: ingredient.isStaple,
+    isSpicyIngredient: ingredient.isSpicyIngredient,
+    aliases: ingredient.aliases,
     imageUrl: null,
     updatedAt: toIsoDate(ingredient.updatedAt)
   };
@@ -456,6 +509,23 @@ function toAdminPendingIngredientFeedbackSummary(row: AdminPendingIngredientFeed
       id: row.ingredient.owner?.id ?? row.userId,
       uid: row.ingredient.owner?.uid ?? 0,
       nickname: row.ingredient.owner?.nickname ?? null
+    }
+  };
+}
+
+function toAdminPendingUnitRecommendationSummary(row: AdminPendingUnitRecommendationRow): AdminPendingUnitRecommendationSummary {
+  return {
+    id: row.id,
+    name: row.unitName,
+    type: row.unitType,
+    version: row.version,
+    status: "PENDING",
+    createdAt: toIsoDate(row.createdAt),
+    updatedAt: toIsoDate(row.updatedAt),
+    user: {
+      id: row.user.id,
+      uid: row.user.uid,
+      nickname: row.user.nickname
     }
   };
 }
@@ -1348,12 +1418,62 @@ export class AdminService {
   async listSystemUnits(adminId: UUID): Promise<AdminUnitSummary[]> {
     await this.requireSuperAdmin(adminId);
     const items = await this.prisma.unit.findMany({
-      where: {
-        ownerId: null
-      },
+      where: { ownerId: null },
       orderBy: [{ type: "asc" }, { systemSortOrder: "asc" }, { name: "asc" }]
     });
     return items.map(toAdminUnitSummary);
+  }
+
+  async listPendingUnitRecommendations(
+    page: number,
+    pageSize: number,
+    keyword: string | undefined,
+    adminId: UUID
+  ): Promise<PageResult<AdminPendingUnitRecommendationSummary>> {
+    await this.requireSuperAdmin(adminId);
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const normalizedKeyword = keyword?.trim();
+    const uidKeyword = normalizedKeyword && /^\d+$/.test(normalizedKeyword) ? Number(normalizedKeyword) : null;
+    const where: Prisma.UnitRecommendationWhereInput = {
+      status: "PENDING",
+      ...(normalizedKeyword
+        ? {
+            OR: [
+              { unitName: { contains: normalizedKeyword, mode: "insensitive" } },
+              { user: { is: { nickname: { contains: normalizedKeyword, mode: "insensitive" } } } },
+              ...(uidKeyword === null ? [] : [{ user: { is: { uid: uidKeyword } } }])
+            ]
+          }
+        : {})
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.unitRecommendation.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              uid: true,
+              nickname: true
+            }
+          },
+          targetUnit: true
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.unitRecommendation.count({ where })
+    ]);
+    return {
+      items: items.map(toAdminPendingUnitRecommendationSummary),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
   }
 
   async createSystemUnit(body: AdminUnitPayloadRequest, adminId: UUID): Promise<AdminUnitSummary> {
@@ -1693,6 +1813,7 @@ export class AdminService {
     categoryId: UUID | undefined,
     keyword: string | undefined,
     status: string | undefined,
+    factStatus: string | undefined,
     adminId: UUID
   ): Promise<PageResult<AdminIngredientSummary>> {
     await this.requireSuperAdmin(adminId);
@@ -1701,6 +1822,7 @@ export class AdminService {
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const normalizedKeyword = keyword?.trim();
     const normalizedStatus = status === "DISABLED" || status === "ALL" ? status : "ACTIVE";
+    const normalizedFactStatus = factStatus === "MISSING" ? "MISSING" : "ALL";
     const where: Prisma.IngredientWhereInput = {
       ownerId: null,
       status:
@@ -1721,6 +1843,28 @@ export class AdminService {
     const orderBy = categoryId
       ? ([{ systemSortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[])
       : ([{ displaySortOrder: "asc" }, { createdAt: "asc" }] satisfies Prisma.IngredientOrderByWithRelationInput[]);
+    if (normalizedFactStatus === "MISSING") {
+      const rows = await this.prisma.ingredient.findMany({
+        where,
+        include: {
+          category: true,
+          defaultUnit: true
+        },
+        orderBy
+      });
+      const filtered = rows.filter(item => hasIngredientTagFactGap(item));
+      const items = filtered.slice(skip, skip + normalizedPageSize);
+      return {
+        items: items.map(item => ({
+          ...toAdminIngredientSummary(item),
+          imageUrl: this.ingredientImageService.buildImageUrl(request, item.id, (item as AdminIngredientWithImageRow).imageUpdatedAt)
+        })),
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total: filtered.length,
+        hasNext: skip + items.length < filtered.length
+      };
+    }
     const [items, total] = await this.prisma.$transaction([
       this.prisma.ingredient.findMany({
         where,
@@ -1750,7 +1894,16 @@ export class AdminService {
     await this.requireSuperAdmin(adminId);
     const name = body.name.trim();
     const searchKey = buildSearchKey(name);
-    const requestHash = `${searchKey}:${body.categoryId}:${body.defaultUnitId}`;
+    const aliases = normalizeIngredientAliases(name, body.aliases);
+    const requestHash = JSON.stringify({
+      searchKey,
+      categoryId: body.categoryId,
+      defaultUnitId: body.defaultUnitId,
+      proteinType: body.proteinType ?? null,
+      isStaple: body.isStaple,
+      isSpicyIngredient: body.isSpicyIngredient,
+      aliases
+    });
     try {
       return await this.prisma.$transaction(async tx => {
         const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
@@ -1776,6 +1929,10 @@ export class AdminService {
             defaultUnitId: unit.id,
             name,
             searchKey,
+            proteinType: body.proteinType ?? null,
+            isStaple: body.isStaple,
+            isSpicyIngredient: body.isSpicyIngredient,
+            aliases,
             systemSortOrder,
             displaySortOrder
           },
@@ -1792,7 +1949,14 @@ export class AdminService {
             action: "INGREDIENT_CREATED",
             objectType: "INGREDIENT",
             objectId: ingredient.id,
-            payload: { categoryId: body.categoryId, name }
+            payload: {
+              categoryId: body.categoryId,
+              name,
+              proteinType: body.proteinType ?? null,
+              isStaple: body.isStaple,
+              isSpicyIngredient: body.isSpicyIngredient,
+              aliases
+            }
           }
         });
         await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:create", adminId, requestHash, result);
@@ -1815,7 +1979,18 @@ export class AdminService {
     await this.requireSuperAdmin(adminId);
     const name = body.name.trim();
     const searchKey = buildSearchKey(name);
-    const requestHash = `${ingredientId}:${body.expectedVersion}:${searchKey}:${body.categoryId}:${body.defaultUnitId}`;
+    const aliases = normalizeIngredientAliases(name, body.aliases);
+    const requestHash = JSON.stringify({
+      ingredientId,
+      expectedVersion: body.expectedVersion,
+      searchKey,
+      categoryId: body.categoryId,
+      defaultUnitId: body.defaultUnitId,
+      proteinType: body.proteinType ?? null,
+      isStaple: body.isStaple,
+      isSpicyIngredient: body.isSpicyIngredient,
+      aliases
+    });
     try {
       return await this.prisma.$transaction(async tx => {
         const repeated = await getAdminIdempotentResult<AdminIngredientSummary>(
@@ -1845,6 +2020,10 @@ export class AdminService {
             searchKey,
             categoryId: body.categoryId,
             defaultUnitId: unit.id,
+            proteinType: body.proteinType ?? null,
+            isStaple: body.isStaple,
+            isSpicyIngredient: body.isSpicyIngredient,
+            aliases,
             systemSortOrder,
             version: { increment: 1 }
           },
@@ -1870,7 +2049,11 @@ export class AdminService {
             objectId: ingredientId,
             payload: {
               categoryId: body.categoryId,
-              name
+              name,
+              proteinType: body.proteinType ?? null,
+              isStaple: body.isStaple,
+              isSpicyIngredient: body.isSpicyIngredient,
+              aliases
             }
           }
         });
@@ -2655,6 +2838,158 @@ export class AdminService {
     }
   }
 
+  async reviewPendingUnitRecommendation(
+    recommendationId: UUID,
+    body: AdminReviewPendingUnitRecommendationRequest,
+    adminId: UUID
+  ): Promise<AdminReviewPendingUnitRecommendationResult> {
+    await this.requireSuperAdmin(adminId);
+    const reviewNote = body.reason?.trim() || null;
+    const requestHash = JSON.stringify({
+      recommendationId,
+      action: body.action,
+      expectedVersion: body.expectedVersion,
+      name: body.name?.trim() || null,
+      type: body.type ?? null,
+      reviewNote
+    });
+    try {
+      return await this.prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT "id" FROM "unit_recommendations" WHERE "id" = ${recommendationId} FOR UPDATE`;
+        const recommendation = await this.requirePendingUnitRecommendation(tx, recommendationId);
+        const repeated = await getAdminIdempotentResult<AdminReviewPendingUnitRecommendationResult>(
+          tx,
+          body.operationId,
+          "admin-pending-unit:review",
+          adminId,
+          requestHash
+        );
+        if (repeated) return repeated;
+        if (recommendation.version !== body.expectedVersion) {
+          throw new ConflictException("单位建议已更新，请刷新后重试");
+        }
+        await startAdminIdempotentOperation(tx, body.operationId, "admin-pending-unit:review", adminId, requestHash);
+
+        const now = new Date();
+        if (body.action === "REJECT") {
+          await tx.unitRecommendation.update({
+            where: { id: recommendation.id },
+            data: {
+              status: "REJECTED",
+              reviewNote: reviewNote || "审核未通过",
+              reviewAdvice: "请尽量改成更准确、常用的单位后再提交。",
+              reviewedAt: now,
+              version: { increment: 1 }
+            }
+          });
+          await tx.auditEvent.create({
+            data: {
+              actorType: "ADMIN",
+              actorAdminId: adminId,
+              action: "UNIT_RECOMMENDATION_REVIEWED",
+              objectType: "UNIT_RECOMMENDATION",
+              objectId: recommendation.id,
+              payload: {
+                action: body.action,
+                reason: reviewNote
+              }
+            }
+          });
+          const result = {
+            id: recommendation.id,
+            status: "REJECTED",
+            reviewedAt: toIsoDate(now),
+            targetUnitId: null
+          } satisfies AdminReviewPendingUnitRecommendationResult;
+          await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-unit:review", adminId, requestHash, result);
+          return result;
+        }
+
+        const name = body.name?.trim() || recommendation.unitName;
+        if (!name) throw new BadRequestException("单位名称不能为空");
+        const type = body.type ?? recommendation.unitType;
+        const searchKey = buildSearchKey(name);
+        let targetUnitId: UUID | null = null;
+        const duplicate = await tx.unit.findFirst({
+          where: {
+            ownerId: null,
+            searchKey
+          }
+        });
+        if (duplicate) {
+          targetUnitId = duplicate.id;
+          await tx.unitRecommendation.update({
+            where: { id: recommendation.id },
+            data: {
+              unitName: duplicate.name,
+              unitType: duplicate.type,
+              status: "MERGED",
+              reviewNote,
+              reviewAdvice: null,
+              targetUnitId: duplicate.id,
+              reviewedAt: now,
+              version: { increment: 1 }
+            }
+          });
+        } else {
+          const created = await tx.unit.create({
+            data: {
+              ownerId: null,
+              name,
+              type,
+              searchKey,
+              systemSortOrder: await this.nextSystemUnitSortOrder(tx, type)
+            }
+          });
+          targetUnitId = created.id;
+          await tx.unitRecommendation.update({
+            where: { id: recommendation.id },
+            data: {
+              unitName: created.name,
+              unitType: created.type,
+              status: "ADOPTED",
+              reviewNote,
+              reviewAdvice: null,
+              targetUnitId: created.id,
+              reviewedAt: now,
+              version: { increment: 1 }
+            }
+          });
+        }
+
+        await tx.auditEvent.create({
+          data: {
+            actorType: "ADMIN",
+            actorAdminId: adminId,
+            action: "UNIT_RECOMMENDATION_REVIEWED",
+            objectType: "UNIT_RECOMMENDATION",
+            objectId: recommendation.id,
+            payload: {
+              action: body.action,
+              targetUnitId,
+              name,
+              type,
+              reviewNote
+            }
+          }
+        });
+        const result = {
+          id: recommendation.id,
+          status: "APPROVED",
+          reviewedAt: toIsoDate(now),
+          targetUnitId
+        } satisfies AdminReviewPendingUnitRecommendationResult;
+        await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-unit:review", adminId, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("系统单位名称已存在，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
   async reviewIngredientFeedback(
     feedbackId: UUID,
     body: AdminReviewIngredientFeedbackRequest,
@@ -2859,6 +3194,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(sourceContent, recommendation.recipe.coverImageUrl)
         });
+        await replaceAutoRecipeVersionTags(tx, nextVersion.id, sourceContent);
 
         const created = await tx.recipe.create({
           data: {
@@ -3009,9 +3345,7 @@ export class AdminService {
           }
         }),
         this.prisma.unit.findMany({
-          where: {
-            ownerId: null
-          },
+          where: { ownerId: null },
           select: {
             id: true,
             name: true
@@ -3449,6 +3783,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, coverImageUrl)
         });
+        await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
         const recipe = await tx.recipe.create({
           data: {
             ownerId: null,
@@ -3616,6 +3951,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
         });
+        await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
 
         const created = await tx.recipe.create({
           data: {
@@ -3999,6 +4335,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
         });
+        await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
 
         const updated = await tx.recipe.update({
           where: { id: recipeId },
@@ -4711,6 +5048,7 @@ export class AdminService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       category: toRecipeCategorySummary(recipe.category!),
+      contentVersionId: recipe.currentVersionId,
       version: recipe.version,
       updatedAt: toIsoDate(recipe.updatedAt)
     };
@@ -4913,6 +5251,29 @@ export class AdminService {
     });
     if (!recommendation || !recommendation.ingredient.ownerId || recommendation.ingredient.status !== "ACTIVE") {
       throw new NotFoundException("待审核个人食材不存在");
+    }
+    return recommendation;
+  }
+
+  private async requirePendingUnitRecommendation(tx: Prisma.TransactionClient, recommendationId: UUID) {
+    const recommendation = await tx.unitRecommendation.findFirst({
+      where: {
+        id: recommendationId,
+        status: "PENDING"
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            uid: true,
+            nickname: true
+          }
+        },
+        targetUnit: true
+      }
+    });
+    if (!recommendation) {
+      throw new NotFoundException("待审核单位建议不存在");
     }
     return recommendation;
   }

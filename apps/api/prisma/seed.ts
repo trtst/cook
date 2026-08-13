@@ -2,6 +2,8 @@ import { PrismaClient, type EntitlementTier, type UnitType } from "@prisma/clien
 import { loadLocalEnv } from "../src/common/load-env";
 import { hashPassword } from "../src/common/security/password";
 import { buildSearchKey } from "../src/modules/recipe/recipe-content";
+import { inferIngredientTagFacts } from "../src/modules/recipe/ingredient-tag-facts";
+import { allowedSystemUnitNames } from "../src/modules/recipe/system-unit-policy";
 
 loadLocalEnv();
 
@@ -38,36 +40,15 @@ type SystemIngredientSeed = {
 const defaultSystemUnits: SystemUnitSeed[] = [
   { id: 3001, name: "克", type: "WEIGHT" },
   { id: 3002, name: "千克", type: "WEIGHT" },
-  { id: 3003, name: "斤", type: "WEIGHT" },
-  { id: 3004, name: "两", type: "WEIGHT" },
   { id: 3005, name: "毫升", type: "VOLUME" },
   { id: 3006, name: "升", type: "VOLUME" },
-  { id: 3007, name: "个", type: "COUNT" },
-  { id: 3008, name: "只", type: "COUNT" },
-  { id: 3009, name: "颗", type: "COUNT" },
-  { id: 3010, name: "根", type: "COUNT" },
-  { id: 3011, name: "块", type: "COUNT" },
-  { id: 3012, name: "片", type: "COUNT" },
-  { id: 3013, name: "把", type: "COUNT" },
-  { id: 3014, name: "瓣", type: "SHAPE" },
-  { id: 3015, name: "段", type: "SHAPE" },
-  { id: 3016, name: "撮", type: "SHAPE" },
-  { id: 3017, name: "勺", type: "CONTAINER" },
-  { id: 3018, name: "汤匙", type: "CONTAINER" },
-  { id: 3019, name: "茶匙", type: "CONTAINER" },
-  { id: 3020, name: "碗", type: "CONTAINER" },
-  { id: 3021, name: "杯", type: "CONTAINER" },
-  { id: 3022, name: "袋", type: "PACKAGE" },
+  { id: 3007, name: "个", type: "COMMON" },
+  { id: 3014, name: "瓣", type: "COMMON" },
+  { id: 3018, name: "汤匙", type: "COMMON" },
   { id: 3023, name: "包", type: "PACKAGE" },
   { id: 3024, name: "盒", type: "PACKAGE" },
   { id: 3025, name: "瓶", type: "PACKAGE" },
-  { id: 3026, name: "罐", type: "PACKAGE" },
-  { id: 3027, name: "份", type: "OTHER" },
-  { id: 3028, name: "条", type: "COUNT" },
-  { id: 3029, name: "张", type: "COUNT" },
-  { id: 3030, name: "节", type: "COUNT" },
-  { id: 3031, name: "朵", type: "COUNT" },
-  { id: 3032, name: "串", type: "COUNT" }
+  { id: 3026, name: "罐", type: "PACKAGE" }
 ];
 
 const defaultSystemCategories: SystemCategorySeed[] = [
@@ -105,57 +86,57 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: 4005, name: "青椒", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4006, name: "里脊肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4007, name: "白菜", categoryName: "蔬果菌菇", defaultUnitName: "个" },
-  { id: 4008, name: "菠菜", categoryName: "蔬果菌菇", defaultUnitName: "把" },
+  { id: 4008, name: "菠菜", categoryName: "蔬果菌菇", defaultUnitName: "克" },
   { id: 4009, name: "生菜", categoryName: "蔬果菌菇", defaultUnitName: "个" },
-  { id: 4010, name: "黄瓜", categoryName: "蔬果菌菇", defaultUnitName: "根" },
-  { id: 4011, name: "胡萝卜", categoryName: "蔬果菌菇", defaultUnitName: "根" },
+  { id: 4010, name: "黄瓜", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: 4011, name: "胡萝卜", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4012, name: "茄子", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4013, name: "西兰花", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4014, name: "洋葱", categoryName: "蔬果菌菇", defaultUnitName: "个" },
-  { id: 4015, name: "大葱", categoryName: "蔬果菌菇", defaultUnitName: "根" },
-  { id: 4016, name: "生姜", categoryName: "蔬果菌菇", defaultUnitName: "块" },
+  { id: 4015, name: "大葱", categoryName: "蔬果菌菇", defaultUnitName: "个" },
+  { id: 4016, name: "生姜", categoryName: "蔬果菌菇", defaultUnitName: "克" },
   { id: 4017, name: "大蒜", categoryName: "蔬果菌菇", defaultUnitName: "瓣" },
-  { id: 4018, name: "香菇", categoryName: "蔬果菌菇", defaultUnitName: "朵" },
-  { id: 4019, name: "金针菇", categoryName: "蔬果菌菇", defaultUnitName: "把" },
-  { id: 4020, name: "莲藕", categoryName: "蔬果菌菇", defaultUnitName: "节" },
-  { id: 4021, name: "南瓜", categoryName: "蔬果菌菇", defaultUnitName: "块" },
+  { id: 4018, name: "香菇", categoryName: "蔬果菌菇", defaultUnitName: "克" },
+  { id: 4019, name: "金针菇", categoryName: "蔬果菌菇", defaultUnitName: "克" },
+  { id: 4020, name: "莲藕", categoryName: "蔬果菌菇", defaultUnitName: "克" },
+  { id: 4021, name: "南瓜", categoryName: "蔬果菌菇", defaultUnitName: "克" },
   { id: 4022, name: "猪肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4023, name: "鸡肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4024, name: "鸭肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4025, name: "排骨", categoryName: "肉禽蛋", defaultUnitName: "克" },
-  { id: 4026, name: "鸡翅", categoryName: "肉禽蛋", defaultUnitName: "只" },
-  { id: 4027, name: "鸡腿", categoryName: "肉禽蛋", defaultUnitName: "只" },
+  { id: 4026, name: "鸡翅", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: 4027, name: "鸡腿", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4028, name: "五花肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
-  { id: 4029, name: "鲈鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
-  { id: 4030, name: "草鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
-  { id: 4031, name: "带鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
+  { id: 4029, name: "鲈鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: 4030, name: "草鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: 4031, name: "带鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4032, name: "虾", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4033, name: "虾仁", categoryName: "水产海鲜", defaultUnitName: "克" },
-  { id: 4034, name: "鱿鱼", categoryName: "水产海鲜", defaultUnitName: "只" },
+  { id: 4034, name: "鱿鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4035, name: "花甲", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4036, name: "蛤蜊", categoryName: "水产海鲜", defaultUnitName: "克" },
-  { id: 4037, name: "海带", categoryName: "水产海鲜", defaultUnitName: "片" },
-  { id: 4038, name: "紫菜", categoryName: "水产海鲜", defaultUnitName: "张" },
-  { id: 4039, name: "北豆腐", categoryName: "豆乳制品", defaultUnitName: "块" },
-  { id: 4040, name: "南豆腐", categoryName: "豆乳制品", defaultUnitName: "块" },
-  { id: 4041, name: "豆干", categoryName: "豆乳制品", defaultUnitName: "片" },
-  { id: 4042, name: "千张", categoryName: "豆乳制品", defaultUnitName: "张" },
-  { id: 4043, name: "腐竹", categoryName: "豆乳制品", defaultUnitName: "根" },
-  { id: 4044, name: "豆皮", categoryName: "豆乳制品", defaultUnitName: "张" },
+  { id: 4037, name: "海带", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: 4038, name: "紫菜", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: 4039, name: "北豆腐", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: 4040, name: "南豆腐", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: 4041, name: "豆干", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: 4042, name: "千张", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: 4043, name: "腐竹", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: 4044, name: "豆皮", categoryName: "豆乳制品", defaultUnitName: "克" },
   { id: 4045, name: "豆浆", categoryName: "豆乳制品", defaultUnitName: "毫升" },
   { id: 4046, name: "牛奶", categoryName: "豆乳制品", defaultUnitName: "毫升" },
   { id: 4047, name: "酸奶", categoryName: "豆乳制品", defaultUnitName: "盒" },
   { id: 4048, name: "黄油", categoryName: "豆乳制品", defaultUnitName: "克" },
   { id: 4049, name: "大米", categoryName: "米面杂粮", defaultUnitName: "克" },
   { id: 4050, name: "面粉", categoryName: "米面杂粮", defaultUnitName: "克" },
-  { id: 4051, name: "挂面", categoryName: "米面杂粮", defaultUnitName: "把" },
-  { id: 4052, name: "意面", categoryName: "米面杂粮", defaultUnitName: "把" },
+  { id: 4051, name: "挂面", categoryName: "米面杂粮", defaultUnitName: "克" },
+  { id: 4052, name: "意面", categoryName: "米面杂粮", defaultUnitName: "克" },
   { id: 4053, name: "燕麦", categoryName: "米面杂粮", defaultUnitName: "克" },
   { id: 4054, name: "小米", categoryName: "米面杂粮", defaultUnitName: "克" },
   { id: 4055, name: "红豆", categoryName: "米面杂粮", defaultUnitName: "克" },
   { id: 4056, name: "绿豆", categoryName: "米面杂粮", defaultUnitName: "克" },
   { id: 4057, name: "木耳", categoryName: "干货腌制", defaultUnitName: "克" },
-  { id: 4058, name: "银耳", categoryName: "干货腌制", defaultUnitName: "朵" },
+  { id: 4058, name: "银耳", categoryName: "干货腌制", defaultUnitName: "克" },
   { id: 4059, name: "盐", categoryName: "调味料", defaultUnitName: "克" },
   { id: 4060, name: "糖", categoryName: "调味料", defaultUnitName: "克" },
   { id: 4061, name: "生抽", categoryName: "调味料", defaultUnitName: "毫升" },
@@ -171,17 +152,17 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: 4071, name: "香油", categoryName: "调味料", defaultUnitName: "毫升" },
   { id: 4072, name: "胡椒粉", categoryName: "调味料", defaultUnitName: "克" },
   { id: 4073, name: "苹果", categoryName: "蔬果菌菇", defaultUnitName: "个" },
-  { id: 4074, name: "香蕉", categoryName: "蔬果菌菇", defaultUnitName: "根" },
+  { id: 4074, name: "香蕉", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4075, name: "橙子", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4076, name: "柠檬", categoryName: "蔬果菌菇", defaultUnitName: "个" },
   { id: 4077, name: "梨", categoryName: "蔬果菌菇", defaultUnitName: "个" },
-  { id: 4078, name: "葡萄", categoryName: "蔬果菌菇", defaultUnitName: "串" },
-  { id: 4079, name: "速冻饺子", categoryName: "米面杂粮", defaultUnitName: "袋" },
-  { id: 4080, name: "速冻馄饨", categoryName: "米面杂粮", defaultUnitName: "袋" },
-  { id: 4081, name: "丸子", categoryName: "肉禽蛋", defaultUnitName: "袋" },
-  { id: 4082, name: "手抓饼", categoryName: "米面杂粮", defaultUnitName: "袋" },
-  { id: 4083, name: "冷冻玉米粒", categoryName: "蔬果菌菇", defaultUnitName: "袋" },
-  { id: 4084, name: "冷冻虾仁", categoryName: "水产海鲜", defaultUnitName: "袋" },
+  { id: 4078, name: "葡萄", categoryName: "蔬果菌菇", defaultUnitName: "克" },
+  { id: 4079, name: "速冻饺子", categoryName: "米面杂粮", defaultUnitName: "包" },
+  { id: 4080, name: "速冻馄饨", categoryName: "米面杂粮", defaultUnitName: "包" },
+  { id: 4081, name: "丸子", categoryName: "肉禽蛋", defaultUnitName: "包" },
+  { id: 4082, name: "手抓饼", categoryName: "米面杂粮", defaultUnitName: "包" },
+  { id: 4083, name: "冷冻玉米粒", categoryName: "蔬果菌菇", defaultUnitName: "包" },
+  { id: 4084, name: "冷冻虾仁", categoryName: "水产海鲜", defaultUnitName: "包" },
   { id: 4085, name: "啤酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
   { id: 4086, name: "红酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
   { id: 4087, name: "洋酒", categoryName: "酒水饮料", defaultUnitName: "瓶" },
@@ -191,23 +172,23 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: 4091, name: "羊肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4092, name: "羊排", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4093, name: "鸡胸肉", categoryName: "肉禽蛋", defaultUnitName: "克" },
-  { id: 4094, name: "鸡爪", categoryName: "肉禽蛋", defaultUnitName: "只" },
-  { id: 4095, name: "鸭翅", categoryName: "肉禽蛋", defaultUnitName: "只" },
+  { id: 4094, name: "鸡爪", categoryName: "肉禽蛋", defaultUnitName: "克" },
+  { id: 4095, name: "鸭翅", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4096, name: "鹌鹑蛋", categoryName: "肉禽蛋", defaultUnitName: "个" },
   { id: 4097, name: "三文鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
-  { id: 4098, name: "鲫鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
-  { id: 4099, name: "鲳鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
-  { id: 4100, name: "黄鱼", categoryName: "水产海鲜", defaultUnitName: "条" },
+  { id: 4098, name: "鲫鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: 4099, name: "鲳鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
+  { id: 4100, name: "黄鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4101, name: "生蚝", categoryName: "水产海鲜", defaultUnitName: "个" },
   { id: 4102, name: "扇贝", categoryName: "水产海鲜", defaultUnitName: "个" },
-  { id: 4103, name: "螃蟹", categoryName: "水产海鲜", defaultUnitName: "只" },
+  { id: 4103, name: "螃蟹", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4104, name: "鲍鱼", categoryName: "水产海鲜", defaultUnitName: "个" },
-  { id: 4105, name: "墨鱼", categoryName: "水产海鲜", defaultUnitName: "只" },
+  { id: 4105, name: "墨鱼", categoryName: "水产海鲜", defaultUnitName: "克" },
   { id: 4106, name: "内酯豆腐", categoryName: "豆乳制品", defaultUnitName: "盒" },
   { id: 4107, name: "豆腐泡", categoryName: "豆乳制品", defaultUnitName: "个" },
   { id: 4108, name: "豆腐乳", categoryName: "豆乳制品", defaultUnitName: "罐" },
-  { id: 4109, name: "奶酪", categoryName: "豆乳制品", defaultUnitName: "片" },
-  { id: 4110, name: "芝士片", categoryName: "豆乳制品", defaultUnitName: "片" },
+  { id: 4109, name: "奶酪", categoryName: "豆乳制品", defaultUnitName: "克" },
+  { id: 4110, name: "芝士片", categoryName: "豆乳制品", defaultUnitName: "克" },
   { id: 4111, name: "淡奶油", categoryName: "豆乳制品", defaultUnitName: "毫升" },
   { id: 4112, name: "椰浆", categoryName: "豆乳制品", defaultUnitName: "毫升" },
   { id: 4113, name: "炼乳", categoryName: "豆乳制品", defaultUnitName: "克" },
@@ -267,7 +248,7 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: 4167, name: "皮蛋", categoryName: "肉禽蛋", defaultUnitName: "个" }
 ];
 
-const unitTypes: UnitType[] = ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"];
+const unitTypes: UnitType[] = ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"];
 
 async function seedOwnedDiningGroup(userId: number, name = "我的饭搭子") {
   const diningGroup = await prisma.diningGroup.upsert({
@@ -615,6 +596,10 @@ async function seedSystemIngredients(
       const normalizedCategoryName = normalizeSeedCategoryName(item.categoryName);
       const category = requireSeedItem(categoryMap.get(normalizedCategoryName), `系统分类缺失: ${normalizedCategoryName}`);
       const unit = requireSeedItem(unitMap.get(item.defaultUnitName), `系统单位缺失: ${item.defaultUnitName}`);
+      const facts = inferIngredientTagFacts({
+        name: item.name,
+        categoryCode: category.code
+      });
       const existing = await prisma.ingredient.findFirst({
         where: {
           ownerId: null,
@@ -631,6 +616,10 @@ async function seedSystemIngredients(
               searchKey,
               categoryId: category.id,
               defaultUnitId: unit.id,
+              proteinType: facts.proteinType,
+              isStaple: facts.isStaple,
+              isSpicyIngredient: facts.isSpicyIngredient,
+              aliases: facts.aliases,
               systemSortOrder: null,
               displaySortOrder: null
             },
@@ -648,6 +637,10 @@ async function seedSystemIngredients(
               searchKey,
               categoryId: category.id,
               defaultUnitId: unit.id,
+              proteinType: facts.proteinType,
+              isStaple: facts.isStaple,
+              isSpicyIngredient: facts.isSpicyIngredient,
+              aliases: facts.aliases,
               systemSortOrder: null,
               displaySortOrder: null
             },
@@ -737,6 +730,40 @@ async function seedSystemIngredients(
   );
 
   return ingredientMap;
+}
+
+export async function syncSystemIngredientCatalog() {
+  const unitMap = await seedSystemUnits();
+  const categoryMap = await seedSystemCategories();
+  return seedSystemIngredients(categoryMap, unitMap);
+}
+
+export async function auditSystemIngredientDefaultUnits() {
+  return prisma.ingredient.findMany({
+    where: {
+      ownerId: null,
+      defaultUnit: {
+        name: {
+          notIn: [...allowedSystemUnitNames]
+        }
+      }
+    },
+    select: {
+      id: true,
+      name: true,
+      defaultUnit: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
+    },
+    orderBy: { id: "asc" }
+  });
+}
+
+export async function closeSeedPrisma() {
+  await prisma.$disconnect();
 }
 
 async function upsertRecipeVersion(
@@ -837,8 +864,7 @@ async function upsertRecipeVersion(
   });
 }
 
-async function seedRecipes(
-  ownerUserId: number,
+async function seedSystemRecipes(
   ingredientMap: Map<
     string,
     {
@@ -855,32 +881,8 @@ async function seedRecipes(
   const egg = requireSeedItem(ingredientMap.get("鸡蛋"), "系统食材缺失: 鸡蛋");
   const potato = requireSeedItem(ingredientMap.get("土豆"), "系统食材缺失: 土豆");
   const beef = requireSeedItem(ingredientMap.get("牛肉"), "系统食材缺失: 牛肉");
-  const pepper = requireSeedItem(ingredientMap.get("青椒"), "系统食材缺失: 青椒");
-  const tenderloin = requireSeedItem(ingredientMap.get("里脊肉"), "系统食材缺失: 里脊肉");
   const quickCategory = requireSeedItem(inspirationCategoryMap.get("家常快手"), "灵感分类缺失: 家常快手");
   const stewCategory = requireSeedItem(inspirationCategoryMap.get("炖煮硬菜"), "灵感分类缺失: 炖煮硬菜");
-  const ownerCategorySearchKey = buildSearchKey("拿手菜");
-  const ownerCategory =
-    (await prisma.recipeCategory.findFirst({
-      where: {
-        userId: ownerUserId,
-        searchKey: ownerCategorySearchKey
-      },
-      select: {
-        id: true
-      }
-    })) ??
-    (await prisma.recipeCategory.create({
-      data: {
-        userId: ownerUserId,
-        name: "拿手菜",
-        searchKey: ownerCategorySearchKey,
-        sortOrder: 0
-      },
-      select: {
-        id: true
-      }
-    }));
 
   const buildSystemIngredient = (name: string, quantity: string) => {
     const ingredient = requireSeedItem(ingredientMap.get(name), `系统食材缺失: ${name}`);
@@ -1359,6 +1361,82 @@ async function seedRecipes(
     duration: "BETWEEN_30_60",
     images: []
   });
+  await upsertSystemRecipe({
+    recipeId: 2001,
+    versionId: tomatoVersion.id,
+    categoryId: quickCategory.id,
+    name: "番茄炒蛋",
+    story: null,
+    baseServings: 2,
+    difficulty: "BEGINNER",
+    duration: "WITHIN_15",
+    tips: "番茄最后下锅，保持一点汁水。",
+    ingredients: [
+      { name: "番茄", quantity: "2" },
+      { name: "鸡蛋", quantity: "3" }
+    ],
+    steps: ["番茄切块", "鸡蛋炒散后和番茄一起翻炒"]
+  });
+
+  await upsertSystemRecipe({
+    recipeId: 2002,
+    versionId: potatoVersion.id,
+    categoryId: stewCategory.id,
+    name: "土豆烧牛肉",
+    story: null,
+    baseServings: 3,
+    difficulty: "SKILLED",
+    duration: "BETWEEN_30_60",
+    tips: "牛肉先焯水再炖，口感更稳。",
+    ingredients: [
+      { name: "土豆", quantity: "2" },
+      { name: "牛肉", quantity: "400" }
+    ],
+    steps: ["牛肉焯水", "土豆与牛肉一起焖煮"]
+  });
+
+  for (const recipe of generatedSystemRecipes) {
+    await upsertSystemRecipe(recipe);
+  }
+}
+
+async function seedOwnerRecipe(
+  ownerUserId: number,
+  ingredientMap: Map<
+    string,
+    {
+      id: number;
+      categoryId: number;
+      defaultUnitId: number;
+      defaultUnitName: string;
+      defaultUnitType: UnitType;
+    }
+  >
+) {
+  const pepper = requireSeedItem(ingredientMap.get("青椒"), "系统食材缺失: 青椒");
+  const tenderloin = requireSeedItem(ingredientMap.get("里脊肉"), "系统食材缺失: 里脊肉");
+  const ownerCategorySearchKey = buildSearchKey("拿手菜");
+  const ownerCategory =
+    (await prisma.recipeCategory.findFirst({
+      where: {
+        userId: ownerUserId,
+        searchKey: ownerCategorySearchKey
+      },
+      select: {
+        id: true
+      }
+    })) ??
+    (await prisma.recipeCategory.create({
+      data: {
+        userId: ownerUserId,
+        name: "拿手菜",
+        searchKey: ownerCategorySearchKey,
+        sortOrder: 0
+      },
+      select: {
+        id: true
+      }
+    }));
 
   const ownerVersion = await upsertRecipeVersion(1003, ownerUserId, {
     name: "青椒肉丝",
@@ -1399,44 +1477,6 @@ async function seedRecipes(
     images: []
   });
 
-  await upsertSystemRecipe({
-    recipeId: 2001,
-    versionId: tomatoVersion.id,
-    categoryId: quickCategory.id,
-    name: "番茄炒蛋",
-    story: null,
-    baseServings: 2,
-    difficulty: "BEGINNER",
-    duration: "WITHIN_15",
-    tips: "番茄最后下锅，保持一点汁水。",
-    ingredients: [
-      { name: "番茄", quantity: "2" },
-      { name: "鸡蛋", quantity: "3" }
-    ],
-    steps: ["番茄切块", "鸡蛋炒散后和番茄一起翻炒"]
-  });
-
-  await upsertSystemRecipe({
-    recipeId: 2002,
-    versionId: potatoVersion.id,
-    categoryId: stewCategory.id,
-    name: "土豆烧牛肉",
-    story: null,
-    baseServings: 3,
-    difficulty: "SKILLED",
-    duration: "BETWEEN_30_60",
-    tips: "牛肉先焯水再炖，口感更稳。",
-    ingredients: [
-      { name: "土豆", quantity: "2" },
-      { name: "牛肉", quantity: "400" }
-    ],
-    steps: ["牛肉焯水", "土豆与牛肉一起焖煮"]
-  });
-
-  for (const recipe of generatedSystemRecipes) {
-    await upsertSystemRecipe(recipe);
-  }
-
   await prisma.recipe.upsert({
     where: { id: 2003 },
     update: {
@@ -1464,6 +1504,32 @@ async function seedRecipes(
       coverImageUrl: null
     }
   });
+}
+
+async function seedRecipes(
+  ownerUserId: number,
+  ingredientMap: Map<
+    string,
+    {
+      id: number;
+      categoryId: number;
+      defaultUnitId: number;
+      defaultUnitName: string;
+      defaultUnitType: UnitType;
+    }
+  >,
+  inspirationCategoryMap: Map<string, { id: number; sortOrder: number }>
+) {
+  await seedSystemRecipes(ingredientMap, inspirationCategoryMap);
+  await seedOwnerRecipe(ownerUserId, ingredientMap);
+}
+
+export async function syncSystemRecipeCatalog() {
+  const unitMap = await seedSystemUnits();
+  const categoryMap = await seedSystemCategories();
+  const inspirationCategoryMap = await seedInspirationCategories();
+  const ingredientMap = await seedSystemIngredients(categoryMap, unitMap);
+  await seedSystemRecipes(ingredientMap, inspirationCategoryMap);
 }
 
 async function main() {
@@ -1565,11 +1631,13 @@ async function main() {
   );
 }
 
-main()
-  .finally(async () => {
-    await prisma.$disconnect();
-  })
-  .catch(error => {
-    console.error(error);
-    process.exitCode = 1;
-  });
+if (require.main === module) {
+  main()
+    .finally(async () => {
+      await prisma.$disconnect();
+    })
+    .catch(error => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}

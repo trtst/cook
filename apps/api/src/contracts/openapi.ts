@@ -55,6 +55,7 @@ const uuid = { type: Number, minimum: 1 };
 const dateTime = { type: "string" as const, format: "date-time" };
 const nullableString = { type: String, nullable: true };
 const tierValues = ["FREE", "PLUS", "PRO", "ULTRA"];
+const mealSlotValues = ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"];
 
 export class SessionUserModel {
   @ApiProperty({ type: Number }) uid!: number;
@@ -530,7 +531,7 @@ export class IngredientCategoryModel {
 export class UnitModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] }) type!: string;
+  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] }) type!: string;
   @ApiProperty({ type: String, enum: ["SYSTEM", "PERSONAL"] }) source!: string;
 }
 
@@ -562,6 +563,19 @@ export class IngredientRecommendationModel {
   @ApiProperty({ ...dateTime, nullable: true }) reviewedAt!: string | null;
 }
 
+export class UnitRecommendationModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) unitName!: string;
+  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] }) unitType!: string;
+  @ApiProperty({ type: String, enum: ["PENDING", "REJECTED", "ADOPTED", "MERGED"] }) status!: string;
+  @ApiProperty(nullableString) reviewNote!: string | null;
+  @ApiProperty(nullableString) reviewAdvice!: string | null;
+  @ApiProperty({ type: UnitModel, nullable: true }) targetUnit!: UnitModel | null;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) reviewedAt!: string | null;
+}
+
 export class IngredientFeedbackResultModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) ingredientId!: string;
@@ -574,7 +588,7 @@ export class RecipeAmountModel {
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
   @ApiProperty(nullableString) unitName!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] })
+  @ApiProperty({ type: String, nullable: true, enum: ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] })
   unitType!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) text!: string | null;
 }
@@ -722,6 +736,7 @@ export class MyRecipeSummaryModel {
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: RecipeCategoryModel }) category!: RecipeCategoryModel;
+  @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -834,6 +849,7 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
+  @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
   @ApiProperty(nullableString) curatedByName!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1090,6 +1106,11 @@ export class AdminIngredientModel {
   @ApiProperty(uuid) categoryId!: string;
   @ApiProperty({ type: String }) categoryName!: string;
   @ApiProperty({ type: UnitModel }) defaultUnit!: UnitModel;
+  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] })
+  proteinType!: string | null;
+  @ApiProperty({ type: Boolean }) isStaple!: boolean;
+  @ApiProperty({ type: Boolean }) isSpicyIngredient!: boolean;
+  @ApiProperty({ type: [String] }) aliases!: string[];
   @ApiProperty(nullableString) imageUrl!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1113,6 +1134,24 @@ export class AdminReviewPendingIngredientResultModel {
   @ApiProperty({ type: String, enum: ["APPROVED", "REJECTED"] }) status!: string;
   @ApiProperty(dateTime) reviewedAt!: string;
   @ApiProperty({ ...uuid, nullable: true }) targetIngredientId!: string | null;
+}
+
+export class AdminPendingUnitRecommendationModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] }) type!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: () => AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
+}
+
+export class AdminReviewPendingUnitRecommendationResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["APPROVED", "REJECTED"] }) status!: string;
+  @ApiProperty(dateTime) reviewedAt!: string;
+  @ApiProperty({ ...uuid, nullable: true }) targetUnitId!: string | null;
 }
 
 export class AdminPendingIngredientFeedbackModel {
@@ -1142,7 +1181,7 @@ export class AdminReviewIngredientFeedbackResultModel {
 export class AdminUnitModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] }) type!: string;
+  @ApiProperty({ type: String, enum: ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] }) type!: string;
   @ApiProperty({ type: String, enum: ["SYSTEM"] }) source!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -1175,20 +1214,163 @@ export class MealPlanMenuItemModel {
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: Number, nullable: true, minimum: 1 }) servings!: number | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"]
+  })
+  slotType!: string | null;
+  @ApiProperty({ type: String, enum: ["READY", "PENDING"] }) purchaseState!: string;
   @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
 }
 
 export class MealPlanModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String, format: "date" }) planDate!: string;
-  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "DINNER"] }) mealSlot!: string;
+  @ApiProperty({ type: String, enum: mealSlotValues }) mealSlot!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: [MealPlanMenuItemModel] }) menuItems!: MealPlanMenuItemModel[];
   @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
   @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
   @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class MealPlanCookAssistantTaskModel {
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) detail!: string;
+  @ApiProperty({ type: [String] }) dishTitles!: string[];
+}
+
+export class MealPlanCookAssistantTimelineStepModel extends MealPlanCookAssistantTaskModel {
+  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
+  @ApiProperty({ type: String, nullable: true }) parallelKey!: string | null;
+}
+
+export class MealPlanCookAssistantSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) dishCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) prepTaskCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) timelineStepCount!: number;
+  @ApiProperty(nullableString) totalDurationText!: string | null;
+  @ApiProperty(nullableString) suggestedStartTime!: string | null;
+  @ApiProperty({ type: [String] }) notes!: string[];
+}
+
+export class MealPlanCookAssistantModel {
+  @ApiProperty(uuid) planItemId!: string;
+  @ApiProperty({ type: Boolean }) hasSnapshot!: boolean;
+  @ApiProperty({ type: Boolean }) isStale!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) generatedAt!: string | null;
+  @ApiProperty({ type: MealPlanCookAssistantSummaryModel }) summary!: MealPlanCookAssistantSummaryModel;
+  @ApiProperty({ type: [MealPlanCookAssistantTaskModel] }) prepTasks!: MealPlanCookAssistantTaskModel[];
+  @ApiProperty({ type: [MealPlanCookAssistantTimelineStepModel] }) cookTimeline!: MealPlanCookAssistantTimelineStepModel[];
+  @ApiProperty({ type: [MealPlanCookAssistantTaskModel] }) serveTasks!: MealPlanCookAssistantTaskModel[];
+}
+
+export class RandomSlotPlanModel {
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) meatCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) vegetableCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) soupCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) stapleCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) breakfastStapleCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) breakfastProteinCount!: number;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 12 }) breakfastSideCount!: number;
+}
+
+export class RandomMenuWarningModel {
+  @ApiProperty({ type: String, enum: ["INSUFFICIENT_CANDIDATES", "PARTIAL_MENU"] }) code!: string;
+  @ApiProperty({ type: String }) message!: string;
+  @ApiProperty({
+    type: [String],
+    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"]
+  })
+  slotTypes!: string[];
+}
+
+export class RandomMenuItemModel {
+  @ApiProperty({ type: String }) slotId!: string;
+  @ApiProperty({
+    type: String,
+    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"]
+  })
+  slotType!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) slotIndex!: number;
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverUrl!: string | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) servings!: number | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] })
+  duration!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
+  @ApiProperty({ type: [String] }) flavorTags!: string[];
+  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"] })
+  mainProteinType!: string | null;
+  @ApiProperty({ type: String, enum: ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] }) fridgeFit!: string;
+}
+
+export class RandomMenuModel {
+  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "DINNER"] }) mealSlot!: string;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 12 }) peopleCount!: number;
+  @ApiProperty({ type: Boolean }) fridgePreferred!: boolean;
+  @ApiProperty({ type: RandomSlotPlanModel }) slotPlan!: RandomSlotPlanModel;
+  @ApiProperty({ type: [RandomMenuItemModel] }) items!: RandomMenuItemModel[];
+  @ApiProperty({ type: [RandomMenuWarningModel] }) warnings!: RandomMenuWarningModel[];
+  @ApiProperty(dateTime) generatedAt!: string;
+}
+
+export class ReplaceRandomMenuSlotModel {
+  @ApiProperty({ type: Number, minimum: 1 }) requestSeq!: number;
+  @ApiProperty({ type: RandomMenuItemModel, nullable: true }) slot!: RandomMenuItemModel | null;
+  @ApiProperty({ type: RandomMenuWarningModel, nullable: true }) warning!: RandomMenuWarningModel | null;
+}
+
+export class RandomGapIngredientModel {
+  @ApiProperty({ type: String }) decisionKey!: string;
+  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty({ type: String }) ingredientName!: string;
+  @ApiProperty(nullableString) quantityText!: string | null;
+  @ApiProperty({ type: String, enum: ["ENOUGH", "PARTIAL", "MISSING", "UNKNOWN"] }) inventoryStatus!: string;
+  @ApiProperty({ type: Boolean }) purchasable!: boolean;
+}
+
+export class RandomGapActionsModel {
+  @ApiProperty({ type: Boolean }) canKeep!: boolean;
+  @ApiProperty({ type: Boolean }) canReplace!: boolean;
+  @ApiProperty({ type: Boolean }) canRemove!: boolean;
+  @ApiProperty({ type: Boolean }) canAddToShopping!: boolean;
+}
+
+export class RandomGapItemModel {
+  @ApiProperty({ type: String }) slotId!: string;
+  @ApiProperty({
+    type: String,
+    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"]
+  })
+  slotType!: string;
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String }) recipeName!: string;
+  @ApiProperty({ type: String, enum: ["OK", "PARTIAL", "MISSING", "UNKNOWN"] }) status!: string;
+  @ApiProperty({ type: [RandomGapIngredientModel] }) missingIngredients!: RandomGapIngredientModel[];
+  @ApiProperty({ type: RandomGapActionsModel }) actions!: RandomGapActionsModel;
+  @ApiProperty({ type: Number, minimum: 0 }) unresolvedUnknownCount!: number;
+}
+
+export class RandomGapSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) okCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) partialCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) missingCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) unknownCount!: number;
+}
+
+export class RandomGapPreviewModel {
+  @ApiProperty({ type: [RandomGapItemModel] }) items!: RandomGapItemModel[];
+  @ApiProperty({ type: RandomGapSummaryModel }) summary!: RandomGapSummaryModel;
+  @ApiProperty({ type: Boolean }) canCreatePlan!: boolean;
 }
 
 export class DiningEventParticipantModel {
@@ -1208,7 +1390,7 @@ export class MealPollModel {
   @ApiProperty(uuid) diningGroupId!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String, format: "date" }) planDate!: string;
-  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "DINNER"] }) mealSlot!: string;
+  @ApiProperty({ type: String, enum: mealSlotValues }) mealSlot!: string;
   @ApiProperty({ type: String, enum: ["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"] }) status!: string;
   @ApiProperty(dateTime) deadlineAt!: string;
   @ApiProperty({ type: Number, minimum: 1, maximum: 3 }) choiceLimit!: number;
@@ -1308,7 +1490,7 @@ export class DiningMemoryShareParticipantModel {
 export class DiningMemorySharePreviewModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String, nullable: true }) planDate!: string | null;
-  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "DINNER"], nullable: true }) mealSlot!: string | null;
+  @ApiProperty({ type: String, enum: mealSlotValues, nullable: true }) mealSlot!: string | null;
   @ApiProperty({ type: [DiningMemoryShareMenuItemModel] }) menuItems!: DiningMemoryShareMenuItemModel[];
   @ApiProperty({ type: [DiningMemoryShareParticipantModel] }) participants!: DiningMemoryShareParticipantModel[];
   @ApiProperty(nullableString) caption!: string | null;
@@ -1433,7 +1615,7 @@ export class ShoppingItemModel {
   @ApiProperty(nullableString) note!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) sourceCount!: number;
   @ApiProperty({ type: [String] }) sourceTitles!: string[];
-  @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING"] }) sourceType!: string;
+  @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING", "RANDOM_MENU"] }) sourceType!: string;
   @ApiProperty(nullableString) sourceKey!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "BOUGHT", "DELETED"] }) status!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -1500,7 +1682,7 @@ export class ShoppingListInviteActionModel {
 }
 
 export class ShoppingItemSourceSummaryModel {
-  @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING"] }) sourceType!: string;
+  @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING", "RANDOM_MENU"] }) sourceType!: string;
   @ApiProperty(nullableString) title!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) sourceVersionId!: string | null;

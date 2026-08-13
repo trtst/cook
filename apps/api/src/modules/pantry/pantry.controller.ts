@@ -7,6 +7,7 @@ import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AddRecipeToShoppingListDto,
   ConsumeFridgeItemsDto,
+  CreateRandomMenuShoppingItemsDto,
   CreateFridgeItemDto,
   CreateRecipeShoppingItemsDto,
   CreateShoppingListDto,
@@ -447,6 +448,32 @@ export class PantryController {
   ) {
     return this.pantryService
       .createRecipeShoppingItems(request.user.userId, operationId, body.recipeId, body.sourceVersionId)
+      .then(result => ok(result));
+  }
+
+  @Post("shopping-items/from-random-menu")
+  @ApiIdempotencyKey()
+  @ApiOkArray(ShoppingItemModel, "把当前随机菜单确认采购的缺口写入本人购物清单")
+  createRandomMenuShoppingItems(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateRandomMenuShoppingItemsDto
+  ) {
+    return this.pantryService
+      .createRandomMenuShoppingItems(
+        request.user.userId,
+        operationId,
+        body.items.map(item => ({
+          slotId: item.slotId,
+          recipeId: item.recipeId,
+          recipeVersionId: item.recipeVersionId,
+          ingredients: item.ingredients.map(ingredient => ({
+            ingredientId: ingredient.ingredientId ?? null,
+            ingredientName: ingredient.ingredientName,
+            quantityText: ingredient.quantityText ?? null
+          }))
+        }))
+      )
       .then(result => ok(result));
   }
 

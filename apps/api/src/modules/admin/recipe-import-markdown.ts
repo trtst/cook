@@ -61,8 +61,7 @@ const unitAliasMap = new Map<string, string>([
   ["kg", "千克"],
   ["ml", "毫升"],
   ["l", "升"],
-  ["tbsp", "汤匙"],
-  ["tsp", "茶匙"]
+  ["tbsp", "汤匙"]
 ]);
 
 function readPngSize(buffer: Buffer) {

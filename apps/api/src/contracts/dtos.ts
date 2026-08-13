@@ -48,6 +48,8 @@ const medalCategoryValues = [
 ] as const;
 const medalStatusValues = ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] as const;
 const editableMedalStatusValues = ["DRAFT", "LISTED", "UNLISTED"] as const;
+const ingredientProteinTypeValues = ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] as const;
+const mealSlotValues = ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] as const;
 
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
@@ -802,7 +804,7 @@ export class IngredientListQueryDto extends PageQueryDto {
 export class UnitListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: "WEIGHT" })
   @IsOptional()
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
   type?: string;
 
   @ApiPropertyOptional({ example: "ALL" })
@@ -812,6 +814,8 @@ export class UnitListQueryDto extends PageQueryDto {
 }
 
 export class IngredientRecommendationListQueryDto extends PageQueryDto {}
+
+export class UnitRecommendationListQueryDto extends PageQueryDto {}
 
 export class InspirationRecipeListQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ example: resourceIdExample })
@@ -953,7 +957,7 @@ export class CreateUnitDto extends OperationDto {
   name!: string;
 
   @ApiProperty({ example: "WEIGHT" })
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
   type!: string;
 }
 
@@ -1403,24 +1407,62 @@ export class ReportRecipeDto extends OperationDto {
   reason!: string;
 }
 
+export class CreateMealPlanMenuItemDto {
+  @ApiProperty({
+    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"],
+    nullable: true
+  })
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
+  slotType!: string | null;
+
+  @ApiProperty({ minimum: 0 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeVersionId!: number;
+
+  @ApiProperty({ enum: ["READY", "PENDING"] })
+  @IsIn(["READY", "PENDING"])
+  purchaseState!: string;
+}
+
 export class CreateMealPlanDto extends OperationDto {
   @ApiProperty()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   planDate!: string;
 
-  @ApiProperty()
-  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
+  @ApiProperty({ enum: mealSlotValues })
+  @IsIn(mealSlotValues)
   mealSlot!: string;
 
-  @ApiProperty({ type: [String], maxItems: 20 })
+  @ApiPropertyOptional({ minimum: 1, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion?: number | null;
+
+  @ApiProperty({ type: [CreateMealPlanMenuItemDto], maxItems: 12 })
   @IsArray()
   @ArrayNotEmpty()
-  @ArrayMaxSize(20)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  recipeIds!: number[];
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => CreateMealPlanMenuItemDto)
+  menuItems!: CreateMealPlanMenuItemDto[];
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
@@ -1428,6 +1470,279 @@ export class CreateMealPlanDto extends OperationDto {
   @IsString()
   @MaxLength(255)
   note?: string | null;
+}
+
+export class RandomSlotPlanDto {
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  meatCount!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  vegetableCount!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  soupCount!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  stapleCount!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  breakfastStapleCount!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  breakfastProteinCount!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(12)
+  breakfastSideCount!: number;
+}
+
+export class GenerateRandomMenuDto extends OperationDto {
+  @ApiProperty({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
+  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
+  mealSlot!: "BREAKFAST" | "LUNCH" | "DINNER";
+
+  @ApiProperty({ minimum: 1, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  peopleCount!: number;
+
+  @ApiProperty()
+  @IsBoolean()
+  fridgePreferred!: boolean;
+
+  @ApiPropertyOptional({ type: RandomSlotPlanDto, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @ValidateNested()
+  @Type(() => RandomSlotPlanDto)
+  slotPlan?: RandomSlotPlanDto | null;
+}
+
+export class ReplaceRandomMenuCurrentItemDto {
+  @ApiProperty({ minLength: 1, maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotId!: string;
+
+  @ApiProperty({ enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"] })
+  @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
+  slotType!: string;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeVersionId!: number;
+}
+
+export class RandomReplaceConstraintDto {
+  @ApiProperty({ enum: ["FLAVOR", "DURATION", "INGREDIENT", "AVOID_INGREDIENT"] })
+  @IsIn(["FLAVOR", "DURATION", "INGREDIENT", "AVOID_INGREDIENT"])
+  kind!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 64 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(64)
+  value?: string | null;
+
+  @ApiPropertyOptional({ minimum: 1, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId?: number | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 64 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(64)
+  ingredientName?: string | null;
+}
+
+export class ReplaceRandomMenuSlotDto extends OperationDto {
+  @ApiProperty({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
+  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
+  mealSlot!: "BREAKFAST" | "LUNCH" | "DINNER";
+
+  @ApiProperty({ minimum: 1, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  peopleCount!: number;
+
+  @ApiProperty()
+  @IsBoolean()
+  fridgePreferred!: boolean;
+
+  @ApiProperty({ type: RandomSlotPlanDto })
+  @ValidateNested()
+  @Type(() => RandomSlotPlanDto)
+  slotPlan!: RandomSlotPlanDto;
+
+  @ApiProperty({ type: [ReplaceRandomMenuCurrentItemDto], maxItems: 12 })
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => ReplaceRandomMenuCurrentItemDto)
+  currentItems!: ReplaceRandomMenuCurrentItemDto[];
+
+  @ApiProperty({ minLength: 1, maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  targetSlotId!: string;
+
+  @ApiProperty({ enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"] })
+  @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
+  targetSlotType!: string;
+
+  @ApiProperty({ type: [RandomReplaceConstraintDto], maxItems: 6 })
+  @IsArray()
+  @ArrayMaxSize(6)
+  @ValidateNested({ each: true })
+  @Type(() => RandomReplaceConstraintDto)
+  replaceConstraints!: RandomReplaceConstraintDto[];
+
+  @ApiProperty({ type: [Number], maxItems: 30 })
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  rejectedRecipeVersionIds!: number[];
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  requestSeq!: number;
+}
+
+export class RandomGapInventoryDecisionDto {
+  @ApiProperty({ minLength: 1, maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotId!: string;
+
+  @ApiPropertyOptional({ minimum: 1, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId?: number | null;
+
+  @ApiProperty({ maxLength: 120 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  ingredientName!: string;
+
+  @ApiProperty({ enum: ["HAS", "MISSING"] })
+  @IsIn(["HAS", "MISSING"])
+  decision!: "HAS" | "MISSING";
+}
+
+export class RandomGapCheckItemDto {
+  @ApiProperty({ minLength: 1, maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotId!: string;
+
+  @ApiProperty({ enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"] })
+  @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
+  slotType!: string;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeVersionId!: number;
+}
+
+export class CheckRandomMenuGapDto extends OperationDto {
+  @ApiProperty({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
+  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
+  mealSlot!: "BREAKFAST" | "LUNCH" | "DINNER";
+
+  @ApiProperty({ minimum: 1, maximum: 12 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  peopleCount!: number;
+
+  @ApiProperty({ type: [RandomGapCheckItemDto], maxItems: 12 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => RandomGapCheckItemDto)
+  items!: RandomGapCheckItemDto[];
+
+  @ApiProperty({ type: [RandomGapInventoryDecisionDto], maxItems: 80 })
+  @IsArray()
+  @ArrayMaxSize(80)
+  @ValidateNested({ each: true })
+  @Type(() => RandomGapInventoryDecisionDto)
+  inventoryDecisions!: RandomGapInventoryDecisionDto[];
 }
 
 export class CreateDiningEventDto extends OperationDto {
@@ -1460,10 +1775,10 @@ export class MealPollListQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   planDate?: string;
 
-  @ApiPropertyOptional({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
+  @ApiPropertyOptional({ enum: mealSlotValues })
   @IsOptional()
-  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
-  mealSlot?: "BREAKFAST" | "LUNCH" | "DINNER";
+  @IsIn(mealSlotValues)
+  mealSlot?: (typeof mealSlotValues)[number];
 
   @ApiPropertyOptional({ minimum: 1, maximum: 20, default: 20 })
   @IsOptional()
@@ -1501,9 +1816,9 @@ export class CreateMealPollDto extends OperationDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   planDate!: string;
 
-  @ApiProperty({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
-  @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
-  mealSlot!: "BREAKFAST" | "LUNCH" | "DINNER";
+  @ApiProperty({ enum: mealSlotValues })
+  @IsIn(mealSlotValues)
+  mealSlot!: (typeof mealSlotValues)[number];
 
   @ApiProperty({ example: "2026-08-02T10:30:00.000Z" })
   @IsISO8601({ strict: true })
@@ -1590,6 +1905,8 @@ export class ConfirmMealPollDto extends VersionedOperationDto {
 }
 
 export class CompleteMealPlanDto extends OperationDto {}
+
+export class GenerateMealPlanCookAssistantDto extends OperationDto {}
 
 export class InviteDiningGroupParticipantsDto extends OperationDto {
   @ApiProperty()
@@ -1706,6 +2023,70 @@ export class CreateRecipeShoppingItemsDto extends OperationDto {
   @IsInt()
   @Min(1)
   sourceVersionId!: number;
+}
+
+export class CreateRandomMenuShoppingIngredientDto {
+  @ApiPropertyOptional({ minimum: 1, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId?: number | null;
+
+  @ApiProperty({ maxLength: 120 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  ingredientName!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 64 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(64)
+  quantityText?: string | null;
+}
+
+export class CreateRandomMenuShoppingItemDto {
+  @ApiProperty({ minLength: 1, maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotId!: string;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeVersionId!: number;
+
+  @ApiProperty({ type: [CreateRandomMenuShoppingIngredientDto], maxItems: 80 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(80)
+  @ValidateNested({ each: true })
+  @Type(() => CreateRandomMenuShoppingIngredientDto)
+  ingredients!: CreateRandomMenuShoppingIngredientDto[];
+}
+
+export class CreateRandomMenuShoppingItemsDto extends OperationDto {
+  @ApiProperty({ type: [CreateRandomMenuShoppingItemDto], maxItems: 12 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => CreateRandomMenuShoppingItemDto)
+  items!: CreateRandomMenuShoppingItemDto[];
 }
 
 export class ShoppingItemQueryDto extends PageQueryDto {
@@ -2007,6 +2388,11 @@ export class AdminIngredientQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["ACTIVE", "DISABLED", "ALL"])
   status?: "ACTIVE" | "DISABLED" | "ALL";
+
+  @ApiPropertyOptional({ example: "MISSING", enum: ["ALL", "MISSING"] })
+  @IsOptional()
+  @IsIn(["ALL", "MISSING"])
+  factStatus?: "ALL" | "MISSING";
 }
 
 export class AdminUnitPayloadDto extends OperationDto {
@@ -2018,7 +2404,7 @@ export class AdminUnitPayloadDto extends OperationDto {
   name!: string;
 
   @ApiProperty({ example: "WEIGHT" })
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
   type!: string;
 }
 
@@ -2031,7 +2417,7 @@ export class UpdateAdminUnitDto extends VersionedOperationDto {
   name!: string;
 
   @ApiProperty({ example: "WEIGHT" })
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
   type!: string;
 }
 
@@ -2039,7 +2425,7 @@ export class DeleteAdminUnitDto extends VersionedOperationDto {}
 
 export class ReorderAdminUnitsDto extends OperationDto {
   @ApiProperty({ example: "WEIGHT" })
-  @IsIn(["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"])
+  @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
   type!: string;
 
   @ApiProperty({ type: [ReorderItemDto] })
@@ -2510,6 +2896,31 @@ export class AdminIngredientPayloadDto extends OperationDto {
   @IsInt()
   @Min(1)
   defaultUnitId!: number;
+
+  @ApiPropertyOptional({ enum: ingredientProteinTypeValues, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(ingredientProteinTypeValues)
+  proteinType?: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isStaple!: boolean;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isSpicyIngredient!: boolean;
+
+  @ApiPropertyOptional({ type: [String], maxItems: 20 })
+  @IsOptional()
+  @Transform(({ value }) => trimItems(value))
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(32, { each: true })
+  aliases?: string[];
 }
 
 export class UpdateAdminIngredientDto extends VersionedOperationDto {
@@ -2531,6 +2942,31 @@ export class UpdateAdminIngredientDto extends VersionedOperationDto {
   @IsInt()
   @Min(1)
   defaultUnitId!: number;
+
+  @ApiPropertyOptional({ enum: ingredientProteinTypeValues, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(ingredientProteinTypeValues)
+  proteinType?: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isStaple!: boolean;
+
+  @ApiProperty({ example: false })
+  @IsBoolean()
+  isSpicyIngredient!: boolean;
+
+  @ApiPropertyOptional({ type: [String], maxItems: 20 })
+  @IsOptional()
+  @Transform(({ value }) => trimItems(value))
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(32, { each: true })
+  aliases?: string[];
 }
 
 export class UpdateAdminIngredientImageDto extends VersionedOperationDto {}
@@ -2614,6 +3050,41 @@ export class ReviewPendingIngredientDto extends VersionedOperationDto {
   @ValidateIf(object => object.action === "REJECT")
   @IsIn(["NAME_NOT_CLEAR", "NAME_HAS_BRAND", "CATEGORY_NOT_FIT", "UNIT_NOT_FIT", "OUT_OF_SCOPE", "OTHER"])
   rejectReasonCode?: "NAME_NOT_CLEAR" | "NAME_HAS_BRAND" | "CATEGORY_NOT_FIT" | "UNIT_NOT_FIT" | "OUT_OF_SCOPE" | "OTHER";
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}
+
+export class AdminPendingUnitRecommendationQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "汤勺" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(32)
+  declare keyword?: string;
+}
+
+export class ReviewPendingUnitRecommendationDto extends VersionedOperationDto {
+  @ApiProperty({ example: "APPROVE" })
+  @IsIn(["APPROVE", "REJECT"])
+  action!: "APPROVE" | "REJECT";
+
+  @ApiPropertyOptional()
+  @ValidateIf(object => object.action === "APPROVE")
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16)
+  name?: string;
+
+  @ApiPropertyOptional({ example: "WEIGHT" })
+  @ValidateIf(object => object.action === "APPROVE")
+  @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
+  type?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

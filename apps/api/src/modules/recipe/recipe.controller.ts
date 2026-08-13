@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
@@ -9,6 +9,7 @@ import {
   CreateIngredientDto,
   CreateIngredientFeedbackDto,
   IngredientRecommendationListQueryDto,
+  UnitRecommendationListQueryDto,
   CreateCollectionRecipeDto,
   CreateRecipeDraftDto,
   CreateUnitDto,
@@ -63,7 +64,8 @@ import {
   RecipeSceneModel,
   SaveRecipeDraftResultModel,
   SaveCollectionRecipeResultModel,
-  UnitModel
+  UnitModel,
+  UnitRecommendationModel
 } from "../../contracts/openapi";
 import type { RecipeDraftContentInput, UnitType } from "../../contracts/types";
 import { RecipeService } from "./recipe.service";
@@ -144,8 +146,17 @@ export class RecipeController {
 
   @Get("inspiration-recipes/:recipeId")
   @ApiOkModel(InspirationRecipeDetailModel, "匿名读取一个可曝光灵感菜谱详情")
-  getInspirationRecipe(@Param("recipeId", ParseIntPipe) recipeId: number) {
-    return this.recipeService.getInspirationRecipe(recipeId).then(result => ok(result));
+  getInspirationRecipe(
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @Headers("authorization") authorization?: string
+  ) {
+    return this.recipeService
+      .getInspirationRecipe(recipeId, {
+        headers: {
+          authorization
+        }
+      })
+      .then(result => ok(result));
   }
 
   @Get("recipe-categories")
@@ -351,6 +362,14 @@ export class RecipeController {
       .then(result => ok(result));
   }
 
+  @Get("unit-recommendations")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkPage(UnitRecommendationModel, "分页读取我的单位建议记录")
+  listUnitRecommendations(@Req() request: RequestWithUser, @Query() query: UnitRecommendationListQueryDto) {
+    return this.recipeService.listUnitRecommendations(request.user.userId, query.page, query.pageSize).then(result => ok(result));
+  }
+
   @Get("units")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -365,7 +384,7 @@ export class RecipeController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(UnitModel, "新建我的单位")
+  @ApiOkModel(UnitRecommendationModel, "提交一条单位建议")
   createUnit(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
