@@ -322,6 +322,7 @@
           v-if="sheetMode"
           :visible="sheetVisible"
           :title="sheetTitle"
+          :subtitle="sheetSubtitle"
           body-padding="none"
           @close="closeSheet"
           @after-close="handleSheetAfterClose"
@@ -567,15 +568,20 @@
 
                       <view v-if="ingredientCreateSection === 'unit'" class="ingredient-create__group">
                         <text class="ingredient-create__group-title">单位：</text>
-                        <view class="ingredient-grid ingredient-grid--create ingredient-grid--unit">
-                          <view
-                            v-for="item in units"
-                            :key="item.id"
-                            class="ingredient-choice"
-                            :class="{ 'ingredient-choice--active': ingredientCreateDraft.unitId === item.id }"
-                            @click="selectIngredientCreateUnit(item.id)"
-                          >
-                            <text class="ingredient-choice__name">{{ item.name }}</text>
+                        <view class="ingredient-unit-groups">
+                          <view v-for="group in unitGroups" :key="group.type" class="ingredient-unit-group">
+                            <text class="ingredient-unit-group__title">{{ group.label }}</text>
+                            <view class="ingredient-grid ingredient-grid--create ingredient-grid--unit">
+                              <view
+                                v-for="item in group.items"
+                                :key="item.id"
+                                class="ingredient-choice"
+                                :class="{ 'ingredient-choice--active': ingredientCreateDraft.unitId === item.id }"
+                                @click="selectIngredientCreateUnit(item.id)"
+                              >
+                                <text class="ingredient-choice__name">{{ item.name }}</text>
+                              </view>
+                            </view>
                           </view>
                         </view>
                       </view>
@@ -596,39 +602,8 @@
             </template>
 
             <template v-else-if="sheetMode === 'unit'">
-              <view class="sheet-search">
-                <input
-                  v-model="unitKeyword"
-                  class="sheet-search__input"
-                  maxlength="20"
-                  placeholder="搜索或输入单位"
-                  placeholder-class="sheet-search__placeholder"
-                />
-              </view>
-
-              <view v-if="unitQuickOptions.length" class="sheet-section">
-                <view class="chip-row">
-                  <view
-                    v-for="item in unitQuickOptions"
-                    :key="item.id"
-                    class="chip"
-                    @click="selectUnitOption(item.id)"
-                  >
-                    {{ item.name }}
-                  </view>
-                  <view
-                    v-for="item in fuzzyAmounts"
-                    :key="item"
-                    class="chip"
-                    @click="selectFuzzyOption(item)"
-                  >
-                    {{ item }}
-                  </view>
-                </view>
-              </view>
-
               <view
-                v-for="group in filteredUnitGroups"
+                v-for="group in unitGroups"
                 :key="group.type"
                 class="sheet-section"
               >
@@ -1027,7 +1002,6 @@ const ingredientCreateVisible = ref(false);
 const ingredientCreateSubmitting = ref(false);
 const ingredientCreateSection = ref<"" | "category" | "unit">("");
 const formFieldFocused = ref(false);
-const unitKeyword = ref("");
 const activeUnitRowId = ref("");
 const categoriesLoaded = ref(false);
 const scenesLoaded = ref(false);
@@ -1080,16 +1054,12 @@ const sceneDraftName = ref("");
 const categorySubmitting = ref(false);
 const sceneSubmitting = ref(false);
 
-const fuzzyAmounts: FuzzyAmount[] = ["适量", "少许", "按需"];
 const baseServingsOptions = Array.from({ length: 10 }, (_, index) => `${index + 1}`);
 const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
   WEIGHT: "重量",
   VOLUME: "体积",
-  COUNT: "数量",
-  SHAPE: "形态",
-  CONTAINER: "量具",
-  PACKAGE: "包装",
-  OTHER: "其他"
+  COMMON: "常用",
+  PACKAGE: "包装"
 };
 
 const heroStyle = computed(() => ({
@@ -1144,6 +1114,12 @@ const sheetTitle = computed(() => {
   if (sheetMode.value === "unit") return "选择单位";
   return "高级设置";
 });
+const sheetSubtitle = computed(() => {
+  if (sheetMode.value === "unit") {
+    return "优先选更明确的单位，如：克、毫升";
+  }
+  return "";
+});
 const sheetTitleTag = computed(() => {
   if (sheetMode.value !== "ingredient" || ingredientCreateVisible.value || !pendingIngredientAddCount.value) {
     return "";
@@ -1185,26 +1161,20 @@ const ingredientPickerMainStyle = computed(() => {
   };
 });
 const activeUnitRow = computed(() => ingredientRows.value.find(item => item.localId === activeUnitRowId.value) || null);
-const unitQuickOptions = computed(() => {
-  const preferred = ["只", "个", "克", "千克", "毫升", "升"];
-  return preferred
-    .map(name => units.value.find(item => item.name === name))
-    .filter((item): item is UnitSummary => Boolean(item));
-});
-const filteredUnitGroups = computed(() => {
-  const keyword = normalizeText(unitKeyword.value);
+const unitGroups = computed(() => {
   const groups = new Map<UnitSummary["type"], UnitSummary[]>();
   units.value.forEach(item => {
-    if (keyword && !normalizeText(item.name).includes(keyword)) return;
     const list = groups.get(item.type) || [];
     list.push(item);
     groups.set(item.type, list);
   });
-  return Array.from(groups.entries()).map(([type, items]) => ({
-    type,
-    label: unitTypeLabelMap[type],
-    items
-  }));
+  return (["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] as const)
+    .map(type => ({
+      type,
+      label: unitTypeLabelMap[type],
+      items: groups.get(type) || []
+    }))
+    .filter(group => group.items.length > 0);
 });
 const difficultyText = computed(() => {
   return recipeDifficultyText(form.difficulty, "未设置");
@@ -1526,7 +1496,7 @@ async function ensureUnitsLoaded() {
   }
 
   unitPromise = recipeApi
-    .listUnits({ page: 1, pageSize: 100 })
+    .listUnits({ page: 1, pageSize: 100, source: "SYSTEM" })
     .then(result => {
       mergeUnits(result.items);
       unitsLoaded.value = true;
@@ -1656,7 +1626,7 @@ async function loadPage() {
         recipeApi.listScenes(),
         recipeApi.listIngredientCategories(),
         recipeApi.listIngredients({ page: 1, pageSize: 100 }),
-        recipeApi.listUnits({ page: 1, pageSize: 100 }),
+        recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" }),
         recipeApi.getDraft(draftId.value)
       ]);
       categories.value = categoryList;
@@ -1674,7 +1644,7 @@ async function loadPage() {
         recipeApi.listScenes(),
         recipeApi.listIngredientCategories(),
         recipeApi.listIngredients({ page: 1, pageSize: 100 }),
-        recipeApi.listUnits({ page: 1, pageSize: 100 }),
+        recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" }),
         recipeApi.getMyRecipe(recipeId.value)
       ]);
       categories.value = categoryList;
@@ -1692,7 +1662,7 @@ async function loadPage() {
         recipeApi.listScenes(),
         recipeApi.listIngredientCategories(),
         recipeApi.listIngredients({ page: 1, pageSize: 100 }),
-        recipeApi.listUnits({ page: 1, pageSize: 100 })
+        recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" })
       ]);
       categories.value = categoryList;
       scenes.value = sceneList;
@@ -2394,7 +2364,6 @@ function removeStepRow(localId: string) {
 
 async function openUnitSheet(localId: string) {
   activeUnitRowId.value = localId;
-  unitKeyword.value = "";
   try {
     await ensureUnitsLoaded();
     openSheet("unit");
@@ -2412,14 +2381,6 @@ function selectUnitOption(unitId: ResourceId) {
   if (!row.defaultUnitId) {
     row.defaultUnitId = unit.id;
   }
-  closeSheet();
-}
-
-function selectFuzzyOption(value: FuzzyAmount) {
-  const row = activeUnitRow.value;
-  if (!row) return;
-  row.fuzzyText = value;
-  row.unitId = "";
   closeSheet();
 }
 
@@ -4104,6 +4065,22 @@ function nextSlotKey() {
 
 .ingredient-grid--unit {
   grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.ingredient-unit-groups {
+  display: grid;
+  gap: 20rpx;
+}
+
+.ingredient-unit-group {
+  display: grid;
+  gap: 12rpx;
+}
+
+.ingredient-unit-group__title {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.4;
 }
 
 .ingredient-grid--create .ingredient-choice {

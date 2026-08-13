@@ -20,7 +20,7 @@
           class="category-card"
           hover-class="category-card--hover"
           hover-stay-time="100"
-          @click="openType(item.key)"
+          @click="openType(item.key, item.recommendKind)"
         >
           <view class="category-card__icon-shell" :class="`category-card__icon-shell--${item.tone}`">
             <text class="cookfont category-card__icon" :class="item.icon" />
@@ -46,15 +46,16 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { recipeApi, type IngredientRecommendationSummary } from "@/apis/recipe";
+import { recipeApi, type IngredientRecommendationSummary, type UnitRecommendationSummary } from "@/apis/recipe";
 import { shoppingApi, type ShoppingListInviteSummary } from "../apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 
-type MessageTypeKey = "ingredient" | "shoppingInvite";
+type MessageTypeKey = "recommend" | "shoppingInvite";
 type ReadState = Partial<Record<MessageTypeKey, string>>;
+type RecommendKind = "ingredient" | "unit";
 
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
@@ -63,7 +64,7 @@ const { navBarTotalHeight } = useSystemInfo();
 
 const messageTabs = [
   {
-    key: "ingredient",
+    key: "recommend",
     name: "推荐审核",
     icon: "icon-recommend",
     tone: "recommend"
@@ -84,15 +85,18 @@ const messageTabs = [
 const loading = ref(false);
 const errorText = ref("");
 const ingredientItems = ref<IngredientRecommendationSummary[]>([]);
+const unitItems = ref<UnitRecommendationSummary[]>([]);
 const shoppingInvites = ref<ShoppingListInviteSummary[]>([]);
 const readState = ref<ReadState>(uniPlatform.storage.getSync<ReadState>(READ_STORAGE_KEY) ?? {});
 
 const messageGroups = computed(() =>
   messageTabs.map(item => {
     const latestTime = getLatestTime(item.key);
+    const recommendPreview = item.key === "recommend" ? buildRecommendPreview() : null;
     return {
       ...item,
-      preview: buildGroupPreview(item.key),
+      preview: item.key === "recommend" ? recommendPreview?.text ?? "" : buildGroupPreview(item.key),
+      recommendKind: recommendPreview?.kind ?? "ingredient",
       timeText: latestTime ? formatListTime(latestTime) : "",
       hasUnread: Boolean(latestTime) && latestTime !== (readState.value[item.key] ?? "")
     };
@@ -126,8 +130,9 @@ async function doLoadPage() {
   loading.value = true;
   errorText.value = "";
   try {
-    const [ingredientResult, inviteResult] = await Promise.allSettled([
+    const [ingredientResult, unitResult, inviteResult] = await Promise.allSettled([
       recipeApi.listIngredientRecommendations({ page: 1, pageSize: 20 }),
+      recipeApi.listUnitRecommendations({ page: 1, pageSize: 20 }),
       shoppingApi.listInvites("ALL")
     ]);
 
@@ -136,6 +141,13 @@ async function doLoadPage() {
     } else {
       ingredientItems.value = [];
       errorText.value ||= ingredientResult.reason instanceof Error ? ingredientResult.reason.message : "加载失败，请重试";
+    }
+
+    if (unitResult.status === "fulfilled") {
+      unitItems.value = unitResult.value.items;
+    } else {
+      unitItems.value = [];
+      errorText.value ||= unitResult.reason instanceof Error ? unitResult.reason.message : "加载失败，请重试";
     }
 
     if (inviteResult.status === "fulfilled") {
@@ -162,6 +174,31 @@ function getLatestIngredient() {
   }, null);
 }
 
+function getUnitSortTime(item: UnitRecommendationSummary) {
+  return item.reviewedAt || item.updatedAt || item.createdAt;
+}
+
+function getLatestUnit() {
+  return unitItems.value.reduce<UnitRecommendationSummary | null>((latest, item) => {
+    if (!latest) return item;
+    return new Date(getUnitSortTime(item)).getTime() > new Date(getUnitSortTime(latest)).getTime() ? item : latest;
+  }, null);
+}
+
+function getLatestRecommend() {
+  const latestIngredient = getLatestIngredient();
+  const latestUnit = getLatestUnit();
+  if (!latestIngredient) {
+    return latestUnit ? { kind: "unit" as RecommendKind, time: getUnitSortTime(latestUnit) } : null;
+  }
+  if (!latestUnit) {
+    return { kind: "ingredient" as RecommendKind, time: getItemSortTime(latestIngredient) };
+  }
+  return new Date(getUnitSortTime(latestUnit)).getTime() > new Date(getItemSortTime(latestIngredient)).getTime()
+    ? { kind: "unit" as RecommendKind, time: getUnitSortTime(latestUnit) }
+    : { kind: "ingredient" as RecommendKind, time: getItemSortTime(latestIngredient) };
+}
+
 function getLatestInvite() {
   return shoppingInvites.value.reduce<ShoppingListInviteSummary | null>((latest, item) => {
     if (!latest) return item;
@@ -175,7 +212,7 @@ function getInviteSortTime(item: ShoppingListInviteSummary) {
 
 function getLatestTime(type: MessageTypeKey) {
   if (type === "shoppingInvite") return getLatestInvite() ? getInviteSortTime(getLatestInvite() as ShoppingListInviteSummary) : "";
-  return getLatestIngredient() ? getItemSortTime(getLatestIngredient() as IngredientRecommendationSummary) : "";
+  return getLatestRecommend()?.time ?? "";
 }
 
 function buildGroupPreview(type: MessageTypeKey) {
@@ -190,16 +227,37 @@ function buildGroupPreview(type: MessageTypeKey) {
     if (latest.canJoin) return `${ownerName} 邀请你一起维护“${latest.name}”`;
     return `“${latest.name}”当前协作者已满，暂时不能加入`;
   }
-
-  const item = getLatestIngredient();
-  if (loading.value && !ingredientItems.value.length) return "正在同步推荐审核记录";
-  if (errorText.value && !ingredientItems.value.length) return "记录加载失败，点击进入后可重试";
-  if (!item) return "食材推荐审核动态会先收口到这里";
-  if (item.status === "PENDING") return `“${item.ingredientName}”正在审核中`;
-  if (item.status === "REJECTED") return item.reviewNote || `“${item.ingredientName}”审核未通过`;
-  if (item.status === "ADOPTED") return `“${item.ingredientName}”已收录为系统食材`;
-  return `“${item.ingredientName}”已归并到现有系统食材`;
+  return "";
 }
+
+function buildRecommendPreview() {
+  const item = getLatestIngredient();
+  const unit = getLatestUnit();
+  const latest = getLatestRecommend();
+  if (loading.value && !ingredientItems.value.length && !unitItems.value.length) {
+    return { kind: "ingredient" as RecommendKind, text: "正在同步推荐审核记录" };
+  }
+  if (errorText.value && !ingredientItems.value.length && !unitItems.value.length) {
+    return { kind: "ingredient" as RecommendKind, text: "记录加载失败，点击进入后可重试" };
+  }
+  if (!latest) {
+    return { kind: "ingredient" as RecommendKind, text: "食材和单位的审核动态会收口到这里" };
+  }
+  if (latest.kind === "unit" && unit) {
+    if (unit.status === "PENDING") return { kind: "unit" as RecommendKind, text: `“${unit.unitName}”正在审核中` };
+    if (unit.status === "REJECTED") return { kind: "unit" as RecommendKind, text: unit.reviewNote || `“${unit.unitName}”审核未通过` };
+    if (unit.status === "ADOPTED") return { kind: "unit" as RecommendKind, text: `“${unit.unitName}”已收录为系统单位` };
+    return { kind: "unit" as RecommendKind, text: `“${unit.unitName}”已归并到现有系统单位` };
+  }
+  if (!item) {
+    return { kind: "ingredient" as RecommendKind, text: "食材推荐审核动态会收口到这里" };
+  }
+  if (item.status === "PENDING") return { kind: "ingredient" as RecommendKind, text: `“${item.ingredientName}”正在审核中` };
+  if (item.status === "REJECTED") return { kind: "ingredient" as RecommendKind, text: item.reviewNote || `“${item.ingredientName}”审核未通过` };
+  if (item.status === "ADOPTED") return { kind: "ingredient" as RecommendKind, text: `“${item.ingredientName}”已收录为系统食材` };
+  return { kind: "ingredient" as RecommendKind, text: `“${item.ingredientName}”已归并到现有系统食材` };
+}
+
 
 function formatListTime(value: string) {
   const date = new Date(value);
@@ -218,9 +276,10 @@ function markTypeRead(type: MessageTypeKey) {
   uniPlatform.storage.setSync(READ_STORAGE_KEY, readState.value);
 }
 
-function openType(type: MessageTypeKey) {
+function openType(type: MessageTypeKey, recommendKind?: RecommendKind) {
   markTypeRead(type);
-  void uniPlatform.navigation.navigateTo(`/pages_me/recommend-detail/index?type=${encodeURIComponent(type)}`);
+  const extra = type === "recommend" ? `&kind=${encodeURIComponent(recommendKind || "ingredient")}` : "";
+  void uniPlatform.navigation.navigateTo(`/pages_me/recommend-detail/index?type=${encodeURIComponent(type)}${extra}`);
 }
 
 function handleBack() {

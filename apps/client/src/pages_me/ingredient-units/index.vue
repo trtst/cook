@@ -99,7 +99,7 @@
             </view>
             <view v-else-if="activeTab === 'unit' && !unitGroups.length" class="empty-state">
               <text class="empty-state__title">还没有单位</text>
-              <text class="empty-state__desc">当前没有可展示的单位，稍后再看，或从右下角先补一个个人单位。</text>
+              <text class="empty-state__desc">当前没有可展示的系统单位，稍后再看。</text>
             </view>
 
             <view v-else class="list" :class="{ 'list--unit': activeTab === 'unit' }">
@@ -130,8 +130,17 @@
               </view>
 
               <view v-else class="unit-section-list sheet-unit-list">
+                <view class="unit-guide">
+                  <text class="unit-guide__title">用量选择及填写建议</text>
+                  <text class="unit-guide__text">优先使用:克、千克（重量），毫升、升（容量）。</text>
+                  <text class="unit-guide__text">日常单位:个、瓣、包、盒等，仅在表述自然时使用。</text>
+                  <text class="unit-guide__text">少用模糊词:尽量用具体数字替代“适量、少许、按需”。</text>
+                </view>
                 <view v-for="group in unitGroups" :key="group.value" class="unit-section sheet-unit-group">
-                  <text class="unit-section__title sheet-unit-group__title">{{ group.label }}</text>
+                  <view class="unit-section__head">
+                    <text class="unit-section__title sheet-unit-group__title">{{ group.label }}</text>
+                    <text class="unit-section__example">{{ group.example }}</text>
+                  </view>
                   <view class="unit-grid sheet-unit-grid">
                     <view v-for="item in group.items" :key="item.id" class="unit-card sheet-chip sheet-chip--unit">
                       <text class="unit-card__name">{{ item.name }}</text>
@@ -322,7 +331,7 @@ const loadingTips = [
   "灶台备料中，马上就好",
   "替你把食材和单位拢一遍",
   "锅里翻找中，马上出结果",
-  "先把常用单位摆上来",
+  "把单位整理出来",
   "厨房小本本翻页中"
 ];
 
@@ -334,14 +343,18 @@ const tabs = [
 const unitTypeLabelMap: Record<UnitType, string> = {
   WEIGHT: "重量",
   VOLUME: "体积",
-  COUNT: "数量",
-  SHAPE: "形态",
-  CONTAINER: "量具",
-  PACKAGE: "包装",
-  OTHER: "其他"
+  COMMON: "常用",
+  PACKAGE: "包装"
 };
 
-const unitTypeItems = (["WEIGHT", "VOLUME", "COUNT", "SHAPE", "CONTAINER", "PACKAGE", "OTHER"] as const).map((type) => ({
+const unitTypeExampleMap: Record<UnitType, string> = {
+  WEIGHT: "例：牛肉 300克，大米 2千克",
+  VOLUME: "例：生抽 15毫升，牛奶 1升",
+  COMMON: "例：番茄 2个，大蒜 3瓣，生抽 1汤匙",
+  PACKAGE: "例：粉丝 1包，酸奶 1盒"
+};
+
+const unitTypeItems = (["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] as const).map((type) => ({
   value: type,
   label: unitTypeLabelMap[type]
 }));
@@ -397,6 +410,7 @@ const unitGroups = computed(() =>
   unitTypeItems
     .map((group) => ({
       ...group,
+      example: unitTypeExampleMap[group.value],
       items: units.value.filter((item) => item.type === group.value)
     }))
     .filter((group) => group.items.length > 0)
@@ -425,14 +439,14 @@ const sheetTitle = computed(() => {
 });
 const sheetHint = computed(() =>
   sheetMode.value === "ingredient"
-    ? "系统库里还没有也没关系，先加到你的食材里用，也可以顺手推荐给我们收录。"
+    ? "系统库里暂时没有也没关系，可先补食材并提交收录建议。"
     : sheetMode.value === "unit"
-      ? "系统里还没有也没关系，先加到你的单位里，做菜时就能直接用。"
-      : "可修改名字、分类，或补充备注，帮助我们更快纠正食材信息。"
+      ? "填写准确单位，提交后会进入后台审核。"
+      : "可修改名字、分类，或补充备注，帮助我们更快核对。"
 );
 const sheetSubmitText = computed(() => {
   if (sheetMode.value === "ingredient") return "提交推荐";
-  if (sheetMode.value === "unit") return "创建个人单位";
+  if (sheetMode.value === "unit") return "提交建议";
   return "确定";
 });
 const {
@@ -624,7 +638,8 @@ async function loadUnits(force = false) {
   unitPromise = recipeApi
     .listUnits({
       page: 1,
-      pageSize: 100
+      pageSize: 100,
+      source: "SYSTEM"
     })
     .then((result) => {
       units.value = result.items;
@@ -719,7 +734,7 @@ async function submitSheet() {
     await submitIngredientFeedback();
     return;
   }
-  await submitUnitCreate();
+  await submitUnitRecommend();
 }
 
 async function submitIngredientRecommend() {
@@ -762,7 +777,7 @@ async function submitIngredientRecommend() {
   }
 }
 
-async function submitUnitCreate() {
+async function submitUnitRecommend() {
   const name = unitForm.name.trim();
   if (!name) {
     sheetErrorText.value = "请先填写单位名字";
@@ -777,16 +792,15 @@ async function submitUnitCreate() {
   sheetErrorText.value = "";
 
   try {
-    await recipeApi.createUnit({
+    await recipeApi.recommendUnit({
       operationId: createOperationId(),
       name,
       type: unitForm.type
     });
-    await loadUnits();
     closeSheet();
-    await uniPlatform.feedback.toast({ title: "个人单位已创建", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已提交建议", icon: "success" });
   } catch (error) {
-    sheetErrorText.value = error instanceof Error ? error.message : "创建失败";
+    sheetErrorText.value = error instanceof Error ? error.message : "提交失败";
   } finally {
     sheetSubmitting.value = false;
   }
@@ -1323,11 +1337,49 @@ async function handleRefresherRefresh() {
 
 .sheet-unit-group__title {
   display: block;
-  margin-bottom: 12rpx;
+  margin-bottom: 20rpx;
   color: var(--color-text-secondary);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 1.3;
+  line-height: 1;
+}
+
+.unit-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 24rpx;
+  padding: 24rpx;
+  border: 1rpx solid color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary) 12%);
+}
+
+.unit-guide__title {
+  color: var(--color-text);
+  font-size: 30rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.unit-guide__text {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.unit-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin: 12rpx 0;
+  flex-wrap: wrap;
+}
+
+.unit-section__example {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.6;
 }
 
 .sheet__error {

@@ -1,34 +1,12 @@
 <template>
   <page-meta :page-style="pageStyle" />
-  <Layout
-    title=""
-    full-screen
-    :navbar-transparent="isIngredientType"
-    :navbar-placeholder="!isIngredientType"
-    :show-left="isIngredientType"
-    :navbar-layout="isIngredientType ? 'title' : 'custom-left'"
-  >
-    <template v-if="!isIngredientType" #navbar-left>
-      <view class="header-tabs">
-        <view class="cookfont icon-back header-tabs__back" hover-class="header-tabs__back--hover" hover-stay-time="100" @click="goBack" />
-        <view class="nav-tabs">
-          <view
-            v-for="item in inviteStatusTabs"
-            :key="item.key"
-            class="nav-tabs__item"
-            :class="{ 'nav-tabs__item--active': activeStatus === item.key }"
-            @click="changeStatus(item.key)"
-          >
-            {{ item.name }}
-          </view>
-        </view>
-      </view>
+  <Layout title="" full-screen :show-left="false" navbar-layout="custom-left">
+    <template #navbar-left>
+      <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
     </template>
-    <template v-if="isIngredientType" #navbar-center>
-      <text class="detail-navbar__title">{{ currentType.name }}</text>
+    <template #navbar-center>
+      <text class="detail-nav__title">{{ currentTypeName }}</text>
     </template>
-
-    <view v-if="isIngredientType" class="detail-nav-backdrop" :style="navBackdropStyle" />
 
     <view class="detail-page">
       <view class="detail-scroll-wrap">
@@ -47,125 +25,144 @@
           :show-scrollbar="false"
           :refresher-threshold="refresherThreshold"
           :refresher-triggered="refresherTriggered"
-          @scroll="handleScroll"
+          :lower-threshold="120"
           @refresherpulling="onRefresherPulling"
           @refresherrefresh="handleRefresherRefresh"
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
+          @scrolltolower="handleScrollToLower"
         >
-          <view class="detail-body" :style="detailBodyStyle">
-          <view v-if="currentStatusTabs.length" class="sticky-wrap" :style="stickyStyle">
-            <view class="status-panel">
-              <view
-                v-for="item in currentStatusTabs"
-                :key="item.key"
-                class="status-chip"
-                :class="{ 'status-chip--active': activeStatus === item.key }"
-                @click="changeStatus(item.key)"
-              >
-                {{ item.name }}
+          <view class="detail-body">
+            <view v-if="loading && !currentItems.length" class="notice">加载中...</view>
+            <view v-else-if="errorText && !currentItems.length" class="notice notice--error" @click="loadPage()">
+              {{ errorText }}
+            </view>
+            <view v-else-if="!currentItems.length" class="empty-state">
+              <image class="empty-state__art" :src="emptyStateArt" mode="aspectFit" />
+              <text class="empty-state__title">{{ emptyTitle }}</text>
+              <text class="empty-state__desc">{{ emptyDesc }}</text>
+            </view>
+            <view v-else class="recommend-list">
+              <view v-if="errorText" class="inline-notice" @click="loadPage()">
+                <text>{{ errorText }}</text>
+                <text class="inline-notice__action">重试</text>
+              </view>
+
+              <template v-if="isRecommendType">
+                <template v-for="item in recommendationItems" :key="`${item.kind}-${item.id}`">
+                  <view v-if="item.kind === 'ingredient'" class="recommend-card">
+                    <view class="recommend-card__head">
+                      <view class="recommend-card__head-main">
+                        <text class="recommend-card__name">{{ item.ingredientName }}</text>
+                        <text class="recommend-card__meta">{{ item.category.name }} · {{ item.defaultUnit.name }}</text>
+                      </view>
+                      <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
+                        {{ statusText(item.status) }}
+                      </text>
+                    </view>
+
+                    <text class="recommend-card__time">推荐时间 {{ formatDetailTime(item.createdAt) }}</text>
+
+                    <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
+                    <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
+                      <text class="recommend-card__desc">
+                        {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
+                      </text>
+                      <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+                    </view>
+                    <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
+                      已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
+                    </text>
+                    <text v-else class="recommend-card__desc">
+                      已归并到现有系统食材{{ item.mergedIngredient ? `：${item.mergedIngredient.name}` : "" }}
+                    </text>
+
+                    <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
+                      <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
+                    </view>
+                  </view>
+
+                  <view v-else class="recommend-card">
+                    <view class="recommend-card__head">
+                      <view class="recommend-card__head-main">
+                        <text class="recommend-card__name">{{ item.unitName }}</text>
+                        <text class="recommend-card__meta">{{ unitTypeText(item.unitType) }}</text>
+                      </view>
+                      <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
+                        {{ statusText(item.status) }}
+                      </text>
+                    </view>
+
+                    <text class="recommend-card__time">提交时间 {{ formatDetailTime(item.createdAt) }}</text>
+
+                    <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，审核通过后会进入系统单位。</text>
+                    <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
+                      <text class="recommend-card__desc">
+                        {{ item.reviewNote || "审核未通过，可换成更准确、常用的单位后再提交。" }}
+                      </text>
+                      <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+                    </view>
+                    <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
+                      已收录为系统单位{{ item.targetUnit ? `：${item.targetUnit.name}` : "" }}
+                    </text>
+                    <text v-else class="recommend-card__desc">
+                      已归并到现有系统单位{{ item.targetUnit ? `：${item.targetUnit.name}` : "" }}
+                    </text>
+                  </view>
+                </template>
+              </template>
+
+              <template v-else>
+                <view
+                  v-for="item in visibleInviteItems"
+                  :key="item.id"
+                  class="recommend-card invite-card"
+                  :class="{ 'invite-card--pending': item.inviteStatus === 'PENDING' }"
+                  hover-class="recommend-card--hover"
+                  hover-stay-time="100"
+                >
+                  <view class="recommend-card__head">
+                    <view class="recommend-card__head-main">
+                      <text class="recommend-card__eyebrow">{{ inviteOwnerLine(item) }}</text>
+                      <text class="recommend-card__name">{{ item.name }}</text>
+                    </view>
+                    <view class="recommend-card__time-box">
+                      <text class="recommend-card__time-label">{{ inviteTimeLabel(item) }}</text>
+                      <text class="recommend-card__time-value">{{ formatDetailTime(invitePrimaryTime(item)) }}</text>
+                    </view>
+                  </view>
+
+                  <view class="recommend-card__summary">
+                    <text class="recommend-card__status" :class="`recommend-card__status--${inviteStatusTone(item)}`">
+                      {{ inviteStatusText(item) }}
+                    </text>
+                    <text class="recommend-card__summary-text">{{ item.memberCount }}/{{ item.memberLimit }} 人协作</text>
+                    <text class="recommend-card__summary-dot" />
+                    <text class="recommend-card__summary-text">{{ item.itemCount }} 个食材项</text>
+                  </view>
+
+                  <text class="recommend-card__desc">{{ inviteDesc(item) }}</text>
+
+                  <view v-if="showInviteActions(item)" class="recommend-card__actions">
+                    <button class="editor-button invite-card__button invite-card__button--cancel" :disabled="inviteSubmittingId === item.id" @click.stop="declineInvite(item)">
+                      忽略邀请
+                    </button>
+                    <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id || !item.canJoin" @click.stop="acceptInvite(item)">
+                      {{ item.canJoin ? "确认邀请" : "当前不可加入" }}
+                    </button>
+                  </view>
+                  <view v-else-if="item.inviteStatus === 'ACCEPTED'" class="recommend-card__actions">
+                    <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id" @click.stop="openInviteList(item)">查看清单</button>
+                  </view>
+                </view>
+              </template>
+
+              <view v-if="showFooter" class="recommend-footer">
+                <text v-if="loadingMore" class="recommend-footer__text">加载中...</text>
+                <text v-else-if="canLoadMore" class="recommend-footer__action" @click="loadMore">上拉加载更多</text>
+                <text v-else class="recommend-footer__text">没有更多了</text>
               </view>
             </view>
-          </view>
-
-          <view v-if="loading && !currentItems.length" class="notice">加载中...</view>
-          <view v-else-if="errorText && !currentItems.length" class="notice notice--error" @click="loadPage()">
-            {{ errorText }}
-          </view>
-          <view v-else-if="!currentItems.length" class="empty-state">
-            <image class="empty-state__art" :src="emptyStateArt" mode="aspectFit" />
-            <text class="empty-state__title">{{ emptyTitle }}</text>
-            <text class="empty-state__desc">{{ emptyDesc }}</text>
-          </view>
-          <view v-else class="recommend-list">
-            <view v-if="errorText" class="inline-notice" @click="loadPage()">
-              <text>{{ errorText }}</text>
-              <text class="inline-notice__action">重试</text>
-            </view>
-
-            <template v-if="isIngredientType">
-              <view v-for="item in filteredIngredients" :key="item.id" class="recommend-card">
-                <view class="recommend-card__head">
-                  <view class="recommend-card__head-main">
-                    <text class="recommend-card__name">{{ item.ingredientName }}</text>
-                    <text class="recommend-card__meta">{{ item.category.name }} · {{ item.defaultUnit.name }}</text>
-                  </view>
-                  <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
-                    {{ statusText(item.status) }}
-                  </text>
-                </view>
-
-                <text class="recommend-card__time">推荐时间 {{ formatDetailTime(item.createdAt) }}</text>
-
-                <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
-                <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
-                  <text class="recommend-card__desc">
-                    {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
-                  </text>
-                  <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
-                </view>
-                <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
-                  已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
-                </text>
-                <text v-else class="recommend-card__desc">
-                  已归并到现有系统食材{{ item.mergedIngredient ? `：${item.mergedIngredient.name}` : "" }}
-                </text>
-
-                <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
-                  <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
-                </view>
-              </view>
-            </template>
-
-            <template v-else>
-              <view
-                v-for="item in filteredInvites"
-                :key="item.id"
-                class="recommend-card invite-card"
-                :class="{ 'invite-card--pending': item.inviteStatus === 'PENDING' }"
-                hover-class="recommend-card--hover"
-                hover-stay-time="100"
-              >
-                <view class="recommend-card__head">
-                  <view class="recommend-card__head-main">
-                    <text class="recommend-card__eyebrow">{{ inviteOwnerLine(item) }}</text>
-                    <text class="recommend-card__name">{{ item.name }}</text>
-                  </view>
-                  <view class="recommend-card__time-box">
-                    <text class="recommend-card__time-label">{{ inviteTimeLabel(item) }}</text>
-                    <text class="recommend-card__time-value">{{ formatDetailTime(invitePrimaryTime(item)) }}</text>
-                  </view>
-                </view>
-
-                <view class="recommend-card__summary">
-                  <text class="recommend-card__status" :class="`recommend-card__status--${inviteStatusTone(item)}`">
-                    {{ inviteStatusText(item) }}
-                  </text>
-                  <text class="recommend-card__summary-text">{{ item.memberCount }}/{{ item.memberLimit }} 人协作</text>
-                  <text class="recommend-card__summary-dot" />
-                  <text class="recommend-card__summary-text">{{ item.itemCount }} 个食材项</text>
-                </view>
-
-                <text class="recommend-card__desc">{{ inviteDesc(item) }}</text>
-
-                <view v-if="showInviteActions(item)" class="recommend-card__actions">
-                  <button class="editor-button invite-card__button invite-card__button--cancel" :disabled="inviteSubmittingId === item.id" @click.stop="declineInvite(item)">
-                    忽略邀请
-                  </button>
-                  <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id || !item.canJoin" @click.stop="acceptInvite(item)">
-                    {{ item.canJoin ? "确认邀请" : "当前不可加入" }}
-                  </button>
-                </view>
-                <view v-else-if="item.inviteStatus === 'ACCEPTED'" class="recommend-card__actions">
-                  <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id" @click.stop="openInviteList(item)">查看清单</button>
-                </view>
-              </view>
-            </template>
-
-            <view v-if="isIngredientType && hasNext" class="recommend-footer">
-              <text class="recommend-footer__action" @click="loadMore">点击加载更多</text>
-            </view>
-          </view>
           </view>
         </scroll-view>
       </view>
@@ -226,7 +223,6 @@
           </view>
         </view>
       </view>
-
     </view>
   </Layout>
 </template>
@@ -240,30 +236,28 @@ import {
   type IngredientCategorySummary,
   type IngredientRecommendationStatus,
   type IngredientRecommendationSummary,
+  type UnitRecommendationSummary,
   type UnitSummary
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
-import { shoppingApi, type ShoppingListInviteFilter, type ShoppingListInviteSummary } from "../apis/shopping";
+import { shoppingApi, type ShoppingListInviteSummary } from "../apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { createOperationId } from "@/utils/operation-id";
 
-type MessageTypeKey = "ingredient" | "shoppingInvite";
-type IngredientStatusFilterKey = "ALL" | IngredientRecommendationStatus;
-type InviteStatusFilterKey = "ALL" | "PENDING" | "RESOLVED";
-type StatusFilterKey = IngredientStatusFilterKey | InviteStatusFilterKey;
+type MessageTypeKey = "recommend" | "shoppingInvite";
 type ReadState = Partial<Record<MessageTypeKey, string>>;
+type RecommendationListItem =
+  | (IngredientRecommendationSummary & { kind: "ingredient" })
+  | (UnitRecommendationSummary & { kind: "unit" });
 
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
-const NAV_FADE_DISTANCE = 88;
 
 const pageStyle = usePageScrollStyle();
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recommend-detail-editor"));
-const { navBarTotalHeight } = useSystemInfo();
 const {
   threshold: refresherThreshold,
   pullDistance,
@@ -278,14 +272,14 @@ const {
 } = useCustomRefresher({
   text: {
     pulling: "下拉刷新通知",
-    canRelease: ["松手刷新通知", "更新协作消息"],
+    canRelease: ["松手刷新通知", "更新通知消息"],
     success: "通知已刷新"
   }
 });
 
 const typeMap = {
-  ingredient: {
-    key: "ingredient" as MessageTypeKey,
+  recommend: {
+    key: "recommend" as MessageTypeKey,
     name: "推荐审核"
   },
   shoppingInvite: {
@@ -294,35 +288,24 @@ const typeMap = {
   }
 } as const;
 
-const ingredientStatusTabs = [
-  { key: "ALL", name: "全部" },
-  { key: "PENDING", name: "审核中" },
-  { key: "REJECTED", name: "已拒绝" },
-  { key: "ADOPTED", name: "已收录" },
-  { key: "MERGED", name: "已归并" }
-] as const satisfies Array<{ key: IngredientStatusFilterKey; name: string }>;
-const inviteStatusTabs = [
-  { key: "ALL", name: "全部" },
-  { key: "PENDING", name: "未处理" },
-  { key: "RESOLVED", name: "已处理" }
-] as const satisfies Array<{ key: InviteStatusFilterKey; name: string }>;
-
-const typeKey = ref<MessageTypeKey>("ingredient");
+const typeKey = ref<MessageTypeKey>("recommend");
 const loading = ref(false);
 const loadingMore = ref(false);
 const errorText = ref("");
 const editorVisible = ref(false);
 const editorSubmitting = ref(false);
 const inviteSubmittingId = ref<UUID | null>(null);
-const activeStatus = ref<StatusFilterKey>("ALL");
-const scrollTop = ref(0);
 const ingredientItems = ref<IngredientRecommendationSummary[]>([]);
+const unitItems = ref<UnitRecommendationSummary[]>([]);
 const inviteItems = ref<ShoppingListInviteSummary[]>([]);
+const visibleInviteCount = ref(0);
 const categories = ref<IngredientCategorySummary[]>([]);
 const units = ref<UnitSummary[]>([]);
 const page = ref(1);
 const pageSize = ref(20);
 const hasNext = ref(false);
+const unitPage = ref(1);
+const unitHasNext = ref(false);
 const editorForm = reactive({
   ingredientId: "" as UUID | "",
   expectedVersion: 0,
@@ -331,52 +314,35 @@ const editorForm = reactive({
   defaultUnitId: "" as UUID | ""
 });
 
-const currentType = computed(() => typeMap[typeKey.value]);
-const isIngredientType = computed(() => typeKey.value === "ingredient");
-const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
-const navBackdropStyle = computed(() => ({
-  height: `${navBarTotalHeight.value}px`,
-  opacity: `${navProgress.value}`
-}));
-const detailBodyStyle = computed(() => ({
-  paddingTop: isIngredientType.value ? `${navBarTotalHeight.value + 20}px` : "20px"
-}));
-const stickyStyle = computed(() => ({
-  top: isIngredientType.value ? `${navBarTotalHeight.value}px` : "0px"
-}));
-const currentStatusTabs = computed(() => (isIngredientType.value ? ingredientStatusTabs : []));
-const filteredIngredients = computed(() => {
-  if (activeStatus.value === "ALL") return ingredientItems.value;
-  return ingredientItems.value.filter(item => item.status === activeStatus.value);
-});
-const filteredInvites = computed(() => inviteItems.value);
-const currentItems = computed(() => (isIngredientType.value ? filteredIngredients.value : filteredInvites.value));
-const emptyTitle = computed(() => {
-  if (!isIngredientType.value) {
-    if (activeStatus.value === "PENDING") return "还没有未处理邀请";
-    if (activeStatus.value === "RESOLVED") return "还没有已处理邀请";
-    return "还没有清单协作消息";
-  }
-  return activeStatus.value === "ALL" ? "还没有推荐审核" : "这个状态下还没有记录";
-});
-const emptyDesc = computed(() => {
-  if (isIngredientType.value) {
-    return activeStatus.value === "ALL"
-      ? "你在菜谱编辑里推荐个人食材后，会先在这里看到审核结果。"
-      : "换个状态看看，或者稍后再回来。";
-  }
-  if (activeStatus.value === "RESOLVED") return "你处理过的协作邀请会在这里保留 7 天。";
-  if (activeStatus.value === "PENDING") return "新的清单协作邀请，会先收口到这里等待你处理。";
-  return "饭搭子分享给你的清单协作消息，会先收口到这里。";
-});
+const isRecommendType = computed(() => typeKey.value === "recommend");
+const currentTypeName = computed(() => typeMap[typeKey.value].name);
+const recommendationItems = computed<RecommendationListItem[]>(() =>
+  [
+    ...ingredientItems.value.map(item => ({ ...item, kind: "ingredient" as const })),
+    ...unitItems.value.map(item => ({ ...item, kind: "unit" as const }))
+  ].sort((left, right) => new Date(getRecommendSortTime(right)).getTime() - new Date(getRecommendSortTime(left)).getTime())
+);
+const sortedInviteItems = computed(() =>
+  [...inviteItems.value].sort((left, right) => new Date(invitePrimaryTime(right)).getTime() - new Date(invitePrimaryTime(left)).getTime())
+);
+const visibleInviteItems = computed(() => sortedInviteItems.value.slice(0, visibleInviteCount.value));
+const currentItems = computed(() => (isRecommendType.value ? recommendationItems.value : visibleInviteItems.value));
+const recommendHasMore = computed(() => hasNext.value || unitHasNext.value);
+const inviteHasMore = computed(() => visibleInviteCount.value < sortedInviteItems.value.length);
+const canLoadMore = computed(() => (isRecommendType.value ? recommendHasMore.value : inviteHasMore.value));
+const showFooter = computed(() => currentItems.value.length > 0);
+const emptyTitle = computed(() => (isRecommendType.value ? "还没有审核通知" : "还没有协作通知"));
+const emptyDesc = computed(() =>
+  isRecommendType.value
+    ? "食材推荐和单位建议会按时间倒序展示在这里。"
+    : "新的清单协作邀请和已处理记录会按时间倒序展示在这里。"
+);
 
 let loadPromise: Promise<void> | null = null;
-let inviteLoadSeq = 0;
 
 onLoad(query => {
-  const nextType = typeof query?.type === "string" ? decodeURIComponent(query.type) : "ingredient";
-  typeKey.value = nextType === "shoppingInvite" ? "shoppingInvite" : "ingredient";
-  activeStatus.value = "ALL";
+  const nextType = typeof query?.type === "string" ? decodeURIComponent(query.type) : "recommend";
+  typeKey.value = nextType === "shoppingInvite" ? "shoppingInvite" : "recommend";
 });
 
 onShow(() => {
@@ -392,11 +358,6 @@ watch(
 );
 
 async function loadPage() {
-  if (!isIngredientType.value) {
-    await doLoadPage(true);
-    return;
-  }
-
   if (loadPromise) {
     await loadPromise;
     return;
@@ -424,14 +385,23 @@ async function handleRefresherRefresh() {
   }
 }
 
+async function handleScrollToLower() {
+  if (!canLoadMore.value) return;
+  await loadMore();
+}
+
 async function loadMore() {
-  if (!isIngredientType.value || loading.value || loadingMore.value || !hasNext.value) return;
+  if (!canLoadMore.value || loading.value || loadingMore.value) return;
+
+  if (!isRecommendType.value) {
+    visibleInviteCount.value = Math.min(visibleInviteCount.value + pageSize.value, sortedInviteItems.value.length);
+    return;
+  }
+
   await doLoadPage(false);
 }
 
 async function doLoadPage(reset: boolean) {
-  const inviteSeq = !isIngredientType.value ? inviteLoadSeq + 1 : 0;
-
   if (reset) {
     loading.value = true;
     errorText.value = "";
@@ -440,27 +410,43 @@ async function doLoadPage(reset: boolean) {
   }
 
   try {
-    if (!isIngredientType.value) {
-      inviteLoadSeq = inviteSeq;
-      const inviteResult = await shoppingApi.listInvites(resolveInviteFilter());
-      if (inviteSeq !== inviteLoadSeq) return;
+    if (!isRecommendType.value) {
+      const inviteResult = await shoppingApi.listInvites("ALL");
       inviteItems.value = inviteResult.items;
-      hasNext.value = false;
+      visibleInviteCount.value = Math.min(pageSize.value, inviteResult.items.length);
       markTypeRead();
       return;
     }
 
-    const nextPage = reset ? 1 : page.value + 1;
-    const recommendationResult = await recipeApi.listIngredientRecommendations({ page: nextPage, pageSize: pageSize.value });
-    page.value = recommendationResult.page;
-    hasNext.value = recommendationResult.hasNext;
-    ingredientItems.value = reset ? recommendationResult.items : [...ingredientItems.value, ...recommendationResult.items];
+    const [ingredientResult, unitResult] = await Promise.all([
+      reset || hasNext.value ? recipeApi.listIngredientRecommendations({ page: reset ? 1 : page.value + 1, pageSize: pageSize.value }) : Promise.resolve(null),
+      reset || unitHasNext.value ? recipeApi.listUnitRecommendations({ page: reset ? 1 : unitPage.value + 1, pageSize: pageSize.value }) : Promise.resolve(null)
+    ]);
+
+    if (ingredientResult) {
+      page.value = ingredientResult.page;
+      hasNext.value = ingredientResult.hasNext;
+      ingredientItems.value = reset ? ingredientResult.items : [...ingredientItems.value, ...ingredientResult.items];
+    } else if (reset) {
+      page.value = 1;
+      hasNext.value = false;
+      ingredientItems.value = [];
+    }
+
+    if (unitResult) {
+      unitPage.value = unitResult.page;
+      unitHasNext.value = unitResult.hasNext;
+      unitItems.value = reset ? unitResult.items : [...unitItems.value, ...unitResult.items];
+    } else if (reset) {
+      unitPage.value = 1;
+      unitHasNext.value = false;
+      unitItems.value = [];
+    }
+
     markTypeRead();
   } catch (error) {
-    if (!isIngredientType.value && inviteSeq !== inviteLoadSeq) return;
     errorText.value = error instanceof Error ? error.message : "加载失败，请重试";
   } finally {
-    if (!isIngredientType.value && inviteSeq !== inviteLoadSeq) return;
     if (reset) {
       loading.value = false;
     } else {
@@ -473,29 +459,39 @@ async function ensureEditorMeta() {
   if (categories.value.length && units.value.length) return;
   const [categoryList, unitResult] = await Promise.all([
     categories.value.length ? Promise.resolve(categories.value) : recipeApi.listIngredientCategories(),
-    units.value.length ? Promise.resolve({ items: units.value }) : recipeApi.listUnits({ page: 1, pageSize: 100 })
+    units.value.length ? Promise.resolve({ items: units.value }) : recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" })
   ]);
   categories.value = categoryList;
   units.value = unitResult.items;
 }
 
-function getItemSortTime(item: IngredientRecommendationSummary) {
+function getIngredientSortTime(item: IngredientRecommendationSummary) {
   return item.reviewedAt || item.updatedAt || item.createdAt;
 }
 
+function getUnitSortTime(item: UnitRecommendationSummary) {
+  return item.reviewedAt || item.updatedAt || item.createdAt;
+}
+
+function getRecommendSortTime(item: RecommendationListItem) {
+  return item.kind === "ingredient" ? getIngredientSortTime(item) : getUnitSortTime(item);
+}
+
 function markTypeRead() {
-  const latestTime = isIngredientType.value
-    ? ingredientItems.value.reduce<string>((current, item) => {
-        const nextTime = getItemSortTime(item);
+  const latestTime = isRecommendType.value
+    ? recommendationItems.value.reduce<string>((current, item) => {
+        const nextTime = getRecommendSortTime(item);
         if (!current) return nextTime;
         return new Date(nextTime).getTime() > new Date(current).getTime() ? nextTime : current;
       }, "")
-    : inviteItems.value.reduce<string>((current, item) => {
-        const nextTime = item.handledAt || item.invitedAt;
+    : sortedInviteItems.value.reduce<string>((current, item) => {
+        const nextTime = invitePrimaryTime(item);
         if (!current) return nextTime;
         return new Date(nextTime).getTime() > new Date(current).getTime() ? nextTime : current;
       }, "");
+
   if (!latestTime) return;
+
   const readState = uniPlatform.storage.getSync<ReadState>(READ_STORAGE_KEY) ?? {};
   uniPlatform.storage.setSync(READ_STORAGE_KEY, {
     ...readState,
@@ -503,37 +499,25 @@ function markTypeRead() {
   });
 }
 
-function handleScroll(event: { detail: { scrollTop?: number } }) {
-  scrollTop.value = event.detail.scrollTop ?? 0;
-}
-
-function changeStatus(status: StatusFilterKey) {
-  if (activeStatus.value === status) return;
-  activeStatus.value = status;
-  if (!isIngredientType.value) {
-    void doLoadPage(true);
-  }
-}
-
-function resolveInviteFilter(): ShoppingListInviteFilter {
-  if (activeStatus.value === "PENDING" || activeStatus.value === "RESOLVED") {
-    return activeStatus.value;
-  }
-  return "ALL";
-}
-
 function statusText(status: IngredientRecommendationStatus) {
   if (status === "PENDING") return "审核中";
   if (status === "REJECTED") return "已拒绝";
-  if (status === "ADOPTED") return "已收录";
-  return "已归并";
+  return "审核通过";
 }
 
 function statusTone(status: IngredientRecommendationStatus) {
   if (status === "PENDING") return "pending";
   if (status === "REJECTED") return "rejected";
-  if (status === "ADOPTED") return "adopted";
-  return "merged";
+  if (status === "MERGED") return "merged";
+  return "adopted";
+}
+
+function unitTypeText(type: UnitSummary["type"]) {
+  if (type === "WEIGHT") return "重量单位";
+  if (type === "VOLUME") return "体积单位";
+  if (type === "COMMON") return "常用单位";
+  if (type === "PACKAGE") return "包装单位";
+  return "常用单位";
 }
 
 function formatDetailTime(value: string) {
@@ -560,25 +544,28 @@ function invitePrimaryTime(item: ShoppingListInviteSummary) {
 
 function inviteTimeLabel(item: ShoppingListInviteSummary) {
   if (item.inviteStatus === "ACCEPTED") return "加入时间";
-  if (item.inviteStatus === "DECLINED") return "处理时间";
+  if (item.inviteStatus === "DECLINED" || item.inviteStatus === "REVOKED") return "处理时间";
   return "邀请时间";
 }
 
 function inviteStatusText(item: ShoppingListInviteSummary) {
   if (item.inviteStatus === "ACCEPTED") return "已加入";
   if (item.inviteStatus === "DECLINED") return "已忽略";
+  if (item.inviteStatus === "REVOKED") return "已撤回";
   return item.canJoin ? "待确认" : "暂不可加";
 }
 
 function inviteStatusTone(item: ShoppingListInviteSummary) {
   if (item.inviteStatus === "ACCEPTED") return "adopted";
   if (item.inviteStatus === "DECLINED") return "rejected";
+  if (item.inviteStatus === "REVOKED") return "merged";
   return item.canJoin ? "pending" : "merged";
 }
 
 function inviteDesc(item: ShoppingListInviteSummary) {
   if (item.inviteStatus === "ACCEPTED") return "你已加入这张清单协作，可以继续查看并一起维护。";
   if (item.inviteStatus === "DECLINED") return "你已忽略这条协作邀请；后续若对方再次邀请，会生成新的待处理消息。";
+  if (item.inviteStatus === "REVOKED") return "发起人已撤回这条协作邀请，这里仅保留通知记录。";
   if (item.canJoin) return `${inviteOwnerName(item)} 邀请你一起维护这张购物清单，确认后即可加入协作。`;
   return "当前协作者名额已满，这条邀请暂时不能继续加入。";
 }
@@ -611,7 +598,7 @@ async function declineInvite(item: ShoppingListInviteSummary) {
   if (inviteSubmittingId.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "忽略邀请",
-    content: `忽略后，“${item.name}” 会移到已处理，方便你后续回看。`
+    content: `忽略后，“${item.name}” 会留在通知里，方便你后续回看。`
   });
   if (!confirmed) return;
   inviteSubmittingId.value = item.id;
@@ -630,12 +617,6 @@ function openInviteList(item: ShoppingListInviteSummary) {
   void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?listId=${encodeURIComponent(String(item.listId))}`);
 }
 
-function shareStatusText(nextStatus: "ACTIVE" | "COMPLETED" | "VOIDED") {
-  if (nextStatus === "COMPLETED") return "已完成";
-  if (nextStatus === "VOIDED") return "已作废";
-  return "采购中";
-}
-
 function goBack() {
   if (getCurrentPages().length > 1) {
     void uniPlatform.navigation.navigateBack();
@@ -645,7 +626,7 @@ function goBack() {
 }
 
 async function openEditor(item: IngredientRecommendationSummary) {
-  if (!isIngredientType.value) return;
+  if (!isRecommendType.value) return;
   try {
     await ensureEditorMeta();
   } catch (error) {
@@ -710,14 +691,7 @@ async function submitEditor() {
 </script>
 
 <style scoped lang="scss">
-.header-tabs {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  min-width: 0;
-}
-
-.header-tabs__back {
+.detail-nav__back {
   display: flex;
   align-items: center;
   width: 64rpx;
@@ -727,67 +701,15 @@ async function submitEditor() {
   line-height: 1;
 }
 
-.header-tabs__back--hover {
+.detail-nav__back--hover {
   opacity: 0.82;
 }
 
-.nav-tabs {
-  display: flex;
-  gap: 44rpx;
-  align-items: flex-end;
-  min-width: 0;
-  padding-top: 6rpx;
-}
-
-.nav-tabs__item {
-  position: relative;
-  z-index: 0;
-  flex: 0 0 auto;
-  padding: 8rpx 0 12rpx;
-  color: var(--color-text-secondary);
-  font-size: 36rpx;
-  font-weight: var(--font-weight-bold);
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.nav-tabs__item--active {
-  color: var(--color-text);
-}
-
-.nav-tabs__item--active::after {
-  content: "";
-  position: absolute;
-  right: -8rpx;
-  bottom: 2rpx;
-  left: -8rpx;
-  z-index: -1;
-  height: 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--theme-primary);
-  opacity: 0.3;
-  transform: rotate(-5deg);
-}
-
-.detail-navbar__title {
-  overflow: hidden;
-  max-width: 420rpx;
+.detail-nav__title {
   color: var(--color-text);
   font-size: var(--font-size-lg);
-  font-weight: 700;
-  line-height: var(--line-height-tight);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.detail-nav-backdrop {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 790;
-  background: var(--color-page);
-  pointer-events: none;
+  font-weight: var(--font-weight-bold);
+  text-align: center;
 }
 
 .detail-page {
@@ -814,44 +736,6 @@ async function submitEditor() {
   padding-right: var(--space-page);
   padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
-}
-
-.sticky-wrap {
-  position: sticky;
-  z-index: 20;
-  padding-bottom: 16rpx;
-  background: var(--color-page);
-}
-
-.status-panel {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 28rpx;
-  padding: 0 4rpx;
-}
-
-.status-chip {
-  position: relative;
-  padding-bottom: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: 26rpx;
-  line-height: 1.4;
-}
-
-.status-chip--active {
-  color: var(--color-text);
-  font-weight: var(--font-weight-semibold);
-}
-
-.status-chip--active::after {
-  content: "";
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 6rpx;
-  border-radius: 999rpx;
-  background: var(--theme-primary);
 }
 
 .notice,
@@ -919,7 +803,9 @@ async function submitEditor() {
 .recommend-card__time,
 .recommend-card__desc,
 .inline-notice,
-.recommend-card__advice {
+.recommend-card__advice,
+.recommend-footer__text,
+.recommend-footer__action {
   color: #8d97b5;
   font-size: 24rpx;
   line-height: 1.6;
@@ -1115,6 +1001,7 @@ async function submitEditor() {
 }
 
 .recommend-footer {
+  padding-bottom: 8rpx;
   text-align: center;
 }
 
