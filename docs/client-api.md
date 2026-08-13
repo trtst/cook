@@ -390,6 +390,18 @@ interface ConfirmMealPollRequest {
 
 动态不得混入冰箱、购物明细、过敏、忌口、内部备注、未采用候选菜或投票明细。
 
+#### 计划详情做饭助手
+
+`GET /api/meal-plans/{planItemId}/cook-assistant` 用于读取当前计划餐次下的做饭助手结果；如果还没生成过，接口仍返回同一份结构，但 `hasSnapshot = false`。`POST /api/meal-plans/{planItemId}/cook-assistant` 用于首次生成或在菜单变化后重新生成。
+
+客户端接入约束：
+
+1. 入口固定放在计划详情页，不单独做新页面。
+2. 助手结果挂在当前计划下，计划删除后不再保留。
+3. 若接口返回 `isStale = true`，页面必须提示“当前菜单已变更”，并由用户手动点击重新生成；不得静默覆盖。
+4. 第一版只展示三段：`prepTasks`、`cookTimeline`、`serveTasks`，以及 `summary` 里的总时长/建议开做时间/提醒。
+5. 不在客户端自行拼多道菜步骤，不按 `recipeId` 逐个详情拼装；统一以这个接口结果为准。
+
 #### 我来做
 
 `POST /api/dining-events/{eventId}/cook` 用于对已确认菜单中的单道菜执行“我来做”认领或释放。请求体：
@@ -446,6 +458,199 @@ interface DiningMemorySharePreview {
 ```
 
 客户端不得把饭局详情页里的实时参与人 UID、投票明细、带菜备注、购物或冰箱信息拼进公开卡片；公开预览只能信任快照接口返回的白名单字段。
+
+### 2.6 随机页最小真实流程
+
+随机页当前确认的目标不是“摇一摇玩具”，而是：
+
+```text
+选条件 -> 生成一桌 -> 逐道调整 -> 本桌缺口预检 -> 加入计划或去采购
+```
+
+这部分当前已落最小真实流程。客户端按以下边界接入，不得额外扩展 owner、缓存草稿或共享写入口。
+
+当前最小接口面评审为：
+
+```text
+POST /api/random-menus/generate
+POST /api/random-menu-slots/replace
+POST /api/random-menu-gap/preview
+POST /api/meal-plans
+POST /api/shopping-items/from-random-menu
+```
+
+#### 生成一桌
+
+```text
+POST /api/random-menus/generate
+Auth: UserBearerAuth
+```
+
+最小请求：
+
+```ts
+interface GenerateRandomMenuRequest {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  fridgePreferred: boolean;
+  slotPlan?: {
+    meatCount: number;
+    vegetableCount: number;
+    soupCount: number;
+    stapleCount: number;
+    breakfastStapleCount: number;
+    breakfastProteinCount: number;
+    breakfastSideCount: number;
+  } | null;
+}
+```
+
+客户端约束：
+
+1. 没有 `mealSlot` 和 `peopleCount` 不发请求。
+2. 不把“随机页入口名”当成真实餐次；必须显式传 `BREAKFAST / LUNCH / DINNER`。
+3. 不自行拼展示文本回传服务端。
+
+#### 替换单个菜位
+
+```text
+POST /api/random-menu-slots/replace
+Auth: UserBearerAuth
+```
+
+最小请求：
+
+```ts
+interface ReplaceRandomMenuSlotRequest {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  fridgePreferred: boolean;
+  slotPlan: {
+    meatCount: number;
+    vegetableCount: number;
+    soupCount: number;
+    stapleCount: number;
+    breakfastStapleCount: number;
+    breakfastProteinCount: number;
+    breakfastSideCount: number;
+  };
+  currentItems: Array<{
+    slotId: string;
+    slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+    recipeId: UUID;
+    recipeVersionId: UUID;
+  }>;
+  targetSlotId: string;
+  targetSlotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+  replaceConstraints: Array<
+    | { kind: "FLAVOR"; value: "NOT_SPICY" | "MILD" | "LIGHT" }
+    | { kind: "DURATION"; value: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" }
+    | { kind: "INGREDIENT"; value: "USE_FRIDGE_FIRST" }
+    | { kind: "AVOID_INGREDIENT"; ingredientId?: UUID; ingredientName: string }
+  >;
+  rejectedRecipeVersionIds: UUID[];
+  requestSeq: number;
+}
+```
+
+客户端约束：
+
+1. `requestSeq` 由当前菜位单独维护。
+2. 旧响应不得覆盖新响应。
+3. 只替换目标菜位，不要因为“状态统一”把整桌重置。
+
+#### 本桌缺口预检
+
+```text
+POST /api/random-menu-gap/preview
+Auth: UserBearerAuth
+```
+
+最小请求：
+
+```ts
+interface CheckRandomMenuGapRequest {
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  peopleCount: number;
+  items: Array<{
+    slotId: string;
+    slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+    recipeId: UUID;
+    recipeVersionId: UUID;
+  }>;
+  inventoryDecisions: Array<{
+    slotId: string;
+    ingredientId?: UUID | null;
+    ingredientName: string;
+    decision: "HAS" | "MISSING";
+  }>;
+}
+```
+
+客户端约束：
+
+1. `unknown` 不自动视为 `missing`。
+2. 存在未处理 `unknown` 时，不允许直接触发加入计划。
+3. 这里只处理当前这桌，不去混用 `GET /api/shopping-gap` 的全局汇总结果。
+
+#### 计划写入升级
+
+随机页最终写计划仍回真实 owner：`POST /api/meal-plans`。
+
+随机页使用当前已冻结的计划写入契约：
+
+```ts
+interface CreateMealPlanRequestV2 {
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
+  expectedVersion?: number | null;
+  menuItems: Array<{
+    slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+    sortOrder: number;
+    recipeId: UUID;
+    recipeVersionId: UUID;
+    purchaseState: "READY" | "PENDING";
+  }>;
+  note?: string | null;
+}
+```
+
+客户端约束：
+
+1. `purchaseState = PENDING` 对应“保留但暂不采购”。
+2. 覆盖已有计划时，必须带 `expectedVersion`。
+3. 计划写入只接受完整 `menuItems[]`，不再存在裸菜谱 ID 输入。
+
+#### 缺口写入购物
+
+```text
+POST /api/shopping-items/from-random-menu
+Auth: UserBearerAuth
+Idempotency-Key: 172251000101
+```
+
+最小请求：
+
+```ts
+interface CreateRandomMenuShoppingItemsRequest {
+  items: Array<{
+    slotId: string;
+    recipeId: UUID;
+    recipeVersionId: UUID;
+    ingredients: Array<{
+      ingredientId?: UUID | null;
+      ingredientName: string;
+      quantityText: string | null;
+    }>;
+  }>;
+}
+```
+
+客户端约束：
+
+1. 只提交用户明确决定采购的缺口。
+2. 不自己拼 `sourceKey`。
+3. 成功后按购物域返回结果刷新，不假定写入一定命中某张特定共享清单。
 
 ## 3. 个人存储
 
@@ -575,3 +780,4 @@ Idempotency-Key: 172251000003
 3. 可重试写操作生成并复用 `Idempotency-Key`，成功后再清除。
 4. 会员事实只读 `/users/me.membership`；关系用量只读 `/dining-groups.usage`；存储只读 `/storage-usage`。
 5. 不使用旧字段兼容、多个字段 fallback 或本地拼装全局权益对象。
+6. 对随机页，客户端不得提前抽出 `manager / engine / adapter / center` 类通用层；先按页面局部 owner 和正式契约实现。

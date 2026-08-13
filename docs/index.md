@@ -63,7 +63,13 @@
    - 首页“餐桌话题”列表与详情执行单，覆盖历次话题倒序、真实参与数和后台持续新建闭环。
 25. `plans/home-action-dock-execution.md`
    - 首页四宫格执行单，冻结 `我想吃 / 问大家 / 随机 / 缺什么` 的固定四宫格定位、首页卡片规则和四个入口的首屏结构。
-26. `plans/display-format-owner-audit.md`
+26. `plans/random-page-execution.md`
+   - 随机页功能执行单，冻结“单桌菜位决策台”的业务流程、页面行为、最小 API / DTO、计划写入升级和过渡边界。
+27. `plans/random-page-data-review.md`
+   - 随机页最小数据表与字段约束评审稿，冻结 `RecipeContentVersion / MealPlanDish / ShoppingItem` 的字段扩展、约束和迁移边界。
+28. `plans/random-page-schema-dto-openapi-review.md`
+   - 随机页 Prisma / DTO / OpenAPI 改造评审稿，冻结真实代码层要新增的枚举、字段、请求响应和模块 owner。
+29. `plans/display-format-owner-audit.md`
    - 当前展示映射、格式化函数和页面辅助判断的散点审计基线，用于后续治理与 owner 收口。
 
 ## 文档地图
@@ -132,6 +138,12 @@
   - 首页“餐桌话题”列表与详情的业务边界、真实参与数口径、最小接口和最小表约束。
 - `plans/home-action-dock-execution.md`
   - 首页四宫格的产品边界、固定顺序、卡片规则和四个入口的场景首页要求。
+- `plans/random-page-execution.md`
+  - 随机页的正式功能执行单，覆盖业务闭环、最小接口、数据依赖、安全/性能边界和实现顺序。
+- `plans/random-page-data-review.md`
+  - 随机页的最小数据表与字段约束评审稿，覆盖真实 owner、新增字段、约束、索引和前向迁移策略。
+- `plans/random-page-schema-dto-openapi-review.md`
+  - 随机页进入代码改造前的 Prisma / DTO / OpenAPI 评审稿，覆盖枚举、字段、共享类型、模块 owner 和短过渡策略。
 - `plans/display-format-owner-audit.md`
   - 当前 `client/admin` 展示映射、格式化函数和页面辅助判断的散点清单与风险基线。
 - `plans/engineering-foundation-fix.md`

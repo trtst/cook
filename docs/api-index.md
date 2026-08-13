@@ -118,6 +118,8 @@
 | AdminIngredient | PUT | `/admin/units/{unitId}` | 后台编辑系统单位 |
 | AdminIngredient | DELETE | `/admin/units/{unitId}` | 后台删除系统单位 |
 | AdminIngredient | POST | `/admin/units/reorder` | 后台重排同类型系统单位 |
+| AdminIngredient | GET | `/admin/pending-units` | 后台待审核单位建议分页列表 |
+| AdminIngredient | POST | `/admin/pending-units/{recommendationId}/review` | 后台审核单位建议 |
 | AdminIngredient | GET | `/admin/ingredients` | 后台系统食材分页列表 |
 | AdminIngredient | POST | `/admin/ingredients` | 后台新建系统食材 |
 | AdminIngredient | PUT | `/admin/ingredients/{ingredientId}` | 后台编辑系统食材 |
@@ -140,8 +142,9 @@
 | Ingredient | POST | `/ingredients/{ingredientId}/recommendations` | 显式推荐个人食材入系统库 |
 | Ingredient | POST | `/ingredients/{ingredientId}/feedbacks` | 提交系统食材纠错 |
 | Ingredient | GET | `/ingredient-recommendations` | 分页查询我的食材推荐记录 |
-| Unit | GET | `/units` | 分页查询系统/本人单位 |
-| Unit | POST | `/units` | 新建个人单位 |
+| Unit | GET | `/units` | 分页查询单位列表 |
+| Unit | POST | `/units` | 提交单位建议 |
+| Unit | GET | `/unit-recommendations` | 分页查询我的单位建议记录 |
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
 | MealPoll | GET | `/meal-polls` | 查询当前饭搭子的点菜征集摘要列表 |
@@ -188,6 +191,8 @@
 
 | 模块 | 方法与路径 | 状态 |
 | --- | --- | --- |
+| RandomMenu | `POST /random-menus/generate`、`POST /random-menu-slots/replace`、`POST /random-menu-gap/preview`、`POST /shopping-items/from-random-menu`、`POST /meal-plans` | 已落最小真实流程；后续仅继续补前端接入与真实联调验收 |
+| MealPlanCookAssistant | `GET /meal-plans/{planItemId}/cook-assistant`、`POST /meal-plans/{planItemId}/cook-assistant` | 已冻结为计划附属快照：一次生成、挂靠计划、菜单变更后按签名判过期 |
 | RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
 | InspirationInteraction | 点赞、收藏统计与推荐排序治理 | 已确认非本轮范围，待契约 |
 

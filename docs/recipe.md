@@ -143,6 +143,17 @@
 
 菜谱正文使用不可变的固定内容版本。饭局、计划、分享、收藏、导入和推荐审核提交都必须引用固定版本，不能引用会被后续编辑改变的实时正文。
 
+固定内容版本可以附带独立的版本标签快照，用于随机页、推荐和筛选。标签不并回 `RecipeContentVersion` 主字段，而是以版本级标签记录单独冻结，至少覆盖：
+
+1. `dishRoles`：`MAIN / VEGETABLE / SOUP / STAPLE`，可多选。
+2. `mealTypes`：`BREAKFAST / LUNCH / DINNER`，可多选。
+3. `mainProteinType`：主蛋白类型，可空。
+4. `primaryIngredientIds`：主要食材的结构化 `ingredientId` 列表。
+5. `flavorProfile`：风味标签数组。
+6. `spiceLevel`：`NONE / MILD / MEDIUM / HOT`。
+
+标签来源允许区分 `AUTO / USER / OPS / AI`。当前首版发布和后台录入后先生成 `AUTO` 建议标签；用户后续修正时，以更高优先级来源覆盖自动标签。随机和推荐只使用结构化标签与 `ingredientId`，不把名称推断、标题猜测或 AI 口味推断当成安全过滤事实。
+
 来源菜谱产生新版本时，不自动改变已经收藏、导入、加入计划、加入饭局、分享或提交审核的版本。
 
 从来源菜谱建立可编辑的“我的”菜谱时，使用：
