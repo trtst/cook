@@ -1,5 +1,6 @@
 import { loadLocalEnv } from "../src/common/load-env";
 import type {
+  CheckRandomMenuGapResponse,
   DiningEventSummary,
   GetMyDiningGroupsResponse,
   IngredientSummary,
@@ -7,9 +8,11 @@ import type {
   MyRecipeDetail,
   MyRecipeSummary,
   PageResult,
+  RandomMenuResponse,
   RecipeCategorySummary,
   RecipeDraftDetail,
   RecipeSceneSummary,
+  ReplaceRandomMenuSlotResponse,
   SaveRecipeDraftResponse,
   ShoppingItemSummary
 } from "../src/contracts/types";
@@ -146,6 +149,8 @@ async function createPublishedRecipe(
         story: null,
         categoryId: category.id,
         sceneIds: [scene.id],
+        coverUploadId: null,
+        coverImageUrl: null,
         baseServings: 2,
         difficulty: "EASY",
         duration: "WITHIN_15",
@@ -162,7 +167,14 @@ async function createPublishedRecipe(
             source: ingredient.source
           }
         ],
-        steps: [{ text: `${label}验收步骤` }]
+        steps: [
+          {
+            slotKey: "step-1",
+            text: `${label}验收步骤`,
+            uploadId: null,
+            imageUrl: null
+          }
+        ]
       }
     })
   });
@@ -196,6 +208,12 @@ async function main() {
   const memberIngredient = systemIngredients.items[0];
   assert(memberIngredient, "system ingredient should be readable");
   const memberBringRecipe = await createPublishedRecipe(memberAuth, memberIngredient, "带菜");
+  const ownerRandomMeatRecipe = await createPublishedRecipe(ownerAuth, memberIngredient, "鸡肉");
+  const ownerRandomVegetableRecipe = await createPublishedRecipe(
+    ownerAuth,
+    systemIngredients.items[1] ?? memberIngredient,
+    "青菜"
+  );
 
   const ownerRecipes = await requestData<PageResult<MyRecipeSummary>>("/recipes?page=1&pageSize=20", {
     headers: ownerAuth
@@ -205,6 +223,92 @@ async function main() {
   const ownerRecipeDetail = await requestData<MyRecipeDetail>(`/recipes/${ownerRecipe.id}`, {
     headers: ownerAuth
   });
+
+  const randomMenu = await requestData<RandomMenuResponse>("/random-menus/generate", {
+    method: "POST",
+    headers: ownerAuth,
+    body: JSON.stringify({
+      mealSlot: "DINNER",
+      peopleCount: 2,
+      fridgePreferred: false,
+      slotPlan: {
+        meatCount: 1,
+        vegetableCount: 1,
+        soupCount: 0,
+        stapleCount: 0,
+        breakfastStapleCount: 0,
+        breakfastProteinCount: 0,
+        breakfastSideCount: 0
+      }
+    })
+  });
+  assert(randomMenu.items.length >= 1, "random menu should return at least one slot");
+
+  const replaceTarget = randomMenu.items[0];
+  assert(replaceTarget, "random menu should include replace target");
+  const replaced = await requestData<ReplaceRandomMenuSlotResponse>("/random-menu-slots/replace", {
+    method: "POST",
+    headers: ownerAuth,
+    body: JSON.stringify({
+      mealSlot: "DINNER",
+      peopleCount: 2,
+      fridgePreferred: false,
+      slotPlan: randomMenu.slotPlan,
+      currentItems: randomMenu.items.map(item => ({
+        slotId: item.slotId,
+        slotType: item.slotType,
+        recipeId: item.recipeId,
+        recipeVersionId: item.recipeVersionId
+      })),
+      targetSlotId: replaceTarget.slotId,
+      targetSlotType: replaceTarget.slotType,
+      replaceConstraints: [],
+      rejectedRecipeVersionIds: [replaceTarget.recipeVersionId],
+      requestSeq: 1
+    })
+  });
+  assert(replaced.requestSeq === 1, "replace slot should echo request sequence");
+  assert(replaced.slot || replaced.warning, "replace slot should return a new slot or warning");
+
+  const gapPreview = await requestData<CheckRandomMenuGapResponse>("/random-menu-gap/preview", {
+    method: "POST",
+    headers: ownerAuth,
+    body: JSON.stringify({
+      mealSlot: "DINNER",
+      peopleCount: 2,
+      items: randomMenu.items.map(item => ({
+        slotId: item.slotId,
+        slotType: item.slotType,
+        recipeId: item.recipeId,
+        recipeVersionId: item.recipeVersionId
+      })),
+      inventoryDecisions: []
+    })
+  });
+  assert(gapPreview.items.length === randomMenu.items.length, "gap preview should align with random menu slots");
+
+  const randomGapTargets = gapPreview.items
+    .filter(item => item.missingIngredients.length > 0)
+    .map(item => ({
+      slotId: item.slotId,
+      recipeId: item.recipeId,
+      recipeVersionId: item.recipeVersionId,
+      ingredients: item.missingIngredients.map(ingredient => ({
+        ingredientId: ingredient.ingredientId,
+        ingredientName: ingredient.ingredientName,
+        quantityText: ingredient.quantityText
+      }))
+    }));
+  if (randomGapTargets.length > 0) {
+    const randomShoppingItems = await requestData<ShoppingItemSummary[]>("/shopping-items/from-random-menu", {
+      method: "POST",
+      headers: withIdempotencyKey(ownerAuth),
+      body: JSON.stringify({
+        items: randomGapTargets
+      })
+    });
+    assert(randomShoppingItems.some(item => item.sourceType === "RANDOM_MENU"), "random menu gap should write random-menu shopping items");
+  }
 
   const ownerPlans = await requestData<PageResult<MealPlanSummary>>("/meal-plans?page=1&pageSize=100", {
     headers: ownerAuth
@@ -217,10 +321,29 @@ async function main() {
     body: JSON.stringify({
       planDate,
       mealSlot: "DINNER",
-      recipeIds: [ownerRecipe.id]
+      menuItems: [
+        {
+          slotType: "MEAT",
+          sortOrder: 0,
+          recipeId: ownerRecipe.id,
+          recipeVersionId: ownerRecipeDetail.contentVersionId,
+          purchaseState: "READY"
+        }
+      ]
     })
   });
   assert(mealPlan.title.length > 0, "meal plan should use fixed menu snapshot");
+
+  const legacyPlanWrite = await request<unknown>("/meal-plans", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({
+      planDate,
+      mealSlot: "DINNER",
+      recipeIds: [ownerRecipe.id]
+    })
+  });
+  assert(legacyPlanWrite.status === 400, "legacy recipeIds payload should be rejected");
 
   const event = await requestData<DiningEventSummary>(`/meal-plans/${mealPlan.id}/dining-event`, {
     method: "POST",
@@ -299,11 +422,11 @@ async function main() {
     })
   });
 
-  const gapPreview = await requestData<ShoppingItemSummary[]>(`/shopping-gap`, {
+  const eventGapPreview = await requestData<ShoppingItemSummary[]>(`/shopping-gap`, {
     headers: ownerAuth
   });
-  assert(gapPreview.some(item => expectedGapNames.includes(item.name)), "event gap should compare event menu with personal fridge");
-  assert(gapPreview.some(item => item.sourceTitles.includes(event.title)), "gap preview should expose owning event titles");
+  assert(eventGapPreview.some(item => expectedGapNames.includes(item.name)), "event gap should compare event menu with personal fridge");
+  assert(eventGapPreview.some(item => item.sourceTitles.includes(event.title)), "gap preview should expose owning event titles");
 
   const gapCreate = await requestData<ShoppingItemSummary[]>(`/dining-events/${event.id}/shopping-gap`, {
     method: "POST",
@@ -321,6 +444,8 @@ async function main() {
       {
         apiBaseUrl,
         memberRecipeId: memberBringRecipe.id,
+        ownerRandomMeatRecipeId: ownerRandomMeatRecipe.id,
+        ownerRandomVegetableRecipeId: ownerRandomVegetableRecipe.id,
         mealPlanId: mealPlan.id,
         eventId: event.id,
         gapCount: gapCreate.length

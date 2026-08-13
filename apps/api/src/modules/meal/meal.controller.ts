@@ -15,10 +15,14 @@ import {
   CreateMealPollDto,
   CreateDiningEventDto,
   CreateMealPlanDto,
+  GenerateMealPlanCookAssistantDto,
+  GenerateRandomMenuDto,
   DiningGroupActivitiesQueryDto,
   InviteDiningGroupParticipantsDto,
   MealPollListQueryDto,
   MealPlanQueryDto,
+  CheckRandomMenuGapDto,
+  ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
   VoteMealPollDto
 } from "../../contracts/dtos";
@@ -30,9 +34,13 @@ import {
   DiningMemoryShareSnapshotModel,
   DiningEventModel,
   DiningGroupActivityModel,
+  MealPlanCookAssistantModel,
   MealPlanModel,
   MealPollDetailModel,
   MealPollModel,
+  RandomGapPreviewModel,
+  RandomMenuModel,
+  ReplaceRandomMenuSlotModel,
   SharePreviewModel
 } from "../../contracts/openapi";
 import { MealService } from "./meal.service";
@@ -50,6 +58,14 @@ export class MealController {
     return this.mealService
       .listMealPlans(request.user.userId, query.page, query.pageSize, query.from, query.to)
       .then(result => ok(result));
+  }
+
+  @Get("meal-plans/:planItemId/cook-assistant")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(MealPlanCookAssistantModel, "读取当前计划餐次的做饭助手快照")
+  getMealPlanCookAssistant(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number) {
+    return this.mealService.getMealPlanCookAssistant(request.user.userId, planItemId).then(result => ok(result));
   }
 
   @Get("meal-polls")
@@ -154,7 +170,74 @@ export class MealController {
     @Body() body: CreateMealPlanDto
   ) {
     return this.mealService
-      .createMealPlan(request.user.userId, operationId, body.planDate, body.mealSlot, body.recipeIds, body.note)
+      .createMealPlan(
+        request.user.userId,
+        operationId,
+        body.planDate,
+        body.mealSlot,
+        body.menuItems,
+        body.expectedVersion,
+        body.note
+      )
+      .then(result => ok(result));
+  }
+
+  @Post("random-menus/generate")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(RandomMenuModel, "按餐次、人数和冰箱优先生成一桌随机菜单")
+  generateRandomMenu(@Req() request: RequestWithUser, @Body() body: GenerateRandomMenuDto) {
+    return this.mealService
+      .generateRandomMenu(request.user.userId, body.mealSlot, body.peopleCount, body.fridgePreferred, body.slotPlan ?? null)
+      .then(result => ok(result));
+  }
+
+  @Post("random-menu-slots/replace")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(ReplaceRandomMenuSlotModel, "替换当前随机菜单中的单个菜位")
+  replaceRandomMenuSlot(@Req() request: RequestWithUser, @Body() body: ReplaceRandomMenuSlotDto) {
+    return this.mealService
+      .replaceRandomMenuSlot(
+        request.user.userId,
+        body.mealSlot,
+        body.peopleCount,
+        body.fridgePreferred,
+        body.slotPlan,
+        body.currentItems.map(item => ({
+          slotId: item.slotId,
+          slotType: item.slotType as
+            | "MEAT"
+            | "VEGETABLE"
+            | "SOUP"
+            | "STAPLE"
+            | "BREAKFAST_STAPLE"
+            | "BREAKFAST_PROTEIN"
+            | "BREAKFAST_SIDE",
+          recipeId: item.recipeId,
+          recipeVersionId: item.recipeVersionId
+        })),
+        body.targetSlotId,
+        body.targetSlotType,
+        body.replaceConstraints.map(item => ({
+          kind: item.kind as "FLAVOR" | "DURATION" | "INGREDIENT" | "AVOID_INGREDIENT",
+          value: item.value ?? null,
+          ingredientId: item.ingredientId ?? null,
+          ingredientName: item.ingredientName ?? null
+        })),
+        body.rejectedRecipeVersionIds,
+        body.requestSeq
+      )
+      .then(result => ok(result));
+  }
+
+  @Post("random-menu-gap/preview")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(RandomGapPreviewModel, "预检当前随机菜单的本桌缺口")
+  previewRandomMenuGap(@Req() request: RequestWithUser, @Body() body: CheckRandomMenuGapDto) {
+    return this.mealService
+      .previewRandomMenuGap(request.user.userId, body.mealSlot, body.peopleCount, body.items, body.inventoryDecisions)
       .then(result => ok(result));
   }
 
@@ -170,6 +253,20 @@ export class MealController {
     @Body() _body: CompleteMealPlanDto
   ) {
     return this.mealService.completeMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/cook-assistant")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanCookAssistantModel, "生成或重生成当前计划餐次的做饭助手快照")
+  generateMealPlanCookAssistant(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: GenerateMealPlanCookAssistantDto
+  ) {
+    return this.mealService.generateMealPlanCookAssistant(request.user.userId, planItemId, operationId).then(result => ok(result));
   }
 
   @Post("meal-plans/:planItemId/dining-event")

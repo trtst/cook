@@ -8,20 +8,41 @@ import {
   NotFoundException
 } from "@nestjs/common";
 import { Prisma, type MealSlot } from "@prisma/client";
+import { recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
+  CheckRandomMenuGapResponse,
   DiningMemorySharePreview,
   DiningMemoryShareSnapshot,
   DiningEventParticipantSummary,
   DiningEventSummary,
   DiningGroupActivitySummary,
+  MealPlanCookAssistant,
+  MealPlanCookAssistantSummary,
+  MealPlanCookAssistantTask,
+  MealPlanCookAssistantTimelineStep,
+  MealPlanDishPurchaseState,
   MealPlanSummary,
   MealPollDetail,
   MealPollSummary,
   OperationId,
   PageResult,
+  RandomGapIngredient,
+  RandomGapInventoryDecision,
+  RandomGapItem,
+  RandomGapSummary,
+  RandomMenuItem,
+  RandomMenuResponse,
+  RandomMenuWarning,
+  RandomReplaceConstraint,
+  RandomSlotPlan,
+  ReplaceRandomMenuCurrentItem,
+  ReplaceRandomMenuSlotResponse,
+  RecipeDuration,
+  RecipeProteinType,
+  RecipeSlotType,
   RecipeContentSnapshot,
   SharePreviewResponse,
   UUID
@@ -103,24 +124,36 @@ type DiningEventMemoryShareRow = Prisma.DiningEventMemoryShareGetPayload<{}>;
 
 type MealDb = Prisma.TransactionClient | PrismaService;
 
-const mealPlanInclude = {
-  diningEvent: true,
-  dishes: {
-    include: {
-      recipeVersion: {
-        select: {
-          name: true,
-          baseServings: true
+const mealPlanArgs = Prisma.validator<Prisma.MealPlanItemDefaultArgs>()({
+  include: {
+    cookAssistant: true,
+    diningEvent: true,
+    dishes: {
+      select: {
+        id: true,
+        planItemId: true,
+        recipeId: true,
+        recipeVersionId: true,
+        sortOrder: true,
+        slotType: true,
+        purchaseState: true,
+        createdAt: true,
+        updatedAt: true,
+        recipeVersion: {
+          select: {
+            name: true,
+            baseServings: true
+          }
         }
-      }
-    },
-    orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+      },
+      orderBy: [{ sortOrder: Prisma.SortOrder.asc }, { id: Prisma.SortOrder.asc }]
+    }
   }
-} satisfies Prisma.MealPlanItemInclude;
+});
 
-type MealPlanRow = Prisma.MealPlanItemGetPayload<{
-  include: typeof mealPlanInclude;
-}>;
+const mealPlanInclude = mealPlanArgs.include;
+
+type MealPlanRow = Prisma.MealPlanItemGetPayload<typeof mealPlanArgs>;
 
 type ResolvedMenuVersion = {
   recipeId: UUID | null;
@@ -128,6 +161,20 @@ type ResolvedMenuVersion = {
   coverUrl: string | null;
   title: string;
   content: RecipeContentSnapshot;
+};
+
+type PlanMenuItemInput = {
+  slotType: RecipeSlotType | null;
+  sortOrder: number;
+  purchaseState: MealPlanDishPurchaseState;
+  menu: ResolvedMenuVersion;
+};
+
+type MealPlanCookAssistantSnapshot = {
+  summary: MealPlanCookAssistantSummary;
+  prepTasks: MealPlanCookAssistantTask[];
+  cookTimeline: MealPlanCookAssistantTimelineStep[];
+  serveTasks: MealPlanCookAssistantTask[];
 };
 
 type DiningMemoryShareMenuItemSnapshot = {
@@ -142,8 +189,50 @@ type DiningMemoryShareParticipantSnapshot = {
   role: "ORGANIZER" | "PARTICIPANT" | "GUEST";
 };
 
+type RandomRecipeRow = Prisma.RecipeGetPayload<{
+  include: {
+    currentVersion: {
+      include: {
+        versionTags: true;
+      };
+    };
+  };
+}>;
+
+type RandomRecipeCandidate = {
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  title: string;
+  coverUrl: string | null;
+  content: RecipeContentSnapshot;
+  mealMoments: MealSlot[];
+  slotTypes: RecipeSlotType[];
+  flavorTags: string[];
+  mainProteinType: RecipeProteinType | null;
+  primaryIngredientIds: UUID[];
+};
+
+type RandomRecipeSlotSeed = {
+  slotId: string;
+  slotType: RecipeSlotType;
+  slotIndex: number;
+};
+
+type RandomInventoryFacts = {
+  fridgeIngredientIds: Set<UUID>;
+};
+
+type RandomTagSnapshot = {
+  mealMoments: MealSlot[];
+  slotTypes: RecipeSlotType[];
+  flavorTags: string[];
+  mainProteinType: RecipeProteinType | null;
+  primaryIngredientIds: UUID[];
+};
+
 const activeMemberStatuses = ["ACTIVE", "RESTRICTED"] as const;
 const groupManagerRoles = ["OWNER", "ADMIN"] as const;
+const recipeVersionTagSourcePriority = ["USER", "OPS", "AI", "AUTO"] as const;
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -174,8 +263,21 @@ function parseDateTime(value: string, message = "时间格式错误") {
 }
 
 function normalizeMealSlot(value: string): MealSlot {
-  if (value !== "BREAKFAST" && value !== "LUNCH" && value !== "DINNER") {
+  if (
+    value !== "BREAKFAST" &&
+    value !== "LUNCH" &&
+    value !== "AFTERNOON_TEA" &&
+    value !== "DINNER" &&
+    value !== "LATE_NIGHT"
+  ) {
     throw new BadRequestException("餐次参数错误");
+  }
+  return value;
+}
+
+function normalizeCoreMealSlot(value: string): "BREAKFAST" | "LUNCH" | "DINNER" {
+  if (value !== "BREAKFAST" && value !== "LUNCH" && value !== "DINNER") {
+    throw new BadRequestException("随机餐次参数错误");
   }
   return value;
 }
@@ -190,6 +292,33 @@ function normalizeEventStatus(value: string) {
 function normalizeCookAction(value: string) {
   if (value !== "CLAIM" && value !== "RELEASE") {
     throw new BadRequestException("掌勺操作参数错误");
+  }
+  return value;
+}
+
+function normalizeRecipeSlotType(value: string): RecipeSlotType {
+  if (
+    value !== "MEAT" &&
+    value !== "VEGETABLE" &&
+    value !== "SOUP" &&
+    value !== "STAPLE" &&
+    value !== "BREAKFAST_STAPLE" &&
+    value !== "BREAKFAST_PROTEIN" &&
+    value !== "BREAKFAST_SIDE"
+  ) {
+    throw new BadRequestException("菜位类型参数错误");
+  }
+  return value;
+}
+
+function normalizeNullableRecipeSlotType(value: string | null): RecipeSlotType | null {
+  if (value == null) return null;
+  return normalizeRecipeSlotType(value);
+}
+
+function normalizePurchaseState(value: string): MealPlanDishPurchaseState {
+  if (value !== "READY" && value !== "PENDING") {
+    throw new BadRequestException("采购状态参数错误");
   }
   return value;
 }
@@ -212,8 +341,70 @@ function normalizeOptionalText(value?: string | null) {
   return normalized ? normalized : null;
 }
 
+function normalizeNameKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function tagSourceRank(source: string) {
+  const index = recipeVersionTagSourcePriority.indexOf(source as (typeof recipeVersionTagSourcePriority)[number]);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function pickPreferredTagValues(
+  tags: Array<{ source: string; tagValue: string; sortOrder: number | null; id: number }>,
+  multi: boolean
+) {
+  if (!tags.length) return [] as string[];
+  const ranked = [...tags].sort((left, right) => {
+    const sourceDiff = tagSourceRank(left.source) - tagSourceRank(right.source);
+    if (sourceDiff !== 0) return sourceDiff;
+    const sortDiff = (left.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.sortOrder ?? Number.MAX_SAFE_INTEGER);
+    if (sortDiff !== 0) return sortDiff;
+    return left.id - right.id;
+  });
+  const preferredSource = ranked[0]?.source;
+  const scoped = ranked.filter(item => item.source === preferredSource);
+  if (!multi) {
+    return scoped[0] ? [scoped[0].tagValue] : [];
+  }
+  return Array.from(new Set(scoped.map(item => item.tagValue)));
+}
+
+function mapDishRolesToLegacySlotTypes(
+  roles: string[],
+  mealMoments: MealSlot[],
+  content: RecipeContentSnapshot,
+  mainProteinType: RecipeProteinType | null
+): RecipeSlotType[] {
+  const dishRoles = new Set(roles);
+  const onlyBreakfast = mealMoments.length > 0 && mealMoments.every(item => item === "BREAKFAST");
+  if (!onlyBreakfast) {
+    const slotTypes: RecipeSlotType[] = [];
+    if (dishRoles.has("MAIN")) slotTypes.push("MEAT");
+    if (dishRoles.has("VEGETABLE")) slotTypes.push("VEGETABLE");
+    if (dishRoles.has("SOUP")) slotTypes.push("SOUP");
+    if (dishRoles.has("STAPLE")) slotTypes.push("STAPLE");
+    return slotTypes;
+  }
+
+  if (dishRoles.has("STAPLE")) return ["BREAKFAST_STAPLE"];
+  if (mainProteinType && mainProteinType !== "NONE") return ["BREAKFAST_PROTEIN"];
+  const text = `${content.name} ${content.ingredients.map(item => item.ingredientName).join(" ")}`;
+  if (/(鸡蛋|牛奶|酸奶|豆浆|燕麦)/.test(text)) return ["BREAKFAST_PROTEIN"];
+  return ["BREAKFAST_SIDE"];
+}
+
 function buildMealPollTitle(planDate: string, mealSlot: MealSlot) {
-  const label = mealSlot === "BREAKFAST" ? "早餐" : mealSlot === "LUNCH" ? "午餐" : "晚餐";
+  const label =
+    mealSlot === "BREAKFAST"
+      ? "早餐"
+      : mealSlot === "LUNCH"
+        ? "午餐"
+        : mealSlot === "AFTERNOON_TEA"
+          ? "下午茶"
+          : mealSlot === "DINNER"
+            ? "晚餐"
+            : "夜宵";
   return `${planDate} ${label}吃什么`;
 }
 
@@ -224,7 +415,16 @@ function buildMenuTitle(titles: string[]) {
 }
 
 function buildFallbackScheduledAt(planDate: string, mealSlot: MealSlot) {
-  const time = mealSlot === "BREAKFAST" ? "08:00:00" : mealSlot === "LUNCH" ? "12:00:00" : "18:30:00";
+  const time =
+    mealSlot === "BREAKFAST"
+      ? "08:00:00"
+      : mealSlot === "LUNCH"
+        ? "12:00:00"
+        : mealSlot === "AFTERNOON_TEA"
+          ? "15:30:00"
+          : mealSlot === "DINNER"
+            ? "18:30:00"
+            : "21:30:00";
   return new Date(`${planDate}T${time}+08:00`);
 }
 
@@ -244,6 +444,193 @@ function buildMenuSnapshot(menuItems: ResolvedMenuVersion[]): RecipeContentSnaps
     tips: null,
     ingredients: menuItems.flatMap(item => item.content.ingredients),
     steps: []
+  };
+}
+
+function cookAssistantRecordKey(planItemId: UUID) {
+  return `meal-plan-cook-assistant:${planItemId}`;
+}
+
+function buildMealPlanMenuDigest(plan: MealPlanRow) {
+  const value = plan.dishes
+    .map(item => [item.recipeVersionId, item.slotType ?? "", item.purchaseState, item.sortOrder].join(":"))
+    .join("|");
+  return hashText(value);
+}
+
+function recipeDurationMinutes(value: RecipeDuration | null) {
+  if (value === "WITHIN_15") return 15;
+  if (value === "BETWEEN_15_30") return 30;
+  if (value === "BETWEEN_30_60") return 50;
+  if (value === "OVER_60") return 75;
+  return null;
+}
+
+function formatDurationText(minutes: number | null) {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes < 60) return `约${minutes}分钟`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return remaining > 0 ? `约${hours}小时${remaining}分钟` : `约${hours}小时`;
+}
+
+function formatClockText(value: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Shanghai"
+  }).format(value);
+}
+
+function containsCookKeyword(text: string, pattern: RegExp) {
+  return pattern.test(text);
+}
+
+function buildDishCookText(menu: ResolvedMenuVersion) {
+  return menu.content.steps
+    .map(item => item.text?.trim() ?? "")
+    .filter(Boolean)
+    .join(" ");
+}
+
+function resolveCookStage(menu: ResolvedMenuVersion, slotType: RecipeSlotType | null) {
+  const text = `${menu.title} ${buildDishCookText(menu)}`;
+  const minutes = recipeDurationMinutes(menu.content.duration);
+  if (slotType === "SOUP" || containsCookKeyword(text, /(炖|焖|煮|卤|蒸|烤|熬)/) || (minutes != null && minutes >= 45)) {
+    return "EARLY" as const;
+  }
+  if (
+    slotType === "VEGETABLE" ||
+    containsCookKeyword(text, /(凉拌|快炒|小炒|焯|装盘|生拌|快手)/) ||
+    (minutes != null && minutes <= 15)
+  ) {
+    return "LATE" as const;
+  }
+  return "MID" as const;
+}
+
+function buildCookAssistantSnapshot(plan: MealPlanRow, menuItems: PlanMenuItemInput[]): MealPlanCookAssistantSnapshot {
+  const dishTitles = menuItems.map(item => item.menu.title);
+  const prepTasks: MealPlanCookAssistantTask[] = [];
+  const cookTimeline: MealPlanCookAssistantTimelineStep[] = [];
+  const serveTasks: MealPlanCookAssistantTask[] = [];
+  const notes: string[] = [];
+  const totalDurations = menuItems
+    .map(item => recipeDurationMinutes(item.menu.content.duration))
+    .filter((item): item is NonNullable<ReturnType<typeof recipeDurationMinutes>> => item != null);
+  const unresolvedInfoCount = menuItems.filter(item => !item.menu.content.steps.length || item.menu.content.duration == null).length;
+  const pendingCount = menuItems.filter(item => item.purchaseState === "PENDING").length;
+
+  if (dishTitles.length) {
+    prepTasks.push({
+      title: "统一备菜",
+      detail: `先把${dishTitles.join("、")}涉及的主要食材洗净、切配，调料、小碗和装盘器具提前摆好。`,
+      dishTitles
+    });
+  }
+
+  const marinadeTitles = menuItems
+    .filter(item => containsCookKeyword(buildDishCookText(item.menu), /(腌|腌制|入味)/))
+    .map(item => item.menu.title);
+  if (marinadeTitles.length) {
+    prepTasks.push({
+      title: "提前腌制",
+      detail: `把${marinadeTitles.join("、")}需要提前入味的步骤先做掉，后续开火时会顺很多。`,
+      dishTitles: marinadeTitles
+    });
+  }
+
+  const soakTitles = menuItems
+    .filter(item => {
+      const ingredientText = item.menu.content.ingredients.map(ingredient => ingredient.ingredientName).join(" ");
+      const text = `${ingredientText} ${buildDishCookText(item.menu)}`;
+      return containsCookKeyword(text, /(泡发|浸泡|木耳|银耳|香菇|腐竹|粉丝|海带)/);
+    })
+    .map(item => item.menu.title);
+  if (soakTitles.length) {
+    prepTasks.push({
+      title: "提前泡发或浸泡",
+      detail: `如果${soakTitles.join("、")}用到干货或需要浸泡的原料，先把这一步做掉，避免开火后卡住。`,
+      dishTitles: soakTitles
+    });
+  }
+
+  const grouped = {
+    EARLY: menuItems.filter(item => resolveCookStage(item.menu, item.slotType) === "EARLY"),
+    MID: menuItems.filter(item => resolveCookStage(item.menu, item.slotType) === "MID"),
+    LATE: menuItems.filter(item => resolveCookStage(item.menu, item.slotType) === "LATE")
+  };
+
+  let order = 1;
+  if (grouped.EARLY.length) {
+    cookTimeline.push({
+      order: order++,
+      title: "先开长耗时菜",
+      detail: `优先处理${grouped.EARLY.map(item => item.menu.title).join("、")}，让它们先进入炖、煮、蒸或焖的阶段，后面可以并行做其他菜。`,
+      dishTitles: grouped.EARLY.map(item => item.menu.title),
+      parallelKey: "LONG_COOK"
+    });
+  }
+  if (grouped.MID.length) {
+    cookTimeline.push({
+      order: order++,
+      title: grouped.EARLY.length ? "利用空档处理中段主菜" : "先处理中段主菜",
+      detail: `按${grouped.MID.map(item => item.menu.title).join("、")}的顺序完成主烹调，尽量把占灶时间长的步骤集中完成。`,
+      dishTitles: grouped.MID.map(item => item.menu.title),
+      parallelKey: grouped.EARLY.length ? "LONG_COOK" : null
+    });
+  }
+  if (grouped.LATE.length) {
+    cookTimeline.push({
+      order: order++,
+      title: "最后做快手菜和临出锅菜",
+      detail: `把${grouped.LATE.map(item => item.menu.title).join("、")}放到后段处理，尽量让蔬菜和快炒菜接近上桌时再完成。`,
+      dishTitles: grouped.LATE.map(item => item.menu.title),
+      parallelKey: null
+    });
+  }
+
+  serveTasks.push({
+    title: "出锅前统一收尾",
+    detail: "上桌前把咸淡、汤汁、熟度和装盘顺序再过一遍，避免最后一刻手忙脚乱。",
+    dishTitles
+  });
+  serveTasks.push({
+    title: "按先热后快的顺序上桌",
+    detail: "先端汤或炖菜，再上主菜和快炒菜，快手菜尽量最后离火，口感会更稳。",
+    dishTitles
+  });
+
+  if (pendingCount > 0) {
+    notes.push(`当前还有${pendingCount}道菜标记为待采购，开始前先确认缺的食材已经补齐。`);
+  }
+  if (unresolvedInfoCount > 0) {
+    notes.push(`有${unresolvedInfoCount}道菜的步骤或时长信息不完整，本次流程按已有字段做了保守估算。`);
+  }
+  if (menuItems.length >= 4) {
+    notes.push("这顿菜比较多，建议先清出一块专用备菜区，再按长耗时菜 -> 主菜 -> 快手菜推进。");
+  }
+
+  const longestDuration = totalDurations.length ? Math.max(...totalDurations) : null;
+  const estimatedMinutes =
+    longestDuration == null ? null : longestDuration + Math.max(0, menuItems.length - 1) * 12 + prepTasks.length * 6;
+  const planDate = plan.planDate.toISOString().slice(0, 10);
+  const suggestedStartTime =
+    estimatedMinutes == null ? null : formatClockText(new Date(buildFallbackScheduledAt(planDate, plan.mealSlot).getTime() - estimatedMinutes * 60 * 1000));
+
+  return {
+    summary: {
+      dishCount: menuItems.length,
+      prepTaskCount: prepTasks.length,
+      timelineStepCount: cookTimeline.length,
+      totalDurationText: formatDurationText(estimatedMinutes),
+      suggestedStartTime,
+      notes
+    },
+    prepTasks,
+    cookTimeline,
+    serveTasks
   };
 }
 
@@ -325,6 +712,228 @@ export class MealService {
       take: normalizedLimit
     });
     return polls.map(item => this.toMealPollSummary(item));
+  }
+
+  async generateRandomMenu(
+    userId: UUID,
+    mealSlot: string,
+    peopleCount: number,
+    fridgePreferred: boolean,
+    slotPlan?: RandomSlotPlan | null
+  ): Promise<RandomMenuResponse> {
+    const normalizedMealSlot = normalizeCoreMealSlot(mealSlot);
+    const normalizedPeopleCount = this.normalizePeopleCount(peopleCount);
+    const normalizedSlotPlan = this.normalizeRandomSlotPlan(normalizedMealSlot, normalizedPeopleCount, slotPlan ?? null);
+    const [candidates, inventoryFacts] = await Promise.all([
+      this.loadRandomRecipeCandidates(userId),
+      this.loadRandomInventoryFacts(userId)
+    ]);
+
+    const seeds = this.buildRandomSlotSeeds(normalizedMealSlot, normalizedSlotPlan);
+    const selected = new Set<UUID>();
+    const items: RandomMenuItem[] = [];
+    const missingSlotTypes: RecipeSlotType[] = [];
+
+    for (const seed of seeds) {
+      const candidate = this.pickRandomRecipeCandidate({
+        mealSlot: normalizedMealSlot,
+        slotType: seed.slotType,
+        candidates,
+        excludedVersionIds: selected,
+        currentItems: items.map(item => ({
+          slotId: item.slotId,
+          slotType: item.slotType,
+          recipeId: item.recipeId,
+          recipeVersionId: item.recipeVersionId
+        })),
+        inventoryFacts,
+        fridgePreferred,
+        replaceConstraints: []
+      });
+      if (!candidate) {
+        missingSlotTypes.push(seed.slotType);
+        continue;
+      }
+      selected.add(candidate.recipeVersionId);
+      items.push(this.toRandomMenuItem(seed, candidate, inventoryFacts));
+    }
+
+    return {
+      mealSlot: normalizedMealSlot,
+      peopleCount: normalizedPeopleCount,
+      fridgePreferred,
+      slotPlan: normalizedSlotPlan,
+      items,
+      warnings: this.buildRandomMenuWarnings(seeds.length, items.length, missingSlotTypes),
+      generatedAt: toIsoDate(new Date())
+    };
+  }
+
+  async replaceRandomMenuSlot(
+    userId: UUID,
+    mealSlot: string,
+    peopleCount: number,
+    fridgePreferred: boolean,
+    slotPlan: RandomSlotPlan,
+    currentItems: ReplaceRandomMenuCurrentItem[],
+    targetSlotId: string,
+    targetSlotType: string,
+    replaceConstraints: RandomReplaceConstraint[],
+    rejectedRecipeVersionIds: UUID[],
+    requestSeq: number
+  ): Promise<ReplaceRandomMenuSlotResponse> {
+    const normalizedMealSlot = normalizeCoreMealSlot(mealSlot);
+    const normalizedPeopleCount = this.normalizePeopleCount(peopleCount);
+    const normalizedSlotPlan = this.normalizeRandomSlotPlan(normalizedMealSlot, normalizedPeopleCount, slotPlan);
+    const normalizedTargetSlotType = normalizeRecipeSlotType(targetSlotType);
+    const slotSeed = this.buildRandomSlotSeeds(normalizedMealSlot, normalizedSlotPlan).find(
+      item => item.slotId === targetSlotId && item.slotType === normalizedTargetSlotType
+    );
+    if (!slotSeed) {
+      throw new BadRequestException("目标菜位不存在");
+    }
+    const excludedVersionIds = new Set(
+      rejectedRecipeVersionIds
+        .filter((item): item is UUID => Number.isInteger(item) && item > 0)
+    );
+    const normalizedCurrentItems = currentItems.map(item => ({
+      slotId: item.slotId,
+      slotType: normalizeRecipeSlotType(item.slotType),
+      recipeId: item.recipeId,
+      recipeVersionId: item.recipeVersionId
+    }));
+    const currentTarget = normalizedCurrentItems.find(item => item.slotId === targetSlotId);
+    if (!currentTarget) {
+      throw new BadRequestException("目标菜位不存在");
+    }
+    excludedVersionIds.add(currentTarget.recipeVersionId);
+
+    const [candidates, inventoryFacts] = await Promise.all([
+      this.loadRandomRecipeCandidates(userId),
+      this.loadRandomInventoryFacts(userId)
+    ]);
+
+    const candidate = this.pickRandomRecipeCandidate({
+      mealSlot: normalizedMealSlot,
+      slotType: normalizedTargetSlotType,
+      candidates,
+      excludedVersionIds,
+      currentItems: normalizedCurrentItems.filter(item => item.slotId !== targetSlotId),
+      inventoryFacts,
+      fridgePreferred,
+      replaceConstraints
+    });
+
+    if (!candidate) {
+      return {
+        requestSeq,
+        slot: null,
+        warning: {
+          code: "INSUFFICIENT_CANDIDATES",
+          message: "当前条件下能换的菜不多，请放宽限制后重试",
+          slotTypes: [normalizedTargetSlotType]
+        }
+      };
+    }
+
+    return {
+      requestSeq,
+      slot: this.toRandomMenuItem(slotSeed, candidate, inventoryFacts),
+      warning: null
+    };
+  }
+
+  async previewRandomMenuGap(
+    userId: UUID,
+    mealSlot: string,
+    peopleCount: number,
+    items: Array<{
+      slotId: string;
+      slotType: string;
+      recipeId: UUID;
+      recipeVersionId: UUID;
+    }>,
+    inventoryDecisions: RandomGapInventoryDecision[]
+  ): Promise<CheckRandomMenuGapResponse> {
+    normalizeCoreMealSlot(mealSlot);
+    this.normalizePeopleCount(peopleCount);
+    if (!items.length) {
+      throw new BadRequestException("当前菜单不能为空");
+    }
+
+    const [recipes, inventoryFacts] = await Promise.all([
+      this.prisma.recipe.findMany({
+        where: {
+          id: { in: items.map(item => item.recipeId) },
+          ownerId: userId,
+          status: "ACTIVE"
+        },
+        include: {
+          currentVersion: true
+        }
+      }),
+      this.loadRandomInventoryFacts(userId)
+    ]);
+    const recipeMap = new Map(recipes.map(item => [item.id, item]));
+    const decisionMap = new Map<string, "HAS" | "MISSING">(
+      inventoryDecisions.map(item => [this.buildGapDecisionKey(item.slotId, item.ingredientId ?? null, item.ingredientName), item.decision])
+    );
+
+    const gapItems: RandomGapItem[] = items.map(item => {
+      const recipe = recipeMap.get(item.recipeId);
+      if (!recipe || recipe.currentVersionId !== item.recipeVersionId) {
+        throw new NotFoundException("菜谱不存在");
+      }
+      const slotType = normalizeRecipeSlotType(item.slotType);
+      const content = this.getEffectiveRecipeContent(recipe);
+      const totalIngredientCount = content.ingredients.length;
+      const gapIngredients = content.ingredients
+        .map(ingredient => this.buildRandomGapIngredient(item.slotId, ingredient, inventoryFacts, decisionMap))
+        .filter((ingredient): ingredient is RandomGapIngredient => ingredient !== null);
+      const unknownCount = gapIngredients.filter(ingredient => ingredient.inventoryStatus === "UNKNOWN").length;
+      const missingCount = gapIngredients.filter(ingredient => ingredient.inventoryStatus === "MISSING").length;
+      const partialCount = gapIngredients.filter(ingredient => ingredient.inventoryStatus === "PARTIAL").length;
+      const status =
+        unknownCount > 0
+          ? "UNKNOWN"
+          : gapIngredients.length === 0
+            ? "OK"
+            : gapIngredients.length < totalIngredientCount
+              ? "PARTIAL"
+              : missingCount > 0 && partialCount === 0
+              ? "MISSING"
+              : "PARTIAL";
+
+      return {
+        slotId: item.slotId,
+        slotType,
+        recipeId: recipe.id,
+        recipeVersionId: recipe.currentVersionId,
+        recipeName: recipe.title,
+        status,
+        missingIngredients: gapIngredients,
+        actions: {
+          canKeep: true,
+          canReplace: true,
+          canRemove: true,
+          canAddToShopping: gapIngredients.some(ingredient => ingredient.inventoryStatus !== "UNKNOWN")
+        },
+        unresolvedUnknownCount: unknownCount
+      };
+    });
+
+    const summary: RandomGapSummary = {
+      okCount: gapItems.filter(item => item.status === "OK").length,
+      partialCount: gapItems.filter(item => item.status === "PARTIAL").length,
+      missingCount: gapItems.filter(item => item.status === "MISSING").length,
+      unknownCount: gapItems.filter(item => item.status === "UNKNOWN").length
+    };
+
+    return {
+      items: gapItems,
+      summary,
+      canCreatePlan: gapItems.every(item => item.missingIngredients.length === 0)
+    };
   }
 
   async createMealPoll(
@@ -743,21 +1352,38 @@ export class MealService {
     operationId: OperationId,
     planDate: string,
     mealSlot: string,
-    recipeIds: UUID[],
+    menuItems: Array<{
+      slotType: string | null;
+      sortOrder: number;
+      recipeId: UUID;
+      recipeVersionId: UUID;
+      purchaseState: string;
+    }>,
+    expectedVersion?: number | null,
     note?: string | null
   ) {
     return this.prisma.$transaction(async tx => {
       const slot = normalizeMealSlot(mealSlot);
-      const menus = await this.resolveOwnedMenus(tx, userId, recipeIds);
-      const menuSnapshot = buildMenuSnapshot(menus);
       const normalizedNote = normalizeOptionalText(note);
       const normalizedPlanDate = parseDateOnly(planDate);
-      const requestHash = `${planDate}:${slot}:${recipeIds.join(",")}:${normalizedNote ?? ""}`;
+      const normalizedItems = await this.resolvePlanMenuItems(tx, userId, menuItems);
+      const requestHash = JSON.stringify({
+        planDate,
+        mealSlot: slot,
+        expectedVersion: expectedVersion ?? null,
+        menuItems: normalizedItems.map(item => ({
+          slotType: item.slotType,
+          sortOrder: item.sortOrder,
+          recipeId: item.menu.recipeId,
+          recipeVersionId: item.menu.recipeVersionId,
+          purchaseState: item.purchaseState
+        })),
+        note: normalizedNote
+      });
       const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:create", userId, null, requestHash);
       if (repeated) return repeated;
 
       await startIdempotentOperation(tx, operationId, "meal-plan:create", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, menu: menuSnapshot, note: normalizedNote }));
 
       const existing = await tx.mealPlanItem.findUnique({
         where: {
@@ -774,15 +1400,36 @@ export class MealService {
         throw new ConflictException("已完成餐次不能修改");
       }
 
+      const menuSnapshot = buildMenuSnapshot(normalizedItems.map(item => item.menu));
+      await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, menu: menuSnapshot, note: normalizedNote }));
+
+      const resolvedExpectedVersion = expectedVersion ?? null;
+
+      if (existing && resolvedExpectedVersion == null) {
+        throw new ConflictException("计划已存在，请刷新后携带 expectedVersion 重试");
+      }
+
       const planItem = existing
-        ? await tx.mealPlanItem.update({
-            where: { id: existing.id },
-            data: {
-              menuSnapshot: toJson(menuSnapshot),
-              note: normalizedNote,
-              version: { increment: 1 }
+        ? await (async () => {
+            if (existing.version !== resolvedExpectedVersion) {
+              throw new ConflictException("计划已被更新，请刷新后重试");
             }
-          })
+            const updated = await tx.mealPlanItem.updateMany({
+              where: {
+                id: existing.id,
+                version: resolvedExpectedVersion
+              },
+              data: {
+                menuSnapshot: toJson(menuSnapshot),
+                note: normalizedNote,
+                version: { increment: 1 }
+              }
+            });
+            if (updated.count !== 1) {
+              throw new ConflictException("计划已被更新，请刷新后重试");
+            }
+            return { id: existing.id };
+          })()
         : await tx.mealPlanItem.create({
             data: {
               userId,
@@ -793,11 +1440,70 @@ export class MealService {
             }
           });
 
-      await this.replaceMealPlanDishes(tx, planItem.id, menus);
+      await this.replaceMealPlanDishes(tx, planItem.id, normalizedItems);
       const item = await this.getMealPlanOrThrow(tx, planItem.id);
       await upsertStorageLedger(tx, userId, "MEAL", item.id, sizeOfJson(item));
       const result = this.toMealPlanSummary(item);
       await completeIdempotentOperation(tx, operationId, "meal-plan:create", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async getMealPlanCookAssistant(userId: UUID, planItemId: UUID): Promise<MealPlanCookAssistant> {
+    const plan = await this.getOwnedMealPlanOrThrow(this.prisma, userId, planItemId);
+    return this.toMealPlanCookAssistant(plan);
+  }
+
+  async generateMealPlanCookAssistant(userId: UUID, planItemId: UUID, operationId: OperationId): Promise<MealPlanCookAssistant> {
+    const requestHash = String(planItemId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<MealPlanCookAssistant>(
+        tx,
+        operationId,
+        "meal-plan:cook-assistant",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash);
+
+      const plan = await this.getOwnedMealPlanOrThrow(tx, userId, planItemId);
+      const currentValue = {
+        ...plan,
+        cookAssistant: plan.cookAssistant
+      };
+      const menuItems = await this.resolveStoredPlanMenuItems(tx, plan);
+      const snapshot = buildCookAssistantSnapshot(plan, menuItems);
+      const nextValue = {
+        ...plan,
+        cookAssistant: {
+          menuDigest: buildMealPlanMenuDigest(plan),
+          generatedAt: new Date(),
+          snapshot
+        }
+      };
+      await this.assertStorageWritable(tx, userId, Math.max(0, sizeOfJson(nextValue) - sizeOfJson(currentValue)));
+
+      await tx.mealPlanCookAssistant.upsert({
+        where: { planItemId: plan.id },
+        update: {
+          menuDigest: buildMealPlanMenuDigest(plan),
+          snapshot: toJson(snapshot),
+          generatedAt: new Date()
+        },
+        create: {
+          planItemId: plan.id,
+          menuDigest: buildMealPlanMenuDigest(plan),
+          snapshot: toJson(snapshot),
+          generatedAt: new Date()
+        }
+      });
+
+      const nextPlan = await this.getMealPlanOrThrow(tx, plan.id);
+      await upsertStorageLedger(tx, userId, "MEAL", nextPlan.id, sizeOfJson(nextPlan));
+      const result = this.toMealPlanCookAssistant(nextPlan);
+      await completeIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash, result);
       return result;
     });
   }
@@ -1457,13 +2163,37 @@ export class MealService {
         recipeVersionId: dish.recipeVersionId,
         title: dish.recipeVersion.name,
         servings: dish.recipeVersion.baseServings ?? null,
+        slotType: dish.slotType,
+        purchaseState: dish.purchaseState,
         sortOrder: dish.sortOrder
       })),
       status: item.status,
+      version: item.version,
       completedAt: item.completedAt ? toIsoDate(item.completedAt) : null,
       hasDiningEvent: Boolean(item.diningEvent),
       diningEventId: item.diningEvent?.id ?? null,
       createdAt: toIsoDate(item.createdAt)
+    };
+  }
+
+  private toMealPlanCookAssistant(item: MealPlanRow): MealPlanCookAssistant {
+    const snapshot = item.cookAssistant ? fromJson<MealPlanCookAssistantSnapshot>(item.cookAssistant.snapshot) : null;
+    return {
+      planItemId: item.id,
+      hasSnapshot: Boolean(snapshot),
+      isStale: Boolean(item.cookAssistant && item.cookAssistant.menuDigest !== buildMealPlanMenuDigest(item)),
+      generatedAt: item.cookAssistant ? toIsoDate(item.cookAssistant.generatedAt) : null,
+      summary: snapshot?.summary ?? {
+        dishCount: item.dishes.length,
+        prepTaskCount: 0,
+        timelineStepCount: 0,
+        totalDurationText: null,
+        suggestedStartTime: null,
+        notes: []
+      },
+      prepTasks: snapshot?.prepTasks ?? [],
+      cookTimeline: snapshot?.cookTimeline ?? [],
+      serveTasks: snapshot?.serveTasks ?? []
     };
   }
 
@@ -1657,22 +2387,6 @@ export class MealService {
     return recipe.currentVersion;
   }
 
-  private async resolveOwnedMenus(tx: Prisma.TransactionClient, userId: UUID, recipeIds: UUID[]): Promise<ResolvedMenuVersion[]> {
-    const menus: ResolvedMenuVersion[] = [];
-    for (const recipeId of recipeIds) {
-      const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
-      const recipeVersion = await this.resolveRecipeVersion(tx, recipe);
-      menus.push({
-        recipeId: recipe.id,
-        recipeVersionId: recipeVersion.id,
-        coverUrl: recipe.coverImageUrl ?? null,
-        title: recipe.title,
-        content: this.getEffectiveRecipeContent(recipe)
-      });
-    }
-    return menus;
-  }
-
   private async resolveMenuVersions(tx: Prisma.TransactionClient, recipeVersionIds: UUID[]): Promise<ResolvedMenuVersion[]> {
     const versions = await tx.recipeContentVersion.findMany({
       where: { id: { in: recipeVersionIds } },
@@ -1700,6 +2414,463 @@ export class MealService {
         content: versionToContent(version)
       };
     });
+  }
+
+  private async resolvePlanMenuItems(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    menuItems: Array<{
+      slotType: string | null;
+      sortOrder: number;
+      recipeId: UUID;
+      recipeVersionId: UUID;
+      purchaseState: string;
+    }>
+  ): Promise<PlanMenuItemInput[]> {
+    const resolved: PlanMenuItemInput[] = [];
+    for (const item of menuItems) {
+      const recipe = await this.requireOwnedRecipe(tx, userId, item.recipeId);
+      if (recipe.currentVersionId !== item.recipeVersionId) {
+        throw new ConflictException("菜谱版本已变化，请重新选择");
+      }
+      resolved.push({
+        slotType: normalizeNullableRecipeSlotType(item.slotType),
+        sortOrder: item.sortOrder,
+        purchaseState: normalizePurchaseState(item.purchaseState),
+        menu: {
+          recipeId: recipe.id,
+          recipeVersionId: recipe.currentVersionId,
+          coverUrl: recipe.coverImageUrl ?? null,
+          title: recipe.title,
+          content: this.getEffectiveRecipeContent(recipe)
+        }
+      });
+    }
+    return resolved.sort((left, right) => left.sortOrder - right.sortOrder);
+  }
+
+  private async resolveStoredPlanMenuItems(tx: Prisma.TransactionClient, plan: MealPlanRow): Promise<PlanMenuItemInput[]> {
+    const menus = await this.resolveMenuVersions(
+      tx,
+      plan.dishes.map(item => item.recipeVersionId)
+    );
+    return plan.dishes
+      .map((dish, index) => {
+        const menu = menus[index];
+        if (!menu) return null;
+        return {
+          slotType: normalizeNullableRecipeSlotType(dish.slotType),
+          sortOrder: dish.sortOrder,
+          purchaseState: normalizePurchaseState(dish.purchaseState),
+          menu: {
+            ...menu,
+            recipeId: dish.recipeId ?? menu.recipeId
+          }
+        } satisfies PlanMenuItemInput;
+      })
+      .filter((item): item is PlanMenuItemInput => Boolean(item));
+  }
+
+  private normalizePeopleCount(value: number) {
+    if (!Number.isInteger(value) || value < 1 || value > 12) {
+      throw new BadRequestException("人数参数错误");
+    }
+    return value;
+  }
+
+  private normalizeRandomSlotPlan(mealSlot: MealSlot, peopleCount: number, slotPlan?: RandomSlotPlan | null): RandomSlotPlan {
+    const fallback = this.buildDefaultRandomSlotPlan(mealSlot, peopleCount);
+    const normalized = {
+      meatCount: slotPlan?.meatCount ?? fallback.meatCount,
+      vegetableCount: slotPlan?.vegetableCount ?? fallback.vegetableCount,
+      soupCount: slotPlan?.soupCount ?? fallback.soupCount,
+      stapleCount: slotPlan?.stapleCount ?? fallback.stapleCount,
+      breakfastStapleCount: slotPlan?.breakfastStapleCount ?? fallback.breakfastStapleCount,
+      breakfastProteinCount: slotPlan?.breakfastProteinCount ?? fallback.breakfastProteinCount,
+      breakfastSideCount: slotPlan?.breakfastSideCount ?? fallback.breakfastSideCount
+    };
+    const counts = Object.values(normalized);
+    if (counts.some(value => !Number.isInteger(value) || value < 0)) {
+      throw new BadRequestException("菜位数量参数错误");
+    }
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    if (total < 1 || total > 12) {
+      throw new BadRequestException("菜位数量参数错误");
+    }
+    if (mealSlot === "BREAKFAST") {
+      if (normalized.meatCount > 0 || normalized.vegetableCount > 0 || normalized.soupCount > 0 || normalized.stapleCount > 0) {
+        throw new BadRequestException("早餐菜位参数错误");
+      }
+    } else if (normalized.breakfastStapleCount > 0 || normalized.breakfastProteinCount > 0 || normalized.breakfastSideCount > 0) {
+      throw new BadRequestException("午晚餐菜位参数错误");
+    }
+    return normalized;
+  }
+
+  private buildDefaultRandomSlotPlan(mealSlot: MealSlot, peopleCount: number): RandomSlotPlan {
+    if (mealSlot === "BREAKFAST") {
+      return {
+        meatCount: 0,
+        vegetableCount: 0,
+        soupCount: 0,
+        stapleCount: 0,
+        breakfastStapleCount: 1,
+        breakfastProteinCount: 1,
+        breakfastSideCount: 1
+      };
+    }
+
+    const dishCount = peopleCount + 1;
+    return {
+      meatCount: Math.ceil(dishCount / 2),
+      vegetableCount: Math.floor(dishCount / 2),
+      soupCount: 1,
+      stapleCount: 1,
+      breakfastStapleCount: 0,
+      breakfastProteinCount: 0,
+      breakfastSideCount: 0
+    };
+  }
+
+  private buildRandomSlotSeeds(mealSlot: MealSlot, slotPlan: RandomSlotPlan): RandomRecipeSlotSeed[] {
+    const slots: RandomRecipeSlotSeed[] = [];
+    const append = (slotType: RecipeSlotType, count: number) => {
+      for (let index = 0; index < count; index += 1) {
+        slots.push({
+          slotId: `${slotType}-${index + 1}`,
+          slotType,
+          slotIndex: slots.length
+        });
+      }
+    };
+
+    if (mealSlot === "BREAKFAST") {
+      append("BREAKFAST_STAPLE", slotPlan.breakfastStapleCount);
+      append("BREAKFAST_PROTEIN", slotPlan.breakfastProteinCount);
+      append("BREAKFAST_SIDE", slotPlan.breakfastSideCount);
+      return slots;
+    }
+
+    append("MEAT", slotPlan.meatCount);
+    append("VEGETABLE", slotPlan.vegetableCount);
+    append("SOUP", slotPlan.soupCount);
+    append("STAPLE", slotPlan.stapleCount);
+    return slots;
+  }
+
+  private async loadRandomRecipeCandidates(userId: UUID): Promise<RandomRecipeCandidate[]> {
+    const [recipes, profile] = await Promise.all([
+      this.prisma.recipe.findMany({
+        where: {
+          ownerId: userId,
+          status: "ACTIVE"
+        },
+        include: {
+          currentVersion: {
+            include: {
+              versionTags: true
+            }
+          }
+        }
+      }),
+      this.prisma.userTasteProfile.findUnique({
+        where: { userId }
+      })
+    ]);
+    const blockedNames = new Set(
+      [
+        ...(profile?.allergies ?? []),
+        ...(profile?.strictDislikes ?? []),
+        ...(profile?.dislikedIngredients ?? [])
+      ]
+        .map(normalizeNameKey)
+        .filter(Boolean)
+    );
+
+    return recipes
+      .filter(recipe => this.isRandomRecipeAllowedByTaste(recipe, blockedNames))
+      .map(recipe => {
+        const content = this.getEffectiveRecipeContent(recipe);
+        const tags = this.resolveRandomTagSnapshot(recipe.currentVersion.versionTags, content);
+        if (!tags) return null;
+        return {
+          recipeId: recipe.id,
+          recipeVersionId: recipe.currentVersionId,
+          title: recipe.title,
+          coverUrl: recipe.coverImageUrl ?? null,
+          content,
+          mealMoments: tags.mealMoments,
+          slotTypes: tags.slotTypes,
+          flavorTags: tags.flavorTags,
+          mainProteinType: tags.mainProteinType,
+          primaryIngredientIds: tags.primaryIngredientIds
+        };
+      })
+      .filter((item): item is RandomRecipeCandidate => Boolean(item));
+  }
+
+  private isRandomRecipeAllowedByTaste(recipe: RandomRecipeRow, blockedNames: Set<string>) {
+    if (!blockedNames.size) return true;
+    const content = this.getEffectiveRecipeContent(recipe);
+    return !content.ingredients.some(ingredient => blockedNames.has(normalizeNameKey(ingredient.ingredientName)));
+  }
+
+  private async loadRandomInventoryFacts(userId: UUID): Promise<RandomInventoryFacts> {
+    const fridgeItems = await this.prisma.fridgeItem.findMany({
+      where: {
+        userId,
+        available: true
+      },
+      select: {
+        ingredientId: true
+      }
+    });
+    return {
+      fridgeIngredientIds: new Set(
+        fridgeItems
+          .map(item => item.ingredientId)
+          .filter((item): item is UUID => typeof item === "number" && item > 0)
+      )
+    };
+  }
+
+  private pickRandomRecipeCandidate(params: {
+    mealSlot: MealSlot;
+    slotType: RecipeSlotType;
+    candidates: RandomRecipeCandidate[];
+    excludedVersionIds: Set<UUID>;
+    currentItems: Array<{ slotId: string; slotType: RecipeSlotType; recipeId: UUID; recipeVersionId: UUID }>;
+    inventoryFacts: RandomInventoryFacts;
+    fridgePreferred: boolean;
+    replaceConstraints: RandomReplaceConstraint[];
+  }): RandomRecipeCandidate | null {
+    const candidateMap = new Map(params.candidates.map(item => [item.recipeVersionId, item]));
+    const avoidNames = new Set(
+      params.replaceConstraints
+        .filter(item => item.kind === "AVOID_INGREDIENT")
+        .map(item => normalizeNameKey(item.ingredientName ?? ""))
+        .filter(Boolean)
+    );
+    const avoidIds = new Set(
+      params.replaceConstraints
+        .filter(item => item.kind === "AVOID_INGREDIENT" && typeof item.ingredientId === "number" && item.ingredientId > 0)
+        .map(item => item.ingredientId as UUID)
+    );
+    const flavorValue = params.replaceConstraints.find(item => item.kind === "FLAVOR")?.value ?? null;
+    const durationValue = params.replaceConstraints.find(item => item.kind === "DURATION")?.value ?? null;
+    const useFridgeFirst =
+      params.fridgePreferred || params.replaceConstraints.some(item => item.kind === "INGREDIENT" && item.value === "USE_FRIDGE_FIRST");
+    const existingProteinTypes = new Set(
+      params.currentItems
+        .filter(item => item.slotType === "MEAT")
+        .map(item => candidateMap.get(item.recipeVersionId)?.mainProteinType ?? null)
+        .filter((item): item is RecipeProteinType => Boolean(item) && item !== "NONE")
+    );
+
+    const filtered = params.candidates.filter(candidate => {
+      if (params.excludedVersionIds.has(candidate.recipeVersionId)) return false;
+      if (params.currentItems.some(item => item.recipeVersionId === candidate.recipeVersionId)) return false;
+      if (!this.randomCandidateSupportsMealSlot(candidate, params.mealSlot)) return false;
+      if (!this.randomCandidateSupportsSlotType(candidate, params.slotType)) return false;
+      if (flavorValue && !candidate.flavorTags.includes(flavorValue)) return false;
+      if (durationValue && candidate.content.duration !== durationValue) return false;
+      if (
+        candidate.content.ingredients.some(ingredient =>
+          avoidIds.has((ingredient.ingredientId ?? 0) as UUID) || avoidNames.has(normalizeNameKey(ingredient.ingredientName))
+        )
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    if (!filtered.length) return null;
+
+    return filtered
+      .map(candidate => ({
+        candidate,
+        score: this.scoreRandomCandidate(candidate, params.slotType, existingProteinTypes, params.inventoryFacts, useFridgeFirst),
+        tieBreaker: Math.random()
+      }))
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        return right.tieBreaker - left.tieBreaker;
+      })[0]?.candidate ?? null;
+  }
+
+  private randomCandidateSupportsMealSlot(candidate: RandomRecipeCandidate, mealSlot: MealSlot) {
+    if (candidate.mealMoments.includes(mealSlot)) return true;
+    return candidate.mealMoments.length === 0 && mealSlot !== "BREAKFAST";
+  }
+
+  private randomCandidateSupportsSlotType(candidate: RandomRecipeCandidate, slotType: RecipeSlotType) {
+    if (candidate.slotTypes.includes(slotType)) return true;
+    if (candidate.slotTypes.length > 0) return false;
+    if (slotType === "MEAT") return candidate.mainProteinType !== null && candidate.mainProteinType !== "NONE";
+    if (slotType === "VEGETABLE") return candidate.mainProteinType === null || candidate.mainProteinType === "NONE";
+    return false;
+  }
+
+  private scoreRandomCandidate(
+    candidate: RandomRecipeCandidate,
+    slotType: RecipeSlotType,
+    existingProteinTypes: Set<RecipeProteinType>,
+    inventoryFacts: RandomInventoryFacts,
+    useFridgeFirst: boolean
+  ) {
+    let score = Math.random();
+    const fridgeFit = this.computeRandomFridgeFit(candidate.content, inventoryFacts);
+    if (useFridgeFirst) {
+      score += fridgeFit === "HIGH" ? 4 : fridgeFit === "MEDIUM" ? 2 : fridgeFit === "LOW" ? 1 : 0;
+    }
+    if (slotType === "MEAT" && candidate.mainProteinType && candidate.mainProteinType !== "NONE") {
+      score += existingProteinTypes.has(candidate.mainProteinType) ? -2 : 2;
+    }
+    if (candidate.content.duration === "WITHIN_15") score += 0.5;
+    return score;
+  }
+
+  private toRandomMenuItem(seed: RandomRecipeSlotSeed, candidate: RandomRecipeCandidate, inventoryFacts: RandomInventoryFacts): RandomMenuItem {
+    return {
+      slotId: seed.slotId,
+      slotType: seed.slotType,
+      slotIndex: seed.slotIndex,
+      recipeId: candidate.recipeId,
+      recipeVersionId: candidate.recipeVersionId,
+      title: candidate.title,
+      coverUrl: candidate.coverUrl,
+      servings: candidate.content.baseServings ?? null,
+      duration: candidate.content.duration as RecipeDuration | null,
+      durationText: recipeDurationText((candidate.content.duration ?? null) as RecipeDuration | null),
+      estimatedCalories: candidate.content.estimatedCalories ?? null,
+      flavorTags: candidate.flavorTags,
+      mainProteinType: candidate.mainProteinType,
+      fridgeFit: this.computeRandomFridgeFit(candidate.content, inventoryFacts)
+    };
+  }
+
+  private computeRandomFridgeFit(content: RecipeContentSnapshot, inventoryFacts: RandomInventoryFacts): "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN" {
+    const ingredientIds = content.ingredients
+      .map(ingredient => ingredient.ingredientId ?? null)
+      .filter((item): item is UUID => typeof item === "number" && item > 0);
+    if (!ingredientIds.length) return "UNKNOWN";
+    const matched = ingredientIds.filter(item => inventoryFacts.fridgeIngredientIds.has(item)).length;
+    if (matched === 0) return "LOW";
+    if (matched === ingredientIds.length) return "HIGH";
+    if (matched > 0) return "MEDIUM";
+    return "LOW";
+  }
+
+  private buildRandomMenuWarnings(expectedCount: number, actualCount: number, missingSlotTypes: RecipeSlotType[]): RandomMenuWarning[] {
+    if (actualCount >= expectedCount || missingSlotTypes.length === 0) return [];
+    const uniqueSlotTypes = Array.from(new Set(missingSlotTypes));
+    return [
+      {
+        code: "INSUFFICIENT_CANDIDATES",
+        message: "当前条件下能选的菜不多，已按现有菜谱尽量推荐",
+        slotTypes: uniqueSlotTypes
+      },
+      {
+        code: "PARTIAL_MENU",
+        message: "本次只生成了部分菜单，你可以放宽限制后再试",
+        slotTypes: uniqueSlotTypes
+      }
+    ];
+  }
+
+  private buildGapDecisionKey(slotId: string, ingredientId: UUID | null, ingredientName: string) {
+    return `${slotId}:${ingredientId ?? 0}:${normalizeNameKey(ingredientName)}`;
+  }
+
+  private buildRandomGapIngredient(
+    slotId: string,
+    ingredient: RecipeContentSnapshot["ingredients"][number],
+    inventoryFacts: RandomInventoryFacts,
+    decisionMap: Map<string, "HAS" | "MISSING">
+  ): RandomGapIngredient | null {
+    const ingredientId = ((ingredient.ingredientId ?? null) as UUID | null) ?? null;
+    const decisionKey = this.buildGapDecisionKey(slotId, ingredientId, ingredient.ingredientName);
+    const manualDecision = decisionMap.get(decisionKey);
+    const hasInventory =
+      ingredientId !== null && inventoryFacts.fridgeIngredientIds.has(ingredientId);
+
+    if (manualDecision === "HAS" || hasInventory) {
+      return null;
+    }
+
+    const inventoryStatus =
+      manualDecision === "MISSING"
+        ? "MISSING"
+        : ingredientId === null
+          ? "UNKNOWN"
+          : "MISSING";
+
+    return {
+      decisionKey,
+      ingredientId,
+      ingredientName: ingredient.ingredientName,
+      quantityText: ingredient.amount ? this.formatGapAmount(ingredient.amount) : null,
+      inventoryStatus,
+      purchasable: true
+    };
+  }
+
+  private formatGapAmount(amount: RecipeContentSnapshot["ingredients"][number]["amount"]) {
+    if (amount.kind === "FUZZY") return amount.text;
+    return `${amount.quantity}${amount.unitName}`;
+  }
+
+  private resolveRandomTagSnapshot(
+    tags: Array<{
+      id: number;
+      tagCode: string;
+      tagValue: string;
+      source: string;
+      sortOrder: number | null;
+    }>,
+    content: RecipeContentSnapshot
+  ): RandomTagSnapshot | null {
+    if (!tags.length) return null;
+    const byCode = new Map<string, Array<{ id: number; tagValue: string; source: string; sortOrder: number | null }>>();
+    for (const tag of tags) {
+      const bucket = byCode.get(tag.tagCode) ?? [];
+      bucket.push(tag);
+      byCode.set(tag.tagCode, bucket);
+    }
+
+    const mealMoments = pickPreferredTagValues(byCode.get("MEAL_TYPE") ?? [], true).filter(
+      (item): item is MealSlot =>
+        item === "BREAKFAST" ||
+        item === "LUNCH" ||
+        item === "AFTERNOON_TEA" ||
+        item === "DINNER" ||
+        item === "LATE_NIGHT"
+    );
+    const dishRoles = pickPreferredTagValues(byCode.get("DISH_ROLE") ?? [], true);
+    const mainProteinTypeValue = pickPreferredTagValues(byCode.get("MAIN_PROTEIN_TYPE") ?? [], false)[0] ?? null;
+    const mainProteinType =
+      mainProteinTypeValue &&
+      ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"].includes(mainProteinTypeValue)
+        ? (mainProteinTypeValue as RecipeProteinType)
+        : null;
+    const flavorTags = pickPreferredTagValues(byCode.get("FLAVOR_PROFILE") ?? [], true);
+    const spiceLevel = pickPreferredTagValues(byCode.get("SPICE_LEVEL") ?? [], false)[0] ?? null;
+    if (spiceLevel === "NONE" && !flavorTags.includes("NOT_SPICY")) flavorTags.push("NOT_SPICY");
+    if (spiceLevel === "MILD" && !flavorTags.includes("MILD")) flavorTags.push("MILD");
+
+    const primaryIngredientIds = pickPreferredTagValues(byCode.get("PRIMARY_INGREDIENT") ?? [], true)
+      .map(item => Number(item))
+      .filter((item): item is UUID => Number.isInteger(item) && item > 0);
+
+    if (!mealMoments.length || !dishRoles.length) return null;
+
+    return {
+      mealMoments,
+      slotTypes: mapDishRolesToLegacySlotTypes(dishRoles, mealMoments, content, mainProteinType),
+      flavorTags,
+      mainProteinType,
+      primaryIngredientIds
+    };
   }
 
   private async resolveConfirmedPollMenus(
@@ -1749,16 +2920,32 @@ export class MealService {
     return recipe;
   }
 
-  private async replaceMealPlanDishes(tx: Prisma.TransactionClient, planItemId: UUID, menus: ResolvedMenuVersion[]) {
+  private async replaceMealPlanDishes(
+    tx: Prisma.TransactionClient,
+    planItemId: UUID,
+    menuItems: Array<PlanMenuItemInput | ResolvedMenuVersion>
+  ) {
+    const normalizedItems = menuItems.map((item, index) =>
+      "menu" in item
+        ? item
+        : {
+            slotType: null,
+            sortOrder: index,
+            purchaseState: "READY" as const,
+            menu: item
+          }
+    );
     await tx.mealPlanDish.deleteMany({
       where: { planItemId }
     });
     await tx.mealPlanDish.createMany({
-      data: menus.map((item, index) => ({
+      data: normalizedItems.map(item => ({
         planItemId,
-        recipeId: item.recipeId,
-        recipeVersionId: item.recipeVersionId,
-        sortOrder: index
+        recipeId: item.menu.recipeId,
+        recipeVersionId: item.menu.recipeVersionId,
+        slotType: item.slotType,
+        purchaseState: item.purchaseState,
+        sortOrder: item.sortOrder
       }))
     });
   }
@@ -1769,6 +2956,15 @@ export class MealService {
       include: mealPlanInclude
     });
     if (!plan) throw new NotFoundException("计划不存在");
+    return plan;
+  }
+
+  private async getOwnedMealPlanOrThrow(db: MealDb, userId: UUID, planItemId: UUID) {
+    const plan = await db.mealPlanItem.findUnique({
+      where: { id: planItemId },
+      include: mealPlanInclude
+    });
+    if (!plan || plan.userId !== userId) throw new NotFoundException("计划不存在");
     return plan;
   }
 
