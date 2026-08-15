@@ -164,9 +164,9 @@
 	                  <view class="detail-inline-actions__text">分享</view>
 	                </button>
                 <template v-if="isExternalDetail">
-	                  <button class="detail-inline-actions__item" @click="handleAdaptRecipe">
+	                  <button class="detail-inline-actions__item" @click="handleExternalEditAction">
 	                    <view class="cookfont detail-inline-actions__icon icon-edit" />
-	                    <view class="detail-inline-actions__text">改编</view>
+	                    <view class="detail-inline-actions__text">{{ externalEditActionLabel }}</view>
 	                  </button>
 	                  <button class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
 	                    <view class="cookfont detail-inline-actions__icon" :class="externalPrimaryActionIcon" />
@@ -180,7 +180,7 @@
 	                    </button>
 	                    <button class="detail-inline-actions__item" @click="handleAddPlan">
 	                      <view class="cookfont detail-inline-actions__icon icon-add-plan" />
-	                      <view class="detail-inline-actions__text">加入计划</view>
+	                      <view class="detail-inline-actions__text">添加计划</view>
 	                    </button>
 	                  </template>
 	                </view>
@@ -200,9 +200,9 @@
             <view class="detail-actions__text">分享</view>
           </button>
           <template v-if="isExternalDetail">
-            <button class="detail-actions__item" @click="handleAdaptRecipe">
+            <button class="detail-actions__item" @click="handleExternalEditAction">
               <view class="cookfont icon-edit detail-actions__icon" />
-              <view class="detail-actions__text">改编</view>
+              <view class="detail-actions__text">{{ externalEditActionLabel }}</view>
             </button>
             <button class="detail-actions__item" @click="handleExternalPrimaryAction">
               <view class="cookfont detail-actions__icon" :class="externalPrimaryActionIcon" />
@@ -216,7 +216,7 @@
             </button>
             <button class="detail-actions__item" @click="handleAddPlan">
               <view class="cookfont icon-add-plan detail-actions__icon" />
-              <view class="detail-actions__text">加入计划</view>
+              <view class="detail-actions__text">添加计划</view>
             </button>
           </template>
         </view>
@@ -649,8 +649,9 @@ const recommendActionLabel = computed(() => {
 	return "投稿灵感";
 });
 const addActionLabel = computed(() => (kind.value === "collection" ? "升级为我的" : "添加到我的"));
+const externalEditActionLabel = computed(() => (linkedOwnedRecipeId.value && kind.value === "inspiration" ? "编辑" : "改编"));
 const externalPrimaryActionLabel = computed(() => {
-  if (planRecipeId.value && kind.value === "inspiration") return "加入计划";
+  if (planRecipeId.value && kind.value === "inspiration") return "添加计划";
   return addActionLabel.value;
 });
 const externalPrimaryActionIcon = computed(() => {
@@ -1040,6 +1041,9 @@ function resolveShoppingSource() {
 
 async function openShoppingSheet() {
   await loadShoppingLists(true);
+  if (!shoppingCreateName.value.trim()) {
+    shoppingCreateName.value = buildDefaultListName();
+  }
   shoppingSheetVisible.value = true;
 }
 
@@ -1049,11 +1053,11 @@ async function createShoppingList() {
   try {
     const created = await shoppingApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || null
+      name: shoppingCreateName.value.trim() || buildDefaultListName()
     });
     shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
     selectedShoppingListId.value = created.id;
-    shoppingCreateName.value = "";
+    shoppingCreateName.value = buildDefaultListName();
     await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
@@ -1160,6 +1164,14 @@ async function handleAdaptRecipe() {
   void uniPlatform.navigation.navigateTo("/pages_recipe/edit/index");
 }
 
+function handleExternalEditAction() {
+  if (linkedOwnedRecipeId.value && kind.value === "inspiration") {
+    void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(linkedOwnedRecipeId.value))}`);
+    return;
+  }
+  void handleAdaptRecipe();
+}
+
 function handleEditRecipe() {
   if (!showStickyActions.value || kind.value !== "my" || !recipeId.value) return;
   void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
@@ -1168,6 +1180,12 @@ function handleEditRecipe() {
 function handleAddPlan() {
   if (!showStickyActions.value || !planRecipeId.value) return;
   openPlanSheet();
+}
+
+function buildDefaultListName(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${month}月${day}日清单`;
 }
 
 async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[] }) {
@@ -1236,37 +1254,15 @@ async function submitPlanSheet(payload: { planDate: string; mealSlot: MealSlot }
   if (!planRecipeId.value || planSubmitting.value) return;
   planSubmitting.value = true;
   try {
-    const plans = await mealApi.listPlans({ from: payload.planDate, to: payload.planDate, page: 1, pageSize: 10 });
-    const plan = plans.items.find(item => item.mealSlot === payload.mealSlot) ?? null;
-    const existingItems = plan?.menuItems ?? [];
-    const recipeIds = [...existingItems.map(item => item.recipeId), planRecipeId.value].filter(
-      (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
-    );
-    const recipes = await Promise.all(recipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
-    const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
-    const menuItems = recipeIds.map((recipeId, index) => {
-      const recipe = recipeMap.get(recipeId);
-      const existing = existingItems.find(item => item.recipeId === recipeId) ?? null;
-      if (!recipe) return null;
-      return {
-        slotType: existing?.slotType ?? null,
-        sortOrder: index,
-        recipeId: recipe.id,
-        recipeVersionId: recipe.contentVersionId,
-        purchaseState: existing?.purchaseState ?? "READY"
-      };
-    });
-    if (menuItems.some(item => item === null)) {
-      await uniPlatform.feedback.toast({ title: "当前计划包含已变化的菜谱，请刷新后重试", icon: "none" });
-      return;
-    }
-    const resolvedMenuItems = menuItems.filter((item): item is NonNullable<typeof item> => Boolean(item));
-    await mealApi.createPlan({
+    const recipe = await recipeApi.getMyRecipe(planRecipeId.value);
+    await mealApi.addPlanItem({
       operationId: createOperationId(),
       planDate: payload.planDate,
       mealSlot: payload.mealSlot,
-      expectedVersion: plan?.version ?? null,
-      menuItems: resolvedMenuItems
+      recipeId: recipe.id,
+      recipeVersionId: recipe.contentVersionId,
+      slotType: null,
+      purchaseState: "READY"
     });
     closePlanSheet();
     await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });

@@ -1,6 +1,6 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type OperationId, type PageResult, type UUID } from "./http";
-import type { RecipeContentSnapshot } from "./recipe";
+import type { RecipeContentSnapshot, RecipeDuration } from "./recipe";
 import type { MealSlot } from "@/utils/meal-slot";
 
 export interface MealPlanMenuItemSummary {
@@ -8,6 +8,8 @@ export interface MealPlanMenuItemSummary {
   recipeVersionId: UUID;
   title: string;
   servings: number | null;
+  duration: RecipeDuration | null;
+  durationText: string | null;
   slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
   purchaseState: "READY" | "PENDING";
   sortOrder: number;
@@ -120,6 +122,16 @@ export interface CreateMealPlanRequest {
   note?: string | null;
 }
 
+export interface AddMealPlanItemRequest {
+  operationId: OperationId;
+  planDate: string;
+  mealSlot: MealSlot;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  slotType?: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
+  purchaseState?: "READY" | "PENDING";
+}
+
 export interface CreateDiningEventRequest {
   operationId: OperationId;
   scheduledAt: string;
@@ -154,6 +166,10 @@ export const mealApi = {
   createPlan(body: CreateMealPlanRequest) {
     const { operationId, ...payload } = body;
     return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans`, payload, { idempotencyKey: operationId });
+  },
+  addPlanItem(body: AddMealPlanItemRequest) {
+    const { operationId, ...payload } = body;
+    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans/items`, payload, { idempotencyKey: operationId });
   },
   getCookAssistant(planItemId: UUID) {
     return get<MealPlanCookAssistant>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-assistant`);

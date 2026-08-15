@@ -11,6 +11,8 @@ export interface ShoppingListSummary {
 
 export interface ShoppingItemSourceSummary {
   planItemId: UUID | null;
+  recipeId?: UUID | null;
+  sourceVersionId?: UUID | null;
 }
 
 export interface ShoppingListDetailItem {

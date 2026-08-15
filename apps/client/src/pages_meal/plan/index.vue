@@ -393,7 +393,6 @@ const WEEK_PANEL_EDGE_BUFFER = 1;
 const WEEK_SWIPER_DURATION_MS = 280;
 const PLAN_LOADING_TIPS = ["刷新这一周安排", "把最近的做饭计划拉下来", "看看这周有没有新安排"];
 const plans = ref<MealPlanSummary[]>([]);
-const recipeDurationMap = ref<Record<string, RecipeDuration | null | undefined>>({});
 const loading = ref(false);
 const copyBusy = ref(false);
 const errorText = ref("");
@@ -435,7 +434,6 @@ const shoppingPlan = ref<MealPlanSummary | null>(null);
 let planSortPressTimer: ReturnType<typeof setTimeout> | null = null;
 let planSortPressId: UUID | "" = "";
 let planSortPressTouchY = 0;
-const recipeDurationPending = new Set<UUID>();
 const {
   threshold: refresherThreshold,
   pullDistance,
@@ -555,7 +553,6 @@ async function loadWeekPlans() {
     const result = await listWeekPlans(selectedWeekStart.value);
     if (seq !== planLoadSeq.value) return;
     plans.value = result.items;
-    void hydratePlanRecipeDurations(result.items);
   } catch (error) {
     if (seq !== planLoadSeq.value) return;
     errorText.value = error instanceof Error ? error.message : "本周计划加载失败，点此重试";
@@ -573,29 +570,6 @@ async function handleRefresherRefresh() {
   } finally {
     await onRefreshComplete();
   }
-}
-
-async function hydratePlanRecipeDurations(items: MealPlanSummary[]) {
-  const missingRecipeIds = Array.from(
-    new Set(
-      items
-        .flatMap(plan => plan.menuItems.map(menuItem => menuItem.recipeId))
-        .filter((recipeId): recipeId is UUID => isUuid(recipeId) && recipeDurationMap.value[recipeId] === undefined && !recipeDurationPending.has(recipeId))
-    )
-  );
-  if (!missingRecipeIds.length) return;
-
-  missingRecipeIds.forEach(recipeId => recipeDurationPending.add(recipeId));
-  const results = await Promise.allSettled(missingRecipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
-  const nextDurationMap = { ...recipeDurationMap.value };
-  results.forEach((result, index) => {
-    const recipeId = missingRecipeIds[index];
-    recipeDurationPending.delete(recipeId);
-    if (result.status === "fulfilled") {
-      nextDurationMap[recipeId] = result.value.content.duration ?? null;
-    }
-  });
-  recipeDurationMap.value = nextDurationMap;
 }
 
 function buildWeekPanel(weekStart: Date): WeekPanel {
@@ -833,15 +807,12 @@ function formatPlanDuration(minutes: number | null) {
 }
 
 function planDurationMinutes(plan: MealPlanSummary) {
-  const recipeIds = plan.menuItems.map(item => item.recipeId).filter(isUuid);
-  if (!recipeIds.length) return null;
+  if (!plan.menuItems.length) return null;
 
   let total = 0;
   let hasDuration = false;
-  for (const recipeId of recipeIds) {
-    const duration = recipeDurationMap.value[recipeId];
-    if (duration === undefined) return null;
-    const minutes = recipeDurationMinutes(duration);
+  for (const item of plan.menuItems) {
+    const minutes = recipeDurationMinutes(item.duration);
     if (minutes != null) {
       total += minutes;
       hasDuration = true;
@@ -894,7 +865,7 @@ function buildCopySummary(copiedCount: number, skippedInvalid: number) {
 function dedupePlanShoppingItems(plan: MealPlanSummary) {
   const seen = new Set<string>();
   return plan.menuItems.filter(item => {
-    if (!isUuid(item.recipeId)) return false;
+    if (!isUuid(item.recipeId) || !isUuid(item.recipeVersionId)) return false;
     const key = `${item.recipeId}/${item.recipeVersionId}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -933,6 +904,9 @@ async function loadShoppingLists(force = false) {
 
 async function openShoppingSheet() {
   await loadShoppingLists(true);
+  if (!shoppingCreateName.value.trim()) {
+    shoppingCreateName.value = buildDefaultListName();
+  }
   shoppingSheetVisible.value = true;
 }
 
@@ -942,11 +916,11 @@ async function createShoppingList() {
   try {
     const created = await shoppingListApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || null
+      name: shoppingCreateName.value.trim() || buildDefaultListName()
     });
     await loadShoppingLists(true);
     selectedShoppingListId.value = created.id;
-    shoppingCreateName.value = "";
+    shoppingCreateName.value = buildDefaultListName();
     await uniPlatform.feedback.toast({ title: "清单已创建", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
@@ -957,29 +931,69 @@ async function createShoppingList() {
 
 async function confirmAddToShoppingList() {
   if (!shoppingPlan.value || !selectedShoppingListId.value || shoppingSubmitting.value) return;
-  const planId = shoppingPlan.value.id;
-  const menuItems = dedupePlanShoppingItems(shoppingPlan.value);
-  if (!menuItems.length) {
-    await uniPlatform.feedback.toast({ title: "当前餐次没有可加入采购清单的菜谱", icon: "none" });
-    return;
-  }
+  const targetDate = shoppingPlan.value.planDate;
   shoppingSubmitting.value = true;
   try {
-    const listDetail = await shoppingListApi.getListDetail(selectedShoppingListId.value);
-    const hasRepeatedPlan = listDetail.items.some(item => item.sources.some(source => source.planItemId === planId));
-    if (hasRepeatedPlan) {
-      const confirmed = await uniPlatform.feedback.confirm({
-        title: "重复加入确认",
-        content: "这顿计划已经加进这张清单了，继续会重复添加，确认继续吗？"
-      });
-      if (!confirmed) return;
-    }
-    await shoppingListApi.addPlanToList(selectedShoppingListId.value, {
-      operationId: createOperationId(),
-      planItemId: planId
+    const latestPlans = await mealApi.listPlans({
+      from: targetDate,
+      to: targetDate,
+      page: 1,
+      pageSize: 10
     });
+    const latestPlan = latestPlans.items.find(item => item.id === shoppingPlan.value?.id) ?? null;
+    if (!latestPlan) {
+      await loadWeekPlans();
+      closeShoppingSheet();
+      await uniPlatform.feedback.toast({ title: "这条计划已失效，请刷新后重试", icon: "none" });
+      return;
+    }
+
+    shoppingPlan.value = latestPlan;
+    const planId = latestPlan.id;
+    const menuItems = dedupePlanShoppingItems(latestPlan);
+    if (!menuItems.length) {
+      await uniPlatform.feedback.toast({ title: "当前餐次没有可加入采购清单的菜谱", icon: "none" });
+      return;
+    }
+
+    let listDetail = await shoppingListApi.getListDetail(selectedShoppingListId.value);
+    const existingKeys = new Set(
+      listDetail.items.flatMap(item =>
+        item.sources
+          .filter((source): source is typeof source & { recipeId: UUID; sourceVersionId?: UUID | null } => (
+            source.planItemId === planId && isUuid(source.recipeId ?? null)
+          ))
+          .map(source => `${source.recipeId}/${source.sourceVersionId || ""}`)
+      )
+    );
+    const pendingMenuItems = menuItems.filter(
+      (item): item is typeof item & { recipeId: UUID; recipeVersionId: UUID } => (
+        isUuid(item.recipeId)
+        && isUuid(item.recipeVersionId)
+        && !existingKeys.has(`${item.recipeId}/${item.recipeVersionId}`)
+      )
+    );
+
+    if (!pendingMenuItems.length) {
+      await uniPlatform.feedback.toast({ title: "这条计划里的菜谱都已在清单里", icon: "none" });
+      return;
+    }
+
+    for (const item of pendingMenuItems) {
+      listDetail = await shoppingListApi.addRecipeToList(selectedShoppingListId.value, {
+        operationId: createOperationId(),
+        recipeId: item.recipeId,
+        sourceVersionId: item.recipeVersionId,
+        planItemId: planId
+      });
+    }
+
     closeShoppingSheet();
-    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
+    const skippedCount = menuItems.length - pendingMenuItems.length;
+    const title = skippedCount > 0
+      ? `已补入 ${pendingMenuItems.length} 道新菜，跳过 ${skippedCount} 道已添加菜谱`
+      : "已加入采购清单";
+    await uniPlatform.feedback.toast({ title, icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
   } finally {
@@ -1007,6 +1021,12 @@ function readPlanOrderState() {
 
 function buildPlanOrderStorageKey(uid: number) {
   return `${PLAN_ORDER_STORAGE_KEY}/${uid}`;
+}
+
+function buildDefaultListName(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${month}月${day}日清单`;
 }
 
 function writePlanOrder(date: string, ids: UUID[]) {
@@ -1153,8 +1173,6 @@ function recenterWeekRange(targetWeekStart: Date) {
 
 function clearPageState() {
   plans.value = [];
-  recipeDurationMap.value = {};
-  recipeDurationPending.clear();
   loading.value = false;
   copyBusy.value = false;
   errorText.value = "";
