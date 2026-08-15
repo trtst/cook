@@ -5528,7 +5528,7 @@ export class AdminService {
         FROM "recipe_drafts" AS draft
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(draft."content_json"->'ingredients', '[]'::jsonb)) AS item
         WHERE item->'amount'->>'kind' = 'EXACT'
-          AND item->'amount'->>'unitId' = ${unitId}
+          AND item->'amount'->>'unitId' = ${String(unitId)}
       ) AS "exists"
     `;
     return rows[0]?.exists === true;
@@ -5541,7 +5541,7 @@ export class AdminService {
         UNION
         SELECT "source_version_id" AS "version_id" FROM "recipe_collections"
         UNION
-        SELECT "recipe_version_id" AS "version_id" FROM "meal_plan_items"
+        SELECT "recipe_version_id" AS "version_id" FROM "meal_plan_dishes"
         UNION
         SELECT "bring_version_id" AS "version_id"
         FROM "dining_event_participants"
@@ -5554,7 +5554,7 @@ export class AdminService {
           ON refs."version_id" = version."id"
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(version."ingredients_json", '[]'::jsonb)) AS item
         WHERE item->'amount'->>'kind' = 'EXACT'
-          AND item->'amount'->>'unitId' = ${unitId}
+          AND item->'amount'->>'unitId' = ${String(unitId)}
       ) AS "exists"
     `;
     return rows[0]?.exists === true;

@@ -155,6 +155,11 @@ type RecipeShoppingSource = {
   ingredients: RecipeContentSnapshot["ingredients"];
 };
 
+type PlanShoppingRecipe = {
+  recipeId: UUID;
+  sourceVersionId: UUID;
+};
+
 type ExactAmountGroup = {
   unitId: UUID;
   unitName: string;
@@ -164,6 +169,7 @@ type ExactAmountGroup = {
 type EntitlementReader = Pick<Prisma.TransactionClient, "entitlementGrant" | "diningGroupMember" | "diningGroup">;
 
 const recipeSourceType = "RECIPE" as ShoppingSourceType;
+const planSourceType = "PLAN" as ShoppingSourceType;
 
 const shoppingRowSelect = {
   id: true,
@@ -570,15 +576,21 @@ export class PantryService {
     listId: UUID,
     operationId: OperationId,
     recipeId: UUID,
-    sourceVersionId: UUID
+    sourceVersionId: UUID,
+    planItemId: UUID | null = null
   ): Promise<ShoppingListDetail> {
-    const requestHash = `${listId}:${recipeId}:${sourceVersionId}`;
+    const requestHash = `${listId}:${recipeId}:${sourceVersionId}:${planItemId ?? 0}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:item:recipe", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:item:recipe", userId, null, requestHash);
       const access = await this.assertShoppingListWritable(tx, userId, listId);
       const source = await this.loadRecipeShoppingSource(tx, userId, recipeId, sourceVersionId);
+      if (planItemId) {
+        await this.assertPlanShoppingSource(tx, userId, planItemId, recipeId, sourceVersionId);
+      }
+      const itemSourceType = planItemId ? planSourceType : recipeSourceType;
+      const itemSourceKey = planItemId ? String(planItemId) : null;
       const batchKey = String(operationId);
       const sizeBytes = source.ingredients.reduce(
         (total, ingredient, index) =>
@@ -589,8 +601,8 @@ export class PantryService {
             name: ingredient.ingredientName,
             quantityText: formatRecipeAmount(ingredient.amount),
             note: source.title,
-            sourceType: "RECIPE",
-            sourceKey: `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
+            sourceType: itemSourceType,
+            sourceKey: itemSourceKey ?? `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
             sourceRecipeId: source.recipeId,
             sourceRecipeVersionId: source.sourceVersionId,
             sourceRecipeTitle: source.title,
@@ -611,8 +623,8 @@ export class PantryService {
             name: ingredient.ingredientName,
             quantityText: formatRecipeAmount(ingredient.amount),
             note: source.title,
-            sourceType: recipeSourceType,
-            sourceKey: `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
+            sourceType: itemSourceType,
+            sourceKey: itemSourceKey ?? `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
             sourceRecipeId: source.recipeId,
             sourceRecipeVersionId: source.sourceVersionId,
             sourceRecipeTitle: source.title,
@@ -633,6 +645,83 @@ export class PantryService {
       });
       const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
       await completeIdempotentOperation(tx, operationId, "shopping-list:item:recipe", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async addPlanToShoppingList(userId: UUID, listId: UUID, operationId: OperationId, planItemId: UUID): Promise<ShoppingListDetail> {
+    const requestHash = `${listId}:${planItemId}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:item:plan", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "shopping-list:item:plan", userId, null, requestHash);
+      const access = await this.assertShoppingListWritable(tx, userId, listId);
+      const recipes = await this.readPlanShoppingRecipes(tx, userId, planItemId);
+      const sources = await Promise.all(recipes.map(item => this.loadRecipeShoppingSource(tx, userId, item.recipeId, item.sourceVersionId)));
+      const batchKey = String(operationId);
+      const itemSourceKey = String(planItemId);
+      const sizeBytes = sources.reduce(
+        (total, source) =>
+          total +
+          source.ingredients.reduce(
+            (innerTotal, ingredient, index) =>
+              innerTotal +
+              sizeOfJson({
+                userId: access.ownerUserId,
+                listId,
+                name: ingredient.ingredientName,
+                quantityText: formatRecipeAmount(ingredient.amount),
+                note: source.title,
+                sourceType: planSourceType,
+                sourceKey: itemSourceKey,
+                sourceRecipeId: source.recipeId,
+                sourceRecipeVersionId: source.sourceVersionId,
+                sourceRecipeTitle: source.title,
+                sourceBaseServings: source.baseServings,
+                sourceBatchKey: batchKey,
+                sourceIngredientSort: index + 1,
+                ingredientId: ingredient.ingredientId,
+                amountJson: ingredient.amount
+              }),
+            0
+          ),
+        0
+      );
+      await this.assertStorageWritable(tx, access.ownerUserId, sizeBytes);
+
+      for (const source of sources) {
+        for (const [index, ingredient] of source.ingredients.entries()) {
+          const created = await tx.shoppingItem.create({
+            data: {
+              userId: access.ownerUserId,
+              listId,
+              name: ingredient.ingredientName,
+              quantityText: formatRecipeAmount(ingredient.amount),
+              note: source.title,
+              sourceType: planSourceType,
+              sourceKey: itemSourceKey,
+              sourceRecipeId: source.recipeId,
+              sourceRecipeVersionId: source.sourceVersionId,
+              sourceRecipeTitle: source.title,
+              sourceBaseServings: source.baseServings,
+              sourceBatchKey: batchKey,
+              sourceIngredientSort: index + 1,
+              ingredientId: ingredient.ingredientId,
+              amountJson: ingredient.amount
+            }
+          });
+          await upsertStorageLedger(tx, access.ownerUserId, "SHOPPING", created.id, sizeOfJson(created));
+        }
+      }
+
+      await tx.shoppingList.update({
+        where: { id: listId },
+        data: {
+          version: { increment: 1 }
+        }
+      });
+      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
+      await completeIdempotentOperation(tx, operationId, "shopping-list:item:plan", userId, null, requestHash, result);
       return result;
     });
   }
@@ -2325,6 +2414,79 @@ export class PantryService {
       collaborators: list.members.map(member => this.toShoppingListCollaborator(member)),
       items: list.items.map(item => this.toShoppingListDetailItem(item))
     };
+  }
+
+  private async assertPlanShoppingSource(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    planItemId: UUID,
+    recipeId: UUID,
+    sourceVersionId: UUID
+  ) {
+    const plan = await tx.mealPlanItem.findFirst({
+      where: {
+        id: planItemId,
+        userId
+      },
+      select: {
+        id: true,
+        dishes: {
+          where: {
+            recipeId,
+            recipeVersionId: sourceVersionId
+          },
+          select: {
+            id: true
+          },
+          take: 1
+        }
+      }
+    });
+    if (!plan) {
+      throw new NotFoundException("计划不存在");
+    }
+    if (!plan.dishes.length) {
+      throw new BadRequestException("计划里的菜谱已变更，请刷新后重试");
+    }
+  }
+
+  private async readPlanShoppingRecipes(tx: Prisma.TransactionClient, userId: UUID, planItemId: UUID): Promise<PlanShoppingRecipe[]> {
+    const plan = await tx.mealPlanItem.findFirst({
+      where: {
+        id: planItemId,
+        userId
+      },
+      select: {
+        id: true,
+        dishes: {
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+          select: {
+            recipeId: true,
+            recipeVersionId: true
+          }
+        }
+      }
+    });
+    if (!plan) {
+      throw new NotFoundException("计划不存在");
+    }
+
+    const seen = new Set<string>();
+    const recipes: PlanShoppingRecipe[] = [];
+    for (const dish of plan.dishes) {
+      if (!dish.recipeId) continue;
+      const key = `${dish.recipeId}:${dish.recipeVersionId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recipes.push({
+        recipeId: dish.recipeId,
+        sourceVersionId: dish.recipeVersionId
+      });
+    }
+    if (!recipes.length) {
+      throw new BadRequestException("当前餐次没有可加入采购清单的菜谱");
+    }
+    return recipes;
   }
 
   private async toShoppingListSummary(tx: EntitlementReader, list: {

@@ -2178,6 +2178,22 @@ export class AddRecipeToShoppingListDto extends OperationDto {
   @IsInt()
   @Min(1)
   sourceVersionId!: number;
+
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  planItemId?: number | null;
+}
+
+export class AddPlanToShoppingListDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  planItemId!: number;
 }
 
 export class UpdateShoppingListItemCheckDto extends OperationDto {

@@ -5,6 +5,7 @@ import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
+  AddPlanToShoppingListDto,
   AddRecipeToShoppingListDto,
   ConsumeFridgeItemsDto,
   CreateRandomMenuShoppingItemsDto,
@@ -180,7 +181,21 @@ export class PantryController {
     @Body() body: AddRecipeToShoppingListDto
   ) {
     return this.pantryService
-      .addRecipeToShoppingList(request.user.userId, listId, operationId, body.recipeId, body.sourceVersionId)
+      .addRecipeToShoppingList(request.user.userId, listId, operationId, body.recipeId, body.sourceVersionId, body.planItemId ?? null)
+      .then(result => ok(result));
+  }
+
+  @Post("shopping-lists/:listId/items/from-plan")
+  @ApiIdempotencyKey()
+  @ApiOkModel(ShoppingListDetailModel, "把一顿计划里的菜谱整单写入购物清单")
+  addPlanToShoppingList(
+    @Req() request: RequestWithUser,
+    @Param("listId", ParseIntPipe) listId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AddPlanToShoppingListDto
+  ) {
+    return this.pantryService
+      .addPlanToShoppingList(request.user.userId, listId, operationId, body.planItemId)
       .then(result => ok(result));
   }
 

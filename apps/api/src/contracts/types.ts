@@ -2209,6 +2209,12 @@ export interface AddRecipeToShoppingListRequest {
   operationId: OperationId;
   recipeId: UUID;
   sourceVersionId: UUID;
+  planItemId?: UUID | null;
+}
+
+export interface AddPlanToShoppingListRequest {
+  operationId: OperationId;
+  planItemId: UUID;
 }
 
 export interface CreateRandomMenuShoppingIngredientRequest {
