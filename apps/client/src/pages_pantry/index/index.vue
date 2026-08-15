@@ -61,9 +61,9 @@ const pantryEntries = [
     url: "/pages_pantry/history/index"
   },
   {
-    title: "编辑食材",
-    description: "维护你自己的冰箱食材",
-    url: "/pages_pantry/item-edit/index"
+    title: "冰箱库存",
+    description: "按状态查看并维护你自己的库存",
+    url: "/pages_pantry/fridge/index"
   }
 ];
 

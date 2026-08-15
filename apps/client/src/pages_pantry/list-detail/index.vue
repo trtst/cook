@@ -45,15 +45,17 @@
             </view>
 
             <view class="detail-content">
-              <view class="detail-panel">
+              <view class="detail-panel" :style="detailPanelStyle">
                 <view class="summary-card">
                   <view class="summary-card__head">
                     <view class="summary-card__progress">
                       <text class="summary-card__progress-text">采购进度</text>
                       <text class="summary-card__progress-dot">·</text>
                       <text class="summary-card__progress-value">{{ progressText }}</text>
-                      <text class="summary-card__progress-dot">·</text>
-                      <text class="summary-card__progress-meta">{{ collaborationText }}</text>
+                      <template v-if="showCollaborationMeta">
+                        <text class="summary-card__progress-dot">·</text>
+                        <text class="summary-card__progress-meta">{{ collaborationText }}</text>
+                      </template>
                     </view>
                     <text class="summary-card__percent">{{ progressPercent }}%</text>
                   </view>
@@ -62,52 +64,96 @@
                   </view>
                 </view>
 
-                <view class="summary-actions">
-                  <button v-if="canOpenShare" class="action-pill" :disabled="submitting" @click="openShareSheet">协作</button>
-                  <button v-if="canOpenComplete" class="action-pill action-pill--primary" :disabled="submitting" @click="markComplete">
-                    标记完成
-                  </button>
-                  <button v-if="canVoid" class="action-pill action-pill--danger" :disabled="submitting" @click="voidList">作废</button>
-                  <button v-if="canRestore" class="action-pill" :disabled="submitting" @click="restoreList">恢复采购</button>
-                  <button v-if="canDelete" class="action-pill action-pill--danger" :disabled="submitting" @click="deleteList">删除清单</button>
-                  <button v-if="canLeave" class="action-pill action-pill--danger" :disabled="submitting" @click="leaveList">退出共享</button>
-                </view>
               </view>
 
               <view v-if="groups.length" class="group-list">
                 <view v-for="group in groups" :key="group.key" class="group-card">
-                  <view class="group-card__head">
-                    <view class="group-card__main">
-                      <text class="group-card__title">{{ group.name }}</text>
-                      <text class="group-card__meta">{{ group.lines.join(" · ") }}</text>
-                    </view>
-                    <text class="group-card__count">{{ group.checkedCount }}/{{ group.totalCount }}</text>
-                  </view>
-
-                  <view v-if="group.sourceLabels.length" class="source-row">
-                    <text v-for="label in group.sourceLabels" :key="label" class="source-pill">{{ label }}</text>
-                  </view>
-
-                  <view class="item-list">
-                    <view v-for="item in group.items" :key="item.id" class="item-row">
-                      <view class="item-row__main">
-                        <text class="item-row__source">{{ itemSourceText(item) }}</text>
-                        <text class="item-row__meta">{{ item.quantityText || "未填数量" }}</text>
-                        <text v-if="item.note" class="item-row__meta">{{ item.note }}</text>
+                  <view
+                    class="item-swipe"
+                    @touchstart="handleItemTouchStart(group.id, $event)"
+                    @touchmove.stop="handleItemTouchMove($event)"
+                    @touchend="handleItemTouchEnd"
+                    @touchcancel="handleItemTouchEnd"
+                  >
+                    <view v-if="canEditItems" class="item-swipe__action" @click.stop="removeItem(group)">删除</view>
+                    <view
+                      class="item-swipe__content"
+                      :class="{ 'item-swipe__content--dragging': swipeState.itemId === group.id }"
+                      :style="itemSwipeStyle(group.id)"
+                    >
+                      <view class="item-card">
+                        <view class="item-row__cover">
+                          <image v-if="group.imageUrl" class="item-row__image" :src="group.imageUrl" mode="aspectFill" />
+                          <view v-else class="item-row__placeholder">食材</view>
+                        </view>
+                        <view class="item-row__main">
+                          <view class="item-row__top">
+                            <text class="item-row__title">{{ group.name }}</text>
+                            <text class="item-row__quantity">{{ itemQuantityText(group) }}</text>
+                          </view>
+                          <view v-if="group.categoryName || inventoryText(group)" class="item-row__info">
+                            <text class="item-row__category">{{ group.categoryName || "未分类" }}</text>
+                            <text
+                              v-if="inventoryText(group)"
+                              class="item-row__inventory"
+                              :class="{ 'item-row__inventory--warning': hasInventoryWarning(group) }"
+                            >
+                              {{ inventoryText(group) }}
+                            </text>
+                          </view>
+                            <view class="item-row__bottom">
+                              <view class="item-row__bottom-left">
+                                <text
+                                  v-if="itemSourceText(group)"
+                                  class="item-row__origin-toggle"
+                                :class="{ 'item-row__origin-toggle--open': isOriginOpen(group.id) }"
+                                @click.stop="toggleItemOrigin(group.id)"
+                              >
+                                {{ isOriginOpen(group.id) ? "收起来源" : "查看来源" }}
+                              </text>
+                              </view>
+                              <view v-if="canEditItems" class="item-row__actions">
+                                <button
+                                  v-if="canShowInventoryAction(group)"
+                                  class="mini-pill"
+                                  hover-class="none"
+                                  :class="{
+                                    'mini-pill--active': isInventoryApplied(group),
+                                    'mini-pill--pending': isItemPending(group.id, 'fridge'),
+                                    'mini-pill--disabled': isInventoryDisabled(group) && !isInventoryApplied(group),
+                                    'mini-pill--locked': isInventoryDisabled(group) && isInventoryApplied(group)
+                                  }"
+                                  :disabled="submitting || isInventoryDisabled(group)"
+                                  @click.stop="handleFridgeAction(group)"
+                                >
+                                  用库存
+                                </button>
+                              <button
+                                class="mini-pill"
+                                hover-class="none"
+                                :class="{
+                                  'mini-pill--active': isItemChecked(group),
+                                  'mini-pill--pending': isItemPending(group.id, 'check'),
+                                  'mini-pill--disabled': isBoughtDisabled(group)
+                                }"
+                                :disabled="submitting || isBoughtDisabled(group)"
+                                @click.stop="toggleItem(group)"
+                              >
+                                已购
+                              </button>
+                            </view>
+                          </view>
+                        </view>
                       </view>
-                      <view class="item-row__actions">
-                        <button
-                          v-if="canEditItems"
-                          class="mini-pill"
-                          :class="{ 'mini-pill--checked': item.status === 'CHECKED' }"
-                          :disabled="submitting"
-                          @click="toggleItem(item)"
-                        >
-                          {{ item.status === "CHECKED" ? "已购" : "待购" }}
-                        </button>
-                        <button v-if="canEditItems" class="mini-pill mini-pill--danger" :disabled="submitting" @click="removeItem(item)">
-                          删除
-                        </button>
+                      <view
+                        v-if="itemSourceText(group)"
+                        class="item-origin-wrap"
+                        :class="{ 'item-origin-wrap--open': isOriginOpen(group.id) }"
+                      >
+                        <view class="item-origin">
+                          <text class="item-origin__tag">{{ itemSourceKindText(group) }}</text>
+                          <text class="item-origin__text">{{ itemSourceText(group) }}</text>
+                        </view>
                       </view>
                     </view>
                   </view>
@@ -119,9 +165,43 @@
           </view>
         </scroll-view>
 
-        <view v-if="canAddItem" class="detail-fab" hover-class="detail-fab--hover" hover-stay-time="100" @click="openAddSheet">
-          <text class="cookfont icon-add detail-fab__icon" />
-          <text class="detail-fab__text">添加食材</text>
+        <view v-if="canShowFloatingDock" class="floating-dock">
+          <view v-if="manageMenuOpen" class="floating-dock__backdrop" @click="closeManageMenu" />
+          <button
+            v-if="canShowPrimaryAction"
+            class="floating-dock__store"
+            :class="{ 'floating-dock__store--finish': canShowFinishButton }"
+            :disabled="submitting"
+            @click="handlePrimaryAction"
+          >
+            {{ primaryActionText }}
+          </button>
+          <view v-if="canShowManageDock" class="manage-dock">
+            <view class="manage-dock__actions">
+              <view
+                v-for="(action, index) in manageActions"
+                :key="action.key"
+                class="manage-dock__action"
+                :class="{
+                  'manage-dock__action--open': manageMenuOpen,
+                  'manage-dock__action--danger': action.tone === 'danger'
+                }"
+                :style="manageActionStyle(index)"
+                @click="handleManageAction(action.key)"
+              >
+                <text
+                  class="cookfont manage-dock__action-icon"
+                  :class="[action.iconClass, { 'manage-dock__action-icon--danger': action.tone === 'danger' }]"
+                />
+                <text class="manage-dock__action-label" :class="{ 'manage-dock__action-label--danger': action.tone === 'danger' }">
+                  {{ action.label }}
+                </text>
+              </view>
+            </view>
+            <view class="manage-dock__button" hover-class="manage-dock__button--hover" hover-stay-time="100" @click="toggleManageMenu">
+              <text class="cookfont icon-manage manage-dock__icon" :class="{ 'manage-dock__icon--open': manageMenuOpen }" />
+            </view>
+          </view>
         </view>
       </template>
     </view>
@@ -339,7 +419,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { diningGroupApi, type DiningGroupMemberSummary } from "@/apis/dining-group";
@@ -361,22 +441,40 @@ import {
   shoppingApi,
   type ShoppingListCollaborator,
   type ShoppingListDetail,
-  type ShoppingListDetailItem
+  type ShoppingListDetailItem,
+  type ShoppingItemSourceSummary,
+  type ShoppingListItemFridgeActionMode,
+  type ShoppingInventoryStatus,
+  type ShoppingListItemPatchResponse
 } from "../apis/shopping";
 
 type DetailAction = "" | "share" | "complete";
+type ManageActionKey = "add" | "share" | "void" | "restore" | "delete" | "leave";
 
 interface GroupView {
   key: string;
-  name: string;
+  id: UUID;
   items: ShoppingListDetailItem[];
-  lines: string[];
-  sourceLabels: string[];
-  checkedCount: number;
-  totalCount: number;
+  name: string;
+  categoryName: string | null;
+  imageUrl: string | null;
+  quantityText: string;
+  requiredQuantityText: string | null;
+  remainingQuantityText: string | null;
+  appliedInventoryQuantityText: string | null;
+  fridgeText: string | null;
+  inventoryStatus: ShoppingInventoryStatus;
+  inventoryApplied: boolean;
+  inventoryCovered: boolean;
+  fridgeStatusText: string | null;
+  fridgeActionLabel: string | null;
+  fridgeActionMode: ShoppingListItemFridgeActionMode;
+  checkedAt: string | null;
+  sources: ShoppingItemSourceSummary[];
 }
 
 const NAV_FADE_DISTANCE = 132;
+const SWIPE_DELETE_WIDTH = typeof uni !== "undefined" && typeof uni.upx2px === "function" ? uni.upx2px(156) : 78;
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
@@ -417,42 +515,45 @@ const scrollTop = ref(0);
 
 const completeSheetVisible = ref(false);
 const completeItems = ref<ShoppingCompleteEntry[]>([]);
+const manageMenuOpen = ref(false);
+const openSwipeItemId = ref<UUID | "">("");
+const itemPendingId = ref<UUID | "">("");
+const itemPendingAction = ref<"" | "check" | "fridge" | "remove">("");
+const openOriginItemIds = ref<UUID[]>([]);
+const swipeState = reactive({
+  itemId: "" as UUID | "",
+  startX: 0,
+  startY: 0,
+  startOffset: 0,
+  offset: 0,
+  axis: "" as "" | "x" | "y"
+});
 
 const groups = computed<GroupView[]>(() => {
-  const source = detail.value?.items ?? [];
-  const bucket = new Map<string, GroupView>();
+  const source = (detail.value?.items ?? []).filter(item => item.status !== "REMOVED");
+  const bucket = new Map<string, ShoppingListDetailItem[]>();
   source.forEach((item) => {
-    const key = `${item.ingredientId || "none"}:${item.name.trim().toLowerCase()}`;
-    const current = bucket.get(key);
-    const line = item.quantityText?.trim() || "未填数量";
-    const labels = item.sources.map(sourceItem => sourceLabel(sourceItem.sourceType, sourceItem.title, sourceItem.addCount, sourceItem.servings));
-    if (current) {
-      current.items.push(item);
-      if (!current.lines.includes(line)) current.lines.push(line);
-      labels.forEach((label) => {
-        if (!current.sourceLabels.includes(label)) current.sourceLabels.push(label);
-      });
-      if (item.status === "CHECKED") current.checkedCount += 1;
-      current.totalCount += 1;
-      return;
-    }
-    bucket.set(key, {
-      key,
-      name: item.name,
-      items: [item],
-      lines: [line],
-      sourceLabels: [...labels],
-      checkedCount: item.status === "CHECKED" ? 1 : 0,
-      totalCount: 1
-    });
+    const key = buildGroupKey(item);
+    const current = bucket.get(key) ?? [];
+    current.push(item);
+    bucket.set(key, current);
   });
-  return [...bucket.values()];
+  return [...bucket.entries()]
+    .map(([key, items], index) => ({
+      index,
+      group: buildGroupView(key, items)
+    }))
+    .sort((left, right) => {
+      const leftResolved = isGroupResolved(left.group) ? 1 : 0;
+      const rightResolved = isGroupResolved(right.group) ? 1 : 0;
+      if (leftResolved !== rightResolved) {
+        return leftResolved - rightResolved;
+      }
+      return left.index - right.index;
+    })
+    .map(entry => entry.group);
 });
 
-const progressPercent = computed(() => {
-  if (!detail.value?.progressTotalCount) return 0;
-  return Math.min(100, Math.round((detail.value.progressDoneCount / detail.value.progressTotalCount) * 100));
-});
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const navTitleStyle = computed(() => ({
   opacity: sessionStore.isLoggedIn ? `${navProgress.value}` : "1"
@@ -464,27 +565,57 @@ const navBackdropStyle = computed(() => ({
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + 12}px`
 }));
+const detailPanelStyle = computed(() => ({
+  top: `${navBarTotalHeight.value + 12}px`
+}));
 const heroTitleStyle = computed(() => ({
   opacity: `${1 - navProgress.value * 0.56}`
 }));
+const progressTotalCount = computed(() => groups.value.length);
+const progressDoneCount = computed(() => groups.value.filter(group => isGroupResolved(group)).length);
+const progressPercent = computed(() => {
+  if (!progressTotalCount.value) return 0;
+  return Math.min(100, Math.round((progressDoneCount.value / progressTotalCount.value) * 100));
+});
 const progressText = computed(() => {
-  if (!detail.value) return "0/0";
-  return `${detail.value.progressDoneCount}/${detail.value.progressTotalCount}`;
+  return `${progressDoneCount.value}/${progressTotalCount.value}`;
 });
 const collaborationText = computed(() => {
   if (!detail.value) return "0/0人协作";
   return `${detail.value.memberCount}/${detail.value.memberLimit}人协作`;
 });
+const showCollaborationMeta = computed(() => (detail.value?.memberCount ?? 0) > 1);
 const heroMeta = computed(() => "先把要买的食材归到这里，买的时候就不会漏。");
 const canRename = computed(() => detail.value?.role === "OWNER" && detail.value?.status === "ACTIVE");
 const canOpenShare = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
-const canOpenComplete = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canVoid = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canRestore = computed(() => detail.value?.role === "OWNER" && detail.value.status === "VOIDED");
 const canDelete = computed(() => detail.value?.role === "OWNER" && (detail.value.status === "COMPLETED" || detail.value.status === "VOIDED"));
 const canLeave = computed(() => detail.value?.role === "COLLABORATOR");
 const canEditItems = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
 const canAddItem = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
+const hasPendingGroups = computed(() => groups.value.some(group => !isGroupResolved(group)));
+const hasCheckedGroups = computed(() => groups.value.some(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))));
+const canShowStoreButton = computed(() => detail.value?.status === "ACTIVE" && groups.value.length > 0 && !hasPendingGroups.value && hasCheckedGroups.value);
+const canShowFinishButton = computed(() => detail.value?.status === "ACTIVE" && groups.value.length > 0 && !hasPendingGroups.value && !hasCheckedGroups.value);
+const canShowPrimaryAction = computed(() => canShowStoreButton.value || canShowFinishButton.value);
+const primaryActionText = computed(() => {
+  if (canShowStoreButton.value) return "入库";
+  if (canShowFinishButton.value) return "完成清单";
+  return "";
+});
+const manageActions = computed(() => {
+  const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
+  if (canAddItem.value) actions.push({ key: "add", label: "添加食材", iconClass: "icon-add", tone: "default" });
+  if (canOpenShare.value) actions.push({ key: "share", label: "协作", iconClass: "icon-share", tone: "default" });
+  if (canVoid.value) actions.push({ key: "void", label: "作废", iconClass: "icon-close", tone: "danger" });
+  if (canRestore.value) actions.push({ key: "restore", label: "恢复采购", iconClass: "icon-back", tone: "default" });
+  if (canDelete.value) actions.push({ key: "delete", label: "删除清单", iconClass: "icon-close", tone: "danger" });
+  if (canLeave.value) actions.push({ key: "leave", label: "退出共享", iconClass: "icon-close", tone: "danger" });
+  return actions;
+});
+const canShowManageDock = computed(() => manageActions.value.length > 0);
+const canShowFloatingDock = computed(() => canShowPrimaryAction.value || canShowManageDock.value);
 const shareActive = computed(() => Boolean(detail.value && (detail.value.memberCount > 1 || detail.value.pendingInviteCount > 0)));
 const canUseShareFeature = computed(() => userStore.profile?.membership?.tier !== "FREE");
 const shareMemberFull = computed(() => {
@@ -552,17 +683,29 @@ onShow(() => {
   void loadDetail();
 });
 
-async function loadDetail() {
+function loadDetail() {
+  return requestDetail();
+}
+
+async function requestDetail(options?: { silent?: boolean }) {
+  const silent = options?.silent === true;
   if (!sessionStore.isLoggedIn || !listId.value || loading.value) return;
-  loading.value = true;
-  errorText.value = "";
+  if (!silent) {
+    loading.value = true;
+    errorText.value = "";
+  }
   try {
     detail.value = await shoppingApi.getListDetail(listId.value);
     handlePendingAction();
   } catch (error) {
+    if (silent) {
+      throw error;
+    }
     errorText.value = error instanceof Error ? error.message : "清单详情加载失败";
   } finally {
-    loading.value = false;
+    if (!silent) {
+      loading.value = false;
+    }
   }
 }
 
@@ -574,8 +717,8 @@ function handlePendingAction() {
     openShareSheet();
     return;
   }
-  if (action === "complete" && canOpenComplete.value) {
-    void markComplete();
+  if (action === "complete" && canShowPrimaryAction.value) {
+    void handlePrimaryAction();
   }
 }
 
@@ -589,28 +732,207 @@ function handleScroll(event: { detail: { scrollTop?: number } }) {
   scrollTop.value = event.detail.scrollTop ?? 0;
 }
 
-function sourceLabel(
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU",
-  title: string | null,
-  addCount: number | null,
-  servings: number | null
-) {
-  if (sourceType === "RECIPE") {
-    const countText = addCount && addCount > 1 ? ` x${addCount}` : "";
-    const servingsText = servings ? ` · ${servings} 人份` : "";
-    return `${title || "菜谱"}${countText}${servingsText}`;
-  }
-  if (sourceType === "PLAN") return title || "下一餐计划";
-  if (sourceType === "EVENT") return title || "饭局缺口";
-  if (sourceType === "BRING") return title || "带菜清单";
-  if (sourceType === "RANDOM_MENU") return title || "随机菜单缺口";
-  return title || "手动补充";
+function itemSourceText(group: GroupView) {
+  const sourceType = resolveGroupSourceType(group);
+  if (!sourceType) return null;
+  const titles = [...new Set(
+    group.sources
+      .filter(source => source.sourceType === sourceType)
+      .map(source => source.title?.trim() || "")
+      .filter(Boolean)
+  )];
+  if (titles.length) return titles.join("、");
+  return sourceType === "PLAN" ? "下一餐计划" : "菜谱";
 }
 
-function itemSourceText(item: ShoppingListDetailItem) {
-  const first = item.sources[0];
-  if (!first) return "手动补充";
-  return sourceLabel(first.sourceType, first.title, first.addCount, first.servings);
+function itemSourceKindText(group: GroupView) {
+  const sourceType = resolveGroupSourceType(group);
+  if (sourceType === "PLAN") return "计划";
+  if (sourceType === "RECIPE") return "菜谱";
+  return null;
+}
+
+function itemQuantityText(group: GroupView) {
+  if (group.inventoryCovered) {
+    return "不需购买";
+  }
+  if (group.inventoryApplied && group.remainingQuantityText) {
+    return `还需购买 ${group.remainingQuantityText}`;
+  }
+  return group.requiredQuantityText || group.quantityText || "未填数量";
+}
+
+function isOriginOpen(itemId: UUID) {
+  return openOriginItemIds.value.includes(itemId);
+}
+
+function toggleItemOrigin(itemId: UUID) {
+  if (isOriginOpen(itemId)) {
+    openOriginItemIds.value = openOriginItemIds.value.filter(currentId => currentId !== itemId);
+    return;
+  }
+  openOriginItemIds.value = [...openOriginItemIds.value, itemId];
+}
+
+function inventoryText(group: GroupView) {
+  if (!group.fridgeText) return null;
+  const text = group.fridgeText.replace(/^冰箱：/, "库存：");
+  return isInventoryApplied(group) ? `已用 ${text}` : text;
+}
+
+function hasInventoryWarning(group: GroupView) {
+  return group.items.some(item => {
+    if (item.inventoryStatus === "SHORTAGE") return true;
+    return Boolean(item.inventoryApplied && item.remainingQuantityText);
+  });
+}
+
+function isItemChecked(group: GroupView) {
+  const purchasableItems = group.items.filter(item => !item.inventoryCovered);
+  return purchasableItems.length > 0 && purchasableItems.every(item => item.status === "CHECKED" || Boolean(item.checkedAt));
+}
+
+function isGroupResolved(group: GroupView) {
+  return group.items.every(item => isResolvedItem(item));
+}
+
+function isResolvedItem(item: ShoppingListDetailItem) {
+  return item.status === "CHECKED"
+    || Boolean(item.checkedAt)
+    || isFullyCoveredItem(item);
+}
+
+function isFullyCoveredItem(item: ShoppingListDetailItem) {
+  return item.inventoryCovered;
+}
+
+function isItemPending(itemId: UUID, action?: "check" | "fridge" | "remove") {
+  if (itemPendingId.value !== itemId) return false;
+  if (!action) return true;
+  return itemPendingAction.value === action;
+}
+
+function isInventoryApplied(group: GroupView) {
+  return group.inventoryApplied;
+}
+
+function isInventoryDisabled(group: GroupView) {
+  if (!canShowInventoryAction(group)) return true;
+  if (group.inventoryApplied) {
+    return group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt));
+  }
+  if (isItemChecked(group) && group.inventoryStatus === "ENOUGH") return true;
+  return group.fridgeActionMode === "NONE" || group.fridgeActionMode === "NEED_CONFIRM";
+}
+
+function isBoughtDisabled(group: GroupView) {
+  return group.inventoryCovered;
+}
+
+function canShowInventoryAction(group: GroupView) {
+  return group.inventoryApplied
+    || group.fridgeActionMode === "APPLY_FULL"
+    || group.fridgeActionMode === "APPLY_PARTIAL"
+    || group.fridgeActionMode === "UNDO";
+}
+
+function applyItemPatch(patch: ShoppingListItemPatchResponse) {
+  if (!detail.value || detail.value.id !== patch.listId) return;
+
+  const nextItems = [...detail.value.items];
+  if (patch.removedItemId !== null) {
+    const removedIndex = nextItems.findIndex(item => item.id === patch.removedItemId);
+    if (removedIndex >= 0) {
+      nextItems.splice(removedIndex, 1);
+    }
+    openOriginItemIds.value = openOriginItemIds.value.filter(itemId => itemId !== patch.removedItemId);
+    if (openSwipeItemId.value === patch.removedItemId) {
+      openSwipeItemId.value = "";
+    }
+  }
+  if (patch.item) {
+    const patchedItem = patch.item;
+    const targetIndex = nextItems.findIndex(item => item.id === patchedItem.id);
+    if (targetIndex >= 0) {
+      nextItems.splice(targetIndex, 1, patchedItem);
+    } else {
+      nextItems.unshift(patchedItem);
+    }
+  }
+
+  detail.value = {
+    ...detail.value,
+    version: patch.version,
+    progressDoneCount: patch.progressDoneCount,
+    progressTotalCount: patch.progressTotalCount,
+    items: nextItems
+  };
+}
+
+function itemSwipeStyle(itemId: UUID) {
+  const offset = swipeState.itemId === itemId
+    ? swipeState.offset
+    : openSwipeItemId.value === itemId
+      ? -SWIPE_DELETE_WIDTH
+      : 0;
+  return {
+    transform: `translateX(${offset}px)`
+  };
+}
+
+type ItemTouchEvent = {
+  touches?: ArrayLike<{ pageX: number; pageY: number }>;
+  changedTouches?: ArrayLike<{ pageX: number; pageY: number }>;
+};
+
+function readTouch(event: ItemTouchEvent) {
+  return event.touches?.[0] ?? event.changedTouches?.[0] ?? null;
+}
+
+function resetSwipeState() {
+  swipeState.itemId = "";
+  swipeState.startX = 0;
+  swipeState.startY = 0;
+  swipeState.startOffset = 0;
+  swipeState.offset = 0;
+  swipeState.axis = "";
+}
+
+function handleItemTouchStart(itemId: UUID, event: ItemTouchEvent) {
+  if (!canEditItems.value) return;
+  const touch = readTouch(event);
+  if (!touch) return;
+  if (openSwipeItemId.value && openSwipeItemId.value !== itemId) {
+    openSwipeItemId.value = "";
+  }
+  swipeState.itemId = itemId;
+  swipeState.startX = touch.pageX;
+  swipeState.startY = touch.pageY;
+  swipeState.startOffset = openSwipeItemId.value === itemId ? -SWIPE_DELETE_WIDTH : 0;
+  swipeState.offset = swipeState.startOffset;
+  swipeState.axis = "";
+}
+
+function handleItemTouchMove(event: ItemTouchEvent) {
+  if (!canEditItems.value || !swipeState.itemId) return;
+  const touch = readTouch(event);
+  if (!touch) return;
+  const deltaX = touch.pageX - swipeState.startX;
+  const deltaY = touch.pageY - swipeState.startY;
+  if (!swipeState.axis) {
+    if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+    swipeState.axis = Math.abs(deltaX) > Math.abs(deltaY) ? "x" : "y";
+  }
+  if (swipeState.axis !== "x") return;
+  swipeState.offset = Math.min(0, Math.max(-SWIPE_DELETE_WIDTH, swipeState.startOffset + deltaX));
+}
+
+function handleItemTouchEnd() {
+  if (!swipeState.itemId) return;
+  if (swipeState.axis === "x") {
+    openSwipeItemId.value = Math.abs(swipeState.offset) > SWIPE_DELETE_WIDTH / 2 ? swipeState.itemId : "";
+  }
+  resetSwipeState();
 }
 
 function openRenameSheet() {
@@ -644,44 +966,96 @@ async function renameList() {
   }
 }
 
-async function toggleItem(item: ShoppingListDetailItem) {
-  if (!detail.value || submitting.value) return;
-  submitting.value = true;
+async function toggleItem(group: GroupView) {
+  if (!detail.value || submitting.value || itemPendingId.value) return;
+  openSwipeItemId.value = "";
+  itemPendingId.value = group.id;
+  itemPendingAction.value = "check";
   try {
-    detail.value = await shoppingApi.checkListItem(detail.value.id, item.id, {
-      operationId: createOperationId(),
-      version: detail.value.version,
-      checked: item.status !== "CHECKED"
-    });
+    const targetChecked = !isItemChecked(group);
+    const currentItems = getCurrentGroupItems(group.key);
+    for (const currentItem of currentItems) {
+      if (targetChecked && isFullyCoveredItem(currentItem)) continue;
+      if (Boolean(currentItem.checkedAt) === targetChecked) continue;
+      const patch = await shoppingApi.checkListItem(detail.value.id, currentItem.id, {
+        operationId: createOperationId(),
+        version: detail.value.version,
+        checked: targetChecked
+      });
+      applyItemPatch(patch);
+    }
+    await requestDetail({ silent: true });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
   } finally {
-    submitting.value = false;
+    itemPendingId.value = "";
+    itemPendingAction.value = "";
   }
 }
 
-async function removeItem(item: ShoppingListDetailItem) {
-  if (!detail.value || submitting.value) return;
+async function handleFridgeAction(group: GroupView) {
+  if (!detail.value || submitting.value || itemPendingId.value || isInventoryDisabled(group)) return;
+  openSwipeItemId.value = "";
+  if (group.fridgeActionMode === "NEED_CONFIRM") {
+    await uniPlatform.feedback.toast({ title: "这条库存还不能自动计算，请先把冰箱数量改成精确数量。", icon: "none" });
+    return;
+  }
+  if (group.fridgeActionMode === "NONE") return;
+  itemPendingId.value = group.id;
+  itemPendingAction.value = "fridge";
+  try {
+    const targetAction = group.items.some(item => item.inventoryApplied) ? "UNDO" : "APPLY";
+    const currentItems = getCurrentGroupItems(group.key);
+    for (const currentItem of currentItems) {
+      if (targetAction === "UNDO" && !currentItem.inventoryApplied) continue;
+      if (targetAction === "APPLY" && currentItem.inventoryApplied) continue;
+      if (targetAction === "APPLY" && (currentItem.fridgeActionMode !== "APPLY_FULL" && currentItem.fridgeActionMode !== "APPLY_PARTIAL")) continue;
+      const patch = await shoppingApi.applyListItemFridge(detail.value.id, currentItem.id, {
+        operationId: createOperationId(),
+        version: detail.value.version,
+        action: targetAction
+      });
+      applyItemPatch(patch);
+    }
+    await requestDetail({ silent: true });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "库存应用失败", icon: "none" });
+  } finally {
+    itemPendingId.value = "";
+    itemPendingAction.value = "";
+  }
+}
+
+async function removeItem(group: GroupView) {
+  if (!detail.value || submitting.value || itemPendingId.value) return;
+  openSwipeItemId.value = "";
   const confirmed = await uniPlatform.feedback.confirm({
     title: "移出食材",
     content: "移出后，这个食材会从当前有效采购项里消失。"
   });
   if (!confirmed) return;
-  submitting.value = true;
+  itemPendingId.value = group.id;
+  itemPendingAction.value = "remove";
   try {
-    detail.value = await shoppingApi.removeListItem(detail.value.id, item.id, {
-      operationId: createOperationId(),
-      version: detail.value.version
-    });
+    const currentItems = getCurrentGroupItems(group.key);
+    for (const currentItem of currentItems) {
+      const patch = await shoppingApi.removeListItem(detail.value.id, currentItem.id, {
+        operationId: createOperationId(),
+        version: detail.value.version
+      });
+      applyItemPatch(patch);
+    }
     await uniPlatform.feedback.toast({ title: "已移出", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "移出失败", icon: "none" });
   } finally {
-    submitting.value = false;
+    itemPendingId.value = "";
+    itemPendingAction.value = "";
   }
 }
 
 function openAddSheet() {
+  closeManageMenu();
   addSheetVisible.value = true;
   if (!ingredientOptions.value.length) {
     void searchIngredients();
@@ -690,6 +1064,266 @@ function openAddSheet() {
 
 function closeAddSheet() {
   addSheetVisible.value = false;
+}
+
+function buildGroupKey(item: { ingredientId: UUID | null; name: string }) {
+  return `${item.ingredientId || "none"}:${item.name.trim().toLowerCase()}`;
+}
+
+function resolveGroupSourceType(group: GroupView) {
+  if (group.sources.some(source => source.sourceType === "PLAN")) return "PLAN" as const;
+  if (group.sources.some(source => source.sourceType === "RECIPE")) return "RECIPE" as const;
+  return null;
+}
+
+function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView {
+  const primary = items[0]!;
+  const sources = mergeGroupSources(items);
+  const checkedItems = items.map(item => item.checkedAt).filter((value): value is string => Boolean(value));
+  const inventoryApplied = items.some(item => item.inventoryApplied);
+  const inventoryCovered = items.length > 0 && items.every(item => item.inventoryCovered);
+  const requiredQuantityText = buildGroupQuantityText(items, false);
+  const remainingQuantityText = inventoryApplied && !inventoryCovered ? buildGroupQuantityText(items, true) : null;
+  return {
+    key,
+    id: primary.id,
+    items,
+    name: primary.name,
+    categoryName: primary.categoryName,
+    imageUrl: primary.imageUrl,
+    quantityText: remainingQuantityText || requiredQuantityText,
+    requiredQuantityText,
+    remainingQuantityText,
+    appliedInventoryQuantityText: buildGroupAppliedQuantityText(items),
+    fridgeText: buildGroupFridgeText(items),
+    inventoryStatus: resolveGroupInventoryStatus(items),
+    inventoryApplied,
+    inventoryCovered,
+    fridgeStatusText: resolveGroupFridgeStatusText(items),
+    fridgeActionLabel: resolveGroupFridgeActionLabel(items),
+    fridgeActionMode: resolveGroupFridgeActionMode(items),
+    checkedAt: items.every(item => Boolean(item.checkedAt))
+      ? checkedItems.sort()[checkedItems.length - 1] ?? primary.checkedAt
+      : null,
+    sources
+  };
+}
+
+function mergeGroupSources(items: ShoppingListDetailItem[]) {
+  const sourceMap = new Map<string, ShoppingItemSourceSummary>();
+  for (const item of items) {
+    for (const source of item.sources) {
+      const key = [
+        source.sourceType,
+        source.planItemId ?? "",
+        source.recipeId ?? "",
+        source.sourceVersionId ?? "",
+        source.sourceBatchKey ?? "",
+        source.title ?? ""
+      ].join(":");
+      if (!sourceMap.has(key)) {
+        sourceMap.set(key, source);
+      }
+    }
+  }
+  return [...sourceMap.values()];
+}
+
+function manageActionStyle(index: number) {
+  const total = manageActions.value.length;
+  return {
+    transitionDelay: manageMenuOpen.value ? `${index * 46}ms` : `${(total - index - 1) * 28}ms`
+  };
+}
+
+function buildGroupQuantityText(items: ShoppingListDetailItem[], remainingOnly = false) {
+  if (!items.length || (remainingOnly && items.every(item => item.inventoryCovered))) {
+    return "不需购买";
+  }
+  const exactOrder: string[] = [];
+  const exactMap = new Map<string, { unit: string; total: number }>();
+  const fuzzyLines: string[] = [];
+
+  for (const item of items) {
+    if (remainingOnly && item.inventoryCovered) continue;
+    const text = (remainingOnly && item.inventoryApplied
+      ? item.remainingQuantityText
+      : item.requiredQuantityText ?? item.quantityText)?.trim();
+    if (!text) continue;
+    const parsed = parseExactQuantityText(text);
+    if (!parsed) {
+      fuzzyLines.push(text);
+      continue;
+    }
+    if (!exactMap.has(parsed.unitKey)) {
+      exactOrder.push(parsed.unitKey);
+      exactMap.set(parsed.unitKey, {
+        unit: parsed.unitText,
+        total: parsed.amount
+      });
+      continue;
+    }
+    exactMap.get(parsed.unitKey)!.total += parsed.amount;
+  }
+
+  const lines = exactOrder.map((unitKey) => {
+    const current = exactMap.get(unitKey)!;
+    return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
+  }).concat(fuzzyLines);
+
+  if (!lines.length) return "未填数量";
+  return lines.join(" / ");
+}
+
+function buildGroupAppliedQuantityText(items: ShoppingListDetailItem[]) {
+  const exactOrder: string[] = [];
+  const exactMap = new Map<string, { unit: string; total: number }>();
+  for (const item of items) {
+    const parsed = item.appliedInventoryQuantityText ? parseExactQuantityText(item.appliedInventoryQuantityText) : null;
+    if (!parsed) continue;
+    if (!exactMap.has(parsed.unitKey)) {
+      exactOrder.push(parsed.unitKey);
+      exactMap.set(parsed.unitKey, { unit: parsed.unitText, total: parsed.amount });
+    } else {
+      exactMap.get(parsed.unitKey)!.total += parsed.amount;
+    }
+  }
+  if (!exactOrder.length) return null;
+  return exactOrder.map(unitKey => {
+    const current = exactMap.get(unitKey)!;
+    return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
+  }).join(" / ");
+}
+
+function resolveGroupInventoryStatus(items: ShoppingListDetailItem[]): ShoppingInventoryStatus {
+  if (items.some(item => item.inventoryStatus === "SHORTAGE")) return "SHORTAGE";
+  if (items.some(item => item.inventoryStatus === "UNKNOWN")) return "UNKNOWN";
+  if (items.some(item => item.inventoryStatus === "ENOUGH")) return "ENOUGH";
+  return "NONE";
+}
+
+function buildGroupFridgeText(items: ShoppingListDetailItem[]) {
+  const exactOrder: string[] = [];
+  const exactMap = new Map<string, { unit: string; total: number }>();
+  let recordCount = 0;
+  let fallbackText: string | null = null;
+
+  for (const item of items) {
+    const text = item.fridgeText?.replace(/^冰箱：/, "").trim();
+    if (!text) continue;
+    const parsed = parseExactQuantityText(text);
+    if (parsed) {
+      if (!exactMap.has(parsed.unitKey)) {
+        exactOrder.push(parsed.unitKey);
+        exactMap.set(parsed.unitKey, {
+          unit: parsed.unitText,
+          total: parsed.amount
+        });
+      } else {
+        exactMap.get(parsed.unitKey)!.total += parsed.amount;
+      }
+      continue;
+    }
+    if (text === "有库存记录") {
+      recordCount += 1;
+      continue;
+    }
+    const recordMatch = text.match(/^有\s*(\d+)\s*条记录$/);
+    if (recordMatch) {
+      recordCount += Number(recordMatch[1] ?? 0);
+      continue;
+    }
+    fallbackText = fallbackText ?? text;
+  }
+
+  if (exactOrder.length) {
+    const exactText = exactOrder
+      .map((unitKey) => {
+        const current = exactMap.get(unitKey)!;
+        return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
+      })
+      .join(" / ");
+    if (recordCount > 0) {
+      return `冰箱：${exactText}，另有${recordCount}条记录`;
+    }
+    return `冰箱：${exactText}`;
+  }
+  if (recordCount > 1) {
+    return `冰箱：有 ${recordCount} 条记录`;
+  }
+  if (recordCount === 1) {
+    return "冰箱：有库存记录";
+  }
+  return fallbackText ? `冰箱：${fallbackText}` : null;
+}
+
+function parseExactQuantityText(value: string) {
+  const match = value.trim().match(/^([+-]?\d+(?:\.\d+)?)\s*(.+)$/);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unitText = match[2]?.trim();
+  if (!Number.isFinite(amount) || !unitText) return null;
+  return {
+    amount,
+    unitText,
+    unitKey: unitText.toLowerCase()
+  };
+}
+
+function formatQuantityNumber(value: number) {
+  const normalized = Math.round((value + Number.EPSILON) * 1000) / 1000;
+  return normalized.toFixed(3).replace(/\.?0+$/, "");
+}
+
+function resolveGroupFridgeActionMode(items: ShoppingListDetailItem[]): ShoppingListItemFridgeActionMode {
+  const modes = items.map(item => item.fridgeActionMode);
+  if (items.some(item => item.inventoryApplied)) {
+    return modes.includes("UNDO") ? "UNDO" : "NONE";
+  }
+  const hasApplyPartial = modes.includes("APPLY_PARTIAL");
+  const hasApplyFull = modes.includes("APPLY_FULL");
+  const hasShortage = items.some(item => item.inventoryStatus === "SHORTAGE");
+  if (hasApplyPartial) return "APPLY_PARTIAL";
+  if (hasApplyFull) {
+    return modes.includes("NEED_CONFIRM") || hasShortage ? "APPLY_PARTIAL" : "APPLY_FULL";
+  }
+  if (modes.includes("UNDO")) return "UNDO";
+  if (modes.includes("NEED_CONFIRM")) return "NEED_CONFIRM";
+  return "NONE";
+}
+
+function resolveGroupFridgeActionLabel(items: ShoppingListDetailItem[]) {
+  const mode = resolveGroupFridgeActionMode(items);
+  if (mode === "NONE") return null;
+  if (mode === "NEED_CONFIRM") return "库存待确认";
+  if (mode === "UNDO") {
+    return items.find(item => item.fridgeActionMode === "UNDO")?.fridgeActionLabel ?? "撤销";
+  }
+  return items.find(item => item.fridgeActionMode === mode)?.fridgeActionLabel ?? "用库存";
+}
+
+function resolveGroupFridgeStatusText(items: ShoppingListDetailItem[]) {
+  const hasNeedConfirm = items.some(item => item.fridgeActionMode === "NEED_CONFIRM");
+  const hasApplied = items.some(item => item.inventoryApplied);
+  const hasShortage = items.some(item => item.inventoryStatus === "SHORTAGE");
+  if (items.length > 0 && items.every(item => item.inventoryCovered) && !hasNeedConfirm) {
+    return "库存足够，不买了";
+  }
+  if (hasApplied && hasShortage) {
+    return hasNeedConfirm ? "已应用部分库存，其余待确认" : "已应用部分库存，仍需补买";
+  }
+  if (hasShortage) {
+    return hasNeedConfirm ? "部分库存待确认，仍需补买" : "库存不足，仍需补买";
+  }
+  if (hasApplied) {
+    return hasNeedConfirm ? "已应用部分库存，其余待确认" : "已应用部分库存";
+  }
+  if (hasNeedConfirm) return "部分库存待确认";
+  return items.find(item => item.fridgeStatusText)?.fridgeStatusText ?? null;
+}
+
+function getCurrentGroupItems(groupKey: string) {
+  return (detail.value?.items ?? []).filter(item => buildGroupKey(item) === groupKey);
 }
 
 function handleAddSheetAfterClose() {
@@ -751,6 +1385,7 @@ async function createItem() {
 }
 
 function openShareSheet() {
+  closeManageMenu();
   shareSheetVisible.value = true;
   shareLinkError.value = "";
   if (!shareMemberFull.value && !shareUrl.value) {
@@ -944,36 +1579,80 @@ async function closeShare() {
   }
 }
 
-async function markComplete() {
+function toggleManageMenu() {
+  if (!canShowManageDock.value) return;
+  manageMenuOpen.value = !manageMenuOpen.value;
+}
+
+function closeManageMenu() {
+  manageMenuOpen.value = false;
+}
+
+function handleManageAdd() {
+  openAddSheet();
+}
+
+function handleManageShare() {
+  openShareSheet();
+}
+
+async function handleManageVoid() {
+  closeManageMenu();
+  await voidList();
+}
+
+async function handleManageRestore() {
+  closeManageMenu();
+  await restoreList();
+}
+
+async function handleManageDelete() {
+  closeManageMenu();
+  await deleteList();
+}
+
+async function handleManageLeave() {
+  closeManageMenu();
+  await leaveList();
+}
+
+function openStoreFlow() {
   if (!detail.value || submitting.value) return;
-  if (!detail.value.progressTotalCount) {
-    submitting.value = true;
-    try {
-      detail.value = await shoppingApi.completeList(detail.value.id, {
-        operationId: createOperationId(),
-        version: detail.value.version,
-        entries: []
-      });
-      await uniPlatform.feedback.toast({ title: "已标记完成", icon: "success" });
-    } catch (error) {
-      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "标记失败", icon: "none" });
-    } finally {
-      submitting.value = false;
-    }
-    return;
-  }
+  closeManageMenu();
+  completeItems.value = toShoppingCompleteEntries(detail.value.items);
+  completeSheetVisible.value = true;
+}
+
+async function finishList() {
+  if (!detail.value || submitting.value) return;
+  closeManageMenu();
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "完成清单",
+    content: "这张清单已经都处理完了，确认后会结束当前采购。"
+  });
+  if (!confirmed) return;
   submitting.value = true;
   try {
-    detail.value = await shoppingApi.checkAllListItems(detail.value.id, {
+    detail.value = await shoppingApi.completeList(detail.value.id, {
       operationId: createOperationId(),
-      version: detail.value.version
+      version: detail.value.version,
+      entries: []
     });
-    completeItems.value = toShoppingCompleteEntries(detail.value.items);
-    completeSheetVisible.value = true;
+    await uniPlatform.feedback.toast({ title: "已完成清单", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "标记失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
   } finally {
     submitting.value = false;
+  }
+}
+
+async function handlePrimaryAction() {
+  if (canShowStoreButton.value) {
+    openStoreFlow();
+    return;
+  }
+  if (canShowFinishButton.value) {
+    await finishList();
   }
 }
 
@@ -1011,6 +1690,30 @@ async function completeList() {
   } finally {
     submitting.value = false;
   }
+}
+
+async function handleManageAction(action: ManageActionKey) {
+  if (action === "add") {
+    handleManageAdd();
+    return;
+  }
+  if (action === "share") {
+    handleManageShare();
+    return;
+  }
+  if (action === "void") {
+    await handleManageVoid();
+    return;
+  }
+  if (action === "restore") {
+    await handleManageRestore();
+    return;
+  }
+  if (action === "delete") {
+    await handleManageDelete();
+    return;
+  }
+  await handleManageLeave();
 }
 
 async function voidList() {
@@ -1233,14 +1936,12 @@ async function leaveList() {
 }
 
 .summary-card__head,
-.group-card__head,
 .complete-card__head,
 .picker-row {
   justify-content: space-between;
 }
 
 .summary-card__head,
-.group-card__head,
 .complete-card__head,
 .picker-row {
   display: flex;
@@ -1252,10 +1953,8 @@ async function leaveList() {
 .summary-card__progress-value,
 .summary-card__progress-meta,
 .summary-card__percent,
-.group-card__meta,
-.group-card__count,
-.item-row__source,
-.item-row__meta,
+.item-origin__tag,
+.item-origin__text,
 .editor-card__label,
 .editor-card__value,
 .share-card__label,
@@ -1315,8 +2014,9 @@ async function leaveList() {
 }
 
 .detail-panel {
-  position: relative;
-  z-index: 2;
+  position: sticky;
+  z-index: 12;
+  padding-bottom: 20rpx;
   margin-top: -168rpx;
 }
 
@@ -1332,7 +2032,6 @@ async function leaveList() {
 }
 
 .notice,
-.summary-card,
 .group-list,
 .share-card,
 .complete-list,
@@ -1354,10 +2053,9 @@ async function leaveList() {
     inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 74%, transparent);
 }
 
-.item-row,
+.item-card,
 .item-row__actions,
 .search-box,
-.summary-actions,
 .sheet-actions,
 .share-actions,
 .quick-days__chips {
@@ -1366,19 +2064,16 @@ async function leaveList() {
 }
 
 .summary-card__main,
-.group-card__main,
 .item-row__main {
   flex: 1;
   min-width: 0;
 }
 
-.group-card__title,
 .complete-card__title {
   color: var(--color-text);
   font-weight: var(--font-weight-heavy);
 }
 
-.source-pill,
 .day-chip,
 .mini-pill,
 .sheet-actions__button {
@@ -1389,8 +2084,7 @@ async function leaveList() {
 .summary-card__progress-value,
 .summary-card__progress-meta,
 .summary-card__percent,
-.group-card__meta,
-.item-row__meta,
+.item-origin__text,
 .share-card__label,
 .share-card__hint,
 .quick-days__label,
@@ -1402,7 +2096,6 @@ async function leaveList() {
   font-size: var(--font-size-sm);
 }
 
-.group-card__meta,
 .share-card__hint {
   margin-top: 10rpx;
 }
@@ -1446,7 +2139,7 @@ async function leaveList() {
 .summary-card__progress-meta,
 .summary-card__percent {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -1478,7 +2171,6 @@ async function leaveList() {
   background: linear-gradient(90deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
 }
 
-.summary-actions,
 .share-actions {
   flex-wrap: wrap;
   margin-top: 24rpx;
@@ -1502,8 +2194,11 @@ async function leaveList() {
 .search-box__button,
 .sheet-actions__button--cancel,
 .mini-pill {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-primary-soft) 18%);
+  color: color-mix(in srgb, var(--color-text) 86%, var(--color-primary) 14%);
+  box-shadow:
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary) 18%, var(--color-border) 82%),
+    0 6rpx 14rpx color-mix(in srgb, var(--color-surface-mask-medium) 10%, transparent);
 }
 
 .sheet-actions__button {
@@ -1520,59 +2215,153 @@ async function leaveList() {
   color: var(--color-danger-text);
 }
 
-.group-card {
-  padding: 26rpx;
-}
-
 .group-card + .group-card {
   margin-top: 18rpx;
 }
 
-.group-card__title {
-  font-size: var(--font-size-lg);
-}
-
-.group-card__count {
-  flex: 0 0 auto;
-  color: var(--color-warning-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.source-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-  margin-top: 18rpx;
-}
-
-.source-pill,
 .day-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.source-pill {
-  padding: 8rpx 18rpx;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-}
-
-.item-list {
-  margin-top: 18rpx;
-}
-
-.item-row + .item-row {
+.item-swipe + .item-swipe {
   margin-top: 16rpx;
-  padding-top: 16rpx;
-  border-top: 1rpx solid var(--color-divider);
 }
 
-.item-row__source {
-  color: var(--color-text);
+.item-swipe {
+  position: relative;
+  overflow: hidden;
+}
+
+.item-swipe__action {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 156rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.item-swipe__content {
+  position: relative;
+  z-index: 1;
+  padding: 24rpx;
+  background: var(--color-surface);
+  transition: transform 180ms ease;
+}
+
+.item-swipe__content--dragging {
+  transition: none;
+}
+
+.item-card {
+  display: flex;
+  align-items: stretch;
+}
+
+.item-row__cover {
+  flex: 0 0 140rpx;
+}
+
+.item-row__main {
+  display: flex;
+  flex-direction: column;
+}
+
+.item-row__image,
+.item-row__placeholder {
+  width: 140rpx;
+  height: 140rpx;
+  border-radius: var(--radius-xs);
+}
+
+.item-row__image {
+  display: block;
+  background: var(--color-surface-muted);
+}
+
+.item-row__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-primary-soft) 34%, var(--color-surface) 66%);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.item-row__top,
+.item-row__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.item-row__bottom {
+  margin-top: auto;
+  align-items: center;
+}
+
+.item-row__title,
+.item-row__quantity,
+.item-origin__tag {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.item-row__quantity {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.item-row__category {
+  flex: 0 1 auto;
+  min-width: 0;
+  line-height: 40rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.item-row__bottom-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-row__origin-toggle {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: 48rpx;
+}
+
+.item-row__origin-toggle--open {
+  color: var(--color-primary);
+}
+
+.item-row__info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.item-row__inventory {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.item-row__inventory--warning {
+  color: var(--color-danger-text);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -1582,47 +2371,249 @@ async function leaveList() {
   justify-content: flex-end;
 }
 
+.item-row__actions .mini-pill {
+  height: 48rpx;
+  line-height: 48rpx;
+}
+
+.item-origin-wrap {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-10rpx);
+  transition:
+    max-height 220ms ease,
+    opacity 180ms ease,
+    transform 220ms ease;
+}
+
+.item-origin-wrap--open {
+  max-height: 120rpx;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.item-origin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12rpx;
+  width: 100%;
+  margin-top: 16rpx;
+  padding-top: 14rpx;
+  max-width: 100%;
+  border-top: 1rpx solid color-mix(in srgb, var(--color-border) 72%, var(--color-surface) 28%);
+}
+
+.item-origin__tag {
+  flex: 0 0 auto;
+  padding: 6rpx 16rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-size-xs);
+}
+
+.item-origin__text {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: right;
+}
+
 .mini-pill {
   min-width: 118rpx;
   padding: 0 20rpx;
 }
 
-.mini-pill--checked {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+.mini-pill--pending {
+  opacity: 0.72;
 }
 
-.detail-fab {
+.mini-pill--active {
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  color: var(--button-primary-text);
+  box-shadow: none;
+}
+
+.mini-pill--disabled {
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-page) 12%);
+  color: color-mix(in srgb, var(--color-text-tertiary) 82%, var(--color-text) 18%);
+  box-shadow:
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-border) 88%, transparent),
+    none;
+  opacity: 1;
+}
+
+.mini-pill--locked {
+  opacity: 0.62;
+}
+
+.floating-dock {
   position: fixed;
   right: 24rpx;
   bottom: calc(40rpx + env(safe-area-inset-bottom));
   z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 18rpx;
+}
+
+.floating-dock__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: transparent;
+}
+
+.floating-dock__store,
+.manage-dock__action,
+.manage-dock__button {
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+}
+
+.floating-dock__store {
   display: inline-flex;
   align-items: center;
-  gap: 10rpx;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
   min-height: 92rpx;
-  padding: 0 28rpx;
-  border-radius: var(--radius-pill);
+  padding: 0;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.floating-dock__store--finish {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
+  color: var(--color-text);
+  box-shadow: var(--shadow-card);
+}
+
+.manage-dock {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 92rpx;
+  min-height: 92rpx;
+  margin-left: auto;
+  padding-bottom: 52rpx;
+}
+
+.manage-dock__actions {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 50rpx);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 50rpx;
+  pointer-events: none;
+}
+
+.manage-dock__action {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 92rpx;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
+  box-shadow:
+    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 30%, transparent),
+    0 8rpx 18rpx color-mix(in srgb, var(--color-primary) 12%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 85%, transparent);
+  color: var(--color-text);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(26rpx) scale(0.92);
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+}
+
+.manage-dock__action--open {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+.manage-dock__action--danger {
+  background: color-mix(in srgb, var(--color-danger-soft) 66%, var(--color-surface) 34%);
+  box-shadow:
+    0 18rpx 34rpx color-mix(in srgb, var(--color-danger-soft) 34%, transparent),
+    0 8rpx 18rpx color-mix(in srgb, var(--color-danger-text) 12%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+}
+
+.manage-dock__action-icon {
+  color: color-mix(in srgb, var(--color-text) 84%, var(--color-primary) 16%);
+  font-size: 34rpx;
+}
+
+.manage-dock__action-icon--danger {
+  color: color-mix(in srgb, var(--color-danger-text) 78%, var(--color-text) 22%);
+}
+
+.manage-dock__action-label {
+  position: absolute;
+  top: calc(100% + 14rpx);
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--color-text);
+  font-size: 24rpx;
+  line-height: 1.3;
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.manage-dock__action-label--danger {
+  color: color-mix(in srgb, var(--color-danger-text) 82%, var(--color-text) 18%);
+}
+
+.manage-dock__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
   background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
   box-shadow: var(--button-primary-shadow);
 }
 
-.detail-fab--hover {
-  opacity: 0.92;
+.manage-dock__button--hover {
+  opacity: 0.94;
 }
 
-.detail-fab__icon,
-.detail-fab__text {
+.manage-dock__icon {
   color: var(--button-primary-text);
+  font-size: 34rpx;
+  transition: transform 240ms ease;
 }
 
-.detail-fab__icon {
-  font-size: 24rpx;
+.manage-dock__icon--open {
+  transform: rotate(90deg);
 }
 
-.detail-fab__text {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
+.floating-dock__store::after,
+.manage-dock__action::after {
+  display: none;
 }
 
 .sheet-input {
@@ -1829,6 +2820,7 @@ async function leaveList() {
 }
 
 .share-card--button {
+  position: relative;
   display: block;
   width: 100%;
   margin: 0;

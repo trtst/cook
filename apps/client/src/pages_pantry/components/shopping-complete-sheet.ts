@@ -13,6 +13,7 @@ type CompleteSourceItem = {
   id: UUID;
   name: string;
   quantityText: string | null;
+  remainingQuantityText: string | null;
   status: "OPEN" | "CHECKED" | "REMOVED";
 };
 
@@ -22,7 +23,7 @@ export function toShoppingCompleteEntries(items: CompleteSourceItem[]): Shopping
     .map(item => ({
       itemId: item.id,
       name: item.name,
-      quantityText: item.quantityText || "",
+      quantityText: item.remainingQuantityText || item.quantityText || "",
       store: true,
       expireDays: 7,
       expireAt: null
