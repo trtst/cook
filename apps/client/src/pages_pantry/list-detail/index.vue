@@ -1,16 +1,24 @@
 <template>
   <page-meta :page-style="pageStyle" />
-  <Layout title="" full-screen navbar-layout="custom-left" :show-left="false">
+  <Layout
+    title=""
+    full-screen
+    navbar-layout="custom-left"
+    :show-left="false"
+    :navbar-transparent="sessionStore.isLoggedIn"
+    :navbar-placeholder="!sessionStore.isLoggedIn"
+  >
     <template #navbar-left>
       <view class="detail-nav">
         <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
-        <text class="detail-nav__title">{{ detail?.name || "购物清单" }}</text>
+        <text class="detail-nav__title" :style="navTitleStyle">{{ detail?.name || "购物清单" }}</text>
       </view>
     </template>
 
     <Login v-if="!sessionStore.isLoggedIn" title="登录后查看清单详情" description="共享清单详情、采购勾选和入库确认都需要登录后处理。" />
 
     <view v-else class="detail-page">
+      <view class="detail-nav-backdrop" :style="navBackdropStyle" />
       <view v-if="loading" class="notice">加载中...</view>
       <view v-else-if="errorText" class="notice" @click="loadDetail">{{ errorText }}</view>
       <view v-else-if="!detail" class="detail-empty">
@@ -22,86 +30,92 @@
       </view>
 
       <template v-else>
-        <scroll-view scroll-y class="detail-scroll" :show-scrollbar="false">
+        <scroll-view scroll-y class="detail-scroll" :show-scrollbar="false" @scroll="handleScroll">
           <view class="detail-body">
-            <view class="summary-card">
-              <view class="summary-card__head">
-                <view class="summary-card__main">
-                  <text class="summary-card__title">{{ detail.name }}</text>
-                  <text class="summary-card__meta">{{ headerMeta }}</text>
-                </view>
-                <view class="summary-card__side">
-                  <text class="summary-card__badge" :class="statusBadgeClass">{{ statusBadgeText }}</text>
-                  <text v-if="canRename" class="summary-card__edit" @click="openRenameSheet">改名</text>
-                </view>
+            <view class="detail-hero" :style="heroStyle">
+              <view class="detail-hero__title-row">
+                <text class="detail-hero__title" :style="heroTitleStyle">{{ detail.name }}</text>
+                <text
+                  v-if="canRename"
+                  class="cookfont icon-edit detail-hero__edit"
+                  @click.stop="openRenameSheet"
+                />
               </view>
-
-              <view class="progress-card">
-                <view class="progress-card__head">
-                  <text class="progress-card__label">采购进度</text>
-                  <text class="progress-card__value">{{ detail.progressDoneCount }}/{{ detail.progressTotalCount }}</text>
-                </view>
-                <view class="progress-card__track">
-                  <view class="progress-card__bar" :style="{ width: `${progressPercent}%` }" />
-                </view>
-              </view>
-
-              <text class="summary-card__hint">{{ summaryHint }}</text>
-
-              <view class="summary-actions">
-                <button v-if="canOpenShare" class="action-pill" :disabled="submitting" @click="openShareSheet">协作</button>
-                <button v-if="canCopy" class="action-pill" :disabled="submitting || copying" @click="copyList">复制清单</button>
-                <button v-if="canOpenComplete" class="action-pill action-pill--primary" :disabled="submitting" @click="markComplete">
-                  标记完成
-                </button>
-                <button v-if="canVoid" class="action-pill action-pill--danger" :disabled="submitting" @click="voidList">作废</button>
-                <button v-if="canRestore" class="action-pill" :disabled="submitting" @click="restoreList">恢复采购</button>
-                <button v-if="canDelete" class="action-pill action-pill--danger" :disabled="submitting" @click="deleteList">删除清单</button>
-                <button v-if="canLeave" class="action-pill action-pill--danger" :disabled="submitting" @click="leaveList">退出共享</button>
-              </view>
+              <text class="detail-hero__meta">{{ heroMeta }}</text>
             </view>
 
-            <view v-if="groups.length" class="group-list">
-              <view v-for="group in groups" :key="group.key" class="group-card">
-                <view class="group-card__head">
-                  <view class="group-card__main">
-                    <text class="group-card__title">{{ group.name }}</text>
-                    <text class="group-card__meta">{{ group.lines.join(" · ") }}</text>
-                  </view>
-                  <text class="group-card__count">{{ group.checkedCount }}/{{ group.totalCount }}</text>
-                </view>
-
-                <view v-if="group.sourceLabels.length" class="source-row">
-                  <text v-for="label in group.sourceLabels" :key="label" class="source-pill">{{ label }}</text>
-                </view>
-
-                <view class="item-list">
-                  <view v-for="item in group.items" :key="item.id" class="item-row">
-                    <view class="item-row__main">
-                      <text class="item-row__source">{{ itemSourceText(item) }}</text>
-                      <text class="item-row__meta">{{ item.quantityText || "未填数量" }}</text>
-                      <text v-if="item.note" class="item-row__meta">{{ item.note }}</text>
+            <view class="detail-content">
+              <view class="detail-panel">
+                <view class="summary-card">
+                  <view class="summary-card__head">
+                    <view class="summary-card__progress">
+                      <text class="summary-card__progress-text">采购进度</text>
+                      <text class="summary-card__progress-dot">·</text>
+                      <text class="summary-card__progress-value">{{ progressText }}</text>
+                      <text class="summary-card__progress-dot">·</text>
+                      <text class="summary-card__progress-meta">{{ collaborationText }}</text>
                     </view>
-                    <view class="item-row__actions">
-                      <button
-                        v-if="canEditItems"
-                        class="mini-pill"
-                        :class="{ 'mini-pill--checked': item.status === 'CHECKED' }"
-                        :disabled="submitting"
-                        @click="toggleItem(item)"
-                      >
-                        {{ item.status === "CHECKED" ? "已购" : "待购" }}
-                      </button>
-                      <button v-if="canEditItems" class="mini-pill mini-pill--danger" :disabled="submitting" @click="removeItem(item)">
-                        删除
-                      </button>
+                    <text class="summary-card__percent">{{ progressPercent }}%</text>
+                  </view>
+                  <view class="progress-card__track">
+                    <view class="progress-card__bar" :style="{ width: `${progressPercent}%` }" />
+                  </view>
+                </view>
+
+                <view class="summary-actions">
+                  <button v-if="canOpenShare" class="action-pill" :disabled="submitting" @click="openShareSheet">协作</button>
+                  <button v-if="canOpenComplete" class="action-pill action-pill--primary" :disabled="submitting" @click="markComplete">
+                    标记完成
+                  </button>
+                  <button v-if="canVoid" class="action-pill action-pill--danger" :disabled="submitting" @click="voidList">作废</button>
+                  <button v-if="canRestore" class="action-pill" :disabled="submitting" @click="restoreList">恢复采购</button>
+                  <button v-if="canDelete" class="action-pill action-pill--danger" :disabled="submitting" @click="deleteList">删除清单</button>
+                  <button v-if="canLeave" class="action-pill action-pill--danger" :disabled="submitting" @click="leaveList">退出共享</button>
+                </view>
+              </view>
+
+              <view v-if="groups.length" class="group-list">
+                <view v-for="group in groups" :key="group.key" class="group-card">
+                  <view class="group-card__head">
+                    <view class="group-card__main">
+                      <text class="group-card__title">{{ group.name }}</text>
+                      <text class="group-card__meta">{{ group.lines.join(" · ") }}</text>
+                    </view>
+                    <text class="group-card__count">{{ group.checkedCount }}/{{ group.totalCount }}</text>
+                  </view>
+
+                  <view v-if="group.sourceLabels.length" class="source-row">
+                    <text v-for="label in group.sourceLabels" :key="label" class="source-pill">{{ label }}</text>
+                  </view>
+
+                  <view class="item-list">
+                    <view v-for="item in group.items" :key="item.id" class="item-row">
+                      <view class="item-row__main">
+                        <text class="item-row__source">{{ itemSourceText(item) }}</text>
+                        <text class="item-row__meta">{{ item.quantityText || "未填数量" }}</text>
+                        <text v-if="item.note" class="item-row__meta">{{ item.note }}</text>
+                      </view>
+                      <view class="item-row__actions">
+                        <button
+                          v-if="canEditItems"
+                          class="mini-pill"
+                          :class="{ 'mini-pill--checked': item.status === 'CHECKED' }"
+                          :disabled="submitting"
+                          @click="toggleItem(item)"
+                        >
+                          {{ item.status === "CHECKED" ? "已购" : "待购" }}
+                        </button>
+                        <button v-if="canEditItems" class="mini-pill mini-pill--danger" :disabled="submitting" @click="removeItem(item)">
+                          删除
+                        </button>
+                      </view>
                     </view>
                   </view>
                 </view>
               </view>
-            </view>
 
-            <Empty v-else title="这张清单还没有食材" description="可以从菜谱里继续加，也可以用右下角按钮手动补食材。" />
+              <Empty v-else class="detail-content__empty" title="这张清单还没有食材" description="可以从菜谱里继续加，也可以用右下角按钮手动补食材。" />
+            </view>
           </view>
         </scroll-view>
 
@@ -336,11 +350,11 @@ import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMonthDay } from "../utils/date";
 import ShoppingCompleteSheet from "../components/ShoppingCompleteSheet.vue";
 import { type ShoppingCompleteEntry, toShoppingCompleteEntries } from "../components/shopping-complete-sheet";
 import {
@@ -362,7 +376,10 @@ interface GroupView {
   totalCount: number;
 }
 
+const NAV_FADE_DISTANCE = 132;
+
 const pageStyle = usePageScrollStyle();
+const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 
@@ -396,7 +413,7 @@ const shareMembersError = ref("");
 const shareMembers = ref<DiningGroupMemberSummary[]>([]);
 const shareMembersReady = ref(false);
 const selectedShareUserIds = ref<UUID[]>([]);
-const copying = ref(false);
+const scrollTop = ref(0);
 
 const completeSheetVisible = ref(false);
 const completeItems = ref<ShoppingCompleteEntry[]>([]);
@@ -436,36 +453,31 @@ const progressPercent = computed(() => {
   if (!detail.value?.progressTotalCount) return 0;
   return Math.min(100, Math.round((detail.value.progressDoneCount / detail.value.progressTotalCount) * 100));
 });
-const headerMeta = computed(() => {
-  if (!detail.value) return "";
-  const roleText = detail.value.role === "OWNER"
-    ? `${detail.value.memberCount}/${detail.value.memberLimit} 人协作`
-    : `来自 ${detail.value.ownerNickname || `UID ${detail.value.ownerUid}`} 的清单`;
-  return `${roleText} · 创建于 ${formatMonthDay(detail.value.createdAt)}`;
+const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
+const navTitleStyle = computed(() => ({
+  opacity: sessionStore.isLoggedIn ? `${navProgress.value}` : "1"
+}));
+const navBackdropStyle = computed(() => ({
+  height: `${navBarTotalHeight.value}px`,
+  opacity: `${navProgress.value}`
+}));
+const heroStyle = computed(() => ({
+  paddingTop: `${navBarTotalHeight.value + 12}px`
+}));
+const heroTitleStyle = computed(() => ({
+  opacity: `${1 - navProgress.value * 0.56}`
+}));
+const progressText = computed(() => {
+  if (!detail.value) return "0/0";
+  return `${detail.value.progressDoneCount}/${detail.value.progressTotalCount}`;
 });
-const summaryHint = computed(() => {
-  if (!detail.value) return "";
-  if (!detail.value.progressTotalCount) return "这是一张空白清单，可以从菜谱或手动继续补食材。";
-  if (detail.value.status === "COMPLETED") return "这张清单已完成，本次已勾选的食材已经进入入库确认流程。";
-  if (detail.value.status === "VOIDED") return "这张清单已作废，创建者可恢复后继续采购。";
-  if (!detail.value.progressDoneCount) return "点标记完成后，会先把当前清单食材全部标成已购，再一起确认是否入库。";
-  return `当前已勾选 ${detail.value.progressDoneCount} 项，标记完成后会一起确认入库。`;
+const collaborationText = computed(() => {
+  if (!detail.value) return "0/0人协作";
+  return `${detail.value.memberCount}/${detail.value.memberLimit}人协作`;
 });
-const statusBadgeText = computed(() => {
-  if (!detail.value) return "";
-  if (detail.value.status === "COMPLETED") return "已完成";
-  if (detail.value.status === "VOIDED") return "已作废";
-  return detail.value.role === "OWNER" ? "采购中" : "协作中";
-});
-const statusBadgeClass = computed(() => {
-  if (!detail.value) return "summary-card__badge--active";
-  if (detail.value.status === "COMPLETED") return "summary-card__badge--done";
-  if (detail.value.status === "VOIDED") return "summary-card__badge--voided";
-  return detail.value.role === "OWNER" ? "summary-card__badge--active" : "summary-card__badge--shared";
-});
+const heroMeta = computed(() => "先把要买的食材归到这里，买的时候就不会漏。");
 const canRename = computed(() => detail.value?.role === "OWNER" && detail.value?.status === "ACTIVE");
 const canOpenShare = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
-const canCopy = computed(() => Boolean(detail.value));
 const canOpenComplete = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canVoid = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canRestore = computed(() => detail.value?.role === "OWNER" && detail.value.status === "VOIDED");
@@ -571,6 +583,10 @@ function goBack() {
   void uniPlatform.navigation.navigateBack().catch(() => {
     void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
   });
+}
+
+function handleScroll(event: { detail: { scrollTop?: number } }) {
+  scrollTop.value = event.detail.scrollTop ?? 0;
 }
 
 function sourceLabel(
@@ -997,23 +1013,6 @@ async function completeList() {
   }
 }
 
-async function copyList() {
-  if (!detail.value || submitting.value || copying.value) return;
-  copying.value = true;
-  try {
-    const nextDetail = await shoppingApi.copyList(detail.value.id, {
-      operationId: createOperationId(),
-      version: detail.value.version
-    });
-    await uniPlatform.feedback.toast({ title: "已复制到新清单", icon: "success" });
-    void uniPlatform.navigation.redirectTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(nextDetail.id))}`);
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "复制失败", icon: "none" });
-  } finally {
-    copying.value = false;
-  }
-}
-
 async function voidList() {
   if (!detail.value || submitting.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
@@ -1102,8 +1101,10 @@ async function leaveList() {
   height: 100%;
 }
 
-.detail-body {
-  padding: 24rpx 24rpx calc(176rpx + env(safe-area-inset-bottom));
+.detail-page {
+  position: relative;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-page) 84%, var(--color-primary-soft) 16%) 0%, var(--color-page) 48%, var(--color-page) 100%);
 }
 
 .detail-empty {
@@ -1125,6 +1126,19 @@ async function leaveList() {
   min-width: 0;
 }
 
+.detail-nav-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 790;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface-mask-strong) 82%, var(--color-surface) 18%) 0%, color-mix(in srgb, var(--color-surface) 92%, transparent) 100%);
+  box-shadow: 0 10rpx 26rpx color-mix(in srgb, var(--color-surface-mask-medium) 64%, transparent);
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
 .detail-nav__back,
 .detail-nav__title {
   color: var(--color-text);
@@ -1140,6 +1154,170 @@ async function leaveList() {
   font-weight: var(--font-weight-heavy);
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: opacity 180ms ease;
+}
+
+.detail-hero {
+  --detail-hero-end: var(--color-page);
+
+  position: relative;
+  overflow: hidden;
+  min-height: 452rpx;
+  padding-right: 32rpx;
+  padding-bottom: 146rpx;
+  padding-left: 32rpx;
+  border-bottom-right-radius: 56rpx;
+  border-bottom-left-radius: 56rpx;
+  background:
+    radial-gradient(circle at 16% 18%, var(--entry-side-mint-bg) 0, transparent 32%),
+    radial-gradient(circle at 86% 12%, var(--entry-side-aqua-bg) 0, transparent 30%),
+    linear-gradient(148deg, var(--entry-primary-bg), var(--entry-board-bg));
+}
+
+.detail-hero::before {
+  position: absolute;
+  top: 92rpx;
+  right: -84rpx;
+  z-index: 1;
+  width: 320rpx;
+  height: 228rpx;
+  border-radius: 50%;
+  background: var(--color-surface-mask-weak);
+  content: "";
+  pointer-events: none;
+  transform: rotate(-16deg);
+}
+
+.detail-hero::after {
+  --detail-mask-solid: #000;
+  --detail-mask-strong: rgba(0, 0, 0, 0.76);
+  --detail-mask-mid: rgba(0, 0, 0, 0.42);
+
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 248rpx;
+  background: var(--detail-hero-end);
+  content: "";
+  mask-image:
+    radial-gradient(ellipse at 15% 100%,
+      var(--detail-mask-solid) 0%,
+      var(--detail-mask-strong) 36%,
+      transparent 72%),
+    radial-gradient(ellipse at 85% 100%,
+      var(--detail-mask-solid) 0%,
+      var(--detail-mask-strong) 36%,
+      transparent 72%),
+    linear-gradient(to bottom,
+      transparent 0%,
+      var(--detail-mask-mid) 50%,
+      var(--detail-mask-solid) 100%);
+  mask-size: 100% 100%;
+  pointer-events: none;
+  -webkit-mask-image:
+    radial-gradient(ellipse at 15% 100%,
+      var(--detail-mask-solid) 0%,
+      var(--detail-mask-strong) 36%,
+      transparent 72%),
+    radial-gradient(ellipse at 85% 100%,
+      var(--detail-mask-solid) 0%,
+      var(--detail-mask-strong) 36%,
+      transparent 72%),
+    linear-gradient(to bottom,
+      transparent 0%,
+      var(--detail-mask-mid) 50%,
+      var(--detail-mask-solid) 100%);
+  -webkit-mask-size: 100% 100%;
+}
+
+.summary-card__head,
+.group-card__head,
+.complete-card__head,
+.picker-row {
+  justify-content: space-between;
+}
+
+.summary-card__head,
+.group-card__head,
+.complete-card__head,
+.picker-row {
+  display: flex;
+  align-items: center;
+}
+
+.detail-hero__meta,
+.summary-card__progress-text,
+.summary-card__progress-value,
+.summary-card__progress-meta,
+.summary-card__percent,
+.group-card__meta,
+.group-card__count,
+.item-row__source,
+.item-row__meta,
+.editor-card__label,
+.editor-card__value,
+.share-card__label,
+.share-card__path,
+.share-card__hint,
+.quick-days__label,
+.complete-card__title,
+.complete-card__meta,
+.picker-row__label,
+.picker-row__value,
+.sheet-note {
+  display: block;
+}
+
+.detail-hero__title-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+}
+
+.detail-hero__title {
+  display: block;
+  min-width: 0;
+  margin-top: 8rpx;
+  color: var(--color-text);
+  font-size: 62rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.08;
+  transition: opacity 180ms ease;
+}
+
+.detail-hero__edit {
+  flex: 0 0 auto;
+  margin-top: 16rpx;
+  color: var(--color-primary);
+  font-size: 32rpx;
+}
+
+.detail-hero__meta {
+  position: relative;
+  z-index: 2;
+  margin-top: 14rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.detail-content {
+  position: relative;
+  margin-top: -42rpx;
+  padding: 126rpx var(--space-page) calc(24rpx + env(safe-area-inset-bottom));
+  border-top-left-radius: 38rpx;
+  border-top-right-radius: 38rpx;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-page) 6%);
+}
+
+.detail-panel {
+  position: relative;
+  z-index: 2;
+  margin-top: -168rpx;
 }
 
 .notice,
@@ -1169,38 +1347,22 @@ async function leaveList() {
 }
 
 .summary-card {
-  padding: 28rpx;
-  background:
-    radial-gradient(circle at top right, var(--color-primary-soft) 0%, transparent 36%),
-    linear-gradient(135deg, var(--color-surface) 0%, var(--color-page) 100%);
+  padding: 28rpx 30rpx;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-page) 6%);
+  box-shadow:
+    0 18rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 32%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 74%, transparent);
 }
 
-.summary-card__head,
-.group-card__head,
 .item-row,
 .item-row__actions,
 .search-box,
 .summary-actions,
 .sheet-actions,
 .share-actions,
-.quick-days__chips,
-.complete-card__head,
-.picker-row {
+.quick-days__chips {
   display: flex;
   gap: 16rpx;
-}
-
-.summary-card__head,
-.group-card__head,
-.complete-card__head,
-.picker-row {
-  justify-content: space-between;
-}
-
-.summary-card__head,
-.complete-card__head,
-.picker-row {
-  align-items: center;
 }
 
 .summary-card__main,
@@ -1210,43 +1372,23 @@ async function leaveList() {
   min-width: 0;
 }
 
-.summary-card__title,
-.summary-card__meta,
-.summary-card__hint,
-.progress-card__label,
-.progress-card__value,
-.group-card__title,
-.group-card__meta,
-.group-card__count,
-.item-row__source,
-.item-row__meta,
-.editor-card__label,
-.editor-card__value,
-.share-card__label,
-.share-card__path,
-.share-card__hint,
-.quick-days__label,
-.complete-card__title,
-.complete-card__meta,
-.picker-row__label,
-.picker-row__value,
-.sheet-note {
-  display: block;
-}
-
-.summary-card__title,
 .group-card__title,
 .complete-card__title {
   color: var(--color-text);
   font-weight: var(--font-weight-heavy);
 }
 
-.summary-card__title {
-  font-size: 40rpx;
+.source-pill,
+.day-chip,
+.mini-pill,
+.sheet-actions__button {
+  border-radius: var(--radius-pill);
 }
 
-.summary-card__meta,
-.summary-card__hint,
+.summary-card__progress-text,
+.summary-card__progress-value,
+.summary-card__progress-meta,
+.summary-card__percent,
 .group-card__meta,
 .item-row__meta,
 .share-card__label,
@@ -1260,33 +1402,9 @@ async function leaveList() {
   font-size: var(--font-size-sm);
 }
 
-.summary-card__meta,
-.summary-card__hint,
 .group-card__meta,
 .share-card__hint {
   margin-top: 10rpx;
-}
-
-.summary-card__side {
-  flex: 0 0 auto;
-  text-align: right;
-}
-
-.summary-card__badge,
-.source-pill,
-.day-chip,
-.mini-pill,
-.sheet-actions__button {
-  border-radius: var(--radius-pill);
-}
-
-.summary-card__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8rpx 18rpx;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
 }
 
 .summary-card__badge--active {
@@ -1310,26 +1428,47 @@ async function leaveList() {
   color: var(--color-danger-text);
 }
 
-.summary-card__edit {
-  display: block;
-  margin-top: 12rpx;
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
+.summary-card__head {
+  gap: 20rpx;
 }
 
-.progress-card {
-  margin-top: 20rpx;
-  padding: 22rpx;
-  border-radius: 24rpx;
-  background: var(--color-surface);
-  box-shadow: inset 0 0 0 1rpx var(--color-divider);
+.summary-card__progress {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.summary-card__progress-text,
+.summary-card__progress-value,
+.summary-card__progress-meta,
+.summary-card__percent {
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.summary-card__progress-dot {
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+}
+
+.summary-card__progress-meta {
+  color: var(--color-text-secondary);
+}
+
+.summary-card__percent {
+  flex: 0 0 auto;
+  color: var(--color-primary);
 }
 
 .progress-card__track {
-  height: 14rpx;
+  height: 16rpx;
   margin-top: 12rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
+  background: color-mix(in srgb, var(--color-primary-soft) 62%, var(--color-surface));
   overflow: hidden;
 }
 
@@ -1342,7 +1481,15 @@ async function leaveList() {
 .summary-actions,
 .share-actions {
   flex-wrap: wrap;
-  margin-top: 22rpx;
+  margin-top: 24rpx;
+}
+
+.group-list {
+  margin-top: 28rpx;
+}
+
+.detail-content__empty {
+  margin-top: 28rpx;
 }
 
 .mini-pill,

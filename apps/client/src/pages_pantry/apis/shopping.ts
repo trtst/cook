@@ -185,6 +185,7 @@ export interface AddRecipeToShoppingListRequest {
   operationId: OperationId;
   recipeId: UUID;
   sourceVersionId: UUID;
+  planItemId?: UUID | null;
 }
 
 export interface UpdateShoppingListItemCheckRequest {

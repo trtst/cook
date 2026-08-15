@@ -9,13 +9,24 @@ export interface ShoppingListSummary {
   progressTotalCount: number;
 }
 
-export interface ShoppingListDetail extends ShoppingListSummary {}
+export interface ShoppingItemSourceSummary {
+  planItemId: UUID | null;
+}
+
+export interface ShoppingListDetailItem {
+  id: UUID;
+  sources: ShoppingItemSourceSummary[];
+}
+
+export interface ShoppingListDetail extends ShoppingListSummary {
+  items: ShoppingListDetailItem[];
+}
 
 interface ShoppingListPageResponse {
   items: ShoppingListSummary[];
 }
 
-export interface CreateRecipeShoppingListRequest {
+export interface CreateShoppingListRequest {
   operationId: OperationId;
   name: string | null;
 }
@@ -27,12 +38,20 @@ export interface AddRecipeToShoppingListRequest {
   planItemId?: UUID | null;
 }
 
-export const shoppingApi = {
+export interface AddPlanToShoppingListRequest {
+  operationId: OperationId;
+  planItemId: UUID;
+}
+
+export const shoppingListApi = {
   async listActive() {
     const result = await get<ShoppingListPageResponse>(`${cfg.domain}/api/shopping-lists`, { status: "ACTIVE" });
     return result.items;
   },
-  createList(body: CreateRecipeShoppingListRequest) {
+  getListDetail(listId: UUID) {
+    return get<ShoppingListDetail>(`${cfg.domain}/api/shopping-lists/${encodeURIComponent(String(listId))}`);
+  },
+  createList(body: CreateShoppingListRequest) {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(`${cfg.domain}/api/shopping-lists`, payload, { idempotencyKey: operationId });
   },
@@ -40,6 +59,14 @@ export const shoppingApi = {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(
       `${cfg.domain}/api/shopping-lists/${encodeURIComponent(String(listId))}/items/from-recipe`,
+      payload,
+      { idempotencyKey: operationId }
+    );
+  },
+  addPlanToList(listId: UUID, body: AddPlanToShoppingListRequest): Promise<ShoppingListDetail> {
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(
+      `${cfg.domain}/api/shopping-lists/${encodeURIComponent(String(listId))}/items/from-plan`,
       payload,
       { idempotencyKey: operationId }
     );

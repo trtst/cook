@@ -1193,7 +1193,7 @@ async function joinShare() {
 }
 
 .shopping-home__body {
-  padding: 12rpx 24rpx calc(176rpx + env(safe-area-inset-bottom));
+  padding: 12rpx var(--space-page) calc(176rpx + env(safe-area-inset-bottom));
 }
 
 .home-nav {
@@ -1290,7 +1290,7 @@ async function joinShare() {
 }
 
 .list-card + .list-card {
-  margin-top: 18rpx;
+  margin-top: var(--space-page);
 }
 
 .list-card__head,
