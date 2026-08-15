@@ -1495,10 +1495,23 @@ interface CreateShoppingListItemRequest {
 interface AddRecipeToShoppingListRequest {
   recipeId: UUID;
   sourceVersionId: UUID;
+  planItemId?: UUID | null;
 }
 ```
 
 同一道菜再次加入同一张清单时，不覆盖旧来源批次；服务端保留 `sourceBatchKey`，以便详情页统计 `addCount` 和累计人份。
+
+当请求携带 `planItemId` 时，服务端必须校验该计划属于当前用户，且该计划下确实包含本次写入的 `recipeId + sourceVersionId`。写入后的清单项来源摘要继续保留菜谱字段，同时把 `sourceType` 记为 `PLAN`、`planItemId` 记为对应计划，供后续按计划或按菜谱聚合展示。
+
+`POST /shopping-lists/{listId}/items/from-plan` 用于把一顿计划里的菜谱整单写入购物清单，避免前端逐菜循环时出现部分成功：
+
+```ts
+interface AddPlanToShoppingListRequest {
+  planItemId: UUID;
+}
+```
+
+服务端必须校验该计划属于当前用户，并按计划当前保存的菜谱明细一次性完成整单写入；任一菜谱版本校验失败时整单回滚，不允许留下部分成功的购物项。
 
 `POST /shopping-lists/{listId}/items/{itemId}/check` 用于勾选或取消采购完成：
 
