@@ -26,6 +26,16 @@
 6. `current` 类接口只返回入口态，不返回后续子流程详情。
 7. 列表、详情、账本、快照和统计摘要要区分，不能混成全局大接口。
 8. 写接口只接收完成操作所需字段；服务端能判断的状态不从前端传入。
+9. 整资源写接口与局部增量写接口必须分离；禁止用整资源覆盖接口模拟“追加一项 / 删除一项 / 修改一项”。
+10. 若一个局部动作需要调用方先读取旧资源、拼装完整快照后再提交，说明契约粒度错误，应新增或改造增量接口。
+
+### 写接口粒度约束
+
+1. 整资源接口用于创建整个资源、整体编辑、排序重排或批量替换结果，调用方提交完整目标状态。
+2. 增量接口用于追加、删除、勾选、认领、局部修改等单动作写入，只提交当前动作所需字段。
+3. 局部动作不得要求客户端提交与当前动作无关的现存子项、历史字段或完整数组。
+4. 同一条写接口只表达一种写入语义，不同时承担“整体替换”和“局部追加”。
+5. 允许修改或删除旧接口时，应优先收窄旧接口职责，而不是让前端承担兼容拼装逻辑。
 
 ## 返回数据边界
 
@@ -903,6 +913,10 @@ POST /dining-events/{eventId}/invite-group
 POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
 POST /dining-events/{eventId}/complete
+GET  /fridge-items
+POST /fridge-items
+PUT  /fridge-items/{itemId}
+POST /fridge-items/consume
 GET  /shopping-items
 POST /shopping-items
 GET  /shopping-items/board
@@ -916,7 +930,9 @@ GET  /shopping-lists/{listId}
 POST /shopping-lists/{listId}/rename
 POST /shopping-lists/{listId}/items
 POST /shopping-lists/{listId}/items/from-recipe
+POST /shopping-lists/{listId}/items/from-plan
 POST /shopping-lists/{listId}/items/{itemId}/check
+POST /shopping-lists/{listId}/items/{itemId}/fridge
 POST /shopping-lists/{listId}/items/{itemId}/remove
 POST /shopping-lists/{listId}/void
 POST /shopping-lists/{listId}/restore
@@ -981,6 +997,8 @@ interface MealPlanMenuItemSummary {
   recipeVersionId: UUID;
   title: string;
   servings: number | null;
+  duration: RecipeDuration | null;
+  durationText: string | null;
   slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
   purchaseState: "READY" | "PENDING";
   sortOrder: number;
@@ -1095,7 +1113,64 @@ interface MedalWallResponse {
   totalCount: number;
   items: UserMedalSummary[];
 }
+
+interface FridgeItemSummary {
+  id: UUID;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  exactQuantity: string | null;
+  exactUnitId: UUID | null;
+  exactUnitName: string | null;
+  note: string | null;
+  available: boolean;
+  expireAt: IsoDateTime | null;
+  stockText: string | null;
+  reservedText: string | null;
+  availableText: string | null;
+  reservations: Array<{
+    shoppingListId: UUID;
+    shoppingListName: string;
+    shoppingItemId: UUID;
+    reservedText: string;
+  }>;
+  updatedAt: IsoDateTime;
+}
 ```
+
+`GET /fridge-items?page=1&pageSize=50` 返回当前用户自己的冰箱条目分页，冰箱列表页用 `stockText / reservedText / availableText / reservations[]` 直接展示“实际库存 / 已预占 / 可用库存”和预占去向；其中 `expireAt` 用于“临期 / 到期”状态展示。新增冰箱条目仍走 `POST /fridge-items`：
+
+```ts
+interface CreateFridgeItemRequest {
+  name: string;
+  ingredientId?: UUID | null;
+  quantityText?: string | null;
+  exactQuantity?: string | null;
+  exactUnitId?: UUID | null;
+  expireAt?: IsoDateTime | null;
+  note?: string | null;
+}
+```
+
+编辑已有冰箱条目改为只修改库存、到期时间和备注，不在这个接口里改食材名称或重新绑定系统食材：
+
+```ts
+interface UpdateFridgeItemRequest {
+  quantityText?: string | null;
+  exactQuantity?: string | null;
+  exactUnitId?: UUID | null;
+  expireAt?: IsoDateTime | null;
+  note?: string | null;
+}
+```
+
+规则：
+
+1. `quantityText` 继续保存用户可读文案，比如 `半盒`、`1 把`。
+2. `exactQuantity` 与 `exactUnitId` 必须成对出现或同时为空；只有这组结构化字段才参与后续库存自动抵扣。
+3. `exactUnitId` 当前只接受系统单位；若数量或单位不可比较，购物清单详情只能给出“库存待确认”，不能自动算剩余采购量。
+4. `PUT /fridge-items/{itemId}` 只维护这条个人库存事实，不改系统食材资料，也不支持在这里重绑食材身份。
+5. `POST /fridge-items/consume` 继续只接收既有冰箱条目 ID 批量消耗，返回最新的 `PageResult<FridgeItemSummary>`。
 
 `POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但当前一个餐次可同时承载多道菜；请求体固定提交：
 
@@ -1310,6 +1385,31 @@ interface CreateMealPlanRequestV2 {
 
 1. 覆盖已有计划时必须校验 `expectedVersion`。
 2. 已完成餐次仍不允许覆盖。
+
+`POST /meal-plans` 只用于整餐创建和整餐编辑，请求体继续提交完整 `menuItems[]` 快照。
+
+当调用方只是向某个餐次追加一道菜时，不再复用整餐覆盖接口，而是使用增量写入：
+
+```ts
+POST /meal-plans/items
+
+interface AddMealPlanItemRequest {
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  slotType?: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
+  purchaseState?: "READY" | "PENDING";
+}
+```
+
+规则：
+
+1. 这条接口只表达“把当前菜谱追加进对应餐次”，不接收完整 `menuItems[]`。
+2. 若对应餐次不存在，服务端按 `planDate + mealSlot` 自动创建该餐次。
+3. 若该餐次已存在相同 `recipeId` 的有效菜单项，服务端返回当前餐次摘要，不重复追加。
+4. 若该餐次已完成，返回 `409`。
+5. 响应继续返回最新 `MealPlanSummary`，不额外返回无关上下文数据。
 3. `purchaseState = PENDING` 对应“保留但暂不采购”。
 4. `recipeVersionId` 由客户端显式提交，服务端必须校验与 `recipeId` 的真实匹配关系。
 
@@ -1367,6 +1467,8 @@ interface ShoppingItemSummary {
 
 type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
 type ShoppingListRole = "OWNER" | "COLLABORATOR";
+type ShoppingListItemFridgeAction = "APPLY" | "UNDO";
+type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
 
 interface ShoppingListStatusCount {
   status: ShoppingListStatus;
@@ -1409,9 +1511,21 @@ interface ShoppingListDetailItem {
   id: UUID;
   ingredientId: UUID | null;
   name: string;
+  categoryName: string | null;
+  imageUrl: string | null;
   quantityText: string | null;
+  requiredQuantityText: string | null;
+  remainingQuantityText: string | null;
+  appliedInventoryQuantityText: string | null;
   note: string | null;
   status: "OPEN" | "CHECKED" | "REMOVED";
+  fridgeText: string | null;
+  inventoryStatus: "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
+  inventoryApplied: boolean;
+  inventoryCovered: boolean;
+  fridgeStatusText: string | null;
+  fridgeActionLabel: string | null;
+  fridgeActionMode: ShoppingListItemFridgeActionMode;
   checkedAt: IsoDateTime | null;
   updatedAt: IsoDateTime;
   sources: ShoppingItemSourceSummary[];
@@ -1431,6 +1545,15 @@ interface ShoppingListCollaborator {
 interface ShoppingListDetail extends ShoppingListSummary {
   collaborators: ShoppingListCollaborator[];
   items: ShoppingListDetailItem[];
+}
+
+interface ShoppingListItemPatchResponse {
+  listId: UUID;
+  version: number;
+  progressDoneCount: number;
+  progressTotalCount: number;
+  item: ShoppingListDetailItem | null;
+  removedItemId: UUID | null;
 }
 ```
 
@@ -1467,7 +1590,15 @@ interface CreateShoppingListRequest {
 
 服务端可在 `name = null` 时生成默认标题；购物清单没有“订单模板”或“整单一键买完”概念。清单名当前统一限制为最多 `20` 个字。
 
-`GET /shopping-lists/{listId}` 返回单张清单详情，当前默认按食材项聚合展示，不强制提供“按菜谱 / 按食材”双视图。每个食材项必须保留来源摘要，至少能表达它来自哪些菜谱、计划或饭局。
+`GET /shopping-lists/{listId}` 返回单张清单详情，当前默认按食材项聚合展示，不强制提供“按菜谱 / 按食材”双视图。每个食材项必须保留来源摘要，至少能表达它来自哪些菜谱、计划或饭局。详情页额外下发：
+
+1. `categoryName`、`imageUrl`：供食材卡片直接展示分类和封面；没有图片时客户端显示占位图。
+2. `quantityText` 与 `requiredQuantityText` 只表示原始采购需求，不因点击 `已购` 或 `用库存` 改写。
+3. `remainingQuantityText` 表示扣除当前清单库存预占后的待买量；`appliedInventoryQuantityText` 表示本清单已经预占的库存量。
+4. `fridgeText` 显示当前可用库存摘要，`inventoryStatus` 明确表示无库存、库存足够、库存不足或数量待确认；`inventoryApplied / inventoryCovered` 是按钮和进度判断使用的事实状态。
+5. `fridgeStatusText` 只负责展示 `库存不足，还需买 X`、`库存足够，不买了` 或 `库存待确认`，不能作为客户端状态判断依据。
+6. `fridgeActionLabel`、`fridgeActionMode`：驱动详情页上的 `用库存 / 撤销` 按钮；当前只对清单创建者开放，协作者固定返回 `NONE`，且不读取创建者的冰箱精确数量。
+7. 清单摘要里的 `progressDoneCount / progressTotalCount` 按合并后的食材组统计；组内所有采购项均已购或 `inventoryCovered = true` 才算完成。
 
 `POST /shopping-lists/{listId}/rename` 只允许清单创建者调用：
 
@@ -1522,6 +1653,33 @@ interface UpdateShoppingListItemCheckRequest {
 }
 ```
 
+已被库存完全覆盖的购物项当前不能再走这条勾选链路；它们通过库存动作直接变为“无需购买”。
+
+这条接口成功后不再回整份 `ShoppingListDetail`，而是返回 `ShoppingListItemPatchResponse`：只带清单新 `version`、顶部进度，以及当前变更的购物项。
+
+`POST /shopping-lists/{listId}/items/{itemId}/fridge` 用于为当前购物项创建或撤销个人库存预占：
+
+```ts
+interface ApplyShoppingListItemFridgeRequest {
+  version: number;
+  action: "APPLY" | "UNDO";
+}
+```
+
+规则：
+
+1. 当前只有清单 `OWNER` 能调用；协作者不读取、也不预占创建者的个人冰箱。
+2. 只允许在 `ACTIVE` 清单下对 `OPEN` 状态食材项调用。
+3. `APPLY` 时，若购物项和冰箱都具备可比较的结构化数量，服务端会为该购物项创建一组库存预占记录，并按“可用库存 = 实际库存 - 有效预占”自动计算：
+   - 库存足够：把该项标记为 `inventoryCovered = true`，详情页显示 `库存足够，不买了`，`已购` 按钮应禁用。
+   - 库存不足：只写入预占事实，`remainingQuantityText` 返回剩余待买量，详情页显示 `库存不足，还需买 X`。
+4. 若命中了冰箱记录但缺少可比较的结构化数量，详情页返回 `fridgeActionMode = "NEED_CONFIRM"`；客户端应提示先补精确库存，服务端也会拒绝自动预占。
+5. `UNDO` 会释放当前购物项尚未结算的库存预占，原始采购量字段不变。
+6. 点击 `已购` 只更新采购状态，不改原始需求、剩余待买量、已预占量或真实库存；库存不足时允许与 `用库存` 同时成立，库存足够时两者互斥。
+7. 预占不会在点击时立即扣减真实冰箱库存；只有 `POST /shopping-lists/{listId}/complete` 完成清单时，服务端才会事务性结算这些预占。
+
+这条接口成功后同样返回 `ShoppingListItemPatchResponse`，不再回整份详情。
+
 `POST /shopping-lists/{listId}/items/{itemId}/remove` 用于把食材项从当前有效采购项中移除，不抹掉来源事实：
 
 ```ts
@@ -1529,6 +1687,8 @@ interface RemoveShoppingListItemRequest {
   version: number;
 }
 ```
+
+如果该购物项存在尚未结算的库存预占，服务端会先释放预占，再把该项标记移除。这条接口成功后返回 `ShoppingListItemPatchResponse`，其中 `removedItemId` 表示需要从当前列表移除的那一项。
 
 `POST /shopping-lists/{listId}/members/{memberUserId}/remove` 只允许清单创建者在 `ACTIVE` 状态下移除一个已加入的普通协作者；创建者本人和 `OWNER` 角色当前不能通过这条路径移除：
 
