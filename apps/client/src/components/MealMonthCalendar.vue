@@ -3,7 +3,12 @@
     <view class="month-calendar__bar">
       <text class="month-calendar__title">{{ monthTitle }}</text>
       <view class="month-calendar__actions">
-        <view class="month-calendar__arrow" hover-class="month-calendar__arrow--hover" hover-stay-time="100" @click="emitMonthChange(-1)">
+        <view
+          :class="['month-calendar__arrow', canGoPrevMonth ? '' : 'month-calendar__arrow--disabled']"
+          :hover-class="canGoPrevMonth ? 'month-calendar__arrow--hover' : ''"
+          hover-stay-time="100"
+          @click="emitMonthChange(-1)"
+        >
           <text class="cookfont icon-back month-calendar__arrow-icon" />
         </view>
         <view class="month-calendar__arrow" hover-class="month-calendar__arrow--hover" hover-stay-time="100" @click="emitMonthChange(1)">
@@ -18,26 +23,28 @@
 
     <view class="month-calendar__grid">
       <view
-        v-for="day in days"
-        :key="day.date"
+        v-for="cell in cells"
+        :key="cell.key"
         :class="[
           'month-calendar__cell',
-          day.isCurrentMonth ? '' : 'month-calendar__cell--muted',
-          day.isToday ? 'month-calendar__cell--today' : '',
-          day.isSelected ? 'month-calendar__cell--selected' : '',
-          day.isDisabled ? 'month-calendar__cell--disabled' : ''
+          cell.isPlaceholder ? 'month-calendar__cell--placeholder' : '',
+          cell.isToday ? 'month-calendar__cell--today' : '',
+          cell.isSelected ? 'month-calendar__cell--selected' : '',
+          cell.isDisabled ? 'month-calendar__cell--disabled' : ''
         ]"
-        hover-class="month-calendar__cell--hover"
+        :hover-class="cell.isPlaceholder || cell.isDisabled ? '' : 'month-calendar__cell--hover'"
         hover-stay-time="100"
-        @click="handleSelect(day)"
+        @click="handleSelect(cell)"
       >
-        <text class="month-calendar__day">{{ day.dayNumber }}</text>
-        <view class="month-calendar__marks">
-          <view v-if="day.mark.breakfast" class="month-calendar__dot month-calendar__dot--breakfast" />
-          <view v-if="day.mark.lunch" class="month-calendar__dot month-calendar__dot--lunch" />
-          <view v-if="day.mark.dinner" class="month-calendar__dot month-calendar__dot--dinner" />
-          <text v-if="day.mark.hasExtra" class="month-calendar__extra">+</text>
-        </view>
+        <template v-if="!cell.isPlaceholder">
+          <text class="month-calendar__day">{{ cell.dayNumber }}</text>
+          <view class="month-calendar__marks">
+            <view v-if="cell.mark.breakfast" class="month-calendar__dot month-calendar__dot--breakfast" />
+            <view v-if="cell.mark.lunch" class="month-calendar__dot month-calendar__dot--lunch" />
+            <view v-if="cell.mark.dinner" class="month-calendar__dot month-calendar__dot--dinner" />
+            <text v-if="cell.mark.hasExtra" class="month-calendar__extra">+</text>
+          </view>
+        </template>
       </view>
     </view>
   </view>
@@ -45,14 +52,15 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { addDays, addMonths, formatDateOnly, parseDateOnly, startOfWeek } from "@/pages_meal/utils/date";
+import { addMonths, formatDateOnly, parseDateOnly } from "@/utils/date";
 import type { MealCalendarMark } from "@/utils/meal-slot";
 import { createEmptyMealCalendarMark } from "@/utils/meal-slot";
 
-interface CalendarDay {
-  date: string;
+interface CalendarCell {
+  key: string;
+  date: string | null;
   dayNumber: string;
-  isCurrentMonth: boolean;
+  isPlaceholder: boolean;
   isToday: boolean;
   isSelected: boolean;
   isDisabled: boolean;
@@ -87,35 +95,78 @@ const monthStart = computed(() => {
 });
 
 const monthTitle = computed(() => `${monthStart.value.getFullYear()}年${monthStart.value.getMonth() + 1}月`);
+const minDateValue = computed(() => (props.minDate ? parseDateOnly(props.minDate) : null));
+const minMonthStart = computed(() => {
+  if (!minDateValue.value) return null;
+  return new Date(minDateValue.value.getFullYear(), minDateValue.value.getMonth(), 1, 12, 0, 0, 0);
+});
+const canGoPrevMonth = computed(() => {
+  if (!minMonthStart.value) return true;
+  const previousMonthStart = new Date(monthStart.value.getFullYear(), monthStart.value.getMonth() - 1, 1, 12, 0, 0, 0);
+  return previousMonthStart.getTime() >= minMonthStart.value.getTime();
+});
 
-const days = computed<CalendarDay[]>(() => {
-  const gridStart = startOfWeek(monthStart.value);
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = addDays(gridStart, index);
+const cells = computed<CalendarCell[]>(() => {
+  const firstWeekday = monthStart.value.getDay();
+  const year = monthStart.value.getFullYear();
+  const month = monthStart.value.getMonth();
+  const dayCount = new Date(year, month + 1, 0).getDate();
+  const result: CalendarCell[] = [];
+
+  for (let index = 0; index < firstWeekday; index += 1) {
+    result.push({
+      key: `placeholder-start-${index}`,
+      date: null,
+      dayNumber: "",
+      isPlaceholder: true,
+      isToday: false,
+      isSelected: false,
+      isDisabled: true,
+      mark: createEmptyMealCalendarMark()
+    });
+  }
+
+  for (let day = 1; day <= dayCount; day += 1) {
+    const date = new Date(year, month, day, 12, 0, 0, 0);
     const dateText = formatDateOnly(date);
-    return {
+    result.push({
+      key: dateText,
       date: dateText,
-      dayNumber: `${date.getDate()}`,
-      isCurrentMonth: date.getMonth() === monthStart.value.getMonth(),
+      dayNumber: `${day}`,
+      isPlaceholder: false,
       isToday: dateText === today,
       isSelected: dateText === props.selectedDate,
-      isDisabled: Boolean(props.minDate && dateText < props.minDate),
+      isDisabled: Boolean(minDateValue.value && date.getTime() < minDateValue.value.getTime()),
       mark: props.marks[dateText] ?? createEmptyMealCalendarMark()
-    };
-  });
+    });
+  }
+
+  const trailingCount = (7 - (result.length % 7 || 7)) % 7;
+  for (let index = 0; index < trailingCount; index += 1) {
+    result.push({
+      key: `placeholder-end-${index}`,
+      date: null,
+      dayNumber: "",
+      isPlaceholder: true,
+      isToday: false,
+      isSelected: false,
+      isDisabled: true,
+      mark: createEmptyMealCalendarMark()
+    });
+  }
+
+  return result;
 });
 
 function emitMonthChange(offset: -1 | 1) {
-  const nextMonth = new Date(monthStart.value.getFullYear(), monthStart.value.getMonth() + offset, 1, 12, 0, 0, 0);
-  emit("monthChange", formatDateOnly(nextMonth));
+  if (offset < 0 && !canGoPrevMonth.value) return;
+  const nextMonth = addMonths(monthStart.value, offset);
+  emit("monthChange", formatDateOnly(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1, 12, 0, 0, 0)));
 }
 
-function handleSelect(day: CalendarDay) {
-  if (day.isDisabled) return;
-  if (!day.isCurrentMonth) {
-    emit("monthChange", `${day.date.slice(0, 8)}01`);
-  }
-  emit("select", day.date);
+function handleSelect(cell: CalendarCell) {
+  if (cell.isPlaceholder || cell.isDisabled || !cell.date) return;
+  emit("select", cell.date);
 }
 </script>
 
@@ -160,6 +211,10 @@ function handleSelect(day: CalendarDay) {
   transform: scale(0.96);
 }
 
+.month-calendar__arrow--disabled {
+  opacity: 0.35;
+}
+
 .month-calendar__arrow-icon {
   font-size: 28rpx;
   color: var(--color-text);
@@ -188,14 +243,16 @@ function handleSelect(day: CalendarDay) {
 }
 
 .month-calendar__cell {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  min-height: 108rpx;
-  padding: 16rpx 8rpx 12rpx;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  padding: 10rpx;
   box-sizing: border-box;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--color-surface) 90%, var(--color-primary-soft) 10%);
   transition: transform 0.16s ease, background-color 0.16s ease;
 }
@@ -204,11 +261,11 @@ function handleSelect(day: CalendarDay) {
   transform: translateY(-2rpx);
 }
 
-.month-calendar__cell--muted {
-  opacity: 0.45;
+.month-calendar__cell--placeholder {
+  background: transparent;
 }
 
-.month-calendar__cell--today:not(.month-calendar__cell--selected) {
+.month-calendar__cell--today:not(.month-calendar__cell--selected):not(.month-calendar__cell--disabled) {
   box-shadow: inset 0 0 0 2rpx color-mix(in srgb, var(--color-primary) 28%, transparent);
 }
 
@@ -228,11 +285,12 @@ function handleSelect(day: CalendarDay) {
 }
 
 .month-calendar__marks {
+  position: absolute;
+  bottom: 8rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6rpx;
-  min-height: 20rpx;
 }
 
 .month-calendar__dot {
@@ -242,15 +300,15 @@ function handleSelect(day: CalendarDay) {
 }
 
 .month-calendar__dot--breakfast {
-  background: #f4a261;
+  background: var(--meal-slot-breakfast);
 }
 
 .month-calendar__dot--lunch {
-  background: #2a9d8f;
+  background: var(--meal-slot-lunch);
 }
 
 .month-calendar__dot--dinner {
-  background: #e76f51;
+  background: var(--meal-slot-dinner);
 }
 
 .month-calendar__extra {

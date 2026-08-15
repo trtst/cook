@@ -13,6 +13,8 @@ export interface MealCalendarMark {
   hasExtra: boolean;
 }
 
+export type MealSlotTone = "breakfast" | "lunch" | "dinner" | "extra";
+
 export const MEAL_SLOT_OPTIONS: MealSlotOption[] = [
   { value: "BREAKFAST", label: "早餐", kind: "core" },
   { value: "LUNCH", label: "午餐", kind: "core" },
@@ -71,4 +73,16 @@ export function appendMealSlotToMark(mark: MealCalendarMark, slot: MealSlot) {
     return;
   }
   mark.hasExtra = true;
+}
+
+export function resolveMealSlotTone(slot: MealSlot | null | undefined): MealSlotTone {
+  if (slot === "BREAKFAST") return "breakfast";
+  if (slot === "LUNCH") return "lunch";
+  if (slot === "DINNER") return "dinner";
+  return "extra";
+}
+
+export function buildMealSlotTitle(slot: MealSlot | null | undefined) {
+  const label = formatMealSlot(slot);
+  return label ? `${label}饮食计划` : "这顿饮食计划";
 }

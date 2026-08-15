@@ -122,6 +122,10 @@ function buildThemeVars(seed: ThemeSeed, themeMode: EffectiveTheme): ThemeVars {
   const buttonTone = mixColor(seed.primary, accent, 0.48);
   const buttonText = themeMode === "light" ? inverseText : getContrastText(buttonTone);
   const ink = themeMode === "dark" ? "#f5efe8" : "#1b1b1b";
+  const breakfast = mixColor(accent, "#d9902f", themeMode === "dark" ? 0.44 : 0.38);
+  const lunch = mixColor(seed.primary, "#216e4e", themeMode === "dark" ? 0.24 : 0.18);
+  const dinner = mixColor("#f47c35", accent, themeMode === "dark" ? 0.24 : 0.2);
+  const extra = mixColor(secondaryText, accent, themeMode === "dark" ? 0.24 : 0.18);
 
   return {
     "--theme-bg": seed.bg,
@@ -140,6 +144,7 @@ function buildThemeVars(seed: ThemeSeed, themeMode: EffectiveTheme): ThemeVars {
     "--color-text-tertiary": tertiaryText,
     "--color-text-inverse": inverseText,
     "--color-primary": seed.primary,
+    "--color-primary-foreground": buttonText,
     "--color-primary-active": primaryActive,
     "--color-primary-soft": primarySoft,
     "--color-border": border,
@@ -151,6 +156,14 @@ function buildThemeVars(seed: ThemeSeed, themeMode: EffectiveTheme): ThemeVars {
     "--button-primary-gradient-end": accent,
     "--button-primary-text": buttonText,
     "--button-primary-shadow": `0 22rpx 44rpx ${toRgba(seed.primary, themeMode === "dark" ? 0.32 : 0.24)}`,
+    "--meal-slot-breakfast": breakfast,
+    "--meal-slot-breakfast-soft": mixColor(seed.surface, breakfast, themeMode === "dark" ? 0.22 : 0.16),
+    "--meal-slot-lunch": lunch,
+    "--meal-slot-lunch-soft": mixColor(seed.surface, lunch, themeMode === "dark" ? 0.22 : 0.16),
+    "--meal-slot-dinner": dinner,
+    "--meal-slot-dinner-soft": mixColor(seed.surface, dinner, themeMode === "dark" ? 0.22 : 0.16),
+    "--meal-slot-extra": extra,
+    "--meal-slot-extra-soft": mixColor(seed.surface, extra, themeMode === "dark" ? 0.2 : 0.14),
     "--login-popup-backdrop-bg": toRgba(themeMode === "dark" ? "#050908" : seed.text, themeMode === "dark" ? 0.48 : 0.32),
     "--login-popup-hero-copy": seed.text,
     "--login-popup-hero-copy-secondary": secondaryText,

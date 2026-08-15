@@ -277,53 +277,24 @@
           </template>
       </SheetShell>
 
-      <SheetShell
+      <PlanArrangeSheet
         :visible="planSheetVisible"
         title="加入计划"
         subtitle="选好日期和餐次后，这道菜会加入对应的安排。"
+        :date="planDate"
+        :month-date="planMonth"
+        :meal-slot="planMealSlot"
+        :meal-slots="planMealSlots"
+        :marks="planMarks"
+        :min-date="planStartDate"
+        :submitting="planSubmitting"
+        :show-cancel="true"
+        confirm-text="确认加入"
+        confirm-loading-text="加入中..."
         @close="closePlanSheet"
-      >
-        <view class="plan-sheet">
-          <view class="plan-sheet__section">
-            <view class="plan-sheet__head">
-              <text class="plan-sheet__label">安排到哪天</text>
-              <text class="plan-sheet__date">{{ formatPlanDate(planDate) }}</text>
-            </view>
-            <MealMonthCalendar
-              :selected-date="planDate"
-              :month-date="planMonth"
-              :marks="planMarks"
-              :min-date="planStartDate"
-              @select="handlePlanDateSelect"
-              @month-change="handlePlanMonthChange"
-            />
-            <text class="plan-sheet__hint">小圆点代表早中晚，`+` 代表还有下午茶或夜宵安排。</text>
-          </view>
-
-          <view class="plan-sheet__section">
-            <text class="plan-sheet__label">安排到哪餐</text>
-            <view class="plan-sheet__slot-row">
-              <view
-                v-for="item in planMealSlots"
-                :key="item.value"
-                :class="['plan-sheet__slot', planMealSlot === item.value ? 'plan-sheet__slot--active' : '']"
-                @click="planMealSlot = item.value"
-              >
-                {{ item.label }}
-              </view>
-            </view>
-          </view>
-        </view>
-
-        <template #footer>
-          <view class="sheet-actions">
-            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="planSubmitting" @click="closePlanSheet">取消</button>
-            <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="planSubmitting" @click="submitPlanSheet">
-              {{ planSubmitting ? "加入中..." : "确认加入" }}
-            </button>
-          </view>
-        </template>
-      </SheetShell>
+        @month-change="handlePlanMonthChange"
+        @confirm="submitPlanSheet"
+      />
 
       <SheetShell
         :visible="shoppingSheetVisible"
@@ -432,7 +403,7 @@ import {
 import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
+import PlanArrangeSheet from "@/components/PlanArrangeSheet.vue";
 import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -451,9 +422,8 @@ import {
   type MealCalendarMark,
   type MealSlot
 } from "@/utils/meal-slot";
+import { formatDateOnly, parseDateOnly, todayText } from "@/utils/date";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
-import { addDays, formatDateOnly, parseDateOnly } from "@/pages_meal/utils/date";
-import { todayText } from "@/pages_home/utils/date";
 
 type DetailKind = "my" | "inspiration" | "collection";
 type DetailMode = "published" | "preview";
@@ -1018,15 +988,6 @@ function closePlanSheet() {
   planSheetVisible.value = false;
 }
 
-function handlePlanDateSelect(date: string) {
-  planDate.value = date;
-  const nextMonth = buildMonthAnchor(date);
-  if (nextMonth !== planMonth.value) {
-    planMonth.value = nextMonth;
-    void loadPlanMarks(nextMonth);
-  }
-}
-
 function handlePlanMonthChange(nextMonthDate: string) {
   const nextMonth = buildMonthAnchor(nextMonthDate);
   if (nextMonth === planMonth.value) return;
@@ -1271,12 +1232,12 @@ async function addToShoppingList() {
   }
 }
 
-async function submitPlanSheet() {
+async function submitPlanSheet(payload: { planDate: string; mealSlot: MealSlot }) {
   if (!planRecipeId.value || planSubmitting.value) return;
   planSubmitting.value = true;
   try {
-    const plans = await mealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
-    const plan = plans.items.find(item => item.mealSlot === planMealSlot.value) ?? null;
+    const plans = await mealApi.listPlans({ from: payload.planDate, to: payload.planDate, page: 1, pageSize: 10 });
+    const plan = plans.items.find(item => item.mealSlot === payload.mealSlot) ?? null;
     const existingItems = plan?.menuItems ?? [];
     const recipeIds = [...existingItems.map(item => item.recipeId), planRecipeId.value].filter(
       (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
@@ -1302,8 +1263,8 @@ async function submitPlanSheet() {
     const resolvedMenuItems = menuItems.filter((item): item is NonNullable<typeof item> => Boolean(item));
     await mealApi.createPlan({
       operationId: createOperationId(),
-      planDate: planDate.value,
-      mealSlot: planMealSlot.value,
+      planDate: payload.planDate,
+      mealSlot: payload.mealSlot,
       expectedVersion: plan?.version ?? null,
       menuItems: resolvedMenuItems
     });
@@ -1347,10 +1308,9 @@ async function loadPlanMarks(monthDate = planMonth.value) {
   const seq = ++planMarksSeq.value;
   try {
     const monthStart = parseDateOnly(monthDate);
-    const rangeStart = addDays(monthStart, -monthStart.getDay());
-    const rangeEnd = addDays(rangeStart, 41);
+    const rangeEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 12, 0, 0, 0);
     const items = await mealApi.listAllPlans({
-      from: formatDateOnly(rangeStart),
+      from: formatDateOnly(monthStart),
       to: formatDateOnly(rangeEnd)
     });
     if (seq !== planMarksSeq.value) return;
@@ -1379,11 +1339,6 @@ function limitSceneName(value: string) {
   return name.slice(0, 6);
 }
 
-function formatPlanDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const [, month, day] = value.split("-");
-  return `${Number(month)}月${Number(day)}日`;
-}
 </script>
 
 <style scoped lang="scss">
@@ -2054,66 +2009,6 @@ function formatPlanDate(value: string) {
   font-weight: var(--font-weight-semibold);
 }
 
-.plan-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-}
-
-.plan-sheet__section {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.plan-sheet__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24rpx;
-}
-
-.plan-sheet__label {
-  color: var(--color-text);
-  font-size: 28rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-sheet__date {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-sheet__hint {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
-.plan-sheet__slot-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16rpx;
-}
-
-.plan-sheet__slot {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 84rpx;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-surface-muted) 78%, var(--color-surface));
-  color: var(--color-text-secondary);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-sheet__slot--active {
-  background: color-mix(in srgb, var(--theme-primary) 18%, var(--color-surface));
-  color: var(--theme-primary);
-}
 
 .sheet-creator {
   display: flex;

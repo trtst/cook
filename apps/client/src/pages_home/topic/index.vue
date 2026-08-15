@@ -162,59 +162,26 @@
       </view>
     </view>
 
-    <SheetShell
+    <PlanArrangeSheet
       v-if="sheetMounted"
       :visible="sheetVisible"
       title="安排这批菜"
       :subtitle="planSheetSubtitle"
+      :title-extra="`${queuedItems.length}道`"
+      :date="planDate"
+      :month-date="planMonth"
+      :meal-slot="mealSlot"
+      :meal-slots="mealSlots"
+      :marks="planMarks"
+      :min-date="today"
+      :submitting="planSubmitting"
+      confirm-text="确认安排"
+      confirm-loading-text="安排中..."
       @close="closePlanSheet"
       @after-close="handleSheetAfterClose"
-    >
-      <template #title-extra>
-        <text class="plan-sheet__title-extra">{{ queuedItems.length }}道</text>
-      </template>
-
-      <view class="plan-sheet">
-        <view class="plan-sheet__section">
-          <view class="plan-sheet__head">
-            <text class="plan-sheet__section-label">安排到哪天</text>
-            <text class="plan-sheet__date">{{ formatPlanDate(planDate) }}</text>
-          </view>
-          <MealMonthCalendar
-            :selected-date="planDate"
-            :month-date="planMonth"
-            :marks="planMarks"
-            :min-date="today"
-            @select="handlePlanDateSelect"
-            @month-change="handlePlanMonthChange"
-          />
-          <text class="plan-sheet__hint">小圆点代表早中晚，`+` 代表还有下午茶或夜宵安排。</text>
-        </view>
-
-        <view class="plan-sheet__section">
-          <text class="plan-sheet__section-label">安排到哪餐</text>
-          <view class="plan-sheet__slot-row">
-            <view
-              v-for="item in mealSlots"
-              :key="item.value"
-              :class="['plan-sheet__slot', mealSlot === item.value ? 'plan-sheet__slot--active' : '']"
-              @click="mealSlot = item.value"
-            >
-              {{ item.label }}
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <template #footer>
-        <view
-          :class="['plan-sheet__submit', planSubmitting ? 'plan-sheet__submit--disabled' : '']"
-          @click="submitPlan"
-        >
-          {{ planSubmitting ? "安排中..." : "确认安排" }}
-        </view>
-      </template>
-    </SheetShell>
+      @month-change="handlePlanMonthChange"
+      @confirm="submitPlan"
+    />
 
     <RecipeAddSheet
       v-if="currentAddItem"
@@ -241,16 +208,15 @@ import { mealApi as commonMealApi } from "@/apis/meal";
 import { recipeApi } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
+import PlanArrangeSheet from "@/components/PlanArrangeSheet.vue";
 import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
-import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
-import { formatMonthDay, formatPlanDate, formatSort, todayText } from "../utils/date";
+import { formatMonthDay, formatSort, todayText } from "../utils/date";
 import { isTopicQueued } from "../utils/home-topic";
 import { createOperationId } from "@/utils/operation-id";
 import {
@@ -260,7 +226,7 @@ import {
   type MealCalendarMark,
   type MealSlot
 } from "@/utils/meal-slot";
-import { addDays, formatDateOnly, parseDateOnly } from "@/pages_meal/utils/date";
+import { formatDateOnly, parseDateOnly } from "@/utils/date";
 
 const pageStyle = usePageScrollStyle();
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
@@ -528,15 +494,6 @@ function handleSheetAfterClose() {
   sheetMounted.value = false;
 }
 
-function handlePlanDateSelect(date: string) {
-  planDate.value = date;
-  const nextMonth = buildMonthAnchor(date);
-  if (nextMonth !== planMonth.value) {
-    planMonth.value = nextMonth;
-    void loadPlanMarks(nextMonth);
-  }
-}
-
 function handlePlanMonthChange(nextMonthDate: string) {
   const nextMonth = buildMonthAnchor(nextMonthDate);
   if (nextMonth === planMonth.value) return;
@@ -544,13 +501,13 @@ function handlePlanMonthChange(nextMonthDate: string) {
   void loadPlanMarks(nextMonth);
 }
 
-async function submitPlan() {
+async function submitPlan(payload: { planDate: string; mealSlot: MealSlot }) {
   const recipeIds = queuedItems.value.map(item => item.ownedRecipeId).filter((item): item is UUID => Boolean(item));
   if (!recipeIds.length || planSubmitting.value) return;
   planSubmitting.value = true;
   try {
-    const plans = await commonMealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
-    const currentPlan = plans.items.find(item => item.mealSlot === mealSlot.value) ?? null;
+    const plans = await commonMealApi.listPlans({ from: payload.planDate, to: payload.planDate, page: 1, pageSize: 10 });
+    const currentPlan = plans.items.find(item => item.mealSlot === payload.mealSlot) ?? null;
     const existingItems = currentPlan?.menuItems ?? [];
     const targetRecipeIds = [...existingItems.map(item => item.recipeId), ...recipeIds].filter(
       (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
@@ -577,8 +534,8 @@ async function submitPlan() {
     }
     await commonMealApi.createPlan({
       operationId: createOperationId(),
-      planDate: planDate.value,
-      mealSlot: mealSlot.value,
+      planDate: payload.planDate,
+      mealSlot: payload.mealSlot,
       expectedVersion: currentPlan?.version ?? null,
       menuItems
     });
@@ -596,10 +553,9 @@ async function loadPlanMarks(monthDate = planMonth.value) {
   const seq = ++planMarksSeq.value;
   try {
     const monthStart = parseDateOnly(monthDate);
-    const rangeStart = addDays(monthStart, -monthStart.getDay());
-    const rangeEnd = addDays(rangeStart, 41);
+    const rangeEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 12, 0, 0, 0);
     const items = await commonMealApi.listAllPlans({
-      from: formatDateOnly(rangeStart),
+      from: formatDateOnly(monthStart),
       to: formatDateOnly(rangeEnd)
     });
     if (seq !== planMarksSeq.value) return;
@@ -1361,36 +1317,6 @@ function buildMonthAnchor(dateText: string) {
   font-weight: 700;
 }
 
-.sheet-actions {
-  display: flex;
-  gap: 16rpx;
-}
-
-.sheet-actions__button {
-  flex: 1;
-  height: 92rpx;
-  border: none;
-  border-radius: var(--radius-pill);
-  font-size: 28rpx;
-  font-weight: 700;
-  line-height: 92rpx;
-}
-
-.sheet-actions__button--cancel {
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-}
-
-.sheet-actions__button--confirm {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-}
-
 .plan-queue {
   position: fixed;
   right: 28rpx;
@@ -1444,93 +1370,4 @@ function buildMonthAnchor(dateText: string) {
   line-height: 1;
 }
 
-.plan-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-  padding-bottom: 12rpx;
-}
-
-.plan-sheet__title-extra {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  font-weight: 500;
-}
-
-.plan-sheet__section {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-}
-
-.plan-sheet__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.plan-sheet__section-label {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: 700;
-}
-
-.plan-sheet__date {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: 600;
-}
-
-.plan-sheet__hint {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
-.plan-sheet__slot-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14rpx;
-}
-
-.plan-sheet__slot {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 84rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: 26rpx;
-  font-weight: 600;
-}
-
-.plan-sheet__slot--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-.plan-sheet__submit {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 92rpx;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.plan-sheet__submit--disabled {
-  opacity: 0.68;
-}
 </style>

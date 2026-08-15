@@ -8,7 +8,7 @@
 				<view class="profile-hero__mask" />
 				<view class="identity-card">
 					<template v-if="profileLoading">
-						<view class="profile-row">
+						<view class="profile-row" hover-class="is-pressed" hover-stay-time="100" @click="handleProfileAction">
 							<Skeleton shape="circle" width="112rpx" height="112rpx" />
 							<view class="profile-row__main">
 								<Skeleton width="250rpx" height="36rpx" />
@@ -21,7 +21,7 @@
 					</template>
 
 					<template v-else>
-						<view class="profile-row">
+						<view class="profile-row" hover-class="is-pressed" hover-stay-time="100" @click="handleProfileAction">
 							<view class="profile-row__avatar">
 								<image v-if="profileAvatarUrl" class="profile-row__avatar-image" :src="profileAvatarUrl"
 									mode="aspectFill" />
@@ -37,8 +37,7 @@
 								<text class="profile-row__uid">{{ profileUidText }}</text>
 							</view>
 
-							<view class="profile-row__edit" hover-class="is-pressed" hover-stay-time="100"
-								@click="handleProfileAction">
+							<view class="profile-row__edit" @click.stop="handleProfileAction">
 								<text class="profile-row__edit-arrow cookfont icon-back" aria-hidden="true" />
 							</view>
 						</view>

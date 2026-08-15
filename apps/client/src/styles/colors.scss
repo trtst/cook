@@ -34,6 +34,7 @@ page {
   --color-text-tertiary: #7b6d61;
   --color-text-inverse: #ffffff;
   --color-primary: var(--button-primary-gradient-start);
+  --color-primary-foreground: var(--button-primary-text);
   --color-primary-active: #6d9a8c;
   --color-primary-soft: rgba(138, 183, 164, 0.28);
   --color-border: rgba(111, 151, 136, 0.16);
@@ -67,6 +68,14 @@ page,
   --color-danger-button-bg: var(--color-danger);
   --color-danger-button-text: var(--color-danger-contrast);
   --color-info: #326fa8;
+  --meal-slot-breakfast: color-mix(in srgb, var(--button-primary-gradient-end) 72%, var(--color-warning) 28%);
+  --meal-slot-breakfast-soft: color-mix(in srgb, var(--meal-slot-breakfast) 18%, var(--color-surface));
+  --meal-slot-lunch: color-mix(in srgb, var(--color-primary) 82%, var(--color-success) 18%);
+  --meal-slot-lunch-soft: color-mix(in srgb, var(--meal-slot-lunch) 18%, var(--color-surface));
+  --meal-slot-dinner: color-mix(in srgb, var(--color-danger) 76%, var(--button-primary-gradient-end) 24%);
+  --meal-slot-dinner-soft: color-mix(in srgb, var(--meal-slot-dinner) 18%, var(--color-surface));
+  --meal-slot-extra: color-mix(in srgb, var(--color-text-secondary) 72%, var(--button-primary-gradient-end) 28%);
+  --meal-slot-extra-soft: color-mix(in srgb, var(--meal-slot-extra) 14%, var(--color-surface));
   --medal-icon-border: rgba(255, 255, 255, 0.66);
   --medal-icon-bg: var(--color-warning-button-bg);
   --medal-icon-shadow: 0 8rpx 16rpx var(--color-warning-soft);

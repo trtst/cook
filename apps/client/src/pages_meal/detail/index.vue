@@ -32,7 +32,7 @@
               </view>
               <text v-if="heroMeta" class="meal-hero__meta">{{ heroMeta }}</text>
               <view class="meal-hero__tags">
-                <text v-if="eventDetail" class="meal-hero__tag meal-hero__tag--accent">已关联饭局</text>
+                <text v-if="eventDetail" class="meal-hero__tag meal-hero__tag--accent">约了饭</text>
                 <text v-if="planDetail.status === 'COMPLETED'" class="meal-hero__tag meal-hero__tag--done">已完成</text>
                 <text v-if="eventDetail?.completedAt" class="meal-hero__tag meal-hero__tag--done">饭局已完成</text>
               </view>
