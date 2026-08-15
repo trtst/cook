@@ -7,6 +7,7 @@ import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AddPlanToShoppingListDto,
   AddRecipeToShoppingListDto,
+  ApplyShoppingListItemFridgeDto,
   ConsumeFridgeItemsDto,
   CreateRandomMenuShoppingItemsDto,
   CreateFridgeItemDto,
@@ -40,6 +41,7 @@ import {
   ShoppingBoardModel,
   ShoppingItemModel,
   ShoppingListDetailModel,
+  ShoppingListItemPatchResponseModel,
   ShoppingListInviteActionModel,
   ShoppingListInvitePageResponseModel,
   ShoppingListPageResponseModel,
@@ -71,7 +73,17 @@ export class PantryController {
     @Body() body: CreateFridgeItemDto
   ) {
     return this.pantryService
-      .createFridgeItem(request.user.userId, operationId, body.name, body.quantityText, body.note)
+      .createFridgeItem(
+        request.user.userId,
+        operationId,
+        body.name,
+        body.ingredientId ?? null,
+        body.quantityText ?? null,
+        body.exactQuantity ?? null,
+        body.exactUnitId ?? null,
+        body.expireAt ?? null,
+        body.note ?? null
+      )
       .then(result => ok(result));
   }
 
@@ -85,7 +97,16 @@ export class PantryController {
     @Body() body: UpdateFridgeItemDto
   ) {
     return this.pantryService
-      .updateFridgeItem(request.user.userId, itemId, operationId, body.name, body.quantityText, body.note)
+      .updateFridgeItem(
+        request.user.userId,
+        itemId,
+        operationId,
+        body.quantityText ?? null,
+        body.exactQuantity ?? null,
+        body.exactUnitId ?? null,
+        body.expireAt ?? null,
+        body.note ?? null
+      )
       .then(result => ok(result));
   }
 
@@ -201,7 +222,7 @@ export class PantryController {
 
   @Post("shopping-lists/:listId/items/:itemId/check")
   @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListDetailModel, "勾选或取消勾选一个购物清单项")
+  @ApiOkModel(ShoppingListItemPatchResponseModel, "勾选或取消勾选一个购物清单项")
   updateShoppingListItemCheck(
     @Req() request: RequestWithUser,
     @Param("listId", ParseIntPipe) listId: number,
@@ -214,9 +235,24 @@ export class PantryController {
       .then(result => ok(result));
   }
 
+  @Post("shopping-lists/:listId/items/:itemId/fridge")
+  @ApiIdempotencyKey()
+  @ApiOkModel(ShoppingListItemPatchResponseModel, "对一个购物清单项应用或撤销库存预占")
+  applyShoppingListItemFridge(
+    @Req() request: RequestWithUser,
+    @Param("listId", ParseIntPipe) listId: number,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ApplyShoppingListItemFridgeDto
+  ) {
+    return this.pantryService
+      .applyShoppingListItemFridge(request.user.userId, listId, itemId, operationId, body.version, body.action)
+      .then(result => ok(result));
+  }
+
   @Post("shopping-lists/:listId/items/:itemId/remove")
   @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListDetailModel, "把一个购物清单项从当前有效采购项中移除")
+  @ApiOkModel(ShoppingListItemPatchResponseModel, "把一个购物清单项从当前有效采购项中移除")
   removeShoppingListItem(
     @Req() request: RequestWithUser,
     @Param("listId", ParseIntPipe) listId: number,

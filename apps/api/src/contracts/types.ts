@@ -1705,6 +1705,16 @@ export interface MealPlanSummary {
   createdAt: IsoDateTime;
 }
 
+export interface AddMealPlanItemRequest {
+  operationId: OperationId;
+  planDate: string;
+  mealSlot: MealSlot;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  slotType?: RecipeSlotType | null;
+  purchaseState?: MealPlanDishPurchaseState;
+}
+
 export interface MealPlanCookAssistantTask {
   title: string;
   detail: string;
@@ -1744,6 +1754,8 @@ export interface MealPlanMenuItemSummary {
   recipeVersionId: UUID;
   title: string;
   servings: number | null;
+  duration: RecipeDuration | null;
+  durationText: string | null;
   slotType: RecipeSlotType | null;
   purchaseState: MealPlanDishPurchaseState;
   sortOrder: number;
@@ -2070,11 +2082,45 @@ export interface UpdateAdminMedalTemplateImageRequest {
 
 export interface FridgeItemSummary {
   id: UUID;
+  ingredientId: UUID | null;
   name: string;
   quantityText: string | null;
+  exactQuantity: string | null;
+  exactUnitId: UUID | null;
+  exactUnitName: string | null;
   note: string | null;
   available: boolean;
+  expireAt: IsoDateTime | null;
+  stockText: string | null;
+  reservedText: string | null;
+  availableText: string | null;
+  reservations: Array<{
+    shoppingListId: UUID;
+    shoppingListName: string;
+    shoppingItemId: UUID;
+    reservedText: string;
+  }>;
   updatedAt: IsoDateTime;
+}
+
+export interface CreateFridgeItemRequest {
+  operationId: OperationId;
+  name: string;
+  ingredientId?: UUID | null;
+  quantityText?: string | null;
+  exactQuantity?: string | null;
+  exactUnitId?: UUID | null;
+  expireAt?: IsoDateTime | null;
+  note?: string | null;
+}
+
+export interface UpdateFridgeItemRequest {
+  operationId: OperationId;
+  quantityText?: string | null;
+  exactQuantity?: string | null;
+  exactUnitId?: UUID | null;
+  expireAt?: IsoDateTime | null;
+  note?: string | null;
 }
 
 export interface ShoppingItemSummary {
@@ -2095,6 +2141,9 @@ export type ShoppingListRole = "OWNER" | "COLLABORATOR";
 export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
 export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
 export type ShoppingListItemStatus = "OPEN" | "CHECKED" | "REMOVED";
+export type ShoppingListItemFridgeAction = "APPLY" | "UNDO";
+export type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
+export type ShoppingInventoryStatus = "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
 
 export interface ShoppingListStatusCount {
   status: ShoppingListStatus;
@@ -2166,9 +2215,21 @@ export interface ShoppingListDetailItem {
   id: UUID;
   ingredientId: UUID | null;
   name: string;
+  categoryName: string | null;
+  imageUrl: string | null;
   quantityText: string | null;
+  requiredQuantityText: string | null;
+  remainingQuantityText: string | null;
+  appliedInventoryQuantityText: string | null;
   note: string | null;
   status: ShoppingListItemStatus;
+  fridgeText: string | null;
+  inventoryStatus: ShoppingInventoryStatus;
+  inventoryApplied: boolean;
+  inventoryCovered: boolean;
+  fridgeStatusText: string | null;
+  fridgeActionLabel: string | null;
+  fridgeActionMode: ShoppingListItemFridgeActionMode;
   checkedAt: IsoDateTime | null;
   updatedAt: IsoDateTime;
   sources: ShoppingItemSourceSummary[];
@@ -2186,9 +2247,24 @@ export interface ShoppingListDetail extends ShoppingListSummary {
   items: ShoppingListDetailItem[];
 }
 
+export interface ShoppingListItemPatchResponse {
+  listId: UUID;
+  version: number;
+  progressDoneCount: number;
+  progressTotalCount: number;
+  item: ShoppingListDetailItem | null;
+  removedItemId: UUID | null;
+}
+
 export interface CreateShoppingListRequest {
   operationId: OperationId;
   name: string | null;
+}
+
+export interface ApplyShoppingListItemFridgeRequest {
+  operationId: OperationId;
+  version: number;
+  action: ShoppingListItemFridgeAction;
 }
 
 export interface RenameShoppingListRequest {

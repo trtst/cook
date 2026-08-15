@@ -1214,6 +1214,8 @@ export class MealPlanMenuItemModel {
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: Number, nullable: true, minimum: 1 }) servings!: number | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({
     type: String,
     nullable: true,
@@ -1599,12 +1601,28 @@ export class SharePreviewModel {
   @ApiProperty({ type: Number }) organizerUid!: number;
 }
 
+export class FridgeReservationModel {
+  @ApiProperty(uuid) shoppingListId!: string;
+  @ApiProperty({ type: String }) shoppingListName!: string;
+  @ApiProperty(uuid) shoppingItemId!: string;
+  @ApiProperty({ type: String }) reservedText!: string;
+}
+
 export class FridgeItemModel {
   @ApiProperty(uuid) id!: string;
+  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) quantityText!: string | null;
+  @ApiProperty(nullableString) exactQuantity!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) exactUnitId!: string | null;
+  @ApiProperty(nullableString) exactUnitName!: string | null;
   @ApiProperty(nullableString) note!: string | null;
   @ApiProperty({ type: Boolean }) available!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) expireAt!: string | null;
+  @ApiProperty(nullableString) stockText!: string | null;
+  @ApiProperty(nullableString) reservedText!: string | null;
+  @ApiProperty(nullableString) availableText!: string | null;
+  @ApiProperty({ type: [FridgeReservationModel] }) reservations!: FridgeReservationModel[];
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
@@ -1697,9 +1715,21 @@ export class ShoppingListDetailItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
   @ApiProperty({ type: String }) name!: string;
+  @ApiProperty(nullableString) categoryName!: string | null;
+  @ApiProperty(nullableString) imageUrl!: string | null;
   @ApiProperty(nullableString) quantityText!: string | null;
+  @ApiProperty(nullableString) requiredQuantityText!: string | null;
+  @ApiProperty(nullableString) remainingQuantityText!: string | null;
+  @ApiProperty(nullableString) appliedInventoryQuantityText!: string | null;
   @ApiProperty(nullableString) note!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "CHECKED", "REMOVED"] }) status!: string;
+  @ApiProperty(nullableString) fridgeText!: string | null;
+  @ApiProperty({ type: String, enum: ["NONE", "ENOUGH", "SHORTAGE", "UNKNOWN"] }) inventoryStatus!: string;
+  @ApiProperty({ type: Boolean }) inventoryApplied!: boolean;
+  @ApiProperty({ type: Boolean }) inventoryCovered!: boolean;
+  @ApiProperty(nullableString) fridgeStatusText!: string | null;
+  @ApiProperty(nullableString) fridgeActionLabel!: string | null;
+  @ApiProperty({ type: String, enum: ["NONE", "APPLY_FULL", "APPLY_PARTIAL", "NEED_CONFIRM", "UNDO"] }) fridgeActionMode!: string;
   @ApiProperty({ ...dateTime, nullable: true }) checkedAt!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: [ShoppingItemSourceSummaryModel] }) sources!: ShoppingItemSourceSummaryModel[];
@@ -1715,6 +1745,15 @@ export class ShoppingListCollaboratorModel {
 export class ShoppingListDetailModel extends ShoppingListSummaryModel {
   @ApiProperty({ type: [ShoppingListCollaboratorModel] }) collaborators!: ShoppingListCollaboratorModel[];
   @ApiProperty({ type: [ShoppingListDetailItemModel] }) items!: ShoppingListDetailItemModel[];
+}
+
+export class ShoppingListItemPatchResponseModel {
+  @ApiProperty(uuid) listId!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) progressDoneCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) progressTotalCount!: number;
+  @ApiProperty({ type: ShoppingListDetailItemModel, nullable: true }) item!: ShoppingListDetailItemModel | null;
+  @ApiProperty({ ...uuid, nullable: true }) removedItemId!: string | null;
 }
 
 export class ShoppingShareLinkModel {

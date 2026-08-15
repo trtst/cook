@@ -1472,6 +1472,42 @@ export class CreateMealPlanDto extends OperationDto {
   note?: string | null;
 }
 
+export class AddMealPlanItemDto extends OperationDto {
+  @ApiProperty()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  planDate!: string;
+
+  @ApiProperty({ enum: mealSlotValues })
+  @IsIn(mealSlotValues)
+  mealSlot!: string;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeVersionId!: number;
+
+  @ApiPropertyOptional({
+    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"],
+    nullable: true
+  })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
+  slotType?: string | null;
+
+  @ApiPropertyOptional({ enum: ["READY", "PENDING"], default: "READY" })
+  @IsOptional()
+  @IsIn(["READY", "PENDING"])
+  purchaseState?: string;
+}
+
 export class RandomSlotPlanDto {
   @ApiProperty({ minimum: 0, maximum: 12 })
   @Type(() => Number)
@@ -1973,12 +2009,80 @@ export class CreateFridgeItemDto extends OperationDto {
   @MaxLength(120)
   name!: string;
 
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  ingredientId?: number | null;
+
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_object, value) => value !== null)
   @IsString()
   @MaxLength(64)
   quantityText?: string | null;
+
+  @ApiPropertyOptional({ example: "2.5", nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/)
+  exactQuantity?: string | null;
+
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  exactUnitId?: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(255)
+  note?: string | null;
+
+  @ApiPropertyOptional({ format: "date-time", nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  expireAt?: string | null;
+}
+
+export class UpdateFridgeItemDto extends OperationDto {
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(64)
+  quantityText?: string | null;
+
+  @ApiPropertyOptional({ example: "2.5", nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/)
+  exactQuantity?: string | null;
+
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  exactUnitId?: number | null;
+
+  @ApiPropertyOptional({ format: "date-time", nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601()
+  expireAt?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
@@ -1987,8 +2091,6 @@ export class CreateFridgeItemDto extends OperationDto {
   @MaxLength(255)
   note?: string | null;
 }
-
-export class UpdateFridgeItemDto extends CreateFridgeItemDto {}
 
 export class CreateShoppingItemDto extends OperationDto {
   @ApiProperty()
@@ -2206,6 +2308,18 @@ export class UpdateShoppingListItemCheckDto extends OperationDto {
   @ApiProperty({ example: true })
   @IsBoolean()
   checked!: boolean;
+}
+
+export class ApplyShoppingListItemFridgeDto extends OperationDto {
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({ enum: ["APPLY", "UNDO"] })
+  @IsIn(["APPLY", "UNDO"])
+  action!: "APPLY" | "UNDO";
 }
 
 export class RemoveShoppingListItemDto extends OperationDto {

@@ -24,6 +24,9 @@ import type {
   ShoppingListInviteSummary,
   ShoppingListDetail,
   ShoppingListDetailItem,
+  ShoppingListItemFridgeActionMode,
+  ShoppingListItemPatchResponse,
+  ShoppingInventoryStatus,
   ShoppingListPageResponse,
   ShoppingListStatusCount,
   ShoppingListSummary,
@@ -44,6 +47,7 @@ import type {
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
+import { IngredientImageService } from "../admin/ingredient-image.service";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -85,6 +89,10 @@ function addDays(base: Date, days: number) {
 
 function normalizeNameKey(value: string) {
   return value.trim().toLowerCase();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 type GapEvent = {
@@ -166,6 +174,45 @@ type ExactAmountGroup = {
   quantity: Prisma.Decimal;
 };
 
+type FridgeMatchRow = {
+  id: UUID;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  exactQuantity: Prisma.Decimal | null;
+  exactUnitId: UUID | null;
+  exactUnitName: string | null;
+  available: boolean;
+};
+
+type FridgeReservationSummaryRow = {
+  shoppingListId: UUID;
+  shoppingListName: string;
+  shoppingItemId: UUID;
+  reservedQuantity: Prisma.Decimal;
+  reservedUnitName: string;
+};
+
+type ShoppingItemFridgeMeta = {
+  requiredQuantityText: string | null;
+  remainingQuantityText: string | null;
+  appliedInventoryQuantityText: string | null;
+  fridgeText: string | null;
+  inventoryStatus: ShoppingInventoryStatus;
+  inventoryApplied: boolean;
+  inventoryCovered: boolean;
+  fridgeStatusText: string | null;
+  fridgeActionLabel: string | null;
+  fridgeActionMode: ShoppingListItemFridgeActionMode;
+};
+
+type ShoppingListProgressRow = {
+  ingredientId: UUID | null;
+  name: string;
+  status: "OPEN" | "BOUGHT" | "DELETED";
+  fridgeCovered: boolean;
+};
+
 type EntitlementReader = Pick<Prisma.TransactionClient, "entitlementGrant" | "diningGroupMember" | "diningGroup">;
 
 const recipeSourceType = "RECIPE" as ShoppingSourceType;
@@ -192,11 +239,48 @@ const shoppingRowSelect = {
   updatedAt: true
 } satisfies Prisma.ShoppingItemSelect;
 
+const shoppingDetailItemSelect = {
+  id: true,
+  ingredientId: true,
+  name: true,
+  quantityText: true,
+  baseQuantityText: true,
+  fridgeAppliedQuantityText: true,
+  fridgeCovered: true,
+  note: true,
+  status: true,
+  checkedAt: true,
+  updatedAt: true,
+  sourceType: true,
+  sourceKey: true,
+  sourceRecipeId: true,
+  sourceRecipeVersionId: true,
+  sourceRecipeTitle: true,
+  sourceBaseServings: true,
+  sourceBatchKey: true,
+  amountJson: true,
+  ingredient: {
+    select: {
+      ownerId: true,
+      id: true,
+      imageUpdatedAt: true,
+      category: {
+        select: {
+          name: true
+        }
+      }
+    }
+  }
+} satisfies Prisma.ShoppingItemSelect;
+
+type ShoppingDetailItemRow = Prisma.ShoppingItemGetPayload<{ select: typeof shoppingDetailItemSelect }>;
+
 @Injectable()
 export class PantryService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(EntitlementService) private readonly entitlementService: EntitlementService
+    @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
+    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService
   ) {}
 
   async listFridge(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeItemSummary>> {
@@ -204,59 +288,119 @@ export class PantryService {
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const where = { userId };
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.fridgeItem.findMany({
-        where,
-        orderBy: [{ available: "desc" }, { updatedAt: "desc" }],
-        skip,
-        take: normalizedPageSize
-      }),
-      this.prisma.fridgeItem.count({ where })
-    ]);
+    return this.prisma.$transaction(async tx => {
+      const [items, total] = await Promise.all([
+        tx.fridgeItem.findMany({
+          where,
+          orderBy: [{ available: "desc" }, { updatedAt: "desc" }],
+          skip,
+          take: normalizedPageSize,
+          include: {
+            exactUnit: {
+              select: {
+                id: true,
+                name: true
+              }
+            },
+            sourceShoppingItem: {
+              select: {
+                amountJson: true
+              }
+            }
+          }
+        }),
+        tx.fridgeItem.count({ where })
+      ]);
+      const reservationMap = await this.loadFridgeReservationMap(tx, items.map(item => item.id));
 
-    return {
-      items: items.map(item => ({
-        id: item.id,
-        name: item.name,
-        quantityText: item.quantityText,
-        note: item.note,
-        available: item.available,
-        updatedAt: toIsoDate(item.updatedAt)
-      })),
-      page: normalizedPage,
-      pageSize: normalizedPageSize,
-      total,
-      hasNext: skip + items.length < total
-    };
+      return {
+        items: items.map(item => this.toFridgeItemSummary(item, reservationMap.get(item.id) ?? [])),
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total,
+        hasNext: skip + items.length < total
+      };
+    });
   }
 
-  async createFridgeItem(userId: UUID, operationId: OperationId, name: string, quantityText?: string | null, note?: string | null) {
+  async createFridgeItem(
+    userId: UUID,
+    operationId: OperationId,
+    name: string,
+    ingredientId: UUID | null,
+    quantityText?: string | null,
+    exactQuantity?: string | null,
+    exactUnitId?: UUID | null,
+    expireAt?: string | null,
+    note?: string | null
+  ) {
     const normalized = this.normalizePantryFields(name, quantityText, note);
-    const requestHash = JSON.stringify(normalized);
+    const normalizedExpireAt = this.normalizeExpireAt(expireAt);
+    const requestHash = JSON.stringify({
+      ...normalized,
+      ingredientId,
+      exactQuantity: exactQuantity ?? null,
+      exactUnitId: exactUnitId ?? null,
+      expireAt: normalizedExpireAt?.toISOString() ?? null
+    });
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<FridgeItemSummary>(tx, operationId, "fridge:create", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "fridge:create", userId, null, requestHash);
       await this.assertStorageWritable(tx, userId, sizeOfJson(normalized));
+      const fridgeInput = await this.buildFridgeWriteInput(
+        tx,
+        userId,
+        ingredientId,
+        normalized.name,
+        normalized.quantityText,
+        exactQuantity,
+        exactUnitId,
+        normalizedExpireAt,
+        normalized.note
+      );
 
       const item = await tx.fridgeItem.create({
         data: {
           userId,
-          name: normalized.name,
-          quantityText: normalized.quantityText,
-          note: normalized.note
+          ...fridgeInput
+        },
+        include: {
+          exactUnit: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
         }
       });
       await upsertStorageLedger(tx, userId, "FRIDGE", item.id, sizeOfJson(item));
-      const result = this.toFridgeItemSummary(item);
+      const result = await this.loadFridgeItemSummaryFromTx(tx, userId, item.id);
       await completeIdempotentOperation(tx, operationId, "fridge:create", userId, null, requestHash, result);
       return result;
     });
   }
 
-  async updateFridgeItem(userId: UUID, itemId: UUID, operationId: OperationId, name: string, quantityText?: string | null, note?: string | null) {
-    const normalized = this.normalizePantryFields(name, quantityText, note);
-    const requestHash = `${itemId}:${JSON.stringify(normalized)}`;
+  async updateFridgeItem(
+    userId: UUID,
+    itemId: UUID,
+    operationId: OperationId,
+    quantityText?: string | null,
+    exactQuantity?: string | null,
+    exactUnitId?: UUID | null,
+    expireAt?: string | null,
+    note?: string | null
+  ) {
+    const normalizedQuantityText = quantityText?.trim() || null;
+    const normalizedNote = note?.trim() || null;
+    const normalizedExpireAt = this.normalizeExpireAt(expireAt);
+    const requestHash = `${itemId}:${JSON.stringify({
+      quantityText: normalizedQuantityText,
+      exactQuantity: exactQuantity ?? null,
+      exactUnitId: exactUnitId ?? null,
+      expireAt: normalizedExpireAt?.toISOString() ?? null,
+      note: normalizedNote
+    })}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<FridgeItemSummary>(tx, operationId, "fridge:update", userId, null, requestHash);
       if (repeated) return repeated;
@@ -265,13 +409,32 @@ export class PantryService {
 
       const item = await tx.fridgeItem.findUnique({ where: { id: itemId } });
       if (!item || item.userId !== userId) throw new NotFoundException("食材不存在");
+      const fridgeInput = await this.buildFridgeWriteInput(
+        tx,
+        userId,
+        item.ingredientId,
+        item.name,
+        normalizedQuantityText,
+        exactQuantity,
+        exactUnitId,
+        normalizedExpireAt,
+        normalizedNote
+      );
 
       const next = await tx.fridgeItem.update({
         where: { id: itemId },
-        data: normalized
+        data: fridgeInput,
+        include: {
+          exactUnit: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
       });
       await upsertStorageLedger(tx, userId, "FRIDGE", next.id, sizeOfJson(next));
-      const result = this.toFridgeItemSummary(next);
+      const result = await this.loadFridgeItemSummaryFromTx(tx, userId, next.id);
       await completeIdempotentOperation(tx, operationId, "fridge:update", userId, null, requestHash, result);
       return result;
     });
@@ -419,7 +582,10 @@ export class PantryService {
             }
           },
           select: {
-            status: true
+            ingredientId: true,
+            name: true,
+            status: true,
+            fridgeCovered: true
           }
         }
       }
@@ -553,6 +719,7 @@ export class PantryService {
           listId,
           name: normalized.name,
           quantityText: normalized.quantityText,
+          baseQuantityText: normalized.quantityText,
           note: normalized.note,
           sourceType: "MANUAL",
           ingredientId
@@ -622,6 +789,7 @@ export class PantryService {
             listId,
             name: ingredient.ingredientName,
             quantityText: formatRecipeAmount(ingredient.amount),
+            baseQuantityText: formatRecipeAmount(ingredient.amount),
             note: source.title,
             sourceType: itemSourceType,
             sourceKey: itemSourceKey ?? `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
@@ -657,7 +825,9 @@ export class PantryService {
       await startIdempotentOperation(tx, operationId, "shopping-list:item:plan", userId, null, requestHash);
       const access = await this.assertShoppingListWritable(tx, userId, listId);
       const recipes = await this.readPlanShoppingRecipes(tx, userId, planItemId);
-      const sources = await Promise.all(recipes.map(item => this.loadRecipeShoppingSource(tx, userId, item.recipeId, item.sourceVersionId)));
+      const sources = await Promise.all(
+        recipes.map(item => this.loadRecipeShoppingSource(tx, userId, item.recipeId, item.sourceVersionId, true))
+      );
       const batchKey = String(operationId);
       const itemSourceKey = String(planItemId);
       const sizeBytes = sources.reduce(
@@ -692,13 +862,14 @@ export class PantryService {
       for (const source of sources) {
         for (const [index, ingredient] of source.ingredients.entries()) {
           const created = await tx.shoppingItem.create({
-            data: {
-              userId: access.ownerUserId,
-              listId,
-              name: ingredient.ingredientName,
-              quantityText: formatRecipeAmount(ingredient.amount),
-              note: source.title,
-              sourceType: planSourceType,
+          data: {
+            userId: access.ownerUserId,
+            listId,
+            name: ingredient.ingredientName,
+            quantityText: formatRecipeAmount(ingredient.amount),
+            baseQuantityText: formatRecipeAmount(ingredient.amount),
+            note: source.title,
+            sourceType: planSourceType,
               sourceKey: itemSourceKey,
               sourceRecipeId: source.recipeId,
               sourceRecipeVersionId: source.sourceVersionId,
@@ -733,10 +904,10 @@ export class PantryService {
     operationId: OperationId,
     version: number,
     checked: boolean
-  ): Promise<ShoppingListDetail> {
+  ): Promise<ShoppingListItemPatchResponse> {
     const requestHash = `${listId}:${itemId}:${version}:${checked}`;
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:item:check", userId, null, requestHash);
+      const repeated = await getIdempotentResult<ShoppingListItemPatchResponse>(tx, operationId, "shopping-list:item:check", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:item:check", userId, null, requestHash);
       const access = await this.assertShoppingListWritable(tx, userId, listId);
@@ -752,6 +923,9 @@ export class PantryService {
       }
       if (item.status === "DELETED") {
         throw new BadRequestException("当前购物项已移除");
+      }
+      if (item.fridgeCovered) {
+        throw new BadRequestException("当前购物项已由库存覆盖，无需勾选采购");
       }
       await tx.shoppingItem.update({
         where: { id: itemId },
@@ -773,8 +947,108 @@ export class PantryService {
           version: { increment: 1 }
         }
       });
-      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
+      const result = await this.loadShoppingListItemPatchFromTx(tx, userId, listId, itemId, null);
       await completeIdempotentOperation(tx, operationId, "shopping-list:item:check", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async applyShoppingListItemFridge(
+    userId: UUID,
+    listId: UUID,
+    itemId: UUID,
+    operationId: OperationId,
+    version: number,
+    action: "APPLY" | "UNDO"
+  ): Promise<ShoppingListItemPatchResponse> {
+    const requestHash = `${listId}:${itemId}:${version}:${action}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<ShoppingListItemPatchResponse>(tx, operationId, "shopping-list:item:fridge", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "shopping-list:item:fridge", userId, null, requestHash);
+      const access = await this.assertShoppingListOwner(tx, userId, listId);
+      this.assertShoppingListVersion(access.version, version);
+      if (access.status !== "ACTIVE") {
+        throw new BadRequestException("当前清单不能调整库存抵扣");
+      }
+      const item = await tx.shoppingItem.findFirst({
+        where: {
+          id: itemId,
+          listId
+        },
+        select: shoppingDetailItemSelect
+      });
+      if (!item) {
+        throw new NotFoundException("购物项不存在");
+      }
+      if (item.status !== "OPEN") {
+        throw new BadRequestException("当前购物项不能调整库存抵扣");
+      }
+
+      if (action === "UNDO") {
+        if (!item.fridgeAppliedQuantityText) {
+          throw new BadRequestException("当前购物项还没有应用库存");
+        }
+        await this.releaseShoppingItemReservations(tx, [itemId], new Date());
+        await tx.shoppingItem.update({
+          where: { id: itemId },
+          data: {
+            quantityText: item.baseQuantityText ?? item.quantityText,
+            fridgeAppliedQuantityText: null,
+            fridgeCovered: false,
+            version: { increment: 1 }
+          }
+        });
+      } else {
+        if (item.fridgeAppliedQuantityText) {
+          throw new BadRequestException("当前购物项已经应用库存");
+        }
+        const activeReservationCount = await tx.shoppingItemFridgeReservation.count({
+          where: {
+            shoppingItemId: itemId,
+            releasedAt: null,
+            settledAt: null
+          }
+        });
+        if (activeReservationCount > 0) {
+          throw new BadRequestException("当前购物项已经应用库存");
+        }
+        const fridgeRows = await this.loadShoppingFridgeRows(tx, access.ownerUserId);
+        const reservationPlan = this.buildShoppingItemReservationPlan(item, fridgeRows);
+        if (reservationPlan.mode === "NEED_CONFIRM") {
+          throw new BadRequestException("当前库存数量还不能自动计算，请先补齐结构化数量");
+        }
+        if (reservationPlan.mode === "NONE" || !reservationPlan.reservations.length) {
+          throw new BadRequestException("当前购物项没有可自动使用的库存");
+        }
+        await tx.shoppingItemFridgeReservation.createMany({
+          data: reservationPlan.reservations.map(current => ({
+            userId: access.ownerUserId,
+            shoppingListId: listId,
+            shoppingItemId: itemId,
+            fridgeItemId: current.fridgeItemId,
+            reservedQuantity: current.reservedQuantity,
+            reservedUnitId: current.reservedUnitId
+          }))
+        });
+        await tx.shoppingItem.update({
+          where: { id: itemId },
+          data: {
+            fridgeAppliedQuantityText: reservationPlan.appliedQuantityText,
+            fridgeCovered: reservationPlan.covered,
+            version: { increment: 1 }
+          }
+        });
+      }
+
+      await tx.shoppingList.update({
+        where: { id: listId },
+        data: {
+          version: { increment: 1 }
+        }
+      });
+      const result = await this.loadShoppingListItemPatchFromTx(tx, userId, listId, itemId, null);
+      await completeIdempotentOperation(tx, operationId, "shopping-list:item:fridge", userId, null, requestHash, result);
       return result;
     });
   }
@@ -785,10 +1059,10 @@ export class PantryService {
     itemId: UUID,
     operationId: OperationId,
     version: number
-  ): Promise<ShoppingListDetail> {
+  ): Promise<ShoppingListItemPatchResponse> {
     const requestHash = `${listId}:${itemId}:${version}`;
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:item:remove", userId, null, requestHash);
+      const repeated = await getIdempotentResult<ShoppingListItemPatchResponse>(tx, operationId, "shopping-list:item:remove", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:item:remove", userId, null, requestHash);
       const access = await this.assertShoppingListWritable(tx, userId, listId);
@@ -802,6 +1076,7 @@ export class PantryService {
       if (!item) {
         throw new NotFoundException("购物项不存在");
       }
+      await this.releaseShoppingItemReservations(tx, [itemId], new Date());
       await tx.shoppingItem.update({
         where: { id: itemId },
         data: {
@@ -816,7 +1091,7 @@ export class PantryService {
           version: { increment: 1 }
         }
       });
-      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
+      const result = await this.loadShoppingListItemPatchFromTx(tx, userId, listId, null, itemId);
       await completeIdempotentOperation(tx, operationId, "shopping-list:item:remove", userId, null, requestHash, result);
       return result;
     });
@@ -833,6 +1108,7 @@ export class PantryService {
       if (access.status !== "ACTIVE") {
         throw new BadRequestException("当前清单不能作废");
       }
+      await this.releaseShoppingListReservationsAndRestoreItems(tx, listId, new Date());
       await this.closeShoppingShareInTx(tx, listId);
       await tx.shoppingList.update({
         where: { id: listId },
@@ -864,6 +1140,7 @@ export class PantryService {
       await tx.shoppingItem.updateMany({
         where: {
           listId,
+          fridgeCovered: false,
           status: {
             not: "DELETED"
           }
@@ -1059,23 +1336,48 @@ export class PantryService {
         if (!entry.store) continue;
         const item = checkedMap.get(entry.itemId)!;
         const expireAt = entry.expireAt ? new Date(entry.expireAt) : addDays(now, entry.expireDays ?? 7);
+        const customQuantityText = entry.quantityText?.trim() || null;
+        const quantities = this.resolveShoppingItemQuantities(item);
+        const storedQuantityText = customQuantityText || quantities.remainingQuantityText || quantities.requiredQuantityText;
+        const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
+        const exactQuantity = exactAmount
+          ? customQuantityText
+            ? this.parseExactQuantityByUnit(customQuantityText, exactAmount.unitName)
+            : quantities.remainingQuantityText
+              ? this.parseExactQuantityByUnit(quantities.remainingQuantityText, exactAmount.unitName)
+              : null
+          : null;
         expectedDeltaBytes += sizeOfJson({
           userId: access.ownerUserId,
           ingredientId: item.ingredientId,
           sourceShoppingListId: listId,
           sourceShoppingItemId: item.id,
           name: item.name,
-          quantityText: entry.quantityText?.trim() || item.quantityText,
+          quantityText: exactAmount && exactQuantity !== null ? this.formatExactQuantityText(exactQuantity, exactAmount.unitName) : storedQuantityText,
+          exactQuantity,
+          exactUnitId: exactAmount && exactQuantity !== null ? exactAmount.unitId : null,
           note: item.note,
           available: true,
           expireAt
         });
       }
       await this.assertStorageWritable(tx, access.ownerUserId, expectedDeltaBytes);
+      await this.settleShoppingListReservations(tx, listId, now);
       for (const entry of entries) {
         if (!entry.store) continue;
         const item = checkedMap.get(entry.itemId)!;
         const expireAt = entry.expireAt ? new Date(entry.expireAt) : addDays(now, entry.expireDays ?? 7);
+        const customQuantityText = entry.quantityText?.trim() || null;
+        const quantities = this.resolveShoppingItemQuantities(item);
+        const storedQuantityText = customQuantityText || quantities.remainingQuantityText || quantities.requiredQuantityText;
+        const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
+        const exactQuantity = exactAmount
+          ? customQuantityText
+            ? this.parseExactQuantityByUnit(customQuantityText, exactAmount.unitName)
+            : quantities.remainingQuantityText
+              ? this.parseExactQuantityByUnit(quantities.remainingQuantityText, exactAmount.unitName)
+              : null
+          : null;
         const created = await tx.fridgeItem.create({
           data: {
             userId: access.ownerUserId,
@@ -1083,7 +1385,9 @@ export class PantryService {
             sourceShoppingListId: listId,
             sourceShoppingItemId: item.id,
             name: item.name,
-            quantityText: entry.quantityText?.trim() || item.quantityText,
+            quantityText: exactAmount && exactQuantity !== null ? this.formatExactQuantityText(exactQuantity, exactAmount.unitName) : storedQuantityText,
+            exactQuantity,
+            exactUnitId: exactAmount && exactQuantity !== null ? exactAmount.unitId : null,
             note: item.note,
             expireAt
           }
@@ -2239,6 +2543,282 @@ export class PantryService {
     return access;
   }
 
+  private async loadShoppingListItemPatchFromTx(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    listId: UUID,
+    changedItemId: UUID | null,
+    removedItemId: UUID | null
+  ): Promise<ShoppingListItemPatchResponse> {
+    const access = await this.assertShoppingListReadable(tx, userId, listId);
+    const canUseFridgeAction = access.role === "OWNER" && access.status === "ACTIVE";
+    const [items, fridgeRows] = await Promise.all([
+      changedItemId === null
+        ? Promise.resolve([] as ShoppingDetailItemRow[])
+        : tx.shoppingItem.findMany({
+            where: {
+              listId,
+              status: {
+                not: "DELETED"
+              }
+            },
+            orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+            select: shoppingDetailItemSelect
+          }),
+      changedItemId !== null && canUseFridgeAction
+        ? this.loadShoppingFridgeRows(tx, access.ownerUserId)
+        : Promise.resolve([] as FridgeMatchRow[])
+    ]);
+    if (changedItemId !== null && !items.some(item => item.id === changedItemId)) {
+      throw new NotFoundException("购物项不存在");
+    }
+    const itemMap = changedItemId === null
+      ? null
+      : this.buildShoppingListDetailItemMap(items, fridgeRows, canUseFridgeAction);
+    const progress = this.buildShoppingListProgress(items);
+    return {
+      listId,
+      version: access.version,
+      progressDoneCount: progress.progressDoneCount,
+      progressTotalCount: progress.progressTotalCount,
+      item: changedItemId === null ? null : itemMap?.get(changedItemId) ?? null,
+      removedItemId
+    };
+  }
+
+  private async loadShoppingFridgeRows(tx: Prisma.TransactionClient, userId: UUID): Promise<FridgeMatchRow[]> {
+    const [fridgeItems, reservations] = await Promise.all([
+      tx.fridgeItem.findMany({
+        where: {
+          userId,
+          available: true
+        },
+        orderBy: [{ id: "asc" }],
+        select: {
+          id: true,
+          ingredientId: true,
+          name: true,
+          quantityText: true,
+          exactQuantity: true,
+          exactUnitId: true,
+          available: true,
+          exactUnit: {
+            select: {
+              name: true
+            }
+          },
+          sourceShoppingItem: {
+            select: {
+              amountJson: true
+            }
+          }
+        }
+      }),
+      tx.shoppingItemFridgeReservation.findMany({
+        where: {
+          userId,
+          releasedAt: null,
+          settledAt: null
+        },
+        select: {
+          fridgeItemId: true,
+          reservedQuantity: true
+        }
+      })
+    ]);
+
+    const reservedMap = new Map<UUID, Prisma.Decimal>();
+    for (const reservation of reservations) {
+      const current = reservedMap.get(reservation.fridgeItemId) ?? new Prisma.Decimal(0);
+      reservedMap.set(reservation.fridgeItemId, current.add(reservation.reservedQuantity));
+    }
+
+    return fridgeItems.map(item => {
+      const resolvedExact = this.resolveFridgeExactAmount(item);
+      if (!resolvedExact) {
+        return {
+          id: item.id,
+          ingredientId: item.ingredientId,
+          name: item.name,
+          quantityText: item.quantityText,
+          exactQuantity: null,
+          exactUnitId: null,
+          exactUnitName: null,
+          available: item.available
+        } satisfies FridgeMatchRow;
+      }
+      const reservedQuantity = reservedMap.get(item.id) ?? new Prisma.Decimal(0);
+      const remainingQuantity = resolvedExact.quantity.sub(reservedQuantity);
+      const exactQuantity = remainingQuantity.gt(0) ? remainingQuantity : new Prisma.Decimal(0);
+      return {
+        id: item.id,
+        ingredientId: item.ingredientId,
+        name: item.name,
+        quantityText: this.formatExactQuantityText(exactQuantity, resolvedExact.unitName),
+        exactQuantity,
+        exactUnitId: resolvedExact.unitId,
+        exactUnitName: resolvedExact.unitName,
+        available: exactQuantity.gt(0)
+      } satisfies FridgeMatchRow;
+    });
+  }
+
+  private async releaseShoppingItemReservations(tx: Prisma.TransactionClient, shoppingItemIds: UUID[], releasedAt: Date) {
+    const uniqueIds = Array.from(new Set(shoppingItemIds));
+    if (!uniqueIds.length) return;
+    await tx.shoppingItemFridgeReservation.updateMany({
+      where: {
+        shoppingItemId: {
+          in: uniqueIds
+        },
+        releasedAt: null,
+        settledAt: null
+      },
+      data: {
+        releasedAt
+      }
+    });
+  }
+
+  private async releaseShoppingListReservationsAndRestoreItems(tx: Prisma.TransactionClient, listId: UUID, releasedAt: Date) {
+    const appliedItems = await tx.shoppingItem.findMany({
+      where: {
+        listId,
+        fridgeAppliedQuantityText: {
+          not: null
+        },
+        status: {
+          not: "DELETED"
+        }
+      },
+      select: {
+        id: true,
+        quantityText: true,
+        baseQuantityText: true
+      }
+    });
+    if (!appliedItems.length) return;
+
+    await this.releaseShoppingItemReservations(tx, appliedItems.map(item => item.id), releasedAt);
+    for (const item of appliedItems) {
+      await tx.shoppingItem.update({
+        where: {
+          id: item.id
+        },
+        data: {
+          quantityText: item.baseQuantityText ?? item.quantityText,
+          fridgeAppliedQuantityText: null,
+          fridgeCovered: false,
+          version: { increment: 1 }
+        }
+      });
+    }
+  }
+
+  private async settleShoppingListReservations(tx: Prisma.TransactionClient, listId: UUID, settledAt: Date) {
+    const reservations = await tx.shoppingItemFridgeReservation.findMany({
+      where: {
+        shoppingListId: listId,
+        releasedAt: null,
+        settledAt: null
+      },
+      select: {
+        id: true,
+        fridgeItemId: true,
+        reservedQuantity: true,
+        reservedUnitId: true
+      }
+    });
+    if (!reservations.length) return;
+
+    const grouped = new Map<UUID, { reservedQuantity: Prisma.Decimal; reservedUnitId: UUID; reservationIds: UUID[] }>();
+    for (const reservation of reservations) {
+      const current = grouped.get(reservation.fridgeItemId);
+      if (current) {
+        if (current.reservedUnitId !== reservation.reservedUnitId) {
+          throw new BadRequestException("库存预占单位不一致，暂时不能完成清单");
+        }
+        current.reservedQuantity = current.reservedQuantity.add(reservation.reservedQuantity);
+        current.reservationIds.push(reservation.id);
+        continue;
+      }
+      grouped.set(reservation.fridgeItemId, {
+        reservedQuantity: new Prisma.Decimal(reservation.reservedQuantity),
+        reservedUnitId: reservation.reservedUnitId,
+        reservationIds: [reservation.id]
+      });
+    }
+
+    const fridgeItems = await tx.fridgeItem.findMany({
+      where: {
+        id: {
+          in: [...grouped.keys()]
+        }
+      },
+      select: {
+        id: true,
+        available: true,
+        quantityText: true,
+        exactQuantity: true,
+        exactUnitId: true,
+        exactUnit: {
+          select: {
+            name: true
+          }
+        },
+        sourceShoppingItem: {
+          select: {
+            amountJson: true
+          }
+        }
+      }
+    });
+    const fridgeMap = new Map(fridgeItems.map(item => [item.id, item]));
+    for (const [fridgeItemId, current] of grouped) {
+      const fridgeItem = fridgeMap.get(fridgeItemId);
+      if (!fridgeItem) {
+        throw new BadRequestException("预占库存已变更，请刷新后重试");
+      }
+      const resolvedExact = this.resolveFridgeExactAmount(fridgeItem);
+      if (!resolvedExact) {
+        throw new BadRequestException("预占库存已变更，请刷新后重试");
+      }
+      if (!fridgeItem.available) {
+        throw new BadRequestException("预占库存已失效，请刷新后重试");
+      }
+      if (resolvedExact.unitId !== current.reservedUnitId) {
+        throw new BadRequestException("预占库存单位已变更，请刷新后重试");
+      }
+      const remainingQuantity = resolvedExact.quantity.sub(current.reservedQuantity);
+      if (remainingQuantity.lt(0)) {
+        throw new BadRequestException("预占库存已不足，请刷新后重试");
+      }
+      await tx.fridgeItem.update({
+        where: {
+          id: fridgeItemId
+        },
+        data: {
+          quantityText: this.formatExactQuantityText(remainingQuantity, resolvedExact.unitName),
+          exactQuantity: remainingQuantity,
+          exactUnitId: resolvedExact.unitId,
+          available: remainingQuantity.gt(0),
+          consumedAt: remainingQuantity.gt(0) ? null : settledAt,
+          version: { increment: 1 }
+        }
+      });
+      await tx.shoppingItemFridgeReservation.updateMany({
+        where: {
+          id: {
+            in: current.reservationIds
+          }
+        },
+        data: {
+          settledAt
+        }
+      });
+    }
+  }
+
   private async loadShoppingListPageFromTx(
     tx: Prisma.TransactionClient,
     userId: UUID,
@@ -2303,7 +2883,10 @@ export class PantryService {
             }
           },
           select: {
-            status: true
+            ingredientId: true,
+            name: true,
+            status: true,
+            fridgeCovered: true
           }
         }
       }
@@ -2379,23 +2962,7 @@ export class PantryService {
             }
           },
           orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-          select: {
-            id: true,
-            ingredientId: true,
-            name: true,
-            quantityText: true,
-            note: true,
-            status: true,
-            checkedAt: true,
-            updatedAt: true,
-            sourceType: true,
-            sourceKey: true,
-            sourceRecipeId: true,
-            sourceRecipeVersionId: true,
-            sourceRecipeTitle: true,
-            sourceBaseServings: true,
-            sourceBatchKey: true
-          }
+          select: shoppingDetailItemSelect
         }
       }
     });
@@ -2406,13 +2973,21 @@ export class PantryService {
     if (!currentMember) {
       throw new NotFoundException("购物清单不存在");
     }
+    const fridgeRows = currentMember.role === "OWNER" && list.status === "ACTIVE"
+      ? await this.loadShoppingFridgeRows(tx, list.ownerUserId)
+      : [];
+    const detailItemMap = this.buildShoppingListDetailItemMap(
+      list.items,
+      fridgeRows,
+      currentMember.role === "OWNER" && list.status === "ACTIVE"
+    );
     return {
       ...(await this.toShoppingListSummary(tx, {
         ...list,
         members: [{ role: currentMember.role }]
       })),
       collaborators: list.members.map(member => this.toShoppingListCollaborator(member)),
-      items: list.items.map(item => this.toShoppingListDetailItem(item))
+      items: list.items.map(item => detailItemMap.get(item.id)!)
     };
   }
 
@@ -2503,10 +3078,9 @@ export class PantryService {
     members: Array<{ role: "OWNER" | "COLLABORATOR" }>;
     _count: { members: number; invites: number };
     shareTokens: Array<{ id: UUID }>;
-    items: Array<{ status: "OPEN" | "BOUGHT" | "DELETED" }>;
+    items: ShoppingListProgressRow[];
   }): Promise<ShoppingListSummary> {
-    const progressTotalCount = list.items.filter(item => item.status !== "DELETED").length;
-    const progressDoneCount = list.items.filter(item => item.status === "BOUGHT").length;
+    const { progressDoneCount, progressTotalCount } = this.buildShoppingListProgress(list.items);
     const memberLimit = await this.resolveShoppingListMemberLimit(tx, list.ownerUserId);
     return {
       id: list.id,
@@ -2526,6 +3100,27 @@ export class PantryService {
       updatedAt: toIsoDate(list.updatedAt),
       completedAt: list.completedAt ? toIsoDate(list.completedAt) : null,
       voidedAt: list.voidedAt ? toIsoDate(list.voidedAt) : null
+    };
+  }
+
+  private buildShoppingListProgress(items: ShoppingListProgressRow[]) {
+    const bucket = new Map<string, ShoppingListProgressRow[]>();
+    for (const item of items) {
+      if (item.status === "DELETED") continue;
+      const key = this.buildShoppingItemGroupKey(item);
+      const current = bucket.get(key) ?? [];
+      current.push(item);
+      bucket.set(key, current);
+    }
+    let progressDoneCount = 0;
+    for (const groupItems of bucket.values()) {
+      if (groupItems.every(item => item.status === "BOUGHT" || item.fridgeCovered)) {
+        progressDoneCount += 1;
+      }
+    }
+    return {
+      progressDoneCount,
+      progressTotalCount: bucket.size
     };
   }
 
@@ -2661,33 +3256,429 @@ export class PantryService {
     };
   }
 
-  private toShoppingListDetailItem(item: {
-    id: UUID;
-    ingredientId: UUID | null;
-    name: string;
+  private readShoppingItemExactAmount(amountJson: Prisma.JsonValue | null) {
+    if (!amountJson) return null;
+    const amount = fromJson<RecipeAmountSnapshot>(amountJson);
+    return amount.kind === "EXACT" ? amount : null;
+  }
+
+  private parseExactQuantityByUnit(quantityText: string | null, unitName: string) {
+    if (!quantityText) return null;
+    const pattern = new RegExp(`^([+-]?\\d+(?:\\.\\d+)?)\\s*${escapeRegExp(unitName)}$`);
+    const match = quantityText.trim().match(pattern);
+    if (!match?.[1]) return null;
+    return new Prisma.Decimal(match[1]);
+  }
+
+  private resolveFridgeExactAmount(item: {
     quantityText: string | null;
-    note: string | null;
-    status: "OPEN" | "BOUGHT" | "DELETED";
-    checkedAt: Date | null;
-    updatedAt: Date;
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
-    sourceKey: string | null;
-    sourceRecipeId: UUID | null;
-    sourceRecipeVersionId: UUID | null;
-    sourceRecipeTitle: string | null;
-    sourceBaseServings: number | null;
-    sourceBatchKey: string | null;
-  }): ShoppingListDetailItem {
+    exactQuantity: Prisma.Decimal | null;
+    exactUnitId: UUID | null;
+    exactUnit?: { name: string } | null;
+    sourceShoppingItem?: { amountJson: Prisma.JsonValue | null } | null;
+  }) {
+    if (item.exactQuantity !== null && item.exactUnitId !== null && item.exactUnit?.name) {
+      return {
+        quantity: new Prisma.Decimal(item.exactQuantity),
+        unitId: item.exactUnitId,
+        unitName: item.exactUnit.name
+      };
+    }
+    const sourceAmount = item.sourceShoppingItem?.amountJson
+      ? this.readShoppingItemExactAmount(item.sourceShoppingItem.amountJson)
+      : null;
+    if (!sourceAmount) return null;
+    const parsedQuantity = this.parseExactQuantityByUnit(item.quantityText, sourceAmount.unitName);
+    if (!parsedQuantity) return null;
+    return {
+      quantity: parsedQuantity,
+      unitId: sourceAmount.unitId,
+      unitName: sourceAmount.unitName
+    };
+  }
+
+  private matchFridgeRows(
+    item: { ingredientId: UUID | null; name: string },
+    fridgeRows: FridgeMatchRow[]
+  ) {
+    if (item.ingredientId !== null) {
+      const matchedByIngredient = fridgeRows.filter(row => row.ingredientId === item.ingredientId);
+      if (matchedByIngredient.length) {
+        return matchedByIngredient;
+      }
+    }
+    const nameKey = normalizeNameKey(item.name);
+    return fridgeRows.filter(row => normalizeNameKey(row.name) === nameKey);
+  }
+
+  private matchExactFridgeRows(
+    fridgeRows: FridgeMatchRow[],
+    exactAmount: Extract<RecipeAmountSnapshot, { kind: "EXACT" }>
+  ) {
+    const targetUnitKey = normalizeNameKey(exactAmount.unitName);
+    const comparable = fridgeRows.filter(
+      row =>
+        row.exactQuantity !== null &&
+        row.exactUnitId !== null &&
+        row.exactUnitName &&
+        (row.exactUnitId === exactAmount.unitId || normalizeNameKey(row.exactUnitName) === targetUnitKey)
+    );
+    const exactIdMatches = comparable.filter(row => row.exactUnitId === exactAmount.unitId);
+    return exactIdMatches.length ? exactIdMatches : comparable;
+  }
+
+  private sumMatchingFridgeQuantity(
+    fridgeRows: FridgeMatchRow[],
+    exactAmount: Extract<RecipeAmountSnapshot, { kind: "EXACT" }>
+  ) {
+    const comparable = this.matchExactFridgeRows(fridgeRows, exactAmount);
+    if (!comparable.length) return null;
+    return {
+      quantity: comparable.reduce((current, row) => current.add(row.exactQuantity ?? 0), new Prisma.Decimal(0)),
+      unitName: comparable[0]!.exactUnitName!
+    };
+  }
+
+  private buildFridgeText(fridgeRows: FridgeMatchRow[], exactText: string | null) {
+    if (exactText) return `冰箱：${exactText}`;
+    if (!fridgeRows.length) return null;
+    if (fridgeRows.length === 1) {
+      const [current] = fridgeRows;
+      if (current?.quantityText) return `冰箱：${current.quantityText}`;
+      return "冰箱：有库存记录";
+    }
+    return `冰箱：有 ${fridgeRows.length} 条记录`;
+  }
+
+  private buildShoppingItemGroupKey(item: { ingredientId: UUID | null; name: string }) {
+    return `${item.ingredientId ?? "none"}:${normalizeNameKey(item.name)}`;
+  }
+
+  private cloneFridgeRows(fridgeRows: FridgeMatchRow[]) {
+    return fridgeRows.map(row => ({
+      ...row,
+      exactQuantity: row.exactQuantity ? new Prisma.Decimal(row.exactQuantity) : null
+    }));
+  }
+
+  private reserveFridgeRows(
+    fridgeRows: FridgeMatchRow[],
+    reservations: Array<{ fridgeItemId: UUID; reservedQuantity: Prisma.Decimal }>
+  ) {
+    if (!reservations.length) return;
+    const reservedMap = new Map<UUID, Prisma.Decimal>();
+    for (const reservation of reservations) {
+      const current = reservedMap.get(reservation.fridgeItemId) ?? new Prisma.Decimal(0);
+      reservedMap.set(reservation.fridgeItemId, current.add(reservation.reservedQuantity));
+    }
+    for (let index = 0; index < fridgeRows.length; index += 1) {
+      const currentRow = fridgeRows[index]!;
+      const reservedQuantity = reservedMap.get(currentRow.id);
+      if (!reservedQuantity || currentRow.exactQuantity === null) continue;
+      const nextQuantity = currentRow.exactQuantity.sub(reservedQuantity);
+      const exactQuantity = nextQuantity.gt(0) ? nextQuantity : new Prisma.Decimal(0);
+      fridgeRows[index] = {
+        ...currentRow,
+        quantityText: currentRow.exactUnitName ? this.formatExactQuantityText(exactQuantity, currentRow.exactUnitName) : currentRow.quantityText,
+        exactQuantity,
+        available: exactQuantity.gt(0)
+      };
+    }
+  }
+
+  private buildShoppingItemFridgeMeta(
+    item: Pick<
+      ShoppingDetailItemRow,
+      "ingredientId" | "name" | "quantityText" | "baseQuantityText" | "fridgeAppliedQuantityText" | "fridgeCovered" | "status" | "amountJson"
+    >,
+    fridgeRows: FridgeMatchRow[],
+    canUseFridgeAction: boolean,
+    showFridgeText = true,
+    displayAppliedQuantity: Prisma.Decimal | null = null
+  ): ShoppingItemFridgeMeta {
+    const quantities = this.resolveShoppingItemQuantities(item);
+    const matchedRows = this.matchFridgeRows(item, fridgeRows);
+    const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
+    let exactSummary = exactAmount ? this.sumMatchingFridgeQuantity(matchedRows, exactAmount) : null;
+    if (exactAmount && displayAppliedQuantity?.gt(0)) {
+      const appliedQuantity = new Prisma.Decimal(displayAppliedQuantity);
+      if (appliedQuantity.gt(0)) {
+        exactSummary = exactSummary
+          ? {
+              quantity: exactSummary.quantity.add(appliedQuantity),
+              unitName: exactSummary.unitName
+            }
+          : {
+              quantity: appliedQuantity,
+              unitName: exactAmount.unitName
+            };
+      }
+    }
+    const exactText = exactSummary ? this.formatExactQuantityText(exactSummary.quantity, exactSummary.unitName) : null;
+    const fridgeText = showFridgeText ? this.buildFridgeText(matchedRows, exactText) : null;
+    const canOperate = canUseFridgeAction && item.status === "OPEN";
+    const inventoryApplied = Boolean(item.fridgeAppliedQuantityText);
+
+    if (inventoryApplied) {
+      return {
+        ...quantities,
+        fridgeText,
+        inventoryStatus: item.fridgeCovered ? "ENOUGH" : "SHORTAGE",
+        inventoryApplied: true,
+        inventoryCovered: item.fridgeCovered,
+        fridgeStatusText: item.fridgeCovered
+          ? "库存足够，不买了"
+          : quantities.remainingQuantityText
+            ? `库存不足，还需买 ${quantities.remainingQuantityText}`
+            : "已用库存",
+        fridgeActionLabel: canOperate ? "撤销" : null,
+        fridgeActionMode: canOperate ? "UNDO" : "NONE"
+      } as const;
+    }
+
+    if (!matchedRows.length) {
+      return {
+        ...quantities,
+        fridgeText: null,
+        inventoryStatus: "NONE",
+        inventoryApplied: false,
+        inventoryCovered: false,
+        fridgeStatusText: null,
+        fridgeActionLabel: null,
+        fridgeActionMode: "NONE"
+      } as const;
+    }
+
+    if (exactAmount && exactSummary && exactSummary.quantity.gt(0)) {
+      const demand = new Prisma.Decimal(exactAmount.quantity);
+      if (exactSummary.quantity.gte(demand)) {
+        return {
+          ...quantities,
+          fridgeText,
+          inventoryStatus: "ENOUGH",
+          inventoryApplied: false,
+          inventoryCovered: false,
+          fridgeStatusText: null,
+          fridgeActionLabel: canOperate ? "用库存" : null,
+          fridgeActionMode: canOperate ? "APPLY_FULL" : "NONE"
+        } as const;
+      }
+      const remaining = demand.sub(exactSummary.quantity);
+      const remainingText = this.formatExactQuantityText(remaining, exactAmount.unitName);
+      return {
+        ...quantities,
+        fridgeText,
+        inventoryStatus: "SHORTAGE",
+        inventoryApplied: false,
+        inventoryCovered: false,
+        fridgeStatusText: `库存不足，还需买 ${remainingText}`,
+        fridgeActionLabel: canOperate ? "用库存" : null,
+        fridgeActionMode: canOperate ? "APPLY_PARTIAL" : "NONE"
+      } as const;
+    }
+
+    if (exactAmount && exactSummary) {
+      return {
+        ...quantities,
+        fridgeText,
+        inventoryStatus: "SHORTAGE",
+        inventoryApplied: false,
+        inventoryCovered: false,
+        fridgeStatusText: null,
+        fridgeActionLabel: null,
+        fridgeActionMode: "NONE"
+      } as const;
+    }
+
+    return {
+      ...quantities,
+      fridgeText,
+      inventoryStatus: "UNKNOWN",
+      inventoryApplied: false,
+      inventoryCovered: false,
+      fridgeStatusText: "库存待确认",
+      fridgeActionLabel: canOperate ? "库存待确认" : null,
+      fridgeActionMode: canOperate ? "NEED_CONFIRM" : "NONE"
+    } as const;
+  }
+
+  private resolveShoppingItemQuantities(item: Pick<ShoppingDetailItemRow, "quantityText" | "baseQuantityText" | "fridgeAppliedQuantityText" | "amountJson">) {
+    const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
+    const requiredQuantityText = item.baseQuantityText?.trim()
+      || (exactAmount ? this.formatExactQuantityText(exactAmount.quantity, exactAmount.unitName) : item.quantityText);
+    const appliedInventoryQuantityText = item.fridgeAppliedQuantityText?.trim() || null;
+    if (!exactAmount || !appliedInventoryQuantityText) {
+      return {
+        requiredQuantityText: requiredQuantityText ?? null,
+        remainingQuantityText: appliedInventoryQuantityText ? requiredQuantityText ?? null : requiredQuantityText ?? null,
+        appliedInventoryQuantityText
+      };
+    }
+    const appliedQuantity = this.parseExactQuantityByUnit(appliedInventoryQuantityText, exactAmount.unitName);
+    if (appliedQuantity === null) {
+      return {
+        requiredQuantityText: requiredQuantityText ?? null,
+        remainingQuantityText: requiredQuantityText ?? null,
+        appliedInventoryQuantityText
+      };
+    }
+    const remainingQuantity = new Prisma.Decimal(exactAmount.quantity).sub(appliedQuantity);
+    return {
+      requiredQuantityText: requiredQuantityText ?? null,
+      remainingQuantityText: remainingQuantity.gt(0) ? this.formatExactQuantityText(remainingQuantity, exactAmount.unitName) : null,
+      appliedInventoryQuantityText
+    };
+  }
+
+  private sumGroupAppliedDisplayQuantity(
+    groupItems: ShoppingDetailItemRow[],
+    amountJson: Prisma.JsonValue | null
+  ) {
+    const exactAmount = this.readShoppingItemExactAmount(amountJson);
+    if (!exactAmount) return null;
+    let total = new Prisma.Decimal(0);
+    let hasValue = false;
+    for (const item of groupItems) {
+      if (!item.fridgeAppliedQuantityText) continue;
+      const parsedQuantity = this.parseExactQuantityByUnit(item.fridgeAppliedQuantityText, exactAmount.unitName);
+      if (parsedQuantity === null) continue;
+      total = total.add(parsedQuantity);
+      hasValue = true;
+    }
+    return hasValue ? total : null;
+  }
+
+  private buildShoppingListDetailItemMap(
+    items: ShoppingDetailItemRow[],
+    fridgeRows: FridgeMatchRow[],
+    canUseFridgeAction: boolean
+  ) {
+    const result = new Map<UUID, ShoppingListDetailItem>();
+    const remainingFridgeRows = this.cloneFridgeRows(fridgeRows);
+    const groupedItems = new Map<string, ShoppingDetailItemRow[]>();
+    for (const item of items) {
+      const groupKey = this.buildShoppingItemGroupKey(item);
+      const current = groupedItems.get(groupKey) ?? [];
+      current.push(item);
+      groupedItems.set(groupKey, current);
+    }
+    const shownGroupKeys = new Set<string>();
+    for (const item of items) {
+      const groupKey = this.buildShoppingItemGroupKey(item);
+      const showFridgeText = !shownGroupKeys.has(groupKey);
+      const groupItems = groupedItems.get(groupKey) ?? [item];
+      const displayAppliedQuantity = showFridgeText ? this.sumGroupAppliedDisplayQuantity(groupItems, item.amountJson) : null;
+      const fridgeMeta = this.buildShoppingItemFridgeMeta(
+        item,
+        remainingFridgeRows,
+        canUseFridgeAction,
+        showFridgeText,
+        displayAppliedQuantity
+      );
+      shownGroupKeys.add(groupKey);
+      result.set(item.id, this.toShoppingListDetailItem(item, fridgeMeta));
+      if (!canUseFridgeAction || item.status !== "OPEN" || item.fridgeAppliedQuantityText) continue;
+      const reservationPlan = this.buildShoppingItemReservationPlan(item, remainingFridgeRows);
+      if (reservationPlan.mode !== "APPLY_FULL" && reservationPlan.mode !== "APPLY_PARTIAL") continue;
+      this.reserveFridgeRows(remainingFridgeRows, reservationPlan.reservations);
+    }
+    return result;
+  }
+
+  private toShoppingListDetailItem(item: ShoppingDetailItemRow, fridgeMeta: ShoppingItemFridgeMeta): ShoppingListDetailItem {
     return {
       id: item.id,
       ingredientId: item.ingredientId,
       name: item.name,
-      quantityText: item.quantityText,
+      categoryName: item.ingredient?.category.name ?? null,
+      imageUrl: item.ingredient ? this.ingredientImageService.buildImageUrl({}, item.ingredient.id, item.ingredient.imageUpdatedAt) : null,
+      quantityText: fridgeMeta.requiredQuantityText,
+      requiredQuantityText: fridgeMeta.requiredQuantityText,
+      remainingQuantityText: fridgeMeta.remainingQuantityText,
+      appliedInventoryQuantityText: fridgeMeta.appliedInventoryQuantityText,
       note: item.note,
       status: toListItemStatus(item.status),
+      fridgeText: fridgeMeta.fridgeText,
+      inventoryStatus: fridgeMeta.inventoryStatus,
+      inventoryApplied: fridgeMeta.inventoryApplied,
+      inventoryCovered: fridgeMeta.inventoryCovered,
+      fridgeStatusText: fridgeMeta.fridgeStatusText,
+      fridgeActionLabel: fridgeMeta.fridgeActionLabel,
+      fridgeActionMode: fridgeMeta.fridgeActionMode,
       checkedAt: item.checkedAt ? toIsoDate(item.checkedAt) : null,
       updatedAt: toIsoDate(item.updatedAt),
       sources: [this.toShoppingItemSourceSummary(item)]
+    };
+  }
+
+  private buildShoppingItemReservationPlan(
+    item: {
+      ingredientId: UUID | null;
+      name: string;
+      quantityText: string | null;
+      amountJson: Prisma.JsonValue | null;
+    },
+    fridgeRows: FridgeMatchRow[]
+  ) {
+    const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
+    if (!exactAmount) {
+      return {
+        mode: "NEED_CONFIRM" as const,
+        reservations: [],
+        appliedQuantityText: null,
+        nextQuantityText: item.quantityText,
+        covered: false
+      };
+    }
+
+    const matchedRows = this.matchFridgeRows(item, fridgeRows);
+    const exactRows = this.matchExactFridgeRows(matchedRows, exactAmount)
+      .sort((left, right) => left.id - right.id);
+    if (!exactRows.length) {
+      return {
+        mode: matchedRows.length ? "NEED_CONFIRM" as const : "NONE" as const,
+        reservations: [],
+        appliedQuantityText: null,
+        nextQuantityText: item.quantityText,
+        covered: false
+      };
+    }
+
+    const totalAvailable = exactRows.reduce((current, row) => current.add(row.exactQuantity ?? 0), new Prisma.Decimal(0));
+    if (totalAvailable.lte(0)) {
+      return {
+        mode: "NONE" as const,
+        reservations: [],
+        appliedQuantityText: null,
+        nextQuantityText: item.quantityText,
+        covered: false
+      };
+    }
+
+    const demand = new Prisma.Decimal(exactAmount.quantity);
+    const reserveQuantity = totalAvailable.gte(demand) ? demand : totalAvailable;
+    let remainingReserve = new Prisma.Decimal(reserveQuantity);
+    const reservations: Array<{ fridgeItemId: UUID; reservedQuantity: Prisma.Decimal; reservedUnitId: UUID }> = [];
+    for (const row of exactRows) {
+      if (remainingReserve.lte(0)) break;
+      const currentQuantity = row.exactQuantity ?? new Prisma.Decimal(0);
+      if (currentQuantity.lte(0)) continue;
+      const reservedQuantity = currentQuantity.gte(remainingReserve) ? remainingReserve : currentQuantity;
+      reservations.push({
+        fridgeItemId: row.id,
+        reservedQuantity,
+        reservedUnitId: row.exactUnitId!
+      });
+      remainingReserve = remainingReserve.sub(reservedQuantity);
+    }
+
+    const covered = totalAvailable.gte(demand);
+    return {
+      mode: covered ? "APPLY_FULL" as const : "APPLY_PARTIAL" as const,
+      reservations,
+      appliedQuantityText: this.formatExactQuantityText(reserveQuantity, exactAmount.unitName),
+      nextQuantityText: covered ? null : this.formatExactQuantityText(demand.sub(reserveQuantity), exactAmount.unitName),
+      covered
     };
   }
 
@@ -2838,7 +3829,8 @@ export class PantryService {
     tx: Prisma.TransactionClient,
     userId: UUID,
     recipeId: UUID,
-    sourceVersionId: UUID
+    sourceVersionId: UUID,
+    allowHistoricalVersion = false
   ): Promise<RecipeShoppingSource> {
     const recipe = await tx.recipe.findUnique({
       where: { id: recipeId },
@@ -2850,7 +3842,40 @@ export class PantryService {
         inspirationCategoryId: true
       }
     });
-    if (!recipe || recipe.status !== "ACTIVE") {
+    if (!recipe) {
+      throw new NotFoundException("菜谱不存在");
+    }
+
+    if (allowHistoricalVersion) {
+      const version = await tx.recipeContentVersion.findUnique({
+        where: { id: sourceVersionId },
+        select: {
+          id: true,
+          name: true,
+          story: true,
+          baseServings: true,
+          difficulty: true,
+          duration: true,
+          estimatedCalories: true,
+          tips: true,
+          ingredientsJson: true,
+          stepsJson: true
+        }
+      });
+      if (!version) {
+        throw new NotFoundException("菜谱版本不存在");
+      }
+      const content = versionToContent(version);
+      return {
+        recipeId,
+        sourceVersionId,
+        title: content.name,
+        baseServings: content.baseServings,
+        ingredients: content.ingredients
+      };
+    }
+
+    if (recipe.status !== "ACTIVE") {
       throw new NotFoundException("菜谱不存在");
     }
 
@@ -3076,6 +4101,146 @@ export class PantryService {
     };
   }
 
+  private formatExactQuantityText(quantity: Prisma.Decimal | string, unitName: string) {
+    return `${new Prisma.Decimal(quantity).toString()} ${unitName}`;
+  }
+
+  private normalizeExpireAt(expireAt?: string | null) {
+    if (!expireAt) return null;
+    const resolved = new Date(expireAt);
+    if (Number.isNaN(resolved.getTime())) {
+      throw new BadRequestException("到期时间参数错误");
+    }
+    return resolved;
+  }
+
+  private async buildFridgeWriteInput(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    ingredientId: UUID | null,
+    name: string,
+    quantityText: string | null,
+    exactQuantity?: string | null,
+    exactUnitId?: UUID | null,
+    expireAt?: Date | null,
+    note?: string | null
+  ) {
+    const hasExactQuantity = Boolean(exactQuantity);
+    const hasExactUnit = exactUnitId !== null && exactUnitId !== undefined;
+    if (hasExactQuantity !== hasExactUnit) {
+      throw new BadRequestException("精确数量和单位需要一起填写");
+    }
+    if (hasExactQuantity && !ingredientId) {
+      throw new BadRequestException("使用精确数量时需要绑定食材");
+    }
+
+    let resolvedQuantityText = quantityText;
+    if (hasExactQuantity && hasExactUnit) {
+      const unit = await tx.unit.findFirst({
+        where: {
+          id: exactUnitId,
+          ownerId: null
+        },
+        select: {
+          id: true,
+          name: true
+        }
+      });
+      if (!unit) {
+        throw new NotFoundException("单位不存在");
+      }
+      resolvedQuantityText = this.formatExactQuantityText(exactQuantity!, unit.name);
+    }
+
+    return {
+      ingredientId,
+      name,
+      quantityText: resolvedQuantityText,
+      exactQuantity: hasExactQuantity ? new Prisma.Decimal(exactQuantity!) : null,
+      exactUnitId: hasExactUnit ? exactUnitId! : null,
+      expireAt: expireAt ?? null,
+      note: note ?? null
+    };
+  }
+
+  private async loadFridgeReservationMap(tx: Prisma.TransactionClient, fridgeItemIds: UUID[]) {
+    const uniqueIds = Array.from(new Set(fridgeItemIds));
+    if (!uniqueIds.length) {
+      return new Map<UUID, FridgeReservationSummaryRow[]>();
+    }
+    const reservations = await tx.shoppingItemFridgeReservation.findMany({
+      where: {
+        fridgeItemId: {
+          in: uniqueIds
+        },
+        releasedAt: null,
+        settledAt: null
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        fridgeItemId: true,
+        reservedQuantity: true,
+        shoppingList: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        shoppingItem: {
+          select: {
+            id: true
+          }
+        },
+        reservedUnit: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
+
+    const reservationMap = new Map<UUID, FridgeReservationSummaryRow[]>();
+    for (const reservation of reservations) {
+      const current = reservationMap.get(reservation.fridgeItemId) ?? [];
+      current.push({
+        shoppingListId: reservation.shoppingList.id,
+        shoppingListName: reservation.shoppingList.name,
+        shoppingItemId: reservation.shoppingItem.id,
+        reservedQuantity: reservation.reservedQuantity,
+        reservedUnitName: reservation.reservedUnit.name
+      });
+      reservationMap.set(reservation.fridgeItemId, current);
+    }
+    return reservationMap;
+  }
+
+  private async loadFridgeItemSummaryFromTx(tx: Prisma.TransactionClient, userId: UUID, itemId: UUID) {
+    const item = await tx.fridgeItem.findFirst({
+      where: {
+        id: itemId,
+        userId
+      },
+      include: {
+        exactUnit: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        sourceShoppingItem: {
+          select: {
+            amountJson: true
+          }
+        }
+      }
+    });
+    if (!item) {
+      throw new NotFoundException("食材不存在");
+    }
+    const reservationMap = await this.loadFridgeReservationMap(tx, [item.id]);
+    return this.toFridgeItemSummary(item, reservationMap.get(item.id) ?? []);
+  }
+
   private async assertStorageWritable(tx: Prisma.TransactionClient, userId: UUID, expectedDeltaBytes: number) {
     const entitlements = await this.entitlementService.resolveForUser(tx, userId);
     const current = await tx.storageLedger.aggregate({
@@ -3093,18 +4258,58 @@ export class PantryService {
 
   private toFridgeItemSummary(item: {
     id: UUID;
+    ingredientId: UUID | null;
     name: string;
     quantityText: string | null;
+    exactQuantity: Prisma.Decimal | null;
+    exactUnitId: UUID | null;
+    expireAt: Date | null;
     note: string | null;
     available: boolean;
     updatedAt: Date;
-  }): FridgeItemSummary {
+    exactUnit?: {
+      id: UUID;
+      name: string;
+    } | null;
+    sourceShoppingItem?: {
+      amountJson: Prisma.JsonValue | null;
+    } | null;
+  }, reservations: FridgeReservationSummaryRow[]): FridgeItemSummary {
+    const resolvedExact = this.resolveFridgeExactAmount(item);
+    const stockText = resolvedExact
+      ? this.formatExactQuantityText(resolvedExact.quantity, resolvedExact.unitName)
+      : item.quantityText;
+    const reservedTotal = reservations.reduce((current, reservation) => current.add(reservation.reservedQuantity), new Prisma.Decimal(0));
+    const hasExactStock = Boolean(resolvedExact);
+    const reservedText = hasExactStock && reservedTotal.gt(0) ? this.formatExactQuantityText(reservedTotal, resolvedExact!.unitName) : null;
+    const availableQuantity = hasExactStock ? resolvedExact!.quantity.sub(reservedTotal) : null;
+    const normalizedAvailableQuantity =
+      availableQuantity && availableQuantity.gt(0) ? availableQuantity : hasExactStock ? new Prisma.Decimal(0) : null;
+    const availableText = hasExactStock
+      ? this.formatExactQuantityText(normalizedAvailableQuantity ?? new Prisma.Decimal(0), resolvedExact!.unitName)
+      : stockText;
+    const available = hasExactStock ? item.available && (normalizedAvailableQuantity?.gt(0) ?? false) : item.available;
+
     return {
       id: item.id,
+      ingredientId: item.ingredientId,
       name: item.name,
       quantityText: item.quantityText,
+      exactQuantity: resolvedExact?.quantity.toString() ?? null,
+      exactUnitId: resolvedExact?.unitId ?? null,
+      exactUnitName: resolvedExact?.unitName ?? null,
       note: item.note,
-      available: item.available,
+      available,
+      expireAt: item.expireAt ? toIsoDate(item.expireAt) : null,
+      stockText,
+      reservedText,
+      availableText,
+      reservations: reservations.map(reservation => ({
+        shoppingListId: reservation.shoppingListId,
+        shoppingListName: reservation.shoppingListName,
+        shoppingItemId: reservation.shoppingItemId,
+        reservedText: this.formatExactQuantityText(reservation.reservedQuantity, reservation.reservedUnitName)
+      })),
       updatedAt: toIsoDate(item.updatedAt)
     };
   }
