@@ -142,7 +142,8 @@ const mealPlanArgs = Prisma.validator<Prisma.MealPlanItemDefaultArgs>()({
         recipeVersion: {
           select: {
             name: true,
-            baseServings: true
+            baseServings: true,
+            duration: true
           }
         }
       },
@@ -1449,6 +1450,124 @@ export class MealService {
     });
   }
 
+  async addMealPlanItem(
+    userId: UUID,
+    operationId: OperationId,
+    planDate: string,
+    mealSlot: string,
+    recipeId: UUID,
+    recipeVersionId: UUID,
+    slotType: string | null,
+    purchaseState: string
+  ): Promise<MealPlanSummary> {
+    const normalizedSlot = normalizeMealSlot(mealSlot);
+    const normalizedPlanDate = parseDateOnly(planDate);
+    const normalizedSlotType = normalizeNullableRecipeSlotType(slotType);
+    const normalizedPurchaseState = normalizePurchaseState(purchaseState);
+    const requestHash = JSON.stringify({
+      planDate,
+      mealSlot: normalizedSlot,
+      recipeId,
+      recipeVersionId,
+      slotType: normalizedSlotType,
+      purchaseState: normalizedPurchaseState
+    });
+
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:item:add", userId, null, requestHash);
+        if (repeated) return repeated;
+        await startIdempotentOperation(tx, operationId, "meal-plan:item:add", userId, null, requestHash);
+
+        const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
+        if (recipe.currentVersionId !== recipeVersionId) {
+          throw new ConflictException("菜谱版本已变化，请重新选择");
+        }
+
+        let existing = await tx.mealPlanItem.findUnique({
+          where: {
+            userId_planDate_mealSlot: {
+              userId,
+              planDate: normalizedPlanDate,
+              mealSlot: normalizedSlot
+            }
+          },
+          include: mealPlanInclude
+        });
+
+        if (existing) {
+          await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${existing.id} FOR UPDATE`;
+          existing = await this.getMealPlanOrThrow(tx, existing.id);
+        }
+
+        if (existing?.status === "COMPLETED") {
+          throw new ConflictException("已完成餐次不能修改");
+        }
+
+        if (existing?.dishes.some(item => item.recipeId === recipe.id)) {
+          const result = this.toMealPlanSummary(existing);
+          await completeIdempotentOperation(tx, operationId, "meal-plan:item:add", userId, null, requestHash, result);
+          return result;
+        }
+
+        const nextMenu = {
+          recipeId: recipe.id,
+          recipeVersionId: recipe.currentVersionId,
+          coverUrl: recipe.coverImageUrl ?? null,
+          title: recipe.title,
+          content: this.getEffectiveRecipeContent(recipe)
+        } satisfies ResolvedMenuVersion;
+
+        const existingMenus = existing?.dishes.length
+          ? await this.resolveMenuVersions(tx, existing.dishes.map(item => item.recipeVersionId))
+          : [];
+        const menus = [...existingMenus, nextMenu];
+        const menuSnapshot = buildMenuSnapshot(menus);
+        await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: normalizedSlot, menu: menuSnapshot, note: existing?.note ?? null }));
+
+        const planItem = existing
+          ? await tx.mealPlanItem.update({
+              where: { id: existing.id },
+              data: {
+                menuSnapshot: toJson(menuSnapshot),
+                version: { increment: 1 }
+              }
+            })
+          : await tx.mealPlanItem.create({
+              data: {
+                userId,
+                planDate: normalizedPlanDate,
+                mealSlot: normalizedSlot,
+                menuSnapshot: toJson(menuSnapshot),
+                note: null
+              }
+            });
+
+        await tx.mealPlanDish.create({
+          data: {
+            planItemId: planItem.id,
+            recipeId: recipe.id,
+            recipeVersionId: recipe.currentVersionId,
+            slotType: normalizedSlotType,
+            purchaseState: normalizedPurchaseState,
+            sortOrder: existing?.dishes.length ?? 0
+          }
+        });
+
+        const item = await this.getMealPlanOrThrow(tx, planItem.id);
+        await upsertStorageLedger(tx, userId, "MEAL", item.id, sizeOfJson(item));
+        const result = this.toMealPlanSummary(item);
+        await completeIdempotentOperation(tx, operationId, "meal-plan:item:add", userId, null, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("餐次已被更新，请刷新后重试");
+      }
+      throw error;
+    }
+  }
+
   async getMealPlanCookAssistant(userId: UUID, planItemId: UUID): Promise<MealPlanCookAssistant> {
     const plan = await this.getOwnedMealPlanOrThrow(this.prisma, userId, planItemId);
     return this.toMealPlanCookAssistant(plan);
@@ -2163,6 +2282,8 @@ export class MealService {
         recipeVersionId: dish.recipeVersionId,
         title: dish.recipeVersion.name,
         servings: dish.recipeVersion.baseServings ?? null,
+        duration: (dish.recipeVersion.duration ?? null) as RecipeDuration | null,
+        durationText: recipeDurationText((dish.recipeVersion.duration ?? null) as RecipeDuration | null),
         slotType: dish.slotType,
         purchaseState: dish.purchaseState,
         sortOrder: dish.sortOrder

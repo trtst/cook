@@ -6,6 +6,7 @@ import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AcceptShareInviteDto,
+  AddMealPlanItemDto,
   ClaimCookDto,
   ChooseBringRecipeDto,
   CompleteDiningEventDto,
@@ -178,6 +179,30 @@ export class MealController {
         body.menuItems,
         body.expectedVersion,
         body.note
+      )
+      .then(result => ok(result));
+  }
+
+  @Post("meal-plans/items")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanModel, "向某个餐次追加一道菜谱")
+  addMealPlanItem(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AddMealPlanItemDto
+  ) {
+    return this.mealService
+      .addMealPlanItem(
+        request.user.userId,
+        operationId,
+        body.planDate,
+        body.mealSlot,
+        body.recipeId,
+        body.recipeVersionId,
+        body.slotType ?? null,
+        body.purchaseState ?? "READY"
       )
       .then(result => ok(result));
   }

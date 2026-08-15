@@ -51,6 +51,14 @@ owner: 13800000000 / change-me
 guest: 13900000000 / change-me
 ```
 
+需要把本地数据库完整清空并重建一套可联调基线时，在仓库根目录执行：
+
+```bash
+pnpm db:reset-local
+```
+
+该命令会按当前 migration 重建本地库，然后重新生成 Prisma Client 并执行 seed。旧的冰箱、采购清单、计划等本地数据会一并清空。
+
 本机没有 PostgreSQL 但已安装 Docker 时，可只启动本项目的最小数据库：
 
 ```bash

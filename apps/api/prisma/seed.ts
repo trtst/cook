@@ -955,445 +955,176 @@ async function seedSystemRecipes(
     });
   };
 
-  const quickCombos = [
+  void tomato;
+  void egg;
+  void potato;
+  void beef;
+
+  const categoryRecipeSeeds = [
     {
-      title: "番茄鸡蛋",
-      baseServings: 2,
-      ingredients: [
-        { name: "番茄", quantity: "2" },
-        { name: "鸡蛋", quantity: "3" },
-        { name: "大葱", quantity: "1" }
-      ],
-      tip: "番茄最后回锅，留一点自然汤汁更下饭。"
+      category: quickCategory,
+      items: [
+        {
+          name: "番茄炒蛋",
+          story: "基础快手菜测试样本，确认系统食材与系统单位能直接关联。",
+          baseServings: 2,
+          difficulty: "BEGINNER" as const,
+          duration: "WITHIN_15" as const,
+          tips: "番茄最后回锅，留一点自然汤汁更下饭。",
+          ingredients: [
+            { name: "番茄", quantity: "2" },
+            { name: "鸡蛋", quantity: "3" },
+            { name: "大葱", quantity: "1" }
+          ],
+          steps: ["番茄切块，鸡蛋打散。", "鸡蛋先炒到凝固盛出。", "番茄和大葱炒软后回锅拌匀。"]
+        },
+        {
+          name: "青椒里脊",
+          story: "用来验证肉类结构化用量和购物清单库存匹配。",
+          baseServings: 2,
+          difficulty: "EASY" as const,
+          duration: "WITHIN_15" as const,
+          tips: "里脊先抓匀再下锅，成菜更嫩。",
+          ingredients: [
+            { name: "青椒", quantity: "2" },
+            { name: "里脊肉", quantity: "250" },
+            { name: "洋葱", quantity: "1" }
+          ],
+          steps: ["青椒、洋葱切块，里脊切丝。", "里脊先滑散到变色。", "并入配菜大火快炒收口。"]
+        },
+        {
+          name: "黄瓜鸡蛋",
+          story: "轻量家常样本，验证蔬果菌菇和鸡蛋的基础联调。",
+          baseServings: 2,
+          difficulty: "BEGINNER" as const,
+          duration: "WITHIN_15" as const,
+          tips: "黄瓜下锅后快速翻匀，保持清脆口感。",
+          ingredients: [
+            { name: "黄瓜", quantity: "1" },
+            { name: "鸡蛋", quantity: "2" },
+            { name: "大蒜", quantity: "2" }
+          ],
+          steps: ["黄瓜切片，鸡蛋打散。", "鸡蛋炒散盛出备用。", "黄瓜和蒜片快炒后回锅拌匀。"]
+        },
+        {
+          name: "西兰花虾仁",
+          story: "测试水产海鲜和蔬菜混合食材的最小快手样本。",
+          baseServings: 2,
+          difficulty: "EASY" as const,
+          duration: "BETWEEN_15_30" as const,
+          tips: "西兰花先焯一下，后续翻炒更容易熟透。",
+          ingredients: [
+            { name: "西兰花", quantity: "1" },
+            { name: "虾仁", quantity: "200" },
+            { name: "胡萝卜", quantity: "1" }
+          ],
+          steps: ["西兰花切小朵，胡萝卜切片。", "虾仁先炒到卷曲。", "配菜回锅翻匀到断生。"]
+        },
+        {
+          name: "白菜豆腐",
+          story: "测试豆乳制品和蔬菜的基础快手样本。",
+          baseServings: 3,
+          difficulty: "EASY" as const,
+          duration: "BETWEEN_15_30" as const,
+          tips: "豆腐先煎一下表面，翻炒时更完整。",
+          ingredients: [
+            { name: "白菜", quantity: "1" },
+            { name: "北豆腐", quantity: "300" },
+            { name: "大葱", quantity: "1" }
+          ],
+          steps: ["白菜切段，豆腐切块。", "豆腐轻煎后盛出备用。", "白菜炒软后回锅焖一小会。"]
+        }
+      ]
     },
     {
-      title: "青椒里脊",
-      baseServings: 2,
-      ingredients: [
-        { name: "青椒", quantity: "2" },
-        { name: "里脊肉", quantity: "250" },
-        { name: "洋葱", quantity: "1" }
-      ],
-      tip: "里脊先抓匀再下锅，成菜更嫩。"
-    },
-    {
-      title: "黄瓜鸡蛋",
-      baseServings: 2,
-      ingredients: [
-        { name: "黄瓜", quantity: "1" },
-        { name: "鸡蛋", quantity: "2" },
-        { name: "大蒜", quantity: "2" }
-      ],
-      tip: "黄瓜下锅后快速翻匀，保持清脆口感。"
-    },
-    {
-      title: "西兰花虾仁",
-      baseServings: 2,
-      ingredients: [
-        { name: "西兰花", quantity: "1" },
-        { name: "虾仁", quantity: "200" },
-        { name: "胡萝卜", quantity: "1" }
-      ],
-      tip: "西兰花先焯一下，后续翻炒更容易熟透。"
-    },
-    {
-      title: "香菇鸡肉",
-      baseServings: 3,
-      ingredients: [
-        { name: "香菇", quantity: "8" },
-        { name: "鸡肉", quantity: "250" },
-        { name: "青椒", quantity: "1" }
-      ],
-      tip: "香菇先煸出香气，再并入鸡肉更有层次。"
-    },
-    {
-      title: "洋葱牛肉",
-      baseServings: 2,
-      ingredients: [
-        { name: "洋葱", quantity: "1" },
-        { name: "牛肉", quantity: "220" },
-        { name: "青椒", quantity: "1" }
-      ],
-      tip: "牛肉大火快炒到刚变色即可，避免发老。"
-    },
-    {
-      title: "白菜豆腐",
-      baseServings: 3,
-      ingredients: [
-        { name: "白菜", quantity: "1" },
-        { name: "北豆腐", quantity: "1" },
-        { name: "大葱", quantity: "1" }
-      ],
-      tip: "豆腐先煎一下表面，翻炒时更完整。"
-    },
-    {
-      title: "菠菜鸡蛋",
-      baseServings: 2,
-      ingredients: [
-        { name: "菠菜", quantity: "1" },
-        { name: "鸡蛋", quantity: "2" },
-        { name: "大蒜", quantity: "2" }
-      ],
-      tip: "菠菜断生即可出锅，颜色会更鲜亮。"
-    },
-    {
-      title: "胡萝卜鸡胸",
-      baseServings: 2,
-      ingredients: [
-        { name: "胡萝卜", quantity: "1" },
-        { name: "鸡胸肉", quantity: "220" },
-        { name: "洋葱", quantity: "1" }
-      ],
-      tip: "鸡胸肉切薄片后滑炒，更容易保持水分。"
-    },
-    {
-      title: "土豆五花",
-      baseServings: 3,
-      ingredients: [
-        { name: "土豆", quantity: "2" },
-        { name: "五花肉", quantity: "220" },
-        { name: "青椒", quantity: "1" }
-      ],
-      tip: "五花肉先煸出部分油脂，再炒土豆更香。"
+      category: stewCategory,
+      items: [
+        {
+          name: "土豆烧牛肉",
+          story: "炖煮硬菜基础样本，验证重量单位和计划写购物链路。",
+          baseServings: 3,
+          difficulty: "SKILLED" as const,
+          duration: "BETWEEN_30_60" as const,
+          tips: "牛肉先焯水再炖，口感更稳。",
+          ingredients: [
+            { name: "土豆", quantity: "2" },
+            { name: "牛肉", quantity: "400" },
+            { name: "洋葱", quantity: "1" }
+          ],
+          steps: ["牛肉焯水后沥干。", "炒香洋葱后并入牛肉。", "土豆下锅一起焖到软糯。"]
+        },
+        {
+          name: "莲藕排骨汤",
+          story: "排骨汤样本，用于验证慢炖类系统菜谱最小基线。",
+          baseServings: 4,
+          difficulty: "EASY" as const,
+          duration: "OVER_60" as const,
+          tips: "莲藕后半程再下锅，口感会更脆糯分明。",
+          ingredients: [
+            { name: "莲藕", quantity: "400" },
+            { name: "排骨", quantity: "500" },
+            { name: "生姜", quantity: "20" }
+          ],
+          steps: ["排骨焯水去浮沫。", "生姜和排骨先炖出底汤。", "放入莲藕继续小火慢炖。"]
+        },
+        {
+          name: "番茄牛腩",
+          story: "带番茄风味的硬菜样本，测试肉类和蔬果混合炖煮。",
+          baseServings: 4,
+          difficulty: "SKILLED" as const,
+          duration: "OVER_60" as const,
+          tips: "番茄先炒出沙感，再转炖会更浓郁。",
+          ingredients: [
+            { name: "番茄", quantity: "3" },
+            { name: "牛腩", quantity: "450" },
+            { name: "胡萝卜", quantity: "1" }
+          ],
+          steps: ["牛腩焯水后备用。", "番茄炒软出汁。", "并入牛腩和胡萝卜慢炖到入味。"]
+        },
+        {
+          name: "香菇鸡翅煲",
+          story: "带锅煲口径的系统硬菜样本，方便验证多食材来源。",
+          baseServings: 3,
+          difficulty: "EASY" as const,
+          duration: "BETWEEN_30_60" as const,
+          tips: "鸡翅提前煎到两面微黄，成菜更香。",
+          ingredients: [
+            { name: "香菇", quantity: "120" },
+            { name: "鸡翅", quantity: "500" },
+            { name: "生姜", quantity: "20" }
+          ],
+          steps: ["鸡翅两面煎到微黄。", "香菇和姜片炒出香味。", "加水焖煮到鸡翅熟透。"]
+        },
+        {
+          name: "海带排骨汤",
+          story: "汤锅类硬菜样本，用于验证干货腌制和肉类的组合。",
+          baseServings: 4,
+          difficulty: "EASY" as const,
+          duration: "OVER_60" as const,
+          tips: "海带炖到软糯以后，汤味会更厚一点。",
+          ingredients: [
+            { name: "海带", quantity: "200" },
+            { name: "排骨", quantity: "500" },
+            { name: "生姜", quantity: "20" }
+          ],
+          steps: ["排骨焯水，海带洗净。", "排骨和姜片先煮开。", "下海带继续炖到汤色浓白。"]
+        }
+      ]
     }
   ] as const;
 
-  const quickStyles = [
-    {
-      suffix: "小炒",
-      difficulty: "BEGINNER" as const,
-      duration: "WITHIN_15" as const,
-      scene: "十几分钟的工作日晚餐",
-      tip: "调味不要一次下重，出锅前再补一口最稳。",
-      steps: ["食材洗净切好备用。", "热锅后先处理主料到断生。", "并入配菜快速翻匀后出锅。"]
-    },
-    {
-      suffix: "快手炒",
-      difficulty: "EASY" as const,
-      duration: "WITHIN_15" as const,
-      scene: "想省时但又想吃热菜的时候",
-      tip: "提前把所有食材放在手边，锅气会更连续。",
-      steps: ["先把主料和配菜分别整理好。", "主料入锅翻炒到七成熟。", "加入配菜和基础调味快炒收口。"]
-    },
-    {
-      suffix: "家常炒",
-      difficulty: "EASY" as const,
-      duration: "BETWEEN_15_30" as const,
-      scene: "日常两三人的家常饭桌",
-      tip: "如果食材出水较多，最后开大火收一下汁。",
-      steps: ["先完成清洗、切配和简单腌制。", "依次下主料与配菜翻炒均匀。", "调味后略收汁，让味道挂在食材表面。"]
-    },
-    {
-      suffix: "鲜香炒",
-      difficulty: "SKILLED" as const,
-      duration: "BETWEEN_15_30" as const,
-      scene: "想要口味更浓一点的正餐",
-      tip: "锅里保持足够热度，香气才会更立体。",
-      steps: ["食材分别改刀到易熟大小。", "先把香味食材炒开，再下主料。", "合入配菜并快速翻匀至锅气明显。"]
-    },
-    {
-      suffix: "滑炒",
-      difficulty: "SKILLED" as const,
-      duration: "BETWEEN_15_30" as const,
-      scene: "希望口感更嫩更顺滑的时候",
-      tip: "带肉类的主料先滑散，后续不需要久炒。",
-      steps: ["把主料和配菜都处理成薄片或小块。", "热锅宽油快速滑开主料。", "回锅后和配菜一起翻匀，立刻出锅。"]
-    }
-  ] as const;
+  const generatedSystemRecipes = categoryRecipeSeeds.flatMap(({ category, items }, categoryIndex) =>
+    items.map((recipe, itemIndex) => ({
+      recipeId: 2101 + categoryIndex * 10 + itemIndex,
+      versionId: 1101 + categoryIndex * 10 + itemIndex,
+      categoryId: category.id,
+      ...recipe
+    }))
+  );
 
-  const stewCombos = [
-    {
-      title: "土豆牛腩",
-      baseServings: 4,
-      ingredients: [
-        { name: "土豆", quantity: "2" },
-        { name: "牛腩", quantity: "450" },
-        { name: "胡萝卜", quantity: "1" }
-      ],
-      tip: "牛腩先焯水再炖，汤底会更清爽。"
-    },
-    {
-      title: "莲藕排骨",
-      baseServings: 4,
-      ingredients: [
-        { name: "莲藕", quantity: "2" },
-        { name: "排骨", quantity: "500" },
-        { name: "生姜", quantity: "2" }
-      ],
-      tip: "莲藕后半程再下锅，口感会更脆糯分明。"
-    },
-    {
-      title: "南瓜鸡腿",
-      baseServings: 3,
-      ingredients: [
-        { name: "南瓜", quantity: "3" },
-        { name: "鸡腿", quantity: "2" },
-        { name: "洋葱", quantity: "1" }
-      ],
-      tip: "南瓜块切得略大一些，炖好后不容易碎。"
-    },
-    {
-      title: "香菇鸡翅",
-      baseServings: 3,
-      ingredients: [
-        { name: "香菇", quantity: "8" },
-        { name: "鸡翅", quantity: "8" },
-        { name: "生姜", quantity: "2" }
-      ],
-      tip: "鸡翅提前煎到两面微黄，成菜更香。"
-    },
-    {
-      title: "白菜豆腐",
-      baseServings: 3,
-      ingredients: [
-        { name: "白菜", quantity: "1" },
-        { name: "南豆腐", quantity: "1" },
-        { name: "金针菇", quantity: "1" }
-      ],
-      tip: "豆腐不要频繁翻动，保持完整更好看。"
-    },
-    {
-      title: "海带排骨",
-      baseServings: 4,
-      ingredients: [
-        { name: "海带", quantity: "4" },
-        { name: "排骨", quantity: "500" },
-        { name: "生姜", quantity: "2" }
-      ],
-      tip: "海带炖到软糯以后，汤味会更厚一点。"
-    },
-    {
-      title: "番茄牛肉",
-      baseServings: 3,
-      ingredients: [
-        { name: "番茄", quantity: "3" },
-        { name: "牛肉", quantity: "350" },
-        { name: "洋葱", quantity: "1" }
-      ],
-      tip: "番茄先炒出沙感，再转炖会更浓郁。"
-    },
-    {
-      title: "胡萝卜羊肉",
-      baseServings: 4,
-      ingredients: [
-        { name: "胡萝卜", quantity: "2" },
-        { name: "羊肉", quantity: "420" },
-        { name: "洋葱", quantity: "1" }
-      ],
-      tip: "羊肉先煸到微焦边，炖出来更有香气。"
-    },
-    {
-      title: "金针菇鲈鱼",
-      baseServings: 3,
-      ingredients: [
-        { name: "金针菇", quantity: "1" },
-        { name: "鲈鱼", quantity: "1" },
-        { name: "生姜", quantity: "2" }
-      ],
-      tip: "鱼身先略煎定型，再炖煮不容易散。"
-    },
-    {
-      title: "土豆鸡肉",
-      baseServings: 3,
-      ingredients: [
-        { name: "土豆", quantity: "2" },
-        { name: "鸡肉", quantity: "350" },
-        { name: "洋葱", quantity: "1" }
-      ],
-      tip: "土豆和鸡肉一同焖到入味，口感会更协调。"
-    }
-  ] as const;
-
-  const stewStyles = [
-    {
-      suffix: "焖锅",
-      difficulty: "EASY" as const,
-      duration: "BETWEEN_30_60" as const,
-      scene: "一锅端的家常晚饭",
-      tip: "中途不要频繁开盖，温度更稳定。",
-      steps: ["把主料和配菜处理成适合炖煮的块状。", "先把主料煸香或焯水定味。", "并入配菜加水焖到软糯入味。"]
-    },
-    {
-      suffix: "炖煮",
-      difficulty: "EASY" as const,
-      duration: "BETWEEN_30_60" as const,
-      scene: "需要一锅热汤热菜的晚餐",
-      tip: "保持小火慢炖，味道更容易融合。",
-      steps: ["先完成切配与基础预处理。", "主料先下锅炒香或焯水。", "加足汤水后转小火炖到汤味融合。"]
-    },
-    {
-      suffix: "浓汤",
-      difficulty: "SKILLED" as const,
-      duration: "BETWEEN_30_60" as const,
-      scene: "偏爱汤汁拌饭口感的时候",
-      tip: "最后留一部分汤汁，盛出时更有满足感。",
-      steps: ["主料、配菜分别处理好。", "先把主料和香味食材炒出底味。", "加汤煮到略浓稠后再调整咸淡。"]
-    },
-    {
-      suffix: "砂锅",
-      difficulty: "SKILLED" as const,
-      duration: "OVER_60" as const,
-      scene: "适合慢慢炖出香气的周末正餐",
-      tip: "砂锅阶段保持微沸即可，不要大火滚煮。",
-      steps: ["先把需要久煮的主料处理好。", "炉灶上炒出底味后转入砂锅。", "小火慢煨到主料和汤底都变柔和。"]
-    },
-    {
-      suffix: "慢炖煲",
-      difficulty: "CHALLENGING" as const,
-      duration: "OVER_60" as const,
-      scene: "多人一起吃的耐心炖菜",
-      tip: "炖到最后十分钟再微调味道，层次会更完整。",
-      steps: ["先把主料整理、焯洗或煎香。", "把配菜分成先下和后下两批。", "保持小火慢炖到所有食材都吸满汤汁。"]
-    }
-  ] as const;
-
-  const generatedSystemRecipes = [
-    ...quickCombos.flatMap(combo =>
-      quickStyles.map(style => ({
-        categoryId: quickCategory.id,
-        name: `${combo.title}${style.suffix}`,
-        story: `${combo.title}${style.suffix}，适合${style.scene}。`,
-        baseServings: combo.baseServings,
-        difficulty: style.difficulty,
-        duration: style.duration,
-        tips: `${combo.tip}${style.tip}`,
-        ingredients: combo.ingredients,
-        steps: style.steps
-      }))
-    ),
-    ...stewCombos.flatMap(combo =>
-      stewStyles.map(style => ({
-        categoryId: stewCategory.id,
-        name: `${combo.title}${style.suffix}`,
-        story: `${combo.title}${style.suffix}，适合${style.scene}。`,
-        baseServings: combo.baseServings,
-        difficulty: style.difficulty,
-        duration: style.duration,
-        tips: `${combo.tip}${style.tip}`,
-        ingredients: combo.ingredients,
-        steps: style.steps
-      }))
-    )
-  ].map((recipe, index) => ({
-    recipeId: 2101 + index,
-    versionId: 1101 + index,
-    ...recipe
-  }));
-
-  if (generatedSystemRecipes.length !== 100) {
+  if (generatedSystemRecipes.length !== defaultInspirationCategories.length * 5) {
     throw new Error(`系统菜谱 seed 数量异常: ${generatedSystemRecipes.length}`);
   }
-
-  const tomatoVersion = await upsertRecipeVersion(1001, null, {
-    name: "番茄炒蛋",
-    story: null,
-    baseServings: 2,
-    difficulty: "BEGINNER",
-    tips: "番茄最后下锅，保持一点汁水。",
-    ingredients: [
-      {
-        ingredientId: tomato.id,
-        ingredientName: "番茄",
-        source: "SYSTEM",
-        categoryId: tomato.categoryId,
-        amount: {
-          kind: "EXACT",
-          quantity: "2",
-          unitId: tomato.defaultUnitId,
-          unitName: tomato.defaultUnitName,
-          unitType: tomato.defaultUnitType
-        }
-      },
-      {
-        ingredientId: egg.id,
-        ingredientName: "鸡蛋",
-        source: "SYSTEM",
-        categoryId: egg.categoryId,
-        amount: {
-          kind: "EXACT",
-          quantity: "3",
-          unitId: egg.defaultUnitId,
-          unitName: egg.defaultUnitName,
-          unitType: egg.defaultUnitType
-        }
-      }
-    ],
-    steps: [{ text: "番茄切块" }, { text: "鸡蛋炒散后和番茄一起翻炒" }],
-    duration: "WITHIN_15",
-    images: []
-  });
-
-  const potatoVersion = await upsertRecipeVersion(1002, null, {
-    name: "土豆烧牛肉",
-    story: null,
-    baseServings: 3,
-    difficulty: "SKILLED",
-    tips: "牛肉先焯水再炖，口感更稳。",
-    ingredients: [
-      {
-        ingredientId: potato.id,
-        ingredientName: "土豆",
-        source: "SYSTEM",
-        categoryId: potato.categoryId,
-        amount: {
-          kind: "EXACT",
-          quantity: "2",
-          unitId: potato.defaultUnitId,
-          unitName: potato.defaultUnitName,
-          unitType: potato.defaultUnitType
-        }
-      },
-      {
-        ingredientId: beef.id,
-        ingredientName: "牛肉",
-        source: "SYSTEM",
-        categoryId: beef.categoryId,
-        amount: {
-          kind: "EXACT",
-          quantity: "400",
-          unitId: beef.defaultUnitId,
-          unitName: beef.defaultUnitName,
-          unitType: beef.defaultUnitType
-        }
-      }
-    ],
-    steps: [{ text: "牛肉焯水" }, { text: "土豆与牛肉一起焖煮" }],
-    duration: "BETWEEN_30_60",
-    images: []
-  });
-  await upsertSystemRecipe({
-    recipeId: 2001,
-    versionId: tomatoVersion.id,
-    categoryId: quickCategory.id,
-    name: "番茄炒蛋",
-    story: null,
-    baseServings: 2,
-    difficulty: "BEGINNER",
-    duration: "WITHIN_15",
-    tips: "番茄最后下锅，保持一点汁水。",
-    ingredients: [
-      { name: "番茄", quantity: "2" },
-      { name: "鸡蛋", quantity: "3" }
-    ],
-    steps: ["番茄切块", "鸡蛋炒散后和番茄一起翻炒"]
-  });
-
-  await upsertSystemRecipe({
-    recipeId: 2002,
-    versionId: potatoVersion.id,
-    categoryId: stewCategory.id,
-    name: "土豆烧牛肉",
-    story: null,
-    baseServings: 3,
-    difficulty: "SKILLED",
-    duration: "BETWEEN_30_60",
-    tips: "牛肉先焯水再炖，口感更稳。",
-    ingredients: [
-      { name: "土豆", quantity: "2" },
-      { name: "牛肉", quantity: "400" }
-    ],
-    steps: ["牛肉焯水", "土豆与牛肉一起焖煮"]
-  });
 
   for (const recipe of generatedSystemRecipes) {
     await upsertSystemRecipe(recipe);

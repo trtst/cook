@@ -22,6 +22,7 @@
     "restart": "bash scripts/local/restart-all.sh",
     "stop": "bash scripts/local/stop-all.sh",
     "status": "bash scripts/local/status-all.sh",
+    "db:reset-local": "bash scripts/local/reset-db.sh",
     "build": "bash scripts/local/build-all.sh",
     "check": "pnpm type-check"
   },
