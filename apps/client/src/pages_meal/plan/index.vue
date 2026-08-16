@@ -94,28 +94,12 @@
                 </view>
                 <view v-else-if="loading && !refreshing" class="notice">正在同步这一周的计划...</view>
 
-                <view v-if="!selectedPlanCount" class="day-empty">
-                  <text class="day-empty__title">这一天还没有安排</text>
-                  <text class="day-empty__desc">可以直接把上周同一天的安排带过来，或者先去菜谱里挑一道。</text>
-                  <view class="day-empty__actions">
-                    <view
-                      class="day-empty__action action-pill action-pill--primary"
-                      :class="copyBusy ? 'day-empty__action--disabled' : ''"
-                      :hover-class="copyBusy ? '' : 'action-pill--hover'"
-                      hover-stay-time="100"
-                      @click="copyPreviousWeek"
-                    >
-                      {{ copyBusy ? "复制中..." : "复制上周" }}
-                    </view>
-                    <view
-                      class="day-empty__action action-pill action-pill--muted action-pill--subtle"
-                      hover-class="action-pill--hover"
-                      hover-stay-time="100"
-                      @click="openRecipe"
-                    >
-                      去菜谱
-                    </view>
-                  </view>
+                <view v-if="!selectedPlanCount">
+                  <Empty
+                    :art="emptyStateArt"
+                    title="这一天还没有安排"
+                    description="先把想吃的记下来，复制上周还是去菜谱挑一道，都能从右下角继续。"
+                  />
                 </view>
 
                 <view v-if="selectedPlanCount" class="meal-list">
@@ -249,6 +233,34 @@
         </template>
       </SheetShell>
 
+      <view v-if="canShowEmptyDock" class="empty-plan-dock">
+        <view v-if="emptyDockOpen" class="empty-plan-dock__backdrop" @click="closeEmptyDock" />
+        <view class="empty-plan-dock__actions">
+          <view
+            class="empty-plan-dock__action"
+            :class="{
+              'empty-plan-dock__action--open': emptyDockOpen,
+              'empty-plan-dock__action--disabled': copyBusy
+            }"
+            :style="emptyDockActionStyle(0)"
+            @click="handleEmptyDockAction('copy')"
+          >
+            {{ copyBusy ? "复制中..." : "复制上周" }}
+          </view>
+          <view
+            class="empty-plan-dock__action"
+            :class="{ 'empty-plan-dock__action--open': emptyDockOpen }"
+            :style="emptyDockActionStyle(1)"
+            @click="handleEmptyDockAction('recipe')"
+          >
+            去菜谱
+          </view>
+        </view>
+        <view class="empty-plan-dock__button" hover-class="empty-plan-dock__button--hover" hover-stay-time="100" @click="toggleEmptyDock">
+          <text class="cookfont icon-manage empty-plan-dock__icon" :class="{ 'empty-plan-dock__icon--open': emptyDockOpen }" />
+        </view>
+      </view>
+
       <SheetShell
         v-if="sortSheetMounted"
         :visible="sortSheetVisible"
@@ -327,8 +339,10 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { shoppingListApi, type ShoppingListSummary } from "@/apis/shopping-list";
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
@@ -431,6 +445,7 @@ const selectedShoppingListId = ref<UUID | "">("");
 const shoppingCreateName = ref("");
 const shoppingSubmitting = ref(false);
 const shoppingPlan = ref<MealPlanSummary | null>(null);
+const emptyDockOpen = ref(false);
 let planSortPressTimer: ReturnType<typeof setTimeout> | null = null;
 let planSortPressId: UUID | "" = "";
 let planSortPressTouchY = 0;
@@ -489,6 +504,7 @@ const selectedPlanCount = computed(() => selectedPlans.value.length);
 const selectedDateHint = computed(() => {
   return "先把这天想吃的安排上，买菜和约饭都会顺手很多。";
 });
+const canShowEmptyDock = computed(() => !loading.value && !errorText.value && !selectedPlanCount.value);
 const canSortPlans = computed(() => selectedPlanCount.value > 1);
 const hasContentCards = computed(() => Boolean(errorText.value || selectedPlanCount.value || loading.value));
 const inlineLoading = computed(() => loading.value && hasContentCards.value && !refreshing.value);
@@ -674,6 +690,7 @@ function confirmSortSheet() {
 
 async function copyPreviousWeek() {
   if (copyBusy.value) return;
+  closeEmptyDock();
   const previousDate = formatDateOnly(addDays(parseDateOnly(selectedDate.value), -7));
 
   copyBusy.value = true;
@@ -750,7 +767,32 @@ function reloadWeek() {
 }
 
 function openRecipe() {
+  closeEmptyDock();
   void uniPlatform.navigation.switchTab("/pages/recipe/index");
+}
+
+function toggleEmptyDock() {
+  if (!canShowEmptyDock.value) return;
+  emptyDockOpen.value = !emptyDockOpen.value;
+}
+
+function closeEmptyDock() {
+  emptyDockOpen.value = false;
+}
+
+function emptyDockActionStyle(index: number) {
+  const total = 2;
+  return {
+    transitionDelay: emptyDockOpen.value ? `${index * 44}ms` : `${(total - index - 1) * 28}ms`
+  };
+}
+
+function handleEmptyDockAction(action: "copy" | "recipe") {
+  if (action === "copy") {
+    void copyPreviousWeek();
+    return;
+  }
+  openRecipe();
 }
 
 async function addPlanToShoppingList(plan: MealPlanSummary) {
@@ -1198,6 +1240,7 @@ function clearPageState() {
   shoppingCreateName.value = "";
   shoppingSubmitting.value = false;
   shoppingPlan.value = null;
+  emptyDockOpen.value = false;
   resetPlanSortDrag();
 }
 
@@ -1410,12 +1453,7 @@ function clearPageState() {
   line-height: 1.6;
 }
 
-.day-empty__action--disabled {
-  opacity: 0.54;
-}
-
 .notice,
-.day-empty,
 .meal-card {
   border: 1rpx solid var(--plan-card-border);
   border-radius: var(--plan-card-radius);
@@ -1434,35 +1472,8 @@ function clearPageState() {
   margin-top: 18rpx;
 }
 
-.day-empty {
-  margin-top: 24rpx;
-  padding: 28rpx;
-}
-
-.day-empty__title {
-  display: block;
-  color: var(--color-text);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-heavy);
-}
-
-.day-empty__desc {
-  display: block;
-  margin-top: 12rpx;
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.7;
-}
-
-.day-empty__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-  margin-top: 24rpx;
-}
-
-.day-empty__action {
-  min-width: 188rpx;
+.plan-scroll__body :deep(.empty-state--art) {
+  margin-top: 0;
 }
 
 .plan-entry {
@@ -1853,6 +1864,89 @@ function clearPageState() {
 .sheet-actions__button--cancel {
   background: rgba(255, 255, 255, 0.78);
   color: var(--color-text-secondary);
+}
+
+.empty-plan-dock {
+  position: fixed;
+  right: 24rpx;
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  z-index: 30;
+}
+
+.empty-plan-dock__backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+}
+
+.empty-plan-dock__actions {
+  position: absolute;
+  right: calc(100% + 24rpx);
+  bottom: 10rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  pointer-events: none;
+}
+
+.empty-plan-dock__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 172rpx;
+  height: 72rpx;
+  padding: 0 28rpx;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
+  box-shadow:
+    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 28%, transparent),
+    0 8rpx 18rpx color-mix(in srgb, var(--color-primary) 10%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 85%, transparent);
+  color: var(--color-text);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(24rpx) scale(0.94);
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
+}
+
+.empty-plan-dock__action--open {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+.empty-plan-dock__action--disabled {
+  opacity: 0.62;
+}
+
+.empty-plan-dock__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  box-shadow: var(--button-primary-shadow);
+}
+
+.empty-plan-dock__button--hover {
+  opacity: 0.94;
+}
+
+.empty-plan-dock__icon {
+  color: var(--button-primary-text);
+  font-size: 34rpx;
+  transition: transform 240ms ease;
+}
+
+.empty-plan-dock__icon--open {
+  transform: rotate(90deg);
 }
 
 .plan-sort {
