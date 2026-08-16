@@ -1611,6 +1611,7 @@ export class FridgeReservationModel {
 export class FridgeItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty(nullableString) categoryName!: string | null;
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) quantityText!: string | null;
   @ApiProperty(nullableString) exactQuantity!: string | null;

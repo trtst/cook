@@ -2083,6 +2083,7 @@ export interface UpdateAdminMedalTemplateImageRequest {
 export interface FridgeItemSummary {
   id: UUID;
   ingredientId: UUID | null;
+  categoryName: string | null;
   name: string;
   quantityText: string | null;
   exactQuantity: string | null;

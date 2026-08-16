@@ -1117,6 +1117,7 @@ interface MedalWallResponse {
 interface FridgeItemSummary {
   id: UUID;
   ingredientId: UUID | null;
+  categoryName: string | null;
   name: string;
   quantityText: string | null;
   exactQuantity: string | null;
@@ -1138,7 +1139,7 @@ interface FridgeItemSummary {
 }
 ```
 
-`GET /fridge-items?page=1&pageSize=50` 返回当前用户自己的冰箱条目分页，冰箱列表页用 `stockText / reservedText / availableText / reservations[]` 直接展示“实际库存 / 已预占 / 可用库存”和预占去向；其中 `expireAt` 用于“临期 / 到期”状态展示。新增冰箱条目仍走 `POST /fridge-items`：
+`GET /fridge-items?page=1&pageSize=50` 返回当前用户自己的冰箱条目分页，冰箱列表页用 `stockText / reservedText / availableText / reservations[]` 直接展示“实际库存 / 已预占 / 可用库存”和预占去向；其中 `categoryName` 给食材首页直接展示分类，`expireAt` 用于“临期 / 到期”状态展示。新增冰箱条目仍走 `POST /fridge-items`：
 
 ```ts
 interface CreateFridgeItemRequest {

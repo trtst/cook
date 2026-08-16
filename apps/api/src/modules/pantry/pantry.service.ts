@@ -296,6 +296,15 @@ export class PantryService {
           skip,
           take: normalizedPageSize,
           include: {
+            ingredient: {
+              select: {
+                category: {
+                  select: {
+                    name: true
+                  }
+                }
+              }
+            },
             exactUnit: {
               select: {
                 id: true,
@@ -2793,16 +2802,17 @@ export class PantryService {
       if (remainingQuantity.lt(0)) {
         throw new BadRequestException("预占库存已不足，请刷新后重试");
       }
+      const hasRemainingQuantity = remainingQuantity.gt(0);
       await tx.fridgeItem.update({
         where: {
           id: fridgeItemId
         },
         data: {
           quantityText: this.formatExactQuantityText(remainingQuantity, resolvedExact.unitName),
-          exactQuantity: remainingQuantity,
-          exactUnitId: resolvedExact.unitId,
-          available: remainingQuantity.gt(0),
-          consumedAt: remainingQuantity.gt(0) ? null : settledAt,
+          exactQuantity: hasRemainingQuantity ? remainingQuantity : null,
+          exactUnitId: hasRemainingQuantity ? resolvedExact.unitId : null,
+          available: hasRemainingQuantity,
+          consumedAt: hasRemainingQuantity ? null : settledAt,
           version: { increment: 1 }
         }
       });
@@ -4221,6 +4231,15 @@ export class PantryService {
         userId
       },
       include: {
+        ingredient: {
+          select: {
+            category: {
+              select: {
+                name: true
+              }
+            }
+          }
+        },
         exactUnit: {
           select: {
             id: true,
@@ -4259,6 +4278,11 @@ export class PantryService {
   private toFridgeItemSummary(item: {
     id: UUID;
     ingredientId: UUID | null;
+    ingredient?: {
+      category: {
+        name: string;
+      } | null;
+    } | null;
     name: string;
     quantityText: string | null;
     exactQuantity: Prisma.Decimal | null;
@@ -4293,6 +4317,7 @@ export class PantryService {
     return {
       id: item.id,
       ingredientId: item.ingredientId,
+      categoryName: item.ingredient?.category?.name ?? null,
       name: item.name,
       quantityText: item.quantityText,
       exactQuantity: resolvedExact?.quantity.toString() ?? null,
