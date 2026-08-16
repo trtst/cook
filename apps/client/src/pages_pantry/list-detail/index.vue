@@ -63,10 +63,31 @@
                     <view class="progress-card__bar" :style="{ width: `${progressPercent}%` }" />
                   </view>
                 </view>
-
+                <view v-if="canShowPrimaryAction" class="store-card" :class="{ 'store-card--finish': canShowFinishButton }">
+                  <view class="store-card__main">
+                    <text class="store-card__title">{{ primaryCardTitle }}</text>
+                    <text class="store-card__desc">{{ primaryCardDesc }}</text>
+                  </view>
+                  <view class="store-card__aside">
+                    <view class="store-card__stat">
+                      <text class="store-card__stat-number">{{ primaryCardStatNumber }}</text>
+                      <text class="store-card__stat-label">{{ primaryCardStatLabel }}</text>
+                    </view>
+                    <view
+                      class="store-card__button"
+                      :class="{
+                        'store-card__button--finish': canShowFinishButton,
+                        'store-card__button--disabled': submitting
+                      }"
+                      @click="submitting ? undefined : handlePrimaryAction()"
+                    >
+                      {{ primaryCardButtonText }}
+                    </view>
+                  </view>
+                </view>
               </view>
 
-              <view v-if="groups.length" class="group-list">
+              <transition-group v-if="groups.length" name="group-list" tag="view" class="group-list">
                 <view v-for="group in groups" :key="group.key" class="group-card">
                   <view
                     class="item-swipe"
@@ -158,25 +179,16 @@
                     </view>
                   </view>
                 </view>
-              </view>
+              </transition-group>
 
-              <Empty v-else class="detail-content__empty" title="这张清单还没有食材" description="可以从菜谱里继续加，也可以用右下角按钮手动补食材。" />
+              <Empty v-else class="detail-content__empty" title="这张清单还没有食材" description="可以从菜谱里继续加，也可以用右下角管理入口手动补食材。" />
             </view>
           </view>
         </scroll-view>
 
-        <view v-if="canShowFloatingDock" class="floating-dock">
+        <view v-if="canShowManageDock" class="floating-dock">
           <view v-if="manageMenuOpen" class="floating-dock__backdrop" @click="closeManageMenu" />
-          <button
-            v-if="canShowPrimaryAction"
-            class="floating-dock__store"
-            :class="{ 'floating-dock__store--finish': canShowFinishButton }"
-            :disabled="submitting"
-            @click="handlePrimaryAction"
-          >
-            {{ primaryActionText }}
-          </button>
-          <view v-if="canShowManageDock" class="manage-dock">
+          <view class="manage-dock">
             <view class="manage-dock__actions">
               <view
                 v-for="(action, index) in manageActions"
@@ -406,15 +418,6 @@
       </template>
     </SheetShell>
 
-    <ShoppingCompleteSheet
-      :visible="completeSheetVisible"
-      :entries="completeItems"
-      :submitting="submitting"
-      @close="closeCompleteSheet"
-      @after-close="handleCompleteSheetAfterClose"
-      @update:entries="updateCompleteItems"
-      @submit="completeList"
-    />
   </Layout>
 </template>
 
@@ -435,8 +438,6 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
-import ShoppingCompleteSheet from "../components/ShoppingCompleteSheet.vue";
-import { type ShoppingCompleteEntry, toShoppingCompleteEntries } from "../components/shopping-complete-sheet";
 import {
   shoppingApi,
   type ShoppingListCollaborator,
@@ -447,6 +448,7 @@ import {
   type ShoppingInventoryStatus,
   type ShoppingListItemPatchResponse
 } from "../apis/shopping";
+import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 type DetailAction = "" | "share" | "complete";
 type ManageActionKey = "add" | "share" | "void" | "restore" | "delete" | "leave";
@@ -512,9 +514,6 @@ const shareMembers = ref<DiningGroupMemberSummary[]>([]);
 const shareMembersReady = ref(false);
 const selectedShareUserIds = ref<UUID[]>([]);
 const scrollTop = ref(0);
-
-const completeSheetVisible = ref(false);
-const completeItems = ref<ShoppingCompleteEntry[]>([]);
 const manageMenuOpen = ref(false);
 const openSwipeItemId = ref<UUID | "">("");
 const itemPendingId = ref<UUID | "">("");
@@ -528,6 +527,16 @@ const swipeState = reactive({
   offset: 0,
   axis: "" as "" | "x" | "y"
 });
+
+function resolveGroupSortRank(group: GroupView) {
+  if (isGroupResolved(group)) {
+    return isItemChecked(group) ? 3 : 2;
+  }
+  if (group.items.some(item => Boolean(item.checkedAt) || item.status === "CHECKED" || item.inventoryApplied)) {
+    return 1;
+  }
+  return 0;
+}
 
 const groups = computed<GroupView[]>(() => {
   const source = (detail.value?.items ?? []).filter(item => item.status !== "REMOVED");
@@ -544,10 +553,10 @@ const groups = computed<GroupView[]>(() => {
       group: buildGroupView(key, items)
     }))
     .sort((left, right) => {
-      const leftResolved = isGroupResolved(left.group) ? 1 : 0;
-      const rightResolved = isGroupResolved(right.group) ? 1 : 0;
-      if (leftResolved !== rightResolved) {
-        return leftResolved - rightResolved;
+      const leftRank = resolveGroupSortRank(left.group);
+      const rightRank = resolveGroupSortRank(right.group);
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
       }
       return left.index - right.index;
     })
@@ -596,6 +605,7 @@ const canEditItems = computed(() => Boolean(detail.value) && detail.value?.statu
 const canAddItem = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
 const hasPendingGroups = computed(() => groups.value.some(group => !isGroupResolved(group)));
 const hasCheckedGroups = computed(() => groups.value.some(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))));
+const storeReadyCount = computed(() => groups.value.filter(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))).length);
 const canShowStoreButton = computed(() => detail.value?.status === "ACTIVE" && groups.value.length > 0 && !hasPendingGroups.value && hasCheckedGroups.value);
 const canShowFinishButton = computed(() => detail.value?.status === "ACTIVE" && groups.value.length > 0 && !hasPendingGroups.value && !hasCheckedGroups.value);
 const canShowPrimaryAction = computed(() => canShowStoreButton.value || canShowFinishButton.value);
@@ -604,6 +614,19 @@ const primaryActionText = computed(() => {
   if (canShowFinishButton.value) return "完成清单";
   return "";
 });
+const primaryCardTitle = computed(() => {
+  if (canShowStoreButton.value) return "入库还差一步";
+  return "这张清单可以收尾了";
+});
+const primaryCardDesc = computed(() => {
+  if (canShowStoreButton.value) {
+    return "确认好数量和保鲜时间，这批食材就能收进库存，后续补买更顺手。";
+  }
+  return "都处理完了，确认后这张清单就归到已完成。";
+});
+const primaryCardStatNumber = computed(() => String(canShowStoreButton.value ? storeReadyCount.value : progressDoneCount.value));
+const primaryCardStatLabel = computed(() => (canShowStoreButton.value ? "项待入库" : "项已处理"));
+const primaryCardButtonText = computed(() => (canShowStoreButton.value ? "继续入库" : "完成清单"));
 const manageActions = computed(() => {
   const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
   if (canAddItem.value) actions.push({ key: "add", label: "添加食材", iconClass: "icon-add", tone: "default" });
@@ -615,7 +638,6 @@ const manageActions = computed(() => {
   return actions;
 });
 const canShowManageDock = computed(() => manageActions.value.length > 0);
-const canShowFloatingDock = computed(() => canShowPrimaryAction.value || canShowManageDock.value);
 const shareActive = computed(() => Boolean(detail.value && (detail.value.memberCount > 1 || detail.value.pendingInviteCount > 0)));
 const canUseShareFeature = computed(() => userStore.profile?.membership?.tier !== "FREE");
 const shareMemberFull = computed(() => {
@@ -680,6 +702,11 @@ onLoad((query) => {
 
 onShow(() => {
   if (!sessionStore.isLoggedIn || !listId.value) return;
+  const completedDetail = consumeShoppingCompleteResult("detail", listId.value);
+  if (completedDetail) {
+    detail.value = completedDetail;
+    return;
+  }
   void loadDetail();
 });
 
@@ -984,7 +1011,6 @@ async function toggleItem(group: GroupView) {
       });
       applyItemPatch(patch);
     }
-    await requestDetail({ silent: true });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
   } finally {
@@ -1017,7 +1043,6 @@ async function handleFridgeAction(group: GroupView) {
       });
       applyItemPatch(patch);
     }
-    await requestDetail({ silent: true });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "库存应用失败", icon: "none" });
   } finally {
@@ -1619,8 +1644,7 @@ async function handleManageLeave() {
 function openStoreFlow() {
   if (!detail.value || submitting.value) return;
   closeManageMenu();
-  completeItems.value = toShoppingCompleteEntries(detail.value.items);
-  completeSheetVisible.value = true;
+  void uniPlatform.navigation.navigateTo(buildShoppingCompletePagePath(detail.value.id, "detail"));
 }
 
 async function finishList() {
@@ -1653,42 +1677,6 @@ async function handlePrimaryAction() {
   }
   if (canShowFinishButton.value) {
     await finishList();
-  }
-}
-
-function closeCompleteSheet() {
-  completeSheetVisible.value = false;
-}
-
-function handleCompleteSheetAfterClose() {
-  completeItems.value = [];
-}
-
-function updateCompleteItems(entries: ShoppingCompleteEntry[]) {
-  completeItems.value = entries;
-}
-
-async function completeList() {
-  if (!detail.value || submitting.value) return;
-  submitting.value = true;
-  try {
-    detail.value = await shoppingApi.completeList(detail.value.id, {
-      operationId: createOperationId(),
-      version: detail.value.version,
-      entries: completeItems.value.map(item => ({
-        itemId: item.itemId,
-        store: item.store,
-        quantityText: item.quantityText.trim() || null,
-        expireDays: item.expireAt ? null : item.expireDays,
-        expireAt: item.expireAt
-      }))
-    });
-    closeCompleteSheet();
-    await uniPlatform.feedback.toast({ title: "已完成并入库", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
-  } finally {
-    submitting.value = false;
   }
 }
 
@@ -2022,6 +2010,7 @@ async function leaveList() {
 
 .notice,
 .summary-card,
+.store-card,
 .group-card,
 .share-card,
 .complete-card,
@@ -2053,6 +2042,29 @@ async function leaveList() {
     inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 74%, transparent);
 }
 
+.store-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  margin-top: 18rpx;
+  padding: 28rpx 30rpx;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-warning-soft) 68%, transparent) 0 26%, transparent 27%),
+    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-warning-soft) 5%) 0%, var(--color-surface) 100%);
+  box-shadow:
+    0 20rpx 42rpx color-mix(in srgb, var(--color-warning-soft) 26%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-warning-soft) 34%, transparent);
+}
+
+.store-card--finish {
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-primary-soft) 62%, transparent) 0 26%, transparent 27%),
+    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-primary-soft) 5%) 0%, var(--color-surface) 100%);
+  box-shadow:
+    0 20rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 22%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary-soft) 26%, transparent);
+}
+
 .item-card,
 .item-row__actions,
 .search-box,
@@ -2064,9 +2076,18 @@ async function leaveList() {
 }
 
 .summary-card__main,
+.store-card__main,
 .item-row__main {
   flex: 1;
   min-width: 0;
+}
+
+.store-card__main {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: space-between;
+  padding: 4rpx 0;
 }
 
 .complete-card__title {
@@ -2157,6 +2178,79 @@ async function leaveList() {
   color: var(--color-primary);
 }
 
+.store-card__title {
+  display: block;
+  color: var(--color-text);
+  font-size: 40rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.24;
+}
+
+.store-card__desc {
+  display: block;
+  margin-top: 0;
+  color: var(--color-text-secondary);
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+
+.store-card__aside {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 18rpx;
+  align-items: flex-end;
+  margin-left: auto;
+}
+
+.store-card__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 120rpx;
+  color: var(--color-text);
+}
+
+.store-card__stat-number {
+  font-size: 56rpx;
+  line-height: 1;
+  font-weight: var(--font-weight-heavy);
+}
+
+.store-card__stat-label {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.3;
+  color: var(--color-text-secondary);
+}
+
+.store-card__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 196rpx;
+  min-height: 72rpx;
+  padding: 0 24rpx;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-heavy);
+}
+
+.store-card__button--finish {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
+  box-shadow: var(--shadow-card);
+  color: var(--color-text);
+}
+
+.store-card__button--disabled {
+  opacity: 0.58;
+}
+
 .progress-card__track {
   height: 16rpx;
   margin-top: 12rpx;
@@ -2178,6 +2272,10 @@ async function leaveList() {
 
 .group-list {
   margin-top: 28rpx;
+}
+
+.group-list-move {
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .detail-content__empty {

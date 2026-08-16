@@ -326,15 +326,6 @@
       </template>
     </SheetShell>
 
-    <ShoppingCompleteSheet
-      :visible="completeSheetVisible"
-      :entries="completeItems"
-      :submitting="submitting"
-      @close="closeCompleteSheet"
-      @after-close="handleCompleteSheetAfterClose"
-      @update:entries="updateCompleteItems"
-      @submit="submitCompleteList"
-    />
   </Layout>
 </template>
 
@@ -356,8 +347,6 @@ import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMonthDay } from "../utils/date";
-import ShoppingCompleteSheet from "../components/ShoppingCompleteSheet.vue";
-import { type ShoppingCompleteEntry, toShoppingCompleteEntries } from "../components/shopping-complete-sheet";
 import {
   shoppingApi,
   type ShoppingListCollaborator,
@@ -366,6 +355,7 @@ import {
   type ShoppingListSummary,
   type ShoppingSharePreview
 } from "../apis/shopping";
+import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 const pageStyle = usePageScrollStyle();
 const sessionStore = useSessionStore();
@@ -399,10 +389,6 @@ const selectedShareUserIds = ref<UUID[]>([]);
 const shareLinkLoading = ref(false);
 const shareLinkError = ref("");
 const shareUrl = ref("");
-const completeSheetVisible = ref(false);
-const completeItems = ref<ShoppingCompleteEntry[]>([]);
-const completeListId = ref<UUID | "">("");
-const completeListVersion = ref(0);
 const copyingListId = ref<UUID | "">("");
 const busyListId = ref<UUID | "">("");
 
@@ -519,7 +505,12 @@ onLoad((query) => {
 
 onShow(() => {
   if (!sessionStore.isLoggedIn) return;
-  void loadPage();
+  const completedDetail = consumeShoppingCompleteResult("list");
+  if (completedDetail) {
+    applyCompletedSummary(completedDetail);
+  } else {
+    void loadPage();
+  }
   if (shareToken.value) {
     void loadSharePreview();
   }
@@ -861,7 +852,7 @@ async function markComplete(item: ShoppingListSummary) {
         })
       : await shoppingApi.getListDetail(item.id);
     syncListSummary(detail);
-    openCompleteSheet(detail);
+    openCompletePage(detail.id);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "标记失败", icon: "none" });
   } finally {
@@ -892,51 +883,8 @@ function applyCompletedSummary(detail: ShoppingListDetail) {
   syncListSummary(detail);
 }
 
-function openCompleteSheet(detail: ShoppingListDetail) {
-  completeListId.value = detail.id;
-  completeListVersion.value = detail.version;
-  completeItems.value = toShoppingCompleteEntries(detail.items);
-  completeSheetVisible.value = true;
-}
-
-function closeCompleteSheet() {
-  completeSheetVisible.value = false;
-}
-
-function handleCompleteSheetAfterClose() {
-  completeItems.value = [];
-  completeListId.value = "";
-  completeListVersion.value = 0;
-}
-
-function updateCompleteItems(entries: ShoppingCompleteEntry[]) {
-  completeItems.value = entries;
-}
-
-async function submitCompleteList() {
-  if (!completeListId.value || submitting.value) return;
-  submitting.value = true;
-  try {
-    const detail = await shoppingApi.completeList(completeListId.value, {
-      operationId: createOperationId(),
-      version: completeListVersion.value,
-      entries: completeItems.value.map(item => ({
-        itemId: item.itemId,
-        store: item.store,
-        quantityText: item.quantityText.trim() || null,
-        expireDays: item.expireAt ? null : item.expireDays,
-        expireAt: item.expireAt
-      }))
-    });
-    applyCompletedSummary(detail);
-    closeCompleteSheet();
-    await loadPage();
-    await uniPlatform.feedback.toast({ title: "已完成并入库", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
+function openCompletePage(listId: UUID) {
+  void uniPlatform.navigation.navigateTo(buildShoppingCompletePagePath(listId, "list"));
 }
 
 function closeShareSheet() {
