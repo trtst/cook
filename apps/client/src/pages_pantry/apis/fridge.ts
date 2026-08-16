@@ -4,6 +4,7 @@ import { get, post, put, type PageResult, type OperationId, type UUID } from "@/
 export interface FridgeItemSummary {
   id: UUID;
   ingredientId: UUID | null;
+  categoryName: string | null;
   name: string;
   quantityText: string | null;
   exactQuantity: string | null;
@@ -48,6 +49,7 @@ function normalizeFridgeItem(item: Partial<FridgeItemSummary> & Pick<FridgeItemS
   return {
     id: item.id,
     ingredientId: item.ingredientId ?? null,
+    categoryName: item.categoryName ?? null,
     name: item.name,
     quantityText: item.quantityText ?? null,
     exactQuantity: item.exactQuantity ?? null,
