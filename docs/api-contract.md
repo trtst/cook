@@ -903,11 +903,14 @@ POST /meal-polls
 GET  /meal-polls/{pollId}
 POST /meal-polls/{pollId}/vote
 POST /meal-polls/{pollId}/confirm
+POST /dining-events
 POST /dining-events/{eventId}/memory-shares
 GET  /memory-shares/{shareToken}/preview
 POST /meal-plans/{planItemId}/dining-event
 GET  /dining-group-activities
 GET  /dining-events/{eventId}
+POST /dining-events/{eventId}/share-link
+POST /dining-events/{eventId}/cover
 POST /dining-events/{eventId}/cook
 POST /dining-events/{eventId}/invite-group
 POST /dining-events/{eventId}/respond
@@ -955,7 +958,7 @@ POST /dining-events/{eventId}/shopping-gap
 
 ```ts
 type MealPlanStatus = "PLANNED" | "COMPLETED";
-type MealSlot = "BREAKFAST" | "LUNCH" | "DINNER";
+type MealSlot = "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
 type MealPollStatus = "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
 type MealPollCandidateStatus = "ACTIVE" | "PENDING" | "REJECTED";
 type ActivityState = "PENDING" | "DONE" | "EXPIRED";
@@ -1080,6 +1083,7 @@ interface DiningEventMenuItemSummary {
   title: string;
   cookUserUid: number | null;
   cookName: string | null;
+  version: number;
 }
 
 interface DiningEventSummary {
@@ -1087,7 +1091,11 @@ interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
+  coverImageUrl: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  organizerUid: number | null;
+  organizerName: string | null;
+  organizerAvatarUrl: string | null;
   planItemId: UUID | null;
   diningGroupId: UUID | null;
   menu: RecipeContentSnapshot;
@@ -1095,7 +1103,13 @@ interface DiningEventSummary {
   participants: DiningEventParticipantSummary[];
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
+  version: number;
   createdAt: IsoDateTime;
+}
+
+interface DiningEventShareLinkResponse {
+  shareTokenPath: string;
+  expiresAt: IsoDateTime | null;
 }
 
 interface UserMedalSummary {
@@ -1191,7 +1205,20 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时提交 `expectedVersion = null`，覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。
+同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时提交 `expectedVersion = null`，覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+
+`POST /dining-events` 新增“直接发起饭局”最小写入口，请求体固定为：
+
+```ts
+interface CreateDirectDiningEventRequest {
+  planDate: string;
+  mealSlot: MealSlot;
+  scheduledAt: IsoDateTime;
+  location?: string | null;
+}
+```
+
+这条写接口只允许当前登录用户给“自己的某一天某一餐”直接开一场饭局，不额外接收菜单字段。若该餐次还没有计划项，服务端会先自动创建一条空菜单计划，再把饭局挂上去；若已有计划项，则直接复用原计划项。已完成餐次、同餐次已存在未结束饭局时统一返回冲突错误。直接创建得到的 `DiningEventSummary.menuItems` 可以为空，客户端随后继续走计划编辑链路补菜单即可。
 
 计划详情新增“做饭助手”附属快照：`GET /meal-plans/{planItemId}/cook-assistant` 读取当前计划下最近一次生成结果；若从未生成，响应仍返回同一个对象，但 `hasSnapshot = false`，客户端据此显示空态。`POST /meal-plans/{planItemId}/cook-assistant` 在当前计划上生成或重生成一份规则型做饭安排，请求头继续使用 `Idempotency-Key`，请求体不额外接收业务字段。该快照固定挂在 `MealPlanItem` 下，与计划同生命周期：计划删除时一并删除，不独立保留。服务端必须按当前 `MealPlanDish` 的 `recipeVersionId + slotType + purchaseState + sortOrder` 计算菜单签名；若后续计划菜单被改动，旧快照仍可返回，但 `isStale = true`，客户端应提示用户手动重新生成，不得静默覆盖。
 
@@ -1886,6 +1913,28 @@ interface ConfirmMealPollRequest {
 该接口必须在同一事务内完成“关闭征集 -> 汇总回应 -> 生成或更新当前餐次的 `MealPlanItem` -> 生成或更新对应 `DiningEvent`”。最终菜单中的每一项都必须能落到固定 `recipeVersionId`；未匹配的自由文本建议必须在确认前被显式忽略或映射到真实菜谱版本，不得混入最终菜单。
 
 `GET /dining-group-activities` 返回当前饭搭子最近 `3~5` 条轻动态，只服务首页卡片，不提供完整历史翻页。动态是结构化事项摘要，不是聊天消息；不得返回冰箱、购物、过敏、忌口、内部备注或未采用候选菜等隐私字段。
+
+`POST /dining-events/{eventId}/share-link` 用于生成或重置当前饭局的邀请分享链接，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功。响应最小固定为：
+
+```ts
+interface DiningEventShareLinkResponse {
+  shareTokenPath: string;
+  expiresAt: IsoDateTime | null;
+}
+```
+
+分享页仍复用现有 `/pages_share/preview/index?token=...` 预览页，不单独新开页面；邀请链接在饭局完成或取消前都可继续重生成和使用，完成后主分享动作切到饭局卡快照。由于服务端当前只持久化分享 token 的哈希，不保留历史明文 token，客户端后续若要继续分享，必须再次调用该写接口现生成链接；`GET /dining-events/{eventId}` 里的 `shareTokenPath` 不应被当作可长期复用的稳定链接来源。
+
+`POST /dining-events/{eventId}/cover` 用于上传或替换饭局封面图，请求头继续使用 `Idempotency-Key`，表单字段最小固定为：
+
+```ts
+interface UpdateDiningEventCoverRequest {
+  expectedVersion: number;
+  file: File;
+}
+```
+
+当前只允许饭局发起人调用；服务端按 `expectedVersion` 防并发覆盖，并把图片固化成饭局公开资源。读取 `GET /dining-events/{eventId}` 时，若当前饭局已有封面图，摘要里的 `coverImageUrl` 返回可直接展示的公开地址；若没有封面图则返回 `null`。
 
 `POST /dining-events/{eventId}/cook` 用于对已确认菜单中的单道菜执行“我来做”认领或释放，请求体只接收：
 

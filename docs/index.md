@@ -71,6 +71,16 @@
    - 随机页 Prisma / DTO / OpenAPI 改造评审稿，冻结真实代码层要新增的枚举、字段、请求响应和模块 owner。
 29. `plans/display-format-owner-audit.md`
    - 当前展示映射、格式化函数和页面辅助判断的散点审计基线，用于后续治理与 owner 收口。
+30. `plans/recipe-data-completion-rules.md`
+   - 菜谱创建边界、导入缺失处理、后台补全、营养分析最小字段集、样例 JSON 和实施优先级确认稿。
+31. `plans/recipe-nutrition-mapping-rules.md`
+   - 系统食材到营养基表项的映射优先级、自动映射边界、人工复核门禁和后续实施步骤确认稿。
+32. `plans/recipe-import-review-workbench-rules.md`
+   - 导入草稿发布前的人工作台边界、可编辑字段、可发布门禁和状态机确认稿。
+33. `plans/recipe-data-roadmap.md`
+   - 菜谱导入、后台补全、营养分析与健康规划的总执行顺序、阶段依赖和当前只做规则冻结的路线图。
+34. `plans/recipe-data-open-questions.md`
+   - 汇总菜谱导入、补全、营养分析与健康规划这条线的待确认项总表，供后续集中拍板。
 
 ## 文档地图
 
@@ -146,6 +156,16 @@
   - 随机页进入代码改造前的 Prisma / DTO / OpenAPI 评审稿，覆盖枚举、字段、共享类型、模块 owner 和短过渡策略。
 - `plans/display-format-owner-audit.md`
   - 当前 `client/admin` 展示映射、格式化函数和页面辅助判断的散点清单与风险基线。
+- `plans/recipe-data-completion-rules.md`
+  - 菜谱创建、导入补全、营养分析与后续健康规划的规则确认稿，覆盖字段分层、样例和实施优先级。
+- `plans/recipe-nutrition-mapping-rules.md`
+  - 系统食材与营养基表项的映射规则确认稿，覆盖映射优先级、自动映射边界、人工复核和后续步骤。
+- `plans/recipe-import-review-workbench-rules.md`
+  - 导入校对工作台的规则确认稿，覆盖可编辑字段、发布门禁、状态和与后台补全的分工。
+- `plans/recipe-data-roadmap.md`
+  - 菜谱导入、补全、营养与健康规划这条线的总执行计划，覆盖阶段目标、依赖关系和当前阶段边界。
+- `plans/recipe-data-open-questions.md`
+  - 汇总四份规则稿中的待确认项，并给出当前建议口径，供后续统一确认。
 - `plans/engineering-foundation-fix.md`
   - 2026-07-24 幂等、管理员审计、迁移验证和模块状态收口的实际执行记录。
 - `plans/site-content-execution.md`
