@@ -1294,6 +1294,8 @@ model DiningEvent {
   title               String            @db.VarChar(120)
   scheduledAt         DateTime          @map("scheduled_at") @db.Timestamptz(3)
   location            String?           @db.VarChar(255)
+  coverStorageKey     String?           @map("cover_storage_key") @db.VarChar(255)
+  coverContentType    String?           @map("cover_content_type") @db.VarChar(64)
   status              DiningEventStatus @default(PLANNED)
   menuSnapshot        Json              @map("menu_snapshot")
   shareTokenHash      String?           @unique @map("share_token_hash") @db.VarChar(128)

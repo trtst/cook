@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
@@ -13,6 +14,7 @@ import {
   ConfirmMealPollDto,
   CompleteMealPlanDto,
   CreateDiningMemoryShareDto,
+  CreateDirectDiningEventDto,
   CreateMealPollDto,
   CreateDiningEventDto,
   CreateMealPlanDto,
@@ -25,6 +27,7 @@ import {
   CheckRandomMenuGapDto,
   ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
+  UpdateDiningEventCoverDto,
   VoteMealPollDto
 } from "../../contracts/dtos";
 import {
@@ -34,6 +37,7 @@ import {
   DiningMemorySharePreviewModel,
   DiningMemoryShareSnapshotModel,
   DiningEventModel,
+  DiningEventShareLinkModel,
   DiningGroupActivityModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
@@ -300,13 +304,28 @@ export class MealController {
   @ApiIdempotencyKey()
   @ApiOkModel(DiningEventModel, "从计划餐次发起饭局")
   createDiningEvent(
-    @Req() request: RequestWithUser,
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
     @Param("planItemId", ParseIntPipe) planItemId: number,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateDiningEventDto
   ) {
     return this.mealService
-      .createDiningEvent(request.user.userId, planItemId, operationId, body.scheduledAt, body.location)
+      .createDiningEvent(request.user.userId, planItemId, operationId, body.scheduledAt, body.location, request)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "直接创建一场饭局，必要时自动补一条空菜单餐次")
+  createDirectDiningEvent(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateDirectDiningEventDto
+  ) {
+    return this.mealService
+      .createDirectDiningEvent(request, request.user.userId, operationId, body.planDate, body.mealSlot, body.scheduledAt, body.location)
       .then(result => ok(result));
   }
 
@@ -314,8 +333,46 @@ export class MealController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiOkModel(DiningEventModel, "查看我的饭局详情或参与中的饭局详情")
-  getDiningEvent(@Req() request: RequestWithUser, @Param("eventId", ParseIntPipe) eventId: number) {
-    return this.mealService.getDiningEvent(request.user.userId, eventId).then(result => ok(result));
+  getDiningEvent(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number
+  ) {
+    return this.mealService.getDiningEvent(request.user.userId, eventId, undefined, undefined, request).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/share-link")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventShareLinkModel, "生成或重置饭局邀请分享链接")
+  createDiningEventShareLink(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService.createDiningEventShareLink(request.user.userId, eventId, operationId).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/cover")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiConsumes("multipart/form-data")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "上传或替换饭局封面图")
+  updateDiningEventCover(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateDiningEventCoverDto,
+    @UploadedFile() file?: { buffer?: Buffer; size?: number }
+  ) {
+    if (!file) {
+      throw new BadRequestException("请上传图片");
+    }
+    return this.mealService
+      .updateDiningEventCover(request, request.user.userId, eventId, operationId, body.expectedVersion, file)
+      .then(result => ok(result));
   }
 
   @Get("dining-group-activities")

@@ -63,4 +63,13 @@ export class UploadPublicController {
     response.setHeader("Cache-Control", "public, max-age=300");
     asset.stream.pipe(response);
   }
+
+  @Get("dining-event-covers/:eventId")
+  async getDiningEventCover(@Param("eventId", ParseIntPipe) eventId: number, @Res() response: ResponseLike) {
+    const asset = await this.uploadService.getDiningEventCoverAsset(eventId);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "public, max-age=300");
+    asset.stream.pipe(response);
+  }
 }

@@ -190,6 +190,14 @@ export class UploadService {
     return `${protocol}://${host}${path}`;
   }
 
+  buildDiningEventCoverUrl(request: RequestLike, eventId: UUID, updatedAt: Date) {
+    const protocol = request.protocol || "http";
+    const host = request.get?.("host");
+    const path = `/api/public-assets/dining-event-covers/${encodeURIComponent(String(eventId))}?v=${encodeURIComponent(updatedAt.toISOString())}`;
+    if (!host) return path;
+    return `${protocol}://${host}${path}`;
+  }
+
   async uploadRecipeImage(
     request: RequestLike,
     userId: UUID,
@@ -333,6 +341,24 @@ export class UploadService {
     }
   }
 
+  async storeDiningEventCover(file: FileUpload, eventId: UUID) {
+    const imageMeta = detectImageMeta(file);
+    const tempPath = await this.writeTempFile(file.buffer as Buffer, imageMeta.extension);
+    const storageKey = this.buildDiningEventCoverStorageKey(eventId);
+
+    try {
+      await this.moveTempFile(tempPath, storageKey);
+      return {
+        storageKey,
+        contentType: imageMeta.contentType,
+        sizeBytes: file.size as number
+      };
+    } catch (error) {
+      await rm(tempPath, { force: true });
+      throw error;
+    }
+  }
+
   async getDiningGroupCoverAsset(diningGroupId: UUID) {
     const diningGroup = await this.prisma.diningGroup.findFirst({
       where: {
@@ -354,6 +380,34 @@ export class UploadService {
     try {
       return {
         contentType: diningGroup.coverContentType,
+        stream: createReadStream(filePath),
+        stat: await stat(filePath)
+      };
+    } catch {
+      throw new NotFoundException("图片不存在");
+    }
+  }
+
+  async getDiningEventCoverAsset(eventId: UUID) {
+    const event = await this.prisma.diningEvent.findFirst({
+      where: {
+        id: eventId,
+        coverStorageKey: { not: null },
+        coverContentType: { not: null }
+      },
+      select: {
+        coverStorageKey: true,
+        coverContentType: true
+      }
+    });
+    if (!event?.coverStorageKey || !event.coverContentType) {
+      throw new NotFoundException("图片不存在");
+    }
+
+    const filePath = this.getStoragePath(event.coverStorageKey);
+    try {
+      return {
+        contentType: event.coverContentType,
         stream: createReadStream(filePath),
         stat: await stat(filePath)
       };
@@ -543,6 +597,10 @@ export class UploadService {
 
   private buildDiningGroupCoverStorageKey(diningGroupId: UUID) {
     return join("dining-group-covers", String(diningGroupId), randomUUID());
+  }
+
+  private buildDiningEventCoverStorageKey(eventId: UUID) {
+    return join("dining-event-covers", String(eventId), randomUUID());
   }
 
 }

@@ -1794,6 +1794,35 @@ export class CreateDiningEventDto extends OperationDto {
   location?: string | null;
 }
 
+export class CreateDirectDiningEventDto extends OperationDto {
+  @ApiProperty({ example: "2026-08-17" })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  planDate!: string;
+
+  @ApiProperty({ enum: mealSlotValues })
+  @IsIn(mealSlotValues)
+  mealSlot!: string;
+
+  @ApiProperty()
+  @IsISO8601({ strict: true })
+  scheduledAt!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(255)
+  location?: string | null;
+}
+
+export class UpdateDiningEventCoverDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class MealPollListQueryDto {
   @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)

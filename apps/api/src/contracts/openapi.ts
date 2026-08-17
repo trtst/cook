@@ -1462,6 +1462,7 @@ export class DiningEventModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(dateTime) scheduledAt!: string;
   @ApiProperty(nullableString) location!: string | null;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: String, enum: ["PLANNED", "CONFIRMED", "CANCELLED", "COMPLETED"] }) status!: string;
   @ApiProperty({ type: Number, nullable: true }) organizerUid!: number | null;
   @ApiProperty(nullableString) organizerName!: string | null;
@@ -1475,6 +1476,11 @@ export class DiningEventModel {
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class DiningEventShareLinkModel {
+  @ApiProperty({ type: String }) shareTokenPath!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) expiresAt!: string | null;
 }
 
 export class DiningMemoryShareMenuItemModel {
