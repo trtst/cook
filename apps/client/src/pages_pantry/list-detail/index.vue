@@ -42,6 +42,9 @@
                 />
               </view>
               <text class="detail-hero__meta">{{ heroMeta }}</text>
+              <view v-if="detailStatusTagText" class="detail-hero__tags">
+                <text class="detail-hero__tag" :class="detailStatusTagClass">{{ detailStatusTagText }}</text>
+              </view>
             </view>
 
             <view class="detail-content">
@@ -61,6 +64,17 @@
                   </view>
                   <view class="progress-card__track">
                     <view class="progress-card__bar" :style="{ width: `${progressPercent}%` }" />
+                  </view>
+                </view>
+                <view v-if="showEndedCard" class="store-card" :class="endedCardClass">
+                  <view class="store-card__main">
+                    <text class="store-card__title">{{ endedCardTitle }}</text>
+                    <text class="store-card__desc">{{ endedCardDesc }}</text>
+                  </view>
+                  <view v-if="canOpenPantryHome" class="store-card__aside">
+                    <view class="store-card__button store-card__button--plain" @click="openPantryHome">
+                      去食材库
+                    </view>
                   </view>
                 </view>
                 <view v-if="canShowPrimaryAction" class="store-card" :class="{ 'store-card--finish': canShowFinishButton }">
@@ -438,6 +452,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
+import { formatMonthDay } from "../utils/date";
 import {
   shoppingApi,
   type ShoppingListCollaborator,
@@ -594,7 +609,45 @@ const collaborationText = computed(() => {
   return `${detail.value.memberCount}/${detail.value.memberLimit}人协作`;
 });
 const showCollaborationMeta = computed(() => (detail.value?.memberCount ?? 0) > 1);
-const heroMeta = computed(() => "先把要买的食材归到这里，买的时候就不会漏。");
+const heroMeta = computed(() => {
+  if (detail.value?.status === "COMPLETED") return "这张清单已经结束，本轮采购和入库都已收尾。";
+  if (detail.value?.status === "VOIDED") return "这张清单已经作废，后续也可以恢复继续采购。";
+  return "先把要买的食材归到这里，买的时候就不会漏。";
+});
+const detailStatusTagText = computed(() => {
+  if (detail.value?.status === "COMPLETED") return "已完成";
+  if (detail.value?.status === "VOIDED") return "已作废";
+  return "";
+});
+const detailStatusTagClass = computed(() => {
+  if (detail.value?.status === "COMPLETED") return "detail-hero__tag--done";
+  if (detail.value?.status === "VOIDED") return "detail-hero__tag--voided";
+  return "";
+});
+const showEndedCard = computed(() => detail.value?.status === "COMPLETED" || detail.value?.status === "VOIDED");
+const canOpenPantryHome = computed(() => detail.value?.status === "COMPLETED");
+const endedCardClass = computed(() => {
+  if (detail.value?.status === "COMPLETED") return "store-card--done";
+  if (detail.value?.status === "VOIDED") return "store-card--voided";
+  return "";
+});
+const endedCardTitle = computed(() => {
+  if (detail.value?.status === "COMPLETED") return "这张清单已完成";
+  if (detail.value?.status === "VOIDED") return "这张清单已作废";
+  return "";
+});
+const endedCardDesc = computed(() => {
+  if (!detail.value) return "";
+  if (detail.value.status === "COMPLETED") {
+    const dayText = detail.value.completedAt ? formatMonthDay(detail.value.completedAt) : "刚刚";
+    return `${dayText} 已结束本轮采购；需要继续补货时，可以直接去食材库看看当前库存。`;
+  }
+  if (detail.value.status === "VOIDED") {
+    const dayText = detail.value.voidedAt ? formatMonthDay(detail.value.voidedAt) : "刚刚";
+    return `${dayText} 已结束当前采购；如果后面还要继续买，也可以随时恢复这张清单。`;
+  }
+  return "";
+});
 const canRename = computed(() => detail.value?.role === "OWNER" && detail.value?.status === "ACTIVE");
 const canOpenShare = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canVoid = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
@@ -753,6 +806,12 @@ function goBack() {
   void uniPlatform.navigation.navigateBack().catch(() => {
     void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
   });
+}
+
+function openPantryHome() {
+  if (submitting.value) return;
+  closeManageMenu();
+  void uniPlatform.navigation.navigateTo("/pages_pantry/index/index");
 }
 
 function handleScroll(event: { detail: { scrollTop?: number } }) {
@@ -1992,6 +2051,36 @@ async function leaveList() {
   line-height: 1.6;
 }
 
+.detail-hero__tags {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.detail-hero__tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.detail-hero__tag--done {
+  background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface) 22%);
+  color: var(--color-primary);
+}
+
+.detail-hero__tag--voided {
+  background: color-mix(in srgb, var(--color-danger-soft) 72%, var(--color-surface) 28%);
+  color: var(--color-danger-text);
+}
+
 .detail-content {
   position: relative;
   margin-top: -42rpx;
@@ -2063,6 +2152,24 @@ async function leaveList() {
   box-shadow:
     0 20rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 22%, transparent),
     inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary-soft) 26%, transparent);
+}
+
+.store-card--done {
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-primary-soft) 60%, transparent) 0 26%, transparent 27%),
+    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-primary-soft) 5%) 0%, var(--color-surface) 100%);
+  box-shadow:
+    0 20rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 24%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary-soft) 24%, transparent);
+}
+
+.store-card--voided {
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-danger-soft) 60%, transparent) 0 26%, transparent 27%),
+    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-danger-soft) 5%) 0%, var(--color-surface) 100%);
+  box-shadow:
+    0 20rpx 42rpx color-mix(in srgb, var(--color-danger-soft) 24%, transparent),
+    inset 0 0 0 1rpx color-mix(in srgb, var(--color-danger-soft) 22%, transparent);
 }
 
 .item-card,
@@ -2242,6 +2349,12 @@ async function leaveList() {
 }
 
 .store-card__button--finish {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
+  box-shadow: var(--shadow-card);
+  color: var(--color-text);
+}
+
+.store-card__button--plain {
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
   box-shadow: var(--shadow-card);
   color: var(--color-text);
