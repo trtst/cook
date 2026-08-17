@@ -704,15 +704,38 @@
 
               <view class="sheet-section editor-grid">
                 <view class="editor-field">
-                  <text class="editor-field__label">人数</text>
-                  <picker class="picker" :range="baseServingsOptions" :value="baseServingsIndex" @change="handleBaseServingsChange">
+                  <view class="editor-field__head">
+                    <text class="editor-field__label">人数</text>
                     <view
-                      class="picker__value picker__value--readonly"
-                      :class="{ 'picker__value--placeholder': !advancedForm.baseServingsText }"
+                      class="editor-field__action"
+                      :class="{ 'editor-field__action--active': showCustomBaseServings }"
+                      @click="openCustomBaseServings"
                     >
-                      {{ advancedForm.baseServingsText ? `${advancedForm.baseServingsText} 人` : "请选择 1 - 10 人" }}
+                      自定义人数
                     </view>
-                  </picker>
+                  </view>
+                  <view class="chip-row servings-chip-row">
+                    <view
+                      v-for="item in baseServingsOptions"
+                      :key="item"
+                      class="chip"
+                      :class="{ 'chip--active': advancedForm.baseServingsText === item }"
+                      @click="selectBaseServingsOption(item)"
+                    >
+                      {{ item }} 人
+                    </view>
+                  </view>
+                  <view v-if="showCustomBaseServings" class="sheet-creator servings-custom">
+                    <input
+                      :value="advancedForm.baseServingsText"
+                      type="number"
+                      maxlength="3"
+                      class="sheet-creator__input"
+                      placeholder="请输入人数"
+                      placeholder-class="sheet-textarea__placeholder"
+                      @input="handleBaseServingsInput"
+                    />
+                  </view>
                 </view>
               </view>
 
@@ -813,7 +836,7 @@ import {
 } from "@/utils/recipe-edit-cache";
 import { restoreAppSession } from "@/utils/session";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
-import ImageField from "../components/ImageField.vue";
+import ImageField from "@/components/ImageField.vue";
 import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -1049,12 +1072,13 @@ const advancedForm = reactive({
 });
 const showCategoryCreator = ref(false);
 const showSceneCreator = ref(false);
+const showCustomBaseServings = ref(false);
 const categoryDraftName = ref("");
 const sceneDraftName = ref("");
 const categorySubmitting = ref(false);
 const sceneSubmitting = ref(false);
 
-const baseServingsOptions = Array.from({ length: 10 }, (_, index) => `${index + 1}`);
+const baseServingsOptions = ["1", "2", "3", "4", "6", "8", "10"];
 const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
   WEIGHT: "重量",
   VOLUME: "体积",
@@ -1181,12 +1205,6 @@ const difficultyText = computed(() => {
 });
 const durationText = computed(() => {
   return recipeDurationText(form.duration, "未设置");
-});
-const baseServingsIndex = computed(() => {
-  const value = Number(advancedForm.baseServingsText || "1");
-  if (!Number.isInteger(value) || value < 1) return 0;
-  if (value > 10) return 9;
-  return value - 1;
 });
 const advancedTotalCount = 5;
 const advancedItems = computed(() => {
@@ -2160,10 +2178,25 @@ function resetAdvancedDraft() {
 function resetAdvancedAuxState() {
   showCategoryCreator.value = false;
   showSceneCreator.value = false;
+  showCustomBaseServings.value = shouldShowCustomBaseServings(advancedForm.baseServingsText);
   categoryDraftName.value = "";
   sceneDraftName.value = "";
   categorySubmitting.value = false;
   sceneSubmitting.value = false;
+}
+
+function normalizeBaseServingsText(value: string) {
+  const digits = String(value || "")
+    .replace(/\D+/gu, "")
+    .slice(0, 3);
+  if (!digits) return "";
+  const normalized = String(Math.min(20, Number(digits)));
+  return normalized === "0" ? "" : normalized;
+}
+
+function shouldShowCustomBaseServings(value: string) {
+  const normalized = normalizeBaseServingsText(value);
+  return Boolean(normalized) && !baseServingsOptions.includes(normalized);
 }
 
 function toggleCategoryCreator() {
@@ -2232,10 +2265,26 @@ async function createSceneTag() {
   }
 }
 
-function handleBaseServingsChange(event: Event) {
-  const detail = (event as { detail?: { value?: number | string } }).detail;
-  const value = typeof detail?.value === "number" ? detail.value : Number(detail?.value || 0);
-  advancedForm.baseServingsText = baseServingsOptions[value] || "1";
+function openCustomBaseServings() {
+  dismissSheetKeyboard();
+  if (showCustomBaseServings.value) {
+    showCustomBaseServings.value = false;
+    advancedForm.baseServingsText = "";
+    return;
+  }
+  showCustomBaseServings.value = true;
+  advancedForm.baseServingsText = normalizeBaseServingsText(advancedForm.baseServingsText);
+}
+
+function selectBaseServingsOption(value: string) {
+  dismissSheetKeyboard();
+  showCustomBaseServings.value = false;
+  advancedForm.baseServingsText = value;
+}
+
+function handleBaseServingsInput(event: Event) {
+  const detail = (event as { detail?: { value?: string } }).detail;
+  advancedForm.baseServingsText = normalizeBaseServingsText(detail?.value || "");
 }
 
 function toggleAdvancedDifficulty(value: RecipeDifficulty) {
@@ -2249,6 +2298,7 @@ function toggleAdvancedDuration(value: RecipeDuration) {
 }
 
 function applyAdvancedForm() {
+  advancedForm.baseServingsText = normalizeBaseServingsText(advancedForm.baseServingsText);
   form.categoryId = advancedForm.categoryId;
   form.sceneIds = [...advancedForm.sceneIds];
   form.baseServingsText = advancedForm.baseServingsText;
@@ -2978,6 +3028,10 @@ async function validatePublishForm() {
   }
   if (!form.baseServingsText.trim()) {
     await uniPlatform.feedback.toast({ title: "请选择人数", icon: "none" });
+    return false;
+  }
+  if (Number(form.baseServingsText) < 1 || Number(form.baseServingsText) > 20) {
+    await uniPlatform.feedback.toast({ title: "人数需在 1-20 之间", icon: "none" });
     return false;
   }
   if (!form.difficulty) {
@@ -3847,7 +3901,7 @@ function nextSlotKey() {
 
 .mode-pill,
 .chip {
-  padding: 14rpx 22rpx;
+  padding: 10rpx 20rpx;
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 24rpx;
@@ -3918,6 +3972,40 @@ function nextSlotKey() {
 .sheet-search__bar {
   flex: 1;
   min-width: 0;
+}
+
+.editor-field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.editor-field__action {
+  color: var(--color-primary);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+.editor-field__action--active {
+  color: var(--entry-accent);
+}
+
+.servings-chip-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.servings-chip-row .chip {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+  text-align: center;
+}
+
+.servings-custom {
+  margin-top: 18rpx;
 }
 
 .ingredient-picker__hint {
