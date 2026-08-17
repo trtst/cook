@@ -47,11 +47,6 @@
             </view>
 
             <template v-else>
-              <view v-if="errorText" class="notice" @click="loadPage(true)">
-                <text class="notice__text">{{ errorText }}</text>
-                <text class="notice__action">重新加载</text>
-              </view>
-
               <view v-if="loading && !pollItems.length" class="notice">
                 <text class="notice__text">征集加载中...</text>
               </view>
@@ -353,6 +348,7 @@ async function loadPage(force = false) {
       await diningGroupStore.refreshCurrent();
     } catch (error) {
       errorText.value = error instanceof Error ? error.message : "饭搭子加载失败";
+      await uniPlatform.feedback.toast({ title: errorText.value, icon: "none" });
     }
   }
 
@@ -385,6 +381,7 @@ async function loadPage(force = false) {
       if (currentDiningGroupId.value !== requestGroupId) return;
       errorText.value = error instanceof Error ? error.message : "征集加载失败";
       pollItems.value = [];
+      void uniPlatform.feedback.toast({ title: errorText.value, icon: "none" });
     })
     .finally(() => {
       loading.value = false;
@@ -416,6 +413,7 @@ async function loadDetail(pollId: UUID, options: { force?: boolean } = {}) {
   } catch (error) {
     if (seq !== detailSeq) return;
     errorText.value = error instanceof Error ? error.message : "征集详情加载失败";
+    await uniPlatform.feedback.toast({ title: errorText.value, icon: "none" });
   } finally {
     if (seq === detailSeq) detailLoading.value = false;
   }

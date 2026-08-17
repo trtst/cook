@@ -89,12 +89,9 @@
               @refresherabort="onRefresherRestore"
             >
               <view class="plan-scroll__body">
-                <view v-if="errorText" class="notice" @click="reloadWeek">
-                  {{ errorText }}
-                </view>
-                <view v-else-if="loading && !refreshing" class="notice">正在同步这一周的计划...</view>
+                <view v-if="loading && !refreshing" class="notice">正在同步这一周的计划...</view>
 
-                <view v-if="!selectedPlanCount">
+                <view v-if="!selectedPlanCount && !loading">
                   <Empty
                     :art="emptyStateArt"
                     title="这一天还没有安排"
@@ -117,13 +114,16 @@
 
                     <view class="meal-card__panel">
                       <view class="meal-card__title-row">
-                        <text class="meal-card__title">{{ slotPlanTitle(plan.mealSlot) }}</text>
-                        <view class="meal-card__meta meal-card__meta--inline">
-                          <text class="meal-card__meta-text">{{ planDishCountText(plan) }}</text>
-                          <text v-if="planDurationText(plan)" class="meal-card__meta-divider">·</text>
-                          <text v-if="planDurationText(plan)" class="meal-card__meta-text">{{ planDurationText(plan) }}</text>
+                        <view class="meal-card__title-main">
+                          <text class="meal-card__title">{{ planCardTitle(plan) }}</text>
+                          <text class="meal-card__slot">{{ slotLabel(plan.mealSlot) }}</text>
                         </view>
                         <text v-if="plan.status === 'COMPLETED'" class="meal-card__state">已完成</text>
+                      </view>
+                      <view class="meal-card__meta">
+                        <text class="meal-card__meta-text">{{ planDishCountText(plan) }}</text>
+                        <text v-if="planDurationText(plan)" class="meal-card__meta-divider">·</text>
+                        <text v-if="planDurationText(plan)" class="meal-card__meta-text">{{ planDurationText(plan) }}</text>
                       </view>
 
                       <view class="meal-card__menu-list">
@@ -144,12 +144,6 @@
                       <view class="meal-card__footer">
                         <view class="meal-card__actions">
                           <button
-                            class="action-pill action-pill--muted action-pill--subtle meal-card__action-button"
-                            @click.stop="openPlanDetail(plan)"
-                          >
-                            查看计划
-                          </button>
-                          <button
                             class="action-pill action-pill--primary meal-card__action-button"
                             :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id }"
                             :disabled="shoppingSubmitting && shoppingPlan?.id === plan.id"
@@ -163,17 +157,33 @@
                   </view>
                 </view>
 
-                <view
-                  v-if="selectedPlanCount"
-                  class="plan-entry action-pill action-pill--muted action-pill--subtle"
-                  hover-class="action-pill--hover"
-                  hover-stay-time="100"
-                  @click="openRecipe"
-                >
-                  去菜谱
-                </view>
               </view>
             </scroll-view>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="canShowPlanDock" class="floating-dock">
+        <view v-if="emptyDockOpen" class="floating-dock__backdrop" @click="closeEmptyDock" />
+        <view class="manage-dock">
+          <view class="manage-dock__actions">
+            <view
+              v-for="(action, index) in planDockActions"
+              :key="action.key"
+              class="manage-dock__action"
+              :class="{
+                'manage-dock__action--open': emptyDockOpen,
+                'manage-dock__action--disabled': action.key === 'copy' && copyBusy
+              }"
+              :style="emptyDockActionStyle(index)"
+              @click="handleEmptyDockAction(action.key)"
+            >
+              <text class="cookfont manage-dock__action-icon" :class="action.iconClass" />
+              <text class="manage-dock__action-label">{{ action.key === "copy" && copyBusy ? "复制中..." : action.label }}</text>
+            </view>
+          </view>
+          <view class="manage-dock__button" hover-class="manage-dock__button--hover" hover-stay-time="100" @click="toggleEmptyDock">
+            <text class="cookfont icon-manage manage-dock__icon" :class="{ 'manage-dock__icon--open': emptyDockOpen }" />
           </view>
         </view>
       </view>
@@ -232,34 +242,6 @@
           </view>
         </template>
       </SheetShell>
-
-      <view v-if="canShowEmptyDock" class="empty-plan-dock">
-        <view v-if="emptyDockOpen" class="empty-plan-dock__backdrop" @click="closeEmptyDock" />
-        <view class="empty-plan-dock__actions">
-          <view
-            class="empty-plan-dock__action"
-            :class="{
-              'empty-plan-dock__action--open': emptyDockOpen,
-              'empty-plan-dock__action--disabled': copyBusy
-            }"
-            :style="emptyDockActionStyle(0)"
-            @click="handleEmptyDockAction('copy')"
-          >
-            {{ copyBusy ? "复制中..." : "复制上周" }}
-          </view>
-          <view
-            class="empty-plan-dock__action"
-            :class="{ 'empty-plan-dock__action--open': emptyDockOpen }"
-            :style="emptyDockActionStyle(1)"
-            @click="handleEmptyDockAction('recipe')"
-          >
-            去菜谱
-          </view>
-        </view>
-        <view class="empty-plan-dock__button" hover-class="empty-plan-dock__button--hover" hover-stay-time="100" @click="toggleEmptyDock">
-          <text class="cookfont icon-manage empty-plan-dock__icon" :class="{ 'empty-plan-dock__icon--open': emptyDockOpen }" />
-        </view>
-      </view>
 
       <SheetShell
         v-if="sortSheetMounted"
@@ -340,7 +322,7 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
-import { shoppingListApi, type ShoppingListSummary } from "@/apis/shopping-list";
+import { shoppingListApi, type ShoppingListSummary } from "../apis/shopping-list";
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -392,6 +374,7 @@ interface WeekPanel {
 }
 
 type PlanOrderState = Record<string, UUID[]>;
+type PlanDockActionKey = "copy" | "recipe" | "shopping";
 
 const pageStyle = usePageScrollStyle();
 const sessionStore = useSessionStore();
@@ -501,12 +484,26 @@ const planMap = computed(() => {
 const selectedDatePlanMap = computed(() => planMap.value.get(selectedDate.value) ?? new Map<MealSlot, MealPlanSummary>());
 const selectedPlans = computed(() => sortPlans(Array.from(selectedDatePlanMap.value.values()), selectedDate.value));
 const selectedPlanCount = computed(() => selectedPlans.value.length);
+const hasPlans = computed(() => selectedPlanCount.value > 0);
 const selectedDateHint = computed(() => {
   return "先把这天想吃的安排上，买菜和约饭都会顺手很多。";
 });
-const canShowEmptyDock = computed(() => !loading.value && !errorText.value && !selectedPlanCount.value);
+const canShowPlanDock = computed(() => !loading.value && !errorText.value);
+const planDockActions = computed(() => {
+  if (hasPlans.value) {
+    return [
+      { key: "recipe" as const, label: "去菜谱", iconClass: "icon-go-recipe" },
+      { key: "shopping" as const, label: "去清单", iconClass: "icon-shopping" }
+    ];
+  }
+  return [
+    { key: "copy" as const, label: "复制上周", iconClass: "icon-add-owner" },
+    { key: "recipe" as const, label: "去菜谱", iconClass: "icon-go-recipe" },
+    { key: "shopping" as const, label: "去清单", iconClass: "icon-shopping" }
+  ];
+});
 const canSortPlans = computed(() => selectedPlanCount.value > 1);
-const hasContentCards = computed(() => Boolean(errorText.value || selectedPlanCount.value || loading.value));
+const hasContentCards = computed(() => Boolean(selectedPlanCount.value || loading.value));
 const inlineLoading = computed(() => loading.value && hasContentCards.value && !refreshing.value);
 const inlineLoadingText = computed(() => PLAN_LOADING_TIPS);
 const weekPanels = computed<WeekPanel[]>(() => weekPanelStarts.value.map(weekStart => buildWeekPanel(weekStart)));
@@ -571,7 +568,7 @@ async function loadWeekPlans() {
     plans.value = result.items;
   } catch (error) {
     if (seq !== planLoadSeq.value) return;
-    errorText.value = error instanceof Error ? error.message : "本周计划加载失败，点此重试";
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "本周计划加载失败", icon: "none" });
   } finally {
     if (seq === planLoadSeq.value) {
       loading.value = false;
@@ -771,8 +768,13 @@ function openRecipe() {
   void uniPlatform.navigation.switchTab("/pages/recipe/index");
 }
 
+function openShoppingListPage() {
+  closeEmptyDock();
+  void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
+}
+
 function toggleEmptyDock() {
-  if (!canShowEmptyDock.value) return;
+  if (!canShowPlanDock.value) return;
   emptyDockOpen.value = !emptyDockOpen.value;
 }
 
@@ -781,15 +783,19 @@ function closeEmptyDock() {
 }
 
 function emptyDockActionStyle(index: number) {
-  const total = 2;
+  const total = planDockActions.value.length;
   return {
     transitionDelay: emptyDockOpen.value ? `${index * 44}ms` : `${(total - index - 1) * 28}ms`
   };
 }
 
-function handleEmptyDockAction(action: "copy" | "recipe") {
+function handleEmptyDockAction(action: PlanDockActionKey) {
   if (action === "copy") {
     void copyPreviousWeek();
+    return;
+  }
+  if (action === "shopping") {
+    openShoppingListPage();
     return;
   }
   openRecipe();
@@ -797,8 +803,7 @@ function handleEmptyDockAction(action: "copy" | "recipe") {
 
 async function addPlanToShoppingList(plan: MealPlanSummary) {
   if (shoppingSubmitting.value) return;
-  const validMenuItems = dedupePlanShoppingItems(plan);
-  if (!validMenuItems.length) {
+  if (!hasPlanShoppingRecipes(plan)) {
     await uniPlatform.feedback.toast({ title: "当前餐次没有可加入采购清单的菜谱", icon: "none" });
     return;
   }
@@ -830,6 +835,10 @@ function summarizeMenu(plan: MealPlanSummary) {
 
 function planDishCountText(plan: MealPlanSummary) {
   return `${plan.menuItems.length}道菜`;
+}
+
+function planCardTitle(plan: MealPlanSummary) {
+  return slotPlanTitle(plan.mealSlot);
 }
 
 function recipeDurationMinutes(value: RecipeDuration | null) {
@@ -904,15 +913,8 @@ function buildCopySummary(copiedCount: number, skippedInvalid: number) {
   return parts.join("，");
 }
 
-function dedupePlanShoppingItems(plan: MealPlanSummary) {
-  const seen = new Set<string>();
-  return plan.menuItems.filter(item => {
-    if (!isUuid(item.recipeId) || !isUuid(item.recipeVersionId)) return false;
-    const key = `${item.recipeId}/${item.recipeVersionId}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function hasPlanShoppingRecipes(plan: MealPlanSummary) {
+  return plan.menuItems.some(item => isUuid(item.recipeId) && isUuid(item.recipeVersionId));
 }
 
 function closeShoppingSheet() {
@@ -973,69 +975,14 @@ async function createShoppingList() {
 
 async function confirmAddToShoppingList() {
   if (!shoppingPlan.value || !selectedShoppingListId.value || shoppingSubmitting.value) return;
-  const targetDate = shoppingPlan.value.planDate;
   shoppingSubmitting.value = true;
   try {
-    const latestPlans = await mealApi.listPlans({
-      from: targetDate,
-      to: targetDate,
-      page: 1,
-      pageSize: 10
+    await shoppingListApi.addPlanToList(selectedShoppingListId.value, {
+      operationId: createOperationId(),
+      planItemId: shoppingPlan.value.id
     });
-    const latestPlan = latestPlans.items.find(item => item.id === shoppingPlan.value?.id) ?? null;
-    if (!latestPlan) {
-      await loadWeekPlans();
-      closeShoppingSheet();
-      await uniPlatform.feedback.toast({ title: "这条计划已失效，请刷新后重试", icon: "none" });
-      return;
-    }
-
-    shoppingPlan.value = latestPlan;
-    const planId = latestPlan.id;
-    const menuItems = dedupePlanShoppingItems(latestPlan);
-    if (!menuItems.length) {
-      await uniPlatform.feedback.toast({ title: "当前餐次没有可加入采购清单的菜谱", icon: "none" });
-      return;
-    }
-
-    let listDetail = await shoppingListApi.getListDetail(selectedShoppingListId.value);
-    const existingKeys = new Set(
-      listDetail.items.flatMap(item =>
-        item.sources
-          .filter((source): source is typeof source & { recipeId: UUID; sourceVersionId?: UUID | null } => (
-            source.planItemId === planId && isUuid(source.recipeId ?? null)
-          ))
-          .map(source => `${source.recipeId}/${source.sourceVersionId || ""}`)
-      )
-    );
-    const pendingMenuItems = menuItems.filter(
-      (item): item is typeof item & { recipeId: UUID; recipeVersionId: UUID } => (
-        isUuid(item.recipeId)
-        && isUuid(item.recipeVersionId)
-        && !existingKeys.has(`${item.recipeId}/${item.recipeVersionId}`)
-      )
-    );
-
-    if (!pendingMenuItems.length) {
-      await uniPlatform.feedback.toast({ title: "这条计划里的菜谱都已在清单里", icon: "none" });
-      return;
-    }
-
-    for (const item of pendingMenuItems) {
-      listDetail = await shoppingListApi.addRecipeToList(selectedShoppingListId.value, {
-        operationId: createOperationId(),
-        recipeId: item.recipeId,
-        sourceVersionId: item.recipeVersionId,
-        planItemId: planId
-      });
-    }
-
     closeShoppingSheet();
-    const skippedCount = menuItems.length - pendingMenuItems.length;
-    const title = skippedCount > 0
-      ? `已补入 ${pendingMenuItems.length} 道新菜，跳过 ${skippedCount} 道已添加菜谱`
-      : "已加入采购清单";
-    await uniPlatform.feedback.toast({ title, icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
   } finally {
@@ -1476,10 +1423,6 @@ function clearPageState() {
   margin-top: 0;
 }
 
-.plan-entry {
-  margin-top: 24rpx;
-}
-
 .meal-list {
   display: flex;
   flex-direction: column;
@@ -1616,23 +1559,25 @@ function clearPageState() {
   z-index: 1;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 16rpx;
+}
+
+.meal-card__title-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .meal-card__title {
   flex: 0 1 auto;
-  min-width: 120rpx;
+  min-width: 0;
   color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.3;
-}
-
-.meal-card__meta--inline {
-  flex: 1 1 auto;
-  min-width: 0;
-  gap: 8rpx;
+  word-break: break-word;
 }
 
 .meal-card__state {
@@ -1642,6 +1587,16 @@ function clearPageState() {
   background: var(--plan-tag-done-bg);
   color: var(--plan-tag-done-text);
   font-size: 20rpx;
+}
+
+.meal-card__slot {
+  flex: 0 0 auto;
+  padding: 8rpx 18rpx;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--plan-slot-color) 14%, var(--color-surface));
+  color: var(--plan-slot-color);
+  font-size: 20rpx;
+  font-weight: var(--font-weight-semibold);
 }
 
 .meal-card__menu-list {
@@ -1697,22 +1652,12 @@ function clearPageState() {
   line-height: 1.4;
 }
 
-.meal-card__footer {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12rpx;
-  margin-top: auto;
-  padding-top: 20rpx;
-}
-
 .meal-card__meta {
   display: flex;
   align-items: center;
   gap: 12rpx;
   min-width: 0;
+  margin-top: 10rpx;
 }
 
 .meal-card__meta-text,
@@ -1725,6 +1670,17 @@ function clearPageState() {
 
 .meal-card__meta-divider {
   flex: 0 0 auto;
+}
+
+.meal-card__footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+  margin-top: auto;
+  padding-top: 20rpx;
 }
 
 .meal-card__actions {
@@ -1866,65 +1822,96 @@ function clearPageState() {
   color: var(--color-text-secondary);
 }
 
-.empty-plan-dock {
+.floating-dock {
   position: fixed;
   right: 24rpx;
   bottom: calc(40rpx + env(safe-area-inset-bottom));
   z-index: 30;
 }
 
-.empty-plan-dock__backdrop {
+.floating-dock__backdrop {
   position: fixed;
   inset: 0;
   background: transparent;
 }
 
-.empty-plan-dock__actions {
-  position: absolute;
-  right: calc(100% + 24rpx);
-  bottom: 10rpx;
+.manage-dock {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 18rpx;
+  justify-content: flex-end;
+  width: 92rpx;
+  min-height: 92rpx;
+  margin-left: auto;
+  padding-bottom: 52rpx;
+}
+
+.manage-dock__actions {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 50rpx);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 50rpx;
   pointer-events: none;
 }
 
-.empty-plan-dock__action {
+.manage-dock__action {
+  position: relative;
   display: inline-flex;
+  flex: 0 0 92rpx;
   align-items: center;
   justify-content: center;
-  min-width: 172rpx;
-  height: 72rpx;
-  padding: 0 28rpx;
-  border-radius: var(--radius-pill);
+  width: 92rpx;
+  height: 92rpx;
+  padding: 0;
+  border-radius: 50%;
   background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
   box-shadow:
-    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 28%, transparent),
-    0 8rpx 18rpx color-mix(in srgb, var(--color-primary) 10%, transparent),
+    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 30%, transparent),
+    0 8rpx 18rpx color-mix(in srgb, var(--color-primary) 12%, transparent),
     inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 85%, transparent);
   color: var(--color-text);
-  font-size: 24rpx;
-  font-weight: var(--font-weight-semibold);
   white-space: nowrap;
   opacity: 0;
-  transform: translateX(24rpx) scale(0.94);
+  transform: translateX(26rpx) scale(0.92);
   pointer-events: none;
   transition:
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease;
 }
 
-.empty-plan-dock__action--open {
+.manage-dock__action--open {
   opacity: 1;
   transform: translateX(0) scale(1);
   pointer-events: auto;
 }
 
-.empty-plan-dock__action--disabled {
-  opacity: 0.62;
+.manage-dock__action--disabled {
+  opacity: 0.58;
 }
 
-.empty-plan-dock__button {
+.manage-dock__action-icon {
+  color: color-mix(in srgb, var(--color-text) 84%, var(--color-primary) 16%);
+  font-size: 34rpx;
+}
+
+.manage-dock__action-label {
+  position: absolute;
+  top: calc(100% + 14rpx);
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--color-text);
+  font-size: 24rpx;
+  line-height: 1.3;
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.manage-dock__button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1935,18 +1922,22 @@ function clearPageState() {
   box-shadow: var(--button-primary-shadow);
 }
 
-.empty-plan-dock__button--hover {
+.manage-dock__button--hover {
   opacity: 0.94;
 }
 
-.empty-plan-dock__icon {
+.manage-dock__icon {
   color: var(--button-primary-text);
   font-size: 34rpx;
   transition: transform 240ms ease;
 }
 
-.empty-plan-dock__icon--open {
+.manage-dock__icon--open {
   transform: rotate(90deg);
+}
+
+.manage-dock__action::after {
+  display: none;
 }
 
 .plan-sort {

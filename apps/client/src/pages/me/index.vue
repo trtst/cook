@@ -66,11 +66,6 @@
 				</template>
 
 				<template v-else>
-					<view v-if="sessionStore.isLoggedIn && loadErrorText" class="load-notice" @click="loadMe">
-						<text class="load-notice__text">{{ loadErrorText }}</text>
-						<text class="load-notice__action">重新加载</text>
-					</view>
-
 					<view class="overview-grid">
 						<view class="dining-card" hover-class="is-pressed" hover-stay-time="100"
 							@click="handleDiningGroupManage">
@@ -348,7 +343,6 @@ const {
 const { navBarTotalHeight } = useSystemInfo();
 
 const profileLoading = ref(false);
-const loadErrorText = ref("");
 const themePanelOpen = ref(false);
 const profileEditorOpen = ref(false);
 const profileSaving = ref(false);
@@ -432,7 +426,8 @@ const paletteLabels: Record<ThemePalette, string> = {
 const coreEntries: PageEntry[] = [
 	{
 		title: "饭局",
-		iconSrc: diningEventIcon
+		iconSrc: diningEventIcon,
+		url: "/pages_meal/event/index"
 	},
 	{
 		title: "计划",
@@ -578,7 +573,6 @@ async function syncPageState() {
 
 		if (sessionStore.isLoggedIn && userStore.profile && diningGroupStore.hasCurrentContext) {
 			profileLoading.value = false;
-			loadErrorText.value = "";
 			return;
 		}
 	}
@@ -589,7 +583,6 @@ async function syncPageState() {
 	}
 
 	profileLoading.value = false;
-	loadErrorText.value = "";
 	medalCount.value = null;
 }
 
@@ -614,12 +607,10 @@ async function doLoadMe() {
 
 	if (!shouldLoadProfile && !shouldLoadDiningGroup) {
 		profileLoading.value = false;
-		loadErrorText.value = "";
 		return;
 	}
 
 	profileLoading.value = true;
-	loadErrorText.value = "";
 
 	const [profileResult, diningGroupResult] = await Promise.allSettled([
 		shouldLoadProfile ? userApi.getCurrent() : Promise.resolve(null),
@@ -634,7 +625,10 @@ async function doLoadMe() {
 		(shouldLoadProfile && profileResult.status === "rejected") ||
 		(shouldLoadDiningGroup && diningGroupResult.status === "rejected")
 	) {
-		loadErrorText.value = "部分信息加载失败";
+		await uniPlatform.feedback.toast({
+			title: "部分信息加载失败，请稍后重试",
+			icon: "none"
+		}).catch(() => undefined);
 	}
 
 	profileLoading.value = false;
@@ -834,7 +828,6 @@ async function handleLogout() {
 	closeProfileEditor();
 	closePasswordEditor();
 	await clearUserSessionState();
-	loadErrorText.value = "";
 	medalCount.value = null;
 	await uniPlatform.feedback.toast({
 		title: "已退出登录",
@@ -853,7 +846,6 @@ async function handleClearCache() {
 	if (!confirmed) return;
 
 	clearLocalClientCache();
-	loadErrorText.value = "";
 	await uniPlatform.feedback.toast({
 		title: "缓存已清除",
 		icon: "success"
@@ -1168,31 +1160,6 @@ function getPasswordErrorText(error: unknown) {
 	z-index: 2;
 	margin-top: -68rpx;
 	padding: 0 var(--space-page) calc(var(--space-lg) + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
-}
-
-.load-notice {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	min-height: 72rpx;
-	margin-bottom: var(--space-md);
-	padding: 0 var(--space-md);
-	border-radius: var(--radius-lg);
-	background: var(--color-primary-soft);
-}
-
-.load-notice__text,
-.load-notice__action {
-	font-size: var(--font-size-sm);
-}
-
-.load-notice__text {
-	color: var(--color-text-secondary);
-}
-
-.load-notice__action {
-	color: var(--color-primary);
-	font-weight: var(--font-weight-bold);
 }
 
 .overview-grid {

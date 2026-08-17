@@ -41,16 +41,6 @@
         </view>
 
         <view class="table-content">
-          <view v-if="sessionStore.isLoggedIn && loadErrorText" class="home-notice" @click="loadHome(true)">
-            <text class="home-notice__text">{{ loadErrorText }}</text>
-            <text class="home-notice__action">重试</text>
-          </view>
-
-          <view v-if="showHomeEntriesNotice" class="home-notice" @click="loadHomeEntries(true)">
-            <text class="home-notice__text">{{ homeEntriesErrorText }}</text>
-            <text class="home-notice__action">重试</text>
-          </view>
-
           <view v-if="hasFeatureEntries" class="feature-board">
             <view class="feature-card feature-card--main" hover-class="feature-card--hover" hover-stay-time="100" @click="openHomeEntry(mainFeatureCard)">
               <view class="feature-card__copy">
@@ -270,6 +260,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
+import { isUniRequestBlockedError } from "@/apis/adapters/uni";
 import { homeApi, type HomeEntryItem, type HomeEntryPlacement } from "@/apis/home";
 import { pollApi, type DiningGroupActivityKind, type DiningGroupActivitySummary, type MealPollSummary } from "@/apis/poll";
 import Empty from "@/components/Empty/Empty.vue";
@@ -287,19 +278,17 @@ const pageStyle = usePageScrollStyle();
 
 const HOME_NAV_GAP = 16;
 const HOME_NAV_FADE_DISTANCE = 96;
-const HOME_REQUEST_BLOCKED_TEXT = "请求未发出或被小程序环境拦截：";
 const { navBarTotalHeight } = useSystemInfo();
 const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 const homeLoading = ref(false);
-const loadErrorText = ref("");
 const pollItems = ref<MealPollSummary[]>([]);
 const activityItems = ref<DiningGroupActivitySummary[]>([]);
 const homeScrollTop = ref(0);
 const homeEntriesLoading = ref(false);
 const homeEntriesLoaded = ref(false);
-const homeEntriesErrorText = ref("");
+const homeEntriesRequestBlocked = ref(false);
 const featureEntryItems = ref<HomeEntryItem[]>([]);
 const quickEntryItems = ref<HomeEntryItem[]>([]);
 let homeLoadPromise: Promise<void> | null = null;
@@ -339,10 +328,6 @@ const sideFeatureCards = computed(() =>
 const quickEntryPlacementList: HomeEntryPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
 const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideFeatureCards.value.length === 2);
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
-const homeEntriesRequestBlocked = computed(() => homeEntriesErrorText.value.startsWith(HOME_REQUEST_BLOCKED_TEXT));
-const showHomeEntriesNotice = computed(
-  () => Boolean(homeEntriesErrorText.value) && !homeEntriesRequestBlocked.value && !hasFeatureEntries.value && !hasQuickEntries.value
-);
 const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const progressWidth = computed(() => {
@@ -409,7 +394,7 @@ async function loadHome(force = false) {
     try {
       await diningGroupStore.refreshCurrent();
     } catch (error) {
-      loadErrorText.value = error instanceof Error ? error.message : "饭搭子加载失败";
+      await showLoadToast(error instanceof Error ? error.message : "饭搭子加载失败");
     }
   }
 
@@ -426,26 +411,30 @@ async function loadHome(force = false) {
 
   const seq = ++homeLoadSeq;
   homeLoading.value = true;
-  loadErrorText.value = "";
   homeLoadPromise = Promise.allSettled([
     pollApi.list({ diningGroupId, status: "OPEN", limit: 3 }),
     pollApi.listActivities({ diningGroupId, limit: 5 })
   ])
-    .then(([pollResult, activityResult]) => {
+    .then(async ([pollResult, activityResult]) => {
       if (seq !== homeLoadSeq || diningGroupStore.currentDiningGroupId !== diningGroupId) return;
 
+      let errorText = "";
       if (pollResult.status === "fulfilled") {
         pollItems.value = pollResult.value;
       } else {
         pollItems.value = [];
-        loadErrorText.value = pollResult.reason instanceof Error ? pollResult.reason.message : "征集加载失败";
+        errorText = pollResult.reason instanceof Error ? pollResult.reason.message : "征集加载失败";
       }
 
       if (activityResult.status === "fulfilled") {
         activityItems.value = activityResult.value;
       } else {
         activityItems.value = [];
-        loadErrorText.value ||= activityResult.reason instanceof Error ? activityResult.reason.message : "动态加载失败";
+        errorText ||= activityResult.reason instanceof Error ? activityResult.reason.message : "动态加载失败";
+      }
+
+      if (errorText) {
+        await showLoadToast(errorText);
       }
     })
     .finally(() => {
@@ -466,7 +455,7 @@ async function loadHomeEntries(force = false) {
 
   homeEntriesLoading.value = true;
   if (force) {
-    homeEntriesErrorText.value = "";
+    homeEntriesRequestBlocked.value = false;
   }
 
   homeEntriesLoadPromise = homeApi
@@ -479,9 +468,9 @@ async function loadHomeEntries(force = false) {
         item => item.placement === "QUICK_1" || item.placement === "QUICK_2" || item.placement === "QUICK_3" || item.placement === "QUICK_4"
       );
       homeEntriesLoaded.value = true;
-      homeEntriesErrorText.value = "";
+      homeEntriesRequestBlocked.value = false;
     })
-    .catch(error => {
+    .catch(async error => {
       if (!hasFeatureEntries.value) {
         featureEntryItems.value = [];
       }
@@ -489,7 +478,8 @@ async function loadHomeEntries(force = false) {
         quickEntryItems.value = [];
       }
       homeEntriesLoaded.value = hasFeatureEntries.value || hasQuickEntries.value;
-      homeEntriesErrorText.value = error instanceof Error ? error.message : "首页快捷入口加载失败";
+      homeEntriesRequestBlocked.value = isUniRequestBlockedError(error);
+      await showLoadToast(error instanceof Error ? error.message : "首页快捷入口加载失败");
     })
     .finally(() => {
       homeEntriesLoading.value = false;
@@ -503,7 +493,13 @@ function clearHomeState() {
   pollItems.value = [];
   activityItems.value = [];
   homeLoading.value = false;
-  loadErrorText.value = "";
+}
+
+async function showLoadToast(title: string) {
+  await uniPlatform.feedback.toast({
+    title,
+    icon: "none"
+  }).catch(() => undefined);
 }
 
 function formatMealSlot(slot: MealPollSummary["mealSlot"]) {
@@ -1106,27 +1102,6 @@ function navigateTo(url: string) {
   font-weight: var(--font-weight-heavy);
   line-height: var(--line-height-tight);
   text-align: center;
-}
-
-.home-notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24rpx;
-  padding: 22rpx 24rpx;
-  border-radius: var(--radius-card);
-  background: rgba(255, 243, 219, 0.96);
-  color: #8b4d12;
-}
-
-.home-notice__text,
-.home-notice__action {
-  display: block;
-  font-size: var(--font-size-sm);
-}
-
-.home-notice__action {
-  font-weight: var(--font-weight-heavy);
 }
 
 .decision-card,

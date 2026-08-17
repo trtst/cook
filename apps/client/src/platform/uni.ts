@@ -37,6 +37,7 @@ interface ClientPlatform {
 		getRuntimeChannel(): RuntimeChannel;
 		onThemeChange(listener: (result: ThemeChangeResult) => void): void;
 		measure(selector: string): Promise<ElementRect | null>;
+		setKeepScreenOn(enabled: boolean): Promise<void>;
 	};
 	/**
 	 * 本地存储能力。
@@ -498,6 +499,16 @@ function measure(selector: string) {
 	});
 }
 
+function setKeepScreenOn(enabled: boolean) {
+	return callUni<void>((resolve, reject) => {
+		uni.setKeepScreenOn({
+			keepScreenOn: enabled,
+			success: () => resolve(),
+			fail: reject
+		});
+	});
+}
+
 /**
  * 对业务层暴露的统一平台对象。
  * 业务代码应优先依赖这里，而不是直接散落访问 `uni.*`。
@@ -537,6 +548,9 @@ export const uniPlatform: ClientPlatform = {
 		},
 		measure(selector) {
 			return measure(selector);
+		},
+		setKeepScreenOn(enabled) {
+			return setKeepScreenOn(enabled);
 		}
 	},
 	storage: {

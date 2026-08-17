@@ -50,6 +50,20 @@ export interface DownloadFileResult {
 	tempFilePath: string;
 }
 
+export class UniRequestBlockedError extends Error {
+	constructor(
+		message: string,
+		readonly detail: string
+	) {
+		super(message);
+		this.name = "UniRequestBlockedError";
+	}
+}
+
+export function isUniRequestBlockedError(error: unknown): error is UniRequestBlockedError {
+	return error instanceof UniRequestBlockedError;
+}
+
 type UniSystemInfoSyncApi = typeof uni & {
 	getSystemInfoSync?: () => {
 		platform?: string;
@@ -167,7 +181,7 @@ export function uniRequestAdapter(request: ApiRequest): Promise<ApiRequestResult
 				});
 			},
 			fail: (error) => {
-				reject(new Error(`请求未发出或被小程序环境拦截：${error.errMsg || request.url}`));
+				reject(new UniRequestBlockedError("当前网络异常，请检查网络后重试", error.errMsg || request.url));
 			}
 		});
 	});
@@ -195,7 +209,7 @@ export function uploadFile(options: UploadFileOptions): Promise<FileResult> {
 				});
 			},
 			fail: (error) => {
-				reject(new Error(`上传请求未发出或被小程序环境拦截：${error.errMsg || options.url}`));
+				reject(new UniRequestBlockedError("上传失败，请检查网络后重试", error.errMsg || options.url));
 			}
 		});
 	});
@@ -213,7 +227,7 @@ export function downloadFile(options: DownloadFileOptions): Promise<DownloadFile
 				});
 			},
 			fail: (error) => {
-				reject(new Error(`下载请求未发出或被小程序环境拦截：${error.errMsg || options.url}`));
+				reject(new UniRequestBlockedError("下载失败，请检查网络后重试", error.errMsg || options.url));
 			}
 		});
 	});
