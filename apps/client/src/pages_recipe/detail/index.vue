@@ -159,6 +159,10 @@
               <text v-if="curatedText" class="detail-curated">{{ curatedText }}</text>
 
 	              <view v-if="showInlineDetailActions" class="detail-inline-actions">
+                  <button class="detail-inline-actions__item" @click="openCookMode">
+                    <view class="cookfont detail-inline-actions__icon icon-wave" />
+                    <view class="detail-inline-actions__text">开始做饭</view>
+                  </button>
 	                <button class="detail-inline-actions__item" open-type="share">
 	                  <view class="cookfont detail-inline-actions__icon icon-share" />
 	                  <view class="detail-inline-actions__text">分享</view>
@@ -195,6 +199,10 @@
         :class="{ 'detail-actions-shell--visible': detailActionsVisible }"
       >
         <view class="detail-actions" :class="{ 'detail-actions--visible': detailActionsVisible }">
+          <button class="detail-actions__item" @click="openCookMode">
+            <view class="cookfont icon-wave detail-actions__icon" />
+            <view class="detail-actions__text">开始做饭</view>
+          </button>
           <button class="detail-actions__item" open-type="share">
             <view class="cookfont icon-share detail-actions__icon" />
             <view class="detail-actions__text">分享</view>
@@ -388,7 +396,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
-import { mealApi } from "@/apis/meal";
+import { mealApi } from "../apis/meal";
 import {
   recipeApi,
   type CollectedRecipeDetail,
@@ -1170,6 +1178,13 @@ function handleExternalEditAction() {
     return;
   }
   void handleAdaptRecipe();
+}
+
+function openCookMode() {
+  if (!showStickyActions.value || !recipeId.value || mode.value !== "published") return;
+  void uniPlatform.navigation.navigateTo(
+    `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}`
+  );
 }
 
 function handleEditRecipe() {

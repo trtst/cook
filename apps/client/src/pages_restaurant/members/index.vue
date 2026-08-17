@@ -458,7 +458,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
-import { memoryShareApi, type MemorySharePreviewResponse } from "@/apis/memory-share";
+import { memoryShareApi, type MemorySharePreviewResponse } from "../apis/memory-share";
 import type { DiningGroupRole } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
 import { pollApi, type DiningGroupActivitySummary, type MealPollDetail, type MealPollSummary } from "@/apis/poll";

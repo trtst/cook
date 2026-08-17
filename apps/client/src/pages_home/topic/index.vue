@@ -204,7 +204,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import { homeApi, type HomeTopicDetail } from "@/apis/home";
-import { mealApi as commonMealApi } from "@/apis/meal";
+import { mealApi as commonMealApi } from "../apis/meal";
 import { recipeApi } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";

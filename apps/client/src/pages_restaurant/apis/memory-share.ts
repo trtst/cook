@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
+import { get, type IsoDateTime, type UUID } from "@/apis/http";
 import type { MealSlot } from "@/utils/meal-slot";
 
 export interface MemoryShareMenuItem {
@@ -25,23 +25,10 @@ export interface MemorySharePreviewResponse {
   snapshotVersion: number;
 }
 
-export interface MemoryShareSnapshotResponse extends MemorySharePreviewResponse {
-  id: UUID;
-  diningEventId: UUID;
-  sharePath: string;
-}
-
 export const memoryShareApi = {
   getPreview(shareToken: string) {
     return get<MemorySharePreviewResponse>(`${cfg.domain}/api/memory-shares/${encodeURIComponent(shareToken)}/preview`, undefined, {
       auth: false
     });
-  },
-  create(eventId: UUID, operationId: OperationId, showParticipants: boolean, caption: string | null) {
-    return post<MemoryShareSnapshotResponse>(
-      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/memory-shares`,
-      { showParticipants, caption },
-      { idempotencyKey: operationId }
-    );
   }
 };

@@ -124,11 +124,11 @@ import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
 import {
-  memoryShareApi,
+  shareApi,
   type MemoryShareParticipant,
   type MemorySharePreviewResponse,
   type MemoryShareSnapshotResponse
-} from "@/apis/memory-share";
+} from "../apis/share";
 import { mealApi, type DiningEventSummary } from "../apis/meal";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -312,7 +312,7 @@ async function loadPage() {
     loading.value = true;
     errorText.value = "";
     try {
-      sharePreview.value = toCardView(await memoryShareApi.getPreview(shareToken.value));
+      sharePreview.value = toCardView(await shareApi.getMemoryPreview(shareToken.value));
     } catch (error) {
       sharePreview.value = null;
       errorText.value = error instanceof Error ? error.message : "饭搭子卡加载失败";
@@ -359,7 +359,7 @@ async function createShare() {
   submitting.value = true;
   errorText.value = "";
   try {
-    shareSnapshot.value = await memoryShareApi.create(eventId.value, createOperationId(), showParticipants.value, normalizedCaption.value);
+    shareSnapshot.value = await shareApi.createMemoryShare(eventId.value, createOperationId(), showParticipants.value, normalizedCaption.value);
     await uniPlatform.feedback.toast({ title: "已生成饭搭子卡", icon: "success" });
   } catch (error) {
     shareSnapshot.value = null;
