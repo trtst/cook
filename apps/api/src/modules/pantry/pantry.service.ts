@@ -1219,7 +1219,7 @@ export class PantryService {
       const sizeBytes = sourceItems.reduce((total, item) => total + sizeOfJson(item), 0);
       await this.assertStorageWritable(tx, userId, sizeBytes);
       for (const item of sourceItems) {
-        const recipeSource = item.sourceType === "RECIPE"
+        const sourceFields = item.sourceType === "RECIPE" || item.sourceType === "PLAN"
           ? {
               sourceRecipeId: item.sourceRecipeId,
               sourceRecipeVersionId: item.sourceRecipeVersionId,
@@ -1230,6 +1230,17 @@ export class PantryService {
               ingredientId: item.ingredientId,
               amountJson: item.amountJson as Prisma.InputJsonValue
             }
+          : item.sourceType === "MANUAL"
+            ? {
+                sourceRecipeId: null,
+                sourceRecipeVersionId: null,
+                sourceRecipeTitle: null,
+                sourceBaseServings: null,
+                sourceBatchKey: null,
+                sourceIngredientSort: null,
+                ingredientId: item.ingredientId,
+                amountJson: Prisma.DbNull
+              }
           : {
               sourceRecipeId: null,
               sourceRecipeVersionId: null,
@@ -1246,10 +1257,13 @@ export class PantryService {
             listId: targetList.id,
             name: item.name,
             quantityText: item.quantityText,
+            baseQuantityText: item.baseQuantityText,
+            fridgeAppliedQuantityText: null,
             note: item.note,
             sourceType: item.sourceType,
             sourceKey: item.sourceKey,
-            ...recipeSource,
+            ...sourceFields,
+            fridgeCovered: false,
             status: "OPEN",
             checkedAt: null,
             checkedByUserId: null,
