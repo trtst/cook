@@ -409,7 +409,7 @@ export class HomeTopicService {
           orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
         }
       },
-      orderBy: [{ publishedAt: "desc" }, { id: "desc" }]
+      orderBy: [{ issueNo: "desc" }, { publishedAt: "desc" }, { id: "desc" }]
     });
   }
 
@@ -500,8 +500,7 @@ export class HomeTopicService {
   }
 
   private toTopicDetail(request: RequestLike, topic: TopicRow, allTopics: TopicRow[], ownedRecipeMap: Map<UUID, UUID>): HomeTopicDetail {
-    const currentIndex = allTopics.findIndex(item => item.id === topic.id);
-    const historyItems = currentIndex >= 0 ? allTopics.slice(currentIndex + 1) : allTopics.filter(item => item.id !== topic.id);
+    const historyItems = allTopics.filter(item => item.id !== topic.id && item.issueNo < topic.issueNo);
 
     return {
       id: topic.id,

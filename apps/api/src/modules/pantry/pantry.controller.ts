@@ -5,6 +5,7 @@ import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
+  AddShoppingGapItemsDto,
   AddPlanToShoppingListDto,
   AddRecipeToShoppingListDto,
   ApplyShoppingListItemFridgeDto,
@@ -39,6 +40,7 @@ import {
   ApiOkPage,
   FridgeItemModel,
   ShoppingBoardModel,
+  ShoppingGapResponseModel,
   ShoppingItemModel,
   ShoppingListDetailModel,
   ShoppingListItemPatchResponseModel,
@@ -217,6 +219,20 @@ export class PantryController {
   ) {
     return this.pantryService
       .addPlanToShoppingList(request.user.userId, listId, operationId, body.planItemId)
+      .then(result => ok(result));
+  }
+
+  @Post("shopping-lists/:listId/items/from-gap")
+  @ApiIdempotencyKey()
+  @ApiOkModel(ShoppingListDetailModel, "把缺口页选中的食材写入购物清单")
+  addGapItemsToShoppingList(
+    @Req() request: RequestWithUser,
+    @Param("listId", ParseIntPipe) listId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AddShoppingGapItemsDto
+  ) {
+    return this.pantryService
+      .addGapItemsToShoppingList(request.user.userId, listId, operationId, body.window, body.gapKeys)
       .then(result => ok(result));
   }
 
@@ -556,7 +572,7 @@ export class PantryController {
   }
 
   @Get("shopping-gap")
-  @ApiOkArray(ShoppingItemModel, "预览当前用户待处理饭局汇总后的购物缺口")
+  @ApiOkModel(ShoppingGapResponseModel, "预览当前用户待处理饭局汇总后的购物缺口")
   previewGap(@Req() request: RequestWithUser) {
     return this.pantryService.previewGap(request.user.userId).then(result => ok(result));
   }

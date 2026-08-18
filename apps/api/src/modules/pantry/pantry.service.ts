@@ -39,6 +39,8 @@ import type {
   RecipeAmountSnapshot,
   RecipeContentSnapshot,
   ShoppingBoardResponse,
+  ShoppingGapResponse,
+  ShoppingGapWindow,
   ShoppingIngredientGroup,
   ShoppingRecipeGroup,
   ShoppingRecipeIngredientGroup,
@@ -95,30 +97,65 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const gapWindowMeta: Record<ShoppingGapWindow, { title: string; description: string }> = {
+  NEXT_48_HOURS: {
+    title: "未来 48 小时",
+    description: "先把最近这两顿到几顿要做的食材补齐，避免临做前缺料。"
+  },
+  NEXT_7_DAYS: {
+    title: "3 到 7 天",
+    description: "这周后半段会用到的食材先记着，需要时再一起补买。"
+  },
+  LATER: {
+    title: "7 天后",
+    description: "更后面的安排先收起，不打扰最近做饭。"
+  }
+};
+
+function resolveGapWindow(scheduledAt: Date, now: Date): ShoppingGapWindow | null {
+  const diffMs = scheduledAt.getTime() - now.getTime();
+  if (diffMs <= 0) return null;
+  if (diffMs <= 48 * 60 * 60 * 1000) return "NEXT_48_HOURS";
+  if (diffMs <= 7 * 24 * 60 * 60 * 1000) return "NEXT_7_DAYS";
+  return "LATER";
+}
+
 type GapEvent = {
   id: UUID;
   title: string;
+  scheduledAt: Date;
   updatedAt: Date;
   menuSnapshot: Prisma.JsonValue;
+  menuItems: Array<{ title: string }>;
 };
 
 type GapItemSeed = {
   eventId: UUID;
   eventTitle: string;
-  ingredientId: UUID;
+  scheduledAt: Date;
+  recipeTitles: string[];
+  ingredientId: UUID | null;
   ingredientName: string;
   amount: RecipeAmountSnapshot;
   updatedAt: Date;
   index: number;
 };
 
+type GapGroupEvent = {
+  eventId: UUID;
+  title: string;
+  scheduledAt: Date;
+  recipeTitles: Set<string>;
+};
+
 type GapGroup = {
+  key: string;
+  ingredientId: UUID | null;
   name: string;
   amount: RecipeAmountSnapshot;
-  sourceKey: string;
   sourceCount: number;
-  sourceTitles: string[];
   updatedAt: Date;
+  events: Map<string, GapGroupEvent>;
 };
 
 type ShoppingRow = {
@@ -2340,7 +2377,7 @@ export class PantryService {
     });
   }
 
-  async previewGap(userId: UUID): Promise<ShoppingItemSummary[]> {
+  async previewGap(userId: UUID): Promise<ShoppingGapResponse> {
     const [events, fridgeItems] = await Promise.all([
       this.prisma.diningEvent.findMany({
         where: {
@@ -2353,8 +2390,15 @@ export class PantryService {
         select: {
           id: true,
           title: true,
+          scheduledAt: true,
           updatedAt: true,
-          menuSnapshot: true
+          menuSnapshot: true,
+          menuItems: {
+            select: {
+              title: true
+            },
+            orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+          }
         }
       }),
       this.prisma.fridgeItem.findMany({
@@ -2365,7 +2409,7 @@ export class PantryService {
       })
     ]);
 
-    return this.buildGapSummary(events, fridgeItems, "ALL");
+    return this.buildGapPreview(events, fridgeItems, new Date());
   }
 
   async previewEventGap(userId: UUID, eventId: UUID): Promise<ShoppingItemSummary[]> {
@@ -2375,8 +2419,15 @@ export class PantryService {
         select: {
           id: true,
           title: true,
+          scheduledAt: true,
           updatedAt: true,
           menuSnapshot: true,
+          menuItems: {
+            select: {
+              title: true
+            },
+            orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+          },
           userId: true
         }
       }),
@@ -2388,7 +2439,7 @@ export class PantryService {
       })
     ]);
     if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
-    return this.buildGapSummary([event], fridgeItems, "EVENT");
+    return this.buildLegacyGapSummary([event], fridgeItems, "EVENT");
   }
 
   async createEventGap(userId: UUID, eventId: UUID, operationId: OperationId) {
@@ -2447,6 +2498,122 @@ export class PantryService {
 
       await completeIdempotentOperation(tx, operationId, "shopping:gap", userId, null, requestHash, results);
       return results;
+    });
+  }
+
+  async addGapItemsToShoppingList(
+    userId: UUID,
+    listId: UUID,
+    operationId: OperationId,
+    window: ShoppingGapWindow,
+    gapKeys: string[]
+  ): Promise<ShoppingListDetail> {
+    const uniqueGapKeys = Array.from(new Set(gapKeys.map(item => item.trim()).filter(Boolean)));
+    if (!uniqueGapKeys.length) {
+      throw new BadRequestException("请选择要加入清单的缺口");
+    }
+    const requestHash = `${listId}:${window}:${uniqueGapKeys.join(",")}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:item:gap", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "shopping-list:item:gap", userId, null, requestHash);
+      const access = await this.assertShoppingListWritable(tx, userId, listId);
+      const [events, fridgeItems] = await Promise.all([
+        tx.diningEvent.findMany({
+          where: {
+            userId,
+            status: {
+              in: ["PLANNED", "CONFIRMED"]
+            }
+          },
+          orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
+          select: {
+            id: true,
+            title: true,
+            scheduledAt: true,
+            updatedAt: true,
+            menuSnapshot: true,
+            menuItems: {
+              select: {
+                title: true
+              },
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+            }
+          }
+        }),
+        tx.fridgeItem.findMany({
+          where: {
+            userId,
+            available: true
+          }
+        })
+      ]);
+      const selectedSeeds = this.resolveGapSeedsForWindow(events, fridgeItems, window, uniqueGapKeys, new Date());
+      const selectedGroups = this.buildLegacyGapSummaryFromSeeds(selectedSeeds, "EVENT");
+      if (!selectedGroups.length) {
+        throw new BadRequestException("选中的缺口已失效，请刷新后重试");
+      }
+
+      const sizeBytes = selectedGroups.reduce(
+        (total, item) =>
+          total +
+          sizeOfJson({
+            userId: access.ownerUserId,
+            listId,
+            name: item.name,
+            quantityText: item.quantityText,
+            baseQuantityText: item.quantityText,
+            note: item.note,
+            sourceType: "EVENT",
+            sourceKey: item.sourceKey,
+            ingredientId: item.ingredientId,
+            amountJson: item.amountJson
+          }),
+        0
+      );
+      await this.assertStorageWritable(tx, access.ownerUserId, sizeBytes);
+
+      let mutated = false;
+      for (const item of selectedGroups) {
+        const existing = await tx.shoppingItem.findFirst({
+          where: {
+            listId,
+            sourceType: "EVENT",
+            sourceKey: item.sourceKey,
+            status: "OPEN"
+          }
+        });
+        if (existing) continue;
+        const created = await tx.shoppingItem.create({
+          data: {
+            userId: access.ownerUserId,
+            listId,
+            name: item.name,
+            quantityText: item.quantityText,
+            baseQuantityText: item.quantityText,
+            note: item.note,
+            sourceType: "EVENT",
+            sourceKey: item.sourceKey,
+            ingredientId: item.ingredientId,
+            amountJson: item.amountJson
+          }
+        });
+        mutated = true;
+        await upsertStorageLedger(tx, access.ownerUserId, "SHOPPING", created.id, sizeOfJson(created));
+      }
+
+      if (mutated) {
+        await tx.shoppingList.update({
+          where: { id: listId },
+          data: {
+            version: { increment: 1 }
+          }
+        });
+      }
+
+      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
+      await completeIdempotentOperation(tx, operationId, "shopping-list:item:gap", userId, null, requestHash, result);
+      return result;
     });
   }
 
@@ -4353,34 +4520,103 @@ export class PantryService {
     };
   }
 
-  private buildGapSummary(
-    events: GapEvent[],
-    fridgeItems: Array<{ name: string }>,
-    mode: "ALL" | "EVENT"
-  ): ShoppingItemSummary[] {
+  private buildGapPreview(events: GapEvent[], fridgeItems: Array<{ name: string }>, now: Date): ShoppingGapResponse {
     const ownedIngredientKeys = new Set(fridgeItems.map(item => item.name.trim().toLowerCase()));
-    const gapMap = new Map<string, GapGroup>();
+    const seeds = this.listGapSeeds(events, ownedIngredientKeys);
+    const activeSeeds = seeds.filter(seed => resolveGapWindow(seed.scheduledAt, now) !== null);
+    const totalEventIds = new Set<string>();
+    activeSeeds.forEach(seed => totalEventIds.add(String(seed.eventId)));
 
-    this.listGapSeeds(events, ownedIngredientKeys).forEach(seed => {
+    const sections = (["NEXT_48_HOURS", "NEXT_7_DAYS", "LATER"] as ShoppingGapWindow[]).map(window => {
+      const sectionSeeds = activeSeeds.filter(seed => resolveGapWindow(seed.scheduledAt, now) === window);
+      const items = this.buildGapGroups(sectionSeeds, "ALL").map(group => this.toShoppingGapItem(group));
+      const eventIds = new Set<string>();
+      items.forEach(item => {
+        item.events.forEach(event => eventIds.add(String(event.eventId)));
+      });
+      return {
+        window,
+        title: gapWindowMeta[window].title,
+        description: gapWindowMeta[window].description,
+        itemCount: items.length,
+        eventCount: eventIds.size,
+        items
+      };
+    });
+
+    const laterSection = sections.find(section => section.window === "LATER");
+    return {
+      sections,
+      totalItemCount: sections.reduce((sum, section) => sum + section.itemCount, 0),
+      totalEventCount: totalEventIds.size,
+      hasLater: Boolean(laterSection?.itemCount),
+      laterItemCount: laterSection?.itemCount ?? 0
+    };
+  }
+
+  private buildLegacyGapSummary(events: GapEvent[], fridgeItems: Array<{ name: string }>, mode: "ALL" | "EVENT"): ShoppingItemSummary[] {
+    const ownedIngredientKeys = new Set(fridgeItems.map(item => item.name.trim().toLowerCase()));
+    return this.buildLegacyGapSummaryFromSeeds(this.listGapSeeds(events, ownedIngredientKeys), mode).map((item, index) => ({
+      id: -(index + 1),
+      name: item.name,
+      quantityText: item.quantityText,
+      note: item.note,
+      sourceCount: item.sourceCount,
+      sourceTitles: item.sourceTitles,
+      sourceType: "EVENT" as const,
+      sourceKey: item.sourceKey,
+      status: "OPEN",
+      updatedAt: toIsoDate(item.updatedAt)
+    }));
+  }
+
+  private buildLegacyGapSummaryFromSeeds(seeds: GapItemSeed[], mode: "ALL" | "EVENT") {
+    return this.buildGapGroups(seeds, mode).map(group => {
+      const sourceTitles = Array.from(group.events.values()).map(event => event.title);
+      return {
+        key: group.key,
+        ingredientId: group.ingredientId,
+        name: group.name,
+        quantityText: formatRecipeAmount(group.amount),
+        note: mode === "EVENT" ? sourceTitles[0] ?? "来自饭局菜单缺口" : "来自待处理饭局缺口",
+        sourceCount: group.sourceCount,
+        sourceTitles,
+        sourceKey: group.key,
+        updatedAt: group.updatedAt,
+        amountJson: group.amount as Prisma.InputJsonValue
+      };
+    });
+  }
+
+  private buildGapGroups(seeds: GapItemSeed[], mode: "ALL" | "EVENT") {
+    const gapMap = new Map<string, GapGroup>();
+    for (const seed of seeds) {
       const groupKey = this.getGapGroupKey(seed, mode);
       const current = gapMap.get(groupKey);
-
       if (!current) {
         gapMap.set(groupKey, {
+          key: groupKey,
+          ingredientId: seed.ingredientId,
           name: seed.ingredientName,
           amount: seed.amount,
-          sourceKey: mode === "EVENT" ? this.getEventSourceKey(seed) : groupKey,
           sourceCount: 1,
-          sourceTitles: [seed.eventTitle],
-          updatedAt: seed.updatedAt
+          updatedAt: seed.updatedAt,
+          events: new Map<string, GapGroupEvent>([
+            [
+              String(seed.eventId),
+              {
+                eventId: seed.eventId,
+                title: seed.eventTitle,
+                scheduledAt: seed.scheduledAt,
+                recipeTitles: new Set(seed.recipeTitles)
+              }
+            ]
+          ])
         });
-        return;
+        continue;
       }
 
       current.sourceCount += 1;
-      if (!current.sourceTitles.includes(seed.eventTitle)) {
-        current.sourceTitles.push(seed.eventTitle);
-      }
       if (seed.updatedAt > current.updatedAt) {
         current.updatedAt = seed.updatedAt;
       }
@@ -4390,22 +4626,63 @@ export class PantryService {
           quantity: new Prisma.Decimal(current.amount.quantity).add(seed.amount.quantity).toString()
         };
       }
-    });
 
-    return Array.from(gapMap.values())
-      .sort((left, right) => left.name.localeCompare(right.name, "zh-Hans-CN"))
-      .map((item, index) => ({
-        id: -(index + 1),
-        name: item.name,
-        quantityText: formatRecipeAmount(item.amount),
-        note: mode === "ALL" ? "来自待处理饭局缺口" : "来自饭局菜单缺口",
-        sourceCount: item.sourceCount,
-        sourceTitles: item.sourceTitles,
-        sourceType: "EVENT" as const,
-        sourceKey: item.sourceKey,
-        status: "OPEN",
-        updatedAt: toIsoDate(item.updatedAt)
+      const currentEvent = current.events.get(String(seed.eventId));
+      if (!currentEvent) {
+        current.events.set(String(seed.eventId), {
+          eventId: seed.eventId,
+          title: seed.eventTitle,
+          scheduledAt: seed.scheduledAt,
+          recipeTitles: new Set(seed.recipeTitles)
+        });
+        continue;
+      }
+      seed.recipeTitles.forEach(title => currentEvent.recipeTitles.add(title));
+    }
+
+    return Array.from(gapMap.values()).sort((left, right) => left.name.localeCompare(right.name, "zh-Hans-CN"));
+  }
+
+  private toShoppingGapItem(group: GapGroup) {
+    const events = Array.from(group.events.values())
+      .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime() || left.eventId - right.eventId)
+      .map(event => ({
+        eventId: event.eventId,
+        title: event.title,
+        scheduledAt: toIsoDate(event.scheduledAt),
+        recipeTitles: Array.from(event.recipeTitles)
       }));
+
+    return {
+      key: group.key,
+      ingredientId: group.ingredientId,
+      name: group.name,
+      quantityText: formatRecipeAmount(group.amount),
+      sourceCount: group.sourceCount,
+      eventCount: events.length,
+      events
+    };
+  }
+
+  private resolveGapSeedsForWindow(
+    events: GapEvent[],
+    fridgeItems: Array<{ name: string }>,
+    window: ShoppingGapWindow,
+    gapKeys: string[],
+    now: Date
+  ) {
+    const ownedIngredientKeys = new Set(fridgeItems.map(item => item.name.trim().toLowerCase()));
+    const groupedSeeds = new Map<string, GapItemSeed[]>();
+    this.listGapSeeds(events, ownedIngredientKeys)
+      .filter(seed => resolveGapWindow(seed.scheduledAt, now) === window)
+      .forEach(seed => {
+        const groupKey = this.getGapGroupKey(seed, "ALL");
+        const current = groupedSeeds.get(groupKey) ?? [];
+        current.push(seed);
+        groupedSeeds.set(groupKey, current);
+      });
+
+    return gapKeys.flatMap(key => groupedSeeds.get(key) ?? []);
   }
 
   private listGapSeeds(events: GapEvent[], ownedIngredientKeys: Set<string>): GapItemSeed[] {
@@ -4417,6 +4694,8 @@ export class PantryService {
           {
             eventId: event.id,
             eventTitle: event.title,
+            scheduledAt: event.scheduledAt,
+            recipeTitles: Array.from(new Set(event.menuItems.map(menuItem => menuItem.title.trim()).filter(Boolean))),
             ingredientId: item.ingredientId,
             ingredientName: item.ingredientName,
             amount: item.amount,
@@ -4429,18 +4708,20 @@ export class PantryService {
   }
 
   private getEventSourceKey(seed: GapItemSeed) {
+    const ingredientKey = seed.ingredientId ?? `${normalizeNameKey(seed.ingredientName)}:name`;
     if (seed.amount.kind === "EXACT") {
-      return `${seed.eventId}:${seed.ingredientId}:EXACT:${seed.amount.unitId}`;
+      return `${seed.eventId}:${ingredientKey}:EXACT:${seed.amount.unitId}`;
     }
-    return `${seed.eventId}:${seed.ingredientId}:FUZZY:${seed.amount.text}:${seed.index}`;
+    return `${seed.eventId}:${ingredientKey}:FUZZY:${seed.amount.text}:${seed.index}`;
   }
 
   private getGapGroupKey(seed: GapItemSeed, mode: "ALL" | "EVENT") {
     if (mode === "EVENT") return this.getEventSourceKey(seed);
+    const ingredientKey = seed.ingredientId ?? `${normalizeNameKey(seed.ingredientName)}:name`;
     if (seed.amount.kind === "EXACT") {
-      return `${seed.ingredientId}:EXACT:${seed.amount.unitId}`;
+      return `${ingredientKey}:EXACT:${seed.amount.unitId}`;
     }
-    return `${seed.eventId}:${seed.ingredientId}:FUZZY:${seed.amount.text}:${seed.index}`;
+    return `${seed.eventId}:${ingredientKey}:FUZZY:${seed.amount.text}:${seed.index}`;
   }
 
   private isRecipeShoppingRow(item: ShoppingRow): item is RecipeShoppingRow {

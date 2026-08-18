@@ -14,6 +14,7 @@ import type {
   RecipeSceneSummary,
   ReplaceRandomMenuSlotResponse,
   SaveRecipeDraftResponse,
+  ShoppingGapResponse,
   ShoppingItemSummary
 } from "../src/contracts/types";
 
@@ -422,11 +423,12 @@ async function main() {
     })
   });
 
-  const eventGapPreview = await requestData<ShoppingItemSummary[]>(`/shopping-gap`, {
+  const eventGapPreview = await requestData<ShoppingGapResponse>(`/shopping-gap`, {
     headers: ownerAuth
   });
-  assert(eventGapPreview.some(item => expectedGapNames.includes(item.name)), "event gap should compare event menu with personal fridge");
-  assert(eventGapPreview.some(item => item.sourceTitles.includes(event.title)), "gap preview should expose owning event titles");
+  const previewItems = eventGapPreview.sections.flatMap(section => section.items);
+  assert(previewItems.some(item => expectedGapNames.includes(item.name)), "event gap should compare event menu with personal fridge");
+  assert(previewItems.some(item => item.events.some(source => source.title === event.title)), "gap preview should expose owning event titles");
 
   const gapCreate = await requestData<ShoppingItemSummary[]>(`/dining-events/${event.id}/shopping-gap`, {
     method: "POST",

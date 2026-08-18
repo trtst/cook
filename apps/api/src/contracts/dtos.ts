@@ -50,6 +50,19 @@ const medalStatusValues = ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] as const;
 const editableMedalStatusValues = ["DRAFT", "LISTED", "UNLISTED"] as const;
 const ingredientProteinTypeValues = ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] as const;
 const mealSlotValues = ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] as const;
+const shoppingGapWindowValues = ["NEXT_48_HOURS", "NEXT_7_DAYS", "LATER"] as const;
+const membershipSkuCodeValues = ["PLUS_30D", "PRO_30D", "PRO_TRIAL_1D", "PRO_TRIAL_3D", "PRO_TRIAL_7D"] as const;
+const membershipCodeStatusValues = ["ACTIVE", "REDEEMED", "DISABLED"] as const;
+
+function toOptionalBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return value;
+}
 
 export class PasswordLoginDto {
   @ApiProperty({ example: "13800000000" })
@@ -1456,6 +1469,15 @@ export class CreateMealPlanDto extends OperationDto {
   @Min(1)
   expectedVersion?: number | null;
 
+  @ApiPropertyOptional({ nullable: true, maxLength: 40 })
+  @IsOptional()
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(40)
+  title?: string | null;
+
   @ApiProperty({ type: [CreateMealPlanMenuItemDto], maxItems: 12 })
   @IsArray()
   @ArrayNotEmpty()
@@ -1506,6 +1528,23 @@ export class AddMealPlanItemDto extends OperationDto {
   @IsOptional()
   @IsIn(["READY", "PENDING"])
   purchaseState?: string;
+}
+
+export class UpdateMealPlanTitleDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 40 })
+  @IsOptional()
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(40)
+  title?: string | null;
 }
 
 export class RandomSlotPlanDto {
@@ -1815,6 +1854,25 @@ export class CreateDirectDiningEventDto extends OperationDto {
   location?: string | null;
 }
 
+export class UpdateDiningEventScheduleDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
+  @ApiProperty()
+  @IsISO8601({ strict: true })
+  scheduledAt!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(255)
+  location?: string | null;
+}
+
 export class UpdateDiningEventCoverDto extends OperationDto {
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
@@ -1979,6 +2037,18 @@ export class InviteDiningGroupParticipantsDto extends OperationDto {
   @IsInt()
   @Min(1)
   diningGroupId!: number;
+}
+
+export class ShareDiningEventMembersDto extends OperationDto {
+  @ApiProperty({ type: [Number] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  targetUserIds!: number[];
 }
 
 export class RespondDiningEventDto extends OperationDto {
@@ -2325,6 +2395,23 @@ export class AddPlanToShoppingListDto extends OperationDto {
   @IsInt()
   @Min(1)
   planItemId!: number;
+}
+
+export class AddShoppingGapItemsDto extends OperationDto {
+  @ApiProperty({ enum: shoppingGapWindowValues })
+  @IsIn(shoppingGapWindowValues)
+  window!: "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
+
+  @ApiProperty({ type: [String], maxItems: 50 })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @Transform(({ value }) => trimItems(value))
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(120, { each: true })
+  gapKeys!: string[];
 }
 
 export class UpdateShoppingListItemCheckDto extends OperationDto {
@@ -3311,4 +3398,97 @@ export class UpdateUserDisplayDto extends OperationDto {
   @IsString()
   @MaxLength(512)
   homeBackgroundUrl?: string | null;
+}
+
+export class RedeemMembershipCodeDto extends OperationDto {
+  @ApiProperty({ example: "PLUS30-ABCD1234" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(6)
+  @MaxLength(40)
+  code!: string;
+}
+
+export class AdminMembershipCodeBatchQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ enum: membershipSkuCodeValues })
+  @IsOptional()
+  @IsIn(membershipSkuCodeValues)
+  skuCode?: "PLUS_30D" | "PRO_30D" | "PRO_TRIAL_1D" | "PRO_TRIAL_3D" | "PRO_TRIAL_7D";
+
+  @ApiPropertyOptional({ type: Boolean })
+  @IsOptional()
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  redeemEnabled?: boolean;
+}
+
+export class CreateAdminMembershipCodeBatchDto extends OperationDto {
+  @ApiProperty({ enum: membershipSkuCodeValues })
+  @IsIn(membershipSkuCodeValues)
+  skuCode!: "PLUS_30D" | "PRO_30D" | "PRO_TRIAL_1D" | "PRO_TRIAL_3D" | "PRO_TRIAL_7D";
+
+  @ApiProperty({ maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ type: Boolean })
+  @IsBoolean()
+  redeemEnabled!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true })
+  startsAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true })
+  endsAt?: string | null;
+}
+
+export class SetAdminMembershipCodeBatchStatusDto extends OperationDto {
+  @ApiProperty({ type: Boolean })
+  @IsBoolean()
+  redeemEnabled!: boolean;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class GenerateAdminMembershipCodesDto extends OperationDto {
+  @ApiProperty({ minimum: 1, maximum: 1000 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  quantity!: number;
+}
+
+export class AdminMembershipCodeQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  batchId?: number;
+
+  @ApiPropertyOptional({ enum: membershipCodeStatusValues })
+  @IsOptional()
+  @IsIn(membershipCodeStatusValues)
+  status?: "ACTIVE" | "REDEEMED" | "DISABLED";
+
+  @ApiPropertyOptional({ maxLength: 40 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(40)
+  code?: string;
 }

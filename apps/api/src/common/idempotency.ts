@@ -80,7 +80,8 @@ export function completeAdminIdempotentOperation<T>(
   operationType: string,
   adminId: number,
   requestHash: string,
-  result: T
+  result: T,
+  storedResult: T = result
 ) {
   return tx.idempotencyRecord.updateMany({
     where: {
@@ -92,7 +93,7 @@ export function completeAdminIdempotentOperation<T>(
     },
     data: {
       status: "SUCCEEDED",
-      resultJson: toJson(result)
+      resultJson: toJson(storedResult)
     }
   });
 }

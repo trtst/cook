@@ -24,9 +24,12 @@ import {
   InviteDiningGroupParticipantsDto,
   MealPollListQueryDto,
   MealPlanQueryDto,
+  ShareDiningEventMembersDto,
   CheckRandomMenuGapDto,
   ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
+  UpdateMealPlanTitleDto,
+  UpdateDiningEventScheduleDto,
   UpdateDiningEventCoverDto,
   VoteMealPollDto
 } from "../../contracts/dtos";
@@ -182,6 +185,7 @@ export class MealController {
         body.mealSlot,
         body.menuItems,
         body.expectedVersion,
+        body.title,
         body.note
       )
       .then(result => ok(result));
@@ -208,6 +212,22 @@ export class MealController {
         body.slotType ?? null,
         body.purchaseState ?? "READY"
       )
+      .then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/title")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanModel, "更新一个计划餐次的标题")
+  updateMealPlanTitle(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateMealPlanTitleDto
+  ) {
+    return this.mealService
+      .updateMealPlanTitle(request.user.userId, planItemId, operationId, body.expectedVersion, body.title)
       .then(result => ok(result));
   }
 
@@ -351,6 +371,85 @@ export class MealController {
     @ReadIdempotencyKey() operationId: string
   ) {
     return this.mealService.createDiningEventShareLink(request.user.userId, eventId, operationId).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/share-link/disable")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "关闭当前饭局的好友邀请链接")
+  disableDiningEventShareLink(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService
+      .disableDiningEventShareLink(request.user.userId, eventId, operationId, request)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/share-members")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "向指定饭搭子成员发送饭局邀请")
+  shareDiningEventMembers(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ShareDiningEventMembersDto
+  ) {
+    return this.mealService
+      .shareDiningEventMembers(request.user.userId, eventId, operationId, body.targetUserIds)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/participants/:participantId/revoke")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "撤回一条待确认的饭局邀请")
+  revokeDiningEventParticipantInvite(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("participantId", ParseIntPipe) participantId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService
+      .revokeDiningEventParticipantInvite(request.user.userId, eventId, participantId, operationId, request)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/participants/:participantId/reinvite")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "再次邀请一位已拒绝或已移除的饭搭子成员")
+  reinviteDiningEventParticipant(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("participantId", ParseIntPipe) participantId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService
+      .reinviteDiningEventParticipant(request.user.userId, eventId, participantId, operationId, request)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/schedule")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "更新一场饭局的时间和地点")
+  updateDiningEventSchedule(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateDiningEventScheduleDto
+  ) {
+    return this.mealService
+      .updateDiningEventSchedule(request, request.user.userId, eventId, operationId, body.expectedVersion, body.scheduledAt, body.location)
+      .then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/cover")

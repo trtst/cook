@@ -1,6 +1,7 @@
 import { PrismaClient, type EntitlementTier, type UnitType } from "@prisma/client";
 import { loadLocalEnv } from "../src/common/load-env";
 import { hashPassword } from "../src/common/security/password";
+import { ensureMembershipSkuCatalog } from "../src/modules/user/membership-code.catalog";
 import { buildSearchKey } from "../src/modules/recipe/recipe-content";
 import { inferIngredientTagFacts } from "../src/modules/recipe/ingredient-tag-facts";
 import { allowedSystemUnitNames } from "../src/modules/recipe/system-unit-policy";
@@ -1263,6 +1264,10 @@ export async function syncSystemRecipeCatalog() {
   await seedSystemRecipes(ingredientMap, inspirationCategoryMap);
 }
 
+export async function syncMembershipSkuCatalog() {
+  await ensureMembershipSkuCatalog(prisma);
+}
+
 async function main() {
   const username = process.env.ADMIN_SEED_USERNAME ?? "admin";
   const password = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
@@ -1348,6 +1353,7 @@ async function main() {
   await resetUserRelations(ownerUser.id, ownerGroup.id);
   await resetUserRelations(guestUser.id, guestGroup.id);
   await resetUserRelations(memberUser.id, memberGroup.id);
+  await syncMembershipSkuCatalog();
   await seedEntitlement(ownerUser.id, "PRO");
   await seedEntitlement(guestUser.id, null);
   await seedEntitlement(memberUser.id, "PLUS");

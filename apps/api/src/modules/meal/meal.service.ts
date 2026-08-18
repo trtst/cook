@@ -57,6 +57,16 @@ type DiningEventRow = Prisma.DiningEventGetPayload<{
   include: {
     user: { select: { uid: true; nickname: true; avatarUrl: true } };
     mealPlanItem: { select: { planDate: true; mealSlot: true } };
+    shareInvites: {
+      where: {
+        status: {
+          in: ["ACTIVE", "OPENED"];
+        };
+      };
+      select: {
+        id: true;
+      };
+    };
     participants: {
       include: {
         user: { select: { uid: true; nickname: true; avatarUrl: true } };
@@ -123,6 +133,17 @@ type ActivityRow = Prisma.DiningGroupActivityGetPayload<{
 }>;
 
 type DiningEventMemoryShareRow = Prisma.DiningEventMemoryShareGetPayload<{}>;
+type DiningEventShareInviteRow = Prisma.DiningEventShareInviteGetPayload<{
+  include: {
+    diningEvent: {
+      include: {
+        user: { select: { nickname: true } };
+        mealPlanItem: { select: { planDate: true; mealSlot: true } };
+        menuItems: { select: { title: true } };
+      };
+    };
+  };
+}>;
 
 type MealDb = Prisma.TransactionClient | PrismaService;
 type RequestLike = {
@@ -263,6 +284,18 @@ function buildMemorySharePath(shareToken: string) {
 
 function buildDiningEventSharePath(shareToken: string) {
   return `/pages_share/preview/index?token=${encodeURIComponent(shareToken)}`;
+}
+
+function formatShareCountdown(targetAt: Date, now = new Date()) {
+  const diff = targetAt.getTime() - now.getTime();
+  if (diff <= 0) return null;
+  const totalMinutes = Math.floor(diff / 60000);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}天${hours}小时`;
+  if (hours > 0) return `${hours}小时${minutes}分钟`;
+  return `${Math.max(1, minutes)}分钟`;
 }
 
 function parseDateOnly(value: string) {
@@ -445,10 +478,8 @@ function buildEmptyMenuSnapshot(mealSlot: MealSlot): RecipeContentSnapshot {
   };
 }
 
-function buildDiningEventTitle(planDate: string, mealSlot: MealSlot, menu: RecipeContentSnapshot) {
-  const title = menu.name?.trim();
-  if (title && title !== "本餐菜单") return title;
-  return `${planDate} ${mealSlotLabel(mealSlot)}`;
+function buildMealPlanTitle(mealSlot: MealSlot) {
+  return `${mealSlotLabel(mealSlot)}饮食计划`;
 }
 
 function buildFallbackScheduledAt(planDate: string, mealSlot: MealSlot) {
@@ -1402,17 +1433,24 @@ export class MealService {
       purchaseState: string;
     }>,
     expectedVersion?: number | null,
+    title?: string | null,
     note?: string | null
   ) {
     return this.prisma.$transaction(async tx => {
       const slot = normalizeMealSlot(mealSlot);
-      const normalizedNote = normalizeOptionalText(note);
+      const hasTitleInput = title !== undefined;
+      const normalizedTitle = hasTitleInput ? normalizeOptionalText(title) : undefined;
+      const hasNoteInput = note !== undefined;
+      const normalizedNote = hasNoteInput ? normalizeOptionalText(note) : undefined;
       const normalizedPlanDate = parseDateOnly(planDate);
       const normalizedItems = await this.resolvePlanMenuItems(tx, userId, menuItems);
       const requestHash = JSON.stringify({
         planDate,
         mealSlot: slot,
         expectedVersion: expectedVersion ?? null,
+        hasTitleInput,
+        title: normalizedTitle ?? null,
+        hasNoteInput,
         menuItems: normalizedItems.map(item => ({
           slotType: item.slotType,
           sortOrder: item.sortOrder,
@@ -1420,7 +1458,7 @@ export class MealService {
           recipeVersionId: item.menu.recipeVersionId,
           purchaseState: item.purchaseState
         })),
-        note: normalizedNote
+        note: normalizedNote ?? null
       });
       const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:create", userId, null, requestHash);
       if (repeated) return repeated;
@@ -1443,13 +1481,17 @@ export class MealService {
       }
 
       const menuSnapshot = buildMenuSnapshot(normalizedItems.map(item => item.menu));
-      await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, menu: menuSnapshot, note: normalizedNote }));
+      const draftTitle = normalizedTitle === undefined ? existing?.title?.trim() || buildMealPlanTitle(slot) : normalizedTitle || buildMealPlanTitle(slot);
+      const resolvedNote = normalizedNote === undefined ? existing?.note ?? null : normalizedNote;
+      await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, title: draftTitle, menu: menuSnapshot, note: resolvedNote }));
 
       const resolvedExpectedVersion = expectedVersion ?? null;
 
       if (existing && resolvedExpectedVersion == null) {
         throw new ConflictException("计划已存在，请刷新后携带 expectedVersion 重试");
       }
+
+      const resolvedTitle = draftTitle;
 
       const planItem = existing
         ? await (async () => {
@@ -1462,8 +1504,9 @@ export class MealService {
                 version: resolvedExpectedVersion
               },
               data: {
+                title: resolvedTitle,
                 menuSnapshot: toJson(menuSnapshot),
-                note: normalizedNote,
+                note: resolvedNote,
                 version: { increment: 1 }
               }
             });
@@ -1477,8 +1520,9 @@ export class MealService {
               userId,
               planDate: normalizedPlanDate,
               mealSlot: slot,
+              title: resolvedTitle,
               menuSnapshot: toJson(menuSnapshot),
-              note: normalizedNote
+              note: resolvedNote
             }
           });
 
@@ -1566,7 +1610,17 @@ export class MealService {
           : [];
         const menus = [...existingMenus, nextMenu];
         const menuSnapshot = buildMenuSnapshot(menus);
-        await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: normalizedSlot, menu: menuSnapshot, note: existing?.note ?? null }));
+        await this.assertStorageWritable(
+          tx,
+          userId,
+          sizeOfJson({
+            planDate,
+            mealSlot: normalizedSlot,
+            title: existing?.title?.trim() || buildMealPlanTitle(normalizedSlot),
+            menu: menuSnapshot,
+            note: existing?.note ?? null
+          })
+        );
 
         const planItem = existing
           ? await tx.mealPlanItem.update({
@@ -1581,6 +1635,7 @@ export class MealService {
                 userId,
                 planDate: normalizedPlanDate,
                 mealSlot: normalizedSlot,
+                title: buildMealPlanTitle(normalizedSlot),
                 menuSnapshot: toJson(menuSnapshot),
                 note: null
               }
@@ -1597,7 +1652,15 @@ export class MealService {
           }
         });
 
-        const item = await this.getMealPlanOrThrow(tx, planItem.id);
+        let item = await this.getMealPlanOrThrow(tx, planItem.id);
+        const syncedMenuItems = menus.map((menu, index) => ({
+          slotType: index === menus.length - 1 ? normalizedSlotType : existing?.dishes[index]?.slotType ?? null,
+          sortOrder: index,
+          purchaseState: index === menus.length - 1 ? normalizedPurchaseState : existing?.dishes[index]?.purchaseState ?? "READY",
+          menu
+        })) satisfies PlanMenuItemInput[];
+        await this.syncMealPlanDiningEvent(tx, item, syncedMenuItems, menuSnapshot);
+        item = await this.getMealPlanOrThrow(tx, planItem.id);
         await upsertStorageLedger(tx, userId, "MEAL", item.id, sizeOfJson(item));
         const result = this.toMealPlanSummary(item);
         await completeIdempotentOperation(tx, operationId, "meal-plan:item:add", userId, null, requestHash, result);
@@ -1614,6 +1677,70 @@ export class MealService {
   async getMealPlanCookAssistant(userId: UUID, planItemId: UUID): Promise<MealPlanCookAssistant> {
     const plan = await this.getOwnedMealPlanOrThrow(this.prisma, userId, planItemId);
     return this.toMealPlanCookAssistant(plan);
+  }
+
+  async updateMealPlanTitle(
+    userId: UUID,
+    planItemId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    title?: string | null
+  ): Promise<MealPlanSummary> {
+    const requestHash = JSON.stringify({
+      planItemId,
+      expectedVersion,
+      title: normalizeOptionalText(title) ?? null
+    });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:title", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "meal-plan:title", userId, null, requestHash);
+
+      const plan = await this.getOwnedMealPlanOrThrow(tx, userId, planItemId);
+      if (plan.status === "COMPLETED") {
+        throw new ConflictException("已完成餐次不能修改标题");
+      }
+      if (plan.version !== expectedVersion) {
+        throw new ConflictException("计划已被更新，请刷新后重试");
+      }
+
+      const nextTitle = normalizeOptionalText(title) || buildMealPlanTitle(plan.mealSlot);
+      const nextPlanValue = {
+        title: nextTitle,
+        menuSnapshot: plan.menuSnapshot,
+        note: plan.note,
+        status: plan.status,
+        completedAt: plan.completedAt,
+        version: plan.version + 1
+      };
+      await this.assertStorageWritable(tx, userId, Math.max(0, sizeOfJson(nextPlanValue) - sizeOfJson(plan)));
+
+      await tx.mealPlanItem.update({
+        where: { id: plan.id },
+        data: {
+          title: nextTitle,
+          version: { increment: 1 }
+        }
+      });
+
+      if (plan.diningEvent) {
+        const nextEvent = await tx.diningEvent.update({
+          where: { id: plan.diningEvent.id },
+          data: {
+            title: nextTitle,
+            version: { increment: 1 }
+          }
+        });
+        await upsertStorageLedger(tx, userId, "MEAL", nextEvent.id, sizeOfJson(nextEvent));
+      }
+
+      const resultPlan = await this.getMealPlanOrThrow(tx, plan.id);
+      await upsertStorageLedger(tx, userId, "MEAL", resultPlan.id, sizeOfJson(resultPlan));
+      const result = this.toMealPlanSummary(resultPlan);
+      await completeIdempotentOperation(tx, operationId, "meal-plan:title", userId, null, requestHash, result);
+      return result;
+    });
   }
 
   async generateMealPlanCookAssistant(userId: UUID, planItemId: UUID, operationId: OperationId): Promise<MealPlanCookAssistant> {
@@ -1723,27 +1850,23 @@ export class MealService {
       if (plan.status === "COMPLETED") throw new ConflictException("已完成餐次不能再发起饭局");
       if (plan.diningEvent) throw new ConflictException("该餐次已发起饭局");
 
-      const shareToken = createShareToken();
-      const sharePath = buildDiningEventSharePath(shareToken);
       const normalizedLocation = normalizeOptionalText(location);
       const eventRequestHash = `${planItemId}:${scheduledAt}:${normalizedLocation ?? ""}`;
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:create", userId, null, eventRequestHash);
       if (repeated) return repeated;
 
       await startIdempotentOperation(tx, operationId, "dining-event:create", userId, null, eventRequestHash);
-      await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, menu: plan.menuSnapshot }));
-
-      const menu = fromJson<RecipeContentSnapshot>(plan.menuSnapshot);
+      await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
       const event = await tx.diningEvent.create({
         data: {
           userId,
           mealPlanItemId: plan.id,
-          title: buildDiningEventTitle(plan.planDate.toISOString().slice(0, 10), plan.mealSlot, menu),
+          title: plan.title,
           scheduledAt: resolvedScheduledAt,
           location: normalizedLocation,
           menuSnapshot: toJson(plan.menuSnapshot),
-          shareTokenHash: hashText(shareToken),
+          shareTokenHash: null,
           shareTokenExpiresAt: null,
           menuItems: {
             create: plan.dishes.map(item => ({
@@ -1756,7 +1879,7 @@ export class MealService {
       });
 
       await upsertStorageLedger(tx, userId, "MEAL", event.id, sizeOfJson(event));
-      const result = await this.getDiningEvent(userId, event.id, sharePath, tx, request);
+      const result = await this.getDiningEvent(userId, event.id, null, tx, request);
       await completeIdempotentOperation(tx, operationId, "dining-event:create", userId, null, eventRequestHash, result);
       return result;
     });
@@ -1805,12 +1928,17 @@ export class MealService {
 
       if (!plan) {
         const emptyMenu = buildEmptyMenuSnapshot(slot);
-        await this.assertStorageWritable(tx, userId, sizeOfJson({ planDate, mealSlot: slot, menu: emptyMenu, note: null }));
+        await this.assertStorageWritable(
+          tx,
+          userId,
+          sizeOfJson({ planDate, mealSlot: slot, title: buildMealPlanTitle(slot), menu: emptyMenu, note: null })
+        );
         plan = await tx.mealPlanItem.create({
           data: {
             userId,
             planDate: normalizedPlanDate,
             mealSlot: slot,
+            title: buildMealPlanTitle(slot),
             menuSnapshot: toJson(emptyMenu),
             note: null
           },
@@ -1819,21 +1947,17 @@ export class MealService {
         await upsertStorageLedger(tx, userId, "MEAL", plan.id, sizeOfJson(plan));
       }
 
-      const shareToken = createShareToken();
-      const sharePath = buildDiningEventSharePath(shareToken);
-      await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, menu: plan.menuSnapshot }));
-
-      const menu = fromJson<RecipeContentSnapshot>(plan.menuSnapshot);
+      await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
       const event = await tx.diningEvent.create({
         data: {
           userId,
           mealPlanItemId: plan.id,
-          title: buildDiningEventTitle(plan.planDate.toISOString().slice(0, 10), plan.mealSlot, menu),
+          title: plan.title,
           scheduledAt: resolvedScheduledAt,
           location: normalizedLocation,
           menuSnapshot: toJson(plan.menuSnapshot),
-          shareTokenHash: hashText(shareToken),
+          shareTokenHash: null,
           shareTokenExpiresAt: null,
           ...(plan.dishes.length
             ? {
@@ -1850,7 +1974,7 @@ export class MealService {
       });
 
       await upsertStorageLedger(tx, userId, "MEAL", event.id, sizeOfJson(event));
-      const result = await this.getDiningEvent(userId, event.id, sharePath, tx, request);
+      const result = await this.getDiningEvent(userId, event.id, null, tx, request);
       await completeIdempotentOperation(tx, operationId, "dining-event:create-direct", userId, null, requestHash, result);
       return result;
     });
@@ -1923,6 +2047,49 @@ export class MealService {
     }
   }
 
+  async updateDiningEventSchedule(
+    request: RequestLike,
+    userId: UUID,
+    eventId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    scheduledAt: string,
+    location?: string | null
+  ): Promise<DiningEventSummary> {
+    const normalizedLocation = normalizeOptionalText(location);
+    const requestHash = JSON.stringify({ eventId, expectedVersion, scheduledAt, location: normalizedLocation ?? null });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:schedule", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:schedule", userId, null, requestHash);
+
+      const event = await tx.diningEvent.findUnique({
+        where: { id: eventId }
+      });
+      if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
+      if (event.status === "CANCELLED" || event.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能再改时间");
+      }
+      if (event.version !== expectedVersion) {
+        throw new ConflictException("饭局已被更新，请刷新后重试");
+      }
+
+      const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
+      await tx.diningEvent.update({
+        where: { id: eventId },
+        data: {
+          scheduledAt: resolvedScheduledAt,
+          location: normalizedLocation === undefined ? event.location : normalizedLocation,
+          version: { increment: 1 }
+        }
+      });
+
+      const result = await this.getDiningEvent(userId, eventId, undefined, tx, request);
+      await completeIdempotentOperation(tx, operationId, "dining-event:schedule", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   async createDiningEventShareLink(userId: UUID, eventId: UUID, operationId: OperationId): Promise<DiningEventShareLinkResponse> {
     const requestHash = String(eventId);
     return this.prisma.$transaction(async tx => {
@@ -1939,11 +2106,22 @@ export class MealService {
       }
 
       const shareToken = createShareToken();
-      await tx.diningEvent.update({
-        where: { id: eventId },
+      const now = new Date();
+      await tx.diningEventShareInvite.updateMany({
+        where: {
+          diningEventId: eventId,
+          status: { in: ["ACTIVE", "OPENED"] }
+        },
         data: {
-          shareTokenHash: hashText(shareToken),
-          shareTokenExpiresAt: null
+          status: "REVOKED",
+          revokedAt: now
+        }
+      });
+      await tx.diningEventShareInvite.create({
+        data: {
+          diningEventId: eventId,
+          inviterUserId: userId,
+          shareTokenHash: hashText(shareToken)
         }
       });
 
@@ -1952,6 +2130,207 @@ export class MealService {
         expiresAt: null
       };
       await completeIdempotentOperation(tx, operationId, "dining-event:share-link", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async disableDiningEventShareLink(
+    userId: UUID,
+    eventId: UUID,
+    operationId: OperationId,
+    request?: RequestLike
+  ): Promise<DiningEventSummary> {
+    const requestHash = String(eventId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:share-link:disable", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:share-link:disable", userId, null, requestHash);
+
+      const event = await tx.diningEvent.findUnique({
+        where: { id: eventId }
+      });
+      if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
+      if (event.status === "CANCELLED" || event.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能继续调整好友邀请");
+      }
+
+      const now = new Date();
+      await tx.diningEventShareInvite.updateMany({
+        where: {
+          diningEventId: eventId,
+          status: { in: ["ACTIVE", "OPENED"] }
+        },
+        data: {
+          status: "REVOKED",
+          revokedAt: now
+        }
+      });
+
+      const result = await this.getDiningEvent(userId, eventId, undefined, tx, request);
+      await completeIdempotentOperation(tx, operationId, "dining-event:share-link:disable", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async shareDiningEventMembers(
+    userId: UUID,
+    eventId: UUID,
+    operationId: OperationId,
+    targetUserIds: UUID[]
+  ): Promise<DiningEventSummary> {
+    const uniqueUserIds = Array.from(new Set(targetUserIds.filter(id => id !== userId)));
+    if (!uniqueUserIds.length) {
+      throw new BadRequestException("请至少选择 1 位饭搭子");
+    }
+    const requestHash = `${eventId}:${uniqueUserIds.join(",")}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:share-members", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:share-members", userId, null, requestHash);
+
+      const event = await tx.diningEvent.findUnique({
+        where: { id: eventId }
+      });
+      if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
+      if (event.status === "CANCELLED" || event.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能继续分享邀请");
+      }
+
+      await this.assertShareableDiningGroupUsers(tx, userId, uniqueUserIds);
+      const existingParticipants = await tx.diningEventParticipant.findMany({
+        where: {
+          diningEventId: eventId,
+          userId: { in: uniqueUserIds }
+        },
+        select: {
+          userId: true
+        }
+      });
+      const existingUserIds = new Set(existingParticipants.map(item => item.userId).filter((value): value is UUID => value !== null));
+      const nextInviteUserIds = uniqueUserIds.filter(targetUserId => !existingUserIds.has(targetUserId));
+
+      for (const targetUserId of nextInviteUserIds) {
+        const participant = await tx.diningEventParticipant.create({
+          data: {
+            diningEventId: eventId,
+            userId: targetUserId,
+            invitedByUserId: userId,
+            sourceType: "DINING_GROUP",
+            status: "INVITED"
+          }
+        });
+        await upsertStorageLedger(tx, userId, "MEAL_GUEST", participant.id, sizeOfJson(participant));
+      }
+
+      if (event.diningGroupId && nextInviteUserIds.length) {
+        await this.writeActivity(tx, {
+          diningGroupId: event.diningGroupId,
+          kind: "INVITE_PENDING",
+          state: "PENDING",
+          actorUserId: userId,
+          title: "邀请了饭搭子成员一起参加这顿饭",
+          detail: null,
+          diningEventId: eventId,
+          dedupeKey: `invite-pending:${eventId}`
+        });
+      }
+
+      const result = await this.getDiningEvent(userId, eventId, undefined, tx);
+      await completeIdempotentOperation(tx, operationId, "dining-event:share-members", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async revokeDiningEventParticipantInvite(
+    userId: UUID,
+    eventId: UUID,
+    participantId: UUID,
+    operationId: OperationId,
+    request?: RequestLike
+  ): Promise<DiningEventSummary> {
+    const requestHash = `${eventId}:${participantId}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:participant:revoke", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:participant:revoke", userId, null, requestHash);
+
+      const participant = await tx.diningEventParticipant.findFirst({
+        where: {
+          id: participantId,
+          diningEventId: eventId
+        },
+        include: {
+          diningEvent: true
+        }
+      });
+      if (!participant || participant.diningEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
+      if (participant.diningEvent.status === "CANCELLED" || participant.diningEvent.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能继续调整邀请");
+      }
+      if (participant.status !== "INVITED") {
+        throw new ConflictException("当前邀请不能撤回");
+      }
+
+      const updated = await tx.diningEventParticipant.update({
+        where: { id: participant.id },
+        data: {
+          status: "REMOVED",
+          respondedAt: new Date()
+        }
+      });
+      await upsertStorageLedger(tx, participant.diningEvent.userId, "MEAL_GUEST", participant.id, sizeOfJson(updated));
+      const result = await this.getDiningEvent(userId, eventId, undefined, tx, request);
+      await completeIdempotentOperation(tx, operationId, "dining-event:participant:revoke", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async reinviteDiningEventParticipant(
+    userId: UUID,
+    eventId: UUID,
+    participantId: UUID,
+    operationId: OperationId,
+    request?: RequestLike
+  ): Promise<DiningEventSummary> {
+    const requestHash = `${eventId}:${participantId}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:participant:reinvite", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:participant:reinvite", userId, null, requestHash);
+
+      const participant = await tx.diningEventParticipant.findFirst({
+        where: {
+          id: participantId,
+          diningEventId: eventId
+        },
+        include: {
+          diningEvent: true
+        }
+      });
+      if (!participant || participant.diningEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
+      if (participant.diningEvent.status === "CANCELLED" || participant.diningEvent.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能继续调整邀请");
+      }
+      if (!participant.userId || participant.sourceType !== "DINING_GROUP") {
+        throw new ConflictException("当前邀请不能再次发送");
+      }
+      if (participant.status !== "DECLINED" && participant.status !== "REMOVED") {
+        throw new ConflictException("当前邀请不能再次发送");
+      }
+
+      const updated = await tx.diningEventParticipant.update({
+        where: { id: participant.id },
+        data: {
+          status: "INVITED",
+          invitedByUserId: userId,
+          respondedAt: null,
+          bringRecipeId: null,
+          bringVersionId: null
+        }
+      });
+      await upsertStorageLedger(tx, participant.diningEvent.userId, "MEAL_GUEST", participant.id, sizeOfJson(updated));
+      const result = await this.getDiningEvent(userId, eventId, undefined, tx, request);
+      await completeIdempotentOperation(tx, operationId, "dining-event:participant:reinvite", userId, null, requestHash, result);
       return result;
     });
   }
@@ -2027,6 +2406,7 @@ export class MealService {
           data: {
             diningEventId: eventId,
             userId: member.userId,
+            invitedByUserId: userId,
             sourceType: "DINING_GROUP",
             status: "INVITED"
           }
@@ -2260,6 +2640,16 @@ export class MealService {
           version: { increment: 1 }
         }
       });
+      await tx.diningEventShareInvite.updateMany({
+        where: {
+          diningEventId: current.id,
+          status: { in: ["ACTIVE", "OPENED"] }
+        },
+        data: {
+          status: "EXPIRED",
+          expiredAt: new Date()
+        }
+      });
 
       const event = await this.loadDiningEventRow(tx, current.id);
       if (!event) throw new NotFoundException("饭局不存在");
@@ -2411,26 +2801,43 @@ export class MealService {
 
   async getSharePreview(shareToken: string): Promise<SharePreviewResponse> {
     const shareTokenHash = hashText(shareToken);
-    const event = await this.prisma.diningEvent.findUnique({
-      where: { shareTokenHash },
-      include: {
-        user: { select: { uid: true } }
-      }
-    });
-    if (!event || event.status === "COMPLETED" || event.status === "CANCELLED" || (event.shareTokenExpiresAt && event.shareTokenExpiresAt <= new Date())) {
+    const invite = await this.loadDiningEventShareInvite(this.prisma, shareTokenHash);
+    if (!invite) {
       throw new NotFoundException("分享已失效");
     }
-
-    const menu = fromJson<RecipeContentSnapshot>(event.menuSnapshot);
+    const now = new Date();
+    await this.ensureDiningEventShareInviteActive(this.prisma, invite, now);
+    if (invite.status === "ACTIVE") {
+      await this.prisma.diningEventShareInvite.update({
+        where: { id: invite.id },
+        data: {
+          status: "OPENED",
+          openedAt: invite.openedAt ?? now
+        }
+      });
+    } else if (!invite.openedAt) {
+      await this.prisma.diningEventShareInvite.update({
+        where: { id: invite.id },
+        data: {
+          openedAt: now
+        }
+      });
+    }
+    const event = invite.diningEvent;
     return {
       title: event.title,
+      planItemId: event.mealPlanItemId,
+      planDate: event.mealPlanItem?.planDate?.toISOString().slice(0, 10) ?? null,
+      mealSlot: event.mealPlanItem?.mealSlot ?? null,
       scheduledAt: toIsoDate(event.scheduledAt),
-      location: event.location,
-      menu: {
-        name: menu.name,
-        ingredients: menu.ingredients
-      },
-      organizerUid: event.user.uid
+      coverImageUrl:
+        event.coverStorageKey && event.coverContentType
+          ? this.uploadService.buildDiningEventCoverUrl({}, event.id, event.updatedAt)
+          : null,
+      organizerName: event.user?.nickname ?? null,
+      menuPreview: event.menuItems.slice(0, 4).map(item => item.title),
+      countdownText: formatShareCountdown(event.scheduledAt, now),
+      locationHint: event.location ? "地点加入后查看" : null
     };
   }
 
@@ -2445,12 +2852,29 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "share:accept", userId, null, requestHash);
 
-      const event = await tx.diningEvent.findUnique({
-        where: { shareTokenHash }
-      });
-      if (!event || event.status === "COMPLETED" || event.status === "CANCELLED" || (event.shareTokenExpiresAt && event.shareTokenExpiresAt <= new Date())) {
+      const invite = await this.loadDiningEventShareInvite(tx, shareTokenHash);
+      if (!invite) {
         throw new NotFoundException("分享已失效");
       }
+      const now = new Date();
+      await this.ensureDiningEventShareInviteActive(tx, invite, now);
+      if (invite.acceptedByUserId && invite.acceptedByUserId !== userId) {
+        throw new ForbiddenException("这条分享邀请已经被其他账号使用");
+      }
+      const event = invite.diningEvent;
+      if (event.userId === userId) {
+        const result = await this.getDiningEvent(userId, event.id, undefined, tx);
+        await completeIdempotentOperation(tx, operationId, "share:accept", userId, null, requestHash, result);
+        return result;
+      }
+      await tx.diningEventShareInvite.update({
+        where: { id: invite.id },
+        data: {
+          status: invite.acceptedByUserId === userId ? invite.status : "OPENED",
+          openedAt: invite.openedAt ?? now,
+          validatedAt: invite.validatedAt ?? now
+        }
+      });
 
       const existing = await tx.diningEventParticipant.findFirst({
         where: { diningEventId: event.id, userId }
@@ -2459,10 +2883,19 @@ export class MealService {
         await tx.diningEventParticipant.update({
           where: { id: existing.id },
           data: {
+            invitedByUserId: invite.inviterUserId,
             guestName: normalizedGuestName,
             status: "ACCEPTED",
-            respondedAt: new Date(),
+            respondedAt: now,
             sourceType: "SHARE"
+          }
+        });
+        await tx.diningEventShareInvite.update({
+          where: { id: invite.id },
+          data: {
+            status: "ACCEPTED",
+            acceptedByUserId: userId,
+            acceptedAt: invite.acceptedAt ?? now
           }
         });
         const result = await this.getDiningEvent(userId, event.id, undefined, tx);
@@ -2474,10 +2907,19 @@ export class MealService {
         data: {
           diningEventId: event.id,
           userId,
+          invitedByUserId: invite.inviterUserId,
           guestName: normalizedGuestName,
           sourceType: "SHARE",
           status: "ACCEPTED",
-          respondedAt: new Date()
+          respondedAt: now
+        }
+      });
+      await tx.diningEventShareInvite.update({
+        where: { id: invite.id },
+        data: {
+          status: "ACCEPTED",
+          acceptedByUserId: userId,
+          acceptedAt: invite.acceptedAt ?? now
         }
       });
       await upsertStorageLedger(tx, event.userId, "MEAL_GUEST", participant.id, sizeOfJson(participant));
@@ -2487,12 +2929,56 @@ export class MealService {
     });
   }
 
+  private async loadDiningEventShareInvite(db: MealDb, shareTokenHash: string): Promise<DiningEventShareInviteRow | null> {
+    return db.diningEventShareInvite.findUnique({
+      where: { shareTokenHash },
+      include: {
+        diningEvent: {
+          include: {
+            user: { select: { nickname: true } },
+            mealPlanItem: { select: { planDate: true, mealSlot: true } },
+            menuItems: { select: { title: true } }
+          }
+        }
+      }
+    });
+  }
+
+  private async ensureDiningEventShareInviteActive(db: MealDb, invite: DiningEventShareInviteRow, now: Date) {
+    const event = invite.diningEvent;
+    const expired =
+      invite.status === "REVOKED" ||
+      invite.status === "EXPIRED" ||
+      event.status === "COMPLETED" ||
+      event.status === "CANCELLED" ||
+      (event.shareTokenExpiresAt && event.shareTokenExpiresAt <= now);
+    if (!expired) return;
+    if (invite.status === "ACTIVE" || invite.status === "OPENED") {
+      await db.diningEventShareInvite.update({
+        where: { id: invite.id },
+        data: {
+          status: "EXPIRED",
+          expiredAt: invite.expiredAt ?? now
+        }
+      });
+    }
+    throw new NotFoundException("分享已失效");
+  }
+
   private async loadDiningEventRow(db: MealDb, eventId: UUID) {
     return db.diningEvent.findUnique({
       where: { id: eventId },
       include: {
         user: { select: { uid: true, nickname: true, avatarUrl: true } },
         mealPlanItem: { select: { planDate: true, mealSlot: true } },
+        shareInvites: {
+          where: {
+            status: { in: ["ACTIVE", "OPENED"] }
+          },
+          select: {
+            id: true
+          }
+        },
         participants: {
           include: {
             user: { select: { uid: true, nickname: true, avatarUrl: true } },
@@ -2518,12 +3004,11 @@ export class MealService {
   }
 
   private toMealPlanSummary(item: MealPlanRow): MealPlanSummary {
-    const menu = fromJson<RecipeContentSnapshot>(item.menuSnapshot);
     return {
       id: item.id,
       planDate: item.planDate.toISOString().slice(0, 10),
       mealSlot: item.mealSlot,
-      title: menu.name,
+      title: item.title?.trim() || buildMealPlanTitle(item.mealSlot),
       menuItems: item.dishes.map(dish => ({
         recipeId: dish.recipeId,
         recipeVersionId: dish.recipeVersionId,
@@ -2670,6 +3155,7 @@ export class MealService {
         bringRecipeId: item.bringRecipeId,
         bringRecipeTitle: item.bringRecipe?.title ?? null
       }) satisfies DiningEventParticipantSummary),
+      hasActiveShareLink: event.shareInvites.length > 0,
       shareTokenPath: shareTokenPath ?? null,
       completedAt: event.completedAt ? toIsoDate(event.completedAt) : null,
       version: event.version,
@@ -2684,6 +3170,48 @@ export class MealService {
       sharePath,
       ...this.toDiningMemorySharePreview(snapshot)
     };
+  }
+
+  private async assertShareableDiningGroupUsers(tx: Prisma.TransactionClient, userId: UUID, targetUserIds: UUID[]) {
+    if (!targetUserIds.length) return;
+    const groups = await tx.diningGroup.findMany({
+      where: {
+        OR: [
+          { ownerId: userId },
+          {
+            members: {
+              some: {
+                userId,
+                status: "ACTIVE"
+              }
+            }
+          }
+        ]
+      },
+      select: {
+        ownerId: true,
+        members: {
+          where: {
+            status: "ACTIVE"
+          },
+          select: {
+            userId: true
+          }
+        }
+      }
+    });
+    const allowedUserIds = new Set<UUID>();
+    for (const group of groups) {
+      allowedUserIds.add(group.ownerId);
+      for (const member of group.members) {
+        allowedUserIds.add(member.userId);
+      }
+    }
+    for (const targetUserId of targetUserIds) {
+      if (!allowedUserIds.has(targetUserId)) {
+        throw new ForbiddenException("只能邀请当前饭搭子成员");
+      }
+    }
   }
 
   private toDiningMemorySharePreview(snapshot: DiningEventMemoryShareRow): DiningMemorySharePreview {
@@ -3334,7 +3862,7 @@ export class MealService {
     await tx.diningEvent.update({
       where: { id: plan.diningEvent.id },
       data: {
-        title: buildDiningEventTitle(plan.planDate.toISOString().slice(0, 10), plan.mealSlot, menuSnapshot),
+        title: plan.title,
         menuSnapshot: toJson(menuSnapshot),
         version: { increment: 1 }
       }
@@ -3494,6 +4022,7 @@ export class MealService {
       ? await tx.mealPlanItem.update({
           where: { id: existing.id },
           data: {
+            title: existing.title?.trim() || buildMealPlanTitle(existing.mealSlot),
             menuSnapshot: toJson(menuSnapshot),
             note: poll.note,
             version: { increment: 1 }
@@ -3504,6 +4033,7 @@ export class MealService {
             userId: poll.createdByUserId,
             planDate: poll.planDate,
             mealSlot: poll.mealSlot,
+            title: buildMealPlanTitle(poll.mealSlot),
             menuSnapshot: toJson(menuSnapshot),
             note: poll.note
           }
@@ -3536,7 +4066,7 @@ export class MealService {
           where: { id: plan.diningEvent.id },
           data: {
             diningGroupId: poll.diningGroupId,
-            title: menuSnapshot.name,
+            title: plan.title,
             scheduledAt: resolvedScheduledAt,
             location,
             status: "CONFIRMED",
@@ -3547,15 +4077,15 @@ export class MealService {
           }
         })
       : await tx.diningEvent.create({
-          data: {
-            userId: poll.createdByUserId,
-            mealPlanItemId: plan.id,
-            diningGroupId: poll.diningGroupId,
-            title: menuSnapshot.name,
-            scheduledAt: resolvedScheduledAt,
-            location,
-            status: "CONFIRMED",
-            menuSnapshot: toJson(menuSnapshot),
+        data: {
+          userId: poll.createdByUserId,
+          mealPlanItemId: plan.id,
+          diningGroupId: poll.diningGroupId,
+          title: plan.title,
+          scheduledAt: resolvedScheduledAt,
+          location,
+          status: "CONFIRMED",
+          menuSnapshot: toJson(menuSnapshot),
             shareTokenHash: hashText(shareToken),
             shareTokenExpiresAt: null
           }

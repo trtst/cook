@@ -349,6 +349,103 @@ export interface ChangeCurrentPasswordResult {
   changedAt: IsoDateTime;
 }
 
+export interface RedeemMembershipCodeRequest {
+  code: string;
+}
+
+export interface RedeemMembershipCodeResult {
+  membership: UserMembership;
+  redeemedAt: IsoDateTime;
+}
+
+export type MembershipCodeKind = "FORMAL" | "TRIAL";
+export type MembershipCodeStatus = "ACTIVE" | "REDEEMED" | "DISABLED";
+export type MembershipCodeBatchWindowState = "NO_LIMIT" | "PENDING" | "ACTIVE" | "EXPIRED";
+
+export interface AdminMembershipSkuItem {
+  id: UUID;
+  code: string;
+  kind: MembershipCodeKind;
+  tier: EntitlementTier;
+  durationDays: number;
+  redeemEnabled: boolean;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminMembershipSkuListResponse {
+  items: AdminMembershipSkuItem[];
+  syncedAt: IsoDateTime;
+}
+
+export interface CreateAdminMembershipCodeBatchRequest {
+  skuCode: string;
+  name: string;
+  redeemEnabled: boolean;
+  startsAt?: IsoDateTime | null;
+  endsAt?: IsoDateTime | null;
+}
+
+export interface SetAdminMembershipCodeBatchStatusRequest {
+  redeemEnabled: boolean;
+  expectedVersion: number;
+}
+
+export interface AdminMembershipCodeBatchItem {
+  id: UUID;
+  sku: AdminMembershipSkuItem;
+  name: string;
+  redeemEnabled: boolean;
+  startsAt: IsoDateTime | null;
+  endsAt: IsoDateTime | null;
+  windowState: MembershipCodeBatchWindowState;
+  version: number;
+  codeCount: number;
+  activeCodeCount: number;
+  redeemedCodeCount: number;
+  disabledCodeCount: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface GenerateAdminMembershipCodesRequest {
+  quantity: number;
+}
+
+export interface GeneratedMembershipCodeRow {
+  code: string;
+  codeMask: string;
+}
+
+export interface AdminMembershipCodeOperatorSummary {
+  id: UUID;
+  uid: number;
+  nickname: string | null;
+}
+
+export interface AdminMembershipCodeItem {
+  id: UUID;
+  batchId: UUID;
+  batchName: string;
+  skuCode: string;
+  kind: MembershipCodeKind;
+  tier: EntitlementTier;
+  durationDays: number;
+  codeMask: string;
+  status: MembershipCodeStatus;
+  redeemedBy: AdminMembershipCodeOperatorSummary | null;
+  redeemedAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminGenerateMembershipCodesResult {
+  batch: AdminMembershipCodeBatchItem;
+  generatedCount: number;
+  exportedAt: IsoDateTime;
+  codes: GeneratedMembershipCodeRow[];
+}
+
 export interface TasteProfileResponse {
   allergies: string[];
   strictDislikes: string[];
@@ -1512,8 +1609,15 @@ export interface CreateMealPlanRequest {
   planDate: string;
   mealSlot: MealSlot;
   expectedVersion?: number | null;
+  title?: string | null;
   menuItems: CreateMealPlanMenuItemRequest[];
   note?: string | null;
+}
+
+export interface UpdateMealPlanTitleRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  title?: string | null;
 }
 
 export interface RandomSlotPlan {
@@ -1873,6 +1977,7 @@ export interface DiningEventSummary {
   menu: RecipeContentSnapshot;
   menuItems: DiningEventMenuItemSummary[];
   participants: DiningEventParticipantSummary[];
+  hasActiveShareLink: boolean;
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
   version: number;
@@ -1882,6 +1987,11 @@ export interface DiningEventSummary {
 export interface DiningEventShareLinkResponse {
   shareTokenPath: string;
   expiresAt: IsoDateTime | null;
+}
+
+export interface ShareDiningEventMembersRequest {
+  operationId: OperationId;
+  targetUserIds: UUID[];
 }
 
 export interface DiningMemoryShareMenuItem {
@@ -2143,6 +2253,42 @@ export interface ShoppingItemSummary {
   updatedAt: IsoDateTime;
 }
 
+export type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
+
+export interface ShoppingGapEventSummary {
+  eventId: UUID;
+  title: string;
+  scheduledAt: IsoDateTime;
+  recipeTitles: string[];
+}
+
+export interface ShoppingGapItem {
+  key: string;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  sourceCount: number;
+  eventCount: number;
+  events: ShoppingGapEventSummary[];
+}
+
+export interface ShoppingGapSection {
+  window: ShoppingGapWindow;
+  title: string;
+  description: string;
+  itemCount: number;
+  eventCount: number;
+  items: ShoppingGapItem[];
+}
+
+export interface ShoppingGapResponse {
+  sections: ShoppingGapSection[];
+  totalItemCount: number;
+  totalEventCount: number;
+  hasLater: boolean;
+  laterItemCount: number;
+}
+
 export type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
 export type ShoppingListRole = "OWNER" | "COLLABORATOR";
 export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
@@ -2286,6 +2432,12 @@ export interface CreateShoppingListItemRequest {
   ingredientId: UUID | null;
   quantityText: string | null;
   note: string | null;
+}
+
+export interface AddShoppingGapItemsRequest {
+  operationId: OperationId;
+  window: ShoppingGapWindow;
+  gapKeys: string[];
 }
 
 export interface AddRecipeToShoppingListRequest {
@@ -2446,8 +2598,13 @@ export interface UpdateShoppingGroupStatusRequest {
 
 export interface SharePreviewResponse {
   title: string;
+  planItemId: UUID | null;
+  planDate: string | null;
+  mealSlot: MealSlot | null;
   scheduledAt: IsoDateTime;
-  location: string | null;
-  menu: Pick<RecipeContentSnapshot, "name" | "ingredients">;
-  organizerUid: number;
+  coverImageUrl: string | null;
+  organizerName: string | null;
+  menuPreview: string[];
+  countdownText: string | null;
+  locationHint: string | null;
 }

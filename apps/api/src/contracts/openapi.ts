@@ -188,6 +188,78 @@ export class ChangePasswordResultModel {
   @ApiProperty(dateTime) changedAt!: string;
 }
 
+export class RedeemMembershipCodeResultModel {
+  @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
+  @ApiProperty(dateTime) redeemedAt!: string;
+}
+
+export class AdminMembershipSkuItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["PLUS_30D", "PRO_30D", "PRO_TRIAL_1D", "PRO_TRIAL_3D", "PRO_TRIAL_7D"] }) code!: string;
+  @ApiProperty({ type: String, enum: ["FORMAL", "TRIAL"] }) kind!: string;
+  @ApiProperty({ type: String, enum: tierValues }) tier!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) durationDays!: number;
+  @ApiProperty({ type: Boolean }) redeemEnabled!: boolean;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminMembershipSkuListResponseModel {
+  @ApiProperty({ type: [AdminMembershipSkuItemModel] }) items!: AdminMembershipSkuItemModel[];
+  @ApiProperty(dateTime) syncedAt!: string;
+}
+
+export class AdminMembershipCodeBatchItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: AdminMembershipSkuItemModel }) sku!: AdminMembershipSkuItemModel;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Boolean }) redeemEnabled!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) startsAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) endsAt!: string | null;
+  @ApiProperty({ type: String, enum: ["NO_LIMIT", "PENDING", "ACTIVE", "EXPIRED"] }) windowState!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) codeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) activeCodeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) redeemedCodeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) disabledCodeCount!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminMembershipCodeOperatorModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Number }) uid!: number;
+  @ApiProperty(nullableString) nickname!: string | null;
+}
+
+export class AdminMembershipCodeItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) batchId!: string;
+  @ApiProperty({ type: String }) batchName!: string;
+  @ApiProperty({ type: String, enum: ["PLUS_30D", "PRO_30D", "PRO_TRIAL_1D", "PRO_TRIAL_3D", "PRO_TRIAL_7D"] }) skuCode!: string;
+  @ApiProperty({ type: String, enum: ["FORMAL", "TRIAL"] }) kind!: string;
+  @ApiProperty({ type: String, enum: tierValues }) tier!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) durationDays!: number;
+  @ApiProperty({ type: String }) codeMask!: string;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "REDEEMED", "DISABLED"] }) status!: string;
+  @ApiProperty({ type: AdminMembershipCodeOperatorModel, nullable: true }) redeemedBy!: AdminMembershipCodeOperatorModel | null;
+  @ApiProperty({ ...dateTime, nullable: true }) redeemedAt!: string | null;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class GeneratedMembershipCodeRowModel {
+  @ApiProperty({ type: String }) code!: string;
+  @ApiProperty({ type: String }) codeMask!: string;
+}
+
+export class AdminGenerateMembershipCodesResultModel {
+  @ApiProperty({ type: AdminMembershipCodeBatchItemModel }) batch!: AdminMembershipCodeBatchItemModel;
+  @ApiProperty({ type: Number, minimum: 1 }) generatedCount!: number;
+  @ApiProperty(dateTime) exportedAt!: string;
+  @ApiProperty({ type: [GeneratedMembershipCodeRowModel] }) codes!: GeneratedMembershipCodeRowModel[];
+}
+
 export class TasteProfileModel {
   @ApiProperty({ type: [String] }) allergies!: string[];
   @ApiProperty({ type: [String] }) strictDislikes!: string[];
@@ -1472,6 +1544,7 @@ export class DiningEventModel {
   @ApiProperty({ type: RecipeContentModel }) menu!: RecipeContentModel;
   @ApiProperty({ type: [DiningEventMenuItemModel] }) menuItems!: DiningEventMenuItemModel[];
   @ApiProperty({ type: [DiningEventParticipantModel] }) participants!: DiningEventParticipantModel[];
+  @ApiProperty({ type: Boolean }) hasActiveShareLink!: boolean;
   @ApiProperty(nullableString) shareTokenPath!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
@@ -1594,17 +1667,17 @@ export class AdminMedalTemplateModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
-export class ShareMenuModel {
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: [RecipeIngredientModel] }) ingredients!: RecipeIngredientModel[];
-}
-
 export class SharePreviewModel {
   @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
+  @ApiProperty({ type: String, nullable: true }) planDate!: string | null;
+  @ApiProperty({ type: String, enum: mealSlotValues, nullable: true }) mealSlot!: string | null;
   @ApiProperty(dateTime) scheduledAt!: string;
-  @ApiProperty(nullableString) location!: string | null;
-  @ApiProperty({ type: ShareMenuModel }) menu!: ShareMenuModel;
-  @ApiProperty({ type: Number }) organizerUid!: number;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty(nullableString) organizerName!: string | null;
+  @ApiProperty({ type: [String] }) menuPreview!: string[];
+  @ApiProperty(nullableString) countdownText!: string | null;
+  @ApiProperty(nullableString) locationHint!: string | null;
 }
 
 export class FridgeReservationModel {
@@ -1644,6 +1717,40 @@ export class ShoppingItemModel {
   @ApiProperty(nullableString) sourceKey!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "BOUGHT", "DELETED"] }) status!: string;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class ShoppingGapEventSummaryModel {
+  @ApiProperty(uuid) eventId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(dateTime) scheduledAt!: string;
+  @ApiProperty({ type: [String] }) recipeTitles!: string[];
+}
+
+export class ShoppingGapItemModel {
+  @ApiProperty({ type: String }) key!: string;
+  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty(nullableString) quantityText!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) sourceCount!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) eventCount!: number;
+  @ApiProperty({ type: [ShoppingGapEventSummaryModel] }) events!: ShoppingGapEventSummaryModel[];
+}
+
+export class ShoppingGapSectionModel {
+  @ApiProperty({ type: String, enum: ["NEXT_48_HOURS", "NEXT_7_DAYS", "LATER"] }) window!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) description!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) itemCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) eventCount!: number;
+  @ApiProperty({ type: [ShoppingGapItemModel] }) items!: ShoppingGapItemModel[];
+}
+
+export class ShoppingGapResponseModel {
+  @ApiProperty({ type: [ShoppingGapSectionModel] }) sections!: ShoppingGapSectionModel[];
+  @ApiProperty({ type: Number, minimum: 0 }) totalItemCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) totalEventCount!: number;
+  @ApiProperty({ type: Boolean }) hasLater!: boolean;
+  @ApiProperty({ type: Number, minimum: 0 }) laterItemCount!: number;
 }
 
 export class ShoppingListStatusCountModel {

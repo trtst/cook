@@ -220,6 +220,14 @@ enum DiningEventParticipantStatus {
   REMOVED
 }
 
+enum DiningEventShareInviteStatus {
+  ACTIVE
+  OPENED
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 enum MealPollStatus {
   OPEN
   CLOSED
@@ -532,6 +540,7 @@ model User {
   createdInvites            DiningGroupInvite[]        @relation("DiningGroupInviteCreator")
   acceptedInvites           DiningGroupInvite[]        @relation("DiningGroupInviteAcceptor")
   entitlementGrant          EntitlementGrant?
+  redeemedMembershipCodes   MembershipCode[]           @relation("MembershipCodeRedeemer")
   tasteProfile              UserTasteProfile?
   idempotencyRecords        IdempotencyRecord[]        @relation("IdempotencyRecordUser")
   auditEvents               AuditEvent[]               @relation("AuditEventActor")
@@ -554,7 +563,10 @@ model User {
   mealPollResponses         MealPollResponse[]
   diningEvents              DiningEvent[]              @relation("DiningEventOwner")
   diningEventParticipants   DiningEventParticipant[]   @relation("DiningEventParticipantUser")
+  invitedDiningEventParticipants DiningEventParticipant[] @relation("DiningEventParticipantInviter")
   diningEventCookItems      DiningEventMenuItem[]      @relation("DiningEventMenuItemCook")
+  createdDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteCreator")
+  acceptedDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteAcceptor")
   diningEventMemoryShares   DiningEventMemoryShare[]   @relation("DiningEventMemoryShareCreator")
   diningGroupActivities     DiningGroupActivity[]      @relation("DiningGroupActivityActor")
   fridgeItems               FridgeItem[]
@@ -674,6 +686,17 @@ enum EntitlementTier {
   ULTRA
 }
 
+enum MembershipCodeKind {
+  FORMAL
+  TRIAL
+}
+
+enum MembershipCodeStatus {
+  ACTIVE
+  REDEEMED
+  DISABLED
+}
+
 /// Free 由服务端默认解析；这里只保存用户级有效套餐事实。
 model EntitlementGrant {
   id        Int             @id @default(autoincrement())
@@ -688,6 +711,60 @@ model EntitlementGrant {
 
   @@index([tier, endsAt])
   @@map("entitlement_grants")
+}
+
+model MembershipSku {
+  id            Int                @id @default(autoincrement())
+  code          String             @unique @db.VarChar(32)
+  kind          MembershipCodeKind
+  tier          EntitlementTier
+  durationDays  Int                @map("duration_days")
+  redeemEnabled Boolean            @default(false) @map("redeem_enabled")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  batches MembershipCodeBatch[]
+
+  @@index([kind, tier, durationDays])
+  @@map("membership_skus")
+}
+
+model MembershipCodeBatch {
+  id            Int       @id @default(autoincrement())
+  skuId         Int       @map("sku_id")
+  name          String    @db.VarChar(64)
+  redeemEnabled Boolean   @default(false) @map("redeem_enabled")
+  startsAt      DateTime? @map("starts_at") @db.Timestamptz(3)
+  endsAt        DateTime? @map("ends_at") @db.Timestamptz(3)
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sku   MembershipSku   @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  codes MembershipCode[]
+
+  @@index([skuId, redeemEnabled, startsAt, endsAt])
+  @@map("membership_code_batches")
+}
+
+model MembershipCode {
+  id               Int                  @id @default(autoincrement())
+  batchId          Int                  @map("batch_id")
+  codeHash         String               @unique @map("code_hash") @db.VarChar(128)
+  codeMask         String               @map("code_mask") @db.VarChar(64)
+  status           MembershipCodeStatus @default(ACTIVE)
+  redeemedByUserId Int?                 @map("redeemed_by_user_id")
+  redeemedAt       DateTime?            @map("redeemed_at") @db.Timestamptz(3)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  batch      MembershipCodeBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  redeemedBy User?               @relation("MembershipCodeRedeemer", fields: [redeemedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([batchId, status, id])
+  @@index([redeemedByUserId, redeemedAt])
+  @@index([status, redeemedAt])
+  @@map("membership_codes")
 }
 
 model RecipeCategory {
@@ -1231,6 +1308,7 @@ model MealPlanItem {
   userId       Int            @map("user_id")
   planDate     DateTime       @map("plan_date") @db.Date
   mealSlot     MealSlot       @map("meal_slot")
+  title        String         @db.VarChar(40)
   menuSnapshot Json           @map("menu_snapshot")
   note         String?        @db.VarChar(255)
   status       MealPlanStatus @default(PLANNED)
@@ -1312,6 +1390,7 @@ model DiningEvent {
   activities   DiningGroupActivity[]
   menuItems    DiningEventMenuItem[]
   participants DiningEventParticipant[]
+  shareInvites DiningEventShareInvite[]
   memoryShares DiningEventMemoryShare[]
 
   @@index([userId, scheduledAt])
@@ -1323,6 +1402,7 @@ model DiningEventParticipant {
   id             Int                          @id @default(autoincrement())
   diningEventId  Int                          @map("dining_event_id")
   userId         Int?                         @map("user_id")
+  invitedByUserId Int?                        @map("invited_by_user_id")
   guestName      String?                      @map("guest_name") @db.VarChar(120)
   sourceType     DiningEventParticipantSource @map("source_type")
   status         DiningEventParticipantStatus @default(INVITED)
@@ -1334,12 +1414,38 @@ model DiningEventParticipant {
 
   diningEvent  DiningEvent           @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
   user         User?                 @relation("DiningEventParticipantUser", fields: [userId], references: [id])
+  invitedBy    User?                 @relation("DiningEventParticipantInviter", fields: [invitedByUserId], references: [id])
   bringRecipe  Recipe?               @relation("DiningEventBringRecipe", fields: [bringRecipeId], references: [id])
   bringVersion RecipeContentVersion? @relation("DiningEventBringVersion", fields: [bringVersionId], references: [id])
 
   @@index([diningEventId, status])
   @@index([userId, status])
   @@map("dining_event_participants")
+}
+
+model DiningEventShareInvite {
+  id               Int                          @id @default(autoincrement())
+  diningEventId    Int                          @map("dining_event_id")
+  inviterUserId    Int                          @map("inviter_user_id")
+  acceptedByUserId Int?                         @map("accepted_by_user_id")
+  shareTokenHash   String                       @unique @map("share_token_hash") @db.VarChar(128)
+  status           DiningEventShareInviteStatus @default(ACTIVE)
+  openedAt         DateTime?                    @map("opened_at") @db.Timestamptz(3)
+  validatedAt      DateTime?                    @map("validated_at") @db.Timestamptz(3)
+  acceptedAt       DateTime?                    @map("accepted_at") @db.Timestamptz(3)
+  revokedAt        DateTime?                    @map("revoked_at") @db.Timestamptz(3)
+  expiredAt        DateTime?                    @map("expired_at") @db.Timestamptz(3)
+  createdAt        DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningEvent DiningEvent @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+  inviter     User        @relation("DiningEventShareInviteCreator", fields: [inviterUserId], references: [id], onDelete: Cascade)
+  acceptedBy  User?       @relation("DiningEventShareInviteAcceptor", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([diningEventId, createdAt(sort: Desc)])
+  @@index([inviterUserId, createdAt(sort: Desc)])
+  @@index([acceptedByUserId, createdAt(sort: Desc)])
+  @@map("dining_event_share_invites")
 }
 
 model DiningEventMemoryShare {
