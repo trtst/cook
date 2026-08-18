@@ -141,6 +141,10 @@ function triggerHeaderRefresh() {
           <el-icon><Setting /></el-icon>
           <span>公共配置</span>
         </el-menu-item>
+        <el-menu-item index="/membership-codes">
+          <el-icon><Files /></el-icon>
+          <span>会员兑换码</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

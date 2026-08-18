@@ -214,6 +214,12 @@ const router = createRouter({
           name: "config",
           component: () => import("@/pages/ConfigPage.vue"),
           meta: { title: "公共配置" }
+        },
+        {
+          path: "membership-codes",
+          name: "membership-codes",
+          component: () => import("@/pages/MembershipCodesPage.vue"),
+          meta: { title: "会员兑换码" }
         }
       ]
     }
