@@ -38,6 +38,8 @@
       "pages": [
         { "path": "medal/index", "style": { "navigationBarTitleText": "我的勋章", "navigationStyle": "custom" } },
         { "path": "medal-detail/index", "style": { "navigationBarTitleText": "勋章详情", "navigationStyle": "custom" } },
+        { "path": "benefit/index", "style": { "navigationBarTitleText": "权益中心", "navigationStyle": "custom" } },
+        { "path": "membership-code/index", "style": { "navigationBarTitleText": "会员兑换码", "navigationStyle": "custom" } },
         { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } },
         { "path": "recommend/index", "style": { "navigationBarTitleText": "通知中心", "navigationStyle": "custom" } },
         { "path": "recommend-detail/index", "style": { "navigationBarTitleText": "通知详情", "navigationStyle": "custom" } },

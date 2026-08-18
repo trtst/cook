@@ -31,8 +31,9 @@
 							<view class="profile-row__main">
 								<view class="profile-row__name-line">
 									<text class="profile-row__name">{{ profileName }}</text>
-									<TierBadge v-if="sessionStore.isLoggedIn"
-										:tier="userStore.profile?.membership?.tier" />
+									<view v-if="sessionStore.isLoggedIn" class="profile-row__badge-hit" @click.stop="handleBenefitCenter">
+										<TierBadge :tier="userStore.profile?.membership?.tier" />
+									</view>
 								</view>
 								<text class="profile-row__uid">{{ profileUidText }}</text>
 							</view>
@@ -94,6 +95,32 @@
 							<view class="medal-card__count-line">
 								<text class="medal-card__count">{{ medalCount === null ? "--" : medalCount }}</text>
 								<text class="medal-card__unit">枚</text>
+							</view>
+						</view>
+					</view>
+
+					<view class="service-section">
+						<text class="service-section__title">权益服务</text>
+						<view class="service-list">
+							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleBenefitCenter">
+								<view class="service-row__icon-wrap service-row__icon-wrap--benefit">
+									<text class="service-row__icon-mark">益</text>
+								</view>
+								<view class="service-row__copy">
+									<text class="service-row__title">权益中心</text>
+									<text class="service-row__description">查看当前会员、体验码与广告减免规则</text>
+								</view>
+								<text class="service-row__arrow">›</text>
+							</view>
+							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMembershipCode">
+								<view class="service-row__icon-wrap service-row__icon-wrap--membership">
+									<text class="service-row__icon-mark">码</text>
+								</view>
+								<view class="service-row__copy">
+									<text class="service-row__title">会员兑换码</text>
+									<text class="service-row__description">站外购买后，在这里输入兑换码到账</text>
+								</view>
+								<text class="service-row__arrow">›</text>
 							</view>
 						</view>
 					</view>
@@ -673,6 +700,14 @@ function handleDiningGroupManage() {
 	navigateTo("/pages_restaurant/members/index");
 }
 
+function handleBenefitCenter() {
+	requireLogin(() => navigateTo("/pages_me/benefit/index"));
+}
+
+function handleMembershipCode() {
+	requireLogin(() => navigateTo("/pages_me/membership-code/index"));
+}
+
 function handleEntryClick(entry: PageEntry) {
 	if (entry.action === "change-password") {
 		requireLogin(() => {
@@ -1064,6 +1099,12 @@ function getPasswordErrorText(error: unknown) {
 	min-width: 0;
 }
 
+.profile-row__badge-hit {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+}
+
 .profile-row__name {
 	overflow: hidden;
 	max-width: 270rpx;
@@ -1345,6 +1386,23 @@ function getPasswordErrorText(error: unknown) {
 	display: block;
 	width: 58rpx;
 	height: 58rpx;
+}
+
+.service-row__icon-wrap--membership {
+	background: color-mix(in srgb, var(--theme-primary) 9%, var(--color-page));
+	border-radius: 20rpx;
+}
+
+.service-row__icon-wrap--benefit {
+	background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-page));
+	border-radius: 20rpx;
+}
+
+.service-row__icon-mark {
+	color: var(--theme-primary);
+	font-size: 30rpx;
+	font-weight: 700;
+	line-height: 1;
 }
 
 .service-row__copy {

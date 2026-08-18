@@ -307,6 +307,7 @@ import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 type RecipeTab = "my" | "inspiration" | "collection";
 type SheetMode = "" | "my";
 type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
+const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
 
 interface CategoryItem {
 	id: UUID | "";
@@ -526,6 +527,7 @@ const inlineLoadingText = computed(() => {
 	return loadingTips;
 });
 onShow(() => {
+	consumeRecipeTabIntent();
 	void loadActiveTab();
 });
 
@@ -598,6 +600,21 @@ function switchTab(tab: RecipeTab) {
 		showFilters.value = false;
 	}
 	void loadActiveTab({ source: "switch" });
+}
+
+function consumeRecipeTabIntent() {
+	const intentTab = uniPlatform.storage.getSync<RecipeTab | null>(RECIPE_HOME_INTENT_STORAGE_KEY);
+	if (!intentTab) return;
+	uniPlatform.storage.removeSync(RECIPE_HOME_INTENT_STORAGE_KEY);
+	if (intentTab !== "my" && intentTab !== "inspiration" && intentTab !== "collection") return;
+	if (activeTab.value === intentTab) return;
+	if (activeTab.value === "inspiration" && intentTab !== "inspiration") {
+		resetInspirationFilters();
+	}
+	activeTab.value = intentTab;
+	keyword.value = "";
+	errorText.value = "";
+	showFilters.value = false;
 }
 
 function changeCategory(categoryId: UUID | "") {
