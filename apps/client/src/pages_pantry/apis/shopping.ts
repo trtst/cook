@@ -14,6 +14,42 @@ export interface ShoppingItemSummary {
   updatedAt: IsoDateTime;
 }
 
+export type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
+
+export interface ShoppingGapEventSummary {
+  eventId: UUID;
+  title: string;
+  scheduledAt: IsoDateTime;
+  recipeTitles: string[];
+}
+
+export interface ShoppingGapItem {
+  key: string;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  sourceCount: number;
+  eventCount: number;
+  events: ShoppingGapEventSummary[];
+}
+
+export interface ShoppingGapSection {
+  window: ShoppingGapWindow;
+  title: string;
+  description: string;
+  itemCount: number;
+  eventCount: number;
+  items: ShoppingGapItem[];
+}
+
+export interface ShoppingGapResponse {
+  sections: ShoppingGapSection[];
+  totalItemCount: number;
+  totalEventCount: number;
+  hasLater: boolean;
+  laterItemCount: number;
+}
+
 export interface ShoppingIngredientGroup {
   key: string;
   ingredientId: UUID;
@@ -212,6 +248,12 @@ export interface AddRecipeToShoppingListRequest {
   planItemId?: UUID | null;
 }
 
+export interface AddShoppingGapItemsRequest {
+  operationId: OperationId;
+  window: ShoppingGapWindow;
+  gapKeys: string[];
+}
+
 export interface UpdateShoppingListItemCheckRequest {
   operationId: OperationId;
   version: number;
@@ -327,7 +369,7 @@ export const shoppingApi = {
     );
   },
   previewGap() {
-    return get<ShoppingItemSummary[]>(`${cfg.domain}/api/shopping-gap`);
+    return get<ShoppingGapResponse>(`${cfg.domain}/api/shopping-gap`);
   },
   createEventGap(eventId: UUID, operationId: OperationId) {
     return post<ShoppingItemSummary[]>(`${cfg.domain}/api/dining-events/${encodeURIComponent(String(eventId))}/shopping-gap`, undefined, {
@@ -361,6 +403,10 @@ export const shoppingApi = {
   addRecipeToList(listId: UUID, body: AddRecipeToShoppingListRequest) {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(`${listPath(listId)}/items/from-recipe`, payload, { idempotencyKey: operationId });
+  },
+  addGapItemsToList(listId: UUID, body: AddShoppingGapItemsRequest) {
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(`${listPath(listId)}/items/from-gap`, payload, { idempotencyKey: operationId });
   },
   checkListItem(listId: UUID, itemId: UUID, body: UpdateShoppingListItemCheckRequest) {
     const { operationId, ...payload } = body;

@@ -173,67 +173,52 @@
       </template>
     </SheetShell>
 
-    <SheetShell
+    <InviteShareSheet
       :visible="shareManageVisible"
       :title="shareManageTitle"
       :subtitle="shareManageSubtitle"
+      :member-action="shareMemberAction"
+      :friend-action="shareFriendAction"
+      :error-text="shareLinkError"
+      :show-close-action="canCloseShare"
+      close-action-text="关闭分享"
+      :close-action-disabled="submitting"
       @close="closeShareManager"
+      @member="openShareMembersSheet"
+      @friend="handleShareFriendClick"
+      @close-action="closeShare"
     >
       <template #title-extra>
         <view class="sheet-help" @click.stop="openShareNotice">
           <text class="cookfont icon-qa sheet-help__icon" />
         </view>
       </template>
-      <view v-if="shareActive && shareTarget" class="collaborator-strip">
-        <view class="collaborator-strip__list">
-          <view v-for="member in shareCollaborators" :key="member.userId" class="collaborator-chip">
-            <view class="collaborator-chip__avatar-wrap">
-              <image v-if="member.user.avatarUrl" class="collaborator-chip__avatar-image" :src="member.user.avatarUrl" mode="aspectFill" />
-              <view v-else class="collaborator-chip__avatar">{{ shareAvatarText(member) }}</view>
-              <view
-                v-if="canRemoveShareMember(member)"
-                class="collaborator-chip__remove"
-                @click.stop="removeShareMember(member)"
-              >
-                <text class="cookfont icon-close collaborator-chip__remove-icon" />
+      <template #header>
+        <view v-if="shareActive && shareTarget" class="collaborator-strip">
+          <view class="collaborator-strip__list">
+            <view v-for="member in shareCollaborators" :key="member.userId" class="collaborator-chip">
+              <view class="collaborator-chip__avatar-wrap">
+                <image v-if="member.user.avatarUrl" class="collaborator-chip__avatar-image" :src="member.user.avatarUrl" mode="aspectFill" />
+                <view v-else class="collaborator-chip__avatar">{{ shareAvatarText(member) }}</view>
+                <view
+                  v-if="canRemoveShareMember(member)"
+                  class="collaborator-chip__remove"
+                  @click.stop="removeShareMember(member)"
+                >
+                  <text class="cookfont icon-close collaborator-chip__remove-icon" />
+                </view>
               </view>
+              <text class="collaborator-chip__name">{{ shareMemberName(member) }}</text>
             </view>
-            <text class="collaborator-chip__name">{{ shareMemberName(member) }}</text>
+            <view v-for="slot in shareEmptySlots" :key="`slot-${slot}`" class="collaborator-chip collaborator-chip--ghost">
+              <view class="collaborator-chip__avatar collaborator-chip__avatar--ghost">+</view>
+              <text class="collaborator-chip__name collaborator-chip__name--ghost">虚位待入</text>
+            </view>
           </view>
-          <view v-for="slot in shareEmptySlots" :key="`slot-${slot}`" class="collaborator-chip collaborator-chip--ghost">
-            <view class="collaborator-chip__avatar collaborator-chip__avatar--ghost">+</view>
-            <text class="collaborator-chip__name collaborator-chip__name--ghost">虚位待入</text>
-          </view>
+          <text v-if="sharePendingText" class="collaborator-strip__hint">{{ sharePendingText }}</text>
         </view>
-        <text v-if="sharePendingText" class="collaborator-strip__hint">{{ sharePendingText }}</text>
-      </view>
-      <view class="share-menu">
-        <view class="share-card share-card--button" :class="{ 'share-card--disabled': shareMemberFull || !canUseShareFeature }" @click="openShareMembersSheet">
-          <view class="member-tag">
-            <text class="cookfont member-tag__icon">&#xe6c8;</text>
-          </view>
-          <text class="share-card__label">分享给饭搭子</text>
-          <text class="share-card__hint">{{ !canUseShareFeature ? "协作分享属于会员权益，开通会员后可邀请饭搭子一起维护。" : shareMemberFull ? "当前协作者名额已满，暂时不能再加新的饭搭子。" : "把这张清单发给已有关系的饭搭子，对方确认后一起维护。" }}</text>
-        </view>
-        <button
-          class="share-card share-card--button"
-          :class="{ 'share-card--disabled': shareFriendDisabled }"
-          :disabled="canUseShareFeature && (shareMemberFull || shareLinkLoading || !shareUrl)"
-          :open-type="shareFriendOpenType()"
-          @click="handleShareFriendClick"
-        >
-          <view class="member-tag">
-            <text class="cookfont member-tag__icon">&#xe6c8;</text>
-          </view>
-          <text class="share-card__label">分享给好友</text>
-          <text class="share-card__hint">{{ shareFriendCardHint }}</text>
-        </button>
-      </view>
-      <view v-if="shareLinkError" class="sheet-note sheet-note--error">{{ shareLinkError }}</view>
-      <view v-if="canCloseShare" class="share-actions">
-        <button class="action-pill action-pill--danger" :disabled="submitting" @click="closeShare">关闭分享</button>
-      </view>
-    </SheetShell>
+      </template>
+    </InviteShareSheet>
 
     <SheetShell
       :visible="shareNoticeVisible"
@@ -338,6 +323,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
@@ -453,19 +439,29 @@ const shareMembersSubtitle = computed(() => {
 });
 const canCloseShare = computed(() => shareTarget.value?.role === "OWNER" && shareTarget.value?.status === "ACTIVE" && shareActive.value);
 const shareFriendDisabled = computed(() => !canUseShareFeature.value || shareMemberFull.value || shareLinkLoading.value || !shareUrl.value);
-const shareFriendHint = computed(() => {
-  if (shareMemberFull.value) return "当前协作者名额已满。";
-  if (shareLinkLoading.value) return "正在准备好友分享入口...";
-  if (shareUrl.value) return "点击后直接呼起系统分享，对方打开后需确认加入。";
-  if (shareLinkError.value) return "好友分享入口准备失败，可关闭后重试。";
-  return "正在准备好友分享入口...";
-});
 const shareFriendCardHint = computed(() => {
   if (!canUseShareFeature.value) return "协作分享属于会员权益，开通会员后可邀请一起维护。";
   if (shareMemberFull.value) return "当前协作者名额已满，暂时不能再通过好友加入。";
   if (shareLinkLoading.value) return "正在准备好友分享入口...";
   return "直接转发给好友，对方打开后确认加入。";
 });
+const shareMemberAction = computed(() => ({
+  label: "分享给饭搭子",
+  hint: !canUseShareFeature.value
+    ? "协作分享属于会员权益，开通会员后可邀请饭搭子一起维护。"
+    : shareMemberFull.value
+      ? "当前协作者名额已满，暂时不能再加新的饭搭子。"
+      : "把这张清单发给已有关系的饭搭子，对方确认后一起维护。",
+  disabled: shareMemberFull.value,
+  muted: shareMemberFull.value || !canUseShareFeature.value
+}));
+const shareFriendAction = computed(() => ({
+  label: "分享给好友",
+  hint: shareFriendCardHint.value,
+  disabled: canUseShareFeature.value && (shareMemberFull.value || shareLinkLoading.value || !shareUrl.value),
+  muted: shareFriendDisabled.value,
+  openType: shareFriendOpenType()
+}));
 const shareNoticeLimitText = computed(() => {
   if (!shareTarget.value) return "当前只支持小范围协作，先加入者优先。";
   return `当前最多支持 ${shareTarget.value.memberLimit} 人一起维护，先加入者优先。`;

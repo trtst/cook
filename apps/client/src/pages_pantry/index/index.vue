@@ -285,7 +285,7 @@ import { useSessionStore } from "@/stores/session";
 import { formatDateOnly, parseDateOnly } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
-import { shoppingApi, type ShoppingItemSummary, type ShoppingListSummary } from "../apis/shopping";
+import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
 import {
   buildIngredientAvatarText,
   formatExpireLabel,
@@ -345,7 +345,7 @@ const scrollTop = ref(0);
 const keyword = ref("");
 const activeFilter = ref<FilterKey>("ALL");
 const fridgeItems = ref<FridgeItemSummary[]>([]);
-const gapItems = ref<ShoppingItemSummary[]>([]);
+const gapData = ref<ShoppingGapResponse | null>(null);
 const activeLists = ref<ShoppingListSummary[]>([]);
 const imageMap = ref<Record<string, string>>({});
 const restockSheetVisible = ref(false);
@@ -397,7 +397,7 @@ const expiringCount = computed(() => cards.value.filter(item => item.expireSoon)
 const pendingShoppingCount = computed(() =>
   activeLists.value.reduce((sum, item) => sum + Math.max(item.progressTotalCount - item.progressDoneCount, 0), 0)
 );
-const gapCount = computed(() => gapItems.value.length);
+const gapCount = computed(() => gapData.value?.totalItemCount ?? 0);
 
 const summaryItems = computed(() => [
   { label: "食材数", value: String(ingredientCount.value) },
@@ -531,7 +531,7 @@ async function loadPage() {
       shoppingApi.listLists("ACTIVE")
     ]);
     fridgeItems.value = fridgeResult.items;
-    gapItems.value = gapResult;
+    gapData.value = gapResult;
     activeLists.value = listResult.items;
     imageMap.value = await resolveFridgeImageMap(fridgeResult.items, 18);
   } catch (error) {
