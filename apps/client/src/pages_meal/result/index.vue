@@ -222,7 +222,7 @@ function openMemory(eventId: UUID) {
 .summary-card,
 .section-card {
   margin: var(--space-md) var(--space-page) 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
 }
 
 .notice,

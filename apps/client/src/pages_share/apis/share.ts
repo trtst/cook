@@ -1,26 +1,30 @@
 import { cfg } from "@/config";
 import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
-import type { RecipeContentSnapshot } from "@/apis/recipe";
 import type { MealSlot } from "@/utils/meal-slot";
 
 export interface SharePreviewResponse {
   title: string;
+  planItemId: UUID | null;
+  planDate: string | null;
+  mealSlot: MealSlot | null;
   scheduledAt: IsoDateTime;
-  location: string | null;
-  menu: Pick<RecipeContentSnapshot, "name" | "ingredients">;
-  organizerUid: number;
-}
-
-export interface MemoryShareMenuItem {
-  title: string;
-  coverUrl: string | null;
-  cookName: string | null;
+  coverImageUrl: string | null;
+  organizerName: string | null;
+  menuPreview: string[];
+  countdownText: string | null;
+  locationHint: string | null;
 }
 
 export interface MemoryShareParticipant {
   displayName: string;
   avatarUrl: string | null;
   role: "ORGANIZER" | "PARTICIPANT" | "GUEST";
+}
+
+export interface MemoryShareMenuItem {
+  title: string;
+  coverUrl: string | null;
+  cookName: string | null;
 }
 
 export interface MemorySharePreviewResponse {
@@ -42,9 +46,7 @@ export interface MemoryShareSnapshotResponse extends MemorySharePreviewResponse 
 
 export interface ShareAcceptResponse {
   id: UUID;
-  participants: Array<{
-    id: UUID;
-  }>;
+  planItemId: UUID | null;
 }
 
 export const shareApi = {

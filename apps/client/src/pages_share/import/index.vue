@@ -51,12 +51,9 @@ async function acceptInvite() {
   submitting.value = true;
   errorText.value = "";
   try {
-    const result = await shareApi.acceptInvite(shareToken.value, createOperationId(), guestName.value.trim());
+    await shareApi.acceptInvite(shareToken.value, createOperationId(), guestName.value.trim());
     await uniPlatform.feedback.toast({ title: "已加入饭局", icon: "success" });
-    if (result.participants.length) {
-      await uniPlatform.clipboard.set(String(result.id));
-    }
-    void uniPlatform.navigation.redirectTo("/pages_meal/plan/index");
+    void uniPlatform.navigation.redirectTo("/pages_meal/event/index");
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "加入失败";
   } finally {

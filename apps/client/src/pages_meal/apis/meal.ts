@@ -96,6 +96,7 @@ export interface DiningEventSummary {
     version: number;
   }>;
   participants: DiningEventParticipantSummary[];
+  hasActiveShareLink: boolean;
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
   version: number;
@@ -119,6 +120,7 @@ export interface CreateMealPlanRequest {
   planDate: string;
   mealSlot: MealSlot;
   expectedVersion?: number | null;
+  title?: string | null;
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
     sortOrder: number;
@@ -129,8 +131,31 @@ export interface CreateMealPlanRequest {
   note?: string | null;
 }
 
+export interface UpdateMealPlanTitleRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  title?: string | null;
+}
+
+export interface AddMealPlanItemRequest {
+  operationId: OperationId;
+  planDate: string;
+  mealSlot: MealSlot;
+  recipeId: UUID;
+  recipeVersionId: UUID;
+  slotType?: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
+  purchaseState?: "READY" | "PENDING";
+}
+
 export interface CreateDiningEventRequest {
   operationId: OperationId;
+  scheduledAt: string;
+  location?: string | null;
+}
+
+export interface UpdateDiningEventScheduleRequest {
+  operationId: OperationId;
+  expectedVersion: number;
   scheduledAt: string;
   location?: string | null;
 }
@@ -149,6 +174,15 @@ export interface UpdateDiningEventCoverRequest {
   filePath: string;
 }
 
+export interface ShareDiningEventMembersRequest {
+  operationId: OperationId;
+  targetUserIds: UUID[];
+}
+
+export interface ManageDiningEventParticipantRequest {
+  operationId: OperationId;
+}
+
 export interface GenerateMealPlanCookAssistantRequest {
   operationId: OperationId;
 }
@@ -158,6 +192,11 @@ export interface ClaimCookRequest {
   expectedVersion: number;
   menuItemId: UUID;
   action: "CLAIM" | "RELEASE";
+}
+
+export interface ChooseBringRecipeRequest {
+  operationId: OperationId;
+  recipeId: UUID;
 }
 
 export const mealApi = {
@@ -177,6 +216,16 @@ export const mealApi = {
   createPlan(body: CreateMealPlanRequest) {
     const { operationId, ...payload } = body;
     return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans`, payload, { idempotencyKey: operationId });
+  },
+  updatePlanTitle(planItemId: UUID, body: UpdateMealPlanTitleRequest) {
+    const { operationId, ...payload } = body;
+    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/title`, payload, {
+      idempotencyKey: operationId
+    });
+  },
+  addPlanItem(body: AddMealPlanItemRequest) {
+    const { operationId, ...payload } = body;
+    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans/items`, payload, { idempotencyKey: operationId });
   },
   getCookAssistant(planItemId: UUID) {
     return get<MealPlanCookAssistant>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-assistant`);
@@ -218,6 +267,41 @@ export const mealApi = {
       { idempotencyKey: operationId }
     );
   },
+  disableDiningEventShareLink(eventId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/share-link/disable`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  shareDiningEventMembers(eventId: UUID, body: ShareDiningEventMembersRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/share-members`,
+      payload,
+      { idempotencyKey: operationId }
+    );
+  },
+  revokeDiningEventParticipantInvite(eventId: UUID, participantId: UUID, body: ManageDiningEventParticipantRequest) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/participants/${encodeURIComponent(participantId)}/revoke`,
+      undefined,
+      { idempotencyKey: body.operationId }
+    );
+  },
+  reinviteDiningEventParticipant(eventId: UUID, participantId: UUID, body: ManageDiningEventParticipantRequest) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/participants/${encodeURIComponent(participantId)}/reinvite`,
+      undefined,
+      { idempotencyKey: body.operationId }
+    );
+  },
+  updateDiningEventSchedule(eventId: UUID, body: UpdateDiningEventScheduleRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/schedule`, payload, {
+      idempotencyKey: operationId
+    });
+  },
   async uploadDiningEventCover(eventId: UUID, body: UpdateDiningEventCoverRequest) {
     const result = await uploadFile({
       url: `${cfg.domain}/api/dining-events/${encodeURIComponent(String(eventId))}/cover`,
@@ -250,6 +334,14 @@ export const mealApi = {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/cook`,
+      payload,
+      { idempotencyKey: operationId }
+    );
+  },
+  chooseBringRecipe(eventId: UUID, body: ChooseBringRecipeRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/bring`,
       payload,
       { idempotencyKey: operationId }
     );

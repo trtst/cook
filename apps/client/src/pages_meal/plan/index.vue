@@ -114,16 +114,18 @@
 
                     <view class="meal-card__panel">
                       <view class="meal-card__title-row">
-                        <view class="meal-card__title-main">
-                          <text class="meal-card__title">{{ planCardTitle(plan) }}</text>
-                          <text class="meal-card__slot">{{ slotLabel(plan.mealSlot) }}</text>
+                        <view class="meal-card__head-main">
+                          <view class="meal-card__title-main">
+                            <text class="meal-card__title">{{ planCardTitle(plan) }}</text>
+                            <text class="meal-card__slot">{{ slotLabel(plan.mealSlot) }}</text>
+                          </view>
+                          <view class="meal-card__meta">
+                            <text class="meal-card__meta-text">{{ planDishCountText(plan) }}</text>
+                            <text v-if="planDurationText(plan)" class="meal-card__meta-divider">·</text>
+                            <text v-if="planDurationText(plan)" class="meal-card__meta-text">{{ planDurationText(plan) }}</text>
+                          </view>
                         </view>
-                        <text v-if="plan.status === 'COMPLETED'" class="meal-card__state">已完成</text>
-                      </view>
-                      <view class="meal-card__meta">
-                        <text class="meal-card__meta-text">{{ planDishCountText(plan) }}</text>
-                        <text v-if="planDurationText(plan)" class="meal-card__meta-divider">·</text>
-                        <text v-if="planDurationText(plan)" class="meal-card__meta-text">{{ planDurationText(plan) }}</text>
+                        <text v-if="planCardStateText(plan)" class="meal-card__state">{{ planCardStateText(plan) }}</text>
                       </view>
 
                       <view class="meal-card__menu-list">
@@ -141,7 +143,7 @@
                         </view>
                       </view>
 
-                      <view class="meal-card__footer">
+                      <view v-if="canShowShoppingAction(plan)" class="meal-card__footer">
                         <view class="meal-card__actions">
                           <button
                             class="action-pill action-pill--primary meal-card__action-button"
@@ -318,7 +320,7 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad, onShow } from "@dcloudio/uni-app";
+import { onHide, onLoad, onShow, onUnload } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
@@ -339,6 +341,7 @@ import {
   buildMealSlotTitle,
   createEmptyMealCalendarMark,
   formatMealSlot,
+  mealSlotDefaultTime,
   mealSlotOrder,
   resolveMealSlotTone,
   type MealCalendarMark,
@@ -429,7 +432,9 @@ const shoppingCreateName = ref("");
 const shoppingSubmitting = ref(false);
 const shoppingPlan = ref<MealPlanSummary | null>(null);
 const emptyDockOpen = ref(false);
+const nowMs = ref(Date.now());
 let planSortPressTimer: ReturnType<typeof setTimeout> | null = null;
+let planNowTimer: ReturnType<typeof setInterval> | null = null;
 let planSortPressId: UUID | "" = "";
 let planSortPressTouchY = 0;
 const {
@@ -528,8 +533,17 @@ onLoad(query => {
 });
 
 onShow(() => {
+  startPlanNowTimer();
   if (!sessionStore.isLoggedIn) return;
   void loadPage();
+});
+
+onHide(() => {
+  stopPlanNowTimer();
+});
+
+onUnload(() => {
+  stopPlanNowTimer();
 });
 
 watch(
@@ -803,6 +817,10 @@ function handleEmptyDockAction(action: PlanDockActionKey) {
 
 async function addPlanToShoppingList(plan: MealPlanSummary) {
   if (shoppingSubmitting.value) return;
+  if (isPlanExpired(plan, nowMs.value) || plan.status === "COMPLETED") {
+    await uniPlatform.feedback.toast({ title: "这条计划已经结束，不能再加入采购清单", icon: "none" });
+    return;
+  }
   if (!hasPlanShoppingRecipes(plan)) {
     await uniPlatform.feedback.toast({ title: "当前餐次没有可加入采购清单的菜谱", icon: "none" });
     return;
@@ -838,7 +856,13 @@ function planDishCountText(plan: MealPlanSummary) {
 }
 
 function planCardTitle(plan: MealPlanSummary) {
-  return slotPlanTitle(plan.mealSlot);
+  return plan.title?.trim() || slotPlanTitle(plan.mealSlot);
+}
+
+function planCardStateText(plan: MealPlanSummary) {
+  if (plan.status === "COMPLETED") return "已完成";
+  if (isPlanExpired(plan, nowMs.value)) return "已结束";
+  return "";
 }
 
 function recipeDurationMinutes(value: RecipeDuration | null) {
@@ -917,6 +941,21 @@ function hasPlanShoppingRecipes(plan: MealPlanSummary) {
   return plan.menuItems.some(item => isUuid(item.recipeId) && isUuid(item.recipeVersionId));
 }
 
+function canShowShoppingAction(plan: MealPlanSummary) {
+  return !isPlanExpired(plan, nowMs.value) && plan.status !== "COMPLETED";
+}
+
+function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">) {
+  const localDate = new Date(`${plan.planDate}T${mealSlotDefaultTime(plan.mealSlot)}:00`);
+  const time = localDate.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function isPlanExpired(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">, currentMs = Date.now()) {
+  const deadlineMs = resolvePlanDeadlineMs(plan);
+  return deadlineMs > 0 && deadlineMs <= currentMs;
+}
+
 function closeShoppingSheet() {
   shoppingSheetVisible.value = false;
 }
@@ -975,6 +1014,11 @@ async function createShoppingList() {
 
 async function confirmAddToShoppingList() {
   if (!shoppingPlan.value || !selectedShoppingListId.value || shoppingSubmitting.value) return;
+  if (isPlanExpired(shoppingPlan.value, nowMs.value) || shoppingPlan.value.status === "COMPLETED") {
+    closeShoppingSheet();
+    await uniPlatform.feedback.toast({ title: "这条计划已经结束，不能再加入采购清单", icon: "none" });
+    return;
+  }
   shoppingSubmitting.value = true;
   try {
     await shoppingListApi.addPlanToList(selectedShoppingListId.value, {
@@ -1036,6 +1080,20 @@ function clearPlanSortPressTimer() {
   if (!planSortPressTimer) return;
   clearTimeout(planSortPressTimer);
   planSortPressTimer = null;
+}
+
+function startPlanNowTimer() {
+  if (planNowTimer) return;
+  nowMs.value = Date.now();
+  planNowTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
+}
+
+function stopPlanNowTimer() {
+  if (!planNowTimer) return;
+  clearInterval(planNowTimer);
+  planNowTimer = null;
 }
 
 function resetPlanSortDrag() {
@@ -1562,12 +1620,16 @@ function clearPageState() {
   gap: 16rpx;
 }
 
-.meal-card__title-main {
+.meal-card__head-main {
   flex: 1;
   min-width: 0;
+}
+
+.meal-card__title-main {
   display: flex;
   align-items: center;
   gap: 12rpx;
+  min-width: 0;
 }
 
 .meal-card__title {

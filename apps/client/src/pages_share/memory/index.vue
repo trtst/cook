@@ -1,10 +1,10 @@
 <template>
   <page-meta :page-style="pageStyle" />
-  <Layout title="饭搭子卡">
+  <Layout title="活动回忆卡">
     <Login
       v-if="mode === 'event' && !sessionStore.isLoggedIn"
-      title="登录后生成饭搭子卡"
-      description="公开饭搭子卡先生成不可变快照，只保留菜单、掌勺标记、可选成员摘要和一句话。"
+      title="登录后生成活动回忆卡"
+      description="公开回忆卡会先生成不可变快照，只保留菜单、掌勺标记、可选成员摘要和一句话。"
     />
 
     <template v-else>
@@ -14,11 +14,11 @@
       </view>
 
       <view v-else-if="loading && !cardData" class="notice">
-        <text class="notice__text">饭搭子卡加载中...</text>
+        <text class="notice__text">活动回忆卡加载中...</text>
       </view>
 
       <view v-else-if="!cardData" class="empty-wrap">
-        <Empty title="还没有可展示的饭搭子卡" description="从已完成饭局生成一张公开快照，或通过公开分享链接查看不可变卡片。" />
+        <Empty title="还没有可展示的活动回忆卡" description="从已结束饭局生成一张公开快照，或通过公开分享链接查看不可变卡片。" />
       </view>
 
       <template v-else>
@@ -240,11 +240,11 @@ const currentSharePath = computed(() => {
   return "";
 });
 const shareTitle = computed(() => {
-  if (!cardData.value) return "饭搭子卡";
+  if (!cardData.value) return "活动回忆卡";
   if (cardData.value.planDate && cardData.value.mealSlot) {
     return `${cardData.value.planDate} ${formatMealSlot(cardData.value.mealSlot)} · ${cardData.value.title}`;
   }
-  return `${cardData.value.title} · 饭搭子卡`;
+  return `${cardData.value.title} · 活动回忆卡`;
 });
 const shareImageUrl = computed(() => cardData.value?.menuItems.find(item => Boolean(item.coverUrl))?.coverUrl ?? undefined);
 
@@ -315,7 +315,7 @@ async function loadPage() {
       sharePreview.value = toCardView(await shareApi.getMemoryPreview(shareToken.value));
     } catch (error) {
       sharePreview.value = null;
-      errorText.value = error instanceof Error ? error.message : "饭搭子卡加载失败";
+      errorText.value = error instanceof Error ? error.message : "活动回忆卡加载失败";
     } finally {
       loading.value = false;
     }
@@ -348,7 +348,7 @@ async function loadPage() {
   } catch (error) {
     eventDetail.value = null;
     shareSnapshot.value = null;
-    errorText.value = error instanceof Error ? error.message : "饭搭子卡加载失败";
+    errorText.value = error instanceof Error ? error.message : "活动回忆卡加载失败";
   } finally {
     loading.value = false;
   }
@@ -360,10 +360,10 @@ async function createShare() {
   errorText.value = "";
   try {
     shareSnapshot.value = await shareApi.createMemoryShare(eventId.value, createOperationId(), showParticipants.value, normalizedCaption.value);
-    await uniPlatform.feedback.toast({ title: "已生成饭搭子卡", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已生成活动回忆卡", icon: "success" });
   } catch (error) {
     shareSnapshot.value = null;
-    errorText.value = error instanceof Error ? error.message : "饭搭子卡生成失败";
+    errorText.value = error instanceof Error ? error.message : "活动回忆卡生成失败";
   } finally {
     submitting.value = false;
   }

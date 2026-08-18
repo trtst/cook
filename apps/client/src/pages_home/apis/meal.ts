@@ -41,6 +41,7 @@ export interface CreateMealPlanRequest {
   planDate: string;
   mealSlot: MealSlot;
   expectedVersion?: number | null;
+  title?: string | null;
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE" | null;
     sortOrder: number;

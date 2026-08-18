@@ -74,10 +74,7 @@
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
-          <view v-if="errorText" class="notice notice--error" @click="loadEvents">
-            {{ errorText }}
-          </view>
-          <view v-else-if="loading && !eventCards.length" class="notice">正在同步饭局...</view>
+          <view v-if="loading && !eventCards.length" class="notice">正在同步饭局...</view>
           <view v-else-if="partialErrorText" class="notice notice--soft">
             {{ partialErrorText }}
           </view>
@@ -92,42 +89,40 @@
               @click="openEvent(item)"
             >
               <view class="event-card__top">
-                <view class="event-card__badges">
-                  <text class="event-card__badge event-card__badge--role">{{ item.roleText }}</text>
-                  <text class="event-card__badge" :class="item.statusClass">{{ item.statusText }}</text>
+                <image v-if="item.coverImageUrl" class="event-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
+                <view v-else class="event-card__cover event-card__cover--empty">
+                  <text class="event-card__cover-empty">{{ item.coverText }}</text>
                 </view>
                 <text v-if="item.focusText" class="event-card__focus">{{ item.focusText }}</text>
               </view>
 
-              <view class="event-card__main">
-                <view class="event-card__main-shell" :class="{ 'event-card__main-shell--with-cover': Boolean(item.coverImageUrl) }">
-                  <view class="event-card__main-text">
-                    <text class="event-card__title">{{ item.title }}</text>
-                    <text class="event-card__desc">{{ item.description }}</text>
+              <view class="event-card__body">
+                <view class="event-card__main">
+                  <text class="event-card__title">{{ item.title }}</text>
+                </view>
+
+                <view class="event-card__rows">
+                  <view class="event-card__row">
+                    <text class="cookfont icon-time event-card__row-icon" />
+                    <text class="event-card__row-text">{{ item.scheduleText }}</text>
                   </view>
-                  <image v-if="item.coverImageUrl" class="event-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
+                  <view class="event-card__row">
+                    <text class="cookfont icon-notice event-card__row-icon" />
+                    <text class="event-card__row-text">{{ item.statLine }}</text>
+                  </view>
                 </view>
-              </view>
 
-              <view class="event-card__rows">
-                <view class="event-card__row">
-                  <text class="cookfont icon-time event-card__row-icon" />
-                  <text class="event-card__row-text">{{ item.scheduleText }}</text>
+                <scroll-view v-if="item.menuPreview.length" scroll-x class="event-card__menu" show-scrollbar="false">
+                  <view class="event-card__menu-track">
+                    <text v-for="title in item.menuPreview" :key="`${item.id}-${title}`" class="event-card__menu-chip">{{ title }}</text>
+                    <text v-if="item.moreMenuCount" class="event-card__menu-chip event-card__menu-chip--more">+{{ item.moreMenuCount }}</text>
+                  </view>
+                </scroll-view>
+
+                <view class="event-card__footer">
+                  <text class="event-card__organizer">{{ item.organizerText }}</text>
+                  <text class="event-card__action">{{ item.actionText }}</text>
                 </view>
-                <view class="event-card__row">
-                  <text class="cookfont icon-notice event-card__row-icon" />
-                  <text class="event-card__row-text">{{ item.statLine }}</text>
-                </view>
-              </view>
-
-              <view v-if="item.menuPreview.length" class="event-card__menu">
-                <text v-for="title in item.menuPreview" :key="`${item.id}-${title}`" class="event-card__menu-chip">{{ title }}</text>
-                <text v-if="item.moreMenuCount" class="event-card__menu-chip event-card__menu-chip--more">+{{ item.moreMenuCount }}</text>
-              </view>
-
-              <view class="event-card__footer">
-                <text class="event-card__organizer">{{ item.organizerText }}</text>
-                <text class="event-card__action">{{ item.actionText }}</text>
               </view>
             </view>
           </view>
@@ -135,7 +130,8 @@
           <Empty
             v-else-if="!loading"
             class="page-empty"
-            title="这一栏还没有饭局"
+            :art="emptyStateArt"
+            title="还没有饭局安排"
             :description="emptyDescription"
           />
         </scroll-view>
@@ -211,6 +207,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, mealSlotDefaultTime } from "@/utils/meal-slot";
+import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { formatDateTimeMinute } from "../utils/date";
 import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
 
@@ -224,13 +221,10 @@ type EventCardItem = {
   planDate: string;
   stage: EventStage;
   role: Exclude<RoleFilter, "ALL">;
-  roleText: string;
   title: string;
-  description: string;
   coverImageUrl: string | null;
+  coverText: string;
   scheduleText: string;
-  statusText: string;
-  statusClass: string;
   focusText: string;
   actionText: string;
   organizerText: string;
@@ -245,7 +239,6 @@ const sessionStore = useSessionStore();
 
 const legacyRedirecting = ref(false);
 const loading = ref(false);
-const errorText = ref("");
 const partialErrorText = ref("");
 const stage = ref<EventStage>("TODO");
 const roleFilter = ref<RoleFilter>("ALL");
@@ -305,21 +298,9 @@ const visibleCards = computed(() =>
     .sort((left, right) => compareCards(left, right, stage.value))
 );
 
-const emptyDescription = computed(() => {
-  if (stage.value === "TODO") {
-    if (roleFilter.value === "PARTICIPANT") return "当前没有等你回应的饭局，别人邀请你之后会先出现在这里。";
-    if (roleFilter.value === "ORGANIZER") return "你发起的饭局暂时没有待推进项，先去计划页发起一场新的也可以。";
-    return "当前没有待你处理的饭局，先去计划页发起，或者等别人邀请你加入。";
-  }
-  if (stage.value === "ACTIVE") {
-    if (roleFilter.value === "PARTICIPANT") return "你参与的饭局暂时没有正在进行中的记录。";
-    if (roleFilter.value === "ORGANIZER") return "你发起的饭局暂时没有正在进行中的记录。";
-    return "目前没有进行中的饭局，等新的一场局开始后再来看。";
-  }
-  if (roleFilter.value === "PARTICIPANT") return "你参加过的结束态饭局还没有出现在这里。";
-  if (roleFilter.value === "ORGANIZER") return "你发起过的结束态饭局还没有出现在这里。";
-  return "还没有结束态饭局，等第一场饭局收尾后，这里会留下记录。";
-});
+const emptyDescription = computed(
+  () => "先把时间约起来，菜单后面再补也没关系。你发起的和参与的饭局，后面都会收在这里。"
+);
 
 onLoad(query => {
   const planItemId = parseQueryText(query?.planItemId);
@@ -358,7 +339,6 @@ function stageCount(target: EventStage) {
 async function loadEvents() {
   if (!sessionStore.isLoggedIn || loading.value) return;
   loading.value = true;
-  errorText.value = "";
   partialErrorText.value = "";
 
   try {
@@ -390,7 +370,7 @@ async function loadEvents() {
       .map(item => buildEventCard(item.value.plan, item.value.event));
     syncStageWithRole();
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "饭局加载失败";
+    await uniPlatform.feedback.toast({ title: "饭局同步失败，请稍后重试", icon: "none" });
   } finally {
     loading.value = false;
   }
@@ -417,16 +397,12 @@ function buildEventCard(plan: MealPlanSummary, event: DiningEventSummary): Event
   const acceptedCount = event.participants.filter(item => item.status === "ACCEPTED").length;
   const bringCount = event.participants.filter(item => Boolean(item.bringRecipeTitle?.trim())).length;
   const participantCount = event.participants.length;
-  const menuPreview = event.menuItems.slice(0, 3).map(item => item.title);
+  const menuPreview = event.menuItems.slice(0, 6).map(item => item.title);
   const menuCount = event.menuItems.length;
   const scheduleTime = Date.parse(event.scheduledAt);
+  const eventExpired = isEventExpired(event);
   const stageValue = resolveStage(event, role, myParticipant?.status ?? null);
   const title = buildCardTitle(plan, event);
-  const description = event.title?.trim()
-    ? event.title.trim()
-    : menuPreview.length
-      ? `这顿饭先定了 ${menuPreview.join("、")}${menuCount > menuPreview.length ? " 等菜" : ""}。`
-      : "这顿饭先把时间和菜单定下来。";
 
   return {
     id: `${plan.id}-${event.id}`,
@@ -435,15 +411,12 @@ function buildEventCard(plan: MealPlanSummary, event: DiningEventSummary): Event
     planDate: plan.planDate,
     stage: stageValue,
     role,
-    roleText: role === "ORGANIZER" ? "我发起的" : "我参与的",
     title,
-    description,
     coverImageUrl: event.coverImageUrl,
+    coverText: `${formatMealSlot(plan.mealSlot) || "这顿饭"}封面待补`,
     scheduleText: buildScheduleText(event.scheduledAt),
-    statusText: formatEventStatus(event.status),
-    statusClass: resolveStatusClass(event.status),
     focusText: resolveFocusText(event, role, myParticipant?.status ?? null),
-    actionText: event.status === "COMPLETED" ? "回看这顿饭" : "查看详情",
+    actionText: event.status === "COMPLETED" || eventExpired ? "回看这顿饭" : "查看详情",
     organizerText: event.organizerName?.trim()
       ? `发起人 · ${event.organizerName.trim()}`
       : role === "ORGANIZER"
@@ -457,11 +430,9 @@ function buildEventCard(plan: MealPlanSummary, event: DiningEventSummary): Event
 }
 
 function buildCardTitle(plan: MealPlanSummary, event: DiningEventSummary) {
-  const dateText = formatPlanDate(plan.planDate);
-  const slotText = formatMealSlot(plan.mealSlot) || "这顿饭";
-  if (event.status === "COMPLETED") return `${dateText} · ${slotText}已开饭`;
-  if (event.status === "CANCELLED") return `${dateText} · ${slotText}已取消`;
-  return `${dateText} · ${slotText}`;
+  const title = event.title?.trim() || plan.title?.trim();
+  if (title) return title;
+  return `${formatMealSlot(plan.mealSlot) || "这顿饭"}饮食计划`;
 }
 
 function buildStatLine(acceptedCount: number, participantCount: number, menuCount: number, bringCount: number) {
@@ -475,6 +446,7 @@ function resolveStage(
   role: EventCardItem["role"],
   myStatus: DiningEventSummary["participants"][number]["status"] | null
 ): EventStage {
+  if (isEventExpired(event)) return "DONE";
   if (event.status === "COMPLETED" || event.status === "CANCELLED") return "DONE";
   if (role === "PARTICIPANT" && myStatus === "INVITED") return "TODO";
   if (role === "ORGANIZER" && event.status === "PLANNED") return "TODO";
@@ -486,6 +458,7 @@ function resolveFocusText(
   role: EventCardItem["role"],
   myStatus: DiningEventSummary["participants"][number]["status"] | null
 ) {
+  if (isEventExpired(event)) return "这场局已结束";
   if (event.status === "COMPLETED") return "可看饭搭子卡";
   if (event.status === "CANCELLED") return "这场局已取消";
   if (role === "PARTICIPANT" && myStatus === "INVITED") return "等你回应";
@@ -496,26 +469,18 @@ function resolveFocusText(
   return "";
 }
 
-function resolveStatusClass(status: DiningEventSummary["status"]) {
-  if (status === "COMPLETED") return "event-card__badge--done";
-  if (status === "CANCELLED") return "event-card__badge--cancelled";
-  if (status === "CONFIRMED") return "event-card__badge--confirmed";
-  return "event-card__badge--planned";
-}
-
-function formatEventStatus(status: DiningEventSummary["status"]) {
-  if (status === "PLANNED") return "组织中";
-  if (status === "CONFIRMED") return "已确认";
-  if (status === "CANCELLED") return "已取消";
-  return "已完成";
-}
-
 function buildScheduleText(value: string) {
   const fullText = formatDateTimeMinute(value, "");
   if (!fullText) return "时间待定";
   const [dateText, timeText] = fullText.split(" ");
   if (!dateText || !timeText) return fullText;
   return `${dateText.slice(5)} ${timeText}`;
+}
+
+function isEventExpired(event: DiningEventSummary) {
+  if (event.status === "CANCELLED" || event.status === "COMPLETED" || event.completedAt) return false;
+  const scheduledAt = Date.parse(event.scheduledAt);
+  return Number.isFinite(scheduledAt) && scheduledAt <= Date.now();
 }
 
 function formatPlanDate(value: string) {
@@ -816,10 +781,6 @@ function todayText() {
   line-height: 1.6;
 }
 
-.notice--error {
-  color: var(--color-danger);
-}
-
 .notice--soft {
   background: color-mix(in srgb, var(--color-warning-soft) 68%, var(--color-surface) 32%);
 }
@@ -827,14 +788,16 @@ function todayText() {
 .event-list {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: var(--space-page);
   padding-top: 20rpx;
-  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .event-card {
-  padding: 24rpx;
-  border-radius: 28rpx;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
   transition: transform 180ms ease, box-shadow 180ms ease;
@@ -848,71 +811,33 @@ function todayText() {
 }
 
 .event-card__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18rpx;
+  position: relative;
+  overflow: hidden;
+  height: 260rpx;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--entry-photo-bg) 88%, white 12%) 0%, color-mix(in srgb, var(--entry-board-bg) 88%, var(--entry-side-mint-bg) 12%) 100%);
 }
 
-.event-card__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-
-.event-card__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 42rpx;
-  padding: 0 14rpx;
-  border-radius: 999rpx;
-  font-size: 20rpx;
-  font-weight: 600;
-}
-
-.event-card__badge--role {
-  background: color-mix(in srgb, var(--color-surface-muted) 78%, transparent);
-  color: var(--color-text-secondary);
-}
-
-.event-card__badge--planned {
-  background: color-mix(in srgb, var(--color-warning-soft) 78%, var(--color-surface) 22%);
-  color: var(--color-warning-text);
-}
-
-.event-card__badge--confirmed,
-.event-card__badge--done {
-  background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface) 22%);
-  color: var(--color-primary);
-}
-
-.event-card__badge--cancelled {
-  background: color-mix(in srgb, var(--color-danger-soft) 78%, var(--color-surface) 22%);
-  color: var(--color-danger-text);
+.event-card__body {
+  padding: 24rpx;
 }
 
 .event-card__focus {
+  position: absolute;
+  top: 18rpx;
+  right: 18rpx;
+  z-index: 2;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
   color: var(--color-warning-text);
   font-size: 22rpx;
   font-weight: 600;
-  line-height: 1.5;
-  text-align: right;
+  line-height: 1;
 }
 
 .event-card__main {
-  margin-top: 18rpx;
-}
-
-.event-card__main-shell {
-  display: flex;
-  align-items: flex-start;
-  gap: 18rpx;
-}
-
-.event-card__main-shell--with-cover .event-card__main-text {
-  min-width: 0;
-  flex: 1;
+  margin-top: 0;
 }
 
 .event-card__title {
@@ -923,20 +848,23 @@ function todayText() {
   line-height: 1.28;
 }
 
-.event-card__desc {
-  display: block;
-  margin-top: 12rpx;
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.7;
+.event-card__cover {
+  width: 100%;
+  height: 100%;
 }
 
-.event-card__cover {
-  width: 140rpx;
-  height: 108rpx;
-  flex: 0 0 auto;
-  border-radius: 20rpx;
-  background: var(--color-surface-muted);
+.event-card__cover--empty {
+  display: flex;
+  align-items: flex-end;
+  padding: 22rpx;
+  box-sizing: border-box;
+}
+
+.event-card__cover-empty {
+  color: color-mix(in srgb, var(--entry-ink) 72%, white 28%);
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .event-card__rows {
@@ -968,17 +896,21 @@ function todayText() {
 }
 
 .event-card__menu {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
   margin-top: 18rpx;
+  white-space: nowrap;
+}
+
+.event-card__menu-track {
+  display: inline-flex;
+  gap: 12rpx;
+  padding-right: 24rpx;
 }
 
 .event-card__menu-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  max-width: 100%;
+  flex: 0 0 auto;
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
   background: color-mix(in srgb, var(--color-primary-soft) 66%, var(--color-surface) 34%);
@@ -1074,7 +1006,6 @@ function todayText() {
 .sheet-actions {
   display: flex;
   gap: 20rpx;
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .sheet-actions__button {
