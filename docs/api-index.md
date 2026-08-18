@@ -146,7 +146,9 @@
 | Unit | POST | `/units` | 提交单位建议 |
 | Unit | GET | `/unit-recommendations` | 分页查询我的单位建议记录 |
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划 |
+| Meal | POST | `/meal-plans/{planItemId}/title` | 更新一个计划餐次标题 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
+| Meal | POST | `/meal-plans/{planItemId}/title` | 单独修改一个计划餐次标题 |
 | MealPoll | GET | `/meal-polls` | 查询当前饭搭子的点菜征集摘要列表 |
 | MealPoll | POST | `/meal-polls` | 发起点菜征集 |
 | MealPoll | GET | `/meal-polls/{pollId}` | 点菜征集详情与结果汇总 |
@@ -155,6 +157,7 @@
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
 | DiningGroupActivity | GET | `/dining-group-activities` | 查询当前饭搭子最近轻动态 |
 | DiningEvent | GET | `/dining-events/{eventId}` | 饭局详情 |
+| DiningEvent | POST | `/dining-events/{eventId}/schedule` | 修改饭局时间 |
 | DiningEvent | POST | `/dining-events/{eventId}/cook` | 对已确认菜单执行“我来做”认领或释放 |
 | DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张不可变饭搭子卡快照 |
 | DiningEvent | POST | `/dining-events/{eventId}/invite-group` | 邀请饭搭子成员 |
@@ -172,6 +175,7 @@
 | Shopping | POST | `/shopping-items/from-recipe` | 把一份可读菜谱固定版本写入旧购物事实链路 |
 | Shopping | POST | `/shopping-items/{itemId}/status` | 更新个人购物事实状态，供旧超市模式兼容使用 |
 | Shopping | POST | `/shopping-items/group-status` | 更新旧购物页聚合板分组状态 |
+| ShoppingList | POST | `/shopping-lists/{listId}/items/from-gap` | 把缺口页选中的食材写入目标购物清单 |
 | Shopping | GET | `/shopping-gap` | 查询当前用户待处理饭局汇总缺口 |
 | Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局购物缺口 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |

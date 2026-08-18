@@ -253,6 +253,7 @@ GET  /home-entries
 GET  /users/me
 GET  /users/me/medals
 PUT  /users/me
+POST /membership-codes/redeem
 PUT  /users/me/display
 PUT  /users/me/password
 ```
@@ -468,6 +469,15 @@ interface ChangeCurrentPasswordRequest {
 interface ChangeCurrentPasswordResult {
   changedAt: IsoDateTime;
 }
+
+interface RedeemMembershipCodeRequest {
+  code: string;
+}
+
+interface RedeemMembershipCodeResult {
+  membership: UserMembership;
+  redeemedAt: IsoDateTime;
+}
 ```
 
 `POST /auth/code-login` 是当前客户端主登录入口。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
@@ -481,6 +491,8 @@ interface ChangeCurrentPasswordResult {
 `GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回 `404`。
 
 `GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
+
+`POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、当前会员冲突校验、有效会员到账、单码置已用和审计。失败统一返回“兑换码无效或不可用”，不向客户端暴露“已使用 / 已停用 / 未上架 / 超过体验上限”等内部状态；请求过快时返回 `429`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
 
 ### 本人饭搭子关系
 
@@ -739,6 +751,13 @@ DELETE /admin/ingredients/{ingredientId}/image
 POST /admin/ingredients/reorder
 GET  /admin/pending-ingredients
 POST /admin/pending-ingredients/{ingredientId}/review
+GET  /admin/membership-codes/skus
+GET  /admin/membership-codes/batches
+POST /admin/membership-codes/batches
+POST /admin/membership-codes/batches/{batchId}/status
+POST /admin/membership-codes/batches/{batchId}/generate
+GET  /admin/membership-codes
+POST /admin/membership-codes/{codeId}/disable
 ```
 
 后台饭搭子状态筛选支持 `ACTIVE / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
@@ -788,6 +807,90 @@ interface AdminUserEntitlementResponse {
 }
 ```
 
+```ts
+type MembershipCodeKind = "FORMAL" | "TRIAL";
+type MembershipCodeStatus = "ACTIVE" | "REDEEMED" | "DISABLED";
+type MembershipCodeBatchWindowState = "NO_LIMIT" | "PENDING" | "ACTIVE" | "EXPIRED";
+
+interface AdminMembershipSkuItem {
+  id: UUID;
+  code: "PLUS_30D" | "PRO_30D" | "PRO_TRIAL_1D" | "PRO_TRIAL_3D" | "PRO_TRIAL_7D";
+  kind: MembershipCodeKind;
+  tier: EntitlementTier;
+  durationDays: number;
+  redeemEnabled: boolean;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface AdminMembershipSkuListResponse {
+  items: AdminMembershipSkuItem[];
+  syncedAt: IsoDateTime;
+}
+
+interface CreateAdminMembershipCodeBatchRequest {
+  skuCode: AdminMembershipSkuItem["code"];
+  name: string;
+  redeemEnabled: boolean;
+  startsAt?: IsoDateTime | null;
+  endsAt?: IsoDateTime | null;
+}
+
+interface SetAdminMembershipCodeBatchStatusRequest {
+  redeemEnabled: boolean;
+  expectedVersion: number;
+}
+
+interface AdminMembershipCodeBatchItem {
+  id: UUID;
+  sku: AdminMembershipSkuItem;
+  name: string;
+  redeemEnabled: boolean;
+  startsAt: IsoDateTime | null;
+  endsAt: IsoDateTime | null;
+  windowState: MembershipCodeBatchWindowState;
+  version: number;
+  codeCount: number;
+  activeCodeCount: number;
+  redeemedCodeCount: number;
+  disabledCodeCount: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface GenerateAdminMembershipCodesRequest {
+  quantity: number;
+}
+
+interface GeneratedMembershipCodeRow {
+  code: string;
+  codeMask: string;
+}
+
+interface AdminMembershipCodeItem {
+  id: UUID;
+  batchId: UUID;
+  batchName: string;
+  skuCode: AdminMembershipSkuItem["code"];
+  kind: MembershipCodeKind;
+  tier: EntitlementTier;
+  durationDays: number;
+  codeMask: string;
+  status: MembershipCodeStatus;
+  redeemedBy: { id: UUID; uid: number; nickname: string | null } | null;
+  redeemedAt: IsoDateTime | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+interface AdminGenerateMembershipCodesResult {
+  batch: AdminMembershipCodeBatchItem;
+  generatedCount: number;
+  exportedAt: IsoDateTime;
+  codes: GeneratedMembershipCodeRow[];
+}
+```
+
 `POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status` 和 `POST /admin/users/{userId}/reset-password` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用和重置密码；不支持物理删除用户，也不通过后台直接改用户归属数据。
 
 用户 token 绑定服务端 `sessionVersion`。后台启用、禁用或重置密码时递增该版本；此前签发的 token 从下一次鉴权请求起统一返回 `401`，重新启用用户不会恢复旧 token。
@@ -795,6 +898,8 @@ interface AdminUserEntitlementResponse {
 用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。它是后台审计视图，按领域分段返回，不作为小程序的聚合契约。背景图能力当前统一返回 `false`。
 
 `GET /admin/app-config`、`POST /admin/app-config/login-image` 和 `DELETE /admin/app-config/login-image` 共同维护登录弹窗图片。它们只服务这一条已确认配置，不扩成通用配置中心或通用素材库。上传成功和清空成功都返回最新 `AppConfigResponse`。
+
+`GET /admin/membership-codes/skus`、`GET /admin/membership-codes/batches`、`POST /admin/membership-codes/batches`、`POST /admin/membership-codes/batches/{batchId}/status`、`POST /admin/membership-codes/batches/{batchId}/generate`、`GET /admin/membership-codes` 和 `POST /admin/membership-codes/{codeId}/disable` 共同组成后台会员兑换码治理面。固定 SKU 目录由服务端自动同步，当前只允许 `PLUS_30D / PRO_30D / PRO_TRIAL_1D / PRO_TRIAL_3D / PRO_TRIAL_7D` 五项；后台不得新增第六种 SKU，也不得基于其他数据库遗留 SKU 发码。批次读取固定返回分页 `PageResult<AdminMembershipCodeBatchItem>`，并附带 `windowState + version + codeCount / activeCodeCount / redeemedCodeCount / disabledCodeCount`，用于后台判断上架状态、时间窗和发码规模。创建批次时只收 `skuCode / name / redeemEnabled / startsAt / endsAt` 最小字段，`startsAt < endsAt` 由服务端校验；切换上下架时必须带 `expectedVersion`，避免多人后台覆盖。`POST /admin/membership-codes/batches/{batchId}/generate` 只收 `quantity`，单次上限 `1000`；服务端高熵生成明文码，但数据库、审计和后台列表只保留 `codeHash + codeMask`，明文码只在该次响应的 `codes[]` 中返回一次供导出。`GET /admin/membership-codes` 只返回掩码、批次、SKU、状态、使用人和使用时间；若后台输入完整兑换码查询，服务端只做哈希精确匹配，不回显明文。`POST /admin/membership-codes/{codeId}/disable` 仅允许停用未使用兑换码，已使用码不得再改状态。
 
 `GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/status`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。`POST /admin/home-entries/{placement}/status` 当前只允许 `QUICK_1 ... QUICK_4`，请求体固定提交 `status + expectedVersion`；`LISTED` 表示该四宫格入口会出现在首页，`UNLISTED` 表示该坑位仍保留配置但不在首页展示，主卡 `MAIN / SIDE_TOP / SIDE_BOTTOM` 不支持下架。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
 
@@ -910,6 +1015,10 @@ POST /meal-plans/{planItemId}/dining-event
 GET  /dining-group-activities
 GET  /dining-events/{eventId}
 POST /dining-events/{eventId}/share-link
+POST /dining-events/{eventId}/share-link/disable
+POST /dining-events/{eventId}/share-members
+POST /dining-events/{eventId}/participants/{participantId}/revoke
+POST /dining-events/{eventId}/participants/{participantId}/reinvite
 POST /dining-events/{eventId}/cover
 POST /dining-events/{eventId}/cook
 POST /dining-events/{eventId}/invite-group
@@ -934,6 +1043,7 @@ POST /shopping-lists/{listId}/rename
 POST /shopping-lists/{listId}/items
 POST /shopping-lists/{listId}/items/from-recipe
 POST /shopping-lists/{listId}/items/from-plan
+POST /shopping-lists/{listId}/items/from-gap
 POST /shopping-lists/{listId}/items/{itemId}/check
 POST /shopping-lists/{listId}/items/{itemId}/fridge
 POST /shopping-lists/{listId}/items/{itemId}/remove
@@ -1101,6 +1211,7 @@ interface DiningEventSummary {
   menu: RecipeContentSnapshot;
   menuItems: DiningEventMenuItemSummary[];
   participants: DiningEventParticipantSummary[];
+  hasActiveShareLink: boolean;
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
   version: number;
@@ -1110,6 +1221,19 @@ interface DiningEventSummary {
 interface DiningEventShareLinkResponse {
   shareTokenPath: string;
   expiresAt: IsoDateTime | null;
+}
+
+interface SharePreviewResponse {
+  title: string;
+  planItemId: UUID | null;
+  planDate: string | null;
+  mealSlot: MealSlot | null;
+  scheduledAt: IsoDateTime;
+  coverImageUrl: string | null;
+  organizerName: string | null;
+  menuPreview: string[];
+  countdownText: string | null;
+  locationHint: string | null;
 }
 
 interface UserMedalSummary {
@@ -1194,6 +1318,7 @@ interface CreateMealPlanRequest {
   planDate: string;
   mealSlot: MealSlot;
   expectedVersion?: number | null;
+  title?: string | null;
   menuItems: Array<{
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
     sortOrder: number;
@@ -1205,7 +1330,18 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时提交 `expectedVersion = null`，覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+
+详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
+
+```ts
+interface UpdateMealPlanTitleRequest {
+  expectedVersion: number;
+  title?: string | null;
+}
+```
+
+`POST /meal-plans/{planItemId}/title` 只修改当前计划标题；`title` 留空或显式传 `null` 时，服务端恢复成该餐次的默认 `餐次 + 饮食计划` 名称。该接口仍要求计划 owner 调用，并继续走 `expectedVersion` 防并发覆盖；若当前餐次已经挂有饭局，服务端会同步刷新饭局标题，保证饭局页和计划页标题一致。
 
 `POST /dining-events` 新增“直接发起饭局”最小写入口，请求体固定为：
 
@@ -1672,6 +1808,19 @@ interface AddPlanToShoppingListRequest {
 
 服务端必须校验该计划属于当前用户，并按计划当前保存的菜谱明细一次性完成整单写入；任一菜谱版本校验失败时整单回滚，不允许留下部分成功的购物项。
 
+`POST /shopping-lists/{listId}/items/from-gap` 用于把缺口页当前选中的食材写入指定购物清单：
+
+```ts
+type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
+
+interface AddShoppingGapItemsRequest {
+  window: ShoppingGapWindow;
+  gapKeys: string[];
+}
+```
+
+服务端必须按当前登录用户当下的饭局与冰箱重新计算缺口，只接受当前时间层里仍有效的 `gapKeys`；写入时按真实来源饭局拆成 `EVENT` 来源购物项，同一张清单里已存在相同 `sourceKey` 的未完成缺口项时跳过，不重复堆叠。
+
 `POST /shopping-lists/{listId}/items/{itemId}/check` 用于勾选或取消采购完成：
 
 ```ts
@@ -1859,7 +2008,14 @@ interface ShoppingSharePreview {
 
 `handledAt` 在 `ACCEPTED / DECLINED` 时返回处理时间，否则为 `null`。`POST /shopping-list-invites/{inviteId}/accept` 由被邀请人确认加入；若用户已经通过好友链接先加入同一张清单，服务端会把这条待确认邀请同步结清为 `ACCEPTED`，避免首页继续残留旧卡片。`POST /shopping-list-invites/{inviteId}/decline` 只把当前邀请标记为 `DECLINED`，不影响该清单后续重新发起新邀请。
 
-`GET /shopping-gap` 当前返回“当前用户待处理饭局”的汇总缺口，不再要求先选某一场饭局；页面可以直接按食材平铺展示，并通过 `sourceTitles` 标记这条缺口关联了哪些饭局。`POST /dining-events/{eventId}/shopping-gap` 仍保持单饭局写入本人购物清单的职责，不扩成整包写入所有饭局。
+`GET /shopping-gap` 当前返回“当前用户待处理饭局”的时间分层缺口，不再要求先选某一场饭局。响应固定分成 `NEXT_48_HOURS / NEXT_7_DAYS / LATER` 三段，每段按食材平铺，单条食材缺口继续只在“同食材且同精确单位”下合法合并数量，并返回：
+
+1. `key`：当前时间层内该条缺口的稳定键，供后续 `from-gap` 写入使用。
+2. `ingredientId / name / quantityText`：食材主视角摘要。
+3. `sourceCount / eventCount`：当前条目覆盖了几道菜、几场饭局。
+4. `events[]`：每场来源饭局的 `eventId / title / scheduledAt / recipeTitles[]`，用于页面展示“这条缺口对应哪些饭局、哪些菜谱”。
+
+`POST /dining-events/{eventId}/shopping-gap` 仍保持单饭局写入旧个人购物事实链路的职责，不扩成整包写入所有饭局，也不作为新共享购物清单的主写入口。
 
 缺口合并规则当前保持：
 
@@ -1924,6 +2080,55 @@ interface DiningEventShareLinkResponse {
 ```
 
 分享页仍复用现有 `/pages_share/preview/index?token=...` 预览页，不单独新开页面；邀请链接在饭局完成或取消前都可继续重生成和使用，完成后主分享动作切到饭局卡快照。由于服务端当前只持久化分享 token 的哈希，不保留历史明文 token，客户端后续若要继续分享，必须再次调用该写接口现生成链接；`GET /dining-events/{eventId}` 里的 `shareTokenPath` 不应被当作可长期复用的稳定链接来源。
+
+同时，这条写口会让同一饭局之前仍处于 `ACTIVE / OPENED` 的旧好友邀请失效，当前只保留最新一条未使用外链，避免旧链接继续裸露在外。服务端会单独记录这条外链邀请事实及其打开、校验、接受、撤销/失效时间，供后续审计与回看使用。
+
+`POST /dining-events/{eventId}/share-link/disable` 用于当前饭局发起人主动关闭好友邀请外链，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；服务端会把该饭局当前仍处于 `ACTIVE / OPENED` 的好友邀请统一改成 `REVOKED`，随后返回最新 `DiningEventSummary`。客户端应使用返回里的 `hasActiveShareLink=false` 刷新页面状态，而不是继续复用旧的本地分享状态。
+
+`POST /dining-events/{eventId}/share-members` 用于向指定饭搭子成员发送饭局邀请，请求头继续使用 `Idempotency-Key`，请求体最小固定为：
+
+```ts
+interface ShareDiningEventMembersRequest {
+  targetUserIds: UUID[];
+}
+```
+
+当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；`targetUserIds` 只允许填写当前与发起人存在有效饭搭子关系的成员。已经在这场饭局参与名单里的用户本次会直接忽略，不重复生成新的参与记录。该写口成功后返回最新 `DiningEventSummary`，前端据此刷新待确认人数与参与名单。
+
+`POST /dining-events/{eventId}/participants/{participantId}/revoke` 用于饭局发起人撤回一条仍处于待确认状态的邀请，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成、该参与记录状态仍为 `INVITED` 时可成功；服务端会把这条记录改成 `REMOVED`，随后返回最新 `DiningEventSummary`。
+
+`POST /dining-events/{eventId}/participants/{participantId}/reinvite` 用于饭局发起人再次邀请一位已经拒绝或被移除的饭搭子成员，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成、该参与记录来自饭搭子成员且状态为 `DECLINED / REMOVED` 时可成功；服务端会把这条记录重置回 `INVITED`，随后返回最新 `DiningEventSummary`。
+
+`POST /dining-events/{eventId}/schedule` 用于当前饭局发起人单独修改时间，请求头继续使用 `Idempotency-Key`，请求体最小固定为：
+
+```ts
+interface UpdateDiningEventScheduleRequest {
+  expectedVersion: number;
+  scheduledAt: IsoDateTime;
+  location?: string | null;
+}
+```
+
+当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；服务端继续按 `expectedVersion` 防并发覆盖。客户端当前主要用于“改时间”，`location` 未传时复用原值。
+
+`GET /share/{shareToken}/preview` 继续作为饭局邀请落地页读取口，但现在只返回登录前可公开展示的轻信息，不再直接暴露完整菜单食材和精确地点。最小响应固定为：
+
+```ts
+interface SharePreviewResponse {
+  title: string;
+  planItemId: UUID | null;
+  planDate: string | null;
+  mealSlot: MealSlot | null;
+  scheduledAt: IsoDateTime;
+  coverImageUrl: string | null;
+  organizerName: string | null;
+  menuPreview: string[];
+  countdownText: string | null;
+  locationHint: string | null;
+}
+```
+
+`POST /share/{shareToken}/accept` 仍要求登录；当前采用“一条链接先到先得”的受控好友邀请策略：同一条链接首次被某个账号接受后，会把这位用户固化到这条邀请记录上，后续其他账号再拿到同一链接时统一拒绝进入。由于当前账号体系还没有微信身份绑定，这里只能做到“单链接单账号消费”，不能强校验“分享目标 A 的微信身份必须等于登录账号 A”。
 
 `POST /dining-events/{eventId}/cover` 用于上传或替换饭局封面图，请求头继续使用 `Idempotency-Key`，表单字段最小固定为：
 
