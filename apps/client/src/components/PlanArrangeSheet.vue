@@ -32,7 +32,11 @@
           <view
             v-for="item in mealSlots"
             :key="item.value"
-            :class="['plan-arrange-sheet__slot', localMealSlot === item.value ? 'plan-arrange-sheet__slot--active' : '']"
+            :class="[
+              'plan-arrange-sheet__slot',
+              `plan-arrange-sheet__slot--${resolveMealSlotTone(item.value)}`,
+              localMealSlot === item.value ? 'plan-arrange-sheet__slot--active' : ''
+            ]"
             @click="localMealSlot = item.value"
           >
             {{ item.label }}
@@ -72,6 +76,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { MealCalendarMark, MealSlot, MealSlotOption } from "@/utils/meal-slot";
+import { resolveMealSlotTone } from "@/utils/meal-slot";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { parseDateOnly } from "@/utils/date";
@@ -228,8 +233,32 @@ function submit() {
 }
 
 .plan-arrange-sheet__slot--active {
-  background: color-mix(in srgb, var(--theme-primary) 18%, var(--color-surface));
-  color: var(--theme-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.plan-arrange-sheet__slot--active.plan-arrange-sheet__slot--breakfast {
+  background: var(--meal-slot-breakfast-soft);
+  color: var(--meal-slot-breakfast);
+}
+
+.plan-arrange-sheet__slot--active.plan-arrange-sheet__slot--lunch {
+  background: var(--meal-slot-lunch-soft);
+  color: var(--meal-slot-lunch);
+}
+
+.plan-arrange-sheet__slot--active.plan-arrange-sheet__slot--afternoon-tea {
+  background: var(--meal-slot-afternoon-tea-soft);
+  color: var(--meal-slot-afternoon-tea);
+}
+
+.plan-arrange-sheet__slot--active.plan-arrange-sheet__slot--dinner {
+  background: var(--meal-slot-dinner-soft);
+  color: var(--meal-slot-dinner);
+}
+
+.plan-arrange-sheet__slot--active.plan-arrange-sheet__slot--late-night {
+  background: var(--meal-slot-late-night-soft);
+  color: var(--meal-slot-late-night);
 }
 
 .plan-arrange-sheet__actions {

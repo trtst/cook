@@ -300,12 +300,6 @@ export interface ShareShoppingListLinkResponse {
   shareUrl: string;
 }
 
-export interface ShareShoppingListMembersRequest {
-  operationId: OperationId;
-  version: number;
-  targetUserIds: UUID[];
-}
-
 export interface RemoveShoppingListMemberRequest {
   operationId: OperationId;
   version: number;
@@ -457,10 +451,6 @@ export const shoppingApi = {
   disableShareLink(listId: UUID, body: UpdateShoppingListStatusRequest) {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(`${listPath(listId)}/share-link/disable`, payload, { idempotencyKey: operationId });
-  },
-  shareListMembers(listId: UUID, body: ShareShoppingListMembersRequest) {
-    const { operationId, ...payload } = body;
-    return post<ShoppingListDetail>(`${listPath(listId)}/share-members`, payload, { idempotencyKey: operationId });
   },
   removeListMember(listId: UUID, memberUserId: UUID, body: RemoveShoppingListMemberRequest) {
     const { operationId, ...payload } = body;

@@ -9,11 +9,12 @@ export interface MealSlotOption {
 export interface MealCalendarMark {
   breakfast: boolean;
   lunch: boolean;
+  afternoonTea: boolean;
   dinner: boolean;
-  hasExtra: boolean;
+  lateNight: boolean;
 }
 
-export type MealSlotTone = "breakfast" | "lunch" | "dinner" | "extra";
+export type MealSlotTone = "breakfast" | "lunch" | "afternoon-tea" | "dinner" | "late-night";
 
 export const MEAL_SLOT_OPTIONS: MealSlotOption[] = [
   { value: "BREAKFAST", label: "早餐", kind: "core" },
@@ -54,8 +55,9 @@ export function createEmptyMealCalendarMark(): MealCalendarMark {
   return {
     breakfast: false,
     lunch: false,
+    afternoonTea: false,
     dinner: false,
-    hasExtra: false
+    lateNight: false
   };
 }
 
@@ -68,18 +70,23 @@ export function appendMealSlotToMark(mark: MealCalendarMark, slot: MealSlot) {
     mark.lunch = true;
     return;
   }
+  if (slot === "AFTERNOON_TEA") {
+    mark.afternoonTea = true;
+    return;
+  }
   if (slot === "DINNER") {
     mark.dinner = true;
     return;
   }
-  mark.hasExtra = true;
+  mark.lateNight = true;
 }
 
 export function resolveMealSlotTone(slot: MealSlot | null | undefined): MealSlotTone {
   if (slot === "BREAKFAST") return "breakfast";
   if (slot === "LUNCH") return "lunch";
+  if (slot === "AFTERNOON_TEA") return "afternoon-tea";
   if (slot === "DINNER") return "dinner";
-  return "extra";
+  return "late-night";
 }
 
 export function buildMealSlotTitle(slot: MealSlot | null | undefined) {

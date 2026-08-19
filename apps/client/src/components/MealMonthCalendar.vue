@@ -41,8 +41,9 @@
           <view class="month-calendar__marks">
             <view v-if="cell.mark.breakfast" class="month-calendar__dot month-calendar__dot--breakfast" />
             <view v-if="cell.mark.lunch" class="month-calendar__dot month-calendar__dot--lunch" />
+            <view v-if="cell.mark.afternoonTea" class="month-calendar__dot month-calendar__dot--afternoon-tea" />
             <view v-if="cell.mark.dinner" class="month-calendar__dot month-calendar__dot--dinner" />
-            <text v-if="cell.mark.hasExtra" class="month-calendar__extra">+</text>
+            <view v-if="cell.mark.lateNight" class="month-calendar__dot month-calendar__dot--late-night" />
           </view>
         </template>
       </view>
@@ -286,16 +287,20 @@ function handleSelect(cell: CalendarCell) {
 
 .month-calendar__marks {
   position: absolute;
+  left: 50%;
   bottom: 8rpx;
+  width: 42rpx;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 6rpx;
+  gap: 4rpx;
+  transform: translateX(-50%);
 }
 
 .month-calendar__dot {
-  width: 10rpx;
-  height: 10rpx;
+  width: 9rpx;
+  height: 9rpx;
   border-radius: 999rpx;
 }
 
@@ -307,13 +312,15 @@ function handleSelect(cell: CalendarCell) {
   background: var(--meal-slot-lunch);
 }
 
+.month-calendar__dot--afternoon-tea {
+  background: var(--meal-slot-afternoon-tea);
+}
+
 .month-calendar__dot--dinner {
   background: var(--meal-slot-dinner);
 }
 
-.month-calendar__extra {
-  font-size: 18rpx;
-  line-height: 1;
-  color: var(--color-text-secondary);
+.month-calendar__dot--late-night {
+  background: var(--meal-slot-late-night);
 }
 </style>

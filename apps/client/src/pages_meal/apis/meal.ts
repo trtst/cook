@@ -22,6 +22,7 @@ export interface MealPlanSummary {
   mealSlot: MealSlot;
   title: string;
   menuItems: MealPlanMenuItemSummary[];
+  menuLocked: boolean;
   status: "PLANNED" | "COMPLETED";
   version: number;
   completedAt: IsoDateTime | null;
@@ -78,6 +79,7 @@ export interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
+  note: string | null;
   coverImageUrl: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   organizerUid: number | null;
@@ -137,6 +139,11 @@ export interface UpdateMealPlanTitleRequest {
   title?: string | null;
 }
 
+export interface ConfirmMealPlanMenuRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
 export interface AddMealPlanItemRequest {
   operationId: OperationId;
   planDate: string;
@@ -160,6 +167,12 @@ export interface UpdateDiningEventScheduleRequest {
   location?: string | null;
 }
 
+export interface UpdateDiningEventNoteRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  note: string | null;
+}
+
 export interface CreateDirectDiningEventRequest {
   operationId: OperationId;
   planDate: string;
@@ -172,11 +185,6 @@ export interface UpdateDiningEventCoverRequest {
   operationId: OperationId;
   expectedVersion: number;
   filePath: string;
-}
-
-export interface ShareDiningEventMembersRequest {
-  operationId: OperationId;
-  targetUserIds: UUID[];
 }
 
 export interface ManageDiningEventParticipantRequest {
@@ -220,6 +228,12 @@ export const mealApi = {
   updatePlanTitle(planItemId: UUID, body: UpdateMealPlanTitleRequest) {
     const { operationId, ...payload } = body;
     return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/title`, payload, {
+      idempotencyKey: operationId
+    });
+  },
+  confirmPlanMenu(planItemId: UUID, body: ConfirmMealPlanMenuRequest) {
+    const { operationId, ...payload } = body;
+    return post<MealPlanSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/confirm-menu`, payload, {
       idempotencyKey: operationId
     });
   },
@@ -274,14 +288,6 @@ export const mealApi = {
       { idempotencyKey: operationId }
     );
   },
-  shareDiningEventMembers(eventId: UUID, body: ShareDiningEventMembersRequest) {
-    const { operationId, ...payload } = body;
-    return post<DiningEventSummary>(
-      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/share-members`,
-      payload,
-      { idempotencyKey: operationId }
-    );
-  },
   revokeDiningEventParticipantInvite(eventId: UUID, participantId: UUID, body: ManageDiningEventParticipantRequest) {
     return post<DiningEventSummary>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/participants/${encodeURIComponent(participantId)}/revoke`,
@@ -299,6 +305,12 @@ export const mealApi = {
   updateDiningEventSchedule(eventId: UUID, body: UpdateDiningEventScheduleRequest) {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/schedule`, payload, {
+      idempotencyKey: operationId
+    });
+  },
+  updateDiningEventNote(eventId: UUID, body: UpdateDiningEventNoteRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(`${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/note`, payload, {
       idempotencyKey: operationId
     });
   },

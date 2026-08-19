@@ -94,15 +94,11 @@
                         <view
                           :class="[
                             'recipe-card__action',
-                            item.ownedRecipeId
-                              ? isQueued(item)
-                                ? 'recipe-card__action--queued'
-                                : 'recipe-card__action--ready'
-                              : 'recipe-card__action--guide'
+                            item.ownedRecipeId ? 'recipe-card__action--ready' : 'recipe-card__action--guide'
                           ]"
                           @click.stop="handleRecipeAction(item)"
                         >
-                          <text :class="['cookfont', 'recipe-card__action-icon', recipeActionIcon(item)]" />
+                          <text class="cookfont recipe-card__action-icon icon-add-plan" />
                           <text>{{ recipeActionText(item) }}</text>
                         </view>
                       </view>
@@ -114,8 +110,8 @@
               <view class="recipe-note">
                 <text class="cookfont icon-notice recipe-note__icon" />
                 <view class="recipe-note__body">
-                  <text class="recipe-note__line">未加入“我的菜谱”的菜，需要先添加，之后才能安排到计划。</text>
-                  <text class="recipe-note__line recipe-note__line--soft">本期有喜欢的菜可以先收下，再慢慢安排。</text>
+                  <text class="recipe-note__line">确认加入计划时，会同时保存到私房菜。</text>
+                  <text class="recipe-note__line recipe-note__line--soft">已有私房菜的菜谱不会重复保存。</text>
                 </view>
               </view>
             </view>
@@ -154,79 +150,33 @@
       </view>
     </scroll-view>
 
-    <view v-if="queuedItems.length" class="plan-queue" hover-class="plan-queue--hover" hover-stay-time="100" @click="openPlanSheet">
-      <text class="cookfont icon-add-plan plan-queue__icon" />
-      <text class="plan-queue__label">开始安排</text>
-      <view class="plan-queue__badge">
-        <text class="plan-queue__badge-text">{{ queuedItems.length }}</text>
-      </view>
-    </view>
-
-    <PlanArrangeSheet
-      v-if="sheetMounted"
-      :visible="sheetVisible"
-      title="安排这批菜"
-      :subtitle="planSheetSubtitle"
-      :title-extra="`${queuedItems.length}道`"
-      :date="planDate"
-      :month-date="planMonth"
-      :meal-slot="mealSlot"
-      :meal-slots="mealSlots"
-      :marks="planMarks"
-      :min-date="today"
-      :submitting="planSubmitting"
-      confirm-text="确认安排"
-      confirm-loading-text="安排中..."
+    <AddToPlanSheet
+      v-if="currentPlanItem"
+      :visible="planSheetVisible"
+      :recipe-id="currentPlanItem.ownedRecipeId"
+      :source-recipe-id="currentPlanItem.id"
+      :source-version-id="currentPlanItem.sourceVersionId"
+      :need-add-to-private="!Boolean(currentPlanItem.ownedRecipeId)"
       @close="closePlanSheet"
-      @after-close="handleSheetAfterClose"
-      @month-change="handlePlanMonthChange"
-      @confirm="submitPlan"
-    />
-
-    <RecipeAddSheet
-      v-if="currentAddItem"
-      :visible="addSheetVisible"
-      :title="addSheetTitle"
-      :subtitle="addSheetSubtitle"
-      :category-hint="addCategoryHint"
-      :scene-hint="'还没有合集，不选也可以直接加入待安排。'"
-      :show-scene-section="true"
-      :require-category="true"
-      :submitting="addSheetSubmitting"
-      @close="closeAddSheet"
-      @confirm="confirmAddSheet"
+      @success="handlePlanSuccess"
     />
   </Layout>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import type { UUID } from "@/apis/http";
 import { homeApi, type HomeTopicDetail } from "@/apis/home";
-import { mealApi as commonMealApi } from "../apis/meal";
-import { recipeApi } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import PlanArrangeSheet from "@/components/PlanArrangeSheet.vue";
-import RecipeAddSheet from "@/components/Recipe/RecipeAddSheet.vue";
+import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
-import { formatMonthDay, formatSort, todayText } from "../utils/date";
-import { isTopicQueued } from "../utils/home-topic";
-import { createOperationId } from "@/utils/operation-id";
-import {
-  appendMealSlotToMark,
-  createEmptyMealCalendarMark,
-  MEAL_SLOT_OPTIONS,
-  type MealCalendarMark,
-  type MealSlot
-} from "@/utils/meal-slot";
-import { formatDateOnly, parseDateOnly } from "@/utils/date";
+import { formatMonthDay, formatSort } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
@@ -234,7 +184,6 @@ const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
 const NAV_FADE_DISTANCE = 96;
-const mealSlots = MEAL_SLOT_OPTIONS;
 
 const loading = ref(false);
 const errorText = ref("");
@@ -242,28 +191,11 @@ const topic = ref<HomeTopicDetail | null>(null);
 const topicId = ref(0);
 const scrollAnchor = ref("");
 const scrollTop = ref(0);
-const sheetMounted = ref(false);
-const sheetVisible = ref(false);
-const addSheetVisible = ref(false);
-const addSheetSubmitting = ref(false);
-const currentAddItemId = ref<number | null>(null);
-const queuedIds = ref<number[]>([]);
-const planSubmitting = ref(false);
-const today = todayText();
-const planDate = ref(todayText());
-const planMonth = ref(buildMonthAnchor(planDate.value));
-const planMarks = ref<Record<string, MealCalendarMark>>({});
-const mealSlot = ref<MealSlot>("DINNER");
-const planMarksSeq = ref(0);
+const planSheetVisible = ref(false);
+const currentPlanItemId = ref<number | null>(null);
 const shouldRefreshOnShow = ref(false);
 
-watch(
-  () => [sheetVisible.value, addSheetVisible.value],
-  ([planVisible, addVisible]) => {
-    setLocked(planVisible || addVisible);
-  },
-  { immediate: true }
-);
+watch(() => planSheetVisible.value, visible => setLocked(visible), { immediate: true });
 
 const heroStyle = computed(() => {
   if (!topic.value?.coverImageUrl) return {};
@@ -282,17 +214,7 @@ const emptyStyle = computed(() => ({
 const navTitle = computed(() => topic.value?.title || "本周灵感");
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const visibleHistory = computed(() => topic.value?.history.slice(0, 5) ?? []);
-const queuedItems = computed(() => {
-  const itemMap = new Set(queuedIds.value);
-  return (topic.value?.items ?? []).filter(item => itemMap.has(item.id) && item.ownedRecipeId);
-});
-const currentAddItem = computed(() => (topic.value?.items ?? []).find(item => item.id === currentAddItemId.value) ?? null);
-const planSheetSubtitle = computed(() => {
-  return "选好日期和餐次后，待安排里的菜会一起进入这个计划。";
-});
-const addSheetTitle = computed(() => "添加到我的");
-const addSheetSubtitle = computed(() => "先选个人分类，可选合集。确认后会自动进入待安排。");
-const addCategoryHint = computed(() => "还没有个人分类，先创建一个分类再加入。");
+const currentPlanItem = computed(() => (topic.value?.items ?? []).find(item => item.id === currentPlanItemId.value) ?? null);
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
   opacity: `${navProgress.value}`
@@ -314,26 +236,8 @@ onShow(() => {
   void loadTopic(topicId.value, false);
 });
 
-function isQueued(item: HomeTopicDetail["items"][number]) {
-  return isTopicQueued(item.id, queuedIds.value);
-}
-
 function recipeActionText(item: HomeTopicDetail["items"][number]) {
-  if (!item.ownedRecipeId) return "先加入";
-  return isQueued(item) ? "待安排" : "加入计划";
-}
-
-function recipeActionIcon(item: HomeTopicDetail["items"][number]) {
-  if (!item.ownedRecipeId) return "icon-add-owner";
-  return isQueued(item) ? "icon-add-plan" : "icon-add-list";
-}
-
-function syncQueuedItems(nextTopic: HomeTopicDetail | null) {
-  const validIds = new Set((nextTopic?.items ?? []).filter(item => item.ownedRecipeId).map(item => item.id));
-  queuedIds.value = queuedIds.value.filter(itemId => validIds.has(itemId));
-  if (!queuedIds.value.length) {
-    closePlanSheet();
-  }
+  return item.ownedRecipeId ? "加入计划" : "加入计划";
 }
 
 async function loadTopic(nextId = topicId.value, resetScroll = true) {
@@ -348,14 +252,12 @@ async function loadTopic(nextId = topicId.value, resetScroll = true) {
       topic.value = result.topic;
       topicId.value = result.topic?.id ?? 0;
     }
-    syncQueuedItems(topic.value);
     errorText.value = "";
     if (resetScroll) {
       jumpTop();
     }
   } catch (error) {
     topic.value = null;
-    syncQueuedItems(null);
     errorText.value = error instanceof Error ? error.message : "加载本周灵感失败";
   } finally {
     loading.value = false;
@@ -389,48 +291,27 @@ function openHistory(nextId: number) {
 }
 
 function handleRecipeAction(item: HomeTopicDetail["items"][number]) {
-  if (!item.ownedRecipeId) {
-    openAddSheet(item);
-    return;
-  }
-  if (isQueued(item)) {
-    queuedIds.value = queuedIds.value.filter(itemId => itemId !== item.id);
-    if (!queuedIds.value.length) {
-      closePlanSheet();
-    }
-    return;
-  }
-  queuedIds.value = [...queuedIds.value, item.id];
+  openPlanSheet(item);
 }
 
 function openLogin(afterLogin?: () => void) {
   loginModalStore.open(null, afterLogin);
 }
 
-function openAddSheet(item: HomeTopicDetail["items"][number]) {
+function openPlanSheet(item: HomeTopicDetail["items"][number]) {
   if (!sessionStore.isLoggedIn) {
     openLogin(() => {
-      openAddSheet(item);
+      openPlanSheet(item);
     });
     return;
   }
-  currentAddItemId.value = item.id;
-  addSheetVisible.value = true;
+  currentPlanItemId.value = item.id;
+  planSheetVisible.value = true;
 }
 
-function closeAddSheet() {
-  addSheetVisible.value = false;
-  currentAddItemId.value = null;
-}
-
-async function collectIntoScenes(item: HomeTopicDetail["items"][number], sceneIds: UUID[]) {
-  if (!sceneIds.length) return;
-  await recipeApi.collectRecipe({
-    operationId: createOperationId(),
-    sourceRecipeId: item.id,
-    sourceVersionId: item.sourceVersionId,
-    sceneIds
-  });
+function closePlanSheet() {
+  planSheetVisible.value = false;
+  currentPlanItemId.value = null;
 }
 
 function syncOwnedRecipe(itemId: number, ownedRecipeId: number) {
@@ -441,141 +322,13 @@ function syncOwnedRecipe(itemId: number, ownedRecipeId: number) {
   };
 }
 
-async function confirmAddSheet(payload: { categoryId: UUID | ""; sceneIds: UUID[] }) {
-  const item = currentAddItem.value;
-  if (!item || !payload.categoryId || addSheetSubmitting.value) return;
-  addSheetSubmitting.value = true;
-  try {
-    const sceneIds = [...payload.sceneIds];
-    if (sceneIds.length) {
-      await collectIntoScenes(item, sceneIds);
-      markRecipeHomeDirty(["collection"]);
-    }
-    const result = await recipeApi.createMyRecipeFromInspiration({
-      operationId: createOperationId(),
-      sourceRecipeId: item.id,
-      sourceVersionId: item.sourceVersionId,
-      categoryId: payload.categoryId,
-      sceneIds
-    });
-    syncOwnedRecipe(item.id, result.recipe.id);
-    if (!queuedIds.value.includes(item.id)) {
-      queuedIds.value = [...queuedIds.value, item.id];
-    }
+function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean }) {
+  const item = currentPlanItem.value;
+  if (item && payload.addedToPrivate) {
+    syncOwnedRecipe(item.id, payload.recipeId);
     markRecipeHomeDirty(["my"]);
     markRecipeManageDirty(["recipes"]);
-    closeAddSheet();
-    await uniPlatform.feedback.toast({ title: "已添加到我的，并加入待安排", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
-  } finally {
-    addSheetSubmitting.value = false;
   }
-}
-
-function openPlanSheet() {
-  if (!queuedItems.value.length) return;
-  planDate.value = todayText();
-  planMonth.value = buildMonthAnchor(planDate.value);
-  mealSlot.value = "DINNER";
-  sheetMounted.value = true;
-  sheetVisible.value = false;
-  void nextTick(() => {
-    sheetVisible.value = true;
-  });
-  void loadPlanMarks(planMonth.value);
-}
-
-function closePlanSheet() {
-  sheetVisible.value = false;
-}
-
-function handleSheetAfterClose() {
-  sheetMounted.value = false;
-}
-
-function handlePlanMonthChange(nextMonthDate: string) {
-  const nextMonth = buildMonthAnchor(nextMonthDate);
-  if (nextMonth === planMonth.value) return;
-  planMonth.value = nextMonth;
-  void loadPlanMarks(nextMonth);
-}
-
-async function submitPlan(payload: { planDate: string; mealSlot: MealSlot }) {
-  const recipeIds = queuedItems.value.map(item => item.ownedRecipeId).filter((item): item is UUID => Boolean(item));
-  if (!recipeIds.length || planSubmitting.value) return;
-  planSubmitting.value = true;
-  try {
-    const plans = await commonMealApi.listPlans({ from: payload.planDate, to: payload.planDate, page: 1, pageSize: 10 });
-    const currentPlan = plans.items.find(item => item.mealSlot === payload.mealSlot) ?? null;
-    const existingItems = currentPlan?.menuItems ?? [];
-    const targetRecipeIds = [...existingItems.map(item => item.recipeId), ...recipeIds].filter(
-      (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
-    );
-    const recipes = await Promise.all(targetRecipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
-    const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
-    const menuItems = targetRecipeIds
-      .map((recipeId, index) => {
-        const recipe = recipeMap.get(recipeId);
-        if (!recipe) return null;
-        const existing = existingItems.find(item => item.recipeId === recipeId) ?? null;
-        return {
-          slotType: existing?.slotType ?? null,
-          sortOrder: index,
-          recipeId: recipe.id,
-          recipeVersionId: recipe.contentVersionId,
-          purchaseState: existing?.purchaseState ?? "READY"
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-    if (menuItems.length !== targetRecipeIds.length) {
-      await uniPlatform.feedback.toast({ title: "当前计划或待安排菜谱已变化，请刷新后重试", icon: "none" });
-      return;
-    }
-    await commonMealApi.createPlan({
-      operationId: createOperationId(),
-      planDate: payload.planDate,
-      mealSlot: payload.mealSlot,
-      expectedVersion: currentPlan?.version ?? null,
-      menuItems
-    });
-    queuedIds.value = [];
-    closePlanSheet();
-    await uniPlatform.feedback.toast({ title: "已加入计划", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "安排失败", icon: "none" });
-  } finally {
-    planSubmitting.value = false;
-  }
-}
-
-async function loadPlanMarks(monthDate = planMonth.value) {
-  const seq = ++planMarksSeq.value;
-  try {
-    const monthStart = parseDateOnly(monthDate);
-    const rangeEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0, 12, 0, 0, 0);
-    const items = await commonMealApi.listAllPlans({
-      from: formatDateOnly(monthStart),
-      to: formatDateOnly(rangeEnd)
-    });
-    if (seq !== planMarksSeq.value) return;
-    const marks: Record<string, MealCalendarMark> = {};
-    for (const item of items) {
-      const current = marks[item.planDate] ?? createEmptyMealCalendarMark();
-      appendMealSlotToMark(current, item.mealSlot);
-      marks[item.planDate] = current;
-    }
-    planMarks.value = marks;
-  } catch {
-    if (seq === planMarksSeq.value) {
-      planMarks.value = {};
-    }
-  }
-}
-
-function buildMonthAnchor(dateText: string) {
-  const date = parseDateOnly(dateText);
-  return formatDateOnly(new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0));
 }
 </script>
 

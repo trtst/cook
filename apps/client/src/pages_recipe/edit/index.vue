@@ -665,41 +665,22 @@
               <view class="sheet-section">
                 <view class="sheet-section__head">
                   <view class="sheet-section__meta">
-                    <text class="sheet-section__title">个人场景</text>
-                    <text class="sheet-section__tag">最多6字</text>
-                  </view>
-                  <view class="sheet-section__action" @click="toggleSceneCreator">
-                    {{ showSceneCreator ? "取消" : "添加场景" }}
+                    <text class="sheet-section__title">系统分类</text>
+                    <text class="sheet-section__tag">用于筛选</text>
                   </view>
                 </view>
-                <view v-if="showSceneCreator" class="sheet-creator">
-                  <input
-                    v-model="sceneDraftName"
-                    class="sheet-creator__input"
-                    maxlength="6"
-                    placeholder="输入场景名称"
-                    :disabled="sceneSubmitting"
-                  />
-                  <button
-                    class="sheet-creator__button"
-                    :disabled="sceneSubmitting || !sceneDraftName.trim()"
-                    @click="createSceneTag"
-                  >
-                    {{ sceneSubmitting ? "添加中" : "确定" }}
-                  </button>
-                </view>
-                <view v-if="scenes.length" class="chip-row">
+                <view v-if="inspirationCategories.length" class="chip-row">
                   <view
-                    v-for="item in scenes"
+                    v-for="item in inspirationCategories"
                     :key="item.id"
                     class="chip"
-                    :class="{ 'chip--active': advancedForm.sceneIds.includes(item.id) }"
-                    @click="toggleDraftScene(item.id)"
+                    :class="{ 'chip--active': advancedForm.inspirationCategoryId === item.id }"
+                    @click="advancedForm.inspirationCategoryId = advancedForm.inspirationCategoryId === item.id ? null : item.id"
                   >
                     {{ item.name }}
                   </view>
                 </view>
-                <text v-else class="sheet-section__hint">还没有个人场景时可以先留空。</text>
+                <text v-else class="sheet-section__hint">当前还没有可选的系统分类。</text>
               </view>
 
               <view class="sheet-section editor-grid">
@@ -802,6 +783,7 @@ import {
   type IngredientCategorySummary,
   type IngredientSource,
   type IngredientSummary,
+  type InspirationCategorySummary,
   type MyRecipeDetail,
   type RecipeDraftContentInput,
   type RecipeDraftIngredientInput,
@@ -810,7 +792,6 @@ import {
   type RecipeDuration,
   type RecipeIngredientInput,
   type RecipeCategorySummary,
-  type RecipeSceneSummary,
   type UploadAssetScene,
   type UnitSummary
 } from "@/apis/recipe";
@@ -839,6 +820,7 @@ import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils
 import ImageField from "@/components/ImageField.vue";
 import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
+import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 import {
   difficultyOptions,
@@ -878,6 +860,7 @@ interface RecipeEditCacheFormSnapshot {
   name: string;
   story: string;
   categoryId: NullableResourceId;
+  inspirationCategoryId: NullableResourceId;
   sceneIds: ResourceId[];
   coverUploadId: NullableResourceId;
   coverImageUrl: string;
@@ -928,6 +911,7 @@ type CropTarget =
 const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
+const userStore = useUserStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const TITLE_LIMIT = 30;
@@ -993,6 +977,7 @@ let recipeEditCacheTimer: ReturnType<typeof setTimeout> | null = null;
 let recipeEditCacheBaseline = "";
 let recipeEditCacheSuspended = true;
 let advancedOptionsPromise: Promise<void> | null = null;
+let inspirationCategoriesPromise: Promise<void> | null = null;
 let ingredientCategoryPromise: Promise<void> | null = null;
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let ingredientRequestSeed = 0;
@@ -1003,7 +988,7 @@ let stepSortPressId = "";
 let stepSortPressTouchY = 0;
 
 const categories = ref<RecipeCategorySummary[]>([]);
-const scenes = ref<RecipeSceneSummary[]>([]);
+const inspirationCategories = ref<InspirationCategorySummary[]>([]);
 const ingredientCategories = ref<IngredientCategorySummary[]>([]);
 const ingredients = ref<IngredientSummary[]>([]);
 const ingredientOptions = ref<IngredientSummary[]>([]);
@@ -1027,7 +1012,7 @@ const ingredientCreateSection = ref<"" | "category" | "unit">("");
 const formFieldFocused = ref(false);
 const activeUnitRowId = ref("");
 const categoriesLoaded = ref(false);
-const scenesLoaded = ref(false);
+const inspirationCategoriesLoaded = ref(false);
 const ingredientCategoriesLoaded = ref(false);
 const unitsLoaded = ref(false);
 const ingredientCreateDraft = reactive({
@@ -1055,6 +1040,7 @@ const form = reactive({
   name: "",
   story: "",
   categoryId: null as NullableResourceId,
+  inspirationCategoryId: null as NullableResourceId,
   sceneIds: [] as ResourceId[],
   baseServingsText: "",
   difficulty: null as RecipeDifficulty | null,
@@ -1064,6 +1050,7 @@ const form = reactive({
 
 const advancedForm = reactive({
   categoryId: null as NullableResourceId,
+  inspirationCategoryId: null as NullableResourceId,
   sceneIds: [] as ResourceId[],
   baseServingsText: "",
   difficulty: null as RecipeDifficulty | null,
@@ -1071,12 +1058,9 @@ const advancedForm = reactive({
   tips: ""
 });
 const showCategoryCreator = ref(false);
-const showSceneCreator = ref(false);
 const showCustomBaseServings = ref(false);
 const categoryDraftName = ref("");
-const sceneDraftName = ref("");
 const categorySubmitting = ref(false);
-const sceneSubmitting = ref(false);
 
 const baseServingsOptions = ["1", "2", "3", "4", "6", "8", "10"];
 const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
@@ -1213,14 +1197,9 @@ const advancedItems = computed(() => {
   if (categoryName) {
     items.push(categoryName);
   }
-  if (form.sceneIds.length) {
-    const sceneNames = scenes.value
-      .filter(item => form.sceneIds.includes(item.id))
-      .map(item => item.name)
-      .filter(Boolean);
-    if (sceneNames.length) {
-      items.push(sceneNames.join(" / "));
-    }
+  const inspirationCategoryName = inspirationCategories.value.find(item => item.id === form.inspirationCategoryId)?.name;
+  if (inspirationCategoryName) {
+    items.push(inspirationCategoryName);
   }
   if (form.baseServingsText.trim()) {
     items.push(`${form.baseServingsText.trim()} 人`);
@@ -1237,7 +1216,7 @@ const advancedItems = computed(() => {
 const advancedCountText = computed(() => `已设 ${advancedItems.value.length} / ${advancedTotalCount}`);
 const advancedSummary = computed(() => {
   if (!advancedItems.value.length) {
-    return "还没设置分类、场景、人数、难度和时长";
+		return "还没设置分类、系统分类、人数、难度和时长";
   }
   return advancedItems.value.join(" · ");
 });
@@ -1251,6 +1230,7 @@ const ingredientGhostStyle = computed(() => ({
   left: `${ingredientGhostLeft.value}px`,
   width: `${ingredientGhostWidth.value}px`
 }));
+const canGenerateRecipeAssistant = computed(() => Boolean(userStore.profile && userStore.profile.membership.tier !== "FREE"));
 
 const showStepSortEntry = computed(() => stepRows.value.length > 1);
 const stepSortDragging = computed(() => Boolean(stepSortDraggingId.value));
@@ -1315,9 +1295,10 @@ onUnload(() => {
 watch(
   [
     () => form.name,
-    () => form.story,
-    () => form.categoryId,
-    () => [...form.sceneIds],
+	    () => form.story,
+	    () => form.categoryId,
+	    () => form.inspirationCategoryId,
+	    () => [...form.sceneIds],
     () => coverUploadId.value,
     () => coverImageUrl.value,
     () => coverLocalImagePath.value,
@@ -1463,7 +1444,7 @@ function applyEditRefs(ingredientItems: IngredientSummary[], unitItems: UnitSumm
 }
 
 async function ensureAdvancedOptionsLoaded() {
-  if (categoriesLoaded.value && scenesLoaded.value) return;
+  if (categoriesLoaded.value && inspirationCategoriesLoaded.value) return;
   if (advancedOptionsPromise) {
     await advancedOptionsPromise;
     return;
@@ -1471,13 +1452,13 @@ async function ensureAdvancedOptionsLoaded() {
 
   advancedOptionsPromise = Promise.all([
     categoriesLoaded.value ? Promise.resolve(categories.value) : recipeApi.listCategories(),
-    scenesLoaded.value ? Promise.resolve(scenes.value) : recipeApi.listScenes()
+    inspirationCategoriesLoaded.value ? Promise.resolve(inspirationCategories.value) : recipeApi.listInspirationCategories()
   ])
-    .then(([categoryList, sceneList]) => {
+    .then(([categoryList, inspirationCategoryList]) => {
       categories.value = categoryList;
-      scenes.value = sceneList;
+      inspirationCategories.value = inspirationCategoryList;
       categoriesLoaded.value = true;
-      scenesLoaded.value = true;
+      inspirationCategoriesLoaded.value = true;
     })
     .finally(() => {
       advancedOptionsPromise = null;
@@ -1639,73 +1620,66 @@ async function loadPage() {
   errorText.value = "";
   try {
     if (draftId.value) {
-      const [categoryList, sceneList, ingredientCategoryList, ingredientResult, unitResult, draft] = await Promise.all([
+      const [categoryList, ingredientCategoryList, ingredientResult, unitResult, draft] = await Promise.all([
         recipeApi.listCategories(),
-        recipeApi.listScenes(),
         recipeApi.listIngredientCategories(),
         recipeApi.listIngredients({ page: 1, pageSize: 100 }),
         recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" }),
         recipeApi.getDraft(draftId.value)
       ]);
       categories.value = categoryList;
-      scenes.value = sceneList;
       ingredientCategories.value = ingredientCategoryList;
       applyEditRefs(ingredientResult.items, unitResult.items, draft);
       categoriesLoaded.value = true;
-      scenesLoaded.value = true;
       ingredientCategoriesLoaded.value = true;
       unitsLoaded.value = true;
       fillFromDraft(draft);
     } else if (recipeId.value) {
-      const [categoryList, sceneList, ingredientCategoryList, ingredientResult, unitResult, recipe] = await Promise.all([
+      const [categoryList, ingredientCategoryList, ingredientResult, unitResult, recipe] = await Promise.all([
         recipeApi.listCategories(),
-        recipeApi.listScenes(),
         recipeApi.listIngredientCategories(),
         recipeApi.listIngredients({ page: 1, pageSize: 100 }),
         recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" }),
         recipeApi.getMyRecipe(recipeId.value)
       ]);
       categories.value = categoryList;
-      scenes.value = sceneList;
       ingredientCategories.value = ingredientCategoryList;
       applyEditRefs(ingredientResult.items, unitResult.items, recipe);
       categoriesLoaded.value = true;
-      scenesLoaded.value = true;
       ingredientCategoriesLoaded.value = true;
       unitsLoaded.value = true;
       fillFromRecipe(recipe);
     } else if (draftSeed?.content) {
-      const [categoryList, sceneList, ingredientCategoryList, ingredientResult, unitResult] = await Promise.all([
+      const [categoryList, ingredientCategoryList, ingredientResult, unitResult] = await Promise.all([
         recipeApi.listCategories(),
-        recipeApi.listScenes(),
         recipeApi.listIngredientCategories(),
         recipeApi.listIngredients({ page: 1, pageSize: 100 }),
         recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" })
       ]);
       categories.value = categoryList;
-      scenes.value = sceneList;
       ingredientCategories.value = ingredientCategoryList;
       applyEditRefs(ingredientResult.items, unitResult.items, {
         ingredientRefs: [],
         unitRefs: []
       });
       categoriesLoaded.value = true;
-      scenesLoaded.value = true;
       ingredientCategoriesLoaded.value = true;
       unitsLoaded.value = true;
       fillForm(draftSeed.content);
       recipePreviewStore.consumeDraftSeed();
       usedDraftSeed = true;
-    } else {
-      categories.value = [];
-      scenes.value = [];
-      ingredientCategories.value = [];
+	    } else {
+	      categories.value = [];
+	      inspirationCategories.value = [];
+	      ingredientCategories.value = [];
       ingredients.value = [];
       units.value = [];
-      categoriesLoaded.value = false;
-      scenesLoaded.value = false;
-      ingredientCategoriesLoaded.value = false;
-      unitsLoaded.value = false;
+	      categoriesLoaded.value = false;
+	      inspirationCategoriesLoaded.value = false;
+	      ingredientCategoriesLoaded.value = false;
+	      unitsLoaded.value = false;
+	      form.inspirationCategoryId = null;
+	      advancedForm.inspirationCategoryId = null;
       ingredientOptions.value = [];
       ingredientPage.value = 1;
       ingredientHasNext.value = false;
@@ -1736,6 +1710,7 @@ function fillFromRecipe(recipe: MyRecipeDetail) {
     name: recipe.content.name,
     story: recipe.content.story,
     categoryId: recipe.category.id,
+    inspirationCategoryId: recipe.inspirationCategory?.id ?? null,
     sceneIds: recipe.scenes.map(item => item.id),
     coverUploadId: null,
     coverImageUrl: recipe.coverImageUrl || null,
@@ -1768,6 +1743,7 @@ function fillForm(content: RecipeDraftContentInput) {
   form.name = content.name;
   form.story = content.story || "";
   form.categoryId = content.categoryId;
+  form.inspirationCategoryId = content.inspirationCategoryId ?? null;
   form.sceneIds = [...content.sceneIds];
   originVersionId.value = content.originVersionId ?? null;
   originCoverImageUrl.value = content.originCoverImageUrl || "";
@@ -1883,7 +1859,7 @@ function openPreviewSheet() {
   recipePreviewStore.setPreview({
     title: form.name.trim() || "未命名菜谱",
     categoryName: categories.value.find(item => item.id === form.categoryId)?.name || null,
-    sceneNames: scenes.value.filter(item => form.sceneIds.includes(item.id)).map(item => item.name),
+    sceneNames: [],
     coverImageUrl: currentCoverImage.value || null,
     content: {
       story: form.story.trim() || null,
@@ -2139,24 +2115,9 @@ async function recommendIngredient(item: IngredientSummary) {
   }
 }
 
-function toggleScene(sceneId: ResourceId) {
-  if (form.sceneIds.includes(sceneId)) {
-    form.sceneIds = form.sceneIds.filter(item => item !== sceneId);
-    return;
-  }
-  form.sceneIds = [...form.sceneIds, sceneId];
-}
-
-function toggleDraftScene(sceneId: ResourceId) {
-  if (advancedForm.sceneIds.includes(sceneId)) {
-    advancedForm.sceneIds = advancedForm.sceneIds.filter(item => item !== sceneId);
-    return;
-  }
-  advancedForm.sceneIds = [...advancedForm.sceneIds, sceneId];
-}
-
 function fillAdvancedDraft() {
   advancedForm.categoryId = form.categoryId;
+  advancedForm.inspirationCategoryId = form.inspirationCategoryId;
   advancedForm.sceneIds = [...form.sceneIds];
   advancedForm.baseServingsText = form.baseServingsText;
   advancedForm.difficulty = form.difficulty;
@@ -2167,6 +2128,7 @@ function fillAdvancedDraft() {
 
 function resetAdvancedDraft() {
   advancedForm.categoryId = form.categoryId;
+  advancedForm.inspirationCategoryId = form.inspirationCategoryId;
   advancedForm.sceneIds = [...form.sceneIds];
   advancedForm.baseServingsText = form.baseServingsText;
   advancedForm.difficulty = form.difficulty;
@@ -2176,13 +2138,10 @@ function resetAdvancedDraft() {
 }
 
 function resetAdvancedAuxState() {
-  showCategoryCreator.value = false;
-  showSceneCreator.value = false;
-  showCustomBaseServings.value = shouldShowCustomBaseServings(advancedForm.baseServingsText);
-  categoryDraftName.value = "";
-  sceneDraftName.value = "";
-  categorySubmitting.value = false;
-  sceneSubmitting.value = false;
+	showCategoryCreator.value = false;
+	showCustomBaseServings.value = shouldShowCustomBaseServings(advancedForm.baseServingsText);
+	categoryDraftName.value = "";
+	categorySubmitting.value = false;
 }
 
 function normalizeBaseServingsText(value: string) {
@@ -2203,13 +2162,6 @@ function toggleCategoryCreator() {
   showCategoryCreator.value = !showCategoryCreator.value;
   if (!showCategoryCreator.value) {
     categoryDraftName.value = "";
-  }
-}
-
-function toggleSceneCreator() {
-  showSceneCreator.value = !showSceneCreator.value;
-  if (!showSceneCreator.value) {
-    sceneDraftName.value = "";
   }
 }
 
@@ -2236,32 +2188,6 @@ async function createCategoryTag() {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加分类失败", icon: "none" });
   } finally {
     categorySubmitting.value = false;
-  }
-}
-
-async function createSceneTag() {
-  const name = sceneDraftName.value.trim();
-  if (!name || sceneSubmitting.value) return;
-  if (name.length > 6) {
-    await uniPlatform.feedback.toast({ title: "场景最多6个字", icon: "none" });
-    return;
-  }
-  sceneSubmitting.value = true;
-  try {
-    const scene = await recipeApi.createScene({
-      operationId: createOperationId(),
-      name
-    });
-    scenes.value = [...scenes.value, scene];
-    advancedForm.sceneIds = [...advancedForm.sceneIds, scene.id];
-    markRecipeHomeDirty(["collection"]);
-    sceneDraftName.value = "";
-    showSceneCreator.value = false;
-    await uniPlatform.feedback.toast({ title: "场景已添加", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加场景失败", icon: "none" });
-  } finally {
-    sceneSubmitting.value = false;
   }
 }
 
@@ -2300,6 +2226,7 @@ function toggleAdvancedDuration(value: RecipeDuration) {
 function applyAdvancedForm() {
   advancedForm.baseServingsText = normalizeBaseServingsText(advancedForm.baseServingsText);
   form.categoryId = advancedForm.categoryId;
+  form.inspirationCategoryId = advancedForm.inspirationCategoryId;
   form.sceneIds = [...advancedForm.sceneIds];
   form.baseServingsText = advancedForm.baseServingsText;
   form.difficulty = advancedForm.difficulty;
@@ -2464,9 +2391,10 @@ function buildRecipeEditCachePayload(): Omit<RecipeEditCacheEntry, "savedAt"> {
     sourceVersion: getRecipeEditSourceVersion(),
     form: {
       name: form.name,
-      story: form.story,
-      categoryId: form.categoryId,
-      sceneIds: [...form.sceneIds],
+	      story: form.story,
+	      categoryId: form.categoryId,
+	      inspirationCategoryId: form.inspirationCategoryId,
+	      sceneIds: [...form.sceneIds],
       coverUploadId: coverUploadId.value,
       coverImageUrl: coverImageUrl.value,
       coverLocalImagePath: coverLocalImagePath.value,
@@ -2555,9 +2483,10 @@ function removeCurrentRecipeEditCache(itemKey: string = getRecipeEditCacheItemKe
 
 function applyRecipeEditCacheEntry(entry: RecipeEditCacheEntry) {
   form.name = entry.form.name;
-  form.story = entry.form.story;
-  form.categoryId = entry.form.categoryId;
-  form.sceneIds = [...entry.form.sceneIds];
+	  form.story = entry.form.story;
+	  form.categoryId = entry.form.categoryId;
+	  form.inspirationCategoryId = entry.form.inspirationCategoryId;
+	  form.sceneIds = [...entry.form.sceneIds];
   coverUploadId.value = entry.form.coverUploadId;
   coverImageUrl.value = entry.form.coverImageUrl;
   coverLocalImagePath.value = entry.form.coverLocalImagePath;
@@ -2653,11 +2582,32 @@ async function publishDraft() {
     markRecipeHomeDirty(["my"]);
     markRecipeManageDirty(["recipes", "drafts"]);
     await uniPlatform.feedback.toast({ title: "已发布", icon: "success" });
+    await maybeGenerateRecipeAssistantAfterPublish(result.recipe.id, Boolean(result.recipe.assistant?.steps.length));
     void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(result.recipe.id))}&kind=my`);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "发布失败", icon: "none" });
   } finally {
     submitting.value = false;
+  }
+}
+
+async function maybeGenerateRecipeAssistantAfterPublish(targetRecipeId: ResourceId, hasAssistant: boolean) {
+  if (hasAssistant || !canGenerateRecipeAssistant.value) return;
+  const shouldGenerate = await uniPlatform.feedback.confirm({
+    title: "生成做饭建议",
+    content: "菜谱已发布，是否现在整理一份做饭建议？你也可以稍后再生成。",
+    confirmText: "立即生成",
+    cancelText: "稍后再说",
+    maskClosable: false
+  });
+  if (!shouldGenerate) return;
+  try {
+    await recipeApi.generateMyRecipeAssistant(targetRecipeId, {
+      operationId: createOperationId()
+    });
+    await uniPlatform.feedback.toast({ title: "做饭建议已生成", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "生成失败，稍后可再试", icon: "none" });
   }
 }
 
@@ -3060,6 +3010,7 @@ async function buildDraftContent(): Promise<RecipeDraftContentInput> {
     name: form.name.trim(),
     story: form.story.trim() || null,
     categoryId: form.categoryId || null,
+    inspirationCategoryId: form.inspirationCategoryId || null,
     sceneIds: [...form.sceneIds],
     originVersionId: originVersionId.value,
     originCoverImageUrl: originCoverImageUrl.value || null,
@@ -3088,6 +3039,7 @@ async function buildSaveContent(): Promise<RecipeDraftContentInput> {
     name: form.name.trim(),
     story: form.story.trim() || null,
     categoryId: form.categoryId || null,
+    inspirationCategoryId: form.inspirationCategoryId || null,
     sceneIds: [...form.sceneIds],
     originVersionId: originVersionId.value,
     originCoverImageUrl: originCoverImageUrl.value || null,

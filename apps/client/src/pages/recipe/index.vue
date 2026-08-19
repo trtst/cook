@@ -58,7 +58,7 @@
               </view>
             </scroll-view>
 
-            <view v-if="activeTab === 'inspiration'" class="filter-trigger-wrap">
+            <view v-if="activeTab === 'my' || activeTab === 'inspiration'" class="filter-trigger-wrap">
               <view
                 class="filter-trigger"
                 :class="{ 'filter-trigger--active': showFilters || activeFilterCount > 0 }"
@@ -74,11 +74,11 @@
           </view>
 
           <view
-            v-if="activeTab === 'inspiration'"
+            v-if="activeTab === 'my' || activeTab === 'inspiration'"
             class="filter-drawer"
             :class="{ 'filter-drawer--visible': showFilters }"
           >
-            <view class="filter-group">
+            <view v-if="activeTab === 'inspiration'" class="filter-group">
               <text class="filter-group__title">排序</text>
               <view class="filter-group__chips">
                 <view
@@ -119,6 +119,28 @@
                   @click="changeDuration(item.value)"
                 >
                   {{ item.label }}
+                </view>
+              </view>
+            </view>
+
+            <view v-if="activeTab === 'my'" class="filter-group">
+              <text class="filter-group__title">系统分类</text>
+              <view class="filter-group__chips">
+                <view
+                  class="filter-chip"
+                  :class="{ 'filter-chip--active': filterInspirationCategoryId === '' }"
+                  @click="changeFilterInspirationCategory('')"
+                >
+                  全部
+                </view>
+                <view
+                  v-for="item in inspirationCategories"
+                  :key="item.id"
+                  class="filter-chip"
+                  :class="{ 'filter-chip--active': filterInspirationCategoryId === item.id }"
+                  @click="changeFilterInspirationCategory(item.id)"
+                >
+                  {{ item.name }}
                 </view>
               </view>
             </view>
@@ -248,8 +270,8 @@
             <text class="action-card__icon-text">逛</text>
           </view>
           <view class="action-card__main">
-            <text class="action-card__name">从广场挑菜</text>
-            <text class="action-card__desc">切到灵感页挑选并收藏菜谱</text>
+            <text class="action-card__name">从灵感挑菜</text>
+            <text class="action-card__desc">切到灵感页挑选并保存到私房菜</text>
           </view>
           <text class="action-card__arrow">›</text>
         </view>
@@ -272,19 +294,15 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { onHide, onShow } from "@dcloudio/uni-app";
-import emptyCollectionIllustration from "@/assets/recipe-page/empty-collection.svg";
 import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
 import manageIcon from "@/assets/recipe-page/manage.svg";
 import {
 	recipeApi,
-	type CollectionSceneSummary,
-	type CollectedRecipeSummary,
 	type InspirationCategorySummary,
 	type InspirationRecipeSummary,
 	type InspirationSort,
 	type MyRecipeSummary,
 	type RecipeCategorySummary,
-	type RecipeSceneSummary,
 	type RecipeDifficulty,
 	type RecipeDuration
 } from "@/apis/recipe";
@@ -301,10 +319,9 @@ import { uniPlatform } from "@/platform/uni";
 import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
-import { formatDateTimeSecond } from "./date";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 
-type RecipeTab = "my" | "inspiration" | "collection";
+type RecipeTab = "my" | "inspiration";
 type SheetMode = "" | "my";
 type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
 const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
@@ -322,7 +339,7 @@ interface CardItem {
 	meta: string;
 	tag: string;
 	subline: string;
-	kind: "my" | "inspiration" | "collection";
+	kind: "my" | "inspiration";
 }
 
 function isSeedCoverUrl(value: string) {
@@ -343,8 +360,7 @@ const loginModalStore = useLoginModalStore();
 
 const pageSizeMap: Record<RecipeTab, number> = {
 	my: 20,
-	inspiration: 20,
-	collection: 20
+	inspiration: 20
 };
 const loadingTips = [
 	"帮你翻一翻今天想吃什么",
@@ -356,9 +372,8 @@ const loadingTips = [
 ];
 
 const tabs = [
-	{ value: "my" as const, label: "我的" },
-	{ value: "inspiration" as const, label: "灵感" },
-	{ value: "collection" as const, label: "合集" }
+	{ value: "my" as const, label: "私房菜" },
+	{ value: "inspiration" as const, label: "灵感" }
 ];
 const sortItems = [
 	{ value: "RECOMMENDED" as const, label: "推荐" },
@@ -376,17 +391,18 @@ const errorText = ref("");
 const fabHidden = ref(false);
 const myCategories = ref<RecipeCategorySummary[]>([]);
 const inspirationCategories = ref<InspirationCategorySummary[]>([]);
-const collectionScenes = ref<CollectionSceneSummary[]>([]);
-const collectionRecipes = ref<CollectedRecipeSummary[]>([]);
 const myCategoryId = ref<UUID | "">("");
 const inspirationCategoryId = ref<UUID | "">("");
-const collectionSceneId = ref<UUID | "">("");
+const myInspirationCategoryId = ref<UUID | "">("");
+const myDifficulty = ref<RecipeDifficulty | "">("");
+const myDuration = ref<RecipeDuration | "">("");
 const inspirationSort = ref<InspirationSort>("RECOMMENDED");
 const inspirationDifficulty = ref<RecipeDifficulty | "">("");
 const inspirationDuration = ref<RecipeDuration | "">("");
 const filterSort = ref<InspirationSort>("RECOMMENDED");
 const filterDifficulty = ref<RecipeDifficulty | "">("");
 const filterDuration = ref<RecipeDuration | "">("");
+const filterInspirationCategoryId = ref<UUID | "">("");
 const myRecipes = ref<MyRecipeSummary[]>([]);
 const inspirationRecipes = ref<InspirationRecipeSummary[]>([]);
 const loginIntentTab = ref<RecipeTab | null>(null);
@@ -394,23 +410,19 @@ const sheetMode = ref<SheetMode>("");
 const sheetVisible = ref(false);
 const loadedVersions = ref<Record<RecipeTab, number | null>>({
 	my: null,
-	inspiration: null,
-	collection: null
+	inspiration: null
 });
 const loadedKeywords = ref<Record<RecipeTab, string>>({
 	my: "",
-	inspiration: "",
-	collection: ""
+	inspiration: ""
 });
 const tabPage = ref<Record<RecipeTab, number>>({
 	my: 0,
-	inspiration: 0,
-	collection: 0
+	inspiration: 0
 });
 const tabHasNext = ref<Record<RecipeTab, boolean>>({
 	my: false,
-	inspiration: false,
-	collection: false
+	inspiration: false
 });
 const loadSource = ref<LoadSource>("idle");
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-page-sheet"));
@@ -441,32 +453,21 @@ const categoryItems = computed<CategoryItem[]>(() => {
 	if (activeTab.value === "inspiration") {
 		return [{ id: "", name: "全部" }, ...inspirationCategories.value.map(item => ({ id: item.id, name: item.name }))];
 	}
-	return [{ id: "", name: "全部" }, ...collectionScenes.value.map(item => ({ id: item.id, name: item.name }))];
+	return [{ id: "", name: "全部" }, ...myCategories.value.map(item => ({ id: item.id, name: item.name }))];
 });
 const firstCategoryItem = computed<CategoryItem>(() => categoryItems.value[0] || { id: "", name: "全部" });
 const scrollCategoryItems = computed<CategoryItem[]>(() => categoryItems.value.slice(1));
 const currentCategoryId = computed(() => {
 	if (activeTab.value === "my") return myCategoryId.value;
-	if (activeTab.value === "inspiration") return inspirationCategoryId.value;
-	return collectionSceneId.value;
-});
-const selectedCollection = computed(() => {
-	if (!collectionScenes.value.length || !collectionSceneId.value) return null;
-	return collectionScenes.value.find(item => item.id === collectionSceneId.value) || null;
+	return inspirationCategoryId.value;
 });
 const cards = computed<CardItem[]>(() => {
 	if (activeTab.value === "my") return myRecipes.value.map(toMyCard);
-	if (activeTab.value === "inspiration") return inspirationRecipes.value.map(toInspirationCard);
-	return collectionRecipes.value.map(toCollectionCard);
+	return inspirationRecipes.value.map(toInspirationCard);
 });
-const collectionNeedsCreate = computed(
-	() => activeTab.value === "collection" && !collectionScenes.value.length && !collectionSceneId.value
-);
 const showCategoryBar = computed(() => {
 	if (activeTab.value === "inspiration") return true;
-	if (!sessionStore.isLoggedIn) return false;
-	if (activeTab.value === "my") return myCategories.value.length > 0;
-	return collectionScenes.value.length > 0;
+	return sessionStore.isLoggedIn;
 });
 const showStickyControls = computed(
 	() => showCategoryBar.value || activeTab.value === "inspiration"
@@ -474,9 +475,10 @@ const showStickyControls = computed(
 const keywordText = computed(() => keyword.value.trim());
 const activeFilterCount = computed(
 	() =>
-		Number(inspirationSort.value !== "RECOMMENDED") +
-		Number(Boolean(inspirationDifficulty.value)) +
-		Number(Boolean(inspirationDuration.value))
+		Number(activeTab.value === "inspiration" && inspirationSort.value !== "RECOMMENDED") +
+		Number(Boolean(activeTab.value === "my" ? myDifficulty.value : inspirationDifficulty.value)) +
+		Number(Boolean(activeTab.value === "my" ? myDuration.value : inspirationDuration.value)) +
+		Number(Boolean(activeTab.value === "my" ? myInspirationCategoryId.value : inspirationCategoryId.value))
 );
 const activeFilterBadge = computed(() => (activeFilterCount.value > 9 ? "9+" : String(activeFilterCount.value)));
 watch(
@@ -489,27 +491,19 @@ watch(
 const showRecipeEmpty = computed(
 	() =>
 		(activeTab.value === "my" && !cards.value.length) ||
-		(activeTab.value === "inspiration" && !cards.value.length) ||
-		(activeTab.value === "collection" && !cards.value.length)
+		(activeTab.value === "inspiration" && !cards.value.length)
 );
 const emptyStateClickable = computed(() => activeTab.value !== "inspiration");
 const emptyStateTitle = computed(() => {
-	if (activeTab.value === "my") return "添加你的第一道菜谱";
-	if (activeTab.value === "inspiration") return "暂时没找到合适的菜谱";
-	return collectionNeedsCreate.value ? "还没有合集菜谱" : `${selectedCollection.value?.name || "这个合集"}还没有菜谱`;
+	if (activeTab.value === "my") return "添加你的第一道私房菜";
+	return "暂时没找到合适的菜谱";
 });
 const emptyStateDescription = computed(() =>
 	activeTab.value === "my"
 		? "记录家常拿手菜、灵感改编和做法草稿，点一下就开始添加。"
-		: activeTab.value === "inspiration"
-			? "换个分类、关键词或筛选条件试试。"
-		: collectionNeedsCreate.value
-			? "可以先手动添加菜谱，或去灵感页挑菜后再慢慢整理合集。"
-			: "去灵感页挑菜后即可加入这个合集，也可以先手动补录。"
+			: "换个分类、关键词或筛选条件试试。"
 );
-const emptyStateArt = computed(() =>
-	activeTab.value === "collection" ? emptyCollectionIllustration : emptyStateIllustration
-);
+const emptyStateArt = computed(() => emptyStateIllustration);
 const fabText = computed(() => {
 	return "添加";
 });
@@ -606,7 +600,7 @@ function consumeRecipeTabIntent() {
 	const intentTab = uniPlatform.storage.getSync<RecipeTab | null>(RECIPE_HOME_INTENT_STORAGE_KEY);
 	if (!intentTab) return;
 	uniPlatform.storage.removeSync(RECIPE_HOME_INTENT_STORAGE_KEY);
-	if (intentTab !== "my" && intentTab !== "inspiration" && intentTab !== "collection") return;
+	if (intentTab !== "my" && intentTab !== "inspiration") return;
 	if (activeTab.value === intentTab) return;
 	if (activeTab.value === "inspiration" && intentTab !== "inspiration") {
 		resetInspirationFilters();
@@ -621,10 +615,8 @@ function changeCategory(categoryId: UUID | "") {
 	if (currentCategoryId.value === categoryId) return;
 	if (activeTab.value === "my") {
 		myCategoryId.value = categoryId;
-	} else if (activeTab.value === "inspiration") {
-		inspirationCategoryId.value = categoryId;
 	} else {
-		collectionSceneId.value = categoryId;
+		inspirationCategoryId.value = categoryId;
 	}
 	void loadActiveTab({ force: true, source: "switch" });
 }
@@ -642,6 +634,10 @@ function changeDifficulty(value: RecipeDifficulty | "") {
 function changeDuration(value: RecipeDuration | "") {
 	if (filterDuration.value === value) return;
 	filterDuration.value = value;
+}
+
+function changeFilterInspirationCategory(value: UUID | "") {
+	filterInspirationCategoryId.value = value;
 }
 
 function toggleFilters() {
@@ -671,6 +667,9 @@ function closeFilters() {
 }
 
 function resetInspirationFilters() {
+	myDifficulty.value = "";
+	myDuration.value = "";
+	myInspirationCategoryId.value = "";
 	inspirationSort.value = "RECOMMENDED";
 	inspirationDifficulty.value = "";
 	inspirationDuration.value = "";
@@ -680,25 +679,43 @@ function resetInspirationFilters() {
 }
 
 function syncFilterDraft() {
+	if (activeTab.value === "my") {
+		filterSort.value = "RECOMMENDED";
+		filterDifficulty.value = myDifficulty.value;
+		filterDuration.value = myDuration.value;
+		filterInspirationCategoryId.value = myInspirationCategoryId.value;
+		return;
+	}
 	filterSort.value = inspirationSort.value;
 	filterDifficulty.value = inspirationDifficulty.value;
 	filterDuration.value = inspirationDuration.value;
+	filterInspirationCategoryId.value = inspirationCategoryId.value;
 }
 
 function resetFilters() {
 	filterSort.value = "RECOMMENDED";
 	filterDifficulty.value = "";
 	filterDuration.value = "";
+	filterInspirationCategoryId.value = "";
 }
 
 function applyFilters() {
-	const changed =
-		filterSort.value !== inspirationSort.value ||
-		filterDifficulty.value !== inspirationDifficulty.value ||
-		filterDuration.value !== inspirationDuration.value;
-	inspirationSort.value = filterSort.value;
-	inspirationDifficulty.value = filterDifficulty.value;
-	inspirationDuration.value = filterDuration.value;
+	const changed = activeTab.value === "my"
+		? filterDifficulty.value !== myDifficulty.value ||
+		  filterDuration.value !== myDuration.value ||
+		  filterInspirationCategoryId.value !== myInspirationCategoryId.value
+		: filterSort.value !== inspirationSort.value ||
+		  filterDifficulty.value !== inspirationDifficulty.value ||
+		  filterDuration.value !== inspirationDuration.value;
+	if (activeTab.value === "my") {
+		myDifficulty.value = filterDifficulty.value;
+		myDuration.value = filterDuration.value;
+		myInspirationCategoryId.value = filterInspirationCategoryId.value;
+	} else {
+		inspirationSort.value = filterSort.value;
+		inspirationDifficulty.value = filterDifficulty.value;
+		inspirationDuration.value = filterDuration.value;
+	}
 	showFilters.value = false;
 	if (changed) {
 		void loadActiveTab({ force: true, source: "switch" });
@@ -707,8 +724,7 @@ function applyFilters() {
 
 function getHomeScope(tab: RecipeTab) {
 	if (tab === "my") return "home-my" as const;
-	if (tab === "inspiration") return "home-inspiration" as const;
-	return "home-collection" as const;
+	return "home-inspiration" as const;
 }
 
 function syncTabLoadState(tab: RecipeTab) {
@@ -732,59 +748,6 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 	loadSource.value = source;
 	let success = false;
 
-	if (currentTab === "collection") {
-		if (sessionStore.isLoggedIn) {
-			loading.value = true;
-			try {
-				if (!collectionScenes.value.length || source === "refresh") {
-					const result = await recipeApi.listCollections();
-					collectionScenes.value = result.items;
-					if (collectionSceneId.value && !collectionScenes.value.some(item => item.id === collectionSceneId.value)) {
-						collectionSceneId.value = collectionScenes.value[0]?.id || "";
-					}
-				}
-				if (!collectionScenes.value.length) {
-					collectionSceneId.value = "";
-					collectionRecipes.value = [];
-					tabPage.value.collection = 1;
-					tabHasNext.value.collection = false;
-					syncTabLoadState(currentTab);
-					success = true;
-					return success;
-				}
-				const list = await recipeApi.listCollectionRecipes({
-					page: 1,
-					pageSize: pageSizeMap.collection,
-					keyword: keywordText.value || undefined,
-					sceneId: collectionSceneId.value || undefined
-				});
-				collectionRecipes.value = list.items;
-				tabPage.value.collection = list.page;
-				tabHasNext.value.collection = list.hasNext;
-				syncTabLoadState(currentTab);
-				success = true;
-			} catch (error) {
-				errorText.value = error instanceof Error ? error.message : "合集加载失败";
-				collectionRecipes.value = [];
-				tabPage.value.collection = 0;
-				tabHasNext.value.collection = false;
-			} finally {
-				loading.value = false;
-				loadSource.value = "idle";
-			}
-		} else {
-			collectionScenes.value = [];
-			collectionSceneId.value = "";
-			collectionRecipes.value = [];
-			tabPage.value.collection = 0;
-			tabHasNext.value.collection = false;
-			syncTabLoadState(currentTab);
-			loadSource.value = "idle";
-			success = true;
-		}
-		return success;
-	}
-
 	loading.value = true;
 	try {
 		if (currentTab === "my") {
@@ -797,14 +760,23 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 				success = true;
 				return success;
 			}
-			if (!myCategories.value.length || source === "refresh") {
-				myCategories.value = await recipeApi.listCategories();
+			const optionRequests: Promise<unknown>[] = [];
+			if (!myCategories.value.length || source === "refresh") optionRequests.push(recipeApi.listCategories());
+			if (!inspirationCategories.value.length || source === "refresh") optionRequests.push(recipeApi.listInspirationCategories());
+			if (optionRequests.length) {
+				const options = await Promise.all(optionRequests);
+				let optionIndex = 0;
+				if (!myCategories.value.length || source === "refresh") myCategories.value = options[optionIndex++] as RecipeCategorySummary[];
+				if (!inspirationCategories.value.length || source === "refresh") inspirationCategories.value = options[optionIndex++] as InspirationCategorySummary[];
 			}
 			const result = await recipeApi.listMyRecipes({
 				page: 1,
 				pageSize: pageSizeMap.my,
 				keyword: keywordText.value || undefined,
-				categoryId: myCategoryId.value || undefined
+				categoryId: myCategoryId.value || undefined,
+				inspirationCategoryId: myInspirationCategoryId.value || undefined,
+				difficulty: myDifficulty.value || undefined,
+				duration: myDuration.value || undefined
 			});
 			myRecipes.value = result.items;
 			tabPage.value.my = result.page;
@@ -851,11 +823,14 @@ async function loadMoreActiveTab() {
 		if (currentTab === "my") {
 			if (!sessionStore.isLoggedIn) return;
 			const result = await recipeApi.listMyRecipes({
-				page: tabPage.value.my + 1,
-				pageSize: pageSizeMap.my,
-				keyword: keywordText.value || undefined,
-				categoryId: myCategoryId.value || undefined
-			});
+					page: tabPage.value.my + 1,
+					pageSize: pageSizeMap.my,
+					keyword: keywordText.value || undefined,
+					categoryId: myCategoryId.value || undefined,
+					inspirationCategoryId: myInspirationCategoryId.value || undefined,
+					difficulty: myDifficulty.value || undefined,
+					duration: myDuration.value || undefined
+				});
 			myRecipes.value = [...myRecipes.value, ...result.items];
 			tabPage.value.my = result.page;
 			tabHasNext.value.my = result.hasNext;
@@ -863,22 +838,7 @@ async function loadMoreActiveTab() {
 			return;
 		}
 
-		if (currentTab === "collection") {
-			if (!sessionStore.isLoggedIn) return;
-			const result = await recipeApi.listCollectionRecipes({
-				page: tabPage.value.collection + 1,
-				pageSize: pageSizeMap.collection,
-				keyword: keywordText.value || undefined,
-				sceneId: collectionSceneId.value || undefined
-			});
-			collectionRecipes.value = [...collectionRecipes.value, ...result.items];
-			tabPage.value.collection = result.page;
-			tabHasNext.value.collection = result.hasNext;
-			syncTabLoadState(currentTab);
-			return;
-		}
-
-		const result = await recipeApi.listInspirationRecipes({
+			const result = await recipeApi.listInspirationRecipes({
 			page: tabPage.value.inspiration + 1,
 			pageSize: pageSizeMap.inspiration,
 			keyword: keywordText.value || undefined,
@@ -1017,18 +977,6 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 	};
 }
 
-function toCollectionCard(item: CollectedRecipeSummary): CardItem {
-	return {
-		id: item.id,
-		title: item.title,
-		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		coverTag: "",
-		meta: item.durationText || "未设时长",
-		tag: "",
-		subline: "",
-		kind: "collection"
-	};
-}
 </script>
 
 <style scoped lang="scss">
@@ -1337,54 +1285,6 @@ function toCollectionCard(item: CollectedRecipeSummary): CardItem {
   padding: var(--space-md);
   border-radius: var(--radius-xs);
   background: var(--color-surface);
-}
-
-.collection-board {
-  display: flex;
-  flex-direction: column;
-  gap: 18rpx;
-  margin-top: var(--space-md);
-  padding: 32rpx 30rpx;
-  border: 1rpx solid var(--color-border);
-  border-radius: 30rpx;
-  background: var(--color-surface);
-  box-shadow: 0 20rpx 48rpx rgba(41, 59, 47, 0.08);
-}
-
-.collection-board__title {
-  color: var(--color-text);
-  font-size: 34rpx;
-  font-weight: var(--font-weight-bold);
-}
-
-.collection-board__desc {
-  color: var(--color-text-secondary);
-  font-size: 26rpx;
-  line-height: var(--line-height-loose);
-}
-
-.collection-board__actions {
-  display: flex;
-  gap: 16rpx;
-  margin-top: 8rpx;
-}
-
-.collection-board__button {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  min-height: 84rpx;
-  padding: 0 24rpx;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
-  color: var(--button-primary-text);
-  font-size: 28rpx;
-}
-
-.collection-board__button--ghost {
-  background: var(--color-surface-muted);
-  color: var(--color-primary);
 }
 
 .notice {

@@ -72,10 +72,12 @@ page,
   --meal-slot-breakfast-soft: color-mix(in srgb, var(--meal-slot-breakfast) 18%, var(--color-surface));
   --meal-slot-lunch: color-mix(in srgb, var(--color-primary) 82%, var(--color-success) 18%);
   --meal-slot-lunch-soft: color-mix(in srgb, var(--meal-slot-lunch) 18%, var(--color-surface));
+  --meal-slot-afternoon-tea: color-mix(in srgb, var(--color-warning) 72%, var(--color-info) 28%);
+  --meal-slot-afternoon-tea-soft: color-mix(in srgb, var(--meal-slot-afternoon-tea) 18%, var(--color-surface));
   --meal-slot-dinner: color-mix(in srgb, var(--color-danger) 76%, var(--button-primary-gradient-end) 24%);
   --meal-slot-dinner-soft: color-mix(in srgb, var(--meal-slot-dinner) 18%, var(--color-surface));
-  --meal-slot-extra: color-mix(in srgb, var(--color-text-secondary) 72%, var(--button-primary-gradient-end) 28%);
-  --meal-slot-extra-soft: color-mix(in srgb, var(--meal-slot-extra) 14%, var(--color-surface));
+  --meal-slot-late-night: color-mix(in srgb, var(--color-info) 72%, var(--color-primary) 28%);
+  --meal-slot-late-night-soft: color-mix(in srgb, var(--meal-slot-late-night) 16%, var(--color-surface));
   --medal-icon-border: rgba(255, 255, 255, 0.66);
   --medal-icon-bg: var(--color-warning-button-bg);
   --medal-icon-shadow: 0 8rpx 16rpx var(--color-warning-soft);

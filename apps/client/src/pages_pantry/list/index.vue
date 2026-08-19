@@ -177,14 +177,13 @@
       :visible="shareManageVisible"
       :title="shareManageTitle"
       :subtitle="shareManageSubtitle"
-      :member-action="shareMemberAction"
+      single-share
       :friend-action="shareFriendAction"
       :error-text="shareLinkError"
       :show-close-action="canCloseShare"
       close-action-text="关闭分享"
       :close-action-disabled="submitting"
       @close="closeShareManager"
-      @member="openShareMembersSheet"
       @friend="handleShareFriendClick"
       @close-action="closeShare"
     >
@@ -232,56 +231,13 @@
         </view>
         <view class="sheet-facts__item">
           <text class="sheet-facts__label">加入方式</text>
-          <text class="sheet-facts__value">可发给饭搭子，也可直接转发给好友，对方确认后才会加入。</text>
+          <text class="sheet-facts__value">直接转发给好友，对方确认后才会加入。</text>
         </view>
         <view class="sheet-facts__item">
           <text class="sheet-facts__label">关闭分享</text>
           <text class="sheet-facts__value">关闭后，好友入口和待确认邀请会失效，新的协作者不能再加入。</text>
         </view>
       </view>
-    </SheetShell>
-
-    <SheetShell
-      :visible="shareMembersSheetVisible"
-      title="分享给饭搭子"
-      :subtitle="shareMembersSubtitle"
-      @close="closeShareMembersSheet"
-    >
-      <view class="share-card">
-        <text class="share-card__label">可选饭搭子</text>
-        <text class="share-card__hint">这里只显示当前和你存在有效关系的饭搭子成员。</text>
-        <view v-if="shareMembersLoading" class="sheet-note">加载中...</view>
-        <view v-else-if="shareMembersError" class="sheet-note sheet-note--error" @click="loadShareMembers(true)">{{ shareMembersError }}</view>
-        <view v-else-if="shareMembers.length" class="share-member-list">
-          <view
-            v-for="member in shareMembers"
-            :key="member.userId"
-            class="share-member"
-            :class="{ 'share-member--active': selectedShareUserIds.includes(member.userId) }"
-            @click="toggleShareUser(member.userId)"
-          >
-            <view class="share-member__avatar">{{ member.user.nickname?.trim().slice(0, 1) || "饭" }}</view>
-            <view class="share-member__main">
-              <text class="share-member__name">{{ member.user.nickname || "未命名成员" }}</text>
-              <text class="share-member__meta">UID {{ member.user.uid }}</text>
-            </view>
-            <text class="share-member__check">{{ selectedShareUserIds.includes(member.userId) ? "已选" : "选择" }}</text>
-          </view>
-        </view>
-        <text v-else class="share-card__hint">当前还没有可添加的饭搭子成员。</text>
-      </view>
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeShareMembersSheet">取消</button>
-          <button
-            class="sheet-actions__button sheet-actions__button--confirm"
-            :disabled="submitting || !selectedShareUserIds.length || shareMemberFull"
-            @click="shareToMembers"
-          >
-            {{ submitting ? "发送中..." : `发送 ${selectedShareUserIds.length} 位加入邀请` }}
-          </button>
-        </view>
-      </template>
     </SheetShell>
 
     <SheetShell
@@ -317,7 +273,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
-import { diningGroupApi, type DiningGroupMemberSummary } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -366,12 +321,6 @@ const sharePreview = ref<ShoppingSharePreview | null>(null);
 const shareManageVisible = ref(false);
 const shareTarget = ref<ShoppingListDetail | null>(null);
 const shareNoticeVisible = ref(false);
-const shareMembersSheetVisible = ref(false);
-const shareMembersLoading = ref(false);
-const shareMembersError = ref("");
-const shareMembers = ref<DiningGroupMemberSummary[]>([]);
-const shareMembersReady = ref(false);
-const selectedShareUserIds = ref<UUID[]>([]);
 const shareLinkLoading = ref(false);
 const shareLinkError = ref("");
 const shareUrl = ref("");
@@ -429,13 +378,9 @@ const sharePendingText = computed(() => {
 });
 const shareManageTitle = computed(() => "清单协作");
 const shareManageSubtitle = computed(() => {
-  if (!shareTarget.value) return "支持饭搭子和好友一起维护。";
+  if (!shareTarget.value) return "直接转发给好友，对方确认后一起维护。";
   if (shareActive.value) return `最多 ${shareTarget.value.memberLimit} 人协作，先加入者优先。`;
-  return "选一个协作方式，对方确认后加入。";
-});
-const shareMembersSubtitle = computed(() => {
-  if (!shareTarget.value) return "选择当前与你有有效关系的饭搭子成员。";
-  return `当前 ${shareTarget.value.memberCount}/${shareTarget.value.memberLimit} 人，发出邀请后需对方确认才会加入。`;
+  return "会生成好友分享入口，对方确认后加入。";
 });
 const canCloseShare = computed(() => shareTarget.value?.role === "OWNER" && shareTarget.value?.status === "ACTIVE" && shareActive.value);
 const shareFriendDisabled = computed(() => !canUseShareFeature.value || shareMemberFull.value || shareLinkLoading.value || !shareUrl.value);
@@ -445,16 +390,6 @@ const shareFriendCardHint = computed(() => {
   if (shareLinkLoading.value) return "正在准备好友分享入口...";
   return "直接转发给好友，对方打开后确认加入。";
 });
-const shareMemberAction = computed(() => ({
-  label: "分享给饭搭子",
-  hint: !canUseShareFeature.value
-    ? "协作分享属于会员权益，开通会员后可邀请饭搭子一起维护。"
-    : shareMemberFull.value
-      ? "当前协作者名额已满，暂时不能再加新的饭搭子。"
-      : "把这张清单发给已有关系的饭搭子，对方确认后一起维护。",
-  disabled: shareMemberFull.value,
-  muted: shareMemberFull.value || !canUseShareFeature.value
-}));
 const shareFriendAction = computed(() => ({
   label: "分享给好友",
   hint: shareFriendCardHint.value,
@@ -907,58 +842,6 @@ function closeShareNotice() {
   shareNoticeVisible.value = false;
 }
 
-function openShareMembersSheet() {
-  if (!canUseShareFeature.value) {
-    void handleShareFeatureLocked();
-    return;
-  }
-  if (shareMemberFull.value) return;
-  shareManageVisible.value = false;
-  shareMembersSheetVisible.value = true;
-  void loadShareMembers();
-}
-
-function closeShareMembersSheet() {
-  shareMembersSheetVisible.value = false;
-  selectedShareUserIds.value = [];
-  shareMembersError.value = "";
-}
-
-async function loadShareMembers(force = false) {
-  if (shareMembersReady.value && !force) return;
-  if (shareMembersLoading.value && !force) return;
-  shareMembersLoading.value = true;
-  shareMembersError.value = "";
-  try {
-    const groups = await diningGroupApi.getMine();
-    const results = await Promise.all(groups.items.map(item => diningGroupApi.listMembers(item.id)));
-    const memberMap = new Map<UUID, DiningGroupMemberSummary>();
-    results.forEach((result) => {
-      result.members.forEach((member) => {
-        if (member.user.uid === sessionStore.uid) return;
-        if (!memberMap.has(member.userId)) {
-          memberMap.set(member.userId, member);
-        }
-      });
-    });
-    shareMembers.value = [...memberMap.values()];
-    shareMembersReady.value = true;
-    selectedShareUserIds.value = selectedShareUserIds.value.filter(userId => memberMap.has(userId));
-  } catch (error) {
-    shareMembersError.value = error instanceof Error ? error.message : "饭搭子成员加载失败";
-  } finally {
-    shareMembersLoading.value = false;
-  }
-}
-
-function toggleShareUser(userId: UUID) {
-  if (selectedShareUserIds.value.includes(userId)) {
-    selectedShareUserIds.value = selectedShareUserIds.value.filter(currentUserId => currentUserId !== userId);
-    return;
-  }
-  selectedShareUserIds.value = [...selectedShareUserIds.value, userId];
-}
-
 async function handleShareFeatureLocked() {
   await uniPlatform.feedback.toast({ title: "协作分享属于会员权益，暂时仅会员可用", icon: "none" });
 }
@@ -1001,26 +884,6 @@ async function prepareShareLink(silent = false) {
     }
   } finally {
     shareLinkLoading.value = false;
-  }
-}
-
-async function shareToMembers() {
-  if (!shareTarget.value || submitting.value || !selectedShareUserIds.value.length) return;
-  submitting.value = true;
-  try {
-    shareTarget.value = await shoppingApi.shareListMembers(shareTarget.value.id, {
-      operationId: createOperationId(),
-      version: shareTarget.value.version,
-      targetUserIds: selectedShareUserIds.value
-    });
-    syncListSummary(shareTarget.value);
-    closeShareMembersSheet();
-    selectedShareUserIds.value = [];
-    await uniPlatform.feedback.toast({ title: "已发送邀请", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分享失败", icon: "none" });
-  } finally {
-    submitting.value = false;
   }
 }
 
@@ -1073,7 +936,6 @@ async function closeShare() {
     syncListSummary(shareTarget.value);
     shareUrl.value = "";
     shareLinkError.value = "";
-    closeShareMembersSheet();
     await uniPlatform.feedback.toast({ title: "已关闭共享", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });

@@ -49,8 +49,9 @@
                   <view class="week-day__dots">
                     <view v-if="day.mark.breakfast" class="week-day__dot week-day__dot--breakfast" />
                     <view v-if="day.mark.lunch" class="week-day__dot week-day__dot--lunch" />
+                    <view v-if="day.mark.afternoonTea" class="week-day__dot week-day__dot--afternoon-tea" />
                     <view v-if="day.mark.dinner" class="week-day__dot week-day__dot--dinner" />
-                    <text v-if="day.mark.hasExtra" class="week-day__extra">+</text>
+                    <view v-if="day.mark.lateNight" class="week-day__dot week-day__dot--late-night" />
                   </view>
                 </view>
               </view>
@@ -1390,13 +1391,15 @@ function clearPageState() {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
-  min-height: 20rpx;
+  width: 42rpx;
+  gap: 2rpx;
+  min-height: 24rpx;
 }
 
 .week-day__dot {
   width: 10rpx;
   height: 10rpx;
+  flex-shrink: 0;
   border-radius: 999rpx;
 }
 
@@ -1408,14 +1411,16 @@ function clearPageState() {
   background: var(--meal-slot-lunch);
 }
 
+.week-day__dot--afternoon-tea {
+  background: var(--meal-slot-afternoon-tea);
+}
+
 .week-day__dot--dinner {
   background: var(--meal-slot-dinner);
 }
 
-.week-day__extra {
-  font-size: 18rpx;
-  line-height: 1;
-  color: var(--color-text-secondary);
+.week-day__dot--late-night {
+  background: var(--meal-slot-late-night);
 }
 
 .week-day--selected .week-day__number-shell {
@@ -1574,9 +1579,9 @@ function clearPageState() {
     radial-gradient(circle at 58% 42%, color-mix(in srgb, var(--meal-slot-dinner) 4%, transparent) 0 13%, transparent 14%);
 }
 
-.meal-card--extra {
-  --plan-slot-color: var(--meal-slot-extra);
-  --plan-slot-soft: var(--meal-slot-extra-soft);
+.meal-card--afternoon-tea {
+  --plan-slot-color: var(--meal-slot-afternoon-tea);
+  --plan-slot-soft: var(--meal-slot-afternoon-tea-soft);
   --plan-slot-band-pattern:
     radial-gradient(circle at 24% 26%, color-mix(in srgb, var(--plan-slot-color) 11%, transparent) 0 16%, transparent 17%),
     radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 12%, transparent 13%),
@@ -1584,8 +1589,22 @@ function clearPageState() {
     radial-gradient(circle at 38% 74%, color-mix(in srgb, var(--plan-slot-color) 6%, transparent) 0 12%, transparent 13%);
   --plan-slot-panel-bg:
     radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 80% 72%, color-mix(in srgb, var(--meal-slot-extra) 5%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 56% 38%, color-mix(in srgb, var(--meal-slot-extra) 4%, transparent) 0 13%, transparent 14%);
+    radial-gradient(circle at 80% 72%, color-mix(in srgb, var(--meal-slot-afternoon-tea) 5%, transparent) 0 16%, transparent 17%),
+    radial-gradient(circle at 56% 38%, color-mix(in srgb, var(--meal-slot-afternoon-tea) 4%, transparent) 0 13%, transparent 14%);
+}
+
+.meal-card--late-night {
+  --plan-slot-color: var(--meal-slot-late-night);
+  --plan-slot-soft: var(--meal-slot-late-night-soft);
+  --plan-slot-band-pattern:
+    radial-gradient(circle at 24% 26%, color-mix(in srgb, var(--plan-slot-color) 11%, transparent) 0 16%, transparent 17%),
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 12%, transparent 13%),
+    radial-gradient(circle at 74% 70%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 15%, transparent 16%),
+    radial-gradient(circle at 38% 74%, color-mix(in srgb, var(--plan-slot-color) 6%, transparent) 0 12%, transparent 13%);
+  --plan-slot-panel-bg:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
+    radial-gradient(circle at 80% 72%, color-mix(in srgb, var(--meal-slot-late-night) 5%, transparent) 0 16%, transparent 17%),
+    radial-gradient(circle at 56% 38%, color-mix(in srgb, var(--meal-slot-late-night) 4%, transparent) 0 13%, transparent 14%);
 }
 
 .meal-card__event-badge {

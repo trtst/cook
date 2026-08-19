@@ -19,6 +19,17 @@
           <view class="cook-toolbar__main">
             <text class="cook-toolbar__title">{{ sourceTitle }}</text>
             <text class="cook-toolbar__meta">{{ toolbarMeta }}</text>
+            <view v-if="canSwitchFlowMode" class="cook-toolbar__flow-modes">
+              <view
+                v-for="item in flowModeOptions"
+                :key="item.value"
+                class="cook-toolbar__flow-mode"
+                :class="{ 'cook-toolbar__flow-mode--active': flowMode === item.value }"
+                @click="setFlowMode(item.value)"
+              >
+                {{ item.label }}
+              </view>
+            </view>
           </view>
           <view class="cook-toolbar__modes">
             <view
@@ -173,7 +184,7 @@
 import { computed, ref, watch } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
-import { recipeApi, type RecipeContentSnapshot } from "@/apis/recipe";
+import { recipeApi, type RecipeAssistantSnapshot, type RecipeContentSnapshot } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
@@ -186,6 +197,7 @@ import { mealApi, type MealPlanCookAssistant, type MealPlanSummary } from "../ap
 type SourceType = "recipe" | "plan";
 type RecipeKind = "my" | "inspiration" | "collection";
 type ViewMode = "list" | "swiper";
+type FlowMode = "assistant" | "original";
 type StepDisplayMode = "text" | "image" | "mixed";
 type StepDurationInfo = {
   text: string;
@@ -215,11 +227,14 @@ const recipeKind = ref<RecipeKind>("my");
 const recipeId = ref<UUID | "">("");
 const planItemId = ref<UUID | "">("");
 const planDate = ref("");
-const steps = ref<CookStep[]>([]);
-const currentIndex = ref(0);
-const completedStepIds = ref<string[]>([]);
+const assistantSteps = ref<CookStep[]>([]);
+const originalSteps = ref<CookStep[]>([]);
+const flowMode = ref<FlowMode>("original");
+const assistantCurrentIndex = ref(0);
+const originalCurrentIndex = ref(0);
+const assistantCompletedStepIds = ref<string[]>([]);
+const originalCompletedStepIds = ref<string[]>([]);
 const sourceTitle = ref("");
-const useAssistantFlow = ref(false);
 const keepScreenOn = ref(false);
 const timerRunning = ref(false);
 const elapsedSeconds = ref(0);
@@ -229,6 +244,16 @@ let timerId: ReturnType<typeof setInterval> | null = null;
 
 const pageTitle = computed(() => (allStepsDone.value ? "做饭完成" : "做饭模式"));
 const requiresLogin = computed(() => sourceType.value === "plan");
+const steps = computed(() => (flowMode.value === "assistant" ? assistantSteps.value : originalSteps.value));
+const currentIndex = computed(() => (flowMode.value === "assistant" ? assistantCurrentIndex.value : originalCurrentIndex.value));
+const completedStepIds = computed(() => (flowMode.value === "assistant" ? assistantCompletedStepIds.value : originalCompletedStepIds.value));
+const hasAssistantFlow = computed(() => assistantSteps.value.length > 0);
+const hasOriginalFlow = computed(() => originalSteps.value.length > 0);
+const canSwitchFlowMode = computed(() => hasAssistantFlow.value && hasOriginalFlow.value);
+const flowModeOptions = computed(() => [
+  { value: "assistant" as FlowMode, label: sourceType.value === "plan" ? "本餐建议" : "做饭建议" },
+  { value: "original" as FlowMode, label: "原始步骤" }
+]);
 const currentStep = computed(() => steps.value[currentIndex.value] ?? null);
 const allStepsDone = computed(() => steps.value.length > 0 && completedStepIds.value.length >= steps.value.length);
 const canOpenRecipe = computed(() => {
@@ -236,7 +261,7 @@ const canOpenRecipe = computed(() => {
   return Boolean(currentStep.value?.recipeId);
 });
 const toolbarMeta = computed(() => {
-  if (useAssistantFlow.value) return "当前按这桌菜的做饭建议继续。";
+  if (flowMode.value === "assistant") return sourceType.value === "plan" ? "当前按这桌菜的做饭建议继续。" : "当前按这道菜的做饭建议继续。";
   return sourceType.value === "plan" ? "当前按各道菜的原步骤继续。" : "当前按原菜谱步骤继续。";
 });
 const timerDisplay = computed(() => {
@@ -310,10 +335,15 @@ async function loadRecipeFlow() {
   }
   const detail = await loadRecipeDetail(recipeKind.value, recipeId.value);
   sourceTitle.value = detail.title || "开始做饭";
-  useAssistantFlow.value = false;
-  steps.value = ensureSteps(buildRecipeSteps(detail.id, recipeKind.value, detail.title, detail.content), detail.title || "这道菜", recipeKind.value);
-  currentIndex.value = 0;
-  completedStepIds.value = [];
+  const original = ensureSteps(buildRecipeSteps(detail.id, recipeKind.value, detail.title, detail.content), detail.title || "这道菜", recipeKind.value);
+  const assistant = detail.assistant?.steps.length
+    ? ensureSteps(
+        buildRecipeAssistantSteps(detail.id, recipeKind.value, detail.title, detail.assistant),
+        detail.title || "这道菜",
+        recipeKind.value
+      )
+    : [];
+  applyFlowData(assistant, original);
 }
 
 async function loadPlanFlow() {
@@ -336,16 +366,10 @@ async function loadPlanFlow() {
     assistant = null;
   }
 
-  if (assistant?.hasSnapshot && !assistant.isStale) {
-    useAssistantFlow.value = true;
-    steps.value = ensureSteps(buildAssistantSteps(plan, assistant), sourceTitle.value || "这顿饭", "my");
-  } else {
-    useAssistantFlow.value = false;
-    steps.value = ensureSteps(await buildPlanRecipeSteps(plan), sourceTitle.value || "这顿饭", "my");
-  }
-
-  currentIndex.value = 0;
-  completedStepIds.value = [];
+  const original = ensureSteps(await buildPlanRecipeSteps(plan), sourceTitle.value || "这顿饭", "my");
+  const assistantStepsList =
+    assistant?.hasSnapshot && !assistant.isStale ? ensureSteps(buildAssistantSteps(plan, assistant), sourceTitle.value || "这顿饭", "my") : [];
+  applyFlowData(assistantStepsList, original);
 }
 
 async function loadRecipeDetail(kind: RecipeKind, targetRecipeId: UUID) {
@@ -380,6 +404,33 @@ function buildRecipeSteps(targetRecipeId: UUID, targetRecipeKind: RecipeKind, di
     });
   });
   return nextSteps;
+}
+
+function buildRecipeAssistantSteps(
+  targetRecipeId: UUID,
+  targetRecipeKind: RecipeKind,
+  dishTitle: string,
+  assistant: RecipeAssistantSnapshot
+): CookStep[] {
+  return assistant.steps.map(item => ({
+    id: `recipe-assistant-${targetRecipeId}-${item.order}`,
+    title: item.title.trim() || resolveRecipeStepTitle(item.detail, item.order - 1),
+    bodyText: item.detail.trim() || "按这一步继续处理。",
+    dishTitle,
+    sourceTag: "建议流程",
+    recipeId: targetRecipeId,
+    recipeKind: targetRecipeKind,
+    note:
+      item.phase === "PREP"
+        ? "先把这一步准备好，再进入开做。"
+        : item.phase === "SERVE"
+          ? "接近出锅上桌时再处理这一项。"
+          : "",
+    imageUrl: item.imageUrl || null,
+    displayMode: resolveDisplayMode(item.detail, item.imageUrl || null),
+    durationText: item.durationText || "",
+    durationSeconds: resolveDurationSeconds(item.durationText)
+  }));
 }
 
 async function buildPlanRecipeSteps(plan: MealPlanSummary) {
@@ -478,6 +529,18 @@ function ensureSteps(currentSteps: CookStep[], fallbackTitle: string, fallbackKi
   ];
 }
 
+function resolveDurationSeconds(durationText: string | null | undefined) {
+  if (!durationText) return null;
+  let seconds = 0;
+  const matches = durationText.matchAll(/(\d+)\s*(小时|分钟)/g);
+  for (const match of matches) {
+    const value = Number(match[1] ?? 0);
+    if (!Number.isFinite(value) || value <= 0) continue;
+    seconds += match[2] === "小时" ? value * 3600 : value * 60;
+  }
+  return seconds > 0 ? seconds : null;
+}
+
 function resolveRecipeStepTitle(detail: string, index: number) {
   const shortText = detail.replace(/\s+/g, " ").trim();
   if (!shortText) return `步骤 ${index + 1}`;
@@ -536,23 +599,49 @@ function setViewMode(nextMode: ViewMode) {
   viewMode.value = nextMode;
 }
 
+function setFlowMode(nextMode: FlowMode) {
+  if (nextMode === flowMode.value) return;
+  if (nextMode === "assistant" && !hasAssistantFlow.value) return;
+  if (nextMode === "original" && !hasOriginalFlow.value) return;
+  stopTimer();
+  elapsedSeconds.value = 0;
+  flowMode.value = nextMode;
+}
+
+function applyFlowData(nextAssistantSteps: CookStep[], nextOriginalSteps: CookStep[]) {
+  assistantSteps.value = nextAssistantSteps;
+  originalSteps.value = nextOriginalSteps;
+  assistantCurrentIndex.value = 0;
+  originalCurrentIndex.value = 0;
+  assistantCompletedStepIds.value = [];
+  originalCompletedStepIds.value = [];
+  flowMode.value = nextAssistantSteps.length ? "assistant" : "original";
+}
+
 function setCurrentStep(index: number) {
   if (index < 0 || index >= steps.value.length) return;
-  currentIndex.value = index;
+  if (flowMode.value === "assistant") {
+    assistantCurrentIndex.value = index;
+    return;
+  }
+  originalCurrentIndex.value = index;
 }
 
 function resetPage() {
   loading.value = false;
   errorText.value = "";
   sourceTitle.value = "";
-  useAssistantFlow.value = false;
   resetSteps();
 }
 
 function resetSteps() {
-  steps.value = [];
-  currentIndex.value = 0;
-  completedStepIds.value = [];
+  assistantSteps.value = [];
+  originalSteps.value = [];
+  flowMode.value = "original";
+  assistantCurrentIndex.value = 0;
+  originalCurrentIndex.value = 0;
+  assistantCompletedStepIds.value = [];
+  originalCompletedStepIds.value = [];
   stopTimer();
   elapsedSeconds.value = 0;
 }
@@ -560,27 +649,33 @@ function resetSteps() {
 function handleSwiperChange(event: { detail?: { current?: number } }) {
   const nextIndex = Number(event.detail?.current ?? 0);
   if (!Number.isInteger(nextIndex) || nextIndex < 0 || nextIndex >= steps.value.length) return;
-  currentIndex.value = nextIndex;
+  setCurrentStep(nextIndex);
 }
 
 function goPrev() {
   if (currentIndex.value <= 0) return;
-  currentIndex.value -= 1;
+  setCurrentStep(currentIndex.value - 1);
 }
 
 function goNext() {
   if (currentIndex.value >= steps.value.length - 1) return;
-  currentIndex.value += 1;
+  setCurrentStep(currentIndex.value + 1);
 }
 
 function completeCurrentStep() {
   const step = currentStep.value;
   if (!step) return;
-  if (!completedStepIds.value.includes(step.id)) {
-    completedStepIds.value = [...completedStepIds.value, step.id];
+  const currentCompleted = flowMode.value === "assistant" ? assistantCompletedStepIds.value : originalCompletedStepIds.value;
+  if (!currentCompleted.includes(step.id)) {
+    const nextCompleted = [...currentCompleted, step.id];
+    if (flowMode.value === "assistant") {
+      assistantCompletedStepIds.value = nextCompleted;
+    } else {
+      originalCompletedStepIds.value = nextCompleted;
+    }
   }
   if (currentIndex.value < steps.value.length - 1) {
-    currentIndex.value += 1;
+    setCurrentStep(currentIndex.value + 1);
     return;
   }
   stopTimer();
@@ -731,6 +826,29 @@ function formatElapsed(totalSeconds: number) {
   font-size: 24rpx;
   line-height: 1.7;
   color: var(--color-text-secondary);
+}
+
+.cook-toolbar__flow-modes {
+  display: inline-flex;
+  width: fit-content;
+  gap: 8rpx;
+  padding: 8rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 1rpx rgba(47, 111, 78, 0.08);
+}
+
+.cook-toolbar__flow-mode {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: var(--color-text-secondary);
+}
+
+.cook-toolbar__flow-mode--active {
+  color: var(--color-primary);
+  background: rgba(47, 111, 78, 0.12);
+  font-weight: var(--font-weight-medium);
 }
 
 .cook-toolbar__modes {

@@ -459,7 +459,7 @@ function resolveFocusText(
   myStatus: DiningEventSummary["participants"][number]["status"] | null
 ) {
   if (isEventExpired(event)) return "这场局已结束";
-  if (event.status === "COMPLETED") return "可看饭搭子卡";
+  if (event.status === "COMPLETED") return "可看饭局回忆";
   if (event.status === "CANCELLED") return "这场局已取消";
   if (role === "PARTICIPANT" && myStatus === "INVITED") return "等你回应";
   if (role === "PARTICIPANT" && myStatus === "DECLINED") return "你已拒绝";
@@ -876,12 +876,11 @@ function todayText() {
 
 .event-card__row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12rpx;
 }
 
 .event-card__row-icon {
-  width: 28rpx;
   margin-top: 2rpx;
   color: color-mix(in srgb, var(--color-text-secondary) 72%, transparent);
   font-size: 22rpx;

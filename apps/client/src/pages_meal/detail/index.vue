@@ -314,6 +314,29 @@
                   </template>
                 </view>
               </view>
+
+              <view v-if="eventDetail" class="meal-panel">
+                <view class="meal-panel__head meal-panel__head--row">
+                  <text class="meal-panel__title">备注</text>
+                  <view
+                    v-if="canEditEventNote"
+                    class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
+                    @click="openNoteSheet"
+                  >
+                    <text class="cookfont icon-edit meal-menu__add-icon" />
+                    <text>{{ eventNoteActionText }}</text>
+                  </view>
+                </view>
+
+                <view v-if="eventNoteText" class="event-note">
+                  <text class="event-note__text">{{ eventNoteText }}</text>
+                </view>
+
+                <view v-else class="meal-menu-empty">
+                  <text class="meal-menu-empty__title">{{ eventNoteEmptyTitle }}</text>
+                  <text class="meal-menu-empty__text">{{ eventNoteEmptyText }}</text>
+                </view>
+              </view>
             </view>
           </view>
         </scroll-view>
@@ -409,6 +432,29 @@
                     <text class="participant-sheet__name">{{ item.name }}</text>
                     <text class="participant-sheet__meta">{{ item.statusText }}</text>
                   </view>
+                </view>
+              </view>
+
+              <view v-if="eventDetail" class="meal-panel">
+                <view class="meal-panel__head meal-panel__head--row">
+                  <text class="meal-panel__title">备注</text>
+                  <view
+                    v-if="canEditEventNote"
+                    class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
+                    @click="openNoteSheet"
+                  >
+                    <text class="cookfont icon-edit meal-menu__add-icon" />
+                    <text>{{ eventNoteActionText }}</text>
+                  </view>
+                </view>
+
+                <view v-if="eventNoteText" class="event-note">
+                  <text class="event-note__text">{{ eventNoteText }}</text>
+                </view>
+
+                <view v-else class="meal-menu-empty">
+                  <text class="meal-menu-empty__title">{{ eventNoteEmptyTitle }}</text>
+                  <text class="meal-menu-empty__text">{{ eventNoteEmptyText }}</text>
                 </view>
               </view>
             </view>
@@ -588,6 +634,33 @@
         </SheetShell>
 
         <SheetShell
+          :visible="noteSheetVisible"
+          title="饭局备注"
+          subtitle="写给参与人的公开说明，比如到场提醒、饮食禁忌或临时安排。"
+          @close="closeNoteSheet"
+          @after-close="handleNoteSheetAfterClose"
+        >
+          <view class="sheet-section">
+            <textarea
+              v-model="noteDraft"
+              class="sheet-input note-sheet__input"
+              maxlength="255"
+              placeholder="例如：有人花生过敏，今晚不要带含花生的凉菜"
+              placeholder-class="sheet-input__placeholder"
+            />
+          </view>
+
+          <template #footer>
+            <view class="sheet-actions">
+              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeNoteSheet">取消</button>
+              <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting" @click="submitEventNote">
+                {{ submitting ? "保存中..." : "保存备注" }}
+              </button>
+            </view>
+          </template>
+        </SheetShell>
+
+        <SheetShell
           :visible="showEventEditor"
           :title="eventDetail ? '修改时间' : '发起饭局'"
           subtitle="先把时间定下来，菜单后面仍在这个餐次详情里继续补。"
@@ -630,67 +703,22 @@
           :visible="shareSheetVisible"
           title="分享邀请"
           :subtitle="shareSheetSubtitle"
-          :member-action="inviteMemberAction"
+          single-share
           :friend-action="inviteFriendAction"
           :error-text="shareLinkError"
           @close="closeShareSheet"
           @after-close="handleShareSheetAfterClose"
-          @member="openShareMembersSheet"
           @friend="handleShareFriendClick"
         />
-
-        <SheetShell
-          :visible="shareMembersSheetVisible"
-          title="分享给饭搭子"
-          subtitle="这里只显示当前和你存在有效关系、且还没在这场饭局里的饭搭子成员。"
-          @close="closeShareMembersSheet"
-        >
-          <view class="share-card">
-            <text class="share-card__label">可选饭搭子</text>
-            <text class="share-card__hint">发出邀请后，对方确认才会加入这场饭局。</text>
-            <view v-if="shareMembersLoading" class="sheet-note">加载中...</view>
-            <view v-else-if="shareMembersError" class="sheet-note sheet-note--error" @click="loadShareMembers(true)">{{ shareMembersError }}</view>
-            <view v-else-if="shareMembers.length" class="share-member-list">
-              <view
-                v-for="member in shareMembers"
-                :key="member.userId"
-                class="share-member"
-                :class="{ 'share-member--active': selectedShareUserIds.includes(member.userId) }"
-                @click="toggleShareUser(member.userId)"
-              >
-                <view class="share-member__avatar">{{ member.user.nickname?.trim().slice(0, 1) || "饭" }}</view>
-                <view class="share-member__main">
-                  <text class="share-member__name">{{ member.user.nickname || "未命名成员" }}</text>
-                  <text class="share-member__meta">UID {{ member.user.uid }}</text>
-                </view>
-                <text class="share-member__check">{{ selectedShareUserIds.includes(member.userId) ? "已选" : "选择" }}</text>
-              </view>
-            </view>
-            <text v-else class="share-card__hint">当前还没有可添加的饭搭子成员。</text>
-          </view>
-          <template #footer>
-            <view class="sheet-actions">
-              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeShareMembersSheet">取消</button>
-              <button
-                class="sheet-actions__button sheet-actions__button--confirm"
-                :disabled="submitting || !selectedShareUserIds.length"
-                @click="shareToMembers"
-              >
-                {{ submitting ? "发送中..." : `发送 ${selectedShareUserIds.length} 位加入邀请` }}
-              </button>
-            </view>
-          </template>
-        </SheetShell>
       </template>
     </view>
   </Layout>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from "@dcloudio/uni-app";
 import { mealApi, type DiningEventSummary, type MealPlanCookAssistant, type MealPlanSummary } from "../apis/meal";
-import { diningGroupApi, type DiningGroupMemberSummary } from "@/apis/dining-group";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
@@ -753,17 +781,14 @@ type ParticipantSheetItem = {
   canRevoke: boolean;
   canReinvite: boolean;
 };
-type FooterStage = "PLANNING" | "MENU_PENDING" | "READY_TO_START" | "PLAN_ENDED" | "ENDED" | "COMPLETED" | "CANCELLED";
+type FooterStage = "MENU_EDITING" | "READY_TO_START" | "TIME_UP" | "CANCELLED";
 type FooterActionKey =
   | "share-invite"
   | "recipe"
   | "bring"
   | "create-event"
-  | "fill-menu"
   | "confirm-menu"
   | "cook-assistant"
-  | "view-menu"
-  | "complete-event"
   | "share-memory"
   | "view-memory";
 type FooterAction = {
@@ -801,12 +826,6 @@ const participantSheetVisible = ref(false);
 const participantActionId = ref<UUID | null>(null);
 const inviteSharing = ref(false);
 const shareSheetVisible = ref(false);
-const shareMembersSheetVisible = ref(false);
-const shareMembersLoading = ref(false);
-const shareMembersError = ref("");
-const shareMembers = ref<DiningGroupMemberSummary[]>([]);
-const shareMembersReady = ref(false);
-const selectedShareUserIds = ref<UUID[]>([]);
 const shareLinkError = ref("");
 const activeSharePath = ref("");
 const recipeSheetVisible = ref(false);
@@ -819,6 +838,8 @@ const recipeSubmitting = ref(false);
 const claimingMenuItemId = ref<UUID | null>(null);
 const titleSheetVisible = ref(false);
 const titleDraft = ref("");
+const noteSheetVisible = ref(false);
+const noteDraft = ref("");
 const scheduleMonthDate = ref(todayText());
 const nowMs = ref(Date.now());
 let footerTimer: ReturnType<typeof setInterval> | null = null;
@@ -860,6 +881,9 @@ const planHeroEyebrow = computed(() => {
 const planHeroMeta = computed(() => {
   if (planClosed.value) return "这顿饭已经过了时间，当前菜单和记录先保留给你回看。";
   if (hasDiningEvent.value) return "这顿饭已经约上饭局，菜单、参与反馈和后续分享都从这里继续。";
+  if (planDetail.value?.menuLocked) {
+    return "菜单已经固定下来了，后面可以直接开始做饭，也可以再补发起饭局。";
+  }
   if (currentMenuItems.value.length) {
     return "菜单、做饭顺序、后续发起饭局，都从这里继续。";
   }
@@ -941,6 +965,15 @@ const detailFacts = computed<FactItem[]>(() => {
   ];
 });
 const canEditTitle = computed(() => Boolean(planDetail.value && (!eventDetail.value || isEventOrganizer.value)));
+const canEditEventNote = computed(() => Boolean(eventDetail.value && isEventOrganizer.value && !eventClosed.value));
+const eventNoteText = computed(() => eventDetail.value?.note?.trim() || "");
+const eventNoteActionText = computed(() => (eventNoteText.value ? "修改" : "添加"));
+const eventNoteEmptyTitle = computed(() => (canEditEventNote.value ? "还没补充备注" : "主家还没补充备注"));
+const eventNoteEmptyText = computed(() => (
+  canEditEventNote.value
+    ? "可以补一句到场说明、饮食提醒或其他安排。"
+    : "如果主家后面补了到场说明或饮食提醒，会显示在这里。"
+));
 const organizerAvatarItem = computed<ParticipantAvatarItem | null>(() => {
   if (!eventDetail.value) return null;
   const organizerName = eventDetail.value.organizerName?.trim() || `UID ${eventDetail.value.organizerUid ?? "--"}`;
@@ -1000,7 +1033,7 @@ const progressSteps = computed<ProgressStep[]>(() => {
 
   const planSteps = [
     { label: "餐次已创建", done: Boolean(planDetail.value) },
-    { label: "菜单已定", done: currentMenuItems.value.length > 0 },
+    { label: "菜单已定", done: Boolean(planDetail.value?.menuLocked) },
     { label: "饭局已发起", done: hasDiningEvent.value },
     { label: "做饭建议已生成", done: Boolean(cookAssistant.value?.hasSnapshot && !cookAssistant.value.isStale) },
     { label: "计划已结束", done: planClosed.value }
@@ -1019,11 +1052,14 @@ const progressDesc = computed(() => {
   if (eventDetail.value?.status === "CANCELLED") return "这场饭局已取消，当前不再继续推进。";
   if (eventDetail.value) return "时间、菜单和参与反馈会沿着这里继续往下推进。";
   if (planClosed.value) return "这顿饭已经过时，当前不再继续补菜单、发起饭局或生成新的做饭建议。";
+  if (planDetail.value?.menuLocked) return "菜单已固定，这顿饭现在可以直接开始做饭，或继续补发起饭局与分享。";
   if (hasDiningEvent.value) return "这顿饭已经挂上饭局，后续菜单和做饭安排继续往下补。";
   return "先把这顿饭安排起来，菜单、饭局和做饭建议会按顺序补齐。";
 });
 const canEditPlan = computed(() => Boolean(planDetail.value && !eventClosed.value && !planClosed.value));
-const canManageMenu = computed(() => Boolean(canEditPlan.value && (!eventDetail.value || isEventOrganizer.value)));
+const canManageMenu = computed(() =>
+  Boolean(canEditPlan.value && !planDetail.value?.menuLocked && (!eventDetail.value || isEventOrganizer.value))
+);
 const currentParticipant = computed(() => visibleEventParticipants.value.find(item => item.userUid === sessionStore.uid) ?? null);
 const currentBringRecipeId = computed(() => currentParticipant.value?.bringRecipeId ?? null);
 const canChooseBring = computed(() =>
@@ -1060,17 +1096,18 @@ const canCreateEvent = computed(() =>
       !eventDetail.value
   )
 );
-const canCompleteEvent = computed(() => Boolean(eventDetail.value && !eventClosed.value));
 const canManageParticipants = computed(() => Boolean(eventDetail.value && eventDetail.value.organizerUid === sessionStore.uid && !eventClosed.value));
 const canUpdateCover = computed(() => Boolean(eventDetail.value && eventDetail.value.organizerUid === sessionStore.uid));
+const canQuickShareInvite = computed(() =>
+  Boolean(eventDetail.value && !eventClosed.value && (canInviteParticipants.value || activeSharePath.value || eventDetail.value.shareTokenPath))
+);
 const footerStage = computed<FooterStage>(() => {
   if (eventDetail.value?.status === "CANCELLED") return "CANCELLED";
-  if (eventDetail.value?.status === "COMPLETED" || eventDetail.value?.completedAt) return "COMPLETED";
-  if (eventAutoEnded.value) return "ENDED";
-  if (planClosed.value) return "PLAN_ENDED";
-  if (eventDetail.value?.status === "CONFIRMED") return "READY_TO_START";
-  if (currentMenuItems.value.length > 0) return "MENU_PENDING";
-  return "PLANNING";
+  if (eventDetail.value?.status === "COMPLETED" || eventDetail.value?.completedAt) return "TIME_UP";
+  if (eventAutoEnded.value) return "TIME_UP";
+  if (planClosed.value) return "TIME_UP";
+  if (eventDetail.value?.status === "CONFIRMED" || planDetail.value?.menuLocked) return "READY_TO_START";
+  return "MENU_EDITING";
 });
 const scheduledAtMs = computed(() => {
   if (!eventDetail.value?.scheduledAt) return 0;
@@ -1101,19 +1138,18 @@ const footerCountdownParts = computed(() => {
 });
 const menuDeadlineText = computed(() => (eventDetail.value ? "调整时间" : "设置时间"));
 const showMenuDeadlineAction = computed(() => Boolean(eventDetail.value && canManageParticipants.value && !eventClosed.value));
-const footerVisible = computed(() => Boolean(planDetail.value && footerStage.value !== "CANCELLED" && footerStage.value !== "PLAN_ENDED"));
-const showFooterStatus = computed(() => Boolean(eventDetail.value && footerStage.value !== "COMPLETED" && footerStage.value !== "ENDED"));
+const footerVisible = computed(() => {
+  if (!planDetail.value || footerStage.value === "CANCELLED") return false;
+  if (footerStage.value !== "TIME_UP") return true;
+  return Boolean(eventDetail.value);
+});
+const showFooterStatus = computed(() => Boolean(eventDetail.value && footerStage.value !== "TIME_UP"));
 const footerStatusIcon = computed(() => {
-  if (footerStage.value === "COMPLETED") return "icon-select-on";
-  if (footerStage.value === "ENDED") return "icon-time";
   if (eventDetail.value?.scheduledAt && !eventClosed.value) return "icon-time";
-  if (footerStage.value === "MENU_PENDING") return "icon-notice";
+  if (footerStage.value === "MENU_EDITING") return "icon-notice";
   return eventDetail.value ? "icon-dining-event" : "icon-plan";
 });
 const footerStatusText = computed(() => {
-  if (footerStage.value === "COMPLETED") return "这场饭局已完成";
-  if (footerStage.value === "ENDED") return "这场饭局已结束";
-  if (footerStage.value === "PLAN_ENDED") return "这顿饭已结束";
   if (eventDetail.value?.scheduledAt && !eventClosed.value) {
     return scheduledCountdownText.value ? `距开饭还剩 ${scheduledCountdownText.value}` : formatDateTimeMinute(eventDetail.value.scheduledAt) || "开饭时间已定";
   }
@@ -1124,52 +1160,64 @@ const footerStatusMeta = computed(() => {
   return "";
 });
 const endedMemoryAction = computed<FooterAction | null>(() => {
-  if ((footerStage.value === "COMPLETED" || footerStage.value === "ENDED") && eventDetail.value) {
+  if (footerStage.value === "TIME_UP" && eventDetail.value) {
     return { key: "share-memory", label: "分享回忆", iconClass: "icon-share" };
   }
   return null;
 });
 const footerQuickAction = computed<FooterAction | null>(() => {
-  if (footerStage.value === "READY_TO_START" && currentMenuItems.value.length) {
-    return { key: "cook-assistant", label: "做饭助手", iconClass: "icon-recommend" };
+  if (footerStage.value === "MENU_EDITING") {
+    if (eventDetail.value) {
+      return canQuickShareInvite.value ? { key: "share-invite", label: "快捷分享", iconClass: "icon-share" } : null;
+    }
+    return canCreateEvent.value ? { key: "create-event", label: "发起饭局", iconClass: "icon-share" } : null;
   }
-  if (eventDetail.value && canInviteParticipants.value) {
-    return { key: "share-invite", label: "分享邀请", iconClass: "icon-share", disabled: !canInviteParticipants.value || inviteSharing.value };
+  if (footerStage.value === "READY_TO_START" && eventDetail.value) {
+    return canQuickShareInvite.value ? { key: "share-invite", label: "快捷分享", iconClass: "icon-share", disabled: inviteSharing.value } : null;
+  }
+  if (footerStage.value === "READY_TO_START" && !eventDetail.value) {
+    return canCreateEvent.value ? { key: "create-event", label: "发起饭局", iconClass: "icon-share" } : null;
   }
   return null;
 });
 const footerSecondaryAction = computed<FooterAction | null>(() => {
-  if (footerStage.value === "READY_TO_START" && !eventDetail.value) return { key: "view-menu", label: "查看菜单" };
-  if (!eventDetail.value && currentMenuItems.value.length && canEditPlan.value) return { key: "recipe", label: "调整菜单" };
+  if (footerStage.value === "MENU_EDITING" && canManageMenu.value) return { key: "recipe", label: "添加菜单" };
   return null;
 });
 const footerPrimaryAction = computed<FooterAction | null>(() => {
-  if (footerStage.value === "COMPLETED" || footerStage.value === "ENDED" || footerStage.value === "PLAN_ENDED" || footerStage.value === "CANCELLED") return null;
-  if (eventDetail.value) {
-    if (isEventOrganizer.value) return canManageMenu.value ? { key: "fill-menu", label: "添加菜单" } : null;
+  if (footerStage.value === "CANCELLED" || footerStage.value === "TIME_UP") return null;
+  if (footerStage.value === "MENU_EDITING") {
+    if (canManageMenu.value) {
+      return {
+        key: "confirm-menu",
+        label: "确认菜单",
+        disabled: !currentMenuItems.value.length
+      };
+    }
     return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
-  if (!currentMenuItems.value.length) {
-    return canEditPlan.value ? { key: "recipe", label: "添加菜单" } : null;
+  if (footerStage.value === "READY_TO_START") {
+    if (isEventOrganizer.value || !eventDetail.value) {
+      return currentMenuItems.value.length ? { key: "cook-assistant", label: "做饭助手" } : null;
+    }
+    return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
-  if (!eventDetail.value) return canCreateEvent.value ? { key: "create-event", label: "发起饭局" } : null;
-  if (canCreateEvent.value) return { key: "create-event", label: "发起饭局" };
   return null;
 });
 const shareSheetSubtitle = computed(() => (
-  "先选邀请对象；好友邀请会在你打开这里时先准备好，方便直接转发。"
+  "会在你打开这里时先准备好当前这条好友邀请，方便直接转发。"
 ));
 const shareHeadline = computed(() => eventDetail.value?.title?.trim() || detailTitle.value);
-const inviteMemberAction = computed(() => ({
-  label: "分享给饭搭子",
-  hint: "选择已有关系的饭搭子成员，对方确认后才会加入这场饭局。"
-}));
 const inviteFriendAction = computed(() => ({
   label: inviteSharing.value ? "准备好友邀请中..." : "分享给好友",
   hint: inviteSharing.value
     ? "正在准备当前这条好友邀请，请稍候。"
-    : "会生成一条可直接转发给好友的饭局邀请。",
-  disabled: inviteSharing.value,
+    : activeSharePath.value
+      ? "会使用当前已准备好的好友邀请，直接转发给朋友。"
+      : canInviteParticipants.value
+        ? "会生成一条可直接转发给好友的饭局邀请。"
+        : "请先让发起人准备好友邀请，再回来直接转发。",
+  disabled: inviteSharing.value || (!activeSharePath.value && !canInviteParticipants.value),
   openType: activeSharePath.value && !inviteSharing.value ? "share" : ""
 }));
 const recipePendingAddCount = computed(() => {
@@ -1351,9 +1399,6 @@ async function loadDetail() {
   loading.value = true;
   errorText.value = "";
   eventErrorText.value = "";
-  shareMembersReady.value = false;
-  shareMembers.value = [];
-  selectedShareUserIds.value = [];
   try {
     const result = await mealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
     const nextPlan = result.items.find(item => item.id === planItemId.value) ?? null;
@@ -1361,6 +1406,7 @@ async function loadDetail() {
     if (!nextPlan) {
       errorText.value = "这条餐次暂时找不到了，点此重试";
       eventDetail.value = null;
+      activeSharePath.value = "";
       cookAssistant.value = null;
       return;
     }
@@ -1370,15 +1416,18 @@ async function loadDetail() {
     const targetEventId = eventId.value || nextPlan.diningEventId;
     if (!targetEventId) {
       eventDetail.value = null;
+      activeSharePath.value = "";
       return;
     }
 
     try {
       eventDetail.value = await mealApi.getDiningEvent(targetEventId);
       eventId.value = eventDetail.value.id;
+      activeSharePath.value = eventDetail.value.shareTokenPath || "";
       showEventEditor.value = false;
     } catch (error) {
       eventDetail.value = null;
+      activeSharePath.value = "";
       eventErrorText.value = "饭局信息暂时没同步出来，点此重试";
     }
   } catch (error) {
@@ -1403,12 +1452,6 @@ function clearPageState() {
   cookAssistantLoading.value = false;
   showEventEditor.value = false;
   shareSheetVisible.value = false;
-  shareMembersSheetVisible.value = false;
-  shareMembersLoading.value = false;
-  shareMembersError.value = "";
-  shareMembers.value = [];
-  shareMembersReady.value = false;
-  selectedShareUserIds.value = [];
   participantActionId.value = null;
   shareLinkError.value = "";
   activeSharePath.value = "";
@@ -1417,6 +1460,8 @@ function clearPageState() {
   recipeSheetError.value = "";
   recipeSelectedIds.value = [];
   recipeSubmitting.value = false;
+  noteSheetVisible.value = false;
+  noteDraft.value = "";
 }
 
 function resetEventDraft(plan: MealPlanSummary) {
@@ -1594,65 +1639,20 @@ function closeTitleSheet() {
   titleSheetVisible.value = false;
 }
 
+function openNoteSheet() {
+  if (!eventDetail.value || !canEditEventNote.value || submitting.value) return;
+  noteDraft.value = eventDetail.value.note?.trim() || "";
+  noteSheetVisible.value = true;
+}
+
+function closeNoteSheet() {
+  if (submitting.value) return;
+  noteSheetVisible.value = false;
+}
+
 function closeShareSheet() {
   if (inviteSharing.value) return;
   shareSheetVisible.value = false;
-}
-
-function openShareMembersSheet() {
-  if (!eventDetail.value || !canInviteParticipants.value) return;
-  shareSheetVisible.value = false;
-  shareMembersSheetVisible.value = true;
-  void loadShareMembers();
-}
-
-function closeShareMembersSheet() {
-  if (submitting.value) return;
-  shareMembersSheetVisible.value = false;
-  selectedShareUserIds.value = [];
-  shareMembersError.value = "";
-}
-
-async function loadShareMembers(force = false) {
-  if (shareMembersReady.value && !force) return;
-  if (shareMembersLoading.value && !force) return;
-  shareMembersLoading.value = true;
-  shareMembersError.value = "";
-  try {
-    const groups = await diningGroupApi.getMine();
-    const results = await Promise.all(groups.items.map(item => diningGroupApi.listMembers(item.id)));
-    const existingUids = new Set(
-      (eventDetail.value?.participants ?? [])
-        .filter(item => item.status !== "REMOVED")
-        .map(item => item.userUid)
-        .filter((value): value is number => typeof value === "number")
-    );
-    const memberMap = new Map<UUID, DiningGroupMemberSummary>();
-    results.forEach(result => {
-      result.members.forEach(member => {
-        if (member.user.uid === sessionStore.uid) return;
-        if (existingUids.has(member.user.uid)) return;
-        if (!memberMap.has(member.userId)) {
-          memberMap.set(member.userId, member);
-        }
-      });
-    });
-    shareMembers.value = [...memberMap.values()];
-    shareMembersReady.value = true;
-    selectedShareUserIds.value = selectedShareUserIds.value.filter(userId => memberMap.has(userId));
-  } catch (error) {
-    shareMembersError.value = error instanceof Error ? error.message : "饭搭子成员加载失败";
-  } finally {
-    shareMembersLoading.value = false;
-  }
-}
-
-function toggleShareUser(userId: UUID) {
-  if (selectedShareUserIds.value.includes(userId)) {
-    selectedShareUserIds.value = selectedShareUserIds.value.filter(currentUserId => currentUserId !== userId);
-    return;
-  }
-  selectedShareUserIds.value = [...selectedShareUserIds.value, userId];
 }
 
 async function revokeParticipantInvite(item: ParticipantSheetItem) {
@@ -1668,7 +1668,6 @@ async function revokeParticipantInvite(item: ParticipantSheetItem) {
     eventDetail.value = await mealApi.revokeDiningEventParticipantInvite(eventDetail.value.id, item.participantId, {
       operationId: createOperationId()
     });
-    shareMembersReady.value = false;
     await uniPlatform.feedback.toast({ title: "已撤回邀请", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "撤回失败", icon: "none" });
@@ -1686,7 +1685,6 @@ async function reinviteParticipant(item: ParticipantSheetItem) {
     eventDetail.value = await mealApi.reinviteDiningEventParticipant(eventDetail.value.id, item.participantId, {
       operationId: createOperationId()
     });
-    shareMembersReady.value = false;
     await uniPlatform.feedback.toast({ title: "已重新发出邀请", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "再次邀请失败", icon: "none" });
@@ -1704,6 +1702,11 @@ function handleShareSheetAfterClose() {
 function handleTitleSheetAfterClose() {
   if (titleSheetVisible.value) return;
   titleDraft.value = planDetail.value?.title?.trim() || "";
+}
+
+function handleNoteSheetAfterClose() {
+  if (noteSheetVisible.value) return;
+  noteDraft.value = eventDetail.value?.note?.trim() || "";
 }
 
 function openCookAssistantPage() {
@@ -1964,6 +1967,7 @@ async function handleCookAssistantAction() {
     cookAssistant.value = await mealApi.generateCookAssistant(planDetail.value.id, {
       operationId: createOperationId()
     });
+    await loadDetail();
     await uniPlatform.feedback.toast({ title: cookAssistant.value.isStale ? "已重新生成" : "已生成做饭安排", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "生成失败", icon: "none" });
@@ -1991,8 +1995,25 @@ async function submitTitleUpdate() {
   }
 }
 
+async function submitEventNote() {
+  if (!eventDetail.value || !canEditEventNote.value || submitting.value) return;
+  submitting.value = true;
+  try {
+    eventDetail.value = await mealApi.updateDiningEventNote(eventDetail.value.id, {
+      operationId: createOperationId(),
+      expectedVersion: eventDetail.value.version,
+      note: noteDraft.value.trim() || null
+    });
+    noteSheetVisible.value = false;
+    await uniPlatform.feedback.toast({ title: eventDetail.value.note ? "备注已保存" : "备注已清空", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "备注保存失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
 function resolveMenuMeta(item: MenuEntry) {
-  if (eventDetail.value) return "主家安排";
   return item.servings ? `${item.servings}人份` : "";
 }
 
@@ -2074,59 +2095,22 @@ function stopFooterTimer() {
   footerTimer = null;
 }
 
-async function markPlanDone(plan: MealPlanSummary) {
-  if (submitting.value) return;
-  const confirmed = await uniPlatform.feedback.confirm({
-    title: "标记完成",
-    content: `确认把${slotLabel(plan.mealSlot)}这顿饭标记为已完成吗？`
-  });
-  if (!confirmed) return;
-
-  submitting.value = true;
-  try {
-    planDetail.value = await mealApi.completePlan(plan.id, createOperationId());
-    await uniPlatform.feedback.toast({ title: "已标记完成", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function markEventDone() {
-  if (!eventDetail.value || submitting.value) return;
-  const confirmed = await uniPlatform.feedback.confirm({
-    title: "完成饭局",
-    content: "确认把这场饭局标记为已完成吗？"
-  });
-  if (!confirmed) return;
-
-  submitting.value = true;
-  try {
-    eventDetail.value = await mealApi.completeDiningEvent(eventDetail.value.id, createOperationId());
-    await uniPlatform.feedback.toast({ title: "饭局已完成", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
 async function handleInviteShare() {
   if (!eventDetail.value || inviteSharing.value) return;
-  if (!canInviteParticipants.value) {
-    const message =
-      eventDetail.value.organizerUid !== sessionStore.uid
-        ? "当前仅发起人可分享邀请"
-        : eventDetail.value.status === "CANCELLED" || eventDetail.value.status === "COMPLETED"
-          ? "当前饭局状态不能继续分享邀请"
-          : "分享入口准备中";
+  const existingSharePath = activeSharePath.value || eventDetail.value.shareTokenPath || "";
+  if (!canQuickShareInvite.value && !existingSharePath) {
+    const message = canInviteParticipants.value
+      ? "分享入口准备中"
+      : "请先让发起人准备分享邀请";
     void uniPlatform.feedback.toast({ title: message, icon: "none" });
     return;
   }
+  if (!activeSharePath.value && existingSharePath) {
+    activeSharePath.value = existingSharePath;
+  }
   shareLinkError.value = "";
   shareSheetVisible.value = true;
-  if (!activeSharePath.value) {
+  if (!activeSharePath.value && canInviteParticipants.value) {
     void prepareInviteShareLink(true);
   }
 }
@@ -2153,38 +2137,15 @@ async function prepareInviteShareLink(silent = false) {
   }
 }
 
-async function shareToMembers() {
-  if (!eventDetail.value || submitting.value || !selectedShareUserIds.value.length) return;
-  submitting.value = true;
-  try {
-    eventDetail.value = await mealApi.shareDiningEventMembers(eventDetail.value.id, {
-      operationId: createOperationId(),
-      targetUserIds: selectedShareUserIds.value
-    });
-    shareMembersReady.value = false;
-    closeShareMembersSheet();
-    await uniPlatform.feedback.toast({ title: "已发送邀请", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分享失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
 function handleShareFriendClick() {
   if (!eventDetail.value) return;
-  if (!canInviteParticipants.value) {
-    const message =
-      eventDetail.value.organizerUid !== sessionStore.uid
-        ? "当前仅发起人可分享邀请"
-        : eventDetail.value.status === "CANCELLED" || eventDetail.value.status === "COMPLETED"
-          ? "当前饭局状态不能继续分享邀请"
-          : "分享入口准备中";
-    void uniPlatform.feedback.toast({ title: message, icon: "none" });
-    return;
-  }
+  if (activeSharePath.value) return;
   if (!activeSharePath.value) {
-    void prepareInviteShareLink();
+    if (canInviteParticipants.value) {
+      void prepareInviteShareLink();
+      return;
+    }
+    void uniPlatform.feedback.toast({ title: "请先让发起人准备分享邀请", icon: "none" });
   }
 }
 
@@ -2202,8 +2163,23 @@ function openTimePicker() {
   // no-op placeholder for click target; actual time picker is handled by the native picker wrapper
 }
 
-function handleConfirmMenuAction() {
-  void uniPlatform.feedback.toast({ title: "确认菜单能力待接入", icon: "none" });
+async function handleConfirmMenuAction() {
+  if (!planDetail.value || !canManageMenu.value || submitting.value) return;
+  submitting.value = true;
+  try {
+    planDetail.value = await mealApi.confirmPlanMenu(planDetail.value.id, {
+      operationId: createOperationId(),
+      expectedVersion: planDetail.value.version
+    });
+    if (eventDetail.value) {
+      eventDetail.value = await mealApi.getDiningEvent(eventDetail.value.id);
+    }
+    await uniPlatform.feedback.toast({ title: "菜单已固定", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认菜单失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
 }
 
 function openMemory() {
@@ -2221,19 +2197,12 @@ function handleScroll(event: { detail: { scrollTop?: number } }) {
   scrollTop.value = event.detail.scrollTop ?? 0;
 }
 
-function scrollToSection(sectionId: string) {
-  scrollTarget.value = "";
-  void nextTick(() => {
-    scrollTarget.value = sectionId;
-  });
-}
-
 function handleFooterAction(action: FooterActionKey) {
   if (action === "share-invite") {
     handleInviteShare();
     return;
   }
-  if (action === "recipe" || action === "fill-menu") {
+  if (action === "recipe") {
     openMenuSheet();
     return;
   }
@@ -2246,7 +2215,7 @@ function handleFooterAction(action: FooterActionKey) {
     return;
   }
   if (action === "confirm-menu") {
-    handleConfirmMenuAction();
+    void handleConfirmMenuAction();
     return;
   }
   if (action === "cook-assistant") {
@@ -2255,14 +2224,6 @@ function handleFooterAction(action: FooterActionKey) {
       return;
     }
     void handleCookAssistantAction();
-    return;
-  }
-  if (action === "view-menu") {
-    scrollToSection("meal-menu-panel");
-    return;
-  }
-  if (action === "complete-event") {
-    void markEventDone();
     return;
   }
   if (action === "share-memory" || action === "view-memory") {
@@ -2619,11 +2580,15 @@ function handleFooterAction(action: FooterActionKey) {
 }
 
 .summary-card__title {
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
   color: var(--color-text);
-  font-size: 62rpx;
+  font-size: 50rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   transition: opacity 180ms ease;
 }
 
@@ -3252,10 +3217,18 @@ function handleFooterAction(action: FooterActionKey) {
 }
 
 .meal-helper__button {
-  height: 84rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 84rpx;
+  padding: 0 24rpx;
+  margin: 0;
   border-radius: 999rpx;
   font-size: 26rpx;
   font-weight: 700;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .meal-helper__button::after {
@@ -3596,6 +3569,20 @@ function handleFooterAction(action: FooterActionKey) {
   font-weight: 700;
 }
 
+.event-note {
+  padding: 24rpx 28rpx;
+  margin-top: 24rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+}
+
+.event-note__text {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
 .recipe-sheet__status--added .recipe-sheet__status-text {
   color: var(--theme-primary);
 }
@@ -3639,6 +3626,14 @@ function handleFooterAction(action: FooterActionKey) {
 
 .title-sheet__input {
   width: 100%;
+}
+
+.note-sheet__input {
+  width: 100%;
+  min-height: 240rpx;
+  height: 240rpx;
+  padding: 24rpx;
+  line-height: 1.7;
 }
 
 .recipe-sheet__empty {

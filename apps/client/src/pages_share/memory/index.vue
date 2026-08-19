@@ -4,7 +4,7 @@
     <Login
       v-if="mode === 'event' && !sessionStore.isLoggedIn"
       title="登录后生成活动回忆卡"
-      description="公开回忆卡会先生成不可变快照，只保留菜单、掌勺标记、可选成员摘要和一句话。"
+      description="公开回忆卡会先生成不可变快照，只保留菜单、掌勺标记、可选成员摘要和一句话。到开饭时间后即可生成。"
     />
 
     <template v-else>
@@ -18,7 +18,7 @@
       </view>
 
       <view v-else-if="!cardData" class="empty-wrap">
-        <Empty title="还没有可展示的活动回忆卡" description="从已结束饭局生成一张公开快照，或通过公开分享链接查看不可变卡片。" />
+        <Empty title="还没有可展示的活动回忆卡" description="从已到开饭时间的饭局生成一张公开快照，或通过公开分享链接查看不可变卡片。" />
       </view>
 
       <template v-else>
@@ -74,7 +74,7 @@
             <text class="share-box__title">分享出口</text>
             <SharePillButton label="转发卡片" />
           </view>
-          <text class="share-box__hint">点击“转发卡片”可直接发给饭搭子；也可以复制下面的公开路径作为兜底。</text>
+          <text class="share-box__hint">点击“转发卡片”可直接发给朋友；也可以复制下面的公开路径作为兜底。</text>
           <text class="share-box__path">{{ currentSharePath }}</text>
           <view class="action-row">
             <button class="secondary" @click="copySharePath">复制公开路径</button>
@@ -104,7 +104,7 @@
           </view>
 
           <text class="action-card__hint">
-            {{ eventDetail?.completedAt ? "只有当前白名单字段会进入公开快照，后续饭局改动不会回写到已生成卡片。" : "饭局完成后，主理人才能生成公开快照。" }}
+            {{ generateHintText }}
           </text>
 
           <view class="action-row">
@@ -120,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
+import { onHide, onLoad, onShow, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
 import {
@@ -171,6 +171,8 @@ const caption = ref("");
 const eventDetail = ref<DiningEventSummary | null>(null);
 const sharePreview = ref<MemoryCardView | null>(null);
 const shareSnapshot = ref<MemoryShareSnapshotResponse | null>(null);
+const nowMs = ref(Date.now());
+let clockTimer: ReturnType<typeof setInterval> | null = null;
 
 const normalizedCaption = computed(() => {
   const value = caption.value.trim();
@@ -231,7 +233,13 @@ const footerHintText = computed(() => {
   return "生成前预览只用于确认公开内容，正式分享时会冻结为不可变快照。";
 });
 
-const canGenerate = computed(() => Boolean(eventId.value && eventDetail.value?.completedAt) && !submitting.value);
+const generateReady = computed(() => isEventTimeUp(eventDetail.value, nowMs.value));
+const generateHintText = computed(() => {
+  if (eventDetail.value?.status === "CANCELLED") return "已取消的饭局不能生成公开快照。";
+  if (generateReady.value) return "只有当前白名单字段会进入公开快照，后续饭局改动不会回写到已生成卡片。";
+  return "到开饭时间后，主理人即可生成公开快照。";
+});
+const canGenerate = computed(() => Boolean(eventId.value && generateReady.value) && !submitting.value);
 const currentSharePath = computed(() => {
   if (shareSnapshot.value?.sharePath) return shareSnapshot.value.sharePath;
   if (mode.value === "token" && shareToken.value) {
@@ -269,7 +277,16 @@ onLoad(query => {
 });
 
 onShow(() => {
+  startClock();
   void loadPage();
+});
+
+onHide(() => {
+  stopClock();
+});
+
+onUnload(() => {
+  stopClock();
 });
 
 onShareAppMessage(() => ({
@@ -402,7 +419,7 @@ function resolveCookText(cookName: string | null) {
 
 function formatParticipantRole(role: MemoryShareParticipant["role"]) {
   if (role === "ORGANIZER") return "主理人";
-  if (role === "PARTICIPANT") return "饭搭子";
+  if (role === "PARTICIPANT") return "参与人";
   return "来客";
 }
 
@@ -443,7 +460,7 @@ function buildDraftParticipants(event: DiningEventSummary, showMemberSummary: bo
     }
 
     participants.push({
-      displayName: item.displayName?.trim() || "饭搭子",
+      displayName: item.displayName?.trim() || "参与人",
       avatarUrl: item.avatarUrl ?? null,
       role: "PARTICIPANT"
     });
@@ -467,6 +484,29 @@ function buildDraftCard(event: DiningEventSummary, nextCaption: string | null, s
     sharedAt: null,
     snapshotVersion: null
   };
+}
+
+function isEventTimeUp(event: DiningEventSummary | null, currentMs: number) {
+  if (!event) return false;
+  if (event.status === "CANCELLED") return false;
+  if (event.status === "COMPLETED" || event.completedAt) return true;
+  const scheduledMs = new Date(event.scheduledAt).getTime();
+  if (!Number.isFinite(scheduledMs)) return false;
+  return scheduledMs <= currentMs;
+}
+
+function startClock() {
+  nowMs.value = Date.now();
+  if (clockTimer) return;
+  clockTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 30_000);
+}
+
+function stopClock() {
+  if (!clockTimer) return;
+  clearInterval(clockTimer);
+  clockTimer = null;
 }
 </script>
 
