@@ -18,6 +18,12 @@ const router = createRouter({
       meta: { title: doc.title }
     })),
     {
+      path: "/guides/:slug",
+      name: "guide-doc",
+      component: () => import("@/pages/DocPage.vue"),
+      meta: { title: "生活指南" }
+    },
+    {
       path: "/:pathMatch(.*)*",
       name: "not-found",
       component: () => import("@/pages/NotFoundPage.vue"),

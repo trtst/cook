@@ -16,7 +16,9 @@ export interface SiteDoc {
   effectiveAt?: string;
   label: string;
   heroNote?: string;
-  sections: DocSection[];
+  sections?: DocSection[];
+  bodyHtml?: string;
+  bodyText?: string;
 }
 
 export const siteDocs: SiteDoc[] = [
@@ -25,8 +27,8 @@ export const siteDocs: SiteDoc[] = [
     path: "/product",
     type: "page",
     title: "产品介绍",
-    summary: "围绕下一顿吃什么，把计划、菜谱、冰箱、购物与饭搭子关系收成一条轻量闭环。",
-    updatedAt: "2026-08-04",
+    summary: "围绕下一顿吃什么，把计划、菜谱、冰箱、购物与饭局协作收成一条轻量闭环。",
+    updatedAt: "2026-08-19",
     label: "产品",
     heroNote: "不是菜谱平台，也不是聊天工具，而是帮助家里把做饭决策真正推进下去。",
     sections: [
@@ -35,7 +37,7 @@ export const siteDocs: SiteDoc[] = [
         title: "核心闭环",
         paragraphs: [
           "炊火记关注的不是单次搜索一道菜，而是从想吃什么、怎么决定、缺什么食材，到最后真正做出来的一整段链路。",
-          "小程序把菜谱、计划、冰箱、购物与饭局关系放在同一条家庭决策线上，减少做饭前的重复讨论和重复准备。"
+          "小程序把菜谱、计划、冰箱、购物与饭局协作放在同一条家庭决策线上，减少做饭前的重复讨论和重复准备。"
         ]
       },
       {
@@ -45,7 +47,7 @@ export const siteDocs: SiteDoc[] = [
           "我的 / 灵感 / 合集：区分个人菜谱、系统灵感和只读收藏版本",
           "下一餐计划：把抽象想法落成明确餐次",
           "冰箱与采购：围绕缺口决定购物，不做复杂库存账本",
-          "饭搭子：维护关系和邀请，不接管个人数据"
+          "饭局协作：邀请、参与、带菜与餐后回忆分享"
         ]
       },
       {
@@ -64,7 +66,7 @@ export const siteDocs: SiteDoc[] = [
     type: "page",
     title: "适用场景",
     summary: "适合经常做饭、需要一起商量下一顿，但又不想把家务协作做成复杂项目的人。",
-    updatedAt: "2026-08-04",
+    updatedAt: "2026-08-19",
     label: "场景",
     sections: [
       {
@@ -77,10 +79,10 @@ export const siteDocs: SiteDoc[] = [
       },
       {
         id: "family",
-        title: "小家庭与饭搭子协作",
+        title: "小家庭与共同做饭协作",
         paragraphs: [
-          "如果家里成员经常一起吃饭，但购物、做饭、带菜、发起饭局的人并不固定，炊火记可以把这些关系表达得更清楚。",
-          "关系是共享的，数据仍是个人的，避免把个人冰箱、购物和计划永久混成一个公共空间。"
+          "如果家里成员经常一起吃饭，但购物、做饭、带菜、发起饭局的人并不固定，炊火记可以把这些协作动作表达得更清楚。",
+          "菜谱、冰箱、购物和计划仍以个人为主，只在具体饭局或清单上共享必要协作。"
         ]
       },
       {
@@ -99,7 +101,7 @@ export const siteDocs: SiteDoc[] = [
     type: "page",
     title: "关于我们",
     summary: "炊火记希望把家庭里的做饭决策，从重复讨论变成更轻松的日常协作。",
-    updatedAt: "2026-08-04",
+    updatedAt: "2026-08-19",
     label: "关于",
     sections: [
       {
@@ -115,7 +117,7 @@ export const siteDocs: SiteDoc[] = [
         title: "我们坚持的边界",
         bullets: [
           "先解决家庭做饭闭环，再考虑更大的内容或社区扩张",
-          "个人数据归个人，不把饭搭子关系做成共享数据空间",
+          "个人数据归个人，只在具体饭局和清单上共享必要协作",
           "知识内容优先服务做饭过程，不追求内容站式流量堆叠"
         ]
       },
@@ -135,7 +137,7 @@ export const siteDocs: SiteDoc[] = [
     type: "page",
     title: "隐私政策",
     summary: "说明炊火记在当前阶段如何收集、使用、存储和保护必要的用户信息。",
-    updatedAt: "2026-08-04",
+    updatedAt: "2026-08-19",
     effectiveAt: "2026-08-04",
     label: "法务",
     sections: [
@@ -153,7 +155,7 @@ export const siteDocs: SiteDoc[] = [
         bullets: [
           "账号与登录信息：例如手机号、账号标识、登录态信息",
           "基础资料：例如昵称、头像、与展示相关的最小资料字段",
-          "业务数据：例如个人菜谱、计划、购物清单、饭搭子关系",
+          "业务数据：例如个人菜谱、计划、购物清单与饭局协作记录",
           "必要日志：例如请求时间、错误摘要和基础设备环境"
         ]
       },

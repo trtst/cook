@@ -113,13 +113,16 @@ button {
 }
 
 #app {
-  min-height: 100vh;
+  height: 100vh;
 }
 
 .site-shell {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   width: 100%;
+  height: 100%;
   margin: 0;
-  padding: 0 0 48px;
 }
 
 .site-shell__header {
