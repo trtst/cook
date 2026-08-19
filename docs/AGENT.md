@@ -4,7 +4,7 @@
 
 This is the short guide for AI-assisted vibe coding in this repository.
 
-Read this file first. Use `project.md` for the full developer overview, `dining-group.md` for relationship and collaboration rules, `recipe.md` for recipe product and version rules, `ingredient.md` for ingredient and unit rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
+Read this file first. Use `project.md` for the full developer overview, `dining-group.md` only as the historical dining-group archive, `recipe.md` for recipe product and version rules, `ingredient.md` for ingredient and unit rules, `configuration.md` for membership and personal storage rules, `api-database-rules.md` before designing APIs or database changes, `api-contract.md` before API/client/admin integration work, and `uniapp.md` plus `uniapp-architecture.md` before mini program work. Use `docs/cook/*` only as historical product, schema, and SQL source material.
 
 ## Product
 
@@ -53,7 +53,7 @@ Rules:
 4. Keep product source material in `docs/cook/*`; keep current project rules in top-level `docs/*.md`.
 5. For uni-app mini program engineering rules, read `docs/uniapp.md` instead of duplicating those rules here.
 6. For the `apps/client` scaffold, main package, subpackages, login component, request layer, platform adapter, and Pinia boundaries, read `docs/uniapp-architecture.md`.
-7. For API response, error codes, auth schemes, DTO boundaries, and the first Auth/User/DiningGroup vertical slice, read `docs/api-contract.md`.
+7. For API response, error codes, auth schemes, DTO boundaries, and the current Auth/User/Meal/Shopping collaboration slices, read `docs/api-contract.md`.
 
 ## Flat Shape Rules
 
@@ -73,20 +73,20 @@ Rules:
 
 Build the confirmed personal-data meal loop:
 
-1. A user may own one dining group and join additional dining groups within the personal plan limit.
-2. Dining-group membership never freezes, switches, merges, or migrates personal data.
-3. Recipes use My / Inspiration / Collections: editable personal recipes, reviewed inspiration versions, and read-only saved fixed versions. Imports use a fixed base version plus user overrides.
-4. Fridge data are user-owned and never become long-term shared objects; shopping lists stay user-owned but may allow confirmed per-list collaboration.
-5. Sparse weekly plans remain personal; dining events handle invitations, participants, menus, and bring-a-dish coordination.
-6. Personal Free/Plus/Pro/Ultra plans control recipes, storage, images, variants, recycle bin, dining-group growth, and personalization.
-7. Admin supports user management, entitlement inspection, relationship inspection, configuration, basic audit, ingredient review, and the content-safety and manual-review surface required by Inspiration recipes.
+1. Personal data stays user-owned; the current product does not use a dining-group shared space or a standalone relationship module.
+2. Recipes use Private Recipes / Inspiration: editable personal recipes are the default menu, while reviewed system recipes are read-only inspiration. Adding inspiration to a plan creates or reuses a private recipe first; source versions remain fixed for references.
+3. Fridge data are user-owned and never become long-term shared objects.
+4. Shopping lists stay user-owned and may allow confirmed per-list collaboration.
+5. Sparse weekly plans remain personal; dining events handle invitations, participants, menus, bring-a-dish coordination, and memory sharing.
+6. Personal Free/Plus/Pro/Ultra plans control recipes, storage, images, variants, recycle bin, and personalization.
+7. Admin supports user management, entitlement inspection, configuration, basic audit, ingredient review, and the content-safety and manual-review surface required by Inspiration recipes.
 
 V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner transfer, chat, comments, follows, delivery, price comparison, fine-grained inventory accounting, shared fridge, or a generic permission center.
 
 ## Module State
 
-- Engineering foundation: authentication, request boundaries, platform adapter, personal membership resolution, idempotency, audit, Outbox tables, and candidate implementations for dining groups, recipes, meals, pantry, shopping, storage, sharing, and Admin. Existing code is not evidence that those business modules are accepted.
-- In development: DiningGroup, Recipe, Inspiration review, Ingredient/Unit, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
+- Engineering foundation: authentication, request boundaries, platform adapter, personal membership resolution, idempotency, audit, Outbox tables, and candidate implementations for recipes, meals, pantry, shopping, storage, sharing, and Admin. Existing code is not evidence that those business modules are accepted.
+- In development: Recipe, Inspiration review, Ingredient/Unit, Meal, Fridge, Shopping, Share, Entitlement, Storage, and Admin governance. Each feature must return to the business-flow and page-behavior gates before its contract or database constraints are treated as frozen.
 - User profile and home background image upload remain deferred. User responses keep nullable URL fields and capability flags, and those user-background fields currently return `null` and `false`. The admin-managed login popup image is a separate `app-config` surface, not a generic asset-management reopening.
 - Deferred business decisions and known risks are tracked in `plans/business-development-todo.md`. That list prevents omissions but does not confirm a contract.
 - Disabled until a separate contract is confirmed: generic public-user discovery outside the reviewed Inspiration flow and Worker/Outbox runtime behavior.
@@ -109,18 +109,17 @@ V1 does not implement receipt scanning, OCR, AI, fridge-item photos, owner trans
 
 ## Lifecycle And Entitlement Rules
 
-1. DiningGroup is a relationship object, never a data space.
+1. Current collaboration is event-scoped or per-list; there is no dining-group data space in the live product.
 2. All entitlements are user-scoped Free/Plus/Pro/Ultra; there is no dining-group grant.
 3. Numeric defaults, image parameters, storage accounting, variants, recycle bin, personalization, and downgrade behavior come only from `configuration.md` and server policy resolution.
 4. Over-storage users retain viewing, permanent cleanup, export, renewal, and user-owned safety actions.
 5. Allergies and strict restrictions are user-owned, always free, and never exposed to unrelated participants.
 6. Fridge and shopping are always user-owned; membership never grants read or write access.
-7. Dining-group overage preserves reads and relationship-reduction actions but blocks growth and relationship edits.
-8. Variant limits are resolved only from the acting user's current personal tier; variants cannot create more variants.
-9. Membership activation, upgrade, and renewal are direct-payment only. Points or meal tickets cannot buy, offset, or join a mixed membership payment.
-10. Paid personalization is a continuous non-AI entitlement that affects only the user's own recommendations and never changes safety filters, shared votes, or global ranking.
-11. Activities and achievements are non-monetary meal-loop records. Medals have no cash value, cannot be exchanged, transferred, withdrawn, or used for membership payment, and must be derived from server-confirmed meal or dining-event facts.
-12. Free users can earn baseline medals. Paid plans may improve history depth, display, templates, and summaries, but must not change shared voting weight, safety filters, or baseline medal eligibility.
+7. Variant limits are resolved only from the acting user's current personal tier; variants cannot create more variants.
+8. Membership activation, upgrade, and renewal are direct-payment only. Points or meal tickets cannot buy, offset, or join a mixed membership payment.
+9. Paid personalization is a continuous non-AI entitlement that affects only the user's own recommendations and never changes safety filters, shared votes, or global ranking.
+10. Activities and achievements are non-monetary meal-loop records. Medals have no cash value, cannot be exchanged, transferred, withdrawn, or used for membership payment, and must be derived from server-confirmed meal or dining-event facts.
+11. Free users can earn baseline medals. Paid plans may improve history depth, display, templates, and summaries, but must not change shared voting weight, safety filters, or baseline medal eligibility.
 
 ## Write Rules
 

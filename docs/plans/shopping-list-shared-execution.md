@@ -40,7 +40,7 @@
 - 共享契约：
   - `docs/api-contract.md`
   - `docs/api-index.md`
-  - 购物边界和饭搭子协作文档
+  - 购物边界相关文档
 
 ## 四、本轮不做
 
@@ -57,7 +57,7 @@
 3. 采购进度按“食材项数”计算。
 4. 角色先只做 `创建者 / 协作者`。
 5. 协作者可退出、编辑内容、勾选采购完成、从菜谱加入和复制清单；复制后得到自己的个人新清单。
-6. 分享支持 `分享链接` 和 `分享给饭搭子成员`；链接加入必须登录。
+6. 分享首版只支持 `分享链接`；链接加入必须登录。
 7. 清单详情默认按食材聚合展示，保留来源摘要；先不强制上“按菜谱 / 按食材”双视图。
 8. 完成清单先弹 `入库确认 sheet`，只处理 `是否入库 / 数量 / 到期时间`。
 9. 到期时间默认 `7 天`，支持快捷值、全选批量、同食材批量和单项修改。
@@ -146,7 +146,6 @@
 | POST | `/shopping-lists/{listId}/complete` | 完成清单并入库 | 仅创建者 | 是 | 是 | 事务操作 |
 | POST | `/shopping-lists/{listId}/share-link` | 生成或重置分享链接 | 仅创建者 | 是 | 是 | 返回 token 和 url |
 | POST | `/shopping-lists/{listId}/share-link/disable` | 失效分享链接 | 仅创建者 | 是 | 是 | 只关当前活动链接 |
-| POST | `/shopping-lists/{listId}/share-members` | 向饭搭子成员发加入邀请 | 仅创建者 | 是 | 是 | 不预占名额，对方确认后才真正加入 |
 | POST | `/shopping-lists/{listId}/members/{memberUserId}/remove` | 移除一个已加入的普通协作者 | 仅创建者 | 是 | 是 | 创建者本人和 `OWNER` 角色不可通过此入口移除 |
 | GET | `/shopping-list-invites` | 读取当前用户清单协作邀请 | 当前用户已登录 | 否 | 否 | 默认返回待处理 `ACTIVE` 邀请；通知中心可用 `filter=ALL/PENDING/RESOLVED` 读取最近 7 天协作消息 |
 | POST | `/shopping-list-invites/{inviteId}/accept` | 确认加入共享清单 | 被邀请人本人 | 是 | 否 | 已通过链接先加入时幂等结清邀请 |
@@ -426,7 +425,7 @@
 1. 当前 `shopping_items` 已被勋章、超市模式和旧购物页使用，不能一上来直接删表。
 2. `shopping_items.status` 从 `OPEN/BOUGHT/DELETED` 改为 `OPEN/CHECKED/REMOVED` 后，旧历史语义会变化，必须在兼容期内显式分流。
 3. `fridge_items` 新增来源字段后，完成清单事务要同时覆盖库存事实和购物清单状态，必须放进同一事务。
-4. 分享给饭搭子成员当前以 `shopping_list_invites` 为唯一邀请事实；购物清单首页邀请卡片与通知中心里的“清单协作”都只能复用这条事实，不得再额外引入第二套前端猜测状态或独立消息表。
+4. 购物清单协作当前以 `shopping_list_invites` 为唯一邀请/加入事实；购物清单首页邀请卡片与通知中心里的“清单协作”都只能复用这条事实，不得再额外引入第二套前端猜测状态或独立消息表。
 5. 本轮不做后台治理页，后续若需要查看共享清单关系，应单独开新范围。
 
 ## 十三、范围自检

@@ -146,14 +146,13 @@
 - 最小交付：
   - `POST /api/dining-events/:eventId/share-link`
   - `POST /api/dining-events/:eventId/share-link/disable`
-  - `POST /api/dining-events/:eventId/share-members`
   - `POST /api/dining-events/:eventId/participants/:participantId/revoke`
   - `POST /api/dining-events/:eventId/participants/:participantId/reinvite`
 - 数据表 / 事务边界：
   - 好友外链继续复用现有 `DiningEventShareInvite`
-  - 饭搭子定向邀请继续复用现有 `DiningEventParticipant`
+  - 饭局参与邀请继续复用现有 `DiningEventParticipant`
 - 错误码：
-  - 发起人之外不可生成邀请链接或饭搭子邀请；已取消 / 已完成统一拒绝
+  - 发起人之外不可生成邀请链接或管理邀请；已取消 / 已完成统一拒绝
 - 不做项：
   - 不新增独立分享页，不保存历史明文 token
 - 验收方式：
@@ -184,7 +183,6 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | `POST` | `/api/dining-events/:eventId/share-link` | 生成或重置邀请分享链接 | 仅发起人 | 是 | 无 | 新增 |
 | `POST` | `/api/dining-events/:eventId/share-link/disable` | 主动关闭当前好友邀请外链 | 仅发起人 | 是 | 无 | 新增 |
-| `POST` | `/api/dining-events/:eventId/share-members` | 向指定饭搭子成员发送饭局邀请 | 仅发起人 | 是 | 无 | 新增 |
 | `POST` | `/api/dining-events/:eventId/participants/:participantId/revoke` | 撤回一条待确认邀请 | 仅发起人 | 是 | 无 | 新增 |
 | `POST` | `/api/dining-events/:eventId/participants/:participantId/reinvite` | 再次邀请一位已拒绝成员 | 仅发起人 | 是 | 无 | 新增 |
 | `POST` | `/api/dining-events/:eventId/cook` | 认领或释放一道菜的掌勺 | 发起者或有效参与人 | 是 | `expectedVersion` | 已复用 |

@@ -1,6 +1,6 @@
 # API 接口索引
 
-> 当前索引已经切换到个人数据 + 多饭搭子关系模型。旧的唯一当前空间、冻结恢复、迁出快照和 `/entitlements/current` 不再作为现行合同。
+> 当前索引已经收口为个人数据 + 饭局协作 + 四档个人会员模型。已下线的饭搭子关系接口、旧空间切换模型和 `/entitlements/current` 都不再作为现行合同。
 
 ## 状态说明
 
@@ -17,6 +17,8 @@
 | 模块 | 方法 | 路径 | 说明 |
 | --- | --- | --- | --- |
 | Auth | POST | `/auth/login` | 手机号密码登录 |
+| Auth | POST | `/auth/wechat-login` | 小程序微信登录 |
+| Auth | POST | `/auth/code-login` | 手机号验证码登录 |
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
 | Home | GET | `/home-entries` | 小程序首页入口配置：固定返回 3 张首屏主卡，四宫格只返回当前已上架入口，统一按布局顺序排序 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
@@ -31,17 +33,7 @@
 | User | PUT | `/users/me/password` | 修改当前用户登录密码 |
 | User | GET | `/users/me/taste-profile` | 当前用户口味与安全资料 |
 | User | PUT | `/users/me/taste-profile` | 更新当前用户口味与安全资料 |
-| DiningGroup | GET | `/dining-groups` | 本人饭搭子关系列表和关系域用量 |
-| DiningGroup | POST | `/dining-groups` | 显式开启并创建本人主理的首个饭搭子 |
-| DiningGroup | GET | `/dining-group-members` | 指定饭搭子成员 |
-| DiningGroup | PUT | `/dining-groups/{diningGroupId}` | 主理人更新当前饭搭子名称和简介 |
-| DiningGroup | POST | `/dining-groups/{diningGroupId}/cover` | 主理人上传或替换饭搭子主页主图 |
 | Storage | GET | `/storage-usage` | 个人逻辑空间模块明细 |
-| DiningGroupInvite | POST | `/dining-group-invites` | 创建单次长期邀请 |
-| DiningGroupInvite | POST | `/dining-group-invites/{inviteToken}/accept` | 接受邀请并建立关系 |
-| DiningGroup | POST | `/dining-groups/{diningGroupId}/leave` | 退出指定饭搭子 |
-| DiningGroup | POST | `/dining-groups/{diningGroupId}/remove-member` | 主理人移除成员 |
-| DiningGroup | POST | `/dining-groups/{diningGroupId}/dissolve` | 主理人解散饭搭子 |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
 | AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
 | AdminHome | GET | `/admin/home-entries` | 后台读取小程序首页 7 个快捷入口配置和站内页白名单 |
@@ -73,8 +65,7 @@
 | AdminUser | PUT | `/admin/users/{userId}` | 更新用户昵称或手机号 |
 | AdminUser | POST | `/admin/users/{userId}/status` | 启用或禁用用户 |
 | AdminUser | POST | `/admin/users/{userId}/reset-password` | 重置用户密码 |
-| AdminDiningGroup | GET | `/admin/dining-groups` | 饭搭子只读查询 |
-| AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员、关系和分域策略摘要 |
+| AdminEntitlement | GET | `/admin/user-entitlements` | SUPER_ADMIN 查询用户会员、空间和分域策略摘要 |
 | Inspiration | GET | `/inspiration-categories` | 匿名灵感分类列表 |
 | Inspiration | GET | `/inspiration-recipes` | 匿名灵感菜谱分页 |
 | Inspiration | GET | `/inspiration-recipes/{recipeId}` | 匿名灵感菜谱详情 |
@@ -82,10 +73,7 @@
 | Recipe | POST | `/recipe-categories` | 新建个人分类 |
 | Recipe | PUT | `/recipe-categories/{categoryId}` | 修改个人分类 |
 | Recipe | POST | `/recipe-categories/reorder` | 重排个人分类 |
-| Recipe | GET | `/recipe-scenes` | 当前用户个人场景列表 |
-| Recipe | POST | `/recipe-scenes` | 新建个人场景 |
-| Recipe | PUT | `/recipe-scenes/{sceneId}` | 修改个人场景 |
-| Recipe | POST | `/recipe-scenes/reorder` | 重排个人场景 |
+| Recipe | GET/POST/PUT | `/recipe-scenes*` | 历史合集兼容接口，不再有前台入口 |
 | Recipe | GET | `/recipe-drafts` | 当前用户草稿分页 |
 | Recipe | POST | `/recipe-drafts` | 首次保存草稿或创建编辑草稿 |
 | Recipe | GET | `/recipe-drafts/{draftId}` | 草稿详情 |
@@ -93,22 +81,18 @@
 | Recipe | POST | `/recipe-drafts/{draftId}/delete` | 删除草稿 |
 | Recipe | POST | `/recipe-drafts/{draftId}/publish` | 发布草稿到“我的” |
 | Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
-| Recipe | POST | `/recipes/from-inspiration` | 从灵感详情直接加入“我的” |
+| Recipe | POST | `/recipes/from-inspiration` | 从灵感详情保存到私房菜，供加入计划流程复用 |
 | Recipe | GET | `/recipes/{recipeId}` | 当前用户已发布菜谱详情 |
 | Recipe | POST | `/recipes/{recipeId}/recommendations` | 推荐当前个人菜谱到系统菜谱审核 |
 | Recipe | POST | `/recipe-recommendations/{recommendationId}/withdraw` | 撤回待审核的菜谱推荐 |
 | Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/delete` | 回收或删除菜谱 |
 | Recipe | POST | `/recipes/{recipeId}/report` | 举报菜谱 |
-| Collection | GET | `/collections` | 当前用户合集场景摘要 |
-| Collection | GET | `/collections/recipes` | 当前用户收藏快照分页 |
-| Collection | GET | `/collections/recipes/{collectionRecipeId}` | 当前用户收藏快照详情 |
-| Collection | POST | `/collections/recipes` | 收藏灵感固定版本到合集，`sceneIds` 至少一个 |
+| Collection | GET/POST | `/collections*` | 历史合集兼容接口，不再有前台入口 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-domain` | 后台按用户读取菜谱域概览 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipes` | 后台按用户读取已发布菜谱 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-drafts` | 后台按用户读取菜谱草稿 |
-| AdminRecipeDomain | GET | `/admin/users/{userId}/collections` | 后台按用户读取合集场景摘要 |
-| AdminRecipeDomain | GET | `/admin/users/{userId}/collections/{sceneId}/recipes` | 后台按用户读取某合集内容 |
+| AdminRecipeDomain | GET | `/admin/users/{userId}/collections*` | 历史合集兼容查询，不作为当前前台功能 |
 | AdminIngredient | GET | `/admin/ingredient-categories` | 后台系统食材分类列表 |
 | AdminIngredient | POST | `/admin/ingredient-categories` | 后台新建系统食材分类 |
 | AdminIngredient | PUT | `/admin/ingredient-categories/{categoryId}` | 后台编辑系统食材分类 |
@@ -149,24 +133,18 @@
 | Meal | POST | `/meal-plans/{planItemId}/title` | 更新一个计划餐次标题 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
 | Meal | POST | `/meal-plans/{planItemId}/title` | 单独修改一个计划餐次标题 |
-| MealPoll | GET | `/meal-polls` | 查询当前饭搭子的点菜征集摘要列表 |
-| MealPoll | POST | `/meal-polls` | 发起点菜征集 |
-| MealPoll | GET | `/meal-polls/{pollId}` | 点菜征集详情与结果汇总 |
-| MealPoll | POST | `/meal-polls/{pollId}/vote` | 当前成员提交或覆盖自己的征集回应 |
-| MealPoll | POST | `/meal-polls/{pollId}/confirm` | 关闭征集并确认最终菜单 |
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
-| DiningGroupActivity | GET | `/dining-group-activities` | 查询当前饭搭子最近轻动态 |
 | DiningEvent | GET | `/dining-events/{eventId}` | 饭局详情 |
 | DiningEvent | POST | `/dining-events/{eventId}/schedule` | 修改饭局时间 |
+| DiningEvent | POST | `/dining-events/{eventId}/note` | 修改饭局公开备注 |
 | DiningEvent | POST | `/dining-events/{eventId}/cook` | 对已确认菜单执行“我来做”认领或释放 |
-| DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张不可变饭搭子卡快照 |
-| DiningEvent | POST | `/dining-events/{eventId}/invite-group` | 邀请饭搭子成员 |
+| DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张不可变餐桌回忆卡快照 |
 | DiningEvent | POST | `/dining-events/{eventId}/respond` | 回应饭局 |
 | DiningEvent | POST | `/dining-events/{eventId}/bring` | 选择带菜 |
 | DiningEvent | POST | `/dining-events/{eventId}/complete` | 完成一场饭局 |
 | Share | GET | `/share/{shareToken}/preview` | 饭局分享预览 |
 | Share | POST | `/share/{shareToken}/accept` | 以临时参与人接受分享 |
-| Share | GET | `/memory-shares/{shareToken}/preview` | 读取公开饭搭子卡快照 |
+| Share | GET | `/memory-shares/{shareToken}/preview` | 读取公开餐桌回忆卡快照 |
 | Fridge | GET/POST | `/fridge-items` | 查询或创建个人冰箱条目 |
 | Fridge | PUT | `/fridge-items/{itemId}` | 更新个人冰箱条目 |
 | Fridge | POST | `/fridge-items/consume` | 消耗个人冰箱条目 |
@@ -204,7 +182,7 @@
 | --- | --- | --- |
 | Membership | 待冻结 | 订单、补差、回调和到期选择 |
 | Activity / Achievement | 部分已实现 | 勋章模板治理、勋章墙分类详情、完成餐次/饭局/采购闭环勋章与推荐贡献勋章已实现；更广活动与成就系统仍待冻结 |
-| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、分享链接/饭搭子共享、完成清单入库、删除已完成/已作废清单和版本冲突语义已接入主链路 |
+| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、好友分享链接、完成清单入库、删除已完成/已作废清单和版本冲突语义已接入主链路 |
 
 ## 暂不创建
 

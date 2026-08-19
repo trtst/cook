@@ -21,41 +21,39 @@
    - 技术规则、接口协议、目录边界、命名规则、代码风格和验证规则。
 4. `api-database-rules.md`
    - API、字段、表、约束、安全、性能、缓存、事务、迁移和最小实现的强制规则。
-5. `dining-group.md`
-   - 饭搭子关系、成员额度、周计划、饭局、冰箱和购物清单边界。
-6. `recipe.md`
+5. `recipe.md`
    - 我的/灵感/合集、录入、收藏、推荐、基础版本、覆盖修改和图片规则。
-7. `ingredient.md`
+6. `ingredient.md`
    - 系统与个人食材、分类、单位、审核和换算边界。
-8. `configuration.md`
+7. `configuration.md`
    - Free/Plus/Pro/Ultra、个人空间、图片、回收站、降级和个性化权益。
-9. `client-api.md`
+8. `client-api.md`
    - 客户端/后台接口手册，查看已创建接口、待创建接口、请求响应示例和调用说明。
-10. `api-contract.md`
-   - 三端并行前的共享 API 契约、错误码、分页、鉴权、Auth/User/DiningGroup 纵切链路。
-11. `api-index.md`
+9. `api-contract.md`
+   - 三端并行前的共享 API 契约、错误码、分页、鉴权和当前已开放主链路。
+10. `api-index.md`
    - 接口看板，查看已创建接口、待创建接口、实现位置和详情位置。
-12. `uniapp.md`
+11. `uniapp.md`
    - uni-app 小程序端工程规则、分包边界、生命周期、请求、滚动、分享和样式兼容。
-13. `uniapp-architecture.md`
+12. `uniapp-architecture.md`
    - `apps/client` 小程序目录骨架、主包/分包规划、登录组件、请求层、平台适配层和 store 边界。
-14. `architecture.md`
+13. `architecture.md`
    - 前后端分层、依赖方向、接口边界和数据流。
-15. `decision.md`
+14. `decision.md`
    - 范围写法、不做项、交付口径和边界确认规则。
-16. `components.md`
+15. `components.md`
    - 前端组件准入、拆分边界、命名和输入输出规则。
-17. `client-image.md`
+16. `client-image.md`
    - 客户端图片选择、裁剪、本地预览、延迟上传、本地清理和后续头像接入约定。
-18. `runbook.md`
+17. `runbook.md`
    - 启动、调试、验证、三端联合开发流程、联调和交付说明。
-19. `apps/worker/README.md`
+18. `apps/worker/README.md`
    - Worker 禁用态骨架、命令和 V1 不启动异步任务边界。
-20. `docs/cook/`
+19. `docs/cook/`
    - 需要追溯完整产品方案、Prisma Schema 或手写 SQL 时再阅读。
-21. `plans/business-development-todo.md`
+20. `plans/business-development-todo.md`
    - 记录后续业务开发必须重新确认的问题；只防遗漏，不作为已确认契约。
-22. `plans/engineering-todo.md`
+21. `plans/engineering-todo.md`
    - 记录后续工程治理待办，例如命名规则清理和检查门禁；只防遗漏，不替代具体执行单。
 23. `plans/home-weekly-topic-execution.md`
    - 首页“本周灵感”专题页执行单，覆盖后台维护、首页跳转、专题页展示和计划页导流闭环。
@@ -94,8 +92,6 @@
   - 技术栈、接口、工程规则、命名规则和代码风格。
 - `api-database-rules.md`
   - API、字段、数据库表、约束、安全、性能、缓存、事务、迁移和最小实现的强制设计基线。
-- `dining-group.md`
-  - 当前饭搭子关系、成员额度、计划、饭局和个人数据边界。
 - `recipe.md`
   - 当前我的/灵感/合集、录入、收藏、推荐、版本、图片和派生规则。
 - `ingredient.md`
@@ -105,7 +101,7 @@
 - `client-api.md`
   - 客户端/后台接口手册，查看已创建接口、待创建接口、请求响应示例和调用说明。
 - `api-contract.md`
-  - 三端并行前的共享 API 契约、错误码、分页、鉴权、Auth/User/DiningGroup 纵切链路。
+  - 三端并行前的共享 API 契约、错误码、分页、鉴权和当前已开放主链路。
 - `api-index.md`
   - 接口看板，查看已创建接口、待创建接口、实现位置和详情位置。
 - `uniapp.md`
@@ -133,7 +129,7 @@
 - `plans/minor_change_log.md`
   - 全项目中央变更时间线；小改动直接记录，大改动记录摘要并链接独立执行文档。
 - `plans/personal-data-refactor-plan.md`
-  - 当前个人数据与饭搭子关系重构计划；涉及关系模型、个人权益、菜谱、计划和后台治理时优先参考。
+  - 当前个人数据重构的历史执行计划；涉及现行个人权益、菜谱、计划和后台治理时仅作背景参考。
 - `plans/recipe-execution.md`
   - 菜谱业务流与页面行为确认结果，以及接口、数据、实现和验收门禁。
 - `plans/recipe-contract-review.md`
@@ -180,7 +176,7 @@
 ## 维护规则
 
 1. 长期稳定规则写入顶层主文档。
-2. `docs/cook/` 保留历史产品、Schema 和 SQL 来源；冲突时以 `dining-group.md`、`recipe.md`、`ingredient.md` 和 `configuration.md` 为准。
+2. `docs/cook/` 保留历史产品、Schema 和 SQL 来源；冲突时以 `recipe.md`、`ingredient.md`、`configuration.md` 和现行 API 契约为准。
 3. 一次性执行说明写入 `plans/`。
 4. 已过时材料移入 `archive/`。
 5. 主文档必须写当前项目如何做，不保留与炊火记无关的通用模板口径。

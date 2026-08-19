@@ -2,7 +2,7 @@
 
 ## 定位
 
-本文是小程序、API 和后台共享的当前契约。现行模型是“个人数据 + 多饭搭子关系 + 四档个人会员”。饭搭子只表达关系，不承载或切换用户数据。
+本文是小程序、API 和后台共享的当前契约。现行模型是“个人数据 + 饭局协作 + 四档个人会员”。已下线的饭搭子关系接口不再作为当前对外合同。
 
 契约变更顺序：
 
@@ -151,22 +151,15 @@ interface UserProfile extends SessionUser {
 }
 ```
 
+`MeResponse.phone` 和后台 `UserProfile.phone` 当前统一返回脱敏手机号，格式如 `138xxxxx000`。页面展示可以直接使用返回值，但不能再把响应里的手机号当作可回填的明文表单值。
+
 `uid` 是非连续公开用户号，不是主键，不能用来推算注册量。
 用户侧接口默认不返回 `User.id` 这类数据库内部主键；空间等业务对象如果前端需要定位，保留业务对象自身 id。
 
-## 饭搭子与用量 DTO
+## 权益与空间 DTO
 
 ```ts
 type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
-type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
-type DiningGroupStatus = "ACTIVE" | "ARCHIVED";
-type LongTermMemberStatus = "ACTIVE" | "RESTRICTED" | "ENDED";
-type LongTermMemberStatusReason =
-  | "LEFT"
-  | "REMOVED"
-  | "USER_OVER_LIMIT"
-  | "OWNER_OVER_LIMIT"
-  | "GROUP_DISSOLVED";
 type RelationshipState = "NORMAL" | "OVER_MEMBER_LIMIT";
 type StorageModule =
   | "RECIPE"
@@ -177,48 +170,6 @@ type StorageModule =
   | "TECHNICAL_SNAPSHOT"
   | "RECYCLE_BIN"
   | "PROFILE_ASSET";
-
-interface DiningGroupSummary {
-  id: UUID;
-  name: string;
-  ownerUid: number;
-  isOwned: boolean;
-  myRole: DiningGroupRole;
-  myStatus: LongTermMemberStatus;
-  myStatusReason: LongTermMemberStatusReason | null;
-  memberCount: number;
-  memberLimit: number;
-  state: RelationshipState;
-  version: number;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-
-interface DiningGroupUsageSummary {
-  ownedCount: number;
-  joinedCount: number;
-  joinLimit: number;
-  state: RelationshipState;
-}
-
-interface GetMyDiningGroupsResponse {
-  items: DiningGroupSummary[];
-  usage: DiningGroupUsageSummary;
-}
-
-interface DiningGroupMemberSummary {
-  id: UUID;
-  diningGroupId: UUID;
-  userId: UUID;
-  user: UserSummary;
-  role: DiningGroupRole;
-  status: LongTermMemberStatus;
-  statusReason: LongTermMemberStatusReason | null;
-  joinedAt: IsoDateTime;
-  restrictedAt: IsoDateTime | null;
-  endedAt: IsoDateTime | null;
-  version: number;
-}
 
 interface EffectiveImagePolicy {
   quality: number;
@@ -238,7 +189,7 @@ interface StorageUsageSummary {
 }
 ```
 
-会员事实、关系用量和存储用量分别归属 `/users/me`、`/dining-groups` 和 `/storage-usage`。客户端不得自行拼出全局权益快照。
+会员事实归属 `/users/me`，存储用量归属 `/storage-usage`。已下线的饭搭子接口不再参与当前客户端契约，客户端不得自行拼出全局权益快照。
 
 ## 当前已实现接口
 
@@ -247,6 +198,7 @@ interface StorageUsageSummary {
 ```text
 POST /auth/login
 POST /auth/code-login
+POST /auth/wechat-login
 POST /auth/refresh
 GET  /app-config
 GET  /home-entries
@@ -269,6 +221,10 @@ interface CodeLoginRequest {
   code: string;
 }
 
+interface WechatLoginRequest {
+  code: string;
+}
+
 interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
@@ -276,6 +232,12 @@ interface PasswordLoginResult {
 }
 
 interface CodeLoginResult {
+  token: string;
+  expiresAt: IsoDateTime;
+  user: SessionUser;
+}
+
+interface WechatLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: SessionUser;
@@ -480,7 +442,9 @@ interface RedeemMembershipCodeResult {
 }
 ```
 
-`POST /auth/code-login` 是当前客户端主登录入口。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
+`POST /auth/wechat-login` 是当前小程序主登录入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端再调用微信 `code2session` 换取 `openid`，按 `openid` 识别或创建用户，并在可取到时同步记录 `unionid`。请求体只收 `code`；响应仍只返回 `token + expiresAt + user` 这组建立业务会话所需的最小摘要，不返回 `openid / unionid / session_key` 等微信身份细节。若微信配置缺失或微信侧不可达，统一返回“微信登录暂不可用”；若 `code` 无效或已失效，统一返回“微信登录失败，请重试”。
+
+`POST /auth/code-login` 保留为手机号验证码链路。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 
@@ -492,211 +456,11 @@ interface RedeemMembershipCodeResult {
 
 `GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
-`POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、当前会员冲突校验、有效会员到账、单码置已用和审计。失败统一返回“兑换码无效或不可用”，不向客户端暴露“已使用 / 已停用 / 未上架 / 超过体验上限”等内部状态；请求过快时返回 `429`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
+`POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、正式码 30 天冷却校验、当前会员冲突校验、有效会员到账、单码置已用和审计。DTO/鉴权/限流仍按 HTTP `400 / 401 / 429` 返回；可预期的兑换业务拒绝改为 HTTP `200` + 业务 `code/message`，其中正式码 30 天冷却返回 `code = 4601, message = "30天内仅可兑换一次"`，无效/停用/未上架/会员状态冲突/超过体验上限等其余内部原因统一收口为 `code = 4602, message = "兑换码无效或不可用"`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
 
-### 本人饭搭子关系
+### 关系功能下线说明
 
-```text
-GET /dining-groups
-Auth: UserBearerAuth
-```
-
-返回 `GetMyDiningGroupsResponse`。`items` 是本人主理和加入的有效关系，`usage` 只表达关系域计数和上限，不返回会员、菜谱、存储或展示设置。
-
-`DiningGroupSummary` 当前固定返回：
-
-```ts
-interface DiningGroupSummary {
-  id: UUID;
-  name: string;
-  description: string | null;
-  coverImageUrl: string | null;
-  ownerUid: number;
-  isOwned: boolean;
-  canManageCover: boolean;
-  myRole: "OWNER" | "ADMIN" | "MEMBER";
-  myStatus: "ACTIVE" | "RESTRICTED" | "ENDED";
-  myStatusReason: LongTermMemberStatusReason | null;
-  createdDays: number;
-  memberCount: number;
-  memberLimit: number;
-  pollCount: number;
-  diningEventCount: number;
-  hasAttention: boolean;
-  latestActivityTitle: string | null;
-  latestActivityAt: IsoDateTime | null;
-  state: "NORMAL" | "OVER_MEMBER_LIMIT";
-  version: number;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-```
-
-新用户默认不自动创建饭搭子；`items.length = 0` 表示当前账号尚未开启饭搭子，而不是加载失败。
-
-### 开启饭搭子
-
-```text
-POST /dining-groups
-Auth: UserBearerAuth
-```
-
-```ts
-interface CreateDiningGroupRequest {
-  name: string;
-  description: string | null;
-}
-
-interface CreateDiningGroupResponse {
-  diningGroup: DiningGroupSummary;
-}
-```
-
-该接口用于用户在饭搭子页显式开启饭搭子时创建自己主理的第一个关系。服务端必须校验：
-
-1. 当前用户状态有效。
-2. 当前用户昵称已存在；昵称为空时拒绝开启。
-3. 当前用户还没有自己主理的饭搭子。
-
-成功后同一事务创建 `DiningGroup + OWNER 成员关系 + 审计/Outbox`。`description` 可空，空字符串入库前统一折叠为 `null`。
-
-### 成员列表
-
-```text
-GET /dining-group-members?diningGroupId={currentDiningGroupId}
-Auth: UserBearerAuth
-```
-
-```ts
-interface DiningGroupMembersResult {
-  diningGroupId: UUID;
-  members: DiningGroupMemberSummary[];
-}
-```
-
-只有该饭搭子的有效成员可以读取完整成员列表。
-
-### 更新饭搭子
-
-```text
-PUT /dining-groups/{diningGroupId}
-Auth: UserBearerAuth
-```
-
-```ts
-interface UpdateDiningGroupRequest {
-  name: string;
-  description: string | null;
-  expectedVersion: number;
-}
-
-interface UpdateDiningGroupResponse {
-  diningGroup: DiningGroupSummary;
-}
-```
-
-只有当前饭搭子的 `OWNER` 可以更新名称和简介。服务端在事务内锁定目标饭搭子、校验成员身份和 `expectedVersion`，成功变更后递增版本；空字符串简介入库前统一折叠为 `null`。
-
-### 更新饭搭子主页主图
-
-```text
-POST /dining-groups/{diningGroupId}/cover
-Auth: UserBearerAuth
-Content-Type: multipart/form-data
-```
-
-```ts
-interface UpdateDiningGroupCoverRequest {
-  expectedVersion: number;
-  file: File;
-}
-
-interface UpdateDiningGroupCoverResponse {
-  diningGroup: DiningGroupSummary;
-}
-```
-
-当前只有 `OWNER` 且个人套餐为 `Pro / Ultra` 时可以上传或替换主页主图。服务端同样会锁定饭搭子并校验 `expectedVersion`；主图文件计入主理人的 `PROFILE_ASSET` 空间，解散饭搭子时同步释放主图记录和文件。
-
-### 创建邀请
-
-```text
-POST /dining-group-invites
-Auth: UserBearerAuth
-```
-
-```ts
-interface CreateInviteRequest {
-  diningGroupId: UUID;
-}
-
-interface CreateInviteResult {
-  inviteToken: string;
-  sharePath: string;
-  expiresAt: IsoDateTime;
-}
-```
-
-邀请是单次不透明凭证，只保存 SHA-256 哈希。`OWNER / ADMIN` 可邀请，`MEMBER` 不可邀请。
-
-### 接受邀请
-
-```text
-POST /dining-group-invites/{inviteToken}/accept
-Auth: UserBearerAuth
-```
-
-```ts
-interface AcceptInviteRequest {
-}
-
-interface AcceptInviteResponse {
-  diningGroup: DiningGroupSummary;
-}
-```
-
-同一事务完成邀请锁定、关系上限校验、成员创建、邀请消费、审计和幂等结果。接受邀请只建立关系，不迁移、冻结或共享个人数据。
-
-### 退出饭搭子
-
-```text
-POST /dining-groups/{diningGroupId}/leave
-Auth: UserBearerAuth
-```
-
-```ts
-interface LeaveDiningGroupRequest {
-  expectedVersion: number;
-}
-
-interface LeaveDiningGroupResponse {
-  diningGroupId: UUID;
-  leftAt: IsoDateTime;
-}
-```
-
-退出只结束成员关系，不迁移或回填个人数据。主理人不能通过该接口退出自己主理的饭搭子，应使用解散接口。
-
-### 移除成员与解散
-
-```text
-POST /dining-groups/{diningGroupId}/remove-member
-POST /dining-groups/{diningGroupId}/dissolve
-Auth: UserBearerAuth
-```
-
-```ts
-interface RemoveDiningGroupMemberRequest {
-  expectedVersion: number;
-  userId: UUID;
-}
-
-interface DissolveDiningGroupRequest {
-  expectedVersion: number;
-}
-```
-
-`PUT /dining-groups/{diningGroupId}`、`POST /dining-groups/{diningGroupId}/cover`、`leave`、`remove-member` 和 `dissolve` 都以 `GET /dining-groups` 返回的 `DiningGroupSummary.version` 作为预期版本。服务端在事务内锁定饭搭子并校验版本，成功变更后递增版本；相同幂等请求必须复用同一个 `Idempotency-Key` 和 `expectedVersion`。
+`/dining-groups*`、`/dining-group-members` 和 `/dining-group-invites*` 已从当前 API 装配中移除，不再作为现行前台或后台合同。后续协作主链路统一挂在饭局、购物清单分享和个人会员/空间事实上，不再新增饭搭子对外接口。
 
 ### 个人存储用量
 
@@ -712,12 +476,12 @@ Auth: UserBearerAuth
 ```text
 POST /admin/auth/login
 GET  /admin/dashboard/summary
+GET  /admin/dashboard/trends
 GET  /admin/users
 POST /admin/users
 PUT  /admin/users/{userId}
 POST /admin/users/{userId}/status
 POST /admin/users/{userId}/reset-password
-GET  /admin/dining-groups
 GET  /admin/user-entitlements?userId={userId}
 GET  /admin/app-config
 GET  /admin/home-entries
@@ -752,19 +516,32 @@ POST /admin/ingredients/reorder
 GET  /admin/pending-ingredients
 POST /admin/pending-ingredients/{ingredientId}/review
 GET  /admin/membership-codes/skus
+POST /admin/membership-codes/skus/{skuId}/status
 GET  /admin/membership-codes/batches
 POST /admin/membership-codes/batches
 POST /admin/membership-codes/batches/{batchId}/status
 POST /admin/membership-codes/batches/{batchId}/generate
 GET  /admin/membership-codes
+GET  /admin/membership-codes/generations
+GET  /admin/membership-codes/redemptions
 POST /admin/membership-codes/{codeId}/disable
+GET  /admin/content/channels
+POST /admin/content/channels
+PUT  /admin/content/channels/{channelId}
+GET  /admin/content/pages
+GET  /admin/content/articles
+GET  /admin/content/{contentId}
+POST /admin/content
+PUT  /admin/content/{contentId}
+POST /admin/content/{contentId}/status
+POST /admin/content/images
+GET  /site-contents/resolve?path={path}
+GET  /public-assets/site-content-images/{fileName}
 ```
 
-后台饭搭子状态筛选支持 `ACTIVE / ARCHIVED`，返回 `PageResult<AdminDiningGroupSummary>`。
+`GET /admin/dashboard/summary` 是后台首页只读摘要接口，只返回首页当前需要的计数，不混入分页列表、明细、趋势和策略对象。当前响应新增 `overview`，固定返回 `todayNewUsers / sevenDayNewUsers / totalUsers / openReportCount / pendingRecipeCount / pendingIngredientCount / todayRedeemedCount` 这组首页核心卡片数据；同时继续保留四组结构化统计：用户 `total / activeCount / disabledCount`，饭搭子 `total / activeCount / memberCount`，菜谱 `total / activeCount / blockedCount / recycledCount / openReportCount`，以及基础资料 `categoryCount / itemCount / unitCount`。其中 `memberCount` 继续沿用后台饭搭子列表的有效成员口径，只统计 `ACTIVE / RESTRICTED`。
 
-`memberCount` 按当前有效长期成员口径返回，即只统计 `ACTIVE / RESTRICTED`，不把 `ENDED` 计入后台列表摘要。
-
-`GET /admin/dashboard/summary` 是后台首页只读摘要接口，只返回首页当前需要的计数，不混入分页列表、明细、趋势和策略对象。当前固定返回四组统计：用户 `total / activeCount / disabledCount`，饭搭子 `total / activeCount / memberCount`，菜谱 `total / activeCount / blockedCount / recycledCount / openReportCount`，以及基础资料 `categoryCount / itemCount / unitCount`。其中 `memberCount` 继续沿用后台饭搭子列表的有效成员口径，只统计 `ACTIVE / RESTRICTED`。
+`GET /admin/dashboard/trends` 是后台首页趋势图接口，只允许 `SUPER_ADMIN` 调用，查询参数固定为 `range=7D | 30D`，默认 `7D`。响应返回按日补齐的趋势点数组，每个点固定包含 `date / label / newUsers / totalUsers / openReportCount / pendingRecipeCount / pendingIngredientCount / membershipGeneratedCount / membershipRedeemedCount`，用于后台首页直接绘制轻量趋势图，不返回分页和明细列表。
 
 ```ts
 interface CreateAdminUserRequest {
@@ -798,8 +575,6 @@ interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
-  diningGroupUsage: DiningGroupUsageSummary;
-  diningGroups: DiningGroupSummary[];
   storage: StorageUsageSummary;
   recipePolicy: { recipeLimit: number; recycleDays: number; variantLimitPerRoot: number };
   invitePolicy: { inviteLimit: number; memberLimit: number };
@@ -819,6 +594,7 @@ interface AdminMembershipSkuItem {
   tier: EntitlementTier;
   durationDays: number;
   redeemEnabled: boolean;
+  version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -826,6 +602,11 @@ interface AdminMembershipSkuItem {
 interface AdminMembershipSkuListResponse {
   items: AdminMembershipSkuItem[];
   syncedAt: IsoDateTime;
+}
+
+interface SetAdminMembershipSkuStatusRequest {
+  redeemEnabled: boolean;
+  expectedVersion: number;
 }
 
 interface CreateAdminMembershipCodeBatchRequest {
@@ -883,6 +664,17 @@ interface AdminMembershipCodeItem {
   updatedAt: IsoDateTime;
 }
 
+interface AdminMembershipCodeGenerationItem {
+  id: UUID;
+  batchId: UUID;
+  batchName: string;
+  skuCode: AdminMembershipSkuItem["code"];
+  generatedCount: number;
+  generatedBy: { id: UUID; username: string; displayName: string } | null;
+  exportedAt: IsoDateTime;
+  createdAt: IsoDateTime;
+}
+
 interface AdminGenerateMembershipCodesResult {
   batch: AdminMembershipCodeBatchItem;
   generatedCount: number;
@@ -890,6 +682,35 @@ interface AdminGenerateMembershipCodesResult {
   codes: GeneratedMembershipCodeRow[];
 }
 ```
+
+后台内容治理本轮新增：
+
+```text
+GET  /admin/content/channels
+POST /admin/content/channels
+PUT  /admin/content/channels/{channelId}
+GET  /admin/content/pages
+GET  /admin/content/articles
+GET  /admin/content/{contentId}
+POST /admin/content
+PUT  /admin/content/{contentId}
+POST /admin/content/{contentId}/status
+POST /admin/content/images
+GET  /site-contents/resolve?path={path}
+GET  /public-assets/site-content-images/{fileName}
+```
+
+这一组接口共同承接后台“内容治理”。栏目治理只服务站点内容栏目，不扩成通用分类中心。`GET /admin/content/channels` 固定返回分页 `PageResult<AdminSiteContentChannelSummary>`，支持按 `code` 模糊过滤；`POST /admin/content/channels` 与 `PUT /admin/content/channels/{channelId}` 都要求 `Idempotency-Key`，只维护 `code / name / description / sortOrder`，并通过 `expectedVersion` 防并发覆盖。
+
+`GET /admin/content/pages` 固定返回 5 个受控固定页：`about / privacy / terms / product / faq`。这些固定页在服务端自动落种，后台只能编辑正文与展示信息，路径固定分别为 `/about / /privacy / /terms / /product / /faq`，不得新增第 6 个固定页，也不得改成其他路径。
+
+`GET /admin/content/articles` 返回文章分页，查询参数固定为 `page / pageSize`，并支持 `channelId / status / keyword` 过滤；`status` 只允许 `DRAFT / PUBLISHED / UNLISTED`。`GET /admin/content/{contentId}` 返回后台详情。`POST /admin/content` 与 `PUT /admin/content/{contentId}` 都要求 `Idempotency-Key`，当前只治理两类内容：`PAGE` 与 `ARTICLE`。`PAGE` 必须命中受控固定页 slug；`ARTICLE` 必须选择栏目，路径由服务端固定生成 `/guides/{slug}`，后台提交的自定义 `path` 不生效。正文固定使用 `bodyHtml + bodyText` 双写；服务端会做基础 HTML 清洗，并在 `bodyText` 为空时从 HTML 提取纯文本兜底。
+
+`POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
+
+`POST /admin/content/images` 是后台富文本图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`，单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`。服务端把文件落到站内资源目录，并返回 `imageUrl`；公开读取统一走 `GET /public-assets/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。
+
+`GET /site-contents/resolve` 是站点和官网的公开内容读取接口，只按 `path` 返回已发布内容。当前只返回 `PUBLISHED` 内容，固定响应 `id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`，不返回草稿和下架内容。
 
 `POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status` 和 `POST /admin/users/{userId}/reset-password` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用和重置密码；不支持物理删除用户，也不通过后台直接改用户归属数据。
 
@@ -899,7 +720,7 @@ interface AdminGenerateMembershipCodesResult {
 
 `GET /admin/app-config`、`POST /admin/app-config/login-image` 和 `DELETE /admin/app-config/login-image` 共同维护登录弹窗图片。它们只服务这一条已确认配置，不扩成通用配置中心或通用素材库。上传成功和清空成功都返回最新 `AppConfigResponse`。
 
-`GET /admin/membership-codes/skus`、`GET /admin/membership-codes/batches`、`POST /admin/membership-codes/batches`、`POST /admin/membership-codes/batches/{batchId}/status`、`POST /admin/membership-codes/batches/{batchId}/generate`、`GET /admin/membership-codes` 和 `POST /admin/membership-codes/{codeId}/disable` 共同组成后台会员兑换码治理面。固定 SKU 目录由服务端自动同步，当前只允许 `PLUS_30D / PRO_30D / PRO_TRIAL_1D / PRO_TRIAL_3D / PRO_TRIAL_7D` 五项；后台不得新增第六种 SKU，也不得基于其他数据库遗留 SKU 发码。批次读取固定返回分页 `PageResult<AdminMembershipCodeBatchItem>`，并附带 `windowState + version + codeCount / activeCodeCount / redeemedCodeCount / disabledCodeCount`，用于后台判断上架状态、时间窗和发码规模。创建批次时只收 `skuCode / name / redeemEnabled / startsAt / endsAt` 最小字段，`startsAt < endsAt` 由服务端校验；切换上下架时必须带 `expectedVersion`，避免多人后台覆盖。`POST /admin/membership-codes/batches/{batchId}/generate` 只收 `quantity`，单次上限 `1000`；服务端高熵生成明文码，但数据库、审计和后台列表只保留 `codeHash + codeMask`，明文码只在该次响应的 `codes[]` 中返回一次供导出。`GET /admin/membership-codes` 只返回掩码、批次、SKU、状态、使用人和使用时间；若后台输入完整兑换码查询，服务端只做哈希精确匹配，不回显明文。`POST /admin/membership-codes/{codeId}/disable` 仅允许停用未使用兑换码，已使用码不得再改状态。
+`GET /admin/membership-codes/skus`、`POST /admin/membership-codes/skus/{skuId}/status`、`GET /admin/membership-codes/batches`、`POST /admin/membership-codes/batches`、`POST /admin/membership-codes/batches/{batchId}/status`、`POST /admin/membership-codes/batches/{batchId}/generate`、`GET /admin/membership-codes`、`GET /admin/membership-codes/generations`、`GET /admin/membership-codes/redemptions` 和 `POST /admin/membership-codes/{codeId}/disable` 共同组成后台会员兑换码治理面。固定 SKU 目录由服务端自动同步，当前只允许 `PLUS_30D / PRO_30D / PRO_TRIAL_1D / PRO_TRIAL_3D / PRO_TRIAL_7D` 五项；后台不得新增第六种 SKU，也不得基于其他数据库遗留 SKU 发码。SKU 摘要新增 `version`，只用于后台切换该 SKU 的核销开关；切换请求体固定提交 `redeemEnabled + expectedVersion`，服务端成功后才会递增 `version`。SKU 目录同步只负责校正 `code / kind / tier / durationDays` 这类固定事实，不会覆盖后台已设置的 `redeemEnabled`。批次读取固定返回分页 `PageResult<AdminMembershipCodeBatchItem>`，并附带 `windowState + version + codeCount / activeCodeCount / redeemedCodeCount / disabledCodeCount`，用于后台判断上架状态、时间窗和发码规模。创建批次时只收 `skuCode / name / redeemEnabled / startsAt / endsAt` 最小字段，`startsAt < endsAt` 由服务端校验；切换上下架时必须带 `expectedVersion`，避免多人后台覆盖。`POST /admin/membership-codes/batches/{batchId}/generate` 只收 `quantity`，单次上限 `1000`；服务端高熵生成明文码，但数据库、审计和后台列表只保留 `codeHash + codeMask`，明文码只在该次响应的 `codes[]` 中返回一次供导出。`GET /admin/membership-codes` 只返回掩码、批次、SKU、状态、使用人和使用时间；若后台输入完整兑换码查询，服务端只做哈希精确匹配，不回显明文。`GET /admin/membership-codes/generations` 按 `audit_events` 中的 `membership-code.generate` 事实分页返回生成记录，首版支持按 `batchId / skuCode` 过滤，响应只包含 `批次 / SKU / 生成数量 / 操作人 / 时间`，不回放明文码。`GET /admin/membership-codes/redemptions` 只返回已核销兑换码分页，首版支持按 `batchId / skuCode / uid / redeemedFrom / redeemedTo / code` 过滤，用于后台独立查看兑换使用事实。`POST /admin/membership-codes/{codeId}/disable` 仅允许停用未使用兑换码，已使用码不得再改状态。
 
 `GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/status`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。`POST /admin/home-entries/{placement}/status` 当前只允许 `QUICK_1 ... QUICK_4`，请求体固定提交 `status + expectedVersion`；`LISTED` 表示该四宫格入口会出现在首页，`UNLISTED` 表示该坑位仍保留配置但不在首页展示，主卡 `MAIN / SIDE_TOP / SIDE_BOTTOM` 不支持下架。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
 
@@ -971,7 +792,7 @@ POST /admin/recipes/{recipeId}/unblock
 POST /admin/recipe-reports/{reportId}/resolve
 ```
 
-`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排系统菜谱分类，请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `ownerId = null` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName`，排序统一按 `updatedAt desc`。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `ownerId = null` 的系统菜谱记录。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount` 和 `canEdit`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `ownerId = null`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`GET /admin/pending-recipes` 返回待审核个人菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。
+`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排系统菜谱分类，请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `ownerId = null` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName`，排序统一按 `updatedAt desc`。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `ownerId = null` 的系统菜谱记录。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount`、`canEdit`，以及单菜助理状态 `assistantState(status / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `ownerId = null`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台手动重试当前系统菜谱版本的单菜助理生成，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情。`GET /admin/pending-recipes` 返回待审核个人菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次创建新的系统固定版本时，服务端还要同步生成一份单菜助理快照并挂到该 `RecipeContentVersion`；当前覆盖后台新建、后台编辑、后台导入发布，以及个人推荐审核通过收录为系统菜谱这四条写路径。若生成失败，主菜谱版本写入不回滚，而是把失败状态、最近错误和尝试次数落到同一份助理记录里，供后台详情页查看并手动重试。该快照只作为固定版本附属数据保留，不回写正文主数据。
 
 ## 其他领域接口摘要
 
@@ -1002,17 +823,12 @@ GET  /meal-plans
 GET  /meal-plans/{planItemId}/cook-assistant
 POST /meal-plans
 POST /meal-plans/{planItemId}/complete
+POST /meal-plans/{planItemId}/confirm-menu
 POST /meal-plans/{planItemId}/cook-assistant
-GET  /meal-polls
-POST /meal-polls
-GET  /meal-polls/{pollId}
-POST /meal-polls/{pollId}/vote
-POST /meal-polls/{pollId}/confirm
 POST /dining-events
 POST /dining-events/{eventId}/memory-shares
 GET  /memory-shares/{shareToken}/preview
 POST /meal-plans/{planItemId}/dining-event
-GET  /dining-group-activities
 GET  /dining-events/{eventId}
 POST /dining-events/{eventId}/share-link
 POST /dining-events/{eventId}/share-link/disable
@@ -1021,7 +837,6 @@ POST /dining-events/{eventId}/participants/{participantId}/revoke
 POST /dining-events/{eventId}/participants/{participantId}/reinvite
 POST /dining-events/{eventId}/cover
 POST /dining-events/{eventId}/cook
-POST /dining-events/{eventId}/invite-group
 POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
 POST /dining-events/{eventId}/complete
@@ -1097,6 +912,7 @@ interface MealPlanSummary {
   mealSlot: MealSlot;
   title: string;
   menuItems: MealPlanMenuItemSummary[];
+  menuLocked: boolean;
   status: MealPlanStatus;
   version: number;
   completedAt: IsoDateTime | null;
@@ -1201,6 +1017,7 @@ interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
+  note: string | null;
   coverImageUrl: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   organizerUid: number | null;
@@ -1330,7 +1147,7 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
 
 详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
 
@@ -1342,6 +1159,16 @@ interface UpdateMealPlanTitleRequest {
 ```
 
 `POST /meal-plans/{planItemId}/title` 只修改当前计划标题；`title` 留空或显式传 `null` 时，服务端恢复成该餐次的默认 `餐次 + 饮食计划` 名称。该接口仍要求计划 owner 调用，并继续走 `expectedVersion` 防并发覆盖；若当前餐次已经挂有饭局，服务端会同步刷新饭局标题，保证饭局页和计划页标题一致。
+
+菜单固定走独立写口：
+
+```ts
+interface ConfirmMealPlanMenuRequest {
+  expectedVersion: number;
+}
+```
+
+`POST /meal-plans/{planItemId}/confirm-menu` 只允许计划 owner 调用，要求当前餐次至少已有一道菜，且必须提交最新 `expectedVersion`。成功后服务端把 `MealPlanSummary.menuLocked` 置为 `true`，并同步把当前未结束饭局推进到 `CONFIRMED`。菜单固定后，不再允许通过 `POST /meal-plans` 或 `POST /meal-plans/items` 修改结构性内容，包括换菜、增删、排序和切换菜谱版本；但计划标题、饭局时间、餐次时间展示仍可继续调整。
 
 `POST /dining-events` 新增“直接发起饭局”最小写入口，请求体固定为：
 
@@ -1356,7 +1183,11 @@ interface CreateDirectDiningEventRequest {
 
 这条写接口只允许当前登录用户给“自己的某一天某一餐”直接开一场饭局，不额外接收菜单字段。若该餐次还没有计划项，服务端会先自动创建一条空菜单计划，再把饭局挂上去；若已有计划项，则直接复用原计划项。已完成餐次、同餐次已存在未结束饭局时统一返回冲突错误。直接创建得到的 `DiningEventSummary.menuItems` 可以为空，客户端随后继续走计划编辑链路补菜单即可。
 
-计划详情新增“做饭助手”附属快照：`GET /meal-plans/{planItemId}/cook-assistant` 读取当前计划下最近一次生成结果；若从未生成，响应仍返回同一个对象，但 `hasSnapshot = false`，客户端据此显示空态。`POST /meal-plans/{planItemId}/cook-assistant` 在当前计划上生成或重生成一份规则型做饭安排，请求头继续使用 `Idempotency-Key`，请求体不额外接收业务字段。该快照固定挂在 `MealPlanItem` 下，与计划同生命周期：计划删除时一并删除，不独立保留。服务端必须按当前 `MealPlanDish` 的 `recipeVersionId + slotType + purchaseState + sortOrder` 计算菜单签名；若后续计划菜单被改动，旧快照仍可返回，但 `isStale = true`，客户端应提示用户手动重新生成，不得静默覆盖。
+计划详情新增“做饭助手”附属快照：`GET /meal-plans/{planItemId}/cook-assistant` 读取当前计划下最近一次生成结果；若从未生成，响应仍返回同一个对象，但 `hasSnapshot = false`，客户端据此显示空态。`POST /meal-plans/{planItemId}/cook-assistant` 在当前计划上生成或重生成一份规则型做饭安排，请求头继续使用 `Idempotency-Key`，请求体不额外接收业务字段。若当前菜单尚未固定，服务端先自动执行一次“固定菜单”，再继续生成本餐助理；自动固定成功后即使后续生成失败，也不回滚 `menuLocked`。该快照固定挂在 `MealPlanItem` 下，与计划同生命周期：计划删除时一并删除，不独立保留。服务端必须按当前 `MealPlanDish` 的 `recipeVersionId + slotType + purchaseState + sortOrder` 计算菜单签名；若当前 digest 与已存快照一致，则直接返回现有结果，不重复生成。
+
+当前本餐助理的编排规则已经升级为：优先读取每道菜固定版本上的单菜助理快照，并按 `PREP / COOK / SERVE` 三段和 `EARLY / MID / LATE` 时序做规则编排；若某道菜还没有单菜助理，则回退读取该固定版本原始正文步骤与时长字段继续保守编排。也就是说，本餐助理现在是“单菜快照优先、原步骤兜底”。
+
+实时补洞当前固定为同一个写接口内的受控分支：当本餐缺少单菜助理的菜数 `>= 2`，或缺失占比 `> 40%` 时，服务端会继续判断当前用户会员层级。若当前用户不是 `FREE`，则在生成本餐助理前，先为缺失的固定菜谱版本补齐单菜助理快照，再继续整桌编排；若当前用户是 `FREE`，则不自动补齐，只在 `summary.notes` 里明确提示“当前先按原步骤保守编排”。这个补洞过程仍然是一版本一次固化，不会在每次点击时反复重写。
 
 返回结构最小固定为：
 
@@ -1394,7 +1225,7 @@ interface MealPlanCookAssistant {
 }
 ```
 
-第一版只允许服务端基于计划里已固定的菜谱版本正文、步骤和时长做规则编排，不新增 AI 自由生成入口，也不把助手结果另存成独立历史对象。
+当前版本仍然不新增 AI 自由生成入口，也不把本餐助理结果另存成独立历史对象；实时补洞留待后续单独接入。
 
 ### 随机页最小真实流程
 
@@ -1572,7 +1403,7 @@ interface AddMealPlanItemRequest {
 1. 这条接口只表达“把当前菜谱追加进对应餐次”，不接收完整 `menuItems[]`。
 2. 若对应餐次不存在，服务端按 `planDate + mealSlot` 自动创建该餐次。
 3. 若该餐次已存在相同 `recipeId` 的有效菜单项，服务端返回当前餐次摘要，不重复追加。
-4. 若该餐次已完成，返回 `409`。
+4. 若该餐次已完成或菜单已固定，返回 `409`。
 5. 响应继续返回最新 `MealPlanSummary`，不额外返回无关上下文数据。
 3. `purchaseState = PENDING` 对应“保留但暂不采购”。
 4. `recipeVersionId` 由客户端显式提交，服务端必须校验与 `recipeId` 的真实匹配关系。
@@ -1930,24 +1761,19 @@ interface CompleteShoppingListRequest {
 
 共享规则：
 
-1. 清单分享支持链接和饭搭子成员邀请两种入口。
+1. 清单分享当前只保留好友链接邀请入口。
 2. 共享加入必须要求登录，不开放匿名协作编辑。
 3. 首版角色只分 `OWNER` 与 `COLLABORATOR`，不建设管理员。
 4. 创建者可改名、分享、移除成员、完成、作废、恢复、删除和复制清单。
 5. 协作者可勾选完成、取消完成、添加食材、删除食材、从菜谱加入、退出和复制清单。
 6. 协作者上限按“总人数”计算，包含创建者本人；普通用户当前最多 `2` 人协作。
-7. 发出饭搭子邀请或好友链接不预占名额，只有真正加入成功时才占坑。
+7. 发出好友链接不预占名额，只有真正加入成功时才占坑。
 8. 满员后旧成员不受影响，但新成员不能继续加入；移除成员后名额重新释放。
 
 ```ts
 interface ShareShoppingListLinkResponse {
   shareToken: string;
   shareUrl: string;
-}
-
-interface ShareShoppingListMembersRequest {
-  version: number;
-  targetUserIds: UUID[];
 }
 
 interface ShoppingListInviteSummary {
@@ -2026,50 +1852,6 @@ interface ShoppingSharePreview {
 
 共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回 `409`，提示客户端刷新后重试。
 
-`GET /meal-polls` 返回当前饭搭子下的征集摘要列表，当前只支持按 `diningGroupId / status / planDate / mealSlot / limit` 过滤；首页和征集入口只读取摘要，不返回成员逐条回应。`POST /meal-polls` 用于由 `OWNER / ADMIN` 发起一条新的点菜征集，请求体只接收：
-
-```ts
-interface CreateMealPollRequest {
-  diningGroupId: UUID;
-  planDate: string;
-  mealSlot: MealSlot;
-  deadlineAt: IsoDateTime;
-  choiceLimit: number;
-  note: string | null;
-  candidateRecipeVersionIds: UUID[];
-}
-```
-
-当前每个饭搭子同一 `planDate + mealSlot` 只允许一条有效征集；`choiceLimit` 当前固定 `1~3` 且在创建时实例冻结；候选菜必须解析到固定 `recipeVersionId`，不能直接提交自由文本菜名。
-
-`GET /meal-polls/{pollId}` 返回 `MealPollDetail`。`POST /meal-polls/{pollId}/vote` 由当前成员提交或覆盖自己的一份回应，请求体只接收：
-
-```ts
-interface VoteMealPollRequest {
-  expectedVersion: number;
-  selectedCandidateIds: UUID[];
-  suggestionTitle: string | null;
-  note: string | null;
-}
-```
-
-同一成员对同一征集只有一份有效回应；重复提交覆盖自己的旧回应；`suggestionTitle` 只是建议菜名，不直接进入最终菜单；截止后提交返回明确失败，不静默丢弃。
-
-`POST /meal-polls/{pollId}/confirm` 由 `OWNER / ADMIN` 关闭征集、汇总回应并确认最终菜单，请求体只接收：
-
-```ts
-interface ConfirmMealPollRequest {
-  expectedVersion: number;
-  finalRecipeVersionIds: UUID[];
-  scheduledAt: IsoDateTime | null;
-  location: string | null;
-}
-```
-
-该接口必须在同一事务内完成“关闭征集 -> 汇总回应 -> 生成或更新当前餐次的 `MealPlanItem` -> 生成或更新对应 `DiningEvent`”。最终菜单中的每一项都必须能落到固定 `recipeVersionId`；未匹配的自由文本建议必须在确认前被显式忽略或映射到真实菜谱版本，不得混入最终菜单。
-
-`GET /dining-group-activities` 返回当前饭搭子最近 `3~5` 条轻动态，只服务首页卡片，不提供完整历史翻页。动态是结构化事项摘要，不是聊天消息；不得返回冰箱、购物、过敏、忌口、内部备注或未采用候选菜等隐私字段。
-
 `POST /dining-events/{eventId}/share-link` 用于生成或重置当前饭局的邀请分享链接，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功。响应最小固定为：
 
 ```ts
@@ -2084,16 +1866,6 @@ interface DiningEventShareLinkResponse {
 同时，这条写口会让同一饭局之前仍处于 `ACTIVE / OPENED` 的旧好友邀请失效，当前只保留最新一条未使用外链，避免旧链接继续裸露在外。服务端会单独记录这条外链邀请事实及其打开、校验、接受、撤销/失效时间，供后续审计与回看使用。
 
 `POST /dining-events/{eventId}/share-link/disable` 用于当前饭局发起人主动关闭好友邀请外链，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；服务端会把该饭局当前仍处于 `ACTIVE / OPENED` 的好友邀请统一改成 `REVOKED`，随后返回最新 `DiningEventSummary`。客户端应使用返回里的 `hasActiveShareLink=false` 刷新页面状态，而不是继续复用旧的本地分享状态。
-
-`POST /dining-events/{eventId}/share-members` 用于向指定饭搭子成员发送饭局邀请，请求头继续使用 `Idempotency-Key`，请求体最小固定为：
-
-```ts
-interface ShareDiningEventMembersRequest {
-  targetUserIds: UUID[];
-}
-```
-
-当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；`targetUserIds` 只允许填写当前与发起人存在有效饭搭子关系的成员。已经在这场饭局参与名单里的用户本次会直接忽略，不重复生成新的参与记录。该写口成功后返回最新 `DiningEventSummary`，前端据此刷新待确认人数与参与名单。
 
 `POST /dining-events/{eventId}/participants/{participantId}/revoke` 用于饭局发起人撤回一条仍处于待确认状态的邀请，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成、该参与记录状态仍为 `INVITED` 时可成功；服务端会把这条记录改成 `REMOVED`，随后返回最新 `DiningEventSummary`。
 
@@ -2110,6 +1882,17 @@ interface UpdateDiningEventScheduleRequest {
 ```
 
 当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；服务端继续按 `expectedVersion` 防并发覆盖。客户端当前主要用于“改时间”，`location` 未传时复用原值。
+
+`POST /dining-events/{eventId}/note` 用于当前饭局发起人补充或清空一段公开备注，请求头继续使用 `Idempotency-Key`，请求体最小固定为：
+
+```ts
+interface UpdateDiningEventNoteRequest {
+  expectedVersion: number;
+  note: string | null;
+}
+```
+
+当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；服务端继续按 `expectedVersion` 防并发覆盖。`note` 留空字符串时按 `null` 处理，读取 `GET /dining-events/{eventId}` 时统一通过 `DiningEventSummary.note` 回显给全部参与人。
 
 `GET /share/{shareToken}/preview` 继续作为饭局邀请落地页读取口，但现在只返回登录前可公开展示的轻信息，不再直接暴露完整菜单食材和精确地点。最小响应固定为：
 
@@ -2155,7 +1938,7 @@ interface ClaimCookRequest {
 
 `POST /dining-events/{eventId}/bring` 继续用于“我带菜”，不新增并行写路径。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
 
-`POST /dining-events/{eventId}/memory-shares` 用于在已完成饭局上生成一张不可变饭搭子卡快照。当前只允许饭局发起人调用，请求体只接收：
+`POST /dining-events/{eventId}/memory-shares` 用于在已到开饭时间或已完成的饭局上生成一张不可变餐桌回忆卡快照。当前只允许饭局发起人调用，请求体只接收：
 
 ```ts
 interface CreateDiningMemoryShareRequest {
@@ -2166,13 +1949,13 @@ interface CreateDiningMemoryShareRequest {
 
 该接口必须满足：
 
-1. 饭局必须已经 `COMPLETED`，且已经冻结最终菜单。
+1. 饭局必须已经到开饭时间或已经 `COMPLETED`，且已经冻结最终菜单；已取消饭局不得生成。
 2. 只允许当前饭局发起人生成，不给其他参与成员开放代生成路径。
 3. `showParticipants=false` 时公开快照不得返回任何成员摘要。
 4. 每次生成都会固化为新的 `snapshotVersion`，后续饭局改动不会回写到历史快照。
 5. 快照只允许包含 `title / planDate / mealSlot / menuItems(title, coverUrl, cookName) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。
 
-`GET /memory-shares/{shareToken}/preview` 是饭搭子卡的公开读取路径，无需登录，只返回上述不可变白名单快照；不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
+`GET /memory-shares/{shareToken}/preview` 是餐桌回忆卡的公开读取路径，无需登录，只返回上述不可变白名单快照；不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
 
 `GET /users/me/medals` 当前按模板返回可见勋章，不再写死在接口层。服务端当前只根据真实完成事实和真实审核收录事实自动点亮，包括：
 
@@ -2186,7 +1969,7 @@ interface CreateDiningMemoryShareRequest {
 
 ### 菜谱
 
-菜谱 R1 本轮冻结为两条最小链路：`草稿 -> 发布到我的`，以及 `灵感固定版本 -> 收藏到合集`。现有直接创建、直接更新和导入接口仍是候选实现，不属于 R1 契约；实现时直接替换，不保留旧字段 fallback。
+菜谱当前链路冻结为：`草稿 -> 发布到私房菜`、`灵感系统菜谱 -> 改编为私房菜`，以及“灵感/周刊直接加入计划时，必要时先保存到私房菜”。灵感系统菜谱只读；用户创建、编辑和保存不会自动进入系统库，只有推荐审核通过后才生成系统菜谱。合集不再是前台菜谱入口，历史合集接口暂不删除，以保留已有固定引用。
 
 ```ts
 type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
@@ -2330,6 +2113,31 @@ interface RecipeContentSnapshot {
   steps: RecipeStepSnapshot[];
 }
 
+type RecipeAssistantStepPhase = "PREP" | "COOK" | "SERVE";
+
+interface RecipeAssistantStep {
+  order: number;
+  phase: RecipeAssistantStepPhase;
+  title: string;
+  detail: string;
+  imageUrl: string | null;
+  durationText: string | null;
+}
+
+interface RecipeAssistantSummary {
+  stepCount: number;
+  prepStepCount: number;
+  cookStepCount: number;
+  serveStepCount: number;
+  totalDurationText: string | null;
+}
+
+interface RecipeAssistantSnapshot {
+  generatedAt: IsoDateTime;
+  summary: RecipeAssistantSummary;
+  steps: RecipeAssistantStep[];
+}
+
 interface RecipeDraftContentInput {
   name: string;
   story: string | null;
@@ -2470,9 +2278,11 @@ interface MyRecipeDetail {
   difficultyText: string | null;
   durationText: string | null;
   category: RecipeCategorySummary;
+  inspirationCategory: InspirationCategorySummary | null;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistant: RecipeAssistantSnapshot | null;
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
@@ -2521,6 +2331,7 @@ interface CollectedRecipeDetail {
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistant: RecipeAssistantSnapshot | null;
   collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -2558,6 +2369,7 @@ interface InspirationRecipeDetail {
   category: InspirationCategorySummary;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistant: RecipeAssistantSnapshot | null;
   likeCount: number;
   collectCount: number;
   curatedByName: string | null;
@@ -2575,6 +2387,8 @@ interface AdminUserRecipeDomainOverview {
   latestCollectionAt: IsoDateTime | null;
 }
 ```
+
+`assistant` 是固定菜谱版本附属快照，允许为 `null`。前台进入单菜做饭模式时默认优先展示 `assistant.steps`，只有快照不存在或步骤为空时才回退到 `content.steps`；步骤图片继续直接引用原始步骤图片，不复制资源。
 
 R1 鉴权路径：
 
@@ -2602,15 +2416,12 @@ POST /uploads/images
 GET /recipes
 POST /recipes/from-inspiration
 GET /recipes/{recipeId}
-GET /collections
-GET /collections/recipes
-GET /collections/recipes/{collectionRecipeId}
-POST /collections/recipes
+POST /recipes/{recipeId}/assistant
 POST /recipes/reorder
 POST /recipes/{recipeId}/delete
 ```
 
-`GET /recipes` 只返回本人已发布菜谱，支持分页、关键词和个人分类筛选。查询参数为 `page`、`pageSize`、`keyword` 和 `categoryId`。新建和编辑正文统一经过草稿发布，R1 不注册直接 `POST /recipes` 和 `PUT /recipes/{recipeId}`。
+`GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。`POST /recipes/{recipeId}/assistant` 只对本人已发布私房菜开放，且请求头必须带 `Idempotency-Key`：若当前固定版本已经有助理快照，则直接返回现有结果；若没有，则仅会员可触发首次生成并固化到该 `contentVersionId`。免费用户调用返回权限错误，但仍可继续读取原始步骤和做饭模式降级链路。
 
 调用方不要再使用以下旧路径或旧参数：
 
@@ -2628,7 +2439,7 @@ POST /recipe-drafts
 POST /recipe-drafts/{draftId}/publish
 POST /recipes/from-inspiration
 GET /recipes
-POST /collections/recipes
+POST /recipes/{recipeId}/recommendations
 ```
 
 写接口的幂等键统一通过请求头 `Idempotency-Key` 传递，请求体不再出现 `operationId` 字段。例如：
@@ -2645,6 +2456,7 @@ Idempotency-Key: 172251000001
     "name": "番茄炒蛋",
     "story": null,
     "categoryId": 1,
+    "inspirationCategoryId": 2,
     "sceneIds": [1],
     "coverUploadId": null,
     "coverImageUrl": null,
@@ -2690,7 +2502,7 @@ slotKey: cover | step-1 | ...
 file: <binary>
 ```
 
-`GET /collections` 返回当前用户的合集场景摘要。`items` 按场景返回 `recipeCount` 和最近更新时间；`totalCount` 返回该用户当前收藏主记录总条数，不是场景条数。`GET /collections/recipes` 返回当前用户收藏快照分页，支持 `page`、`pageSize`、`keyword` 和可选 `sceneId`；传 `sceneId` 时只返回该合集内容。`GET /collections/recipes/{collectionRecipeId}` 返回一个固定版本快照详情。`POST /collections/recipes` 通过请求头 `Idempotency-Key` 保证幂等，请求体只接收 `sourceRecipeId`、`sourceVersionId` 和 `sceneIds`，不接受前端传正文快照；`sceneIds` 必须是非空数组，至少选择一个合集场景。
+合集接口仍保留为历史兼容路径，不再出现在当前菜谱页面、创建编辑流程或加入计划 Sheet 中；新功能统一使用私房菜和灵感链路。已有固定引用继续按原版本读取，避免删除合集数据造成历史计划或饭局失效。
 
 匿名灵感读取路径冻结为：
 
@@ -2700,9 +2512,9 @@ GET /inspiration-recipes
 GET /inspiration-recipes/{recipeId}
 ```
 
-`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；后者详情页额外返回 `curatedByName`，仅用于展示 `由某某整理` 的昵称快照，不跳用户主页。`GET /inspiration-recipes/{recipeId}` 在请求带有效用户 token 时，还会额外返回 `ownedRecipeId`：当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，否则返回 `null`，供详情页直接把主按钮切到“加入计划”。点赞、推荐排序和升级为我的接口后续独立冻结。
+`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；后者详情页额外返回 `curatedByName`，仅用于展示 `由某某整理` 的昵称快照，不跳用户主页。`GET /inspiration-recipes/{recipeId}` 在请求带有效用户 token 时，还会额外返回 `ownedRecipeId`：当前用户已持有该灵感固定版本对应的有效私房菜时返回个人菜谱 ID，否则返回 `null`，供详情页直接把主按钮切到“加入计划”。点赞和推荐排序接口后续独立冻结。
 
-收藏主事实冻结为“同一用户 + 同一灵感固定版本最多一条收藏记录”。`sceneIds` 表达该收藏记录挂载到哪些个人场景，必须至少挂到 1 个场景；仅补挂新场景时服务端补关系并刷新 `updatedAt`，同一场景重复收藏返回 `409`。收藏详情和后台合集内容都读取当时固定版本快照，来源菜谱后续更新不得改写已收藏内容。
+历史合集主事实仍按“同一用户 + 同一灵感固定版本最多一条收藏记录”读取，但不再提供新的前台写入口。新建或编辑私房菜只维护个人分类和可选系统分类；来源固定版本仍用于系统侧治理、计划和历史引用。
 
 后台只读查询本轮新增：
 
@@ -2714,7 +2526,7 @@ GET /admin/users/{userId}/collections
 GET /admin/users/{userId}/collections/{sceneId}/recipes
 ```
 
-`GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；`/collections` 返回该用户全部合集场景摘要；`/collections/{sceneId}/recipes` 返回该场景下的收藏快照分页。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
+`GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；历史 `/collections` 路径仍返回该用户合集场景摘要，供旧固定引用治理。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
 
 `GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，当前前台常规入口只展示系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes`、`GET /collections/recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配，其中合集基于已收藏固定版本正文检索。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`POST /recipes/from-inspiration` 是灵感详情的显式“添加到我的”入口：请求体固定提交 `sourceRecipeId / sourceVersionId / categoryId / sceneIds`，其中 `categoryId` 必填，`sceneIds` 可为空数组；服务端直接把当前灵感固定版本加入“我的”，不先创建草稿，也不要求客户端跳转编辑页。若同一用户已持有同一 `sourceVersionId` 的有效“我的”菜谱，本轮直接返回已有入口，不再额外创建第二条。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `ownerId = null`、挂系统分类的系统菜谱，并把审核通过时的昵称快照写入 `curatedByName`；原个人菜谱继续保留在“我的”下，不被替换或删除。
 

@@ -4,7 +4,7 @@
 
 本文是给开发人员阅读的项目总文档，描述当前仓库的产品定位、V1 范围、技术选型、工程边界和核心实现规则。
 
-AI 快速执行规则见 `AGENT.md`。饭搭子生命周期见 `dining-group.md`，菜谱规则见 `recipe.md`，食材与单位规则见 `ingredient.md`，会员、配置和空间规则见 `configuration.md`。`docs/cook/` 中的 Prisma、SQL 和早期产品方案只是来源材料，不覆盖当前产品规则。
+AI 快速执行规则见 `AGENT.md`。菜谱规则见 `recipe.md`，食材与单位规则见 `ingredient.md`，会员、配置和空间规则见 `configuration.md`。`docs/cook/` 中的 Prisma、SQL 和早期产品方案只是来源材料，不覆盖当前产品规则。
 
 ## 项目定位
 
@@ -12,7 +12,7 @@ AI 快速执行规则见 `AGENT.md`。饭搭子生命周期见 `dining-group.md`
 
 英文名：**Ember**。
 
-产品定义：帮助用户独立管理菜谱、冰箱、计划和购物清单，并通过饭搭子关系与饭局共同决定下一顿吃什么的轻量小程序。
+产品定义：帮助用户独立管理菜谱、冰箱、计划和购物清单，并通过饭局协作共同决定下一顿吃什么的轻量小程序。
 
 Slogan：**炊烟晚，人归缓，烟火暖流年**。
 
@@ -22,7 +22,7 @@ Slogan：**炊烟晚，人归缓，烟火暖流年**。
 
 菜谱流转闭环：
 
-`浏览灵感或手动创建 -> 收藏或进入我的 -> 安排个人计划或饭局 -> 做饭并沉淀个人记录`
+`浏览灵感或手动创建 -> 保存到私房菜 -> 安排个人计划或饭局 -> 做饭并沉淀个人记录`
 
 产品不是聊天工具。所有协作都围绕菜谱发现、饭局邀请、菜单和带菜发生；冰箱和购物清单始终属于个人。
 
@@ -30,15 +30,14 @@ Slogan：**炊烟晚，人归缓，烟火暖流年**。
 
 V1 目标是跑通家庭下一餐闭环，包含：
 
-1. 每人最多创建一个自己主理的饭搭子，并按个人套餐加入多个饭搭子。
-2. 饭搭子只维护成员关系；加入和退出不触碰个人业务数据。
-3. “我的 / 灵感 / 合集”菜谱结构、固定基础版本、字段级覆盖、只读收藏、图片独立化、派生做法和可重算空间计量。
-4. 菜谱不设个人可配置的可见权限；灵感只展示系统内容和人工审核通过的用户推荐固定版本。
-5. 个人冰箱、稀疏周计划、个人购物清单和食材缺口。
-6. 饭局邀请、外部分享、参与状态、“我带菜”和本人饭局记录。
-7. 个人 Free/Plus/Pro/Ultra、饭搭子增长额度、回收站、降级超额限制和个性化展示。
-8. 用户级“我的口味”、过敏与忌口安全、基础审计和必要的内容治理。
-9. 系统菜谱导入、用户菜谱受控推荐、点赞与收藏统计、统一食材和单位库、个人食材及后台审核。
+1. “私房菜 / 灵感”菜谱结构、固定基础版本、字段级覆盖、灵感改编、图片独立化、派生做法和可重算空间计量。
+2. 菜谱不设个人可配置的可见权限；灵感只展示系统内容和人工审核通过的用户推荐固定版本。
+3. 个人冰箱、稀疏周计划、个人购物清单和食材缺口。
+4. 饭局邀请、外部分享、参与状态、“我带菜”和本人饭局记录。
+5. 购物清单按单张清单协作，不扩成长期共享空间。
+6. 个人 Free/Plus/Pro/Ultra、回收站、广告减免和个性化展示。
+7. 用户级“我的口味”、过敏与忌口安全、基础审计和必要的内容治理。
+8. 系统菜谱导入、用户菜谱受控推荐、点赞与收藏统计、统一食材和单位库、个人食材及后台审核。
 
 ## V1 不做
 
@@ -132,7 +131,7 @@ CTO 拆解后必须分别与小程序、后端、后台开发者确认最小任�
 
 统一规则：
 
-1. 小程序路由默认只表达 `分包 / 页面`，不把饭搭子、菜谱、版本和状态流全部写进路径。
+1. 小程序路由默认只表达 `分包 / 页面`，不把菜谱、版本和状态流全部写进路径。
 2. 后端 API 默认只表达资源和动作的最短稳定入口，不按数据库关系层层嵌套。
 3. 后台路由按运营页面扁平组织，不按菜单树、权限树或数据模型树嵌套。
 4. NestJS 模块按领域一级拆分，不在模块下继续堆多层子模块。
@@ -149,7 +148,7 @@ pages_pantry/gap
 GET /users/me
 GET /recipes/{recipeId}
 POST /meal-plans
-GET /admin/dining-groups
+GET /admin/users
 
 modules/
   recipes/
@@ -160,13 +159,13 @@ modules/
 避免方向：
 
 ```text
-pages/dining-group/recipe/version/detail
+pages/meal/recipe/version/detail
 pages/admin/content/recipe/import/review
 
-GET /dining-groups/{diningGroupId}/recipes/{recipeId}/versions/{versionId}/ingredients
+GET /meal-plans/{planId}/recipes/{recipeId}/versions/{versionId}/ingredients
 POST /admin/content/recipes/import/batches/{batchId}/rows/{rowId}/publish
 
-modules/dining-groups/recipes/versions/public/adoptions
+modules/meals/recipes/versions/public/adoptions
 ```
 
 ## 模块状态
@@ -186,7 +185,7 @@ V1 模块状态：
 | --- | --- | --- |
 | Auth / User / Request Boundary | Engineering Foundation | 可支持后续业务开发，具体页面流程仍按功能执行单验收 |
 | Idempotency / Audit / Outbox | Engineering Foundation | 幂等和审计可复用；Worker 不启动 |
-| DiningGroup | In Development | 多饭搭子候选实现存在，关系流程和页面行为待逐项验收 |
+| DiningGroup | Disabled | 前台与后台入口已下线；历史表与兼容字段暂保留，不再作为当前产品模块继续开发 |
 | Recipe / RecipeImport | In Development | 产品与页面规则见 `recipe.md` 和 `plans/recipe-execution.md`；候选实现需重新设计和验收 |
 | Ingredient / Unit | In Development | 统一库和个人项规则已确认；API、数据约束、审核与换算仍未设计 |
 | Meal / DiningEvent | In Development | 周计划和饭局候选实现存在，参与者身份约束待业务确认 |
@@ -234,7 +233,7 @@ DishConcept
 
 1. 菜谱编辑：检查基础和个人版本，原子写入覆盖；图片独立化时固化有效正文和媒体引用。
 2. 派生做法：锁定根菜谱，校验本人套餐、派生总数、菜谱数和空间后创建独立菜谱。
-3. 加入餐食计划：锁定当前 `RecipeContentVersion`，`MealPlanItem` 不引用可变饭搭子入口。
+3. 加入餐食计划：锁定当前 `RecipeContentVersion`，`MealPlanItem` 不引用可变协作上下文。
 4. 购物项合并：按请求头 `Idempotency-Key` 去重，同一清单内按 `mergeGroupKey` 原子合并。
 5. 点菜确认：关闭征集、汇总回应、生成计划必须同事务完成。
 6. 结束购物：归档清单、迁移未购项、批量入库必须同事务完成。
@@ -251,8 +250,8 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 必须保留的约束：
 
 1. `DishConcept` 全局 `searchKey` 唯一。
-2. 饭搭子私有 `DishConcept` 必须在饭搭子作用域内唯一。
-3. 收藏、升级为“我的”和再次导入原版的唯一性范围必须先按 `plans/recipe-execution.md` 评审；现有候选约束不得直接视为最终契约。
+2. 已下线的历史关系作用域约束不得继续对新功能暴露为当前产品合同。
+3. 灵感改编、私房菜来源和再次创建原版的唯一性范围必须先按 `plans/recipe-execution.md` 评审；现有候选约束不得直接视为最终契约。
 4. `MealPlan` 同用户、日期、餐次只能有一个未取消计划。
 5. 每个用户同一时间只能有一份 `ACTIVE` 购物清单。
 6. `RecipeContentVersion` 的 `ingredients` 和 `steps` 不能原地更新。
@@ -261,7 +260,7 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 9. `Asset` 归属必须匹配 `scope`。
 10. `IdempotencyRecord` 在操作作用域下唯一。
 11. `FridgeItem(userId, ingredientId)` 在个人范围唯一，V1 不表达多批次库存。
-12. 每个用户最多主理一个饭搭子；同一用户可以有多条有效加入关系，但不能重复加入同一饭搭子。
+12. 历史关系表中的唯一性约束只作为兼容事实保留，不再新增新的前台依赖。
 
 ## API 协议
 
@@ -315,10 +314,10 @@ Disabled 模块统一返回：
 
 ## 权限与安全
 
-1. 所有饭搭子关系写入前必须校验成员状态、双方个人套餐额度、超额状态和角色权限。
+1. 所有协作写入前都必须校验当前参与事实、个人套餐额度和角色权限。
 2. 前端隐藏按钮不能替代服务端校验。
-3. 被移除成员立即失去该饭搭子的成员快捷入口，但保留本人饭局参与记录和个人数据。
-4. 分享预览只读可打开；导入和饭搭子写操作必须建立可信微信身份。
+3. 被撤回或移除的协作者立即失去对应协作入口，但保留本人饭局参与记录和个人数据。
+4. 分享预览只读可打开；导入和协作写操作必须建立可信微信身份。
 5. 分享快照只包含公开白名单字段，不能包含冰箱、忌口、过敏、内部主键或私人备注。
 6. 对象存储访问必须先做业务权限校验，再签发短期 URL。
 7. 过敏和忌口提醒永久免费，敏感原始资料不向无关参与人暴露。
