@@ -106,12 +106,6 @@ const router = createRouter({
           meta: { title: "合集内容" }
         },
         {
-          path: "dining-groups",
-          name: "dining-groups",
-          component: () => import("@/pages/DiningGroupsPage.vue"),
-          meta: { title: "饭搭子查询" }
-        },
-        {
           path: "medals",
           name: "medals",
           component: () => import("@/pages/MedalTemplatesPage.vue"),
@@ -217,9 +211,69 @@ const router = createRouter({
         },
         {
           path: "membership-codes",
-          name: "membership-codes",
-          component: () => import("@/pages/MembershipCodesPage.vue"),
-          meta: { title: "会员兑换码" }
+          redirect: "/membership/skus"
+        },
+        {
+          path: "membership",
+          redirect: "/membership/skus"
+        },
+        {
+          path: "membership/skus",
+          name: "membership-skus",
+          component: () => import("@/pages/MembershipGovernancePage.vue"),
+          meta: { title: "SKU 管理", membershipPage: "skus" }
+        },
+        {
+          path: "membership/batches",
+          name: "membership-batches",
+          component: () => import("@/pages/MembershipGovernancePage.vue"),
+          meta: { title: "兑换码批次", membershipPage: "batches" }
+        },
+        {
+          path: "membership/generations",
+          name: "membership-generations",
+          component: () => import("@/pages/MembershipGovernancePage.vue"),
+          meta: { title: "创建记录", membershipPage: "generations" }
+        },
+        {
+          path: "membership/codes",
+          name: "membership-codes-list",
+          component: () => import("@/pages/MembershipGovernancePage.vue"),
+          meta: { title: "兑换码列表", membershipPage: "codes" }
+        },
+        {
+          path: "membership/redemptions",
+          name: "membership-redemptions",
+          component: () => import("@/pages/MembershipGovernancePage.vue"),
+          meta: { title: "核销记录", membershipPage: "redemptions" }
+        },
+        {
+          path: "content",
+          redirect: "/content/pages"
+        },
+        {
+          path: "content/pages",
+          name: "content-pages",
+          component: () => import("@/pages/ContentGovernancePage.vue"),
+          meta: { title: "固定页", contentPage: "pages" }
+        },
+        {
+          path: "content/articles",
+          name: "content-articles",
+          component: () => import("@/pages/ContentGovernancePage.vue"),
+          meta: { title: "文章列表", contentPage: "articles" }
+        },
+        {
+          path: "content/channels",
+          name: "content-channels",
+          component: () => import("@/pages/ContentGovernancePage.vue"),
+          meta: { title: "栏目管理", contentPage: "channels" }
+        },
+        {
+          path: "content/articles/editor",
+          name: "content-editor",
+          component: () => import("@/pages/ContentEditorPage.vue"),
+          meta: { title: "内容编辑" }
         }
       ]
     }

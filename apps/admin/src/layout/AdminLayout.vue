@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataAnalysis, Files, ForkSpoon, House, Refresh, Setting, SwitchButton, User } from "@element-plus/icons-vue";
+import { Files, ForkSpoon, House, Refresh, Setting, SwitchButton, User } from "@element-plus/icons-vue";
 import { resolveAdminHeaderTitle, useAdminHeaderState } from "@/composables/useAdminHeader";
 import { ADMIN_APP_NAME } from "@/config/app";
 import { useSessionStore } from "@/stores/session";
@@ -49,6 +49,15 @@ const activeMenu = computed(() => {
     }
     return "/recipes/list";
   }
+  if (route.path.startsWith("/membership/")) {
+    return route.path;
+  }
+  if (route.path.startsWith("/content/")) {
+    if (route.path.startsWith("/content/articles/editor")) {
+      return "/content/articles";
+    }
+    return route.path;
+  }
   return route.path;
 });
 const openedMenus = computed(() => {
@@ -61,6 +70,12 @@ const openedMenus = computed(() => {
   }
   if (route.path.startsWith("/operations")) {
     menus.push("/operations");
+  }
+  if (route.path.startsWith("/membership")) {
+    menus.push("/membership");
+  }
+  if (route.path.startsWith("/content")) {
+    menus.push("/content");
   }
   return menus;
 });
@@ -99,17 +114,10 @@ function triggerHeaderRefresh() {
           <el-menu-item index="/operations/app-home">小程序首页</el-menu-item>
           <el-menu-item index="/operations/weekly-topic">本周灵感</el-menu-item>
           <el-menu-item index="/operations/table-topic">餐桌话题</el-menu-item>
-          <el-menu-item index="/operations/site-home">官网首页</el-menu-item>
-          <el-menu-item index="/operations/pre-meal">餐前准备</el-menu-item>
-          <el-menu-item index="/operations/kitchen-knowledge">厨房知识</el-menu-item>
         </el-sub-menu>
         <el-menu-item index="/users">
           <el-icon><User /></el-icon>
           <span>用户查询</span>
-        </el-menu-item>
-        <el-menu-item index="/dining-groups">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>饭搭子查询</span>
         </el-menu-item>
         <el-menu-item index="/medals">
           <el-icon><Files /></el-icon>
@@ -141,10 +149,26 @@ function triggerHeaderRefresh() {
           <el-icon><Setting /></el-icon>
           <span>公共配置</span>
         </el-menu-item>
-        <el-menu-item index="/membership-codes">
-          <el-icon><Files /></el-icon>
-          <span>会员兑换码</span>
-        </el-menu-item>
+        <el-sub-menu index="/membership">
+          <template #title>
+            <el-icon><Files /></el-icon>
+            <span>会员治理</span>
+          </template>
+          <el-menu-item index="/membership/skus">SKU 管理</el-menu-item>
+          <el-menu-item index="/membership/batches">兑换码批次</el-menu-item>
+          <el-menu-item index="/membership/generations">创建记录</el-menu-item>
+          <el-menu-item index="/membership/codes">兑换码列表</el-menu-item>
+          <el-menu-item index="/membership/redemptions">核销记录</el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu index="/content">
+          <template #title>
+            <el-icon><Files /></el-icon>
+            <span>内容治理</span>
+          </template>
+          <el-menu-item index="/content/pages">固定页</el-menu-item>
+          <el-menu-item index="/content/articles">文章列表</el-menu-item>
+          <el-menu-item index="/content/channels">栏目管理</el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 
