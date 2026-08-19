@@ -13,6 +13,7 @@ export interface AdminMembershipSkuItem {
   tier: EntitlementTier;
   durationDays: number;
   redeemEnabled: boolean;
+  version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -20,6 +21,12 @@ export interface AdminMembershipSkuItem {
 export interface AdminMembershipSkuListResponse {
   items: AdminMembershipSkuItem[];
   syncedAt: IsoDateTime;
+}
+
+export interface SetAdminMembershipSkuStatusRequest {
+  operationId: OperationId;
+  redeemEnabled: boolean;
+  expectedVersion: number;
 }
 
 export interface AdminMembershipCodeBatchItem {
@@ -42,6 +49,20 @@ export interface AdminMembershipCodeBatchItem {
 export interface AdminMembershipCodeQuery extends PageQuery {
   batchId?: UUID;
   status?: MembershipCodeStatus;
+  code?: string;
+}
+
+export interface AdminMembershipCodeGenerationQuery extends PageQuery {
+  batchId?: UUID;
+  skuCode?: MembershipSkuCode;
+}
+
+export interface AdminMembershipCodeRedemptionQuery extends PageQuery {
+  batchId?: UUID;
+  skuCode?: MembershipSkuCode;
+  uid?: number;
+  redeemedFrom?: IsoDateTime;
+  redeemedTo?: IsoDateTime;
   code?: string;
 }
 
@@ -98,6 +119,23 @@ export interface GeneratedMembershipCodeRow {
   codeMask: string;
 }
 
+export interface AdminMembershipCodeGenerationOperatorSummary {
+  id: UUID;
+  username: string;
+  displayName: string;
+}
+
+export interface AdminMembershipCodeGenerationItem {
+  id: UUID;
+  batchId: UUID;
+  batchName: string;
+  skuCode: MembershipSkuCode;
+  generatedCount: number;
+  generatedBy: AdminMembershipCodeGenerationOperatorSummary | null;
+  exportedAt: IsoDateTime;
+  createdAt: IsoDateTime;
+}
+
 export interface AdminGenerateMembershipCodesResult {
   batch: AdminMembershipCodeBatchItem;
   generatedCount: number;
@@ -108,6 +146,14 @@ export interface AdminGenerateMembershipCodesResult {
 export const membershipCodeApi = {
   listSkus() {
     return requestData<AdminMembershipSkuListResponse>("/admin/membership-codes/skus");
+  },
+  setSkuStatus(skuId: UUID, body: SetAdminMembershipSkuStatusRequest) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminMembershipSkuItem>(`/admin/membership-codes/skus/${encodeURIComponent(String(skuId))}/status`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
   },
   listBatches(query: AdminMembershipCodeBatchQuery) {
     return requestData<PageResult<AdminMembershipCodeBatchItem>>("/admin/membership-codes/batches", {
@@ -140,6 +186,16 @@ export const membershipCodeApi = {
   },
   listCodes(query: AdminMembershipCodeQuery) {
     return requestData<PageResult<AdminMembershipCodeItem>>("/admin/membership-codes", {
+      query: { ...query }
+    });
+  },
+  listGenerations(query: AdminMembershipCodeGenerationQuery) {
+    return requestData<PageResult<AdminMembershipCodeGenerationItem>>("/admin/membership-codes/generations", {
+      query: { ...query }
+    });
+  },
+  listRedemptions(query: AdminMembershipCodeRedemptionQuery) {
+    return requestData<PageResult<AdminMembershipCodeItem>>("/admin/membership-codes/redemptions", {
       query: { ...query }
     });
   },

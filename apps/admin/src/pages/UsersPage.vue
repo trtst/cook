@@ -170,7 +170,7 @@ function openEditUser(row: UserProfile) {
   userDialogMode.value = "edit";
   clearUserDialog();
   editingUserId.value = row.id;
-  userForm.phone = row.phone || "";
+  userForm.phone = "";
   userForm.nickname = row.nickname || "";
   userForm.status = row.status === "DISABLED" ? "DISABLED" : "ACTIVE";
   userDialogVisible.value = true;
@@ -184,11 +184,6 @@ async function submitUser() {
   const phone = userForm.phone.trim();
   const nickname = userForm.nickname.trim();
 
-  if (!validatePhone(phone)) {
-    ElMessage.error("请输入合法手机号");
-    return;
-  }
-
   if (userDialogMode.value === "create" && userForm.password.trim().length < 6) {
     ElMessage.error("初始密码至少 6 位");
     return;
@@ -196,6 +191,16 @@ async function submitUser() {
 
   if (userDialogMode.value === "edit" && !editingUserId.value) {
     ElMessage.error("用户信息缺失");
+    return;
+  }
+
+  if (userDialogMode.value === "create" && !validatePhone(phone)) {
+    ElMessage.error("请输入合法手机号");
+    return;
+  }
+
+  if (userDialogMode.value === "edit" && phone && !validatePhone(phone)) {
+    ElMessage.error("请输入合法手机号");
     return;
   }
 
@@ -214,7 +219,7 @@ async function submitUser() {
     } else {
       await userApi.update(editingUserId.value!, {
         operationId: createOperationId(),
-        phone,
+        phone: phone || undefined,
         nickname
       });
       ElMessage.success("用户已更新");
@@ -379,8 +384,13 @@ onMounted(loadUsers);
       @close="clearUserDialog"
     >
       <el-form label-position="top">
-        <el-form-item label="手机号" required>
-          <el-input v-model="userForm.phone" maxlength="11" placeholder="请输入手机号" />
+        <el-form-item label="手机号" :required="userDialogMode === 'create'">
+          <el-input
+            v-model="userForm.phone"
+            maxlength="11"
+            :placeholder="userDialogMode === 'create' ? '请输入手机号' : '留空则不修改手机号'"
+          />
+          <div v-if="userDialogMode === 'edit'" class="form-tip">当前接口只返回脱敏手机号，编辑时留空表示保持原手机号不变。</div>
         </el-form-item>
         <el-form-item label="昵称">
           <el-input v-model="userForm.nickname" maxlength="64" placeholder="留空则不设置昵称" />
@@ -438,28 +448,6 @@ onMounted(loadUsers);
           <el-descriptions-item label="状态">{{ formatStatusText(entitlement.user.status) }}</el-descriptions-item>
         </el-descriptions>
 
-        <el-divider content-position="left">饭搭子关系</el-divider>
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="主理数量">{{ entitlement.diningGroupUsage.ownedCount }}</el-descriptions-item>
-          <el-descriptions-item label="加入数量">{{ entitlement.diningGroupUsage.joinedCount }}</el-descriptions-item>
-          <el-descriptions-item label="可加入上限">{{ entitlement.diningGroupUsage.joinLimit }}</el-descriptions-item>
-          <el-descriptions-item label="关系状态">{{ entitlement.diningGroupUsage.state }}</el-descriptions-item>
-        </el-descriptions>
-        <el-table :data="entitlement.diningGroups" row-key="id" style="margin-top: 12px">
-          <el-table-column prop="name" label="关系名称" min-width="160" />
-          <el-table-column label="身份" width="100">
-            <template #default="{ row }">
-              {{ row.myRole }}
-            </template>
-          </el-table-column>
-          <el-table-column label="成员" width="100">
-            <template #default="{ row }">
-              {{ row.memberCount }} / {{ row.memberLimit }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="state" label="状态" width="150" />
-        </el-table>
-
         <el-divider content-position="left">个人会员</el-divider>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="个人套餐">{{ entitlement.membership.tier }}</el-descriptions-item>
@@ -485,7 +473,7 @@ onMounted(loadUsers);
         <el-descriptions :column="1" border>
           <el-descriptions-item label="菜谱上限">{{ entitlement.recipePolicy.recipeLimit }}</el-descriptions-item>
           <el-descriptions-item label="可邀请成员">{{ entitlement.invitePolicy.inviteLimit }}</el-descriptions-item>
-          <el-descriptions-item label="饭搭子成员上限">{{ entitlement.invitePolicy.memberLimit }}</el-descriptions-item>
+          <el-descriptions-item label="协作成员上限">{{ entitlement.invitePolicy.memberLimit }}</el-descriptions-item>
           <el-descriptions-item label="回收站保留">{{ entitlement.recipePolicy.recycleDays }} 天</el-descriptions-item>
           <el-descriptions-item label="根菜谱派生上限">
             {{ entitlement.recipePolicy.variantLimitPerRoot }}
@@ -508,3 +496,12 @@ onMounted(loadUsers);
     </el-drawer>
   </section>
 </template>
+
+<style scoped lang="scss">
+.form-tip {
+  margin-top: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+</style>

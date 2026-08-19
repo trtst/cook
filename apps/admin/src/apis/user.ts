@@ -45,36 +45,10 @@ export interface AdminResetUserPasswordResponse {
 }
 
 export type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
-export type DiningGroupState = "NORMAL" | "OVER_MEMBER_LIMIT";
-export type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
-export type LongTermMemberStatus = "ACTIVE" | "RESTRICTED" | "ENDED";
 
 export interface UserMembership {
   tier: EntitlementTier;
   validUntil: IsoDateTime | null;
-}
-
-export interface DiningGroupUsageSummary {
-  ownedCount: number;
-  joinedCount: number;
-  joinLimit: number;
-  state: DiningGroupState;
-}
-
-export interface DiningGroupSummary {
-  id: UUID;
-  name: string;
-  ownerUid: number;
-  isOwned: boolean;
-  myRole: DiningGroupRole;
-  myStatus: LongTermMemberStatus;
-  myStatusReason: string | null;
-  memberCount: number;
-  memberLimit: number;
-  state: DiningGroupState;
-  version: number;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
 }
 
 export interface EffectiveImagePolicy {
@@ -104,8 +78,6 @@ export interface AdminUserEntitlementResponse {
     canUseProfileBackground: boolean;
     canUseHomeBackground: boolean;
   };
-  diningGroupUsage: DiningGroupUsageSummary;
-  diningGroups: DiningGroupSummary[];
   storage: StorageUsageSummary;
   recipePolicy: {
     recipeLimit: number;

@@ -79,6 +79,32 @@ export interface AdminRecipeDetail {
   difficultyText: string | null;
   durationText: string | null;
   contentVersionId: UUID;
+  assistantState: {
+    status: "MISSING" | "READY" | "FAILED";
+    hasSnapshot: boolean;
+    generatedAt: IsoDateTime | null;
+    lastAttemptAt: IsoDateTime | null;
+    attemptCount: number;
+    lastError: string | null;
+  };
+  assistant: {
+    generatedAt: IsoDateTime;
+    summary: {
+      stepCount: number;
+      prepStepCount: number;
+      cookStepCount: number;
+      serveStepCount: number;
+      totalDurationText: string | null;
+    };
+    steps: Array<{
+      order: number;
+      phase: "PREP" | "COOK" | "SERVE";
+      title: string;
+      detail: string;
+      imageUrl: string | null;
+      durationText: string | null;
+    }>;
+  } | null;
   content: {
     name: string;
     story: string | null;
@@ -369,6 +395,12 @@ export const recipeApi = {
     return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(String(recipeId))}`, {
       method: "PUT",
       body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  regenerateAssistant(recipeId: UUID, operationId: OperationId) {
+    return requestData<AdminRecipeDetail>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/assistant/regenerate`, {
+      method: "POST",
       idempotencyKey: operationId
     });
   },

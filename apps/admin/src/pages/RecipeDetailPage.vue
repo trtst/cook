@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, EditPen, Plus, Upload } from "@element-plus/icons-vue";
+import { ArrowLeft, EditPen, Plus, RefreshRight, Upload } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import {
   ingredientApi,
@@ -85,6 +85,7 @@ const loading = ref(false);
 const optionLoading = ref(false);
 const saving = ref(false);
 const imageSaving = ref(false);
+const assistantSaving = ref(false);
 const editVisible = ref(false);
 const cropDialogVisible = ref(false);
 
@@ -155,6 +156,21 @@ const activeIngredientLabelMap = computed(() => new Map(ingredientOptions.value.
 const currentIngredientLabelMap = computed(
   () => new Map((detail.value?.content.ingredients ?? []).map(item => [item.ingredientId, item.ingredientName]))
 );
+const assistantStatusType = computed(() => {
+  if (detail.value?.assistantState.status === "FAILED") return "error" as const;
+  if (detail.value?.assistantState.status === "READY") return "success" as const;
+  return "warning" as const;
+});
+const assistantStatusText = computed(() => {
+  if (!detail.value) return "";
+  if (detail.value.assistantState.status === "FAILED") {
+    return detail.value.assistantState.hasSnapshot
+      ? "最近一次做饭建议生成失败，当前仍保留上一版可用快照。"
+      : "做饭建议尚未生成成功，请在修正后手动重试。";
+  }
+  if (detail.value.assistantState.status === "READY") return "做饭建议已生成，可直接供前台单菜助理和本餐助理复用。";
+  return "当前版本还没有做饭建议快照，可手动补生成。";
+});
 
 const ingredientOptionList = computed<IngredientOptionItem[]>(() => {
   const items: IngredientOptionItem[] = ingredientOptions.value.map(item => ({
@@ -473,6 +489,23 @@ async function saveEdit() {
   }
 }
 
+async function regenerateAssistant() {
+  if (!detail.value || assistantSaving.value) return;
+  assistantSaving.value = true;
+  try {
+    detail.value = await recipeApi.regenerateAssistant(detail.value.id, createOperationId());
+    if (detail.value.assistantState.status === "FAILED") {
+      ElMessage.error(detail.value.assistantState.lastError || "做饭建议重新生成失败");
+      return;
+    }
+    ElMessage.success("已重新生成做饭建议");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "做饭建议重新生成失败");
+  } finally {
+    assistantSaving.value = false;
+  }
+}
+
 function goBack() {
   void router.push("/recipes/list");
 }
@@ -746,6 +779,80 @@ onBeforeUnmount(() => {
               <div class="multiline-text">{{ detail.content.tips || "-" }}</div>
             </el-descriptions-item>
           </el-descriptions>
+        </div>
+
+        <div class="table-panel">
+          <div class="panel-heading panel-heading--between">
+            <h2>做饭建议</h2>
+            <el-button
+              v-if="detail.canEdit"
+              type="primary"
+              plain
+              :icon="RefreshRight"
+              :loading="assistantSaving"
+              @click="regenerateAssistant"
+            >
+              重新生成
+            </el-button>
+          </div>
+          <el-alert :title="assistantStatusText" :type="assistantStatusType" :closable="false" show-icon />
+          <el-descriptions :column="2" border class="assistant-state">
+            <el-descriptions-item label="当前状态">
+              {{
+                detail.assistantState.status === "READY"
+                  ? "已生成"
+                  : detail.assistantState.status === "FAILED"
+                    ? "生成失败"
+                    : "尚未生成"
+              }}
+            </el-descriptions-item>
+            <el-descriptions-item label="可用快照">{{ detail.assistantState.hasSnapshot ? "有" : "无" }}</el-descriptions-item>
+            <el-descriptions-item label="最近成功时间">{{ detail.assistantState.generatedAt ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="最近尝试时间">{{ detail.assistantState.lastAttemptAt ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="累计尝试次数">{{ detail.assistantState.attemptCount }}</el-descriptions-item>
+            <el-descriptions-item label="最近错误">{{ detail.assistantState.lastError ?? "-" }}</el-descriptions-item>
+          </el-descriptions>
+
+          <template v-if="detail.assistant">
+            <div class="content-list assistant-summary-list">
+              <div class="content-list__item">
+                <span>总步骤</span>
+                <span>{{ detail.assistant.summary.stepCount }}</span>
+              </div>
+              <div class="content-list__item">
+                <span>备菜步骤</span>
+                <span>{{ detail.assistant.summary.prepStepCount }}</span>
+              </div>
+              <div class="content-list__item">
+                <span>烹饪步骤</span>
+                <span>{{ detail.assistant.summary.cookStepCount }}</span>
+              </div>
+              <div class="content-list__item">
+                <span>收尾步骤</span>
+                <span>{{ detail.assistant.summary.serveStepCount }}</span>
+              </div>
+              <div class="content-list__item">
+                <span>总时长</span>
+                <span>{{ detail.assistant.summary.totalDurationText ?? "-" }}</span>
+              </div>
+            </div>
+
+            <div class="detail-step-list assistant-step-list">
+              <div
+                v-for="item in detail.assistant.steps"
+                :key="`${item.order}-${item.title}`"
+                class="detail-step-card"
+              >
+                <div class="detail-step-card__index">建议步骤 {{ item.order }} · {{ item.phase }}</div>
+                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.title" class="detail-step-card__image" />
+                <div class="detail-step-card__title-row">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.durationText ?? "时长待定" }}</span>
+                </div>
+                <div class="multiline-text">{{ item.detail }}</div>
+              </div>
+            </div>
+          </template>
         </div>
 
         <div class="table-panel">
@@ -1025,10 +1132,31 @@ onBeforeUnmount(() => {
   color: #1f1f1f;
 }
 
+.detail-step-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #57534e;
+}
+
 .detail-step-card__image {
   display: block;
   max-width: min(420px, 100%);
   border-radius: 6px;
+}
+
+.assistant-state,
+.assistant-summary-list,
+.assistant-step-list {
+  margin-top: 16px;
+}
+
+.panel-heading--between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .multiline-text {

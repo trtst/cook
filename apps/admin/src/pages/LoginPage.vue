@@ -21,7 +21,7 @@ function getRedirect() {
   const redirect = route.query.redirect;
   return typeof redirect === "string" && redirect.startsWith("/") && !redirect.startsWith("//")
     ? redirect
-    : "/users";
+    : "/dashboard";
 }
 
 async function submit() {
