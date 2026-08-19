@@ -37,8 +37,6 @@ const placementIds: Record<HomeFeatureBoardPlacement, string> = {
 };
 const pageTargets: HomeEntryPageTarget[] = [
   { label: "下一餐计划", value: "/pages_meal/plan/index" },
-  { label: "点菜征集", value: "/pages_meal/poll/index" },
-  { label: "想吃池", value: "/pages_meal/wish/index" },
   { label: "随机吃什么", value: "/pages_meal/random/index" },
   { label: "采购缺口", value: "/pages_pantry/gap/index" },
   { label: "食材与采购", value: "/pages_pantry/index/index" },
@@ -75,20 +73,20 @@ const defaultCards: Record<HomeFeatureBoardPlacement, Omit<HomeCardInput, "place
     badgeText: "题"
   },
   QUICK_1: {
-    title: "我想吃",
-    subtitle: "先记一口",
+    title: "翻菜谱",
+    subtitle: "先挑想做的",
     targetType: "PAGE",
-    targetValue: "/pages_meal/wish/index",
+    targetValue: "/pages/recipe/index",
     artImageUrl: null,
-    badgeText: "想"
+    badgeText: "谱"
   },
   QUICK_2: {
-    title: "问大家",
-    subtitle: "问问大家",
+    title: "看食材",
+    subtitle: "先看家里有啥",
     targetType: "PAGE",
-    targetValue: "/pages_meal/poll/index",
+    targetValue: "/pages_pantry/index/index",
     artImageUrl: null,
-    badgeText: "问"
+    badgeText: "材"
   },
   QUICK_3: {
     title: "随机",
@@ -402,7 +400,26 @@ export class HomeService {
     const items = await db.homeFeatureBoardCard.findMany({
       where: { placement: { in: allPlacements } }
     });
-    return items;
+    const legacyItems = items.filter(item => item.targetType === "PAGE" && !pageTargetSet.has(item.targetValue));
+    if (!legacyItems.length) {
+      return items;
+    }
+
+    await Promise.all(
+      legacyItems.map(item =>
+        db.homeFeatureBoardCard.update({
+          where: { placement: item.placement },
+          data: {
+            ...defaultCards[item.placement],
+            version: { increment: 1 }
+          }
+        })
+      )
+    );
+
+    return db.homeFeatureBoardCard.findMany({
+      where: { placement: { in: allPlacements } }
+    });
   }
 
   private async ensureCards(db: BoardDb) {

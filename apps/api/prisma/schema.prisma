@@ -413,6 +413,11 @@ enum RecipeImportItemStatus {
   FAILED
 }
 
+enum RecipeAssistantStatus {
+  READY
+  FAILED
+}
+
 model AdminAccount {
   id           Int                @id @default(autoincrement())
   username     String             @unique @db.VarChar(64)
@@ -426,6 +431,7 @@ model AdminAccount {
   idempotencyRecords IdempotencyRecord[] @relation("IdempotencyRecordAdmin")
   auditEvents        AuditEvent[]        @relation("AuditEventAdmin")
   recipeImportJobs   RecipeImportJob[]
+  updatedSiteContents SiteContent[]
 
   @@map("admin_accounts")
 }
@@ -444,6 +450,53 @@ model HomeFeatureBoardCard {
   updatedAt   DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("home_feature_board_cards")
+}
+
+model SiteContentChannel {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique @db.VarChar(32)
+  name        String   @db.VarChar(32)
+  description String?  @db.VarChar(200)
+  sortOrder   Int      @default(0) @map("sort_order")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  contents SiteContent[]
+
+  @@index([sortOrder, id])
+  @@map("site_content_channels")
+}
+
+model SiteContent {
+  id               Int               @id @default(autoincrement())
+  type             SiteContentType
+  status           SiteContentStatus @default(DRAFT)
+  channelId        Int?              @map("channel_id")
+  slug             String            @unique @db.VarChar(80)
+  path             String            @unique @db.VarChar(160)
+  title            String            @db.VarChar(80)
+  summary          String            @db.VarChar(240)
+  label            String            @db.VarChar(16)
+  heroNote         String?           @map("hero_note") @db.VarChar(200)
+  coverImageUrl    String?           @map("cover_image_url") @db.VarChar(512)
+  bodyHtml         String            @map("body_html") @db.Text
+  bodyText         String            @map("body_text") @db.Text
+  effectiveAt      DateTime?         @map("effective_at") @db.Timestamptz(3)
+  publishedAt      DateTime?         @map("published_at") @db.Timestamptz(3)
+  sortOrder        Int               @default(0) @map("sort_order")
+  version          Int               @default(1)
+  updatedByAdminId Int?              @map("updated_by_admin_id")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  channel        SiteContentChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  updatedByAdmin AdminAccount?       @relation(fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([type, status, sortOrder, id])
+  @@index([channelId, type, status, sortOrder, id])
+  @@index([publishedAt, id])
+  @@map("site_contents")
 }
 
 model HomeTopic {
@@ -529,6 +582,8 @@ model User {
   profileBackgroundUrl String?    @map("profile_background_url") @db.VarChar(512)
   homeBackgroundUrl    String?    @map("home_background_url") @db.VarChar(512)
   phone                String?    @unique @db.VarChar(32)
+  openid               String?    @unique @db.VarChar(128)
+  unionid              String?    @db.VarChar(128)
   passwordHash         String?    @map("password_hash") @db.VarChar(255)
   status               UserStatus @default(ACTIVE)
   sessionVersion       Int        @default(0) @map("session_version")
@@ -697,6 +752,17 @@ enum MembershipCodeStatus {
   DISABLED
 }
 
+enum SiteContentType {
+  PAGE
+  ARTICLE
+}
+
+enum SiteContentStatus {
+  DRAFT
+  PUBLISHED
+  UNLISTED
+}
+
 /// Free 由服务端默认解析；这里只保存用户级有效套餐事实。
 model EntitlementGrant {
   id        Int             @id @default(autoincrement())
@@ -720,6 +786,7 @@ model MembershipSku {
   tier          EntitlementTier
   durationDays  Int                @map("duration_days")
   redeemEnabled Boolean            @default(false) @map("redeem_enabled")
+  version       Int                @default(1)
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -1020,10 +1087,27 @@ model RecipeContentVersion {
   diningEventMenuItems    DiningEventMenuItem[]
   uploadAssets            UploadAsset[]
   versionTags             RecipeVersionTag[]
+  cookAssistant           RecipeCookAssistant?
 
   @@index([name])
   @@index([createdByUserId, createdAt])
   @@map("recipe_content_versions")
+}
+
+model RecipeCookAssistant {
+  id            Int                   @id @default(autoincrement())
+  recipeVersionId Int                 @unique @map("recipe_version_id")
+  status        RecipeAssistantStatus @default(READY)
+  snapshotJson  Json?                 @map("snapshot_json")
+  generatedAt   DateTime?             @default(now()) @map("generated_at") @db.Timestamptz(3)
+  lastAttemptAt DateTime              @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
+  attemptCount  Int                   @default(1) @map("attempt_count")
+  lastError     String?               @map("last_error") @db.VarChar(500)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_cook_assistants")
 }
 
 model RecipeVersionTag {
@@ -1311,6 +1395,7 @@ model MealPlanItem {
   title        String         @db.VarChar(40)
   menuSnapshot Json           @map("menu_snapshot")
   note         String?        @db.VarChar(255)
+  menuLockedAt DateTime?      @map("menu_locked_at") @db.Timestamptz(3)
   status       MealPlanStatus @default(PLANNED)
   completedAt  DateTime?      @map("completed_at") @db.Timestamptz(3)
   version      Int            @default(1)
@@ -1372,6 +1457,7 @@ model DiningEvent {
   title               String            @db.VarChar(120)
   scheduledAt         DateTime          @map("scheduled_at") @db.Timestamptz(3)
   location            String?           @db.VarChar(255)
+  note                String?           @db.VarChar(255)
   coverStorageKey     String?           @map("cover_storage_key") @db.VarChar(255)
   coverContentType    String?           @map("cover_content_type") @db.VarChar(64)
   status              DiningEventStatus @default(PLANNED)

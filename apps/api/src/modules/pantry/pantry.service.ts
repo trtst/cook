@@ -1565,68 +1565,6 @@ export class PantryService {
     });
   }
 
-  async shareShoppingListMembers(
-    userId: UUID,
-    listId: UUID,
-    operationId: OperationId,
-    version: number,
-    targetUserIds: UUID[]
-  ): Promise<ShoppingListDetail> {
-    const uniqueUserIds = Array.from(new Set(targetUserIds.filter(id => id !== userId)));
-    const requestHash = `${listId}:${version}:${uniqueUserIds.join(",")}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:share-members", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping-list:share-members", userId, null, requestHash);
-      const access = await this.assertShoppingListOwner(tx, userId, listId);
-      this.assertShoppingListVersion(access.version, version);
-      if (access.status !== "ACTIVE") {
-        throw new BadRequestException("当前清单不能继续共享");
-      }
-      await this.assertShareableDiningGroupUsers(tx, userId, uniqueUserIds);
-      const currentMembers = await tx.shoppingListMember.findMany({
-        where: { listId },
-        select: { userId: true }
-      });
-      const memberIds = new Set(currentMembers.map(item => item.userId));
-      const nextInviteUserIds = uniqueUserIds.filter(targetUserId => !memberIds.has(targetUserId));
-      await this.assertShoppingListInviteCapacity(tx, access.ownerUserId, currentMembers.length, nextInviteUserIds.length);
-      for (const targetUserId of nextInviteUserIds) {
-        await tx.shoppingListInvite.upsert({
-          where: {
-            listId_targetUserId: {
-              listId,
-              targetUserId
-            }
-          },
-          create: {
-            listId,
-            targetUserId,
-            createdByUserId: userId,
-            status: "PENDING"
-          },
-          update: {
-            createdByUserId: userId,
-            acceptedByUserId: null,
-            status: "PENDING",
-            acceptedAt: null,
-            declinedAt: null,
-            revokedAt: null
-          }
-        });
-      }
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
-        }
-      });
-      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
-      await completeIdempotentOperation(tx, operationId, "shopping-list:share-members", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
   async removeShoppingListMember(
     userId: UUID,
     listId: UUID,
@@ -3893,48 +3831,6 @@ export class PantryService {
         avatarUrl: member.user.avatarUrl
       }
     };
-  }
-
-  private async assertShareableDiningGroupUsers(tx: Prisma.TransactionClient, userId: UUID, targetUserIds: UUID[]) {
-    if (!targetUserIds.length) return;
-    const groups = await tx.diningGroup.findMany({
-      where: {
-        OR: [
-          { ownerId: userId },
-          {
-            members: {
-              some: {
-                userId,
-                status: "ACTIVE"
-              }
-            }
-          }
-        ]
-      },
-      select: {
-        ownerId: true,
-        members: {
-          where: {
-            status: "ACTIVE"
-          },
-          select: {
-            userId: true
-          }
-        }
-      }
-    });
-    const allowedUserIds = new Set<UUID>();
-    for (const group of groups) {
-      allowedUserIds.add(group.ownerId);
-      for (const member of group.members) {
-        allowedUserIds.add(member.userId);
-      }
-    }
-    for (const targetUserId of targetUserIds) {
-      if (!allowedUserIds.has(targetUserId)) {
-        throw new ForbiddenException("只能分享给当前饭搭子成员");
-      }
-    }
   }
 
   private async resolveShoppingListMemberLimit(tx: EntitlementReader, ownerUserId: UUID) {

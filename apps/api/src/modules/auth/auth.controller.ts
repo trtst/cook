@@ -4,8 +4,14 @@ import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { CodeLoginDto, PasswordLoginDto } from "../../contracts/dtos";
-import { ApiOkModel, CodeLoginResultModel, PasswordLoginResultModel, RefreshSessionResultModel } from "../../contracts/openapi";
+import { CodeLoginDto, PasswordLoginDto, WechatLoginDto } from "../../contracts/dtos";
+import {
+  ApiOkModel,
+  CodeLoginResultModel,
+  PasswordLoginResultModel,
+  RefreshSessionResultModel,
+  WechatLoginResultModel
+} from "../../contracts/openapi";
 import { AuthService } from "./auth.service";
 
 @ApiTags("auth")
@@ -25,6 +31,13 @@ export class AuthController {
   @ApiOkModel(CodeLoginResultModel, "手机号验证码登录，测试阶段固定验证码为 123456")
   loginWithCode(@Body() body: CodeLoginDto) {
     return this.authService.loginWithCode(body).then(result => ok(result));
+  }
+
+  @Post("wechat-login")
+  @UseGuards(LoginRateLimitGuard)
+  @ApiOkModel(WechatLoginResultModel, "小程序微信登录，服务端按 openid 识别或创建用户")
+  loginWithWechat(@Body() body: WechatLoginDto) {
+    return this.authService.loginWithWechat(body).then(result => ok(result));
   }
 
   @Post("refresh")

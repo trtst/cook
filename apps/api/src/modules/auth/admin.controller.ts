@@ -20,7 +20,6 @@ import {
     AdminPendingRecipeQueryDto,
     AdminIngredientQueryDto,
   AdminUnitPayloadDto,
-  AdminDiningGroupQueryDto,
   AdminLoginDto,
   AdminRecipeContentDto,
   AdminRecipeQueryDto,
@@ -83,7 +82,6 @@ import {
   RecipeImportJobDetailModel,
   RecipeImportJobModel,
   AdminUserRecipeDomainOverviewModel,
-  AdminDiningGroupModel,
   AdminLoginResultModel,
   AdminResetUserPasswordResultModel,
   AdminRecipeModel,
@@ -407,16 +405,6 @@ export class AdminController {
     return this.adminService.resetUserPassword(userId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
-  @Get("dining-groups")
-  @UseGuards(AdminAuthGuard)
-  @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(AdminDiningGroupModel, "后台饭搭子只读查询")
-  listDiningGroups(@Req() request: RequestWithAdmin, @Query() query: AdminDiningGroupQueryDto) {
-    return this.adminService
-      .listDiningGroups(query.page, query.pageSize, query.keyword, query.status, request.admin.adminId)
-      .then(result => ok(result));
-  }
-
   @Get("user-entitlements")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -586,6 +574,19 @@ export class AdminController {
         content: toAdminRecipeContentInput(body.content)
       })
       .then(result => ok(result));
+  }
+
+  @Post("recipes/:recipeId/assistant/regenerate")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeDetailModel, "后台重新生成系统菜谱做饭建议")
+  regenerateRecipeAssistant(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.adminService.regenerateRecipeAssistant(recipeId, request.admin.adminId, operationId).then(result => ok(result));
   }
 
   @Post("pending-recipes/:recommendationId/review")

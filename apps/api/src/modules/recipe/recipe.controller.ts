@@ -53,6 +53,7 @@ import {
   InspirationCategoryModel,
     InspirationRecipeDetailModel,
     InspirationRecipeSummaryModel,
+    RecipeAssistantModel,
     MyRecipeDetailModel,
     MyRecipeSummaryModel,
     PublishRecipeDraftResultModel,
@@ -89,6 +90,7 @@ function toDraftContentInput(content: CreateRecipeDraftDto["content"] | UpdateRe
     name: content.name,
     story: content.story,
     categoryId: content.categoryId,
+    inspirationCategoryId: content.inspirationCategoryId ?? null,
     sceneIds: content.sceneIds,
     originVersionId: content.originVersionId ?? null,
     originCoverImageUrl: content.originCoverImageUrl ?? null,
@@ -478,7 +480,16 @@ export class RecipeController {
   @ApiOkPage(MyRecipeSummaryModel, "分页读取我的已发布菜谱")
   listMyRecipes(@Req() request: RequestWithUser, @Query() query: RecipeListQueryDto) {
     return this.recipeService
-      .listMyRecipes(request.user.userId, query.page, query.pageSize, query.keyword, query.categoryId)
+      .listMyRecipes(
+        request.user.userId,
+        query.page,
+        query.pageSize,
+        query.keyword,
+        query.categoryId,
+        query.inspirationCategoryId,
+        query.difficulty as "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | undefined,
+        query.duration as "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | undefined
+      )
       .then(result => ok(result));
   }
 
@@ -488,6 +499,19 @@ export class RecipeController {
   @ApiOkModel(MyRecipeDetailModel, "读取我的一个已发布菜谱详情")
   getMyRecipe(@Req() request: RequestWithUser, @Param("recipeId", ParseIntPipe) recipeId: number) {
     return this.recipeService.getMyRecipe(request.user.userId, recipeId).then(result => ok(result));
+  }
+
+  @Post("recipes/:recipeId/assistant")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecipeAssistantModel, "按需生成或返回我的菜谱固定做饭建议")
+  generateMyRecipeAssistant(
+    @Req() request: RequestWithUser,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.recipeService.generateMyRecipeAssistant(request.user.userId, recipeId, operationId).then(result => ok(result));
   }
 
   @Post("recipes/from-inspiration")
@@ -506,8 +530,7 @@ export class RecipeController {
         operationId,
         body.sourceRecipeId,
         body.sourceVersionId,
-        body.categoryId,
-        body.sceneIds
+        body.categoryId
       )
       .then(result => ok(result));
   }

@@ -1,0 +1,2 @@
+ALTER TABLE "membership_skus"
+ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;

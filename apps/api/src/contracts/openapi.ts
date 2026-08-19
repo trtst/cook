@@ -71,6 +71,8 @@ export class PasswordLoginResultModel {
 
 export class CodeLoginResultModel extends PasswordLoginResultModel {}
 
+export class WechatLoginResultModel extends PasswordLoginResultModel {}
+
 export class RefreshSessionResultModel {
   @ApiProperty({ type: String }) token!: string;
   @ApiProperty(dateTime) expiresAt!: string;
@@ -171,14 +173,14 @@ export class UserMembershipModel {
 }
 
 export class MeResponseModel extends SessionUserModel {
-  @ApiProperty(nullableString) phone!: string | null;
+  @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: UserDisplayModel }) display!: UserDisplayModel;
   @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
 }
 
 export class UserProfileModel extends SessionUserModel {
   @ApiProperty(uuid) id!: string;
-  @ApiProperty(nullableString) phone!: string | null;
+  @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: String }) status!: string;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -200,6 +202,7 @@ export class AdminMembershipSkuItemModel {
   @ApiProperty({ type: String, enum: tierValues }) tier!: string;
   @ApiProperty({ type: Number, minimum: 1 }) durationDays!: number;
   @ApiProperty({ type: Boolean }) redeemEnabled!: boolean;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -232,6 +235,12 @@ export class AdminMembershipCodeOperatorModel {
   @ApiProperty(nullableString) nickname!: string | null;
 }
 
+export class AdminMembershipCodeGenerationOperatorModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) username!: string;
+  @ApiProperty({ type: String }) displayName!: string;
+}
+
 export class AdminMembershipCodeItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) batchId!: string;
@@ -251,6 +260,18 @@ export class AdminMembershipCodeItemModel {
 export class GeneratedMembershipCodeRowModel {
   @ApiProperty({ type: String }) code!: string;
   @ApiProperty({ type: String }) codeMask!: string;
+}
+
+export class AdminMembershipCodeGenerationItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty(uuid) batchId!: string;
+  @ApiProperty({ type: String }) batchName!: string;
+  @ApiProperty({ type: String, enum: ["PLUS_30D", "PRO_30D", "PRO_TRIAL_1D", "PRO_TRIAL_3D", "PRO_TRIAL_7D"] }) skuCode!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) generatedCount!: number;
+  @ApiProperty({ type: AdminMembershipCodeGenerationOperatorModel, nullable: true })
+  generatedBy!: AdminMembershipCodeGenerationOperatorModel | null;
+  @ApiProperty(dateTime) exportedAt!: string;
+  @ApiProperty(dateTime) createdAt!: string;
 }
 
 export class AdminGenerateMembershipCodesResultModel {
@@ -275,62 +296,6 @@ export class UserSummaryModel {
   @ApiProperty(nullableString) avatarUrl!: string | null;
 }
 
-export class DiningGroupSummaryModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: String, nullable: true }) description!: string | null;
-  @ApiProperty(nullableString) coverImageUrl!: string | null;
-  @ApiProperty({ type: Number }) ownerUid!: number;
-  @ApiProperty({ type: Boolean }) isOwned!: boolean;
-  @ApiProperty({ type: Boolean }) canManageCover!: boolean;
-  @ApiProperty({ type: String, enum: ["OWNER", "ADMIN", "MEMBER"] }) myRole!: string;
-  @ApiProperty({ type: String, enum: ["ACTIVE", "RESTRICTED", "ENDED"] }) myStatus!: string;
-  @ApiProperty({ type: String, nullable: true }) myStatusReason!: string | null;
-  @ApiProperty({ type: Number, minimum: 1 }) createdDays!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) memberCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) memberLimit!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) pollCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) diningEventCount!: number;
-  @ApiProperty({ type: Boolean }) hasAttention!: boolean;
-  @ApiProperty({ type: String, nullable: true }) latestActivityTitle!: string | null;
-  @ApiProperty({ ...dateTime, nullable: true }) latestActivityAt!: string | null;
-  @ApiProperty({ type: String, enum: ["NORMAL", "OVER_MEMBER_LIMIT"] }) state!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-  @ApiProperty(dateTime) createdAt!: string;
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class DiningGroupUsageModel {
-  @ApiProperty({ type: Number, minimum: 0 }) ownedCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) joinedCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) joinLimit!: number;
-  @ApiProperty({ type: String, enum: ["NORMAL", "OVER_MEMBER_LIMIT"] }) state!: string;
-}
-
-export class MyDiningGroupsModel {
-  @ApiProperty({ type: [DiningGroupSummaryModel] }) items!: DiningGroupSummaryModel[];
-  @ApiProperty({ type: DiningGroupUsageModel }) usage!: DiningGroupUsageModel;
-}
-
-export class DiningGroupMemberModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty(uuid) userId!: string;
-  @ApiProperty({ type: UserSummaryModel }) user!: UserSummaryModel;
-  @ApiProperty({ type: String, enum: ["OWNER", "ADMIN", "MEMBER"] }) role!: string;
-  @ApiProperty({ type: String, enum: ["ACTIVE", "RESTRICTED", "ENDED"] }) status!: string;
-  @ApiProperty({ type: String, nullable: true }) statusReason!: string | null;
-  @ApiProperty(dateTime) joinedAt!: string;
-  @ApiProperty({ ...dateTime, nullable: true }) restrictedAt!: string | null;
-  @ApiProperty({ ...dateTime, nullable: true }) endedAt!: string | null;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-}
-
-export class DiningGroupMembersModel {
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty({ type: [DiningGroupMemberModel] }) members!: DiningGroupMemberModel[];
-}
-
 export class StorageModuleUsageModel {
   @ApiProperty({ enum: ["RECIPE", "FRIDGE", "MEAL", "SHOPPING", "MEAL_GUEST", "TECHNICAL_SNAPSHOT", "RECYCLE_BIN", "PROFILE_ASSET"] })
   module!: string;
@@ -344,44 +309,6 @@ export class StorageUsageModel {
   @ApiProperty({ type: Number, minimum: 0 }) remainingBytes!: number;
   @ApiProperty({ type: [StorageModuleUsageModel] }) byModule!: StorageModuleUsageModel[];
   @ApiProperty(dateTime) calculatedAt!: string;
-}
-
-export class CreateInviteResultModel {
-  @ApiProperty({ type: String }) inviteToken!: string;
-  @ApiProperty({ type: String }) sharePath!: string;
-  @ApiProperty(dateTime) expiresAt!: string;
-}
-
-export class CreateDiningGroupResultModel {
-  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
-}
-
-export class AcceptInviteResultModel {
-  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
-}
-
-export class UpdateDiningGroupResultModel {
-  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
-}
-
-export class UpdateDiningGroupCoverResultModel {
-  @ApiProperty({ type: DiningGroupSummaryModel }) diningGroup!: DiningGroupSummaryModel;
-}
-
-export class LeaveDiningGroupResultModel {
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty(dateTime) leftAt!: string;
-}
-
-export class RemoveDiningGroupMemberResultModel {
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty(uuid) userId!: string;
-  @ApiProperty(dateTime) removedAt!: string;
-}
-
-export class DissolveDiningGroupResultModel {
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty(dateTime) dissolvedAt!: string;
 }
 
 export class ImagePolicyModel {
@@ -419,8 +346,6 @@ export class AdminUserEntitlementModel {
   @ApiProperty({ type: AdminEntitlementUserModel }) user!: AdminEntitlementUserModel;
   @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
   @ApiProperty({ type: AdminDisplayCapabilityModel }) display!: AdminDisplayCapabilityModel;
-  @ApiProperty({ type: DiningGroupUsageModel }) diningGroupUsage!: DiningGroupUsageModel;
-  @ApiProperty({ type: [DiningGroupSummaryModel] }) diningGroups!: DiningGroupSummaryModel[];
   @ApiProperty({ type: StorageUsageModel }) storage!: StorageUsageModel;
   @ApiProperty({ type: RecipePolicyModel }) recipePolicy!: RecipePolicyModel;
   @ApiProperty({ type: InvitePolicyModel }) invitePolicy!: InvitePolicyModel;
@@ -430,17 +355,6 @@ export class AdminUserEntitlementModel {
 export class AdminResetUserPasswordResultModel {
   @ApiProperty(uuid) userId!: string;
   @ApiProperty(dateTime) resetAt!: string;
-}
-
-export class AdminDiningGroupModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty(uuid) ownerId!: string;
-  @ApiProperty({ type: String, enum: ["ACTIVE", "ARCHIVED"] }) status!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) memberCount!: number;
-  @ApiProperty(dateTime) createdAt!: string;
-  @ApiProperty(dateTime) updatedAt!: string;
 }
 
 export class AdminDashboardUserSummaryModel {
@@ -470,10 +384,120 @@ export class AdminDashboardIngredientSummaryModel {
 }
 
 export class AdminDashboardSummaryModel {
+  @ApiProperty({
+    type: "object",
+    required: ["todayNewUsers", "sevenDayNewUsers", "totalUsers", "openReportCount", "pendingRecipeCount", "pendingIngredientCount", "todayRedeemedCount"],
+    properties: {
+      todayNewUsers: { type: "number", minimum: 0 },
+      sevenDayNewUsers: { type: "number", minimum: 0 },
+      totalUsers: { type: "number", minimum: 0 },
+      openReportCount: { type: "number", minimum: 0 },
+      pendingRecipeCount: { type: "number", minimum: 0 },
+      pendingIngredientCount: { type: "number", minimum: 0 },
+      todayRedeemedCount: { type: "number", minimum: 0 }
+    }
+  })
+  overview!: {
+    todayNewUsers: number;
+    sevenDayNewUsers: number;
+    totalUsers: number;
+    openReportCount: number;
+    pendingRecipeCount: number;
+    pendingIngredientCount: number;
+    todayRedeemedCount: number;
+  };
   @ApiProperty({ type: AdminDashboardUserSummaryModel }) user!: AdminDashboardUserSummaryModel;
   @ApiProperty({ type: AdminDashboardDiningGroupSummaryModel }) diningGroup!: AdminDashboardDiningGroupSummaryModel;
   @ApiProperty({ type: AdminDashboardRecipeSummaryModel }) recipe!: AdminDashboardRecipeSummaryModel;
   @ApiProperty({ type: AdminDashboardIngredientSummaryModel }) ingredient!: AdminDashboardIngredientSummaryModel;
+}
+
+export class AdminDashboardTrendPointModel {
+  @ApiProperty({ type: String }) date!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) newUsers!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) totalUsers!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) openReportCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) pendingRecipeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) pendingIngredientCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) membershipGeneratedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) membershipRedeemedCount!: number;
+}
+
+export class AdminDashboardTrendsResponseModel {
+  @ApiProperty({ type: String, enum: ["7D", "30D"] }) range!: string;
+  @ApiProperty({ type: [AdminDashboardTrendPointModel] }) points!: AdminDashboardTrendPointModel[];
+}
+
+export class AdminSiteContentChannelModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) code!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty(nullableString) description!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminSiteContentOperatorModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) username!: string;
+  @ApiProperty({ type: String }) displayName!: string;
+}
+
+export class AdminSiteContentSummaryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["PAGE", "ARTICLE"] }) type!: string;
+  @ApiProperty({ type: String, enum: ["DRAFT", "PUBLISHED", "UNLISTED"] }) status!: string;
+  @ApiProperty({ type: AdminSiteContentChannelModel, nullable: true }) channel!: AdminSiteContentChannelModel | null;
+  @ApiProperty({ type: String }) slug!: string;
+  @ApiProperty({ type: String }) path!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty(nullableString) heroNote!: string | null;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) publishedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) effectiveAt!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) sortOrder!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: AdminSiteContentOperatorModel, nullable: true }) updatedBy!: AdminSiteContentOperatorModel | null;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminSitePageSummaryModel extends AdminSiteContentSummaryModel {
+  @ApiProperty({ type: Boolean }) exists!: boolean;
+  @ApiProperty({ type: String }) fixedSlug!: string;
+}
+
+export class AdminSiteContentDetailModel extends AdminSiteContentSummaryModel {
+  @ApiProperty({ type: String }) bodyHtml!: string;
+  @ApiProperty({ type: String }) bodyText!: string;
+}
+
+export class AdminSiteContentImageUploadResultModel {
+  @ApiProperty({ type: String }) imageUrl!: string;
+}
+
+export class SiteContentDetailModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String, enum: ["PAGE", "ARTICLE"] }) type!: string;
+  @ApiProperty({ type: String }) slug!: string;
+  @ApiProperty({ type: String }) path!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty(nullableString) heroNote!: string | null;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String }) bodyHtml!: string;
+  @ApiProperty({ type: String }) bodyText!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) publishedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) effectiveAt!: string | null;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty(nullableString) channelCode!: string | null;
+  @ApiProperty(nullableString) channelName!: string | null;
 }
 
 export class RecipeCategoryModel {
@@ -690,6 +714,29 @@ export class RecipeContentModel {
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
 }
 
+export class RecipeAssistantStepModel {
+  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
+  @ApiProperty({ type: String, enum: ["PREP", "COOK", "SERVE"] }) phase!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) detail!: string;
+  @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+}
+
+export class RecipeAssistantSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) stepCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) prepStepCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) cookStepCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) serveStepCount!: number;
+  @ApiProperty(nullableString) totalDurationText!: string | null;
+}
+
+export class RecipeAssistantModel {
+  @ApiProperty(dateTime) generatedAt!: string;
+  @ApiProperty({ type: RecipeAssistantSummaryModel }) summary!: RecipeAssistantSummaryModel;
+  @ApiProperty({ type: [RecipeAssistantStepModel] }) steps!: RecipeAssistantStepModel[];
+}
+
 export class RecipeIngredientInputAmountModel {
   @ApiProperty({ type: String, enum: ["EXACT", "FUZZY"] }) kind!: string;
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
@@ -724,6 +771,7 @@ export class RecipeDraftContentModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) story!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) inspirationCategoryId!: string | null;
   @ApiProperty({ type: [Number] }) sceneIds!: string[];
   @ApiProperty({ ...uuid, nullable: true }) originVersionId!: string | null;
   @ApiProperty(nullableString) originCoverImageUrl!: string | null;
@@ -820,9 +868,11 @@ export class MyRecipeDetailModel {
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: RecipeCategoryModel }) category!: RecipeCategoryModel;
+  @ApiProperty({ type: InspirationCategoryModel, nullable: true }) inspirationCategory!: InspirationCategoryModel | null;
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
   @ApiProperty({ type: () => RecipeRecommendationModel, nullable: true }) recommendation!: RecipeRecommendationModel | null;
@@ -872,6 +922,7 @@ export class CollectedRecipeDetailModel {
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty(dateTime) collectedAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -919,6 +970,7 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
@@ -975,6 +1027,15 @@ export class AdminRecipeContentInputModel {
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
 }
 
+export class RecipeAssistantStateSummaryModel {
+  @ApiProperty({ type: String, enum: ["MISSING", "READY", "FAILED"] }) status!: string;
+  @ApiProperty({ type: Boolean }) hasSnapshot!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) generatedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) lastAttemptAt!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) attemptCount!: number;
+  @ApiProperty(nullableString) lastError!: string | null;
+}
+
 export class AdminRecipeDetailModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
@@ -987,6 +1048,8 @@ export class AdminRecipeDetailModel {
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeAssistantStateSummaryModel }) assistantState!: RecipeAssistantStateSummaryModel;
+  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
   @ApiProperty(nullableString) blockedReason!: string | null;
@@ -1304,6 +1367,7 @@ export class MealPlanModel {
   @ApiProperty({ type: String, enum: mealSlotValues }) mealSlot!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: [MealPlanMenuItemModel] }) menuItems!: MealPlanMenuItemModel[];
+  @ApiProperty({ type: Boolean }) menuLocked!: boolean;
   @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
@@ -1459,66 +1523,6 @@ export class DiningEventParticipantModel {
   @ApiProperty(nullableString) bringRecipeTitle!: string | null;
 }
 
-export class MealPollModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty({ type: String, format: "date" }) planDate!: string;
-  @ApiProperty({ type: String, enum: mealSlotValues }) mealSlot!: string;
-  @ApiProperty({ type: String, enum: ["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"] }) status!: string;
-  @ApiProperty(dateTime) deadlineAt!: string;
-  @ApiProperty({ type: Number, minimum: 1, maximum: 3 }) choiceLimit!: number;
-  @ApiProperty(nullableString) note!: string | null;
-  @ApiProperty({ type: Number, minimum: 0 }) candidateCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) responseCount!: number;
-  @ApiProperty({ ...uuid, nullable: true }) confirmedPlanItemId!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) confirmedDiningEventId!: string | null;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-  @ApiProperty(dateTime) createdAt!: string;
-}
-
-export class MealPollCandidateModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) recipeVersionId!: string | null;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty(nullableString) coverUrl!: string | null;
-  @ApiProperty({ type: String, enum: ["ACTIVE", "PENDING", "REJECTED"] }) status!: string;
-  @ApiProperty({ type: String, enum: ["RECIPE", "SUGGESTION"] }) sourceType!: string;
-  @ApiProperty({ type: Number, nullable: true }) suggestedByUid!: number | null;
-  @ApiProperty({ type: Number, minimum: 0 }) voteCount!: number;
-}
-
-export class MealPollResponseModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: Number }) userUid!: number;
-  @ApiProperty({ type: [Number] }) selectedCandidateIds!: string[];
-  @ApiProperty({ ...uuid, nullable: true }) suggestionCandidateId!: string | null;
-  @ApiProperty(nullableString) note!: string | null;
-  @ApiProperty(dateTime) respondedAt!: string;
-}
-
-export class MealPollDetailModel extends MealPollModel {
-  @ApiProperty({ type: [MealPollCandidateModel] }) candidates!: MealPollCandidateModel[];
-  @ApiProperty({ type: [MealPollResponseModel] }) responses!: MealPollResponseModel[];
-}
-
-export class DiningGroupActivityModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty(uuid) diningGroupId!: string;
-  @ApiProperty({ type: String, enum: ["POLL_OPENED", "POLL_VOTED", "POLL_SUGGESTED", "POLL_NOTED", "MENU_CONFIRMED", "COOK_CLAIMED", "BRING_UPDATED", "MEAL_COMPLETED", "MEMORY_CREATED", "MEMBER_JOINED", "INVITE_PENDING"] })
-  kind!: string;
-  @ApiProperty({ type: String, enum: ["PENDING", "DONE", "EXPIRED"] }) state!: string;
-  @ApiProperty({ type: Number, nullable: true }) actorUid!: number | null;
-  @ApiProperty(nullableString) actorName!: string | null;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty(nullableString) detail!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) pollId!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
-  @ApiProperty(dateTime) createdAt!: string;
-}
-
 export class DiningEventMenuItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
@@ -1534,6 +1538,7 @@ export class DiningEventModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(dateTime) scheduledAt!: string;
   @ApiProperty(nullableString) location!: string | null;
+  @ApiProperty(nullableString) note!: string | null;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: String, enum: ["PLANNED", "CONFIRMED", "CANCELLED", "COMPLETED"] }) status!: string;
   @ApiProperty({ type: Number, nullable: true }) organizerUid!: number | null;

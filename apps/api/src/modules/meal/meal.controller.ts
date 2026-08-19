@@ -11,27 +11,22 @@ import {
   ClaimCookDto,
   ChooseBringRecipeDto,
   CompleteDiningEventDto,
-  ConfirmMealPollDto,
+  ConfirmMealPlanMenuDto,
   CompleteMealPlanDto,
   CreateDiningMemoryShareDto,
   CreateDirectDiningEventDto,
-  CreateMealPollDto,
   CreateDiningEventDto,
   CreateMealPlanDto,
   GenerateMealPlanCookAssistantDto,
   GenerateRandomMenuDto,
-  DiningGroupActivitiesQueryDto,
-  InviteDiningGroupParticipantsDto,
-  MealPollListQueryDto,
   MealPlanQueryDto,
-  ShareDiningEventMembersDto,
   CheckRandomMenuGapDto,
   ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
+  UpdateDiningEventNoteDto,
   UpdateMealPlanTitleDto,
   UpdateDiningEventScheduleDto,
   UpdateDiningEventCoverDto,
-  VoteMealPollDto
 } from "../../contracts/dtos";
 import {
   ApiOkArray,
@@ -41,11 +36,8 @@ import {
   DiningMemoryShareSnapshotModel,
   DiningEventModel,
   DiningEventShareLinkModel,
-  DiningGroupActivityModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
-  MealPollDetailModel,
-  MealPollModel,
   RandomGapPreviewModel,
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
@@ -74,97 +66,6 @@ export class MealController {
   @ApiOkModel(MealPlanCookAssistantModel, "读取当前计划餐次的做饭助手快照")
   getMealPlanCookAssistant(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number) {
     return this.mealService.getMealPlanCookAssistant(request.user.userId, planItemId).then(result => ok(result));
-  }
-
-  @Get("meal-polls")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkArray(MealPollModel, "读取当前饭搭子的点菜征集摘要列表")
-  listMealPolls(@Req() request: RequestWithUser, @Query() query: MealPollListQueryDto) {
-    return this.mealService
-      .listMealPolls(request.user.userId, query.diningGroupId, query.status, query.planDate, query.mealSlot, query.limit)
-      .then(result => ok(result));
-  }
-
-  @Post("meal-polls")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(MealPollDetailModel, "发起一条饭搭子点菜征集")
-  createMealPoll(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateMealPollDto
-  ) {
-    return this.mealService
-      .createMealPoll(
-        request.user.userId,
-        operationId,
-        body.diningGroupId,
-        body.planDate,
-        body.mealSlot,
-        body.deadlineAt,
-        body.choiceLimit,
-        body.note,
-        body.candidateRecipeVersionIds
-      )
-      .then(result => ok(result));
-  }
-
-  @Get("meal-polls/:pollId")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(MealPollDetailModel, "读取点菜征集详情")
-  getMealPoll(@Req() request: RequestWithUser, @Param("pollId", ParseIntPipe) pollId: number) {
-    return this.mealService.getMealPoll(request.user.userId, pollId).then(result => ok(result));
-  }
-
-  @Post("meal-polls/:pollId/vote")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(MealPollDetailModel, "提交或覆盖当前成员的点菜回应")
-  voteMealPoll(
-    @Req() request: RequestWithUser,
-    @Param("pollId", ParseIntPipe) pollId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: VoteMealPollDto
-  ) {
-    return this.mealService
-      .voteMealPoll(
-        request.user.userId,
-        pollId,
-        operationId,
-        body.expectedVersion,
-        body.selectedCandidateIds,
-        body.suggestionTitle,
-        body.note
-      )
-      .then(result => ok(result));
-  }
-
-  @Post("meal-polls/:pollId/confirm")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(MealPollDetailModel, "确认最终菜单并生成或更新餐次与饭局")
-  confirmMealPoll(
-    @Req() request: RequestWithUser,
-    @Param("pollId", ParseIntPipe) pollId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: ConfirmMealPollDto
-  ) {
-    return this.mealService
-      .confirmMealPoll(
-        request.user.userId,
-        pollId,
-        operationId,
-        body.expectedVersion,
-        body.finalRecipeVersionIds,
-        body.scheduledAt,
-        body.location
-      )
-      .then(result => ok(result));
   }
 
   @Post("meal-plans")
@@ -228,6 +129,22 @@ export class MealController {
   ) {
     return this.mealService
       .updateMealPlanTitle(request.user.userId, planItemId, operationId, body.expectedVersion, body.title)
+      .then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/confirm-menu")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanModel, "确认当前餐次菜单，锁定后不再允许调整菜单结构")
+  confirmMealPlanMenu(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ConfirmMealPlanMenuDto
+  ) {
+    return this.mealService
+      .confirmMealPlanMenu(request.user.userId, planItemId, operationId, body.expectedVersion)
       .then(result => ok(result));
   }
 
@@ -388,22 +305,6 @@ export class MealController {
       .then(result => ok(result));
   }
 
-  @Post("dining-events/:eventId/share-members")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(DiningEventModel, "向指定饭搭子成员发送饭局邀请")
-  shareDiningEventMembers(
-    @Req() request: RequestWithUser,
-    @Param("eventId", ParseIntPipe) eventId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: ShareDiningEventMembersDto
-  ) {
-    return this.mealService
-      .shareDiningEventMembers(request.user.userId, eventId, operationId, body.targetUserIds)
-      .then(result => ok(result));
-  }
-
   @Post("dining-events/:eventId/participants/:participantId/revoke")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -452,6 +353,22 @@ export class MealController {
       .then(result => ok(result));
   }
 
+  @Post("dining-events/:eventId/note")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "更新一场饭局的公开备注")
+  updateDiningEventNote(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateDiningEventNoteDto
+  ) {
+    return this.mealService
+      .updateDiningEventNote(request, request.user.userId, eventId, operationId, body.expectedVersion, body.note)
+      .then(result => ok(result));
+  }
+
   @Post("dining-events/:eventId/cover")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -471,32 +388,6 @@ export class MealController {
     }
     return this.mealService
       .updateDiningEventCover(request, request.user.userId, eventId, operationId, body.expectedVersion, file)
-      .then(result => ok(result));
-  }
-
-  @Get("dining-group-activities")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkArray(DiningGroupActivityModel, "读取当前饭搭子最近轻动态")
-  listDiningGroupActivities(@Req() request: RequestWithUser, @Query() query: DiningGroupActivitiesQueryDto) {
-    return this.mealService
-      .listDiningGroupActivities(request.user.userId, query.diningGroupId, query.limit)
-      .then(result => ok(result));
-  }
-
-  @Post("dining-events/:eventId/invite-group")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(DiningEventModel, "从某个饭搭子一键邀请成员参加饭局")
-  inviteDiningGroup(
-    @Req() request: RequestWithUser,
-    @Param("eventId", ParseIntPipe) eventId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: InviteDiningGroupParticipantsDto
-  ) {
-    return this.mealService
-      .inviteDiningGroup(request.user.userId, eventId, body.diningGroupId, operationId)
       .then(result => ok(result));
   }
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { EntitlementTier, type EntitlementGrant, type Prisma } from "@prisma/client";
 import type { RequestContext } from "../../common/auth-context";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
@@ -10,13 +10,31 @@ import { hashCode, normalizeCode } from "./membership-code.utils";
 
 const INVALID_REDEEM_MESSAGE = "兑换码无效或不可用";
 const REDEEM_OPERATION_TYPE = "membership-code-redeem";
+const REDEEM_COOLDOWN_MESSAGE = "30天内仅可兑换一次";
 const TRIAL_DAY_LIMIT = 7;
+const FORMAL_REDEEM_COOLDOWN_DAYS = 30;
+const REDEEM_COOLDOWN_CODE = 4601;
+const INVALID_REDEEM_CODE = 4602;
 
 type GrantPlan = {
   tier: EntitlementTier;
   startsAt: Date;
   endsAt: Date;
 };
+
+type RedeemMembershipCodeOutcome =
+  | { ok: true; result: RedeemMembershipCodeResult }
+  | { ok: false; code: number; message: string };
+
+class RedeemBusinessError extends Error {
+  constructor(
+    readonly code: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "RedeemBusinessError";
+  }
+}
 
 function addDays(base: Date, days: number) {
   return new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
@@ -48,14 +66,31 @@ export class MembershipCodeService {
 
     return this.prisma.$transaction(async tx => {
       const requestHash = JSON.stringify({ code: normalizedCode });
-      const existing = await getIdempotentResult<RedeemMembershipCodeResult>(tx, operationId, REDEEM_OPERATION_TYPE, userId, null, requestHash);
+      const existing = await getIdempotentResult<RedeemMembershipCodeOutcome>(tx, operationId, REDEEM_OPERATION_TYPE, userId, null, requestHash);
 
       if (existing) {
         return existing;
       }
 
       await startIdempotentOperation(tx, operationId, REDEEM_OPERATION_TYPE, userId, null, requestHash);
-      const result = await this.redeemInTx(tx, userId, normalizedCode);
+
+      let result: RedeemMembershipCodeOutcome;
+      try {
+        result = {
+          ok: true,
+          result: await this.redeemInTx(tx, userId, normalizedCode)
+        };
+      } catch (error) {
+        if (!(error instanceof RedeemBusinessError)) {
+          throw error;
+        }
+        result = {
+          ok: false,
+          code: error.code,
+          message: error.message
+        };
+      }
+
       await completeIdempotentOperation(tx, operationId, REDEEM_OPERATION_TYPE, userId, null, requestHash, result);
       return result;
     });
@@ -102,7 +137,7 @@ export class MembershipCodeService {
     });
 
     if (!membershipCode || membershipCode.status !== "ACTIVE") {
-      throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+      throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
     }
 
     if (
@@ -112,7 +147,11 @@ export class MembershipCodeService {
       (membershipCode.batch.startsAt && membershipCode.batch.startsAt > now) ||
       (membershipCode.batch.endsAt && membershipCode.batch.endsAt <= now)
     ) {
-      throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+      throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
+    }
+
+    if (membershipCode.batch.sku.kind === "FORMAL") {
+      await this.assertFormalRedeemCooldown(tx, userId, now);
     }
 
     const currentGrant = await tx.entitlementGrant.findUnique({
@@ -142,7 +181,7 @@ export class MembershipCodeService {
     });
 
     if (redeemed.count !== 1) {
-      throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+      throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
     }
 
     const entitlementGrant = await tx.entitlementGrant.upsert({
@@ -184,6 +223,32 @@ export class MembershipCodeService {
     };
   }
 
+  private async assertFormalRedeemCooldown(tx: Prisma.TransactionClient, userId: UUID, now: Date) {
+    const lastFormalRedeem = await tx.membershipCode.findFirst({
+      where: {
+        redeemedByUserId: userId,
+        status: "REDEEMED",
+        batch: {
+          sku: {
+            kind: "FORMAL"
+          }
+        }
+      },
+      orderBy: {
+        redeemedAt: "desc"
+      },
+      select: {
+        redeemedAt: true
+      }
+    });
+
+    if (!lastFormalRedeem?.redeemedAt) return;
+
+    if (addDays(lastFormalRedeem.redeemedAt, FORMAL_REDEEM_COOLDOWN_DAYS) > now) {
+      throw new RedeemBusinessError(REDEEM_COOLDOWN_CODE, REDEEM_COOLDOWN_MESSAGE);
+    }
+  }
+
   private async buildTrialGrant(
     tx: Prisma.TransactionClient,
     userId: UUID,
@@ -192,7 +257,7 @@ export class MembershipCodeService {
     now: Date
   ): Promise<GrantPlan> {
     if (isGrantActive(currentGrant, now)) {
-      throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+      throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
     }
 
     const redeemedTrials = await tx.membershipCode.findMany({
@@ -220,7 +285,7 @@ export class MembershipCodeService {
 
     const usedTrialDays = redeemedTrials.reduce<number>((total, item) => total + item.batch.sku.durationDays, 0);
     if (usedTrialDays + durationDays > TRIAL_DAY_LIMIT) {
-      throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+      throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
     }
 
     return {
@@ -247,7 +312,7 @@ export class MembershipCodeService {
     }
 
     if (active.tier === "ULTRA" || active.endsAt === null) {
-      throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+      throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
     }
 
     if (active.tier === redeemTier) {
@@ -266,6 +331,6 @@ export class MembershipCodeService {
       };
     }
 
-    throw new BadRequestException(INVALID_REDEEM_MESSAGE);
+    throw new RedeemBusinessError(INVALID_REDEEM_CODE, INVALID_REDEEM_MESSAGE);
   }
 }

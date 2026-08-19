@@ -14,6 +14,7 @@
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "verify:admin-readonly-flow": "tsx scripts/verify-admin-readonly-flow.ts",
+    "verify:admin-operations-flow": "tsx scripts/verify-admin-operations-flow.ts",
     "verify:admin-user-management-flow": "tsx scripts/verify-admin-user-management-flow.ts",
     "verify:admin-recipe-flow": "tsx scripts/verify-admin-recipe-flow.ts",
     "backfill:ingredient-tag-facts": "tsx scripts/backfill-ingredient-tag-facts.ts",
@@ -26,12 +27,8 @@
     "repair:empty-recipe-collections": "tsx scripts/repair-empty-recipe-collections.ts",
     "verify:dto-flow": "tsx scripts/verify-dto-flow.ts",
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",
-    "verify:dining-group-flow": "tsx scripts/verify-dining-group-flow.ts",
-    "verify:meal-pantry-flow": "tsx scripts/verify-meal-pantry-flow.ts",
-    "verify:meal-poll-flow": "tsx scripts/verify-meal-poll-flow.ts",
     "verify:openapi": "tsx scripts/verify-openapi.ts",
     "verify:recipe-flow": "tsx scripts/verify-recipe-flow.ts",
-    "verify:shopping-list-shared-flow": "tsx scripts/verify-shopping-list-shared-flow.ts",
     "verify:taste-profile-flow": "tsx scripts/verify-taste-profile-flow.ts"
   },
   "dependencies": {

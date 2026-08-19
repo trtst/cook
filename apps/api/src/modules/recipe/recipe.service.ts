@@ -30,6 +30,7 @@ import type {
   MyRecipeSummary,
   PageResult,
   PublishRecipeDraftResponse,
+  RecipeAssistantSnapshot,
   RecipeRecommendationSummary,
   RecipeCategorySummary,
   RecipeContentSnapshot,
@@ -52,6 +53,7 @@ import { IngredientImageService } from "../admin/ingredient-image.service";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { UploadService } from "../upload/upload.service";
 import {
+  buildRecipeAssistantSnapshot,
   buildDraftSearchText,
   buildRecipeSearchText,
   buildSearchKey,
@@ -62,6 +64,7 @@ import {
   formatRecipeAmount,
   fromJson,
   toJson,
+  versionAssistantToSnapshot,
   versionToContent
 } from "./recipe-content";
 import { replaceDraftIngredient, replaceRecipeIngredient } from "./ingredient-reference";
@@ -188,6 +191,11 @@ function toPositiveInt(value: number | string | undefined, fallback: number) {
 
 function isUniqueConstraintError(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function normalizeRecipeAssistantError(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "做饭建议生成失败";
+  return message.length > 500 ? `${message.slice(0, 497)}...` : message;
 }
 
 function recipeRecordKey(recipeId: UUID) {
@@ -1089,6 +1097,9 @@ export class RecipeService {
       }
 
       const draftRelations = await this.resolveDraftRelations(tx, userId, normalized);
+      if (normalized.inspirationCategoryId) {
+        await this.requireInspirationCategory(tx, normalized.inspirationCategoryId);
+      }
       const recipe = recipeId ? await this.requireOwnedPublishedRecipe(tx, userId, recipeId) : null;
       if (recipe) {
         await this.assertRecipeRecommendationMutable(tx, recipe.id);
@@ -1159,6 +1170,9 @@ export class RecipeService {
       await startIdempotentOperation(tx, operationId, "recipe-draft:update", userId, null, requestHash);
 
       const draftRelations = await this.resolveDraftRelations(tx, userId, normalized);
+      if (normalized.inspirationCategoryId) {
+        await this.requireInspirationCategory(tx, normalized.inspirationCategoryId);
+      }
       const keepUploadIds = this.collectDraftUploadIds(normalized);
       await this.uploadService.assertDraftUploadOwnership(tx, userId, draftId, Array.from(keepUploadIds));
       const recipe = draft.recipeId ? await this.requireOwnedPublishedRecipe(tx, userId, draft.recipeId) : null;
@@ -1257,6 +1271,9 @@ export class RecipeService {
       const uploadIds = this.collectDraftUploadIds(content);
       await this.uploadService.assertDraftUploadOwnership(tx, userId, draftId, Array.from(uploadIds));
       const category = await this.requireOwnedCategory(tx, userId, content.categoryId as UUID);
+      const inspirationCategory = content.inspirationCategoryId
+        ? await this.requireInspirationCategory(tx, content.inspirationCategoryId)
+        : null;
       const recipeContent = await this.buildPublishedContent(tx, userId, content);
       const nextRecipeBytes = contentSizeBytes(recipeContent) + (await this.getUploadBytes(tx, uploadIds));
       const currentDraftBytes = draft.contentSizeBytes;
@@ -1286,6 +1303,7 @@ export class RecipeService {
           where: { id: currentRecipe.id },
           data: {
             categoryId: category.id,
+            inspirationCategoryId: inspirationCategory?.id ?? null,
             currentVersionId: version.id,
             title: recipeContent.name,
             searchText: buildRecipeSearchText(recipeContent),
@@ -1308,6 +1326,7 @@ export class RecipeService {
           data: {
             ownerId: userId,
             categoryId: category.id,
+            inspirationCategoryId: inspirationCategory?.id ?? null,
             currentVersionId: version.id,
             originVersionId: origin.originVersionId,
             originCoverImageUrl: origin.originCoverImageUrl,
@@ -1345,7 +1364,16 @@ export class RecipeService {
     return result;
   }
 
-  async listMyRecipes(userId: UUID, page: number, pageSize: number, keyword?: string, categoryId?: UUID): Promise<PageResult<MyRecipeSummary>> {
+  async listMyRecipes(
+    userId: UUID,
+    page: number,
+    pageSize: number,
+    keyword?: string,
+    categoryId?: UUID,
+    inspirationCategoryId?: UUID,
+    difficulty?: RecipeContentSnapshot["difficulty"],
+    duration?: RecipeContentSnapshot["duration"]
+  ): Promise<PageResult<MyRecipeSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -1353,8 +1381,19 @@ export class RecipeService {
       ownerId: userId,
       status: "ACTIVE",
       ...(categoryId ? { categoryId } : {}),
-      ...(keyword ? { searchText: { contains: buildSearchKey(keyword) } } : {})
+      ...(inspirationCategoryId ? { inspirationCategoryId } : {}),
+      ...(keyword ? { searchText: { contains: buildSearchKey(keyword) } } : {}),
+      ...(difficulty || duration
+        ? {
+            currentVersion: {
+              ...(difficulty ? { difficulty } : {}),
+              ...(duration ? { duration } : {})
+            }
+          }
+        : {})
     };
+
+    const orderBy = [{ sortOrder: "asc" as const }, { updatedAt: "desc" as const }];
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.recipe.findMany({
@@ -1370,7 +1409,7 @@ export class RecipeService {
             }
           }
         },
-        orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
+        orderBy,
         skip,
         take: normalizedPageSize
       }),
@@ -1391,16 +1430,96 @@ export class RecipeService {
     return this.toMyRecipeDetail(this.prisma, userId, recipe);
   }
 
+  async generateMyRecipeAssistant(userId: UUID, recipeId: UUID, operationId: OperationId): Promise<RecipeAssistantSnapshot> {
+    const requestHash = String(recipeId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<RecipeAssistantSnapshot>(tx, operationId, "recipe:assistant:generate", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "recipe:assistant:generate", userId, null, requestHash);
+      await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${recipeId} FOR UPDATE`;
+      const recipe = await this.requireOwnedPublishedRecipe(tx, userId, recipeId);
+      const existing = await this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId);
+      if (existing?.steps.length) {
+        await completeIdempotentOperation(tx, operationId, "recipe:assistant:generate", userId, null, requestHash, existing);
+        return existing;
+      }
+
+      await this.assertRecipeAssistantGenerationAllowed(tx, userId);
+      try {
+        const attemptedAt = new Date();
+        const content = versionToContent(recipe.currentVersion);
+        const snapshot = buildRecipeAssistantSnapshot(content);
+        await tx.recipeCookAssistant.upsert({
+          where: { recipeVersionId: recipe.currentVersionId },
+          update: {
+            status: "READY",
+            snapshotJson: toJson(snapshot),
+            generatedAt: attemptedAt,
+            lastAttemptAt: attemptedAt,
+            attemptCount: { increment: 1 },
+            lastError: null
+          },
+          create: {
+            recipeVersionId: recipe.currentVersionId,
+            status: "READY",
+            snapshotJson: toJson(snapshot),
+            generatedAt: attemptedAt,
+            lastAttemptAt: attemptedAt,
+            attemptCount: 1,
+            lastError: null
+          },
+          select: {
+            generatedAt: true,
+            snapshotJson: true
+          }
+        });
+      } catch (error) {
+        const lastError = normalizeRecipeAssistantError(error);
+        await tx.recipeCookAssistant.upsert({
+          where: { recipeVersionId: recipe.currentVersionId },
+          update: {
+            status: "FAILED",
+            lastAttemptAt: new Date(),
+            attemptCount: { increment: 1 },
+            lastError
+          },
+          create: {
+            recipeVersionId: recipe.currentVersionId,
+            status: "FAILED",
+            snapshotJson: Prisma.DbNull,
+            generatedAt: null,
+            lastAttemptAt: new Date(),
+            attemptCount: 1,
+            lastError
+          }
+        });
+        throw new ConflictException("做饭建议生成失败，请稍后重试");
+      }
+
+      const created = await tx.recipeCookAssistant.findUniqueOrThrow({
+        where: { recipeVersionId: recipe.currentVersionId },
+        select: {
+          generatedAt: true,
+          snapshotJson: true
+        }
+      });
+      const result = versionAssistantToSnapshot(created);
+      if (!result) {
+        throw new ConflictException("做饭建议生成失败，请稍后重试");
+      }
+      await completeIdempotentOperation(tx, operationId, "recipe:assistant:generate", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   async createMyRecipeFromInspiration(
     userId: UUID,
     operationId: OperationId,
     sourceRecipeId: UUID,
     sourceVersionId: UUID,
-    categoryId: UUID,
-    sceneIds: UUID[]
+    categoryId: UUID
   ): Promise<PublishRecipeDraftResponse> {
-    const normalizedSceneIds = Array.from(new Set(sceneIds)).sort();
-    const requestHash = JSON.stringify({ sourceRecipeId, sourceVersionId, categoryId, sceneIds: normalizedSceneIds });
+    const requestHash = JSON.stringify({ sourceRecipeId, sourceVersionId, categoryId });
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<PublishRecipeDraftResponse>(
         tx,
@@ -1414,19 +1533,6 @@ export class RecipeService {
       await startIdempotentOperation(tx, operationId, "recipe:create-from-inspiration", userId, null, requestHash);
 
       const category = await this.requireOwnedCategory(tx, userId, categoryId);
-      if (normalizedSceneIds.length > 0) {
-        const scenes = await tx.recipeScene.findMany({
-          where: {
-            userId,
-            id: { in: normalizedSceneIds }
-          },
-          select: { id: true }
-        });
-        if (scenes.length !== normalizedSceneIds.length) {
-          throw new NotFoundException("场景不存在");
-        }
-      }
-
       await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${sourceRecipeId} FOR UPDATE`;
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
@@ -1457,7 +1563,7 @@ export class RecipeService {
         where: {
           ownerId: userId,
           originVersionId: sourceVersionId,
-          status: { in: activeRecipeStatuses }
+          status: "ACTIVE"
         },
         include: {
           owner: { select: { uid: true, nickname: true } },
@@ -1488,6 +1594,7 @@ export class RecipeService {
         data: {
           ownerId: userId,
           categoryId: category.id,
+          inspirationCategoryId: sourceRecipe.inspirationCategoryId,
           currentVersionId: sourceRecipe.currentVersionId,
           originVersionId: sourceVersionId,
           originCoverImageUrl: normalizeRecipeImageUrl(sourceRecipe.coverImageUrl),
@@ -1497,14 +1604,6 @@ export class RecipeService {
           sortOrder
         }
       });
-      if (normalizedSceneIds.length > 0) {
-        await tx.recipeSceneLink.createMany({
-          data: normalizedSceneIds.map(sceneId => ({
-            recipeId: created.id,
-            sceneId
-          }))
-        });
-      }
       await upsertStorageLedger(tx, userId, "RECIPE", recipeRecordKey(created.id), recipeBytes);
       const recipe = await this.loadOwnedRecipe(tx, userId, created.id);
       const result = {
@@ -1751,7 +1850,7 @@ export class RecipeService {
 
   async getCollectionRecipe(userId: UUID, collectionRecipeId: UUID): Promise<CollectedRecipeDetail> {
     const collection = await this.loadCollection(this.prisma, userId, collectionRecipeId);
-    return this.toCollectedRecipeDetail(collection);
+    return this.toCollectedRecipeDetail(this.prisma, collection);
   }
 
   async collectRecipe(
@@ -1932,7 +2031,7 @@ export class RecipeService {
 
       const next = await this.loadCollection(tx, userId, existing.id);
       const result = {
-        recipe: this.toCollectedRecipeDetail(next)
+        recipe: await this.toCollectedRecipeDetail(tx, next)
       } satisfies SaveCollectionRecipeResponse;
       await completeIdempotentOperation(tx, operationId, "collection-recipe:create", userId, null, requestHash, result);
       return result;
@@ -2023,7 +2122,7 @@ export class RecipeService {
     if (!recipe || !recipe.inspirationCategory) throw new NotFoundException("灵感菜谱不存在");
     const userId = request ? await this.resolveOptionalUserId(request) : null;
     const ownedRecipeId = userId ? await this.findOwnedRecipeIdByOriginVersion(userId, recipe.currentVersionId) : null;
-    return this.toInspirationRecipeDetail(recipe, ownedRecipeId);
+    return this.toInspirationRecipeDetail(this.prisma, recipe, ownedRecipeId);
   }
 
   async reportRecipe(userId: UUID, recipeId: UUID, operationId: OperationId, reason: string): Promise<RecipeReportSummary> {
@@ -2340,9 +2439,10 @@ export class RecipeService {
 
   private async toMyRecipeDetail(tx: RecipeDb, userId: UUID, recipe: RecipeRow): Promise<MyRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
-    const [refs, recommendation] = await Promise.all([
+    const [refs, recommendation, assistant] = await Promise.all([
       this.loadRecipeEditRefs(tx, userId, content.ingredients),
-      this.loadLatestRecipeRecommendation(tx, recipe.id)
+      this.loadLatestRecipeRecommendation(tx, recipe.id),
+      this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId)
     ]);
     return {
       id: recipe.id,
@@ -2351,9 +2451,13 @@ export class RecipeService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
+      inspirationCategory: recipe.inspirationCategory
+        ? toInspirationCategorySummary(recipe.inspirationCategory)
+        : null,
       scenes: recipe.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: recipe.currentVersionId,
       content: this.normalizeRecipeEditContent(content, refs.ingredientMap),
+      assistant,
       ingredientRefs: refs.ingredientRefs,
       unitRefs: refs.unitRefs,
       recommendation,
@@ -2500,8 +2604,9 @@ export class RecipeService {
     };
   }
 
-  private toCollectedRecipeDetail(collection: CollectionRow): CollectedRecipeDetail {
+  private async toCollectedRecipeDetail(tx: RecipeDb, collection: CollectionRow): Promise<CollectedRecipeDetail> {
     const content = versionToContent(collection.sourceVersion);
+    const assistant = await this.loadRecipeAssistantSnapshot(tx, collection.sourceVersionId);
     return {
       id: collection.id,
       sourceRecipeId: collection.sourceRecipeId,
@@ -2515,6 +2620,7 @@ export class RecipeService {
       scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: collection.sourceVersionId,
       content,
+      assistant,
       collectedAt: toIsoDate(collection.createdAt),
       updatedAt: toIsoDate(collection.updatedAt)
     };
@@ -2537,8 +2643,13 @@ export class RecipeService {
     };
   }
 
-  private toInspirationRecipeDetail(recipe: RecipeRow, ownedRecipeId: UUID | null = null): InspirationRecipeDetail {
+  private async toInspirationRecipeDetail(
+    tx: RecipeDb,
+    recipe: RecipeRow,
+    ownedRecipeId: UUID | null = null
+  ): Promise<InspirationRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
+    const assistant = await this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId);
     return {
       id: recipe.id,
       title: recipe.title,
@@ -2548,12 +2659,20 @@ export class RecipeService {
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
       contentVersionId: recipe.currentVersionId,
       content,
+      assistant,
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       ownedRecipeId,
       curatedByName: recipe.curatedByName,
       updatedAt: toIsoDate(recipe.updatedAt)
     };
+  }
+
+  private async loadRecipeAssistantSnapshot(tx: RecipeDb, recipeVersionId: UUID) {
+    const assistant = await tx.recipeCookAssistant.findUnique({
+      where: { recipeVersionId }
+    });
+    return versionAssistantToSnapshot(assistant);
   }
 
   private async resolveOptionalUserId(request: RequestLike) {
@@ -2580,7 +2699,7 @@ export class RecipeService {
       where: {
         ownerId: userId,
         originVersionId: sourceVersionId,
-        status: { in: activeRecipeStatuses }
+        status: "ACTIVE"
       },
       select: { id: true },
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
@@ -2908,6 +3027,13 @@ export class RecipeService {
   private async assertDraftCreateAllowed(tx: RecipeDb, userId: UUID, extraRecipeCount: number, expectedBytes: number) {
     await this.assertRecipeQuota(tx, userId, extraRecipeCount);
     await this.assertStorageDelta(tx, userId, expectedBytes);
+  }
+
+  private async assertRecipeAssistantGenerationAllowed(tx: RecipeDb, userId: UUID) {
+    const tier = await this.entitlementService.getTier(tx, userId);
+    if (tier === "FREE") {
+      throw new ForbiddenException("开通会员后可生成做饭建议");
+    }
   }
 
   private async assertRecipeQuota(tx: RecipeDb, userId: UUID, extraRecipeCount: number) {

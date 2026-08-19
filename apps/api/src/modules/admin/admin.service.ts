@@ -8,8 +8,9 @@ import {
   NotFoundException,
   UnauthorizedException
 } from "@nestjs/common";
-import { Prisma, type DiningGroupStatus, type RecipeStatus } from "@prisma/client";
+import { Prisma, type RecipeStatus } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
+import { maskPhone } from "../../common/phone";
 import type {
   AdminRecipeContentInput,
   AdminDashboardSummary,
@@ -38,7 +39,6 @@ import type {
   AdminUnitPayloadRequest,
   AdminUnitSummary,
   AdminResetUserPasswordResponse,
-  AdminDiningGroupSummary,
   AdminRecipeSummary,
   AdminUserRecipeDomainOverview,
   CollectionListResponse,
@@ -71,7 +71,6 @@ import type {
   RecipeReportSummary,
   ReorderItem,
   ResetAdminUserPasswordRequest,
-  RelationshipState,
   SetAdminUserStatusRequest,
   StorageUsageSummary,
   UnitSummary,
@@ -95,7 +94,17 @@ import {
 import { AdminTokenService } from "../../common/security/admin-token.service";
 import { hashPassword, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
-import { buildRecipeSearchText, buildSearchKey, contentSizeBytes, draftCoverImageUrl, fromJson, toJson, versionToContent } from "../recipe/recipe-content";
+import {
+  buildRecipeAssistantSnapshot,
+  buildRecipeSearchText,
+  buildSearchKey,
+  contentSizeBytes,
+  draftCoverImageUrl,
+  fromJson,
+  toJson,
+  versionAssistantToSnapshot,
+  versionToContent
+} from "../recipe/recipe-content";
 import { inferIngredientTagFacts } from "../recipe/ingredient-tag-facts";
 import { replaceAutoRecipeVersionTags } from "../recipe/recipe-version-tags";
 import { MedalService } from "../user/medal.service";
@@ -181,6 +190,11 @@ function normalizeImageUrl(value: string | null | undefined) {
   return normalized || null;
 }
 
+function normalizeRecipeAssistantError(error: unknown) {
+  const message = error instanceof Error ? error.message.trim() : "做饭建议生成失败";
+  return message.length > 500 ? `${message.slice(0, 497)}...` : message;
+}
+
 function normalizeIngredientAliases(name: string, aliases: string[] | undefined) {
   const trimmedName = name.trim();
   const seen = new Set<string>();
@@ -209,7 +223,7 @@ function toUserProfile(user: {
     uid: user.uid,
     nickname: user.nickname,
     avatarUrl: user.avatarUrl,
-    phone: user.phone,
+    phone: maskPhone(user.phone),
     status: user.status,
     createdAt: toIsoDate(user.createdAt),
     updatedAt: toIsoDate(user.updatedAt)
@@ -239,6 +253,7 @@ type AdminDraftRow = Prisma.RecipeDraftGetPayload<{
 }>;
 
 type AdminSceneRow = Prisma.RecipeSceneGetPayload<Record<string, never>>;
+type RecipeAssistantRecord = Prisma.RecipeCookAssistantGetPayload<{}>;
 
 type AdminCollectionRow = Prisma.RecipeCollectionGetPayload<{
   include: {
@@ -592,7 +607,13 @@ export class AdminService {
 
   async getDashboardSummary(adminId: UUID): Promise<AdminDashboardSummary> {
     await this.requireSuperAdmin(adminId);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     const [
+      userTodayNewCount,
+      userSevenDayNewCount,
       userTotal,
       userActiveCount,
       userDisabledCount,
@@ -604,10 +625,15 @@ export class AdminService {
       recipeBlockedCount,
       recipeRecycledCount,
       recipeOpenReportCount,
+      pendingRecipeCount,
+      pendingIngredientCount,
       ingredientCategoryCount,
       ingredientItemCount,
-      unitCount
+      unitCount,
+      todayRedeemedCount
     ] = await this.prisma.$transaction([
+      this.prisma.user.count({ where: { createdAt: { gte: today } } }),
+      this.prisma.user.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
       this.prisma.user.count(),
       this.prisma.user.count({ where: { status: "ACTIVE" } }),
       this.prisma.user.count({ where: { status: "DISABLED" } }),
@@ -621,12 +647,24 @@ export class AdminService {
       this.prisma.recipe.count({ where: { status: "BLOCKED" } }),
       this.prisma.recipe.count({ where: { status: "RECYCLED" } }),
       this.prisma.recipeReport.count({ where: { status: "OPEN" } }),
+      this.prisma.recipeRecommendation.count({ where: { status: "PENDING" } }),
+      this.prisma.ingredientRecommendation.count({ where: { status: "PENDING" } }),
       this.prisma.ingredientCategory.count(),
       this.prisma.ingredient.count({ where: { ownerId: null, status: "ACTIVE" } }),
-      this.prisma.unit.count({ where: { ownerId: null } })
+      this.prisma.unit.count({ where: { ownerId: null } }),
+      this.prisma.membershipCode.count({ where: { redeemedAt: { gte: today } } })
     ]);
 
     return {
+      overview: {
+        todayNewUsers: userTodayNewCount,
+        sevenDayNewUsers: userSevenDayNewCount,
+        totalUsers: userTotal,
+        openReportCount: recipeOpenReportCount,
+        pendingRecipeCount,
+        pendingIngredientCount,
+        todayRedeemedCount
+      },
       user: {
         total: userTotal,
         activeCount: userActiveCount,
@@ -903,70 +941,6 @@ export class AdminService {
     });
   }
 
-  async listDiningGroups(
-    page: number,
-    pageSize: number,
-    keyword?: string,
-    status?: string,
-    adminId?: UUID
-  ): Promise<PageResult<AdminDiningGroupSummary>> {
-    if (!adminId) throw new ForbiddenException("无权执行该操作");
-    await this.requireSuperAdmin(adminId);
-    const normalizedPage = toPositiveInt(page, 1);
-    const normalizedPageSize = toPositiveInt(pageSize, 20);
-    const skip = (normalizedPage - 1) * normalizedPageSize;
-    const normalizedStatus = status?.trim();
-
-    if (normalizedStatus && !["ACTIVE", "ARCHIVED"].includes(normalizedStatus)) {
-      throw new BadRequestException("饭搭子状态参数错误");
-    }
-
-    const where: Prisma.DiningGroupWhereInput = {
-      ...(keyword ? { name: { contains: keyword, mode: "insensitive" as const } } : {}),
-      ...(normalizedStatus ? { status: normalizedStatus as DiningGroupStatus } : {})
-    };
-
-    const items = await this.prisma.diningGroup.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: normalizedPageSize,
-      include: {
-        _count: {
-          select: {
-            members: {
-              where: {
-                status: {
-                  in: ["ACTIVE", "RESTRICTED"]
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-    const total = await this.prisma.diningGroup.count({ where });
-
-    return {
-      items: items.map(diningGroup => {
-        return {
-          id: diningGroup.id,
-          name: diningGroup.name,
-          ownerId: diningGroup.ownerId,
-          status: diningGroup.status,
-          version: diningGroup.version,
-          memberCount: diningGroup._count.members,
-          createdAt: toIsoDate(diningGroup.createdAt),
-          updatedAt: toIsoDate(diningGroup.updatedAt)
-        };
-      }),
-      page: normalizedPage,
-      pageSize: normalizedPageSize,
-      total,
-      hasNext: skip + items.length < total
-    };
-  }
-
   async getUserEntitlements(userId: UUID, adminId: UUID): Promise<AdminUserEntitlementResponse> {
     return this.prisma.$transaction(async tx => {
       const admin = await tx.adminAccount.findUnique({
@@ -988,23 +962,8 @@ export class AdminService {
       });
       if (!user) throw new NotFoundException("用户不存在");
 
-      const [resolved, memberships, storageRows] = await Promise.all([
+      const [resolved, storageRows] = await Promise.all([
         this.entitlementService.resolveForUser(tx, userId),
-        tx.diningGroupMember.findMany({
-          where: {
-            userId,
-            status: { in: ["ACTIVE", "RESTRICTED"] },
-            diningGroup: { status: "ACTIVE" }
-          },
-          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
-          include: {
-            diningGroup: {
-              include: {
-                owner: { select: { uid: true } }
-              }
-            }
-          }
-        }),
         tx.storageLedger.findMany({
           where: { userId },
           select: {
@@ -1013,44 +972,6 @@ export class AdminService {
           }
         })
       ]);
-
-      const diningGroups = await Promise.all(
-        memberships.map(async membership => {
-          const memberCount = await tx.diningGroupMember.count({
-            where: {
-              diningGroupId: membership.diningGroupId,
-              status: { in: ["ACTIVE", "RESTRICTED"] }
-            }
-          });
-          const ownerPolicy = await this.entitlementService.resolveForUser(tx, membership.diningGroup.ownerId);
-          const state: RelationshipState = memberCount > ownerPolicy.memberLimit ? "OVER_MEMBER_LIMIT" : "NORMAL";
-
-          return {
-            id: membership.diningGroup.id,
-            name: membership.diningGroup.name,
-            description: membership.diningGroup.description,
-            coverImageUrl: null,
-            ownerUid: membership.diningGroup.owner.uid,
-            isOwned: membership.diningGroup.ownerId === userId,
-            canManageCover: false,
-            myRole: membership.role,
-            myStatus: membership.status,
-            myStatusReason: membership.statusReason,
-            createdDays: Math.max(1, Math.ceil((Date.now() - membership.diningGroup.createdAt.getTime()) / (24 * 60 * 60 * 1000))),
-            memberCount,
-            memberLimit: ownerPolicy.memberLimit,
-            pollCount: 0,
-            diningEventCount: 0,
-            hasAttention: false,
-            latestActivityTitle: null,
-            latestActivityAt: null,
-            state,
-            version: membership.diningGroup.version,
-            createdAt: toIsoDate(membership.diningGroup.createdAt),
-            updatedAt: toIsoDate(membership.diningGroup.updatedAt)
-          };
-        })
-      );
 
       const byModuleMap = new Map<string, number>();
       for (const row of storageRows) {
@@ -1084,13 +1005,6 @@ export class AdminService {
           canUseProfileBackground: false,
           canUseHomeBackground: false
         },
-        diningGroupUsage: {
-          ownedCount: resolved.ownedDiningGroupCount,
-          joinedCount: resolved.joinedDiningGroupCount,
-          joinLimit: resolved.joinLimit,
-          state: resolved.state
-        },
-        diningGroups,
         storage,
         recipePolicy: {
           recipeLimit: resolved.recipeLimit,
@@ -3195,6 +3109,7 @@ export class AdminService {
           data: this.buildAdminRecipeVersionCreateInput(sourceContent, recommendation.recipe.coverImageUrl)
         });
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, sourceContent);
+        await this.syncRecipeAssistant(tx, nextVersion.id, sourceContent);
 
         const created = await tx.recipe.create({
           data: {
@@ -3784,6 +3699,7 @@ export class AdminService {
           data: this.buildAdminRecipeVersionCreateInput(content, coverImageUrl)
         });
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
+        await this.syncRecipeAssistant(tx, nextVersion.id, content);
         const recipe = await tx.recipe.create({
           data: {
             ownerId: null,
@@ -3952,6 +3868,7 @@ export class AdminService {
           data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
         });
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
+        await this.syncRecipeAssistant(tx, nextVersion.id, content);
 
         const created = await tx.recipe.create({
           data: {
@@ -3973,7 +3890,7 @@ export class AdminService {
           }
         });
 
-        const result = this.toAdminRecipeDetail(created);
+        const result = await this.toAdminRecipeDetail(tx, created);
         await tx.auditEvent.create({
           data: {
             actorType: "ADMIN",
@@ -4229,7 +4146,59 @@ export class AdminService {
       }
     });
     if (!recipe) throw new NotFoundException("菜谱不存在");
-    return this.toAdminRecipeDetail(recipe);
+    return this.toAdminRecipeDetail(this.prisma, recipe);
+  }
+
+  async regenerateRecipeAssistant(recipeId: UUID, adminId: UUID, operationId: OperationId): Promise<AdminRecipeDetail> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = String(recipeId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminRecipeDetail>(
+        tx,
+        operationId,
+        "admin-recipe-assistant:regenerate",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-assistant:regenerate", adminId, requestHash);
+
+      const recipe = await tx.recipe.findUnique({
+        where: { id: recipeId },
+        include: {
+          owner: {
+            select: { uid: true }
+          },
+          category: true,
+          inspirationCategory: true,
+          currentVersion: true
+        }
+      });
+      if (!recipe || recipe.ownerId !== null || !recipe.inspirationCategoryId) {
+        throw new NotFoundException("系统菜谱不存在");
+      }
+
+      const content = versionToContent(recipe.currentVersion);
+      const assistantState = await this.syncRecipeAssistant(tx, recipe.currentVersionId, content);
+      const result = await this.toAdminRecipeDetail(tx, recipe);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_ASSISTANT_REGENERATED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: {
+            contentVersionId: recipe.currentVersionId,
+            assistantStatus: assistantState.status,
+            hasSnapshot: assistantState.hasSnapshot,
+            lastError: assistantState.lastError
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-assistant:regenerate", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async listRecipeReports(page: number, pageSize: number, status: string | undefined, adminId: UUID): Promise<PageResult<RecipeReportSummary>> {
@@ -4336,6 +4305,7 @@ export class AdminService {
           data: this.buildAdminRecipeVersionCreateInput(content, imageState.coverImageUrl)
         });
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
+        await this.syncRecipeAssistant(tx, nextVersion.id, content);
 
         const updated = await tx.recipe.update({
           where: { id: recipeId },
@@ -4357,7 +4327,7 @@ export class AdminService {
           }
         });
 
-        const result = this.toAdminRecipeDetail(updated);
+        const result = await this.toAdminRecipeDetail(tx, updated);
         await tx.auditEvent.create({
           data: {
             actorType: "ADMIN",
@@ -4562,8 +4532,10 @@ export class AdminService {
     };
   }
 
-  private toAdminRecipeDetail(recipe: AdminRecipeRow): AdminRecipeDetail {
+  private async toAdminRecipeDetail(tx: Prisma.TransactionClient | PrismaService, recipe: AdminRecipeRow): Promise<AdminRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
+    const assistantRecord = await this.loadRecipeAssistantRecord(tx, recipe.currentVersionId);
+    const assistant = versionAssistantToSnapshot(assistantRecord);
     return {
       id: recipe.id,
       title: recipe.title,
@@ -4576,6 +4548,8 @@ export class AdminService {
       durationText: recipeDurationText(content.duration),
       contentVersionId: recipe.currentVersionId,
       content,
+      assistantState: this.toRecipeAssistantState(assistantRecord),
+      assistant,
       version: recipe.version,
       reportCount: recipe.reportCount,
       blockedReason: recipe.blockedReason,
@@ -4584,6 +4558,34 @@ export class AdminService {
       canEdit: isAdminEditableInspiration(recipe),
       createdAt: toIsoDate(recipe.createdAt),
       updatedAt: toIsoDate(recipe.updatedAt)
+    };
+  }
+
+  private async loadRecipeAssistantRecord(tx: Prisma.TransactionClient | PrismaService, recipeVersionId: UUID) {
+    return tx.recipeCookAssistant.findUnique({
+      where: { recipeVersionId }
+    });
+  }
+
+  private toRecipeAssistantState(record: RecipeAssistantRecord | null): AdminRecipeDetail["assistantState"] {
+    if (!record) {
+      return {
+        status: "MISSING",
+        hasSnapshot: false,
+        generatedAt: null,
+        lastAttemptAt: null,
+        attemptCount: 0,
+        lastError: null
+      };
+    }
+
+    return {
+      status: record.status,
+      hasSnapshot: Boolean(record.generatedAt && record.snapshotJson != null),
+      generatedAt: record.generatedAt ? toIsoDate(record.generatedAt) : null,
+      lastAttemptAt: toIsoDate(record.lastAttemptAt),
+      attemptCount: record.attemptCount,
+      lastError: record.lastError
     };
   }
 
@@ -4957,6 +4959,57 @@ export class AdminService {
       searchText: buildRecipeSearchText(content),
       contentSizeBytes: contentSizeBytes(content)
     };
+  }
+
+  private async syncRecipeAssistant(tx: Prisma.TransactionClient, recipeVersionId: UUID, content: RecipeContentSnapshot) {
+    const attemptedAt = new Date();
+
+    try {
+      const snapshot = buildRecipeAssistantSnapshot(content);
+      await tx.recipeCookAssistant.upsert({
+        where: { recipeVersionId },
+        update: {
+          status: "READY",
+          snapshotJson: toJson(snapshot),
+          generatedAt: attemptedAt,
+          lastAttemptAt: attemptedAt,
+          attemptCount: { increment: 1 },
+          lastError: null
+        },
+        create: {
+          recipeVersionId,
+          status: "READY",
+          snapshotJson: toJson(snapshot),
+          generatedAt: attemptedAt,
+          lastAttemptAt: attemptedAt,
+          attemptCount: 1,
+          lastError: null
+        }
+      });
+    } catch (error) {
+      const lastError = normalizeRecipeAssistantError(error);
+      await tx.recipeCookAssistant.upsert({
+        where: { recipeVersionId },
+        update: {
+          status: "FAILED",
+          lastAttemptAt: attemptedAt,
+          attemptCount: { increment: 1 },
+          lastError
+        },
+        create: {
+          recipeVersionId,
+          status: "FAILED",
+          snapshotJson: Prisma.DbNull,
+          generatedAt: null,
+          lastAttemptAt: attemptedAt,
+          attemptCount: 1,
+          lastError
+        }
+      });
+    }
+
+    const record = await this.loadRecipeAssistantRecord(tx, recipeVersionId);
+    return this.toRecipeAssistantState(record);
   }
 
   private async buildAdminRecipeImageState(

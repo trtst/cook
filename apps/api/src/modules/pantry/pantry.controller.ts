@@ -27,7 +27,6 @@ import {
   ShoppingListInviteQueryDto,
   ShoppingListQueryDto,
   ShoppingItemQueryDto,
-  ShareShoppingListMembersDto,
   UpdateFridgeItemDto,
   UpdateShoppingGroupStatusDto,
   UpdateShoppingListItemCheckDto,
@@ -389,20 +388,6 @@ export class PantryController {
     @Body() body: UpdateShoppingListStatusDto
   ) {
     return this.pantryService.disableShoppingListShareLink(request.user.userId, listId, operationId, body.version).then(result => ok(result));
-  }
-
-  @Post("shopping-lists/:listId/share-members")
-  @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListDetailModel, "向饭搭子成员发送待确认的共享购物清单邀请")
-  shareShoppingListMembers(
-    @Req() request: RequestWithUser,
-    @Param("listId", ParseIntPipe) listId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: ShareShoppingListMembersDto
-  ) {
-    return this.pantryService
-      .shareShoppingListMembers(request.user.userId, listId, operationId, body.version, body.targetUserIds)
-      .then(result => ok(result));
   }
 
   @Post("shopping-lists/:listId/members/:memberUserId/remove")

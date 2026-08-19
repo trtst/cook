@@ -85,8 +85,7 @@ export async function ensureMembershipSkuCatalog(db: MembershipSkuCatalogDb) {
       update: {
         kind: preset.kind,
         tier: preset.tier,
-        durationDays: preset.durationDays,
-        redeemEnabled: preset.redeemEnabled
+        durationDays: preset.durationDays
       },
       create: {
         code: preset.code,

@@ -4,6 +4,7 @@ import type {
   PasswordLoginResult,
   UserProfile
 } from "../src/contracts/types";
+import { maskPhone } from "../src/common/phone";
 import { loadLocalEnv } from "../src/common/load-env";
 
 loadLocalEnv();
@@ -96,7 +97,7 @@ async function main() {
       })
     }
   );
-  assert(created.phone === createdPhone, "created phone mismatch");
+  assert(created.phone === maskPhone(createdPhone), "created phone mismatch");
   assert(created.status === "ACTIVE", "created user should be active");
 
   const updated = await requestData<UserProfile>(
@@ -110,7 +111,7 @@ async function main() {
       })
     }
   );
-  assert(updated.phone === updatedPhone, "updated phone mismatch");
+  assert(updated.phone === maskPhone(updatedPhone), "updated phone mismatch");
   assert(updated.nickname === "后台已编辑用户", "updated nickname mismatch");
 
   const initialLogin = await requestData<PasswordLoginResult>(

@@ -53,6 +53,9 @@ const mealSlotValues = ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_N
 const shoppingGapWindowValues = ["NEXT_48_HOURS", "NEXT_7_DAYS", "LATER"] as const;
 const membershipSkuCodeValues = ["PLUS_30D", "PRO_30D", "PRO_TRIAL_1D", "PRO_TRIAL_3D", "PRO_TRIAL_7D"] as const;
 const membershipCodeStatusValues = ["ACTIVE", "REDEEMED", "DISABLED"] as const;
+const dashboardTrendRangeValues = ["7D", "30D"] as const;
+const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
+const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
 
 function toOptionalBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
@@ -88,6 +91,15 @@ export class CodeLoginDto {
   @ApiProperty({ example: "123456" })
   @IsString()
   @Matches(/^\d{6}$/)
+  code!: string;
+}
+
+export class WechatLoginDto {
+  @ApiProperty({ example: "081xYfll2l7mBh4sFEnl2H0jQY0xYfli" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
   code!: string;
 }
 
@@ -774,13 +786,6 @@ export class SetAdminMedalTemplateStatusDto extends VersionedOperationDto {
 
 export class UpdateAdminMedalTemplateImageDto extends VersionedOperationDto {}
 
-export class AdminDiningGroupQueryDto extends PageQueryDto {
-  @ApiPropertyOptional({ example: "ACTIVE" })
-  @IsOptional()
-  @IsIn(["ACTIVE", "ARCHIVED"])
-  status?: string;
-}
-
 export class AdminUserEntitlementQueryDto {
   @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)
@@ -796,6 +801,28 @@ export class RecipeListQueryDto extends PageQueryDto {
   @IsInt()
   @Min(1)
   categoryId?: number;
+
+  @ApiPropertyOptional({ example: resourceIdExample })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId?: number;
+
+  @ApiPropertyOptional({ example: "RECOMMENDED" })
+  @IsOptional()
+  @IsIn(["RECOMMENDED", "LATEST"])
+  sort?: string;
+
+  @ApiPropertyOptional({ example: "BEGINNER" })
+  @IsOptional()
+  @IsIn(["BEGINNER", "EASY", "SKILLED", "CHALLENGING"])
+  difficulty?: string;
+
+  @ApiPropertyOptional({ example: "WITHIN_15" })
+  @IsOptional()
+  @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
+  duration?: string;
 }
 
 export class RecipeDraftListQueryDto extends PageQueryDto {}
@@ -1226,6 +1253,14 @@ export class RecipeDraftContentDto {
   @Min(1)
   categoryId!: number | null;
 
+  @ApiPropertyOptional({ nullable: true, example: resourceIdExample })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  inspirationCategoryId?: number | null;
+
   @ApiProperty({ type: [String], maxItems: 50 })
   @IsArray()
   @ArrayMaxSize(50)
@@ -1379,14 +1414,6 @@ export class CreateMyRecipeFromInspirationDto extends OperationDto {
   @Min(1)
   categoryId!: number;
 
-  @ApiProperty({ type: [String], maxItems: 50 })
-  @IsArray()
-  @ArrayMaxSize(50)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  sceneIds!: number[];
 }
 
 export class CreateCollectionRecipeDto extends OperationDto {
@@ -1546,6 +1573,8 @@ export class UpdateMealPlanTitleDto extends OperationDto {
   @MaxLength(40)
   title?: string | null;
 }
+
+export class ConfirmMealPlanMenuDto extends VersionedOperationDto {}
 
 export class RandomSlotPlanDto {
   @ApiProperty({ minimum: 0, maximum: 12 })
@@ -1873,6 +1902,22 @@ export class UpdateDiningEventScheduleDto extends OperationDto {
   location?: string | null;
 }
 
+export class UpdateDiningEventNoteDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
+  @ApiProperty({ nullable: true, maxLength: 255 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  note!: string | null;
+}
+
 export class UpdateDiningEventCoverDto extends OperationDto {
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
@@ -1881,175 +1926,9 @@ export class UpdateDiningEventCoverDto extends OperationDto {
   expectedVersion!: number;
 }
 
-export class MealPollListQueryDto {
-  @ApiProperty({ example: resourceIdExample })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  diningGroupId!: number;
-
-  @ApiPropertyOptional({ enum: ["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"] })
-  @IsOptional()
-  @IsIn(["OPEN", "CLOSED", "CONFIRMED", "COMPLETED"])
-  status?: "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
-
-  @ApiPropertyOptional({ example: "2026-08-02" })
-  @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  planDate?: string;
-
-  @ApiPropertyOptional({ enum: mealSlotValues })
-  @IsOptional()
-  @IsIn(mealSlotValues)
-  mealSlot?: (typeof mealSlotValues)[number];
-
-  @ApiPropertyOptional({ minimum: 1, maximum: 20, default: 20 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(20)
-  limit?: number;
-}
-
-export class DiningGroupActivitiesQueryDto {
-  @ApiProperty({ example: resourceIdExample })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  diningGroupId!: number;
-
-  @ApiPropertyOptional({ minimum: 3, maximum: 5, default: 5 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(3)
-  @Max(5)
-  limit?: number;
-}
-
-export class CreateMealPollDto extends OperationDto {
-  @ApiProperty({ example: resourceIdExample })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  diningGroupId!: number;
-
-  @ApiProperty({ example: "2026-08-02" })
-  @Matches(/^\d{4}-\d{2}-\d{2}$/)
-  planDate!: string;
-
-  @ApiProperty({ enum: mealSlotValues })
-  @IsIn(mealSlotValues)
-  mealSlot!: (typeof mealSlotValues)[number];
-
-  @ApiProperty({ example: "2026-08-02T10:30:00.000Z" })
-  @IsISO8601({ strict: true })
-  deadlineAt!: string;
-
-  @ApiProperty({ minimum: 1, maximum: 3 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(3)
-  choiceLimit!: number;
-
-  @ApiProperty({ nullable: true, maxLength: 255 })
-  @IsDefined()
-  @ValidateIf((_object, value) => value !== null)
-  @IsString()
-  @MaxLength(255)
-  note!: string | null;
-
-  @ApiProperty({ type: [Number], maxItems: 20 })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(20)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  candidateRecipeVersionIds!: number[];
-}
-
-export class VoteMealPollDto extends VersionedOperationDto {
-  @ApiProperty({ type: [Number], maxItems: 3 })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(3)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  selectedCandidateIds!: number[];
-
-  @ApiProperty({ nullable: true, maxLength: 120 })
-  @IsDefined()
-  @ValidateIf((_object, value) => value !== null)
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MinLength(1)
-  @MaxLength(120)
-  suggestionTitle!: string | null;
-
-  @ApiProperty({ nullable: true, maxLength: 255 })
-  @IsDefined()
-  @ValidateIf((_object, value) => value !== null)
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MaxLength(255)
-  note!: string | null;
-}
-
-export class ConfirmMealPollDto extends VersionedOperationDto {
-  @ApiProperty({ type: [Number], maxItems: 20 })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(20)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  finalRecipeVersionIds!: number[];
-
-  @ApiProperty({ nullable: true, example: "2026-08-02T18:30:00.000Z" })
-  @IsDefined()
-  @ValidateIf((_object, value) => value !== null)
-  @IsISO8601({ strict: true })
-  scheduledAt!: string | null;
-
-  @ApiProperty({ nullable: true, maxLength: 255 })
-  @IsDefined()
-  @ValidateIf((_object, value) => value !== null)
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @MaxLength(255)
-  location!: string | null;
-}
-
 export class CompleteMealPlanDto extends OperationDto {}
 
 export class GenerateMealPlanCookAssistantDto extends OperationDto {}
-
-export class InviteDiningGroupParticipantsDto extends OperationDto {
-  @ApiProperty()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  diningGroupId!: number;
-}
-
-export class ShareDiningEventMembersDto extends OperationDto {
-  @ApiProperty({ type: [Number] })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(100)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  targetUserIds!: number[];
-}
 
 export class RespondDiningEventDto extends OperationDto {
   @ApiProperty({ example: "ACCEPTED" })
@@ -2501,24 +2380,6 @@ export class CompleteShoppingListDto extends OperationDto {
   @ValidateNested({ each: true })
   @Type(() => CompleteShoppingListEntryDto)
   entries!: CompleteShoppingListEntryDto[];
-}
-
-export class ShareShoppingListMembersDto extends OperationDto {
-  @ApiProperty({ example: 1 })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  version!: number;
-
-  @ApiProperty({ type: [Number] })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(100)
-  @ArrayUnique()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  targetUserIds!: number[];
 }
 
 export class RemoveShoppingListMemberDto extends OperationDto {
@@ -3463,6 +3324,18 @@ export class SetAdminMembershipCodeBatchStatusDto extends OperationDto {
   expectedVersion!: number;
 }
 
+export class SetAdminMembershipSkuStatusDto extends OperationDto {
+  @ApiProperty({ type: Boolean })
+  @IsBoolean()
+  redeemEnabled!: boolean;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class GenerateAdminMembershipCodesDto extends OperationDto {
   @ApiProperty({ minimum: 1, maximum: 1000 })
   @Type(() => Number)
@@ -3491,4 +3364,252 @@ export class AdminMembershipCodeQueryDto extends PageQueryDto {
   @IsString()
   @MaxLength(40)
   code?: string;
+}
+
+export class AdminMembershipCodeGenerationQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  batchId?: number;
+
+  @ApiPropertyOptional({ enum: membershipSkuCodeValues })
+  @IsOptional()
+  @IsIn(membershipSkuCodeValues)
+  skuCode?: "PLUS_30D" | "PRO_30D" | "PRO_TRIAL_1D" | "PRO_TRIAL_3D" | "PRO_TRIAL_7D";
+}
+
+export class AdminMembershipCodeRedemptionQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  batchId?: number;
+
+  @ApiPropertyOptional({ enum: membershipSkuCodeValues })
+  @IsOptional()
+  @IsIn(membershipSkuCodeValues)
+  skuCode?: "PLUS_30D" | "PRO_30D" | "PRO_TRIAL_1D" | "PRO_TRIAL_3D" | "PRO_TRIAL_7D";
+
+  @ApiPropertyOptional({ minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  uid?: number;
+
+  @ApiPropertyOptional({ format: "date-time" })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  redeemedFrom?: string;
+
+  @ApiPropertyOptional({ format: "date-time" })
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  redeemedTo?: string;
+
+  @ApiPropertyOptional({ maxLength: 40 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(40)
+  code?: string;
+}
+
+export class AdminDashboardTrendQueryDto {
+  @ApiPropertyOptional({ enum: dashboardTrendRangeValues })
+  @IsOptional()
+  @IsIn(dashboardTrendRangeValues)
+  range?: "7D" | "30D";
+}
+
+export class AdminSiteContentChannelQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ maxLength: 32 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(32)
+  code?: string;
+}
+
+export class AdminSiteContentArticleQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  channelId?: number;
+
+  @ApiPropertyOptional({ enum: siteContentStatusValues })
+  @IsOptional()
+  @IsIn(siteContentStatusValues)
+  status?: "DRAFT" | "PUBLISHED" | "UNLISTED";
+
+  @ApiPropertyOptional({ maxLength: 80 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(80)
+  declare keyword?: string;
+}
+
+export class CreateAdminSiteContentChannelDto extends OperationDto {
+  @ApiProperty({ maxLength: 32 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  code!: string;
+
+  @ApiProperty({ maxLength: 32 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  name!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(200)
+  description?: string | null;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class UpdateAdminSiteContentChannelDto extends CreateAdminSiteContentChannelDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class CreateAdminSiteContentDto extends OperationDto {
+  @ApiProperty({ enum: siteContentTypeValues })
+  @IsIn(siteContentTypeValues)
+  type!: "PAGE" | "ARTICLE";
+
+  @ApiPropertyOptional({ minimum: 1, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  channelId?: number | null;
+
+  @ApiProperty({ maxLength: 80 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  slug!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 160 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(160)
+  path?: string | null;
+
+  @ApiProperty({ maxLength: 80 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  title!: string;
+
+  @ApiProperty({ maxLength: 240 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(240)
+  summary!: string;
+
+  @ApiProperty({ maxLength: 16 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16)
+  label!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(200)
+  heroNote?: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 512 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(512)
+  coverImageUrl?: string | null;
+
+  @ApiProperty({ type: String })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  bodyHtml!: string;
+
+  @ApiProperty({ type: String })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  bodyText!: string;
+
+  @ApiPropertyOptional({ nullable: true, format: "date-time" })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsISO8601({ strict: true })
+  effectiveAt?: string | null;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+}
+
+export class UpdateAdminSiteContentDto extends CreateAdminSiteContentDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class UpdateAdminSiteContentStatusDto extends OperationDto {
+  @ApiProperty({ enum: siteContentStatusValues })
+  @IsIn(siteContentStatusValues)
+  status!: "DRAFT" | "PUBLISHED" | "UNLISTED";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class ResolveSiteContentDto {
+  @ApiProperty({ maxLength: 160 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(160)
+  path!: string;
 }

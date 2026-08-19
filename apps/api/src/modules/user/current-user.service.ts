@@ -1,5 +1,6 @@
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Prisma, type User } from "@prisma/client";
+import { maskPhone } from "../../common/phone";
 import { PrismaService } from "../../common/prisma.service";
 import type { MeResponse, UpdateCurrentUserRequest, UUID } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
@@ -85,7 +86,7 @@ export class CurrentUserService {
       uid: user.uid,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
-      phone: user.phone,
+      phone: maskPhone(user.phone),
       display: {
         profileBackgroundUrl: null,
         homeBackgroundUrl: null,

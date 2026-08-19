@@ -67,6 +67,10 @@ export interface CodeLoginRequest {
   code: string;
 }
 
+export interface WechatLoginRequest {
+  code: string;
+}
+
 export interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
@@ -74,6 +78,12 @@ export interface PasswordLoginResult {
 }
 
 export interface CodeLoginResult {
+  token: string;
+  expiresAt: IsoDateTime;
+  user: SessionUser;
+}
+
+export interface WechatLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: SessionUser;
@@ -369,6 +379,7 @@ export interface AdminMembershipSkuItem {
   tier: EntitlementTier;
   durationDays: number;
   redeemEnabled: boolean;
+  version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -376,6 +387,11 @@ export interface AdminMembershipSkuItem {
 export interface AdminMembershipSkuListResponse {
   items: AdminMembershipSkuItem[];
   syncedAt: IsoDateTime;
+}
+
+export interface SetAdminMembershipSkuStatusRequest {
+  redeemEnabled: boolean;
+  expectedVersion: number;
 }
 
 export interface CreateAdminMembershipCodeBatchRequest {
@@ -439,6 +455,23 @@ export interface AdminMembershipCodeItem {
   updatedAt: IsoDateTime;
 }
 
+export interface AdminMembershipCodeGenerationOperatorSummary {
+  id: UUID;
+  username: string;
+  displayName: string;
+}
+
+export interface AdminMembershipCodeGenerationItem {
+  id: UUID;
+  batchId: UUID;
+  batchName: string;
+  skuCode: string;
+  generatedCount: number;
+  generatedBy: AdminMembershipCodeGenerationOperatorSummary | null;
+  exportedAt: IsoDateTime;
+  createdAt: IsoDateTime;
+}
+
 export interface AdminGenerateMembershipCodesResult {
   batch: AdminMembershipCodeBatchItem;
   generatedCount: number;
@@ -463,15 +496,6 @@ export interface UpdateTasteProfileRequest {
   note: string | null;
 }
 
-export type DiningGroupRole = "OWNER" | "ADMIN" | "MEMBER";
-export type DiningGroupStatus = "ACTIVE" | "ARCHIVED";
-export type LongTermMemberStatus = "ACTIVE" | "RESTRICTED" | "ENDED";
-export type LongTermMemberStatusReason =
-  | "LEFT"
-  | "REMOVED"
-  | "USER_OVER_LIMIT"
-  | "OWNER_OVER_LIMIT"
-  | "GROUP_DISSOLVED";
 export type RelationshipState = "NORMAL" | "OVER_MEMBER_LIMIT";
 export type EntitlementTier = "FREE" | "PLUS" | "PRO" | "ULTRA";
 export type StorageModule =
@@ -483,45 +507,6 @@ export type StorageModule =
   | "TECHNICAL_SNAPSHOT"
   | "RECYCLE_BIN"
   | "PROFILE_ASSET";
-
-export interface DiningGroupSummary {
-  id: UUID;
-  name: string;
-  description: string | null;
-  coverImageUrl: string | null;
-  ownerUid: number;
-  isOwned: boolean;
-  canManageCover: boolean;
-  myRole: DiningGroupRole;
-  myStatus: LongTermMemberStatus;
-  myStatusReason: LongTermMemberStatusReason | null;
-  createdDays: number;
-  memberCount: number;
-  memberLimit: number;
-  pollCount: number;
-  diningEventCount: number;
-  hasAttention: boolean;
-  latestActivityTitle: string | null;
-  latestActivityAt: IsoDateTime | null;
-  state: RelationshipState;
-  version: number;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-
-export interface DiningGroupMemberSummary {
-  id: UUID;
-  diningGroupId: UUID;
-  userId: UUID;
-  user: UserSummary;
-  role: DiningGroupRole;
-  status: LongTermMemberStatus;
-  statusReason: LongTermMemberStatusReason | null;
-  joinedAt: IsoDateTime;
-  restrictedAt: IsoDateTime | null;
-  endedAt: IsoDateTime | null;
-  version: number;
-}
 
 export interface EffectiveImagePolicy {
   quality: number;
@@ -559,82 +544,16 @@ export interface StorageUsageSummary {
   calculatedAt: IsoDateTime;
 }
 
-export interface DiningGroupUsageSummary {
-  ownedCount: number;
-  joinedCount: number;
-  joinLimit: number;
-  state: RelationshipState;
-}
-
-export interface GetMyDiningGroupsResponse {
-  items: DiningGroupSummary[];
-  usage: DiningGroupUsageSummary;
-}
-
-export interface CreateDiningGroupRequest {
-  name: string;
-  description: string | null;
-}
-
-export interface UpdateDiningGroupRequest extends CreateDiningGroupRequest {
-  expectedVersion: number;
-}
-
-export interface CreateDiningGroupResponse {
-  diningGroup: DiningGroupSummary;
-}
-
-export interface DiningGroupMembersResult {
-  diningGroupId: UUID;
-  members: DiningGroupMemberSummary[];
-}
-
-export interface CreateInviteResult {
-  inviteToken: string;
-  sharePath: string;
-  expiresAt: IsoDateTime;
-}
-
-export interface AcceptInviteResponse {
-  diningGroup: DiningGroupSummary;
-}
-
-export interface UpdateDiningGroupResponse {
-  diningGroup: DiningGroupSummary;
-}
-
-export interface UpdateDiningGroupCoverResponse {
-  diningGroup: DiningGroupSummary;
-}
-
-export interface LeaveDiningGroupResponse {
-  diningGroupId: UUID;
-  leftAt: IsoDateTime;
-}
-
-export interface RemoveDiningGroupMemberResponse {
-  diningGroupId: UUID;
-  userId: UUID;
-  removedAt: IsoDateTime;
-}
-
-export interface DissolveDiningGroupResponse {
-  diningGroupId: UUID;
-  dissolvedAt: IsoDateTime;
-}
-
-export interface AdminDiningGroupSummary {
-  id: UUID;
-  name: string;
-  ownerId: UUID;
-  status: DiningGroupStatus;
-  version: number;
-  memberCount: number;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-
 export interface AdminDashboardSummary {
+  overview: {
+    todayNewUsers: number;
+    sevenDayNewUsers: number;
+    totalUsers: number;
+    openReportCount: number;
+    pendingRecipeCount: number;
+    pendingIngredientCount: number;
+    todayRedeemedCount: number;
+  };
   user: {
     total: number;
     activeCount: number;
@@ -659,6 +578,133 @@ export interface AdminDashboardSummary {
   };
 }
 
+export interface AdminDashboardTrendPoint {
+  date: string;
+  label: string;
+  newUsers: number;
+  totalUsers: number;
+  openReportCount: number;
+  pendingRecipeCount: number;
+  pendingIngredientCount: number;
+  membershipGeneratedCount: number;
+  membershipRedeemedCount: number;
+}
+
+export interface AdminDashboardTrendsResponse {
+  range: "7D" | "30D";
+  points: AdminDashboardTrendPoint[];
+}
+
+export interface AdminSiteContentChannelSummary {
+  id: UUID;
+  code: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminSiteContentOperatorSummary {
+  id: UUID;
+  username: string;
+  displayName: string;
+}
+
+export interface AdminSiteContentSummary {
+  id: UUID;
+  type: "PAGE" | "ARTICLE";
+  status: "DRAFT" | "PUBLISHED" | "UNLISTED";
+  channel: AdminSiteContentChannelSummary | null;
+  slug: string;
+  path: string;
+  title: string;
+  summary: string;
+  label: string;
+  heroNote: string | null;
+  coverImageUrl: string | null;
+  publishedAt: IsoDateTime | null;
+  effectiveAt: IsoDateTime | null;
+  sortOrder: number;
+  version: number;
+  updatedBy: AdminSiteContentOperatorSummary | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminSitePageSummary extends AdminSiteContentSummary {
+  exists: boolean;
+  fixedSlug: string;
+}
+
+export interface AdminSiteContentDetail extends AdminSiteContentSummary {
+  bodyHtml: string;
+  bodyText: string;
+}
+
+export interface AdminSiteContentImageUploadResult {
+  imageUrl: string;
+}
+
+export interface CreateAdminSiteContentRequest {
+  operationId: OperationId;
+  type: "PAGE" | "ARTICLE";
+  channelId?: UUID | null;
+  slug: string;
+  path?: string | null;
+  title: string;
+  summary: string;
+  label: string;
+  heroNote?: string | null;
+  coverImageUrl?: string | null;
+  bodyHtml: string;
+  bodyText: string;
+  effectiveAt?: IsoDateTime | null;
+  sortOrder?: number;
+}
+
+export interface UpdateAdminSiteContentRequest extends CreateAdminSiteContentRequest {
+  expectedVersion: number;
+}
+
+export interface UpdateAdminSiteContentStatusRequest {
+  operationId: OperationId;
+  status: "DRAFT" | "PUBLISHED" | "UNLISTED";
+  expectedVersion: number;
+}
+
+export interface CreateAdminSiteContentChannelRequest {
+  operationId: OperationId;
+  code: string;
+  name: string;
+  description?: string | null;
+  sortOrder?: number;
+}
+
+export interface UpdateAdminSiteContentChannelRequest extends CreateAdminSiteContentChannelRequest {
+  expectedVersion: number;
+}
+
+export interface SiteContentDetail {
+  id: UUID;
+  type: "PAGE" | "ARTICLE";
+  slug: string;
+  path: string;
+  title: string;
+  summary: string;
+  label: string;
+  heroNote: string | null;
+  coverImageUrl: string | null;
+  bodyHtml: string;
+  bodyText: string;
+  publishedAt: IsoDateTime | null;
+  effectiveAt: IsoDateTime | null;
+  updatedAt: IsoDateTime;
+  channelCode: string | null;
+  channelName: string | null;
+}
+
 export interface AdminLoginRequest {
   username: string;
   password: string;
@@ -668,8 +714,6 @@ export interface AdminUserEntitlementResponse {
   user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
-  diningGroupUsage: DiningGroupUsageSummary;
-  diningGroups: DiningGroupSummary[];
   storage: StorageUsageSummary;
   recipePolicy: Pick<ResolvedPolicy, "recipeLimit" | "recycleDays" | "variantLimitPerRoot">;
   invitePolicy: Pick<ResolvedPolicy, "inviteLimit" | "memberLimit">;
@@ -1044,10 +1088,36 @@ export interface RecipeContentSnapshot {
   steps: RecipeStepSnapshot[];
 }
 
+export type RecipeAssistantStepPhase = "PREP" | "COOK" | "SERVE";
+
+export interface RecipeAssistantStep {
+  order: number;
+  phase: RecipeAssistantStepPhase;
+  title: string;
+  detail: string;
+  imageUrl: string | null;
+  durationText: string | null;
+}
+
+export interface RecipeAssistantSummary {
+  stepCount: number;
+  prepStepCount: number;
+  cookStepCount: number;
+  serveStepCount: number;
+  totalDurationText: string | null;
+}
+
+export interface RecipeAssistantSnapshot {
+  generatedAt: IsoDateTime;
+  summary: RecipeAssistantSummary;
+  steps: RecipeAssistantStep[];
+}
+
 export interface RecipeDraftContentInput {
   name: string;
   story: string | null;
   categoryId: UUID | null;
+  inspirationCategoryId?: UUID | null;
   sceneIds: UUID[];
   originVersionId?: UUID | null;
   originCoverImageUrl?: string | null;
@@ -1134,9 +1204,11 @@ export interface MyRecipeDetail {
   difficultyText: string | null;
   durationText: string | null;
   category: RecipeCategorySummary;
+  inspirationCategory: InspirationCategorySummary | null;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistant: RecipeAssistantSnapshot | null;
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
   recommendation: RecipeRecommendationSummary | null;
@@ -1205,6 +1277,7 @@ export interface CollectedRecipeDetail {
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistant: RecipeAssistantSnapshot | null;
   collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -1254,6 +1327,7 @@ export interface InspirationRecipeDetail {
   category: InspirationCategorySummary;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistant: RecipeAssistantSnapshot | null;
   likeCount: number;
   collectCount: number;
   ownedRecipeId: UUID | null;
@@ -1281,6 +1355,15 @@ export interface AdminRecipeSummary {
   ownerUid: number | null;
 }
 
+export interface RecipeAssistantStateSummary {
+  status: "MISSING" | "READY" | "FAILED";
+  hasSnapshot: boolean;
+  generatedAt: IsoDateTime | null;
+  lastAttemptAt: IsoDateTime | null;
+  attemptCount: number;
+  lastError: string | null;
+}
+
 export interface AdminRecipeDetail {
   id: UUID;
   title: string;
@@ -1293,6 +1376,8 @@ export interface AdminRecipeDetail {
   durationText: string | null;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  assistantState: RecipeAssistantStateSummary;
+  assistant: RecipeAssistantSnapshot | null;
   version: number;
   reportCount: number;
   blockedReason: string | null;
@@ -1801,6 +1886,7 @@ export interface MealPlanSummary {
   mealSlot: MealSlot;
   title: string;
   menuItems: MealPlanMenuItemSummary[];
+  menuLocked: boolean;
   status: "PLANNED" | "COMPLETED";
   version: number;
   completedAt: IsoDateTime | null;
@@ -1877,81 +1963,7 @@ export interface DiningEventParticipantSummary {
   bringRecipeTitle: string | null;
 }
 
-export type MealPollStatus = "OPEN" | "CLOSED" | "CONFIRMED" | "COMPLETED";
-export type MealPollCandidateStatus = "ACTIVE" | "PENDING" | "REJECTED";
 export type ActivityState = "PENDING" | "DONE" | "EXPIRED";
-export type DiningGroupActivityKind =
-  | "POLL_OPENED"
-  | "POLL_VOTED"
-  | "POLL_SUGGESTED"
-  | "POLL_NOTED"
-  | "MENU_CONFIRMED"
-  | "COOK_CLAIMED"
-  | "BRING_UPDATED"
-  | "MEAL_COMPLETED"
-  | "MEMORY_CREATED"
-  | "MEMBER_JOINED"
-  | "INVITE_PENDING";
-
-export interface MealPollSummary {
-  id: UUID;
-  diningGroupId: UUID;
-  title: string;
-  planDate: string;
-  mealSlot: MealSlot;
-  status: MealPollStatus;
-  deadlineAt: IsoDateTime;
-  choiceLimit: number;
-  note: string | null;
-  candidateCount: number;
-  responseCount: number;
-  confirmedPlanItemId: UUID | null;
-  confirmedDiningEventId: UUID | null;
-  version: number;
-  createdAt: IsoDateTime;
-}
-
-export interface MealPollCandidateSummary {
-  id: UUID;
-  recipeId: UUID | null;
-  recipeVersionId: UUID | null;
-  title: string;
-  coverUrl: string | null;
-  status: MealPollCandidateStatus;
-  sourceType: "RECIPE" | "SUGGESTION";
-  suggestedByUid: number | null;
-  voteCount: number;
-}
-
-export interface MealPollResponseSummary {
-  id: UUID;
-  userUid: number;
-  selectedCandidateIds: UUID[];
-  suggestionCandidateId: UUID | null;
-  note: string | null;
-  respondedAt: IsoDateTime;
-}
-
-export interface MealPollDetail extends MealPollSummary {
-  candidates: MealPollCandidateSummary[];
-  responses: MealPollResponseSummary[];
-}
-
-export interface DiningGroupActivitySummary {
-  id: UUID;
-  diningGroupId: UUID;
-  kind: DiningGroupActivityKind;
-  state: ActivityState;
-  actorUid: number | null;
-  actorName: string | null;
-  title: string;
-  detail: string | null;
-  pollId: UUID | null;
-  planItemId: UUID | null;
-  diningEventId: UUID | null;
-  createdAt: IsoDateTime;
-}
-
 export interface DiningEventMenuItemSummary {
   id: UUID;
   recipeId: UUID | null;
@@ -1967,6 +1979,7 @@ export interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
+  note: string | null;
   coverImageUrl: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   organizerUid: number | null;
@@ -1989,9 +2002,10 @@ export interface DiningEventShareLinkResponse {
   expiresAt: IsoDateTime | null;
 }
 
-export interface ShareDiningEventMembersRequest {
+export interface UpdateDiningEventNoteRequest {
   operationId: OperationId;
-  targetUserIds: UUID[];
+  expectedVersion: number;
+  note: string | null;
 }
 
 export interface DiningMemoryShareMenuItem {
@@ -2021,46 +2035,6 @@ export interface DiningMemoryShareSnapshot extends DiningMemorySharePreview {
   id: UUID;
   diningEventId: UUID;
   sharePath: string;
-}
-
-export interface MealPollListQuery {
-  diningGroupId: UUID;
-  status?: MealPollStatus;
-  planDate?: string;
-  mealSlot?: MealSlot;
-  limit?: number;
-}
-
-export interface DiningGroupActivitiesQuery {
-  diningGroupId: UUID;
-  limit?: number;
-}
-
-export interface CreateMealPollRequest {
-  operationId: OperationId;
-  diningGroupId: UUID;
-  planDate: string;
-  mealSlot: MealSlot;
-  deadlineAt: IsoDateTime;
-  choiceLimit: number;
-  note: string | null;
-  candidateRecipeVersionIds: UUID[];
-}
-
-export interface VoteMealPollRequest {
-  operationId: OperationId;
-  expectedVersion: number;
-  selectedCandidateIds: UUID[];
-  suggestionTitle: string | null;
-  note: string | null;
-}
-
-export interface ConfirmMealPollRequest {
-  operationId: OperationId;
-  expectedVersion: number;
-  finalRecipeVersionIds: UUID[];
-  scheduledAt: IsoDateTime | null;
-  location: string | null;
 }
 
 export interface ClaimCookRequest {
@@ -2508,12 +2482,6 @@ export interface CompleteShoppingListRequest {
 export interface ShareShoppingListLinkResponse {
   shareToken: string;
   shareUrl: string;
-}
-
-export interface ShareShoppingListMembersRequest {
-  operationId: OperationId;
-  version: number;
-  targetUserIds: UUID[];
 }
 
 export interface RemoveShoppingListMemberRequest {

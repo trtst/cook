@@ -55,15 +55,6 @@ export class UploadPublicController {
     asset.stream.pipe(response);
   }
 
-  @Get("dining-group-covers/:diningGroupId")
-  async getDiningGroupCover(@Param("diningGroupId", ParseIntPipe) diningGroupId: number, @Res() response: ResponseLike) {
-    const asset = await this.uploadService.getDiningGroupCoverAsset(diningGroupId);
-    response.setHeader("Content-Type", asset.contentType);
-    response.setHeader("Content-Length", asset.stat.size);
-    response.setHeader("Cache-Control", "public, max-age=300");
-    asset.stream.pipe(response);
-  }
-
   @Get("dining-event-covers/:eventId")
   async getDiningEventCover(@Param("eventId", ParseIntPipe) eventId: number, @Res() response: ResponseLike) {
     const asset = await this.uploadService.getDiningEventCoverAsset(eventId);

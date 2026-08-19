@@ -1,6 +1,6 @@
-import { Body, Controller, Inject, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, HttpCode, Inject, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { ok } from "../../common/api-response";
+import { fail, ok } from "../../common/api-response";
 import type { RequestWithContext, RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
@@ -16,6 +16,7 @@ export class MembershipCodeController {
   constructor(@Inject(MembershipCodeService) private readonly membershipCodeService: MembershipCodeService) {}
 
   @Post("redeem")
+  @HttpCode(200)
   @ApiIdempotencyKey()
   @ApiOkModel(RedeemMembershipCodeResultModel, "核销当前用户的会员兑换码")
   redeemCode(
@@ -25,6 +26,6 @@ export class MembershipCodeController {
   ) {
     return this.membershipCodeService
       .redeemCurrent(request.user.userId, operationId, request.context, body.code)
-      .then(result => ok(result));
+      .then(result => (result.ok ? ok(result.result) : fail(result.code, result.message)));
   }
 }

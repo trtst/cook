@@ -4,6 +4,7 @@ import { type MembershipCodeBatch, type MembershipCodeStatus, type MembershipSku
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type {
+  AdminMembershipCodeGenerationItem,
   AdminGenerateMembershipCodesResult,
   AdminMembershipCodeBatchItem,
   AdminMembershipCodeItem,
@@ -12,6 +13,7 @@ import type {
   CreateAdminMembershipCodeBatchRequest,
   GenerateAdminMembershipCodesRequest,
   PageResult,
+  SetAdminMembershipSkuStatusRequest,
   SetAdminMembershipCodeBatchStatusRequest,
   UUID
 } from "../../contracts/types";
@@ -49,6 +51,17 @@ type MembershipCodeRow = Prisma.MembershipCodeGetPayload<{
     };
   };
 }>;
+type AuditEventRow = Prisma.AuditEventGetPayload<{
+  include: {
+    actorAdmin: {
+      select: {
+        id: true;
+        username: true;
+        displayName: true;
+      };
+    };
+  };
+}>;
 
 type BatchCountMap = Map<number, { codeCount: number; activeCodeCount: number; redeemedCodeCount: number; disabledCodeCount: number }>;
 
@@ -81,6 +94,7 @@ function toSkuItem(row: MembershipSku): AdminMembershipSkuItem {
     tier: row.tier,
     durationDays: row.durationDays,
     redeemEnabled: row.redeemEnabled,
+    version: row.version,
     createdAt: toIsoDate(row.createdAt),
     updatedAt: toIsoDate(row.updatedAt)
   };
@@ -110,6 +124,32 @@ function toCodeItem(row: MembershipCodeRow): AdminMembershipCodeItem {
     redeemedAt: row.redeemedAt ? toIsoDate(row.redeemedAt) : null,
     createdAt: toIsoDate(row.createdAt),
     updatedAt: toIsoDate(row.updatedAt)
+  };
+}
+
+function toGenerationItem(
+  row: AuditEventRow,
+  batchMap: Map<number, { id: number; name: string; skuCode: string }>
+): AdminMembershipCodeGenerationItem {
+  const batch = row.objectId ? batchMap.get(row.objectId) : null;
+  const payload = typeof row.payload === "object" && row.payload !== null ? (row.payload as Record<string, unknown>) : {};
+  const generatedCount = typeof payload.generatedCount === "number" ? payload.generatedCount : 0;
+  const skuCode = batch?.skuCode ?? (typeof payload.skuCode === "string" ? payload.skuCode : "");
+  return {
+    id: row.id,
+    batchId: batch?.id ?? 0,
+    batchName: batch?.name ?? `批次 #${row.objectId ?? 0}`,
+    skuCode,
+    generatedCount,
+    generatedBy: row.actorAdmin
+      ? {
+          id: row.actorAdmin.id,
+          username: row.actorAdmin.username,
+          displayName: row.actorAdmin.displayName
+        }
+      : null,
+    exportedAt: toIsoDate(row.createdAt),
+    createdAt: toIsoDate(row.createdAt)
   };
 }
 
@@ -192,6 +232,64 @@ export class AdminMembershipCodeService {
       items: sortSkuItems(rows.map(item => toSkuItem(item))),
       syncedAt: new Date().toISOString()
     };
+  }
+
+  async setSkuStatus(adminId: UUID, skuId: UUID, operationId: string, body: SetAdminMembershipSkuStatusRequest): Promise<AdminMembershipSkuItem> {
+    const requestHash = JSON.stringify({ skuId, ...body });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminMembershipSkuItem>(
+        tx,
+        operationId,
+        "admin-membership-sku:set-status",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+
+      await startAdminIdempotentOperation(tx, operationId, "admin-membership-sku:set-status", adminId, requestHash);
+      await ensureMembershipSkuCatalog(tx);
+
+      const current = await tx.membershipSku.findUnique({
+        where: { id: skuId }
+      });
+      if (!current || !isAllowedMembershipSkuPreset(current)) {
+        throw new NotFoundException("会员 SKU 不存在");
+      }
+      if (current.version !== body.expectedVersion) {
+        throw new ConflictException("会员 SKU 已更新，请刷新后重试");
+      }
+
+      const updated =
+        current.redeemEnabled === body.redeemEnabled
+          ? current
+          : await tx.membershipSku.update({
+              where: { id: skuId },
+              data: {
+                redeemEnabled: body.redeemEnabled,
+                version: { increment: 1 }
+              }
+            });
+
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "membership-sku.set-status",
+          objectType: "membership_sku",
+          objectId: updated.id,
+          payload: {
+            code: updated.code,
+            redeemEnabled: updated.redeemEnabled,
+            version: updated.version
+          }
+        }
+      });
+
+      const result = toSkuItem(updated);
+      await completeAdminIdempotentOperation(tx, operationId, "admin-membership-sku:set-status", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async listBatches(
@@ -467,57 +565,129 @@ export class AdminMembershipCodeService {
     status?: string,
     code?: string
   ): Promise<PageResult<AdminMembershipCodeItem>> {
+    return this.listCodePage(page, pageSize, {
+      ...(batchId ? { batchId } : {}),
+      ...(status ? { status: status as MembershipCodeStatus } : {}),
+      ...this.buildCodeWhere(code)
+    });
+  }
+
+  async listGenerations(
+    page: number,
+    pageSize: number,
+    batchId?: number,
+    skuCode?: string
+  ): Promise<PageResult<AdminMembershipCodeGenerationItem>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = Math.min(100, toPositiveInt(pageSize, 20));
     const skip = (normalizedPage - 1) * normalizedPageSize;
-    const trimmedCode = code?.trim();
-    const normalizedCode = trimmedCode ? normalizeCode(trimmedCode) : "";
-    const exactCodeHash = normalizedCode && /^[A-Z0-9]{6,40}$/.test(normalizedCode) ? hashCode(normalizedCode) : "";
+    const batchFilter = await this.resolveGenerationBatchFilter(batchId, skuCode);
+    if (batchFilter === null) {
+      return {
+        items: [],
+        page: normalizedPage,
+        pageSize: normalizedPageSize,
+        total: 0,
+        hasNext: false
+      };
+    }
 
-    const where: Prisma.MembershipCodeWhereInput = {
-      ...(batchId ? { batchId } : {}),
-      ...(status ? { status: status as MembershipCodeStatus } : {}),
-      ...(trimmedCode
-        ? {
-            OR: [
-              ...(exactCodeHash ? [{ codeHash: exactCodeHash }] : []),
-              { codeMask: { contains: trimmedCode.toUpperCase(), mode: "insensitive" } }
-            ]
-          }
-        : {})
+    const where: Prisma.AuditEventWhereInput = {
+      actorType: "ADMIN",
+      action: "membership-code.generate",
+      objectType: "membership_code_batch",
+      ...(batchFilter === undefined ? {} : { objectId: batchFilter })
     };
 
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.membershipCode.findMany({
+      this.prisma.auditEvent.findMany({
         where,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip,
         take: normalizedPageSize,
         include: {
-          batch: {
-            include: {
-              sku: true
-            }
-          },
-          redeemedBy: {
+          actorAdmin: {
             select: {
               id: true,
-              uid: true,
-              nickname: true
+              username: true,
+              displayName: true
             }
           }
         }
       }),
-      this.prisma.membershipCode.count({ where })
+      this.prisma.auditEvent.count({ where })
     ]);
 
+    const batchIds = items
+      .map(item => item.objectId)
+      .filter((value): value is number => typeof value === "number");
+    const batches = batchIds.length
+      ? await this.prisma.membershipCodeBatch.findMany({
+          where: { id: { in: batchIds } },
+          include: {
+            sku: {
+              select: {
+                code: true
+              }
+            }
+          }
+        })
+      : [];
+    const batchMap = new Map(batches.map(item => [item.id, { id: item.id, name: item.name, skuCode: item.sku.code }] as const));
+
     return {
-      items: items.map(item => toCodeItem(item)),
+      items: items.map(item => toGenerationItem(item, batchMap)),
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async listRedemptions(
+    page: number,
+    pageSize: number,
+    options: {
+      batchId?: number;
+      skuCode?: string;
+      uid?: number;
+      redeemedFrom?: string;
+      redeemedTo?: string;
+      code?: string;
+    }
+  ): Promise<PageResult<AdminMembershipCodeItem>> {
+    const redeemedAt =
+      options.redeemedFrom || options.redeemedTo
+        ? {
+            ...(options.redeemedFrom ? { gte: new Date(options.redeemedFrom) } : {}),
+            ...(options.redeemedTo ? { lte: new Date(options.redeemedTo) } : {})
+          }
+        : undefined;
+
+    return this.listCodePage(page, pageSize, {
+      status: "REDEEMED",
+      ...(options.batchId ? { batchId: options.batchId } : {}),
+      ...(options.skuCode
+        ? {
+            batch: {
+              sku: {
+                code: options.skuCode
+              }
+            }
+          }
+        : {}),
+      ...(options.uid
+        ? {
+            redeemedBy: {
+              is: {
+                uid: options.uid
+              }
+            }
+          }
+        : {}),
+      ...(redeemedAt ? { redeemedAt } : {}),
+      ...this.buildCodeWhere(options.code)
+    });
   }
 
   async disableCode(adminId: UUID, codeId: UUID, operationId: string): Promise<AdminMembershipCodeItem> {
@@ -617,6 +787,84 @@ export class AdminMembershipCodeService {
       _count: { _all: true }
     });
     return createCodeCounts(batchIds, rows);
+  }
+
+  private async resolveGenerationBatchFilter(batchId?: number, skuCode?: string) {
+    if (!batchId && !skuCode) return undefined;
+    if (batchId && !skuCode) return batchId;
+
+    const matchedBatches = await this.prisma.membershipCodeBatch.findMany({
+      where: {
+        ...(batchId ? { id: batchId } : {}),
+        ...(skuCode
+          ? {
+              sku: {
+                code: skuCode
+              }
+            }
+          : {})
+      },
+      select: { id: true }
+    });
+    if (matchedBatches.length === 0) return null;
+    if (matchedBatches.length === 1) return matchedBatches[0].id;
+    return { in: matchedBatches.map(item => item.id) } satisfies Prisma.IntFilter;
+  }
+
+  private buildCodeWhere(code?: string): Prisma.MembershipCodeWhereInput {
+    const trimmedCode = code?.trim();
+    if (!trimmedCode) return {};
+
+    const normalizedCode = normalizeCode(trimmedCode);
+    const exactCodeHash = normalizedCode && /^[A-Z0-9]{6,40}$/.test(normalizedCode) ? hashCode(normalizedCode) : "";
+    return {
+      OR: [
+        ...(exactCodeHash ? [{ codeHash: exactCodeHash }] : []),
+        { codeMask: { contains: trimmedCode.toUpperCase(), mode: "insensitive" } }
+      ]
+    };
+  }
+
+  private async listCodePage(
+    page: number,
+    pageSize: number,
+    where: Prisma.MembershipCodeWhereInput
+  ): Promise<PageResult<AdminMembershipCodeItem>> {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = Math.min(100, toPositiveInt(pageSize, 20));
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.membershipCode.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize,
+        include: {
+          batch: {
+            include: {
+              sku: true
+            }
+          },
+          redeemedBy: {
+            select: {
+              id: true,
+              uid: true,
+              nickname: true
+            }
+          }
+        }
+      }),
+      this.prisma.membershipCode.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => toCodeItem(item)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
   }
 
   private async createUniqueCodes(tx: Prisma.TransactionClient, quantity: number) {

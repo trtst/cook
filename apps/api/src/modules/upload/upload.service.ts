@@ -182,14 +182,6 @@ export class UploadService {
     return `${protocol}://${host}${path}`;
   }
 
-  buildDiningGroupCoverUrl(request: RequestLike, diningGroupId: UUID, updatedAt: Date) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/dining-group-covers/${encodeURIComponent(String(diningGroupId))}?v=${encodeURIComponent(updatedAt.toISOString())}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
-  }
-
   buildDiningEventCoverUrl(request: RequestLike, eventId: UUID, updatedAt: Date) {
     const protocol = request.protocol || "http";
     const host = request.get?.("host");
@@ -323,24 +315,6 @@ export class UploadService {
     }
   }
 
-  async storeDiningGroupCover(file: FileUpload, diningGroupId: UUID) {
-    const imageMeta = detectImageMeta(file);
-    const tempPath = await this.writeTempFile(file.buffer as Buffer, imageMeta.extension);
-    const storageKey = this.buildDiningGroupCoverStorageKey(diningGroupId);
-
-    try {
-      await this.moveTempFile(tempPath, storageKey);
-      return {
-        storageKey,
-        contentType: imageMeta.contentType,
-        sizeBytes: file.size as number
-      };
-    } catch (error) {
-      await rm(tempPath, { force: true });
-      throw error;
-    }
-  }
-
   async storeDiningEventCover(file: FileUpload, eventId: UUID) {
     const imageMeta = detectImageMeta(file);
     const tempPath = await this.writeTempFile(file.buffer as Buffer, imageMeta.extension);
@@ -356,35 +330,6 @@ export class UploadService {
     } catch (error) {
       await rm(tempPath, { force: true });
       throw error;
-    }
-  }
-
-  async getDiningGroupCoverAsset(diningGroupId: UUID) {
-    const diningGroup = await this.prisma.diningGroup.findFirst({
-      where: {
-        id: diningGroupId,
-        status: "ACTIVE",
-        coverStorageKey: { not: null },
-        coverContentType: { not: null }
-      },
-      select: {
-        coverStorageKey: true,
-        coverContentType: true
-      }
-    });
-    if (!diningGroup?.coverStorageKey || !diningGroup.coverContentType) {
-      throw new NotFoundException("图片不存在");
-    }
-
-    const filePath = this.getStoragePath(diningGroup.coverStorageKey);
-    try {
-      return {
-        contentType: diningGroup.coverContentType,
-        stream: createReadStream(filePath),
-        stat: await stat(filePath)
-      };
-    } catch {
-      throw new NotFoundException("图片不存在");
     }
   }
 
@@ -593,10 +538,6 @@ export class UploadService {
   private buildDraftStorageKey(draftId: UUID, scene: UploadAssetScene, publicId: string, contentType: string) {
     const extension = getContentTypeExtension(contentType);
     return join("recipe-drafts", String(draftId), scene.toLowerCase(), `${publicId}.${extension}`);
-  }
-
-  private buildDiningGroupCoverStorageKey(diningGroupId: UUID) {
-    return join("dining-group-covers", String(diningGroupId), randomUUID());
   }
 
   private buildDiningEventCoverStorageKey(eventId: UUID) {

@@ -6,16 +6,21 @@ import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import {
+  AdminMembershipCodeGenerationQueryDto,
   AdminMembershipCodeBatchQueryDto,
   AdminMembershipCodeQueryDto,
+  AdminMembershipCodeRedemptionQueryDto,
   CreateAdminMembershipCodeBatchDto,
   GenerateAdminMembershipCodesDto,
-  SetAdminMembershipCodeBatchStatusDto
+  SetAdminMembershipCodeBatchStatusDto,
+  SetAdminMembershipSkuStatusDto
 } from "../../contracts/dtos";
 import {
+  AdminMembershipCodeGenerationItemModel,
   AdminGenerateMembershipCodesResultModel,
   AdminMembershipCodeBatchItemModel,
   AdminMembershipCodeItemModel,
+  AdminMembershipSkuItemModel,
   AdminMembershipSkuListResponseModel,
   ApiOkModel,
   ApiOkPage
@@ -33,6 +38,18 @@ export class AdminMembershipCodeController {
   @ApiOkModel(AdminMembershipSkuListResponseModel, "读取固定会员 SKU 目录")
   listSkus() {
     return this.adminMembershipCodeService.listSkus().then(result => ok(result));
+  }
+
+  @Post("skus/:skuId/status")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMembershipSkuItemModel, "切换固定会员 SKU 的核销开关")
+  setSkuStatus(
+    @Req() request: RequestWithAdmin,
+    @Param("skuId", ParseIntPipe) skuId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetAdminMembershipSkuStatusDto
+  ) {
+    return this.adminMembershipCodeService.setSkuStatus(request.admin.adminId, skuId, operationId, body).then(result => ok(result));
   }
 
   @Get("batches")
@@ -87,6 +104,29 @@ export class AdminMembershipCodeController {
   listCodes(@Query() query: AdminMembershipCodeQueryDto) {
     return this.adminMembershipCodeService
       .listCodes(query.page, query.pageSize, query.batchId, query.status, query.code)
+      .then(result => ok(result));
+  }
+
+  @Get("generations")
+  @ApiOkPage(AdminMembershipCodeGenerationItemModel, "分页读取兑换码生成记录")
+  listGenerations(@Query() query: AdminMembershipCodeGenerationQueryDto) {
+    return this.adminMembershipCodeService
+      .listGenerations(query.page, query.pageSize, query.batchId, query.skuCode)
+      .then(result => ok(result));
+  }
+
+  @Get("redemptions")
+  @ApiOkPage(AdminMembershipCodeItemModel, "分页读取兑换码核销记录")
+  listRedemptions(@Query() query: AdminMembershipCodeRedemptionQueryDto) {
+    return this.adminMembershipCodeService
+      .listRedemptions(query.page, query.pageSize, {
+        batchId: query.batchId,
+        skuCode: query.skuCode,
+        uid: query.uid,
+        redeemedFrom: query.redeemedFrom,
+        redeemedTo: query.redeemedTo,
+        code: query.code
+      })
       .then(result => ok(result));
   }
 

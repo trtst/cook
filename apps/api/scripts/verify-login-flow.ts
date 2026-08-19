@@ -1,4 +1,5 @@
 import { PrismaClient, type UserStatus } from "@prisma/client";
+import { maskPhone } from "../src/common/phone";
 import type { MeResponse, PasswordLoginResult, RefreshSessionResult } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 import { APP_NAME } from "../src/config/app";
@@ -97,7 +98,7 @@ async function main() {
     });
     assert(updatedUser.nickname === nickname, "nickname update failed");
     assert(updatedUser.avatarUrl === "https://example.com/avatar.png", "avatarUrl update failed");
-    assert(updatedUser.phone === ownerPhone, "phone should stay unchanged");
+    assert(updatedUser.phone === maskPhone(ownerPhone), "phone should stay masked");
 
     const refreshed = await requestData<RefreshSessionResult>("/auth/refresh", {
       method: "POST",
@@ -138,7 +139,7 @@ async function main() {
           disabledMeStatus: disabledMe.status,
           nicknameUpdated: updatedUser.nickname === nickname,
           oldPhoneFieldStatus: oldFieldUpdate.status,
-          phoneUnchanged: updatedUser.phone === ownerPhone
+          phoneMasked: updatedUser.phone === maskPhone(ownerPhone)
         },
         null,
         2

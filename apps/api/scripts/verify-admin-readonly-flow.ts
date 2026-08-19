@@ -1,10 +1,10 @@
 import type {
   AdminDashboardSummary,
-  AdminDiningGroupSummary,
   AdminUserEntitlementResponse,
   PageResult,
   UserProfile
 } from "../src/contracts/types";
+import { maskPhone } from "../src/common/phone";
 import { loadLocalEnv } from "../src/common/load-env";
 
 loadLocalEnv();
@@ -87,21 +87,14 @@ async function main() {
   const users = await requestData<PageResult<UserProfile>>("/admin/users?page=1&pageSize=100", {
     headers: { authorization }
   });
-  const ownerUser = users.items.find(item => item.phone === ownerPhone);
+  const ownerUser = users.items.find(item => item.phone === maskPhone(ownerPhone));
   assert(ownerUser, "admin users list missing owner user");
-
-  const diningGroups = await requestData<PageResult<AdminDiningGroupSummary>>("/admin/dining-groups?page=1&pageSize=100", {
-    headers: { authorization }
-  });
-  assert(diningGroups.items.length > 0, "admin dining groups should not be empty");
-  assert(diningGroups.items.every(item => item.status === "ACTIVE" || item.status === "ARCHIVED"), "unexpected dining group status");
 
   const entitlements = await requestData<AdminUserEntitlementResponse>(`/admin/user-entitlements?userId=${ownerUser.id}`, {
     headers: { authorization }
   });
   assert(entitlements.user.id === ownerUser.id, "admin entitlement user mismatch");
   assert(entitlements.membership.tier.length > 0, "admin membership tier missing");
-  assert(Array.isArray(entitlements.diningGroups), "admin dining groups summary missing");
   assert(entitlements.storage.calculatedAt.length > 0, "admin storage summary missing calculation time");
 
   console.log(
@@ -114,9 +107,8 @@ async function main() {
         dashboardOpenReports: dashboard.recipe.openReportCount,
         dashboardUnitCount: dashboard.ingredient.unitCount,
         usersTotal: users.total,
-        diningGroupsTotal: diningGroups.total,
         ownerTier: entitlements.membership.tier,
-        ownerRelationCount: entitlements.diningGroups.length
+        storageState: entitlements.storage.state
       },
       null,
       2
