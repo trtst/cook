@@ -5,7 +5,5 @@
  * 不要在这个文件里新增运行时逻辑，避免把模块初始化顺序复杂化。
  */
 export { authApi } from "./auth";
-export { diningGroupApi } from "./dining-group";
-export { pollApi } from "./poll";
 export { recipeApi } from "./recipe";
 export { userApi } from "./user";

@@ -74,6 +74,9 @@ interface ClientPlatform {
 		confirm(options: ConfirmOptions): Promise<boolean>;
 		hideKeyboard(): Promise<void>;
 	};
+	auth: {
+		login(): Promise<LoginCodeResult>;
+	};
 	/**
 	 * 剪贴板能力。
 	 * 目前只需要写入；读取能力没有真实场景时不提前增加。
@@ -207,6 +210,10 @@ interface SaveFileResult {
 	savedFilePath: string;
 }
 
+interface LoginCodeResult {
+	code: string;
+}
+
 type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 interface UniSystemApi {
@@ -311,6 +318,29 @@ function pageScrollTo(options: { selector?: string; scrollTop?: number; offsetTo
 function hideKeyboard() {
 	return Promise.resolve().then(() => {
 		uni.hideKeyboard();
+	});
+}
+
+function login() {
+	return callUni<LoginCodeResult>((resolve, reject) => {
+		if (getRuntimeChannel() !== "mini_program") {
+			reject(new Error("当前环境不支持微信登录"));
+			return;
+		}
+
+		uni.login({
+			provider: "weixin",
+			success: (result: { code?: string }) => {
+				const code = typeof result.code === "string" ? result.code.trim() : "";
+				if (!code) {
+					reject(new Error("微信登录失败，请重试"));
+					return;
+				}
+
+				resolve({ code });
+			},
+			fail: reject
+		});
 	});
 }
 
@@ -611,6 +641,9 @@ export const uniPlatform: ClientPlatform = {
 		toast: showToast,
 		confirm: showConfirm,
 		hideKeyboard
+	},
+	auth: {
+		login
 	},
 	clipboard: {
 		set: setClipboardData

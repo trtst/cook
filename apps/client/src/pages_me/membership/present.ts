@@ -8,9 +8,7 @@ export interface TierPolicyCard {
   summary: string;
   recipeLimit: string;
   storageLimit: string;
-  inviteLimit: string;
-  joinLimit: string;
-  memberLimit: string;
+  displayPolicy: string;
   recyclePolicy: string;
   adPolicy: string;
   notes: string[];
@@ -41,22 +39,18 @@ export const tierPolicyCards: TierPolicyCard[] = [
     summary: "保留基础做饭闭环与基础广告位。",
     recipeLimit: "50 道菜谱",
     storageLimit: "100 MB",
-    inviteLimit: "自己饭搭子可邀请 1 人",
-    joinLimit: "最多加入 1 个饭搭子",
-    memberLimit: "自己饭搭子最多 2 人",
+    displayPolicy: "默认样式与基础页面壳子",
     recyclePolicy: "删除后直接永久删除",
     adPolicy: "展示普通被动广告位，可主动看激励广告",
-    notes: ["无我的页背景图", "无首页背景图", "无饭搭子主页主图"]
+    notes: ["无我的页背景图", "无首页背景图", "不开放额外展示资源"]
   },
   {
     tier: "PLUS",
     title: "Plus",
-    summary: "扩展个人容量与协作规模，减少高打扰广告位。",
+    summary: "扩展个人容量与基础展示权益，减少高打扰广告位。",
     recipeLimit: "120 道菜谱",
     storageLimit: "300 MB",
-    inviteLimit: "自己饭搭子可邀请 3 人",
-    joinLimit: "最多加入 2 个饭搭子",
-    memberLimit: "自己饭搭子最多 4 人",
+    displayPolicy: "开放我的页背景图与基础主题皮肤",
     recyclePolicy: "回收站保留 3 天",
     adPolicy: "减少高打扰被动广告位，激励广告仍可主动触发",
     notes: ["开放我的页背景图", "开放基础主题皮肤", "首页背景图仍关闭"]
@@ -67,12 +61,10 @@ export const tierPolicyCards: TierPolicyCard[] = [
     summary: "当前主推正式会员，开放完整个人展示权益。",
     recipeLimit: "200 道菜谱",
     storageLimit: "500 MB",
-    inviteLimit: "自己饭搭子可邀请 5 人",
-    joinLimit: "最多加入 4 个饭搭子",
-    memberLimit: "自己饭搭子最多 6 人",
+    displayPolicy: "开放首页背景图与完整个人展示",
     recyclePolicy: "回收站保留 5 天",
     adPolicy: "默认不展示被动广告位，激励广告仅在用户主动领取额外次数时出现",
-    notes: ["开放首页背景图", "开放饭搭子主页主图", "当前体验码固定映射到 Pro"]
+    notes: ["开放首页背景图", "开放完整个人展示资源", "当前体验码固定映射到 Pro"]
   },
   {
     tier: "ULTRA",
@@ -80,9 +72,7 @@ export const tierPolicyCards: TierPolicyCard[] = [
     summary: "保留更高档位能力，当前不作为首发销售入口。",
     recipeLimit: "350 道菜谱",
     storageLimit: "2 GB",
-    inviteLimit: "自己饭搭子可邀请 10 人",
-    joinLimit: "最多加入 6 个饭搭子",
-    memberLimit: "自己饭搭子最多 11 人",
+    displayPolicy: "开放全部展示资源与更高容量",
     recyclePolicy: "回收站保留 7 天",
     adPolicy: "默认不展示被动广告位",
     notes: ["开放全部主题资源", "开放全部个性化展示资源", "当前不在兑换码首发范围内"]
@@ -97,10 +87,9 @@ export const trialRules = [
 ] as const;
 
 export const redeemRules = [
-  "当前首发只开放 Plus 月卡与 Pro 月卡核销。",
-  "季卡 / 年卡可以预建 SKU，但在未上架且未开放核销时，输入兑换码也必须失败。",
-  "核销成功后的最终事实只写当前用户有效会员，不把权益外溢到饭搭子成员。",
-  "兑换码失败统一返回“兑换码无效或不可用”，不暴露已使用、已停用或超过体验上限等内部状态。"
+  "兑换成功后，会员时长到账当前登录账号。",
+  "正式码 30 天内同一账号只可成功兑换 1 次。",
+  "兑换失败按业务提示返回。"
 ] as const;
 
 export const creditRules = [

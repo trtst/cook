@@ -124,8 +124,9 @@ function buildThemeVars(seed: ThemeSeed, themeMode: EffectiveTheme): ThemeVars {
   const ink = themeMode === "dark" ? "#f5efe8" : "#1b1b1b";
   const breakfast = mixColor(accent, "#d9902f", themeMode === "dark" ? 0.44 : 0.38);
   const lunch = mixColor(seed.primary, "#216e4e", themeMode === "dark" ? 0.24 : 0.18);
+  const afternoonTea = mixColor("#d9902f", "#326fa8", themeMode === "dark" ? 0.32 : 0.28);
   const dinner = mixColor("#f47c35", accent, themeMode === "dark" ? 0.24 : 0.2);
-  const extra = mixColor(secondaryText, accent, themeMode === "dark" ? 0.24 : 0.18);
+  const lateNight = mixColor("#326fa8", seed.primary, themeMode === "dark" ? 0.3 : 0.28);
 
   return {
     "--theme-bg": seed.bg,
@@ -160,10 +161,12 @@ function buildThemeVars(seed: ThemeSeed, themeMode: EffectiveTheme): ThemeVars {
     "--meal-slot-breakfast-soft": mixColor(seed.surface, breakfast, themeMode === "dark" ? 0.22 : 0.16),
     "--meal-slot-lunch": lunch,
     "--meal-slot-lunch-soft": mixColor(seed.surface, lunch, themeMode === "dark" ? 0.22 : 0.16),
+    "--meal-slot-afternoon-tea": afternoonTea,
+    "--meal-slot-afternoon-tea-soft": mixColor(seed.surface, afternoonTea, themeMode === "dark" ? 0.22 : 0.16),
     "--meal-slot-dinner": dinner,
     "--meal-slot-dinner-soft": mixColor(seed.surface, dinner, themeMode === "dark" ? 0.22 : 0.16),
-    "--meal-slot-extra": extra,
-    "--meal-slot-extra-soft": mixColor(seed.surface, extra, themeMode === "dark" ? 0.2 : 0.14),
+    "--meal-slot-late-night": lateNight,
+    "--meal-slot-late-night-soft": mixColor(seed.surface, lateNight, themeMode === "dark" ? 0.2 : 0.14),
     "--login-popup-backdrop-bg": toRgba(themeMode === "dark" ? "#050908" : seed.text, themeMode === "dark" ? 0.48 : 0.32),
     "--login-popup-hero-copy": seed.text,
     "--login-popup-hero-copy-secondary": secondaryText,

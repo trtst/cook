@@ -69,20 +69,20 @@
 				<template v-else>
 					<view class="overview-grid">
 						<view class="dining-card" hover-class="is-pressed" hover-stay-time="100"
-							@click="handleDiningGroupManage">
+							@click="handleMealHubOpen">
 							<view class="overview-heading">
-								<text class="overview-heading__title">饭搭子</text>
-								<text class="overview-heading__arrow">›</text>
+								<text class="overview-heading__title">饭局</text>
+								<text class="overview-heading__arrow cookfont icon-back" />
 							</view>
-							<text class="dining-card__description">一起决定下一顿吃什么</text>
+							<text class="dining-card__description">发起、查看和收口最近的饭局</text>
 
-							<view v-if="hasDiningGroup" class="dining-card__summary">
-								<text class="dining-card__count">{{ diningGroupCountText }}</text>
-								<text class="dining-card__current">{{ diningGroupCurrentText }}</text>
+							<view v-if="sessionStore.isLoggedIn" class="dining-card__summary">
+								<text class="dining-card__count">{{ mealHubTitle }}</text>
+								<text class="dining-card__current">{{ mealHubDescription }}</text>
 							</view>
 							<template v-else>
-								<text class="dining-card__status">未开启</text>
-								<text class="dining-card__invite">{{ diningGroupInviteText }}</text>
+								<text class="dining-card__status">去看看</text>
+								<text class="dining-card__invite">登录后查看你发起的和你参加的饭局。</text>
 							</template>
 						</view>
 
@@ -110,7 +110,7 @@
 									<text class="service-row__title">权益中心</text>
 									<text class="service-row__description">查看当前会员、体验码与广告减免规则</text>
 								</view>
-								<text class="service-row__arrow">›</text>
+								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMembershipCode">
 								<view class="service-row__icon-wrap service-row__icon-wrap--membership">
@@ -120,7 +120,7 @@
 									<text class="service-row__title">会员兑换码</text>
 									<text class="service-row__description">站外购买后，在这里输入兑换码到账</text>
 								</view>
-								<text class="service-row__arrow">›</text>
+								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 						</view>
 					</view>
@@ -138,7 +138,7 @@
 									<text v-if="item.description" class="service-row__description">{{ item.description
 										}}</text>
 								</view>
-								<text class="service-row__arrow">›</text>
+								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 						</view>
 					</view>
@@ -160,69 +160,32 @@
 					<view class="service-section">
 						<text class="service-section__title">设置与支持</text>
 						<view class="service-list">
-							<view class="service-row" hover-class="is-pressed" hover-stay-time="100"
-								@click="themePanelOpen = !themePanelOpen">
-								<view class="service-row__icon-wrap">
-									<image class="service-row__icon" :src="themeIcon" mode="aspectFit" />
-								</view>
-								<view class="service-row__copy">
-									<text class="service-row__title">皮肤主题</text>
-									<text class="service-row__description">{{ currentThemeText }}</text>
-								</view>
-								<text class="service-row__arrow"
-									:class="{ 'service-row__arrow--open': themePanelOpen }">›</text>
-							</view>
-
-							<view v-if="themePanelOpen" class="theme-panel">
-								<view class="theme-group">
-									<text class="theme-group__label">显示模式</text>
-									<view class="option-row">
-										<view v-for="option in themeModeOptions" :key="option.value" class="option-chip"
-											:class="{ 'option-chip--active': option.value === themeMode }"
-											hover-class="is-pressed" hover-stay-time="100"
-											@click="handleThemeModeChange(option.value)">
-											<text class="option-chip__text">{{ option.label }}</text>
-										</view>
+							<template v-for="item in settingEntries" :key="item.title">
+								<button v-if="item.openType === 'contact'" class="service-row service-row-button" open-type="contact"
+									hover-class="is-pressed" hover-stay-time="100" session-from="source=me-settings">
+									<view class="service-row__icon-wrap">
+										<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
 									</view>
-								</view>
-
-								<view class="theme-group">
-									<text class="theme-group__label">皮肤风格</text>
-									<view class="option-row">
-										<view v-for="option in skinOptions" :key="option.value" class="option-chip"
-											:class="{ 'option-chip--active': option.value === effectiveSkin }"
-											hover-class="is-pressed" hover-stay-time="100"
-											@click="handleSkinChange(option.value)">
-											<text class="option-chip__text">{{ option.label }}</text>
-										</view>
+									<view class="service-row__copy">
+										<text class="service-row__title">{{ item.title }}</text>
 									</view>
-								</view>
+									<text class="service-row__arrow cookfont icon-back" />
+								</button>
 
-								<view v-if="canSwitchPalette" class="theme-group">
-									<text class="theme-group__label">色系</text>
-									<view class="option-row">
-										<view v-for="palette in supportedPalettes" :key="palette" class="option-chip"
-											:class="{ 'option-chip--active': palette === effectivePalette }"
-											hover-class="is-pressed" hover-stay-time="100"
-											@click="handlePaletteChange(palette)">
-											<text class="option-chip__text">{{ paletteLabels[palette] }}</text>
-										</view>
+								<view v-else class="service-row" hover-class="is-pressed" hover-stay-time="100"
+									@click="handleEntryClick(item)">
+									<view class="service-row__icon-wrap">
+										<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
 									</view>
+									<view class="service-row__copy">
+										<text class="service-row__title">{{ item.title }}</text>
+									</view>
+									<text class="service-row__arrow cookfont icon-back" />
 								</view>
-							</view>
-
-							<view v-for="item in visibleSettingEntries" :key="item.title" class="service-row"
-								hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(item)">
-								<view class="service-row__icon-wrap">
-									<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
-								</view>
-								<view class="service-row__copy">
-									<text class="service-row__title">{{ item.title }}</text>
-									<text v-if="item.description" class="service-row__description">{{ item.description
-										}}</text>
-								</view>
-								<text class="service-row__arrow">›</text>
-							</view>
+							</template>
+						</view>
+						<view class="service-version">
+							<text class="service-version__text">-- Ver {{ APP_VERSION }} --</text>
 						</view>
 					</view>
 				</template>
@@ -255,48 +218,6 @@
 				</view>
 			</view>
 
-			<view v-if="passwordEditorOpen" class="profile-modal" @click="closePasswordEditor" @touchmove.stop.prevent>
-				<view class="profile-modal__panel" @click.stop>
-					<view class="profile-modal__header">
-						<text class="profile-modal__title">修改密码</text>
-						<text class="profile-modal__close" @click="closePasswordEditor">×</text>
-					</view>
-
-					<view class="password-form">
-						<view class="password-form__field">
-							<text class="password-form__label">当前密码</text>
-							<input v-model="currentPasswordDraft" class="password-form__input" password maxlength="128"
-								placeholder="请输入当前密码" :disabled="passwordSaving" />
-						</view>
-
-						<view class="password-form__field">
-							<text class="password-form__label">新密码</text>
-							<input v-model="nextPasswordDraft" class="password-form__input" password maxlength="128"
-								placeholder="请输入新密码，至少 6 位" :disabled="passwordSaving" />
-						</view>
-
-						<view class="password-form__field">
-							<text class="password-form__label">确认新密码</text>
-							<input v-model="confirmPasswordDraft" class="password-form__input" password maxlength="128"
-								placeholder="请再次输入新密码" :disabled="passwordSaving" />
-						</view>
-
-						<text v-if="passwordEditErrorText" class="password-form__error">{{ passwordEditErrorText
-							}}</text>
-					</view>
-
-					<view class="profile-modal__actions">
-						<button class="profile-modal__button profile-modal__button--ghost" :disabled="passwordSaving"
-							@click="closePasswordEditor">
-							取消
-						</button>
-						<button class="profile-modal__button profile-modal__button--primary" :loading="passwordSaving"
-							:disabled="passwordSaving" @click="savePassword">
-							保存
-						</button>
-					</view>
-				</view>
-			</view>
 		</scroll-view>
 	</Layout>
 </template>
@@ -304,7 +225,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { ApiClientError } from "@/apis/http";
 import aboutIcon from "@/assets/me-actions/about.svg";
 import categoriesUnitsIcon from "@/assets/me-actions/categories-units.svg";
 import cookingSkillsIcon from "@/assets/me-actions/cooking-skills.svg";
@@ -312,13 +232,12 @@ import cookwareIcon from "@/assets/me-actions/cookware.svg";
 import diningEventIcon from "@/assets/me-actions/dining-event.svg";
 import feedbackIcon from "@/assets/me-actions/feedback.svg";
 import kitchenPrepIcon from "@/assets/me-actions/kitchen-prep.svg";
-import logoutIcon from "@/assets/me-actions/logout.svg";
 import mealPlanIcon from "@/assets/me-actions/meal-plan.svg";
 import notificationsIcon from "@/assets/me-actions/notifications.svg";
 import pantryIcon from "@/assets/me-actions/pantry.svg";
-import passwordIcon from "@/assets/me-actions/password.svg";
 import privacyIcon from "@/assets/me-actions/privacy.svg";
 import recipeSkillsIcon from "@/assets/me-actions/recipe-skills.svg";
+import remindersIcon from "@/assets/me-actions/reminders.svg";
 import shoppingListIcon from "@/assets/me-actions/shopping-list.svg";
 import tasteIcon from "@/assets/me-actions/taste.svg";
 import themeIcon from "@/assets/me-actions/theme.svg";
@@ -332,22 +251,20 @@ import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
-import { APP_NAME } from "@/config";
-import { useDiningGroupStore } from "@/stores/dining-group";
+import { APP_NAME, APP_VERSION } from "@/config/app";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
-import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
-import { clearLocalClientCache, clearUserSessionState } from "@/utils/session-cleanup";
+import type { ThemePalette } from "@/themes";
 import { restoreAppSession } from "@/utils/session";
 
 interface PageEntry {
 	title: string;
 	iconSrc: string;
 	url?: string;
+	openType?: "contact";
 	disabledText?: string;
 	description?: string;
-	action?: "logout" | "change-password" | "clear-cache";
 	requiresLogin?: boolean;
 }
 
@@ -355,34 +272,16 @@ const pageStyle = usePageScrollStyle();
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
-const diningGroupStore = useDiningGroupStore();
 const loginModalStore = useLoginModalStore();
-const {
-	effectiveSkin,
-	effectivePalette,
-	themeMode,
-	supportedPalettes,
-	canSwitchPalette,
-	setThemeMode,
-	setThemeSkin,
-	setThemePalette
-} = useTheme();
+const { effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
 const { navBarTotalHeight } = useSystemInfo();
 
 const profileLoading = ref(false);
-const themePanelOpen = ref(false);
 const profileEditorOpen = ref(false);
 const profileSaving = ref(false);
-const passwordEditorOpen = ref(false);
-const passwordSaving = ref(false);
 const medalCount = ref<number | null>(null);
 const profileNameDraft = ref("");
 const profileEditErrorText = ref("");
-const currentPasswordDraft = ref("");
-const nextPasswordDraft = ref("");
-const confirmPasswordDraft = ref("");
-const passwordEditErrorText = ref("");
-const skinOptions = THEME_SKIN_OPTIONS;
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
@@ -390,13 +289,11 @@ let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 let loadMedalsPromise: Promise<void> | null = null;
 
-const currentRelation = computed(() => diningGroupStore.currentRelationSummary);
-const relationUsage = computed(() => diningGroupStore.relationUsage);
 const profileHeroStyle = computed(() => ({
 	"--profile-hero-padding-top": `${navBarTotalHeight.value}px`
 }));
 watch(
-	() => profileEditorOpen.value || passwordEditorOpen.value,
+	() => profileEditorOpen.value,
 	(visible) => {
 		setPageLocked(visible);
 	},
@@ -415,21 +312,11 @@ const profileAvatarText = computed(() => {
 const profileUidText = computed(() =>
 	sessionStore.isLoggedIn ? `UID: ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
-const hasDiningGroup = computed(() => Boolean(currentRelation.value && relationUsage.value));
-const diningGroupCountText = computed(() => {
-	if (!relationUsage.value) return "已加入 0 个";
-	return `已加入 ${relationUsage.value.joinedCount} 个`;
-});
-const diningGroupCurrentText = computed(() => {
-	if (!currentRelation.value) return "";
-	return `当前：${currentRelation.value.name} · ${getRoleText(currentRelation.value.myRole)}`;
-});
-const diningGroupInviteText = computed(() => {
-	return "开启后可以邀请饭搭子一起定下一顿吃什么。";
-});
+const mealHubTitle = computed(() => "发起和查看最近饭局");
+const mealHubDescription = computed(() => "菜单、参与人和回忆都会收在这里。");
 const currentThemeText = computed(() => {
 	const modeLabel = themeModeLabels[themeMode.value];
-	const skinLabel = skinOptions.find((item) => item.value === effectiveSkin.value)?.label || "基础";
+	const skinLabel = skinLabelMap[effectiveSkin.value] || "基础";
 	if (!canSwitchPalette.value) return `${modeLabel} · ${skinLabel}`;
 	return `${modeLabel} · ${skinLabel} · ${paletteLabels[effectivePalette.value]}`;
 });
@@ -439,11 +326,12 @@ const themeModeLabels = {
 	light: "浅色",
 	dark: "深色"
 } as const;
-const themeModeOptions = [
-	{ label: "跟随系统", value: "system" },
-	{ label: "浅色", value: "light" },
-	{ label: "深色", value: "dark" }
-] as const;
+const skinLabelMap = {
+	default: "基础",
+	"apple-glass": "玻璃",
+	"warm-couple": "暖调",
+	"handdrawn-food": "手绘"
+} as const;
 const paletteLabels: Record<ThemePalette, string> = {
 	default: "默认",
 	warm: "暖黄",
@@ -524,69 +412,55 @@ const knowledgeEntries: PageEntry[] = [
 	}
 ];
 
-const accountSettingEntries: PageEntry[] = [
+const settingEntries = computed<PageEntry[]>(() => [
 	{
-		title: "修改密码",
-		iconSrc: passwordIcon,
-		description: "更新当前账号登录密码",
-		action: "change-password"
-	}
-];
-
-const supportSettingEntries: PageEntry[] = [
-	{
-		title: "清除缓存",
-		iconSrc: privacyIcon,
-		description: "清除本地资料缓存和菜谱编辑缓存",
-		action: "clear-cache"
+		title: "提醒设置",
+		iconSrc: remindersIcon,
+		description: "进入提醒设置页查看当前提醒入口",
+		url: "/pages_me/reminder/index"
 	},
 	{
-		title: "隐私保护",
-		iconSrc: privacyIcon,
-		url: "/pages_web/content/index?slug=privacy",
+		title: "主题皮肤",
+		iconSrc: themeIcon,
+		description: currentThemeText.value,
+		url: "/pages_me/theme/index",
 		requiresLogin: false
 	},
 	{
-		title: "帮助与反馈",
+		title: "在线客服",
 		iconSrc: feedbackIcon,
-		description: "常见问题与当前内容说明",
-		url: "/pages_web/content/index?slug=faq",
+		description: "直接进入微信客服会话",
+		openType: "contact",
+		requiresLogin: false
+	},
+	{
+		title: "账号设置",
+		iconSrc: notificationsIcon,
+		description: sessionStore.isLoggedIn ? "清除缓存与退出登录" : "登录后管理当前账号",
+		url: "/pages_me/account/index"
+	},
+	{
+		title: "隐私政策",
+		iconSrc: privacyIcon,
+		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/privacy")}`,
+		requiresLogin: false
+	},
+	{
+		title: "用户协议",
+		iconSrc: privacyIcon,
+		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/terms")}`,
 		requiresLogin: false
 	},
 	{
 		title: `关于${APP_NAME}`,
 		iconSrc: aboutIcon,
-		url: "/pages_web/content/index?slug=about",
+		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/about")}`,
 		requiresLogin: false
 	}
-];
-
-const visibleSettingEntries = computed(() => {
-	const entries = sessionStore.isLoggedIn ? [...accountSettingEntries, ...supportSettingEntries] : supportSettingEntries;
-
-	if (!sessionStore.isLoggedIn) {
-		return entries;
-	}
-
-	return [
-		...entries,
-		{
-			title: "退出登录",
-			iconSrc: logoutIcon,
-			description: "清除当前账号会话",
-			action: "logout" as const
-		}
-	];
-});
-
-function getRoleText(role?: "OWNER" | "ADMIN" | "MEMBER") {
-	if (role === "OWNER") return "主理人";
-	if (role === "ADMIN") return "管理员";
-	return "成员";
-}
+]);
 
 function isDisabledEntry(entry: PageEntry) {
-	return Boolean(entry.disabledText && !entry.url && !entry.action);
+	return Boolean(entry.disabledText && !entry.url && !entry.openType);
 }
 
 onShow(() => {
@@ -598,7 +472,7 @@ async function syncPageState() {
 		await restoreAppSession();
 		restoredOnce = true;
 
-		if (sessionStore.isLoggedIn && userStore.profile && diningGroupStore.hasCurrentContext) {
+		if (sessionStore.isLoggedIn && userStore.profile) {
 			profileLoading.value = false;
 			return;
 		}
@@ -630,28 +504,23 @@ async function loadMe() {
 
 async function doLoadMe() {
 	const shouldLoadProfile = !userStore.profile;
-	const shouldLoadDiningGroup = !diningGroupStore.hasCurrentContext;
 
-	if (!shouldLoadProfile && !shouldLoadDiningGroup) {
+	if (!shouldLoadProfile) {
 		profileLoading.value = false;
 		return;
 	}
 
 	profileLoading.value = true;
 
-	const [profileResult, diningGroupResult] = await Promise.allSettled([
-		shouldLoadProfile ? userApi.getCurrent() : Promise.resolve(null),
-		shouldLoadDiningGroup ? diningGroupStore.refreshCurrent() : Promise.resolve()
+	const [profileResult] = await Promise.allSettled([
+		shouldLoadProfile ? userApi.getCurrent() : Promise.resolve(null)
 	]);
 
 	if (shouldLoadProfile && profileResult.status === "fulfilled" && profileResult.value) {
 		userStore.setProfile(profileResult.value);
 	}
 
-	if (
-		(shouldLoadProfile && profileResult.status === "rejected") ||
-		(shouldLoadDiningGroup && diningGroupResult.status === "rejected")
-	) {
+	if (shouldLoadProfile && profileResult.status === "rejected") {
 		await uniPlatform.feedback.toast({
 			title: "部分信息加载失败，请稍后重试",
 			icon: "none"
@@ -684,20 +553,8 @@ async function doLoadMedals() {
 	}
 }
 
-async function handleSkinChange(skin: ThemeSkin) {
-	await setThemeSkin(skin);
-}
-
-async function handleThemeModeChange(mode: (typeof themeModeOptions)[number]["value"]) {
-	await setThemeMode(mode);
-}
-
-async function handlePaletteChange(palette: ThemePalette) {
-	await setThemePalette(palette);
-}
-
-function handleDiningGroupManage() {
-	navigateTo("/pages_restaurant/members/index");
+function handleMealHubOpen() {
+	requireLogin(() => navigateTo("/pages_meal/event/index"));
 }
 
 function handleBenefitCenter() {
@@ -709,23 +566,6 @@ function handleMembershipCode() {
 }
 
 function handleEntryClick(entry: PageEntry) {
-	if (entry.action === "change-password") {
-		requireLogin(() => {
-			openPasswordEditor();
-		});
-		return;
-	}
-
-	if (entry.action === "logout") {
-		void handleLogout();
-		return;
-	}
-
-	if (entry.action === "clear-cache") {
-		void handleClearCache();
-		return;
-	}
-
 	const openEntry = () => {
 		if (entry.url) {
 			navigateTo(entry.url);
@@ -781,17 +621,6 @@ function closeProfileEditor() {
 	profileEditErrorText.value = "";
 }
 
-function openPasswordEditor() {
-	resetPasswordForm();
-	passwordEditorOpen.value = true;
-}
-
-function closePasswordEditor() {
-	if (passwordSaving.value) return;
-	passwordEditorOpen.value = false;
-	passwordEditErrorText.value = "";
-}
-
 async function saveProfile() {
 	if (profileSaving.value) return;
 
@@ -825,68 +654,6 @@ async function saveProfile() {
 	await uniPlatform.feedback.toast({ title: "已保存", icon: "success" }).catch(() => undefined);
 }
 
-async function savePassword() {
-	if (passwordSaving.value) return;
-
-	const currentPassword = currentPasswordDraft.value;
-	const newPassword = nextPasswordDraft.value;
-	const confirmPassword = confirmPasswordDraft.value;
-	const validationError = validatePasswordForm(currentPassword, newPassword, confirmPassword);
-
-	if (validationError) {
-		passwordEditErrorText.value = validationError;
-		return;
-	}
-
-	passwordSaving.value = true;
-	passwordEditErrorText.value = "";
-
-	try {
-		await userApi.changeCurrentPassword({
-			currentPassword,
-			newPassword
-		});
-		passwordEditorOpen.value = false;
-		resetPasswordForm();
-	} catch (error) {
-		passwordEditErrorText.value = getPasswordErrorText(error);
-		return;
-	} finally {
-		passwordSaving.value = false;
-	}
-
-	await uniPlatform.feedback.toast({ title: "密码已更新", icon: "success" }).catch(() => undefined);
-}
-
-async function handleLogout() {
-	loginModalStore.close();
-	closeProfileEditor();
-	closePasswordEditor();
-	await clearUserSessionState();
-	medalCount.value = null;
-	await uniPlatform.feedback.toast({
-		title: "已退出登录",
-		icon: "success"
-	});
-}
-
-async function handleClearCache() {
-	const confirmed = await uniPlatform.feedback.confirm({
-		title: "清除缓存",
-		content: "将清除本地资料缓存和菜谱编辑缓存，不会退出登录，也不会清除主题和设备布局快照。",
-		confirmText: "清除",
-		cancelText: "取消",
-		tone: "danger"
-	}).catch(() => false);
-	if (!confirmed) return;
-
-	clearLocalClientCache();
-	await uniPlatform.feedback.toast({
-		title: "缓存已清除",
-		icon: "success"
-	});
-}
-
 function navigateTo(url: string) {
 	void uniPlatform.navigation.navigateTo(url);
 }
@@ -896,36 +663,6 @@ function showComingSoon(name: string) {
 		title: `${name}暂未开放`,
 		icon: "none"
 	});
-}
-
-function resetPasswordForm() {
-	currentPasswordDraft.value = "";
-	nextPasswordDraft.value = "";
-	confirmPasswordDraft.value = "";
-	passwordEditErrorText.value = "";
-}
-
-function validatePasswordForm(currentPassword: string, newPassword: string, confirmPassword: string) {
-	if (!currentPassword) return "请输入当前密码";
-	if (!newPassword) return "请输入新密码";
-	if (newPassword.length < 6) return "新密码至少 6 位";
-	if (newPassword === currentPassword) return "新密码不能与当前密码相同";
-	if (!confirmPassword) return "请再次输入新密码";
-	if (newPassword !== confirmPassword) return "两次输入的新密码不一致";
-	return "";
-}
-
-function getPasswordErrorText(error: unknown) {
-	if (error instanceof ApiClientError) {
-		if (error.code === 400) return error.message || "请检查密码输入";
-		if (error.code === 401) return "登录状态已失效，请重新登录";
-	}
-
-	if (error instanceof Error && error.message) {
-		return error.message;
-	}
-
-	return "修改密码失败，请稍后重试";
 }
 </script>
 
@@ -1200,7 +937,7 @@ function getPasswordErrorText(error: unknown) {
 	position: relative;
 	z-index: 2;
 	margin-top: -68rpx;
-	padding: 0 var(--space-page) calc(var(--space-lg) + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
+	padding: 0 var(--space-page) calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom));
 }
 
 .overview-grid {
@@ -1237,8 +974,9 @@ function getPasswordErrorText(error: unknown) {
 
 .overview-heading__arrow {
 	color: var(--color-text-tertiary);
-	font-size: 38rpx;
+	font-size: 24rpx;
 	line-height: 1;
+	transform: rotate(180deg);
 }
 
 .dining-card__description,
@@ -1369,8 +1107,26 @@ function getPasswordErrorText(error: unknown) {
 }
 
 .service-row+.service-row,
-.theme-panel+.service-row {
+.service-row-button+.service-row,
+.service-row+.service-row-button,
+.service-row-button+.service-row-button {
 	border-top: 1rpx solid var(--color-divider);
+}
+
+.service-row-button {
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	line-height: inherit;
+	text-align: left;
+}
+
+.service-row-button::after {
+	border: 0;
 }
 
 .service-row__icon-wrap {
@@ -1435,13 +1191,9 @@ function getPasswordErrorText(error: unknown) {
 	flex: 0 0 auto;
 	margin-left: var(--space-lg);
 	color: var(--color-text-tertiary);
-	font-size: 40rpx;
+	font-size: 24rpx;
 	line-height: 1;
-	transition: transform 0.2s ease;
-}
-
-.service-row__arrow--open {
-	transform: rotate(90deg);
+	transform: rotate(180deg);
 }
 
 .knowledge-grid {
@@ -1495,48 +1247,15 @@ function getPasswordErrorText(error: unknown) {
 	white-space: nowrap;
 }
 
-.theme-panel {
-	padding: 0 0 var(--space-md) 82rpx;
-	border-top: 1rpx solid var(--color-divider);
-}
-
-.theme-group {
-	margin-top: var(--space-md);
-}
-
-.theme-group__label {
-	display: block;
-	color: var(--color-text-tertiary);
-	font-size: var(--font-size-xs);
-	font-weight: var(--font-weight-semibold);
-}
-
-.option-row {
+.service-version {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-lg);
-	margin-top: var(--space-lg);
+	justify-content: center;
+	padding: var(--space-xl) 0 0;
 }
 
-.option-chip {
-	display: flex;
-	align-items: center;
-	min-height: 54rpx;
-	padding: 0 20rpx;
-	border: 1rpx solid var(--color-border);
-	border-radius: var(--radius-pill);
-	background: var(--color-surface-muted);
-}
-
-.option-chip--active {
-	border-color: var(--color-primary);
-	background: var(--color-primary-soft);
-}
-
-.option-chip__text {
-	color: var(--color-text-secondary);
-	font-size: var(--font-size-xs);
-	font-weight: var(--font-weight-semibold);
+.service-version__text {
+	color: color-mix(in srgb, var(--color-text-tertiary) 46%, var(--color-page));
+	font-size: var(--font-size-md);
 }
 
 .option-chip--active .option-chip__text {

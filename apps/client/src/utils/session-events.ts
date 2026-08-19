@@ -1,11 +1,11 @@
-import type { CodeLoginResult } from "@/apis/auth";
+import type { AuthSessionResult } from "@/apis/auth";
 
 type SessionClearedHandler = () => Promise<void> | void;
 type LoginSuccessHandler = (payload: LoginSuccessPayload) => Promise<void> | void;
 
 export interface LoginSuccessPayload {
 	sourceId: string | null;
-	session: CodeLoginResult;
+	session: AuthSessionResult;
 }
 
 // 会话被清空后，其他模块需要跟着清理本地状态。

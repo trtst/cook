@@ -10,8 +10,8 @@
     navbar-layout="custom-left"
   >
     <template #navbar-left>
-      <view class="table-nav__selector" hover-class="table-nav__selector--hover" hover-stay-time="100" @click="navigateTo('/pages_restaurant/members/index')">
-        <text class="restaurant-bar__label">当前关系</text>
+      <view class="table-nav__selector">
+        <text class="restaurant-bar__label">当前安排</text>
         <text class="restaurant-bar__name">{{ restaurantName }}</text>
       </view>
     </template>
@@ -143,93 +143,6 @@
             </view>
           </view>
 
-          <view
-            v-if="activePoll"
-            class="decision-card"
-            hover-class="decision-card--hover"
-            hover-stay-time="100"
-            @click="navigateTo(`/pages_meal/poll/index?pollId=${encodeURIComponent(String(activePoll.id))}`)"
-          >
-            <view class="decision-card__header">
-              <view>
-                <text class="decision-card__label">当前征集</text>
-                <text class="decision-card__title">{{ activePoll.title }}</text>
-              </view>
-              <view class="decision-card__badge">
-                <text class="decision-card__badge-text">{{ pollStatusText }}</text>
-              </view>
-            </view>
-
-            <view class="decision-summary">
-              <view class="decision-summary__item">
-                <text class="decision-summary__label">餐次</text>
-                <text class="decision-summary__value">{{ formatMealSlot(activePoll.mealSlot) }}</text>
-              </view>
-              <view class="decision-summary__item">
-                <text class="decision-summary__label">候选菜</text>
-                <text class="decision-summary__value">{{ activePoll.candidateCount }} 道</text>
-              </view>
-              <view class="decision-summary__item">
-                <text class="decision-summary__label">已回应</text>
-                <text class="decision-summary__value">{{ activePoll.responseCount }} 人</text>
-              </view>
-            </view>
-
-            <view class="decision-progress">
-              <view class="decision-progress__track">
-                <view class="decision-progress__value" :style="{ width: progressWidth }" />
-              </view>
-              <text class="decision-progress__text">{{ progressText }}</text>
-            </view>
-
-            <view class="decision-card__footer">
-              <text class="decision-card__hint">{{ activePoll.note || "大家先投票，主理人再确认最终菜单。" }}</text>
-              <text class="decision-card__action">查看征集</text>
-            </view>
-          </view>
-
-          <view class="table-section">
-            <view class="section-heading">
-              <text class="section-heading__title">饭局动静</text>
-              <text class="section-heading__action" @click="navigateTo('/pages_meal/poll/index')">去征集</text>
-            </view>
-            <view class="family-feed">
-              <Empty
-                v-if="!sessionStore.isLoggedIn"
-                title="登录后看饭局动静"
-                description="点菜征集、菜单确认和谁来做都会显示在这里。"
-              />
-              <Empty
-                v-else-if="homeLoading && !activityItems.length"
-                title="正在同步饭局动静"
-                description="稍等一下，最近 3 到 5 条轻动态会出现在这里。"
-              />
-              <Empty
-                v-else-if="!activityItems.length"
-                title="暂无饭局动静"
-                description="有新的点菜、确认菜单或分工更新时会显示在这里。"
-              />
-              <view
-                v-for="item in activityItems"
-                v-else
-                :key="item.id"
-                class="feed-item"
-                hover-class="feed-item--hover"
-                hover-stay-time="100"
-                @click="handleActivityClick(item)"
-              >
-                <view class="feed-item__avatar" :class="resolveActivityTone(item.kind)">
-                  <text class="feed-item__avatar-text">{{ resolveActivityTag(item.kind) }}</text>
-                </view>
-                <view class="feed-item__content">
-                  <text class="feed-item__title">{{ item.title }}</text>
-                  <text class="feed-item__description">{{ resolveActivityFallback(item.kind) }}</text>
-                </view>
-                <text class="feed-item__time">{{ formatShortTime(item.createdAt) }}</text>
-              </view>
-            </view>
-          </view>
-
           <view class="pantry-panel">
             <view class="pantry-panel__header">
               <view>
@@ -259,10 +172,9 @@
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { isUniRequestBlockedError } from "@/apis/adapters/uni";
 import { homeApi, type HomeEntryItem, type HomeEntryPlacement } from "@/apis/home";
-import { pollApi, type DiningGroupActivityKind, type DiningGroupActivitySummary, type MealPollSummary } from "@/apis/poll";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
@@ -270,7 +182,6 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { APP_NAME } from "@/config";
 import { uniPlatform } from "@/platform/uni";
-import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 
@@ -278,22 +189,17 @@ const pageStyle = usePageScrollStyle();
 
 const HOME_NAV_GAP = 16;
 const HOME_NAV_FADE_DISTANCE = 96;
+const HIDDEN_HOME_TARGET_PREFIXES = ["/pages_restaurant/", "/pages_meal/poll/index", "/pages_meal/wish/index", "/pages_meal/result/index"];
 const { navBarTotalHeight } = useSystemInfo();
-const diningGroupStore = useDiningGroupStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
-const homeLoading = ref(false);
-const pollItems = ref<MealPollSummary[]>([]);
-const activityItems = ref<DiningGroupActivitySummary[]>([]);
 const homeScrollTop = ref(0);
 const homeEntriesLoading = ref(false);
 const homeEntriesLoaded = ref(false);
 const homeEntriesRequestBlocked = ref(false);
 const featureEntryItems = ref<HomeEntryItem[]>([]);
 const quickEntryItems = ref<HomeEntryItem[]>([]);
-let homeLoadPromise: Promise<void> | null = null;
 let homeEntriesLoadPromise: Promise<void> | null = null;
-let homeLoadSeq = 0;
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
@@ -308,17 +214,13 @@ const navBackdropStyle = computed(() => ({
 }));
 
 const restaurantName = computed(() => {
-  if (!sessionStore.isLoggedIn) return "未登录";
-  return diningGroupStore.currentDiningGroup?.name ?? "饭搭子未加载";
+  if (!sessionStore.isLoggedIn) return "登录后开始安排";
+  return "饭局、计划、清单";
 });
 const memberCountText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后同步饭局和关系";
-  const count = diningGroupStore.currentDiningGroup?.memberCount;
-  if (!count) return "关系信息待加载";
-  return `${count} 人参与关系`;
+  if (!sessionStore.isLoggedIn) return "登录后同步计划和清单";
+  return "把下一顿安排起来";
 });
-const memberCountValue = computed(() => diningGroupStore.currentDiningGroup?.memberCount ?? "--");
-const activePoll = computed(() => pollItems.value[0] ?? null);
 const mainFeatureCard = computed(() => featureEntryItems.value.find(item => item.placement === "MAIN") ?? null);
 const sideFeatureCards = computed(() =>
   featureEntryItems.value
@@ -330,120 +232,20 @@ const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideF
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
 const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
-const progressWidth = computed(() => {
-  const memberCount = diningGroupStore.currentDiningGroup?.memberCount ?? 0;
-  if (!activePoll.value || memberCount <= 0) return "0%";
-  return `${Math.min(100, Math.round((activePoll.value.responseCount / memberCount) * 100))}%`;
-});
-const progressText = computed(() => {
-  if (!activePoll.value) return "暂无征集";
-  const memberCount = diningGroupStore.currentDiningGroup?.memberCount ?? 0;
-  if (memberCount <= 0) return `${activePoll.value.responseCount} 人已回应`;
-  return `${activePoll.value.responseCount}/${memberCount} 人已回应`;
-});
-const pollStatusText = computed(() => {
-  if (!activePoll.value) return "";
-  if (activePoll.value.status === "CONFIRMED") return "已确认";
-  if (activePoll.value.status === "COMPLETED") return "已完成";
-  if (activePoll.value.status === "CLOSED") return "已截止";
-  return "征集中";
-});
 
 const heroTitle = computed(() => {
   if (!sessionStore.isLoggedIn) return `${APP_NAME}从这里开始`;
-  return activePoll.value ? "这一顿大家一起定" : "今晚谁来定菜？";
+  return "先定菜单，再开饭局";
 });
 const heroDescription = computed(() =>
-  activePoll.value
-    ? `${formatMealSlot(activePoll.value.mealSlot)} · ${formatShortTime(activePoll.value.deadlineAt)} 截止`
-    : sessionStore.isLoggedIn
-      ? "还没安排饭局，先记想吃或发起点菜。"
-      : "登录后同步你的饭搭子关系、计划、购物清单和食材。"
+  sessionStore.isLoggedIn
+    ? "想吃、计划、购物和做饭记录都从这里继续。"
+    : "登录后同步你的下一餐计划、购物清单和食材。"
 );
 
 onShow(() => {
   void loadHomeEntries();
-  void loadHome();
 });
-
-watch(
-  () => sessionStore.isLoggedIn,
-  isLoggedIn => {
-    if (!isLoggedIn) clearHomeState();
-  }
-);
-
-watch(
-  () => diningGroupStore.currentDiningGroupId,
-  (nextId, prevId) => {
-    if (nextId === prevId) return;
-    clearHomeState();
-    if (sessionStore.isLoggedIn && nextId) {
-      void loadHome();
-    }
-  }
-);
-
-async function loadHome(force = false) {
-  if (!sessionStore.isLoggedIn) {
-    clearHomeState();
-    return;
-  }
-
-  if (!diningGroupStore.currentDiningGroupId || force) {
-    try {
-      await diningGroupStore.refreshCurrent();
-    } catch (error) {
-      await showLoadToast(error instanceof Error ? error.message : "饭搭子加载失败");
-    }
-  }
-
-  const diningGroupId = diningGroupStore.currentDiningGroupId;
-  if (!diningGroupId) {
-    clearHomeState();
-    return;
-  }
-
-  if (homeLoadPromise) {
-    await homeLoadPromise;
-    return;
-  }
-
-  const seq = ++homeLoadSeq;
-  homeLoading.value = true;
-  homeLoadPromise = Promise.allSettled([
-    pollApi.list({ diningGroupId, status: "OPEN", limit: 3 }),
-    pollApi.listActivities({ diningGroupId, limit: 5 })
-  ])
-    .then(async ([pollResult, activityResult]) => {
-      if (seq !== homeLoadSeq || diningGroupStore.currentDiningGroupId !== diningGroupId) return;
-
-      let errorText = "";
-      if (pollResult.status === "fulfilled") {
-        pollItems.value = pollResult.value;
-      } else {
-        pollItems.value = [];
-        errorText = pollResult.reason instanceof Error ? pollResult.reason.message : "征集加载失败";
-      }
-
-      if (activityResult.status === "fulfilled") {
-        activityItems.value = activityResult.value;
-      } else {
-        activityItems.value = [];
-        errorText ||= activityResult.reason instanceof Error ? activityResult.reason.message : "动态加载失败";
-      }
-
-      if (errorText) {
-        await showLoadToast(errorText);
-      }
-    })
-    .finally(() => {
-      if (seq === homeLoadSeq) homeLoading.value = false;
-      homeLoadPromise = null;
-    });
-
-  await homeLoadPromise;
-}
 
 async function loadHomeEntries(force = false) {
   if (homeEntriesLoadPromise) {
@@ -461,10 +263,11 @@ async function loadHomeEntries(force = false) {
   homeEntriesLoadPromise = homeApi
     .getHomeEntries()
     .then(result => {
-      featureEntryItems.value = result.items.filter(
+      const visibleItems = result.items.filter(item => isVisibleHomeEntry(item.targetValue));
+      featureEntryItems.value = visibleItems.filter(
         item => item.placement === "MAIN" || item.placement === "SIDE_TOP" || item.placement === "SIDE_BOTTOM"
       );
-      quickEntryItems.value = result.items.filter(
+      quickEntryItems.value = visibleItems.filter(
         item => item.placement === "QUICK_1" || item.placement === "QUICK_2" || item.placement === "QUICK_3" || item.placement === "QUICK_4"
       );
       homeEntriesLoaded.value = true;
@@ -489,64 +292,11 @@ async function loadHomeEntries(force = false) {
   await homeEntriesLoadPromise;
 }
 
-function clearHomeState() {
-  pollItems.value = [];
-  activityItems.value = [];
-  homeLoading.value = false;
-}
-
 async function showLoadToast(title: string) {
   await uniPlatform.feedback.toast({
     title,
     icon: "none"
   }).catch(() => undefined);
-}
-
-function formatMealSlot(slot: MealPollSummary["mealSlot"]) {
-  if (slot === "BREAKFAST") return "早餐";
-  if (slot === "LUNCH") return "午餐";
-  return "晚餐";
-}
-
-function formatShortTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-  return `${month}-${day} ${hours}:${minutes}`;
-}
-
-function resolveActivityTone(kind: DiningGroupActivityKind) {
-  if (kind === "MENU_CONFIRMED" || kind === "MEAL_COMPLETED" || kind === "MEMORY_CREATED") return "feed-item__avatar--rose";
-  if (kind === "COOK_CLAIMED" || kind === "BRING_UPDATED" || kind === "MEMBER_JOINED") return "feed-item__avatar--green";
-  return "feed-item__avatar--blue";
-}
-
-function resolveActivityTag(kind: DiningGroupActivityKind) {
-  if (kind === "MENU_CONFIRMED") return "定";
-  if (kind === "COOK_CLAIMED") return "做";
-  if (kind === "BRING_UPDATED") return "带";
-  if (kind === "MEAL_COMPLETED") return "饭";
-  if (kind === "MEMORY_CREATED") return "卡";
-  if (kind === "MEMBER_JOINED" || kind === "INVITE_PENDING") return "人";
-  return "投";
-}
-
-function resolveActivityFallback(kind: DiningGroupActivityKind) {
-  if (kind === "POLL_OPENED") return "有人发起了新的点菜征集。";
-  if (kind === "POLL_VOTED") return "有人已经选好了想吃的菜。";
-  if (kind === "POLL_SUGGESTED") return "有人补充了一道候选菜。";
-  if (kind === "POLL_NOTED") return "有人留下了这顿饭的备注。";
-  if (kind === "MENU_CONFIRMED") return "这一顿的最终菜单已经定下来了。";
-  if (kind === "COOK_CLAIMED") return "有人认领了这道菜的掌勺。";
-  if (kind === "BRING_UPDATED") return "有人更新了自己要带的菜。";
-  if (kind === "MEAL_COMPLETED") return "这一顿已经吃完，可以留下一张饭搭子卡。";
-  if (kind === "MEMORY_CREATED") return "有人生成了一张新的饭搭子卡。";
-  if (kind === "MEMBER_JOINED") return "新的饭搭子已经加入。";
-  return "有成员正在等待加入。";
 }
 
 function resolveSideCardClass(placement: HomeEntryItem["placement"]) {
@@ -558,6 +308,10 @@ function resolveQuickEntryClass(placement: HomeEntryPlacement) {
   if (placement === "QUICK_2") return "quick-action--mint";
   if (placement === "QUICK_3") return "quick-action--aqua";
   return "quick-action--soft";
+}
+
+function isVisibleHomeEntry(targetValue: string) {
+  return !HIDDEN_HOME_TARGET_PREFIXES.some(prefix => targetValue.startsWith(prefix));
 }
 
 function openHomeEntry(item: HomeEntryItem | null) {
@@ -574,47 +328,6 @@ function openHomeEntry(item: HomeEntryItem | null) {
 
 function handleHomeScroll(event: { detail?: { scrollTop?: number } }) {
   homeScrollTop.value = event.detail?.scrollTop ?? 0;
-}
-
-function handleActivityClick(item: DiningGroupActivitySummary) {
-  if (item.kind === "MEMORY_CREATED") {
-    if (item.detail?.startsWith("/pages_share/memory/index?token=")) {
-      navigateTo(item.detail);
-      return;
-    }
-
-    if (item.diningEventId) {
-      navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(item.diningEventId))}`);
-      return;
-    }
-  }
-
-  if (item.kind === "MENU_CONFIRMED" && item.pollId) {
-    navigateTo(`/pages_meal/result/index?pollId=${encodeURIComponent(String(item.pollId))}`);
-    return;
-  }
-
-  if (item.kind === "MEAL_COMPLETED" && item.diningEventId) {
-    navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(item.diningEventId))}`);
-    return;
-  }
-
-  if (item.pollId) {
-    navigateTo(`/pages_meal/poll/index?pollId=${encodeURIComponent(String(item.pollId))}`);
-    return;
-  }
-
-  if (item.planItemId) {
-    navigateTo("/pages_meal/plan/index");
-    return;
-  }
-
-  if (item.diningEventId) {
-    navigateTo("/pages_meal/plan/index");
-    return;
-  }
-
-  navigateTo("/pages_restaurant/members/index");
 }
 
 function navigateTo(url: string) {

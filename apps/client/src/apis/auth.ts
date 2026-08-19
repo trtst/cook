@@ -34,17 +34,28 @@ export interface CodeLoginRequest {
 	code: string;
 }
 
-export interface PasswordLoginResult {
+export type AuthCodeScene = "LOGIN" | "BIND_PHONE";
+
+export interface SendAuthCodeRequest {
+	phone: string;
+	scene: AuthCodeScene;
+}
+
+export interface WechatLoginRequest {
+	code: string;
+}
+
+export interface AuthSessionResult {
 	token: string;
 	expiresAt: IsoDateTime;
 	user: SessionUser;
 }
 
-export interface CodeLoginResult {
-	token: string;
-	expiresAt: IsoDateTime;
-	user: SessionUser;
-}
+export interface PasswordLoginResult extends AuthSessionResult {}
+
+export interface CodeLoginResult extends AuthSessionResult {}
+
+export interface WechatLoginResult extends AuthSessionResult {}
 
 export interface RefreshSessionResult {
 	token: string;
@@ -60,11 +71,25 @@ export const authApi = {
 		return post<PasswordLoginResult>(`${cfg.authDomain}/api/auth/login`, body, { auth: false });
 	},
 	/**
-	 * 测试阶段验证码登录。
-	 * 当前服务端只接受 `123456`，后续切真实短信时仍保持独立入口。
+	 * 统一验证码发送入口。
+	 * 后端通过 `scene` 区分登录验证码和绑定手机号验证码。
+	 */
+	sendCode(body: SendAuthCodeRequest) {
+		return post<null>(`${cfg.authDomain}/api/auth/code-send`, body, { auth: false });
+	},
+	/**
+	 * 验证码登录。
+	 * 发码与登录提交分离，便于后端替换真实短信通道。
 	 */
 	loginWithCode(body: CodeLoginRequest) {
 		return post<CodeLoginResult>(`${cfg.authDomain}/api/auth/code-login`, body, { auth: false });
+	},
+	/**
+	 * 小程序微信登录。
+	 * 前端先通过 `uni.login` 获取一次性 code，再交给服务端换取业务会话。
+	 */
+	loginWithWechat(body: WechatLoginRequest) {
+		return post<WechatLoginResult>(`${cfg.authDomain}/api/auth/wechat-login`, body, { auth: false });
 	},
 	/**
 	 * 刷新当前 user token。

@@ -1,6 +1,5 @@
 import { refreshSessionIfNeeded } from "@/apis/auth";
 import { userApi } from "@/apis/user";
-import { useDiningGroupStore } from "@/stores/dining-group";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 
@@ -13,7 +12,7 @@ let restorePromise: Promise<void> | null = null;
 let restored = false;
 
 // 每次小程序运行期间只执行一次完整会话恢复：
-// session -> 当前用户资料 -> 饭搭子关系上下文 -> 静默 refresh 检查。
+// session -> 当前用户资料 -> 静默 refresh 检查。
 export function restoreAppSession() {
 	if (restored) return Promise.resolve();
 
@@ -28,7 +27,6 @@ export function restoreAppSession() {
 // 真正的恢复链路放在这里，外层只负责“一次性”和并发去重。
 async function restoreCurrentUser() {
 	const sessionStore = useSessionStore();
-	const diningGroupStore = useDiningGroupStore();
 	const userStore = useUserStore();
 
 	// 第一步：先从本地恢复登录 session。
@@ -59,17 +57,9 @@ async function restoreCurrentUser() {
 	} catch {
 		// 用户资料恢复失败时，只清理依赖用户的本地状态，不在这里继续扩散异常。
 		userStore.clearProfile();
-		diningGroupStore.clearDiningGroupState();
 		return;
 	}
 
-	try {
-		// 第三步：恢复页面依赖的饭搭子关系上下文。
-		await diningGroupStore.refreshCurrent();
-	} catch {
-		diningGroupStore.clearDiningGroupState();
-	}
-
-	// 第四步：在页面已经有可用状态后，再尝试一次静默续期检查。
+	// 第三步：在页面已经有可用状态后，再尝试一次静默续期检查。
 	await refreshSessionIfNeeded().catch(() => undefined);
 }

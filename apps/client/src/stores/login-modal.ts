@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
 import { useAppConfigStore } from "./app-config";
 import { uniPlatform } from "@/platform/uni";
-import type { CodeLoginResult } from "@/apis/auth";
+import type { AuthSessionResult } from "@/apis/auth";
 
-type LoginModalMode = "options" | "phone";
+type LoginModalMode = "wechat" | "phone";
 
 let pendingAction: (() => void) | null = null;
 
@@ -24,7 +24,7 @@ export const useLoginModalStore = defineStore("login-modal", {
 			pendingAction = action;
 			this.sourceId = sourceId;
 			this.openedInMiniProgram = isMiniProgram;
-			this.mode = isMiniProgram ? "options" : "phone";
+			this.mode = isMiniProgram ? "wechat" : "phone";
 			this.openImageUrl = appConfigStore.loginImageUrl;
 			this.visible = true;
 			this.openSeed += 1;
@@ -46,24 +46,24 @@ export const useLoginModalStore = defineStore("login-modal", {
 				return;
 			}
 
-			this.mode = "options";
+			this.mode = "wechat";
 		},
 		close() {
 			this.visible = false;
-			this.mode = this.openedInMiniProgram ? "options" : "phone";
+			this.mode = this.openedInMiniProgram ? "wechat" : "phone";
 			this.sourceId = null;
 			this.openImageUrl = "";
 			this.openedInMiniProgram = false;
 			pendingAction = null;
 		},
-		complete(_session: CodeLoginResult) {
+		complete(_session: AuthSessionResult) {
 			const result = {
 				sourceId: this.sourceId,
 				action: pendingAction
 			};
 
 			this.visible = false;
-			this.mode = "phone";
+			this.mode = this.openedInMiniProgram ? "wechat" : "phone";
 			this.sourceId = null;
 			this.openImageUrl = "";
 			this.openedInMiniProgram = false;

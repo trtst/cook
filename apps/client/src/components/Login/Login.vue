@@ -26,7 +26,7 @@ withDefaults(
 	}>(),
 	{
 		title: `登录${APP_NAME}`,
-		description: "登录后可以查看你的饭搭子、下一餐计划和食材与采购。",
+		description: "登录后可以查看你的饭局、下一餐计划和食材与采购。",
 		buttonText: "打开登录"
 	}
 );

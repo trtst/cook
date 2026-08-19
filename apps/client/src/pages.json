@@ -36,6 +36,10 @@
     {
       "root": "pages_me",
       "pages": [
+        { "path": "reminder/index", "style": { "navigationBarTitleText": "提醒设置", "navigationStyle": "custom" } },
+        { "path": "theme/index", "style": { "navigationBarTitleText": "主题皮肤", "navigationStyle": "custom" } },
+        { "path": "account/index", "style": { "navigationBarTitleText": "账号设置", "navigationStyle": "custom" } },
+        { "path": "phone/index", "style": { "navigationBarTitleText": "绑定手机号", "navigationStyle": "custom" } },
         { "path": "medal/index", "style": { "navigationBarTitleText": "我的勋章", "navigationStyle": "custom" } },
         { "path": "medal-detail/index", "style": { "navigationBarTitleText": "勋章详情", "navigationStyle": "custom" } },
         { "path": "benefit/index", "style": { "navigationBarTitleText": "权益中心", "navigationStyle": "custom" } },
@@ -44,14 +48,6 @@
         { "path": "recommend/index", "style": { "navigationBarTitleText": "通知中心", "navigationStyle": "custom" } },
         { "path": "recommend-detail/index", "style": { "navigationBarTitleText": "通知详情", "navigationStyle": "custom" } },
         { "path": "ingredient-units/index", "style": { "navigationBarTitleText": "食材与单位", "navigationStyle": "custom" } }
-      ]
-    },
-    {
-      "root": "pages_restaurant",
-      "pages": [
-        { "path": "invite/index", "style": { "navigationBarTitleText": "加入饭搭子", "navigationStyle": "custom" } },
-        { "path": "members/index", "style": { "navigationBarTitleText": "饭搭子", "navigationStyle": "custom" } },
-        { "path": "settings/index", "style": { "navigationBarTitleText": "饭搭子设置", "navigationStyle": "custom" } }
       ]
     },
     {
@@ -73,10 +69,7 @@
         { "path": "assistant/index", "style": { "navigationBarTitleText": "做饭助手", "navigationStyle": "custom" } },
         { "path": "cook-mode/index", "style": { "navigationBarTitleText": "做饭模式", "navigationStyle": "custom" } },
         { "path": "event/index", "style": { "navigationBarTitleText": "饭局", "navigationStyle": "custom" } },
-        { "path": "poll/index", "style": { "navigationBarTitleText": "点菜征集", "navigationStyle": "custom" } },
-        { "path": "wish/index", "style": { "navigationBarTitleText": "想吃池", "navigationStyle": "custom" } },
-        { "path": "random/index", "style": { "navigationBarTitleText": "随机一下", "navigationStyle": "custom" } },
-        { "path": "result/index", "style": { "navigationBarTitleText": "结果汇总", "navigationStyle": "custom" } }
+        { "path": "random/index", "style": { "navigationBarTitleText": "随机一下", "navigationStyle": "custom" } }
       ]
     },
     {
@@ -99,7 +92,7 @@
       "pages": [
         { "path": "preview/index", "style": { "navigationBarTitleText": "分享预览", "navigationStyle": "custom" } },
         { "path": "import/index", "style": { "navigationBarTitleText": "导入分享", "navigationStyle": "custom" } },
-        { "path": "memory/index", "style": { "navigationBarTitleText": "饭搭子卡", "navigationStyle": "custom" } }
+        { "path": "memory/index", "style": { "navigationBarTitleText": "饭局回忆", "navigationStyle": "custom" } }
       ]
     },
     {

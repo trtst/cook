@@ -127,10 +127,36 @@ export interface RecipeContentSnapshot {
 	steps: RecipeStepSnapshot[];
 }
 
+export type RecipeAssistantStepPhase = "PREP" | "COOK" | "SERVE";
+
+export interface RecipeAssistantStep {
+	order: number;
+	phase: RecipeAssistantStepPhase;
+	title: string;
+	detail: string;
+	imageUrl: string | null;
+	durationText: string | null;
+}
+
+export interface RecipeAssistantSummary {
+	stepCount: number;
+	prepStepCount: number;
+	cookStepCount: number;
+	serveStepCount: number;
+	totalDurationText: string | null;
+}
+
+export interface RecipeAssistantSnapshot {
+	generatedAt: IsoDateTime;
+	summary: RecipeAssistantSummary;
+	steps: RecipeAssistantStep[];
+}
+
 export interface RecipeDraftContentInput {
 	name: string;
 	story: string | null;
 	categoryId: UUID | null;
+	inspirationCategoryId?: UUID | null;
 	sceneIds: UUID[];
 	originVersionId?: UUID | null;
 	originCoverImageUrl?: string | null;
@@ -214,9 +240,11 @@ export interface MyRecipeDetail {
 	difficultyText: string | null;
 	durationText: string | null;
 	category: RecipeCategorySummary;
+	inspirationCategory: InspirationCategorySummary | null;
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	assistant: RecipeAssistantSnapshot | null;
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
 	recommendation: RecipeRecommendationSummary | null;
@@ -285,6 +313,7 @@ export interface CollectedRecipeDetail {
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	assistant: RecipeAssistantSnapshot | null;
 	collectedAt: IsoDateTime;
 	updatedAt: IsoDateTime;
 }
@@ -312,6 +341,7 @@ export interface InspirationRecipeDetail {
 	category: InspirationCategorySummary;
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	assistant: RecipeAssistantSnapshot | null;
 	likeCount: number;
 	collectCount: number;
 	ownedRecipeId: UUID | null;
@@ -376,6 +406,9 @@ export interface MyRecipeQuery {
 	pageSize?: number;
 	keyword?: string;
 	categoryId?: UUID;
+	inspirationCategoryId?: UUID;
+	difficulty?: RecipeDifficulty;
+	duration?: RecipeDuration;
 }
 
 export interface InspirationRecipeQuery {
@@ -531,7 +564,10 @@ export interface CreateMyRecipeFromInspirationRequest {
 	sourceRecipeId: UUID;
 	sourceVersionId: UUID;
 	categoryId: UUID;
-	sceneIds: UUID[];
+}
+
+export interface GenerateRecipeAssistantRequest {
+	operationId: OperationId;
 }
 
 export interface SaveCollectionRecipeResponse {
@@ -705,6 +741,11 @@ export const recipeApi = {
 	},
 	getMyRecipe(recipeId: UUID) {
 		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
+	},
+	generateMyRecipeAssistant(recipeId: UUID, body: GenerateRecipeAssistantRequest) {
+		return post<RecipeAssistantSnapshot>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}/assistant`, undefined, {
+			idempotencyKey: body.operationId
+		});
 	},
 	createMyRecipeFromInspiration(body: CreateMyRecipeFromInspirationRequest) {
 		const { operationId, ...payload } = body;

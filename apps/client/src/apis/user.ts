@@ -5,7 +5,7 @@
  * 目的是让页面只理解“用户业务对象”，不需要再回到请求层关心域名和 method。
  */
 import { cfg } from "@/config";
-import { get, put, type IsoDateTime } from "./http";
+import { get, post, put, type IsoDateTime } from "./http";
 
 export interface SessionUser {
 	uid: number;
@@ -51,6 +51,11 @@ export interface ChangeCurrentPasswordRequest {
 
 export interface ChangeCurrentPasswordResult {
 	changedAt: IsoDateTime;
+}
+
+export interface BindCurrentPhoneRequest {
+	phone: string;
+	code: string;
 }
 
 export interface TasteProfileResponse {
@@ -101,6 +106,13 @@ export const userApi = {
 	 */
 	changeCurrentPassword(body: ChangeCurrentPasswordRequest) {
 		return put<ChangeCurrentPasswordResult>(`${cfg.domain}/api/users/me/password`, body);
+	},
+	/**
+	 * 绑定当前登录用户手机号。
+	 * 前端只提交手机号和验证码，服务端校验通过后回写最新 `/users/me` 资料。
+	 */
+	bindCurrentPhone(body: BindCurrentPhoneRequest) {
+		return post<MeResponse>(`${cfg.domain}/api/users/me/phone/bind`, body);
 	},
 	/**
 	 * 读取当前用户私有口味、安全和忌口资料。

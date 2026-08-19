@@ -42,7 +42,7 @@ const layerStyle = computed(() => {
 .toast-layer {
   position: fixed;
   inset: 0;
-  z-index: 1400;
+  z-index: 1600;
   pointer-events: none;
 }
 

@@ -220,7 +220,7 @@ function buildGroupPreview(type: MessageTypeKey) {
     if (loading.value && !shoppingInvites.value.length) return "正在同步清单协作邀请";
     if (errorText.value && !shoppingInvites.value.length) return "邀请加载失败，点击进入后可重试";
     const latest = getLatestInvite();
-    if (!latest) return "饭搭子分享给你的清单邀请会先收口到这里";
+    if (!latest) return "发给你的清单协作邀请会先收口到这里";
     const ownerName = latest.ownerNickname || `UID ${latest.ownerUid}`;
     if (latest.inviteStatus === "ACCEPTED") return `你已加入“${latest.name}”，可继续和 ${ownerName} 一起维护`;
     if (latest.inviteStatus === "DECLINED") return `你已忽略 ${ownerName} 发来的“${latest.name}”协作邀请`;

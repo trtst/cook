@@ -16,7 +16,7 @@
             <text class="hero-card__summary">{{ currentTierSummary }}</text>
           </view>
           <text class="hero-card__meta">{{ validUntilText }}</text>
-          <text class="hero-card__description">会员只影响当前用户自己的权益，不外溢给饭搭子成员。</text>
+          <text class="hero-card__description">会员只影响当前登录用户自己的菜谱、空间、展示和广告权益。</text>
           <view class="hero-card__footer">
             <text class="hero-card__hint">正式会员当前先开放 Plus 月卡、Pro 月卡</text>
             <view class="hero-card__action" hover-class="hero-card__action--pressed" hover-stay-time="100" @click="goRedeem">
@@ -65,16 +65,8 @@
                   <text class="policy-grid__value">{{ item.storageLimit }}</text>
                 </view>
                 <view class="policy-grid__item">
-                  <text class="policy-grid__label">邀请人数</text>
-                  <text class="policy-grid__value">{{ item.inviteLimit }}</text>
-                </view>
-                <view class="policy-grid__item">
-                  <text class="policy-grid__label">可加入数</text>
-                  <text class="policy-grid__value">{{ item.joinLimit }}</text>
-                </view>
-                <view class="policy-grid__item">
-                  <text class="policy-grid__label">成员上限</text>
-                  <text class="policy-grid__value">{{ item.memberLimit }}</text>
+                  <text class="policy-grid__label">展示</text>
+                  <text class="policy-grid__value">{{ item.displayPolicy }}</text>
                 </view>
                 <view class="policy-grid__item">
                   <text class="policy-grid__label">回收站</text>
@@ -95,7 +87,11 @@
         </view>
 
         <view class="section-card">
-          <text class="section-card__title">体验码与广告说明</text>
+          <text class="section-card__title">兑换与广告说明</text>
+          <view class="rule-block">
+            <text class="rule-block__heading">正式兑换条件</text>
+            <text v-for="item in redeemRules" :key="item" class="rule-block__item">{{ item }}</text>
+          </view>
           <view class="rule-block">
             <text class="rule-block__heading">体验码规则</text>
             <text v-for="item in trialRules" :key="item" class="rule-block__item">{{ item }}</text>
@@ -124,6 +120,7 @@ import {
   formatTierSummary,
   formatValidUntil,
   formalSkuLabels,
+  redeemRules,
   tierPolicyCards,
   trialRules
 } from "../membership/present";
