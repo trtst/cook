@@ -143,7 +143,7 @@
                 <text class="meal-panel__meta">{{ eventErrorText }}</text>
               </view>
 
-              <view v-if="planDetail" id="meal-menu-panel" class="meal-panel">
+              <view v-if="planDetail" id="meal-menu-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'menu' }">
                 <view class="meal-panel__head meal-panel__head--row">
                   <text class="meal-panel__title">{{ menuPanelTitle }}</text>
                   <view class="meal-menu__head-actions">
@@ -161,7 +161,7 @@
                       @click="openMenuSheet"
                     >
                       <text class="cookfont icon-add meal-menu__add-icon" />
-                      <text>添加</text>
+                      <text>添加菜单</text>
                     </view>
                     <view
                       v-else-if="canChooseBring"
@@ -207,6 +207,15 @@
                   <text class="meal-menu-empty__text">
                     {{ menuPanelEmptyText }}
                   </text>
+                  <view
+                    v-if="canManageMenu"
+                    class="meal-menu-empty__action"
+                    hover-class="meal-menu-empty__action--hover"
+                    hover-stay-time="100"
+                    @click="openMenuSheet"
+                  >
+                    添加这顿菜单
+                  </view>
                 </view>
               </view>
 
@@ -243,7 +252,20 @@
                 </view>
               </view>
 
-              <view v-if="planDetail" class="meal-panel">
+              <view v-if="eventDetail && !eventClosed" id="meal-shopping-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'shopping' }">
+                <view class="meal-panel__head meal-panel__head--row">
+                  <text class="meal-panel__title">采购准备</text>
+                  <view class="meal-inline-action meal-inline-action--ghost meal-menu__add-action" @click="openShoppingPage">
+                    <text class="cookfont icon-plan meal-menu__add-icon" />
+                    <text>去采购</text>
+                  </view>
+                </view>
+                <view class="meal-helper-state">
+                  {{ shoppingPanelText }}
+                </view>
+              </view>
+
+              <view v-if="planDetail" id="meal-assistant-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'assistant' }">
                 <view class="meal-panel__head">
                   <text class="meal-panel__title">做饭助手</text>
                   <text class="meal-panel__meta">{{ cookAssistantMeta }}</text>
@@ -337,11 +359,25 @@
                   <text class="meal-menu-empty__text">{{ eventNoteEmptyText }}</text>
                 </view>
               </view>
+
+              <view v-if="eventDetail" id="meal-memory-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'memory' }">
+                <view class="meal-panel__head meal-panel__head--row">
+                  <text class="meal-panel__title">饭局回忆</text>
+                  <view class="meal-inline-action meal-inline-action--ghost meal-menu__add-action" @click="openMemory">
+                    <text class="cookfont icon-share meal-menu__add-icon" />
+                    <text>{{ memoryActionText }}</text>
+                  </view>
+                </view>
+                <view class="meal-memory-entry">
+                  <text class="meal-memory-entry__title">{{ memoryPanelTitle }}</text>
+                  <text class="meal-memory-entry__text">{{ memoryPanelText }}</text>
+                </view>
+              </view>
             </view>
           </view>
         </scroll-view>
 
-        <view v-if="footerVisible" class="meal-footer">
+        <view v-if="footerVisible" id="meal-footer-panel" class="meal-footer" :class="{ 'meal-footer--focus': focusedSection === 'footer' }">
           <view v-if="showFooterStatus" class="meal-footer__status">
             <template v-if="showFooterCountdown && footerCountdownParts">
               <view class="meal-footer__countdown">
@@ -402,7 +438,8 @@
                 :disabled="footerPrimaryAction.disabled || submitting"
                 @click="handleFooterAction(footerPrimaryAction.key)"
               >
-                {{ footerPrimaryAction.label }}
+                <text class="meal-footer__button-content">{{ footerPrimaryAction.label }}</text>
+                <text v-if="footerPrimaryGapText" class="meal-footer__button-badge">{{ footerPrimaryGapText }}</text>
               </button>
             </view>
           </view>
@@ -526,6 +563,47 @@
               </view>
             </view>
           </view>
+        </SheetShell>
+
+        <SheetShell
+          :visible="menuConfirmSheetVisible"
+          title="确认菜单"
+          :subtitle="menuConfirmSummaryText"
+          @close="closeMenuConfirmSheet"
+        >
+          <view class="sheet-section">
+            <view class="menu-confirm">
+              <view class="menu-confirm__summary">
+                <text class="menu-confirm__summary-title">{{ menuConfirmSummaryTitle }}</text>
+                <text class="menu-confirm__summary-text">{{ menuConfirmSummaryText }}</text>
+              </view>
+
+              <view v-if="gapLoading" class="menu-confirm__state">正在按当前菜单刷新缺口...</view>
+
+              <view v-else-if="currentEventGapItems.length" class="menu-confirm__list">
+                <view v-for="item in currentEventGapItems" :key="item.key" class="menu-confirm__item">
+                  <view class="menu-confirm__item-main">
+                    <text class="menu-confirm__item-name">{{ item.name }}</text>
+                    <text class="menu-confirm__item-meta">{{ item.quantityText || "未填数量" }}</text>
+                  </view>
+                  <text v-if="item.recipeTitles.length" class="menu-confirm__item-recipes">{{ item.recipeTitles.join(" · ") }}</text>
+                </view>
+              </view>
+
+              <view v-else class="menu-confirm__state menu-confirm__state--empty">{{ menuConfirmEmptyText }}</view>
+
+              <text class="menu-confirm__tip">确认菜单只会固定这顿吃什么，不会同步确认食材或写入采购清单。</text>
+            </view>
+          </view>
+
+          <template #footer>
+            <view class="sheet-actions">
+              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeMenuConfirmSheet">返回改菜单</button>
+              <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || gapLoading" @click="handleConfirmMenuAction">
+                {{ submitting ? "确认中..." : "确认菜单" }}
+              </button>
+            </view>
+          </template>
         </SheetShell>
 
         <SheetShell
@@ -716,7 +794,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from "@dcloudio/uni-app";
 import { mealApi, type DiningEventSummary, type MealPlanCookAssistant, type MealPlanSummary } from "../apis/meal";
 import type { UUID } from "@/apis/http";
@@ -730,6 +808,7 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 import ImageField from "@/components/ImageField.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { shoppingApi, type ShoppingGapResponse, type ShoppingGapWindow } from "@/apis/shopping";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -788,6 +867,7 @@ type FooterActionKey =
   | "bring"
   | "create-event"
   | "confirm-menu"
+  | "shopping"
   | "cook-assistant"
   | "share-memory"
   | "view-memory";
@@ -797,9 +877,25 @@ type FooterAction = {
   iconClass?: string;
   disabled?: boolean;
 };
+type MealGapPreviewItem = {
+  key: string;
+  window: ShoppingGapWindow;
+  windowTitle: string;
+  name: string;
+  quantityText: string | null;
+  recipeTitles: string[];
+};
 type RecipeSheetItem = MyRecipeSummary;
 type RecipeSheetMode = "menu" | "bring";
+type DetailFocus = "" | "menu" | "footer" | "shopping" | "assistant" | "memory";
 const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
+const focusTargets: Record<Exclude<DetailFocus, "">, string> = {
+  menu: "meal-menu-panel",
+  footer: "meal-footer-panel",
+  shopping: "meal-shopping-panel",
+  assistant: "meal-assistant-panel",
+  memory: "meal-memory-panel"
+};
 
 const NAV_FADE_DISTANCE = 132;
 const pageStyle = usePageScrollStyle();
@@ -821,6 +917,8 @@ const cookAssistantLoading = ref(false);
 const cookAssistant = ref<MealPlanCookAssistant | null>(null);
 const scrollTop = ref(0);
 const scrollTarget = ref("");
+const entryFocus = ref<DetailFocus>("");
+const focusedSection = ref<DetailFocus>("");
 const uploadingCover = ref(false);
 const participantSheetVisible = ref(false);
 const participantActionId = ref<UUID | null>(null);
@@ -840,9 +938,14 @@ const titleSheetVisible = ref(false);
 const titleDraft = ref("");
 const noteSheetVisible = ref(false);
 const noteDraft = ref("");
+const menuConfirmSheetVisible = ref(false);
+const gapLoading = ref(false);
+const gapErrorText = ref("");
+const gapData = ref<ShoppingGapResponse | null>(null);
 const scheduleMonthDate = ref(todayText());
 const nowMs = ref(Date.now());
 let footerTimer: ReturnType<typeof setInterval> | null = null;
+let focusResetTimer: ReturnType<typeof setTimeout> | null = null;
 const defaultDetailTitle = computed(() => (planDetail.value ? `${slotLabel(planDetail.value.mealSlot)}饮食计划` : "餐次详情"));
 
 const navTitle = computed(() => detailTitle.value);
@@ -1101,6 +1204,26 @@ const canUpdateCover = computed(() => Boolean(eventDetail.value && eventDetail.v
 const canQuickShareInvite = computed(() =>
   Boolean(eventDetail.value && !eventClosed.value && (canInviteParticipants.value || activeSharePath.value || eventDetail.value.shareTokenPath))
 );
+const currentEventGapItems = computed<MealGapPreviewItem[]>(() => {
+  if (!eventDetail.value || !gapData.value) return [];
+  const items: MealGapPreviewItem[] = [];
+  for (const section of gapData.value.sections) {
+    for (const item of section.items) {
+      const matchedEvent = item.events.find(event => event.eventId === eventDetail.value?.id);
+      if (!matchedEvent) continue;
+      items.push({
+        key: `${section.window}:${item.key}`,
+        window: section.window,
+        windowTitle: section.title,
+        name: item.name,
+        quantityText: item.quantityText,
+        recipeTitles: matchedEvent.recipeTitles
+      });
+    }
+  }
+  return items;
+});
+const currentEventGapCount = computed(() => currentEventGapItems.value.length);
 const footerStage = computed<FooterStage>(() => {
   if (eventDetail.value?.status === "CANCELLED") return "CANCELLED";
   if (eventDetail.value?.status === "COMPLETED" || eventDetail.value?.completedAt) return "TIME_UP";
@@ -1157,6 +1280,15 @@ const footerStatusText = computed(() => {
   return `${planDateText.value} · ${planDetail.value ? slotLabel(planDetail.value.mealSlot) : "这顿饭"}`;
 });
 const footerStatusMeta = computed(() => {
+  if (footerStage.value === "READY_TO_START" && eventDetail.value) {
+    if (gapLoading.value) return "正在按当前菜单刷新这顿饭的缺口。";
+    if (currentEventGapCount.value > 0) return `还差 ${currentEventGapCount.value} 样食材，下一步先去采购。`;
+    if (!gapErrorText.value && currentMenuItems.value.length) return "当前菜单没有明显缺口，可以直接开始做饭。";
+  }
+  if (footerStage.value === "MENU_EDITING" && eventDetail.value && currentMenuItems.value.length) {
+    if (gapLoading.value) return "当前缺口会跟着菜单实时更新。";
+    if (currentEventGapCount.value > 0) return `按当前菜单看，还差 ${currentEventGapCount.value} 样食材。`;
+  }
   return "";
 });
 const endedMemoryAction = computed<FooterAction | null>(() => {
@@ -1181,7 +1313,6 @@ const footerQuickAction = computed<FooterAction | null>(() => {
   return null;
 });
 const footerSecondaryAction = computed<FooterAction | null>(() => {
-  if (footerStage.value === "MENU_EDITING" && canManageMenu.value) return { key: "recipe", label: "添加菜单" };
   return null;
 });
 const footerPrimaryAction = computed<FooterAction | null>(() => {
@@ -1197,6 +1328,9 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
     return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
   if (footerStage.value === "READY_TO_START") {
+    if (eventDetail.value && currentEventGapCount.value > 0) {
+      return { key: "shopping", label: "去采购" };
+    }
     if (isEventOrganizer.value || !eventDetail.value) {
       return currentMenuItems.value.length ? { key: "cook-assistant", label: "做饭助手" } : null;
     }
@@ -1204,6 +1338,30 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
   }
   return null;
 });
+const footerPrimaryGapText = computed(() => {
+  if (footerPrimaryAction.value?.key !== "confirm-menu" || !eventDetail.value || !currentMenuItems.value.length) return "";
+  if (gapLoading.value) return "计算中";
+  if (currentEventGapCount.value > 0) return `还差 ${currentEventGapCount.value} 样`;
+  if (!gapErrorText.value) return "暂无缺口";
+  return "";
+});
+const menuConfirmSummaryTitle = computed(() => {
+  if (gapLoading.value) return "正在更新当前缺口";
+  if (currentEventGapCount.value > 0) return `这顿饭还差 ${currentEventGapCount.value} 样食材`;
+  if (gapErrorText.value) return "缺口暂时没同步出来";
+  return "当前菜单看起来已经备齐";
+});
+const menuConfirmSummaryText = computed(() => {
+  if (gapLoading.value) return "菜单变了，当前缺口也会跟着刷新，稍等一下再确认。";
+  if (currentEventGapCount.value > 0) return "先看一眼这顿饭还缺什么；这次确认只固定菜单，不会同步确认食材。";
+  if (gapErrorText.value) return "当前页还没拿到可靠缺口事实；确认菜单仍只固定这顿吃什么。";
+  return "按当前饭局缺口事实，这顿饭暂时没有明显缺料。";
+});
+const menuConfirmEmptyText = computed(() => (
+  gapErrorText.value
+    ? gapErrorText.value
+    : "当前没有需要额外采购的食材，确认菜单后可以直接开始做饭。"
+));
 const shareSheetSubtitle = computed(() => (
   "会在你打开这里时先准备好当前这条好友邀请，方便直接转发。"
 ));
@@ -1348,12 +1506,28 @@ const cookAssistantMeta = computed(() => {
   if (cookAssistant.value.isStale) return "菜单或菜谱有变化，建议重新生成。";
   return cookAssistant.value.generatedAt ? `最近生成于 ${formatDateTimeMinute(cookAssistant.value.generatedAt)}` : "已生成";
 });
+const shoppingPanelText = computed(() => {
+  if (eventClosed.value) return "这顿饭已经结束，当前不再补采购。";
+  if (!currentMenuItems.value.length) return "先把菜单补齐，后面再看缺什么。";
+  if (gapLoading.value) return "正在按当前菜单刷新这顿饭的缺口。";
+  if (currentEventGapCount.value > 0) return `当前这顿还差 ${currentEventGapCount.value} 样食材，确认菜单后就去采购。`;
+  if (eventDetail.value?.status === "CONFIRMED") return "菜单已经定下来了，当前没有明显缺口，可以直接开始做饭。";
+  if (gapErrorText.value) return "缺口暂时没同步出来，先确认菜单，后面再去缺口页看。";
+  return "先确认菜单；确认后这里会继续显示当前饭局还差什么。";
+});
+const memoryPanelTitle = computed(() => (eventClosed.value ? "这顿饭可以留个回忆了" : "饭局回忆"));
+const memoryPanelText = computed(() => {
+  if (eventClosed.value) return "聚完了别忘了补一张回忆卡，后面翻这顿饭会更完整。";
+  return "这顿饭结束后，可以回来补照片和回忆，后面翻这顿饭时会一起保留。";
+});
+const memoryActionText = computed(() => (eventClosed.value ? "分享回忆" : "查看回忆入口"));
 
 onLoad(query => {
   planItemId.value = parseQueryId(query?.planItemId);
   planDate.value = parseQueryText(query?.planDate);
   eventId.value = parseQueryId(query?.eventId);
   showEventEditor.value = parseQueryText(query?.mode) === "create-event";
+  entryFocus.value = parseDetailFocus(query?.focus);
 });
 
 onShareAppMessage(() => {
@@ -1417,6 +1591,9 @@ async function loadDetail() {
     if (!targetEventId) {
       eventDetail.value = null;
       activeSharePath.value = "";
+      gapData.value = null;
+      gapErrorText.value = "";
+      await applyEntryFocus();
       return;
     }
 
@@ -1425,10 +1602,15 @@ async function loadDetail() {
       eventId.value = eventDetail.value.id;
       activeSharePath.value = eventDetail.value.shareTokenPath || "";
       showEventEditor.value = false;
+      await loadGapPreview();
+      await applyEntryFocus();
     } catch (error) {
       eventDetail.value = null;
       activeSharePath.value = "";
+      gapData.value = null;
+      gapErrorText.value = "";
       eventErrorText.value = "饭局信息暂时没同步出来，点此重试";
+      await applyEntryFocus();
     }
   } catch (error) {
     errorText.value = "餐次暂时没加载出来，点此重试";
@@ -1446,6 +1628,8 @@ function clearPageState() {
   eventErrorText.value = "";
   scrollTop.value = 0;
   scrollTarget.value = "";
+  entryFocus.value = "";
+  clearFocusedSection();
   planDetail.value = null;
   eventDetail.value = null;
   cookAssistant.value = null;
@@ -1462,6 +1646,10 @@ function clearPageState() {
   recipeSubmitting.value = false;
   noteSheetVisible.value = false;
   noteDraft.value = "";
+  menuConfirmSheetVisible.value = false;
+  gapLoading.value = false;
+  gapErrorText.value = "";
+  gapData.value = null;
 }
 
 function resetEventDraft(plan: MealPlanSummary) {
@@ -1506,6 +1694,14 @@ function parseQueryId(value: unknown): UUID | "" {
 function parseQueryText(value: unknown) {
   const raw = Array.isArray(value) ? value[0] : value;
   return typeof raw === "string" ? decodeURIComponent(raw).trim() : "";
+}
+
+function parseDetailFocus(value: unknown): DetailFocus {
+  const text = parseQueryText(value);
+  if (text === "menu" || text === "footer" || text === "shopping" || text === "assistant" || text === "memory") {
+    return text;
+  }
+  return "";
 }
 
 function openRecipeDetail(recipeId: UUID | null) {
@@ -1650,6 +1846,11 @@ function closeNoteSheet() {
   noteSheetVisible.value = false;
 }
 
+function closeMenuConfirmSheet() {
+  if (submitting.value) return;
+  menuConfirmSheetVisible.value = false;
+}
+
 function closeShareSheet() {
   if (inviteSharing.value) return;
   shareSheetVisible.value = false;
@@ -1780,6 +1981,7 @@ async function createEvent() {
       hasDiningEvent: true,
       diningEventId: result.id
     };
+    await loadGapPreview();
     showEventEditor.value = false;
     await uniPlatform.feedback.toast({ title: updatingSchedule ? "时间已更新" : "饭局已创建", icon: "success" });
   } catch (error) {
@@ -2174,6 +2376,8 @@ async function handleConfirmMenuAction() {
     if (eventDetail.value) {
       eventDetail.value = await mealApi.getDiningEvent(eventDetail.value.id);
     }
+    await loadGapPreview();
+    menuConfirmSheetVisible.value = false;
     await uniPlatform.feedback.toast({ title: "菜单已固定", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认菜单失败", icon: "none" });
@@ -2182,9 +2386,32 @@ async function handleConfirmMenuAction() {
   }
 }
 
+async function loadGapPreview() {
+  if (!sessionStore.isLoggedIn || !eventDetail.value || eventClosed.value || !currentMenuItems.value.length) {
+    gapLoading.value = false;
+    gapErrorText.value = "";
+    gapData.value = null;
+    return;
+  }
+  if (gapLoading.value) return;
+  gapLoading.value = true;
+  gapErrorText.value = "";
+  try {
+    gapData.value = await shoppingApi.previewGap();
+  } catch (error) {
+    gapErrorText.value = error instanceof Error ? error.message : "缺口暂时没刷新出来";
+  } finally {
+    gapLoading.value = false;
+  }
+}
+
 function openMemory() {
   if (!eventId.value) return;
   void uniPlatform.navigation.navigateTo(`/pages_share/memory/index?eventId=${encodeURIComponent(String(eventId.value))}`);
+}
+
+function openShoppingPage() {
+  void uniPlatform.navigation.navigateTo("/pages_pantry/gap/index");
 }
 
 function goBack() {
@@ -2215,7 +2442,16 @@ function handleFooterAction(action: FooterActionKey) {
     return;
   }
   if (action === "confirm-menu") {
+    if (eventDetail.value) {
+      menuConfirmSheetVisible.value = true;
+      void loadGapPreview();
+      return;
+    }
     void handleConfirmMenuAction();
+    return;
+  }
+  if (action === "shopping") {
+    openShoppingPage();
     return;
   }
   if (action === "cook-assistant") {
@@ -2229,6 +2465,58 @@ function handleFooterAction(action: FooterActionKey) {
   if (action === "share-memory" || action === "view-memory") {
     openMemory();
   }
+}
+
+async function applyEntryFocus() {
+  if (!entryFocus.value || !planDetail.value) return;
+  await nextTick();
+
+  if (entryFocus.value === "footer") {
+    highlightSection("footer");
+    entryFocus.value = "";
+    return;
+  }
+
+  const targetId = resolveFocusTargetId(entryFocus.value);
+  if (!targetId) {
+    entryFocus.value = "";
+    return;
+  }
+
+  scrollTarget.value = "";
+  await nextTick();
+  scrollTarget.value = targetId;
+  highlightSection(entryFocus.value);
+  setTimeout(() => {
+    if (scrollTarget.value === targetId) {
+      scrollTarget.value = "";
+    }
+  }, 320);
+  entryFocus.value = "";
+}
+
+function resolveFocusTargetId(focus: Exclude<DetailFocus, "">) {
+  if (focus === "shopping" && (!eventDetail.value || eventClosed.value)) return "";
+  if (focus === "memory" && !eventDetail.value) return "";
+  if (focus === "assistant" && !planDetail.value) return "";
+  return focusTargets[focus] || "";
+}
+
+function highlightSection(section: DetailFocus) {
+  clearFocusedSection();
+  focusedSection.value = section;
+  focusResetTimer = setTimeout(() => {
+    focusedSection.value = "";
+    focusResetTimer = null;
+  }, 1600);
+}
+
+function clearFocusedSection() {
+  if (focusResetTimer) {
+    clearTimeout(focusResetTimer);
+    focusResetTimer = null;
+  }
+  focusedSection.value = "";
 }
 </script>
 
@@ -2899,6 +3187,16 @@ function handleFooterAction(action: FooterActionKey) {
   border-radius: var(--radius-xs);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.meal-panel--focus {
+  box-shadow:
+    0 0 0 3rpx color-mix(in srgb, var(--color-primary) 22%, transparent),
+    var(--shadow-card);
+  transform: translateY(-4rpx);
 }
 
 .meal-panel--warning {
@@ -2937,6 +3235,30 @@ function handleFooterAction(action: FooterActionKey) {
 
 .meal-panel__facts {
   margin-top: 24rpx;
+}
+
+.meal-memory-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.meal-memory-entry__title,
+.meal-memory-entry__text {
+  display: block;
+}
+
+.meal-memory-entry__title {
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.meal-memory-entry__text {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.7;
 }
 
 .meal-inline-action {
@@ -3073,6 +3395,24 @@ function handleFooterAction(action: FooterActionKey) {
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.7;
+}
+
+.meal-menu-empty__action {
+  margin-top: 20rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72rpx;
+  padding: 0 26rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 245, 229, 0.96);
+  color: #8a561d;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.meal-menu-empty__action--hover {
+  opacity: 0.92;
 }
 
 .bring-list {
@@ -3820,6 +4160,76 @@ function handleFooterAction(action: FooterActionKey) {
   color: var(--button-primary-text);
 }
 
+.menu-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.menu-confirm__summary,
+.menu-confirm__item {
+  padding: 24rpx;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 249, 238, 0.96);
+}
+
+.menu-confirm__summary-title,
+.menu-confirm__item-name {
+  display: block;
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-heavy);
+}
+
+.menu-confirm__summary-text,
+.menu-confirm__item-meta,
+.menu-confirm__item-recipes,
+.menu-confirm__tip,
+.menu-confirm__state {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.menu-confirm__summary-text,
+.menu-confirm__item-meta,
+.menu-confirm__item-recipes {
+  margin-top: 8rpx;
+}
+
+.menu-confirm__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.menu-confirm__item-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.menu-confirm__item-meta {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.menu-confirm__state {
+  padding: 24rpx;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.menu-confirm__state--empty {
+  background: rgba(245, 247, 241, 0.96);
+}
+
+.menu-confirm__tip {
+  color: var(--color-text-tertiary);
+}
+
 .field-actions {
   display: flex;
   gap: 20rpx;
@@ -3871,6 +4281,16 @@ function handleFooterAction(action: FooterActionKey) {
   -webkit-backdrop-filter: blur(12rpx);
   backdrop-filter: blur(12rpx);
   box-sizing: border-box;
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.meal-footer--focus {
+  box-shadow:
+    0 0 0 3rpx color-mix(in srgb, var(--color-primary) 22%, transparent),
+    var(--shadow-floating);
+  transform: translateY(-4rpx);
 }
 
 .meal-footer__status {
@@ -4024,9 +4444,9 @@ function handleFooterAction(action: FooterActionKey) {
 
 .meal-footer__buttons {
   flex: 1;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 14rpx;
 }
 
@@ -4063,12 +4483,17 @@ function handleFooterAction(action: FooterActionKey) {
 }
 
 .meal-footer__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 84rpx;
   margin: 0;
+  padding: 0 28rpx;
   border-radius: 999rpx;
   font-size: 28rpx;
   font-weight: 700;
-  line-height: 84rpx;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .meal-footer__button::after {
@@ -4084,5 +4509,18 @@ function handleFooterAction(action: FooterActionKey) {
   color: var(--button-primary-text);
   background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
   box-shadow: var(--button-primary-shadow);
+}
+
+.meal-footer__button-content {
+  line-height: 1;
+}
+
+.meal-footer__button-badge {
+  margin-left: 10rpx;
+  padding: 8rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 22rpx;
+  line-height: 1;
 }
 </style>

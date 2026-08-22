@@ -21,9 +21,21 @@
         <view class="table-hero" :style="heroStyle">
           <view class="hero-main">
             <view class="hero-copy">
-              <text class="hero-copy__eyebrow">{{ memberCountText }}</text>
+              <text class="hero-copy__eyebrow">{{ heroEyebrow }}</text>
               <text class="hero-copy__title">{{ heroTitle }}</text>
               <text class="hero-copy__description">{{ heroDescription }}</text>
+              <view class="hero-copy__actions">
+                <view class="hero-copy__button hero-copy__button--primary" @click="triggerHeroPrimaryAction">
+                  <text class="hero-copy__button-text">{{ heroPrimaryActionText }}</text>
+                </view>
+                <view
+                  v-if="heroSecondaryActionText"
+                  class="hero-copy__button hero-copy__button--ghost"
+                  @click="triggerHeroSecondaryAction"
+                >
+                  <text class="hero-copy__button-text hero-copy__button-text--ghost">{{ heroSecondaryActionText }}</text>
+                </view>
+              </view>
             </view>
 
             <view class="table-scene">
@@ -143,6 +155,49 @@
             </view>
           </view>
 
+          <view
+            v-if="showRecentArrangementCard && recentArrangement"
+            class="recent-arrangement"
+            hover-class="recent-arrangement--hover"
+            hover-stay-time="100"
+            @click="openRecentArrangementDetail(recentArrangement)"
+          >
+            <view class="recent-arrangement__head">
+              <view>
+                <text class="recent-arrangement__eyebrow">最近安排</text>
+                <text class="recent-arrangement__title">{{ recentArrangement.title }}</text>
+              </view>
+              <text class="recent-arrangement__badge">{{ resolveRecentArrangementSourceText(recentArrangement.sourceType) }}</text>
+            </view>
+            <text class="recent-arrangement__meta">{{ recentArrangementMeta }}</text>
+            <text class="recent-arrangement__status">{{ recentArrangementStatusText }}</text>
+            <view class="recent-arrangement__actions">
+              <view class="recent-arrangement__button recent-arrangement__button--primary" @click.stop="openRecentArrangementPrimaryAction(recentArrangement)">
+                <text class="recent-arrangement__button-text">{{ recentArrangementActionText }}</text>
+              </view>
+              <view class="recent-arrangement__button recent-arrangement__button--ghost" @click.stop="openRecentArrangementDetail(recentArrangement)">
+                <text class="recent-arrangement__button-text recent-arrangement__button-text--ghost">查看详情</text>
+              </view>
+            </view>
+          </view>
+          <view v-else-if="showRecentArrangementSkeleton" class="recent-arrangement recent-arrangement--skeleton">
+            <view class="recent-arrangement__head recent-arrangement__head--skeleton">
+              <view class="recent-arrangement__copy">
+                <Skeleton width="110rpx" height="24rpx" />
+                <Skeleton width="260rpx" height="34rpx" />
+              </view>
+              <Skeleton width="80rpx" height="40rpx" radius="var(--radius-pill)" />
+            </view>
+            <view class="recent-arrangement__body-skeleton">
+              <Skeleton width="100%" height="24rpx" />
+              <Skeleton width="70%" height="24rpx" />
+            </view>
+            <view class="recent-arrangement__actions recent-arrangement__actions--skeleton">
+              <Skeleton width="200rpx" height="76rpx" radius="var(--radius-pill)" />
+              <Skeleton width="160rpx" height="76rpx" radius="var(--radius-pill)" />
+            </view>
+          </view>
+
           <view class="pantry-panel">
             <view class="pantry-panel__header">
               <view>
@@ -174,13 +229,20 @@
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import { isUniRequestBlockedError } from "@/apis/adapters/uni";
-import { homeApi, type HomeEntryItem, type HomeEntryPlacement } from "@/apis/home";
+import {
+  homeApi,
+  type HomeEntryItem,
+  type HomeEntryPlacement,
+  type HomeNextMealState,
+  type HomeNextMealStatus,
+  type HomeRecentArrangement,
+  type HomeRecentArrangementStatus
+} from "@/apis/home";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { APP_NAME } from "@/config";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
@@ -199,7 +261,11 @@ const homeEntriesLoaded = ref(false);
 const homeEntriesRequestBlocked = ref(false);
 const featureEntryItems = ref<HomeEntryItem[]>([]);
 const quickEntryItems = ref<HomeEntryItem[]>([]);
+const nextMealStateLoading = ref(false);
+const nextMealStateLoaded = ref(false);
+const nextMealState = ref<HomeNextMealState | null>(null);
 let homeEntriesLoadPromise: Promise<void> | null = null;
+let nextMealStateLoadPromise: Promise<void> | null = null;
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
@@ -217,10 +283,6 @@ const restaurantName = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后开始安排";
   return "饭局、计划、清单";
 });
-const memberCountText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后同步计划和清单";
-  return "把下一顿安排起来";
-});
 const mainFeatureCard = computed(() => featureEntryItems.value.find(item => item.placement === "MAIN") ?? null);
 const sideFeatureCards = computed(() =>
   featureEntryItems.value
@@ -232,19 +294,73 @@ const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideF
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
 const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
+const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
+const recentArrangement = computed(() => nextMealState.value?.arrangement ?? null);
+const showRecentArrangementCard = computed(() => homeNextStatus.value === "COMPLETED" && Boolean(recentArrangement.value));
+const showRecentArrangementSkeleton = computed(
+  () => sessionStore.isLoggedIn && nextMealStateLoading.value && !nextMealStateLoaded.value
+);
+const recentArrangementMeta = computed(() => {
+  if (!recentArrangement.value) return "";
+  const segments = [
+    formatRecentArrangementTime(recentArrangement.value),
+    `${recentArrangement.value.participantCount}人`,
+    `${recentArrangement.value.menuCount}道菜`
+  ];
+  if (typeof recentArrangement.value.gapCount === "number" && recentArrangement.value.gapCount > 0) {
+    segments.push(`还差${recentArrangement.value.gapCount}样食材`);
+  }
+  return segments.join(" · ");
+});
+const recentArrangementStatusText = computed(() => (recentArrangement.value ? resolveRecentArrangementStatusText(recentArrangement.value.status) : ""));
+const recentArrangementActionText = computed(() => (recentArrangement.value ? resolveRecentArrangementActionText(recentArrangement.value.status) : ""));
+const heroEyebrow = computed(() => {
+  if (!sessionStore.isLoggedIn) return "下一顿状态";
+  if (nextMealStateLoading.value && !nextMealStateLoaded.value) return "正在整理安排";
+  if (homeNextStatus.value === "NO_ARRANGEMENT") return "还没有安排";
+  if (homeNextStatus.value === "COMPLETED") return "上一顿刚刚结束";
+  return recentArrangement.value ? formatRecentArrangementMetaLead(recentArrangement.value) : "下一步继续";
+});
 
 const heroTitle = computed(() => {
-  if (!sessionStore.isLoggedIn) return `${APP_NAME}从这里开始`;
-  return "先定菜单，再开饭局";
+  return "今晚吃什么？";
 });
-const heroDescription = computed(() =>
-  sessionStore.isLoggedIn
-    ? "想吃、计划、购物和做饭记录都从这里继续。"
-    : "登录后同步你的下一餐计划、购物清单和食材。"
-);
+const heroDescription = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后把下一顿、购物清单和冰箱状态接起来。";
+  if (nextMealStateLoading.value && !nextMealStateLoaded.value) return "正在按你的安排、缺口和采购状态整理下一步。";
+  if (homeNextStatus.value === "NO_ARRANGEMENT") return "还没有安排，试试随机一桌，或者先看看冰箱里现在能做什么。";
+  if (homeNextStatus.value === "NEED_GAP_CHECK") {
+    if (!recentArrangement.value) return "先把这顿饭安排起来，再看缺什么。";
+    if (recentArrangement.value.menuCount > 0) return `${recentArrangementMeta.value}，先把菜单和缺口过一遍。`;
+    return `${formatRecentArrangementTime(recentArrangement.value)}，先把这顿要吃什么定下来。`;
+  }
+  if (homeNextStatus.value === "NEED_SHOPPING") {
+    if (!recentArrangement.value) return "还差一些食材，先去采购。";
+    return `${recentArrangementMeta.value}，先把缺的食材补齐。`;
+  }
+  if (homeNextStatus.value === "READY_TO_COOK") {
+    if (!recentArrangement.value) return "食材差不多齐了，可以开始做饭。";
+    return `${recentArrangementMeta.value}，这顿饭可以开始做了。`;
+  }
+  return recentArrangement.value ? `${recentArrangementMeta.value}，回看一下这顿饭，再决定下一顿。` : "上一顿已经结束，接下来继续安排新的一顿。";
+});
+const heroPrimaryActionText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "随机一桌";
+  if (homeNextStatus.value === "NO_ARRANGEMENT") return "随机一桌";
+  if (homeNextStatus.value === "NEED_GAP_CHECK") return recentArrangement.value?.menuCount ? "看看缺什么" : "去加菜";
+  if (homeNextStatus.value === "NEED_SHOPPING") return "去采购";
+  if (homeNextStatus.value === "READY_TO_COOK") return "开始做饭";
+  return "分享回忆";
+});
+const heroSecondaryActionText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "看冰箱";
+  if (homeNextStatus.value === "NO_ARRANGEMENT") return "看冰箱";
+  if (homeNextStatus.value === "COMPLETED") return "看冰箱";
+  return "查看详情";
+});
 
 onShow(() => {
-  void loadHomeEntries();
+  void Promise.all([loadHomeEntries(), loadNextMealState(true)]);
 });
 
 async function loadHomeEntries(force = false) {
@@ -292,6 +408,43 @@ async function loadHomeEntries(force = false) {
   await homeEntriesLoadPromise;
 }
 
+async function loadNextMealState(force = false) {
+  if (!sessionStore.isLoggedIn) {
+    nextMealState.value = null;
+    nextMealStateLoading.value = false;
+    nextMealStateLoaded.value = false;
+    return;
+  }
+
+  if (nextMealStateLoadPromise) {
+    await nextMealStateLoadPromise;
+    return;
+  }
+
+  if (!force && nextMealStateLoaded.value) return;
+
+  nextMealStateLoading.value = true;
+  nextMealStateLoadPromise = homeApi
+    .getNextMealState()
+    .then(result => {
+      nextMealState.value = result;
+      nextMealStateLoaded.value = true;
+    })
+    .catch(() => {
+      nextMealState.value = {
+        status: "NO_ARRANGEMENT",
+        arrangement: null
+      };
+      nextMealStateLoaded.value = true;
+    })
+    .finally(() => {
+      nextMealStateLoading.value = false;
+      nextMealStateLoadPromise = null;
+    });
+
+  await nextMealStateLoadPromise;
+}
+
 async function showLoadToast(title: string) {
   await uniPlatform.feedback.toast({
     title,
@@ -326,12 +479,122 @@ function openHomeEntry(item: HomeEntryItem | null) {
   navigateTo(item.targetValue);
 }
 
+function triggerHeroPrimaryAction() {
+  if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT") {
+    navigateTo("/pages_meal/random/index");
+    return;
+  }
+  if (!recentArrangement.value) {
+    navigateTo("/pages_pantry/index/index");
+    return;
+  }
+  if (homeNextStatus.value === "NEED_GAP_CHECK") {
+    navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, recentArrangement.value.menuCount > 0 ? "shopping" : "menu"));
+    return;
+  }
+  if (homeNextStatus.value === "NEED_SHOPPING") {
+    navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "shopping"));
+    return;
+  }
+  if (homeNextStatus.value === "READY_TO_COOK") {
+    navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "assistant"));
+    return;
+  }
+  navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "memory"));
+}
+
+function triggerHeroSecondaryAction() {
+  if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT" || homeNextStatus.value === "COMPLETED") {
+    navigateTo("/pages_pantry/index/index");
+    return;
+  }
+  if (recentArrangement.value) {
+    openRecentArrangementDetail(recentArrangement.value);
+  }
+}
+
+function openRecentArrangementPrimaryAction(item: HomeRecentArrangement) {
+  navigateTo(buildRecentArrangementDetailUrl(item, resolveRecentArrangementFocus(item.status)));
+}
+
+function openRecentArrangementDetail(item: HomeRecentArrangement) {
+  navigateTo(buildRecentArrangementDetailUrl(item));
+}
+
 function handleHomeScroll(event: { detail?: { scrollTop?: number } }) {
   homeScrollTop.value = event.detail?.scrollTop ?? 0;
 }
 
 function navigateTo(url: string) {
   void uniPlatform.navigation.navigateTo(url);
+}
+
+function resolveRecentArrangementSourceText(sourceType: HomeRecentArrangement["sourceType"]) {
+  return sourceType === "EVENT" ? "饭局" : "计划";
+}
+
+function formatRecentArrangementMetaLead(item: HomeRecentArrangement) {
+  return `${formatRecentArrangementTime(item)} · ${item.participantCount}人`;
+}
+
+function resolveRecentArrangementStatusText(status: HomeRecentArrangementStatus) {
+  if (status === "EMPTY_MENU") return "还没定菜单";
+  if (status === "PENDING_CONFIRM") return "待确认菜单";
+  if (status === "PENDING_SHOPPING") return "待采购";
+  if (status === "READY_TO_COOK") return "可以开始做饭";
+  return "该分享回忆了";
+}
+
+function resolveRecentArrangementActionText(status: HomeRecentArrangementStatus) {
+  if (status === "EMPTY_MENU") return "去加菜";
+  if (status === "PENDING_CONFIRM") return "确认菜单";
+  if (status === "PENDING_SHOPPING") return "去采购";
+  if (status === "READY_TO_COOK") return "开始做饭";
+  return "分享回忆";
+}
+
+function resolveRecentArrangementFocus(status: HomeRecentArrangementStatus) {
+  if (status === "EMPTY_MENU") return "menu";
+  if (status === "PENDING_CONFIRM") return "footer";
+  if (status === "PENDING_SHOPPING") return "shopping";
+  if (status === "READY_TO_COOK") return "assistant";
+  return "memory";
+}
+
+function buildRecentArrangementDetailUrl(item: HomeRecentArrangement, focus?: "menu" | "footer" | "shopping" | "assistant" | "memory") {
+  const query = [
+    `planItemId=${encodeURIComponent(String(item.planItemId))}`,
+    `planDate=${encodeURIComponent(item.planDate)}`
+  ];
+  if (item.eventId) {
+    query.push(`eventId=${encodeURIComponent(String(item.eventId))}`);
+  }
+  if (focus) {
+    query.push(`focus=${encodeURIComponent(focus)}`);
+  }
+  return `/pages_meal/detail/index?${query.join("&")}`;
+}
+
+function formatRecentArrangementTime(item: HomeRecentArrangement) {
+  if (item.scheduledAt) {
+    const date = new Date(item.scheduledAt);
+    if (Number.isFinite(date.getTime())) {
+      const now = new Date();
+      const dayDiff = resolveDayDiff(date, now);
+      const timeText = `${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")}`;
+      if (dayDiff === 0) return `今天 ${timeText}`;
+      if (dayDiff === 1) return `明天 ${timeText}`;
+      if (dayDiff === -1) return `昨天 ${timeText}`;
+      return `${date.getMonth() + 1}月${date.getDate()}日 ${timeText}`;
+    }
+  }
+  return item.planDate;
+}
+
+function resolveDayDiff(target: Date, base: Date) {
+  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+  const baseDay = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
+  return Math.round((targetDay - baseDay) / 86400000);
 }
 </script>
 
@@ -476,6 +739,43 @@ function navigateTo(url: string) {
   color: var(--entry-muted-text);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
+}
+
+.hero-copy__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.hero-copy__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 78rpx;
+  padding: 0 28rpx;
+  border-radius: var(--radius-pill);
+}
+
+.hero-copy__button--primary {
+  background: var(--entry-ink);
+  box-shadow: var(--shadow-card);
+}
+
+.hero-copy__button--ghost {
+  border: 1rpx solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+}
+
+.hero-copy__button-text {
+  color: var(--color-white);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.hero-copy__button-text--ghost {
+  color: var(--color-text);
 }
 
 .table-scene {
@@ -748,6 +1048,136 @@ function navigateTo(url: string) {
   display: flex;
   justify-content: space-evenly;
   margin-top: 32rpx;
+}
+
+.recent-arrangement {
+  margin-top: 28rpx;
+  padding: 28rpx;
+  border-radius: var(--radius-card);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--entry-side-mint-bg) 70%, transparent) 0, transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--entry-board-bg) 90%, white 10%), var(--color-surface));
+  box-shadow: var(--shadow-card);
+}
+
+.recent-arrangement--hover {
+  opacity: 0.88;
+}
+
+.recent-arrangement--skeleton {
+  pointer-events: none;
+}
+
+.recent-arrangement__head,
+.recent-arrangement__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recent-arrangement__head {
+  gap: 18rpx;
+}
+
+.recent-arrangement__head--skeleton {
+  align-items: flex-start;
+}
+
+.recent-arrangement__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.recent-arrangement__eyebrow,
+.recent-arrangement__title,
+.recent-arrangement__meta,
+.recent-arrangement__status {
+  display: block;
+}
+
+.recent-arrangement__eyebrow {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.recent-arrangement__title {
+  margin-top: 10rpx;
+  color: var(--color-text);
+  font-size: 34rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.24;
+}
+
+.recent-arrangement__badge {
+  flex: 0 0 auto;
+  padding: 12rpx 18rpx;
+  border-radius: var(--radius-pill);
+  background: var(--entry-primary-bg);
+  color: var(--entry-ink);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+}
+
+.recent-arrangement__meta {
+  margin-top: 18rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.recent-arrangement__status {
+  margin-top: 12rpx;
+  color: var(--color-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-heavy);
+}
+
+.recent-arrangement__actions {
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.recent-arrangement__actions--skeleton {
+  justify-content: flex-start;
+}
+
+.recent-arrangement__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 28rpx;
+  height: 76rpx;
+  border-radius: var(--radius-pill);
+}
+
+.recent-arrangement__button--primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-active));
+  box-shadow: var(--shadow-card);
+}
+
+.recent-arrangement__button--ghost {
+  border: 1rpx solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+}
+
+.recent-arrangement__button-text {
+  color: var(--color-white);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.recent-arrangement__button-text--ghost {
+  color: var(--color-text);
+}
+
+.recent-arrangement__body-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 18rpx;
 }
 
 .dock-action {

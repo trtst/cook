@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get } from "./http";
+import { get, type IsoDateTime, type UUID } from "./http";
 
 export type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
@@ -18,6 +18,38 @@ export interface HomeEntryItem {
 
 export interface HomeEntriesResponse {
   items: HomeEntryItem[];
+}
+
+export type HomeRecentArrangementStatus =
+  | "EMPTY_MENU"
+  | "PENDING_CONFIRM"
+  | "PENDING_SHOPPING"
+  | "READY_TO_COOK"
+  | "TIME_UP_SHARE";
+
+export interface HomeRecentArrangement {
+  sourceType: "PLAN" | "EVENT";
+  planItemId: UUID;
+  planDate: string;
+  eventId: UUID | null;
+  title: string;
+  scheduledAt: IsoDateTime | null;
+  participantCount: number;
+  menuCount: number;
+  gapCount: number | null;
+  status: HomeRecentArrangementStatus;
+}
+
+export type HomeNextMealStatus =
+  | "NO_ARRANGEMENT"
+  | "NEED_GAP_CHECK"
+  | "NEED_SHOPPING"
+  | "READY_TO_COOK"
+  | "COMPLETED";
+
+export interface HomeNextMealState {
+  status: HomeNextMealStatus;
+  arrangement: HomeRecentArrangement | null;
 }
 
 export type HomeTopicType =
@@ -91,6 +123,12 @@ export interface HomeTopicDetailResponse {
 export const homeApi = {
   getHomeEntries() {
     return get<HomeEntriesResponse>(`${cfg.domain}/api/home-entries`, undefined, { auth: false });
+  },
+  getRecentArrangement() {
+    return get<HomeRecentArrangement | null>(`${cfg.domain}/api/home/recent-arrangement`);
+  },
+  getNextMealState() {
+    return get<HomeNextMealState>(`${cfg.domain}/api/home/next-meal`);
   },
   getCurrentTopic() {
     return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`);

@@ -1,7 +1,7 @@
 <template>
   <view
     class="empty-state"
-    :class="{ 'empty-state--art': !!art }"
+    :class="{ 'empty-state--art': !!art, 'empty-state--plain': plain }"
     :hover-class="clickable ? 'empty-state--hover' : ''"
     hover-stay-time="100"
     @click="handleClick"
@@ -19,11 +19,13 @@ const props = withDefaults(
     description?: string;
     art?: string;
     clickable?: boolean;
+    plain?: boolean;
   }>(),
   {
     description: "",
     art: "",
-    clickable: false
+    clickable: false,
+    plain: false
   }
 );
 
@@ -47,6 +49,16 @@ function handleClick() {
 
 .empty-state--hover {
   opacity: 0.9;
+}
+
+.empty-state--plain {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80rpx 0 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
 }
 
 .empty-state--art {
@@ -73,6 +85,12 @@ function handleClick() {
   font-weight: 600;
 }
 
+.empty-state--plain .empty-state__title {
+  font-size: 34rpx;
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
 .empty-state--art .empty-state__title {
   margin-top: 8rpx;
   font-size: 36rpx;
@@ -86,6 +104,12 @@ function handleClick() {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
+}
+
+.empty-state--plain .empty-state__description {
+  max-width: 520rpx;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
 }
 
 .empty-state--art .empty-state__description {

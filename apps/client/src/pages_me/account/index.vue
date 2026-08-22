@@ -24,8 +24,10 @@
             <text class="account-row__arrow cookfont icon-back" />
           </view>
         </view>
+      </view>
 
-        <view class="account-row" hover-class="is-pressed" hover-stay-time="100" @click="handleLogout">
+      <view class="account-panel account-panel--danger">
+        <view class="account-row account-row--danger" hover-class="is-pressed" hover-stay-time="100" @click="handleLogout">
           <view class="account-row__copy">
             <text class="account-row__title">退出登录</text>
           </view>
@@ -66,6 +68,14 @@ function handleBindPhone() {
 }
 
 async function handleLogout() {
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "确认退出登录？",
+    content: "退出后会清空当前账号的本地登录状态，需要重新登录后才能继续查看文章、计划和个人资料。",
+    confirmText: "退出登录",
+    tone: "danger"
+  });
+  if (!confirmed) return;
+
   loginModalStore.close();
   await clearUserSessionState();
   await uniPlatform.feedback.toast({
@@ -112,11 +122,16 @@ function formatPhoneStatus(phone: string | null) {
 }
 
 .account-panel {
+  margin-top: var(--space-lg);
   overflow: hidden;
   border: 1rpx solid var(--color-divider);
-  border-radius: 20rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+}
+
+.account-panel:first-child {
+  margin-top: 0;
 }
 
 .account-row {
@@ -160,5 +175,14 @@ function formatPhoneStatus(phone: string | null) {
   font-size: 24rpx;
   line-height: 1;
   transform: rotate(180deg);
+}
+
+.account-panel--danger {
+  border-color: color-mix(in srgb, #d95c4f 20%, var(--color-divider));
+}
+
+.account-row--danger .account-row__title,
+.account-row--danger .account-row__arrow {
+  color: #d95c4f;
 }
 </style>

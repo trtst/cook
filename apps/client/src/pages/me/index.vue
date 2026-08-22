@@ -68,21 +68,21 @@
 
 				<template v-else>
 					<view class="overview-grid">
-						<view class="dining-card" hover-class="is-pressed" hover-stay-time="100"
-							@click="handleMealHubOpen">
+						<view class="membership-card" hover-class="is-pressed" hover-stay-time="100"
+							@click="handleBenefitCenter">
 							<view class="overview-heading">
-								<text class="overview-heading__title">饭局</text>
+								<text class="overview-heading__title">我的会员</text>
 								<text class="overview-heading__arrow cookfont icon-back" />
 							</view>
-							<text class="dining-card__description">发起、查看和收口最近的饭局</text>
+							<text class="membership-card__description">{{ membershipCardDescription }}</text>
 
-							<view v-if="sessionStore.isLoggedIn" class="dining-card__summary">
-								<text class="dining-card__count">{{ mealHubTitle }}</text>
-								<text class="dining-card__current">{{ mealHubDescription }}</text>
+							<view v-if="sessionStore.isLoggedIn" class="membership-card__summary">
+								<text class="membership-card__count">{{ membershipCardTitle }}</text>
+								<text class="membership-card__current">{{ membershipCardMeta }}</text>
 							</view>
 							<template v-else>
-								<text class="dining-card__status">去看看</text>
-								<text class="dining-card__invite">登录后查看你发起的和你参加的饭局。</text>
+								<text class="membership-card__status">去看看</text>
+								<text class="membership-card__invite">体验码、会员时长和权益变化都会同步到当前账号。</text>
 							</template>
 						</view>
 
@@ -100,7 +100,7 @@
 					</view>
 
 					<view class="service-section">
-						<text class="service-section__title">权益服务</text>
+						<text class="service-section__title">会员</text>
 						<view class="service-list">
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleBenefitCenter">
 								<view class="service-row__icon-wrap service-row__icon-wrap--benefit">
@@ -108,7 +108,7 @@
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">权益中心</text>
-									<text class="service-row__description">查看当前会员、体验码与广告减免规则</text>
+									<text class="service-row__description">看看你现在能用哪些会员权益</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
@@ -118,7 +118,7 @@
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">会员兑换码</text>
-									<text class="service-row__description">站外购买后，在这里输入兑换码到账</text>
+									<text class="service-row__description">有兑换码的话，在这里兑换到账</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
@@ -126,7 +126,7 @@
 					</view>
 
 					<view class="service-section">
-						<text class="service-section__title">个人服务</text>
+						<text class="service-section__title">我的</text>
 						<view class="service-list">
 							<view v-for="item in personalEntries" :key="item.title" class="service-row"
 								hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(item)">
@@ -158,7 +158,7 @@
 					</view>
 
 					<view class="service-section">
-						<text class="service-section__title">设置与支持</text>
+						<text class="service-section__title">设置</text>
 						<view class="service-list">
 							<template v-for="item in settingEntries" :key="item.title">
 								<button v-if="item.openType === 'contact'" class="service-row service-row-button" open-type="contact"
@@ -166,9 +166,10 @@
 									<view class="service-row__icon-wrap">
 										<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
 									</view>
-									<view class="service-row__copy">
-										<text class="service-row__title">{{ item.title }}</text>
-									</view>
+										<view class="service-row__copy">
+											<text class="service-row__title">{{ item.title }}</text>
+											<text v-if="item.description" class="service-row__description">{{ item.description }}</text>
+										</view>
 									<text class="service-row__arrow cookfont icon-back" />
 								</button>
 
@@ -177,9 +178,10 @@
 									<view class="service-row__icon-wrap">
 										<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
 									</view>
-									<view class="service-row__copy">
-										<text class="service-row__title">{{ item.title }}</text>
-									</view>
+										<view class="service-row__copy">
+											<text class="service-row__title">{{ item.title }}</text>
+											<text v-if="item.description" class="service-row__description">{{ item.description }}</text>
+										</view>
 									<text class="service-row__arrow cookfont icon-back" />
 								</view>
 							</template>
@@ -248,6 +250,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import TierBadge from "@/components/TierBadge/TierBadge.vue";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
+import { buildKnowledgeListPath } from "@/config/knowledge-articles";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
@@ -312,8 +315,11 @@ const profileAvatarText = computed(() => {
 const profileUidText = computed(() =>
 	sessionStore.isLoggedIn ? `UID: ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
-const mealHubTitle = computed(() => "发起和查看最近饭局");
-const mealHubDescription = computed(() => "菜单、参与人和回忆都会收在这里。");
+const membershipCardDescription = computed(() => (
+	sessionStore.isLoggedIn ? "你的容量、展示和减广告权益都收在这里" : "登录后查看会员状态"
+));
+const membershipCardTitle = computed(() => `你当前是 ${formatMembershipTier(userStore.profile?.membership?.tier)}`);
+const membershipCardMeta = computed(() => formatMembershipValidUntil(userStore.profile?.membership?.validUntil ?? null));
 const currentThemeText = computed(() => {
 	const modeLabel = themeModeLabels[themeMode.value];
 	const skinLabel = skinLabelMap[effectiveSkin.value] || "基础";
@@ -365,25 +371,25 @@ const personalEntries: PageEntry[] = [
 	{
 		title: "通知中心",
 		iconSrc: notificationsIcon,
-		description: "推荐审核、饭局邀请、计划进度和系统消息",
+		description: "邀请提醒、进度通知和系统消息都在这里",
 		url: "/pages_me/recommend/index"
 	},
 	{
 		title: "我的口味",
 		iconSrc: tasteIcon,
-		description: "口味偏好、忌口和过敏信息",
+		description: "把爱吃、不吃和过敏信息整理清楚",
 		url: "/pages_me/taste/index"
 	},
 	{
 		title: "食材与单位",
 		iconSrc: categoriesUnitsIcon,
-		description: "创建菜谱时会用到的食材分类、常用食材和单位",
+		description: "常用食材、分类和单位集中管理",
 		url: "/pages_me/ingredient-units/index"
 	},
 	{
 		title: "厨具",
 		iconSrc: cookwareIcon,
-		description: "平底锅等常用厨具资料",
+		description: "收着常见厨具的基础资料",
 		disabledText: "厨具"
 	}
 ];
@@ -392,23 +398,20 @@ const knowledgeEntries: PageEntry[] = [
 	{
 		title: "厨房准备",
 		iconSrc: kitchenPrepIcon,
-		description: "备菜与收纳",
-		url: "/pages_web/content/index?slug=kitchen-prep",
-		requiresLogin: false
+		description: "下厨前的备菜和收纳小知识",
+		url: buildKnowledgeListPath("KITCHEN_PREP")
 	},
 	{
 		title: "烹饪技巧",
 		iconSrc: cookingSkillsIcon,
-		description: "火候与做法",
-		url: "/pages_web/content/index?slug=cooking-skills",
-		requiresLogin: false
+		description: "火候、步骤和做法上的实用经验",
+		url: buildKnowledgeListPath("COOKING_SKILLS")
 	},
 	{
 		title: "食谱技巧",
 		iconSrc: recipeSkillsIcon,
-		description: "配方与替换",
-		url: "/pages_web/content/index?slug=recipe-skills",
-		requiresLogin: false
+		description: "配比调整、替换思路和做菜小窍门",
+		url: buildKnowledgeListPath("RECIPE_SKILLS")
 	}
 ];
 
@@ -416,48 +419,68 @@ const settingEntries = computed<PageEntry[]>(() => [
 	{
 		title: "提醒设置",
 		iconSrc: remindersIcon,
-		description: "进入提醒设置页查看当前提醒入口",
+		description: "看看现在有哪些提醒入口",
 		url: "/pages_me/reminder/index"
 	},
 	{
 		title: "主题皮肤",
 		iconSrc: themeIcon,
-		description: currentThemeText.value,
+		description: `当前${currentThemeText.value}，换一个你更喜欢的页面风格`,
 		url: "/pages_me/theme/index",
 		requiresLogin: false
 	},
 	{
 		title: "在线客服",
 		iconSrc: feedbackIcon,
-		description: "直接进入微信客服会话",
+		description: "有问题时直接联系客服",
 		openType: "contact",
 		requiresLogin: false
 	},
 	{
 		title: "账号设置",
 		iconSrc: notificationsIcon,
-		description: sessionStore.isLoggedIn ? "清除缓存与退出登录" : "登录后管理当前账号",
+		description: sessionStore.isLoggedIn ? "处理当前账号、缓存和登录状态" : "登录后处理账号和登录状态",
 		url: "/pages_me/account/index"
 	},
 	{
 		title: "隐私政策",
 		iconSrc: privacyIcon,
+		description: "了解你的信息会如何被使用",
 		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/privacy")}`,
 		requiresLogin: false
 	},
 	{
 		title: "用户协议",
 		iconSrc: privacyIcon,
+		description: "查看产品使用说明和规则",
 		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/terms")}`,
 		requiresLogin: false
 	},
 	{
 		title: `关于${APP_NAME}`,
 		iconSrc: aboutIcon,
+		description: "看看产品介绍和当前版本",
 		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/about")}`,
 		requiresLogin: false
 	}
 ]);
+
+function formatMembershipTier(tier: string | null | undefined) {
+	if (tier === "ULTRA") return "Ultra";
+	if (tier === "PRO") return "Pro";
+	if (tier === "PLUS") return "Plus";
+	return "Free";
+}
+
+function formatMembershipValidUntil(validUntil: string | null) {
+	if (!validUntil) return "当前未开通会员";
+	const value = new Date(validUntil);
+	if (Number.isNaN(value.getTime())) return "有效期按到账结果为准";
+	const yyyy = value.getFullYear();
+	const mm = `${value.getMonth() + 1}`.padStart(2, "0");
+	const dd = `${value.getDate()}`.padStart(2, "0");
+	return `到期时间 ${yyyy}-${mm}-${dd}`;
+}
 
 function isDisabledEntry(entry: PageEntry) {
 	return Boolean(entry.disabledText && !entry.url && !entry.openType);
@@ -946,7 +969,7 @@ function showComingSoon(name: string) {
 	gap: var(--space-lg);
 }
 
-.dining-card,
+.membership-card,
 .medal-card,
 .service-list,
 .knowledge-grid {
@@ -955,7 +978,7 @@ function showComingSoon(name: string) {
 	box-shadow: var(--me-card-shadow);
 }
 
-.dining-card {
+.membership-card {
 	min-width: 0;
 	padding: 26rpx 24rpx 22rpx;
 }
@@ -979,38 +1002,38 @@ function showComingSoon(name: string) {
 	transform: rotate(180deg);
 }
 
-.dining-card__description,
-.dining-card__invite,
-.dining-card__status {
+.membership-card__description,
+.membership-card__invite,
+.membership-card__status {
 	display: block;
 	font-size: var(--font-size-xs);
 	line-height: 1.5;
 }
 
-.dining-card__description {
+.membership-card__description {
 	color: var(--color-text-tertiary);
 	margin-top: 8rpx;
 }
 
-.dining-card__status {
+.membership-card__status {
 	margin-top: 26rpx;
 	color: var(--color-primary);
 	font-weight: var(--font-weight-bold);
 }
 
-.dining-card__invite {
+.membership-card__invite {
 	margin-top: 8rpx;
 	color: var(--color-text-tertiary);
 }
 
-.dining-card__summary {
+.membership-card__summary {
 	display: flex;
 	flex-direction: column;
 	gap: 10rpx;
 	margin-top: 24rpx;
 }
 
-.dining-card__count {
+.membership-card__count {
 	overflow: hidden;
 	max-width: 100%;
 	color: var(--color-text);
@@ -1020,7 +1043,7 @@ function showComingSoon(name: string) {
 	white-space: nowrap;
 }
 
-.dining-card__current {
+.membership-card__current {
 	overflow: hidden;
 	max-width: 100%;
 	color: var(--color-text-secondary);

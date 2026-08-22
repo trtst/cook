@@ -115,7 +115,7 @@
                     @click="addToShoppingList"
                   >
                     <text class="cookfont icon-add-list section__action-icon" />
-                    <text>{{ shoppingSubmitting ? "添加中..." : "添加清单" }}</text>
+                    <text>{{ shoppingSubmitting ? "加入中..." : "加入当前采购清单" }}</text>
                   </button>
                 </view>
                 <view v-if="detailContent.ingredients.length" class="ingredient-list">
@@ -170,7 +170,7 @@
 	                </button>
 	                  <button v-if="canAddToPrivate && !detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
-	                    <view class="detail-inline-actions__text">添加到私房菜</view>
+	                    <view class="detail-inline-actions__text">保存为私房菜</view>
 	                  </button>
 	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
@@ -210,7 +210,7 @@
           <template v-if="isExternalDetail">
             <button v-if="canAddToPrivate" class="detail-actions__item" @click="openPrivateSheet">
               <view class="cookfont icon-collect detail-actions__icon" />
-              <view class="detail-actions__text">添加到私房菜</view>
+              <view class="detail-actions__text">保存为私房菜</view>
             </button>
             <button class="detail-actions__item" @click="handleExternalPrimaryAction">
               <view class="cookfont icon-add-plan detail-actions__icon" />
@@ -1143,10 +1143,34 @@ async function addToShoppingList() {
     await uniPlatform.feedback.toast({ title: "当前菜谱暂不支持加入购物清单", icon: "none" });
     return;
   }
+  shoppingSubmitting.value = true;
   try {
-    await openShoppingSheet();
+    const source = resolveShoppingSource();
+    if (!source) throw new Error("当前菜谱暂不支持加入购物清单");
+    let listId = selectedShoppingListId.value;
+    if (!listId) {
+      await loadShoppingLists(true);
+      listId = selectedShoppingListId.value || shoppingLists.value[0]?.id || "";
+    }
+    if (!listId) {
+      const created = await shoppingApi.createList({
+        operationId: createOperationId(),
+        name: buildDefaultListName()
+      });
+      shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
+      selectedShoppingListId.value = created.id;
+      listId = created.id;
+    }
+    await shoppingApi.addRecipeToList(listId, {
+      operationId: createOperationId(),
+      recipeId: source.recipeId,
+      sourceVersionId: source.sourceVersionId
+    });
+    await uniPlatform.feedback.toast({ title: "已加入当前采购清单", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "清单加载失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入当前采购清单失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
   }
 }
 

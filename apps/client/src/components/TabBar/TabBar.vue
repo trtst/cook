@@ -6,7 +6,7 @@
         :key="item.key"
         class="tabbar__item"
         :class="{ 'tabbar__item--active': item.key === current }"
-        hover-class="tabbar__item--hover"
+        :hover-class="interactive ? 'tabbar__item--hover' : 'none'"
         hover-stay-time="100"
         @click="switchTab(item.pagePath)"
       >
@@ -36,9 +36,15 @@ import { uniPlatform } from "@/platform/uni";
 import { useTheme } from "@/composables/useTheme";
 import { FALLBACK_ASSET_SKIN, getThemeSkinAssets, type ThemeTabbarIconName } from "@/themes";
 
-defineProps<{
-  current: TabKey;
-}>();
+const props = withDefaults(
+  defineProps<{
+    current: TabKey;
+    interactive?: boolean;
+  }>(),
+  {
+    interactive: true
+  }
+);
 
 const { effectiveSkin } = useTheme();
 
@@ -64,6 +70,7 @@ function getFontIconClass(iconName: ThemeTabbarIconName) {
 }
 
 function switchTab(pagePath: string) {
+  if (!props.interactive) return;
   void uniPlatform.navigation.switchTab(pagePath);
 }
 </script>
