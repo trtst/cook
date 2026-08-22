@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PantryModule } from "../pantry/pantry.module";
 import { AdminHomeController } from "./admin-home.controller";
 import { AdminHomeTopicController } from "./admin-home-topic.controller";
 import { AdminTableTopicController } from "./admin-table-topic.controller";
@@ -13,6 +14,7 @@ import { TableTopicImageService } from "./table-topic-image.service";
 import { TableTopicService } from "./table-topic.service";
 
 @Module({
+  imports: [PantryModule],
   controllers: [
     HomeController,
     HomePublicAssetsController,

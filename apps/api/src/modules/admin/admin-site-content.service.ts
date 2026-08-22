@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, type SiteContentStatus, type SiteContentType } from "@prisma/client";
-import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
+import {
+  completeAdminIdempotentOperation,
+  completeIdempotentOperation,
+  getAdminIdempotentResult,
+  getIdempotentResult,
+  startAdminIdempotentOperation,
+  startIdempotentOperation
+} from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import { sanitizeContentHtml } from "./content-html";
 import type {
@@ -12,6 +19,10 @@ import type {
   CreateAdminSiteContentChannelRequest,
   CreateAdminSiteContentRequest,
   PageResult,
+  SiteContentArticleDetail,
+  SiteContentArticleLikeResult,
+  SiteContentArticleSummary,
+  SiteContentArticleViewResult,
   SiteContentDetail,
   UUID,
   UpdateAdminSiteContentChannelRequest,
@@ -42,8 +53,19 @@ const defaultChannelSeeds = [
   { code: "LEGAL", name: "法务", description: "隐私政策与用户协议", sortOrder: 1 },
   { code: "HELP", name: "帮助", description: "FAQ 与内容帮助页", sortOrder: 2 },
   { code: "PRE_MEAL", name: "餐前准备", description: "备菜与准备类文章", sortOrder: 3 },
-  { code: "KITCHEN_KNOWLEDGE", name: "厨房知识", description: "厨房经验与做饭知识文章", sortOrder: 4 }
+  { code: "KITCHEN_KNOWLEDGE", name: "厨房知识", description: "厨房经验与做饭知识文章", sortOrder: 4 },
+  { code: "KITCHEN_PREP", name: "厨房准备", description: "厨房准备类文章", sortOrder: 5 },
+  { code: "COOKING_SKILLS", name: "烹饪技巧", description: "烹饪技巧类文章", sortOrder: 6 },
+  { code: "RECIPE_SKILLS", name: "食谱技巧", description: "食谱技巧类文章", sortOrder: 7 }
 ] as const;
+
+const publicArticleChannels = [
+  { code: "KITCHEN_PREP", name: "厨房准备" },
+  { code: "COOKING_SKILLS", name: "烹饪技巧" },
+  { code: "RECIPE_SKILLS", name: "食谱技巧" }
+] as const;
+
+type PublicArticleChannelCode = (typeof publicArticleChannels)[number]["code"];
 
 const fixedPageSeeds: FixedPageSeed[] = [
   { slug: "about", path: "/about", title: "关于我们", label: "关于", channelCode: "ABOUT", sortOrder: 0 },
@@ -92,6 +114,10 @@ function buildTextFromHtml(value: string) {
 
 function toRequestHash(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function isPublicArticleChannelCode(value: string): value is PublicArticleChannelCode {
+  return publicArticleChannels.some(item => item.code === value);
 }
 
 @Injectable()
@@ -420,6 +446,175 @@ export class AdminSiteContentService {
     };
   }
 
+  async listPublicArticles(
+    userId: number,
+    page: number,
+    pageSize: number,
+    channelCode: string
+  ): Promise<PageResult<SiteContentArticleSummary>> {
+    await this.requireUser(userId);
+    await this.ensureDefaultChannels();
+    if (!isPublicArticleChannelCode(channelCode)) {
+      throw new BadRequestException("文章栏目不支持");
+    }
+
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = Math.min(50, toPositiveInt(pageSize, 20));
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const where: Prisma.SiteContentWhereInput = {
+      type: "ARTICLE",
+      status: "PUBLISHED",
+      channel: { code: channelCode }
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.siteContent.findMany({
+        where,
+        orderBy: [{ sortOrder: "asc" }, { publishedAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.siteContent.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => this.toPublicArticleSummary(item)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async getPublicArticleDetail(userId: number, articleId: number): Promise<SiteContentArticleDetail> {
+    await this.requireUser(userId);
+    await this.ensureDefaultChannels();
+    const row = await this.findPublicArticle(articleId, userId);
+    return this.toPublicArticleDetail(row);
+  }
+
+  async recordPublicArticleView(userId: number, articleId: number, operationId: string): Promise<SiteContentArticleViewResult> {
+    await this.requireUser(userId);
+    const requestHash = toRequestHash({ articleId });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<SiteContentArticleViewResult>(tx, operationId, "site-content-article:view", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "site-content-article:view", userId, null, requestHash);
+
+      await this.requirePublicArticleForWrite(tx, articleId);
+      const updated = await tx.siteContent.update({
+        where: { id: articleId },
+        data: {
+          viewCount: { increment: 1 }
+        },
+        select: {
+          id: true,
+          viewCount: true
+        }
+      });
+      const result: SiteContentArticleViewResult = {
+        articleId: updated.id,
+        viewCount: updated.viewCount
+      };
+      await completeIdempotentOperation(tx, operationId, "site-content-article:view", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async likePublicArticle(userId: number, articleId: number, operationId: string): Promise<SiteContentArticleLikeResult> {
+    await this.requireUser(userId);
+    const requestHash = toRequestHash({ articleId, action: "like" });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<SiteContentArticleLikeResult>(tx, operationId, "site-content-article:like", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "site-content-article:like", userId, null, requestHash);
+
+      await this.requirePublicArticleForWrite(tx, articleId);
+      const created = await tx.siteContentLike.createMany({
+        data: [
+          {
+            contentId: articleId,
+            userId
+          }
+        ],
+        skipDuplicates: true
+      });
+
+      let likeCount: number;
+      if (created.count > 0) {
+        const article = await tx.siteContent.update({
+          where: { id: articleId },
+          data: {
+            likeCount: { increment: 1 }
+          },
+          select: { likeCount: true }
+        });
+        likeCount = article.likeCount;
+      } else {
+        const article = await tx.siteContent.findUniqueOrThrow({
+          where: { id: articleId },
+          select: { likeCount: true }
+        });
+        likeCount = article.likeCount;
+      }
+
+      const result: SiteContentArticleLikeResult = {
+        articleId,
+        likeCount,
+        viewerHasLiked: true
+      };
+      await completeIdempotentOperation(tx, operationId, "site-content-article:like", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async unlikePublicArticle(userId: number, articleId: number, operationId: string): Promise<SiteContentArticleLikeResult> {
+    await this.requireUser(userId);
+    const requestHash = toRequestHash({ articleId, action: "unlike" });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<SiteContentArticleLikeResult>(tx, operationId, "site-content-article:unlike", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "site-content-article:unlike", userId, null, requestHash);
+
+      await this.requirePublicArticleForWrite(tx, articleId);
+      const deleted = await tx.siteContentLike.deleteMany({
+        where: {
+          contentId: articleId,
+          userId
+        }
+      });
+
+      let likeCount: number;
+      if (deleted.count > 0) {
+        const article = await tx.siteContent.update({
+          where: { id: articleId },
+          data: {
+            likeCount: { decrement: 1 }
+          },
+          select: { likeCount: true }
+        });
+        likeCount = article.likeCount;
+      } else {
+        const article = await tx.siteContent.findUniqueOrThrow({
+          where: { id: articleId },
+          select: { likeCount: true }
+        });
+        likeCount = article.likeCount;
+      }
+
+      const result: SiteContentArticleLikeResult = {
+        articleId,
+        likeCount,
+        viewerHasLiked: false
+      };
+      await completeIdempotentOperation(tx, operationId, "site-content-article:unlike", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   private async normalizeContentInput(body: CreateAdminSiteContentRequest | UpdateAdminSiteContentRequest, tx: Prisma.TransactionClient | PrismaService = this.prisma) {
     const type = body.type;
     const slug = normalizeSlug(body.slug);
@@ -601,6 +796,107 @@ export class AdminSiteContentService {
     });
     if (!admin || admin.status !== "ACTIVE" || !admin.roles.includes("SUPER_ADMIN")) {
       throw new ForbiddenException("无权执行该操作");
+    }
+  }
+
+  private toPublicArticleSummary(row: Pick<ContentRow, "id" | "title" | "summary" | "coverImageUrl" | "publishedAt" | "updatedAt" | "viewCount" | "likeCount">): SiteContentArticleSummary {
+    return {
+      id: row.id,
+      title: row.title,
+      summary: row.summary,
+      coverImageUrl: row.coverImageUrl,
+      publishedAt: (row.publishedAt ?? row.updatedAt).toISOString(),
+      viewCount: row.viewCount,
+      likeCount: row.likeCount
+    };
+  }
+
+  private toPublicArticleDetail(
+    row: Prisma.SiteContentGetPayload<{
+      include: {
+        channel: true;
+        likes: {
+          select: {
+            id: true;
+          };
+        };
+      };
+    }>
+  ): SiteContentArticleDetail {
+    if (!row.channel || !isPublicArticleChannelCode(row.channel.code)) {
+      throw new NotFoundException("文章不存在");
+    }
+
+    return {
+      ...this.toPublicArticleSummary(row),
+      slug: row.slug,
+      path: row.path,
+      label: row.label,
+      heroNote: row.heroNote,
+      bodyHtml: row.bodyHtml,
+      bodyText: row.bodyText,
+      updatedAt: row.updatedAt.toISOString(),
+      channelCode: row.channel.code,
+      channelName: row.channel.name,
+      viewerHasLiked: row.likes.length > 0
+    };
+  }
+
+  private async findPublicArticle(userId: number, articleId: number) {
+    const row = await this.prisma.siteContent.findFirst({
+      where: {
+        id: articleId,
+        type: "ARTICLE",
+        status: "PUBLISHED",
+        channel: {
+          code: {
+            in: publicArticleChannels.map(item => item.code)
+          }
+        }
+      },
+      include: {
+        channel: true,
+        likes: {
+          where: { userId },
+          select: { id: true }
+        }
+      }
+    });
+
+    if (!row) {
+      throw new NotFoundException("文章不存在");
+    }
+
+    return row;
+  }
+
+  private async requirePublicArticleForWrite(tx: Prisma.TransactionClient, articleId: number) {
+    const row = await tx.siteContent.findFirst({
+      where: {
+        id: articleId,
+        type: "ARTICLE",
+        status: "PUBLISHED",
+        channel: {
+          code: {
+            in: publicArticleChannels.map(item => item.code)
+          }
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!row) {
+      throw new NotFoundException("文章不存在");
+    }
+  }
+
+  private async requireUser(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true }
+    });
+    if (!user || user.status !== "ACTIVE") {
+      throw new ForbiddenException("无权访问该内容");
     }
   }
 }

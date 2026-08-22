@@ -121,6 +121,38 @@ export interface HomeEntriesResponse {
   items: HomeEntryItem[];
 }
 
+export type HomeRecentArrangementStatus =
+  | "EMPTY_MENU"
+  | "PENDING_CONFIRM"
+  | "PENDING_SHOPPING"
+  | "READY_TO_COOK"
+  | "TIME_UP_SHARE";
+
+export interface HomeRecentArrangement {
+  sourceType: "PLAN" | "EVENT";
+  planItemId: UUID;
+  planDate: string;
+  eventId: UUID | null;
+  title: string;
+  scheduledAt: IsoDateTime | null;
+  participantCount: number;
+  menuCount: number;
+  gapCount: number | null;
+  status: HomeRecentArrangementStatus;
+}
+
+export type HomeNextMealStatus =
+  | "NO_ARRANGEMENT"
+  | "NEED_GAP_CHECK"
+  | "NEED_SHOPPING"
+  | "READY_TO_COOK"
+  | "COMPLETED";
+
+export interface HomeNextMealState {
+  status: HomeNextMealStatus;
+  arrangement: HomeRecentArrangement | null;
+}
+
 export interface AdminHomeEntryItem extends HomeEntryItem {
   status: HomeEntryStatus;
   version: number;
@@ -703,6 +735,40 @@ export interface SiteContentDetail {
   updatedAt: IsoDateTime;
   channelCode: string | null;
   channelName: string | null;
+}
+
+export interface SiteContentArticleSummary {
+  id: UUID;
+  title: string;
+  summary: string;
+  coverImageUrl: string | null;
+  publishedAt: IsoDateTime;
+  viewCount: number;
+  likeCount: number;
+}
+
+export interface SiteContentArticleDetail extends SiteContentArticleSummary {
+  slug: string;
+  path: string;
+  label: string;
+  heroNote: string | null;
+  bodyHtml: string;
+  bodyText: string;
+  updatedAt: IsoDateTime;
+  channelCode: "KITCHEN_PREP" | "COOKING_SKILLS" | "RECIPE_SKILLS";
+  channelName: string;
+  viewerHasLiked: boolean;
+}
+
+export interface SiteContentArticleLikeResult {
+  articleId: UUID;
+  likeCount: number;
+  viewerHasLiked: boolean;
+}
+
+export interface SiteContentArticleViewResult {
+  articleId: UUID;
+  viewCount: number;
 }
 
 export interface AdminLoginRequest {

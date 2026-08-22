@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { type HomeEntryStatus, type HomeFeatureBoardCard, type HomeFeatureBoardPlacement, type HomeFeatureBoardTargetType, Prisma } from "@prisma/client";
+import { type HomeEntryStatus, type HomeFeatureBoardCard, type HomeFeatureBoardPlacement, type HomeFeatureBoardTargetType, type MealSlot, Prisma } from "@prisma/client";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type {
@@ -8,12 +8,17 @@ import type {
   AdminHomeEntryItem,
   HomeEntriesResponse,
   HomeEntryItem,
+  HomeNextMealState,
+  HomeNextMealStatus,
   HomeEntryPageTarget,
+  HomeRecentArrangement,
+  HomeRecentArrangementStatus,
   OperationId,
   SetHomeEntryStatusRequest,
   UUID,
   UpdateHomeEntriesRequest
 } from "../../contracts/types";
+import { PantryService } from "../pantry/pantry.service";
 import { HomeImageService } from "./home-image.service";
 
 type BoardDb = Prisma.TransactionClient | PrismaService;
@@ -26,6 +31,16 @@ type RequestLike = {
 const featurePlacements: HomeFeatureBoardPlacement[] = ["MAIN", "SIDE_TOP", "SIDE_BOTTOM"];
 const quickPlacements: HomeFeatureBoardPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
 const allPlacements: HomeFeatureBoardPlacement[] = [...featurePlacements, ...quickPlacements];
+const primaryWindowMs = 24 * 60 * 60 * 1000;
+const fallbackWindowMs = 36 * 60 * 60 * 1000;
+const pastShareWindowMs = 24 * 60 * 60 * 1000;
+const arrangementStatusPriority: Record<HomeRecentArrangementStatus, number> = {
+  TIME_UP_SHARE: 5,
+  READY_TO_COOK: 4,
+  PENDING_SHOPPING: 3,
+  PENDING_CONFIRM: 2,
+  EMPTY_MENU: 1
+};
 const placementIds: Record<HomeFeatureBoardPlacement, string> = {
   MAIN: "feature-main",
   SIDE_TOP: "feature-side-top",
@@ -105,6 +120,11 @@ const defaultCards: Record<HomeFeatureBoardPlacement, Omit<HomeCardInput, "place
     badgeText: "缺"
   }
 };
+type RecentArrangementBucket = "PRIMARY" | "PAST_SHARE" | "FALLBACK";
+type RecentArrangementCandidate = HomeRecentArrangement & {
+  bucket: RecentArrangementBucket;
+  scheduledMs: number;
+};
 
 function cleanText(value: string | null | undefined) {
   const text = value?.trim() ?? "";
@@ -133,6 +153,35 @@ function isQuickPlacement(placement: HomeFeatureBoardPlacement) {
   return quickPlacements.includes(placement);
 }
 
+function mealSlotDefaultTime(slot: MealSlot) {
+  if (slot === "BREAKFAST") return "08:00";
+  if (slot === "LUNCH") return "12:00";
+  if (slot === "AFTERNOON_TEA") return "15:30";
+  if (slot === "DINNER") return "18:30";
+  return "22:00";
+}
+
+function resolvePlanScheduledAt(planDate: Date, mealSlot: MealSlot) {
+  const [hoursText, minutesText] = mealSlotDefaultTime(mealSlot).split(":");
+  const next = new Date(planDate);
+  next.setHours(Number(hoursText), Number(minutesText), 0, 0);
+  return next;
+}
+
+function resolveCandidateBucket(scheduledMs: number, status: HomeRecentArrangementStatus, nowMs: number): RecentArrangementBucket | null {
+  const diff = scheduledMs - nowMs;
+  if (diff >= 0 && diff <= primaryWindowMs) return "PRIMARY";
+  if (status === "TIME_UP_SHARE" && diff < 0 && nowMs - scheduledMs <= pastShareWindowMs) return "PAST_SHARE";
+  if (diff > primaryWindowMs && diff <= fallbackWindowMs) return "FALLBACK";
+  return null;
+}
+
+function compareCandidates(left: RecentArrangementCandidate, right: RecentArrangementCandidate, nowMs: number) {
+  const statusDiff = arrangementStatusPriority[right.status] - arrangementStatusPriority[left.status];
+  if (statusDiff !== 0) return statusDiff;
+  return Math.abs(left.scheduledMs - nowMs) - Math.abs(right.scheduledMs - nowMs);
+}
+
 function assertHomeTarget(item: { placement: HomeFeatureBoardPlacement; targetType: HomeFeatureBoardTargetType; targetValue: string }) {
   if (item.targetType === "PAGE") {
     if (!pageTargetSet.has(item.targetValue)) {
@@ -150,7 +199,8 @@ function assertHomeTarget(item: { placement: HomeFeatureBoardPlacement; targetTy
 export class HomeService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
-    @Inject(HomeImageService) private readonly homeImageService: HomeImageService
+    @Inject(HomeImageService) private readonly homeImageService: HomeImageService,
+    @Inject(PantryService) private readonly pantryService: PantryService
   ) {}
 
   async getHomeEntries(request: RequestLike): Promise<HomeEntriesResponse> {
@@ -168,6 +218,172 @@ export class HomeService {
 
   async getAdminHomeEntries(): Promise<AdminHomeEntriesResponse> {
     return this.getAdminEntries(this.prisma);
+  }
+
+  async getRecentArrangement(userId: UUID): Promise<HomeRecentArrangement | null> {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const futureEnd = new Date(nowMs + fallbackWindowMs);
+    const pastShareStart = new Date(nowMs - pastShareWindowMs);
+    const planDateStart = new Date(now);
+    planDateStart.setDate(planDateStart.getDate() - 1);
+    planDateStart.setHours(0, 0, 0, 0);
+    const planDateEnd = new Date(futureEnd);
+    planDateEnd.setHours(23, 59, 59, 999);
+
+    const [events, plans] = await Promise.all([
+      this.prisma.diningEvent.findMany({
+        where: {
+          userId,
+          status: {
+            in: ["PLANNED", "CONFIRMED", "COMPLETED"]
+          },
+          scheduledAt: {
+            gte: pastShareStart,
+            lte: futureEnd
+          },
+          mealPlanItemId: {
+            not: null
+          }
+        },
+        orderBy: [{ scheduledAt: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          title: true,
+          scheduledAt: true,
+          status: true,
+          completedAt: true,
+          mealPlanItemId: true,
+          menuItems: {
+            select: {
+              id: true
+            }
+          },
+          participants: {
+            select: {
+              status: true
+            }
+          },
+          mealPlanItem: {
+            select: {
+              id: true,
+              planDate: true,
+              mealSlot: true
+            }
+          }
+        }
+      }),
+      this.prisma.mealPlanItem.findMany({
+        where: {
+          userId,
+          diningEvent: null,
+          status: "PLANNED",
+          planDate: {
+            gte: planDateStart,
+            lte: planDateEnd
+          }
+        },
+        orderBy: [{ planDate: "asc" }, { mealSlot: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          planDate: true,
+          mealSlot: true,
+          title: true,
+          menuLockedAt: true,
+          dishes: {
+            select: {
+              id: true
+            }
+          }
+        }
+      })
+    ]);
+
+    const eventGapEntries = await Promise.all(
+      events.map(async item => ({
+        eventId: item.id,
+        gapCount: await this.resolveEventGapCount(userId, item.id)
+      }))
+    );
+    const gapCountMap = new Map(eventGapEntries.map(item => [item.eventId, item.gapCount]));
+    const candidates: RecentArrangementCandidate[] = [];
+
+    for (const event of events) {
+      if (!event.mealPlanItem) continue;
+      const scheduledMs = event.scheduledAt.getTime();
+      const menuCount = event.menuItems.length;
+      const gapCount = gapCountMap.get(event.id) ?? null;
+      const status = this.resolveEventArrangementStatus(event.status, event.completedAt, scheduledMs, menuCount, gapCount, nowMs);
+      if (!status) continue;
+      const bucket = resolveCandidateBucket(scheduledMs, status, nowMs);
+      if (!bucket) continue;
+      candidates.push({
+        sourceType: "EVENT",
+        planItemId: event.mealPlanItem.id,
+        planDate: event.mealPlanItem.planDate.toISOString().slice(0, 10),
+        eventId: event.id,
+        title: event.title,
+        scheduledAt: event.scheduledAt.toISOString(),
+        participantCount: 1 + event.participants.filter(item => item.status !== "REMOVED").length,
+        menuCount,
+        gapCount,
+        status,
+        bucket,
+        scheduledMs
+      });
+    }
+
+    for (const plan of plans) {
+      const scheduledAt = resolvePlanScheduledAt(plan.planDate, plan.mealSlot);
+      const scheduledMs = scheduledAt.getTime();
+      const menuCount = plan.dishes.length;
+      const status = this.resolvePlanArrangementStatus(plan.menuLockedAt, menuCount, scheduledMs, nowMs);
+      if (!status) continue;
+      const bucket = resolveCandidateBucket(scheduledMs, status, nowMs);
+      if (!bucket) continue;
+      candidates.push({
+        sourceType: "PLAN",
+        planItemId: plan.id,
+        planDate: plan.planDate.toISOString().slice(0, 10),
+        eventId: null,
+        title: plan.title,
+        scheduledAt: scheduledAt.toISOString(),
+        participantCount: 1,
+        menuCount,
+        gapCount: null,
+        status,
+        bucket,
+        scheduledMs
+      });
+    }
+
+    const selected =
+      this.pickRecentArrangement(candidates, "PRIMARY", nowMs) ||
+      this.pickRecentArrangement(candidates, "PAST_SHARE", nowMs) ||
+      this.pickRecentArrangement(candidates, "FALLBACK", nowMs);
+
+    return selected
+      ? {
+          sourceType: selected.sourceType,
+          planItemId: selected.planItemId,
+          planDate: selected.planDate,
+          eventId: selected.eventId,
+          title: selected.title,
+          scheduledAt: selected.scheduledAt,
+          participantCount: selected.participantCount,
+          menuCount: selected.menuCount,
+          gapCount: selected.gapCount,
+          status: selected.status
+        }
+      : null;
+  }
+
+  async getNextMealState(userId: UUID): Promise<HomeNextMealState> {
+    const arrangement = await this.getRecentArrangement(userId);
+    return {
+      status: this.resolveNextMealStatus(arrangement),
+      arrangement
+    };
   }
 
   async updateAdminHomeEntries(
@@ -526,5 +742,59 @@ export class HomeService {
     if (!host) return path;
     const proto = request.get?.("x-forwarded-proto") || request.protocol || "https";
     return `${proto}://${host}${path}`;
+  }
+
+  private pickRecentArrangement(candidates: RecentArrangementCandidate[], bucket: RecentArrangementBucket, nowMs: number) {
+    const scoped = candidates.filter(item => item.bucket === bucket);
+    if (!scoped.length) return null;
+    const events = scoped.filter(item => item.sourceType === "EVENT").sort((left, right) => compareCandidates(left, right, nowMs));
+    if (events.length) return events[0];
+    const plans = scoped.filter(item => item.sourceType === "PLAN").sort((left, right) => compareCandidates(left, right, nowMs));
+    return plans[0] ?? null;
+  }
+
+  private resolveEventArrangementStatus(
+    eventStatus: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED",
+    completedAt: Date | null,
+    scheduledMs: number,
+    menuCount: number,
+    gapCount: number | null,
+    nowMs: number
+  ): HomeRecentArrangementStatus | null {
+    if (eventStatus === "CANCELLED") return null;
+    if (eventStatus === "COMPLETED" || completedAt || scheduledMs <= nowMs) return "TIME_UP_SHARE";
+    if (!menuCount) return "EMPTY_MENU";
+    if ((gapCount ?? 0) > 0) return "PENDING_SHOPPING";
+    if (eventStatus === "CONFIRMED") return "READY_TO_COOK";
+    return "PENDING_CONFIRM";
+  }
+
+  private resolvePlanArrangementStatus(
+    menuLockedAt: Date | null,
+    menuCount: number,
+    scheduledMs: number,
+    nowMs: number
+  ): HomeRecentArrangementStatus | null {
+    if (scheduledMs <= nowMs) return null;
+    if (!menuCount) return "EMPTY_MENU";
+    if (menuLockedAt) return "READY_TO_COOK";
+    return "PENDING_CONFIRM";
+  }
+
+  private resolveNextMealStatus(arrangement: HomeRecentArrangement | null): HomeNextMealStatus {
+    if (!arrangement) return "NO_ARRANGEMENT";
+    if (arrangement.status === "TIME_UP_SHARE") return "COMPLETED";
+    if (arrangement.status === "PENDING_SHOPPING") return "NEED_SHOPPING";
+    if (arrangement.status === "READY_TO_COOK") return "READY_TO_COOK";
+    return "NEED_GAP_CHECK";
+  }
+
+  private async resolveEventGapCount(userId: UUID, eventId: UUID) {
+    try {
+      const items = await this.pantryService.previewEventGap(userId, eventId);
+      return items.length;
+    } catch (error) {
+      return null;
+    }
   }
 }

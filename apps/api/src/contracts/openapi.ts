@@ -21,6 +21,18 @@ export function ApiOkModel(model: Type<unknown>, description: string) {
   );
 }
 
+export function ApiOkNullableModel(model: Type<unknown>, description: string) {
+  return applyDecorators(
+    ApiExtraModels(model),
+    ApiOkResponse({
+      description,
+      schema: envelopeSchema({
+        anyOf: [{ $ref: getSchemaPath(model) }, { type: "null" }]
+      })
+    })
+  );
+}
+
 export function ApiOkArray(model: Type<unknown>, description: string) {
   return applyDecorators(
     ApiExtraModels(model),
@@ -99,6 +111,28 @@ export class HomeEntryItemModel {
 
 export class HomeEntriesResponseModel {
   @ApiProperty({ type: [HomeEntryItemModel] }) items!: HomeEntryItemModel[];
+}
+
+export class HomeRecentArrangementModel {
+  @ApiProperty({ type: String, enum: ["PLAN", "EVENT"] }) sourceType!: string;
+  @ApiProperty(uuid) planItemId!: string;
+  @ApiProperty({ type: String }) planDate!: string;
+  @ApiProperty({ ...uuid, nullable: true }) eventId!: string | null;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ ...dateTime, nullable: true }) scheduledAt!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) participantCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) menuCount!: number;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) gapCount!: number | null;
+  @ApiProperty({ type: String, enum: ["EMPTY_MENU", "PENDING_CONFIRM", "PENDING_SHOPPING", "READY_TO_COOK", "TIME_UP_SHARE"] })
+  status!: string;
+}
+
+export class HomeNextMealStateModel {
+  @ApiProperty({ type: String, enum: ["NO_ARRANGEMENT", "NEED_GAP_CHECK", "NEED_SHOPPING", "READY_TO_COOK", "COMPLETED"] })
+  status!: string;
+
+  @ApiProperty({ type: HomeRecentArrangementModel, nullable: true })
+  arrangement!: HomeRecentArrangementModel | null;
 }
 
 export class AdminHomeEntryItemModel extends HomeEntryItemModel {
@@ -498,6 +532,40 @@ export class SiteContentDetailModel {
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty(nullableString) channelCode!: string | null;
   @ApiProperty(nullableString) channelName!: string | null;
+}
+
+export class SiteContentArticleSummaryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty(dateTime) publishedAt!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) viewCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
+}
+
+export class SiteContentArticleDetailModel extends SiteContentArticleSummaryModel {
+  @ApiProperty({ type: String }) slug!: string;
+  @ApiProperty({ type: String }) path!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty(nullableString) heroNote!: string | null;
+  @ApiProperty({ type: String }) bodyHtml!: string;
+  @ApiProperty({ type: String }) bodyText!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: String, enum: ["KITCHEN_PREP", "COOKING_SKILLS", "RECIPE_SKILLS"] }) channelCode!: string;
+  @ApiProperty({ type: String }) channelName!: string;
+  @ApiProperty({ type: Boolean }) viewerHasLiked!: boolean;
+}
+
+export class SiteContentArticleLikeResultModel {
+  @ApiProperty(uuid) articleId!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
+  @ApiProperty({ type: Boolean }) viewerHasLiked!: boolean;
+}
+
+export class SiteContentArticleViewResultModel {
+  @ApiProperty(uuid) articleId!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) viewCount!: number;
 }
 
 export class RecipeCategoryModel {

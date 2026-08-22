@@ -1,18 +1,20 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
-import type { RequestWithAdmin } from "../../common/auth-context";
+import type { RequestWithAdmin, RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
+import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AdminSiteContentArticleQueryDto,
   AdminSiteContentChannelQueryDto,
   CreateAdminSiteContentChannelDto,
   CreateAdminSiteContentDto,
   ResolveSiteContentDto,
+  SiteContentArticleQueryDto,
   UpdateAdminSiteContentChannelDto,
   UpdateAdminSiteContentDto,
   UpdateAdminSiteContentStatusDto
@@ -25,6 +27,10 @@ import {
   AdminSitePageSummaryModel,
   ApiOkModel,
   ApiOkPage,
+  SiteContentArticleDetailModel,
+  SiteContentArticleLikeResultModel,
+  SiteContentArticleSummaryModel,
+  SiteContentArticleViewResultModel,
   SiteContentDetailModel
 } from "../../contracts/openapi";
 import { AdminSiteContentService } from "./admin-site-content.service";
@@ -162,6 +168,53 @@ export class SiteContentController {
   @ApiOkModel(SiteContentDetailModel, "按 path 读取已发布内容")
   resolve(@Query() query: ResolveSiteContentDto) {
     return this.adminSiteContentService.resolvePublicContent(query.path).then(result => ok(result));
+  }
+}
+
+@ApiTags("site-content")
+@Controller("site-contents/articles")
+@UseGuards(UserAuthGuard)
+@ApiBearerAuth("UserBearerAuth")
+export class SiteContentArticleController {
+  constructor(@Inject(AdminSiteContentService) private readonly adminSiteContentService: AdminSiteContentService) {}
+
+  @Get()
+  @ApiOkPage(SiteContentArticleSummaryModel, "读取文章列表")
+  list(@Req() request: RequestWithUser, @Query() query: SiteContentArticleQueryDto) {
+    return this.adminSiteContentService
+      .listPublicArticles(request.user.userId, query.page, query.pageSize, query.channelCode)
+      .then(result => ok(result));
+  }
+
+  @Get(":articleId")
+  @ApiOkModel(SiteContentArticleDetailModel, "读取文章详情")
+  getDetail(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number) {
+    return this.adminSiteContentService.getPublicArticleDetail(request.user.userId, articleId).then(result => ok(result));
+  }
+
+  @Post(":articleId/view")
+  @ApiIdempotencyKey()
+  @ApiOkModel(SiteContentArticleViewResultModel, "累积文章阅读数")
+  recordView(
+    @Req() request: RequestWithUser,
+    @Param("articleId", ParseIntPipe) articleId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.adminSiteContentService.recordPublicArticleView(request.user.userId, articleId, operationId).then(result => ok(result));
+  }
+
+  @Post(":articleId/like")
+  @ApiIdempotencyKey()
+  @ApiOkModel(SiteContentArticleLikeResultModel, "点赞文章")
+  like(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number, @ReadIdempotencyKey() operationId: string) {
+    return this.adminSiteContentService.likePublicArticle(request.user.userId, articleId, operationId).then(result => ok(result));
+  }
+
+  @Delete(":articleId/like")
+  @ApiIdempotencyKey()
+  @ApiOkModel(SiteContentArticleLikeResultModel, "取消点赞文章")
+  unlike(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number, @ReadIdempotencyKey() operationId: string) {
+    return this.adminSiteContentService.unlikePublicArticle(request.user.userId, articleId, operationId).then(result => ok(result));
   }
 }
 

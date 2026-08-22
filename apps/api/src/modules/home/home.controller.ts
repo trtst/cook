@@ -1,9 +1,11 @@
-import { Controller, Get, Inject, NotFoundException, Param, Req, Res } from "@nestjs/common";
-import { ApiExcludeController, ApiTags } from "@nestjs/swagger";
+import { Controller, Get, Inject, NotFoundException, Param, Req, Res, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import type { HomeFeatureBoardPlacement } from "@prisma/client";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
-import { ApiOkModel, HomeEntriesResponseModel } from "../../contracts/openapi";
+import type { RequestWithUser } from "../../common/auth-context";
+import { UserAuthGuard } from "../../common/user-auth.guard";
+import { ApiOkModel, ApiOkNullableModel, HomeEntriesResponseModel, HomeNextMealStateModel, HomeRecentArrangementModel } from "../../contracts/openapi";
 import { HomeService } from "./home.service";
 
 type HomeAssetRequest = {
@@ -39,6 +41,22 @@ export class HomeController {
   @ApiOkModel(HomeEntriesResponseModel, "读取小程序首页快捷入口")
   getHomeEntries(@Req() request: HomeAssetRequest) {
     return this.homeService.getHomeEntries(request).then(result => ok(result));
+  }
+
+  @Get("home/recent-arrangement")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkNullableModel(HomeRecentArrangementModel, "读取首页最近安排单卡摘要")
+  getRecentArrangement(@Req() request: RequestWithUser) {
+    return this.homeService.getRecentArrangement(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("home/next-meal")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(HomeNextMealStateModel, "读取首页下一顿状态卡")
+  getNextMealState(@Req() request: RequestWithUser) {
+    return this.homeService.getNextMealState(request.user.userId).then(result => ok(result));
   }
 }
 

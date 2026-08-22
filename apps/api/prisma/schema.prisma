@@ -482,6 +482,8 @@ model SiteContent {
   coverImageUrl    String?           @map("cover_image_url") @db.VarChar(512)
   bodyHtml         String            @map("body_html") @db.Text
   bodyText         String            @map("body_text") @db.Text
+  viewCount        Int               @default(0) @map("view_count")
+  likeCount        Int               @default(0) @map("like_count")
   effectiveAt      DateTime?         @map("effective_at") @db.Timestamptz(3)
   publishedAt      DateTime?         @map("published_at") @db.Timestamptz(3)
   sortOrder        Int               @default(0) @map("sort_order")
@@ -491,12 +493,28 @@ model SiteContent {
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   channel        SiteContentChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  likes          SiteContentLike[]
   updatedByAdmin AdminAccount?       @relation(fields: [updatedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([type, status, sortOrder, id])
   @@index([channelId, type, status, sortOrder, id])
   @@index([publishedAt, id])
   @@map("site_contents")
+}
+
+model SiteContentLike {
+  id        Int      @id @default(autoincrement())
+  contentId Int      @map("content_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  content SiteContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contentId, userId])
+  @@index([userId, createdAt])
+  @@index([contentId, createdAt])
+  @@map("site_content_likes")
 }
 
 model HomeTopic {
@@ -638,6 +656,7 @@ model User {
   removedShoppingItems      ShoppingItem[]          @relation("ShoppingItemRemovedBy")
   storageLedger             StorageLedger[]
   tableTopicParticipants    TableTopicParticipant[]
+  siteContentLikes          SiteContentLike[]
   uploadAssets              UploadAsset[]
   userMedals                UserMedal[]
 

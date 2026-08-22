@@ -56,6 +56,7 @@ const membershipCodeStatusValues = ["ACTIVE", "REDEEMED", "DISABLED"] as const;
 const dashboardTrendRangeValues = ["7D", "30D"] as const;
 const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
 const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
+const siteContentArticleChannelCodeValues = ["KITCHEN_PREP", "COOKING_SKILLS", "RECIPE_SKILLS"] as const;
 
 function toOptionalBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
@@ -3612,4 +3613,10 @@ export class ResolveSiteContentDto {
   @MinLength(1)
   @MaxLength(160)
   path!: string;
+}
+
+export class SiteContentArticleQueryDto extends PageQueryDto {
+  @ApiProperty({ enum: siteContentArticleChannelCodeValues })
+  @IsIn(siteContentArticleChannelCodeValues)
+  channelCode!: "KITCHEN_PREP" | "COOKING_SKILLS" | "RECIPE_SKILLS";
 }

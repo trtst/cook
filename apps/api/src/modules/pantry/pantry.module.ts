@@ -7,6 +7,7 @@ import { PantryService } from "./pantry.service";
 @Module({
   imports: [AdminModule, EntitlementModule],
   controllers: [PantryController],
-  providers: [PantryService]
+  providers: [PantryService],
+  exports: [PantryService]
 })
 export class PantryModule {}
