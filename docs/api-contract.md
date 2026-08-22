@@ -202,6 +202,7 @@ POST /auth/wechat-login
 POST /auth/refresh
 GET  /app-config
 GET  /home-entries
+GET  /home/recent-arrangement
 GET  /users/me
 GET  /users/me/medals
 PUT  /users/me
@@ -257,6 +258,12 @@ interface AppConfigResponse {
 type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
 type HomeEntryStatus = "LISTED" | "UNLISTED";
+type HomeRecentArrangementStatus =
+  | "EMPTY_MENU"
+  | "PENDING_CONFIRM"
+  | "PENDING_SHOPPING"
+  | "READY_TO_COOK"
+  | "TIME_UP_SHARE";
 
 interface HomeEntryItem {
   id: string;
@@ -271,6 +278,19 @@ interface HomeEntryItem {
 
 interface HomeEntriesResponse {
   items: HomeEntryItem[];
+}
+
+interface HomeRecentArrangement {
+  sourceType: "PLAN" | "EVENT";
+  planItemId: UUID;
+  planDate: string;
+  eventId: UUID | null;
+  title: string;
+  scheduledAt: IsoDateTime | null;
+  participantCount: number;
+  menuCount: number;
+  gapCount: number | null;
+  status: HomeRecentArrangementStatus;
 }
 
 interface HomeEntryPageTarget {
@@ -450,6 +470,8 @@ interface RedeemMembershipCodeResult {
 
 `GET /home-entries` 只返回小程序首页入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 只服务入口内部视觉区或图标区，不是整张完成海报；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN / SIDE_TOP / SIDE_BOTTOM` 固定用于首屏 3 卡并始终返回，`QUICK_1 ... QUICK_4` 固定对应首页四宫格 4 个坑位，但公开接口只返回当前 `LISTED` 的四宫格入口；客户端仍按 `placement` 自己拆出上 3 卡和下方快捷入口。
 
+`GET /home/recent-arrangement` 只服务首页“最近安排”条件卡，和 `GET /home-entries` 的运营入口配置职责分离。它只返回当前登录用户最近一顿、且还有下一步动作的计划或饭局摘要；若当前没有符合窗口与权限条件的候选，则返回 `data = null`。候选窗口固定为：先看未来 `24` 小时，若没有再补看未来 `24~36` 小时；在同一窗口内若同时存在饭局和计划候选，统一优先饭局，再按状态优先级 `TIME_UP_SHARE > READY_TO_COOK > PENDING_SHOPPING > PENDING_CONFIRM > EMPTY_MENU` 和离当前时间更近排序。接口最小只返回当前首页卡真正需要的字段：`sourceType + planItemId + planDate + eventId + title + scheduledAt + participantCount + menuCount + gapCount + status`。其中 `planDate` 用于客户端继续复用现有统一餐次详情页路由；`participantCount` 对饭局返回当前参与人数，对纯计划固定返回 `1`；`gapCount` 只有在当前服务端已存在可靠缺口事实时才返回数字，否则返回 `null`。该接口不得返回菜单明细、投票明细、冰箱明细、购物清单明细、参与人 UID、内部备注，也不直接返回首页按钮文案或跳转 URL；客户端根据 `status` 本地映射“去加菜 / 确认菜单 / 去采购 / 开始做饭 / 分享回忆”等主动作。
+
 `GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回 `404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
 
 `GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回 `404`。
@@ -535,6 +557,11 @@ POST /admin/content
 PUT  /admin/content/{contentId}
 POST /admin/content/{contentId}/status
 POST /admin/content/images
+GET  /site-contents/articles
+GET  /site-contents/articles/{articleId}
+POST /site-contents/articles/{articleId}/view
+POST /site-contents/articles/{articleId}/like
+DELETE /site-contents/articles/{articleId}/like
 GET  /site-contents/resolve?path={path}
 GET  /public-assets/site-content-images/{fileName}
 ```
@@ -711,6 +738,8 @@ GET  /public-assets/site-content-images/{fileName}
 `POST /admin/content/images` 是后台富文本图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`，单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`。服务端把文件落到站内资源目录，并返回 `imageUrl`；公开读取统一走 `GET /public-assets/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。
 
 `GET /site-contents/resolve` 是站点和官网的公开内容读取接口，只按 `path` 返回已发布内容。当前只返回 `PUBLISHED` 内容，固定响应 `id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`，不返回草稿和下架内容。
+
+`GET /site-contents/articles`、`GET /site-contents/articles/{articleId}`、`POST /site-contents/articles/{articleId}/view`、`POST /site-contents/articles/{articleId}/like` 和 `DELETE /site-contents/articles/{articleId}/like` 共同承接小程序“厨房准备 / 烹饪技巧 / 食谱技巧”三条知识文章链路。五个接口都要求 `UserBearerAuth`：未登录时客户端先呼起登录，不直接请求文章数据。列表查询参数固定为 `channelCode + page + pageSize`，其中 `channelCode` 只允许 `KITCHEN_PREP / COOKING_SKILLS / RECIPE_SKILLS` 三个受控栏目；列表只返回当前栏目下 `PUBLISHED` 的文章分页，摘要固定为 `id / title / summary / coverImageUrl / publishedAt / viewCount / likeCount`，按 `sortOrder asc, publishedAt desc, id desc` 排序。详情接口只读取同三类受控栏目里的已发布文章，固定返回 `id / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / updatedAt / channelCode / channelName / viewCount / likeCount / viewerHasLiked`，不返回作者、评论、收藏或相关推荐。`POST /site-contents/articles/{articleId}/view` 用于在详情页成功进入后累积一次阅读数，请求头必须带 `Idempotency-Key`，响应只返回最新 `articleId / viewCount`；当前只累计总阅读数，不保留阅读明细。点赞与取消点赞也都要求 `Idempotency-Key`，服务端以 `site_content_likes` 做单用户单文章唯一约束；重复点赞或重复取消点赞都返回当前最新状态，不再报错。点赞相关响应固定返回 `articleId / likeCount / viewerHasLiked`。这组接口当前不开放评论、收藏、点赞用户列表、作者主页、推荐排序或其他社区能力。
 
 `POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status` 和 `POST /admin/users/{userId}/reset-password` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用和重置密码；不支持物理删除用户，也不通过后台直接改用户归属数据。
 

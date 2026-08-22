@@ -61,25 +61,27 @@
    - 首页“餐桌话题”列表与详情执行单，覆盖历次话题倒序、真实参与数和后台持续新建闭环。
 25. `plans/home-action-dock-execution.md`
    - 首页四宫格执行单，冻结 `我想吃 / 问大家 / 随机 / 缺什么` 的固定四宫格定位、首页卡片规则和四个入口的首屏结构。
-26. `plans/random-page-execution.md`
+26. `plans/home-recent-arrangement-execution.md`
+   - 首页“最近安排”条件卡执行单，冻结 `24h -> 24~36h` 候选窗口、饭局优先、最小字段和统一餐次详情跳转口径。
+27. `plans/random-page-execution.md`
    - 随机页功能执行单，冻结“单桌菜位决策台”的业务流程、页面行为、最小 API / DTO、计划写入升级和过渡边界。
-27. `plans/random-page-data-review.md`
+28. `plans/random-page-data-review.md`
    - 随机页最小数据表与字段约束评审稿，冻结 `RecipeContentVersion / MealPlanDish / ShoppingItem` 的字段扩展、约束和迁移边界。
-28. `plans/random-page-schema-dto-openapi-review.md`
+29. `plans/random-page-schema-dto-openapi-review.md`
    - 随机页 Prisma / DTO / OpenAPI 改造评审稿，冻结真实代码层要新增的枚举、字段、请求响应和模块 owner。
-29. `plans/display-format-owner-audit.md`
+30. `plans/display-format-owner-audit.md`
    - 当前展示映射、格式化函数和页面辅助判断的散点审计基线，用于后续治理与 owner 收口。
-30. `plans/recipe-data-completion-rules.md`
+31. `plans/recipe-data-completion-rules.md`
    - 菜谱创建边界、导入缺失处理、后台补全、营养分析最小字段集、样例 JSON 和实施优先级确认稿。
-31. `plans/recipe-nutrition-mapping-rules.md`
+32. `plans/recipe-nutrition-mapping-rules.md`
    - 系统食材到营养基表项的映射优先级、自动映射边界、人工复核门禁和后续实施步骤确认稿。
-32. `plans/recipe-import-review-workbench-rules.md`
+33. `plans/recipe-import-review-workbench-rules.md`
    - 导入草稿发布前的人工作台边界、可编辑字段、可发布门禁和状态机确认稿。
-33. `plans/recipe-data-roadmap.md`
+34. `plans/recipe-data-roadmap.md`
    - 菜谱导入、后台补全、营养分析与健康规划的总执行顺序、阶段依赖和当前只做规则冻结的路线图。
-34. `plans/recipe-data-open-questions.md`
+35. `plans/recipe-data-open-questions.md`
    - 汇总菜谱导入、补全、营养分析与健康规划这条线的待确认项总表，供后续集中拍板。
-35. `plans/membership-code-execution.md`
+36. `plans/membership-code-execution.md`
    - 会员兑换码、体验码、广告减免与“我的”页权益入口执行单，冻结当前页面闭环与后续真实核销门禁。
 
 ## 文档地图
@@ -146,6 +148,8 @@
   - 首页“餐桌话题”列表与详情的业务边界、真实参与数口径、最小接口和最小表约束。
 - `plans/home-action-dock-execution.md`
   - 首页四宫格的产品边界、固定顺序、卡片规则和四个入口的场景首页要求。
+- `plans/home-recent-arrangement-execution.md`
+  - 首页“最近安排”条件卡的业务边界、时间窗口、饭局优先规则、最小字段和统一餐次详情跳转口径。
 - `plans/random-page-execution.md`
   - 随机页的正式功能执行单，覆盖业务闭环、最小接口、数据依赖、安全/性能边界和实现顺序。
 - `plans/random-page-data-review.md`

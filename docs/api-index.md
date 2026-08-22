@@ -175,6 +175,7 @@
 | --- | --- | --- |
 | RandomMenu | `POST /random-menus/generate`、`POST /random-menu-slots/replace`、`POST /random-menu-gap/preview`、`POST /shopping-items/from-random-menu`、`POST /meal-plans` | 已落最小真实流程；后续仅继续补前端接入与真实联调验收 |
 | MealPlanCookAssistant | `GET /meal-plans/{planItemId}/cook-assistant`、`POST /meal-plans/{planItemId}/cook-assistant` | 已冻结为计划附属快照：一次生成、挂靠计划、菜单变更后按签名判过期 |
+| HomeRecentArrangement | `GET /home/recent-arrangement` | 已冻结首页“最近安排”单卡摘要契约：`24h -> 24~36h` 补位，当前窗口内饭局优先于计划，只返回 1 条最小摘要 |
 | RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
 | InspirationInteraction | 点赞、收藏统计与推荐排序治理 | 已确认非本轮范围，待契约 |
 
