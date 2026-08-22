@@ -11,6 +11,12 @@ const router = createRouter({
       component: () => import("@/pages/HomePage.vue"),
       meta: { title: "官网" }
     },
+    {
+      path: "/membership",
+      name: "membership",
+      component: () => import("@/pages/MembershipPage.vue"),
+      meta: { title: "会员权益" }
+    },
     ...siteDocs.map((doc) => ({
       path: doc.path,
       name: doc.slug,

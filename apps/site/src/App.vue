@@ -1,5 +1,5 @@
 <template>
-  <div class="site-shell">
+  <div class="site-shell" :class="{ 'site-shell--membership-mobile': isMembershipPage }">
     <header ref="headerRef" class="site-shell__header">
       <div class="site-shell__header-inner">
         <button
@@ -108,6 +108,7 @@ const resolvedTheme = computed(() => {
   return themeMode.value;
 });
 
+const isMembershipPage = computed(() => route.name === "membership");
 const logoSrc = computed(() => (resolvedTheme.value === "dark" ? darkLogoSrc : lightLogoSrc));
 
 function applyTheme(theme: "light" | "dark") {
@@ -173,3 +174,16 @@ watch(
   }
 );
 </script>
+
+<style scoped lang="scss">
+@media (max-width: 768px) {
+  .site-shell--membership-mobile .site-shell__header,
+  .site-shell--membership-mobile .site-shell__footer {
+    display: none;
+  }
+
+  .site-shell--membership-mobile .site-shell__main {
+    min-height: 100dvh;
+  }
+}
+</style>
