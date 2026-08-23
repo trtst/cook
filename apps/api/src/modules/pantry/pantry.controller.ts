@@ -6,6 +6,7 @@ import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AddShoppingGapItemsDto,
+  AddEventGapToShoppingListDto,
   AddPlanToShoppingListDto,
   AddRecipeToShoppingListDto,
   ApplyShoppingListItemFridgeDto,
@@ -232,6 +233,20 @@ export class PantryController {
   ) {
     return this.pantryService
       .addGapItemsToShoppingList(request.user.userId, listId, operationId, body.window, body.gapKeys)
+      .then(result => ok(result));
+  }
+
+  @Post("shopping-lists/:listId/items/from-event-gap")
+  @ApiIdempotencyKey()
+  @ApiOkModel(ShoppingListDetailModel, "把某个饭局当前缺口写入指定购物清单")
+  addEventGapToShoppingList(
+    @Req() request: RequestWithUser,
+    @Param("listId", ParseIntPipe) listId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AddEventGapToShoppingListDto
+  ) {
+    return this.pantryService
+      .addEventGapToShoppingList(request.user.userId, listId, operationId, body.eventId)
       .then(result => ok(result));
   }
 

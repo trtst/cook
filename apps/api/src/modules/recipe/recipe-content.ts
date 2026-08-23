@@ -5,9 +5,12 @@ import type {
   RecipeAssistantStep,
   RecipeAssistantStepPhase,
   RecipeContentSnapshot,
-  RecipeDraftContentInput
+  RecipeDraftContentInput,
+  UUID
 } from "../../contracts/types";
 import { sizeOfJson } from "../../common/storage-ledger";
+
+type IngredientAliasMap = Map<UUID, string[]>;
 
 export function buildSearchKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
@@ -47,18 +50,52 @@ export function cleanDraftContent(content: RecipeDraftContentInput): RecipeDraft
   };
 }
 
-export function buildDraftSearchText(content: RecipeDraftContentInput) {
-  return [
-    content.name,
-    content.story ?? "",
-    ...content.ingredients.map(item => item.name).filter(name => Boolean(name.trim()))
-  ]
-    .join(" ")
-    .trim();
+function pushSearchTerm(target: string[], seen: Set<string>, value: string | null | undefined) {
+  const term = value?.trim();
+  if (!term || seen.has(term)) return;
+  seen.add(term);
+  target.push(term);
 }
 
-export function buildRecipeSearchText(content: RecipeContentSnapshot) {
-  return [content.name, content.story ?? "", ...content.ingredients.map(item => item.ingredientName)].join(" ").trim();
+function collectIngredientSearchTerms(
+  ingredientId: UUID | null | undefined,
+  name: string,
+  aliasMap: IngredientAliasMap,
+  terms: string[],
+  seen: Set<string>
+) {
+  pushSearchTerm(terms, seen, name);
+  if (!ingredientId) return;
+  for (const alias of aliasMap.get(ingredientId) ?? []) {
+    pushSearchTerm(terms, seen, alias);
+  }
+}
+
+function joinSearchTerms(terms: Array<string | null | undefined>) {
+  const values: string[] = [];
+  const seen = new Set<string>();
+  for (const term of terms) {
+    pushSearchTerm(values, seen, term);
+  }
+  return values.join(" ");
+}
+
+export function buildDraftSearchText(content: RecipeDraftContentInput, aliasMap: IngredientAliasMap = new Map()) {
+  const ingredientTerms: string[] = [];
+  const ingredientSeen = new Set<string>();
+  content.ingredients.forEach(item => {
+    collectIngredientSearchTerms(item.ingredientId, item.name, aliasMap, ingredientTerms, ingredientSeen);
+  });
+  return joinSearchTerms([content.name, content.story ?? "", ...ingredientTerms]);
+}
+
+export function buildRecipeSearchText(content: RecipeContentSnapshot, aliasMap: IngredientAliasMap = new Map()) {
+  const ingredientTerms: string[] = [];
+  const ingredientSeen = new Set<string>();
+  content.ingredients.forEach(item => {
+    collectIngredientSearchTerms(item.ingredientId, item.ingredientName, aliasMap, ingredientTerms, ingredientSeen);
+  });
+  return joinSearchTerms([content.name, content.story ?? "", ...ingredientTerms]);
 }
 
 export function draftCoverImageUrl(value: unknown) {

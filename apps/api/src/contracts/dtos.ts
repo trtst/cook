@@ -57,6 +57,7 @@ const dashboardTrendRangeValues = ["7D", "30D"] as const;
 const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
 const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
 const siteContentArticleChannelCodeValues = ["KITCHEN_PREP", "COOKING_SKILLS", "RECIPE_SKILLS"] as const;
+const authCodeSceneValues = ["LOGIN", "BIND_PHONE"] as const;
 
 function toOptionalBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
@@ -80,6 +81,18 @@ export class PasswordLoginDto {
   @MinLength(6)
   @MaxLength(128)
   password!: string;
+}
+
+export class SendAuthCodeDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ enum: authCodeSceneValues, example: "LOGIN" })
+  @IsIn(authCodeSceneValues)
+  scene!: "LOGIN" | "BIND_PHONE";
 }
 
 export class CodeLoginDto {
@@ -2292,6 +2305,14 @@ export class AddShoppingGapItemsDto extends OperationDto {
   @MinLength(1, { each: true })
   @MaxLength(120, { each: true })
   gapKeys!: string[];
+}
+
+export class AddEventGapToShoppingListDto extends OperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  eventId!: number;
 }
 
 export class UpdateShoppingListItemCheckDto extends OperationDto {

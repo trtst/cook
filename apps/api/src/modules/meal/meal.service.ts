@@ -54,7 +54,19 @@ import { MedalService } from "../user/medal.service";
 type DiningEventRow = Prisma.DiningEventGetPayload<{
   include: {
     user: { select: { uid: true; nickname: true; avatarUrl: true } };
-    mealPlanItem: { select: { planDate: true; mealSlot: true } };
+    mealPlanItem: {
+      select: {
+        planDate: true;
+        mealSlot: true;
+        shoppingList: {
+          select: {
+            id: true;
+            name: true;
+            status: true;
+          };
+        };
+      };
+    };
     shareInvites: {
       where: {
         status: {
@@ -114,6 +126,13 @@ const mealPlanArgs = Prisma.validator<Prisma.MealPlanItemDefaultArgs>()({
   include: {
     cookAssistant: true,
     diningEvent: true,
+    shoppingList: {
+      select: {
+        id: true,
+        name: true,
+        status: true
+      }
+    },
     dishes: {
       select: {
         id: true,
@@ -264,6 +283,12 @@ function parseDateTime(value: string, message = "时间格式错误") {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) throw new BadRequestException(message);
   return parsed;
+}
+
+function assertFutureDiningEventTime(value: Date) {
+  if (value.getTime() < Date.now()) {
+    throw new BadRequestException("饭局时间不能早于当前时间");
+  }
 }
 
 function normalizeMealSlot(value: string): MealSlot {
@@ -1456,6 +1481,16 @@ export class MealService {
       if (!plan.dishes.length) {
         throw new ConflictException("请先添加菜单后再生成做饭建议");
       }
+      if (plan.cookAssistant && plan.cookAssistant.menuDigest === buildMealPlanMenuDigest(plan)) {
+        const result = this.toMealPlanCookAssistant(plan);
+        await completeIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash, result);
+        return result;
+      }
+
+      const tier = await this.entitlementService.getTier(tx, userId);
+      if (tier === "FREE") {
+        throw new ForbiddenException("开通会员后可生成做饭建议");
+      }
 
       const shouldLockMenu = !plan.menuLockedAt;
       if (!plan.menuLockedAt) {
@@ -1722,6 +1757,7 @@ export class MealService {
       await startIdempotentOperation(tx, operationId, "dining-event:create", userId, null, eventRequestHash);
       await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
+      assertFutureDiningEventTime(resolvedScheduledAt);
       const event = await tx.diningEvent.create({
         data: {
           userId,
@@ -1814,6 +1850,7 @@ export class MealService {
 
       await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
+      assertFutureDiningEventTime(resolvedScheduledAt);
       const event = await tx.diningEvent.create({
         data: {
           userId,
@@ -1940,6 +1977,7 @@ export class MealService {
       }
 
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
+      assertFutureDiningEventTime(resolvedScheduledAt);
       await tx.diningEvent.update({
         where: { id: eventId },
         data: {
@@ -2710,7 +2748,19 @@ export class MealService {
       where: { id: eventId },
       include: {
         user: { select: { uid: true, nickname: true, avatarUrl: true } },
-        mealPlanItem: { select: { planDate: true, mealSlot: true } },
+        mealPlanItem: {
+          select: {
+            planDate: true,
+            mealSlot: true,
+            shoppingList: {
+              select: {
+                id: true,
+                name: true,
+                status: true
+              }
+            }
+          }
+        },
         shareInvites: {
           where: {
             status: { in: ["ACTIVE", "OPENED"] }
@@ -2766,6 +2816,9 @@ export class MealService {
       completedAt: item.completedAt ? toIsoDate(item.completedAt) : null,
       hasDiningEvent: Boolean(item.diningEvent),
       diningEventId: item.diningEvent?.id ?? null,
+      shoppingListId: item.shoppingList?.id ?? null,
+      shoppingListName: item.shoppingList?.name ?? null,
+      shoppingListStatus: item.shoppingList?.status ?? null,
       createdAt: toIsoDate(item.createdAt)
     };
   }
@@ -2809,6 +2862,9 @@ export class MealService {
       organizerAvatarUrl: event.user?.avatarUrl ?? null,
       planItemId: event.mealPlanItemId,
       diningGroupId: event.diningGroupId,
+      shoppingListId: event.mealPlanItem?.shoppingList?.id ?? null,
+      shoppingListName: event.mealPlanItem?.shoppingList?.name ?? null,
+      shoppingListStatus: event.mealPlanItem?.shoppingList?.status ?? null,
       menu,
       menuItems: event.menuItems.map(item => ({
         id: item.id,

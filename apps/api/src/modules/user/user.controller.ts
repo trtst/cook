@@ -5,7 +5,7 @@ import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import { ChangeCurrentPasswordDto, UpdateCurrentUserDto, UpdateTasteProfileDto, UpdateUserDisplayDto } from "../../contracts/dtos";
-import { ApiOkModel, ChangePasswordResultModel, MedalWallModel, MeResponseModel, TasteProfileModel } from "../../contracts/openapi";
+import { ApiOkModel, ChangePasswordResultModel, MedalWallModel, MeResponseModel, StorageUsageModel, TasteProfileModel } from "../../contracts/openapi";
 import { AuthService } from "../auth/auth.service";
 import { CurrentUserService } from "./current-user.service";
 import { DisplayService } from "./display.service";
@@ -74,5 +74,19 @@ export class UserController {
     return this.displayService
       .updateCurrent(request.user.userId, operationId, body.profileBackgroundUrl, body.homeBackgroundUrl)
       .then(result => ok(result));
+  }
+}
+
+@ApiTags("storage")
+@Controller("storage-usage")
+@UseGuards(UserAuthGuard)
+@ApiBearerAuth("UserBearerAuth")
+export class StorageUsageController {
+  constructor(@Inject(CurrentUserService) private readonly currentUserService: CurrentUserService) {}
+
+  @Get()
+  @ApiOkModel(StorageUsageModel, "当前用户的逻辑空间模块明细")
+  getCurrent(@Req() request: RequestWithUser) {
+    return this.currentUserService.getStorageUsage(request.user.userId).then(result => ok(result));
   }
 }

@@ -5,7 +5,14 @@ import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { ApiOkModel, ApiOkNullableModel, HomeEntriesResponseModel, HomeNextMealStateModel, HomeRecentArrangementModel } from "../../contracts/openapi";
+import {
+  ApiOkModel,
+  ApiOkNullableModel,
+  HomeEntriesResponseModel,
+  HomeFridgeRecipesResponseModel,
+  HomeNextMealStateModel,
+  HomeRecentArrangementModel
+} from "../../contracts/openapi";
 import { HomeService } from "./home.service";
 
 type HomeAssetRequest = {
@@ -57,6 +64,14 @@ export class HomeController {
   @ApiOkModel(HomeNextMealStateModel, "读取首页下一顿状态卡")
   getNextMealState(@Req() request: RequestWithUser) {
     return this.homeService.getNextMealState(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("home/fridge-recipes")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(HomeFridgeRecipesResponseModel, "读取首页冰箱匹配推荐")
+  getFridgeRecipes(@Req() request: RequestWithUser) {
+    return this.homeService.getFridgeRecipes(request.user.userId).then(result => ok(result));
   }
 }
 

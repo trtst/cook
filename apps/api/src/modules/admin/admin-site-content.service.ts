@@ -489,7 +489,7 @@ export class AdminSiteContentService {
   async getPublicArticleDetail(userId: number, articleId: number): Promise<SiteContentArticleDetail> {
     await this.requireUser(userId);
     await this.ensureDefaultChannels();
-    const row = await this.findPublicArticle(articleId, userId);
+    const row = await this.findPublicArticle(userId, articleId);
     return this.toPublicArticleDetail(row);
   }
 

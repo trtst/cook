@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { type HomeEntryStatus, type HomeFeatureBoardCard, type HomeFeatureBoardPlacement, type HomeFeatureBoardTargetType, type MealSlot, Prisma } from "@prisma/client";
+import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type {
   AdminHomeEntriesResponse,
   AdminHomeEntryItem,
   HomeEntriesResponse,
+  HomeFridgeRecipeItem,
+  HomeFridgeRecipesResponse,
   HomeEntryItem,
   HomeNextMealState,
   HomeNextMealStatus,
@@ -14,15 +17,23 @@ import type {
   HomeRecentArrangement,
   HomeRecentArrangementStatus,
   OperationId,
+  RecipeDifficulty,
+  RecipeDuration,
   SetHomeEntryStatusRequest,
   UUID,
   UpdateHomeEntriesRequest
 } from "../../contracts/types";
 import { PantryService } from "../pantry/pantry.service";
+import { versionToContent } from "../recipe/recipe-content";
 import { HomeImageService } from "./home-image.service";
 
 type BoardDb = Prisma.TransactionClient | PrismaService;
 type HomeCardInput = Pick<HomeFeatureBoardCard, "placement" | "title" | "subtitle" | "targetType" | "targetValue" | "artImageUrl" | "badgeText">;
+type FridgeRecipeRow = Prisma.RecipeGetPayload<{
+  include: {
+    currentVersion: true;
+  };
+}>;
 type RequestLike = {
   protocol?: string;
   get?: (name: string) => string | undefined;
@@ -34,6 +45,8 @@ const allPlacements: HomeFeatureBoardPlacement[] = [...featurePlacements, ...qui
 const primaryWindowMs = 24 * 60 * 60 * 1000;
 const fallbackWindowMs = 36 * 60 * 60 * 1000;
 const pastShareWindowMs = 24 * 60 * 60 * 1000;
+const maxHomeFridgeRecipeCount = 3;
+const maxHomeFridgeMissingCount = 2;
 const arrangementStatusPriority: Record<HomeRecentArrangementStatus, number> = {
   TIME_UP_SHARE: 5,
   READY_TO_COOK: 4,
@@ -133,6 +146,12 @@ function cleanText(value: string | null | undefined) {
 
 function hashText(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function fridgeFitRank(value: HomeFridgeRecipeItem["fridgeFit"]) {
+  if (value === "HIGH") return 3;
+  if (value === "MEDIUM") return 2;
+  return 1;
 }
 
 function isInternalImagePath(value: string | null | undefined) {
@@ -384,6 +403,58 @@ export class HomeService {
       status: this.resolveNextMealStatus(arrangement),
       arrangement
     };
+  }
+
+  async getFridgeRecipes(userId: UUID): Promise<HomeFridgeRecipesResponse> {
+    const [recipes, fridgeItems] = await Promise.all([
+      this.prisma.recipe.findMany({
+        where: {
+          status: "ACTIVE",
+          OR: [{ ownerId: userId }, { ownerId: null, inspirationCategoryId: { not: null } }]
+        },
+        include: {
+          currentVersion: true
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+      }),
+      this.prisma.fridgeItem.findMany({
+        where: {
+          userId,
+          available: true
+        },
+        select: {
+          ingredientId: true
+        }
+      })
+    ]);
+
+    const fridgeIngredientIds = new Set(
+      fridgeItems
+        .map(item => item.ingredientId)
+        .filter((item): item is UUID => typeof item === "number" && item > 0)
+    );
+    const inspirationVersionIds = recipes
+      .filter(item => item.ownerId === null && item.inspirationCategoryId !== null)
+      .map(item => item.currentVersionId);
+    const ownedRecipeMap = await this.loadOwnedOriginRecipeMap(userId, inspirationVersionIds);
+    const items = recipes
+      .map(item => this.toHomeFridgeRecipe(item, fridgeIngredientIds, ownedRecipeMap))
+      .filter((item): item is HomeFridgeRecipeItem => Boolean(item))
+      .sort((left, right) => {
+        const fitDiff = fridgeFitRank(right.fridgeFit) - fridgeFitRank(left.fridgeFit);
+        if (fitDiff !== 0) return fitDiff;
+        if (left.kind !== right.kind) return left.kind === "MY" ? -1 : 1;
+        if (left.missingIngredientCount !== right.missingIngredientCount) {
+          return left.missingIngredientCount - right.missingIngredientCount;
+        }
+        if (left.matchedIngredientCount !== right.matchedIngredientCount) {
+          return right.matchedIngredientCount - left.matchedIngredientCount;
+        }
+        return right.recipeId - left.recipeId;
+      })
+      .slice(0, maxHomeFridgeRecipeCount);
+
+    return { items };
   }
 
   async updateAdminHomeEntries(
@@ -796,5 +867,70 @@ export class HomeService {
     } catch (error) {
       return null;
     }
+  }
+
+  private async loadOwnedOriginRecipeMap(userId: UUID, sourceVersionIds: UUID[]) {
+    const uniqueIds = Array.from(new Set(sourceVersionIds));
+    if (!uniqueIds.length) return new Map<UUID, UUID>();
+    const items = await this.prisma.recipe.findMany({
+      where: {
+        ownerId: userId,
+        status: "ACTIVE",
+        originVersionId: { in: uniqueIds }
+      },
+      select: {
+        id: true,
+        originVersionId: true
+      },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+    });
+    const result = new Map<UUID, UUID>();
+    for (const item of items) {
+      if (!item.originVersionId || result.has(item.originVersionId)) continue;
+      result.set(item.originVersionId, item.id);
+    }
+    return result;
+  }
+
+  private toHomeFridgeRecipe(
+    recipe: FridgeRecipeRow,
+    fridgeIngredientIds: Set<UUID>,
+    ownedRecipeMap: Map<UUID, UUID>
+  ): HomeFridgeRecipeItem | null {
+    const content = versionToContent(recipe.currentVersion);
+    const ingredientIds = Array.from(
+      new Set(
+        content.ingredients
+          .map(item => item.ingredientId ?? null)
+          .filter((item): item is UUID => typeof item === "number" && item > 0)
+      )
+    );
+    const totalIngredientCount = ingredientIds.length;
+    if (!totalIngredientCount) return null;
+    const matchedIngredientCount = ingredientIds.filter(item => fridgeIngredientIds.has(item)).length;
+    const missingIngredientCount = totalIngredientCount - matchedIngredientCount;
+    if (missingIngredientCount > maxHomeFridgeMissingCount) return null;
+    const kind = recipe.ownerId === null ? "INSPIRATION" : "MY";
+
+    return {
+      recipeId: recipe.id,
+      title: recipe.title,
+      coverImageUrl: recipe.coverImageUrl ?? null,
+      kind,
+      ownedRecipeId: kind === "INSPIRATION" ? ownedRecipeMap.get(recipe.currentVersionId) ?? null : null,
+      difficulty: (recipe.currentVersion.difficulty ?? null) as RecipeDifficulty | null,
+      duration: (recipe.currentVersion.duration ?? null) as RecipeDuration | null,
+      difficultyText: recipeDifficultyText((recipe.currentVersion.difficulty ?? null) as RecipeDifficulty | null),
+      durationText: recipeDurationText((recipe.currentVersion.duration ?? null) as RecipeDuration | null),
+      matchedIngredientCount,
+      missingIngredientCount,
+      totalIngredientCount,
+      fridgeFit:
+        matchedIngredientCount === totalIngredientCount
+          ? "HIGH"
+          : matchedIngredientCount > 0
+            ? "MEDIUM"
+            : "LOW"
+    };
   }
 }

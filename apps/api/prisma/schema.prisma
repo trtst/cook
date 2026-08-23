@@ -176,6 +176,19 @@ enum IngredientFeedbackStatus {
   ADOPTED
 }
 
+enum IngredientNutrientMappingStatus {
+  CONFIRMED
+  CANDIDATE
+  UNMAPPED
+}
+
+enum RecipeNutritionStatus {
+  COMPLETE
+  ESTIMATED
+  INSUFFICIENT
+  NONE
+}
+
 enum UnitRecommendationStatus {
   PENDING
   REJECTED
@@ -950,6 +963,7 @@ model Unit {
   fridgeItems        FridgeItem[] @relation("FridgeItemExactUnit")
   shoppingItemFridgeReservations ShoppingItemFridgeReservation[] @relation("ShoppingItemFridgeReservationUnit")
   targetRecommendations UnitRecommendation[] @relation("UnitRecommendationTarget")
+  nutrientConversions IngredientUnitNutrientConversion[]
 
   /// PostgreSQL partial unique indexes for system/personal unit names are kept in hand-written SQL migrations.
   @@index([ownerId, type, searchKey, id])
@@ -1011,6 +1025,8 @@ model Ingredient {
   feedbacks             IngredientFeedback[]
   fridgeItems           FridgeItem[]               @relation("FridgeItemIngredient")
   shoppingSourceItems   ShoppingItem[]             @relation("ShoppingItemIngredient")
+  nutrientMappings      IngredientNutrientMapping[]
+  nutrientConversions   IngredientUnitNutrientConversion[]
 
   /// PostgreSQL partial unique indexes for active system/category sort order, global display order, and ingredient name scope are kept in hand-written SQL migrations.
   @@index([ownerId, status, categoryId, systemSortOrder, id])
@@ -1107,6 +1123,7 @@ model RecipeContentVersion {
   uploadAssets            UploadAsset[]
   versionTags             RecipeVersionTag[]
   cookAssistant           RecipeCookAssistant?
+  nutritionSnapshots      RecipeNutritionSnapshot[]
 
   @@index([name])
   @@index([createdByUserId, createdAt])
@@ -1127,6 +1144,111 @@ model RecipeCookAssistant {
   recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
 
   @@map("recipe_cook_assistants")
+}
+
+model NutrientSourceBatch {
+  id            Int      @id @default(autoincrement())
+  sourceRepo    String   @map("source_repo") @db.VarChar(128)
+  sourceVersion String   @map("source_version") @db.VarChar(64)
+  sourcePath    String   @map("source_path") @db.VarChar(255)
+  importedAt    DateTime @default(now()) @map("imported_at") @db.Timestamptz(3)
+
+  sourceFoods NutrientSourceFood[]
+
+  @@unique([sourceRepo, sourceVersion, sourcePath])
+  @@index([sourceVersion, importedAt])
+  @@map("nutrient_source_batches")
+}
+
+model NutrientSourceFood {
+  id             Int      @id @default(autoincrement())
+  batchId        Int      @map("batch_id")
+  sourceFoodCode String   @map("source_food_code") @db.VarChar(32)
+  sourceName     String   @map("source_name") @db.VarChar(128)
+  rawJson        Json     @map("raw_json")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  batch NutrientSourceBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, sourceFoodCode])
+  @@index([sourceName])
+  @@map("nutrient_source_foods")
+}
+
+model NutrientFood {
+  id             Int      @id @default(autoincrement())
+  sourceFoodCode String   @map("source_food_code") @db.VarChar(32)
+  name           String   @db.VarChar(128)
+  edibleRate     Float?   @map("edible_rate")
+  calories       Float?   @map("calories")
+  protein        Float?   @map("protein")
+  fat            Float?   @map("fat")
+  carbohydrate   Float?   @map("carbohydrate")
+  sourceVersion  String   @map("source_version") @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ingredientMappings IngredientNutrientMapping[]
+
+  @@unique([sourceVersion, sourceFoodCode])
+  @@index([sourceVersion, name])
+  @@map("nutrient_foods")
+}
+
+model IngredientNutrientMapping {
+  id             Int                            @id @default(autoincrement())
+  ingredientId   Int                            @map("ingredient_id")
+  nutrientFoodId Int?                           @map("nutrient_food_id")
+  status         IngredientNutrientMappingStatus
+  matchType      String                         @map("match_type") @db.VarChar(32)
+  confidence     Float?
+  sourceVersion  String                         @map("source_version") @db.VarChar(64)
+  createdAt      DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ingredient   Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  nutrientFood NutrientFood? @relation(fields: [nutrientFoodId], references: [id], onDelete: SetNull)
+
+  @@unique([ingredientId, sourceVersion])
+  @@index([sourceVersion, status])
+  @@map("ingredient_nutrient_mappings")
+}
+
+model IngredientUnitNutrientConversion {
+  id            Int      @id @default(autoincrement())
+  ingredientId  Int      @map("ingredient_id")
+  unitId        Int      @map("unit_id")
+  gramsPerUnit  Float    @map("grams_per_unit")
+  sourceVersion String   @map("source_version") @db.VarChar(64)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  unit       Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([ingredientId, unitId, sourceVersion])
+  @@index([sourceVersion])
+  @@map("ingredient_unit_nutrient_conversions")
+}
+
+model RecipeNutritionSnapshot {
+  id            Int                   @id @default(autoincrement())
+  recipeVersionId Int                 @map("recipe_version_id")
+  status        RecipeNutritionStatus
+  qualityLabel  String?               @map("quality_label") @db.VarChar(32)
+  perServingJson Json?                @map("per_serving_json")
+  perRecipeJson Json?                 @map("per_recipe_json")
+  coverageRate  Float?                @map("coverage_rate")
+  calculatedAt  DateTime              @default(now()) @map("calculated_at") @db.Timestamptz(3)
+  sourceVersion String                @map("source_version") @db.VarChar(64)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeVersionId, sourceVersion])
+  @@index([sourceVersion, status])
+  @@map("recipe_nutrition_snapshots")
 }
 
 model RecipeVersionTag {
@@ -1412,6 +1534,7 @@ model MealPlanItem {
   planDate     DateTime       @map("plan_date") @db.Date
   mealSlot     MealSlot       @map("meal_slot")
   title        String         @db.VarChar(40)
+  shoppingListId Int?         @map("shopping_list_id")
   menuSnapshot Json           @map("menu_snapshot")
   note         String?        @db.VarChar(255)
   menuLockedAt DateTime?      @map("menu_locked_at") @db.Timestamptz(3)
@@ -1425,11 +1548,13 @@ model MealPlanItem {
   dishes        MealPlanDish[]
   cookAssistant MealPlanCookAssistant?
   diningEvent   DiningEvent?
+  shoppingList  ShoppingList?         @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)
   confirmedPolls MealPoll[]           @relation("MealPollConfirmedPlanItem")
   activities    DiningGroupActivity[]
 
   @@unique([userId, planDate, mealSlot])
   @@index([userId, planDate])
+  @@index([shoppingListId])
   @@map("meal_plan_items")
 }
 
@@ -1760,6 +1885,7 @@ model ShoppingList {
   shareTokens ShoppingShareToken[]
   fridgeItems FridgeItem[]        @relation("FridgeItemSourceShoppingList")
   fridgeReservations ShoppingItemFridgeReservation[]
+  mealPlans    MealPlanItem[]
 
   @@index([ownerUserId, status, updatedAt])
   @@map("shopping_lists")

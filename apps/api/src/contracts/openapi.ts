@@ -26,9 +26,7 @@ export function ApiOkNullableModel(model: Type<unknown>, description: string) {
     ApiExtraModels(model),
     ApiOkResponse({
       description,
-      schema: envelopeSchema({
-        anyOf: [{ $ref: getSchemaPath(model) }, { type: "null" }]
-      })
+      schema: envelopeSchema({ $ref: getSchemaPath(model), nullable: true })
     })
   );
 }
@@ -79,6 +77,11 @@ export class PasswordLoginResultModel {
   @ApiProperty({ type: String }) token!: string;
   @ApiProperty(dateTime) expiresAt!: string;
   @ApiProperty({ type: SessionUserModel }) user!: SessionUserModel;
+}
+
+export class SendAuthCodeResultModel {
+  @ApiProperty({ type: String, enum: ["LOGIN", "BIND_PHONE"] }) scene!: string;
+  @ApiProperty(dateTime) sentAt!: string;
 }
 
 export class CodeLoginResultModel extends PasswordLoginResultModel {}
@@ -133,6 +136,26 @@ export class HomeNextMealStateModel {
 
   @ApiProperty({ type: HomeRecentArrangementModel, nullable: true })
   arrangement!: HomeRecentArrangementModel | null;
+}
+
+export class HomeFridgeRecipeItemModel {
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["MY", "INSPIRATION"] }) kind!: string;
+  @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
+  @ApiProperty(nullableString) difficultyText!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: Number, minimum: 0 }) matchedIngredientCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) missingIngredientCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) totalIngredientCount!: number;
+  @ApiProperty({ type: String, enum: ["HIGH", "MEDIUM", "LOW"] }) fridgeFit!: string;
+}
+
+export class HomeFridgeRecipesResponseModel {
+  @ApiProperty({ type: [HomeFridgeRecipeItemModel] }) items!: HomeFridgeRecipeItemModel[];
 }
 
 export class AdminHomeEntryItemModel extends HomeEntryItemModel {
@@ -805,6 +828,22 @@ export class RecipeAssistantModel {
   @ApiProperty({ type: [RecipeAssistantStepModel] }) steps!: RecipeAssistantStepModel[];
 }
 
+export class RecipeNutritionMetricsModel {
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) calories!: number | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) protein!: number | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) fat!: number | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) carbohydrate!: number | null;
+}
+
+export class RecipeNutritionModel {
+  @ApiProperty({ type: String, enum: ["COMPLETE", "ESTIMATED", "INSUFFICIENT", "NONE"] }) status!: string;
+  @ApiProperty({ type: String, nullable: true, enum: ["估算较完整", "结果为估算", "当前数据不足"] }) qualityLabel!: string | null;
+  @ApiProperty({ type: RecipeNutritionMetricsModel, nullable: true }) perServing!: RecipeNutritionMetricsModel | null;
+  @ApiProperty({ type: RecipeNutritionMetricsModel, nullable: true }) perRecipe!: RecipeNutritionMetricsModel | null;
+  @ApiProperty({ ...dateTime, nullable: true }) calculatedAt!: string | null;
+  @ApiProperty(nullableString) sourceVersion!: string | null;
+}
+
 export class RecipeIngredientInputAmountModel {
   @ApiProperty({ type: String, enum: ["EXACT", "FUZZY"] }) kind!: string;
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
@@ -940,6 +979,7 @@ export class MyRecipeDetailModel {
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
@@ -990,6 +1030,7 @@ export class CollectedRecipeDetailModel {
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty(dateTime) collectedAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -1038,6 +1079,7 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
@@ -1441,6 +1483,9 @@ export class MealPlanModel {
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
   @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) shoppingListId!: string | null;
+  @ApiProperty(nullableString) shoppingListName!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) shoppingListStatus!: string | null;
   @ApiProperty(dateTime) createdAt!: string;
 }
 
@@ -1614,6 +1659,9 @@ export class DiningEventModel {
   @ApiProperty(nullableString) organizerAvatarUrl!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) diningGroupId!: string | null;
+  @ApiProperty({ ...uuid, nullable: true }) shoppingListId!: string | null;
+  @ApiProperty(nullableString) shoppingListName!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) shoppingListStatus!: string | null;
   @ApiProperty({ type: RecipeContentModel }) menu!: RecipeContentModel;
   @ApiProperty({ type: [DiningEventMenuItemModel] }) menuItems!: DiningEventMenuItemModel[];
   @ApiProperty({ type: [DiningEventParticipantModel] }) participants!: DiningEventParticipantModel[];
@@ -1890,8 +1938,10 @@ export class ShoppingItemSourceSummaryModel {
   @ApiProperty({ type: String, enum: ["MANUAL", "RECIPE", "PLAN", "EVENT", "BRING", "RANDOM_MENU"] }) sourceType!: string;
   @ApiProperty(nullableString) title!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["my", "inspiration"] }) recipeKind!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) sourceVersionId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
+  @ApiProperty({ type: String, nullable: true, format: "date" }) planDate!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
   @ApiProperty(nullableString) sourceBatchKey!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 1 }) addCount!: number | null;

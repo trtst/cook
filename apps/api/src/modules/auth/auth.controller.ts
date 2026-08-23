@@ -4,12 +4,13 @@ import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { CodeLoginDto, PasswordLoginDto, WechatLoginDto } from "../../contracts/dtos";
+import { CodeLoginDto, PasswordLoginDto, SendAuthCodeDto, WechatLoginDto } from "../../contracts/dtos";
 import {
   ApiOkModel,
   CodeLoginResultModel,
   PasswordLoginResultModel,
   RefreshSessionResultModel,
+  SendAuthCodeResultModel,
   WechatLoginResultModel
 } from "../../contracts/openapi";
 import { AuthService } from "./auth.service";
@@ -24,6 +25,13 @@ export class AuthController {
   @ApiOkModel(PasswordLoginResultModel, "手机号密码登录，返回用户 token 和用户摘要")
   loginWithPassword(@Body() body: PasswordLoginDto) {
     return this.authService.loginWithPassword(body).then(result => ok(result));
+  }
+
+  @Post("code-send")
+  @UseGuards(LoginRateLimitGuard)
+  @ApiOkModel(SendAuthCodeResultModel, "手机号验证码发送入口，测试阶段固定验证码仍为 123456")
+  sendCode(@Body() body: SendAuthCodeDto) {
+    return this.authService.sendCode(body).then(result => ok(result));
   }
 
   @Post("code-login")

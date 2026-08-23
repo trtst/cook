@@ -3,6 +3,7 @@ import { BadRequestException, Inject, Injectable, ServiceUnavailableException, U
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import type {
+  SendAuthCodeRequest,
   ChangeCurrentPasswordRequest,
   CodeLoginRequest,
   PasswordLoginRequest,
@@ -53,6 +54,13 @@ export class AuthService {
     }
 
     return this.createSessionResult(user);
+  }
+
+  async sendCode(body: SendAuthCodeRequest) {
+    return {
+      scene: body.scene,
+      sentAt: new Date().toISOString()
+    };
   }
 
   async loginWithCode(body: CodeLoginRequest) {

@@ -126,6 +126,8 @@ async function main() {
           story: null,
           categoryId: category.id,
           sceneIds: [scene.id],
+          coverUploadId: null,
+          coverImageUrl: null,
           baseServings: 2,
           difficulty: "EASY",
           duration: "WITHIN_15",
@@ -139,7 +141,14 @@ async function main() {
               }
             }
           ],
-          steps: [{ text: "验证草稿禁止客户端图片字段" }],
+          steps: [
+            {
+              slotKey: "step-1",
+              text: "验证草稿禁止客户端图片字段",
+              uploadId: null,
+              imageUrl: null
+            }
+          ],
           images: [{ key: "cover", url: "https://example.com/forged.jpg", sizeBytes: 1 }]
         }
       })
@@ -153,6 +162,8 @@ async function main() {
         story: "用于数字 ID 与草稿发布验收",
         categoryId: 99999991,
         sceneIds: [99999992],
+        coverUploadId: null,
+        coverImageUrl: null,
         baseServings: null,
         difficulty: null,
         duration: null,
@@ -169,7 +180,14 @@ async function main() {
             source: ingredient.source
           }
         ],
-        steps: [{ text: "热锅下油，完成验收步骤" }]
+        steps: [
+          {
+            slotKey: "step-1",
+            text: "热锅下油，完成验收步骤",
+            uploadId: null,
+            imageUrl: null
+          }
+        ]
       }
     });
     const createOperationId = nextIdempotencyKey();

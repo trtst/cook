@@ -62,6 +62,13 @@ export interface PasswordLoginRequest {
   password: string;
 }
 
+export type AuthCodeScene = "LOGIN" | "BIND_PHONE";
+
+export interface SendAuthCodeRequest {
+  phone: string;
+  scene: AuthCodeScene;
+}
+
 export interface CodeLoginRequest {
   phone: string;
   code: string;
@@ -75,6 +82,11 @@ export interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: SessionUser;
+}
+
+export interface SendAuthCodeResult {
+  scene: AuthCodeScene;
+  sentAt: IsoDateTime;
 }
 
 export interface CodeLoginResult {
@@ -151,6 +163,29 @@ export type HomeNextMealStatus =
 export interface HomeNextMealState {
   status: HomeNextMealStatus;
   arrangement: HomeRecentArrangement | null;
+}
+
+export type HomeFridgeRecipeKind = "MY" | "INSPIRATION";
+export type HomeFridgeRecipeFit = "HIGH" | "MEDIUM" | "LOW";
+
+export interface HomeFridgeRecipeItem {
+  recipeId: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  kind: HomeFridgeRecipeKind;
+  ownedRecipeId: UUID | null;
+  difficulty: RecipeDifficulty | null;
+  duration: RecipeDuration | null;
+  difficultyText: string | null;
+  durationText: string | null;
+  matchedIngredientCount: number;
+  missingIngredientCount: number;
+  totalIngredientCount: number;
+  fridgeFit: HomeFridgeRecipeFit;
+}
+
+export interface HomeFridgeRecipesResponse {
+  items: HomeFridgeRecipeItem[];
 }
 
 export interface AdminHomeEntryItem extends HomeEntryItem {
@@ -1179,6 +1214,24 @@ export interface RecipeAssistantSnapshot {
   steps: RecipeAssistantStep[];
 }
 
+export type RecipeNutritionStatus = "COMPLETE" | "ESTIMATED" | "INSUFFICIENT" | "NONE";
+
+export interface RecipeNutritionMetrics {
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbohydrate: number | null;
+}
+
+export interface RecipeNutritionSummary {
+  status: RecipeNutritionStatus;
+  qualityLabel: "估算较完整" | "结果为估算" | "当前数据不足" | null;
+  perServing: RecipeNutritionMetrics | null;
+  perRecipe: RecipeNutritionMetrics | null;
+  calculatedAt: IsoDateTime | null;
+  sourceVersion: string | null;
+}
+
 export interface RecipeDraftContentInput {
   name: string;
   story: string | null;
@@ -1274,6 +1327,7 @@ export interface MyRecipeDetail {
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  nutrition: RecipeNutritionSummary;
   assistant: RecipeAssistantSnapshot | null;
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
@@ -1343,6 +1397,7 @@ export interface CollectedRecipeDetail {
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  nutrition: RecipeNutritionSummary;
   assistant: RecipeAssistantSnapshot | null;
   collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -1393,6 +1448,7 @@ export interface InspirationRecipeDetail {
   category: InspirationCategorySummary;
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
+  nutrition: RecipeNutritionSummary;
   assistant: RecipeAssistantSnapshot | null;
   likeCount: number;
   collectCount: number;
@@ -1958,6 +2014,9 @@ export interface MealPlanSummary {
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
+  shoppingListId: UUID | null;
+  shoppingListName: string | null;
+  shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   createdAt: IsoDateTime;
 }
 
@@ -2053,6 +2112,9 @@ export interface DiningEventSummary {
   organizerAvatarUrl: string | null;
   planItemId: UUID | null;
   diningGroupId: UUID | null;
+  shoppingListId: UUID | null;
+  shoppingListName: string | null;
+  shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   menu: RecipeContentSnapshot;
   menuItems: DiningEventMenuItemSummary[];
   participants: DiningEventParticipantSummary[];
@@ -2396,8 +2458,10 @@ export interface ShoppingItemSourceSummary {
   sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   title: string | null;
   recipeId: UUID | null;
+  recipeKind: "my" | "inspiration" | null;
   sourceVersionId: UUID | null;
   planItemId: UUID | null;
+  planDate: string | null;
   diningEventId: UUID | null;
   sourceBatchKey: string | null;
   addCount: number | null;
@@ -2478,6 +2542,11 @@ export interface AddShoppingGapItemsRequest {
   operationId: OperationId;
   window: ShoppingGapWindow;
   gapKeys: string[];
+}
+
+export interface AddEventGapToShoppingListRequest {
+  operationId: OperationId;
+  eventId: UUID;
 }
 
 export interface AddRecipeToShoppingListRequest {

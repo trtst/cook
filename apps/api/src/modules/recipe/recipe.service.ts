@@ -68,6 +68,7 @@ import {
   versionToContent
 } from "./recipe-content";
 import { replaceDraftIngredient, replaceRecipeIngredient } from "./ingredient-reference";
+import { loadRecipeNutritionSummary } from "./recipe-nutrition";
 import { replaceAutoRecipeVersionTags } from "./recipe-version-tags";
 
 type RecipeDb = Prisma.TransactionClient | PrismaService;
@@ -1097,6 +1098,10 @@ export class RecipeService {
       }
 
       const draftRelations = await this.resolveDraftRelations(tx, userId, normalized);
+      const ingredientAliasMap = await this.loadIngredientAliasMap(
+        tx,
+        normalized.ingredients.map(item => item.ingredientId)
+      );
       if (normalized.inspirationCategoryId) {
         await this.requireInspirationCategory(tx, normalized.inspirationCategoryId);
       }
@@ -1116,7 +1121,7 @@ export class RecipeService {
           recipeId,
           categoryId: draftRelations.categoryId,
           title: normalized.name || null,
-          searchText: buildDraftSearchText(normalized),
+          searchText: buildDraftSearchText(normalized, ingredientAliasMap),
           contentJson: toJson(normalized),
           contentSizeBytes: usedBytes
         },
@@ -1170,6 +1175,10 @@ export class RecipeService {
       await startIdempotentOperation(tx, operationId, "recipe-draft:update", userId, null, requestHash);
 
       const draftRelations = await this.resolveDraftRelations(tx, userId, normalized);
+      const ingredientAliasMap = await this.loadIngredientAliasMap(
+        tx,
+        normalized.ingredients.map(item => item.ingredientId)
+      );
       if (normalized.inspirationCategoryId) {
         await this.requireInspirationCategory(tx, normalized.inspirationCategoryId);
       }
@@ -1197,7 +1206,7 @@ export class RecipeService {
         data: {
           categoryId: draftRelations.categoryId,
           title: normalized.name || null,
-          searchText: buildDraftSearchText(normalized),
+          searchText: buildDraftSearchText(normalized, ingredientAliasMap),
           contentJson: toJson(normalized),
           contentSizeBytes: nextBytes,
           version: { increment: 1 }
@@ -1275,6 +1284,10 @@ export class RecipeService {
         ? await this.requireInspirationCategory(tx, content.inspirationCategoryId)
         : null;
       const recipeContent = await this.buildPublishedContent(tx, userId, content);
+      const ingredientAliasMap = await this.loadIngredientAliasMap(
+        tx,
+        recipeContent.ingredients.map(item => item.ingredientId)
+      );
       const nextRecipeBytes = contentSizeBytes(recipeContent) + (await this.getUploadBytes(tx, uploadIds));
       const currentDraftBytes = draft.contentSizeBytes;
       const versionImages = this.buildVersionImageState(content);
@@ -1286,7 +1299,7 @@ export class RecipeService {
         const currentRecipeBytes = await this.getRecipeBytes(tx, currentRecipe);
         await this.assertStorageDelta(tx, userId, nextRecipeBytes - currentRecipeBytes - currentDraftBytes);
         const version = await tx.recipeContentVersion.create({
-          data: this.buildVersionCreateInput(userId, recipeContent, versionImages)
+          data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
         });
         await replaceAutoRecipeVersionTags(tx, version.id, recipeContent);
         await this.uploadService.bindDraftUploads(tx, draftId, version.id, Array.from(uploadIds));
@@ -1306,7 +1319,7 @@ export class RecipeService {
             inspirationCategoryId: inspirationCategory?.id ?? null,
             currentVersionId: version.id,
             title: recipeContent.name,
-            searchText: buildRecipeSearchText(recipeContent),
+            searchText: buildRecipeSearchText(recipeContent, ingredientAliasMap),
             coverImageUrl: content.coverImageUrl ?? null,
             version: { increment: 1 }
           }
@@ -1316,7 +1329,7 @@ export class RecipeService {
       } else {
         await this.assertStorageDelta(tx, userId, nextRecipeBytes - currentDraftBytes);
         const version = await tx.recipeContentVersion.create({
-          data: this.buildVersionCreateInput(userId, recipeContent, versionImages)
+          data: this.buildVersionCreateInput(userId, recipeContent, versionImages, ingredientAliasMap)
         });
         await replaceAutoRecipeVersionTags(tx, version.id, recipeContent);
         const origin = this.readOriginContent(content);
@@ -1331,7 +1344,7 @@ export class RecipeService {
             originVersionId: origin.originVersionId,
             originCoverImageUrl: origin.originCoverImageUrl,
             title: recipeContent.name,
-            searchText: buildRecipeSearchText(recipeContent),
+            searchText: buildRecipeSearchText(recipeContent, ingredientAliasMap),
             coverImageUrl: content.coverImageUrl ?? null,
             sortOrder
           }
@@ -2439,9 +2452,10 @@ export class RecipeService {
 
   private async toMyRecipeDetail(tx: RecipeDb, userId: UUID, recipe: RecipeRow): Promise<MyRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
-    const [refs, recommendation, assistant] = await Promise.all([
+    const [refs, recommendation, nutrition, assistant] = await Promise.all([
       this.loadRecipeEditRefs(tx, userId, content.ingredients),
       this.loadLatestRecipeRecommendation(tx, recipe.id),
+      loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
       this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId)
     ]);
     return {
@@ -2457,6 +2471,7 @@ export class RecipeService {
       scenes: recipe.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: recipe.currentVersionId,
       content: this.normalizeRecipeEditContent(content, refs.ingredientMap),
+      nutrition,
       assistant,
       ingredientRefs: refs.ingredientRefs,
       unitRefs: refs.unitRefs,
@@ -2606,7 +2621,10 @@ export class RecipeService {
 
   private async toCollectedRecipeDetail(tx: RecipeDb, collection: CollectionRow): Promise<CollectedRecipeDetail> {
     const content = versionToContent(collection.sourceVersion);
-    const assistant = await this.loadRecipeAssistantSnapshot(tx, collection.sourceVersionId);
+    const [nutrition, assistant] = await Promise.all([
+      loadRecipeNutritionSummary(tx, collection.sourceVersionId, content),
+      this.loadRecipeAssistantSnapshot(tx, collection.sourceVersionId)
+    ]);
     return {
       id: collection.id,
       sourceRecipeId: collection.sourceRecipeId,
@@ -2620,6 +2638,7 @@ export class RecipeService {
       scenes: collection.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
       contentVersionId: collection.sourceVersionId,
       content,
+      nutrition,
       assistant,
       collectedAt: toIsoDate(collection.createdAt),
       updatedAt: toIsoDate(collection.updatedAt)
@@ -2649,7 +2668,10 @@ export class RecipeService {
     ownedRecipeId: UUID | null = null
   ): Promise<InspirationRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
-    const assistant = await this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId);
+    const [nutrition, assistant] = await Promise.all([
+      loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
+      this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId)
+    ]);
     return {
       id: recipe.id,
       title: recipe.title,
@@ -2659,6 +2681,7 @@ export class RecipeService {
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
       contentVersionId: recipe.currentVersionId,
       content,
+      nutrition,
       assistant,
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
@@ -2854,7 +2877,8 @@ export class RecipeService {
   private buildVersionCreateInput(
     userId: UUID,
     content: RecipeContentSnapshot,
-    images: VersionImageState
+    images: VersionImageState,
+    ingredientAliasMap: Map<UUID, string[]>
   ): Prisma.RecipeContentVersionUncheckedCreateInput {
     return {
       createdByUserId: userId,
@@ -2868,7 +2892,7 @@ export class RecipeService {
       ingredientsJson: toJson(content.ingredients),
       stepsJson: toJson(content.steps),
       imagesJson: toJson(images),
-      searchText: buildRecipeSearchText(content),
+      searchText: buildRecipeSearchText(content, ingredientAliasMap),
       contentSizeBytes: contentSizeBytes(content)
     };
   }
@@ -3258,10 +3282,15 @@ export class RecipeService {
       const current = fromJson<RecipeDraftContentInput>(draft.contentJson);
       const next = replaceDraftIngredient(current, fromId, toId);
       if (!next.changed) continue;
+      const ingredientAliasMap = await this.loadIngredientAliasMap(
+        tx,
+        next.content.ingredients.map(item => item.ingredientId)
+      );
       await tx.recipeDraft.update({
         where: { id: draft.id },
         data: {
           contentJson: toJson(next.content),
+          searchText: buildDraftSearchText(next.content, ingredientAliasMap),
           contentSizeBytes: draftSizeBytes(next.content),
           version: { increment: 1 }
         }
@@ -3295,15 +3324,49 @@ export class RecipeService {
       const current = versionToContent(version);
       const next = replaceRecipeIngredient(current, fromId, target);
       if (!next.changed) continue;
+      const ingredientAliasMap = await this.loadIngredientAliasMap(
+        tx,
+        next.content.ingredients.map(item => item.ingredientId)
+      );
+      const searchText = buildRecipeSearchText(next.content, ingredientAliasMap);
       await tx.recipeContentVersion.update({
         where: { id: version.id },
         data: {
           ingredientsJson: toJson(next.content.ingredients),
-          searchText: buildRecipeSearchText(next.content),
+          searchText,
           contentSizeBytes: contentSizeBytes(next.content)
         }
       });
+      await tx.recipe.updateMany({
+        where: { currentVersionId: version.id },
+        data: { searchText }
+      });
     }
+  }
+
+  private async loadIngredientAliasMap(tx: RecipeDb, ingredientIds: Array<UUID | null | undefined>) {
+    const ids = Array.from(new Set(ingredientIds.filter((item): item is UUID => typeof item === "number" && item > 0)));
+    if (!ids.length) return new Map<UUID, string[]>();
+    const rows = await tx.ingredient.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        aliases: true,
+        mergedTo: {
+          select: {
+            id: true,
+            aliases: true
+          }
+        }
+      }
+    });
+    const aliasMap = new Map<UUID, string[]>();
+    rows.forEach(row => {
+      const resolved = row.mergedTo ?? row;
+      aliasMap.set(row.id, resolved.aliases);
+      aliasMap.set(resolved.id, resolved.aliases);
+    });
+    return aliasMap;
   }
 
   private async bumpRecipeCollectCount(tx: RecipeDb, sourceRecipeId: UUID, delta: number) {
