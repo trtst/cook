@@ -20,7 +20,7 @@
 
     <Login
       v-if="!sessionStore.isLoggedIn"
-      title="登录后查看购物清单"
+      title="登录后查看采购清单"
       description="共享清单、协作采购和分享加入都需要登录后处理。"
       @success="handleLoginSuccess"
     />
@@ -96,7 +96,14 @@
 
                   <view class="list-card__actions">
                     <template v-if="item.status === 'ACTIVE' && item.role === 'OWNER'">
-                      <button class="action-pill action-pill--muted action-pill--subtle" :disabled="isListBusy(item.id)" @click.stop="openShareManager(item)">协作</button>
+                      <button
+                        v-if="showShoppingShareEntrances"
+                        class="action-pill action-pill--muted action-pill--subtle"
+                        :disabled="isListBusy(item.id)"
+                        @click.stop="openShareManager(item)"
+                      >
+                        协作
+                      </button>
                       <button class="action-pill action-pill--primary" :disabled="isListBusy(item.id)" @click.stop="markComplete(item)">
                         标记完成
                       </button>
@@ -161,7 +168,7 @@
         v-model="createName"
         class="sheet-input"
         maxlength="20"
-        placeholder="请输入购物清单名"
+        placeholder="请输入采购清单名"
       />
       <template #footer>
         <view class="sheet-actions">
@@ -287,6 +294,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
+import { buildDefaultShoppingListName } from "@/utils/shopping";
 import { formatMonthDay } from "../utils/date";
 import {
   shoppingApi,
@@ -326,6 +334,7 @@ const shareLinkError = ref("");
 const shareUrl = ref("");
 const copyingListId = ref<UUID | "">("");
 const busyListId = ref<UUID | "">("");
+const showShoppingShareEntrances = false;
 
 const statusTabs = computed(() => [
   { status: "ACTIVE" as const, label: "采购中" },
@@ -340,13 +349,13 @@ const emptyTitle = computed(() => {
 const emptyDescription = computed(() => {
   if (status.value === "COMPLETED") return "采购完成的清单会收在这里，方便复制后再次采购。";
   if (status.value === "VOIDED") return "暂时取消的清单会放在这里，后续也可以恢复继续采购。";
-  return "先新建一张购物清单，再把菜谱食材或临时补货加进来。";
+  return "先新建一张采购清单，再把菜谱食材或临时补货加进来。";
 });
 const shareSheetSubtitle = computed(() => {
-  if (!sharePreview.value) return "确认后，这张清单会出现在你的购物清单首页里。";
+  if (!sharePreview.value) return "确认后，这张清单会出现在你的采购清单首页里。";
   if (sharePreview.value.joined) return "你已经加入这张共享清单，可直接进入继续维护。";
   if (!sharePreview.value.canJoin) return "当前协作者名额已满，暂时不能继续加入。";
-  return "确认加入后，这张清单会出现在你的购物清单首页里，后续可一起维护。";
+  return "确认加入后，这张清单会出现在你的采购清单首页里，后续可一起维护。";
 });
 const shareJoinDisabled = computed(() => {
   if (!sharePreview.value || Boolean(shareErrorText.value)) return true;
@@ -401,7 +410,7 @@ const shareNoticeLimitText = computed(() => {
   if (!shareTarget.value) return "当前只支持小范围协作，先加入者优先。";
   return `当前最多支持 ${shareTarget.value.memberLimit} 人一起维护，先加入者优先。`;
 });
-const sheetTitle = computed(() => editingList.value ? "修改清单名" : "新建购物清单");
+const sheetTitle = computed(() => editingList.value ? "修改清单名" : "新建采购清单");
 const sheetSubtitle = computed(() => editingList.value ? "改成更好识别的名字，方便这次采购和后续继续维护。" : "先起一个名字，后续再把菜谱、缺口和手动补货收进来。");
 const sheetConfirmText = computed(() => editingList.value ? "保存" : "创建并进入");
 const sheetSubmittingText = computed(() => editingList.value ? "保存中..." : "创建中...");
@@ -425,7 +434,7 @@ const {
 });
 
 onShareAppMessage(() => ({
-  title: shareTarget.value?.name ? `${shareTarget.value.name}，一起补齐这顿饭` : "邀请你一起维护购物清单",
+  title: shareTarget.value?.name ? `${shareTarget.value.name}，一起补齐这顿饭` : "邀请你一起维护采购清单",
   path: shareUrl.value || "/pages_pantry/list/index"
 }));
 
@@ -465,7 +474,7 @@ async function loadPage() {
     const page = await shoppingApi.listLists(nextStatus);
     lists.value = page.items;
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "购物清单加载失败";
+    errorText.value = error instanceof Error ? error.message : "采购清单加载失败";
   } finally {
     loading.value = false;
   }
@@ -721,7 +730,7 @@ async function leaveList(item: ShoppingListSummary) {
   if (submitting.value || isListBusy(item.id)) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "退出共享清单",
-    content: "退出后这张清单会从你的购物清单首页移除。"
+    content: "退出后这张清单会从你的采购清单首页移除。"
   });
   if (!confirmed) return;
   busyListId.value = item.id;
@@ -743,7 +752,7 @@ async function deleteList(item: ShoppingListSummary) {
   if (submitting.value || isListBusy(item.id)) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "删除清单",
-    content: "删除后这张清单和其中食材会从购物清单与兼容记录里移除，无法恢复。"
+    content: "删除后这张清单和其中食材会从采购清单与兼容记录里移除，无法恢复。"
   });
   if (!confirmed) return;
   busyListId.value = item.id;
@@ -955,9 +964,7 @@ function shareStatusText(nextStatus: ShoppingListStatus) {
 }
 
 function buildDefaultListName(date = new Date()) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}月${day}日清单`;
+  return buildDefaultShoppingListName(date);
 }
 
 async function joinShare() {
@@ -981,6 +988,20 @@ async function joinShare() {
     joiningShare.value = false;
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  errorText.value = "";
+  shareToken.value = "";
+  shareSheetVisible.value = false;
+  sharePreview.value = null;
+  status.value = "ACTIVE";
+  await loadPage();
+}
+
+defineExpose({
+  automatorApplySession
+});
 </script>
 
 <style scoped lang="scss">

@@ -198,6 +198,48 @@
             </view>
           </view>
 
+          <view class="table-section table-section--recipes">
+            <view class="section-heading">
+              <text class="section-heading__title">冰箱里现在能做</text>
+              <text class="section-heading__action" @click="navigateTo('/pages_meal/random/index')">随机一桌</text>
+            </view>
+            <scroll-view v-if="fridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
+              <view
+                v-for="item in fridgeRecipes"
+                :key="`${item.kind}-${item.recipeId}`"
+                class="family-recipe"
+                hover-class="family-recipe--hover"
+                hover-stay-time="100"
+                @click="openFridgeRecipe(item)"
+              >
+                <view class="family-recipe__visual">
+                  <image v-if="item.coverImageUrl" class="family-recipe__image" :src="item.coverImageUrl" mode="aspectFill" />
+                  <view v-else class="family-recipe__visual family-recipe__visual--warm">
+                    <view class="family-recipe__plate">
+                      <view class="family-recipe__food" />
+                    </view>
+                  </view>
+                  <view class="family-recipe__badges">
+                    <text class="family-recipe__badge">{{ fridgeFitText(item.fridgeFit) }}</text>
+                    <text class="family-recipe__badge family-recipe__badge--soft">{{ item.kind === "MY" ? "私房菜" : "灵感" }}</text>
+                  </view>
+                </view>
+                <text class="family-recipe__name">{{ item.title }}</text>
+                <text class="family-recipe__meta">{{ fridgeRecipeMeta(item) }}</text>
+              </view>
+            </scroll-view>
+            <view v-else-if="showFridgeRecipesSkeleton" class="recipe-scroll">
+              <view v-for="index in 3" :key="index" class="family-recipe">
+                <Skeleton width="204rpx" height="220rpx" radius="var(--radius-card)" />
+                <view class="family-recipe__skeleton-copy">
+                  <Skeleton width="160rpx" height="24rpx" />
+                  <Skeleton width="120rpx" height="20rpx" />
+                </view>
+              </view>
+            </view>
+            <Empty v-else title="还没找到当前能做的菜" description="先录一点私房菜，或去随机一桌重新搭这顿饭。" />
+          </view>
+
           <view class="pantry-panel">
             <view class="pantry-panel__header">
               <view>
@@ -210,14 +252,6 @@
             <view class="pantry-list">
               <Empty title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
             </view>
-          </view>
-
-          <view class="table-section table-section--recipes">
-            <view class="section-heading">
-              <text class="section-heading__title">常吃清单</text>
-              <text class="section-heading__action" @click="navigateTo('/pages/recipe/index')">菜谱</text>
-            </view>
-            <Empty title="暂无常吃菜谱" description="保存或复做菜谱后会显示在这里。" />
           </view>
         </view>
       </view>
@@ -233,6 +267,7 @@ import {
   homeApi,
   type HomeEntryItem,
   type HomeEntryPlacement,
+  type HomeFridgeRecipeItem,
   type HomeNextMealState,
   type HomeNextMealStatus,
   type HomeRecentArrangement,
@@ -246,6 +281,10 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
+import {
+  buildRecentArrangementDetailUrl,
+  resolveRecentArrangementFocus
+} from "@/utils/recent-arrangement-focus";
 
 const pageStyle = usePageScrollStyle();
 
@@ -264,8 +303,12 @@ const quickEntryItems = ref<HomeEntryItem[]>([]);
 const nextMealStateLoading = ref(false);
 const nextMealStateLoaded = ref(false);
 const nextMealState = ref<HomeNextMealState | null>(null);
+const fridgeRecipesLoading = ref(false);
+const fridgeRecipesLoaded = ref(false);
+const fridgeRecipes = ref<HomeFridgeRecipeItem[]>([]);
 let homeEntriesLoadPromise: Promise<void> | null = null;
 let nextMealStateLoadPromise: Promise<void> | null = null;
+let fridgeRecipesLoadPromise: Promise<void> | null = null;
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
@@ -294,9 +337,12 @@ const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideF
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
 const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
+const showFridgeRecipesSkeleton = computed(
+  () => sessionStore.isLoggedIn && !fridgeRecipes.value.length && (fridgeRecipesLoading.value || !fridgeRecipesLoaded.value)
+);
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
 const recentArrangement = computed(() => nextMealState.value?.arrangement ?? null);
-const showRecentArrangementCard = computed(() => homeNextStatus.value === "COMPLETED" && Boolean(recentArrangement.value));
+const showRecentArrangementCard = computed(() => Boolean(recentArrangement.value));
 const showRecentArrangementSkeleton = computed(
   () => sessionStore.isLoggedIn && nextMealStateLoading.value && !nextMealStateLoaded.value
 );
@@ -360,7 +406,7 @@ const heroSecondaryActionText = computed(() => {
 });
 
 onShow(() => {
-  void Promise.all([loadHomeEntries(), loadNextMealState(true)]);
+  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadFridgeRecipes(true)]);
 });
 
 async function loadHomeEntries(force = false) {
@@ -445,6 +491,40 @@ async function loadNextMealState(force = false) {
   await nextMealStateLoadPromise;
 }
 
+async function loadFridgeRecipes(force = false) {
+  if (!sessionStore.isLoggedIn) {
+    fridgeRecipes.value = [];
+    fridgeRecipesLoading.value = false;
+    fridgeRecipesLoaded.value = false;
+    return;
+  }
+
+  if (fridgeRecipesLoadPromise) {
+    await fridgeRecipesLoadPromise;
+    return;
+  }
+
+  if (!force && fridgeRecipesLoaded.value) return;
+
+  fridgeRecipesLoading.value = true;
+  fridgeRecipesLoadPromise = homeApi
+    .getFridgeRecipes()
+    .then(result => {
+      fridgeRecipes.value = result.items;
+      fridgeRecipesLoaded.value = true;
+    })
+    .catch(() => {
+      fridgeRecipes.value = [];
+      fridgeRecipesLoaded.value = true;
+    })
+    .finally(() => {
+      fridgeRecipesLoading.value = false;
+      fridgeRecipesLoadPromise = null;
+    });
+
+  await fridgeRecipesLoadPromise;
+}
+
 async function showLoadToast(title: string) {
   await uniPlatform.feedback.toast({
     title,
@@ -479,6 +559,11 @@ function openHomeEntry(item: HomeEntryItem | null) {
   navigateTo(item.targetValue);
 }
 
+function openFridgeRecipe(item: HomeFridgeRecipeItem) {
+  const kind = item.kind === "MY" ? "my" : "inspiration";
+  navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.recipeId))}&kind=${kind}`);
+}
+
 function triggerHeroPrimaryAction() {
   if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT") {
     navigateTo("/pages_meal/random/index");
@@ -501,6 +586,22 @@ function triggerHeroPrimaryAction() {
     return;
   }
   navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "memory"));
+}
+
+function fridgeFitText(value: HomeFridgeRecipeItem["fridgeFit"]) {
+  if (value === "HIGH") return "现在就能做";
+  if (value === "MEDIUM") return "差一点就能做";
+  return "再补两样";
+}
+
+function fridgeRecipeMeta(item: HomeFridgeRecipeItem) {
+  const segments = [item.durationText || "时长待补"];
+  if (item.missingIngredientCount > 0) {
+    segments.push(`还差${item.missingIngredientCount}样`);
+  } else {
+    segments.push(`已配上${item.matchedIngredientCount}样`);
+  }
+  return segments.join(" · ");
 }
 
 function triggerHeroSecondaryAction() {
@@ -553,28 +654,6 @@ function resolveRecentArrangementActionText(status: HomeRecentArrangementStatus)
   return "分享回忆";
 }
 
-function resolveRecentArrangementFocus(status: HomeRecentArrangementStatus) {
-  if (status === "EMPTY_MENU") return "menu";
-  if (status === "PENDING_CONFIRM") return "footer";
-  if (status === "PENDING_SHOPPING") return "shopping";
-  if (status === "READY_TO_COOK") return "assistant";
-  return "memory";
-}
-
-function buildRecentArrangementDetailUrl(item: HomeRecentArrangement, focus?: "menu" | "footer" | "shopping" | "assistant" | "memory") {
-  const query = [
-    `planItemId=${encodeURIComponent(String(item.planItemId))}`,
-    `planDate=${encodeURIComponent(item.planDate)}`
-  ];
-  if (item.eventId) {
-    query.push(`eventId=${encodeURIComponent(String(item.eventId))}`);
-  }
-  if (focus) {
-    query.push(`focus=${encodeURIComponent(focus)}`);
-  }
-  return `/pages_meal/detail/index?${query.join("&")}`;
-}
-
 function formatRecentArrangementTime(item: HomeRecentArrangement) {
   if (item.scheduledAt) {
     const date = new Date(item.scheduledAt);
@@ -596,6 +675,46 @@ function resolveDayDiff(target: Date, base: Date) {
   const baseDay = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime();
   return Math.round((targetDay - baseDay) / 86400000);
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  await Promise.all([loadHomeEntries(true), loadNextMealState(true), loadFridgeRecipes(true)]);
+}
+
+function automatorReadRecentArrangementState() {
+  let heroPrimaryTarget = "";
+  if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT") {
+    heroPrimaryTarget = "/pages_meal/random/index";
+  } else if (!recentArrangement.value) {
+    heroPrimaryTarget = "/pages_pantry/index/index";
+  } else if (homeNextStatus.value === "NEED_GAP_CHECK") {
+    heroPrimaryTarget = buildRecentArrangementDetailUrl(
+      recentArrangement.value,
+      recentArrangement.value.menuCount > 0 ? "shopping" : "menu"
+    );
+  } else if (homeNextStatus.value === "NEED_SHOPPING") {
+    heroPrimaryTarget = buildRecentArrangementDetailUrl(recentArrangement.value, "shopping");
+  } else if (homeNextStatus.value === "READY_TO_COOK") {
+    heroPrimaryTarget = buildRecentArrangementDetailUrl(recentArrangement.value, "assistant");
+  } else if (recentArrangement.value) {
+    heroPrimaryTarget = buildRecentArrangementDetailUrl(recentArrangement.value, "memory");
+  }
+
+  return {
+    homeNextStatus: homeNextStatus.value,
+    arrangementStatus: recentArrangement.value?.status ?? "",
+    heroPrimaryTarget,
+    cardPrimaryTarget: recentArrangement.value
+      ? buildRecentArrangementDetailUrl(recentArrangement.value, resolveRecentArrangementFocus(recentArrangement.value.status))
+      : "",
+    cardDetailTarget: recentArrangement.value ? buildRecentArrangementDetailUrl(recentArrangement.value) : ""
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadRecentArrangementState
+});
 </script>
 
 <style scoped lang="scss">

@@ -44,6 +44,7 @@
 import { computed } from "vue";
 import Login from "@/components/Login/Login.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import type { MeResponse } from "@/apis/user";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
@@ -90,6 +91,25 @@ function formatPhoneStatus(phone: string | null) {
   if (!value) return "未绑定";
   return value;
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }, profile?: MeResponse | null) {
+  await sessionStore.setSession(snapshot);
+  if (profile) {
+    userStore.setProfile(profile);
+    return;
+  }
+  userStore.clearProfile();
+}
+
+async function automatorClearSession() {
+  await sessionStore.clearSession();
+  userStore.clearProfile();
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorClearSession
+});
 </script>
 
 <style scoped lang="scss">

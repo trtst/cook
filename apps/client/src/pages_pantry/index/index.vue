@@ -65,7 +65,7 @@
                 <text class="quick-card__description">{{ gapDescription }}</text>
               </view>
               <view class="quick-card" hover-class="quick-card--hover" hover-stay-time="100" @click="openShoppingLists">
-                <text class="quick-card__title">购物清单</text>
+                <text class="quick-card__title">采购清单</text>
                 <text class="quick-card__value">{{ pendingShoppingCount }}</text>
                 <text class="quick-card__description">{{ shoppingDescription }}</text>
               </view>
@@ -192,7 +192,7 @@
 
     <SheetShell
       :visible="shoppingSheetVisible"
-      title="加入购物清单"
+      title="加入采购清单"
       subtitle="先记进清单里，后面补买更顺手。"
       @close="closeShoppingSheet"
       @after-close="resetShoppingSheet"
@@ -284,6 +284,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatDateOnly, parseDateOnly } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
+import { buildDefaultShoppingListName } from "@/utils/shopping";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
 import {
@@ -645,7 +646,7 @@ async function openShoppingSheet(card: PantryCard) {
   shoppingTarget.value = card;
   shoppingCreateMode.value = !activeLists.value.length;
   selectedListId.value = activeLists.value[0]?.id || "";
-  newListName.value = "";
+  newListName.value = shoppingCreateMode.value ? buildDefaultShoppingListName() : "";
   shoppingQuantityText.value = "";
   shoppingExactQuantity.value = "";
   shoppingSheetVisible.value = true;
@@ -673,6 +674,9 @@ function selectActiveList(listId: UUID) {
 
 function toggleShoppingCreateMode() {
   shoppingCreateMode.value = !shoppingCreateMode.value;
+  if (shoppingCreateMode.value && !newListName.value.trim()) {
+    newListName.value = buildDefaultShoppingListName();
+  }
   if (!shoppingCreateMode.value) {
     newListName.value = "";
     shoppingCreatingList.value = false;
@@ -704,7 +708,7 @@ async function submitShopping() {
   shoppingSubmitting.value = true;
   try {
     if (!selectedListId.value) {
-      throw new Error("请选择购物清单");
+      throw new Error("请选择采购清单");
     }
     const quantityText = shoppingUseFixedUnit.value
       ? `${shoppingExactQuantity.value.trim()} ${shoppingFixedUnitName.value}`

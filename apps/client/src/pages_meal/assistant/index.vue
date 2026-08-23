@@ -147,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
@@ -335,6 +335,45 @@ function formatPlanDate(value: string) {
   const [, month, day] = value.split("-");
   return `${Number(month)}月${Number(day)}日`;
 }
+
+async function automatorApplySession(snapshot: { token: string; uid: number; expiresAt: string }) {
+  await sessionStore.setSession(snapshot);
+  await loadDetail();
+}
+
+async function automatorReadState() {
+  await nextTick();
+  return {
+    title: heroTitle.value,
+    eyebrow: heroEyebrow.value,
+    meta: heroMeta.value,
+    menuCount: currentMenuItems.value.length,
+    assistantStatusText: assistantStatusText.value,
+    hasSnapshot: Boolean(cookAssistant.value?.hasSnapshot),
+    isStale: Boolean(cookAssistant.value?.isStale),
+    prepTaskCount: cookAssistant.value?.prepTasks.length ?? 0,
+    timelineStepCount: cookAssistant.value?.cookTimeline.length ?? 0,
+    serveTaskCount: cookAssistant.value?.serveTasks.length ?? 0,
+    noteTexts: cookAssistant.value?.summary.notes ?? [],
+    actionLabel:
+      !cookAssistant.value?.hasSnapshot || cookAssistant.value?.isStale
+        ? cookAssistant.value?.isStale
+          ? "重新生成建议"
+          : "生成做饭建议"
+        : "按建议开始做饭"
+  };
+}
+
+async function automatorGenerateCookAssistant() {
+  await handleGenerateCookAssistant();
+  return automatorReadState();
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState,
+  automatorGenerateCookAssistant
+});
 </script>
 
 <style scoped lang="scss">

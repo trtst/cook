@@ -246,6 +246,7 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
+import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 type MessageTypeKey = "recommend" | "shoppingInvite";
@@ -258,6 +259,7 @@ const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
 const pageStyle = usePageScrollStyle();
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recommend-detail-editor"));
+const sessionStore = useSessionStore();
 const {
   threshold: refresherThreshold,
   pullDistance,
@@ -688,6 +690,43 @@ async function submitEditor() {
     editorSubmitting.value = false;
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  await loadPage();
+}
+
+function automatorReadState() {
+  return {
+    typeKey: typeKey.value,
+    currentTypeName: currentTypeName.value,
+    loading: loading.value,
+    errorText: errorText.value,
+    itemCount: currentItems.value.length,
+    firstRecommendItem: recommendationItems.value[0]
+      ? {
+          kind: recommendationItems.value[0].kind,
+          name:
+            recommendationItems.value[0].kind === "ingredient"
+              ? recommendationItems.value[0].ingredientName
+              : recommendationItems.value[0].unitName,
+          status: recommendationItems.value[0].status
+        }
+      : null,
+    firstInviteItem: visibleInviteItems.value[0]
+      ? {
+          id: visibleInviteItems.value[0].id,
+          name: visibleInviteItems.value[0].name,
+          inviteStatus: visibleInviteItems.value[0].inviteStatus
+        }
+      : null
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState
+});
 </script>
 
 <style scoped lang="scss">

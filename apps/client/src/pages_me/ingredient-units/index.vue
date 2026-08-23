@@ -866,6 +866,57 @@ async function handleRefresherRefresh() {
     onRefresherRestore();
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  await loadActiveTab({ source: "initial", force: true });
+}
+
+function automatorReadState() {
+  return {
+    isLoggedIn: sessionStore.isLoggedIn,
+    activeTab: activeTab.value,
+    categoryCount: categories.value.length,
+    activeCategoryId: ingredientCategoryId.value,
+    activeCategoryName: categories.value.find((item) => item.id === ingredientCategoryId.value)?.name || "",
+    ingredientCount: ingredients.value.length,
+    firstIngredientName: ingredients.value[0]?.name || "",
+    firstIngredientUnitName: ingredients.value[0]?.defaultUnit.name || "",
+    unitGroupCount: unitGroups.value.length,
+    firstUnitGroupLabel: unitGroups.value[0]?.label || "",
+    firstUnitName: unitGroups.value[0]?.items[0]?.name || "",
+    loading: activeLoading.value,
+    errorText: activeErrorText.value,
+    sheetMode: sheetMode.value
+  };
+}
+
+async function automatorSwitchTab(tab: IngredientUnitsTab) {
+  if (activeTab.value === tab) {
+    return automatorReadState();
+  }
+  activeTab.value = tab;
+  if (sessionStore.isLoggedIn) {
+    await loadActiveTab({ source: "switch", force: true });
+  }
+  return automatorReadState();
+}
+
+async function automatorSelectIngredientCategory(categoryId: UUID) {
+  ingredientCategoryId.value = categoryId;
+  if (sessionStore.isLoggedIn && activeTab.value === "ingredient") {
+    loadSource.value = "switch";
+    await loadIngredients();
+  }
+  return automatorReadState();
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState,
+  automatorSwitchTab,
+  automatorSelectIngredientCategory
+});
 </script>
 
 <style scoped lang="scss">

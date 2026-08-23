@@ -28,6 +28,9 @@ export interface MealPlanSummary {
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
+  shoppingListId: UUID | null;
+  shoppingListName: string | null;
+  shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   createdAt: IsoDateTime;
 }
 
@@ -87,6 +90,9 @@ export interface DiningEventSummary {
   organizerAvatarUrl: string | null;
   planItemId: UUID | null;
   diningGroupId: UUID | null;
+  shoppingListId: UUID | null;
+  shoppingListName: string | null;
+  shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   menu: RecipeContentSnapshot;
   menuItems: Array<{
     id: UUID;

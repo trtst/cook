@@ -52,6 +52,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
+import { useSessionStore } from "@/stores/session";
 
 type MessageTypeKey = "recommend" | "shoppingInvite";
 type ReadState = Partial<Record<MessageTypeKey, string>>;
@@ -61,6 +62,7 @@ const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
+const sessionStore = useSessionStore();
 
 const messageTabs = [
   {
@@ -289,6 +291,33 @@ function handleBack() {
   }
   void uniPlatform.navigation.switchTab("/pages/home/index");
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  readState.value = uniPlatform.storage.getSync<ReadState>(READ_STORAGE_KEY) ?? {};
+  await loadPage();
+}
+
+function automatorReadState() {
+  return {
+    loading: loading.value,
+    errorText: errorText.value,
+    groupCount: messageGroups.value.length,
+    messageGroups: messageGroups.value.map((item) => ({
+      key: item.key,
+      name: item.name,
+      preview: item.preview,
+      timeText: item.timeText,
+      hasUnread: item.hasUnread,
+      recommendKind: item.recommendKind
+    }))
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState
+});
 </script>
 
 <style scoped lang="scss">

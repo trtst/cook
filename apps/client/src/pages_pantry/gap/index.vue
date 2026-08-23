@@ -40,11 +40,11 @@
                 <text class="notice__action">重新加载</text>
               </view>
 
-              <text class="gap-intro">缺口页只聚焦从今天起未来 7 天的做饭安排；购物清单继续负责真正的采购维护。</text>
+              <text class="gap-intro">缺口页只聚焦从今天起未来 7 天的做饭安排；采购清单继续负责真正的采购维护。</text>
 
               <view class="target-card" hover-class="target-card--hover" hover-stay-time="100" @click="openTargetSheet()">
                 <view class="target-card__main">
-                  <text class="target-card__eyebrow">当前采购清单</text>
+                  <text class="target-card__eyebrow">已选采购清单</text>
                   <text class="target-card__title">{{ selectedList ? selectedList.name : "先选一张清单" }}</text>
                   <text class="target-card__meta">{{ selectedListMeta }}</text>
                 </view>
@@ -101,7 +101,7 @@
 
               <view v-else class="gap-section">
                 <text class="gap-section__title">当前缺口</text>
-                <Empty title="暂时没有待补食材" description="这几顿饭暂时没有明显缺口；如果已有待买项，直接去购物清单处理就行。" />
+                <Empty title="暂时没有待补食材" description="这几顿饭暂时没有明显缺口；如果已有待买项，直接去采购清单处理就行。" />
               </view>
             </template>
           </view>
@@ -109,11 +109,11 @@
       </scroll-view>
     </view>
 
-    <button v-if="sessionStore.isLoggedIn" class="shopping-fab" @click="goShoppingList">购物清单</button>
+    <button v-if="sessionStore.isLoggedIn" class="shopping-fab" @click="goShoppingList">采购清单</button>
 
     <SheetShell
       :visible="targetSheetVisible"
-      title="加入购物清单"
+      title="加入采购清单"
       :subtitle="sheetSubtitle"
       @close="closeTargetSheet"
       @after-close="resetTargetSheet"
@@ -174,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -188,6 +188,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatDateTimeMinute } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
+import { buildDefaultShoppingListName } from "@/utils/shopping";
 import { shoppingApi, type ShoppingGapItem, type ShoppingGapResponse, type ShoppingGapWindow, type ShoppingListSummary } from "../apis/shopping";
 import type { UUID } from "@/apis/http";
 
@@ -212,6 +213,7 @@ const selectedListId = ref<UUID | "">("");
 const newListName = ref("");
 const submittingGapKey = ref("");
 const pendingGapItem = ref<{ window: ShoppingGapWindow; key: string; name: string; sectionTitle: string } | null>(null);
+const presetListId = ref<UUID | "">("");
 
 const {
   threshold: refresherThreshold,
@@ -242,7 +244,7 @@ const visibleSections = computed(() => {
 const showLoadingNotice = computed(() => loading.value && !refreshing.value);
 const selectedListMeta = computed(() => {
   if (!selectedList.value) {
-    return activeLists.value.length ? "先选一张活跃清单，再把缺口快速收进去。" : "还没有活跃清单，先创建一张。";
+    return activeLists.value.length ? "先选一张采购中的清单，再把缺口快速收进去。" : "还没有采购中的清单，先创建一张。";
   }
   const remaining = Math.max(selectedList.value.progressTotalCount - selectedList.value.progressDoneCount, 0);
   return `剩余 ${remaining} 项待处理`;
@@ -257,12 +259,12 @@ const summaryTitle = computed(() => {
 const summaryDescription = computed(() => {
   if (!sessionStore.isLoggedIn) return "登录后按你自己的冰箱和待处理饭局来判断食材缺口。";
   if (loading.value) return "先按未来 48 小时、3 到 7 天、7 天后，把待处理饭局的食材缺口收口。";
-  if (!totalItemCount.value) return "未来 7 天里没有明显缺口；如果已有待买项，直接去购物清单处理就行。";
+  if (!totalItemCount.value) return "未来 7 天里没有明显缺口；如果已有待买项，直接去采购清单处理就行。";
   return `当前缺口涉及 ${totalEventCount.value} 场饭局；7 天后的安排默认收起，避免干扰最近做饭。`;
 });
 const sheetSubtitle = computed(() => {
   if (pendingGapItem.value) return `把 ${pendingGapItem.value.name} 收进哪张清单？`;
-  return "先选一张当前要维护的购物清单。";
+  return "先选一张当前要维护的采购清单。";
 });
 const shoppingCreateDisabled = computed(() => shoppingCreatingList.value || !newListName.value.trim());
 const sheetSubmitDisabled = computed(() => {
@@ -279,6 +281,13 @@ const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + GAP_NAV_GAP}px`
 }));
 
+onLoad((query) => {
+  presetListId.value = parseQueryId(query?.listId);
+  if (presetListId.value) {
+    selectedListId.value = presetListId.value;
+  }
+});
+
 onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadPage();
@@ -292,7 +301,9 @@ async function loadPage() {
     const [gapResult, listResult] = await Promise.all([shoppingApi.previewGap(), shoppingApi.listLists("ACTIVE")]);
     gapData.value = gapResult;
     activeLists.value = listResult.items;
-    if (!activeLists.value.some(item => item.id === selectedListId.value)) {
+    if (presetListId.value && activeLists.value.some(item => item.id === presetListId.value)) {
+      selectedListId.value = presetListId.value;
+    } else if (!activeLists.value.some(item => item.id === selectedListId.value)) {
       selectedListId.value = activeLists.value[0]?.id || "";
     }
     if (!gapResult.hasLater) {
@@ -319,6 +330,9 @@ function openTargetSheet(item?: { window: ShoppingGapWindow; key: string; name: 
   if (!selectedListId.value) {
     selectedListId.value = activeLists.value[0]?.id || "";
   }
+  if (shoppingCreateMode.value && !newListName.value.trim()) {
+    newListName.value = buildDefaultShoppingListName();
+  }
   targetSheetVisible.value = true;
 }
 
@@ -334,6 +348,9 @@ function resetTargetSheet() {
 
 function toggleCreateMode() {
   shoppingCreateMode.value = !shoppingCreateMode.value;
+  if (shoppingCreateMode.value && !newListName.value.trim()) {
+    newListName.value = buildDefaultShoppingListName();
+  }
   if (!shoppingCreateMode.value && !selectedListId.value) {
     selectedListId.value = activeLists.value[0]?.id || "";
   }
@@ -370,7 +387,7 @@ async function submitTargetSheet() {
     return;
   }
   if (!selectedListId.value) {
-    await uniPlatform.feedback.toast({ title: "请选择购物清单", icon: "none" });
+    await uniPlatform.feedback.toast({ title: "请选择采购清单", icon: "none" });
     return;
   }
   shoppingSubmitting.value = true;
@@ -383,7 +400,7 @@ async function submitTargetSheet() {
     await uniPlatform.feedback.toast({ title: "已加入清单", icon: "success" });
     closeTargetSheet();
     pendingGapItem.value = null;
-    await loadPage();
+    await refreshGapPageSilently();
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入清单失败", icon: "none" });
   } finally {
@@ -407,23 +424,39 @@ async function addGapItem(window: ShoppingGapWindow, item: ShoppingGapItem) {
   const actionKey = `${window}:${item.key}`;
   submittingGapKey.value = actionKey;
   try {
-    await shoppingApi.addGapItemsToList(selectedListId.value, {
+    const detail = await shoppingApi.addGapItemsToList(selectedListId.value, {
       operationId: createOperationId(),
       window,
       gapKeys: [item.key]
     });
     await uniPlatform.feedback.toast({ title: "已加入清单", icon: "success" });
-    await loadPage();
+    await refreshGapPageSilently();
+    return detail;
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入清单失败", icon: "none" });
+    return null;
   } finally {
     submittingGapKey.value = "";
+  }
+}
+
+async function refreshGapPageSilently() {
+  try {
+    await loadPage();
+  } catch {
+    // Keep the success result and let the next page entry or pull-to-refresh recover.
   }
 }
 
 function formatEventTime(value: string) {
   const text = formatDateTimeMinute(value, "");
   return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text) ? text.slice(5) : text || value;
+}
+
+function parseQueryId(value: unknown): UUID | "" {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = typeof raw === "string" ? Number(decodeURIComponent(raw)) : Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : "";
 }
 
 async function handleRefresherRefresh() {
@@ -440,6 +473,16 @@ async function handleRefresherRefresh() {
     onRefresherRestore();
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  errorText.value = "";
+  await loadPage();
+}
+
+defineExpose({
+  automatorApplySession
+});
 </script>
 
 <style scoped lang="scss">

@@ -7,10 +7,10 @@
     :navbar-placeholder="!sessionStore.isLoggedIn"
   >
     <template #navbar-center>
-      <text class="medal-navbar__title" :style="navTitleStyle">我的勋章墙</text>
+      <text class="medal-navbar__title" :style="navTitleStyle">我的勋章</text>
     </template>
 
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看勋章墙" description="勋章只记录你真实完成和真实贡献的做饭事实。" />
+    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看我的勋章" description="勋章只记录你真实完成和真实贡献的做饭事实。" />
 
     <template v-else>
       <view class="medal-nav-backdrop" :style="navBackdropStyle" />
@@ -21,12 +21,13 @@
             <text class="cookfont hero-card__laurel hero-card__laurel--left hero-card__tone icon-medal-left" />
 
             <view class="hero-card__content">
-              <text class="hero-card__title hero-card__tone">我的勋章墙</text>
+              <text class="hero-card__title hero-card__tone">我的勋章</text>
               <text class="hero-card__slogan hero-card__tone">认真做饭，也值得被记录</text>
             </view>
 
             <view class="hero-card__count-block">
               <text class="hero-card__count hero-card__tone">{{ wall?.earnedCount ?? "--" }}</text>
+              <text class="hero-card__count-meta hero-card__tone">已获得 / 共 {{ wall?.totalCount ?? "--" }}</text>
             </view>
 
             <text class="cookfont hero-card__laurel hero-card__laurel--right hero-card__tone icon-medal-right" />
@@ -182,6 +183,41 @@ async function loadWall() {
   }
 }
 
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  await loadWall();
+}
+
+function automatorReadWallState() {
+  return {
+    title: "我的勋章",
+    slogan: "认真做饭，也值得被记录",
+    earnedCount: wall.value?.earnedCount ?? 0,
+    totalCount: wall.value?.totalCount ?? 0,
+    activeCategory: activeCategory.value,
+    categories: tabs.value.map(item => ({
+      key: item.key,
+      name: item.name,
+      earnedCount: item.earnedCount,
+      totalCount: item.totalCount
+    })),
+    items: filteredItems.value.map(item => ({
+      code: item.code,
+      name: item.name,
+      category: item.category,
+      categoryName: item.categoryName,
+      earned: item.earned,
+      isLimited: item.isLimited,
+      state: formatMedalState(item),
+      hint: formatMedalStateHint(item)
+    }))
+  };
+}
+
+function automatorChangeCategory(categoryKey: string) {
+  changeCategory(categoryKey);
+}
+
 function openDetail(code: string) {
   void uniPlatform.navigation.navigateTo(`/pages_me/medal-detail/index?code=${encodeURIComponent(code)}`);
 }
@@ -200,6 +236,12 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
   if (item.isLimited) return "medal-card__tag--limited";
   return "medal-card__tag--locked";
 }
+
+defineExpose({
+  automatorApplySession,
+  automatorReadWallState,
+  automatorChangeCategory
+});
 </script>
 
 <style scoped lang="scss">
@@ -304,6 +346,7 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
 
 .hero-card__count-block {
   flex: 0 0 auto;
+  flex-direction: column;
   justify-content: center;
 }
 
@@ -311,6 +354,12 @@ function getTagClass(item: { earned: boolean; isLimited: boolean }) {
   font-size: 120rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 0.9;
+}
+
+.hero-card__count-meta {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
 }
 
 .hero-card__laurel {

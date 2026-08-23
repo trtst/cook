@@ -206,7 +206,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMealSlot, mealSlotDefaultTime } from "@/utils/meal-slot";
+import { formatMealSlot, isPastLocalDateTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { formatDateTimeMinute } from "../utils/date";
 import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
@@ -528,7 +528,7 @@ function openEvent(item: EventCardItem) {
 function openCreateSheet() {
   createPlanDate.value = todayText();
   createMealSlot.value = "DINNER";
-  createTime.value = resolveDefaultTime("DINNER");
+  createTime.value = resolveDefaultTime("DINNER", createPlanDate.value);
   createSheetVisible.value = true;
 }
 
@@ -545,6 +545,9 @@ function handleCreateDateChange(event: { detail?: { value?: string } }) {
   const nextValue = event.detail?.value?.trim();
   if (!nextValue) return;
   createPlanDate.value = nextValue;
+  if (isPastLocalDateTime(nextValue, createTime.value)) {
+    createTime.value = resolveDefaultTime(createMealSlot.value, nextValue);
+  }
 }
 
 function handleCreateTimeChange(event: { detail?: { value?: string } }) {
@@ -556,7 +559,7 @@ function handleCreateTimeChange(event: { detail?: { value?: string } }) {
 function selectCreateMealSlot(nextSlot: MealPlanSummary["mealSlot"]) {
   if (createMealSlot.value === nextSlot) return;
   createMealSlot.value = nextSlot;
-  createTime.value = resolveDefaultTime(nextSlot);
+  createTime.value = resolveDefaultTime(nextSlot, createPlanDate.value);
 }
 
 async function submitCreateEvent() {
@@ -564,6 +567,22 @@ async function submitCreateEvent() {
   creatingEvent.value = true;
 
   try {
+    if (isPastLocalDateTime(createPlanDate.value, createTime.value)) {
+      throw new Error("饭局时间不能早于当前时间");
+    }
+    const existingPlans = await mealApi.listAllPlans({
+      from: createPlanDate.value,
+      to: createPlanDate.value
+    });
+    const existingPlan = existingPlans.find(plan => plan.mealSlot === createMealSlot.value) ?? null;
+    if (existingPlan?.diningEventId) {
+      createSheetVisible.value = false;
+      await uniPlatform.feedback.toast({ title: "这顿饭已挂饭局，直接带你回到详情", icon: "none" });
+      void uniPlatform.navigation.navigateTo(
+        `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(existingPlan.id))}&planDate=${encodeURIComponent(createPlanDate.value)}&eventId=${encodeURIComponent(String(existingPlan.diningEventId))}`
+      );
+      return;
+    }
     const result = await mealApi.createDirectDiningEvent({
       operationId: createOperationId(),
       planDate: createPlanDate.value,
@@ -591,8 +610,8 @@ function parseQueryText(value: unknown) {
   return typeof raw === "string" ? decodeURIComponent(raw).trim() : "";
 }
 
-function resolveDefaultTime(slot: MealPlanSummary["mealSlot"]) {
-  return mealSlotDefaultTime(slot);
+function resolveDefaultTime(slot: MealPlanSummary["mealSlot"], dateText = todayText()) {
+  return resolveMealSlotSuggestedTime(slot, dateText);
 }
 
 function composeScheduledAt(dateText: string, timeText: string) {

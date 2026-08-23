@@ -181,7 +181,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type RecipeAssistantSnapshot, type RecipeContentSnapshot } from "@/apis/recipe";
@@ -762,6 +762,38 @@ function formatElapsed(totalSeconds: number) {
   const second = String(totalSeconds % 60).padStart(2, "0");
   return `${minute}:${second}`;
 }
+
+async function automatorApplySession(snapshot: { token: string; uid: number; expiresAt: string }) {
+  await sessionStore.setSession(snapshot);
+  await loadData();
+}
+
+async function automatorReadState() {
+  await nextTick();
+  return {
+    sourceTitle: sourceTitle.value,
+    toolbarMeta: toolbarMeta.value,
+    flowMode: flowMode.value,
+    viewMode: viewMode.value,
+    canSwitchFlowMode: canSwitchFlowMode.value,
+    assistantStepCount: assistantSteps.value.length,
+    originalStepCount: originalSteps.value.length,
+    currentStepTitle: currentStep.value?.title ?? "",
+    currentSourceTag: currentStep.value?.sourceTag ?? "",
+    completedCount: completedStepIds.value.length
+  };
+}
+
+async function automatorSetFlowMode(nextMode: FlowMode) {
+  setFlowMode(nextMode);
+  return automatorReadState();
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState,
+  automatorSetFlowMode
+});
 </script>
 
 <style scoped lang="scss">

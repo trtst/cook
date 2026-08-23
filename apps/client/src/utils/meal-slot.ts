@@ -47,6 +47,53 @@ export function mealSlotDefaultTime(slot: MealSlot) {
   return "21:30";
 }
 
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatClock(date: Date) {
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function roundUpToNextHalfHour(date: Date) {
+  const next = new Date(date);
+  next.setSeconds(0, 0);
+  const minutes = next.getMinutes();
+  if (minutes === 0 || minutes === 30) {
+    next.setMinutes(minutes + 30);
+    return next;
+  }
+  next.setMinutes(minutes < 30 ? 30 : 60);
+  return next;
+}
+
+export function resolveMealSlotSuggestedTime(slot: MealSlot, dateText: string, now = new Date()) {
+  const defaultTime = mealSlotDefaultTime(slot);
+  if (formatLocalDate(now) !== dateText) return defaultTime;
+  const suggested = new Date(`${dateText}T${defaultTime}:00`);
+  if (!Number.isFinite(suggested.getTime())) return defaultTime;
+  if (suggested.getTime() > now.getTime()) return defaultTime;
+  return formatClock(roundUpToNextHalfHour(now));
+}
+
+export function isPastLocalDateTime(dateText: string, timeText: string, now = new Date()) {
+  const value = new Date(`${dateText}T${timeText}:00`);
+  if (!Number.isFinite(value.getTime())) return false;
+  return value.getTime() < now.getTime();
+}
+
+export function resolvePlanEndOfDayMs(dateText: string | null | undefined) {
+  if (!dateText) return 0;
+  const value = new Date(`${dateText}T23:59:59.999`);
+  const time = value.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
 export function isCoreMealSlot(slot: MealSlot) {
   return slot === "BREAKFAST" || slot === "LUNCH" || slot === "DINNER";
 }

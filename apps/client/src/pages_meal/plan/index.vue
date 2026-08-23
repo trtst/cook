@@ -149,10 +149,10 @@
                           <button
                             class="action-pill action-pill--primary meal-card__action-button"
                             :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id }"
-                            :disabled="shoppingSubmitting && shoppingPlan?.id === plan.id"
-                            @click.stop="addPlanToShoppingList(plan)"
+                            :disabled="shoppingSubmitting && shoppingPlan?.id === plan.id && !hasShoppingListLink(plan)"
+                            @click.stop="handlePlanShoppingAction(plan)"
                           >
-                            {{ shoppingSubmitting && shoppingPlan?.id === plan.id ? "加入中..." : "加入采购清单" }}
+                            {{ planShoppingActionText(plan) }}
                           </button>
                         </view>
                       </view>
@@ -338,12 +338,18 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import {
+  buildDefaultShoppingListName,
+  buildMealShoppingListName,
+  buildShoppingListDetailPath,
+  hasShoppingListLink
+} from "@/utils/shopping";
+import {
   appendMealSlotToMark,
   buildMealSlotTitle,
   createEmptyMealCalendarMark,
   formatMealSlot,
-  mealSlotDefaultTime,
   mealSlotOrder,
+  resolvePlanEndOfDayMs,
   resolveMealSlotTone,
   type MealCalendarMark,
   type MealSlot
@@ -835,6 +841,24 @@ async function addPlanToShoppingList(plan: MealPlanSummary) {
   }
 }
 
+function planShoppingActionText(plan: MealPlanSummary) {
+  if (hasShoppingListLink(plan)) return "查看采购清单";
+  return shoppingSubmitting.value && shoppingPlan.value?.id === plan.id ? "加入中..." : "加入采购清单";
+}
+
+function openLinkedShoppingList(plan: MealPlanSummary) {
+  if (!plan.shoppingListId) return;
+  void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(plan.shoppingListId));
+}
+
+function handlePlanShoppingAction(plan: MealPlanSummary) {
+  if (hasShoppingListLink(plan)) {
+    openLinkedShoppingList(plan);
+    return;
+  }
+  void addPlanToShoppingList(plan);
+}
+
 function visibleMenuItems(plan: MealPlanSummary) {
   return plan.menuItems.slice(0, 5);
 }
@@ -947,9 +971,7 @@ function canShowShoppingAction(plan: MealPlanSummary) {
 }
 
 function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">) {
-  const localDate = new Date(`${plan.planDate}T${mealSlotDefaultTime(plan.mealSlot)}:00`);
-  const time = localDate.getTime();
-  return Number.isFinite(time) ? time : 0;
+  return resolvePlanEndOfDayMs(plan.planDate);
 }
 
 function isPlanExpired(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">, currentMs = Date.now()) {
@@ -989,7 +1011,7 @@ async function loadShoppingLists(force = false) {
 async function openShoppingSheet() {
   await loadShoppingLists(true);
   if (!shoppingCreateName.value.trim()) {
-    shoppingCreateName.value = buildDefaultListName();
+    shoppingCreateName.value = buildShoppingDraftName(shoppingPlan.value);
   }
   shoppingSheetVisible.value = true;
 }
@@ -1000,11 +1022,11 @@ async function createShoppingList() {
   try {
     const created = await shoppingListApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || buildDefaultListName()
+      name: shoppingCreateName.value.trim() || buildShoppingDraftName(shoppingPlan.value)
     });
     await loadShoppingLists(true);
     selectedShoppingListId.value = created.id;
-    shoppingCreateName.value = buildDefaultListName();
+    shoppingCreateName.value = buildShoppingDraftName(shoppingPlan.value);
     await uniPlatform.feedback.toast({ title: "清单已创建", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
@@ -1022,12 +1044,15 @@ async function confirmAddToShoppingList() {
   }
   shoppingSubmitting.value = true;
   try {
-    await shoppingListApi.addPlanToList(selectedShoppingListId.value, {
+    const listId = selectedShoppingListId.value;
+    await shoppingListApi.addPlanToList(listId, {
       operationId: createOperationId(),
       planItemId: shoppingPlan.value.id
     });
+    await loadWeekPlans();
     closeShoppingSheet();
     await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
+    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(listId));
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
   } finally {
@@ -1057,10 +1082,11 @@ function buildPlanOrderStorageKey(uid: number) {
   return `${PLAN_ORDER_STORAGE_KEY}/${uid}`;
 }
 
-function buildDefaultListName(date = new Date()) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}月${day}日清单`;
+function buildShoppingDraftName(plan?: Pick<MealPlanSummary, "planDate" | "mealSlot"> | null) {
+  if (!plan) {
+    return buildDefaultShoppingListName();
+  }
+  return buildMealShoppingListName(formatMealSlot(plan.mealSlot), new Date(`${plan.planDate}T00:00:00`));
 }
 
 function writePlanOrder(date: string, ids: UUID[]) {

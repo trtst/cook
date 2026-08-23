@@ -8,7 +8,7 @@ export type CookFrom = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmo
  * 如果要在开发环境和正式环境间切换，只改这里的 `mode`；
  * 不再让 `VITE_API_BASE_URL / VITE_API_DOMAIN / VITE_AUTH_DOMAIN` 成为第二套真相来源。
  */
-const mode: AppMode = "prod";       // "dev" | "prod"
+const mode: AppMode = "dev";       // "dev" | "prod"
 const profile = ENV_PROFILES[mode];
 
 export const cfg = {

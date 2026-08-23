@@ -165,8 +165,10 @@ export interface ShoppingItemSourceSummary {
   sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   title: string | null;
   recipeId: UUID | null;
+  recipeKind: "my" | "inspiration" | null;
   sourceVersionId: UUID | null;
   planItemId: UUID | null;
+  planDate: string | null;
   diningEventId: UUID | null;
   sourceBatchKey: string | null;
   addCount: number | null;
@@ -252,6 +254,16 @@ export interface AddShoppingGapItemsRequest {
   operationId: OperationId;
   window: ShoppingGapWindow;
   gapKeys: string[];
+}
+
+export interface AddEventGapToShoppingListRequest {
+  operationId: OperationId;
+  eventId: UUID;
+}
+
+export interface AddPlanToShoppingListRequest {
+  operationId: OperationId;
+  planItemId: UUID;
 }
 
 export interface UpdateShoppingListItemCheckRequest {
@@ -401,6 +413,14 @@ export const shoppingApi = {
   addGapItemsToList(listId: UUID, body: AddShoppingGapItemsRequest) {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(`${listPath(listId)}/items/from-gap`, payload, { idempotencyKey: operationId });
+  },
+  addEventToList(listId: UUID, body: AddEventGapToShoppingListRequest) {
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(`${listPath(listId)}/items/from-event-gap`, payload, { idempotencyKey: operationId });
+  },
+  addPlanToList(listId: UUID, body: AddPlanToShoppingListRequest) {
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(`${listPath(listId)}/items/from-plan`, payload, { idempotencyKey: operationId });
   },
   checkListItem(listId: UUID, itemId: UUID, body: UpdateShoppingListItemCheckRequest) {
     const { operationId, ...payload } = body;

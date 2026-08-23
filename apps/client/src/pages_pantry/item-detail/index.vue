@@ -86,7 +86,7 @@
                 <view v-if="currentItem.reservations.length" class="section-card">
                   <view class="section-card__header">
                     <text class="section-card__title">预占明细</text>
-                    <text class="section-card__hint">这些库存已经被购物清单暂时占用，但还没有正式结算。</text>
+                    <text class="section-card__hint">这些库存已经被采购清单暂时占用，但还没有正式结算。</text>
                   </view>
                   <view class="reservation-list">
                     <view
@@ -133,11 +133,11 @@
                 <view class="section-card">
                   <view class="section-card__header">
                     <text class="section-card__title">采购补货</text>
-                    <text class="section-card__hint">需要补货时，直接把这项食材加到购物清单。</text>
+                    <text class="section-card__hint">需要补货时，直接把这项食材加到采购清单。</text>
                   </view>
                   <view class="shopping-card" hover-class="shopping-card--hover" hover-stay-time="100" @click="openShoppingSheet">
                     <view class="shopping-card__main">
-                      <text class="shopping-card__title">加入购物清单</text>
+                      <text class="shopping-card__title">加入采购清单</text>
                       <text class="shopping-card__meta">可选现有活跃清单，也可现场新建一张清单。</text>
                     </view>
                     <text class="shopping-card__arrow">›</text>
@@ -152,7 +152,7 @@
 
     <SheetShell
       :visible="shoppingSheetVisible"
-      title="加入购物清单"
+      title="加入采购清单"
       subtitle="这次先只处理单食材补货，不改系统食材信息。"
       @close="closeShoppingSheet"
       @after-close="resetShoppingSheet"
@@ -175,7 +175,7 @@
         </view>
         <view class="sheet-option" :class="{ 'sheet-option--active': shoppingCreateMode }" @click="shoppingCreateMode = true">
           <view class="sheet-option__main">
-            <text class="sheet-option__title">新建购物清单</text>
+            <text class="sheet-option__title">新建采购清单</text>
             <text class="sheet-option__meta">没有合适的清单时，直接在这里新建。</text>
           </view>
         </view>
@@ -349,7 +349,7 @@ async function openShoppingSheet() {
     selectedListId.value = result.items[0]?.id || "";
     shoppingSheetVisible.value = true;
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "购物清单加载失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "采购清单加载失败", icon: "none" });
   }
 }
 
@@ -384,7 +384,7 @@ async function submitShopping() {
       targetListId = createdList.id;
     }
     if (!targetListId) {
-      throw new Error("请选择购物清单");
+      throw new Error("请选择采购清单");
     }
     await shoppingApi.createListItem(targetListId, {
       operationId: createOperationId(),

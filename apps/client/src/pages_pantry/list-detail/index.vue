@@ -11,7 +11,7 @@
     <template #navbar-left>
       <view class="detail-nav">
         <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
-        <text class="detail-nav__title" :style="navTitleStyle">{{ detail?.name || "购物清单" }}</text>
+        <text class="detail-nav__title" :style="navTitleStyle">{{ detail?.name || "采购清单" }}</text>
       </view>
     </template>
 
@@ -139,7 +139,7 @@
                             <view class="item-row__bottom">
                               <view class="item-row__bottom-left">
                                 <text
-                                  v-if="itemSourceText(group)"
+                                  v-if="group.sources.length"
                                   class="item-row__origin-toggle"
                                 :class="{ 'item-row__origin-toggle--open': isOriginOpen(group.id) }"
                                 @click.stop="toggleItemOrigin(group.id)"
@@ -181,13 +181,21 @@
                         </view>
                       </view>
                       <view
-                        v-if="itemSourceText(group)"
+                        v-if="group.sources.length"
                         class="item-origin-wrap"
                         :class="{ 'item-origin-wrap--open': isOriginOpen(group.id) }"
                       >
-                        <view class="item-origin">
-                          <text class="item-origin__tag">{{ itemSourceKindText(group) }}</text>
-                          <text class="item-origin__text">{{ itemSourceText(group) }}</text>
+                        <view class="item-origin-list">
+                          <view
+                            v-for="source in orderedGroupSources(group)"
+                            :key="sourceEntryKey(source)"
+                            class="item-origin"
+                            :class="{ 'item-origin--link': canOpenSource(source) }"
+                            @click.stop="openSource(source)"
+                          >
+                            <text class="item-origin__tag">{{ sourceTypeLabel(source.sourceType) }}</text>
+                            <text class="item-origin__text">{{ sourceEntryText(source) }}</text>
+                          </view>
                         </view>
                       </view>
                     </view>
@@ -306,6 +314,45 @@
       </template>
     </SheetShell>
 
+    <SheetShell
+      :visible="mealSourceSheetVisible"
+      title="添加餐次"
+      subtitle="直接选一顿餐次；已挂饭局的，会按当前缺口写进这张清单。"
+      @close="closeMealSourceSheet"
+      @after-close="handleMealSourceSheetAfterClose"
+    >
+      <view class="sheet-section">
+        <view v-if="planSheetLoading" class="sheet-note">正在加载近期餐次...</view>
+        <view v-else-if="planSheetError" class="sheet-note sheet-note--error" @click="loadPlanCandidates(true)">{{ planSheetError }}</view>
+        <scroll-view v-else-if="planCandidates.length" scroll-y class="plan-sheet__scroll" :show-scrollbar="false">
+          <view class="sheet-option-list">
+            <view
+              v-for="plan in planCandidates"
+              :key="plan.id"
+              class="sheet-option"
+              :class="{ 'sheet-option--active': selectedPlanId === plan.id }"
+              @click="selectedPlanId = plan.id"
+            >
+              <view class="sheet-option__main">
+                <text class="sheet-option__title">{{ planSheetTitle(plan) }}</text>
+                <text class="sheet-option__meta">{{ planSheetMeta(plan) }}</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+        <view v-else class="sheet-note">最近两周还没有可加入当前清单的餐次。</view>
+      </view>
+
+      <template #footer>
+        <view class="sheet-actions">
+          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeMealSourceSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || !selectedPlanId" @click="submitPlanSheet">
+            {{ submitting ? "加入中..." : "加入清单" }}
+          </button>
+        </view>
+      </template>
+    </SheetShell>
+
     <InviteShareSheet
       :visible="shareSheetVisible"
       :title="shareSheetTitle"
@@ -380,6 +427,7 @@
 import { computed, reactive, ref } from "vue";
 import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
+import { mealApi, type MealPlanSummary } from "@/apis/meal";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
@@ -393,9 +441,12 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
+import { formatMealSlot, isPastLocalDateTime, mealSlotDefaultTime } from "@/utils/meal-slot";
 import { formatMonthDay } from "../utils/date";
 import {
   shoppingApi,
+  type ShoppingGapResponse,
+  type ShoppingGapWindow,
   type ShoppingListCollaborator,
   type ShoppingListDetail,
   type ShoppingListDetailItem,
@@ -407,11 +458,11 @@ import {
 import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 type DetailAction = "" | "share" | "complete";
-type ManageActionKey = "add" | "share" | "void" | "restore" | "delete" | "leave";
+type ManageActionKey = "add-meal" | "add" | "share" | "void" | "restore" | "delete" | "leave";
 
 interface GroupView {
   key: string;
-  id: UUID;
+  id: string;
   items: ShoppingListDetailItem[];
   name: string;
   categoryName: string | null;
@@ -429,6 +480,11 @@ interface GroupView {
   fridgeActionMode: ShoppingListItemFridgeActionMode;
   checkedAt: string | null;
   sources: ShoppingItemSourceSummary[];
+}
+
+interface MealSourceCandidate extends MealPlanSummary {
+  sourceMode: "PLAN" | "EVENT";
+  gapCount: number;
 }
 
 const NAV_FADE_DISTANCE = 132;
@@ -457,6 +513,11 @@ const ingredientOptions = ref<IngredientSummary[]>([]);
 const selectedIngredientId = ref<UUID | "">("");
 const addQuantityText = ref("");
 const addNote = ref("");
+const mealSourceSheetVisible = ref(false);
+const planSheetLoading = ref(false);
+const planSheetError = ref("");
+const planCandidates = ref<MealSourceCandidate[]>([]);
+const selectedPlanId = ref<UUID | "">("");
 
 const shareSheetVisible = ref(false);
 const shareNoticeVisible = ref(false);
@@ -465,12 +526,12 @@ const shareLinkLoading = ref(false);
 const shareLinkError = ref("");
 const scrollTop = ref(0);
 const manageMenuOpen = ref(false);
-const openSwipeItemId = ref<UUID | "">("");
-const itemPendingId = ref<UUID | "">("");
+const openSwipeItemId = ref<string>("");
+const itemPendingId = ref<string>("");
 const itemPendingAction = ref<"" | "check" | "fridge" | "remove">("");
-const openOriginItemIds = ref<UUID[]>([]);
+const openOriginItemIds = ref<string[]>([]);
 const swipeState = reactive({
-  itemId: "" as UUID | "",
+  itemId: "",
   startX: 0,
   startY: 0,
   startOffset: 0,
@@ -584,7 +645,8 @@ const endedCardDesc = computed(() => {
   return "";
 });
 const canRename = computed(() => detail.value?.role === "OWNER" && detail.value?.status === "ACTIVE");
-const canOpenShare = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
+const showShoppingShareEntrances = false;
+const canOpenShare = computed(() => showShoppingShareEntrances && detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canVoid = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canRestore = computed(() => detail.value?.role === "OWNER" && detail.value.status === "VOIDED");
 const canDelete = computed(() => detail.value?.role === "OWNER" && (detail.value.status === "COMPLETED" || detail.value.status === "VOIDED"));
@@ -617,6 +679,7 @@ const primaryCardStatLabel = computed(() => (canShowStoreButton.value ? "项待�
 const primaryCardButtonText = computed(() => (canShowStoreButton.value ? "继续入库" : "完成清单"));
 const manageActions = computed(() => {
   const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
+  if (canAddItem.value) actions.push({ key: "add-meal", label: "加餐次", iconClass: "icon-plan", tone: "default" });
   if (canAddItem.value) actions.push({ key: "add", label: "添加食材", iconClass: "icon-add", tone: "default" });
   if (canOpenShare.value) actions.push({ key: "share", label: "协作", iconClass: "icon-share", tone: "default" });
   if (canVoid.value) actions.push({ key: "void", label: "作废", iconClass: "icon-close", tone: "danger" });
@@ -673,7 +736,7 @@ const addItemName = computed(() => {
 });
 
 onShareAppMessage(() => ({
-  title: detail.value?.name ? `${detail.value.name}，一起补齐这顿饭` : "邀请你一起维护购物清单",
+  title: detail.value?.name ? `${detail.value.name}，一起补齐这顿饭` : "邀请你一起维护采购清单",
   path: shareUrl.value || "/pages_pantry/list/index"
 }));
 
@@ -707,6 +770,7 @@ async function requestDetail(options?: { silent?: boolean }) {
   }
   try {
     detail.value = await shoppingApi.getListDetail(listId.value);
+    syncGroupUiState(detail.value.items);
     handlePendingAction();
   } catch (error) {
     if (silent) {
@@ -749,24 +813,63 @@ function handleScroll(event: { detail: { scrollTop?: number } }) {
   scrollTop.value = event.detail.scrollTop ?? 0;
 }
 
-function itemSourceText(group: GroupView) {
-  const sourceType = resolveGroupSourceType(group);
-  if (!sourceType) return null;
-  const titles = [...new Set(
-    group.sources
-      .filter(source => source.sourceType === sourceType)
-      .map(source => source.title?.trim() || "")
-      .filter(Boolean)
-  )];
-  if (titles.length) return titles.join("、");
-  return sourceType === "PLAN" ? "下一餐计划" : "菜谱";
+function canAddPlanCandidate(plan: MealPlanSummary, now = new Date()) {
+  if (plan.status === "COMPLETED" || plan.shoppingListId) return false;
+  if (plan.planDate === formatLocalDate(now) && isPastLocalDateTime(plan.planDate, mealSlotDefaultTime(plan.mealSlot), now)) {
+    return false;
+  }
+  return plan.menuItems.some(item => item.purchaseState === "READY");
 }
 
-function itemSourceKindText(group: GroupView) {
-  const sourceType = resolveGroupSourceType(group);
-  if (sourceType === "PLAN") return "计划";
-  if (sourceType === "RECIPE") return "菜谱";
-  return null;
+function collectGapItemsByEvent(gapData: ShoppingGapResponse | null | undefined, currentMs = Date.now()) {
+  const eventMap = new Map<UUID, Array<{ window: ShoppingGapWindow; key: string }>>();
+  if (!gapData) return eventMap;
+  for (const section of gapData.sections) {
+    for (const item of section.items) {
+      for (const event of item.events) {
+        const scheduledAt = new Date(event.scheduledAt).getTime();
+        if (Number.isFinite(scheduledAt) && scheduledAt <= currentMs) continue;
+        const current = eventMap.get(event.eventId) ?? [];
+        current.push({
+          window: section.window,
+          key: item.key
+        });
+        eventMap.set(event.eventId, current);
+      }
+    }
+  }
+  return eventMap;
+}
+
+function planSheetTitle(plan: MealSourceCandidate) {
+  const title = plan.title?.trim() || `${formatMealSlot(plan.mealSlot) || "这顿饭"}计划`;
+  return `${formatMonthDay(plan.planDate)} · ${title}`;
+}
+
+function planSheetMeta(plan: MealSourceCandidate) {
+  if (plan.sourceMode === "EVENT") {
+    return `${formatMealSlot(plan.mealSlot) || "这顿饭"} · 已挂饭局 · 还差${plan.gapCount}样`;
+  }
+  const readyCount = plan.menuItems.filter(item => item.purchaseState === "READY").length;
+  const menuCount = plan.menuItems.length;
+  return `${formatMealSlot(plan.mealSlot) || "这顿饭"} · ${menuCount}道菜单 · ${readyCount}道待采购`;
+}
+
+function todayDateText() {
+  return formatLocalDate(new Date());
+}
+
+function addDaysText(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return formatLocalDate(date);
+}
+
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function itemQuantityText(group: GroupView) {
@@ -779,11 +882,11 @@ function itemQuantityText(group: GroupView) {
   return group.requiredQuantityText || group.quantityText || "未填数量";
 }
 
-function isOriginOpen(itemId: UUID) {
+function isOriginOpen(itemId: string) {
   return openOriginItemIds.value.includes(itemId);
 }
 
-function toggleItemOrigin(itemId: UUID) {
+function toggleItemOrigin(itemId: string) {
   if (isOriginOpen(itemId)) {
     openOriginItemIds.value = openOriginItemIds.value.filter(currentId => currentId !== itemId);
     return;
@@ -823,7 +926,7 @@ function isFullyCoveredItem(item: ShoppingListDetailItem) {
   return item.inventoryCovered;
 }
 
-function isItemPending(itemId: UUID, action?: "check" | "fridge" | "remove") {
+function isItemPending(itemId: string, action?: "check" | "fridge" | "remove") {
   if (itemPendingId.value !== itemId) return false;
   if (!action) return true;
   return itemPendingAction.value === action;
@@ -862,10 +965,6 @@ function applyItemPatch(patch: ShoppingListItemPatchResponse) {
     if (removedIndex >= 0) {
       nextItems.splice(removedIndex, 1);
     }
-    openOriginItemIds.value = openOriginItemIds.value.filter(itemId => itemId !== patch.removedItemId);
-    if (openSwipeItemId.value === patch.removedItemId) {
-      openSwipeItemId.value = "";
-    }
   }
   if (patch.item) {
     const patchedItem = patch.item;
@@ -884,9 +983,10 @@ function applyItemPatch(patch: ShoppingListItemPatchResponse) {
     progressTotalCount: patch.progressTotalCount,
     items: nextItems
   };
+  syncGroupUiState(nextItems);
 }
 
-function itemSwipeStyle(itemId: UUID) {
+function itemSwipeStyle(itemId: string) {
   const offset = swipeState.itemId === itemId
     ? swipeState.offset
     : openSwipeItemId.value === itemId
@@ -915,7 +1015,7 @@ function resetSwipeState() {
   swipeState.axis = "";
 }
 
-function handleItemTouchStart(itemId: UUID, event: ItemTouchEvent) {
+function handleItemTouchStart(itemId: string, event: ItemTouchEvent) {
   if (!canEditItems.value) return;
   const touch = readTouch(event);
   if (!touch) return;
@@ -991,6 +1091,7 @@ async function toggleItem(group: GroupView) {
   try {
     const targetChecked = !isItemChecked(group);
     const currentItems = getCurrentGroupItems(group.key);
+    let changed = false;
     for (const currentItem of currentItems) {
       if (targetChecked && isFullyCoveredItem(currentItem)) continue;
       if (Boolean(currentItem.checkedAt) === targetChecked) continue;
@@ -1000,6 +1101,10 @@ async function toggleItem(group: GroupView) {
         checked: targetChecked
       });
       applyItemPatch(patch);
+      changed = true;
+    }
+    if (changed) {
+      await refreshDetailSilently();
     }
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
@@ -1022,6 +1127,7 @@ async function handleFridgeAction(group: GroupView) {
   try {
     const targetAction = group.items.some(item => item.inventoryApplied) ? "UNDO" : "APPLY";
     const currentItems = getCurrentGroupItems(group.key);
+    let changed = false;
     for (const currentItem of currentItems) {
       if (targetAction === "UNDO" && !currentItem.inventoryApplied) continue;
       if (targetAction === "APPLY" && currentItem.inventoryApplied) continue;
@@ -1032,6 +1138,10 @@ async function handleFridgeAction(group: GroupView) {
         action: targetAction
       });
       applyItemPatch(patch);
+      changed = true;
+    }
+    if (changed) {
+      await refreshDetailSilently();
     }
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "库存应用失败", icon: "none" });
@@ -1053,12 +1163,17 @@ async function removeItem(group: GroupView) {
   itemPendingAction.value = "remove";
   try {
     const currentItems = getCurrentGroupItems(group.key);
+    let changed = false;
     for (const currentItem of currentItems) {
       const patch = await shoppingApi.removeListItem(detail.value.id, currentItem.id, {
         operationId: createOperationId(),
         version: detail.value.version
       });
       applyItemPatch(patch);
+      changed = true;
+    }
+    if (changed) {
+      await refreshDetailSilently();
     }
     await uniPlatform.feedback.toast({ title: "已移出", icon: "success" });
   } catch (error) {
@@ -1081,14 +1196,8 @@ function closeAddSheet() {
   addSheetVisible.value = false;
 }
 
-function buildGroupKey(item: { ingredientId: UUID | null; name: string }) {
+function buildGroupKey(item: Pick<ShoppingListDetailItem, "ingredientId" | "name" | "sources">) {
   return `${item.ingredientId || "none"}:${item.name.trim().toLowerCase()}`;
-}
-
-function resolveGroupSourceType(group: GroupView) {
-  if (group.sources.some(source => source.sourceType === "PLAN")) return "PLAN" as const;
-  if (group.sources.some(source => source.sourceType === "RECIPE")) return "RECIPE" as const;
-  return null;
 }
 
 function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView {
@@ -1101,7 +1210,7 @@ function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView
   const remainingQuantityText = inventoryApplied && !inventoryCovered ? buildGroupQuantityText(items, true) : null;
   return {
     key,
-    id: primary.id,
+    id: key,
     items,
     name: primary.name,
     categoryName: primary.categoryName,
@@ -1131,7 +1240,10 @@ function mergeGroupSources(items: ShoppingListDetailItem[]) {
       const key = [
         source.sourceType,
         source.planItemId ?? "",
+        source.planDate ?? "",
+        source.diningEventId ?? "",
         source.recipeId ?? "",
+        source.recipeKind ?? "",
         source.sourceVersionId ?? "",
         source.sourceBatchKey ?? "",
         source.title ?? ""
@@ -1142,6 +1254,80 @@ function mergeGroupSources(items: ShoppingListDetailItem[]) {
     }
   }
   return [...sourceMap.values()];
+}
+
+function sourceOrderValue(source: ShoppingItemSourceSummary) {
+  if (source.sourceType === "EVENT") return 0;
+  if (source.sourceType === "PLAN") return 1;
+  if (source.sourceType === "RECIPE") return 2;
+  return 3;
+}
+
+function orderedGroupSources(group: GroupView) {
+  return [...group.sources].sort((left, right) => {
+    const orderDiff = sourceOrderValue(left) - sourceOrderValue(right);
+    if (orderDiff !== 0) return orderDiff;
+    return sourceEntryText(left).localeCompare(sourceEntryText(right), "zh-Hans-CN");
+  });
+}
+
+function sourceEntryKey(source: ShoppingItemSourceSummary) {
+  return [
+    source.sourceType,
+    source.planItemId ?? "",
+    source.planDate ?? "",
+    source.diningEventId ?? "",
+    source.recipeId ?? "",
+    source.recipeKind ?? "",
+    source.sourceVersionId ?? "",
+    source.sourceBatchKey ?? "",
+    source.title ?? ""
+  ].join(":");
+}
+
+function sourceTypeLabel(sourceType: ShoppingItemSourceSummary["sourceType"]) {
+  if (sourceType === "EVENT") return "饭局";
+  if (sourceType === "PLAN") return "计划";
+  if (sourceType === "RECIPE") return "食谱";
+  if (sourceType === "RANDOM_MENU") return "随机";
+  if (sourceType === "BRING") return "带菜";
+  return "其他";
+}
+
+function sourceEntryText(source: ShoppingItemSourceSummary) {
+  const title = source.title?.trim();
+  if (title) return title;
+  if (source.sourceType === "EVENT") return "这场饭局";
+  if (source.sourceType === "PLAN") return "这顿餐次";
+  if (source.sourceType === "RECIPE") return "这道菜谱";
+  return "手动添加";
+}
+
+function canOpenSource(source: ShoppingItemSourceSummary) {
+  if (source.diningEventId && source.planItemId && source.planDate) return true;
+  if (source.planItemId && source.planDate) return true;
+  return Boolean(source.recipeId && source.recipeKind);
+}
+
+function openSource(source: ShoppingItemSourceSummary) {
+  if (!canOpenSource(source)) return;
+  if (source.diningEventId && source.planItemId && source.planDate) {
+    void uniPlatform.navigation.navigateTo(
+      `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(source.planItemId))}&planDate=${encodeURIComponent(source.planDate)}&eventId=${encodeURIComponent(String(source.diningEventId))}`
+    );
+    return;
+  }
+  if (source.planItemId && source.planDate) {
+    void uniPlatform.navigation.navigateTo(
+      `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(source.planItemId))}&planDate=${encodeURIComponent(source.planDate)}`
+    );
+    return;
+  }
+  if (source.recipeId && source.recipeKind) {
+    void uniPlatform.navigation.navigateTo(
+      `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(source.recipeId))}&kind=${encodeURIComponent(source.recipeKind)}`
+    );
+  }
 }
 
 function manageActionStyle(index: number) {
@@ -1155,59 +1341,20 @@ function buildGroupQuantityText(items: ShoppingListDetailItem[], remainingOnly =
   if (!items.length || (remainingOnly && items.every(item => item.inventoryCovered))) {
     return "不需购买";
   }
-  const exactOrder: string[] = [];
-  const exactMap = new Map<string, { unit: string; total: number }>();
-  const fuzzyLines: string[] = [];
-
-  for (const item of items) {
-    if (remainingOnly && item.inventoryCovered) continue;
-    const text = (remainingOnly && item.inventoryApplied
-      ? item.remainingQuantityText
-      : item.requiredQuantityText ?? item.quantityText)?.trim();
-    if (!text) continue;
-    const parsed = parseExactQuantityText(text);
-    if (!parsed) {
-      fuzzyLines.push(text);
-      continue;
-    }
-    if (!exactMap.has(parsed.unitKey)) {
-      exactOrder.push(parsed.unitKey);
-      exactMap.set(parsed.unitKey, {
-        unit: parsed.unitText,
-        total: parsed.amount
-      });
-      continue;
-    }
-    exactMap.get(parsed.unitKey)!.total += parsed.amount;
-  }
-
-  const lines = exactOrder.map((unitKey) => {
-    const current = exactMap.get(unitKey)!;
-    return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
-  }).concat(fuzzyLines);
-
+  const lines = collectDistinctQuantityLines(
+    items
+      .filter(item => !(remainingOnly && item.inventoryCovered))
+      .map((item) => (remainingOnly && item.inventoryApplied
+        ? item.remainingQuantityText
+        : item.requiredQuantityText ?? item.quantityText))
+  );
   if (!lines.length) return "未填数量";
   return lines.join(" / ");
 }
 
 function buildGroupAppliedQuantityText(items: ShoppingListDetailItem[]) {
-  const exactOrder: string[] = [];
-  const exactMap = new Map<string, { unit: string; total: number }>();
-  for (const item of items) {
-    const parsed = item.appliedInventoryQuantityText ? parseExactQuantityText(item.appliedInventoryQuantityText) : null;
-    if (!parsed) continue;
-    if (!exactMap.has(parsed.unitKey)) {
-      exactOrder.push(parsed.unitKey);
-      exactMap.set(parsed.unitKey, { unit: parsed.unitText, total: parsed.amount });
-    } else {
-      exactMap.get(parsed.unitKey)!.total += parsed.amount;
-    }
-  }
-  if (!exactOrder.length) return null;
-  return exactOrder.map(unitKey => {
-    const current = exactMap.get(unitKey)!;
-    return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
-  }).join(" / ");
+  const lines = collectDistinctQuantityLines(items.map(item => item.appliedInventoryQuantityText));
+  return lines.length ? lines.join(" / ") : null;
 }
 
 function resolveGroupInventoryStatus(items: ShoppingListDetailItem[]): ShoppingInventoryStatus {
@@ -1290,6 +1437,41 @@ function formatQuantityNumber(value: number) {
   return normalized.toFixed(3).replace(/\.?0+$/, "");
 }
 
+function collectDistinctQuantityLines(values: Array<string | null | undefined>) {
+  const exactOrder: string[] = [];
+  const exactMap = new Map<string, { unit: string; total: number }>();
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const value of values) {
+    const text = value?.trim();
+    if (!text) continue;
+    const parsed = parseExactQuantityText(text);
+    if (parsed) {
+      const current = exactMap.get(parsed.unitKey);
+      if (!current) {
+        exactOrder.push(parsed.unitKey);
+        exactMap.set(parsed.unitKey, {
+          unit: parsed.unitText,
+          total: parsed.amount
+        });
+      } else {
+        current.total += parsed.amount;
+      }
+      continue;
+    }
+    const lineKey = `text:${text}`;
+    if (seen.has(lineKey)) continue;
+    seen.add(lineKey);
+    lines.push(text);
+  }
+  return exactOrder
+    .map(unitKey => {
+      const current = exactMap.get(unitKey)!;
+      return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
+    })
+    .concat(lines);
+}
+
 function resolveGroupFridgeActionMode(items: ShoppingListDetailItem[]): ShoppingListItemFridgeActionMode {
   const modes = items.map(item => item.fridgeActionMode);
   if (items.some(item => item.inventoryApplied)) {
@@ -1339,6 +1521,30 @@ function resolveGroupFridgeStatusText(items: ShoppingListDetailItem[]) {
 
 function getCurrentGroupItems(groupKey: string) {
   return (detail.value?.items ?? []).filter(item => buildGroupKey(item) === groupKey);
+}
+
+function collectGroupKeys(items: ShoppingListDetailItem[]) {
+  return new Set(items.filter(item => item.status !== "REMOVED").map(item => buildGroupKey(item)));
+}
+
+function syncGroupUiState(items: ShoppingListDetailItem[]) {
+  const validGroupKeys = collectGroupKeys(items);
+  openOriginItemIds.value = openOriginItemIds.value.filter(groupId => validGroupKeys.has(groupId));
+  if (openSwipeItemId.value && !validGroupKeys.has(openSwipeItemId.value)) {
+    openSwipeItemId.value = "";
+  }
+  if (itemPendingId.value && !validGroupKeys.has(itemPendingId.value)) {
+    itemPendingId.value = "";
+    itemPendingAction.value = "";
+  }
+}
+
+async function refreshDetailSilently() {
+  try {
+    await requestDetail({ silent: true });
+  } catch {
+    // Keep the local patch result when the silent sync fails.
+  }
 }
 
 function handleAddSheetAfterClose() {
@@ -1599,6 +1805,10 @@ async function handlePrimaryAction() {
 }
 
 async function handleManageAction(action: ManageActionKey) {
+  if (action === "add-meal") {
+    openMealSourceSheet();
+    return;
+  }
   if (action === "add") {
     handleManageAdd();
     return;
@@ -1620,6 +1830,93 @@ async function handleManageAction(action: ManageActionKey) {
     return;
   }
   await handleManageLeave();
+}
+
+function openMealSourceSheet() {
+  if (!detail.value || !canAddItem.value || submitting.value) return;
+  closeManageMenu();
+  selectedPlanId.value = "";
+  mealSourceSheetVisible.value = true;
+  void loadPlanCandidates(true);
+}
+
+function closeMealSourceSheet() {
+  mealSourceSheetVisible.value = false;
+}
+
+function handleMealSourceSheetAfterClose() {
+  planSheetError.value = "";
+  selectedPlanId.value = "";
+}
+
+async function loadPlanCandidates(force = false) {
+  if (planSheetLoading.value && !force) return;
+  planSheetLoading.value = true;
+  planSheetError.value = "";
+  try {
+    const [plans, gapData] = await Promise.all([
+      mealApi.listAllPlans({
+        from: todayDateText(),
+        to: addDaysText(14)
+      }),
+      shoppingApi.previewGap().catch(() => null)
+    ]);
+    const now = new Date();
+    const eventGapMap = collectGapItemsByEvent(gapData, now.getTime());
+    planCandidates.value = plans.flatMap((plan): MealSourceCandidate[] => {
+      if (plan.status === "COMPLETED" || plan.shoppingListId) return [];
+      const gapItems = plan.diningEventId ? eventGapMap.get(plan.diningEventId) ?? [] : [];
+      if (gapItems.length) {
+        return [{
+          ...plan,
+          sourceMode: "EVENT" as const,
+          gapCount: gapItems.length
+        }];
+      }
+      if (!canAddPlanCandidate(plan, now)) return [];
+      return [{
+        ...plan,
+        sourceMode: "PLAN" as const,
+        gapCount: 0
+      }];
+    });
+    if (!planCandidates.value.some(item => item.id === selectedPlanId.value)) {
+      selectedPlanId.value = planCandidates.value[0]?.id || "";
+    }
+  } catch (error) {
+    planSheetError.value = error instanceof Error ? error.message : "餐次加载失败";
+  } finally {
+    planSheetLoading.value = false;
+  }
+}
+
+async function submitPlanSheet() {
+  if (!detail.value || !selectedPlanId.value || submitting.value) return;
+  const selected = planCandidates.value.find(item => item.id === selectedPlanId.value) ?? null;
+  if (!selected) return;
+  submitting.value = true;
+  try {
+    if (selected.sourceMode === "EVENT") {
+      if (!selected.diningEventId) {
+        throw new Error("当前餐次还没有可写入采购清单的饭局");
+      }
+      detail.value = await shoppingApi.addEventToList(detail.value.id, {
+        operationId: createOperationId(),
+        eventId: selected.diningEventId
+      });
+    } else {
+      detail.value = await shoppingApi.addPlanToList(detail.value.id, {
+        operationId: createOperationId(),
+        planItemId: selected.id
+      });
+    }
+    closeMealSourceSheet();
+    await uniPlatform.feedback.toast({ title: "已加入清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入清单失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
 }
 
 async function voidList() {
@@ -1685,7 +1982,7 @@ async function leaveList() {
   if (!detail.value || submitting.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "退出共享清单",
-    content: "退出后，这张清单会从你的购物清单列表移除。"
+    content: "退出后，这张清单会从你的采购清单列表移除。"
   });
   if (!confirmed) return;
   submitting.value = true;
@@ -1702,6 +1999,16 @@ async function leaveList() {
     submitting.value = false;
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  if (!listId.value) return;
+  await requestDetail();
+}
+
+defineExpose({
+  automatorApplySession
+});
 </script>
 
 <style scoped lang="scss">
@@ -2280,6 +2587,50 @@ async function leaveList() {
   color: var(--button-primary-text);
 }
 
+.sheet-section + .sheet-section {
+  margin-top: 20rpx;
+}
+
+.plan-sheet__scroll {
+  max-height: 720rpx;
+}
+
+.sheet-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.sheet-option {
+  padding: 24rpx;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
+  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.sheet-option--active {
+  background: color-mix(in srgb, var(--color-primary-soft) 38%, var(--color-surface) 62%);
+  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary) 26%, transparent);
+}
+
+.sheet-option__main {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.sheet-option__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sheet-option__meta {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
 .mini-pill--danger {
   background: var(--color-danger-soft);
   color: var(--color-danger-text);
@@ -2458,9 +2809,14 @@ async function leaveList() {
 }
 
 .item-origin-wrap--open {
-  max-height: 120rpx;
+  max-height: 320rpx;
   opacity: 1;
   transform: translateY(0);
+}
+
+.item-origin-list {
+  display: flex;
+  flex-direction: column;
 }
 
 .item-origin {
@@ -2473,6 +2829,10 @@ async function leaveList() {
   padding-top: 14rpx;
   max-width: 100%;
   border-top: 1rpx solid color-mix(in srgb, var(--color-border) 72%, var(--color-surface) 28%);
+}
+
+.item-origin--link {
+  cursor: pointer;
 }
 
 .item-origin__tag {

@@ -41,11 +41,12 @@
         <view v-if="item" class="detail-footer">
           <view class="detail-footer__status">
             <text v-if="item.earned" class="detail-footer__value">- {{ earnedAtText }}获得 -</text>
+            <text v-else class="detail-footer__value">- 尚未获得 -</text>
             <text v-if="item.earnedUserCount > 0" class="detail-footer__hint">已有{{ item.earnedUserCount }}人获得。</text>
             <text v-if="showEarlyHint" class="detail-footer__tip">还没多少人拿到，快快去获取吧。</text>
           </view>
           <view class="detail-footer__notice" @click="openNotice">
-            <text class="cookfont icon-qa" />
+            <text class="cookfont icon-notice" />
           </view>
         </view>
 
@@ -156,6 +157,44 @@ function openNotice() {
 function closeNotice() {
   noticeVisible.value = false;
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  await loadDetail();
+}
+
+function automatorOpenNotice() {
+  openNotice();
+}
+
+function automatorCloseNotice() {
+  closeNotice();
+}
+
+function automatorReadDetailState() {
+  return {
+    code: medalCode.value,
+    title: item.value?.name ?? "",
+    categoryName: item.value?.categoryName ?? "",
+    description: item.value?.description ?? "",
+    condition: item.value?.condition ?? "",
+    earned: item.value?.earned ?? false,
+    isLimited: item.value?.isLimited ?? false,
+    statusText: statusText.value,
+    statusHint: statusHint.value,
+    earnedAtText: earnedAtText.value,
+    noticeVisible: noticeVisible.value,
+    earnedUserCount: item.value?.earnedUserCount ?? 0,
+    rangeText: item.value ? formatMedalRange(item.value) : ""
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorOpenNotice,
+  automatorCloseNotice,
+  automatorReadDetailState
+});
 </script>
 
 <style scoped lang="scss">

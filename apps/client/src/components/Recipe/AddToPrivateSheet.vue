@@ -2,7 +2,7 @@
   <SheetShell
     :visible="visible"
     title="保存为私房菜"
-    subtitle="选择一个个人分类，保存后就能从私房菜找到并编辑这道菜。"
+    subtitle="先选一个个人分类，保存后就会生成你的私房菜副本。"
     @close="emit('close')"
   >
     <view v-if="loading" class="panel-note">加载中...</view>
@@ -163,7 +163,7 @@ async function submit() {
     emit("close");
     await uniPlatform.feedback.toast({ title: "已保存为私房菜", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
   } finally {
     submitting.value = false;
   }

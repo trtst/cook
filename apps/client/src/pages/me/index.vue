@@ -31,7 +31,11 @@
 							<view class="profile-row__main">
 								<view class="profile-row__name-line">
 									<text class="profile-row__name">{{ profileName }}</text>
-									<view v-if="sessionStore.isLoggedIn" class="profile-row__badge-hit" @click.stop="handleBenefitCenter">
+									<view
+										v-if="showMemberEntrances && sessionStore.isLoggedIn"
+										class="profile-row__badge-hit"
+										@click.stop="handleBenefitCenter"
+									>
 										<TierBadge :tier="userStore.profile?.membership?.tier" />
 									</view>
 								</view>
@@ -59,7 +63,7 @@
 
 			<view class="page-content">
 				<template v-if="profileLoading">
-					<view class="overview-grid">
+					<view v-if="showMemberEntrances" class="overview-grid">
 						<Skeleton width="100%" height="246rpx" radius="var(--radius-xs)" />
 						<Skeleton width="100%" height="246rpx" radius="var(--radius-xs)" />
 					</view>
@@ -67,9 +71,13 @@
 				</template>
 
 				<template v-else>
-					<view class="overview-grid">
-						<view class="membership-card" hover-class="is-pressed" hover-stay-time="100"
-							@click="handleBenefitCenter">
+					<view v-if="showMemberEntrances" class="overview-grid">
+						<view
+							class="membership-card"
+							hover-class="is-pressed"
+							hover-stay-time="100"
+							@click="handleBenefitCenter"
+						>
 							<view class="overview-heading">
 								<text class="overview-heading__title">我的会员</text>
 								<text class="overview-heading__arrow cookfont icon-back" />
@@ -86,20 +94,9 @@
 							</template>
 						</view>
 
-						<view class="medal-card" hover-class="is-pressed" hover-stay-time="100"
-							@click="handleMedalClick">
-							<view class="medal-card__icon">
-								<text class="medal-card__icon-text">勋</text>
-							</view>
-							<text class="medal-card__label">我的勋章</text>
-							<view class="medal-card__count-line">
-								<text class="medal-card__count">{{ medalCount === null ? "--" : medalCount }}</text>
-								<text class="medal-card__unit">枚</text>
-							</view>
-						</view>
 					</view>
 
-					<view class="service-section">
+					<view v-if="showMemberEntrances" class="service-section">
 						<text class="service-section__title">会员</text>
 						<view class="service-list">
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleBenefitCenter">
@@ -128,6 +125,26 @@
 					<view class="service-section">
 						<text class="service-section__title">我的</text>
 						<view class="service-list">
+							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(notificationEntry)">
+								<view class="service-row__icon-wrap">
+									<image class="service-row__icon" :src="notificationEntry.iconSrc" mode="aspectFit" />
+								</view>
+								<view class="service-row__copy">
+									<text class="service-row__title">{{ notificationEntry.title }}</text>
+									<text v-if="notificationEntry.description" class="service-row__description">{{ notificationEntry.description }}</text>
+								</view>
+								<text class="service-row__arrow cookfont icon-back" />
+							</view>
+							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMedalClick">
+								<view class="service-row__icon-wrap service-row__icon-wrap--medal">
+									<text class="service-row__icon-mark">勋</text>
+								</view>
+								<view class="service-row__copy">
+									<text class="service-row__title">我的勋章</text>
+									<text class="service-row__description">{{ medalEntryDescription }}</text>
+								</view>
+								<text class="service-row__arrow cookfont icon-back" />
+							</view>
 							<view v-for="item in personalEntries" :key="item.title" class="service-row"
 								hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(item)">
 								<view class="service-row__icon-wrap">
@@ -225,7 +242,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import aboutIcon from "@/assets/me-actions/about.svg";
 import categoriesUnitsIcon from "@/assets/me-actions/categories-units.svg";
@@ -291,6 +308,7 @@ const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 let loadMedalsPromise: Promise<void> | null = null;
+const showMemberEntrances = false;
 
 const profileHeroStyle = computed(() => ({
 	"--profile-hero-padding-top": `${navBarTotalHeight.value}px`
@@ -315,6 +333,11 @@ const profileAvatarText = computed(() => {
 const profileUidText = computed(() =>
 	sessionStore.isLoggedIn ? `UID: ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
+const medalEntryDescription = computed(() => {
+	if (!sessionStore.isLoggedIn) return "登录后查看你已经获得的勋章";
+	if (medalCount.value === null) return "看看已经获得的勋章";
+	return `已获得 ${medalCount.value} 枚勋章`;
+});
 const membershipCardDescription = computed(() => (
 	sessionStore.isLoggedIn ? "你的容量、展示和减广告权益都收在这里" : "登录后查看会员状态"
 ));
@@ -367,13 +390,14 @@ const coreEntries: PageEntry[] = [
 	}
 ];
 
+const notificationEntry: PageEntry = {
+	title: "通知中心",
+	iconSrc: notificationsIcon,
+	description: "邀请提醒、进度通知和系统消息都在这里",
+	url: "/pages_me/recommend/index"
+};
+
 const personalEntries: PageEntry[] = [
-	{
-		title: "通知中心",
-		iconSrc: notificationsIcon,
-		description: "邀请提醒、进度通知和系统消息都在这里",
-		url: "/pages_me/recommend/index"
-	},
 	{
 		title: "我的口味",
 		iconSrc: tasteIcon,
@@ -631,6 +655,42 @@ function requireLogin(action: () => void) {
 function openLogin(action: (() => void) | null = null) {
 	loginModalStore.open(null, action);
 }
+
+async function automatorOpenMedalLogin() {
+	handleMedalClick();
+	await nextTick();
+	return {
+		path: "/pages_me/medal/index"
+	};
+}
+
+async function automatorSwitchLoginModalPhoneMode() {
+	loginModalStore.openPhoneMode();
+	await nextTick();
+}
+
+function automatorReadLoginModalState() {
+	return {
+		visible: loginModalStore.visible,
+		mode: loginModalStore.mode,
+		openedInMiniProgram: loginModalStore.openedInMiniProgram,
+		appName: APP_NAME,
+		slogan: "炊烟晚，人归缓，烟火暖流年",
+		wechatButtonText: "微信一键登录",
+		switchText: "手机号验证码登录",
+		phoneTitle: "手机号验证码登录",
+		phoneDescription: "请输入手机号并获取验证码后登录。",
+		phoneSubmitText: "手机号登录",
+		codeButtonText: "发送验证码",
+		backText: "返回微信一键登录"
+	};
+}
+
+defineExpose({
+	automatorOpenMedalLogin,
+	automatorSwitchLoginModalPhoneMode,
+	automatorReadLoginModalState
+});
 
 function openProfileEditor() {
 	profileNameDraft.value = userStore.profile?.nickname || "";
@@ -970,7 +1030,6 @@ function showComingSoon(name: string) {
 }
 
 .membership-card,
-.medal-card,
 .service-list,
 .knowledge-grid {
 	border-radius: var(--radius-xs);
@@ -1052,59 +1111,6 @@ function showComingSoon(name: string) {
 	white-space: nowrap;
 }
 
-.medal-card {
-	position: relative;
-	min-width: 0;
-	overflow: hidden;
-	padding: 22rpx 20rpx;
-	background: linear-gradient(160deg, var(--color-primary-soft), var(--color-surface));
-}
-
-.medal-card__icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 54rpx;
-	height: 54rpx;
-	border: 4rpx solid var(--medal-icon-border);
-	border-radius: var(--radius-pill);
-	background: var(--medal-icon-bg);
-	box-shadow: var(--medal-icon-shadow);
-}
-
-.medal-card__icon-text {
-	color: var(--medal-icon-text);
-	font-size: var(--font-size-xs);
-	font-weight: var(--font-weight-heavy);
-}
-
-.medal-card__label {
-	display: block;
-	margin-top: 14rpx;
-	color: var(--color-text-secondary);
-	font-size: var(--font-size-sm);
-	font-weight: var(--font-weight-bold);
-}
-
-.medal-card__count-line {
-	display: flex;
-	align-items: baseline;
-	margin-top: 4rpx;
-}
-
-.medal-card__count {
-	color: var(--color-primary);
-	font-size: 42rpx;
-	font-weight: var(--font-weight-heavy);
-	line-height: var(--line-height-tight);
-}
-
-.medal-card__unit {
-	margin-left: 4rpx;
-	color: var(--color-text-tertiary);
-	font-size: var(--font-size-xs);
-}
-
 .service-section {
 	margin-top: var(--space-lg);
 }
@@ -1174,6 +1180,11 @@ function showComingSoon(name: string) {
 
 .service-row__icon-wrap--benefit {
 	background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-page));
+	border-radius: 20rpx;
+}
+
+.service-row__icon-wrap--medal {
+	background: color-mix(in srgb, var(--theme-primary) 11%, var(--color-page));
 	border-radius: 20rpx;
 }
 

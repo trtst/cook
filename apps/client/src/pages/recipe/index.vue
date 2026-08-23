@@ -977,6 +977,21 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 	};
 }
 
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+	await sessionStore.setSession(snapshot);
+	if (activeTab.value !== "my") {
+		activeTab.value = "my";
+	}
+	keyword.value = "";
+	errorText.value = "";
+	showFilters.value = false;
+	await loadActiveTab({ force: true, source: "switch" });
+}
+
+defineExpose({
+	automatorApplySession
+});
+
 </script>
 
 <style scoped lang="scss">

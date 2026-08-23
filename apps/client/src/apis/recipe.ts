@@ -152,6 +152,24 @@ export interface RecipeAssistantSnapshot {
 	steps: RecipeAssistantStep[];
 }
 
+export type RecipeNutritionStatus = "COMPLETE" | "ESTIMATED" | "INSUFFICIENT" | "NONE";
+
+export interface RecipeNutritionMetrics {
+	calories: number | null;
+	protein: number | null;
+	fat: number | null;
+	carbohydrate: number | null;
+}
+
+export interface RecipeNutritionSummary {
+	status: RecipeNutritionStatus;
+	qualityLabel: "估算较完整" | "结果为估算" | "当前数据不足" | null;
+	perServing: RecipeNutritionMetrics | null;
+	perRecipe: RecipeNutritionMetrics | null;
+	calculatedAt: IsoDateTime | null;
+	sourceVersion: string | null;
+}
+
 export interface RecipeDraftContentInput {
 	name: string;
 	story: string | null;
@@ -244,6 +262,7 @@ export interface MyRecipeDetail {
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	nutrition: RecipeNutritionSummary;
 	assistant: RecipeAssistantSnapshot | null;
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
@@ -313,6 +332,7 @@ export interface CollectedRecipeDetail {
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	nutrition: RecipeNutritionSummary;
 	assistant: RecipeAssistantSnapshot | null;
 	collectedAt: IsoDateTime;
 	updatedAt: IsoDateTime;
@@ -341,6 +361,7 @@ export interface InspirationRecipeDetail {
 	category: InspirationCategorySummary;
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
+	nutrition: RecipeNutritionSummary;
 	assistant: RecipeAssistantSnapshot | null;
 	likeCount: number;
 	collectCount: number;

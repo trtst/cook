@@ -278,7 +278,7 @@ const bottomTitle = computed(() => {
 
 const bottomDescription = computed(() => {
   if (!state.value.gap.visible) return "缺口预检只检查当前这桌，不混用全局缺口。";
-  if (canCreateShopping.value && !canCreatePlan.value) return "把准备采购的菜位标出来，再去购物清单处理。";
+  if (canCreateShopping.value && !canCreatePlan.value) return "把准备采购的菜位标出来，再去采购清单处理。";
   if (canCreatePlan.value) return "去采购的菜位继续缺口采购，保留待采购的菜位会写入计划但标记为待采购。";
   return "库存未确认的食材需要先确认有/无；缺料菜位也要明确是去采购还是保留待采购。";
 });
@@ -781,10 +781,10 @@ async function createShopping() {
         }))
     });
     state.value.pageStatus = "COMPLETED";
-    await uniPlatform.feedback.toast({ title: "已加入购物清单", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
     void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入购物清单失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
   } finally {
     shoppingSubmitting.value = false;
   }
@@ -947,6 +947,31 @@ function parseBoolean(value: unknown) {
   if (value === "0" || value === "false" || value === false) return false;
   return null;
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  clearError();
+  syncSlotPlan();
+}
+
+function automatorPrimeConditions(next: { mealSlot?: MealSlot | null; peopleCount?: number | null; fridgePreferred?: boolean }) {
+  if (typeof next.mealSlot !== "undefined") {
+    state.value.conditions.mealSlot = next.mealSlot;
+  }
+  if (typeof next.peopleCount !== "undefined") {
+    state.value.conditions.peopleCount = next.peopleCount;
+  }
+  if (typeof next.fridgePreferred !== "undefined") {
+    state.value.conditions.fridgePreferred = next.fridgePreferred;
+  }
+  syncSlotPlan();
+  clearMenuAndGap();
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorPrimeConditions
+});
 </script>
 
 <style scoped lang="scss">

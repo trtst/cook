@@ -127,7 +127,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  success: [payload: { recipeId: UUID; addedToPrivate: boolean }];
+  success: [payload: { recipeId: UUID; addedToPrivate: boolean; planItemId: UUID; planDate: string; mealSlot: MealSlot }];
 }>();
 
 const today = todayText();
@@ -294,7 +294,7 @@ async function submit() {
     }
     if (!recipeId || !recipeVersionId) throw new Error("当前菜谱暂不可加入计划");
 
-    await mealApi.addPlanItem({
+    const plan = await mealApi.addPlanItem({
       operationId: createOperationId(),
       planDate: selectedDate.value,
       mealSlot: mealSlot.value,
@@ -303,7 +303,13 @@ async function submit() {
       slotType: null,
       purchaseState: "READY"
     });
-    emit("success", { recipeId, addedToPrivate });
+    emit("success", {
+      recipeId,
+      addedToPrivate,
+      planItemId: plan.id,
+      planDate: plan.planDate,
+      mealSlot: plan.mealSlot
+    });
     emit("close");
     await uniPlatform.feedback.toast({ title: addedToPrivate ? "已保存到私房菜并加入计划" : "已加入计划", icon: "success" });
   } catch (error) {

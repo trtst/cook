@@ -64,7 +64,7 @@
 	            <view class="summary-card">
 	              <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
 	              <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
-              <view v-if="detailFactText || showReportEntry || showRecommendEntry" class="summary-card__facts">
+              <view v-if="detailFactText || showReportEntry" class="summary-card__facts">
                 <view class="summary-card__fact-row">
                   <view v-if="detailFactText" class="summary-card__fact-block">
                     <text class="summary-card__fact-title">分类</text>
@@ -79,17 +79,6 @@
                   >
                     举报
                   </text>
-                  <view
-                    v-else-if="showRecommendEntry"
-                    class="summary-card__recommend-entry"
-                    :class="recommendEntryClass"
-                    hover-class="summary-card__recommend-entry--hover"
-                    hover-stay-time="100"
-                    @click="openRecommendSheet"
-                  >
-                    <text class="cookfont icon-recommend summary-card__recommend-entry-icon" />
-                    <text>{{ recommendActionLabel }}</text>
-                  </view>
                 </view>
               </view>
 
@@ -100,9 +89,23 @@
 		                </view>
 		              </view>
 
+                  <view
+                    v-if="plannedMealTarget"
+                    class="planned-meal-entry"
+                    hover-class="planned-meal-entry--hover"
+                    hover-stay-time="100"
+                    @click="openPlannedMealTarget"
+                  >
+                    <view class="planned-meal-entry__main">
+                      <text class="planned-meal-entry__label">已安排到</text>
+                      <text class="planned-meal-entry__value">{{ plannedMealText }}</text>
+                    </view>
+                    <text class="planned-meal-entry__action">查看这顿餐次</text>
+                  </view>
+
 	            </view>
 
-              <view id="detail-ingredients" class="section section--first">
+              <view id="detail-ingredients" class="section" :class="{ 'section--first': !showNutritionSection }">
                 <view class="section__head">
                   <view class="section__head-main">
                     <text class="section__label">食材清单</text>
@@ -115,7 +118,7 @@
                     @click="addToShoppingList"
                   >
                     <text class="cookfont icon-add-list section__action-icon" />
-                    <text>{{ shoppingSubmitting ? "加入中..." : "加入当前采购清单" }}</text>
+                    <text>{{ shoppingSubmitting ? "加入中..." : "加入采购清单" }}</text>
                   </button>
                 </view>
                 <view v-if="detailContent.ingredients.length" class="ingredient-list">
@@ -129,6 +132,39 @@
                   </view>
                 </view>
                 <text v-else class="section__empty">暂未添加食材</text>
+              </view>
+
+              <view v-if="showNutritionSection" id="detail-nutrition" class="section">
+                <view class="section__head">
+                  <view class="section__head-main">
+                    <text class="section__label">营养估算</text>
+                    <text class="section__caption">{{ nutritionCaption }}</text>
+                  </view>
+                  <view v-if="publishedNutrition?.perRecipe" class="nutrition-toggle">
+                    <button
+                      class="nutrition-toggle__item"
+                      :class="{ 'nutrition-toggle__item--active': nutritionView === 'perServing' }"
+                      @click="setNutritionView('perServing')"
+                    >
+                      单份
+                    </button>
+                    <text class="nutrition-toggle__divider">/</text>
+                    <button
+                      class="nutrition-toggle__item"
+                      :class="{ 'nutrition-toggle__item--active': nutritionView === 'perRecipe' }"
+                      @click="setNutritionView('perRecipe')"
+                    >
+                      整份
+                    </button>
+                  </view>
+                </view>
+                <view v-if="visibleNutritionMetrics.length" class="nutrition-grid">
+                  <view v-for="metric in visibleNutritionMetrics" :key="metric.key" class="nutrition-card">
+                    <text class="nutrition-card__label">{{ metric.label }}</text>
+                    <text class="nutrition-card__value">{{ formatNutritionValue(metric.value, metric.unit) }}</text>
+                  </view>
+                </view>
+                <text v-else class="section__empty">暂无营养估算</text>
               </view>
 
               <view id="detail-steps" class="section">
@@ -182,6 +218,15 @@
 	                      <view class="cookfont detail-inline-actions__icon icon-edit" />
 	                      <view class="detail-inline-actions__text">编辑</view>
 	                </button>
+                  <button
+                    v-if="showRecommendEntry && !detailActionsVisible"
+                    class="detail-inline-actions__item detail-inline-actions__item--recommend"
+                    :class="{ 'detail-inline-actions__item--disabled': isRecommendReadonly }"
+                    @click="handleRecommendAction"
+                  >
+                    <view class="cookfont detail-inline-actions__icon icon-recommend" />
+                    <view class="detail-inline-actions__text">{{ recommendActionLabel }}</view>
+                  </button>
 	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" open-type="share">
 	                  <view class="cookfont detail-inline-actions__icon icon-share" />
 	                  <view class="detail-inline-actions__text">分享</view>
@@ -218,13 +263,18 @@
             </button>
           </template>
           <template v-else-if="isOwnedDetail">
-            <button class="detail-actions__item" @click="handleEditRecipe">
-              <view class="cookfont icon-edit detail-actions__icon" />
-              <view class="detail-actions__text">编辑</view>
+            <button
+              v-if="showRecommendEntry"
+              class="detail-actions__item detail-actions__item--recommend"
+              :class="{ 'detail-actions__item--disabled': isRecommendReadonly }"
+              @click="handleRecommendAction"
+            >
+              <view class="cookfont icon-recommend detail-actions__icon" />
+              <view class="detail-actions__text">{{ recommendActionLabel }}</view>
             </button>
             <button class="detail-actions__item" @click="handleAddPlan">
               <view class="cookfont icon-add-plan detail-actions__icon" />
-              <view class="detail-actions__text">添加计划</view>
+              <view class="detail-actions__text">添加</view>
             </button>
           </template>
         </view>
@@ -291,7 +341,7 @@
 
       <SheetShell
         :visible="shoppingSheetVisible"
-        title="加入购物清单"
+        title="加入采购清单"
         subtitle="先选一张采购中的清单，也可以现场新建空白清单。"
         @close="closeShoppingSheet"
         @after-close="handleShoppingSheetAfterClose"
@@ -388,10 +438,10 @@ import {
   type MyRecipeDetail,
   type RecipeAmountSnapshot,
   type RecipeContentSnapshot,
-  type RecipeDraftContentInput,
+  type RecipeNutritionSummary,
   type RecipeRecommendationSummary
 } from "@/apis/recipe";
-import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
+import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
@@ -407,11 +457,13 @@ import { useUserStore } from "@/stores/user";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+import { formatMealSlot } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
+import { buildDefaultShoppingListName } from "@/utils/shopping";
 
 type DetailKind = "my" | "inspiration";
 type DetailMode = "published" | "preview";
-type AnchorKey = "ingredients" | "steps";
+type AnchorKey = "ingredients" | "nutrition" | "steps";
 type PublishedDetail = MyRecipeDetail | InspirationRecipeDetail;
 type DetailContent = RecipeContentSnapshot | RecipePreviewDetail["content"];
 
@@ -425,6 +477,13 @@ interface InfoItem {
 interface ReportReasonOption {
   value: "AD" | "FALSE" | "INFRINGEMENT" | "ILLEGAL" | "OTHER";
   label: string;
+}
+
+interface NutritionMetricCard {
+  key: "calories" | "protein" | "fat" | "carbohydrate";
+  label: string;
+  unit: string;
+  value: number | null;
 }
 
 function isSeedCoverUrl(value: string) {
@@ -447,11 +506,6 @@ const reportReasonOptions: ReportReasonOption[] = [
   { value: "INFRINGEMENT", label: "侵犯权益" },
   { value: "ILLEGAL", label: "违法违规" },
   { value: "OTHER", label: "其他" }
-];
-
-const anchorTabs = [
-  { value: "ingredients" as const, label: "食材" },
-  { value: "steps" as const, label: "步骤" }
 ];
 
 const sessionStore = useSessionStore();
@@ -480,9 +534,11 @@ const shoppingSubmitting = ref(false);
 const shoppingSheetVisible = ref(false);
 const shoppingListLoading = ref(false);
 const shoppingListError = ref("");
-const shoppingLists = ref<ShoppingListSummary[]>([]);
+const shoppingLists = ref<import("@/apis/shopping").ShoppingListSummary[]>([]);
 const selectedShoppingListId = ref<UUID | "">("");
 const shoppingCreateName = ref("");
+const nutritionView = ref<"perServing" | "perRecipe">("perServing");
+const plannedMealTarget = ref<{ planItemId: UUID; planDate: string; mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT" } | null>(null);
 const recommendCategories = ref<InspirationCategorySummary[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
 const navOpacity = ref(0);
@@ -490,6 +546,7 @@ const scrollTop = ref(0);
 const detailScrollTop = ref(0);
 const titleThreshold = ref(Number.POSITIVE_INFINITY);
 const ingredientTop = ref(0);
+const nutritionTop = ref(Number.POSITIVE_INFINITY);
 const stepTop = ref(Number.POSITIVE_INFINITY);
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-detail-report-sheet"));
 
@@ -515,9 +572,16 @@ const myDetail = computed(() => {
 });
 
 const detailTitle = computed(() => detail.value?.title || "");
+const plannedMealText = computed(() => {
+  if (!plannedMealTarget.value) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(plannedMealTarget.value.planDate);
+  const dateText = match ? `${Number(match[2])}月${Number(match[3])}日` : plannedMealTarget.value.planDate;
+  return `${dateText} · ${formatMealSlot(plannedMealTarget.value.mealSlot)}`;
+});
 const coverImageUrl = computed(() =>
   resolveCoverImageUrl(previewDetail.value?.coverImageUrl || publishedDetail.value?.coverImageUrl || "")
 );
+const publishedNutrition = computed<RecipeNutritionSummary | null>(() => publishedDetail.value?.nutrition ?? null);
 const navTopOffset = computed(() => `${navBarTotalHeight.value}px`);
 const heroStyle = computed(() => ({
   "--hero-header-offset": navTopOffset.value
@@ -556,12 +620,12 @@ const externalDetail = computed(() => inspirationDetail.value);
 const linkedOwnedRecipeId = computed(() => inspirationDetail.value?.ownedRecipeId || "");
 const externalRecipeRef = computed(() => {
   if (inspirationDetail.value) {
-		return {
-			sourceRecipeId: inspirationDetail.value.id,
-			sourceVersionId: inspirationDetail.value.contentVersionId
+    return {
+      sourceRecipeId: inspirationDetail.value.id,
+      sourceVersionId: inspirationDetail.value.contentVersionId
     };
   }
-	return null;
+  return null;
 });
 const curatedText = computed(() => {
   const name = inspirationDetail.value?.curatedByName?.trim();
@@ -599,18 +663,13 @@ const recommendActionLabel = computed(() => {
 	if (status === "ADOPTED") return "已收录";
 	if (status === "REJECTED") return "重新投稿";
 	if (status === "WITHDRAWN") return "重新投稿";
-	return "投稿灵感";
+	return "投稿";
+});
+const isRecommendReadonly = computed(() => {
+  const status = currentRecommendation.value?.status;
+  return status === "PENDING" || status === "ADOPTED";
 });
 const externalEditActionLabel = computed(() => (linkedOwnedRecipeId.value && kind.value === "inspiration" ? "编辑" : "改编"));
-const recommendEntryClass = computed(() => {
-  const status = currentRecommendation.value?.status;
-  if (status === "ADOPTED") return "summary-card__recommend-entry summary-card__recommend-entry--adopted";
-  if (status === "PENDING") return "summary-card__recommend-entry summary-card__recommend-entry--pending";
-  if (status === "REJECTED" || status === "WITHDRAWN") {
-    return "summary-card__recommend-entry summary-card__recommend-entry--retry";
-  }
-  return "summary-card__recommend-entry summary-card__recommend-entry--default";
-});
 const showRecommendEntry = computed(() => isOwnedDetail.value);
 const showStickyActions = computed(
   () => mode.value === "published" && (isExternalDetail.value || isOwnedDetail.value)
@@ -644,6 +703,33 @@ const detailDurationText = computed(() => {
     mode.value === "published" && detail.value && "durationText" in detail.value ? detail.value.durationText : null;
   return serverText || recipeDurationText(detailContent.value.duration);
 });
+const nutritionCaption = computed(() =>
+  nutritionView.value === "perRecipe" ? "整份营养为估算值，仅供参考" : "单份营养为估算值，仅供参考"
+);
+const visibleNutritionMetrics = computed<NutritionMetricCard[]>(() => {
+  if (!publishedNutrition.value) return [];
+  const preferred =
+    nutritionView.value === "perRecipe"
+      ? publishedNutrition.value.perRecipe
+      : publishedNutrition.value.perServing;
+  if (preferred) {
+    return buildNutritionMetrics(preferred);
+  }
+  const fallback =
+    nutritionView.value === "perRecipe"
+      ? publishedNutrition.value.perServing
+      : publishedNutrition.value.perRecipe;
+  return fallback ? buildNutritionMetrics(fallback) : [];
+});
+const showNutritionSection = computed(() => visibleNutritionMetrics.value.length > 0);
+const anchorTabs = computed(() => {
+  const tabs: Array<{ value: AnchorKey; label: string }> = [{ value: "ingredients", label: "食材" }];
+  if (showNutritionSection.value) {
+    tabs.push({ value: "nutrition", label: "营养" });
+  }
+  tabs.push({ value: "steps", label: "步骤" });
+  return tabs;
+});
 
 const infoItems = computed<InfoItem[]>(() => [
   {
@@ -670,6 +756,7 @@ const showAnchorTabs = computed(() => scrollTop.value >= titleThreshold.value);
 const activeAnchor = computed<AnchorKey>(() => {
   const currentLine = scrollTop.value + navBarTotalHeight.value + 36;
   if (currentLine >= stepTop.value) return "steps";
+  if (showNutritionSection.value && currentLine >= nutritionTop.value) return "nutrition";
   return "ingredients";
 });
 
@@ -686,6 +773,18 @@ function hasStepText(value: string | null | undefined) {
 watch([reportSheetVisible, recommendSheetVisible, privateSheetVisible, planSheetVisible], ([reportVisible, recommendVisible, privateVisible, planVisible]) => {
 	setPageLocked(reportVisible || recommendVisible || privateVisible || planVisible);
 }, { immediate: true });
+
+watch(
+  publishedNutrition,
+  nutrition => {
+    if (!nutrition?.perRecipe) {
+      nutritionView.value = "perServing";
+      return;
+    }
+    nutritionView.value = nutrition.perServing ? "perServing" : "perRecipe";
+  },
+  { immediate: true }
+);
 
 onLoad((query) => {
   const rawKind = Array.isArray(query?.kind) ? query.kind[0] : query?.kind;
@@ -736,10 +835,10 @@ async function loadDetail() {
   if (!recipeId.value || loading.value || mode.value !== "published") return;
   loading.value = true;
   errorText.value = "";
-  try {
-	detail.value = kind.value === "inspiration"
-		? await recipeApi.getInspirationRecipe(recipeId.value)
-		: await recipeApi.getMyRecipe(recipeId.value);
+	try {
+		detail.value = kind.value === "inspiration"
+			? await recipeApi.getInspirationRecipe(recipeId.value)
+			: await recipeApi.getMyRecipe(recipeId.value);
     scheduleMeasure();
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "菜谱加载失败";
@@ -769,10 +868,11 @@ function setDetailScrollTop(nextScrollTop: number) {
 
 async function updateAnchorMetrics() {
   await nextTick();
-  const [scrollRect, titleRect, ingredientRect, stepRect] = await Promise.all([
+  const [scrollRect, titleRect, ingredientRect, nutritionRect, stepRect] = await Promise.all([
     uniPlatform.system.measure("#detail-scroll"),
     uniPlatform.system.measure("#detail-title"),
     uniPlatform.system.measure("#detail-ingredients"),
+    uniPlatform.system.measure("#detail-nutrition"),
     uniPlatform.system.measure("#detail-steps")
   ]);
 
@@ -785,6 +885,11 @@ async function updateAnchorMetrics() {
   if (ingredientRect) {
     ingredientTop.value = Math.max(0, ingredientRect.top - scrollRect.top + currentScrollTop - 20);
   }
+  if (nutritionRect) {
+    nutritionTop.value = Math.max(0, nutritionRect.top - scrollRect.top + currentScrollTop - 20);
+  } else {
+    nutritionTop.value = Number.POSITIVE_INFINITY;
+  }
   if (stepRect) {
     stepTop.value = Math.max(0, stepRect.top - scrollRect.top + currentScrollTop - 20);
   }
@@ -795,8 +900,18 @@ function goBack() {
 }
 
 function scrollToSection(section: AnchorKey) {
-  const top = section === "steps" ? stepTop.value : ingredientTop.value;
+  const top =
+    section === "steps"
+      ? stepTop.value
+      : section === "nutrition"
+        ? nutritionTop.value
+        : ingredientTop.value;
   setDetailScrollTop(top - navBarTotalHeight.value - 18);
+}
+
+function setNutritionView(view: "perServing" | "perRecipe") {
+  if (view === "perRecipe" && !publishedNutrition.value?.perRecipe) return;
+  nutritionView.value = view;
 }
 
 function openLogin(afterLogin?: () => void) {
@@ -890,6 +1005,20 @@ function closeRecommendSheet() {
 	recommendSheetVisible.value = false;
 }
 
+async function handleRecommendAction() {
+  if (!showRecommendEntry.value) return;
+  const status = currentRecommendation.value?.status;
+  if (status === "PENDING") {
+    await uniPlatform.feedback.toast({ title: "已在审核中", icon: "none" });
+    return;
+  }
+  if (status === "ADOPTED") {
+    await uniPlatform.feedback.toast({ title: "已收录到灵感", icon: "none" });
+    return;
+  }
+  openRecommendSheet();
+}
+
 function openPlanSheet() {
   if (!planRecipeId.value && !(kind.value === "inspiration" && externalRecipeRef.value)) return;
   if (!sessionStore.isLoggedIn) {
@@ -901,11 +1030,29 @@ function openPlanSheet() {
   planSheetVisible.value = true;
 }
 
-function handlePlanSuccess(payload: { recipeId: UUID; addedToPrivate: boolean }) {
+function handlePlanSuccess(payload: {
+  recipeId: UUID;
+  addedToPrivate: boolean;
+  planItemId: UUID;
+  planDate: string;
+  mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
+}) {
+  plannedMealTarget.value = {
+    planItemId: payload.planItemId,
+    planDate: payload.planDate,
+    mealSlot: payload.mealSlot
+  };
   if (kind.value !== "inspiration" || !payload.addedToPrivate || !inspirationDetail.value) return;
   inspirationDetail.value.ownedRecipeId = payload.recipeId;
   markRecipeHomeDirty(["my"]);
   markRecipeManageDirty(["recipes"]);
+}
+
+function openPlannedMealTarget() {
+  if (!plannedMealTarget.value) return;
+  void uniPlatform.navigation.navigateTo(
+    `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(plannedMealTarget.value.planItemId))}&planDate=${encodeURIComponent(plannedMealTarget.value.planDate)}`
+  );
 }
 
 function handlePrivateSuccess(recipeId: UUID) {
@@ -933,7 +1080,8 @@ async function loadShoppingLists(force = false) {
   shoppingListLoading.value = true;
   shoppingListError.value = "";
   try {
-    shoppingLists.value = await shoppingApi.listActive();
+    const result = await shoppingApi.listLists("ACTIVE");
+    shoppingLists.value = result.items;
     if (selectedShoppingListId.value && !shoppingLists.value.some(item => item.id === selectedShoppingListId.value)) {
       selectedShoppingListId.value = "";
     }
@@ -953,52 +1101,6 @@ function resolveShoppingSource() {
     recipeId: publishedDetail.value.id,
     sourceVersionId: publishedDetail.value.contentVersionId
   };
-}
-
-async function openShoppingSheet() {
-  await loadShoppingLists(true);
-  if (!shoppingCreateName.value.trim()) {
-    shoppingCreateName.value = buildDefaultListName();
-  }
-  shoppingSheetVisible.value = true;
-}
-
-async function createShoppingList() {
-  if (shoppingSubmitting.value) return;
-  shoppingSubmitting.value = true;
-  try {
-    const created = await shoppingApi.createList({
-      operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || buildDefaultListName()
-    });
-    shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
-    selectedShoppingListId.value = created.id;
-    shoppingCreateName.value = buildDefaultListName();
-    await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
-  }
-}
-
-async function confirmAddToShoppingList() {
-  const source = resolveShoppingSource();
-  if (!source || !selectedShoppingListId.value || shoppingSubmitting.value) return;
-  shoppingSubmitting.value = true;
-  try {
-    await shoppingApi.addRecipeToList(selectedShoppingListId.value, {
-      operationId: createOperationId(),
-      recipeId: source.recipeId,
-      sourceVersionId: source.sourceVersionId
-    });
-    closeShoppingSheet();
-    await uniPlatform.feedback.toast({ title: "已加入购物清单", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
-  }
 }
 
 async function handleRecommendRecipe() {
@@ -1023,7 +1125,7 @@ function buildDraftSeedContent() {
   if (!externalDetail.value || !externalRecipeRef.value) return null;
   const contentSnapshot = externalDetail.value.content;
   const slotSeed = Date.now();
-  const content: RecipeDraftContentInput = {
+  const content = {
     name: detailTitle.value || contentSnapshot.name || "未命名菜谱",
     story: contentSnapshot.story,
     categoryId: null,
@@ -1125,10 +1227,50 @@ function handleAddPlan() {
   openPlanSheet();
 }
 
-function buildDefaultListName(date = new Date()) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}月${day}日清单`;
+async function openShoppingSheet() {
+  await loadShoppingLists(true);
+  if (!shoppingCreateName.value.trim()) {
+    shoppingCreateName.value = buildDefaultShoppingListName();
+  }
+  shoppingSheetVisible.value = true;
+}
+
+async function createShoppingList() {
+  if (shoppingSubmitting.value) return;
+  shoppingSubmitting.value = true;
+  try {
+    const created = await shoppingApi.createList({
+      operationId: createOperationId(),
+      name: shoppingCreateName.value.trim() || buildDefaultShoppingListName()
+    });
+    await loadShoppingLists(true);
+    selectedShoppingListId.value = created.id;
+    shoppingCreateName.value = buildDefaultShoppingListName();
+    await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
+}
+
+async function confirmAddToShoppingList() {
+  const source = resolveShoppingSource();
+  if (!source || !selectedShoppingListId.value || shoppingSubmitting.value) return;
+  shoppingSubmitting.value = true;
+  try {
+    await shoppingApi.addRecipeToList(selectedShoppingListId.value, {
+      operationId: createOperationId(),
+      recipeId: source.recipeId,
+      sourceVersionId: source.sourceVersionId
+    });
+    closeShoppingSheet();
+    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
+  }
 }
 
 async function addToShoppingList() {
@@ -1140,38 +1282,10 @@ async function addToShoppingList() {
     return;
   }
   if (!resolveShoppingSource()) {
-    await uniPlatform.feedback.toast({ title: "当前菜谱暂不支持加入购物清单", icon: "none" });
+    await uniPlatform.feedback.toast({ title: "当前菜谱暂不支持加入采购清单", icon: "none" });
     return;
   }
-  shoppingSubmitting.value = true;
-  try {
-    const source = resolveShoppingSource();
-    if (!source) throw new Error("当前菜谱暂不支持加入购物清单");
-    let listId = selectedShoppingListId.value;
-    if (!listId) {
-      await loadShoppingLists(true);
-      listId = selectedShoppingListId.value || shoppingLists.value[0]?.id || "";
-    }
-    if (!listId) {
-      const created = await shoppingApi.createList({
-        operationId: createOperationId(),
-        name: buildDefaultListName()
-      });
-      shoppingLists.value = [created, ...shoppingLists.value.filter(item => item.id !== created.id)];
-      selectedShoppingListId.value = created.id;
-      listId = created.id;
-    }
-    await shoppingApi.addRecipeToList(listId, {
-      operationId: createOperationId(),
-      recipeId: source.recipeId,
-      sourceVersionId: source.sourceVersionId
-    });
-    await uniPlatform.feedback.toast({ title: "已加入当前采购清单", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入当前采购清单失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
-  }
+  await openShoppingSheet();
 }
 
 async function handleReport() {
@@ -1200,6 +1314,49 @@ function formatAmount(amount: RecipeAmountSnapshot | RecipePreviewAmount) {
   const unitName = amount.unitName || "";
   return `${quantity}${unitName}`.trim() || "未填用量";
 }
+
+function buildNutritionMetrics(metrics: NonNullable<RecipeNutritionSummary["perServing"]>): NutritionMetricCard[] {
+  return [
+    { key: "calories", label: "热量", unit: "kcal", value: metrics.calories },
+    { key: "protein", label: "蛋白质", unit: "g", value: metrics.protein },
+    { key: "fat", label: "脂肪", unit: "g", value: metrics.fat },
+    { key: "carbohydrate", label: "碳水", unit: "g", value: metrics.carbohydrate }
+  ];
+}
+
+function formatNutritionValue(value: number | null, unit: string) {
+  if (value === null || !Number.isFinite(value)) return "暂缺";
+  const normalized = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return `${normalized}${unit}`;
+}
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  errorText.value = "";
+  if (mode.value === "published" && recipeId.value) {
+    detail.value = null;
+    await loadDetail();
+  }
+}
+
+function automatorReadState() {
+  return {
+    isLoggedIn: sessionStore.isLoggedIn,
+    loading: loading.value,
+    errorText: errorText.value,
+    title: detailTitle.value,
+    recommendationStatus: currentRecommendation.value?.status ?? null,
+    recommendActionLabel: recommendActionLabel.value,
+    recommendSheetVisible: recommendSheetVisible.value,
+    recommendCategoryCount: recommendCategories.value.length,
+    selectedRecommendCategoryId: selectedRecommendCategoryId.value || ""
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState
+});
 
 </script>
 
@@ -1538,6 +1695,113 @@ function formatAmount(amount: RecipeAmountSnapshot | RecipePreviewAmount) {
 
 .summary-info__label--muted {
   color: var(--color-text-secondary);
+}
+
+.planned-meal-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 24rpx 28rpx;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--theme-primary) 10%);
+}
+
+.planned-meal-entry--hover {
+  opacity: 0.8;
+}
+
+.planned-meal-entry__main {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.planned-meal-entry__label {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.2;
+}
+
+.planned-meal-entry__value {
+  color: var(--color-text);
+  font-size: 30rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.3;
+}
+
+.planned-meal-entry__action {
+  flex: 0 0 auto;
+  color: var(--theme-primary);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+.nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.nutrition-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: var(--color-surface);
+}
+
+.nutrition-card__label {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.2;
+}
+
+.nutrition-card__value {
+  color: var(--color-text);
+  font-size: 32rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
+.nutrition-toggle {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 16rpx;
+  margin: 0;
+  padding: 0;
+}
+
+.nutrition-toggle__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.nutrition-toggle__item::after {
+  border: 0;
+}
+
+.nutrition-toggle__divider {
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.nutrition-toggle__item--active {
+  color: var(--theme-primary);
 }
 
 .section {
@@ -2079,6 +2343,10 @@ function formatAmount(amount: RecipeAmountSnapshot | RecipePreviewAmount) {
 
 .detail-inline-actions__item::after {
   border: 0;
+}
+
+.detail-inline-actions__item--disabled {
+  opacity: 0.52;
 }
 
 .detail-inline-actions__icon {

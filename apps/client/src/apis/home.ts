@@ -52,6 +52,29 @@ export interface HomeNextMealState {
   arrangement: HomeRecentArrangement | null;
 }
 
+export type HomeFridgeRecipeKind = "MY" | "INSPIRATION";
+export type HomeFridgeRecipeFit = "HIGH" | "MEDIUM" | "LOW";
+
+export interface HomeFridgeRecipeItem {
+  recipeId: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  kind: HomeFridgeRecipeKind;
+  ownedRecipeId: UUID | null;
+  difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | null;
+  duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
+  difficultyText: string | null;
+  durationText: string | null;
+  matchedIngredientCount: number;
+  missingIngredientCount: number;
+  totalIngredientCount: number;
+  fridgeFit: HomeFridgeRecipeFit;
+}
+
+export interface HomeFridgeRecipesResponse {
+  items: HomeFridgeRecipeItem[];
+}
+
 export type HomeTopicType =
   | "WEEKEND_GATHERING"
   | "QUICK_AFTER_WORK"
@@ -129,6 +152,9 @@ export const homeApi = {
   },
   getNextMealState() {
     return get<HomeNextMealState>(`${cfg.domain}/api/home/next-meal`);
+  },
+  getFridgeRecipes() {
+    return get<HomeFridgeRecipesResponse>(`${cfg.domain}/api/home/fridge-recipes`);
   },
   getCurrentTopic() {
     return get<HomeTopicCurrentResponse>(`${cfg.domain}/api/home-topics/current`);

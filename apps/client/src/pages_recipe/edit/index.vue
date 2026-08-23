@@ -2611,6 +2611,33 @@ async function maybeGenerateRecipeAssistantAfterPublish(targetRecipeId: Resource
   }
 }
 
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  errorText.value = "";
+  await loadPage();
+}
+
+function automatorReadState() {
+  return {
+    isLoggedIn: sessionStore.isLoggedIn,
+    loading: loading.value,
+    errorText: errorText.value,
+    title: form.name,
+    story: form.story,
+    categoryName: categories.value.find(item => item.id === form.categoryId)?.name || "",
+    ingredientCount: ingredientRows.value.length,
+    firstIngredientName: ingredientRows.value[0]?.name || "",
+    stepCount: stepRows.value.length,
+    firstStepText: stepRows.value[0]?.text || "",
+    advancedSummary: advancedSummary.value
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorReadState
+});
+
 function hasPendingLocalImages() {
   return Boolean(coverLocalImagePath.value || stepRows.value.some(item => item.localImagePath));
 }

@@ -18,7 +18,7 @@
 
       <view v-if="errorText" class="notice" @click="loadItems">{{ errorText }}</view>
       <view v-else-if="loading" class="notice">加载中...</view>
-      <Empty v-else-if="!items.length" title="还没有记录" description="先去购物清单里完成一次采购。" />
+      <Empty v-else-if="!items.length" title="还没有记录" description="先去采购清单里完成一次采购。" />
 
       <view v-else class="list">
         <view v-for="item in items" :key="item.id" class="card">

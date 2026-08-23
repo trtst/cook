@@ -255,6 +255,18 @@ function formatFullDate(value: string) {
   if (Number.isNaN(date.getTime())) return "最近更新";
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+  needLogin.value = false;
+  loaded.value = false;
+  viewRecorded.value = false;
+  await loadDetail();
+}
+
+defineExpose({
+  automatorApplySession
+});
 </script>
 
 <style scoped lang="scss">
