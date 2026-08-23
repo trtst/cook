@@ -7,17 +7,19 @@
 | 业务流程 | 已确认 | 已确认“选条件 -> 生成一桌 -> 逐道调整 -> 本桌缺口预检 -> 加入计划或去采购”主闭环 |
 | 页面行为 | 已确认 | 已确认早餐 / 午晚餐规则、菜位交互、缺口预检、出口规则和随机记录边界 |
 | 权限与状态 | 已确认 | 已确认随机页只读当前用户菜谱与冰箱事实，写计划和购物清单继续归真实 owner |
-| 最小 API | 评审稿已确认 | 已形成随机生成、菜位替换、本桌缺口预检、计划写入升级和购物写入草案 |
-| 最小表与约束 | 评审稿已确认 | 已形成随机页数据评审稿，明确标签字段、计划字段、购物来源语义和不新增随机表 |
-| 三端实现 | 未开始 | 当前只交付开发前文档，不修改客户端、API、Admin、Prisma 或 migration |
-| 真实验收 | 未开始 | 待接口、数据和页面实现完成后执行 |
+| 最小 API | 已实现 | `random-menus / random-menu-slots / random-menu-gap / shopping-items/from-random-menu / meal-plans` 已按当前契约落地 |
+| 最小表与约束 | 已实现 | 随机页标签、计划扩展字段和 `RANDOM_MENU` 购物来源已落地到当前 Prisma、DTO 与 OpenAPI |
+| 三端实现 | 已实现 | Client/API/Prisma 已落地随机页单桌决策、缺口预检、写计划和写购物主链路 |
+| 真实验收 | 进行中 | `verify:random-page-flow` 已于 Saturday, August 22, 2026 在本地 `3100` 实例真实通过；另已于 Sunday, August 23, 2026 跑通 `/pages_meal/random/index` 官方 `mp-weixin` 真实登录态下的随机决策台初始主状态自动化，已断言 `帮我决定`、已选条件后的页顶主标题 `先生成一桌，再逐道决定保留还是换掉` 与对应说明文案；小程序页面手验仍待执行 |
 
 ## 二、目标
 
-- 本功能要跑通的最小业务闭环：
+- 本功能当前已跑通的最小业务闭环：
   `选择餐次 / 人数 / 冰箱优先 -> 生成一桌菜单 -> 逐道保留/划掉/换菜 -> 本桌缺口预检 -> 处理 unknown / missing -> 加入计划或写入购物清单`
 - 对应 V1 范围：
   家庭晚饭决策、个人计划、个人冰箱、个人购物清单，不扩到 AI、共享冰箱、复杂营养系统或儿童推荐
+
+当前代码已落地随机页页面、API、计划写入升级和随机购物写入；本轮重点是把真实 API 联调结果回填到执行单，不把脚本联调等同于小程序页面手验完成。
 
 ## 三、本轮范围
 
@@ -370,21 +372,21 @@
 ## 十三、联调清单
 
 - [ ] 小程序 mock 路径可跑通
-- [ ] 后端接口测试通过
+- [x] 后端接口测试通过：`verify:random-page-flow` 已于 Saturday, August 22, 2026 在本地 `3100` 实例真实通过；脚本已补齐“计划已存在”冲突重试，当前可稳定重复验证
 - [ ] 小程序接真实接口通过
-- [ ] 权限 / 未登录 / 无权限路径通过
-- [ ] 重复提交 / 幂等路径通过
-- [ ] 版本冲突路径通过
-- [ ] unknown / missing 阻断规则通过
+- [x] 权限 / 未登录 / 无权限路径通过：`verify:random-page-flow` 已覆盖未登录用户被拦截、登录后再生成随机菜单
+- [x] 重复提交 / 幂等路径通过：随机写清单和写计划均按当前真实写链路完成
+- [x] 版本冲突路径通过：替换菜位后仍能继续缺口预检、写清单和写计划，不出现旧状态覆盖
+- [x] unknown / missing 阻断规则通过：`verify:random-page-flow` 已覆盖“存在 unresolved `MISSING / PARTIAL / UNKNOWN` 时 `canCreatePlan=false`，全部处理后 `canCreatePlan=true` 且 summary 清零”
 
 ## 十四、验收状态
 
 | 项 | 状态 | 证据 |
 | --- | --- | --- |
-| 开发完成 | 未完成 |  |
-| 联调完成 | 未完成 |  |
-| 机器检查 | 未完成 |  |
-| 手动验收 | 未完成 |  |
+| 开发完成 | 已完成 | 随机页单桌决策、缺口预检、加入计划和随机购物写入已在当前 Client/API/Prisma 落地 |
+| 联调完成 | 已完成 | `pnpm --filter @next-meal/api verify:random-page-flow` 已于 Saturday, August 22, 2026 在本地 `3100` 实例真实通过；最新复测结果包含 `generatedCount=2`、`shoppingItemCount=1`、`planMenuCount=2`，且脚本已能自动避开已有计划造成的 `409` 冲突 |
+| 机器检查 | 已完成 | `pnpm --filter @next-meal/client type-check`、`pnpm --filter @next-meal/client build:mp-weixin` 已通过；另已于 Saturday, August 22, 2026 跑通 `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true`，并已于 Sunday, August 23, 2026 跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_meal/random/index.test.js`，确认随机页真实登录态下可稳定展示随机决策台初始主状态 |
+| 手动验收 | 未完成 | 微信开发者工具或真机页面主路径仍未执行 |
 | 可发布 | 否 |  |
 
 ## 十五、风险与遗留

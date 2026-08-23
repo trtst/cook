@@ -240,28 +240,44 @@ CTO 负责把功能拆成最小纵切链路，并确认接口契约、数据边�
 ## 联调清单
 
 - [ ] 小程序创建、草稿、发布主路径可跑通
-- [ ] 后端接口主路径可跑通
-- [ ] 后台用户菜谱域主路径可跑通
+- [x] 后端接口主路径可跑通
+- [x] 后台用户菜谱域主路径可跑通
 - [ ] 小程序接真实接口通过
 - [ ] 后台接真实接口通过
-- [ ] 权限 / 未登录 / 无权限路径通过
-- [ ] 重复提交 / 幂等路径通过
-- [ ] 版本冲突路径通过
+- [x] 权限 / 未登录 / 无权限路径通过
+- [x] 重复提交 / 幂等路径通过
+- [x] 版本冲突路径通过
 
 ## 验收状态
 
 | 项 | 状态 | 证据 |
 | --- | --- | --- |
-| 开发完成 | 已完成 | 小程序合集链路、后台用户菜谱域链路、共享契约和 API 索引已修改完成 |
-| 联调完成 | 未完成 | 未做真机或浏览器端手工主路径验收 |
-| 机器检查 | 已完成 | `pnpm --filter @next-meal/client type-check`、`pnpm --filter @next-meal/admin type-check`、`pnpm --filter @next-meal/api exec prisma validate`、`pnpm --filter @next-meal/api prisma:generate`、`pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/api verify:openapi`、`git diff --check` |
-| 手动验收 | 未完成 |  |
+| 开发完成 | 已完成 | 小程序结构化编辑页、合集链路、后台用户菜谱域链路、共享契约和 API 索引已修改完成 |
+| 联调完成 | 已完成 | Saturday, August 22, 2026 已在本地 `3100` 实例串行跑通 `verify:recipe-flow` 与 `verify:admin-recipe-flow`，覆盖草稿保存/发布、我的/灵感/合集读取、`/storage-usage`、后台用户菜谱域与举报主路径 |
+| 机器检查 | 已完成 | `pnpm --filter @next-meal/client type-check`、`pnpm --filter @next-meal/admin type-check`、`pnpm --filter @next-meal/api exec prisma validate`、`pnpm --filter @next-meal/api prisma:generate`、`pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/api verify:openapi`、`node --check apps/client/src/pages/recipe/index.test.js`、`node --check apps/client/src/pages_recipe/detail/index.test.js`、`node --check apps/client/src/pages_recipe/edit/index.test.js`、`git diff --check`，以及 `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true` 已于 Saturday, August 22, 2026 通过；另已于 Sunday, August 23, 2026 跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/recipe/index.test.js`、`pages_recipe/detail/index.test.js` 与 `pages_recipe/edit/index.test.js`，其中 `/pages/recipe/index` 已提升为真实登录态下的“我的菜谱”列表主状态自动化，已断言 `私房菜 / 灵感` Tab、激活态 `私房菜`、新发布菜谱标题与 `添加` 入口；`/pages_recipe/detail/index` 已继续保留真实灵感菜谱正文主状态断言，并同步补到我的菜谱详情 `COMPLETE / ESTIMATED / INSUFFICIENT` 三档营养展示页面证据；`/pages_recipe/edit/index` 已补到真实草稿态结构化录入主状态，已断言标题、故事、分类、食材、步骤与高级设置摘要回填 |
+| 手动验收 | 未完成 | 已补菜谱主页真实登录列表态、统一详情页真实正文态和编辑页真实草稿态官方 `mp-weixin` 自动化，但草稿保存/发布完整人工走查、灵感详情、合集详情和后台浏览器主路径仍未人工验收 |
 | 可发布 | 否 |  |
+
+## 手验清单
+
+小程序端至少补下面 5 条：
+
+1. 新建草稿并保存，重新进入仍能继续编辑。
+2. 把草稿发布为我的菜谱，确认我的列表立即可见。
+3. 打开一条灵感菜谱详情，确认详情可读且收藏/加入合集动作可正常完成。
+4. 进入合集列表和某个合集详情，确认展示的是实际收藏内容，不是空壳 tab。
+5. 删除或下线一条我的菜谱后，确认列表和详情状态与当前契约一致。
+
+后台浏览器端至少补下面 3 条：
+
+1. 从用户列表进入用户菜谱域概览，确认概览、已发布、草稿、合集页都能正常打开。
+2. 打开某个合集详情，确认能看到真实合集内容，而不是空列表或字段错位。
+3. 确认管理员只能查看，不会误出现前台编辑写入口。
 
 ## 风险与遗留
 
 - 风险：
-  - 尚未做真机或后台浏览器端的人工主路径验收，本次仅完成类型与契约级最小验证
+  - 尚未做真机或后台浏览器端的人工主路径验收，当前仅确认真实 API 与静态构建主链路
 - 遗留：
   - 推荐审核、升级为我的、再次导入原版、图片能力
 - 发布前必须处理：

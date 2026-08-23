@@ -8,7 +8,7 @@
 ## 本轮范围
 
 - 小程序端：`App.vue` 全局登录弹窗宿主、登录 CTA 组件、测试验证码登录、启动 `app-config` 读取、H5/小程序分支、`我的` 页面局部登录弹窗收口。
-- 后端 API：新增 `POST /auth/code-login`、`GET /app-config`、`GET/POST/DELETE /admin/app-config/*`、受控登录图读取 URL，本地文件资产槽位。
+- 后端 API：新增 `POST /auth/code-send`、`POST /auth/code-login`、`GET /app-config`、`GET/POST/DELETE /admin/app-config/*`、受控登录图读取 URL，本地文件资产槽位。
 - 后台管理：新增“公共配置”页，支持上传 / 预览 / 替换 / 清空登录图。
 - 共享契约：同步 `docs/api-contract.md`、三端本地类型与请求。
 
@@ -70,6 +70,7 @@
 
 | 方法 | 路径 | 用途 | 权限 | 幂等 | 版本字段 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
+| POST | `/auth/code-send` | 手机号测试发码，按 `scene=LOGIN | BIND_PHONE` 区分登录与绑定手机号 | none | 否 | 否 | 已确认 |
 | POST | `/auth/code-login` | 手机号测试验证码登录与自动注册 | none | 否 | 否 | 已确认 |
 | GET | `/app-config` | 读取公开启动配置 | none | 否 | 否 | 已确认 |
 | GET | `/admin/app-config` | 后台读取当前登录图配置 | AdminBearerAuth | 否 | 否 | 已确认 |
@@ -79,6 +80,7 @@
 ## 最小数据表与约束
 
 - 可以从现有主事实重算、不新增持久化的内容：
+  - `POST /auth/code-send` 当前不接真实短信，只返回测试态发码确认。
   - 测试验证码固定为 `123456`，不落库。
   - `app-config` 只返回是否存在登录图和受控公开 URL，不单独建配置表。
 - 明确不新增的表、字段、枚举和索引：
@@ -92,9 +94,19 @@
 
 - [ ] 小程序弹窗主路径通过
 - [ ] H5 非小程序主路径通过
-- [ ] 后端 `code-login` 接口通过
-- [ ] 后台图片上传 / 清空主路径通过
-- [ ] `app-config` 失败和图片回退路径通过
+- [x] 后端 `code-send -> code-login -> users/me` 接口通过
+- [x] 后台图片上传 / 清空主路径通过
+- [x] `app-config` 主读取路径通过
+
+## 验收状态
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| 开发完成 | 已完成 | 后端已补 `POST /auth/code-send`，测试发码、验证码登录、公开 `app-config`、后台登录图上传/清空与小程序登录弹窗主路径均已接通；`/pages/me/index` 同步新增仅供 automator 使用的最小登录弹窗状态钩子，不改业务分支 |
+| 联调完成 | 已完成 | Sunday, August 23, 2026 已在 `http://127.0.0.1:3100/api` 跑通 `pnpm --filter @next-meal/api verify:login-modal-flow`，真实覆盖 `code-send(LOGIN) -> code-send(BIND_PHONE) -> code-login -> users/me -> admin/app-config login-image upload -> app-config public read -> clear` |
+| 机器检查 | 已完成 | Sunday, August 23, 2026 已通过 `pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/api verify:openapi`、`pnpm --filter @next-meal/client type-check`、`node --check apps/client/src/pages/me/index.test.js`，以及 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/me/index.test.js`；页面自动化已断言“通知中心 -> 我的勋章”顺序、会员入口默认隐藏，以及未登录走勋章入口后登录弹窗 store 的 `visible / wechat / phone` 主状态与固定文案 |
+| 手动验收 | 未完成 | 真机 / 微信开发者工具人工走查统一后置，不阻塞当前标记 |
+| 可发布 | 是 | 当前阶段按“开发完成 + 真实联调 + 官方 `mp-weixin` 主证据完成即可先标记”执行；`H5` 直出表单分支仍建议后续在可运行 H5 容器中补路径验证 |
 
 ## 风险与遗留
 

@@ -17,6 +17,7 @@
 | 模块 | 方法 | 路径 | 说明 |
 | --- | --- | --- | --- |
 | Auth | POST | `/auth/login` | 手机号密码登录 |
+| Auth | POST | `/auth/code-send` | 手机号验证码发码 |
 | Auth | POST | `/auth/wechat-login` | 小程序微信登录 |
 | Auth | POST | `/auth/code-login` | 手机号验证码登录 |
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
@@ -154,6 +155,7 @@
 | Shopping | POST | `/shopping-items/{itemId}/status` | 更新个人购物事实状态，供旧超市模式兼容使用 |
 | Shopping | POST | `/shopping-items/group-status` | 更新旧购物页聚合板分组状态 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-gap` | 把缺口页选中的食材写入目标购物清单 |
+| ShoppingList | POST | `/shopping-lists/{listId}/items/from-event-gap` | 把某个饭局当前缺口写入目标购物清单 |
 | Shopping | GET | `/shopping-gap` | 查询当前用户待处理饭局汇总缺口 |
 | Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局购物缺口 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |

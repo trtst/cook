@@ -99,3 +99,13 @@
   - 不加评论、打卡、取消参与、报名审核、内容 CMS。
 - 因复用未被证明而没有提前增加的抽象：
   - 不抽通用“活动中心”，先只落“餐桌话题”一条线。
+
+## 验收状态
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| 开发完成 | 已完成 | 小程序餐桌话题列表页、详情页、后台维护页、公开读取接口、参与接口与首页入口路径均已接通 |
+| 联调完成 | 已完成 | `pnpm --filter @next-meal/api verify:table-topic-flow` 已于 Sunday, August 23, 2026 在本地 `3100` 实例真实跑通，覆盖后台创建话题、上架话题、公开读取列表 / 详情、用户参与去重，以及首页 `餐桌话题 -> /pages_home/table-topic/index` 入口目标 |
+| 机器检查 | 已完成 | `node --check apps/client/src/pages_home/table-topic/index.test.js`、`node --check apps/client/src/pages_home/table-topic-detail/index.test.js`、`/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_home/table-topic/index.test.js` 与 `pages_home/table-topic-detail/index.test.js` 已于 Sunday, August 23, 2026 串行通过；页面自动化已在真实话题数据下断言列表页的 `历次话题 / 从最近一顿饭开始看 / 人参与` 主状态，以及详情页的标题、`话题简介`、`参与状态`、`点击参与` 与 `查看活动详情` 主状态 |
+| 手动验收 | 未完成 | 微信开发者工具或真机人工走查仍未执行 |
+| 可发布 | 否 | 仍建议补首页入口跳转、详情参与按钮与后台编辑页的人工主路径验收 |

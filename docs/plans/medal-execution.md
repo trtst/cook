@@ -280,23 +280,22 @@
 
 | 项 | 状态 | 证据 |
 | --- | --- | --- |
-| 开发完成 | 未完成 |  |
-| 联调完成 | 未完成 |  |
-| 机器检查 | 未完成 |  |
-| 手动验收 | 未完成 |  |
-| 可发布 | 否 |  |
+| 开发完成 | 已完成 | 后台勋章模板治理、`GET /users/me/medals`、小程序勋章墙与勋章详情页本轮均已收口；标题改回“我的勋章”，详情页说明入口继续使用 `cookfont icon-notice`，未获得态底部补齐 `- 尚未获得 -`。 |
+| 联调完成 | 已完成 | `verify:medal-flow` 已于 Sunday, August 23, 2026 在本地 `3100` 实例真实跑通 `admin medal-templates list/create/update/status/image -> code-login -> users/me/medals -> dining-event complete -> meal-plan complete`，并断言 owner 获得 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION`，accepted member 只获得 `DINING_EVENT_COMPLETION`，未获得且未上架模板不出现在勋章墙。 |
+| 机器检查 | 已完成 | 已执行 `pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/client type-check`、`node --check apps/client/src/test-utils/medal-fixture.js`、`node --check apps/client/src/pages_me/medal/index.test.js`、`node --check apps/client/src/pages_me/medal-detail/index.test.js`、`/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_me/medal/index.test.js`、`/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_me/medal-detail/index.test.js`。 |
+| 手动验收 | 未完成 | 按当前中央口径后置，不阻塞 `[x]` 标记；待所有开发完成后，再统一走真机 / 微信开发者工具人工审查。 |
+| 可发布 | 是 | 以当前“开发完成 + 真实联调完成 + 自动化主证据完成，人工手验后置”口径可先标记完成。 |
 
 ## 风险与遗留
 
 - 风险：
-  - 现有勋章实现使用硬编码目录，本轮需要切到模板表，属于真实数据边界变更。
-  - 旧勋章事实与新模板 code 必须保持一一对应，否则会造成历史勋章丢失或不可见。
+  - 当前自动化会持续累积模板与用户勋章事实，因此断言必须继续锚定本轮新建模板 `code`，不能依赖总数固定值。
   - 推荐贡献当前只统计菜谱推荐收录和食材推荐收录；后续若单位推荐审核上线，必须重新补合同而不是直接改统计口径。
 - 遗留：
-  - 勋章说明 icon 继续先用现有 `cookfont icon-notice`，不在本轮新增视觉资源。
+  - 真机 / 微信开发者工具人工走查仍后置，尚未逐页核对勋章图片、滚动吸顶和说明弹层在真实设备上的视觉细节。
   - 节假日限定勋章的具体活动模板，本轮只搭建模板能力，不承诺一次性铺满内容运营素材。
-- 发布前必须处理：
-  - API 契约、Prisma schema、后台模板页、小程序勋章墙与详情页必须同步完成。
+- 已同步完成：
+  - API 契约、模板治理、勋章墙与详情页本轮已一起回填；后续发布前只需继续补统一人工手验记录。
 
 ## 范围自检
 

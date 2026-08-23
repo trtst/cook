@@ -1,6 +1,8 @@
 # 菜谱功能执行单
 
 > 2026-08-19 方案变更：本文早期“我的 / 灵感 / 合集”与收藏升级流程属于历史评审记录，当前实现以 `../recipe.md` 为准，前台收敛为“私房菜 / 灵感”；合集仅保留后端历史兼容能力。
+>
+> 2026-08-23 补充：本文第 2 节之后仍保留部分早期冻结记录，用于追溯当时的边界与停点；当前代码与验收现状以“执行状态”“当前已落地映射”和对应专项执行单为准，不再把其中“只交付文档”或“尚未开始客户端实现”的旧口径视为当前事实。
 
 ## 一、执行状态
 
@@ -11,8 +13,29 @@
 | 权限与状态 | 部分确认 | 登录门禁、所有权、只读收藏和推荐状态已确认；后台角色与细粒度操作仍待设计 |
 | 最小 API | 已确认 | R1 路径、DTO 和错误语义见 `recipe-contract-review.md` 与 `../api-contract.md` |
 | 最小表与约束 | 已确认 | R1 主事实和约束已确认，尚未修改 Prisma、SQL、索引或 migration |
-| 三端实现 | 未开始 | 现有代码仅视为候选实现，不按本执行单宣告完成 |
-| 真实验收 | 未开始 | 待客户端、API、后台纵切完成后执行 |
+| 三端实现 | 已收口 | 已落地 `recipe-create-display-admin-collection-execution.md` 范围内的草稿/发布、私房菜/灵感主页面、结构化录入页、我的详情营养展示，以及后台用户菜谱域主路径；食材与单位前台主页面、推荐审核通知中心首页和详情页、后台审核 API，以及“拒绝后修改重提”真实链路也已补到证据。按当前阶段口径，后台治理页浏览器证据经用户明确同意跳过，不再阻塞本执行单完成标记 |
+| 真实验收 | 已收口 | Saturday, August 22, 2026 已在本地 `3100` 实例真实跑通 `verify:recipe-flow` 与 `verify:admin-recipe-flow`；Sunday, August 23, 2026 又补跑了 `/pages/recipe/index`、`/pages_recipe/detail/index`、`/pages_recipe/edit/index`、`/pages_me/ingredient-units/index`、`/pages_me/recommend/index`、`/pages_me/recommend-detail/index` 官方 `mp-weixin` 页面自动化，并新增跑通 `verify:recommendation-review-flow`，覆盖后台拒绝个人食材推荐、前台查看拒绝原因、修改后重提，以及后台审核单位建议。同日 `/pages_recipe/detail/index` 还新增真实投稿主路径自动化，已断言“投稿灵感 -> 投稿 -> 审核中”，并通过接口回查确认 `recommendation.status = PENDING`。原计划补的后台治理页浏览器证据已按用户明确指示跳过；小程序与后台人工走查继续后置，不阻塞当前主实现标记 |
+
+### 当前已落地映射
+
+当前菜谱主执行单不再是纯规则稿，已由下列子链路承接了第一阶段落地：
+
+1. [recipe-create-display-admin-collection-execution.md](/Users/yangpenghui/personal/cook/docs/plans/recipe-create-display-admin-collection-execution.md)
+   - 已落地草稿保存、发布、我的、灵感、合集、举报与后台用户菜谱域主路径。
+   - `verify:recipe-flow` 与 `verify:admin-recipe-flow` 已于 Saturday, August 22, 2026 在本地 `3100` 实例真实通过。
+   - `/pages/recipe/index`、`/pages_recipe/detail/index`、`/pages_recipe/edit/index` 已于 Sunday, August 23, 2026 补齐官方 `mp-weixin` 主状态自动化，当前已覆盖我的列表、详情正文与结构化录入页草稿回填。
+2. 当前按已完成收口的边界：
+   - 推荐审核与食材/单位总链路的真实 API、官方 `mp-weixin` 页面自动化和投稿主路径证据已齐备。
+   - 后台治理页浏览器证据已按用户明确指示跳过，不再作为本执行单 blocker。
+3. 食材与单位前台主页面已补到真实页面证据：
+   - `/pages_me/ingredient-units/index` 已于 Sunday, August 23, 2026 跑通官方 `mp-weixin` 真实登录态自动化，当前已断言系统食材列表主状态，以及单位页分组与示例文案主状态。
+4. 推荐审核通知中心前台链路已补到真实页面证据：
+   - `/pages_me/recommend/index` 已于 Sunday, August 23, 2026 跑通官方 `mp-weixin` 真实登录态自动化，当前已断言推荐审核卡片、清单协作卡片，以及真实单位建议预览文案主状态。
+   - `/pages_me/recommend-detail/index` 已于 Sunday, August 23, 2026 跑通官方 `mp-weixin` 真实登录态自动化，当前已断言单位建议详情的名称、状态、时间和“等待审核中”主文案。
+5. 推荐审核后台 API 与“拒绝后修改重提”链路已补到真实接口证据：
+   - `verify:recommendation-review-flow` 已于 Sunday, August 23, 2026 在本地 `3100` 实例真实跑通 `个人食材推荐 -> 后台拒绝 -> 前台查看拒绝原因与建议 -> 修改食材 -> 再次推荐 -> 后台通过`，以及 `单位建议 -> 后台通过`。
+6. 菜谱投稿前台主路径已补到真实页面证据：
+   - `/pages_recipe/detail/index` 已于 Sunday, August 23, 2026 跑通官方 `mp-weixin` 真实登录态自动化，当前已断言个人菜谱详情里的 `投稿灵感` 入口、投稿提交后按钮文案切到 `审核中`，并通过接口回查确认该菜谱 `recommendation.status = PENDING`。
 
 ### 实现任务账本
 

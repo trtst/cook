@@ -77,6 +77,7 @@ CTO 负责把功能拆成最小纵切链路，并确认接口契约、数据边�
 ## 联调清单
 
 - [x] 小程序真实 API 路径可跑通
+- [x] 真实 API `verify-login-flow` 已通过
 - [ ] 小程序接真实接口通过
 - [x] 登录表单空手机号 / 空密码不会提交
 - [x] 登录失败统一提示，不暴露账号是否存在
@@ -107,10 +108,19 @@ CTO 负责把功能拆成最小纵切链路，并确认接口契约、数据边�
 | 项 | 状态 | 证据 |
 | --- | --- | --- |
 | 开发完成 | 已完成 | 去除默认凭据；登录表单校验；`我的` 页展示真实用户基础资料；401 清 session；token 解析统一 401；登录和 `/users/me` 改用 `UserBasic` |
-| 联调完成 | 未完成 | 真实小程序和真实 API 手动联调未执行 |
-| 机器检查 | 已完成 | `git diff --check`、`pnpm --filter @next-meal/api-client type-check`、`pnpm --filter @next-meal/client type-check`、`pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/admin type-check`、`pnpm check` |
+| 联调完成 | 已完成 | `2026-08-22` 已在 `http://127.0.0.1:3100/api` 跑通 `pnpm --filter @next-meal/api verify:login-flow`；真实小程序手动验收仍未执行，故手动验收维持未完成 |
+| 机器检查 | 已完成 | `git diff --check`、`pnpm --filter @next-meal/api-client type-check`、`pnpm --filter @next-meal/client type-check`、`pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/admin type-check`、`pnpm check`，以及 `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true` 已于 Saturday, August 22, 2026 通过；另已于 Sunday, August 23, 2026 跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_me/account/index.test.js`，补到 `/pages_me/account/index` 官方 `mp-weixin` 真实密码登录后的账号设置主状态自动化，已断言标题、`绑定手机号`、脱敏手机号与 `退出登录` |
 | 手动验收 | 未完成 | 未在微信小程序真机或开发者工具中执行 |
 | 可发布 | 否 |  |
+
+## 手验清单
+
+在微信开发者工具或真机里至少补下面 4 条：
+
+1. 未登录打开 `我的` 页，确认展示登录组件，不直接报错或空白。
+2. 输入正确账号密码登录，确认回到 `我的` 页后展示真实用户昵称、UID 与头像占位。
+3. 输入错误密码登录，确认提示仍是统一失败文案，不暴露“账号不存在 / 密码错误”的细分原因。
+4. 人工制造一次 `401`（清理本地 token 或让接口返回失效 token），确认页面回到未登录态，且不会卡在半登录状态。
 
 ## 风险与遗留
 

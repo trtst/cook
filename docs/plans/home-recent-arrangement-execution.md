@@ -366,23 +366,23 @@ interface HomeRecentArrangement {
 ## 联调清单
 
 - [ ] 小程序 mock 路径可跑通
-- [ ] 后端接口测试通过
-- [ ] 小程序接真实接口通过
-- [ ] 无候选时首页不展示空壳
-- [ ] 饭局与计划并存时，当前窗口优先饭局
-- [ ] 仅存在 `24~36` 小时候选时，首页正确补位展示
-- [ ] 首页主动作正确带上 `focus`，详情页找不到目标区块时能正常降级
-- [ ] 权限 / 未登录 / 无权限路径通过
+- [x] 后端接口测试通过：`verify:dining-event-flow` 已于 Saturday, August 22, 2026 覆盖 `/home/recent-arrangement` 非空主路径
+- [x] 小程序接真实接口通过：已于 Sunday, August 23, 2026 跑通 `/pages/home/index` 官方 `mp-weixin` 真实登录态下的首页最近安排主状态自动化，覆盖无安排与有最近安排两条首页主路径
+- [x] 无候选时首页不展示空壳：`verify:dining-event-flow` 已于 Saturday, August 22, 2026 覆盖 `data: null`
+- [x] 饭局与计划并存时，当前窗口优先饭局：`verify:dining-event-flow` 已于 Saturday, August 22, 2026 覆盖 `PRIMARY` 窗口 `EVENT > PLAN`
+- [x] 仅存在 `24~36` 小时候选时，首页正确补位展示：`verify:dining-event-flow` 已于 Saturday, August 22, 2026 覆盖 `FALLBACK`
+- [x] 首页主动作正确带上 `focus`，详情页找不到目标区块时能正常降级：已于 Sunday, August 23, 2026 通过 `/pages/home/index` 官方 `mp-weixin` 自动化断言首页真实生成的 `focus` URL，并通过 `/pages_meal/detail/index` 官方 `mp-weixin` 自动化断言 `focus=shopping` 命中采购区块、`focus=memory` 在无饭局时正常降级
+- [x] 权限 / 未登录 / 无权限路径通过：`verify:dining-event-flow` 已于 Saturday, August 22, 2026 覆盖未登录 `401`
 
 ## 验收状态
 
 | 项 | 状态 | 证据 |
 | --- | --- | --- |
-| 开发完成 | 未完成 | 当前只冻结产品规则与执行口径 |
-| 联调完成 | 未完成 | - |
-| 机器检查 | 未完成 | - |
+| 开发完成 | 已完成 | 首页条件卡、跳转与详情页 `focus` 聚焦已接通 |
+| 联调完成 | 进行中 | `pnpm --filter @next-meal/api verify:dining-event-flow` 已在 Saturday, August 22, 2026 覆盖未登录 `401`、无候选 `data: null`、`24~36h` 补位和同窗口 `EVENT > PLAN`；另已于 Sunday, August 23, 2026 跑通 `/pages/home/index` 官方 `mp-weixin` 真实登录态首页最近安排主状态自动化，以及 `/pages_meal/detail/index` 官方 `mp-weixin` `focus=shopping / focus=memory` 页面级自动化；仍未完成真机 / 开发者工具手验 |
+| 机器检查 | 已完成 | `node --check apps/client/src/pages/home/index.test.js`、`node --check apps/client/src/pages_meal/detail/index.test.js`、`pnpm --filter @next-meal/client type-check`、`git diff --check -- apps/client/src/pages/home/index.vue apps/client/src/pages/home/index.test.js apps/client/src/pages_meal/detail/index.vue apps/client/src/pages_meal/detail/index.test.js` 已通过；另已于 Sunday, August 23, 2026 串行跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/home/index.test.js` 与 `pages_meal/detail/index.test.js` |
 | 手动验收 | 未完成 | - |
-| 可发布 | 否 | 尚未进入实现 |
+| 可发布 | 否 | 仍缺首页与详情页 `focus` 聚焦的真机 / 开发者工具页面走查 |
 
 ## 风险与遗留
 
@@ -393,8 +393,8 @@ interface HomeRecentArrangement {
   - 若未来确实存在多个近期安排，再单独评审“查看更多安排”，首版不提前预埋。
   - 详情页聚焦后的具体视觉强调方式，可在实现阶段继续微调，但不改变 `focus` 取值集合。
 - 发布前必须处理：
-  - 把接口草案同步到 `docs/api-contract.md`
-  - 真实联调 `24h / 24~36h / 饭局优先 / 无候选` 四类路径
+  - 首页主动作 `focus` 与“查看详情”普通跳转的页面级联调
+  - 首页真机或开发者工具主路径走查
 
 ## 范围自检
 

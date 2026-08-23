@@ -217,6 +217,7 @@
 
 - [x] 小程序调用现有认领接口
 - [x] 小程序点击分享时现取邀请链接
+- [x] `verify:dining-event-flow` 已在本地 `3100` API 实例上真实跑通：`share-link -> preview -> accept -> cook claim/release -> disable`
 - [ ] 参与人管理能力后续扩展时补新接口
 - [x] 权限 / 未登录 / 无权限路径沿用当前详情页逻辑
 
@@ -224,11 +225,21 @@
 
 | 项 | 状态 | 证据 |
 | --- | --- | --- |
-| 开发完成 | 进行中 | 当前文档 + 小程序改造 |
-| 联调完成 | 未完成 | 待页面人工验收 |
-| 机器检查 | 进行中 | 见 minor log |
-| 手动验收 | 未完成 | 待小程序端查看 |
-| 可发布 | 否 | 后续协同契约仍未冻结 |
+| 开发完成 | 已完成 | 当前文档范围内的小程序详情改造与分享链接、掌勺认领/释放已接通 |
+| 联调完成 | 已完成 | `pnpm --filter @next-meal/api verify:dining-event-flow` 已于 Saturday, August 22, 2026 在 `http://127.0.0.1:3100/api` 真实通过 |
+| 机器检查 | 已完成 | `pnpm --filter @next-meal/client type-check`、`pnpm --filter @next-meal/api type-check` 已通过；另已于 Saturday, August 22, 2026 跑通 `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true`；并于 Sunday, August 23, 2026 跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_meal/event/index.test.js` 与 `pages_meal/detail/index.test.js`，其中 `/pages_meal/event/index` 仍是饭局分包页列表入口基础 smoke，`/pages_meal/detail/index` 已提升为真实饭局正文主状态自动化，实际断言标题、`参与人`、`菜单`、`采购准备`、`做饭助手`、`待认领` 与真实菜谱标题 |
+| 手动验收 | 未完成 | 饭局页详情主路径仍待小程序端人工验收；虽然 `/pages_meal/detail/index` 已补到真实正文主状态自动化，但当前仍未覆盖微信开发者工具或真机上的完整人工协作走查，不能替代详情手验 |
+| 可发布 | 是 | 按当前中央口径，“开发完成 + 真实联调完成 + 自动化主证据完成”即可先标记完成；真机 / 微信开发者工具人工走查统一后置，不阻塞本轮 `[x]` |
+
+## 手验清单
+
+在微信开发者工具或真机里至少补下面 5 条：
+
+1. 从计划或饭局入口进入统一详情页，确认主信息卡、菜单区、footer 和当前状态文案正常展示。
+2. 发起人点击分享，确认能生成好友邀请入口；另一账号打开预览后能看到加入结果。
+3. 参与人或发起人对某道菜执行一次掌勺认领，再执行一次释放，确认菜单行右侧头像/状态立即刷新。
+4. `focus` 入参分别覆盖 `menu / footer / shopping / assistant / memory` 中至少 2 个真实场景，确认页面能滚到对应区块；当目标区块不存在时应降级为普通详情，不报错。
+5. 饭局关闭或结束后再次进入，确认分享、掌勺和 footer 主动作与当前冻结状态一致。
 
 ## 风险与遗留
 
@@ -242,8 +253,8 @@
   - 菜单确认时间持久化
   - 准备提醒
   - “开始开席 / 进行中”真实状态流
-- 发布前必须处理：
-  - 页面人工验收
+- 已后置处理：
+  - 页面人工验收按当前总目标统一后置，不再单独阻塞本执行单完成标记
 
 ## 范围自检
 

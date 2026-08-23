@@ -197,6 +197,7 @@ interface StorageUsageSummary {
 
 ```text
 POST /auth/login
+POST /auth/code-send
 POST /auth/code-login
 POST /auth/wechat-login
 POST /auth/refresh
@@ -217,6 +218,13 @@ interface PasswordLoginRequest {
   password: string;
 }
 
+type AuthCodeScene = "LOGIN" | "BIND_PHONE";
+
+interface SendAuthCodeRequest {
+  phone: string;
+  scene: AuthCodeScene;
+}
+
 interface CodeLoginRequest {
   phone: string;
   code: string;
@@ -230,6 +238,11 @@ interface PasswordLoginResult {
   token: string;
   expiresAt: IsoDateTime;
   user: SessionUser;
+}
+
+interface SendAuthCodeResult {
+  scene: AuthCodeScene;
+  sentAt: IsoDateTime;
 }
 
 interface CodeLoginResult {
@@ -463,6 +476,8 @@ interface RedeemMembershipCodeResult {
 ```
 
 `POST /auth/wechat-login` 是当前小程序主登录入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端再调用微信 `code2session` 换取 `openid`，按 `openid` 识别或创建用户，并在可取到时同步记录 `unionid`。请求体只收 `code`；响应仍只返回 `token + expiresAt + user` 这组建立业务会话所需的最小摘要，不返回 `openid / unionid / session_key` 等微信身份细节。若微信配置缺失或微信侧不可达，统一返回“微信登录暂不可用”；若 `code` 无效或已失效，统一返回“微信登录失败，请重试”。
+
+`POST /auth/code-send` 是当前手机号验证码链路的统一发码入口，请求体只收 `phone + scene`，其中 `scene` 当前只允许 `LOGIN | BIND_PHONE`。测试阶段它不接真实短信服务，不落验证码表，也不新增验证码核销中心；服务端只做手机号格式和场景校验，返回本次发码的 `scene + sentAt`，供登录弹窗和绑定手机号页共用同一条未来短信契约。
 
 `POST /auth/code-login` 保留为手机号验证码链路。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
 
@@ -947,6 +962,9 @@ interface MealPlanSummary {
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;
+  shoppingListId: UUID | null;
+  shoppingListName: string | null;
+  shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   createdAt: IsoDateTime;
 }
 
@@ -1054,6 +1072,9 @@ interface DiningEventSummary {
   organizerAvatarUrl: string | null;
   planItemId: UUID | null;
   diningGroupId: UUID | null;
+  shoppingListId: UUID | null;
+  shoppingListName: string | null;
+  shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   menu: RecipeContentSnapshot;
   menuItems: DiningEventMenuItemSummary[];
   participants: DiningEventParticipantSummary[];
@@ -1523,8 +1544,10 @@ interface ShoppingItemSourceSummary {
   sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   title: string | null;
   recipeId: UUID | null;
+  recipeKind: "my" | "inspiration" | null;
   sourceVersionId: UUID | null;
   planItemId: UUID | null;
+  planDate: string | null;
   diningEventId: UUID | null;
   sourceBatchKey: string | null;
   addCount: number | null;
@@ -1657,6 +1680,7 @@ interface AddRecipeToShoppingListRequest {
 同一道菜再次加入同一张清单时，不覆盖旧来源批次；服务端保留 `sourceBatchKey`，以便详情页统计 `addCount` 和累计人份。
 
 当请求携带 `planItemId` 时，服务端必须校验该计划属于当前用户，且该计划下确实包含本次写入的 `recipeId + sourceVersionId`。写入后的清单项来源摘要继续保留菜谱字段，同时把 `sourceType` 记为 `PLAN`、`planItemId` 记为对应计划，供后续按计划或按菜谱聚合展示。
+若这顿餐次已经绑定过另一张采购清单，服务端直接返回冲突，不允许把同一顿餐次改绑到别的清单；若本次写入的就是当前已绑定清单，则允许只补新增来源，不重复改绑。
 
 `POST /shopping-lists/{listId}/items/from-plan` 用于把一顿计划里的菜谱整单写入购物清单，避免前端逐菜循环时出现部分成功：
 
@@ -1667,6 +1691,7 @@ interface AddPlanToShoppingListRequest {
 ```
 
 服务端必须校验该计划属于当前用户，并按计划当前保存的菜谱明细一次性完成整单写入；任一菜谱版本校验失败时整单回滚，不允许留下部分成功的购物项。
+整单写入成功后，服务端会把这顿餐次绑定到当前采购清单，并在后续 `MealPlanSummary / DiningEventSummary` 里回传 `shoppingListId / shoppingListName / shoppingListStatus`，供前台优先回跳到已绑定清单。若该餐次已绑定别的采购清单，则返回冲突；若已绑定当前清单，则只补本次新增的菜谱来源，不重复累计已有来源。
 
 `POST /shopping-lists/{listId}/items/from-gap` 用于把缺口页当前选中的食材写入指定购物清单：
 
@@ -1680,6 +1705,17 @@ interface AddShoppingGapItemsRequest {
 ```
 
 服务端必须按当前登录用户当下的饭局与冰箱重新计算缺口，只接受当前时间层里仍有效的 `gapKeys`；写入时按真实来源饭局拆成 `EVENT` 来源购物项，同一张清单里已存在相同 `sourceKey` 的未完成缺口项时跳过，不重复堆叠。
+
+`POST /shopping-lists/{listId}/items/from-event-gap` 用于把某个饭局当前仍缺的食材写入指定购物清单，供饭局详情或采购清单详情里的“加餐次”定向写入：
+
+```ts
+interface AddEventGapToShoppingListRequest {
+  eventId: UUID;
+}
+```
+
+服务端必须校验该饭局属于当前登录用户，并只按这一个饭局的当前菜单与冰箱状态重新计算缺口；不能把同一时间层里其他饭局碰巧同名同单位的食材一起写入。
+若该饭局对应的餐次尚未绑定采购清单，写入成功后同样把这顿餐次绑定到当前清单；若此前已绑定其他清单，则返回冲突，不允许跨清单改绑。
 
 `POST /shopping-lists/{listId}/items/{itemId}/check` 用于勾选或取消采购完成：
 
@@ -2557,7 +2593,7 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 
 `GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；历史 `/collections` 路径仍返回该用户合集场景摘要，供旧固定引用治理。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
 
-`GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，当前前台常规入口只展示系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes`、`GET /collections/recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配，其中合集基于已收藏固定版本正文检索。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`POST /recipes/from-inspiration` 是灵感详情的显式“添加到我的”入口：请求体固定提交 `sourceRecipeId / sourceVersionId / categoryId / sceneIds`，其中 `categoryId` 必填，`sceneIds` 可为空数组；服务端直接把当前灵感固定版本加入“我的”，不先创建草稿，也不要求客户端跳转编辑页。若同一用户已持有同一 `sourceVersionId` 的有效“我的”菜谱，本轮直接返回已有入口，不再额外创建第二条。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `ownerId = null`、挂系统分类的系统菜谱，并把审核通过时的昵称快照写入 `curatedByName`；原个人菜谱继续保留在“我的”下，不被替换或删除。
+`GET /ingredient-categories` 只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`，其中 `SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，当前前台常规入口只展示系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes`、`GET /collections/recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配，其中合集基于已收藏固定版本正文检索。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`GET /recipes/{recipeId}`、`GET /inspiration-recipes/{recipeId}` 与 `GET /collections/recipes/{collectionRecipeId}` 现统一补充只读 `nutrition` block，字段固定为 `status / qualityLabel / perServing / perRecipe / calculatedAt / sourceVersion`；前台只展示 `热量 / 蛋白质 / 脂肪 / 碳水` 四项结果，不上传、也不回写任何营养值。`status = COMPLETE` 表示当前固定正文的主要系统食材映射和重量换算较完整；`ESTIMATED` 表示至少一部分食材通过代表值或近似单位换算得出；`INSUFFICIENT` 表示当前仍无法稳定算出结果；`NONE` 只用于当前库里还没有可读营养源版本时的静默空态。该营养结果属于平台派生快照，不进入草稿正文，也不把原始营养库明细、映射候选、人工审校记录暴露给前台。`POST /recipes/from-inspiration` 是灵感详情的显式“添加到我的”入口：请求体固定提交 `sourceRecipeId / sourceVersionId / categoryId / sceneIds`，其中 `categoryId` 必填，`sceneIds` 可为空数组；服务端直接把当前灵感固定版本加入“我的”，不先创建草稿，也不要求客户端跳转编辑页。若同一用户已持有同一 `sourceVersionId` 的有效“我的”菜谱，本轮直接返回已有入口，不再额外创建第二条。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `ownerId = null`、挂系统分类的系统菜谱，并把审核通过时的昵称快照写入 `curatedByName`；原个人菜谱继续保留在“我的”下，不被替换或删除。
 
 创建和保存草稿时，服务端按以下逻辑计量草稿空间：
 

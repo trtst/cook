@@ -2,15 +2,30 @@
 
 ## 目的
 
-冻结小程序首页 `action-dock` 四宫格的产品定位、首页卡片规则和四个入口的首屏结构，避免继续把 `我想吃 / 问大家 / 随机 / 缺什么` 做成 4 个浅导航。
+冻结小程序首页 `action-dock` 四宫格的产品定位、首页卡片规则和四个入口的首屏结构，避免继续把首页四宫格做成 4 个浅导航。
 
 本文件只确认产品边界和页面行为，不在本轮冻结接口、DTO、数据库或具体实现。
+
+## 当前实现状态
+
+基于 Saturday, August 22, 2026 当前工作树代码与本地 `3100` 实例核对：
+
+1. `apps/client/src/pages/home/index.vue` 已接通 `feature-board + action-dock + recent-arrangement` 首页结构。
+2. `GET /home-entries` 已通过 `pnpm --filter @next-meal/api verify:home-action-dock-flow` 真实联调，当前返回 `MAIN / SIDE_TOP / SIDE_BOTTOM / QUICK_1 / QUICK_2 / QUICK_3 / QUICK_4` 共 `7` 个坑位。
+3. `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true --continue-on-error false --runtime-log true` 已跑通，输出包含 `项目 src 编译成功` 与 `ready in 10224ms`。
+4. 已于 Sunday, August 23, 2026 跑通 `/pages/home/index` 官方 `mp-weixin` 真实登录态下的首页主状态自动化，确认当前首页可稳定展示 `饭局、计划、清单`、`还没有安排`、`今晚吃什么？`、未安排说明文案，以及四个 quick 入口标题 `翻菜谱 / 看食材 / 随机 / 缺什么`。
+5. 首页四宫格当前可视为“代码、真实接口、开发者工具编译链与首页真实登录主状态自动化已落地”；剩余主要缺口是首页真机走查，以及四个场景首页的页面级手动验收。
+
+补充说明：
+
+1. 由于 `pages_meal/wish` 与 `pages_meal/poll` 已不在当前前台主链路，本文下方 `我想吃 / 问大家` 小节保留为早期产品设想，不应当直接视为“当前已实现事实”。
+2. 当前工作树与本地 `3100` 实例下，首页四坑位默认口径以真实接口和页面自动化看到的 `翻菜谱 / 看食材 / 随机 / 缺什么` 为准；如后台配置调整，前台仍按 `placement` 渲染。
 
 ## 适用范围
 
 - `apps/client/src/pages/home/index.vue` 的首页四宫格入口
-- `pages_meal/wish`
-- `pages_meal/poll`
+- `pages/recipe/index`
+- `pages_pantry/index/index`
 - `pages_meal/random`
 - `pages_pantry/gap`
 
@@ -295,3 +310,13 @@
 3. 四个入口点入后的第一页都不是空白壳页。
 4. 用户无需先理解内部术语，也能知道该入口现在能帮他完成什么。
 5. 产品表达仍然围绕 `我想吃 -> 共同选择 -> 确认下一餐 -> 核对冰箱 -> 生成清单` 主链路，不漂移成社区产品。
+
+## 验收状态
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| 开发完成 | 已完成 | 首页 `action-dock` 四坑位、按坑位上架/下架与四个场景首页骨架已在当前 Client/API 落地 |
+| 联调完成 | 已完成 | `pnpm --filter @next-meal/api verify:home-action-dock-flow` 已于 Saturday, August 22, 2026 在本地 `3100` 实例真实通过，结果覆盖 `7` 个坑位、三张主卡和四个快捷坑位；当前 quick 标题为 `翻菜谱 / 看食材 / 随机 / 缺什么` |
+| 机器检查 | 已完成 | `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true --continue-on-error false --runtime-log true` 已于 Saturday, August 22, 2026 跑通，输出包含 `项目 src 编译成功`；另已于 Sunday, August 23, 2026 跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/home/index.test.js`，确认首页真实登录态下可稳定展示 `饭局、计划、清单`、`还没有安排`、`今晚吃什么？` 以及四个 quick 入口标题 |
+| 手动验收 | 未完成 | 首页真机走查，以及当前四个场景首页主路径仍未逐页手验 |
+| 可发布 | 否 | 仍缺首页与四个场景首页的页面级手动验收 |

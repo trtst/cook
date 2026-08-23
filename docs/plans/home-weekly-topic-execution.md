@@ -166,4 +166,14 @@
 - 因复用未被证明而没有提前增加的抽象：
   - 不抽通用“运营专题中心”，先只落本周灵感一条线。
 - 是否还能缩小改动而不破坏需求：
-  - 当前已收成一个专题页闭环，不再继续扩节庆专题或社区链路。
+- 当前已收成一个专题页闭环，不再继续扩节庆专题或社区链路。
+
+## 验收状态
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| 开发完成 | 已完成 | 小程序专题页、后台专题列表/编辑页、公开读取接口、后台维护接口与首页专题入口路径均已接通 |
+| 联调完成 | 已完成 | `pnpm --filter @next-meal/api verify:home-weekly-topic-flow` 已于 Sunday, August 23, 2026 在本地 `3100` 实例真实跑通，覆盖后台创建专题、上架专题、公开读取当前专题 / 指定专题，以及首页 `本周灵感 -> /pages_home/topic/index` 入口目标 |
+| 机器检查 | 已完成 | `node --check apps/client/src/pages_home/topic/index.test.js`、`/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_home/topic/index.test.js` 已于 Sunday, August 23, 2026 通过；页面自动化已在真实专题数据下断言专题标题、本期推荐、往期回顾、推荐菜标题与 `加入计划` 主状态 |
+| 手动验收 | 未完成 | 微信开发者工具或真机人工走查仍未执行 |
+| 可发布 | 否 | 仍建议补专题页和后台编辑页的人工主路径验收 |

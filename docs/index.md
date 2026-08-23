@@ -60,7 +60,7 @@
 24. `plans/table-topic-execution.md`
    - 首页“餐桌话题”列表与详情执行单，覆盖历次话题倒序、真实参与数和后台持续新建闭环。
 25. `plans/home-action-dock-execution.md`
-   - 首页四宫格执行单，冻结 `我想吃 / 问大家 / 随机 / 缺什么` 的固定四宫格定位、首页卡片规则和四个入口的首屏结构。
+   - 首页四宫格执行单，维护首页 `action-dock` 固定四坑位、卡片规则、当前默认入口口径和场景首页要求。
 26. `plans/home-recent-arrangement-execution.md`
    - 首页“最近安排”条件卡执行单，冻结 `24h -> 24~36h` 候选窗口、饭局优先、最小字段和统一餐次详情跳转口径。
 27. `plans/random-page-execution.md`
@@ -83,6 +83,8 @@
    - 汇总菜谱导入、补全、营养分析与健康规划这条线的待确认项总表，供后续集中拍板。
 36. `plans/membership-code-execution.md`
    - 会员兑换码、体验码、广告减免与“我的”页权益入口执行单，冻结当前页面闭环与后续真实核销门禁。
+37. `plans/implementation-checklist.md`
+   - 已落档功能执行清单，按“已落地 / 进行中 / 未开始 / 规则稿”汇总，供后续逐项实现和打勾。
 
 ## 文档地图
 
@@ -147,7 +149,7 @@
 - `plans/table-topic-execution.md`
   - 首页“餐桌话题”列表与详情的业务边界、真实参与数口径、最小接口和最小表约束。
 - `plans/home-action-dock-execution.md`
-  - 首页四宫格的产品边界、固定顺序、卡片规则和四个入口的场景首页要求。
+  - 首页四宫格的产品边界、固定顺序、卡片规则、当前默认入口口径和场景首页要求。
 - `plans/home-recent-arrangement-execution.md`
   - 首页“最近安排”条件卡的业务边界、时间窗口、饭局优先规则、最小字段和统一餐次详情跳转口径。
 - `plans/random-page-execution.md`
@@ -170,6 +172,8 @@
   - 汇总四份规则稿中的待确认项，并给出当前建议口径，供后续统一确认。
 - `plans/membership-code-execution.md`
   - 会员兑换码、体验码、广告减免与“我的”页权益入口的现行执行单，覆盖本轮页面范围和后续核销门禁。
+- `plans/implementation-checklist.md`
+  - 已落档功能执行清单，汇总当前可执行打勾项、总批次文档和不直接打勾的规则稿。
 - `plans/engineering-foundation-fix.md`
   - 2026-07-24 幂等、管理员审计、迁移验证和模块状态收口的实际执行记录。
 - `plans/site-content-execution.md`

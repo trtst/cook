@@ -81,10 +81,29 @@
 ## 联调清单
 
 - [ ] 小程序 mock 路径可跑通
-- [ ] 后端接口测试通过
+- [x] 后端接口测试通过
 - [ ] 小程序接真实接口通过
-- [ ] 权限 / 未登录 / 无权限路径通过
-- [ ] 重复提交 / 幂等路径通过
+- [x] 权限 / 未登录 / 无权限路径通过
+- [x] 重复提交 / 幂等路径通过
+
+## 验收状态
+
+| 项 | 状态 | 证据 |
+| --- | --- | --- |
+| 开发完成 | 已完成 | 文章列表、详情、阅读、点赞/取消点赞链路及小程序入口页已实现 |
+| 联调完成 | 已完成 | Saturday, August 22, 2026 已在 `http://127.0.0.1:3100/api` 重新跑通 `pnpm --filter @next-meal/api verify:knowledge-article-flow`；脚本现改为走 `/auth/code-login` 干净账号，不再依赖种子密码，当前结果覆盖未登录 `401`、文章发布、列表/详情读取、阅读数累积与点赞/取消点赞 |
+| 机器检查 | 已完成 | `pnpm --filter @next-meal/api verify:knowledge-article-flow`、`pnpm --filter @next-meal/client type-check`、`node --check apps/client/src/pages_me/knowledge-list/index.test.js`、`node --check apps/client/src/pages_me/knowledge-detail/index.test.js`、`git diff --check -- apps/client/src/pages_me/knowledge-list/index.vue apps/client/src/pages_me/knowledge-list/index.test.js apps/client/src/pages_me/knowledge-detail/index.vue apps/client/src/pages_me/knowledge-detail/index.test.js docs/plans/site-content-knowledge-article-execution.md docs/plans/implementation-checklist.md docs/plans/minor_change_log.md`，此前已执行 `pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/client build:mp-weixin`、`pnpm --filter @next-meal/api build`；另已于 Saturday, August 22, 2026 跑通 `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true`，并于 Sunday, August 23, 2026 跑通 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_me/knowledge-list/index.test.js` 与 `pages_me/knowledge-detail/index.test.js`，其中知识列表已提升为真实登录列表主状态自动化，已断言后台新发布文章标题、`阅读 / 点赞` 元信息；文章详情已断言已发布文章标题、阅读/点赞文案与点赞后 `已点赞` 状态切换 |
+| 手动验收 | 未完成 | 已补知识列表真实登录列表态和文章详情真实登录正文态官方 `mp-weixin` 自动化，但未在微信小程序真机或开发者工具中执行；文章列表、详情正文、阅读累积与点赞仍待人工主路径验收 |
+| 可发布 | 否 | 仍缺小程序手动验收 |
+
+## 手验清单
+
+在微信开发者工具或真机里至少补下面 4 条：
+
+1. 从 `我的 -> 厨房知识` 任一入口进入列表，确认未登录先走登录，再返回文章列表。
+2. 列表首屏确认 skeleton、正文卡片、发布时间、阅读数与点赞数展示正常。
+3. 打开文章详情，确认正文可读，进入后阅读数会按预期增加。
+4. 点赞与取消点赞各执行一次，确认按钮状态和计数同步刷新，不需要手动重进页面。
 
 ## 风险与遗留
 
