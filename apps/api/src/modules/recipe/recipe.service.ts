@@ -28,9 +28,11 @@ import type {
   InspirationRecipeSummary,
   MyRecipeDetail,
   MyRecipeSummary,
+  MealSlot,
   PageResult,
   PublishRecipeDraftResponse,
   RecipeAssistantSnapshot,
+  RecipePlanLinkSummary,
   RecipeRecommendationSummary,
   RecipeCategorySummary,
   RecipeContentSnapshot,
@@ -179,6 +181,21 @@ const recipeImageUrlPattern = /\/api\/public-assets\/recipe-images\/([^/?#]+)/i;
 
 function toIsoDate(value: Date) {
   return value.toISOString();
+}
+
+const mealSlotRank: Record<MealSlot, number> = {
+  BREAKFAST: 0,
+  LUNCH: 1,
+  AFTERNOON_TEA: 2,
+  DINNER: 3,
+  LATE_NIGHT: 4
+};
+
+function toDateOnly(value: Date) {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, "0");
+  const day = `${value.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function toPositiveInt(value: number | string | undefined, fallback: number) {
@@ -2135,7 +2152,7 @@ export class RecipeService {
     if (!recipe || !recipe.inspirationCategory) throw new NotFoundException("灵感菜谱不存在");
     const userId = request ? await this.resolveOptionalUserId(request) : null;
     const ownedRecipeId = userId ? await this.findOwnedRecipeIdByOriginVersion(userId, recipe.currentVersionId) : null;
-    return this.toInspirationRecipeDetail(this.prisma, recipe, ownedRecipeId);
+    return this.toInspirationRecipeDetail(this.prisma, recipe, userId, ownedRecipeId);
   }
 
   async reportRecipe(userId: UUID, recipeId: UUID, operationId: OperationId, reason: string): Promise<RecipeReportSummary> {
@@ -2452,11 +2469,12 @@ export class RecipeService {
 
   private async toMyRecipeDetail(tx: RecipeDb, userId: UUID, recipe: RecipeRow): Promise<MyRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
-    const [refs, recommendation, nutrition, assistant] = await Promise.all([
+    const [refs, recommendation, nutrition, assistant, planLinks] = await Promise.all([
       this.loadRecipeEditRefs(tx, userId, content.ingredients),
       this.loadLatestRecipeRecommendation(tx, recipe.id),
       loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
-      this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId)
+      this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId),
+      this.loadRecipePlanLinks(tx, userId, recipe.id)
     ]);
     return {
       id: recipe.id,
@@ -2473,6 +2491,7 @@ export class RecipeService {
       content: this.normalizeRecipeEditContent(content, refs.ingredientMap),
       nutrition,
       assistant,
+      planLinks,
       ingredientRefs: refs.ingredientRefs,
       unitRefs: refs.unitRefs,
       recommendation,
@@ -2598,6 +2617,62 @@ export class RecipeService {
     };
   }
 
+  private async loadRecipePlanLinks(tx: RecipeDb, userId: UUID, recipeId: UUID): Promise<RecipePlanLinkSummary[]> {
+    const rows = await tx.mealPlanDish.findMany({
+      where: {
+        recipeId,
+        planItem: {
+          userId
+        }
+      },
+      select: {
+        planItem: {
+          select: {
+            id: true,
+            planDate: true,
+            mealSlot: true,
+            menuLockedAt: true,
+            status: true,
+            diningEvent: {
+              select: {
+                id: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const planMap = new Map<UUID, RecipePlanLinkSummary>();
+    for (const row of rows) {
+      const plan = row.planItem;
+      if (planMap.has(plan.id)) continue;
+      planMap.set(plan.id, {
+        planItemId: plan.id,
+        planDate: plan.planDate.toISOString().slice(0, 10),
+        mealSlot: plan.mealSlot,
+        menuLocked: Boolean(plan.menuLockedAt),
+        status: plan.status,
+        hasDiningEvent: Boolean(plan.diningEvent)
+      });
+    }
+
+    const todayText = toDateOnly(new Date());
+    return Array.from(planMap.values()).sort((left, right) => {
+      const leftActive = left.status !== "COMPLETED" && left.planDate >= todayText;
+      const rightActive = right.status !== "COMPLETED" && right.planDate >= todayText;
+      if (leftActive !== rightActive) {
+        return leftActive ? -1 : 1;
+      }
+      if (leftActive) {
+        if (left.planDate !== right.planDate) return left.planDate.localeCompare(right.planDate);
+        return mealSlotRank[left.mealSlot] - mealSlotRank[right.mealSlot];
+      }
+      if (left.planDate !== right.planDate) return right.planDate.localeCompare(left.planDate);
+      return mealSlotRank[right.mealSlot] - mealSlotRank[left.mealSlot];
+    });
+  }
+
   private toCollectedRecipeSummary(collection: CollectionRow): CollectedRecipeSummary {
     const content = versionToContent(collection.sourceVersion);
     return {
@@ -2665,12 +2740,14 @@ export class RecipeService {
   private async toInspirationRecipeDetail(
     tx: RecipeDb,
     recipe: RecipeRow,
+    userId: UUID | null = null,
     ownedRecipeId: UUID | null = null
   ): Promise<InspirationRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
-    const [nutrition, assistant] = await Promise.all([
+    const [nutrition, assistant, planLinks] = await Promise.all([
       loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
-      this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId)
+      this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId),
+      userId && ownedRecipeId ? this.loadRecipePlanLinks(tx, userId, ownedRecipeId) : Promise.resolve<RecipePlanLinkSummary[]>([])
     ]);
     return {
       id: recipe.id,
@@ -2683,6 +2760,7 @@ export class RecipeService {
       content,
       nutrition,
       assistant,
+      planLinks,
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       ownedRecipeId,

@@ -8,8 +8,8 @@ import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   AcceptShareInviteDto,
   AddMealPlanItemDto,
-  ClaimCookDto,
   ChooseBringRecipeDto,
+  ChooseDiningEventWishRecipeDto,
   CompleteDiningEventDto,
   ConfirmMealPlanMenuDto,
   CompleteMealPlanDto,
@@ -17,6 +17,7 @@ import {
   CreateDirectDiningEventDto,
   CreateDiningEventDto,
   CreateMealPlanDto,
+  DiningEventListQueryDto,
   GenerateMealPlanCookAssistantDto,
   GenerateRandomMenuDto,
   MealPlanQueryDto,
@@ -24,6 +25,7 @@ import {
   ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
   UpdateDiningEventNoteDto,
+  UpdateDiningEventWishSupportDto,
   UpdateMealPlanTitleDto,
   UpdateDiningEventScheduleDto,
   UpdateDiningEventCoverDto,
@@ -35,6 +37,7 @@ import {
   DiningMemorySharePreviewModel,
   DiningMemoryShareSnapshotModel,
   DiningEventModel,
+  DiningEventListPageModel,
   DiningEventShareLinkModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
@@ -57,6 +60,28 @@ export class MealController {
   listMealPlans(@Req() request: RequestWithUser, @Query() query: MealPlanQueryDto) {
     return this.mealService
       .listMealPlans(request.user.userId, query.page, query.pageSize, query.from, query.to)
+      .then(result => ok(result));
+  }
+
+  @Get("dining-events")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(DiningEventListPageModel, "分页查询当前用户可见的饭局摘要列表")
+  listDiningEvents(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Query() query: DiningEventListQueryDto
+  ) {
+    return this.mealService
+      .listDiningEvents(
+        request.user.userId,
+        query.page,
+        query.pageSize,
+        query.role,
+        query.stage,
+        query.planDate,
+        query.mealSlot,
+        request
+      )
       .then(result => ok(result));
   }
 
@@ -407,6 +432,55 @@ export class MealController {
       .then(result => ok(result));
   }
 
+  @Post("dining-events/:eventId/wishes")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "参与人把一道菜加入当前饭局的我想吃池")
+  chooseDiningEventWishRecipe(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ChooseDiningEventWishRecipeDto
+  ) {
+    return this.mealService
+      .chooseDiningEventWishRecipe(request.user.userId, eventId, body.recipeId, operationId)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/wishes/:wishItemId/support")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "参与人附议或取消附议一道我想吃")
+  updateDiningEventWishSupport(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("wishItemId", ParseIntPipe) wishItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateDiningEventWishSupportDto
+  ) {
+    return this.mealService
+      .updateDiningEventWishSupport(request.user.userId, eventId, wishItemId, operationId, body.action)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/wishes/:wishItemId/menu")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "主家把一道我想吃加入本次菜单")
+  addDiningEventWishToMenu(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("wishItemId", ParseIntPipe) wishItemId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.mealService
+      .addDiningEventWishToMenu(request.user.userId, eventId, wishItemId, operationId)
+      .then(result => ok(result));
+  }
+
   @Post("dining-events/:eventId/bring")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -420,22 +494,6 @@ export class MealController {
   ) {
     return this.mealService
       .chooseBringRecipe(request.user.userId, eventId, body.recipeId, operationId)
-      .then(result => ok(result));
-  }
-
-  @Post("dining-events/:eventId/cook")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(DiningEventModel, "认领或释放一道菜的掌勺人")
-  claimCook(
-    @Req() request: RequestWithUser,
-    @Param("eventId", ParseIntPipe) eventId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: ClaimCookDto
-  ) {
-    return this.mealService
-      .claimCook(request.user.userId, eventId, operationId, body.expectedVersion, body.menuItemId, body.action)
       .then(result => ok(result));
   }
 

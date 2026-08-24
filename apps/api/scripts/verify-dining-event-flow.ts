@@ -251,13 +251,23 @@ async function createMealPlan(
   const fixedPlanDate = options?.planDate ?? null;
   const fixedMealSlot = options?.mealSlot ?? "DINNER";
   const titlePrefix = options?.titlePrefix ?? "饭局验收餐次";
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  const fallbackMealSlots: Array<"BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT"> = [
+    "DINNER",
+    "LUNCH",
+    "BREAKFAST",
+    "AFTERNOON_TEA",
+    "LATE_NIGHT"
+  ];
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const mealSlot = fixedPlanDate ? fixedMealSlot : fallbackMealSlots[attempt % fallbackMealSlots.length];
+    const planDate = fixedPlanDate ?? buildPlanDate(30 + Math.floor(attempt / fallbackMealSlots.length));
     const result = await request<MealPlanSummary>("/meal-plans", {
       method: "POST",
       headers: withIdempotencyKey(ownerAuth),
       body: JSON.stringify({
-        planDate: fixedPlanDate ?? buildPlanDate(30 + attempt),
-        mealSlot: fixedMealSlot,
+        planDate,
+        mealSlot,
         title: `${titlePrefix}-${titleSuffix}-${attempt}`,
         menuItems: [
           {
@@ -278,7 +288,7 @@ async function createMealPlan(
     }
     throw new Error(`/meal-plans HTTP ${result.status}: ${result.body.message}`);
   }
-  throw new Error("/meal-plans failed after 10 attempts due to existing plan conflicts");
+  throw new Error("/meal-plans failed after 30 attempts due to existing plan conflicts");
 }
 
 async function verifyRecentArrangementBoundaries() {
@@ -412,31 +422,40 @@ async function main() {
   });
   assert(memberView.id === event.id, "joined member should be able to read dining event detail");
 
-  const menuItem = memberView.menuItems[0];
-  assert(menuItem, "member view should expose menu item for cook claim");
-  const claimed = await requestData<DiningEventSummary>(`/dining-events/${event.id}/cook`, {
+  const memberRecipe = await createOwnerRecipe(memberAuth, "饭局验收成员菜谱");
+  const wished = await requestData<DiningEventSummary>(`/dining-events/${event.id}/wishes`, {
     method: "POST",
     headers: withIdempotencyKey(memberAuth),
     body: JSON.stringify({
-      expectedVersion: menuItem.version,
-      menuItemId: menuItem.id,
-      action: "CLAIM"
+      recipeId: memberRecipe.recipe.id
     })
   });
-  const claimedMenuItem = claimed.menuItems.find(item => item.id === menuItem.id);
-  assert(claimedMenuItem?.cookUserUid === member.user.uid, "member should become cook owner after claim");
+  const wishedItem = wished.wishItems.find(item => item.recipeId === memberRecipe.recipe.id);
+  assert(wishedItem, "member wish should appear in wish pool");
+  assert(wishedItem.supportedByMe === true, "creator should automatically support own wish");
 
-  const released = await requestData<DiningEventSummary>(`/dining-events/${event.id}/cook`, {
+  const ownerView = await requestData<DiningEventSummary>(`/dining-events/${event.id}`, {
+    headers: ownerAuth
+  });
+  const ownerWishItem = ownerView.wishItems.find(item => item.id === wishedItem.id);
+  assert(ownerWishItem, "owner should see wish pool item");
+
+  const addedToMenu = await requestData<DiningEventSummary>(`/dining-events/${event.id}/wishes/${wishedItem.id}/menu`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth)
+  });
+  const addedMenuItem = addedToMenu.menuItems.find(item => item.recipeVersionId === memberRecipe.recipe.contentVersionId);
+  assert(addedMenuItem, "owner should be able to add wished recipe into current menu");
+
+  const bringUpdated = await requestData<DiningEventSummary>(`/dining-events/${event.id}/bring`, {
     method: "POST",
     headers: withIdempotencyKey(memberAuth),
     body: JSON.stringify({
-      expectedVersion: claimedMenuItem!.version,
-      menuItemId: claimedMenuItem!.id,
-      action: "RELEASE"
+      recipeId: memberRecipe.recipe.id
     })
   });
-  const releasedMenuItem = released.menuItems.find(item => item.id === menuItem.id);
-  assert(releasedMenuItem?.cookUserUid === null, "member cook claim should be releasable");
+  const memberBring = bringUpdated.participants.find(item => item.userUid === member.user.uid);
+  assert(memberBring?.bringRecipeId === memberRecipe.recipe.id, "member bring recipe should be recorded independently");
 
   const disabled = await requestData<DiningEventSummary>(`/dining-events/${event.id}/share-link/disable`, {
     method: "POST",
@@ -455,8 +474,9 @@ async function main() {
         shareTokenPath: shareA.shareTokenPath,
         previewPlanItemId: preview.planItemId,
         joinedParticipantStatus: joinedParticipant.status,
-        claimedCookUid: claimedMenuItem?.cookUserUid,
-        releasedCookUid: releasedMenuItem?.cookUserUid,
+        wishedRecipeId: wishedItem.id,
+        wishAddedToMenu: Boolean(addedMenuItem),
+        bringRecipeTitle: memberBring?.bringRecipeTitle ?? null,
         shareDisabled: disabled.hasActiveShareLink === false
       },
       null,

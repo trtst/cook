@@ -50,6 +50,8 @@ const medalStatusValues = ["DRAFT", "LISTED", "UNLISTED", "ARCHIVED"] as const;
 const editableMedalStatusValues = ["DRAFT", "LISTED", "UNLISTED"] as const;
 const ingredientProteinTypeValues = ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] as const;
 const mealSlotValues = ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] as const;
+const diningEventListRoleValues = ["ALL", "ORGANIZER", "PARTICIPANT"] as const;
+const diningEventListStageFilterValues = ["ALL", "TODO", "ACTIVE", "DONE"] as const;
 const shoppingGapWindowValues = ["NEXT_48_HOURS", "NEXT_7_DAYS", "LATER"] as const;
 const membershipSkuCodeValues = ["PLUS_30D", "PRO_30D", "PRO_TRIAL_1D", "PRO_TRIAL_3D", "PRO_TRIAL_7D"] as const;
 const membershipCodeStatusValues = ["ACTIVE", "REDEEMED", "DISABLED"] as const;
@@ -916,6 +918,28 @@ export class MealPlanQueryDto extends PageQueryDto {
   to?: string;
 }
 
+export class DiningEventListQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ enum: diningEventListRoleValues, default: "ALL" })
+  @IsOptional()
+  @IsIn(diningEventListRoleValues)
+  role: "ALL" | "ORGANIZER" | "PARTICIPANT" = "ALL";
+
+  @ApiPropertyOptional({ enum: diningEventListStageFilterValues, default: "TODO" })
+  @IsOptional()
+  @IsIn(diningEventListStageFilterValues)
+  stage: "ALL" | "TODO" | "ACTIVE" | "DONE" = "TODO";
+
+  @ApiPropertyOptional({ example: "2026-08-24", format: "date" })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  planDate?: string;
+
+  @ApiPropertyOptional({ enum: mealSlotValues })
+  @IsOptional()
+  @IsIn(mealSlotValues)
+  mealSlot?: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
+}
+
 export class RecipeCategoryNameDto extends OperationDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -1521,7 +1545,6 @@ export class CreateMealPlanDto extends OperationDto {
 
   @ApiProperty({ type: [CreateMealPlanMenuItemDto], maxItems: 12 })
   @IsArray()
-  @ArrayNotEmpty()
   @ArrayMaxSize(12)
   @ValidateNested({ each: true })
   @Type(() => CreateMealPlanMenuItemDto)
@@ -1952,16 +1975,18 @@ export class RespondDiningEventDto extends OperationDto {
 
 export class CompleteDiningEventDto extends OperationDto {}
 
-export class ClaimCookDto extends VersionedOperationDto {
-  @ApiProperty({ example: resourceIdExample })
+export class ChooseDiningEventWishRecipeDto extends OperationDto {
+  @ApiProperty()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  menuItemId!: number;
+  recipeId!: number;
+}
 
-  @ApiProperty({ enum: ["CLAIM", "RELEASE"] })
-  @IsIn(["CLAIM", "RELEASE"])
-  action!: "CLAIM" | "RELEASE";
+export class UpdateDiningEventWishSupportDto extends OperationDto {
+  @ApiProperty({ enum: ["SUPPORT", "UNSUPPORT"] })
+  @IsIn(["SUPPORT", "UNSUPPORT"])
+  action!: "SUPPORT" | "UNSUPPORT";
 }
 
 export class CreateDiningMemoryShareDto extends OperationDto {

@@ -2418,6 +2418,10 @@ export class PantryService {
     return this.loadEventGapSummary(this.prisma, userId, eventId);
   }
 
+  async previewPlanGap(userId: UUID, planItemId: UUID): Promise<ShoppingItemSummary[]> {
+    return this.loadPlanGapSummary(this.prisma, userId, planItemId);
+  }
+
   private async loadEventGapSummary(
     db: Pick<Prisma.TransactionClient, "diningEvent" | "fridgeItem">,
     userId: UUID,
@@ -2455,6 +2459,64 @@ export class PantryService {
     ]);
     if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
     return this.buildLegacyGapSummary([event], fridgeItems, "EVENT");
+  }
+
+  private async loadPlanGapSummary(
+    db: Pick<Prisma.TransactionClient, "mealPlanItem" | "fridgeItem">,
+    userId: UUID,
+    planItemId: UUID
+  ): Promise<EventGapSummaryItem[]> {
+    const [plan, fridgeItems] = await Promise.all([
+      db.mealPlanItem.findUnique({
+        where: { id: planItemId },
+        select: {
+          id: true,
+          title: true,
+          planDate: true,
+          updatedAt: true,
+          userId: true,
+          dishes: {
+            select: {
+              recipeVersionId: true,
+              recipeVersion: {
+                select: {
+                  name: true,
+                  ingredientsJson: true
+                }
+              }
+            },
+            orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+          }
+        }
+      }),
+      db.fridgeItem.findMany({
+        where: {
+          userId,
+          available: true
+        }
+      })
+    ]);
+    if (!plan || plan.userId !== userId) throw new NotFoundException("计划不存在");
+
+    return this.buildLegacyGapSummary(
+      [
+        {
+          id: plan.id,
+          title: plan.title,
+          scheduledAt: plan.planDate,
+          updatedAt: plan.updatedAt,
+          menuItems: plan.dishes.map(dish => ({
+            title: dish.recipeVersion.name,
+            recipeVersionId: dish.recipeVersionId,
+            recipeVersion: {
+              ingredientsJson: dish.recipeVersion.ingredientsJson
+            }
+          }))
+        }
+      ],
+      fridgeItems,
+      "EVENT"
+    );
   }
 
   async createEventGap(userId: UUID, eventId: UUID, operationId: OperationId) {

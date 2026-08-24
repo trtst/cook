@@ -968,6 +968,15 @@ export class MyRecipeSummaryModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class RecipePlanLinkModel {
+  @ApiProperty(uuid) planItemId!: string;
+  @ApiProperty({ type: String, format: "date" }) planDate!: string;
+  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] }) mealSlot!: string;
+  @ApiProperty({ type: Boolean }) menuLocked!: boolean;
+  @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
+}
+
 export class MyRecipeDetailModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
@@ -981,6 +990,7 @@ export class MyRecipeDetailModel {
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
   @ApiProperty({ type: () => RecipeRecommendationModel, nullable: true }) recommendation!: RecipeRecommendationModel | null;
@@ -1081,6 +1091,7 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
@@ -1489,6 +1500,42 @@ export class MealPlanModel {
   @ApiProperty(dateTime) createdAt!: string;
 }
 
+export class DiningEventStageCountsModel {
+  @ApiProperty({ type: Number, minimum: 0 }) todoCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) activeCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) doneCount!: number;
+}
+
+export class DiningEventListSummaryModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
+  @ApiProperty({ type: String, format: "date", nullable: true }) planDate!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: mealSlotValues }) mealSlot!: string | null;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty(dateTime) scheduledAt!: string;
+  @ApiProperty({ type: String, enum: ["PLANNED", "CONFIRMED", "CANCELLED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["ORGANIZER", "PARTICIPANT"] }) role!: string;
+  @ApiProperty({ type: String, nullable: true, enum: ["INVITED", "ACCEPTED", "DECLINED", "REMOVED"] }) participantStatus!: string | null;
+  @ApiProperty({ type: String, enum: ["TODO", "ACTIVE", "DONE"] }) stage!: string;
+  @ApiProperty({ type: Number, nullable: true }) organizerUid!: number | null;
+  @ApiProperty(nullableString) organizerName!: string | null;
+  @ApiProperty({ type: [String] }) menuPreview!: string[];
+  @ApiProperty({ type: Number, minimum: 0 }) menuCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) participantCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) acceptedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) bringCount!: number;
+}
+
+export class DiningEventListPageModel {
+  @ApiProperty({ type: [DiningEventListSummaryModel] }) items!: DiningEventListSummaryModel[];
+  @ApiProperty({ type: Number, minimum: 1 }) page!: number;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 100 }) pageSize!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Boolean }) hasNext!: boolean;
+  @ApiProperty({ type: DiningEventStageCountsModel }) stageCounts!: DiningEventStageCountsModel;
+}
+
 export class MealPlanCookAssistantTaskModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) detail!: string;
@@ -1636,13 +1683,23 @@ export class DiningEventParticipantModel {
   @ApiProperty(nullableString) bringRecipeTitle!: string | null;
 }
 
+export class DiningEventWishItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) supportCount!: number;
+  @ApiProperty({ type: Boolean }) supportedByMe!: boolean;
+  @ApiProperty({ type: Boolean }) suggestedByMe!: boolean;
+  @ApiProperty({ type: Boolean }) inCurrentMenu!: boolean;
+}
+
 export class DiningEventMenuItemModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
-  @ApiProperty({ type: Number, nullable: true }) cookUserUid!: number | null;
-  @ApiProperty(nullableString) cookName!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 
@@ -1664,6 +1721,7 @@ export class DiningEventModel {
   @ApiProperty({ type: String, nullable: true, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) shoppingListStatus!: string | null;
   @ApiProperty({ type: RecipeContentModel }) menu!: RecipeContentModel;
   @ApiProperty({ type: [DiningEventMenuItemModel] }) menuItems!: DiningEventMenuItemModel[];
+  @ApiProperty({ type: [DiningEventWishItemModel] }) wishItems!: DiningEventWishItemModel[];
   @ApiProperty({ type: [DiningEventParticipantModel] }) participants!: DiningEventParticipantModel[];
   @ApiProperty({ type: Boolean }) hasActiveShareLink!: boolean;
   @ApiProperty(nullableString) shareTokenPath!: string | null;
@@ -1680,7 +1738,6 @@ export class DiningEventShareLinkModel {
 export class DiningMemoryShareMenuItemModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverUrl!: string | null;
-  @ApiProperty(nullableString) cookName!: string | null;
 }
 
 export class DiningMemoryShareParticipantModel {

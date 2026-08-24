@@ -324,7 +324,14 @@ export class HomeService {
         gapCount: await this.resolveEventGapCount(userId, item.id)
       }))
     );
+    const planGapEntries = await Promise.all(
+      plans.map(async item => ({
+        planItemId: item.id,
+        gapCount: item.dishes.length > 0 ? await this.resolvePlanGapCount(userId, item.id) : null
+      }))
+    );
     const gapCountMap = new Map(eventGapEntries.map(item => [item.eventId, item.gapCount]));
+    const planGapCountMap = new Map(planGapEntries.map(item => [item.planItemId, item.gapCount]));
     const candidates: RecentArrangementCandidate[] = [];
 
     for (const event of events) {
@@ -356,7 +363,8 @@ export class HomeService {
       const scheduledAt = resolvePlanScheduledAt(plan.planDate, plan.mealSlot);
       const scheduledMs = scheduledAt.getTime();
       const menuCount = plan.dishes.length;
-      const status = this.resolvePlanArrangementStatus(plan.menuLockedAt, menuCount, scheduledMs, nowMs);
+      const gapCount = planGapCountMap.get(plan.id) ?? null;
+      const status = this.resolvePlanArrangementStatus(plan.menuLockedAt, menuCount, gapCount, scheduledMs, nowMs);
       if (!status) continue;
       const bucket = resolveCandidateBucket(scheduledMs, status, nowMs);
       if (!bucket) continue;
@@ -369,7 +377,7 @@ export class HomeService {
         scheduledAt: scheduledAt.toISOString(),
         participantCount: 1,
         menuCount,
-        gapCount: null,
+        gapCount,
         status,
         bucket,
         scheduledMs
@@ -843,11 +851,13 @@ export class HomeService {
   private resolvePlanArrangementStatus(
     menuLockedAt: Date | null,
     menuCount: number,
+    gapCount: number | null,
     scheduledMs: number,
     nowMs: number
   ): HomeRecentArrangementStatus | null {
     if (scheduledMs <= nowMs) return null;
     if (!menuCount) return "EMPTY_MENU";
+    if (menuLockedAt && (gapCount ?? 0) > 0) return "PENDING_SHOPPING";
     if (menuLockedAt) return "READY_TO_COOK";
     return "PENDING_CONFIRM";
   }
@@ -863,6 +873,15 @@ export class HomeService {
   private async resolveEventGapCount(userId: UUID, eventId: UUID) {
     try {
       const items = await this.pantryService.previewEventGap(userId, eventId);
+      return items.length;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async resolvePlanGapCount(userId: UUID, planItemId: UUID) {
+    try {
+      const items = await this.pantryService.previewPlanGap(userId, planItemId);
       return items.length;
     } catch (error) {
       return null;

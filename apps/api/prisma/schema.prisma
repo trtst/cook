@@ -651,6 +651,8 @@ model User {
   diningEventParticipants   DiningEventParticipant[]   @relation("DiningEventParticipantUser")
   invitedDiningEventParticipants DiningEventParticipant[] @relation("DiningEventParticipantInviter")
   diningEventCookItems      DiningEventMenuItem[]      @relation("DiningEventMenuItemCook")
+  diningEventWishItems      DiningEventWishItem[]      @relation("DiningEventWishItemSuggester")
+  diningEventWishSupports   DiningEventWishSupport[]   @relation("DiningEventWishSupportUser")
   createdDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteCreator")
   acceptedDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteAcceptor")
   diningEventMemoryShares   DiningEventMemoryShare[]   @relation("DiningEventMemoryShareCreator")
@@ -1120,6 +1122,7 @@ model RecipeContentVersion {
   mealPollCandidates      MealPollCandidate[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
   diningEventMenuItems    DiningEventMenuItem[]
+  diningEventWishItems    DiningEventWishItem[]
   uploadAssets            UploadAsset[]
   versionTags             RecipeVersionTag[]
   cookAssistant           RecipeCookAssistant?
@@ -1356,6 +1359,7 @@ model Recipe {
   shoppingSourceItems     ShoppingItem[]           @relation("ShoppingItemSourceRecipe")
   mealPlanDishes          MealPlanDish[]
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
+  diningEventWishItems    DiningEventWishItem[]
   homeTopicItems          HomeTopicItem[]
 
   @@index([ownerId, status, categoryId, sortOrder, id])
@@ -1620,6 +1624,7 @@ model DiningEvent {
   activities   DiningGroupActivity[]
   menuItems    DiningEventMenuItem[]
   participants DiningEventParticipant[]
+  wishItems    DiningEventWishItem[]
   shareInvites DiningEventShareInvite[]
   memoryShares DiningEventMemoryShare[]
 
@@ -1702,6 +1707,45 @@ model DiningEventMemoryShare {
   @@index([createdByUserId, createdAt])
   @@index([diningGroupId, createdAt])
   @@map("dining_event_memory_shares")
+}
+
+model DiningEventWishItem {
+  id                Int      @id @default(autoincrement())
+  diningEventId     Int      @map("dining_event_id")
+  recipeId          Int?     @map("recipe_id")
+  recipeVersionId   Int      @map("recipe_version_id")
+  suggestedByUserId Int      @map("suggested_by_user_id")
+  title             String   @db.VarChar(120)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  diningEvent   DiningEvent           @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+  recipe        Recipe?               @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  recipeVersion RecipeContentVersion  @relation(fields: [recipeVersionId], references: [id])
+  suggestedBy   User                  @relation("DiningEventWishItemSuggester", fields: [suggestedByUserId], references: [id], onDelete: Cascade)
+  supports      DiningEventWishSupport[]
+
+  @@unique([diningEventId, recipeVersionId])
+  @@index([diningEventId, createdAt(sort: Desc)])
+  @@index([suggestedByUserId, createdAt(sort: Desc)])
+  @@index([recipeId])
+  @@index([recipeVersionId])
+  @@map("dining_event_wish_items")
+}
+
+model DiningEventWishSupport {
+  id         Int      @id @default(autoincrement())
+  wishItemId Int      @map("wish_item_id")
+  userId     Int      @map("user_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  wishItem DiningEventWishItem @relation(fields: [wishItemId], references: [id], onDelete: Cascade)
+  user     User                @relation("DiningEventWishSupportUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([wishItemId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([wishItemId, createdAt(sort: Desc)])
+  @@map("dining_event_wish_supports")
 }
 
 model MealPoll {

@@ -1329,6 +1329,7 @@ export interface MyRecipeDetail {
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
   assistant: RecipeAssistantSnapshot | null;
+  planLinks: RecipePlanLinkSummary[];
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
   recommendation: RecipeRecommendationSummary | null;
@@ -1336,6 +1337,15 @@ export interface MyRecipeDetail {
   version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+}
+
+export interface RecipePlanLinkSummary {
+  planItemId: UUID;
+  planDate: string;
+  mealSlot: MealSlot;
+  menuLocked: boolean;
+  status: "PLANNED" | "COMPLETED";
+  hasDiningEvent: boolean;
 }
 
 export type RecipeRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "WITHDRAWN";
@@ -1450,6 +1460,7 @@ export interface InspirationRecipeDetail {
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
   assistant: RecipeAssistantSnapshot | null;
+  planLinks: RecipePlanLinkSummary[];
   likeCount: number;
   collectCount: number;
   ownedRecipeId: UUID | null;
@@ -2088,15 +2099,64 @@ export interface DiningEventParticipantSummary {
   bringRecipeTitle: string | null;
 }
 
+export interface DiningEventWishItemSummary {
+  id: UUID;
+  title: string;
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  coverImageUrl: string | null;
+  supportCount: number;
+  supportedByMe: boolean;
+  suggestedByMe: boolean;
+  inCurrentMenu: boolean;
+}
+
 export type ActivityState = "PENDING" | "DONE" | "EXPIRED";
+export type DiningEventListRole = "ALL" | "ORGANIZER" | "PARTICIPANT";
+export type DiningEventListStage = "TODO" | "ACTIVE" | "DONE";
+export type DiningEventListStageFilter = DiningEventListStage | "ALL";
 export interface DiningEventMenuItemSummary {
   id: UUID;
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
-  cookUserUid: number | null;
-  cookName: string | null;
   version: number;
+}
+
+export interface DiningEventStageCounts {
+  todoCount: number;
+  activeCount: number;
+  doneCount: number;
+}
+
+export interface DiningEventListSummary {
+  id: UUID;
+  planItemId: UUID | null;
+  planDate: string | null;
+  mealSlot: MealSlot | null;
+  title: string;
+  coverImageUrl: string | null;
+  scheduledAt: IsoDateTime;
+  status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  role: Exclude<DiningEventListRole, "ALL">;
+  stage: DiningEventListStage;
+  participantStatus: DiningEventParticipantSummary["status"] | null;
+  organizerUid: number | null;
+  organizerName: string | null;
+  menuPreview: string[];
+  menuCount: number;
+  participantCount: number;
+  acceptedCount: number;
+  bringCount: number;
+}
+
+export interface DiningEventListResponse {
+  items: DiningEventListSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasNext: boolean;
+  stageCounts: DiningEventStageCounts;
 }
 
 export interface DiningEventSummary {
@@ -2117,6 +2177,7 @@ export interface DiningEventSummary {
   shoppingListStatus: "ACTIVE" | "COMPLETED" | "VOIDED" | null;
   menu: RecipeContentSnapshot;
   menuItems: DiningEventMenuItemSummary[];
+  wishItems: DiningEventWishItemSummary[];
   participants: DiningEventParticipantSummary[];
   hasActiveShareLink: boolean;
   shareTokenPath: string | null;
@@ -2139,7 +2200,6 @@ export interface UpdateDiningEventNoteRequest {
 export interface DiningMemoryShareMenuItem {
   title: string;
   coverUrl: string | null;
-  cookName: string | null;
 }
 
 export interface DiningMemoryShareParticipant {
@@ -2163,13 +2223,6 @@ export interface DiningMemoryShareSnapshot extends DiningMemorySharePreview {
   id: UUID;
   diningEventId: UUID;
   sharePath: string;
-}
-
-export interface ClaimCookRequest {
-  operationId: OperationId;
-  expectedVersion: number;
-  menuItemId: UUID;
-  action: "CLAIM" | "RELEASE";
 }
 
 export interface CreateDiningMemoryShareRequest {
