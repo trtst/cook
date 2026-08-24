@@ -869,6 +869,7 @@ POST /meal-plans
 POST /meal-plans/{planItemId}/complete
 POST /meal-plans/{planItemId}/confirm-menu
 POST /meal-plans/{planItemId}/cook-assistant
+GET  /dining-events
 POST /dining-events
 POST /dining-events/{eventId}/memory-shares
 GET  /memory-shares/{shareToken}/preview
@@ -880,7 +881,9 @@ POST /dining-events/{eventId}/share-members
 POST /dining-events/{eventId}/participants/{participantId}/revoke
 POST /dining-events/{eventId}/participants/{participantId}/reinvite
 POST /dining-events/{eventId}/cover
-POST /dining-events/{eventId}/cook
+POST /dining-events/{eventId}/wishes
+POST /dining-events/{eventId}/wishes/{wishItemId}/support
+POST /dining-events/{eventId}/wishes/{wishItemId}/menu
 POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
 POST /dining-events/{eventId}/complete
@@ -1054,8 +1057,6 @@ interface DiningEventMenuItemSummary {
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
-  cookUserUid: number | null;
-  cookName: string | null;
   version: number;
 }
 
@@ -1197,7 +1198,7 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已经完成的餐次不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
 
 详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
 
@@ -1219,6 +1220,27 @@ interface ConfirmMealPlanMenuRequest {
 ```
 
 `POST /meal-plans/{planItemId}/confirm-menu` 只允许计划 owner 调用，要求当前餐次至少已有一道菜，且必须提交最新 `expectedVersion`。成功后服务端把 `MealPlanSummary.menuLocked` 置为 `true`，并同步把当前未结束饭局推进到 `CONFIRMED`。菜单固定后，不再允许通过 `POST /meal-plans` 或 `POST /meal-plans/items` 修改结构性内容，包括换菜、增删、排序和切换菜谱版本；但计划标题、饭局时间、餐次时间展示仍可继续调整。
+
+饭局列表统一走摘要接口：
+
+```ts
+GET /dining-events?page=1&pageSize=20&role=ALL&stage=TODO&planDate=2026-08-24&mealSlot=DINNER
+```
+
+查询参数最小固定为：
+
+```ts
+interface DiningEventListQuery {
+  page?: number;
+  pageSize?: number;
+  role?: "ALL" | "ORGANIZER" | "PARTICIPANT";
+  stage?: "ALL" | "TODO" | "ACTIVE" | "DONE";
+  planDate?: string;
+  mealSlot?: MealSlot;
+}
+```
+
+`GET /dining-events` 只返回当前用户可见的饭局摘要和分页信息，不再允许前端先拉整包 `/meal-plans` 再本地筛饭局、也不应再按列表项逐条补 `GET /dining-events/{eventId}`。`role` 和 `stage` 都由服务端执行筛选；`stage = ALL` 只用于“按某个餐次精确回查当前饭局”这类局部场景。`planDate + mealSlot` 是可选精确过滤条件，当前用于“直接发起饭局”冲突后回查同餐次已存在饭局，避免一次性拉整天或整月所有计划。列表继续按 `page / pageSize` 分页，饭局页触底加载必须直接复用这条分页接口。
 
 `POST /dining-events` 新增“直接发起饭局”最小写入口，请求体固定为：
 
@@ -1989,17 +2011,23 @@ interface UpdateDiningEventCoverRequest {
 
 当前只允许饭局发起人调用；服务端按 `expectedVersion` 防并发覆盖，并把图片固化成饭局公开资源。读取 `GET /dining-events/{eventId}` 时，若当前饭局已有封面图，摘要里的 `coverImageUrl` 返回可直接展示的公开地址；若没有封面图则返回 `null`。
 
-`POST /dining-events/{eventId}/cook` 用于对已确认菜单中的单道菜执行“我来做”认领或释放，请求体只接收：
+`POST /dining-events/{eventId}/wishes` 用于参与人把自己的一道私房菜放进当前饭局的我想吃池，请求体只接收：
 
 ```ts
-interface ClaimCookRequest {
-  expectedVersion: number;
-  menuItemId: UUID;
-  action: "CLAIM" | "RELEASE";
+interface ChooseDiningEventWishRecipeRequest {
+  recipeId: UUID;
 }
 ```
 
-`menuItemId` 必须属于该饭局当前已确认菜单；`CLAIM` 表示当前操作者认领该菜；`RELEASE` 只能释放自己已认领的菜，或由发起人按后续权限规则释放。同一道菜同一时刻只有一位有效认领人；并发冲突返回 `409`。该接口只改写菜级责任人，不改写个人购物、冰箱或菜谱所有权。
+`POST /dining-events/{eventId}/wishes/{wishItemId}/support` 用于参与人附议或取消附议一道现有提议，请求体只接收：
+
+```ts
+interface UpdateDiningEventWishSupportRequest {
+  action: "SUPPORT" | "UNSUPPORT";
+}
+```
+
+`POST /dining-events/{eventId}/wishes/{wishItemId}/menu` 用于饭局发起人把某道我想吃加入本次菜单，不接收额外请求体。`我想吃池` 只作为菜单确认参考，不改写个人购物、冰箱、带菜或菜谱所有权。
 
 `POST /dining-events/{eventId}/bring` 继续用于“我带菜”，不新增并行写路径。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
 
@@ -2018,7 +2046,7 @@ interface CreateDiningMemoryShareRequest {
 2. 只允许当前饭局发起人生成，不给其他参与成员开放代生成路径。
 3. `showParticipants=false` 时公开快照不得返回任何成员摘要。
 4. 每次生成都会固化为新的 `snapshotVersion`，后续饭局改动不会回写到历史快照。
-5. 快照只允许包含 `title / planDate / mealSlot / menuItems(title, coverUrl, cookName) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。
+5. 快照只允许包含 `title / planDate / mealSlot / menuItems(title, coverUrl) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。
 
 `GET /memory-shares/{shareToken}/preview` 是餐桌回忆卡的公开读取路径，无需登录，只返回上述不可变白名单快照；不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
 

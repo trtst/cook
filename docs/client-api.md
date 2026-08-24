@@ -167,14 +167,18 @@ Auth: UserBearerAuth
 
 ## 2. 饭局协作与回忆分享
 
-饭搭子功能已整体下线；当前前台协作入口只保留饭局邀请、参与、带菜、做饭认领和回忆分享，不再提供 `/api/dining-groups*` 或 `/api/dining-group-invites*`。
+饭搭子功能已整体下线；当前前台协作入口只保留饭局邀请、参与、我想吃池、带菜和回忆分享，不再提供 `/api/dining-groups*` 或 `/api/dining-group-invites*`。
 
 ### 2.1 协作与回忆分享
 
 当前饭局协作主链路保留：
 
 ```text
-POST /api/dining-events/{eventId}/cook
+GET  /api/dining-events
+POST /api/dining-events/{eventId}/wishes
+POST /api/dining-events/{eventId}/wishes/{wishItemId}/support
+POST /api/dining-events/{eventId}/wishes/{wishItemId}/menu
+POST /api/dining-events/{eventId}/bring
 POST /api/dining-events/{eventId}/memory-shares
 GET  /api/memory-shares/{shareToken}/preview
 ```
@@ -193,19 +197,47 @@ GET  /api/memory-shares/{shareToken}/preview
 4. 第一版只展示三段：`prepTasks`、`cookTimeline`、`serveTasks`，以及 `summary` 里的总时长/建议开做时间/提醒。
 5. 不在客户端自行拼多道菜步骤，不按 `recipeId` 逐个详情拼装；统一以这个接口结果为准。
 
-#### 我来做
+#### 饭局列表
 
-`POST /api/dining-events/{eventId}/cook` 用于对已确认菜单中的单道菜执行“我来做”认领或释放。请求体：
+`GET /api/dining-events` 用于读取当前用户可见的饭局摘要列表。查询参数：
 
 ```ts
-interface ClaimCookRequest {
-  expectedVersion: number;
-  menuItemId: UUID;
-  action: "CLAIM" | "RELEASE";
+interface DiningEventListQuery {
+  page?: number;
+  pageSize?: number;
+  role?: "ALL" | "ORGANIZER" | "PARTICIPANT";
+  stage?: "ALL" | "TODO" | "ACTIVE" | "DONE";
+  planDate?: string;
+  mealSlot?: MealSlot;
 }
 ```
 
-同一道菜同一时刻只允许一位有效认领人；并发冲突返回 `409`。该接口只改写菜级责任人，不改写购物、库存或菜谱所有权。
+客户端接入约束：
+
+1. 饭局页主列表必须直接走这条接口的服务端分页和筛选，不再先拉 `/api/meal-plans` 再本地筛。
+2. `planDate + mealSlot` 只用于按某一餐精确回查是否已经挂饭局，不用于替代常规分页列表。
+3. 当 `stage = ALL` 时，客户端只能把它用于局部回查，不要把它作为饭局页主 tab 的默认查询。
+4. 饭局页触底加载必须沿用 `page / pageSize / hasNext`，不要再自造前端分页。
+
+#### 我想吃池
+
+`POST /api/dining-events/{eventId}/wishes` 用于参与人从自己的菜谱里选一道菜放进当前饭局的我想吃池。请求体：
+
+```ts
+interface ChooseDiningEventWishRecipeRequest {
+  recipeId: UUID;
+}
+```
+
+`POST /api/dining-events/{eventId}/wishes/{wishItemId}/support` 用于参与人附议或取消附议一道现有提议。请求体：
+
+```ts
+interface UpdateDiningEventWishSupportRequest {
+  action: "SUPPORT" | "UNSUPPORT";
+}
+```
+
+`POST /api/dining-events/{eventId}/wishes/{wishItemId}/menu` 用于发起人把某条提议加入本次菜单，不需要额外请求体。`我想吃池` 只影响菜单确认参考，不进入采购、库存或带菜事实。
 
 #### 餐桌回忆卡快照
 
@@ -235,7 +267,6 @@ interface DiningMemorySharePreview {
   menuItems: Array<{
     title: string;
     coverUrl: string | null;
-    cookName: string | null;
   }>;
   participants: Array<{
     displayName: string;
@@ -411,6 +442,8 @@ interface CreateMealPlanRequestV2 {
 1. `purchaseState = PENDING` 对应“保留但暂不采购”。
 2. 覆盖已有计划时，必须带 `expectedVersion`。
 3. 计划写入只接受完整 `menuItems[]`，不再存在裸菜谱 ID 输入。
+4. 计划页“添加计划”允许对当前选中日期 + 餐次发送 `menuItems = []`，先建一条空白计划；若该餐次已有计划，则应直接打开已有计划，不重复发空白新建。
+5. 随机页和详情页调整菜单时，仍必须提交至少一道菜，不允许用空数组清空已有菜单。
 
 #### 缺口写入购物
 
