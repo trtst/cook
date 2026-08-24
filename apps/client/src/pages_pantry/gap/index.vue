@@ -111,56 +111,26 @@
 
     <button v-if="sessionStore.isLoggedIn" class="shopping-fab" @click="goShoppingList">采购清单</button>
 
-    <SheetShell
+    <ShoppingTargetSheet
       :visible="targetSheetVisible"
       title="加入采购清单"
       :subtitle="sheetSubtitle"
+      :meta-title="pendingGapItem?.name || ''"
+      :meta-text="pendingGapItem?.sectionTitle || ''"
+      :create-mode="shoppingCreateMode"
+      :creating="shoppingCreatingList"
+      :create-disabled="shoppingCreateDisabled"
+      :create-name="newListName"
+      :items="activeLists"
+      :selected-id="selectedListId"
+      hide-selected-state-when-creating
+      @toggle-create="toggleCreateMode"
+      @select="selectActiveList"
+      @create="createShoppingList"
+      @update:create-name="newListName = $event"
       @close="closeTargetSheet"
       @after-close="resetTargetSheet"
     >
-      <view v-if="pendingGapItem" class="sheet-meta">
-        <text class="sheet-meta__title">{{ pendingGapItem.name }}</text>
-        <text class="sheet-meta__text">{{ pendingGapItem.sectionTitle }}</text>
-      </view>
-
-      <view class="sheet-section">
-        <view class="sheet-section__head">
-          <text class="sheet-section__title">目标清单</text>
-          <text class="sheet-section__action" @click="toggleCreateMode">{{ shoppingCreateMode ? "取消创建" : "创建清单" }}</text>
-        </view>
-
-        <view v-if="shoppingCreateMode" class="sheet-create-row">
-          <input
-            v-model="newListName"
-            class="sheet-input sheet-input--grow"
-            maxlength="20"
-            placeholder="输入新清单名"
-          />
-          <view
-            class="sheet-create-button"
-            :class="{ 'sheet-create-button--disabled': shoppingCreateDisabled }"
-            @click="createShoppingList"
-          >
-            {{ shoppingCreatingList ? "创建中..." : "创建" }}
-          </view>
-        </view>
-
-        <view v-if="activeLists.length" class="sheet-option-list">
-          <view
-            v-for="list in activeLists"
-            :key="list.id"
-            class="sheet-option"
-            :class="{ 'sheet-option--active': !shoppingCreateMode && selectedListId === list.id }"
-            @click="selectActiveList(list.id)"
-          >
-            <view class="sheet-option__main">
-              <text class="sheet-option__title">{{ list.name }}</text>
-              <text class="sheet-option__meta">剩余 {{ Math.max(list.progressTotalCount - list.progressDoneCount, 0) }} 项待处理</text>
-            </view>
-          </view>
-        </view>
-      </view>
-
       <template #footer>
         <view class="sheet-actions">
           <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeTargetSheet">取消</button>
@@ -169,7 +139,7 @@
           </button>
         </view>
       </template>
-    </SheetShell>
+    </ShoppingTargetSheet>
   </Layout>
 </template>
 
@@ -179,8 +149,8 @@ import { computed, ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
+import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
-import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -758,48 +728,6 @@ defineExpose({
   padding: 0 0 10rpx;
 }
 
-.sheet-meta__title {
-  color: var(--color-text);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-heavy);
-}
-
-.sheet-meta__text {
-  margin-top: 8rpx;
-}
-
-.sheet-section + .sheet-section {
-  margin-top: 24rpx;
-}
-
-.sheet-section__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-}
-
-.sheet-section__title,
-.sheet-option__title {
-  color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-heavy);
-}
-
-.sheet-section__action,
-.sheet-create-button {
-  color: #83511b;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
-}
-
-.sheet-create-row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  margin-top: 18rpx;
-}
-
 .sheet-input {
   width: 100%;
   min-height: 88rpx;
@@ -813,39 +741,6 @@ defineExpose({
 
 .sheet-input--grow {
   flex: 1;
-}
-
-.sheet-create-button {
-  min-width: 112rpx;
-  text-align: center;
-}
-
-.sheet-create-button--disabled {
-  opacity: 0.45;
-}
-
-.sheet-option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-  margin-top: 18rpx;
-}
-
-.sheet-option {
-  padding: 22rpx 24rpx;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-muted);
-}
-
-.sheet-option--active {
-  background: rgba(234, 245, 237, 0.96);
-  box-shadow: inset 0 0 0 2rpx rgba(47, 111, 78, 0.18);
-}
-
-.sheet-option__meta {
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
 }
 
 .sheet-actions {

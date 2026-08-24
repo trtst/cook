@@ -42,126 +42,131 @@
               <text class="empty-state__title">{{ emptyTitle }}</text>
               <text class="empty-state__desc">{{ emptyDesc }}</text>
             </view>
-            <view v-else class="recommend-list">
-              <view v-if="errorText" class="inline-notice" @click="loadPage()">
-                <text>{{ errorText }}</text>
-                <text class="inline-notice__action">重试</text>
-              </view>
+            <view v-else class="recommend-list-shell">
+              <view class="recommend-list">
+                <view v-if="errorText" class="inline-notice" @click="loadPage()">
+                  <text>{{ errorText }}</text>
+                  <text class="inline-notice__action">重试</text>
+                </view>
 
-              <template v-if="isRecommendType">
-                <template v-for="item in recommendationItems" :key="`${item.kind}-${item.id}`">
-                  <view v-if="item.kind === 'ingredient'" class="recommend-card">
+                <template v-if="isRecommendType">
+                  <template v-for="item in recommendationItems" :key="`${item.kind}-${item.id}`">
+                    <view v-if="item.kind === 'ingredient'" class="recommend-card">
+                      <view class="recommend-card__head">
+                        <view class="recommend-card__head-main">
+                          <text class="recommend-card__name">{{ item.ingredientName }}</text>
+                          <text class="recommend-card__meta">{{ item.category.name }} · {{ item.defaultUnit.name }}</text>
+                        </view>
+                        <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
+                          {{ statusText(item.status) }}
+                        </text>
+                      </view>
+
+                      <text class="recommend-card__time">推荐时间 {{ formatDetailTime(item.createdAt) }}</text>
+
+                      <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
+                      <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
+                        <text class="recommend-card__desc">
+                          {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
+                        </text>
+                        <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+                      </view>
+                      <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
+                        已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
+                      </text>
+                      <text v-else class="recommend-card__desc">
+                        已归并到现有系统食材{{ item.mergedIngredient ? `：${item.mergedIngredient.name}` : "" }}
+                      </text>
+
+                      <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
+                        <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
+                      </view>
+                    </view>
+
+                    <view v-else class="recommend-card">
+                      <view class="recommend-card__head">
+                        <view class="recommend-card__head-main">
+                          <text class="recommend-card__name">{{ item.unitName }}</text>
+                          <text class="recommend-card__meta">{{ unitTypeText(item.unitType) }}</text>
+                        </view>
+                        <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
+                          {{ statusText(item.status) }}
+                        </text>
+                      </view>
+
+                      <text class="recommend-card__time">提交时间 {{ formatDetailTime(item.createdAt) }}</text>
+
+                      <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，审核通过后会进入系统单位。</text>
+                      <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
+                        <text class="recommend-card__desc">
+                          {{ item.reviewNote || "审核未通过，可换成更准确、常用的单位后再提交。" }}
+                        </text>
+                        <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+                      </view>
+                      <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
+                        已收录为系统单位{{ item.targetUnit ? `：${item.targetUnit.name}` : "" }}
+                      </text>
+                      <text v-else class="recommend-card__desc">
+                        已归并到现有系统单位{{ item.targetUnit ? `：${item.targetUnit.name}` : "" }}
+                      </text>
+                    </view>
+                  </template>
+                </template>
+
+                <template v-else>
+                  <view
+                    v-for="item in visibleInviteItems"
+                    :key="item.id"
+                    class="recommend-card invite-card"
+                    :class="{ 'invite-card--pending': item.inviteStatus === 'PENDING' }"
+                    hover-class="recommend-card--hover"
+                    hover-stay-time="100"
+                  >
                     <view class="recommend-card__head">
                       <view class="recommend-card__head-main">
-                        <text class="recommend-card__name">{{ item.ingredientName }}</text>
-                        <text class="recommend-card__meta">{{ item.category.name }} · {{ item.defaultUnit.name }}</text>
+                        <text class="recommend-card__eyebrow">{{ inviteOwnerLine(item) }}</text>
+                        <text class="recommend-card__name">{{ item.name }}</text>
                       </view>
-                      <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
-                        {{ statusText(item.status) }}
-                      </text>
-                    </view>
-
-                    <text class="recommend-card__time">推荐时间 {{ formatDetailTime(item.createdAt) }}</text>
-
-                    <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，当前仍可在菜谱编辑里继续使用这份个人食材。</text>
-                    <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
-                      <text class="recommend-card__desc">
-                        {{ item.reviewNote || "审核未通过，可修改名称、分类或默认单位后重新推荐。" }}
-                      </text>
-                      <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
-                    </view>
-                    <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
-                      已收录为系统食材{{ item.adoptedIngredient ? `：${item.adoptedIngredient.name}` : "" }}
-                    </text>
-                    <text v-else class="recommend-card__desc">
-                      已归并到现有系统食材{{ item.mergedIngredient ? `：${item.mergedIngredient.name}` : "" }}
-                    </text>
-
-                    <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
-                      <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
-                    </view>
-                  </view>
-
-                  <view v-else class="recommend-card">
-                    <view class="recommend-card__head">
-                      <view class="recommend-card__head-main">
-                        <text class="recommend-card__name">{{ item.unitName }}</text>
-                        <text class="recommend-card__meta">{{ unitTypeText(item.unitType) }}</text>
+                      <view class="recommend-card__time-box">
+                        <text class="recommend-card__time-label">{{ inviteTimeLabel(item) }}</text>
+                        <text class="recommend-card__time-value">{{ formatDetailTime(invitePrimaryTime(item)) }}</text>
                       </view>
-                      <text class="recommend-card__status" :class="`recommend-card__status--${statusTone(item.status)}`">
-                        {{ statusText(item.status) }}
-                      </text>
                     </view>
 
-                    <text class="recommend-card__time">提交时间 {{ formatDetailTime(item.createdAt) }}</text>
-
-                    <text v-if="item.status === 'PENDING'" class="recommend-card__desc">等待审核中，审核通过后会进入系统单位。</text>
-                    <view v-else-if="item.status === 'REJECTED'" class="recommend-card__reject">
-                      <text class="recommend-card__desc">
-                        {{ item.reviewNote || "审核未通过，可换成更准确、常用的单位后再提交。" }}
+                    <view class="recommend-card__summary">
+                      <text class="recommend-card__status" :class="`recommend-card__status--${inviteStatusTone(item)}`">
+                        {{ inviteStatusText(item) }}
                       </text>
-                      <text v-if="item.reviewAdvice" class="recommend-card__advice">建议：{{ item.reviewAdvice }}</text>
+                      <text class="recommend-card__summary-text">{{ item.memberCount }}/{{ item.memberLimit }} 人协作</text>
+                      <text class="recommend-card__summary-dot" />
+                      <text class="recommend-card__summary-text">{{ item.itemCount }} 个食材项</text>
                     </view>
-                    <text v-else-if="item.status === 'ADOPTED'" class="recommend-card__desc">
-                      已收录为系统单位{{ item.targetUnit ? `：${item.targetUnit.name}` : "" }}
-                    </text>
-                    <text v-else class="recommend-card__desc">
-                      已归并到现有系统单位{{ item.targetUnit ? `：${item.targetUnit.name}` : "" }}
-                    </text>
+
+                    <text class="recommend-card__desc">{{ inviteDesc(item) }}</text>
+
+                    <view v-if="showInviteActions(item)" class="recommend-card__actions">
+                      <button class="editor-button invite-card__button invite-card__button--cancel" :disabled="inviteSubmittingId === item.id" @click.stop="declineInvite(item)">
+                        忽略邀请
+                      </button>
+                      <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id || !item.canJoin" @click.stop="acceptInvite(item)">
+                        {{ item.canJoin ? "确认邀请" : "当前不可加入" }}
+                      </button>
+                    </view>
+                    <view v-else-if="item.inviteStatus === 'ACCEPTED'" class="recommend-card__actions">
+                      <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id" @click.stop="openInviteList(item)">查看清单</button>
+                    </view>
                   </view>
                 </template>
-              </template>
-
-              <template v-else>
-                <view
-                  v-for="item in visibleInviteItems"
-                  :key="item.id"
-                  class="recommend-card invite-card"
-                  :class="{ 'invite-card--pending': item.inviteStatus === 'PENDING' }"
-                  hover-class="recommend-card--hover"
-                  hover-stay-time="100"
-                >
-                  <view class="recommend-card__head">
-                    <view class="recommend-card__head-main">
-                      <text class="recommend-card__eyebrow">{{ inviteOwnerLine(item) }}</text>
-                      <text class="recommend-card__name">{{ item.name }}</text>
-                    </view>
-                    <view class="recommend-card__time-box">
-                      <text class="recommend-card__time-label">{{ inviteTimeLabel(item) }}</text>
-                      <text class="recommend-card__time-value">{{ formatDetailTime(invitePrimaryTime(item)) }}</text>
-                    </view>
-                  </view>
-
-                  <view class="recommend-card__summary">
-                    <text class="recommend-card__status" :class="`recommend-card__status--${inviteStatusTone(item)}`">
-                      {{ inviteStatusText(item) }}
-                    </text>
-                    <text class="recommend-card__summary-text">{{ item.memberCount }}/{{ item.memberLimit }} 人协作</text>
-                    <text class="recommend-card__summary-dot" />
-                    <text class="recommend-card__summary-text">{{ item.itemCount }} 个食材项</text>
-                  </view>
-
-                  <text class="recommend-card__desc">{{ inviteDesc(item) }}</text>
-
-                  <view v-if="showInviteActions(item)" class="recommend-card__actions">
-                    <button class="editor-button invite-card__button invite-card__button--cancel" :disabled="inviteSubmittingId === item.id" @click.stop="declineInvite(item)">
-                      忽略邀请
-                    </button>
-                    <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id || !item.canJoin" @click.stop="acceptInvite(item)">
-                      {{ item.canJoin ? "确认邀请" : "当前不可加入" }}
-                    </button>
-                  </view>
-                  <view v-else-if="item.inviteStatus === 'ACCEPTED'" class="recommend-card__actions">
-                    <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id" @click.stop="openInviteList(item)">查看清单</button>
-                  </view>
-                </view>
-              </template>
-
-              <view v-if="showFooter" class="recommend-footer">
-                <text v-if="loadingMore" class="recommend-footer__text">加载中...</text>
-                <text v-else-if="canLoadMore" class="recommend-footer__action" @click="loadMore">上拉加载更多</text>
-                <text v-else class="recommend-footer__text">没有更多了</text>
               </view>
+
+              <LoadMore
+                v-if="showFooter"
+                :loading="loadingMore"
+                :has-next="canLoadMore"
+                :show-done="loadedMoreOnceMap[typeKey] && !canLoadMore"
+                action-mode="tap"
+                @click="loadMore"
+              />
             </view>
           </view>
         </scroll-view>
@@ -242,6 +247,7 @@ import {
 import type { UUID } from "@/apis/http";
 import { shoppingApi, type ShoppingListInviteSummary } from "../apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
+import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -332,6 +338,10 @@ const currentItems = computed(() => (isRecommendType.value ? recommendationItems
 const recommendHasMore = computed(() => hasNext.value || unitHasNext.value);
 const inviteHasMore = computed(() => visibleInviteCount.value < sortedInviteItems.value.length);
 const canLoadMore = computed(() => (isRecommendType.value ? recommendHasMore.value : inviteHasMore.value));
+const loadedMoreOnceMap = ref<Record<MessageTypeKey, boolean>>({
+  recommend: false,
+  shoppingInvite: false
+});
 const showFooter = computed(() => currentItems.value.length > 0);
 const emptyTitle = computed(() => (isRecommendType.value ? "还没有审核通知" : "还没有协作通知"));
 const emptyDesc = computed(() =>
@@ -396,7 +406,11 @@ async function loadMore() {
   if (!canLoadMore.value || loading.value || loadingMore.value) return;
 
   if (!isRecommendType.value) {
-    visibleInviteCount.value = Math.min(visibleInviteCount.value + pageSize.value, sortedInviteItems.value.length);
+    const nextCount = Math.min(visibleInviteCount.value + pageSize.value, sortedInviteItems.value.length);
+    if (nextCount > visibleInviteCount.value) {
+      loadedMoreOnceMap.value.shoppingInvite = true;
+    }
+    visibleInviteCount.value = nextCount;
     return;
   }
 
@@ -407,6 +421,7 @@ async function doLoadPage(reset: boolean) {
   if (reset) {
     loading.value = true;
     errorText.value = "";
+    loadedMoreOnceMap.value[typeKey.value] = false;
   } else {
     loadingMore.value = true;
   }
@@ -429,6 +444,9 @@ async function doLoadPage(reset: boolean) {
       page.value = ingredientResult.page;
       hasNext.value = ingredientResult.hasNext;
       ingredientItems.value = reset ? ingredientResult.items : [...ingredientItems.value, ...ingredientResult.items];
+      if (!reset && ingredientResult.items.length > 0) {
+        loadedMoreOnceMap.value.recommend = true;
+      }
     } else if (reset) {
       page.value = 1;
       hasNext.value = false;
@@ -439,6 +457,9 @@ async function doLoadPage(reset: boolean) {
       unitPage.value = unitResult.page;
       unitHasNext.value = unitResult.hasNext;
       unitItems.value = reset ? unitResult.items : [...unitItems.value, ...unitResult.items];
+      if (!reset && unitResult.items.length > 0) {
+        loadedMoreOnceMap.value.recommend = true;
+      }
     } else if (reset) {
       unitPage.value = 1;
       unitHasNext.value = false;
@@ -803,8 +824,7 @@ defineExpose({
 }
 
 .notice--error,
-.inline-notice__action,
-.recommend-footer__action {
+.inline-notice__action {
   color: var(--color-primary);
 }
 
@@ -842,9 +862,7 @@ defineExpose({
 .recommend-card__time,
 .recommend-card__desc,
 .inline-notice,
-.recommend-card__advice,
-.recommend-footer__text,
-.recommend-footer__action {
+.recommend-card__advice {
   color: #8d97b5;
   font-size: 24rpx;
   line-height: 1.6;
@@ -853,6 +871,12 @@ defineExpose({
 .empty-state__desc {
   display: block;
   margin-top: 12rpx;
+}
+
+.recommend-list-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
 .recommend-list {
@@ -1037,11 +1061,6 @@ defineExpose({
   );
   color: var(--button-primary-text);
   box-shadow: var(--button-primary-shadow);
-}
-
-.recommend-footer {
-  padding-bottom: 8rpx;
-  text-align: center;
 }
 
 .editor-mask {

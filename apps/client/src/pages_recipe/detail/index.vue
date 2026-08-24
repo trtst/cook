@@ -89,20 +89,6 @@
 		                </view>
 		              </view>
 
-                  <view
-                    v-if="plannedMealTarget"
-                    class="planned-meal-entry"
-                    hover-class="planned-meal-entry--hover"
-                    hover-stay-time="100"
-                    @click="openPlannedMealTarget"
-                  >
-                    <view class="planned-meal-entry__main">
-                      <text class="planned-meal-entry__label">已安排到</text>
-                      <text class="planned-meal-entry__value">{{ plannedMealText }}</text>
-                    </view>
-                    <text class="planned-meal-entry__action">查看这顿餐次</text>
-                  </view>
-
 	            </view>
 
               <view id="detail-ingredients" class="section" :class="{ 'section--first': !showNutritionSection }">
@@ -161,7 +147,12 @@
                 <view v-if="visibleNutritionMetrics.length" class="nutrition-grid">
                   <view v-for="metric in visibleNutritionMetrics" :key="metric.key" class="nutrition-card">
                     <text class="nutrition-card__label">{{ metric.label }}</text>
-                    <text class="nutrition-card__value">{{ formatNutritionValue(metric.value, metric.unit) }}</text>
+                    <text class="nutrition-card__dot">·</text>
+                    <text v-if="hasNutritionValue(metric.value)" class="nutrition-card__amount">
+                      <text class="nutrition-card__value">{{ formatNutritionNumber(metric.value) }}</text>
+                      <text class="nutrition-card__unit">{{ metric.unit }}</text>
+                    </text>
+                    <text v-else class="nutrition-card__empty">暂缺</text>
                   </view>
                 </view>
                 <text v-else class="section__empty">暂无营养估算</text>
@@ -192,6 +183,29 @@
 	              <text class="tips-text">{{ detailContent.tips }}</text>
 	            </view>
 
+              <view v-if="primaryPlanLink" class="section section--plan-links">
+                <view class="section__head">
+                  <text class="section__label">做饭安排</text>
+                  <text
+                    class="section__link"
+                    hover-class="section__link--hover"
+                    hover-stay-time="100"
+                    @click="openPlanLinksSheet"
+                  >
+                    查看全部
+                  </text>
+                </view>
+                <view
+                  class="plan-link-entry"
+                  hover-class="plan-link-entry--hover"
+                  hover-stay-time="100"
+                  @click="openPlanLinksSheet"
+                >
+                  <text class="plan-link-entry__title">{{ primaryPlanText }}</text>
+                  <text class="plan-link-entry__count">{{ planLinkCountText }}</text>
+                </view>
+              </view>
+
               <text v-if="curatedText" class="detail-curated">{{ curatedText }}</text>
 
 	              <view v-if="showStickyActions" class="detail-inline-actions">
@@ -219,7 +233,7 @@
 	                      <view class="detail-inline-actions__text">编辑</view>
 	                </button>
                   <button
-                    v-if="showRecommendEntry && !detailActionsVisible"
+                    v-if="showRecommendEntry"
                     class="detail-inline-actions__item detail-inline-actions__item--recommend"
                     :class="{ 'detail-inline-actions__item--disabled': isRecommendReadonly }"
                     @click="handleRecommendAction"
@@ -263,15 +277,6 @@
             </button>
           </template>
           <template v-else-if="isOwnedDetail">
-            <button
-              v-if="showRecommendEntry"
-              class="detail-actions__item detail-actions__item--recommend"
-              :class="{ 'detail-actions__item--disabled': isRecommendReadonly }"
-              @click="handleRecommendAction"
-            >
-              <view class="cookfont icon-recommend detail-actions__icon" />
-              <view class="detail-actions__text">{{ recommendActionLabel }}</view>
-            </button>
             <button class="detail-actions__item" @click="handleAddPlan">
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">添加</view>
@@ -279,6 +284,36 @@
           </template>
         </view>
       </view>
+
+      <SheetShell
+        :visible="planLinksSheetVisible"
+        title="做饭安排"
+        :subtitle="planLinksSheetSubtitle"
+        @close="closePlanLinksSheet"
+      >
+        <view class="sheet-section">
+          <view v-if="recipePlanLinks.length" class="plan-link-list">
+            <view
+              v-for="item in recipePlanLinks"
+              :key="item.planItemId"
+              class="plan-link-row"
+              hover-class="plan-link-row--hover"
+              hover-stay-time="100"
+              @click="openPlanLink(item)"
+            >
+              <view class="plan-link-row__main">
+                <view class="plan-link-row__head">
+                  <text class="plan-link-row__title">{{ formatRecipePlanLink(item) }}</text>
+                  <text class="plan-link-row__tag">{{ resolveRecipePlanLinkState(item) }}</text>
+                </view>
+                <text class="plan-link-row__meta">{{ item.status === "COMPLETED" ? "这次计划已完成" : item.menuLocked ? "菜单已固定" : "还可以继续改菜单" }}</text>
+              </view>
+              <text class="cookfont icon-arrow-right plan-link-row__icon" />
+            </view>
+          </view>
+          <text v-else class="sheet-section__hint">这道菜还没有安排到任何餐次。</text>
+        </view>
+      </SheetShell>
 
       <SheetShell
         v-if="kind === 'my'"
@@ -339,58 +374,22 @@
         @success="handlePlanSuccess"
       />
 
-      <SheetShell
+      <ShoppingListPickerSheet
         :visible="shoppingSheetVisible"
-        title="加入采购清单"
-        subtitle="先选一张采购中的清单，也可以现场新建空白清单。"
+        :loading="shoppingListLoading"
+        :error-text="shoppingListError"
+        :items="shoppingLists"
+        :selected-id="selectedShoppingListId"
+        :create-name="shoppingCreateName"
+        :submitting="shoppingSubmitting"
         @close="closeShoppingSheet"
         @after-close="handleShoppingSheetAfterClose"
-      >
-        <view class="sheet-section">
-          <text class="sheet-section__title">采购中清单</text>
-          <view v-if="shoppingListLoading" class="panel-note panel-note--sheet">加载中...</view>
-          <view v-else-if="shoppingListError" class="panel-note panel-note--sheet" @click="loadShoppingLists(true)">{{ shoppingListError }}</view>
-          <view v-else-if="shoppingLists.length" class="shopping-list-grid">
-            <view
-              v-for="item in shoppingLists"
-              :key="item.id"
-              class="shopping-list-option"
-              :class="{ 'shopping-list-option--active': selectedShoppingListId === item.id }"
-              @click="selectedShoppingListId = item.id"
-            >
-              <text class="shopping-list-option__title">{{ item.name }}</text>
-              <text class="shopping-list-option__meta">{{ item.progressDoneCount }}/{{ item.progressTotalCount }} · {{ item.memberCount }} 人</text>
-            </view>
-          </view>
-          <text v-else class="sheet-section__hint">还没有采购中的清单，先新建一张空白清单。</text>
-        </view>
-
-        <view class="sheet-section">
-          <text class="sheet-section__title">新建空白清单</text>
-          <view class="shopping-create">
-            <input
-              v-model="shoppingCreateName"
-              class="shopping-create__input"
-              maxlength="30"
-              placeholder="清单名可不填，系统会自动生成"
-            />
-            <view class="shopping-create__button" @click="createShoppingList">新建</view>
-          </view>
-        </view>
-
-        <template #footer>
-          <view class="sheet-actions">
-            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeShoppingSheet">取消</button>
-            <button
-              class="sheet-actions__button sheet-actions__button--confirm"
-              :disabled="shoppingSubmitting || !selectedShoppingListId"
-              @click="confirmAddToShoppingList"
-            >
-              {{ shoppingSubmitting ? "加入中..." : "确认加入" }}
-            </button>
-          </view>
-        </template>
-      </SheetShell>
+        @retry="loadShoppingLists(true)"
+        @create="createShoppingList"
+        @confirm="confirmAddToShoppingList"
+        @update:selected-id="selectedShoppingListId = $event"
+        @update:create-name="shoppingCreateName = $event"
+      />
 
       <SheetShell
         v-if="isExternalDetail"
@@ -436,6 +435,7 @@ import {
   type InspirationCategorySummary,
   type InspirationRecipeDetail,
   type MyRecipeDetail,
+  type RecipePlanLinkSummary,
   type RecipeAmountSnapshot,
   type RecipeContentSnapshot,
   type RecipeNutritionSummary,
@@ -446,6 +446,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
+import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -525,6 +526,7 @@ const reportReason = ref("");
 const reportSheetVisible = ref(false);
 const privateSheetVisible = ref(false);
 const planSheetVisible = ref(false);
+const planLinksSheetVisible = ref(false);
 const recommendSheetVisible = ref(false);
 const selectedReportReason = ref<ReportReasonOption["value"] | "">("");
 const recommendSheetLoading = ref(false);
@@ -538,7 +540,6 @@ const shoppingLists = ref<import("@/apis/shopping").ShoppingListSummary[]>([]);
 const selectedShoppingListId = ref<UUID | "">("");
 const shoppingCreateName = ref("");
 const nutritionView = ref<"perServing" | "perRecipe">("perServing");
-const plannedMealTarget = ref<{ planItemId: UUID; planDate: string; mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT" } | null>(null);
 const recommendCategories = ref<InspirationCategorySummary[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
 const navOpacity = ref(0);
@@ -572,12 +573,6 @@ const myDetail = computed(() => {
 });
 
 const detailTitle = computed(() => detail.value?.title || "");
-const plannedMealText = computed(() => {
-  if (!plannedMealTarget.value) return "";
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(plannedMealTarget.value.planDate);
-  const dateText = match ? `${Number(match[2])}月${Number(match[3])}日` : plannedMealTarget.value.planDate;
-  return `${dateText} · ${formatMealSlot(plannedMealTarget.value.mealSlot)}`;
-});
 const coverImageUrl = computed(() =>
   resolveCoverImageUrl(previewDetail.value?.coverImageUrl || publishedDetail.value?.coverImageUrl || "")
 );
@@ -680,7 +675,8 @@ const detailActionsVisible = computed(
     scrollTop.value > DETAIL_ACTIONS_SHOW_OFFSET &&
 		!reportSheetVisible.value &&
 		!recommendSheetVisible.value &&
-		!privateSheetVisible.value
+		!privateSheetVisible.value &&
+    !planLinksSheetVisible.value
 );
 const showShoppingEntry = computed(() => mode.value === "published" && detailContent.value.ingredients.length > 0);
 const detailFactText = computed(() => {
@@ -702,6 +698,18 @@ const detailDurationText = computed(() => {
   const serverText =
     mode.value === "published" && detail.value && "durationText" in detail.value ? detail.value.durationText : null;
   return serverText || recipeDurationText(detailContent.value.duration);
+});
+const recipePlanLinks = computed<RecipePlanLinkSummary[]>(() => {
+  if (mode.value !== "published" || !publishedDetail.value?.planLinks?.length) return [];
+  return sortRecipePlanLinks(publishedDetail.value.planLinks);
+});
+const primaryPlanLink = computed(() => recipePlanLinks.value[0] ?? null);
+const primaryPlanText = computed(() => (primaryPlanLink.value ? formatRecipePlanLink(primaryPlanLink.value) : ""));
+const planLinkCountText = computed(() => `共 ${recipePlanLinks.value.length} 个安排`);
+const planLinksSheetSubtitle = computed(() => {
+  if (!recipePlanLinks.value.length) return "这道菜还没有安排到任何餐次。";
+  if (recipePlanLinks.value.length === 1) return "这道菜当前安排在以下餐次。";
+  return `这道菜当前安排在 ${recipePlanLinks.value.length} 个餐次里。`;
 });
 const nutritionCaption = computed(() =>
   nutritionView.value === "perRecipe" ? "整份营养为估算值，仅供参考" : "单份营养为估算值，仅供参考"
@@ -770,8 +778,8 @@ function hasStepText(value: string | null | undefined) {
   return Boolean(value?.trim());
 }
 
-watch([reportSheetVisible, recommendSheetVisible, privateSheetVisible, planSheetVisible], ([reportVisible, recommendVisible, privateVisible, planVisible]) => {
-	setPageLocked(reportVisible || recommendVisible || privateVisible || planVisible);
+watch([reportSheetVisible, recommendSheetVisible, privateSheetVisible, planSheetVisible, planLinksSheetVisible], ([reportVisible, recommendVisible, privateVisible, planVisible, linksVisible]) => {
+	setPageLocked(reportVisible || recommendVisible || privateVisible || planVisible || linksVisible);
 }, { immediate: true });
 
 watch(
@@ -1037,22 +1045,40 @@ function handlePlanSuccess(payload: {
   planDate: string;
   mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
 }) {
-  plannedMealTarget.value = {
+  const nextLink: RecipePlanLinkSummary = {
     planItemId: payload.planItemId,
     planDate: payload.planDate,
-    mealSlot: payload.mealSlot
+    mealSlot: payload.mealSlot,
+    menuLocked: false,
+    status: "PLANNED",
+    hasDiningEvent: false
   };
+  syncDetailPlanLinks(nextLink);
   if (kind.value !== "inspiration" || !payload.addedToPrivate || !inspirationDetail.value) return;
-  inspirationDetail.value.ownedRecipeId = payload.recipeId;
+  detail.value = {
+    ...inspirationDetail.value,
+    ownedRecipeId: payload.recipeId,
+    planLinks: mergeRecipePlanLinks(inspirationDetail.value.planLinks, nextLink)
+  };
   markRecipeHomeDirty(["my"]);
   markRecipeManageDirty(["recipes"]);
 }
 
-function openPlannedMealTarget() {
-  if (!plannedMealTarget.value) return;
+function openPlanLink(link: RecipePlanLinkSummary | null | undefined) {
+  if (!link) return;
+  planLinksSheetVisible.value = false;
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(plannedMealTarget.value.planItemId))}&planDate=${encodeURIComponent(plannedMealTarget.value.planDate)}`
+    `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(link.planItemId))}&planDate=${encodeURIComponent(link.planDate)}`
   );
+}
+
+function openPlanLinksSheet() {
+  if (!recipePlanLinks.value.length) return;
+  planLinksSheetVisible.value = true;
+}
+
+function closePlanLinksSheet() {
+  planLinksSheetVisible.value = false;
 }
 
 function handlePrivateSuccess(recipeId: UUID) {
@@ -1324,10 +1350,70 @@ function buildNutritionMetrics(metrics: NonNullable<RecipeNutritionSummary["perS
   ];
 }
 
-function formatNutritionValue(value: number | null, unit: string) {
-  if (value === null || !Number.isFinite(value)) return "暂缺";
-  const normalized = Number.isInteger(value) ? String(value) : value.toFixed(1);
-  return `${normalized}${unit}`;
+function currentDateText() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function mealSlotRank(slot: RecipePlanLinkSummary["mealSlot"]) {
+  if (slot === "BREAKFAST") return 0;
+  if (slot === "LUNCH") return 1;
+  if (slot === "AFTERNOON_TEA") return 2;
+  if (slot === "DINNER") return 3;
+  return 4;
+}
+
+function sortRecipePlanLinks(links: RecipePlanLinkSummary[]) {
+  const today = currentDateText();
+  return [...links].sort((left, right) => {
+    const leftActive = left.status !== "COMPLETED" && left.planDate >= today;
+    const rightActive = right.status !== "COMPLETED" && right.planDate >= today;
+    if (leftActive !== rightActive) return leftActive ? -1 : 1;
+    if (leftActive) {
+      if (left.planDate !== right.planDate) return left.planDate.localeCompare(right.planDate);
+      return mealSlotRank(left.mealSlot) - mealSlotRank(right.mealSlot);
+    }
+    if (left.planDate !== right.planDate) return right.planDate.localeCompare(left.planDate);
+    return mealSlotRank(right.mealSlot) - mealSlotRank(left.mealSlot);
+  });
+}
+
+function mergeRecipePlanLinks(current: RecipePlanLinkSummary[] | null | undefined, next: RecipePlanLinkSummary) {
+  const merged = (current ?? []).filter(item => item.planItemId !== next.planItemId);
+  merged.unshift(next);
+  return sortRecipePlanLinks(merged);
+}
+
+function formatRecipePlanLink(link: RecipePlanLinkSummary) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(link.planDate);
+  const dateText = match ? `${Number(match[2])}月${Number(match[3])}日` : link.planDate;
+  return `${dateText} · ${formatMealSlot(link.mealSlot)}`;
+}
+
+function resolveRecipePlanLinkState(link: RecipePlanLinkSummary) {
+  if (link.status === "COMPLETED") return "已完成";
+  if (link.menuLocked) return "菜单已确认";
+  return "待确认菜单";
+}
+
+function syncDetailPlanLinks(nextLink: RecipePlanLinkSummary) {
+  if (!publishedDetail.value) return;
+  detail.value = {
+    ...publishedDetail.value,
+    planLinks: mergeRecipePlanLinks(publishedDetail.value.planLinks, nextLink)
+  };
+}
+
+function hasNutritionValue(value: number | null): value is number {
+  return value !== null && Number.isFinite(value);
+}
+
+function formatNutritionNumber(value: number | null) {
+  if (!hasNutritionValue(value)) return "暂缺";
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -1345,6 +1431,8 @@ function automatorReadState() {
     loading: loading.value,
     errorText: errorText.value,
     title: detailTitle.value,
+    planLinkCount: recipePlanLinks.value.length,
+    primaryPlanText: primaryPlanText.value,
     recommendationStatus: currentRecommendation.value?.status ?? null,
     recommendActionLabel: recommendActionLabel.value,
     recommendSheetVisible: recommendSheetVisible.value,
@@ -1697,48 +1785,6 @@ defineExpose({
   color: var(--color-text-secondary);
 }
 
-.planned-meal-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-  padding: 24rpx 28rpx;
-  border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--theme-primary) 10%);
-}
-
-.planned-meal-entry--hover {
-  opacity: 0.8;
-}
-
-.planned-meal-entry__main {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  min-width: 0;
-}
-
-.planned-meal-entry__label {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.2;
-}
-
-.planned-meal-entry__value {
-  color: var(--color-text);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.3;
-}
-
-.planned-meal-entry__action {
-  flex: 0 0 auto;
-  color: var(--theme-primary);
-  font-size: 24rpx;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.2;
-}
-
 .nutrition-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1747,11 +1793,9 @@ defineExpose({
 
 .nutrition-card {
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
   gap: 10rpx;
-  padding: 24rpx;
-  border-radius: 24rpx;
-  background: var(--color-surface);
+  padding: 8rpx 0;
 }
 
 .nutrition-card__label {
@@ -1760,11 +1804,34 @@ defineExpose({
   line-height: 1.2;
 }
 
+.nutrition-card__dot {
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1;
+}
+
+.nutrition-card__amount {
+  color: var(--color-text);
+  font-size: 0;
+  line-height: 1;
+}
+
 .nutrition-card__value {
   color: var(--color-text);
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
+}
+
+.nutrition-card__unit,
+.nutrition-card__empty {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.nutrition-card__unit {
+  margin-left: 4rpx;
 }
 
 .nutrition-toggle {
@@ -1805,8 +1872,7 @@ defineExpose({
 }
 
 .section {
-  margin-top: var(--space-md);
-  padding: 0 32rpx;
+  padding: var(--space-md) 32rpx;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1869,6 +1935,18 @@ defineExpose({
   line-height: 1;
 }
 
+.section__link {
+  color: var(--theme-primary);
+  font-size: 26rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+  flex: 0 0 auto;
+}
+
+.section__link--hover {
+  opacity: 0.72;
+}
+
 .section__note,
 .section__empty,
 .tips-text {
@@ -1884,6 +1962,37 @@ defineExpose({
   color: var(--color-text-tertiary);
   font-size: 24rpx;
   line-height: 1.6;
+}
+
+.plan-link-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 14rpx 0 10rpx;
+  border-top: 1rpx solid rgba(109, 92, 72, 0.08);
+  border-bottom: 1rpx solid rgba(109, 92, 72, 0.08);
+}
+
+.plan-link-entry--hover {
+  opacity: 0.82;
+}
+
+.plan-link-entry__title {
+  min-width: 0;
+  flex: 1;
+  color: var(--color-text);
+  font-size: 28rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.5;
+}
+
+.plan-link-entry__count {
+  flex: 0 0 auto;
+  margin-left: 16rpx;
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.3;
 }
 
 .ingredient-list {
@@ -2062,79 +2171,75 @@ defineExpose({
   line-height: 1.6;
 }
 
-.shopping-list-grid {
+.plan-link-list {
   display: flex;
   flex-direction: column;
   gap: 14rpx;
   margin-top: 18rpx;
 }
 
-.shopping-list-option {
-  padding: 20rpx 22rpx;
+.plan-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 22rpx 24rpx;
   border: 1rpx solid rgba(109, 92, 72, 0.1);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.78);
 }
 
-.shopping-list-option--active {
-  border-color: rgba(47, 111, 78, 0.22);
-  background: rgba(47, 111, 78, 0.08);
+.plan-link-row--hover {
+  opacity: 0.82;
 }
 
-.shopping-list-option__title,
-.shopping-list-option__meta {
+.plan-link-row__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.plan-link-row__head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.plan-link-row__title,
+.plan-link-row__meta,
+.plan-link-row__icon,
+.plan-link-row__tag {
   display: block;
 }
 
-.shopping-list-option__title {
+.plan-link-row__title {
+  min-width: 0;
   color: var(--color-text);
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
+  line-height: 1.4;
 }
 
-.shopping-list-option__meta {
+.plan-link-row__tag {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.plan-link-row__meta {
   margin-top: 8rpx;
   color: var(--color-text-secondary);
   font-size: 22rpx;
+  line-height: 1.5;
 }
 
-.shopping-create {
-  display: flex;
-  gap: 14rpx;
-  margin-top: 18rpx;
+.plan-link-row__icon {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1;
 }
-
-.shopping-create__input {
-  flex: 1;
-  min-width: 0;
-  height: 76rpx;
-  padding: 0 22rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-sizing: border-box;
-  color: var(--color-text);
-  font-size: 26rpx;
-}
-
-.shopping-create__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 132rpx;
-  height: 76rpx;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
 
 .sheet-creator {
   display: flex;

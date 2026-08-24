@@ -69,15 +69,13 @@
           :show-scrollbar="false"
           :refresher-threshold="refresherThreshold"
           :refresher-triggered="refresherTriggered"
+          @scrolltolower="handleLoadMore"
           @refresherpulling="onRefresherPulling"
           @refresherrefresh="handleRefresherRefresh"
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
           <view v-if="loading && !eventCards.length" class="notice">正在同步饭局...</view>
-          <view v-else-if="partialErrorText" class="notice notice--soft">
-            {{ partialErrorText }}
-          </view>
 
           <view v-if="visibleCards.length" class="event-list">
             <view
@@ -127,6 +125,13 @@
             </view>
           </view>
 
+          <LoadMore
+            v-if="visibleCards.length"
+            :loading="loadingMore"
+            :has-next="hasNext"
+            :show-done="hasLoadedMoreOnce && !hasNext"
+          />
+
           <Empty
             v-else-if="!loading"
             class="page-empty"
@@ -142,65 +147,42 @@
       </view>
     </view>
 
-    <SheetShell
+    <EventScheduleSheet
       :visible="createSheetVisible"
       title="直接发起饭局"
       subtitle="先把日期、餐次和时间定下来，菜单后面再补。"
+      date-mode="calendar"
+      :date="createPlanDate"
+      :month-date="createMonthDate"
+      :min-date="createMinDate"
+      :time="createTime"
+      :meal-slot="createMealSlot"
+      :meal-slots="createSlotOptions"
+      :submitting="creatingEvent"
+      cancel-text="取消"
+      confirm-text="确认发起"
+      confirm-loading-text="创建中..."
+      @select-date="handleCreateDateSelect"
+      @month-change="handleCreateMonthChange"
+      @select-time="handleCreateTimeSelect"
+      @select-meal-slot="selectCreateMealSlot"
+      @confirm="submitCreateEvent"
       @close="closeCreateSheet"
       @after-close="handleCreateSheetAfterClose"
-    >
-      <view class="sheet-field">
-        <text class="sheet-field__label">日期</text>
-        <picker mode="date" :value="createPlanDate" @change="handleCreateDateChange">
-          <view class="sheet-picker">{{ createPlanDate }}</view>
-        </picker>
-      </view>
-
-      <view class="sheet-field">
-        <text class="sheet-field__label">餐次</text>
-        <view class="sheet-chip-grid">
-          <view
-            v-for="item in createSlotOptions"
-            :key="item.value"
-            class="sheet-chip"
-            :class="{ 'sheet-chip--active': createMealSlot === item.value }"
-            @click="selectCreateMealSlot(item.value)"
-          >
-            {{ item.label }}
-          </view>
-        </view>
-      </view>
-
-      <view class="sheet-field">
-        <text class="sheet-field__label">时间</text>
-        <picker mode="time" :value="createTime" @change="handleCreateTimeChange">
-          <view class="sheet-picker">{{ createTime }}</view>
-        </picker>
-      </view>
-
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="creatingEvent" @click="closeCreateSheet">
-            取消
-          </button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="creatingEvent" @click="submitCreateEvent">
-            {{ creatingEvent ? "创建中..." : "确认发起" }}
-          </button>
-        </view>
-      </template>
-    </SheetShell>
+    />
   </Layout>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import type { UUID } from "@/apis/http";
+import { ApiClientError, type UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import LoadMore from "@/components/LoadMore.vue";
 import Login from "@/components/Login/Login.vue";
+import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
-import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
@@ -209,10 +191,10 @@ import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isPastLocalDateTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { formatDateTimeMinute } from "../utils/date";
-import { mealApi, type DiningEventSummary, type MealPlanSummary } from "../apis/meal";
+import { mealApi, type DiningEventListStage, type DiningEventListSummary, type MealPlanSummary, type DiningEventStageCounts, type DiningEventListRole } from "../apis/meal";
 
-type EventStage = "TODO" | "ACTIVE" | "DONE";
-type RoleFilter = "ALL" | "ORGANIZER" | "PARTICIPANT";
+type EventStage = DiningEventListStage;
+type RoleFilter = DiningEventListRole;
 
 type EventCardItem = {
   id: string;
@@ -236,18 +218,30 @@ type EventCardItem = {
 
 const pageStyle = usePageScrollStyle();
 const sessionStore = useSessionStore();
+const EVENT_PAGE_SIZE = 20;
+const EMPTY_STAGE_COUNTS: DiningEventStageCounts = {
+  todoCount: 0,
+  activeCount: 0,
+  doneCount: 0
+};
 
 const legacyRedirecting = ref(false);
 const loading = ref(false);
-const partialErrorText = ref("");
+const loadingMore = ref(false);
+const hasNext = ref(false);
+const hasLoadedMoreOnce = ref(false);
+const currentPage = ref(1);
 const stage = ref<EventStage>("TODO");
 const roleFilter = ref<RoleFilter>("ALL");
+const stageCounts = ref<DiningEventStageCounts>(EMPTY_STAGE_COUNTS);
 const eventCards = ref<EventCardItem[]>([]);
 const createSheetVisible = ref(false);
 const creatingEvent = ref(false);
 const createPlanDate = ref(todayText());
+const createMonthDate = ref(todayText());
 const createMealSlot = ref<MealPlanSummary["mealSlot"]>("DINNER");
 const createTime = ref(resolveDefaultTime("DINNER"));
+const createMinDate = computed(() => todayText());
 
 const {
   threshold: refresherThreshold,
@@ -288,15 +282,7 @@ const createSlotOptions = [
   { value: "LATE_NIGHT" as const, label: "夜宵" }
 ];
 
-const roleCards = computed(() =>
-  eventCards.value.filter(item => roleFilter.value === "ALL" || item.role === roleFilter.value)
-);
-
-const visibleCards = computed(() =>
-  roleCards.value
-    .filter(item => item.stage === stage.value)
-    .sort((left, right) => compareCards(left, right, stage.value))
-);
+const visibleCards = computed(() => eventCards.value);
 
 const emptyDescription = computed(
   () => "先把时间约起来，菜单后面再补也没关系。你发起的和参与的饭局，后面都会收在这里。"
@@ -325,54 +311,70 @@ onLoad(query => {
 
 onShow(() => {
   if (!sessionStore.isLoggedIn || legacyRedirecting.value) return;
-  void loadEvents();
+  void loadEvents({ reset: true, syncStage: true });
 });
 
 async function handleLoginSuccess() {
-  await loadEvents();
+  await loadEvents({ reset: true, syncStage: true });
 }
 
 function stageCount(target: EventStage) {
-  return roleCards.value.filter(item => item.stage === target).length;
+  if (target === "TODO") return stageCounts.value.todoCount;
+  if (target === "ACTIVE") return stageCounts.value.activeCount;
+  return stageCounts.value.doneCount;
 }
 
-async function loadEvents() {
-  if (!sessionStore.isLoggedIn || loading.value) return;
-  loading.value = true;
-  partialErrorText.value = "";
+async function loadEvents(options: { reset: boolean; syncStage?: boolean }) {
+  if (!sessionStore.isLoggedIn) return;
+  if (options.reset) {
+    if (loading.value) return;
+    loading.value = true;
+    hasLoadedMoreOnce.value = false;
+  } else {
+    if (loadingMore.value || !hasNext.value) return;
+    loadingMore.value = true;
+  }
+
+  const nextPage = options.reset ? 1 : currentPage.value + 1;
 
   try {
-    const plans = await mealApi.listAllPlans({});
-    const seenEventIds = new Set<UUID>();
-    const plansWithEvents = plans
-      .filter(plan => plan.hasDiningEvent && Boolean(plan.diningEventId))
-      .filter(plan => {
-        const nextEventId = plan.diningEventId;
-        if (!nextEventId || seenEventIds.has(nextEventId)) return false;
-        seenEventIds.add(nextEventId);
-        return true;
-      });
+    const result = await mealApi.listDiningEvents({
+      page: nextPage,
+      pageSize: EVENT_PAGE_SIZE,
+      role: roleFilter.value,
+      stage: stage.value
+    });
+    stageCounts.value = result.stageCounts;
 
-    const detailResults = await Promise.allSettled(
-      plansWithEvents.map(async plan => ({
-        plan,
-        event: await mealApi.getDiningEvent(plan.diningEventId as UUID)
-      }))
-    );
-
-    const failedCount = detailResults.filter(item => item.status === "rejected").length;
-    if (failedCount) {
-      partialErrorText.value = `有 ${failedCount} 场饭局暂未同步完整，先展示已加载部分。`;
+    if (options.syncStage) {
+      const fallbackStage = resolveFallbackStage(stageCounts.value, stage.value);
+      if (fallbackStage && fallbackStage !== stage.value) {
+        stage.value = fallbackStage;
+        if (options.reset) {
+          loading.value = false;
+        } else {
+          loadingMore.value = false;
+        }
+        await loadEvents({ reset: true, syncStage: false });
+        return;
+      }
     }
 
-    eventCards.value = detailResults
-      .filter((item): item is PromiseFulfilledResult<{ plan: MealPlanSummary; event: DiningEventSummary }> => item.status === "fulfilled")
-      .map(item => buildEventCard(item.value.plan, item.value.event));
-    syncStageWithRole();
+    currentPage.value = result.page;
+    hasNext.value = result.hasNext;
+    const nextItems = result.items.map(item => buildEventCard(item));
+    if (!options.reset && nextItems.length > 0) {
+      hasLoadedMoreOnce.value = true;
+    }
+    eventCards.value = options.reset ? nextItems : [...eventCards.value, ...nextItems];
   } catch (error) {
     await uniPlatform.feedback.toast({ title: "饭局同步失败，请稍后重试", icon: "none" });
   } finally {
-    loading.value = false;
+    if (options.reset) {
+      loading.value = false;
+    } else {
+      loadingMore.value = false;
+    }
   }
 }
 
@@ -384,55 +386,39 @@ async function handleRefresherRefresh() {
   }
 
   try {
-    await loadEvents();
+    await loadEvents({ reset: true, syncStage: false });
     await onRefreshComplete();
   } finally {
     onRefresherRestore();
   }
 }
 
-function buildEventCard(plan: MealPlanSummary, event: DiningEventSummary): EventCardItem {
-  const role: EventCardItem["role"] = event.organizerUid === sessionStore.uid ? "ORGANIZER" : "PARTICIPANT";
-  const myParticipant = event.participants.find(item => item.userUid === sessionStore.uid) ?? null;
-  const acceptedCount = event.participants.filter(item => item.status === "ACCEPTED").length;
-  const bringCount = event.participants.filter(item => Boolean(item.bringRecipeTitle?.trim())).length;
-  const participantCount = event.participants.length;
-  const menuPreview = event.menuItems.slice(0, 6).map(item => item.title);
-  const menuCount = event.menuItems.length;
-  const scheduleTime = Date.parse(event.scheduledAt);
-  const eventExpired = isEventExpired(event);
-  const stageValue = resolveStage(event, role, myParticipant?.status ?? null);
-  const title = buildCardTitle(plan, event);
-
+function buildEventCard(item: DiningEventListSummary): EventCardItem {
+  const scheduleTime = Date.parse(item.scheduledAt);
+  const eventExpired = isEventExpired(item.status, item.scheduledAt);
   return {
-    id: `${plan.id}-${event.id}`,
-    eventId: event.id,
-    planItemId: plan.id,
-    planDate: plan.planDate,
-    stage: stageValue,
-    role,
-    title,
-    coverImageUrl: event.coverImageUrl,
-    coverText: `${formatMealSlot(plan.mealSlot) || "这顿饭"}封面待补`,
-    scheduleText: buildScheduleText(event.scheduledAt),
-    focusText: resolveFocusText(event, role, myParticipant?.status ?? null),
-    actionText: event.status === "COMPLETED" || eventExpired ? "回看这顿饭" : "查看详情",
-    organizerText: event.organizerName?.trim()
-      ? `发起人 · ${event.organizerName.trim()}`
-      : role === "ORGANIZER"
+    id: `${item.planItemId ?? item.id}-${item.id}`,
+    eventId: item.id,
+    planItemId: item.planItemId,
+    planDate: item.planDate || "",
+    stage: item.stage,
+    role: item.role,
+    title: item.title,
+    coverImageUrl: item.coverImageUrl,
+    coverText: `${formatMealSlot(item.mealSlot) || "这顿饭"}封面待补`,
+    scheduleText: buildScheduleText(item.scheduledAt),
+    focusText: resolveFocusText(item.role, item.participantStatus, item.status, eventExpired),
+    actionText: item.status === "COMPLETED" || eventExpired ? "回看这顿饭" : "查看详情",
+    organizerText: item.organizerName?.trim()
+      ? `发起人 · ${item.organizerName.trim()}`
+      : item.role === "ORGANIZER"
         ? "发起人 · 我"
         : "发起人 · 待补",
-    menuPreview,
-    moreMenuCount: Math.max(menuCount - menuPreview.length, 0),
-    statLine: buildStatLine(acceptedCount, participantCount, menuCount, bringCount),
+    menuPreview: item.menuPreview,
+    moreMenuCount: Math.max(item.menuCount - item.menuPreview.length, 0),
+    statLine: buildStatLine(item.acceptedCount, item.participantCount, item.menuCount, item.bringCount),
     sortTime: Number.isNaN(scheduleTime) ? Date.now() : scheduleTime
   };
-}
-
-function buildCardTitle(plan: MealPlanSummary, event: DiningEventSummary) {
-  const title = event.title?.trim() || plan.title?.trim();
-  if (title) return title;
-  return `${formatMealSlot(plan.mealSlot) || "这顿饭"}饮食计划`;
 }
 
 function buildStatLine(acceptedCount: number, participantCount: number, menuCount: number, bringCount: number) {
@@ -441,31 +427,20 @@ function buildStatLine(acceptedCount: number, participantCount: number, menuCoun
   return segments.join(" · ");
 }
 
-function resolveStage(
-  event: DiningEventSummary,
-  role: EventCardItem["role"],
-  myStatus: DiningEventSummary["participants"][number]["status"] | null
-): EventStage {
-  if (isEventExpired(event)) return "DONE";
-  if (event.status === "COMPLETED" || event.status === "CANCELLED") return "DONE";
-  if (role === "PARTICIPANT" && myStatus === "INVITED") return "TODO";
-  if (role === "ORGANIZER" && event.status === "PLANNED") return "TODO";
-  return "ACTIVE";
-}
-
 function resolveFocusText(
-  event: DiningEventSummary,
   role: EventCardItem["role"],
-  myStatus: DiningEventSummary["participants"][number]["status"] | null
+  myStatus: DiningEventListSummary["participantStatus"],
+  status: DiningEventListSummary["status"],
+  eventExpired: boolean
 ) {
-  if (isEventExpired(event)) return "这场局已结束";
-  if (event.status === "COMPLETED") return "可看饭局回忆";
-  if (event.status === "CANCELLED") return "这场局已取消";
+  if (eventExpired) return "这场局已结束";
+  if (status === "COMPLETED") return "可看饭局回忆";
+  if (status === "CANCELLED") return "这场局已取消";
   if (role === "PARTICIPANT" && myStatus === "INVITED") return "等你回应";
   if (role === "PARTICIPANT" && myStatus === "DECLINED") return "你已拒绝";
   if (role === "PARTICIPANT" && myStatus === "REMOVED") return "已被移出";
-  if (role === "ORGANIZER" && event.status === "PLANNED") return "待你继续推进";
-  if (role === "ORGANIZER" && event.status === "CONFIRMED") return "待你收尾";
+  if (role === "ORGANIZER" && status === "PLANNED") return "待你继续推进";
+  if (role === "ORGANIZER" && status === "CONFIRMED") return "待你收尾";
   return "";
 }
 
@@ -477,43 +452,33 @@ function buildScheduleText(value: string) {
   return `${dateText.slice(5)} ${timeText}`;
 }
 
-function isEventExpired(event: DiningEventSummary) {
-  if (event.status === "CANCELLED" || event.status === "COMPLETED" || event.completedAt) return false;
-  const scheduledAt = Date.parse(event.scheduledAt);
+function isEventExpired(status: DiningEventListSummary["status"], scheduledAtText: string) {
+  if (status === "CANCELLED" || status === "COMPLETED") return false;
+  const scheduledAt = Date.parse(scheduledAtText);
   return Number.isFinite(scheduledAt) && scheduledAt <= Date.now();
 }
 
-function formatPlanDate(value: string) {
-  const [yearText, monthText, dayText] = value.split("-");
-  const year = Number(yearText);
-  const month = Number(monthText);
-  const day = Number(dayText);
-  if (!year || !month || !day) return value;
-  return `${month}月${day}日`;
+function resolveFallbackStage(counts: DiningEventStageCounts, currentStage: EventStage) {
+  if (currentStage === "TODO" && counts.todoCount > 0) return currentStage;
+  if (currentStage === "ACTIVE" && counts.activeCount > 0) return currentStage;
+  if (currentStage === "DONE" && counts.doneCount > 0) return currentStage;
+  return stageTabs.find(item => stageCount(item.value) > 0)?.value ?? null;
 }
 
-function compareCards(left: EventCardItem, right: EventCardItem, currentStage: EventStage) {
-  if (currentStage === "DONE") return right.sortTime - left.sortTime;
-  return left.sortTime - right.sortTime;
+async function handleLoadMore() {
+  await loadEvents({ reset: false });
 }
 
 function changeStage(nextStage: EventStage) {
   if (stage.value === nextStage) return;
   stage.value = nextStage;
+  void loadEvents({ reset: true, syncStage: false });
 }
 
 function changeRoleFilter(nextFilter: RoleFilter) {
   if (roleFilter.value === nextFilter) return;
   roleFilter.value = nextFilter;
-  syncStageWithRole();
-}
-
-function syncStageWithRole() {
-  if (stageCount(stage.value) > 0) return;
-  const nextStage = stageTabs.find(item => stageCount(item.value) > 0)?.value;
-  if (nextStage) {
-    stage.value = nextStage;
-  }
+  void loadEvents({ reset: true, syncStage: true });
 }
 
 function openEvent(item: EventCardItem) {
@@ -527,6 +492,7 @@ function openEvent(item: EventCardItem) {
 
 function openCreateSheet() {
   createPlanDate.value = todayText();
+  createMonthDate.value = createPlanDate.value;
   createMealSlot.value = "DINNER";
   createTime.value = resolveDefaultTime("DINNER", createPlanDate.value);
   createSheetVisible.value = true;
@@ -541,18 +507,19 @@ function handleCreateSheetAfterClose() {
   if (createSheetVisible.value) return;
 }
 
-function handleCreateDateChange(event: { detail?: { value?: string } }) {
-  const nextValue = event.detail?.value?.trim();
-  if (!nextValue) return;
+function handleCreateDateSelect(nextValue: string) {
   createPlanDate.value = nextValue;
+  createMonthDate.value = nextValue;
   if (isPastLocalDateTime(nextValue, createTime.value)) {
     createTime.value = resolveDefaultTime(createMealSlot.value, nextValue);
   }
 }
 
-function handleCreateTimeChange(event: { detail?: { value?: string } }) {
-  const nextValue = event.detail?.value?.trim();
-  if (!nextValue) return;
+function handleCreateMonthChange(nextValue: string) {
+  createMonthDate.value = nextValue;
+}
+
+function handleCreateTimeSelect(nextValue: string) {
   createTime.value = nextValue;
 }
 
@@ -570,19 +537,6 @@ async function submitCreateEvent() {
     if (isPastLocalDateTime(createPlanDate.value, createTime.value)) {
       throw new Error("饭局时间不能早于当前时间");
     }
-    const existingPlans = await mealApi.listAllPlans({
-      from: createPlanDate.value,
-      to: createPlanDate.value
-    });
-    const existingPlan = existingPlans.find(plan => plan.mealSlot === createMealSlot.value) ?? null;
-    if (existingPlan?.diningEventId) {
-      createSheetVisible.value = false;
-      await uniPlatform.feedback.toast({ title: "这顿饭已挂饭局，直接带你回到详情", icon: "none" });
-      void uniPlatform.navigation.navigateTo(
-        `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(existingPlan.id))}&planDate=${encodeURIComponent(createPlanDate.value)}&eventId=${encodeURIComponent(String(existingPlan.diningEventId))}`
-      );
-      return;
-    }
     const result = await mealApi.createDirectDiningEvent({
       operationId: createOperationId(),
       planDate: createPlanDate.value,
@@ -591,10 +545,19 @@ async function submitCreateEvent() {
       location: null
     });
     createSheetVisible.value = false;
-    void uniPlatform.navigation.navigateTo(
-      `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(result.planItemId))}&planDate=${encodeURIComponent(createPlanDate.value)}&eventId=${encodeURIComponent(String(result.id))}`
-    );
+    void uniPlatform.navigation.navigateTo(buildEventDetailPath(result.id, createPlanDate.value, result.planItemId));
   } catch (error) {
+    if (error instanceof ApiClientError && error.code === 409 && error.message.includes("已发起饭局")) {
+      const existingEvent = await mealApi.findDiningEventByPlanSlot(createPlanDate.value, createMealSlot.value);
+      if (existingEvent) {
+        createSheetVisible.value = false;
+        await uniPlatform.feedback.toast({ title: "这顿饭已挂饭局，直接带你回到详情", icon: "none" });
+        void uniPlatform.navigation.navigateTo(
+          buildEventDetailPath(existingEvent.id, createPlanDate.value, existingEvent.planItemId ?? undefined)
+        );
+        return;
+      }
+    }
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "发起失败", icon: "none" });
   } finally {
     creatingEvent.value = false;
@@ -616,6 +579,15 @@ function resolveDefaultTime(slot: MealPlanSummary["mealSlot"], dateText = todayT
 
 function composeScheduledAt(dateText: string, timeText: string) {
   return new Date(`${dateText}T${timeText}:00`).toISOString();
+}
+
+function buildEventDetailPath(eventId: UUID, planDate: string, planItemId?: UUID | null) {
+  const params = [
+    planItemId ? `planItemId=${encodeURIComponent(String(planItemId))}` : "",
+    planDate ? `planDate=${encodeURIComponent(planDate)}` : "",
+    `eventId=${encodeURIComponent(String(eventId))}`
+  ].filter(Boolean);
+  return `/pages_meal/detail/index?${params.join("&")}`;
 }
 
 function todayText() {
@@ -968,84 +940,6 @@ function todayText() {
 .page-empty {
   margin-top: 20rpx;
   padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
-}
-
-.sheet-field + .sheet-field {
-  margin-top: 28rpx;
-}
-
-.sheet-field__label {
-  display: block;
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: 600;
-}
-
-.sheet-picker,
-.sheet-input {
-  display: flex;
-  align-items: center;
-  min-height: 88rpx;
-  margin-top: 14rpx;
-  padding: 0 24rpx;
-  border-radius: 24rpx;
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  font-size: 26rpx;
-  box-sizing: border-box;
-}
-
-.sheet-chip-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-top: 14rpx;
-}
-
-.sheet-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 64rpx;
-  padding: 0 24rpx;
-  border: 1rpx solid var(--color-divider);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-}
-
-.sheet-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
-}
-
-.sheet-actions {
-  display: flex;
-  gap: 20rpx;
-}
-
-.sheet-actions__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  min-height: 88rpx;
-  border-radius: var(--radius-pill);
-  font-size: 28rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet-actions__button--cancel {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
 }
 
 .event-fab {

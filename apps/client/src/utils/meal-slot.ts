@@ -94,6 +94,21 @@ export function resolvePlanEndOfDayMs(dateText: string | null | undefined) {
   return Number.isFinite(time) ? time : 0;
 }
 
+export function resolveMealSlotExpireMs(dateText: string, slot: MealSlot) {
+  const slotIndex = MEAL_SLOT_OPTIONS.findIndex(item => item.value === slot);
+  if (slotIndex < 0) return 0;
+  const nextSlot = MEAL_SLOT_OPTIONS[slotIndex + 1];
+  if (!nextSlot) return resolvePlanEndOfDayMs(dateText);
+  const value = new Date(`${dateText}T${mealSlotDefaultTime(nextSlot.value)}:00`);
+  const time = value.getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+export function isMealSlotExpired(dateText: string, slot: MealSlot, now = new Date()) {
+  const expireMs = resolveMealSlotExpireMs(dateText, slot);
+  return expireMs > 0 && now.getTime() >= expireMs;
+}
+
 export function isCoreMealSlot(slot: MealSlot) {
   return slot === "BREAKFAST" || slot === "LUNCH" || slot === "DINNER";
 }

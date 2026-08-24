@@ -240,23 +240,22 @@
       </template>
     </view>
 
-    <SheetShell
+    <TextFieldSheet
       :visible="renameSheetVisible"
       title="修改清单名"
       subtitle="这会同步更新当前共享清单的名称。"
+      :model-value="renameName"
+      placeholder="请输入清单名"
+      :maxlength="20"
+      :submitting="submitting"
+      :confirm-disabled="!renameName.trim()"
+      confirm-text="保存"
+      confirm-loading-text="保存中..."
       @close="closeRenameSheet"
       @after-close="handleRenameSheetAfterClose"
-    >
-      <input v-model="renameName" class="sheet-input" maxlength="20" placeholder="请输入清单名" />
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeRenameSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || !renameName.trim()" @click="renameList">
-            {{ submitting ? "保存中..." : "保存" }}
-          </button>
-        </view>
-      </template>
-    </SheetShell>
+      @confirm="renameList"
+      @update:model-value="renameName = $event"
+    />
 
     <SheetShell
       :visible="addSheetVisible"
@@ -435,6 +434,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";

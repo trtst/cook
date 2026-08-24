@@ -34,6 +34,46 @@ export interface MealPlanSummary {
   createdAt: IsoDateTime;
 }
 
+export type DiningEventListRole = "ALL" | "ORGANIZER" | "PARTICIPANT";
+export type DiningEventListStage = "TODO" | "ACTIVE" | "DONE";
+export type DiningEventListStageFilter = DiningEventListStage | "ALL";
+
+export interface DiningEventStageCounts {
+  todoCount: number;
+  activeCount: number;
+  doneCount: number;
+}
+
+export interface DiningEventListSummary {
+  id: UUID;
+  planItemId: UUID | null;
+  planDate: string | null;
+  mealSlot: MealSlot | null;
+  title: string;
+  coverImageUrl: string | null;
+  scheduledAt: IsoDateTime;
+  status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+  role: "ORGANIZER" | "PARTICIPANT";
+  stage: DiningEventListStage;
+  participantStatus: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED" | null;
+  organizerUid: number | null;
+  organizerName: string | null;
+  menuPreview: string[];
+  menuCount: number;
+  participantCount: number;
+  acceptedCount: number;
+  bringCount: number;
+}
+
+export interface DiningEventListResponse {
+  items: DiningEventListSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasNext: boolean;
+  stageCounts: DiningEventStageCounts;
+}
+
 export interface MealPlanCookAssistantTask {
   title: string;
   detail: string;
@@ -77,6 +117,18 @@ export interface DiningEventParticipantSummary {
   bringRecipeTitle: string | null;
 }
 
+export interface DiningEventWishItemSummary {
+  id: UUID;
+  title: string;
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
+  coverImageUrl: string | null;
+  supportCount: number;
+  supportedByMe: boolean;
+  suggestedByMe: boolean;
+  inCurrentMenu: boolean;
+}
+
 export interface DiningEventSummary {
   id: UUID;
   title: string;
@@ -99,10 +151,9 @@ export interface DiningEventSummary {
     recipeId: UUID | null;
     recipeVersionId: UUID;
     title: string;
-    cookUserUid: number | null;
-    cookName: string | null;
     version: number;
   }>;
+  wishItems: DiningEventWishItemSummary[];
   participants: DiningEventParticipantSummary[];
   hasActiveShareLink: boolean;
   shareTokenPath: string | null;
@@ -121,6 +172,15 @@ export interface MealPlanQuery {
   pageSize?: number;
   from?: string;
   to?: string;
+}
+
+export interface DiningEventListQuery {
+  page?: number;
+  pageSize?: number;
+  role?: DiningEventListRole;
+  stage?: DiningEventListStageFilter;
+  planDate?: string;
+  mealSlot?: MealSlot;
 }
 
 export interface CreateMealPlanRequest {
@@ -201,11 +261,14 @@ export interface GenerateMealPlanCookAssistantRequest {
   operationId: OperationId;
 }
 
-export interface ClaimCookRequest {
+export interface ChooseDiningEventWishRecipeRequest {
   operationId: OperationId;
-  expectedVersion: number;
-  menuItemId: UUID;
-  action: "CLAIM" | "RELEASE";
+  recipeId: UUID;
+}
+
+export interface UpdateDiningEventWishSupportRequest {
+  operationId: OperationId;
+  action: "SUPPORT" | "UNSUPPORT";
 }
 
 export interface ChooseBringRecipeRequest {
@@ -270,6 +333,20 @@ export const mealApi = {
     return post<DiningEventSummary>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/dining-event`, payload, {
       idempotencyKey: operationId
     });
+  },
+  listDiningEvents(query: DiningEventListQuery) {
+    return get<DiningEventListResponse>(`${cfg.domain}/api/dining-events`, { ...query });
+  },
+  async findDiningEventByPlanSlot(planDate: string, mealSlot: MealSlot) {
+    const result = await this.listDiningEvents({
+      page: 1,
+      pageSize: 1,
+      role: "ALL",
+      stage: "ALL",
+      planDate,
+      mealSlot
+    });
+    return result.items[0] ?? null;
   },
   createDirectDiningEvent(body: CreateDirectDiningEventRequest) {
     const { operationId, ...payload } = body;
@@ -348,11 +425,26 @@ export const mealApi = {
       { idempotencyKey: operationId }
     );
   },
-  claimCook(eventId: UUID, body: ClaimCookRequest) {
+  chooseDiningEventWishRecipe(eventId: UUID, body: ChooseDiningEventWishRecipeRequest) {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(
-      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/cook`,
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/wishes`,
       payload,
+      { idempotencyKey: operationId }
+    );
+  },
+  updateDiningEventWishSupport(eventId: UUID, wishItemId: UUID, body: UpdateDiningEventWishSupportRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/wishes/${encodeURIComponent(wishItemId)}/support`,
+      payload,
+      { idempotencyKey: operationId }
+    );
+  },
+  addDiningEventWishToMenu(eventId: UUID, wishItemId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/wishes/${encodeURIComponent(wishItemId)}/menu`,
+      undefined,
       { idempotencyKey: operationId }
     );
   },

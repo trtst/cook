@@ -150,44 +150,28 @@
       </scroll-view>
     </view>
 
-    <SheetShell
+    <ShoppingTargetSheet
       :visible="shoppingSheetVisible"
       title="加入采购清单"
       subtitle="这次先只处理单食材补货，不改系统食材信息。"
+      :create-mode="shoppingCreateMode"
+      :creating="shoppingSubmitting"
+      :create-disabled="shoppingCreateMode && !newListName.trim()"
+      :create-name="newListName"
+      :items="activeShoppingLists"
+      :selected-id="selectedListId"
+      :show-create-action="false"
+      :show-create-option="true"
+      :show-create-button="false"
+      create-option-title="新建采购清单"
+      create-option-text="没有合适的清单时，直接在这里新建。"
+      hide-selected-state-when-creating
+      @open-create="openCreateMode"
+      @select="selectActiveList"
+      @update:create-name="newListName = $event"
       @close="closeShoppingSheet"
       @after-close="resetShoppingSheet"
     >
-      <view class="sheet-section">
-        <text class="sheet-section__title">目标清单</text>
-        <view v-if="activeShoppingLists.length" class="sheet-option-list">
-          <view
-            v-for="list in activeShoppingLists"
-            :key="list.id"
-            class="sheet-option"
-            :class="{ 'sheet-option--active': !shoppingCreateMode && selectedListId === list.id }"
-            @click="selectActiveList(list.id)"
-          >
-            <view class="sheet-option__main">
-              <text class="sheet-option__title">{{ list.name }}</text>
-              <text class="sheet-option__meta">剩余 {{ Math.max(list.progressTotalCount - list.progressDoneCount, 0) }} 项待处理</text>
-            </view>
-          </view>
-        </view>
-        <view class="sheet-option" :class="{ 'sheet-option--active': shoppingCreateMode }" @click="shoppingCreateMode = true">
-          <view class="sheet-option__main">
-            <text class="sheet-option__title">新建采购清单</text>
-            <text class="sheet-option__meta">没有合适的清单时，直接在这里新建。</text>
-          </view>
-        </view>
-        <input
-          v-if="shoppingCreateMode"
-          v-model="newListName"
-          class="sheet-input"
-          maxlength="20"
-          placeholder="请输入新清单名"
-        />
-      </view>
-
       <view class="sheet-section">
         <text class="sheet-section__title">采购信息</text>
         <input v-model="shoppingQuantityText" class="sheet-input" placeholder="采购数量，可留空，例如 2 盒 / 500 克" />
@@ -202,7 +186,7 @@
           </button>
         </view>
       </template>
-    </SheetShell>
+    </ShoppingTargetSheet>
   </Layout>
 </template>
 
@@ -213,7 +197,7 @@ import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
-import SheetShell from "@/components/Sheet/SheetShell.vue";
+import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
@@ -369,6 +353,10 @@ function resetShoppingSheet() {
 function selectActiveList(listId: UUID) {
   shoppingCreateMode.value = false;
   selectedListId.value = listId;
+}
+
+function openCreateMode() {
+  shoppingCreateMode.value = true;
 }
 
 async function submitShopping() {
@@ -791,23 +779,8 @@ async function submitShopping() {
   font-weight: var(--font-weight-semibold);
 }
 
-.sheet-option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.sheet-option {
-  padding: 22rpx 20rpx;
-}
-
-.sheet-option + .sheet-input,
 .sheet-input + .sheet-input {
   margin-top: 12rpx;
-}
-
-.sheet-option--active {
-  background: var(--color-primary-soft);
 }
 
 .sheet-input {

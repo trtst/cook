@@ -4,7 +4,7 @@
     <Login
       v-if="mode === 'event' && !sessionStore.isLoggedIn"
       title="登录后生成活动回忆卡"
-      description="公开回忆卡会先生成不可变快照，只保留菜单、掌勺标记、可选成员摘要和一句话。到开饭时间后即可生成。"
+      description="公开回忆卡会先生成不可变快照，只保留菜单、可选成员摘要和一句话。到开饭时间后即可生成。"
     />
 
     <template v-else>
@@ -34,7 +34,6 @@
               <view v-for="(item, index) in cardData.menuItems" :key="`${item.title}-${index}`" class="memory-menu__item">
                 <view class="memory-menu__main">
                   <text class="memory-menu__name">{{ item.title }}</text>
-                  <text class="memory-menu__cook">{{ resolveCookText(item.cookName) }}</text>
                 </view>
               </view>
             </view>
@@ -150,7 +149,6 @@ interface MemoryCardView {
   menuItems: Array<{
     title: string;
     coverUrl: string | null;
-    cookName: string | null;
   }>;
   participants: MemoryShareParticipant[];
   caption: string | null;
@@ -412,11 +410,6 @@ function openPublicPreview(path: string) {
   void uniPlatform.navigation.navigateTo(path);
 }
 
-function resolveCookText(cookName: string | null) {
-  if (cookName) return `${cookName} 掌勺`;
-  return "待认领";
-}
-
 function formatParticipantRole(role: MemoryShareParticipant["role"]) {
   if (role === "ORGANIZER") return "主理人";
   if (role === "PARTICIPANT") return "参与人";
@@ -476,8 +469,7 @@ function buildDraftCard(event: DiningEventSummary, nextCaption: string | null, s
     mealSlot: null,
     menuItems: event.menuItems.map(item => ({
       title: item.title,
-      coverUrl: null,
-      cookName: item.cookName
+      coverUrl: null
     })),
     participants: buildDraftParticipants(event, showMemberSummary),
     caption: nextCaption,

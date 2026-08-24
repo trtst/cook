@@ -264,6 +264,7 @@ export interface MyRecipeDetail {
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
 	assistant: RecipeAssistantSnapshot | null;
+	planLinks: RecipePlanLinkSummary[];
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
 	recommendation: RecipeRecommendationSummary | null;
@@ -271,6 +272,15 @@ export interface MyRecipeDetail {
 	version: number;
 	createdAt: IsoDateTime;
 	updatedAt: IsoDateTime;
+}
+
+export interface RecipePlanLinkSummary {
+	planItemId: UUID;
+	planDate: string;
+	mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
+	menuLocked: boolean;
+	status: "PLANNED" | "COMPLETED";
+	hasDiningEvent: boolean;
 }
 
 export type RecipeRecommendationStatus = "PENDING" | "REJECTED" | "ADOPTED" | "WITHDRAWN";
@@ -363,6 +373,7 @@ export interface InspirationRecipeDetail {
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
 	assistant: RecipeAssistantSnapshot | null;
+	planLinks: RecipePlanLinkSummary[];
 	likeCount: number;
 	collectCount: number;
 	ownedRecipeId: UUID | null;

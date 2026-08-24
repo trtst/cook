@@ -162,21 +162,24 @@
             hover-stay-time="100"
             @click="openRecentArrangementDetail(recentArrangement)"
           >
-            <view class="recent-arrangement__head">
-              <view>
-                <text class="recent-arrangement__eyebrow">最近安排</text>
-                <text class="recent-arrangement__title">{{ recentArrangement.title }}</text>
-              </view>
-              <text class="recent-arrangement__badge">{{ resolveRecentArrangementSourceText(recentArrangement.sourceType) }}</text>
+            <view class="recent-arrangement__stack" aria-hidden="true">
+              <view class="recent-arrangement__back recent-arrangement__back--near" />
+              <view class="recent-arrangement__back recent-arrangement__back--far" />
             </view>
-            <text class="recent-arrangement__meta">{{ recentArrangementMeta }}</text>
-            <text class="recent-arrangement__status">{{ recentArrangementStatusText }}</text>
-            <view class="recent-arrangement__actions">
-              <view class="recent-arrangement__button recent-arrangement__button--primary" @click.stop="openRecentArrangementPrimaryAction(recentArrangement)">
-                <text class="recent-arrangement__button-text">{{ recentArrangementActionText }}</text>
+            <view class="recent-arrangement__panel">
+              <view class="recent-arrangement__head">
+                <view>
+                  <text class="recent-arrangement__eyebrow">最近安排</text>
+                  <text class="recent-arrangement__title">{{ recentArrangement.title }}</text>
+                </view>
+                <text class="recent-arrangement__status recent-arrangement__status--head">{{ recentArrangementStatusText }}</text>
               </view>
-              <view class="recent-arrangement__button recent-arrangement__button--ghost" @click.stop="openRecentArrangementDetail(recentArrangement)">
-                <text class="recent-arrangement__button-text recent-arrangement__button-text--ghost">查看详情</text>
+              <text class="recent-arrangement__meta">{{ recentArrangementMeta }}</text>
+              <text class="recent-arrangement__hint">{{ recentArrangementHintText }}</text>
+              <view class="recent-arrangement__actions">
+                <view class="recent-arrangement__link" @click.stop="openRecentArrangementDetail(recentArrangement)">
+                  <text class="recent-arrangement__link-text">查看详情</text>
+                </view>
               </view>
             </view>
           </view>
@@ -348,18 +351,14 @@ const showRecentArrangementSkeleton = computed(
 );
 const recentArrangementMeta = computed(() => {
   if (!recentArrangement.value) return "";
-  const segments = [
+  return [
     formatRecentArrangementTime(recentArrangement.value),
     `${recentArrangement.value.participantCount}人`,
     `${recentArrangement.value.menuCount}道菜`
-  ];
-  if (typeof recentArrangement.value.gapCount === "number" && recentArrangement.value.gapCount > 0) {
-    segments.push(`还差${recentArrangement.value.gapCount}样食材`);
-  }
-  return segments.join(" · ");
+  ].join(" · ");
 });
 const recentArrangementStatusText = computed(() => (recentArrangement.value ? resolveRecentArrangementStatusText(recentArrangement.value.status) : ""));
-const recentArrangementActionText = computed(() => (recentArrangement.value ? resolveRecentArrangementActionText(recentArrangement.value.status) : ""));
+const recentArrangementHintText = computed(() => (recentArrangement.value ? resolveRecentArrangementHintText(recentArrangement.value) : ""));
 const heroEyebrow = computed(() => {
   if (!sessionStore.isLoggedIn) return "下一顿状态";
   if (nextMealStateLoading.value && !nextMealStateLoaded.value) return "正在整理安排";
@@ -630,10 +629,6 @@ function navigateTo(url: string) {
   void uniPlatform.navigation.navigateTo(url);
 }
 
-function resolveRecentArrangementSourceText(sourceType: HomeRecentArrangement["sourceType"]) {
-  return sourceType === "EVENT" ? "饭局" : "计划";
-}
-
 function formatRecentArrangementMetaLead(item: HomeRecentArrangement) {
   return `${formatRecentArrangementTime(item)} · ${item.participantCount}人`;
 }
@@ -646,12 +641,13 @@ function resolveRecentArrangementStatusText(status: HomeRecentArrangementStatus)
   return "该分享回忆了";
 }
 
-function resolveRecentArrangementActionText(status: HomeRecentArrangementStatus) {
-  if (status === "EMPTY_MENU") return "去加菜";
-  if (status === "PENDING_CONFIRM") return "确认菜单";
-  if (status === "PENDING_SHOPPING") return "去采购";
-  if (status === "READY_TO_COOK") return "开始做饭";
-  return "分享回忆";
+function resolveRecentArrangementHintText(item: HomeRecentArrangement) {
+  const gapCount = item.gapCount ?? 0;
+  if (item.status === "EMPTY_MENU") return "还没定菜";
+  if (item.status === "PENDING_CONFIRM") return gapCount > 0 ? `还差 ${gapCount} 样食材` : "菜单还没完全定好";
+  if (item.status === "PENDING_SHOPPING") return gapCount > 0 ? `还差 ${gapCount} 样食材` : "还差一些食材";
+  if (item.status === "READY_TO_COOK") return "食材差不多齐了";
+  return "这顿饭已经结束，可以回看一下";
 }
 
 function formatRecentArrangementTime(item: HomeRecentArrangement) {
@@ -741,7 +737,6 @@ defineExpose({
 
 .table-page {
   min-height: 100%;
-  padding-bottom: var(--space-page);
 }
 
 .table-hero {
@@ -1004,7 +999,7 @@ defineExpose({
   position: relative;
   z-index: 3;
   margin-top: -200rpx;
-  padding: 50rpx var(--space-page) 28rpx;
+  padding: 50rpx var(--space-page) calc(32rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
 }
 
 .feature-board {
@@ -1170,17 +1165,62 @@ defineExpose({
 }
 
 .recent-arrangement {
-  margin-top: 28rpx;
+  margin: 28rpx 0 36rpx;
+  position: relative;
+  padding-top: 20rpx;
+  padding-left: 12rpx;
+  padding-right: 12rpx;
+}
+
+.recent-arrangement__panel {
   padding: 28rpx;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-xs);
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--entry-side-mint-bg) 70%, transparent) 0, transparent 34%),
     linear-gradient(135deg, color-mix(in srgb, var(--entry-board-bg) 90%, white 10%), var(--color-surface));
   box-shadow: var(--shadow-card);
+  position: relative;
+  z-index: 2;
+}
+
+.recent-arrangement__stack {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.recent-arrangement__back {
+  position: absolute;
+  inset: 18rpx 0 0 0;
+  border-radius: var(--radius-xs);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--entry-side-mint-bg) 56%, transparent) 0, transparent 36%),
+    linear-gradient(135deg, color-mix(in srgb, var(--entry-board-bg) 82%, white 18%), color-mix(in srgb, var(--color-surface) 94%, white 6%));
+  box-shadow: 0 16rpx 44rpx rgba(34, 33, 31, 0.08);
+  transform-origin: center top;
+}
+
+.recent-arrangement__back--near {
+  inset-left: 10rpx;
+  inset-right: 10rpx;
+  transform: rotate(-1.6deg);
+  opacity: 0.72;
+}
+
+.recent-arrangement__back--far {
+  inset-top: 24rpx;
+  inset-left: 20rpx;
+  inset-right: 20rpx;
+  transform: rotate(-3.2deg);
+  opacity: 0.5;
 }
 
 .recent-arrangement--hover {
-  opacity: 0.88;
+  .recent-arrangement__panel,
+  .recent-arrangement__back {
+    opacity: 0.9;
+  }
 }
 
 .recent-arrangement--skeleton {
@@ -1211,7 +1251,8 @@ defineExpose({
 .recent-arrangement__eyebrow,
 .recent-arrangement__title,
 .recent-arrangement__meta,
-.recent-arrangement__status {
+.recent-arrangement__status,
+.recent-arrangement__hint {
   display: block;
 }
 
@@ -1229,14 +1270,13 @@ defineExpose({
   line-height: 1.24;
 }
 
-.recent-arrangement__badge {
+.recent-arrangement__status--head {
   flex: 0 0 auto;
-  padding: 12rpx 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--entry-primary-bg);
-  color: var(--entry-ink);
-  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
+  line-height: 1.3;
+  text-align: right;
 }
 
 .recent-arrangement__meta {
@@ -1247,49 +1287,36 @@ defineExpose({
 }
 
 .recent-arrangement__status {
-  margin-top: 12rpx;
   color: var(--color-primary);
+}
+
+.recent-arrangement__hint {
+  margin-top: 18rpx;
+  color: var(--color-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
 }
 
 .recent-arrangement__actions {
-  gap: 18rpx;
-  margin-top: 24rpx;
+  justify-content: flex-end;
 }
 
 .recent-arrangement__actions--skeleton {
   justify-content: flex-start;
 }
 
-.recent-arrangement__button {
+.recent-arrangement__link {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  padding: 0 28rpx;
-  height: 76rpx;
-  border-radius: var(--radius-pill);
+  padding: 4rpx 0;
 }
 
-.recent-arrangement__button--primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-active));
-  box-shadow: var(--shadow-card);
-}
-
-.recent-arrangement__button--ghost {
-  border: 1rpx solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
-}
-
-.recent-arrangement__button-text {
-  color: var(--color-white);
+.recent-arrangement__link-text {
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
-}
-
-.recent-arrangement__button-text--ghost {
-  color: var(--color-text);
+  line-height: 1.4;
 }
 
 .recent-arrangement__body-skeleton {
@@ -1545,9 +1572,9 @@ defineExpose({
 
 .table-section,
 .pantry-panel {
-  margin-top: 28rpx;
+  margin-top: 32rpx;
   padding: 28rpx;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-xs);
   background: var(--color-surface);
 }
 
@@ -1731,10 +1758,6 @@ defineExpose({
   font-size: var(--font-size-sm);
 }
 
-.table-section--recipes {
-  padding-right: 0;
-}
-
 .recipe-scroll {
   width: 100%;
   white-space: nowrap;
@@ -1742,16 +1765,20 @@ defineExpose({
 
 .family-recipe {
   display: inline-block;
-  width: 204rpx;
-  margin-right: 18rpx;
+  width: 240rpx;
+  margin-right: 28rpx;
   vertical-align: top;
+}
+
+.family-recipe:last-child {
+  margin-right: 0;
 }
 
 .family-recipe__visual {
   position: relative;
   overflow: hidden;
-  height: 220rpx;
-  border-radius: var(--radius-card);
+  height: 180rpx;
+  border-radius: var(--radius-xs);
   background: var(--entry-board-bg);
 }
 

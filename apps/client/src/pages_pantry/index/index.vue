@@ -190,55 +190,26 @@
       </template>
     </SheetShell>
 
-    <SheetShell
+    <ShoppingTargetSheet
       :visible="shoppingSheetVisible"
       title="加入采购清单"
       subtitle="先记进清单里，后面补买更顺手。"
+      :meta-title="shoppingTarget?.name || ''"
+      :meta-text="shoppingTarget ? `当前库存 · ${shoppingTarget.stockText} · ${shoppingTarget.categoryText}` : ''"
+      :create-mode="shoppingCreateMode"
+      :creating="shoppingCreatingList"
+      :create-disabled="shoppingCreateDisabled"
+      :create-name="newListName"
+      :items="activeLists"
+      :selected-id="selectedListId"
+      empty-text="还没有现成清单，先创建一个再加入。"
+      @toggle-create="toggleShoppingCreateMode"
+      @select="selectActiveList"
+      @create="createShoppingList"
+      @update:create-name="newListName = $event"
       @close="closeShoppingSheet"
       @after-close="resetShoppingSheet"
     >
-      <view v-if="shoppingTarget" class="sheet-meta sheet-meta--shopping">
-        <text class="sheet-meta__title">{{ shoppingTarget.name }}</text>
-        <text class="sheet-meta__text">当前库存 · {{ shoppingTarget.stockText }} · {{ shoppingTarget.categoryText }}</text>
-      </view>
-
-      <view class="sheet-section">
-        <view class="sheet-section__head">
-          <text class="sheet-section__title">目标清单</text>
-          <text class="sheet-section__action" @click="toggleShoppingCreateMode">{{ shoppingCreateMode ? "取消创建" : "创建清单" }}</text>
-        </view>
-        <view v-if="shoppingCreateMode" class="sheet-create-row">
-          <input
-            v-model="newListName"
-            class="sheet-input sheet-input--grow"
-            maxlength="20"
-            placeholder="输入新清单名"
-          />
-          <view
-            class="sheet-create-button"
-            :class="{ 'sheet-create-button--disabled': shoppingCreateDisabled }"
-            @click="createShoppingList"
-          >
-            {{ shoppingCreatingList ? "创建中..." : "创建" }}
-          </view>
-        </view>
-        <view v-if="activeLists.length" class="sheet-option-list">
-          <view
-            v-for="list in activeLists"
-            :key="list.id"
-            class="sheet-option"
-            :class="{ 'sheet-option--active': selectedListId === list.id }"
-            @click="selectActiveList(list.id)"
-          >
-            <view class="sheet-option__main">
-              <text class="sheet-option__title">{{ list.name }}</text>
-              <text class="sheet-option__meta">剩余 {{ Math.max(list.progressTotalCount - list.progressDoneCount, 0) }} 项待处理</text>
-            </view>
-          </view>
-        </view>
-        <text v-else class="sheet-empty-tip">还没有现成清单，先创建一个再加入。</text>
-      </view>
-
       <view class="sheet-section">
         <text class="sheet-section__title">采购信息</text>
         <view v-if="shoppingUseFixedUnit" class="sheet-input-group">
@@ -261,7 +232,7 @@
           </button>
         </view>
       </template>
-    </SheetShell>
+    </ShoppingTargetSheet>
   </Layout>
 </template>
 
@@ -274,6 +245,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
+import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -909,7 +881,6 @@ async function submitShopping() {
 .notice,
 .item-card,
 .sheet-card,
-.sheet-option,
 .sheet-input,
 .sheet-picker {
   border-radius: var(--radius-xs);
@@ -1255,17 +1226,6 @@ async function submitShopping() {
   margin-bottom: 14rpx;
 }
 
-.sheet-section__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14rpx;
-}
-
-.sheet-section__head .sheet-section__title {
-  margin-bottom: 0;
-}
-
 .sheet-calendar-head {
   display: flex;
   align-items: baseline;
@@ -1280,81 +1240,10 @@ async function submitShopping() {
   font-weight: var(--font-weight-semibold);
 }
 
-.sheet-section__action {
-  color: var(--color-primary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet-option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-}
-
-.sheet-create-row {
-  display: flex;
-  align-items: stretch;
-  gap: 14rpx;
-  margin-bottom: 14rpx;
-}
-
-.sheet-create-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 144rpx;
-  min-height: 88rpx;
-  padding: 0 28rpx;
-  border-radius: var(--radius-xs);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  box-sizing: border-box;
-}
-
-.sheet-create-button--disabled {
-  opacity: 0.4;
-}
-
-.sheet-option {
-  padding: 22rpx 24rpx;
-  border: 1rpx solid var(--color-border);
-}
-
-.sheet-option + .sheet-option,
-.sheet-option + .sheet-input,
 .sheet-input + .sheet-input,
 .sheet-picker + .sheet-input,
 .sheet-input + .sheet-picker {
   margin-top: 14rpx;
-}
-
-.sheet-option--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-}
-
-.sheet-option__title {
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet-option__meta {
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
-}
-
-.sheet-empty-tip {
-  display: block;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.6;
 }
 
 .sheet-input,

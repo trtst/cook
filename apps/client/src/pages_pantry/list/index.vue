@@ -157,28 +157,22 @@
       </view>
     </view>
 
-    <SheetShell
+    <TextFieldSheet
       :visible="createSheetVisible"
       :title="sheetTitle"
       :subtitle="sheetSubtitle"
+      :model-value="createName"
+      placeholder="请输入采购清单名"
+      :maxlength="20"
+      :submitting="submitting"
+      :confirm-disabled="!createName.trim()"
+      :confirm-text="sheetConfirmText"
+      :confirm-loading-text="sheetSubmittingText"
       @close="closeCreateSheet"
       @after-close="handleCreateSheetAfterClose"
-    >
-      <input
-        v-model="createName"
-        class="sheet-input"
-        maxlength="20"
-        placeholder="请输入采购清单名"
-      />
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeCreateSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || !createName.trim()" @click="submitSheet">
-            {{ submitting ? sheetSubmittingText : sheetConfirmText }}
-          </button>
-        </view>
-      </template>
-    </SheetShell>
+      @confirm="submitSheet"
+      @update:model-value="createName = $event"
+    />
 
     <InviteShareSheet
       :visible="shareManageVisible"
@@ -287,6 +281,7 @@ import Login from "@/components/Login/Login.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -449,7 +444,7 @@ onShow(() => {
   if (completedDetail) {
     applyCompletedSummary(completedDetail);
   } else {
-    void loadPage();
+    void loadInitialPage();
   }
   if (shareToken.value) {
     void loadSharePreview();
@@ -457,19 +452,30 @@ onShow(() => {
 });
 
 async function handleLoginSuccess() {
-  await loadPage();
+  await loadInitialPage();
   if (shareToken.value) {
     await loadSharePreview();
   }
 }
 
+async function loadInitialPage() {
+  await fetchPage(true);
+}
+
 async function loadPage() {
+  await fetchPage(false);
+}
+
+async function fetchPage(resolveDefaultStatus: boolean) {
   if (!sessionStore.isLoggedIn || loading.value) return;
   loading.value = true;
   errorText.value = "";
   try {
-    const summary = await shoppingApi.getListSummary();
-    const nextStatus = summary.statuses.find(item => item.status === status.value) ? status.value : summary.defaultStatus;
+    let nextStatus = status.value;
+    if (resolveDefaultStatus) {
+      const summary = await shoppingApi.getListSummary();
+      nextStatus = summary.defaultStatus;
+    }
     if (status.value !== nextStatus) status.value = nextStatus;
     const page = await shoppingApi.listLists(nextStatus);
     lists.value = page.items;
@@ -1260,16 +1266,6 @@ defineExpose({
 .create-fab__icon {
   color: var(--button-primary-text);
   font-size: 28rpx;
-}
-
-.sheet-input {
-  width: 100%;
-  min-height: 92rpx;
-  margin-top: 20rpx;
-  padding: 0 24rpx;
-  border-radius: 24rpx;
-  background: var(--color-surface-muted);
-  box-sizing: border-box;
 }
 
 .sheet-actions {

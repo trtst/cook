@@ -185,7 +185,7 @@ const currentMenuItems = computed<MenuEntry[]>(() => {
     return eventDetail.value.menuItems.map(item => ({
       key: `event-${item.id}`,
       title: item.title,
-      meta: item.cookName?.trim() ? `${item.cookName.trim()} 来做` : "待认领"
+      meta: "主家菜单"
     }));
   }
   return (planDetail.value?.menuItems ?? []).map(item => ({

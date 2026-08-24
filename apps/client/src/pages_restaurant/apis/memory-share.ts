@@ -5,7 +5,6 @@ import type { MealSlot } from "@/utils/meal-slot";
 export interface MemoryShareMenuItem {
   title: string;
   coverUrl: string | null;
-  cookName: string | null;
 }
 
 export interface MemoryShareParticipant {

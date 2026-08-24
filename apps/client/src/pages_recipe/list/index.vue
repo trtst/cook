@@ -66,48 +66,55 @@
             :description="mode === 'recipes' ? '先新建一份属于你的菜谱，常做的家常菜和灵感改编都可以记在这里。' : '编辑页存下的草稿会先出现在这里，整理好后再继续发布。'"
           />
 
-          <view v-else class="list">
-            <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
-              <view class="card__cover">
-                <image
-                  v-if="item.coverImageUrl"
-                  class="card__cover-image"
-                  :src="item.coverImageUrl"
-                  mode="aspectFill"
-                />
-                <view v-else class="card__cover-fallback">
-                  <text v-if="mode !== 'drafts'" class="card__cover-text font-black">封面</text>
+          <view v-else class="list-shell">
+            <view class="list">
+              <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
+                <view class="card__cover">
+                  <image
+                    v-if="item.coverImageUrl"
+                    class="card__cover-image"
+                    :src="item.coverImageUrl"
+                    mode="aspectFill"
+                  />
+                  <view v-else class="card__cover-fallback">
+                    <text v-if="mode !== 'drafts'" class="card__cover-text font-black">封面</text>
+                  </view>
                 </view>
-              </view>
-              <view class="card__body">
-                <text class="card__title">{{ item.title }}</text>
-                <view class="card__foot">
-                  <text class="card__meta">{{ item.meta }}</text>
-                  <view class="card__action-row">
-                    <text class="card__tail">{{ item.updatedAtText }}</text>
-                    <text
-                      class="card__danger"
-                      :class="{
-                        'card__danger--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
-                      }"
-                      @click.stop="mode === 'drafts' ? removeDraft(item) : removeRecipe(item)"
-                    >
-                      {{
-                        mode === "drafts"
-                          ? deletingDraftId === item.id
-                            ? "删除中..."
-                            : "删除草稿"
-                          : deletingRecipeId === item.id
-                            ? "删除中..."
-                            : "删除"
-                      }}
-                    </text>
+                <view class="card__body">
+                  <text class="card__title">{{ item.title }}</text>
+                  <view class="card__foot">
+                    <text class="card__meta">{{ item.meta }}</text>
+                    <view class="card__action-row">
+                      <text class="card__tail">{{ item.updatedAtText }}</text>
+                      <text
+                        class="card__danger"
+                        :class="{
+                          'card__danger--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
+                        }"
+                        @click.stop="mode === 'drafts' ? removeDraft(item) : removeRecipe(item)"
+                      >
+                        {{
+                          mode === "drafts"
+                            ? deletingDraftId === item.id
+                              ? "删除中..."
+                              : "删除草稿"
+                            : deletingRecipeId === item.id
+                              ? "删除中..."
+                              : "删除"
+                        }}
+                      </text>
+                    </view>
                   </view>
                 </view>
               </view>
             </view>
 
-            <view v-if="showFooter" class="list-footer">{{ footerText }}</view>
+            <LoadMore
+              v-if="showFooter"
+              :loading="loadingMore"
+              :has-next="currentHasNext"
+              :show-done="hasLoadedMoreMap[mode] && !currentHasNext"
+            />
           </view>
         </scroll-view>
       </view>
@@ -123,6 +130,7 @@ import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import LoadMore from "@/components/LoadMore.vue";
 import Login from "@/components/Login/Login.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
@@ -195,16 +203,16 @@ const hasNextMap = ref<Record<ListMode, boolean>>({
 	recipes: false,
 	drafts: false
 });
+const hasLoadedMoreMap = ref<Record<ListMode, boolean>>({
+	recipes: false,
+	drafts: false
+});
 const loadSource = ref<LoadSource>("idle");
 const deletingDraftId = ref<UUID | "">("");
 const deletingRecipeId = ref<UUID | "">("");
 const keywordText = computed(() => keyword.value.trim());
 const items = computed(() => cachedItems.value[mode.value]);
 const currentHasNext = computed(() => hasNextMap.value[mode.value]);
-const footerText = computed(() => {
-	if (loadingMore.value) return "加载更多中...";
-	return currentHasNext.value ? "上滑继续加载" : "没有更多了";
-});
 const showFooter = computed(() => items.value.length > 0 && !errorText.value);
 const inlineLoading = computed(() => loading.value && items.value.length > 0 && loadSource.value !== "refresh");
 const inlineLoadingText = computed(() => {
@@ -303,6 +311,7 @@ async function loadList(options: { force?: boolean; source?: LoadSource } = {}) 
 			cachedItems.value[currentMode] = result.items.map(toRecipeItem);
 			loadedPages.value[currentMode] = result.page;
 			hasNextMap.value[currentMode] = result.hasNext;
+			hasLoadedMoreMap.value[currentMode] = false;
 		} else {
 			const result = await recipeApi.listDrafts({
 				page: 1,
@@ -312,6 +321,7 @@ async function loadList(options: { force?: boolean; source?: LoadSource } = {}) 
 			cachedItems.value[currentMode] = result.items.map(toDraftItem);
 			loadedPages.value[currentMode] = result.page;
 			hasNextMap.value[currentMode] = result.hasNext;
+			hasLoadedMoreMap.value[currentMode] = false;
 		}
 		syncModeLoadState(currentMode);
 		success = true;
@@ -341,6 +351,9 @@ async function loadMore() {
 			cachedItems.value[currentMode] = [...cachedItems.value[currentMode], ...result.items.map(toRecipeItem)];
 			loadedPages.value[currentMode] = result.page;
 			hasNextMap.value[currentMode] = result.hasNext;
+			if (result.items.length > 0) {
+				hasLoadedMoreMap.value[currentMode] = true;
+			}
 		} else {
 			const result = await recipeApi.listDrafts({
 				page: loadedPages.value[currentMode] + 1,
@@ -350,6 +363,9 @@ async function loadMore() {
 			cachedItems.value[currentMode] = [...cachedItems.value[currentMode], ...result.items.map(toDraftItem)];
 			loadedPages.value[currentMode] = result.page;
 			hasNextMap.value[currentMode] = result.hasNext;
+			if (result.items.length > 0) {
+				hasLoadedMoreMap.value[currentMode] = true;
+			}
 		}
 		syncModeLoadState(currentMode);
 	} catch (error) {
@@ -588,16 +604,8 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	color: var(--color-text-secondary);
 }
 
-.list {
+.list-shell {
 	padding: 20rpx var(--space-page) calc(40rpx + env(safe-area-inset-bottom));
-}
-
-.list-footer {
-	padding: 12rpx 0;
-	color: var(--color-text-tertiary);
-	font-size: 22rpx;
-	line-height: 1.5;
-	text-align: center;
 }
 
 .card {

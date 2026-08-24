@@ -324,9 +324,10 @@ describe("pages_meal/detail/index", () => {
     const texts = await collectTexts(page);
     expect(texts).toContain("参与人");
     expect(texts).toContain("菜单");
+    expect(texts).toContain("我想吃池");
     expect(texts).toContain("采购准备");
     expect(texts).toContain("做饭助手");
-    expect(texts).toContain("待认领");
+    expect(texts).toContain("主家菜单");
     expect(texts).toContain(fixture.recipeTitle);
   });
 

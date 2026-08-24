@@ -31,8 +31,6 @@ export interface DiningEventSummary {
     recipeId: UUID | null;
     recipeVersionId: UUID;
     title: string;
-    cookUserUid: number | null;
-    cookName: string | null;
     version: number;
   }>;
   participants: DiningEventParticipantSummary[];

@@ -192,45 +192,52 @@
             @click="handleEmptyClick"
           />
 
-          <view v-else class="list">
-            <view
-              v-for="item in cards"
-              :key="item.id"
-              class="recipe-card"
-              hover-class="recipe-card--hover"
-              hover-stay-time="100"
-              @click="openCard(item)"
-            >
-              <view class="recipe-card__cover">
-                <text v-if="item.coverTag" class="recipe-card__cover-tag">{{ item.coverTag }}</text>
-                <image
-                  v-if="item.coverImageUrl"
-                  class="recipe-card__cover-image"
-                  :src="item.coverImageUrl"
-                  mode="aspectFill"
-                />
-                <view v-else class="recipe-card__cover-fallback">
-                  <text class="recipe-card__cover-text font-black">封面图</text>
+          <view v-else class="list-shell">
+            <view class="list">
+              <view
+                v-for="item in cards"
+                :key="item.id"
+                class="recipe-card"
+                hover-class="recipe-card--hover"
+                hover-stay-time="100"
+                @click="openCard(item)"
+              >
+                <view class="recipe-card__cover">
+                  <text v-if="item.coverTag" class="recipe-card__cover-tag">{{ item.coverTag }}</text>
+                  <image
+                    v-if="item.coverImageUrl"
+                    class="recipe-card__cover-image"
+                    :src="item.coverImageUrl"
+                    mode="aspectFill"
+                  />
+                  <view v-else class="recipe-card__cover-fallback">
+                    <text class="recipe-card__cover-text font-black">封面图</text>
+                  </view>
                 </view>
-              </view>
 
-              <view class="recipe-card__body">
-                <text class="recipe-card__title">{{ item.title }}</text>
-                <view class="recipe-card__info">
-                  <view class="recipe-card__meta">
-                    <text class="cookfont icon-time recipe-card__meta-icon" />
-                    <text class="recipe-card__meta-text">{{ item.meta }}</text>
+                <view class="recipe-card__body">
+                  <text class="recipe-card__title">{{ item.title }}</text>
+                  <view class="recipe-card__info">
+                    <view class="recipe-card__meta">
+                      <text class="cookfont icon-time recipe-card__meta-icon" />
+                      <text class="recipe-card__meta-text">{{ item.meta }}</text>
+                    </view>
+                    <view v-if="item.tag" class="recipe-card__tag" :class="{ 'recipe-card__tag--metric': item.kind === 'inspiration' }">
+                      <text v-if="item.kind === 'inspiration'" class="cookfont icon-collect recipe-card__tag-icon" />
+                      <text>{{ item.tag }}</text>
+                    </view>
                   </view>
-                  <view v-if="item.tag" class="recipe-card__tag" :class="{ 'recipe-card__tag--metric': item.kind === 'inspiration' }">
-                    <text v-if="item.kind === 'inspiration'" class="cookfont icon-collect recipe-card__tag-icon" />
-                    <text>{{ item.tag }}</text>
-                  </view>
+                  <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
                 </view>
-                <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
               </view>
             </view>
 
-            <view v-if="showFooter" class="list-footer">{{ footerText }}</view>
+            <LoadMore
+              v-if="showFooter"
+              :loading="loadingMore"
+              :has-next="currentHasNext"
+              :show-done="loadedMoreOnceMap[activeTab] && !currentHasNext"
+            />
           </view>
         </scroll-view>
       </view>
@@ -309,6 +316,7 @@ import {
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -478,7 +486,7 @@ const activeFilterCount = computed(
 		Number(activeTab.value === "inspiration" && inspirationSort.value !== "RECOMMENDED") +
 		Number(Boolean(activeTab.value === "my" ? myDifficulty.value : inspirationDifficulty.value)) +
 		Number(Boolean(activeTab.value === "my" ? myDuration.value : inspirationDuration.value)) +
-		Number(Boolean(activeTab.value === "my" ? myInspirationCategoryId.value : inspirationCategoryId.value))
+		Number(Boolean(activeTab.value === "my" ? myInspirationCategoryId.value : ""))
 );
 const activeFilterBadge = computed(() => (activeFilterCount.value > 9 ? "9+" : String(activeFilterCount.value)));
 watch(
@@ -508,9 +516,9 @@ const fabText = computed(() => {
 	return "添加";
 });
 const currentHasNext = computed(() => tabHasNext.value[activeTab.value]);
-const footerText = computed(() => {
-	if (loadingMore.value) return "加载更多中...";
-	return currentHasNext.value ? "上滑继续加载" : "没有更多了";
+const loadedMoreOnceMap = ref<Record<RecipeTab, boolean>>({
+	my: false,
+	inspiration: false
 });
 const showFooter = computed(() => cards.value.length > 0 && !errorText.value);
 const inlineLoading = computed(() => loading.value && cards.value.length > 0 && loadSource.value !== "refresh");
@@ -781,6 +789,7 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 			myRecipes.value = result.items;
 			tabPage.value.my = result.page;
 			tabHasNext.value.my = result.hasNext;
+			loadedMoreOnceMap.value.my = false;
 			syncTabLoadState(currentTab);
 			success = true;
 			return success;
@@ -801,6 +810,7 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 		inspirationRecipes.value = result.items;
 		tabPage.value.inspiration = result.page;
 		tabHasNext.value.inspiration = result.hasNext;
+		loadedMoreOnceMap.value.inspiration = false;
 		syncTabLoadState(currentTab);
 		success = true;
 	} catch (error) {
@@ -834,6 +844,9 @@ async function loadMoreActiveTab() {
 			myRecipes.value = [...myRecipes.value, ...result.items];
 			tabPage.value.my = result.page;
 			tabHasNext.value.my = result.hasNext;
+			if (result.items.length > 0) {
+				loadedMoreOnceMap.value.my = true;
+			}
 			syncTabLoadState(currentTab);
 			return;
 		}
@@ -850,6 +863,9 @@ async function loadMoreActiveTab() {
 		inspirationRecipes.value = [...inspirationRecipes.value, ...result.items];
 		tabPage.value.inspiration = result.page;
 		tabHasNext.value.inspiration = result.hasNext;
+		if (result.items.length > 0) {
+			loadedMoreOnceMap.value.inspiration = true;
+		}
 		syncTabLoadState(currentTab);
 	} catch (error) {
 		errorText.value = error instanceof Error ? error.message : "加载更多失败";
@@ -1306,20 +1322,14 @@ defineExpose({
   color: var(--color-text-secondary);
 }
 
+.list-shell {
+  padding-bottom: calc(24rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
+}
+
 .list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20rpx;
-  padding-bottom: calc(24rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
-}
-
-.list-footer {
-  grid-column: 1 / -1;
-  padding: 12rpx 0 8rpx;
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-  line-height: 1.5;
-  text-align: center;
 }
 
 .recipe-card {

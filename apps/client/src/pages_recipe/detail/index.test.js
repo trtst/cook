@@ -209,9 +209,49 @@ async function createPublishedRecipeFixture(authHeaders, categoryId, title, ingr
 
   return {
     recipeId: detail.id,
+    contentVersionId: detail.contentVersionId,
     title: detail.title,
     nutrition: detail.nutrition
   };
+}
+
+function addDaysText(days) {
+  const value = new Date();
+  value.setDate(value.getDate() + days);
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, "0");
+  const day = `${value.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatPlanLinkText(planDate, mealSlot) {
+  const [, month, day] = planDate.split("-");
+  const slotText =
+    mealSlot === "BREAKFAST"
+      ? "早餐"
+      : mealSlot === "LUNCH"
+        ? "午餐"
+        : mealSlot === "AFTERNOON_TEA"
+          ? "下午茶"
+          : mealSlot === "DINNER"
+            ? "晚餐"
+            : "夜宵";
+  return `${Number(month)}月${Number(day)}日 · ${slotText}`;
+}
+
+async function addRecipeToPlan(authHeaders, recipeId, recipeVersionId, planDate, mealSlot) {
+  return requestData("/meal-plans/items", {
+    method: "POST",
+    headers: withIdempotencyKey(authHeaders),
+    body: JSON.stringify({
+      planDate,
+      mealSlot,
+      recipeId,
+      recipeVersionId,
+      slotType: null,
+      purchaseState: "READY"
+    })
+  });
 }
 
 function formatNutritionValue(value, unit) {
@@ -323,6 +363,11 @@ describe("pages_recipe/detail/index", () => {
         "用于验证菜谱投稿主路径。"
       )
     };
+
+    fixtures.complete.planLinks = [
+      await addRecipeToPlan(authHeaders, fixtures.complete.recipeId, fixtures.complete.contentVersionId, addDaysText(1), "DINNER"),
+      await addRecipeToPlan(authHeaders, fixtures.complete.recipeId, fixtures.complete.contentVersionId, addDaysText(3), "LUNCH")
+    ];
   });
 
   it("菜谱详情页可以展示真实灵感菜谱正文主状态", async () => {
@@ -378,6 +423,35 @@ describe("pages_recipe/detail/index", () => {
     for (const expectedText of expectedNutritionTexts(fixture.nutrition, "perRecipe")) {
       expect(toggledTexts).toContain(expectedText);
     }
+  });
+
+  it("菜谱详情页可以展示做饭安排摘要并进入安排列表", async () => {
+    const fixture = fixtures.complete;
+    const page = await openRecipeDetail(session, fixture.recipeId);
+    const primaryPlanText = formatPlanLinkText(fixture.planLinks[0].planDate, fixture.planLinks[0].mealSlot);
+    const secondaryPlanText = formatPlanLinkText(fixture.planLinks[1].planDate, fixture.planLinks[1].mealSlot);
+
+    const state = await waitForState(
+      page,
+      (value) => value && value.planLinkCount === 2 && value.primaryPlanText === primaryPlanText
+    );
+    expect(state.planLinkCount).toBe(2);
+
+    const texts = await collectTexts(page);
+    expect(texts).toContain("做饭安排");
+    expect(texts).toContain(primaryPlanText);
+    expect(texts).toContain("共 2 个安排");
+    expect(texts).toContain("查看全部");
+    expect(texts.indexOf("做饭安排")).toBeGreaterThan(texts.indexOf("步骤"));
+
+    const summaryEntry = await page.$(".plan-link-entry");
+    expect(summaryEntry).toBeTruthy();
+    await summaryEntry.tap();
+
+    const sheetTexts = await collectTexts(page);
+    expect(sheetTexts).toContain("做饭安排");
+    expect(sheetTexts).toContain(primaryPlanText);
+    expect(sheetTexts).toContain(secondaryPlanText);
   });
 
   it("菜谱详情页可以展示真实 ESTIMATED 营养结果", async () => {

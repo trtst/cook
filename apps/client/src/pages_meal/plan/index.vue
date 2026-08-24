@@ -192,59 +192,67 @@
       </view>
 
       <SheetShell
-        :visible="shoppingSheetVisible"
-        title="加入采购清单"
-        subtitle="先选一张采购中的清单，也可以现场新建空白清单。"
-        @close="closeShoppingSheet"
-        @after-close="handleShoppingSheetAfterClose"
+        :visible="createPlanSheetVisible"
+        title="添加计划"
+        :subtitle="`会加在${selectedDateTitle}，先选这一天的餐次。`"
+        @close="closeCreatePlanSheet"
+        @after-close="handleCreatePlanSheetAfterClose"
       >
-        <view class="sheet-section">
-          <text class="sheet-section__title">采购中清单</text>
-          <view v-if="shoppingListLoading" class="notice notice--sheet">加载中...</view>
-          <view v-else-if="shoppingListError" class="notice notice--sheet" @click="loadShoppingLists(true)">{{ shoppingListError }}</view>
-          <view v-else-if="shoppingLists.length" class="shopping-list-grid">
-            <view
-              v-for="item in shoppingLists"
-              :key="item.id"
-              class="shopping-list-option"
-              :class="{ 'shopping-list-option--active': selectedShoppingListId === item.id }"
-              @click="selectedShoppingListId = item.id"
-            >
-              <text class="shopping-list-option__title">{{ item.name }}</text>
-              <text class="shopping-list-option__meta">{{ item.progressDoneCount }}/{{ item.progressTotalCount }} · {{ item.memberCount }} 人</text>
-            </view>
-          </view>
-          <text v-else class="sheet-section__hint">还没有采购中的清单，先新建一张空白清单。</text>
-        </view>
-
-        <view class="sheet-section">
-          <text class="sheet-section__title">新建空白清单</text>
-          <view class="shopping-create">
-            <input
-              v-model="shoppingCreateName"
-              class="shopping-create__input"
-              maxlength="30"
-              placeholder="清单名可不填，系统会自动生成"
-            />
-            <view class="shopping-create__button" @click="createShoppingList">新建</view>
+        <view class="sheet-chip-grid plan-slot-chip-grid">
+          <view
+            v-for="item in MEAL_SLOT_OPTIONS"
+            :key="item.value"
+            class="sheet-chip"
+            :class="{
+              'sheet-chip--active': createPlanSlot === item.value,
+              'sheet-chip--filled': Boolean(selectedDatePlanMap.get(item.value)),
+              'sheet-chip--disabled': isCreatePlanSlotExpired(item.value)
+            }"
+            @click="selectCreatePlanSlot(item.value)"
+          >
+            {{ item.label }}
           </view>
         </view>
+        <text class="sheet-section__hint plan-slot-hint">已安排的餐次会直接打开详情，已经过时的餐次不会再开放添加。</text>
 
         <template #footer>
           <view class="sheet-actions">
-            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeShoppingSheet">
+            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="creatingPlan" @click="closeCreatePlanSheet">
               取消
             </button>
             <button
               class="sheet-actions__button sheet-actions__button--confirm"
-              :disabled="shoppingSubmitting || !selectedShoppingListId"
-              @click="confirmAddToShoppingList"
+              :disabled="creatingPlan || isCreatePlanSlotExpired(createPlanSlot)"
+              @click="confirmCreatePlan"
             >
-              {{ shoppingSubmitting ? "加入中..." : "确认加入" }}
+              {{
+                creatingPlan
+                  ? "处理中..."
+                  : selectedDatePlanMap.get(createPlanSlot)
+                    ? "查看这顿"
+                    : "确认添加"
+              }}
             </button>
           </view>
         </template>
       </SheetShell>
+
+      <ShoppingListPickerSheet
+        :visible="shoppingSheetVisible"
+        :loading="shoppingListLoading"
+        :error-text="shoppingListError"
+        :items="shoppingLists"
+        :selected-id="selectedShoppingListId"
+        :create-name="shoppingCreateName"
+        :submitting="shoppingSubmitting"
+        @close="closeShoppingSheet"
+        @after-close="handleShoppingSheetAfterClose"
+        @retry="loadShoppingLists(true)"
+        @create="createShoppingList"
+        @confirm="confirmAddToShoppingList"
+        @update:selected-id="selectedShoppingListId = $event"
+        @update:create-name="shoppingCreateName = $event"
+      />
 
       <SheetShell
         v-if="sortSheetMounted"
@@ -331,6 +339,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Login from "@/components/Login/Login.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -348,8 +357,10 @@ import {
   buildMealSlotTitle,
   createEmptyMealCalendarMark,
   formatMealSlot,
+  isMealSlotExpired,
+  MEAL_SLOT_OPTIONS,
   mealSlotOrder,
-  resolvePlanEndOfDayMs,
+  resolveMealSlotExpireMs,
   resolveMealSlotTone,
   type MealCalendarMark,
   type MealSlot
@@ -384,7 +395,7 @@ interface WeekPanel {
 }
 
 type PlanOrderState = Record<string, UUID[]>;
-type PlanDockActionKey = "copy" | "recipe" | "shopping";
+type PlanDockActionKey = "copy" | "add" | "recipe" | "shopping";
 
 const pageStyle = usePageScrollStyle();
 const sessionStore = useSessionStore();
@@ -439,6 +450,9 @@ const shoppingCreateName = ref("");
 const shoppingSubmitting = ref(false);
 const shoppingPlan = ref<MealPlanSummary | null>(null);
 const emptyDockOpen = ref(false);
+const createPlanSheetVisible = ref(false);
+const creatingPlan = ref(false);
+const createPlanSlot = ref<MealSlot>("DINNER");
 const nowMs = ref(Date.now());
 let planSortPressTimer: ReturnType<typeof setTimeout> | null = null;
 let planNowTimer: ReturnType<typeof setInterval> | null = null;
@@ -504,12 +518,14 @@ const canShowPlanDock = computed(() => !loading.value && !errorText.value);
 const planDockActions = computed(() => {
   if (hasPlans.value) {
     return [
+      { key: "add" as const, label: "添加计划", iconClass: "icon-add" },
       { key: "recipe" as const, label: "去菜谱", iconClass: "icon-go-recipe" },
       { key: "shopping" as const, label: "去清单", iconClass: "icon-shopping" }
     ];
   }
   return [
     { key: "copy" as const, label: "复制上周", iconClass: "icon-add-owner" },
+    { key: "add" as const, label: "添加计划", iconClass: "icon-add" },
     { key: "recipe" as const, label: "去菜谱", iconClass: "icon-go-recipe" },
     { key: "shopping" as const, label: "去清单", iconClass: "icon-shopping" }
   ];
@@ -789,6 +805,38 @@ function openRecipe() {
   void uniPlatform.navigation.switchTab("/pages/recipe/index");
 }
 
+function resolveCreatePlanSlot() {
+  return (
+    MEAL_SLOT_OPTIONS.find(item => !isCreatePlanSlotExpired(item.value) && !selectedDatePlanMap.value.get(item.value))?.value ??
+    MEAL_SLOT_OPTIONS.find(item => !isCreatePlanSlotExpired(item.value))?.value ??
+    "DINNER"
+  );
+}
+
+function isCreatePlanSlotExpired(slot: MealSlot) {
+  return isMealSlotExpired(selectedDate.value, slot, new Date(nowMs.value));
+}
+
+function selectCreatePlanSlot(slot: MealSlot) {
+  if (isCreatePlanSlotExpired(slot)) return;
+  createPlanSlot.value = slot;
+}
+
+function openCreatePlanSheet() {
+  closeEmptyDock();
+  createPlanSlot.value = resolveCreatePlanSlot();
+  createPlanSheetVisible.value = true;
+}
+
+function closeCreatePlanSheet() {
+  if (creatingPlan.value) return;
+  createPlanSheetVisible.value = false;
+}
+
+function handleCreatePlanSheetAfterClose() {
+  createPlanSlot.value = "DINNER";
+}
+
 function openShoppingListPage() {
   closeEmptyDock();
   void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
@@ -815,11 +863,47 @@ function handleEmptyDockAction(action: PlanDockActionKey) {
     void copyPreviousWeek();
     return;
   }
+  if (action === "add") {
+    openCreatePlanSheet();
+    return;
+  }
   if (action === "shopping") {
     openShoppingListPage();
     return;
   }
   openRecipe();
+}
+
+async function confirmCreatePlan() {
+  if (creatingPlan.value) return;
+  if (isCreatePlanSlotExpired(createPlanSlot.value)) {
+    await uniPlatform.feedback.toast({ title: "当前时间已经不能新建这餐了", icon: "none" });
+    createPlanSlot.value = resolveCreatePlanSlot();
+    return;
+  }
+  const existingPlan = selectedDatePlanMap.value.get(createPlanSlot.value);
+  if (existingPlan) {
+    closeCreatePlanSheet();
+    openPlanDetail(existingPlan);
+    return;
+  }
+
+  creatingPlan.value = true;
+  try {
+    const plan = await mealApi.createPlan({
+      operationId: createOperationId(),
+      planDate: selectedDate.value,
+      mealSlot: createPlanSlot.value,
+      expectedVersion: null,
+      menuItems: []
+    });
+    closeCreatePlanSheet();
+    openPlanDetail(plan);
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加计划失败", icon: "none" });
+  } finally {
+    creatingPlan.value = false;
+  }
 }
 
 async function addPlanToShoppingList(plan: MealPlanSummary) {
@@ -971,7 +1055,7 @@ function canShowShoppingAction(plan: MealPlanSummary) {
 }
 
 function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">) {
-  return resolvePlanEndOfDayMs(plan.planDate);
+  return resolveMealSlotExpireMs(plan.planDate, plan.mealSlot);
 }
 
 function isPlanExpired(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">, currentMs = Date.now()) {
@@ -1273,6 +1357,9 @@ function clearPageState() {
   shoppingSubmitting.value = false;
   shoppingPlan.value = null;
   emptyDockOpen.value = false;
+  createPlanSheetVisible.value = false;
+  creatingPlan.value = false;
+  createPlanSlot.value = "DINNER";
   resetPlanSortDrag();
 }
 
@@ -1825,73 +1912,45 @@ function clearPageState() {
   line-height: 1.6;
 }
 
-.shopping-list-grid {
+.sheet-chip-grid {
   display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-  margin-top: 18rpx;
+  flex-wrap: wrap;
+  gap: 16rpx;
 }
 
-.shopping-list-option {
-  padding: 20rpx 22rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.78);
+.plan-slot-chip-grid {
+  margin-top: 4rpx;
 }
 
-.shopping-list-option--active {
-  border-color: rgba(47, 111, 78, 0.22);
-  background: rgba(47, 111, 78, 0.08);
-}
-
-.shopping-list-option__title,
-.shopping-list-option__meta {
-  display: block;
-}
-
-.shopping-list-option__title {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.shopping-list-option__meta {
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-}
-
-.shopping-create {
-  display: flex;
-  gap: 14rpx;
-  margin-top: 18rpx;
-}
-
-.shopping-create__input {
-  flex: 1;
-  min-width: 0;
-  height: 76rpx;
-  padding: 0 22rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-sizing: border-box;
-  color: var(--color-text);
-  font-size: 26rpx;
-}
-
-.shopping-create__button {
-  display: flex;
+.sheet-chip {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 132rpx;
-  height: 76rpx;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
+  min-height: 64rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid var(--color-divider);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+}
+
+.sheet-chip--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-active);
+}
+
+.sheet-chip--filled {
+  border-style: dashed;
+}
+
+.sheet-chip--disabled {
+  opacity: 0.38;
+}
+
+.plan-slot-hint {
+  margin-top: 18rpx;
 }
 
 .sheet-actions {
