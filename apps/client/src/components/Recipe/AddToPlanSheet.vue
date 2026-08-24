@@ -68,14 +68,15 @@
         </view>
         <view class="meal-slot-row">
           <view
-            v-for="item in mealSlots"
+            v-for="item in mealSlotItems"
             :key="item.value"
             class="meal-slot"
             :class="[
               `meal-slot--${resolveMealSlotTone(item.value)}`,
-              mealSlot === item.value ? 'meal-slot--active' : ''
+              mealSlot === item.value ? 'meal-slot--active' : '',
+              item.expired ? 'meal-slot--disabled' : ''
             ]"
-            @click="mealSlot = item.value"
+            @click="selectMealSlot(item.value)"
           >
             {{ item.label }}
           </view>
@@ -99,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
 import { mealApi } from "@/apis/meal";
 import { recipeApi, type RecipeCategorySummary } from "@/apis/recipe";
@@ -110,6 +111,7 @@ import { createOperationId } from "@/utils/operation-id";
 import {
   appendMealSlotToMark,
   createEmptyMealCalendarMark,
+  isMealSlotExpired,
   MEAL_SLOT_OPTIONS,
   resolveMealSlotTone,
   type MealCalendarMark,
@@ -144,9 +146,21 @@ const selectedDate = ref(today);
 const monthDate = ref(buildMonthAnchor(today));
 const mealSlot = ref<MealSlot>("DINNER");
 const planMarks = ref<Record<string, MealCalendarMark>>({});
+const nowMs = ref(Date.now());
 let planMarksSeq = 0;
+let nowTimer: ReturnType<typeof setInterval> | null = null;
 
-const canSubmit = computed(() => !props.needAddToPrivate || Boolean(selectedCategoryId.value));
+const mealSlotItems = computed(() => {
+  const now = new Date(nowMs.value);
+  return mealSlots.map(item => ({
+    ...item,
+    expired: isMealSlotExpired(selectedDate.value, item.value, now)
+  }));
+});
+const canSubmit = computed(() => {
+  if (props.needAddToPrivate && !selectedCategoryId.value) return false;
+  return !mealSlotItems.value.find(item => item.value === mealSlot.value)?.expired;
+});
 const planDateText = computed(() => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(selectedDate.value);
   return match ? `${Number(match[2])}月${Number(match[3])}日` : selectedDate.value;
@@ -156,7 +170,9 @@ const mealSlotText = computed(() => mealSlots.find(item => item.value === mealSl
 watch(
   () => props.visible,
   visible => {
+    syncNowTimer(visible);
     if (!visible) return;
+    nowMs.value = Date.now();
     resetSelection();
     void loadOptions();
   },
@@ -172,14 +188,23 @@ watch(
   }
 );
 
+watch(
+  () => [selectedDate.value, nowMs.value] as const,
+  () => {
+    ensureMealSlotAvailable();
+  },
+  { immediate: true }
+);
+
 function resetSelection() {
   selectedCategoryId.value = "";
   categoryDraftName.value = "";
   showCategoryCreator.value = false;
   categorySubmitting.value = false;
+  nowMs.value = Date.now();
   selectedDate.value = today;
   monthDate.value = buildMonthAnchor(today);
-  mealSlot.value = "DINNER";
+  mealSlot.value = resolveNextMealSlot(today);
   errorText.value = "";
 }
 
@@ -232,6 +257,34 @@ function reload() {
   void loadOptions();
 }
 
+function syncNowTimer(visible: boolean) {
+  if (nowTimer) {
+    clearInterval(nowTimer);
+    nowTimer = null;
+  }
+  if (!visible) return;
+  nowTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 30_000);
+}
+
+function resolveNextMealSlot(dateText: string) {
+  const now = new Date(nowMs.value);
+  return mealSlots.find(item => !isMealSlotExpired(dateText, item.value, now))?.value ?? "LATE_NIGHT";
+}
+
+function ensureMealSlotAvailable() {
+  const now = new Date(nowMs.value);
+  if (!isMealSlotExpired(selectedDate.value, mealSlot.value, now)) return;
+  mealSlot.value = resolveNextMealSlot(selectedDate.value);
+}
+
+function selectMealSlot(value: MealSlot) {
+  const now = new Date(nowMs.value);
+  if (isMealSlotExpired(selectedDate.value, value, now)) return;
+  mealSlot.value = value;
+}
+
 function toggleCategoryCreator() {
   showCategoryCreator.value = !showCategoryCreator.value;
   if (!showCategoryCreator.value) categoryDraftName.value = "";
@@ -273,6 +326,9 @@ async function submit() {
   submitting.value = true;
   let addedToPrivate = false;
   try {
+    if (isMealSlotExpired(selectedDate.value, mealSlot.value, new Date(nowMs.value))) {
+      throw new Error("当前时间已经不能安排这餐了");
+    }
     let recipeId = props.recipeId ?? null;
     let recipeVersionId: UUID | null = null;
     if (props.needAddToPrivate) {
@@ -326,6 +382,13 @@ function buildMonthAnchor(dateText: string) {
   const date = parseDateOnly(dateText);
   return formatDateOnly(new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0));
 }
+
+onUnmounted(() => {
+  if (nowTimer) {
+    clearInterval(nowTimer);
+    nowTimer = null;
+  }
+});
 </script>
 
 <style scoped lang="scss">
@@ -415,6 +478,10 @@ function buildMonthAnchor(dateText: string) {
 
 .meal-slot {
   flex: 1;
+}
+
+.meal-slot--disabled {
+  opacity: 0.38;
 }
 
 .meal-slot--active {
