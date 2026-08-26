@@ -1845,17 +1845,46 @@ export class AdminMedalTemplateModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
-export class SharePreviewModel {
+export class SharePreviewParticipantModel {
+  @ApiProperty(nullableString) displayName!: string | null;
+  @ApiProperty(nullableString) avatarUrl!: string | null;
+}
+
+export class SharePreviewMenuItemModel {
   @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty({ type: String, enum: ["my", "inspiration"] }) recipeKind!: "my" | "inspiration";
+}
+
+export class SharePreviewModel {
+  @ApiProperty({ type: String }) organizerText!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(uuid) eventId!: string;
   @ApiProperty({ ...uuid, nullable: true }) planItemId!: string | null;
   @ApiProperty({ type: String, nullable: true }) planDate!: string | null;
   @ApiProperty({ type: String, enum: mealSlotValues, nullable: true }) mealSlot!: string | null;
   @ApiProperty(dateTime) scheduledAt!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty(nullableString) organizerName!: string | null;
-  @ApiProperty({ type: [String] }) menuPreview!: string[];
+  @ApiProperty(nullableString) organizerAvatarUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "OPENED", "ACCEPTED"] }) inviteStatus!: "ACTIVE" | "OPENED" | "ACCEPTED";
+  @ApiProperty({ type: [SharePreviewParticipantModel] })
+  participants!: Array<{
+    displayName: string | null;
+    avatarUrl: string | null;
+  }>;
+  @ApiProperty({ type: [SharePreviewMenuItemModel] }) menuPreview!: Array<{
+    title: string;
+    recipeId: string | null;
+    recipeKind: "my" | "inspiration";
+  }>;
   @ApiProperty(nullableString) countdownText!: string | null;
   @ApiProperty(nullableString) locationHint!: string | null;
+}
+
+export class SharePreviewViewerModel {
+  @ApiProperty({ type: String, enum: ["ACCEPT", "VIEW", "BLOCKED"] }) action!: "ACCEPT" | "VIEW" | "BLOCKED";
+  @ApiProperty(nullableString) statusHint!: string | null;
 }
 
 export class FridgeReservationModel {
@@ -1882,6 +1911,11 @@ export class FridgeItemModel {
   @ApiProperty(nullableString) availableText!: string | null;
   @ApiProperty({ type: [FridgeReservationModel] }) reservations!: FridgeReservationModel[];
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class FridgeSummaryModel {
+  @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) expiringCount!: number;
 }
 
 export class ShoppingItemModel {
@@ -1939,6 +1973,8 @@ export class ShoppingListStatusCountModel {
 export class ShoppingListSummaryResponseModel {
   @ApiProperty({ type: [ShoppingListStatusCountModel] }) statuses!: ShoppingListStatusCountModel[];
   @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) defaultStatus!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) activeListCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) pendingItemCount!: number;
 }
 
 export class ShoppingListSummaryModel {

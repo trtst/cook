@@ -51,6 +51,7 @@ import type {
   RecipeSlotType,
   RecipeContentSnapshot,
   SharePreviewResponse,
+  SharePreviewViewerResponse,
   UUID
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
@@ -156,9 +157,25 @@ type DiningEventShareInviteRow = Prisma.DiningEventShareInviteGetPayload<{
   include: {
     diningEvent: {
       include: {
-        user: { select: { nickname: true } };
+        user: { select: { nickname: true; avatarUrl: true } };
         mealPlanItem: { select: { planDate: true; mealSlot: true } };
-        menuItems: { select: { title: true } };
+        menuItems: {
+          include: {
+            recipeVersion: {
+              select: {
+                name: true,
+                currentRecipes: {
+                  select: { id: true; ownerId: true };
+                };
+              };
+            };
+          };
+        };
+        participants: {
+          include: {
+            user: { select: { nickname: true; avatarUrl: true } };
+          };
+        };
       };
     };
   };
@@ -2888,6 +2905,7 @@ export class MealService {
     }
     const now = new Date();
     await this.ensureDiningEventShareInviteActive(this.prisma, invite, now);
+    let inviteStatus = invite.status;
     if (invite.status === "ACTIVE") {
       await this.prisma.diningEventShareInvite.update({
         where: { id: invite.id },
@@ -2896,6 +2914,7 @@ export class MealService {
           openedAt: invite.openedAt ?? now
         }
       });
+      inviteStatus = "OPENED";
     } else if (!invite.openedAt) {
       await this.prisma.diningEventShareInvite.update({
         where: { id: invite.id },
@@ -2905,8 +2924,11 @@ export class MealService {
       });
     }
     const event = invite.diningEvent;
+    const organizerName = event.user?.nickname?.trim() || null;
     return {
+      organizerText: organizerName ? `${organizerName} 邀请你来吃饭` : "",
       title: event.title,
+      eventId: event.id,
       planItemId: event.mealPlanItemId,
       planDate: event.mealPlanItem?.planDate?.toISOString().slice(0, 10) ?? null,
       mealSlot: event.mealPlanItem?.mealSlot ?? null,
@@ -2915,11 +2937,35 @@ export class MealService {
         event.coverStorageKey && event.coverContentType
           ? this.uploadService.buildDiningEventCoverUrl({}, event.id, event.updatedAt)
           : null,
-      organizerName: event.user?.nickname ?? null,
-      menuPreview: event.menuItems.slice(0, 4).map(item => item.title),
+      organizerName,
+      organizerAvatarUrl: event.user?.avatarUrl ?? null,
+      inviteStatus: inviteStatus === "ACCEPTED" ? "ACCEPTED" : inviteStatus === "OPENED" ? "OPENED" : "ACTIVE",
+      participants: event.participants.slice(0, 5).map(item => ({
+        displayName: item.guestName?.trim() || item.user?.nickname?.trim() || null,
+        avatarUrl: item.user?.avatarUrl ?? null
+      })),
+      menuPreview: event.menuItems.slice(0, 4).map(item => {
+        const ownerRecipe = item.recipeVersion.currentRecipes.find(recipe => recipe.ownerId === event.userId) ?? null;
+        const firstRecipe = item.recipeVersion.currentRecipes[0] ?? null;
+        return {
+          title: item.title?.trim() || item.recipeVersion.name,
+          recipeId: ownerRecipe?.id ?? firstRecipe?.id ?? null,
+          recipeKind: ownerRecipe ? "my" : "inspiration"
+        };
+      }),
       countdownText: formatShareCountdown(event.scheduledAt, now),
       locationHint: event.location ? "地点加入后查看" : null
     };
+  }
+
+  async getSharePreviewViewer(userId: UUID, shareToken: string): Promise<SharePreviewViewerResponse> {
+    const shareTokenHash = hashText(shareToken);
+    const invite = await this.loadDiningEventShareInvite(this.prisma, shareTokenHash);
+    if (!invite) {
+      throw new NotFoundException("分享已失效");
+    }
+    await this.ensureDiningEventShareInviteActive(this.prisma, invite, new Date());
+    return this.buildSharePreviewViewer(invite, userId);
   }
 
   async acceptShareInvite(userId: UUID, shareToken: string, operationId: OperationId, guestName: string) {
@@ -3016,13 +3062,62 @@ export class MealService {
       include: {
         diningEvent: {
           include: {
-            user: { select: { nickname: true } },
+            user: { select: { nickname: true, avatarUrl: true } },
             mealPlanItem: { select: { planDate: true, mealSlot: true } },
-            menuItems: { select: { title: true } }
+            menuItems: {
+              include: {
+                recipeVersion: {
+                  include: {
+                    currentRecipes: {
+                      select: { id: true, ownerId: true }
+                    }
+                  }
+                }
+              }
+            },
+            participants: {
+              where: {
+                status: "ACCEPTED"
+              },
+              include: {
+                user: { select: { nickname: true, avatarUrl: true } }
+              },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+            }
           }
         }
       }
     });
+  }
+
+  private buildSharePreviewViewer(invite: DiningEventShareInviteRow, userId: UUID): SharePreviewViewerResponse {
+    const event = invite.diningEvent;
+    if (event.userId === userId) {
+      return {
+        action: "VIEW",
+        statusHint: "这是你发起的饭局。"
+      };
+    }
+
+    const acceptedParticipant = event.participants.find(item => item.userId === userId);
+    if (acceptedParticipant) {
+      return {
+        action: "VIEW",
+        statusHint: "你已经加入这场饭局了。"
+      };
+    }
+
+    if (invite.acceptedByUserId && invite.acceptedByUserId !== userId) {
+      return {
+        action: "BLOCKED",
+        statusHint: "这条分享邀请已经被其他账号使用"
+      };
+    }
+
+    return {
+      action: "ACCEPT",
+      statusHint: null
+    };
   }
 
   private async ensureDiningEventShareInviteActive(db: MealDb, invite: DiningEventShareInviteRow, now: Date) {

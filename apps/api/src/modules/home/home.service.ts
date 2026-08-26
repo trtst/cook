@@ -386,8 +386,8 @@ export class HomeService {
 
     const selected =
       this.pickRecentArrangement(candidates, "PRIMARY", nowMs) ||
-      this.pickRecentArrangement(candidates, "PAST_SHARE", nowMs) ||
-      this.pickRecentArrangement(candidates, "FALLBACK", nowMs);
+      this.pickRecentArrangement(candidates, "FALLBACK", nowMs) ||
+      this.pickRecentArrangement(candidates, "PAST_SHARE", nowMs);
 
     return selected
       ? {

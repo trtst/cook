@@ -2375,6 +2375,11 @@ export interface FridgeItemSummary {
   updatedAt: IsoDateTime;
 }
 
+export interface FridgeSummaryResponse {
+  totalCount: number;
+  expiringCount: number;
+}
+
 export interface CreateFridgeItemRequest {
   operationId: OperationId;
   name: string;
@@ -2461,6 +2466,8 @@ export interface ShoppingListStatusCount {
 export interface ShoppingListSummaryResponse {
   statuses: ShoppingListStatusCount[];
   defaultStatus: ShoppingListStatus;
+  activeListCount: number;
+  pendingItemCount: number;
 }
 
 export interface ShoppingListSummary {
@@ -2753,14 +2760,31 @@ export interface UpdateShoppingGroupStatusRequest {
 }
 
 export interface SharePreviewResponse {
+  organizerText: string;
   title: string;
+  eventId: UUID;
   planItemId: UUID | null;
   planDate: string | null;
   mealSlot: MealSlot | null;
   scheduledAt: IsoDateTime;
   coverImageUrl: string | null;
   organizerName: string | null;
-  menuPreview: string[];
+  organizerAvatarUrl: string | null;
+  inviteStatus: "ACTIVE" | "OPENED" | "ACCEPTED";
+  participants: Array<{
+    displayName: string | null;
+    avatarUrl: string | null;
+  }>;
+  menuPreview: Array<{
+    title: string;
+    recipeId: UUID | null;
+    recipeKind: "my" | "inspiration";
+  }>;
   countdownText: string | null;
   locationHint: string | null;
+}
+
+export interface SharePreviewViewerResponse {
+  action: "ACCEPT" | "VIEW" | "BLOCKED";
+  statusHint: string | null;
 }

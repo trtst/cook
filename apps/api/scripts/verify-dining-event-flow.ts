@@ -36,6 +36,11 @@ interface LoginResult {
   user: LoginUser;
 }
 
+interface SharePreviewViewerResponse {
+  action: "ACCEPT" | "VIEW" | "BLOCKED";
+  statusHint: string | null;
+}
+
 let idempotencySeed = BigInt(Date.now()) * 1000n + BigInt(process.pid % 1000);
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -406,8 +411,16 @@ async function main() {
   const shareToken = parseShareToken(shareA.shareTokenPath);
 
   const preview = await requestData<SharePreviewResponse>(`/share/${shareToken}/preview`);
+  assert(preview.eventId === event.id, "share preview should expose the same event id");
   assert(preview.planItemId === plan.id, "share preview should expose the same plan item");
   assert(preview.title === event.title, "share preview title should match event title");
+  assert(preview.inviteStatus === "OPENED", "share preview should mark first-open invite as OPENED");
+  assert(preview.participants.length === 0, "share preview should not include non-accepted participants before join");
+
+  const memberViewerBeforeJoin = await requestData<SharePreviewViewerResponse>(`/share/${shareToken}/viewer`, {
+    headers: memberAuth
+  });
+  assert(memberViewerBeforeJoin.action === "ACCEPT", "fresh logged-in viewer should still need to accept invite");
 
   const joined = await requestData<DiningEventSummary>(`/share/${shareToken}/accept`, {
     method: "POST",
@@ -416,6 +429,30 @@ async function main() {
   });
   const joinedParticipant = joined.participants.find(item => item.userUid === member.user.uid);
   assert(joinedParticipant?.status === "ACCEPTED", "member should join the event as ACCEPTED");
+
+  const previewAfterJoin = await requestData<SharePreviewResponse>(`/share/${shareToken}/preview`);
+  assert(previewAfterJoin.participants.length === 1, "share preview should only list accepted participants after join");
+  assert(
+    previewAfterJoin.participants[0]?.displayName === "饭局验收成员",
+    "share preview should expose the accepted participant display name"
+  );
+
+  const memberViewerAfterJoin = await requestData<SharePreviewViewerResponse>(`/share/${shareToken}/viewer`, {
+    headers: memberAuth
+  });
+  assert(memberViewerAfterJoin.action === "VIEW", "accepted member should be able to view the dining event");
+
+  const ownerViewer = await requestData<SharePreviewViewerResponse>(`/share/${shareToken}/viewer`, {
+    headers: ownerAuth
+  });
+  assert(ownerViewer.action === "VIEW", "organizer should be able to view the dining event");
+
+  const outsider = await loginWithCode(createFreshPhone());
+  const outsiderAuth = { authorization: `Bearer ${outsider.token}` };
+  const outsiderViewer = await requestData<SharePreviewViewerResponse>(`/share/${shareToken}/viewer`, {
+    headers: outsiderAuth
+  });
+  assert(outsiderViewer.action === "BLOCKED", "invite already used by another account should be blocked");
 
   const memberView = await requestData<DiningEventSummary>(`/dining-events/${event.id}`, {
     headers: memberAuth
@@ -473,6 +510,9 @@ async function main() {
         recentArrangementStatus: recentArrangement.status,
         shareTokenPath: shareA.shareTokenPath,
         previewPlanItemId: preview.planItemId,
+        previewAcceptedParticipantCount: previewAfterJoin.participants.length,
+        memberViewerAction: memberViewerAfterJoin.action,
+        outsiderViewerAction: outsiderViewer.action,
         joinedParticipantStatus: joinedParticipant.status,
         wishedRecipeId: wishedItem.id,
         wishAddedToMenu: Boolean(addedMenuItem),

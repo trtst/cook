@@ -44,7 +44,8 @@ import {
   RandomGapPreviewModel,
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
-  SharePreviewModel
+  SharePreviewModel,
+  SharePreviewViewerModel
 } from "../../contracts/openapi";
 import { MealService } from "./meal.service";
 
@@ -537,6 +538,14 @@ export class MealController {
   @ApiOkModel(SharePreviewModel, "饭局分享预览，只返回白名单字段")
   getSharePreview(@Param("shareToken") shareToken: string) {
     return this.mealService.getSharePreview(shareToken).then(result => ok(result));
+  }
+
+  @Get("share/:shareToken/viewer")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(SharePreviewViewerModel, "登录后读取当前用户对这条饭局分享的可见动作")
+  getSharePreviewViewer(@Req() request: RequestWithUser, @Param("shareToken") shareToken: string) {
+    return this.mealService.getSharePreviewViewer(request.user.userId, shareToken).then(result => ok(result));
   }
 
   @Get("memory-shares/:shareToken/preview")

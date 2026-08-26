@@ -3,6 +3,7 @@ import type {
   CreateFridgeItemRequest,
   DiningEventSummary,
   FridgeItemSummary,
+  FridgeSummaryResponse,
   IngredientSummary,
   MealPlanSummary,
   MyRecipeDetail,
@@ -11,6 +12,7 @@ import type {
   RecipeDraftDetail,
   SaveRecipeDraftResponse,
   ShoppingGapResponse,
+  ShoppingListSummaryResponse,
   ShoppingListDetail,
   ShoppingListItemPatchResponse
 } from "../src/contracts/types";
@@ -112,8 +114,7 @@ function formatDateOnly(date: Date) {
 }
 
 function buildPlanDate(daysFromNow: number) {
-  const extraDays = Number(nextIdempotencyKey().slice(-2)) % 20;
-  return formatDateOnly(new Date(Date.now() + (daysFromNow + extraDays) * 24 * 60 * 60 * 1000));
+  return formatDateOnly(new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000));
 }
 
 function buildFutureIso(hoursFromNow: number) {
@@ -218,12 +219,13 @@ async function createOwnerRecipe(ownerAuth: Record<string, string>) {
 
 async function createMealPlan(ownerAuth: Record<string, string>, recipe: MyRecipeDetail) {
   const titleSuffix = nextIdempotencyKey().slice(-6);
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  const startOffset = 120 + Number(titleSuffix.slice(-2));
+  for (let attempt = 0; attempt < 45; attempt += 1) {
     const result = await request<MealPlanSummary>("/meal-plans", {
       method: "POST",
       headers: withIdempotencyKey(ownerAuth),
       body: JSON.stringify({
-        planDate: buildPlanDate(31 + attempt),
+        planDate: buildPlanDate(startOffset + attempt),
         mealSlot: "DINNER",
         title: `采购验收餐次-${titleSuffix}-${attempt}`,
         menuItems: [
@@ -245,7 +247,7 @@ async function createMealPlan(ownerAuth: Record<string, string>, recipe: MyRecip
     }
     throw new Error(`/meal-plans HTTP ${result.status}: ${result.body.message}`);
   }
-  throw new Error("/meal-plans failed after 10 attempts due to existing plan conflicts");
+  throw new Error(`/meal-plans failed after 45 attempts due to existing plan conflicts (startOffset=${startOffset})`);
 }
 
 async function createFridgeItem(ownerAuth: Record<string, string>, ingredient: IngredientSummary) {
@@ -272,10 +274,88 @@ async function listFridge(ownerAuth: Record<string, string>) {
   });
 }
 
+async function getFridgeSummary(ownerAuth: Record<string, string>) {
+  return requestData<FridgeSummaryResponse>("/fridge-items/summary", {
+    headers: ownerAuth
+  });
+}
+
+async function getShoppingListSummary(ownerAuth: Record<string, string>) {
+  return requestData<ShoppingListSummaryResponse>("/shopping-lists/summary", {
+    headers: ownerAuth
+  });
+}
+
 async function main() {
   const owner = await login();
   const ownerAuth = { authorization: `Bearer ${owner.token}` };
+  const shoppingSummaryBefore = await getShoppingListSummary(ownerAuth);
   const { gapIngredient, stockedIngredient, recipe } = await createOwnerRecipe(ownerAuth);
+  const groupedList = await requestData<ShoppingListDetail>("/shopping-lists", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ name: `分组采购清单-${nextIdempotencyKey().slice(-6)}` })
+  });
+  const shoppingSummaryAfterGroupedList = await getShoppingListSummary(ownerAuth);
+  const groupedAfterFirstItem = await requestData<ShoppingListDetail>(`/shopping-lists/${groupedList.id}/items`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({
+      name: gapIngredient.name,
+      ingredientId: gapIngredient.id,
+      quantityText: buildQuantityText("1", gapIngredient.defaultUnit.name),
+      note: "分组口径验收-1"
+    })
+  });
+  const shoppingSummaryAfterFirstGroup = await getShoppingListSummary(ownerAuth);
+  assert(
+    shoppingSummaryAfterFirstGroup.pendingItemCount === shoppingSummaryAfterGroupedList.pendingItemCount + 1,
+    "shopping list summary should add one pending group after the first grouped item"
+  );
+  const groupedAfterSecondItem = await requestData<ShoppingListDetail>(`/shopping-lists/${groupedList.id}/items`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({
+      name: gapIngredient.name,
+      ingredientId: gapIngredient.id,
+      quantityText: buildQuantityText("2", gapIngredient.defaultUnit.name),
+      note: "分组口径验收-2"
+    })
+  });
+  assert(groupedAfterSecondItem.items.filter(item => item.ingredientId === gapIngredient.id).length >= 2, "grouped shopping list should keep duplicate ingredient rows");
+  assert(groupedAfterSecondItem.progressTotalCount === groupedAfterFirstItem.progressTotalCount, "shopping list detail should still treat duplicate ingredient rows as one group");
+  const shoppingSummaryAfterSecondGroup = await getShoppingListSummary(ownerAuth);
+  assert(
+    shoppingSummaryAfterSecondGroup.pendingItemCount === shoppingSummaryAfterFirstGroup.pendingItemCount,
+    "shopping list summary should not double-count duplicate ingredient groups"
+  );
+  const groupedItems = groupedAfterSecondItem.items.filter(item => item.ingredientId === gapIngredient.id);
+  const groupedAfterFirstCheck = await requestData<ShoppingListItemPatchResponse>(`/shopping-lists/${groupedList.id}/items/${groupedItems[0].id}/check`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({
+      version: groupedAfterSecondItem.version,
+      checked: true
+    })
+  });
+  const shoppingSummaryAfterFirstCheck = await getShoppingListSummary(ownerAuth);
+  assert(
+    shoppingSummaryAfterFirstCheck.pendingItemCount === shoppingSummaryAfterSecondGroup.pendingItemCount,
+    "shopping list summary should keep the group pending until all duplicate rows are done"
+  );
+  await requestData<ShoppingListItemPatchResponse>(`/shopping-lists/${groupedList.id}/items/${groupedItems[1].id}/check`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({
+      version: groupedAfterFirstCheck.version,
+      checked: true
+    })
+  });
+  const shoppingSummaryAfterGroupedDone = await getShoppingListSummary(ownerAuth);
+  assert(
+    shoppingSummaryAfterGroupedDone.pendingItemCount === shoppingSummaryAfterSecondGroup.pendingItemCount - 1,
+    "shopping list summary should drop the group only after all duplicate rows are completed"
+  );
   const recipeList = await requestData<ShoppingListDetail>("/shopping-lists", {
     method: "POST",
     headers: withIdempotencyKey(ownerAuth),
@@ -302,6 +382,25 @@ async function main() {
         )
     ),
     "recipe shopping list should keep RECIPE source traceability"
+  );
+  const shoppingSummaryAfterRecipe = await getShoppingListSummary(ownerAuth);
+  assert(
+    shoppingSummaryAfterRecipe.activeListCount >= shoppingSummaryBefore.activeListCount + 1,
+    "shopping list summary should track newly created active lists"
+  );
+  assert(
+    shoppingSummaryAfterRecipe.pendingItemCount > shoppingSummaryBefore.pendingItemCount,
+    "shopping list summary should track pending shopping items"
+  );
+
+  const fridgeSummaryBefore = await getFridgeSummary(ownerAuth);
+  const createdFridge = await createFridgeItem(ownerAuth, stockedIngredient);
+  assert(createdFridge.ingredientId === stockedIngredient.id, "created fridge item should keep ingredient id");
+  const fridgeSummaryAfterCreate = await getFridgeSummary(ownerAuth);
+  assert(fridgeSummaryAfterCreate.totalCount > fridgeSummaryBefore.totalCount, "fridge summary total count should grow after creating an item");
+  assert(
+    fridgeSummaryAfterCreate.expiringCount >= fridgeSummaryBefore.expiringCount,
+    "fridge summary expiring count should stay stable for a non-expiring item"
   );
 
   const scheduledAt = buildFutureIso(3);
@@ -342,9 +441,6 @@ async function main() {
     ),
     "from-gap shopping list should keep EVENT source and ingredient traceability"
   );
-
-  const createdFridge = await createFridgeItem(ownerAuth, stockedIngredient);
-  assert(createdFridge.ingredientId === stockedIngredient.id, "created fridge item should keep ingredient id");
 
   const planList = await requestData<ShoppingListDetail>("/shopping-lists", {
     method: "POST",

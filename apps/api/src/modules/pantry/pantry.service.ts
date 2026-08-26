@@ -16,6 +16,7 @@ import type {
   CompleteShoppingListEntryRequest,
   CreateRandomMenuShoppingItemRequest,
   FridgeItemSummary,
+  FridgeSummaryResponse,
   ShoppingListCollaborator,
   ShoppingListInviteActionResponse,
   ShoppingListInviteFilter,
@@ -260,6 +261,10 @@ type ShoppingListProgressRow = {
   fridgeCovered: boolean;
 };
 
+type PendingShoppingGroupCountRow = {
+  pendingCount: number;
+};
+
 type ShoppingSourceMeta = {
   planMap: Map<UUID, { title: string; planDate: string }>;
   eventMap: Map<UUID, { title: string; planItemId: UUID | null; planDate: string | null }>;
@@ -383,6 +388,28 @@ export class PantryService {
         hasNext: skip + items.length < total
       };
     });
+  }
+
+  async getFridgeSummary(userId: UUID): Promise<FridgeSummaryResponse> {
+    const cutoff = this.resolveFridgeExpireCutoff(3);
+    const where = { userId };
+    const [totalCount, expiringCount] = await Promise.all([
+      this.prisma.fridgeItem.count({ where }),
+      this.prisma.fridgeItem.count({
+        where: {
+          ...where,
+          expireAt: {
+            not: null,
+            lte: cutoff
+          }
+        }
+      })
+    ]);
+
+    return {
+      totalCount,
+      expiringCount
+    };
   }
 
   async createFridgeItem(
@@ -555,16 +582,34 @@ export class PantryService {
   }
 
   async getShoppingListSummary(userId: UUID): Promise<ShoppingListSummaryResponse> {
-    const memberships = await this.prisma.shoppingListMember.findMany({
-      where: { userId },
-      select: {
-        list: {
-          select: {
-            status: true
+    const [memberships, pendingRows] = await this.prisma.$transaction([
+      this.prisma.shoppingListMember.findMany({
+        where: { userId },
+        select: {
+          list: {
+            select: {
+              status: true
+            }
           }
         }
-      }
-    });
+      }),
+      this.prisma.$queryRaw<PendingShoppingGroupCountRow[]>(Prisma.sql`
+        select count(*)::int as "pendingCount"
+        from (
+          select
+            coalesce(item.ingredient_id::text, 'none') || ':' || lower(trim(item.name)) as group_key,
+            bool_and(item.status = 'BOUGHT' or item.fridge_covered = true) as is_done
+          from shopping_items item
+          inner join shopping_lists list on list.id = item.list_id
+          inner join shopping_list_members member on member.list_id = list.id
+          where member.user_id = ${userId}
+            and list.status = 'ACTIVE'
+            and item.status <> 'DELETED'
+          group by 1
+        ) grouped
+        where grouped.is_done = false
+      `)
+    ]);
     const statuses: ShoppingListStatusCount[] = [
       { status: "ACTIVE", count: 0 },
       { status: "COMPLETED", count: 0 },
@@ -577,9 +622,12 @@ export class PantryService {
     const defaultStatus = statuses.find(item => item.status === "ACTIVE" && item.count > 0)?.status
       ?? statuses.find(item => item.count > 0)?.status
       ?? "ACTIVE";
+    const pendingItemCount = Math.max(Number(pendingRows[0]?.pendingCount ?? 0), 0);
     return {
       statuses,
-      defaultStatus
+      defaultStatus,
+      activeListCount: statuses.find(item => item.status === "ACTIVE")?.count ?? 0,
+      pendingItemCount
     };
   }
 
@@ -4614,6 +4662,13 @@ export class PantryService {
       throw new BadRequestException("到期时间参数错误");
     }
     return resolved;
+  }
+
+  private resolveFridgeExpireCutoff(days: number) {
+    const cutoff = new Date();
+    cutoff.setHours(23, 59, 59, 999);
+    cutoff.setDate(cutoff.getDate() + days);
+    return cutoff;
   }
 
   private async buildFridgeWriteInput(

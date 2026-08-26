@@ -39,6 +39,7 @@ import {
   ApiOkModel,
   ApiOkPage,
   FridgeItemModel,
+  FridgeSummaryModel,
   ShoppingBoardModel,
   ShoppingGapResponseModel,
   ShoppingItemModel,
@@ -64,6 +65,12 @@ export class PantryController {
   @ApiOkPage(FridgeItemModel, "分页查询当前用户自己的冰箱条目")
   listFridge(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
     return this.pantryService.listFridge(request.user.userId, query.page, query.pageSize).then(result => ok(result));
+  }
+
+  @Get("fridge-items/summary")
+  @ApiOkModel(FridgeSummaryModel, "读取当前用户冰箱摘要")
+  getFridgeSummary(@Req() request: RequestWithUser) {
+    return this.pantryService.getFridgeSummary(request.user.userId).then(result => ok(result));
   }
 
   @Post("fridge-items")
