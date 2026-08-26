@@ -10,7 +10,8 @@
         <view class="navbar__side" :class="{ 'navbar__side--custom-left': isCustomLeft && !showLeft && hasLeftSlot }">
           <view
             v-if="showLeft"
-            class="cookfont icon-back navbar__icon"
+            class="cookfont navbar__icon"
+            :class="leftIconClass"
             hover-class="navbar__icon--hover"
             hover-stay-time="100"
             @click="handleLeftClick"
@@ -69,6 +70,7 @@ const { navBarHeight, navBarTotalHeight, navSideGuardWidth, systemInfo } = useSy
 const slots = useSlots();
 
 const canGoBack = computed(() => getCurrentPages().length > 1);
+const leftIconClass = computed(() => (canGoBack.value ? "icon-back" : "icon-homepage"));
 const hasLeftSlot = computed(() => Boolean(slots.left));
 const hasRightSlot = computed(() => Boolean(slots.right));
 const isCustomLeft = computed(() => props.layout === "custom-left");

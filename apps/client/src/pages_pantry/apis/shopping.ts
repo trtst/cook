@@ -115,6 +115,8 @@ export interface ShoppingListStatusCount {
 export interface ShoppingListSummaryResponse {
   statuses: ShoppingListStatusCount[];
   defaultStatus: ShoppingListStatus;
+  activeListCount: number;
+  pendingItemCount: number;
 }
 
 export interface ShoppingListSummary {

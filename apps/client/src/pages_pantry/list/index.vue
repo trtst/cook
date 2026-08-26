@@ -1026,7 +1026,7 @@ defineExpose({
 }
 
 .shopping-home__body {
-  padding: 12rpx var(--space-page) calc(176rpx + env(safe-area-inset-bottom));
+  padding: 12rpx var(--space-page) calc(32rpx + env(safe-area-inset-bottom));
 }
 
 .home-nav {

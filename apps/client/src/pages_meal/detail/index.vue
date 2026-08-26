@@ -124,14 +124,16 @@
                         <view v-if="participantAvatarOverflow > 0" class="summary-card__avatar summary-card__avatar--more">
                           <text class="summary-card__avatar-more">+{{ participantAvatarOverflow }}</text>
                         </view>
-                        <view
+                        <button
                           v-if="canInviteParticipants"
                           class="summary-card__invite"
-                          :class="{ 'summary-card__invite--disabled': !canInviteParticipants || inviteSharing }"
+                          :class="{ 'summary-card__invite--disabled': inviteSharing }"
+                          :disabled="inviteSharing"
+                          :open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
                           @click="handleInviteShare"
                         >
-                          <text class="cookfont icon-add summary-card__invite-icon" />
-                        </view>
+                          <text class="cookfont icon-share summary-card__invite-icon" />
+                        </button>
                       </view>
                     </view>
                   </view>
@@ -393,28 +395,28 @@
 
                 <view v-if="currentMenuItems.length && !eventClosed && !planClosed" class="meal-helper__actions">
                   <template v-if="cookAssistant?.hasSnapshot && !cookAssistant?.isStale">
-                    <button class="meal-helper__button meal-helper__button--ghost" @click="openCookAssistantPage">查看做饭建议</button>
-                    <button class="meal-helper__button meal-helper__button--primary" @click="openCookMode">按建议开始做饭</button>
+                    <button class="meal-helper__button meal-helper__button--primary meal-helper__button--main" @click="openCookAssistantPage">查看做饭助手</button>
+                    <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
                   </template>
                   <template v-else-if="cookAssistant?.isStale">
                     <button
-                      class="meal-helper__button meal-helper__button--primary"
+                      class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
                       :disabled="cookAssistantLoading || submitting"
                       @click="handleCookAssistantAction"
                     >
                       重新生成建议
                     </button>
-                    <button class="meal-helper__button meal-helper__button--ghost" @click="openCookMode">直接开始做饭</button>
+                    <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
                   </template>
                   <template v-else>
                     <button
-                      class="meal-helper__button meal-helper__button--primary"
+                      class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
                       :disabled="cookAssistantLoading || submitting"
                       @click="handleCookAssistantAction"
                     >
                       生成做饭建议
                     </button>
-                    <button class="meal-helper__button meal-helper__button--ghost" @click="openCookMode">直接开始做饭</button>
+                    <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
                   </template>
                 </view>
               </view>
@@ -496,16 +498,27 @@
 
         <view v-else class="meal-footer__actions">
           <view
-            v-if="footerQuickAction"
+            v-if="footerQuickAction && footerQuickAction.key !== 'share-invite'"
             class="meal-footer__quick"
-              :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled }"
-              @click="handleFooterAction(footerQuickAction.key)"
-            >
-              <text class="cookfont meal-footer__quick-icon" :class="footerQuickAction.iconClass" />
-              <text class="meal-footer__quick-label">{{ footerQuickAction.label }}</text>
-            </view>
+            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled }"
+            @click="handleFooterAction(footerQuickAction.key)"
+          >
+            <text class="cookfont meal-footer__quick-icon" :class="footerQuickAction.iconClass" />
+            <text class="meal-footer__quick-label">{{ footerQuickAction.label }}</text>
+          </view>
+          <button
+            v-else-if="footerQuickAction"
+            class="meal-footer__quick meal-footer__quick--button"
+            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled }"
+            :disabled="footerQuickAction.disabled || submitting"
+            :open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
+            @click="handleFooterAction(footerQuickAction.key)"
+          >
+            <text class="cookfont meal-footer__quick-icon" :class="footerQuickAction.iconClass" />
+            <text class="meal-footer__quick-label">{{ footerQuickAction.label }}</text>
+          </button>
 
-            <view class="meal-footer__buttons">
+            <view class="meal-footer__buttons" :class="{ 'meal-footer__buttons--single': footerButtonCount === 1 }">
               <button
                 v-if="footerSecondaryAction"
                 class="meal-footer__button meal-footer__button--ghost"
@@ -555,6 +568,7 @@
           :note-empty-title="eventNoteEmptyTitle"
           :note-empty-text="eventNoteEmptyText"
           :can-invite="canInviteParticipants"
+          :invite-ready="inviteShareReady"
           :invite-sharing="inviteSharing"
           :submitting="submitting"
           :action-participant-id="participantActionId"
@@ -570,8 +584,8 @@
           :subtitle="menuConfirmSummaryText"
           :summary-title="menuConfirmSummaryTitle"
           :summary-text="menuConfirmSummaryText"
-          :loading="gapLoading"
-          :items="currentEventGapItems"
+          :loading="false"
+          :items="menuConfirmItems"
           :empty-text="menuConfirmEmptyText"
           :submitting="submitting"
           @close="closeMenuConfirmSheet"
@@ -712,17 +726,6 @@
           @close="closeEventEditor"
         />
 
-        <InviteShareSheet
-          :visible="shareSheetVisible"
-          title="分享邀请"
-          :subtitle="shareSheetSubtitle"
-          single-share
-          :friend-action="inviteFriendAction"
-          :error-text="shareLinkError"
-          @close="closeShareSheet"
-          @after-close="handleShareSheetAfterClose"
-          @friend="handleShareFriendClick"
-        />
       </template>
     </view>
   </Layout>
@@ -740,7 +743,6 @@ import Layout from "@/components/Layout/Layout.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import MenuConfirmSheet from "@/components/Meal/MenuConfirmSheet.vue";
 import ParticipantManageSheet from "@/components/Meal/ParticipantManageSheet.vue";
-import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
@@ -892,8 +894,6 @@ const uploadingCover = ref(false);
 const participantSheetVisible = ref(false);
 const participantActionId = ref<UUID | null>(null);
 const inviteSharing = ref(false);
-const shareSheetVisible = ref(false);
-const shareLinkError = ref("");
 const activeSharePath = ref("");
 const recipeSheetVisible = ref(false);
 const recipeSheetMode = ref<RecipeSheetMode>("menu");
@@ -1219,6 +1219,7 @@ const canUpdateCover = computed(() => Boolean(eventDetail.value && eventDetail.v
 const canQuickShareInvite = computed(() =>
   Boolean(eventDetail.value && !eventClosed.value && (canInviteParticipants.value || activeSharePath.value || eventDetail.value.shareTokenPath))
 );
+const inviteShareReady = computed(() => Boolean(activeSharePath.value));
 const currentEventGapItems = computed<MealGapPreviewItem[]>(() => {
   if (!eventDetail.value || !gapData.value) return [];
   const items: MealGapPreviewItem[] = [];
@@ -1322,12 +1323,12 @@ const endedMemoryAction = computed<FooterAction | null>(() => {
 const footerQuickAction = computed<FooterAction | null>(() => {
   if (footerStage.value === "MENU_EDITING") {
     if (eventDetail.value) {
-      return canQuickShareInvite.value ? { key: "share-invite", label: "快捷分享", iconClass: "icon-share" } : null;
+      return canQuickShareInvite.value ? { key: "share-invite", label: "分享邀请", iconClass: "icon-share", disabled: inviteSharing.value } : null;
     }
     return canCreateEvent.value ? { key: "create-event", label: "发起饭局", iconClass: "icon-share" } : null;
   }
   if (footerStage.value === "READY_TO_START" && eventDetail.value) {
-    return canQuickShareInvite.value ? { key: "share-invite", label: "快捷分享", iconClass: "icon-share", disabled: inviteSharing.value } : null;
+    return canQuickShareInvite.value ? { key: "share-invite", label: "分享邀请", iconClass: "icon-share", disabled: inviteSharing.value } : null;
   }
   if (footerStage.value === "READY_TO_START" && !eventDetail.value) {
     return canCreateEvent.value ? { key: "create-event", label: "发起饭局", iconClass: "icon-share" } : null;
@@ -1378,45 +1379,34 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
   return null;
 });
 const footerPrimaryGapText = computed(() => {
-  if (footerPrimaryAction.value?.key !== "confirm-menu" || !eventDetail.value || !currentMenuItems.value.length) return "";
-  if (gapLoading.value) return "计算中";
-  if (currentEventGapCount.value > 0) return `还差 ${currentEventGapCount.value} 样`;
-  if (!gapErrorText.value) return "暂无缺口";
+  if (footerPrimaryAction.value?.key === "confirm-menu") {
+    return currentMenuItems.value.length ? `${currentMenuItems.value.length}道菜` : "";
+  }
+  if (footerPrimaryAction.value?.key === "shopping" && eventDetail.value) {
+    if (gapLoading.value) return "计算中";
+    if (currentEventGapCount.value > 0) return `还差 ${currentEventGapCount.value} 样`;
+  }
   return "";
 });
+const footerButtonCount = computed(() => Number(Boolean(footerSecondaryAction.value)) + Number(Boolean(footerPrimaryAction.value)));
+const menuConfirmItems = computed(() => currentMenuItems.value.map(item => ({
+  key: item.key,
+  name: item.title,
+  quantityText: resolveMenuMeta(item) || null,
+  recipeTitles: [] as string[]
+})));
 const menuConfirmSummaryTitle = computed(() => {
-  if (gapLoading.value) return "正在更新当前缺口";
-  if (currentEventGapCount.value > 0) return `这顿饭还差 ${currentEventGapCount.value} 样食材`;
-  if (gapErrorText.value) return "缺口暂时没同步出来";
-  return "当前菜单看起来已经备齐";
+  if (!currentMenuItems.value.length) return "这顿饭还没定菜";
+  return `这顿饭共 ${currentMenuItems.value.length} 道菜`;
 });
 const menuConfirmSummaryText = computed(() => {
-  if (gapLoading.value) return "菜单变了，当前缺口也会跟着刷新，稍等一下再确认。";
-  if (currentEventGapCount.value > 0) return "先看一眼这顿饭还缺什么；这次确认只固定菜单，不会同步确认食材。";
-  if (gapErrorText.value) return "当前页还没拿到可靠缺口事实；确认菜单仍只固定这顿吃什么。";
-  return "按当前饭局缺口事实，这顿饭暂时没有明显缺料。";
+  if (!currentMenuItems.value.length) return "这次确认只固定这顿吃什么，不处理带菜和采购。";
+  return "这次确认只固定主家菜单；带菜不会算进这里，食材缺口确认后再看。";
 });
 const menuConfirmEmptyText = computed(() => (
-  gapErrorText.value
-    ? gapErrorText.value
-    : "当前没有需要额外采购的食材，确认菜单后可以直接开始做饭。"
-));
-const shareSheetSubtitle = computed(() => (
-  "会在你打开这里时先准备好当前这条好友邀请，方便直接转发。"
+  currentMenuItems.value.length ? `已选 ${currentMenuItems.value.length} 道主家菜单。` : "先补一两道主家菜单，再来确认。"
 ));
 const shareHeadline = computed(() => eventDetail.value?.title?.trim() || detailTitle.value);
-const inviteFriendAction = computed(() => ({
-  label: inviteSharing.value ? "准备好友邀请中..." : "分享给好友",
-  hint: inviteSharing.value
-    ? "正在准备当前这条好友邀请，请稍候。"
-    : activeSharePath.value
-      ? "会使用当前已准备好的好友邀请，直接转发给朋友。"
-      : canInviteParticipants.value
-        ? "会生成一条可直接转发给好友的饭局邀请。"
-        : "请先让发起人准备好友邀请，再回来直接转发。",
-  disabled: inviteSharing.value || (!activeSharePath.value && !canInviteParticipants.value),
-  openType: activeSharePath.value && !inviteSharing.value ? "share" : ""
-}));
 const recipePendingAddCount = computed(() => {
   if (recipeSheetMode.value === "bring" || recipeSheetMode.value === "wish") {
     if (!recipeSelectedIds.value.length) return 0;
@@ -1612,7 +1602,6 @@ onLoad(query => {
 });
 
 onShareAppMessage(() => {
-  shareSheetVisible.value = false;
   return {
     title: shareHeadline.value,
     path: activeSharePath.value || "/pages/home/index",
@@ -1691,6 +1680,9 @@ async function loadDetail() {
     const result = await mealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
     const nextPlan = result.items.find(item => item.id === planItemId.value) ?? null;
     planDetail.value = nextPlan;
+    if (nextPlan) {
+      planDate.value = nextPlan.planDate;
+    }
     if (!nextPlan) {
       if (!eventDetail.value) {
         errorText.value = "这条餐次暂时找不到了，点此重试";
@@ -1715,7 +1707,16 @@ async function loadDetail() {
 
     if (!eventDetail.value || eventDetail.value.id !== targetEventId) {
       try {
-        eventDetail.value = await mealApi.getDiningEvent(targetEventId);
+        const nextEvent = await mealApi.getDiningEvent(targetEventId);
+        if (!hasEventQuery && shouldIgnorePlanLinkedEvent(nextPlan, nextEvent)) {
+          eventDetail.value = null;
+          activeSharePath.value = "";
+          gapData.value = null;
+          gapErrorText.value = "";
+          await applyEntryFocus();
+          return;
+        }
+        eventDetail.value = nextEvent;
         eventId.value = eventDetail.value.id;
         activeSharePath.value = eventDetail.value.shareTokenPath || "";
         showEventEditor.value = false;
@@ -1762,9 +1763,7 @@ function clearPageState() {
   cookAssistant.value = null;
   cookAssistantLoading.value = false;
   showEventEditor.value = false;
-  shareSheetVisible.value = false;
   participantActionId.value = null;
-  shareLinkError.value = "";
   activeSharePath.value = "";
   recipeSheetVisible.value = false;
   recipeSheetMode.value = "menu";
@@ -2036,11 +2035,6 @@ function closeMenuConfirmSheet() {
   menuConfirmSheetVisible.value = false;
 }
 
-function closeShareSheet() {
-  if (inviteSharing.value) return;
-  shareSheetVisible.value = false;
-}
-
 async function revokeParticipantInvite(item: ParticipantSheetItem) {
   if (!eventDetail.value || !item.participantId || submitting.value || participantActionId.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
@@ -2078,11 +2072,6 @@ async function reinviteParticipant(item: ParticipantSheetItem) {
     participantActionId.value = null;
     submitting.value = false;
   }
-}
-
-function handleShareSheetAfterClose() {
-  if (shareSheetVisible.value) return;
-  shareLinkError.value = "";
 }
 
 function handleTitleSheetAfterClose() {
@@ -2487,6 +2476,13 @@ function resolvePlanDeadlineMs(dateText: string | null | undefined, mealSlot: Me
   return resolveMealSlotExpireMs(dateText, mealSlot);
 }
 
+function shouldIgnorePlanLinkedEvent(plan: MealPlanSummary, event: DiningEventSummary) {
+  if (event.planItemId !== plan.id) return true;
+  const deadlineMs = resolvePlanDeadlineMs(plan.planDate, plan.mealSlot);
+  if (deadlineMs > nowMs.value && isEventClosed(event, nowMs.value)) return true;
+  return false;
+}
+
 function isEventExpired(event: DiningEventSummary, currentMs = Date.now()) {
   if (event.status === "CANCELLED" || event.status === "COMPLETED" || event.completedAt) return false;
   const scheduledAt = resolveScheduledAtMs(event.scheduledAt);
@@ -2543,30 +2539,9 @@ function stopFooterTimer() {
   footerTimer = null;
 }
 
-async function handleInviteShare() {
-  if (!eventDetail.value || inviteSharing.value) return;
-  const existingSharePath = activeSharePath.value || eventDetail.value.shareTokenPath || "";
-  if (!canQuickShareInvite.value && !existingSharePath) {
-    const message = canInviteParticipants.value
-      ? "分享入口准备中"
-      : "请先让发起人准备分享邀请";
-    void uniPlatform.feedback.toast({ title: message, icon: "none" });
-    return;
-  }
-  if (!activeSharePath.value && existingSharePath) {
-    activeSharePath.value = existingSharePath;
-  }
-  shareLinkError.value = "";
-  shareSheetVisible.value = true;
-  if (!activeSharePath.value && canInviteParticipants.value) {
-    void prepareInviteShareLink(true);
-  }
-}
-
 async function prepareInviteShareLink(silent = false) {
   if (!eventDetail.value || inviteSharing.value) return;
   inviteSharing.value = true;
-  shareLinkError.value = "";
   try {
     const result = await mealApi.createDiningEventShareLink(eventDetail.value.id, createOperationId());
     activeSharePath.value = result.shareTokenPath;
@@ -2575,26 +2550,22 @@ async function prepareInviteShareLink(silent = false) {
       hasActiveShareLink: true,
       shareTokenPath: result.shareTokenPath
     };
-  } catch (error) {
-    shareLinkError.value = error instanceof Error ? error.message : "好友邀请生成失败";
     if (!silent) {
-      await uniPlatform.feedback.toast({ title: shareLinkError.value, icon: "none" });
+      await uniPlatform.feedback.toast({ title: "邀请已准备好，再点一次分享", icon: "none" });
+    }
+  } catch (error) {
+    if (!silent) {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "好友邀请生成失败", icon: "none" });
     }
   } finally {
     inviteSharing.value = false;
   }
 }
 
-function handleShareFriendClick() {
-  if (!eventDetail.value) return;
-  if (activeSharePath.value) return;
-  if (!activeSharePath.value) {
-    if (canInviteParticipants.value) {
-      void prepareInviteShareLink();
-      return;
-    }
-    void uniPlatform.feedback.toast({ title: "请先让发起人准备分享邀请", icon: "none" });
-  }
+function handleInviteShare() {
+  if (!eventDetail.value || inviteSharing.value || inviteShareReady.value) return;
+  if (!canInviteParticipants.value) return;
+  void prepareInviteShareLink();
 }
 
 function handleMenuDeadlineAction() {
@@ -2808,7 +2779,6 @@ function handleFooterAction(action: FooterActionKey) {
   if (action === "confirm-menu") {
     if (eventDetail.value) {
       menuConfirmSheetVisible.value = true;
-      void loadGapPreview();
       return;
     }
     void handleConfirmMenuAction();
@@ -3432,13 +3402,19 @@ function clearFocusedSection() {
   justify-content: center;
   width: 64rpx;
   height: 64rpx;
+  padding: 0;
   border: 2rpx dashed color-mix(in srgb, var(--color-primary) 52%, var(--color-text-tertiary) 48%);
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-surface) 82%, var(--color-primary-soft) 18%);
+  box-sizing: border-box;
 }
 
 .summary-card__invite--disabled {
   opacity: 0.42;
+}
+
+.summary-card__invite::after {
+  border: 0;
 }
 
 .summary-card__invite-icon {
@@ -4036,9 +4012,9 @@ function clearFocusedSection() {
 }
 
 .meal-helper__actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16rpx;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
   margin-top: 24rpx;
 }
 
@@ -4067,9 +4043,17 @@ function clearFocusedSection() {
   box-shadow: var(--button-primary-shadow);
 }
 
-.meal-helper__button--ghost {
-  color: var(--theme-primary);
-  background: color-mix(in srgb, var(--theme-primary) 8%, var(--color-surface));
+.meal-helper__button--main {
+  flex: 0 1 70%;
+}
+
+.meal-helper__text-action {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .participant-list {
@@ -4713,6 +4697,17 @@ function clearFocusedSection() {
   min-width: 86rpx;
 }
 
+.meal-footer__quick--button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.meal-footer__quick--button::after {
+  border: 0;
+}
+
 .meal-footer__quick--disabled {
   opacity: 0.42;
 }
@@ -4734,6 +4729,11 @@ function clearFocusedSection() {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 14rpx;
+}
+
+.meal-footer__buttons--single .meal-footer__button {
+  width: 100%;
+  flex: 1 1 100%;
 }
 
 .meal-footer__memory {

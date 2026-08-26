@@ -133,11 +133,9 @@
                 class="assistant-actions__button assistant-actions__button--primary"
                 @click="openCookMode"
               >
-                按建议开始做饭
+                按菜谱做饭
               </button>
-              <button class="assistant-actions__button assistant-actions__button--ghost" @click="openCookMode">
-                {{ cookAssistant?.hasSnapshot && !cookAssistant?.isStale ? "开始做饭" : "直接开始做饭" }}
-              </button>
+              <text v-if="!cookAssistant?.hasSnapshot || cookAssistant?.isStale" class="assistant-actions__link" @click="openCookMode">按菜谱做饭</text>
             </view>
           </template>
         </view>
@@ -360,7 +358,7 @@ async function automatorReadState() {
         ? cookAssistant.value?.isStale
           ? "重新生成建议"
           : "生成做饭建议"
-        : "按建议开始做饭"
+        : "按菜谱做饭"
   };
 }
 
@@ -614,12 +612,13 @@ defineExpose({
 }
 
 .assistant-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16rpx;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
 }
 
 .assistant-actions__button {
+  flex: 1 1 auto;
   height: 88rpx;
   border-radius: 999rpx;
   font-size: 28rpx;
@@ -636,8 +635,10 @@ defineExpose({
   box-shadow: var(--button-primary-shadow);
 }
 
-.assistant-actions__button--ghost {
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface) 91%);
+.assistant-actions__link {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 </style>

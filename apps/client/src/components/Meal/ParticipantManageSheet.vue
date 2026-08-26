@@ -107,14 +107,16 @@
 
       <view v-if="canInvite" class="participant-sheet__section">
         <text class="participant-sheet__title">邀请入口</text>
-        <view
+        <button
           class="participant-sheet__invite"
-          :class="{ 'participant-sheet__invite--disabled': !canInvite || inviteSharing }"
+          :class="{ 'participant-sheet__invite--disabled': inviteSharing }"
+          :disabled="inviteSharing"
+          :open-type="inviteReady && !inviteSharing ? 'share' : ''"
           @click="emit('invite')"
         >
           <text class="cookfont icon-share participant-sheet__invite-icon" />
-          <text class="participant-sheet__invite-text">分享邀请</text>
-        </view>
+          <text class="participant-sheet__invite-text">{{ inviteSharing ? "准备分享中" : inviteReady ? "分享邀请" : "准备分享邀请" }}</text>
+        </button>
       </view>
     </view>
   </SheetShell>
@@ -146,6 +148,7 @@ defineProps<{
   noteEmptyTitle: string;
   noteEmptyText: string;
   canInvite: boolean;
+  inviteReady: boolean;
   inviteSharing: boolean;
   submitting: boolean;
   actionParticipantId: UUID | null;
@@ -279,13 +282,19 @@ function buildAvatarFallback(name: string) {
   justify-content: center;
   gap: 12rpx;
   min-height: 92rpx;
+  padding: 0 24rpx;
   border: 2rpx dashed color-mix(in srgb, var(--color-primary) 38%, var(--color-border) 62%);
   border-radius: 24rpx;
   background: color-mix(in srgb, var(--color-surface) 86%, var(--color-primary-soft) 14%);
+  box-sizing: border-box;
 }
 
 .participant-sheet__invite--disabled {
   opacity: 0.42;
+}
+
+.participant-sheet__invite::after {
+  border: 0;
 }
 
 .participant-sheet__invite-icon {

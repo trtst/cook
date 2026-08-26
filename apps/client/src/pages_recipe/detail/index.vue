@@ -302,13 +302,12 @@
               @click="openPlanLink(item)"
             >
               <view class="plan-link-row__main">
-                <view class="plan-link-row__head">
-                  <text class="plan-link-row__title">{{ formatRecipePlanLink(item) }}</text>
-                  <text class="plan-link-row__tag">{{ resolveRecipePlanLinkState(item) }}</text>
-                </view>
-                <text class="plan-link-row__meta">{{ item.status === "COMPLETED" ? "这次计划已完成" : item.menuLocked ? "菜单已固定" : "还可以继续改菜单" }}</text>
+                <text class="plan-link-row__title">{{ formatRecipePlanLink(item) }}</text>
               </view>
-              <text class="cookfont icon-arrow-right plan-link-row__icon" />
+              <view class="plan-link-row__action">
+                <text class="plan-link-row__action-text">查看安排</text>
+                <text class="cookfont icon-arrow-right plan-link-row__icon" />
+              </view>
             </view>
           </view>
           <text v-else class="sheet-section__hint">这道菜还没有安排到任何餐次。</text>
@@ -458,7 +457,7 @@ import { useUserStore } from "@/stores/user";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMealSlot } from "@/utils/meal-slot";
+import { formatMealSlot, isMealSlotExpired } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
 import { buildDefaultShoppingListName } from "@/utils/shopping";
 
@@ -701,7 +700,12 @@ const detailDurationText = computed(() => {
 });
 const recipePlanLinks = computed<RecipePlanLinkSummary[]>(() => {
   if (mode.value !== "published" || !publishedDetail.value?.planLinks?.length) return [];
-  return sortRecipePlanLinks(publishedDetail.value.planLinks);
+  const now = new Date();
+  return sortRecipePlanLinks(
+    publishedDetail.value.planLinks.filter(
+      item => item.status !== "COMPLETED" && !isMealSlotExpired(item.planDate, item.mealSlot, now)
+    )
+  );
 });
 const primaryPlanLink = computed(() => recipePlanLinks.value[0] ?? null);
 const primaryPlanText = computed(() => (primaryPlanLink.value ? formatRecipePlanLink(primaryPlanLink.value) : ""));
@@ -1391,12 +1395,6 @@ function formatRecipePlanLink(link: RecipePlanLinkSummary) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(link.planDate);
   const dateText = match ? `${Number(match[2])}月${Number(match[3])}日` : link.planDate;
   return `${dateText} · ${formatMealSlot(link.mealSlot)}`;
-}
-
-function resolveRecipePlanLinkState(link: RecipePlanLinkSummary) {
-  if (link.status === "COMPLETED") return "已完成";
-  if (link.menuLocked) return "菜单已确认";
-  return "待确认菜单";
 }
 
 function syncDetailPlanLinks(nextLink: RecipePlanLinkSummary) {
@@ -2198,17 +2196,11 @@ defineExpose({
   flex: 1;
 }
 
-.plan-link-row__head {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  min-width: 0;
-}
-
 .plan-link-row__title,
-.plan-link-row__meta,
+.plan-link-row__action,
+.plan-link-row__action-text,
 .plan-link-row__icon,
-.plan-link-row__tag {
+.plan-link-row__title {
   display: block;
 }
 
@@ -2220,23 +2212,23 @@ defineExpose({
   line-height: 1.4;
 }
 
-.plan-link-row__tag {
+.plan-link-row__action {
+  display: flex;
   flex: 0 0 auto;
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-  line-height: 1.2;
+  align-items: center;
+  gap: 10rpx;
 }
 
-.plan-link-row__meta {
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.5;
+.plan-link-row__action-text {
+  color: var(--color-primary);
+  font-size: 24rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
 }
 
 .plan-link-row__icon {
   flex: 0 0 auto;
-  color: var(--color-text-tertiary);
+  color: var(--color-primary);
   font-size: 24rpx;
   line-height: 1;
 }

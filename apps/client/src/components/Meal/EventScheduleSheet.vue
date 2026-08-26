@@ -29,8 +29,11 @@
             v-for="item in mealSlots"
             :key="item.value"
             class="event-schedule-sheet__chip"
-            :class="{ 'event-schedule-sheet__chip--active': mealSlot === item.value }"
-            @click="emit('selectMealSlot', item.value)"
+            :class="{
+              'event-schedule-sheet__chip--active': mealSlot === item.value,
+              'event-schedule-sheet__chip--disabled': item.disabled
+            }"
+            @click="handleMealSlotSelect(item)"
           >
             {{ item.label }}
           </view>
@@ -69,6 +72,7 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 type EventScheduleMealSlot = {
   value: MealSlot;
   label: string;
+  disabled?: boolean;
 };
 
 withDefaults(defineProps<{
@@ -122,6 +126,11 @@ function handleTimeChange(event: { detail?: { value?: string } }) {
   const nextValue = event.detail?.value?.trim();
   if (!nextValue) return;
   emit("selectTime", nextValue);
+}
+
+function handleMealSlotSelect(item: EventScheduleMealSlot) {
+  if (item.disabled) return;
+  emit("selectMealSlot", item.value);
 }
 </script>
 
@@ -181,6 +190,13 @@ function handleTimeChange(event: { detail?: { value?: string } }) {
   border-color: var(--color-primary);
   background: var(--color-primary-soft);
   color: var(--color-primary-active);
+}
+
+.event-schedule-sheet__chip--disabled {
+  border-color: color-mix(in srgb, var(--color-border) 82%, transparent);
+  background: color-mix(in srgb, var(--color-surface-muted) 86%, white 14%);
+  color: var(--color-text-tertiary);
+  opacity: 0.68;
 }
 
 .event-schedule-sheet__time {

@@ -31,9 +31,6 @@
           <view class="account-row__copy">
             <text class="account-row__title">退出登录</text>
           </view>
-          <view class="account-row__meta">
-            <text class="account-row__arrow cookfont icon-back" />
-          </view>
         </view>
       </view>
     </view>
@@ -204,5 +201,14 @@ defineExpose({
 .account-row--danger .account-row__title,
 .account-row--danger .account-row__arrow {
   color: #d95c4f;
+}
+
+.account-row--danger {
+  justify-content: center;
+}
+
+.account-row--danger .account-row__copy {
+  flex: 0 0 auto;
+  text-align: center;
 }
 </style>

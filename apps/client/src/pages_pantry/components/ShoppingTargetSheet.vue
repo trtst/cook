@@ -3,6 +3,7 @@
     :visible="visible"
     :title="title"
     :subtitle="subtitle"
+    :panel-style="panelStyle"
     @close="emit('close')"
     @after-close="emit('afterClose')"
   >
@@ -91,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, type StyleValue } from "vue";
 import type { UUID } from "@/apis/http";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 
@@ -106,6 +107,7 @@ const props = withDefaults(defineProps<{
   visible: boolean;
   title?: string;
   subtitle?: string;
+  panelStyle?: StyleValue;
   metaTitle?: string;
   metaText?: string;
   listTitle?: string;
@@ -131,6 +133,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   title: "加入采购清单",
   subtitle: "先选一张当前要维护的采购清单。",
+  panelStyle: undefined,
   metaTitle: "",
   metaText: "",
   listTitle: "目标清单",

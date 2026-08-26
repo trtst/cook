@@ -416,7 +416,9 @@ const heroStyle = computed(() => ({
 const topDockStyle = computed<CSSProperties>(() => ({
   top: `${navBarTotalHeight.value}px`,
   opacity: `${scrollTop.value > TOP_DOCK_DISTANCE ? 1 : 0}`,
-  pointerEvents: scrollTop.value > TOP_DOCK_DISTANCE ? "auto" : "none"
+  pointerEvents: scrollTop.value > TOP_DOCK_DISTANCE ? "auto" : "none",
+  left: 0,
+  right: 0
 }));
 
 const filterItems = computed(() => [
@@ -751,7 +753,9 @@ async function submitShopping() {
   right: var(--space-page);
   left: var(--space-page);
   z-index: 780;
-  transition: opacity 180ms ease;
+  transition: opacity 180ms ease,
+              left 200ms ease,
+              right 200ms ease;
 }
 
 .pantry-hero {

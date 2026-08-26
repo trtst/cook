@@ -51,6 +51,18 @@ export interface ShoppingListPageResponse {
   items: ShoppingListSummary[];
 }
 
+export interface ShoppingListStatusCount {
+  status: ShoppingListStatus;
+  count: number;
+}
+
+export interface ShoppingListSummaryResponse {
+  statuses: ShoppingListStatusCount[];
+  defaultStatus: ShoppingListStatus;
+  activeListCount: number;
+  pendingItemCount: number;
+}
+
 export interface ShoppingListDetail extends ShoppingListSummary {}
 
 export interface CreateShoppingListRequest {
@@ -84,6 +96,9 @@ export interface AddRecipeToShoppingListRequest {
 export const shoppingApi = {
   previewGap() {
     return get<ShoppingGapResponse>(`${cfg.domain}/api/shopping-gap`);
+  },
+  getListSummary() {
+    return get<ShoppingListSummaryResponse>(`${cfg.domain}/api/shopping-lists/summary`);
   },
   listLists(status?: ShoppingListStatus) {
     return get<ShoppingListPageResponse>(`${cfg.domain}/api/shopping-lists`, { status });

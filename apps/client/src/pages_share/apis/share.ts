@@ -3,16 +3,33 @@ import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis
 import type { MealSlot } from "@/utils/meal-slot";
 
 export interface SharePreviewResponse {
+  organizerText: string;
   title: string;
+  eventId: UUID;
   planItemId: UUID | null;
   planDate: string | null;
   mealSlot: MealSlot | null;
   scheduledAt: IsoDateTime;
   coverImageUrl: string | null;
   organizerName: string | null;
-  menuPreview: string[];
+  organizerAvatarUrl: string | null;
+  inviteStatus: "ACTIVE" | "OPENED" | "ACCEPTED";
+  participants: Array<{
+    displayName: string | null;
+    avatarUrl: string | null;
+  }>;
+  menuPreview: Array<{
+    title: string;
+    recipeId: UUID | null;
+    recipeKind: "my" | "inspiration";
+  }>;
   countdownText: string | null;
   locationHint: string | null;
+}
+
+export interface SharePreviewViewerResponse {
+  action: "ACCEPT" | "VIEW" | "BLOCKED";
+  statusHint: string | null;
 }
 
 export interface MemoryShareParticipant {
@@ -53,6 +70,9 @@ export const shareApi = {
     return get<SharePreviewResponse>(`${cfg.domain}/api/share/${encodeURIComponent(shareToken)}/preview`, undefined, {
       auth: false
     });
+  },
+  getPreviewViewer(shareToken: string) {
+    return get<SharePreviewViewerResponse>(`${cfg.domain}/api/share/${encodeURIComponent(shareToken)}/viewer`);
   },
   acceptInvite(shareToken: string, operationId: OperationId, guestName: string) {
     return post<ShareAcceptResponse>(

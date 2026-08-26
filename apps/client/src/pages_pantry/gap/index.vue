@@ -115,6 +115,7 @@
       :visible="targetSheetVisible"
       title="加入采购清单"
       :subtitle="sheetSubtitle"
+      :panel-style="targetSheetPanelStyle"
       :meta-title="pendingGapItem?.name || ''"
       :meta-text="pendingGapItem?.sectionTitle || ''"
       :create-mode="shoppingCreateMode"
@@ -168,6 +169,9 @@ const sessionStore = useSessionStore();
 
 const GAP_NAV_GAP = 16;
 const GAP_NAV_FADE_DISTANCE = 96;
+const targetSheetPanelStyle = {
+  maxHeight: "68vh"
+} as const;
 
 const gapData = ref<ShoppingGapResponse | null>(null);
 const activeLists = ref<ShoppingListSummary[]>([]);

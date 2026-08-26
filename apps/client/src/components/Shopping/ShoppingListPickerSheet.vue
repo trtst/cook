@@ -160,13 +160,17 @@ const createNameModel = computed({
   flex-direction: column;
   gap: 10rpx;
   padding: 24rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.82);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
 }
 
 .shopping-list-option--active {
-  background: rgba(255, 232, 169, 0.58);
-  box-shadow: inset 0 0 0 2rpx rgba(196, 134, 0, 0.18);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 2rpx color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+
+.shopping-list-option--active .shopping-list-option__title {
+  color: var(--color-primary);
 }
 
 .shopping-list-option__title,
@@ -196,8 +200,8 @@ const createNameModel = computed({
   flex: 1;
   min-height: 88rpx;
   padding: 0 28rpx;
-  border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.86);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: 28rpx;
 }
@@ -209,9 +213,9 @@ const createNameModel = computed({
   min-width: 124rpx;
   min-height: 88rpx;
   padding: 0 28rpx;
-  border-radius: 28rpx;
-  background: rgba(247, 176, 66, 0.16);
-  color: var(--color-primary-700);
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -241,12 +245,13 @@ const createNameModel = computed({
 }
 
 .sheet-actions__button--cancel {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--color-surface);
   color: var(--color-text-secondary);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, rgba(247, 176, 66, 0.96), rgba(244, 150, 39, 0.96));
-  color: #fffaf2;
+  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
 }
 </style>

@@ -72,7 +72,7 @@ describe("pages_meal/assistant/index", () => {
     expect(state.prepTaskCount).toBeGreaterThan(0);
     expect(state.timelineStepCount).toBeGreaterThan(0);
     expect(state.noteTexts.some((item) => item.includes("已为1道缺少建议的菜实时补齐单菜做饭建议"))).toBe(true);
-    expect(state.actionLabel).toBe("按建议开始做饭");
+    expect(state.actionLabel).toBe("按菜谱做饭");
 
     const texts = await collectTexts(page);
     expect(texts).toContain("前期准备");

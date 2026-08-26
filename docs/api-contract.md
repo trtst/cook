@@ -1092,14 +1092,26 @@ interface DiningEventShareLinkResponse {
 }
 
 interface SharePreviewResponse {
+  organizerText: string;
   title: string;
+  eventId: UUID;
   planItemId: UUID | null;
   planDate: string | null;
   mealSlot: MealSlot | null;
   scheduledAt: IsoDateTime;
   coverImageUrl: string | null;
   organizerName: string | null;
-  menuPreview: string[];
+  organizerAvatarUrl: string | null;
+  inviteStatus: "ACTIVE" | "OPENED" | "ACCEPTED";
+  participants: Array<{
+    displayName: string | null;
+    avatarUrl: string | null;
+  }>;
+  menuPreview: Array<{
+    title: string;
+    recipeId: UUID | null;
+    recipeKind: "my" | "inspiration";
+  }>;
   countdownText: string | null;
   locationHint: string | null;
 }
@@ -1638,6 +1650,8 @@ interface ShoppingListItemPatchResponse {
 interface ShoppingListSummaryResponse {
   statuses: ShoppingListStatusCount[];
   defaultStatus: ShoppingListStatus;
+  activeListCount: number;
+  pendingItemCount: number;
 }
 ```
 
@@ -1985,16 +1999,37 @@ interface UpdateDiningEventNoteRequest {
 
 ```ts
 interface SharePreviewResponse {
+  organizerText: string;
   title: string;
+  eventId: UUID;
   planItemId: UUID | null;
   planDate: string | null;
   mealSlot: MealSlot | null;
   scheduledAt: IsoDateTime;
   coverImageUrl: string | null;
   organizerName: string | null;
-  menuPreview: string[];
+  organizerAvatarUrl: string | null;
+  inviteStatus: "ACTIVE" | "OPENED" | "ACCEPTED";
+  participants: Array<{
+    displayName: string | null;
+    avatarUrl: string | null;
+  }>;
+  menuPreview: Array<{
+    title: string;
+    recipeId: UUID | null;
+    recipeKind: "my" | "inspiration";
+  }>;
   countdownText: string | null;
   locationHint: string | null;
+}
+```
+
+`GET /share/{shareToken}/viewer` 只在登录后调用，用来读取当前账号对这条邀请的真实动作权限，避免客户端按预览态猜按钮。最小响应固定为：
+
+```ts
+interface SharePreviewViewerResponse {
+  action: "ACCEPT" | "VIEW" | "BLOCKED";
+  statusHint: string | null;
 }
 ```
 

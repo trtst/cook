@@ -253,7 +253,25 @@
             </view>
 
             <view class="pantry-list">
-              <Empty title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
+              <view v-if="showPantrySummarySkeleton" class="pantry-summary">
+                <view class="pantry-summary__stats">
+                  <view v-for="index in 3" :key="index" class="pantry-summary__stat">
+                    <Skeleton width="68rpx" height="34rpx" radius="18rpx" />
+                    <Skeleton width="112rpx" height="22rpx" radius="12rpx" />
+                  </view>
+                </view>
+                <Skeleton width="320rpx" height="24rpx" radius="12rpx" />
+              </view>
+              <view v-else-if="hasPantrySummaryData" class="pantry-summary">
+                <view class="pantry-summary__stats">
+                  <view v-for="item in pantrySummaryItems" :key="item.label" class="pantry-summary__stat">
+                    <text class="pantry-summary__value">{{ item.value }}</text>
+                    <text class="pantry-summary__label">{{ item.label }}</text>
+                  </view>
+                </view>
+                <text class="pantry-summary__hint">{{ pantrySummaryHintText }}</text>
+              </view>
+              <Empty v-else title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
             </view>
           </view>
         </view>
@@ -276,6 +294,8 @@ import {
   type HomeRecentArrangement,
   type HomeRecentArrangementStatus
 } from "@/apis/home";
+import { fridgeApi } from "@/apis/fridge";
+import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
@@ -288,6 +308,11 @@ import {
   buildRecentArrangementDetailUrl,
   resolveRecentArrangementFocus
 } from "@/utils/recent-arrangement-focus";
+import {
+  buildPantrySummaryHint,
+  buildPantrySummaryState,
+  hasPantrySummaryData as resolveHasPantrySummaryData
+} from "./pantry-summary";
 
 const pageStyle = usePageScrollStyle();
 
@@ -309,9 +334,16 @@ const nextMealState = ref<HomeNextMealState | null>(null);
 const fridgeRecipesLoading = ref(false);
 const fridgeRecipesLoaded = ref(false);
 const fridgeRecipes = ref<HomeFridgeRecipeItem[]>([]);
+const pantrySummaryLoading = ref(false);
+const pantrySummaryLoaded = ref(false);
+const pantryIngredientCount = ref(0);
+const pantryExpiringCount = ref(0);
+const pantryPendingShoppingCount = ref(0);
+const pantryActiveListCount = ref(0);
 let homeEntriesLoadPromise: Promise<void> | null = null;
 let nextMealStateLoadPromise: Promise<void> | null = null;
 let fridgeRecipesLoadPromise: Promise<void> | null = null;
+let pantrySummaryLoadPromise: Promise<void> | null = null;
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
@@ -343,6 +375,31 @@ const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeE
 const showFridgeRecipesSkeleton = computed(
   () => sessionStore.isLoggedIn && !fridgeRecipes.value.length && (fridgeRecipesLoading.value || !fridgeRecipesLoaded.value)
 );
+const showPantrySummarySkeleton = computed(
+  () => sessionStore.isLoggedIn && !pantrySummaryLoaded.value && pantrySummaryLoading.value
+);
+const hasPantrySummaryData = computed(
+  () =>
+    resolveHasPantrySummaryData({
+      ingredientCount: pantryIngredientCount.value,
+      expiringCount: pantryExpiringCount.value,
+      pendingShoppingCount: pantryPendingShoppingCount.value,
+      activeListCount: pantryActiveListCount.value
+    })
+);
+const pantrySummaryItems = computed(() => [
+  { label: "冰箱食材", value: String(pantryIngredientCount.value) },
+  { label: "临期待处理", value: String(pantryExpiringCount.value) },
+  { label: "待采购", value: String(pantryPendingShoppingCount.value) }
+]);
+const pantrySummaryHintText = computed(() => {
+  return buildPantrySummaryHint({
+    ingredientCount: pantryIngredientCount.value,
+    expiringCount: pantryExpiringCount.value,
+    pendingShoppingCount: pantryPendingShoppingCount.value,
+    activeListCount: pantryActiveListCount.value
+  });
+});
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
 const recentArrangement = computed(() => nextMealState.value?.arrangement ?? null);
 const showRecentArrangementCard = computed(() => Boolean(recentArrangement.value));
@@ -405,7 +462,7 @@ const heroSecondaryActionText = computed(() => {
 });
 
 onShow(() => {
-  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadFridgeRecipes(true)]);
+  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
 });
 
 async function loadHomeEntries(force = false) {
@@ -522,6 +579,52 @@ async function loadFridgeRecipes(force = false) {
     });
 
   await fridgeRecipesLoadPromise;
+}
+
+async function loadPantrySummary(force = false) {
+  if (!sessionStore.isLoggedIn) {
+    pantryIngredientCount.value = 0;
+    pantryExpiringCount.value = 0;
+    pantryPendingShoppingCount.value = 0;
+    pantryActiveListCount.value = 0;
+    pantrySummaryLoading.value = false;
+    pantrySummaryLoaded.value = false;
+    return;
+  }
+
+  if (pantrySummaryLoadPromise) {
+    await pantrySummaryLoadPromise;
+    return;
+  }
+
+  if (!force && pantrySummaryLoaded.value) return;
+
+  pantrySummaryLoading.value = true;
+  pantrySummaryLoadPromise = Promise.allSettled([fridgeApi.getSummary(), shoppingApi.getListSummary()])
+    .then(([fridgeResult, shoppingResult]) => {
+      const next = buildPantrySummaryState(
+        fridgeResult.status === "fulfilled" ? fridgeResult.value : null,
+        shoppingResult.status === "fulfilled" ? shoppingResult.value : null
+      );
+      pantryIngredientCount.value = next.ingredientCount;
+      pantryExpiringCount.value = next.expiringCount;
+      pantryPendingShoppingCount.value = next.pendingShoppingCount;
+      pantryActiveListCount.value = next.activeListCount;
+      pantrySummaryLoaded.value = true;
+    })
+    .catch(() => {
+      pantryIngredientCount.value = 0;
+      pantryExpiringCount.value = 0;
+      pantryPendingShoppingCount.value = 0;
+      pantryActiveListCount.value = 0;
+      pantrySummaryLoaded.value = true;
+    })
+    .finally(() => {
+      pantrySummaryLoading.value = false;
+      pantrySummaryLoadPromise = null;
+    });
+
+  await pantrySummaryLoadPromise;
 }
 
 async function showLoadToast(title: string) {
@@ -1212,8 +1315,9 @@ defineExpose({
   inset-top: 24rpx;
   inset-left: 20rpx;
   inset-right: 20rpx;
-  transform: rotate(-3.2deg);
+  transform: rotate(2.2deg);
   opacity: 0.5;
+  transform-origin: center bottom;
 }
 
 .recent-arrangement--hover {
@@ -1714,6 +1818,51 @@ defineExpose({
   flex-direction: column;
   gap: 14rpx;
   margin-top: 24rpx;
+}
+
+.pantry-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.pantry-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14rpx;
+}
+
+.pantry-summary__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding: 20rpx 18rpx;
+  border-radius: 24rpx;
+  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+}
+
+.pantry-summary__value,
+.pantry-summary__label,
+.pantry-summary__hint {
+  display: block;
+}
+
+.pantry-summary__value {
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
+}
+
+.pantry-summary__label {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+
+.pantry-summary__hint {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 .pantry-item {

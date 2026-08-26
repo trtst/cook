@@ -188,7 +188,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMealSlot, isPastLocalDateTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
+import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { formatDateTimeMinute } from "../utils/date";
 import { mealApi, type DiningEventListStage, type DiningEventListSummary, type MealPlanSummary, type DiningEventStageCounts, type DiningEventListRole } from "../apis/meal";
@@ -274,13 +274,19 @@ const stageTabs = [
   { value: "DONE" as const, label: "已结束" }
 ];
 
-const createSlotOptions = [
+const createSlotBaseOptions = [
   { value: "BREAKFAST" as const, label: "早餐" },
   { value: "LUNCH" as const, label: "午餐" },
   { value: "AFTERNOON_TEA" as const, label: "下午茶" },
   { value: "DINNER" as const, label: "晚餐" },
   { value: "LATE_NIGHT" as const, label: "夜宵" }
 ];
+const createSlotOptions = computed(() =>
+  createSlotBaseOptions.map(item => ({
+    ...item,
+    disabled: isMealSlotExpired(createPlanDate.value, item.value, new Date())
+  }))
+);
 
 const visibleCards = computed(() => eventCards.value);
 
@@ -491,10 +497,12 @@ function openEvent(item: EventCardItem) {
 }
 
 function openCreateSheet() {
-  createPlanDate.value = todayText();
+  const initialDate = resolveCreateStartDate();
+  const initialSlot = resolveFirstAvailableCreateSlot(initialDate) ?? "BREAKFAST";
+  createPlanDate.value = initialDate;
   createMonthDate.value = createPlanDate.value;
-  createMealSlot.value = "DINNER";
-  createTime.value = resolveDefaultTime("DINNER", createPlanDate.value);
+  createMealSlot.value = initialSlot;
+  createTime.value = resolveDefaultTime(initialSlot, createPlanDate.value);
   createSheetVisible.value = true;
 }
 
@@ -508,8 +516,22 @@ function handleCreateSheetAfterClose() {
 }
 
 function handleCreateDateSelect(nextValue: string) {
+  const nextSlot = resolveFirstAvailableCreateSlot(nextValue);
+  if (!nextSlot) {
+    const fallbackDate = nextDateText(nextValue);
+    const fallbackSlot = resolveFirstAvailableCreateSlot(fallbackDate) ?? "BREAKFAST";
+    createPlanDate.value = fallbackDate;
+    createMonthDate.value = fallbackDate;
+    createMealSlot.value = fallbackSlot;
+    createTime.value = resolveDefaultTime(fallbackSlot, fallbackDate);
+    return;
+  }
+
   createPlanDate.value = nextValue;
   createMonthDate.value = nextValue;
+  if (isMealSlotExpired(nextValue, createMealSlot.value, new Date())) {
+    createMealSlot.value = nextSlot;
+  }
   if (isPastLocalDateTime(nextValue, createTime.value)) {
     createTime.value = resolveDefaultTime(createMealSlot.value, nextValue);
   }
@@ -524,6 +546,8 @@ function handleCreateTimeSelect(nextValue: string) {
 }
 
 function selectCreateMealSlot(nextSlot: MealPlanSummary["mealSlot"]) {
+  const target = createSlotOptions.value.find(item => item.value === nextSlot);
+  if (target?.disabled) return;
   if (createMealSlot.value === nextSlot) return;
   createMealSlot.value = nextSlot;
   createTime.value = resolveDefaultTime(nextSlot, createPlanDate.value);
@@ -575,6 +599,27 @@ function parseQueryText(value: unknown) {
 
 function resolveDefaultTime(slot: MealPlanSummary["mealSlot"], dateText = todayText()) {
   return resolveMealSlotSuggestedTime(slot, dateText);
+}
+
+function resolveFirstAvailableCreateSlot(dateText: string) {
+  const now = new Date();
+  return createSlotBaseOptions.find(item => !isMealSlotExpired(dateText, item.value, now))?.value ?? null;
+}
+
+function resolveCreateStartDate() {
+  const today = todayText();
+  if (resolveFirstAvailableCreateSlot(today)) return today;
+  return nextDateText(today);
+}
+
+function nextDateText(dateText: string) {
+  const current = new Date(`${dateText}T12:00:00`);
+  if (Number.isNaN(current.getTime())) return todayText();
+  current.setDate(current.getDate() + 1);
+  const year = current.getFullYear();
+  const month = `${current.getMonth() + 1}`.padStart(2, "0");
+  const day = `${current.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function composeScheduledAt(dateText: string, timeText: string) {
