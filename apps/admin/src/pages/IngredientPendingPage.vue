@@ -12,6 +12,7 @@ import {
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { buildIngredientUnitHint } from "@/utils/ingredient-unit-policy";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -99,6 +100,8 @@ const needApproveFields = computed(() => form.action !== "REJECT");
 const needMergeTarget = computed(() => form.action === "APPROVE_MERGE");
 const currentRejectOption = computed(() => rejectReasonOptions.find(item => item.code === form.rejectReasonCode) || null);
 const needRejectDetail = computed(() => form.action === "REJECT" && form.rejectReasonCode === "OTHER");
+const selectedUnitName = computed(() => units.value.find(item => item.id === form.defaultUnitId)?.name || "");
+const defaultUnitHint = computed(() => buildIngredientUnitHint(form.name, selectedUnitName.value));
 
 function resetForm() {
   clearMergeSearchTimer();
@@ -410,6 +413,7 @@ onUnmounted(() => {
             <el-select v-model="form.defaultUnitId" placeholder="请选择默认单位">
               <el-option v-for="item in units" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
+            <div v-if="defaultUnitHint" class="form-hint">{{ defaultUnitHint }}</div>
           </el-form-item>
           <el-form-item v-if="needMergeTarget" label="归并到系统食材">
             <el-select
@@ -474,5 +478,12 @@ onUnmounted(() => {
   margin-top: 4px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.form-hint {
+  margin-top: 6px;
+  color: var(--el-color-warning);
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>
