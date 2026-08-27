@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
+import { OptionalUserAuthGuard } from "../../common/optional-user-auth.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   CreateMyRecipeFromInspirationDto,
@@ -71,8 +72,8 @@ import {
 import type { RecipeDraftContentInput, UnitType } from "../../contracts/types";
 import { RecipeService } from "./recipe.service";
 
-function toAssetRequest(request: RequestWithUser) {
-  const current = request as RequestWithUser & {
+function toAssetRequest(request: Partial<RequestWithUser>) {
+  const current = request as Partial<RequestWithUser> & {
     protocol?: string;
     headers?: Record<string, string | string[] | undefined>;
   };
@@ -262,20 +263,20 @@ export class RecipeController {
   }
 
   @Get("ingredient-categories")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
+  @UseGuards(OptionalUserAuthGuard)
   @ApiOkArray(IngredientCategoryModel, "读取系统食材分类")
   listIngredientCategories() {
     return this.recipeService.listIngredientCategories().then(result => ok(result));
   }
 
   @Get("ingredients")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkPage(IngredientModel, "分页读取系统或我的食材")
-  listIngredients(@Req() request: RequestWithUser, @Query() query: IngredientListQueryDto) {
+  @UseGuards(OptionalUserAuthGuard)
+  @ApiOkPage(IngredientModel, "分页读取系统食材；登录后可按 source 读取系统或我的食材")
+  listIngredients(@Req() request: Partial<RequestWithUser>, @Query() query: IngredientListQueryDto) {
+    const userId = request.user?.userId;
+    const source = userId ? query.source : "SYSTEM";
     return this.recipeService
-      .listIngredients(toAssetRequest(request), request.user.userId, query.page, query.pageSize, query.keyword, query.categoryId, query.source)
+      .listIngredients(toAssetRequest(request), userId ?? null, query.page, query.pageSize, query.keyword, query.categoryId, source)
       .then(result => ok(result));
   }
 
@@ -373,12 +374,13 @@ export class RecipeController {
   }
 
   @Get("units")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkPage(UnitModel, "分页读取系统或我的单位")
-  listUnits(@Req() request: RequestWithUser, @Query() query: UnitListQueryDto) {
+  @UseGuards(OptionalUserAuthGuard)
+  @ApiOkPage(UnitModel, "分页读取系统单位；登录后可按 source 读取系统或我的单位")
+  listUnits(@Req() request: Partial<RequestWithUser>, @Query() query: UnitListQueryDto) {
+    const userId = request.user?.userId;
+    const source = userId ? query.source : "SYSTEM";
     return this.recipeService
-      .listUnits(request.user.userId, query.page, query.pageSize, query.keyword, query.type, query.source)
+      .listUnits(userId ?? null, query.page, query.pageSize, query.keyword, query.type, source)
       .then(result => ok(result));
   }
 

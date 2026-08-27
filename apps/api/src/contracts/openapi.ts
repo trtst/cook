@@ -993,6 +993,7 @@ export class MyRecipeDetailModel {
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
+  @ApiProperty({ type: Boolean }) canRecommend!: boolean;
   @ApiProperty({ type: () => RecipeRecommendationModel, nullable: true }) recommendation!: RecipeRecommendationModel | null;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;

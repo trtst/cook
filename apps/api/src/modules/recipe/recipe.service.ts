@@ -621,7 +621,7 @@ export class RecipeService {
 
   async listIngredients(
     request: { protocol?: string; get?: (name: string) => string | undefined },
-    userId: UUID,
+    userId: UUID | null,
     page: number,
     pageSize: number,
     keyword?: string,
@@ -990,7 +990,7 @@ export class RecipeService {
     };
   }
 
-  async listUnits(userId: UUID, page: number, pageSize: number, keyword?: string, type?: string, source?: string): Promise<PageResult<UnitSummary>> {
+  async listUnits(userId: UUID | null, page: number, pageSize: number, keyword?: string, type?: string, source?: string): Promise<PageResult<UnitSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
@@ -2351,28 +2351,8 @@ export class RecipeService {
   }
 
   private async assertRecipeRecommendationCreateAllowed(tx: RecipeDb, recipe: RecipeRow) {
-    if ((await this.isUnchangedOriginRecipe(tx, recipe)) || (await this.isLegacyUnchangedInspirationRecipe(tx, recipe))) {
-      throw new ConflictException("未改动的灵感菜谱不能重复推荐");
-    }
-    const [pending, adopted] = await Promise.all([
-      tx.recipeRecommendation.findFirst({
-        where: {
-          recipeId: recipe.id,
-          status: "PENDING"
-        },
-        select: { id: true }
-      }),
-      tx.recipeRecommendation.findFirst({
-        where: {
-          recipeId: recipe.id,
-          sourceVersionId: recipe.currentVersionId,
-          status: "ADOPTED"
-        },
-        select: { id: true }
-      })
-    ]);
-    if (pending) throw new ConflictException("当前菜谱已在审核中");
-    if (adopted) throw new ConflictException("当前版本已收录到系统菜谱");
+    const blockMessage = await this.getRecipeRecommendBlockMessage(tx, recipe);
+    if (blockMessage) throw new ConflictException(blockMessage);
   }
 
   private async assertRecipeRecommendationMutable(tx: RecipeDb, recipeId: UUID) {
@@ -2469,12 +2449,13 @@ export class RecipeService {
 
   private async toMyRecipeDetail(tx: RecipeDb, userId: UUID, recipe: RecipeRow): Promise<MyRecipeDetail> {
     const content = versionToContent(recipe.currentVersion);
-    const [refs, recommendation, nutrition, assistant, planLinks] = await Promise.all([
+    const [refs, recommendation, nutrition, assistant, planLinks, recommendBlockMessage] = await Promise.all([
       this.loadRecipeEditRefs(tx, userId, content.ingredients),
       this.loadLatestRecipeRecommendation(tx, recipe.id),
       loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
       this.loadRecipeAssistantSnapshot(tx, recipe.currentVersionId),
-      this.loadRecipePlanLinks(tx, userId, recipe.id)
+      this.loadRecipePlanLinks(tx, userId, recipe.id),
+      this.getRecipeRecommendBlockMessage(tx, recipe)
     ]);
     return {
       id: recipe.id,
@@ -2494,6 +2475,7 @@ export class RecipeService {
       planLinks,
       ingredientRefs: refs.ingredientRefs,
       unitRefs: refs.unitRefs,
+      canRecommend: !recommendBlockMessage,
       recommendation,
       status: recipe.status,
       version: recipe.version,
@@ -3117,6 +3099,32 @@ export class RecipeService {
     );
   }
 
+  private async getRecipeRecommendBlockMessage(tx: RecipeDb, recipe: RecipeRow) {
+    if ((await this.isUnchangedOriginRecipe(tx, recipe)) || (await this.isLegacyUnchangedInspirationRecipe(tx, recipe))) {
+      return "未改动的灵感菜谱不能重复推荐";
+    }
+    const [pending, adopted] = await Promise.all([
+      tx.recipeRecommendation.findFirst({
+        where: {
+          recipeId: recipe.id,
+          status: "PENDING"
+        },
+        select: { id: true }
+      }),
+      tx.recipeRecommendation.findFirst({
+        where: {
+          recipeId: recipe.id,
+          sourceVersionId: recipe.currentVersionId,
+          status: "ADOPTED"
+        },
+        select: { id: true }
+      })
+    ]);
+    if (pending) return "当前菜谱已在审核中";
+    if (adopted) return "当前版本已收录到系统菜谱";
+    return null;
+  }
+
   private matchesRecipeSnapshot(
     leftContent: RecipeContentSnapshot,
     leftCoverImageUrl: string | null,
@@ -3511,9 +3519,10 @@ export class RecipeService {
     return (last?.sortOrder ?? -1) + 1;
   }
 
-  private buildIngredientOwnerWhere(userId: UUID, source?: string): Prisma.IngredientWhereInput {
+  private buildIngredientOwnerWhere(userId: UUID | null, source?: string): Prisma.IngredientWhereInput {
     if (source === "SYSTEM") return { ownerId: null, status: "ACTIVE", category: { is: { isSelectable: true } } };
-    if (source === "PERSONAL") return { ownerId: userId, status: "ACTIVE" };
+    if (source === "PERSONAL") return userId ? { ownerId: userId, status: "ACTIVE" } : { id: -1 };
+    if (!userId) return { ownerId: null, status: "ACTIVE", category: { is: { isSelectable: true } } };
     return {
       OR: [
         { ownerId: null, status: "ACTIVE", category: { is: { isSelectable: true } } },
@@ -3529,10 +3538,11 @@ export class RecipeService {
     return [{ ownerId: "asc" }, { displaySortOrder: "asc" }, { createdAt: "desc" }];
   }
 
-  private buildUnitOwnerWhere(userId: UUID, source?: string): Prisma.UnitWhereInput {
+  private buildUnitOwnerWhere(userId: UUID | null, source?: string): Prisma.UnitWhereInput {
     const systemWhere: Prisma.UnitWhereInput = { ownerId: null };
     if (!source || source === "SYSTEM") return systemWhere;
-    if (source === "PERSONAL") return { ownerId: userId };
+    if (source === "PERSONAL") return userId ? { ownerId: userId } : { id: -1 };
+    if (!userId) return systemWhere;
     return {
       OR: [systemWhere, { ownerId: userId }]
     };
