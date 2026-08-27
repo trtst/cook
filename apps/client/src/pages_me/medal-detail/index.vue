@@ -5,7 +5,12 @@
       <text class="medal-navbar__title">勋章详情</text>
     </template>
 
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看勋章详情" description="勋章说明和获得状态只对你自己开放。" />
+    <LoginEmptyState
+      v-if="!sessionStore.isLoggedIn"
+      title="登录后查看勋章详情"
+      description="勋章说明和获得状态只对你自己开放。"
+      @success="handleLoginSuccess"
+    />
 
     <template v-else>
       <view class="detail-page">
@@ -80,7 +85,7 @@ import { computed, ref, watch } from "vue";
 import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
 import { medalApi, type UserMedalSummary } from "@/apis/medal";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -117,6 +122,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadDetail();
 });
+
+async function handleLoginSuccess() {
+  await loadDetail();
+}
 
 onShareAppMessage(() => ({
   title: item.value?.name ? `${item.value.name} | 炊火记勋章` : "炊火记勋章",

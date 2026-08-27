@@ -5,7 +5,7 @@
       <text class="account-navbar__title">账号设置</text>
     </template>
 
-    <Login
+    <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       class="account-login-shell"
       :style="pageBodyStyle"
@@ -39,7 +39,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import type { MeResponse } from "@/apis/user";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";

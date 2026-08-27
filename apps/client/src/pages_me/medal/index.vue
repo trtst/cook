@@ -10,7 +10,12 @@
       <text class="medal-navbar__title" :style="navTitleStyle">我的勋章</text>
     </template>
 
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看我的勋章" description="勋章只记录你真实完成和真实贡献的做饭事实。" />
+    <LoginEmptyState
+      v-if="!sessionStore.isLoggedIn"
+      title="登录后查看我的勋章"
+      description="勋章只记录你真实完成和真实贡献的做饭事实。"
+      @success="handleLoginSuccess"
+    />
 
     <template v-else>
       <view class="medal-nav-backdrop" :style="navBackdropStyle" />
@@ -103,7 +108,7 @@ import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { medalApi, type MedalWallResponse } from "@/apis/medal";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
@@ -164,6 +169,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadWall();
 });
+
+async function handleLoginSuccess() {
+  await loadWall();
+}
 
 async function loadWall() {
   if (!sessionStore.isLoggedIn || loading.value) return;

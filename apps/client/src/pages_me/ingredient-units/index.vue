@@ -19,18 +19,7 @@
     </template>
 
     <view class="ingredient-units-page">
-      <Empty
-        v-if="!sessionStore.isLoggedIn"
-        class="page-empty"
-        :art="emptyStateIllustration"
-        title="登录后查看食材与单位"
-        description="系统食材、个人食材、单位分类和推荐入口都会收口在这里。点一下开始登录。"
-        clickable
-        @click="openLogin"
-      />
-
-      <template v-else>
-        <view v-if="showFixedPanel" class="ingredient-page-head">
+      <view v-if="showFixedPanel" class="ingredient-page-head">
           <view class="search-row">
             <view class="search-row__inner">
               <RecipeSearchBar
@@ -61,7 +50,7 @@
           </view>
         </view>
 
-        <view class="list-scroll-wrap">
+      <view class="list-scroll-wrap">
           <RecipeSearchLoading
             :pull-distance="pullDistance"
             :refreshing="refreshing"
@@ -95,7 +84,7 @@
                 clickable
                 @click="openRecommendSheet"
               />
-              <button class="empty-panel__button" @click="openRecommendSheet">添加食材</button>
+              <button class="empty-panel__button" @click="openRecommendSheet">{{ recommendButtonText }}</button>
             </view>
             <view v-else-if="activeTab === 'unit' && !unitGroups.length" class="empty-state">
               <text class="empty-state__title">还没有单位</text>
@@ -152,10 +141,9 @@
           </scroll-view>
         </view>
 
-        <view v-if="showRecommendFab" class="recommend-fab" hover-class="recommend-fab--hover" hover-stay-time="100" @click="openRecommendSheet">
-          <text class="cookfont icon-add recommend-fab__icon" />
-        </view>
-      </template>
+      <view v-if="showRecommendFab" class="recommend-fab" hover-class="recommend-fab--hover" hover-stay-time="100" @click="openRecommendSheet">
+        <text class="cookfont icon-add recommend-fab__icon" />
+      </view>
     </view>
 
     <SheetShell
@@ -421,6 +409,7 @@ const ingredientEmptyDescription = computed(() =>
     ? "换个关键词试试，或者直接添加一条新的食材推荐。"
     : "当前分类还没有可展示的食材，可以先添加一条新的食材推荐。"
 );
+const recommendButtonText = computed(() => (sessionStore.isLoggedIn ? "添加食材" : "登录后添加食材"));
 const hasActiveItems = computed(() =>
   activeTab.value === "ingredient" ? ingredients.value.length > 0 : unitGroups.value.length > 0
 );
@@ -472,10 +461,6 @@ let categoryPromise: Promise<void> | null = null;
 let unitPromise: Promise<void> | null = null;
 
 onShow(() => {
-  if (!sessionStore.isLoggedIn) {
-    resetPageState();
-    return;
-  }
   void loadActiveTab();
 });
 
@@ -501,7 +486,6 @@ function resetPageState() {
 }
 
 async function loadActiveTab(options: { source?: LoadSource; force?: boolean } = {}) {
-  if (!sessionStore.isLoggedIn) return;
   const source = options.source ?? "initial";
   loadSource.value = source;
   if (source === "refresh") {
@@ -522,7 +506,6 @@ async function loadActiveTab(options: { source?: LoadSource; force?: boolean } =
 function switchTab(tab: IngredientUnitsTab) {
   if (activeTab.value === tab) return;
   activeTab.value = tab;
-  if (!sessionStore.isLoggedIn) return;
   void loadActiveTab({ source: "switch" });
 }
 
@@ -538,14 +521,12 @@ function openLogin(nextAction: (() => void) | null = null) {
 }
 
 function searchIngredients() {
-  if (!sessionStore.isLoggedIn) return;
   ingredientSearchKeyword.value = ingredientKeyword.value.trim();
   loadSource.value = "search";
   void loadIngredients();
 }
 
 function clearIngredientKeyword() {
-  if (!sessionStore.isLoggedIn) return;
   ingredientKeyword.value = "";
   ingredientSearchKeyword.value = "";
   loadSource.value = "search";
@@ -613,7 +594,8 @@ async function loadIngredients() {
       page: 1,
       pageSize: 20,
       keyword: ingredientSearchKeyword.value || undefined,
-      categoryId: ingredientSearchKeyword.value ? undefined : ingredientCategoryId.value
+      categoryId: ingredientSearchKeyword.value ? undefined : ingredientCategoryId.value,
+      source: sessionStore.isLoggedIn ? undefined : "SYSTEM"
     });
     ingredients.value = result.items;
   } catch (error) {
@@ -896,15 +878,13 @@ async function automatorSwitchTab(tab: IngredientUnitsTab) {
     return automatorReadState();
   }
   activeTab.value = tab;
-  if (sessionStore.isLoggedIn) {
-    await loadActiveTab({ source: "switch", force: true });
-  }
+  await loadActiveTab({ source: "switch", force: true });
   return automatorReadState();
 }
 
 async function automatorSelectIngredientCategory(categoryId: UUID) {
   ingredientCategoryId.value = categoryId;
-  if (sessionStore.isLoggedIn && activeTab.value === "ingredient") {
+  if (activeTab.value === "ingredient") {
     loadSource.value = "switch";
     await loadIngredients();
   }

@@ -267,6 +267,7 @@ export interface MyRecipeDetail {
 	planLinks: RecipePlanLinkSummary[];
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
+	canRecommend: boolean;
 	recommendation: RecipeRecommendationSummary | null;
 	status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
 	version: number;

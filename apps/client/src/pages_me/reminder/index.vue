@@ -5,22 +5,21 @@
       <text class="reminder-navbar__title">提醒设置</text>
     </template>
 
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      class="reminder-login-shell"
-      :style="pageBodyStyle"
-      title="登录后查看提醒设置"
-      description="当前提醒与通知记录只跟随当前登录账号展示。"
-    />
-
-    <view v-else class="reminder-page" :style="pageBodyStyle">
+    <view class="reminder-page" :style="pageBodyStyle">
       <view class="reminder-card reminder-card--hero">
         <text class="reminder-card__eyebrow">当前入口</text>
         <text class="reminder-card__title">提醒先统一收在通知中心</text>
         <text class="reminder-card__description">这一页先承接提醒设置入口，当前版本统一通过通知中心查看提醒记录，后续再补更细的提醒开关。</text>
       </view>
 
-      <view class="reminder-card">
+      <LoginEmptyState
+        v-if="!sessionStore.isLoggedIn"
+        class="reminder-login-shell"
+        title="登录后查看提醒设置"
+        description="上面的说明会继续保留；登录后再看当前账号对应的提醒与通知记录。"
+      />
+
+      <view v-else class="reminder-card">
         <view class="reminder-row" hover-class="is-pressed" hover-stay-time="100" @click="goRecommend">
           <view class="reminder-row__copy">
             <text class="reminder-row__title">通知中心</text>
@@ -35,7 +34,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";

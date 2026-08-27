@@ -38,8 +38,12 @@ describe("pages/me/index", () => {
     expect(overviewGrids).toHaveLength(0);
   });
 
-  it("未登录点击我的勋章会呼起全局登录弹窗并可切到手机号验证码表单", async () => {
-    await page.callMethod("automatorOpenMedalLogin");
+  it("未登录点击我的勋章直接进入落地页，不再在入口层拦登录", async () => {
+    expect(await page.callMethod("automatorOpenMedalLogin")).toEqual({ path: "/pages_me/medal/index" });
+  });
+
+  it("未登录点击通知中心会呼起全局登录弹窗并可切到手机号验证码表单", async () => {
+    expect(await page.callMethod("automatorOpenNotificationLogin")).toEqual({ path: null });
 
     const modalState = await page.callMethod("automatorReadLoginModalState");
     expect(modalState.visible).toBe(true);
@@ -59,5 +63,16 @@ describe("pages/me/index", () => {
     expect(phoneState.backText).toBe("返回微信一键登录");
     expect(phoneState.phoneSubmitText).toBe("手机号登录");
     expect(phoneState.codeButtonText).toBe("发送验证码");
+  });
+
+  it("未登录时只有通知中心、我的口味和账号设置在入口层拦登录，其余入口允许进入落地页", async () => {
+    expect(await page.callMethod("automatorResolveEntryAuth", "通知中心")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "我的口味")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "账号设置")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "饭局")).toEqual({ found: true, requiresLogin: false });
+    expect(await page.callMethod("automatorResolveEntryAuth", "计划")).toEqual({ found: true, requiresLogin: false });
+    expect(await page.callMethod("automatorResolveEntryAuth", "购物清单")).toEqual({ found: true, requiresLogin: false });
+    expect(await page.callMethod("automatorResolveEntryAuth", "食材")).toEqual({ found: true, requiresLogin: false });
+    expect(await page.callMethod("automatorResolveEntryAuth", "我的勋章")).toEqual({ found: true, requiresLogin: false });
   });
 });

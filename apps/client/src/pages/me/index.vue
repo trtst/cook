@@ -394,7 +394,8 @@ const notificationEntry: PageEntry = {
 	title: "通知中心",
 	iconSrc: notificationsIcon,
 	description: "邀请提醒、进度通知和系统消息都在这里",
-	url: "/pages_me/recommend/index"
+	url: "/pages_me/recommend/index",
+	requiresLogin: true
 };
 
 const personalEntries: PageEntry[] = [
@@ -402,13 +403,15 @@ const personalEntries: PageEntry[] = [
 		title: "我的口味",
 		iconSrc: tasteIcon,
 		description: "把爱吃、不吃和过敏信息整理清楚",
-		url: "/pages_me/taste/index"
+		url: "/pages_me/taste/index",
+		requiresLogin: true
 	},
 	{
 		title: "食材与单位",
 		iconSrc: categoriesUnitsIcon,
 		description: "常用食材、分类和单位集中管理",
-		url: "/pages_me/ingredient-units/index"
+		url: "/pages_me/ingredient-units/index",
+		requiresLogin: false
 	},
 	{
 		title: "厨具",
@@ -444,7 +447,8 @@ const settingEntries = computed<PageEntry[]>(() => [
 		title: "提醒设置",
 		iconSrc: remindersIcon,
 		description: "看看现在有哪些提醒入口",
-		url: "/pages_me/reminder/index"
+		url: "/pages_me/reminder/index",
+		requiresLogin: false
 	},
 	{
 		title: "主题皮肤",
@@ -464,7 +468,8 @@ const settingEntries = computed<PageEntry[]>(() => [
 		title: "账号设置",
 		iconSrc: notificationsIcon,
 		description: sessionStore.isLoggedIn ? "处理当前账号、缓存和登录状态" : "登录后处理账号和登录状态",
-		url: "/pages_me/account/index"
+		url: "/pages_me/account/index",
+		requiresLogin: true
 	},
 	{
 		title: "隐私政策",
@@ -622,7 +627,7 @@ function handleEntryClick(entry: PageEntry) {
 		showComingSoon(entry.disabledText || entry.title);
 	};
 
-	if (entry.requiresLogin === false) {
+	if (entry.requiresLogin !== true) {
 		openEntry();
 		return;
 	}
@@ -640,7 +645,7 @@ function handleProfileAction() {
 }
 
 function handleMedalClick() {
-	requireLogin(() => navigateTo("/pages_me/medal/index"));
+	navigateTo("/pages_me/medal/index");
 }
 
 function requireLogin(action: () => void) {
@@ -661,6 +666,14 @@ async function automatorOpenMedalLogin() {
 	await nextTick();
 	return {
 		path: "/pages_me/medal/index"
+	};
+}
+
+async function automatorOpenNotificationLogin() {
+	handleEntryClick(notificationEntry);
+	await nextTick();
+	return {
+		path: sessionStore.isLoggedIn ? notificationEntry.url || null : null
 	};
 }
 
@@ -686,10 +699,31 @@ function automatorReadLoginModalState() {
 	};
 }
 
+function automatorResolveEntryAuth(title: string) {
+	const entries = [
+		...coreEntries,
+		notificationEntry,
+		...personalEntries,
+			...knowledgeEntries,
+			...settingEntries.value,
+			{
+				title: "我的勋章",
+				requiresLogin: false
+			}
+		];
+	const entry = entries.find(item => item.title === title);
+	return {
+		found: Boolean(entry),
+		requiresLogin: entry?.requiresLogin === true
+	};
+}
+
 defineExpose({
 	automatorOpenMedalLogin,
+	automatorOpenNotificationLogin,
 	automatorSwitchLoginModalPhoneMode,
-	automatorReadLoginModalState
+	automatorReadLoginModalState,
+	automatorResolveEntryAuth
 });
 
 function openProfileEditor() {

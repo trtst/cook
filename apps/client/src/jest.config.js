@@ -9,6 +9,8 @@ module.exports = {
     watchPathIgnorePatterns: ['/node_modules/', '/dist/', '/.git/'],
     moduleFileExtensions: ['js', 'json'],
     rootDir: __dirname,
-    testMatch: ['<rootDir>/pages_recipe/detail/index.test.js'],
+    testMatch: [
+      "<rootDir>/pages_share/import/index.test.js"
+    ],
     testPathIgnorePatterns: ['/node_modules/'],
 };

@@ -123,7 +123,7 @@
               <view v-if="showNutritionSection" id="detail-nutrition" class="section">
                 <view class="section__head">
                   <view class="section__head-main">
-                    <text class="section__label">营养估算</text>
+                    <text class="section__label">营养和热量</text>
                     <text class="section__caption">{{ nutritionCaption }}</text>
                   </view>
                   <view v-if="publishedNutrition?.perRecipe" class="nutrition-toggle">
@@ -144,15 +144,41 @@
                     </button>
                   </view>
                 </view>
-                <view v-if="visibleNutritionMetrics.length" class="nutrition-grid">
-                  <view v-for="metric in visibleNutritionMetrics" :key="metric.key" class="nutrition-card">
-                    <text class="nutrition-card__label">{{ metric.label }}</text>
-                    <text class="nutrition-card__dot">·</text>
-                    <text v-if="hasNutritionValue(metric.value)" class="nutrition-card__amount">
-                      <text class="nutrition-card__value">{{ formatNutritionNumber(metric.value) }}</text>
-                      <text class="nutrition-card__unit">{{ metric.unit }}</text>
-                    </text>
-                    <text v-else class="nutrition-card__empty">暂缺</text>
+                <view v-if="visibleNutritionMetrics.length" :key="nutritionMotionKey" class="nutrition-grid">
+                  <view class="nutrition-grid__chart">
+                    <view
+                      v-for="segment in nutritionRingSegments"
+                      :key="segment.key"
+                      class="nutrition-ring-segment"
+                      :class="`nutrition-ring-segment--${segment.key}`"
+                      :style="segment.style"
+                    >
+                      <view class="nutrition-ring-segment__cap nutrition-ring-segment__cap--start" :style="segment.startCapStyle" />
+                      <view class="nutrition-ring-segment__cap nutrition-ring-segment__cap--end" :style="segment.endCapStyle" />
+                    </view>
+                  </view>
+                  <view class="nutrition-grid__metrics">
+                    <view v-for="metric in visibleNutritionMetrics" :key="metric.key" class="nutrition-metric">
+                      <view class="nutrition-metric__main">
+                        <view class="nutrition-metric__label-wrap">
+                          <view class="nutrition-metric__dot" :class="`nutrition-metric__dot--${metric.key}`" />
+                          <text class="nutrition-metric__label">{{ metric.label }}(g)</text>
+                        </view>
+                        <text
+                          class="nutrition-metric__amount"
+                          :class="[
+                            `nutrition-metric__amount--${metric.key}`,
+                            { 'nutrition-metric__amount--empty': !hasNutritionValue(metric.value) }
+                          ]"
+                        >
+                          {{ formatNutritionValue(metric.value, metric.unit) }}
+                        </text>
+                      </view>
+                    </view>
+                  </view>
+                  <view class="nutrition-grid__summary">
+                    <text class="nutrition-grid__calories">{{ currentNutritionCalories }}</text>
+                    <text class="nutrition-grid__calories-unit">kcal</text>
                   </view>
                 </view>
                 <text v-else class="section__empty">暂无营养估算</text>
@@ -238,7 +264,7 @@
                     :class="{ 'detail-inline-actions__item--disabled': isRecommendReadonly }"
                     @click="handleRecommendAction"
                   >
-                    <view class="cookfont detail-inline-actions__icon icon-recommend" />
+                    <view class="cookfont detail-inline-actions__icon icon-self-recommend" />
                     <view class="detail-inline-actions__text">{{ recommendActionLabel }}</view>
                   </button>
 	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" open-type="share">
@@ -317,29 +343,37 @@
       <SheetShell
         v-if="kind === 'my'"
         :visible="recommendSheetVisible"
-        title="投稿灵感"
+        title="自荐美食说明"
         subtitle="选择一个建议的系统分类。审核通过后，会收录到灵感里，个人菜谱仍保留在“我的”中。"
         @close="closeRecommendSheet"
       >
-	          <view v-if="recommendSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
-	          <view v-else-if="recommendSheetError" class="panel-note panel-note--sheet" @click="loadRecommendCategories(true)">{{ recommendSheetError }}</view>
-	          <template v-else>
-	            <view class="sheet-section">
-	              <text class="sheet-section__title">系统菜谱分类</text>
-	              <view v-if="recommendCategories.length" class="chip-row">
-	                <view
-	                  v-for="item in recommendCategories"
-	                  :key="item.id"
-	                  class="chip"
-	                  :class="{ 'chip--active': selectedRecommendCategoryId === item.id }"
-	                  @click="selectedRecommendCategoryId = item.id"
-	                >
-	                  {{ item.name }}
-	                </view>
-	              </view>
-	              <text v-else class="sheet-section__hint">当前还没有可选的系统菜谱分类。</text>
-	            </view>
-	          </template>
+        <view class="sheet-section">
+          <text class="sheet-section__title">自荐说明</text>
+          <view class="sheet-note-list">
+            <text class="sheet-note-item">1. 自荐菜谱会进入人工审核，内容完整、步骤清晰、成品质量高的菜谱才会被推荐。</text>
+            <text class="sheet-note-item">2. 编辑可能会在不改变原意的前提下，调整标题、分类或部分描述文案。</text>
+            <text class="sheet-note-item">3. 提交后如 1 个工作日内未被收录，则默认本次未通过审核，可完善后再次提交。</text>
+          </view>
+        </view>
+        <view v-if="recommendSheetLoading" class="panel-note panel-note--sheet">加载中...</view>
+        <view v-else-if="recommendSheetError" class="panel-note panel-note--sheet" @click="loadRecommendCategories(true)">{{ recommendSheetError }}</view>
+        <template v-else>
+          <view class="sheet-section">
+            <text class="sheet-section__title">系统菜谱分类</text>
+            <view v-if="recommendCategories.length" class="chip-row">
+              <view
+                v-for="item in recommendCategories"
+                :key="item.id"
+                class="chip"
+                :class="{ 'chip--active': selectedRecommendCategoryId === item.id }"
+                @click="selectedRecommendCategoryId = item.id"
+              >
+                {{ item.name }}
+              </view>
+            </view>
+            <text v-else class="sheet-section__hint">当前还没有可选的系统菜谱分类。</text>
+          </view>
+        </template>
           <template #footer>
             <view class="sheet-actions">
               <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="recommendSubmitting" @click="closeRecommendSheet">取消</button>
@@ -348,7 +382,7 @@
                 :disabled="recommendSubmitting || !selectedRecommendCategoryId"
                 @click="handleRecommendRecipe"
               >
-                {{ recommendSubmitting ? "提交中..." : "投稿" }}
+                {{ recommendSubmitting ? "提交中..." : "确认" }}
               </button>
             </view>
           </template>
@@ -480,10 +514,17 @@ interface ReportReasonOption {
 }
 
 interface NutritionMetricCard {
-  key: "calories" | "protein" | "fat" | "carbohydrate";
+  key: "protein" | "fat" | "carbohydrate";
   label: string;
   unit: string;
   value: number | null;
+}
+
+interface NutritionRingSegment {
+  key: NutritionMetricCard["key"];
+  style: Record<string, string>;
+  startCapStyle: Record<string, string>;
+  endCapStyle: Record<string, string>;
 }
 
 function isSeedCoverUrl(value: string) {
@@ -636,6 +677,7 @@ const isOwnedDetail = computed(() => mode.value === "published" && kind.value ==
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
 const hasOwnedRecipeAssistant = computed(() => Boolean(myDetail.value?.assistant?.steps.length));
 const canGenerateRecipeAssistant = computed(() => Boolean(userStore.profile && userStore.profile.membership.tier !== "FREE"));
+const canRecommendRecipe = computed(() => Boolean(myDetail.value?.canRecommend));
 const planRecipeId = computed<UUID | "">(() => {
   if (isOwnedDetail.value) return recipeId.value;
   return linkedOwnedRecipeId.value || "";
@@ -655,16 +697,16 @@ const recommendActionLabel = computed(() => {
 	const status = currentRecommendation.value?.status;
 	if (status === "PENDING") return "审核中";
 	if (status === "ADOPTED") return "已收录";
-	if (status === "REJECTED") return "重新投稿";
-	if (status === "WITHDRAWN") return "重新投稿";
-	return "投稿";
+	if (status === "REJECTED") return "再次自荐";
+	if (status === "WITHDRAWN") return "再次自荐";
+	return "自荐美食";
 });
 const isRecommendReadonly = computed(() => {
   const status = currentRecommendation.value?.status;
   return status === "PENDING" || status === "ADOPTED";
 });
 const externalEditActionLabel = computed(() => (linkedOwnedRecipeId.value && kind.value === "inspiration" ? "编辑" : "改编"));
-const showRecommendEntry = computed(() => isOwnedDetail.value);
+const showRecommendEntry = computed(() => isOwnedDetail.value && (canRecommendRecipe.value || Boolean(currentRecommendation.value)));
 const showStickyActions = computed(
   () => mode.value === "published" && (isExternalDetail.value || isOwnedDetail.value)
 );
@@ -718,21 +760,24 @@ const planLinksSheetSubtitle = computed(() => {
 const nutritionCaption = computed(() =>
   nutritionView.value === "perRecipe" ? "整份营养为估算值，仅供参考" : "单份营养为估算值，仅供参考"
 );
-const visibleNutritionMetrics = computed<NutritionMetricCard[]>(() => {
-  if (!publishedNutrition.value) return [];
+const nutritionMotionTick = ref(0);
+const currentNutritionMetrics = computed(() => {
+  if (!publishedNutrition.value) return null;
   const preferred =
     nutritionView.value === "perRecipe"
       ? publishedNutrition.value.perRecipe
       : publishedNutrition.value.perServing;
-  if (preferred) {
-    return buildNutritionMetrics(preferred);
-  }
-  const fallback =
-    nutritionView.value === "perRecipe"
-      ? publishedNutrition.value.perServing
-      : publishedNutrition.value.perRecipe;
-  return fallback ? buildNutritionMetrics(fallback) : [];
+  if (preferred) return preferred;
+  return nutritionView.value === "perRecipe"
+    ? publishedNutrition.value.perServing
+    : publishedNutrition.value.perRecipe;
 });
+const visibleNutritionMetrics = computed<NutritionMetricCard[]>(() => {
+  return currentNutritionMetrics.value ? buildNutritionMetrics(currentNutritionMetrics.value) : [];
+});
+const currentNutritionCalories = computed(() => formatNutritionNumber(currentNutritionMetrics.value?.calories ?? null));
+const nutritionMotionKey = computed(() => `${nutritionView.value}-${nutritionMotionTick.value}`);
+const nutritionRingSegments = computed<NutritionRingSegment[]>(() => buildNutritionRingSegments(visibleNutritionMetrics.value));
 const showNutritionSection = computed(() => visibleNutritionMetrics.value.length > 0);
 const anchorTabs = computed(() => {
   const tabs: Array<{ value: AnchorKey; label: string }> = [{ value: "ingredients", label: "食材" }];
@@ -923,7 +968,9 @@ function scrollToSection(section: AnchorKey) {
 
 function setNutritionView(view: "perServing" | "perRecipe") {
   if (view === "perRecipe" && !publishedNutrition.value?.perRecipe) return;
+  if (nutritionView.value === view) return;
   nutritionView.value = view;
+  nutritionMotionTick.value += 1;
 }
 
 function openLogin(afterLogin?: () => void) {
@@ -1143,9 +1190,9 @@ async function handleRecommendRecipe() {
 		});
 		syncMyRecommendation(result);
 		closeRecommendSheet();
-		await uniPlatform.feedback.toast({ title: "已提交投稿", icon: "success" });
+		await uniPlatform.feedback.toast({ title: "已提交自荐", icon: "success" });
 	} catch (error) {
-		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "投稿失败", icon: "none" });
+		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
 	} finally {
 		recommendSubmitting.value = false;
 	}
@@ -1347,11 +1394,57 @@ function formatAmount(amount: RecipeAmountSnapshot | RecipePreviewAmount) {
 
 function buildNutritionMetrics(metrics: NonNullable<RecipeNutritionSummary["perServing"]>): NutritionMetricCard[] {
   return [
-    { key: "calories", label: "热量", unit: "kcal", value: metrics.calories },
-    { key: "protein", label: "蛋白质", unit: "g", value: metrics.protein },
     { key: "fat", label: "脂肪", unit: "g", value: metrics.fat },
-    { key: "carbohydrate", label: "碳水", unit: "g", value: metrics.carbohydrate }
+    { key: "protein", label: "蛋白质", unit: "g", value: metrics.protein },
+    { key: "carbohydrate", label: "碳水化合物", unit: "g", value: metrics.carbohydrate }
   ];
+}
+
+function buildNutritionRingSegments(metrics: NutritionMetricCard[]): NutritionRingSegment[] {
+  const displayOrder: Array<NutritionMetricCard["key"]> = ["carbohydrate", "protein", "fat"];
+  const ordered = displayOrder
+    .map(key => metrics.find(metric => metric.key === key) || null)
+    .filter((metric): metric is NutritionMetricCard => Boolean(metric));
+  const resolved = ordered.map(metric => ({
+    key: metric.key,
+    value: hasNutritionValue(metric.value) && metric.value > 0 ? metric.value : 0
+  }));
+  const total = resolved.reduce((sum, metric) => sum + metric.value, 0);
+  if (total <= 0) return ordered.map(metric => buildNutritionRingSegment(metric.key, 0, 84));
+
+  const gapDeg = 18;
+  const totalGap = resolved.length * gapDeg;
+  const availableDeg = Math.max(360 - totalGap, 180);
+  let startDeg = -126;
+
+  return resolved.map(metric => {
+    const rawSweep = total > 0 ? (metric.value / total) * availableDeg : 0;
+    const sweepDeg = Math.max(rawSweep, 46);
+    const segment = buildNutritionRingSegment(metric.key, startDeg, sweepDeg);
+    startDeg += sweepDeg + gapDeg;
+    return segment;
+  });
+}
+
+function buildNutritionRingSegment(key: NutritionMetricCard["key"], startDeg: number, sweepDeg: number): NutritionRingSegment {
+  const safeSweep = Math.max(sweepDeg, 24);
+  const endDeg = startDeg + safeSweep;
+  return {
+    key,
+    style: {
+      "--segment-start": `${startDeg}deg`,
+      "--segment-sweep": `${safeSweep}deg`,
+      "--segment-color": resolveNutritionColor(key)
+    },
+    startCapStyle: buildNutritionRingCapStyle(startDeg),
+    endCapStyle: buildNutritionRingCapStyle(endDeg)
+  };
+}
+
+function buildNutritionRingCapStyle(angleDeg: number) {
+  return {
+    transform: `translate(-50%, -50%) rotate(${angleDeg}deg) translateY(calc(-1 * var(--nutrition-ring-radius)))`
+  };
 }
 
 function currentDateText() {
@@ -1414,6 +1507,17 @@ function formatNutritionNumber(value: number | null) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
+function formatNutritionValue(value: number | null, unit: string) {
+  if (!hasNutritionValue(value)) return "暂缺";
+  return `${formatNutritionNumber(value)}${unit}`;
+}
+
+function resolveNutritionColor(key: NutritionMetricCard["key"]) {
+  if (key === "fat") return "#F45151";
+  if (key === "protein") return "#F7B731";
+  return "#1FAA67";
+}
+
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
   await sessionStore.setSession(snapshot);
   errorText.value = "";
@@ -1431,6 +1535,8 @@ function automatorReadState() {
     title: detailTitle.value,
     planLinkCount: recipePlanLinks.value.length,
     primaryPlanText: primaryPlanText.value,
+    canRecommend: myDetail.value?.canRecommend ?? false,
+    showRecommendEntry: showRecommendEntry.value,
     recommendationStatus: currentRecommendation.value?.status ?? null,
     recommendActionLabel: recommendActionLabel.value,
     recommendSheetVisible: recommendSheetVisible.value,
@@ -1784,52 +1890,175 @@ defineExpose({
 }
 
 .nutrition-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 20rpx 0;
+  animation: nutrition-fade-in 220ms ease;
+}
+
+.nutrition-grid__chart {
+  position: relative;
+  --nutrition-ring-size: 140rpx;
+  --nutrition-ring-thickness: 14rpx;
+  --nutrition-ring-radius: calc((var(--nutrition-ring-size) - var(--nutrition-ring-thickness)) / 2);
+  flex: 0 0 var(--nutrition-ring-size);
+  width: var(--nutrition-ring-size);
+  height: var(--nutrition-ring-size);
+  border-radius: 50%;
+}
+
+.nutrition-ring-segment {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      from var(--segment-start),
+      var(--segment-color) 0deg var(--segment-sweep),
+      transparent var(--segment-sweep) 360deg
+    );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--nutrition-ring-thickness)),
+    #000 calc(100% - var(--nutrition-ring-thickness) + 1rpx)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--nutrition-ring-thickness)),
+    #000 calc(100% - var(--nutrition-ring-thickness) + 1rpx)
+  );
+}
+
+.nutrition-ring-segment__cap {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--nutrition-ring-thickness);
+  height: var(--nutrition-ring-thickness);
+  border-radius: 50%;
+  background: var(--segment-color);
+}
+
+.nutrition-grid__metrics {
+  flex: 1;
+  min-width: 0;
+  padding-right: 12rpx;
+}
+
+.nutrition-metric + .nutrition-metric {
+  margin-top: 14rpx;
+}
+
+.nutrition-metric__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16rpx;
 }
 
-.nutrition-card {
-  display: flex;
-  align-items: baseline;
-  gap: 10rpx;
-  padding: 8rpx 0;
+.nutrition-metric__label-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
 }
 
-.nutrition-card__label {
+.nutrition-metric__dot {
+  flex: 0 0 auto;
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: var(--radius-pill);
+}
+
+.nutrition-metric__dot--protein {
+  background: #f7b731;
+}
+
+.nutrition-metric__dot--fat {
+  background: #f45151;
+}
+
+.nutrition-metric__dot--carbohydrate {
+  background: #1faa67;
+}
+
+.nutrition-metric__label {
   color: var(--color-text-secondary);
-  font-size: 24rpx;
+  font-size: 26rpx;
   line-height: 1.2;
 }
 
-.nutrition-card__dot {
+.nutrition-metric__amount {
+  flex: 0 0 auto;
   color: var(--color-text-tertiary);
-  font-size: 24rpx;
-  line-height: 1;
-}
-
-.nutrition-card__amount {
-  color: var(--color-text);
-  font-size: 0;
-  line-height: 1;
-}
-
-.nutrition-card__value {
-  color: var(--color-text);
-  font-size: 34rpx;
+  font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
 }
 
-.nutrition-card__unit,
-.nutrition-card__empty {
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.2;
+.nutrition-metric__amount--fat {
+  color: #f45151;
 }
 
-.nutrition-card__unit {
-  margin-left: 4rpx;
+.nutrition-metric__amount--protein {
+  color: #f7b731;
+}
+
+.nutrition-metric__amount--carbohydrate {
+  color: #1faa67;
+}
+
+.nutrition-metric__amount--empty {
+  color: var(--color-text-quaternary);
+}
+
+.nutrition-grid__summary {
+  position: relative;
+  display: flex;
+  flex: 0 0 200rpx;
+  width: 200rpx;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding-left: 24rpx;
+  text-align: center;
+}
+
+.nutrition-grid__summary::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12rpx;
+  bottom: 12rpx;
+  width: 2rpx;
+  background: var(--color-border);
+}
+
+.nutrition-grid__calories {
+  color: var(--color-text);
+  font-size: 50rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 0.92;
+}
+
+.nutrition-grid__calories-unit {
+  color: var(--color-text-tertiary);
+  font-size: 28rpx;
+  line-height: 1;
+}
+
+@keyframes nutrition-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .nutrition-toggle {
@@ -2167,6 +2396,20 @@ defineExpose({
   color: var(--color-text-tertiary);
   font-size: 24rpx;
   line-height: 1.6;
+}
+
+.sheet-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 18rpx;
+}
+
+.sheet-note-item {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: 26rpx;
+  line-height: 1.7;
 }
 
 .plan-link-list {

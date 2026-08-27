@@ -28,10 +28,11 @@
       </view>
     </template>
 
-    <Login
+    <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       title="登录后维护菜谱"
       description="登录后才能选择食材、保存草稿和发布你自己的菜谱。"
+      :art="loadingIllustration"
       @success="handleLoginSuccess"
     />
     <view v-else-if="loading" class="notice notice--state" :style="noticeStyle">
@@ -550,6 +551,7 @@
                           </text>
                         </view>
                       </view>
+                      <text v-if="ingredientCreateUnitHint" class="ingredient-create__hint">{{ ingredientCreateUnitHint }}</text>
 
                       <view v-if="ingredientCreateSection === 'category'" class="ingredient-create__group">
                         <text class="ingredient-create__group-title">分类：</text>
@@ -796,10 +798,11 @@ import {
   type UnitSummary
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { buildIngredientUnitHint, resolveRecommendedIngredientUnitName } from "@/pages_recipe/ingredient-unit-policy";
 import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -1149,6 +1152,9 @@ const ingredientCreateCategoryName = computed(() => {
 });
 const ingredientCreateUnitName = computed(() => {
   return units.value.find(item => item.id === ingredientCreateDraft.unitId)?.name || "";
+});
+const ingredientCreateUnitHint = computed(() => {
+  return buildIngredientUnitHint(ingredientCreateDraft.name, ingredientCreateUnitName.value);
 });
 const ingredientEmptyText = computed(() => {
   if (ingredientSourceFilter.value === "PERSONAL") {
@@ -1976,7 +1982,7 @@ function startIngredientCreate() {
   ingredientCreateDraft.version = null;
   ingredientCreateDraft.name = name;
   ingredientCreateDraft.categoryId = ingredientCategoryId.value || "";
-  ingredientCreateDraft.unitId = "";
+  ingredientCreateDraft.unitId = resolveUnitIdByName(resolveRecommendedIngredientUnitName(name));
   ingredientCreateSection.value = "";
   ingredientCreateVisible.value = true;
 }
@@ -2019,6 +2025,11 @@ function selectIngredientCreateCategory(categoryId: ResourceId) {
 
 function selectIngredientCreateUnit(unitId: ResourceId) {
   ingredientCreateDraft.unitId = ingredientCreateDraft.unitId === unitId ? "" : unitId;
+}
+
+function resolveUnitIdByName(unitName: string | null) {
+  if (!unitName) return "";
+  return units.value.find(item => item.name === unitName)?.id || "";
 }
 
 async function confirmIngredientSelection() {
@@ -3296,6 +3307,14 @@ function resetIngredientCreate() {
   ingredientCreateDraft.unitId = "";
 }
 
+watch(
+  () => ingredientCreateDraft.name,
+  name => {
+    if (!ingredientCreateVisible.value || ingredientCreateDraft.id || ingredientCreateDraft.unitId) return;
+    ingredientCreateDraft.unitId = resolveUnitIdByName(resolveRecommendedIngredientUnitName(name));
+  }
+);
+
 function createStepRow(partial: Partial<Omit<StepRow, "localId">> = {}): StepRow {
   return {
     localId: nextLocalId("step"),
@@ -4328,6 +4347,12 @@ function nextSlotKey() {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
   gap: 14rpx;
+}
+
+.ingredient-create__hint {
+  color: var(--color-warning, #c77800);
+  font-size: 24rpx;
+  line-height: 1.6;
 }
 
 .ingredient-create__card {

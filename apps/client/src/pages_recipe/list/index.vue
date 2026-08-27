@@ -14,14 +14,7 @@
       <view class="list-nav__action" @click="createRecipe">新建菜谱</view>
     </template>
 
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      title="登录后管理菜谱"
-      description="这里查看我的已发布菜谱和草稿箱。"
-      @success="handleLoginSuccess"
-    />
-
-    <view v-else class="list-page">
+    <view class="list-page">
       <view class="search-row">
         <RecipeSearchBar
           v-model="keyword"
@@ -57,6 +50,15 @@
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
+          <LoginEmptyState
+            v-if="!sessionStore.isLoggedIn"
+            :art="emptyStateIllustration"
+            :title="mode === 'recipes' ? '登录后查看我的菜谱' : '登录后查看草稿箱'"
+            :description="mode === 'recipes' ? '顶部页签和搜索会继续保留；登录后再管理你的已发布菜谱。' : '顶部页签和搜索会继续保留；登录后再继续整理草稿。'"
+            @success="handleLoginSuccess"
+          />
+
+          <template v-else>
           <view v-if="errorText" class="notice" @click="retryLoadList">{{ errorText }}</view>
           <view v-else-if="loading && !items.length" class="notice">加载中...</view>
           <Empty
@@ -116,6 +118,7 @@
               :show-done="hasLoadedMoreMap[mode] && !currentHasNext"
             />
           </view>
+          </template>
         </scroll-view>
       </view>
     </view>
@@ -131,7 +134,7 @@ import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";

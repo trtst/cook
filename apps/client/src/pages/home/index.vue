@@ -11,8 +11,8 @@
   >
     <template #navbar-left>
       <view class="table-nav__selector">
-        <text class="restaurant-bar__label">当前安排</text>
-        <text class="restaurant-bar__name">{{ restaurantName }}</text>
+        <text class="restaurant-bar__label">{{ navGreeting.subtitle }}</text>
+        <text class="restaurant-bar__name">{{ navGreeting.title }}</text>
       </view>
     </template>
     <view class="home-nav-backdrop" :style="navBackdropStyle" />
@@ -302,6 +302,7 @@ import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import {
@@ -320,6 +321,7 @@ const HOME_NAV_GAP = 16;
 const HOME_NAV_FADE_DISTANCE = 96;
 const HIDDEN_HOME_TARGET_PREFIXES = ["/pages_restaurant/", "/pages_meal/poll/index", "/pages_meal/wish/index", "/pages_meal/result/index"];
 const { navBarTotalHeight } = useSystemInfo();
+const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 const homeScrollTop = ref(0);
@@ -357,10 +359,7 @@ const navBackdropStyle = computed(() => ({
   opacity: `${navProgress.value}`
 }));
 
-const restaurantName = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后开始安排";
-  return "饭局、计划、清单";
-});
+const navGreeting = computed(() => resolveNavGreeting(new Date().getHours()));
 const mainFeatureCard = computed(() => featureEntryItems.value.find(item => item.placement === "MAIN") ?? null);
 const sideFeatureCards = computed(() =>
   featureEntryItems.value
@@ -645,12 +644,55 @@ function resolveQuickEntryClass(placement: HomeEntryPlacement) {
   return "quick-action--soft";
 }
 
+function resolveNavGreeting(hour: number) {
+  if (hour >= 1 && hour < 7) {
+    return {
+      title: "晚安。",
+      subtitle: "被我抓到你熬夜啦！"
+    };
+  }
+  if (hour >= 7 && hour < 11) {
+    return {
+      title: "早安。",
+      subtitle: "厨房今天也该有点香气了。"
+    };
+  }
+  if (hour >= 11 && hour < 14) {
+    return {
+      title: "午安。",
+      subtitle: "这会儿，适合认真吃一顿。"
+    };
+  }
+  if (hour >= 14 && hour < 17) {
+    return {
+      title: "午后好。",
+      subtitle: "先给今天加一口松弛感。"
+    };
+  }
+  if (hour >= 17 && hour < 21) {
+    return {
+      title: "晚上好。",
+      subtitle: "今晚准备吃点什么？"
+    };
+  }
+  return {
+    title: "夜深了。",
+    subtitle: "要不要来点夜宵？"
+  };
+}
+
 function isVisibleHomeEntry(targetValue: string) {
   return !HIDDEN_HOME_TARGET_PREFIXES.some(prefix => targetValue.startsWith(prefix));
 }
 
 function openHomeEntry(item: HomeEntryItem | null) {
   if (!item) return;
+  if (requiresLoginForQuickEntry(item) && !sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openHomeEntry(item);
+    });
+    return;
+  }
 
   if (item.targetType === "WEB_VIEW") {
     if (!/^https:\/\//iu.test(item.targetValue)) return;
@@ -659,6 +701,22 @@ function openHomeEntry(item: HomeEntryItem | null) {
   }
 
   navigateTo(item.targetValue);
+}
+
+function requiresLoginForQuickEntry(item: HomeEntryItem) {
+  if (item.placement !== "QUICK_1" && item.placement !== "QUICK_2" && item.placement !== "QUICK_3" && item.placement !== "QUICK_4") {
+    return false;
+  }
+
+  return (
+    item.targetValue === "/pages_meal/plan/index" ||
+    item.targetValue === "/pages_pantry/index/index" ||
+    item.targetValue === "/pages_pantry/gap/index"
+  );
+}
+
+function openLogin(action: (() => void) | null = null) {
+  loginModalStore.open(null, action);
 }
 
 function openFridgeRecipe(item: HomeFridgeRecipeItem) {
@@ -915,7 +973,6 @@ defineExpose({
 .restaurant-bar__name {
   overflow: hidden;
   max-width: 420rpx;
-  margin-top: 8rpx;
   color: var(--entry-ink);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-heavy);
@@ -1268,7 +1325,7 @@ defineExpose({
 }
 
 .recent-arrangement {
-  margin: 28rpx 0 36rpx;
+  margin: 50rpx 0;
   position: relative;
   padding-top: 20rpx;
   padding-left: 12rpx;
@@ -1447,7 +1504,7 @@ defineExpose({
   justify-content: center;
   width: 64rpx;
   height: 64rpx;
-  border-radius: 20rpx;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-card);
 }
 
@@ -1676,7 +1733,7 @@ defineExpose({
 
 .table-section,
 .pantry-panel {
-  margin-top: 32rpx;
+  margin-top: 50rpx;
   padding: 28rpx;
   border-radius: var(--radius-xs);
   background: var(--color-surface);
@@ -1837,7 +1894,7 @@ defineExpose({
   flex-direction: column;
   gap: 10rpx;
   padding: 20rpx 18rpx;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
 }
 

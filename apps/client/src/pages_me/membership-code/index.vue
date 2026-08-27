@@ -5,18 +5,18 @@
       <text class="redeem-nav-title">兑换</text>
     </template>
 
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      title="登录后兑换"
-      description="兑换成功后，会员时长会自动到账当前账号。"
-    />
+    <view class="redeem-page">
+      <view class="redeem-card">
+        <text class="redeem-card__title">输入兑换码</text>
+        <text class="redeem-card__description">兑换成功后，会员时长会自动到账当前账号。</text>
 
-    <template v-else>
-      <view class="redeem-page">
-        <view class="redeem-card">
-          <text class="redeem-card__title">输入兑换码</text>
-          <text class="redeem-card__description">兑换成功后，会员时长会自动到账当前账号。</text>
+        <LoginEmptyState
+          v-if="!sessionStore.isLoggedIn"
+          title="登录后兑换"
+          description="下方兑换说明会继续保留；登录后再把会员时长兑换到当前账号。"
+        />
 
+        <template v-else>
           <input
             v-model="redeemCode"
             class="redeem-input"
@@ -30,21 +30,22 @@
           <button class="redeem-button" :disabled="!canSubmit || submitting" :loading="submitting" @click="submitRedeem">
             确认兑换
           </button>
-          <view class="rule-block">
-            <view class="rule-block__head">
-              <text class="cookfont rule-block__icon icon-notice" />
-              <text class="rule-block__title">兑换说明</text>
-            </view>
+        </template>
 
-            <view class="rule-block__list">
-              <text class="rule-block__item">支持当前已上架的会员兑换码，是否可兑换以系统校验结果为准。</text>
-              <text class="rule-block__item">同档会员会顺延有效期，不同档位按实际到账结果处理。</text>
-              <text class="rule-block__item">每个兑换码只能成功使用一次，失效或未开放批次无法到账。</text>
-            </view>
+        <view class="rule-block">
+          <view class="rule-block__head">
+            <text class="cookfont rule-block__icon icon-notice" />
+            <text class="rule-block__title">兑换说明</text>
+          </view>
+
+          <view class="rule-block__list">
+            <text class="rule-block__item">支持当前已上架的会员兑换码，是否可兑换以系统校验结果为准。</text>
+            <text class="rule-block__item">同档会员会顺延有效期，不同档位按实际到账结果处理。</text>
+            <text class="rule-block__item">每个兑换码只能成功使用一次，失效或未开放批次无法到账。</text>
           </view>
         </view>
       </view>
-    </template>
+    </view>
   </Layout>
 </template>
 
@@ -52,7 +53,7 @@
 import { computed, ref } from "vue";
 import { ApiClientError } from "@/apis/http";
 import { userApi } from "@/apis/user";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { membershipApi } from "@/pages_me/apis/membership";

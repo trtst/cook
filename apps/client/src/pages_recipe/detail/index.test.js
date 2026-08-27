@@ -117,7 +117,8 @@ async function loadInspirationRecipeFixture() {
   const detail = await requestData(`/inspiration-recipes/${recipe.id}`);
   return {
     recipeId: detail.id,
-    title: detail.title
+    title: detail.title,
+    contentVersionId: detail.contentVersionId
   };
 }
 
@@ -213,6 +214,59 @@ async function createPublishedRecipeFixture(authHeaders, categoryId, title, ingr
     title: detail.title,
     nutrition: detail.nutrition
   };
+}
+
+async function createImportedRecipeFixture(authHeaders, sourceRecipeId, sourceVersionId, categoryId, storySuffix = "") {
+  const imported = await requestData("/recipes/from-inspiration", {
+    method: "POST",
+    headers: withIdempotencyKey(authHeaders),
+    body: JSON.stringify({
+      sourceRecipeId,
+      sourceVersionId,
+      categoryId
+    })
+  });
+
+  if (!storySuffix) {
+    return imported.recipe;
+  }
+
+  const currentDetail = await requestData(`/recipes/${imported.recipe.id}`, {
+    headers: authHeaders
+  });
+
+  const draft = await requestData("/recipe-drafts", {
+    method: "POST",
+    headers: withIdempotencyKey(authHeaders),
+    body: JSON.stringify({
+      recipeId: currentDetail.id,
+      content: {
+        ...currentDetail.content,
+        categoryId: currentDetail.category.id,
+        inspirationCategoryId: currentDetail.inspirationCategory?.id ?? null,
+        sceneIds: currentDetail.scenes.map((item) => item.id),
+        coverUploadId: null,
+        coverImageUrl: currentDetail.coverImageUrl,
+        originVersionId: currentDetail.content.originVersionId ?? sourceVersionId,
+        originCoverImageUrl: currentDetail.content.originCoverImageUrl ?? currentDetail.coverImageUrl,
+        story: `${currentDetail.content.story || "灵感改编"} ${storySuffix}`
+      }
+    })
+  });
+
+  const draftDetail = await requestData(`/recipe-drafts/${draft.id}`, {
+    headers: authHeaders
+  });
+
+  const published = await requestData(`/recipe-drafts/${draft.id}/publish`, {
+    method: "POST",
+    headers: withIdempotencyKey(authHeaders),
+    body: JSON.stringify({
+      expectedVersion: draftDetail.version
+    })
+  });
+
+  return published.recipe;
 }
 
 function addDaysText(days) {
@@ -361,6 +415,19 @@ describe("pages_recipe/detail/index", () => {
           buildDraftIngredient(ingredients.egg, 2)
         ],
         "用于验证菜谱投稿主路径。"
+      ),
+      importedUnchanged: await createImportedRecipeFixture(
+        authHeaders,
+        inspirationFixture.recipeId,
+        inspirationFixture.contentVersionId,
+        category.id
+      ),
+      importedModified: await createImportedRecipeFixture(
+        authHeaders,
+        inspirationFixture.recipeId,
+        inspirationFixture.contentVersionId,
+        category.id,
+        `用于验证灵感改编后仍可自荐 ${suffix}`
       )
     };
 
@@ -383,11 +450,12 @@ describe("pages_recipe/detail/index", () => {
     expect(await title.text()).toBe(inspirationFixture.title);
 
     const texts = await collectTexts(page);
-    expect(texts).toContain("营养估算");
+    expect(texts).toContain("营养和热量");
     expect(texts).toContain("单份营养为估算值，仅供参考");
     expect(texts).toContain("食材清单");
     expect(texts).toContain("步骤");
     expect(texts).toContain("加入采购清单");
+    expect(texts).not.toContain("自荐美食");
   });
 
   it("菜谱详情页可以展示真实 COMPLETE 营养结果", async () => {
@@ -401,7 +469,7 @@ describe("pages_recipe/detail/index", () => {
     expect(await title.text()).toBe(fixture.title);
 
     const texts = await collectTexts(page);
-    expect(texts).toContain("营养估算");
+    expect(texts).toContain("营养和热量");
     expect(texts).toContain("单份营养为估算值，仅供参考");
     expect(texts).toContain("食材清单");
     expect(texts).toContain("步骤");
@@ -454,6 +522,29 @@ describe("pages_recipe/detail/index", () => {
     expect(sheetTexts).toContain(secondaryPlanText);
   });
 
+  it("菜谱详情页对未改动的灵感保存菜谱隐藏自荐入口", async () => {
+    const page = await openRecipeDetail(session, fixtures.importedUnchanged.id);
+    const state = await waitForState(page, (value) => value && value.title === fixtures.importedUnchanged.title);
+
+    expect(state.canRecommend).toBe(false);
+    expect(state.showRecommendEntry).toBe(false);
+
+    const texts = await collectTexts(page);
+    expect(texts).not.toContain("自荐美食");
+  });
+
+  it("菜谱详情页对已改动的灵感保存菜谱继续展示自荐入口", async () => {
+    const page = await openRecipeDetail(session, fixtures.importedModified.id);
+    const state = await waitForState(page, (value) => value && value.title === fixtures.importedModified.title);
+
+    expect(state.canRecommend).toBe(true);
+    expect(state.showRecommendEntry).toBe(true);
+    expect(state.recommendActionLabel).toBe("自荐美食");
+
+    const recommendEntry = await page.$(".detail-inline-actions__item--recommend");
+    expect(recommendEntry).toBeTruthy();
+  });
+
   it("菜谱详情页可以展示真实 ESTIMATED 营养结果", async () => {
     const fixture = fixtures.estimated;
     expect(fixture.nutrition.status).toBe("ESTIMATED");
@@ -481,7 +572,7 @@ describe("pages_recipe/detail/index", () => {
     const texts = await collectTexts(page);
     const nutritionSection = await page.$("#detail-nutrition");
     expect(nutritionSection).toBeFalsy();
-    expect(texts).not.toContain("营养估算");
+    expect(texts).not.toContain("营养和热量");
     expect(texts).not.toContain("当前为每份营养估算，结果可能不准确，仅供参考");
     expect(texts).not.toContain("暂无营养估算");
     expect(texts).not.toContain("估算较完整");
@@ -489,13 +580,13 @@ describe("pages_recipe/detail/index", () => {
     expect(texts).not.toContain("当前数据不足");
   });
 
-  it("菜谱详情页可以提交真实投稿并切到审核中", async () => {
+  it("菜谱详情页可以提交真实自荐并切到审核中", async () => {
     const fixture = fixtures.recommendable;
     const page = await openRecipeDetail(session, fixture.recipeId);
 
     const initialState = await waitForState(
       page,
-      (state) => state && state.title === fixture.title && state.recommendActionLabel === "投稿"
+      (state) => state && state.title === fixture.title && state.recommendActionLabel === "自荐美食"
     );
     expect(initialState.recommendationStatus).toBeNull();
 
@@ -507,7 +598,7 @@ describe("pages_recipe/detail/index", () => {
       page,
       (state) => state && state.recommendSheetVisible && state.recommendCategoryCount > 0 && state.selectedRecommendCategoryId
     );
-    expect(sheetState.recommendActionLabel).toBe("投稿");
+    expect(sheetState.recommendActionLabel).toBe("自荐美食");
 
     const confirmButton = await page.$(".sheet-actions__button--confirm");
     expect(confirmButton).toBeTruthy();
@@ -527,5 +618,6 @@ describe("pages_recipe/detail/index", () => {
 
     const texts = await collectTexts(page);
     expect(texts).toContain("审核中");
+    expect(texts).toContain("自荐菜谱会进入人工审核，内容完整、步骤清晰、成品质量高的菜谱才会被推荐。");
   });
 });

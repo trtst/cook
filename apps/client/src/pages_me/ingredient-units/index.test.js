@@ -80,6 +80,13 @@ async function requestData(path, options = {}) {
   return result.body.data;
 }
 
+async function requestOk(path, options = {}) {
+  const result = await request(path, options);
+  assert(result.status >= 200 && result.status < 300, `${path} HTTP ${result.status}: ${result.body.message}`);
+  assert(result.body.code === 0, `${path} code ${result.body.code}: ${result.body.message}`);
+  return result.body;
+}
+
 function createFreshPhone() {
   const suffix = `${Date.now()}`.slice(-8).padStart(8, "0");
   return `139${suffix}`;
@@ -162,6 +169,7 @@ async function waitForState(page, matcher, timeoutMs = 8000) {
 
 describe("pages_me/ingredient-units/index", () => {
   let page;
+  let guestPage;
   let session;
   let fixture;
 
@@ -214,5 +222,44 @@ describe("pages_me/ingredient-units/index", () => {
     expect(texts).toContain("用量选择及填写建议");
     expect(texts).toContain(fixture.firstUnitGroupLabel);
     expect(texts).toContain(fixture.firstUnitName);
+  });
+
+  it("未登录也可以读取系统食材与系统单位", async () => {
+    const categories = await requestOk("/ingredient-categories");
+    expect(Array.isArray(categories.data)).toBe(true);
+    expect(categories.data.length).toBeGreaterThan(0);
+
+    const ingredients = await requestOk(
+      `/ingredients?page=1&pageSize=20&source=SYSTEM&categoryId=${encodeURIComponent(String(fixture.categoryId))}`
+    );
+    expect(Array.isArray(ingredients.data.items)).toBe(true);
+    expect(ingredients.data.items.length).toBeGreaterThan(0);
+    expect(ingredients.data.items[0].name).toBe(fixture.ingredientName);
+
+    const units = await requestOk("/units?page=1&pageSize=100&source=SYSTEM");
+    expect(Array.isArray(units.data.items)).toBe(true);
+    expect(units.data.items.length).toBeGreaterThan(0);
+    expect(units.data.items[0].name).toBe(fixture.firstUnitName);
+  });
+
+  it("未登录进入食材与单位页也会展示系统数据", async () => {
+    await clearSession();
+    guestPage = await program.reLaunch("/pages_me/ingredient-units/index");
+    await waitForState(guestPage, (state) => state && state.categoryCount > 0 && state.ingredientCount > 0);
+
+    const state = await guestPage.callMethod("automatorReadState");
+    expect(state.isLoggedIn).toBe(false);
+    expect(state.activeTab).toBe("ingredient");
+    expect(state.errorText).toBe("");
+    expect(state.categoryCount).toBeGreaterThan(0);
+    expect(state.activeCategoryName).toBe(fixture.categoryName);
+    expect(state.ingredientCount).toBeGreaterThan(0);
+    expect(state.firstIngredientName).toBe(fixture.ingredientName);
+
+    const unitState = await guestPage.callMethod("automatorSwitchTab", "unit");
+    expect(unitState.activeTab).toBe("unit");
+    const readyUnitState = await waitForState(guestPage, (value) => value && value.activeTab === "unit" && value.unitGroupCount > 0);
+    expect(readyUnitState.firstUnitGroupLabel).toBe(fixture.firstUnitGroupLabel);
+    expect(readyUnitState.firstUnitName).toBe(fixture.firstUnitName);
   });
 });

@@ -5,7 +5,7 @@
       <text class="phone-navbar__title">绑定手机号</text>
     </template>
 
-    <Login
+    <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       class="phone-login-shell"
       :style="pageBodyStyle"
@@ -77,7 +77,7 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { authApi } from "@/apis/auth";
 import { ApiClientError } from "@/apis/http";
 import { userApi } from "@/apis/user";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
