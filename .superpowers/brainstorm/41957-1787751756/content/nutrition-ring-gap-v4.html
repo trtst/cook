@@ -1,0 +1,66 @@
+<h2>红绿分离修正</h2>
+<p class="subtitle">保留黄色两边的间距，只修红色和绿色之间的重合。两版区别是红绿 gap 开口大小。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 轻微拉开</div>
+        <div class="mockup-body" style="padding:24px;background:#fbfaf6;">
+          <div style="display:flex;align-items:center;gap:22px;">
+            <div style="position:relative;width:144px;height:144px;">
+              <svg viewBox="0 0 144 144" width="144" height="144" aria-hidden="true">
+                <g transform="rotate(-132 72 72)" fill="none" stroke-linecap="round" stroke-width="16">
+                  <circle cx="72" cy="72" r="54" stroke="#21b06b" stroke-dasharray="80 259" stroke-dashoffset="0"></circle>
+                  <circle cx="72" cy="72" r="54" stroke="#ffb62e" stroke-dasharray="110 229" stroke-dashoffset="-106"></circle>
+                  <circle cx="72" cy="72" r="54" stroke="#f94b4b" stroke-dasharray="126 213" stroke-dashoffset="-244"></circle>
+                </g>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:13px;font-weight:600;">营养素</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>脂肪(克)</span><strong style="color:#f94b4b;">14</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>蛋白质(克)</span><strong style="color:#ffb62e;">21</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>碳水化合物(克)</span><strong style="color:#21b06b;">16</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>只错开一点</h3>
+      <p>尽量保留上一版位置感，只把红绿交界从重合改成分离。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 开口更明确</div>
+        <div class="mockup-body" style="padding:24px;background:#fbfaf6;">
+          <div style="display:flex;align-items:center;gap:22px;">
+            <div style="position:relative;width:144px;height:144px;">
+              <svg viewBox="0 0 144 144" width="144" height="144" aria-hidden="true">
+                <g transform="rotate(-132 72 72)" fill="none" stroke-linecap="round" stroke-width="16">
+                  <circle cx="72" cy="72" r="54" stroke="#21b06b" stroke-dasharray="78 261" stroke-dashoffset="0"></circle>
+                  <circle cx="72" cy="72" r="54" stroke="#ffb62e" stroke-dasharray="110 229" stroke-dashoffset="-106"></circle>
+                  <circle cx="72" cy="72" r="54" stroke="#f94b4b" stroke-dasharray="122 217" stroke-dashoffset="-248"></circle>
+                </g>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:13px;font-weight:600;">营养素</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>脂肪(克)</span><strong style="color:#f94b4b;">14</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>蛋白质(克)</span><strong style="color:#ffb62e;">21</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>碳水化合物(克)</span><strong style="color:#21b06b;">16</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>红绿 gap 更明显</h3>
+      <p>让红绿也达到和黄色两边接近的分离感，整体更规整。</p>
+    </div>
+  </div>
+</div>

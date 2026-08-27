@@ -1,0 +1,66 @@
+<h2>圆环半径调整</h2>
+<p class="subtitle">这次只改两件事：把圆环做大一圈，把三段弧条彼此拉开。长度比例保持不变。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 放大一档</div>
+        <div class="mockup-body" style="padding:24px;background:#fbfaf6;">
+          <div style="display:flex;align-items:center;gap:22px;">
+            <div style="position:relative;width:132px;height:132px;">
+              <svg viewBox="0 0 132 132" width="132" height="132" aria-hidden="true">
+                <g transform="rotate(-132 66 66)" fill="none" stroke-linecap="round" stroke-width="16">
+                  <circle cx="66" cy="66" r="48" stroke="#21b06b" stroke-dasharray="71 231" stroke-dashoffset="0"></circle>
+                  <circle cx="66" cy="66" r="48" stroke="#ffb62e" stroke-dasharray="98 204" stroke-dashoffset="-92"></circle>
+                  <circle cx="66" cy="66" r="48" stroke="#f94b4b" stroke-dasharray="112 190" stroke-dashoffset="-211"></circle>
+                </g>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:13px;font-weight:600;">营养素</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>脂肪(克)</span><strong style="color:#f94b4b;">14</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>蛋白质(克)</span><strong style="color:#ffb62e;">21</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>碳水化合物(克)</span><strong style="color:#21b06b;">16</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>半径放大一档</h3>
+      <p>更接近截图里“环更舒展”的感觉，但仍然比较紧凑。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 再舒展一点</div>
+        <div class="mockup-body" style="padding:24px;background:#fbfaf6;">
+          <div style="display:flex;align-items:center;gap:22px;">
+            <div style="position:relative;width:144px;height:144px;">
+              <svg viewBox="0 0 144 144" width="144" height="144" aria-hidden="true">
+                <g transform="rotate(-132 72 72)" fill="none" stroke-linecap="round" stroke-width="16">
+                  <circle cx="72" cy="72" r="54" stroke="#21b06b" stroke-dasharray="80 259" stroke-dashoffset="0"></circle>
+                  <circle cx="72" cy="72" r="54" stroke="#ffb62e" stroke-dasharray="110 229" stroke-dashoffset="-105"></circle>
+                  <circle cx="72" cy="72" r="54" stroke="#f94b4b" stroke-dasharray="126 213" stroke-dashoffset="-240"></circle>
+                </g>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:13px;font-weight:600;">营养素</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>脂肪(克)</span><strong style="color:#f94b4b;">14</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>蛋白质(克)</span><strong style="color:#ffb62e;">21</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>碳水化合物(克)</span><strong style="color:#21b06b;">16</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>半径更大、间隔更开</h3>
+      <p>更像三根独立横条绕成一圈，留白更明显。</p>
+    </div>
+  </div>
+</div>

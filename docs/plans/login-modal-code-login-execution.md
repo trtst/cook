@@ -104,7 +104,7 @@
 | --- | --- | --- |
 | 开发完成 | 已完成 | 后端已补 `POST /auth/code-send`，测试发码、验证码登录、公开 `app-config`、后台登录图上传/清空与小程序登录弹窗主路径均已接通；`/pages/me/index` 同步新增仅供 automator 使用的最小登录弹窗状态钩子，不改业务分支 |
 | 联调完成 | 已完成 | Sunday, August 23, 2026 已在 `http://127.0.0.1:3100/api` 跑通 `pnpm --filter @next-meal/api verify:login-modal-flow`，真实覆盖 `code-send(LOGIN) -> code-send(BIND_PHONE) -> code-login -> users/me -> admin/app-config login-image upload -> app-config public read -> clear` |
-| 机器检查 | 已完成 | Sunday, August 23, 2026 已通过 `pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/api verify:openapi`、`pnpm --filter @next-meal/client type-check`、`node --check apps/client/src/pages/me/index.test.js`，以及 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/me/index.test.js`；页面自动化已断言“通知中心 -> 我的勋章”顺序、会员入口默认隐藏，以及未登录走勋章入口后登录弹窗 store 的 `visible / wechat / phone` 主状态与固定文案 |
+| 机器检查 | 已完成 | Sunday, August 23, 2026 已通过 `pnpm --filter @next-meal/api type-check`、`pnpm --filter @next-meal/api verify:openapi`、`pnpm --filter @next-meal/client type-check`、`node --check apps/client/src/pages/me/index.test.js`，以及 `/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/me/index.test.js`；当时页面自动化已断言“通知中心 -> 我的勋章”顺序、会员入口默认隐藏，以及 `pages/me` 中一个受控登录入口可拉起登录弹窗 store 的 `visible / wechat / phone` 主状态与固定文案。当前 `我的勋章` 已改成直达落地页，这组弹窗回归应以后续仍受控的 `通知中心 / 我的口味 / 账号设置` 入口为准 |
 | 手动验收 | 未完成 | 真机 / 微信开发者工具人工走查统一后置，不阻塞当前标记 |
 | 可发布 | 是 | 当前阶段按“开发完成 + 真实联调 + 官方 `mp-weixin` 主证据完成即可先标记”执行；`H5` 直出表单分支仍建议后续在可运行 H5 容器中补路径验证 |
 

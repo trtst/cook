@@ -1,0 +1,119 @@
+<h2>首页信息收口建议</h2>
+<p class="subtitle">重点看 4 个入口是否打架，以及“冰箱 / 清单 / 空态”怎么更顺</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 A：入口收口，冰箱做主</div>
+        <div class="mockup-body">
+          <div style="padding:16px;background:#f6efe6;border-radius:16px;margin-bottom:12px;">
+            <div style="font-weight:700;font-size:18px;">今晚吃什么？</div>
+            <div style="margin-top:6px;color:#7a6a58;">主 CTA 只保留“随机一桌 / 继续安排”</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">饭局</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">计划</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">冰箱</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">清单</div>
+          </div>
+          <div style="background:#fff7ef;border:1px solid #eedcc7;border-radius:16px;padding:14px;margin-bottom:12px;">
+            <div style="font-weight:700;">冰箱里现在能做</div>
+            <div style="margin-top:8px;color:#7a6a58;">没食材时切成“去录食材 / 去随机一桌”双按钮空态</div>
+          </div>
+          <div style="background:#fbfaf7;border:1px dashed #d9cbb6;border-radius:16px;padding:14px;">
+            <div style="font-weight:700;">买菜和冰箱</div>
+            <div style="margin-top:8px;color:#7a6a58;">改成一个轻量状态条，不再占大卡</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 A</h3>
+      <p>把“冰箱”和“清单”从概念上拆开，但视觉上收成一个状态区，减少互相抢戏。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 B：入口收口，任务做主</div>
+        <div class="mockup-body">
+          <div style="padding:16px;background:#f6efe6;border-radius:16px;margin-bottom:12px;">
+            <div style="font-weight:700;font-size:18px;">今晚吃什么？</div>
+            <div style="margin-top:6px;color:#7a6a58;">下面不再是 4 个功能入口，而是 4 个任务入口</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">去安排一顿</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">看冰箱还能做啥</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">补缺的食材</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">约人一起吃</div>
+          </div>
+          <div style="background:#fff7ef;border:1px solid #eedcc7;border-radius:16px;padding:14px;margin-bottom:12px;">
+            <div style="font-weight:700;">基于冰箱推荐</div>
+            <div style="margin-top:8px;color:#7a6a58;">卡片标题不再叫“冰箱里现在能做”</div>
+          </div>
+          <div style="background:#fbfaf7;border:1px dashed #d9cbb6;border-radius:16px;padding:14px;">
+            <div style="font-weight:700;">待采购提醒</div>
+            <div style="margin-top:8px;color:#7a6a58;">只露数字和一句话，点进去才看清单详情</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 B</h3>
+      <p>不是按模块露出，而是按“用户下一步要做什么”组织首页，冲突最少，但改动更大。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">方案 C：保持现结构，只修空态</div>
+        <div class="mockup-body">
+          <div style="padding:16px;background:#f6efe6;border-radius:16px;margin-bottom:12px;">
+            <div style="font-weight:700;font-size:18px;">今晚吃什么？</div>
+            <div style="margin-top:6px;color:#7a6a58;">保留现有英雄区和 4 入口</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">饭局</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">计划</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">冰箱</div>
+            <div style="background:#fff;border:1px solid #e8dccd;border-radius:14px;padding:12px;">清单</div>
+          </div>
+          <div style="background:#fff7ef;border:1px solid #eedcc7;border-radius:16px;padding:14px;margin-bottom:12px;">
+            <div style="font-weight:700;">冰箱里现在能做</div>
+            <div style="margin-top:8px;color:#7a6a58;">空态加插画、引导文案、两个操作按钮</div>
+          </div>
+          <div style="background:#fbfaf7;border:1px dashed #d9cbb6;border-radius:16px;padding:14px;">
+            <div style="font-weight:700;">个人清单和冰箱</div>
+            <div style="margin-top:8px;color:#7a6a58;">空态加“先记食材 / 先建清单”分流按钮</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 C</h3>
+      <p>改动最小，但信息冲突本质上还在，只是比现在不那么空。</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:20px;">
+  <div class="pros">
+    <h4>我更推荐 A</h4>
+    <ul>
+      <li>保留现有 IA，不需要把首页全部推翻。</li>
+      <li>“冰箱能做什么”和“买菜清单”职责更清楚。</li>
+      <li>没食材时，大卡不空，且能顺势引导录食材或随机一桌。</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>主要判断点</h4>
+    <ul>
+      <li>你更想首页按“功能模块”组织，还是按“下一步任务”组织。</li>
+      <li>“冰箱”和“清单”是否要继续并列作为一级入口。</li>
+      <li>下面第二张大卡是否还值得保留这么大的面积。</li>
+    </ul>
+  </div>
+</div>

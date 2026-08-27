@@ -1,0 +1,66 @@
+<h2>圆环结构校正</h2>
+<p class="subtitle">这次只看左侧圆环结构。两版都是 3 条独立弧条，前后留等宽 gap，区别只在弧条长短和起始角度。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. 更贴近截图比例</div>
+        <div class="mockup-body" style="padding:24px;background:#fbfaf6;">
+          <div style="display:flex;align-items:center;gap:22px;">
+            <div style="position:relative;width:116px;height:116px;">
+              <svg viewBox="0 0 116 116" width="116" height="116" aria-hidden="true">
+                <g transform="rotate(-132 58 58)" fill="none" stroke-linecap="round" stroke-width="16">
+                  <circle cx="58" cy="58" r="39" stroke="#21b06b" stroke-dasharray="58 187" stroke-dashoffset="0"></circle>
+                  <circle cx="58" cy="58" r="39" stroke="#ffb62e" stroke-dasharray="80 165" stroke-dashoffset="-74"></circle>
+                  <circle cx="58" cy="58" r="39" stroke="#f94b4b" stroke-dasharray="92 153" stroke-dashoffset="-170"></circle>
+                </g>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:12px;font-weight:600;">营养素</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>脂肪(克)</span><strong style="color:#f94b4b;">14</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>蛋白质(克)</span><strong style="color:#ffb62e;">21</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>碳水化合物(克)</span><strong style="color:#21b06b;">16</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>按截图感走</h3>
+      <p>绿色最短，黄色居中，红色最长；三段像三根独立横条围成圆。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. 更均衡一点</div>
+        <div class="mockup-body" style="padding:24px;background:#fbfaf6;">
+          <div style="display:flex;align-items:center;gap:22px;">
+            <div style="position:relative;width:116px;height:116px;">
+              <svg viewBox="0 0 116 116" width="116" height="116" aria-hidden="true">
+                <g transform="rotate(-132 58 58)" fill="none" stroke-linecap="round" stroke-width="16">
+                  <circle cx="58" cy="58" r="39" stroke="#21b06b" stroke-dasharray="64 181" stroke-dashoffset="0"></circle>
+                  <circle cx="58" cy="58" r="39" stroke="#ffb62e" stroke-dasharray="76 169" stroke-dashoffset="-80"></circle>
+                  <circle cx="58" cy="58" r="39" stroke="#f94b4b" stroke-dasharray="86 159" stroke-dashoffset="-172"></circle>
+                </g>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:12px;font-weight:600;">营养素</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>脂肪(克)</span><strong style="color:#f94b4b;">14</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>蛋白质(克)</span><strong style="color:#ffb62e;">21</strong></div>
+              <div style="display:flex;justify-content:space-between;color:#4b5563;font-size:14px;"><span>碳水化合物(克)</span><strong style="color:#21b06b;">16</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>更规整一点</h3>
+      <p>同样是等间距三段弧条，但长度差更收敛，读起来更稳。</p>
+    </div>
+  </div>
+</div>
