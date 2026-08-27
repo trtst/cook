@@ -15,7 +15,7 @@
       </view>
     </template>
 
-    <Login
+    <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       title="登录后继续入库"
       description="入库确认需要登录后处理。"
@@ -249,7 +249,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import type { UUID } from "@/apis/http";

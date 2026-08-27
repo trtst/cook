@@ -1,14 +1,19 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout title="超市模式">
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后进入超市模式" description="超市模式只处理你自己的待买清单。" />
+    <view class="summary">
+      <text class="summary__title">待买清单</text>
+      <text class="summary__description">边买边勾，买完后会自动进入采购记录。</text>
+    </view>
+
+    <LoginEmptyState
+      v-if="!sessionStore.isLoggedIn"
+      title="登录后进入超市模式"
+      description="上面的使用说明会继续保留；登录后再看你自己的待买清单并逐条勾选。"
+      @success="handleLoginSuccess"
+    />
 
     <template v-else>
-      <view class="summary">
-        <text class="summary__title">待买清单</text>
-        <text class="summary__description">边买边勾，买完后会自动进入采购记录。</text>
-      </view>
-
       <view v-if="errorText" class="notice" @click="loadItems">{{ errorText }}</view>
       <view v-else-if="loading" class="notice">加载中...</view>
       <Empty v-else-if="!items.length" title="没有待买食材" description="先去采购清单手动添加，或从饭局缺口生成。" />
@@ -33,7 +38,7 @@ import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -51,6 +56,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadItems();
 });
+
+async function handleLoginSuccess() {
+  await loadItems();
+}
 
 async function loadItems() {
   if (!sessionStore.isLoggedIn || loading.value) return;
@@ -79,6 +88,31 @@ async function markBought(itemId: UUID) {
     submitting.value = false;
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+}
+
+async function automatorHandleLoginSuccess() {
+  await handleLoginSuccess();
+  return automatorReadState();
+}
+
+function automatorReadState() {
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    loading: loading.value,
+    errorText: errorText.value,
+    itemCount: items.value.length,
+    itemNames: items.value.map(item => item.name)
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorHandleLoginSuccess,
+  automatorReadState
+});
 </script>
 
 <style scoped lang="scss">

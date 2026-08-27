@@ -1,14 +1,7 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout title="美食计划" full-screen>
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      title="登录后查看美食计划"
-      description="按天查看你的做饭安排，再决定这顿饭要不要继续发起饭局。"
-    />
-
-    <template v-else>
-      <view class="plan-page">
+    <view class="plan-page">
         <view class="plan-fixed-head">
           <view class="month-bar">
             <view class="month-bar__arrow" hover-class="month-bar__arrow--hover" hover-stay-time="100" @click="goMonth(-1)">
@@ -90,17 +83,25 @@
               @refresherabort="onRefresherRestore"
             >
               <view class="plan-scroll__body">
-                <view v-if="loading && !refreshing" class="notice">正在同步这一周的计划...</view>
+                <LoginEmptyState
+                  v-if="!sessionStore.isLoggedIn"
+                  :art="emptyStateArt"
+                  title="登录后查看这一天的安排"
+                  description="顶部日历会继续保留；登录后再看这一天具体吃什么、要不要继续发起饭局。"
+                />
 
-                <view v-if="!selectedPlanCount && !loading">
-                  <Empty
-                    :art="emptyStateArt"
-                    title="这一天还没有安排"
-                    description="先把想吃的记下来，复制上周还是去菜谱挑一道，都能从右下角继续。"
-                  />
-                </view>
+                <template v-else>
+                  <view v-if="loading && !refreshing" class="notice">正在同步这一周的计划...</view>
 
-                <view v-if="selectedPlanCount" class="meal-list">
+                  <view v-if="!selectedPlanCount && !loading">
+                    <Empty
+                      :art="emptyStateArt"
+                      title="这一天还没有安排"
+                      description="先把想吃的记下来，复制上周还是去菜谱挑一道，都能从右下角继续。"
+                    />
+                  </view>
+
+                  <view v-if="selectedPlanCount" class="meal-list">
                   <view
                     v-for="plan in selectedPlans"
                     :key="plan.id"
@@ -158,8 +159,8 @@
                       </view>
                     </view>
                   </view>
-                </view>
-
+                  </view>
+                </template>
               </view>
             </scroll-view>
           </view>
@@ -324,7 +325,7 @@
           <text class="cookfont icon-drag plan-sort-card__drag plan-sort-card__drag--ghost" />
         </view>
       </view>
-    </template>
+
   </Layout>
 </template>
 
@@ -337,7 +338,7 @@ import { shoppingListApi, type ShoppingListSummary } from "../apis/shopping-list
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -514,7 +515,7 @@ const hasPlans = computed(() => selectedPlanCount.value > 0);
 const selectedDateHint = computed(() => {
   return "先把这天想吃的安排上，买菜和约饭都会顺手很多。";
 });
-const canShowPlanDock = computed(() => !loading.value && !errorText.value);
+const canShowPlanDock = computed(() => sessionStore.isLoggedIn && !loading.value && !errorText.value);
 const planDockActions = computed(() => {
   if (hasPlans.value) {
     return [
@@ -1362,6 +1363,23 @@ function clearPageState() {
   createPlanSlot.value = "DINNER";
   resetPlanSortDrag();
 }
+
+function automatorReadGuestState() {
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    showPlanDock: canShowPlanDock.value,
+    dockOpen: emptyDockOpen.value
+  };
+}
+
+async function automatorClearSession() {
+  await sessionStore.clearSession();
+}
+
+defineExpose({
+  automatorClearSession,
+  automatorReadGuestState
+});
 
 </script>
 

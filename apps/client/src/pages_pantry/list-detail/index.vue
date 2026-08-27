@@ -15,19 +15,32 @@
       </view>
     </template>
 
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看清单详情" description="共享清单详情、采购勾选和入库确认都需要登录后处理。" />
-
-    <view v-else class="detail-page">
+    <view class="detail-page">
       <view class="detail-nav-backdrop" :style="navBackdropStyle" />
-      <view v-if="loading" class="notice">加载中...</view>
-      <view v-else-if="errorText" class="notice" @click="loadDetail">{{ errorText }}</view>
-      <view v-else-if="!detail" class="detail-empty">
-        <Empty
-          :art="emptyStateArt"
-          title="清单不存在"
-          description="这张清单可能已删除、无权访问或分享链接已失效。"
-        />
-      </view>
+      <LoginEmptyState
+        v-if="!sessionStore.isLoggedIn"
+        class="detail-empty"
+        :art="emptyStateArt"
+        title="登录后查看清单详情"
+        description="顶部清单标题会继续保留；登录后再看采购进度、勾选和入库确认。"
+        @success="handleLoginSuccess"
+      />
+
+      <template v-else-if="loading">
+        <view class="notice">加载中...</view>
+      </template>
+      <template v-else-if="errorText">
+        <view class="notice" @click="loadDetail">{{ errorText }}</view>
+      </template>
+      <template v-else-if="!detail">
+        <view class="detail-empty">
+          <Empty
+            :art="emptyStateArt"
+            title="清单不存在"
+            description="这张清单可能已删除、无权访问或分享链接已失效。"
+          />
+        </view>
+      </template>
 
       <template v-else>
         <scroll-view scroll-y class="detail-scroll" :show-scrollbar="false" @scroll="handleScroll">
@@ -431,7 +444,7 @@ import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
@@ -756,6 +769,10 @@ onShow(() => {
   }
   void loadDetail();
 });
+
+async function handleLoginSuccess() {
+  await loadDetail();
+}
 
 function loadDetail() {
   return requestDetail();
@@ -2006,8 +2023,27 @@ async function automatorApplySession(snapshot: { token: string; uid?: number; ex
   await requestDetail();
 }
 
+async function automatorHandleLoginSuccess() {
+  await handleLoginSuccess();
+  return automatorReadState();
+}
+
+function automatorReadState() {
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    listId: listId.value,
+    loading: loading.value,
+    errorText: errorText.value,
+    title: detail.value?.name || "",
+    groupCount: groups.value.length,
+    itemNames: groups.value.map(item => item.name)
+  };
+}
+
 defineExpose({
-  automatorApplySession
+  automatorApplySession,
+  automatorHandleLoginSuccess,
+  automatorReadState
 });
 </script>
 

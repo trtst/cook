@@ -1,13 +1,7 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout title="活动回忆卡">
-    <Login
-      v-if="mode === 'event' && !sessionStore.isLoggedIn"
-      title="登录后生成活动回忆卡"
-      description="公开回忆卡会先生成不可变快照，只保留菜单、可选成员摘要和一句话。到开饭时间后即可生成。"
-    />
-
-    <template v-else>
+    <template>
       <view v-if="errorText" class="notice" @click="loadPage">
         <text class="notice__text">{{ errorText }}</text>
         <text class="notice__action">重新加载</text>
@@ -81,7 +75,15 @@
           </view>
         </view>
 
-        <view v-if="mode === 'event'" class="action-card">
+        <LoginEmptyState
+          v-if="mode === 'event' && !sessionStore.isLoggedIn"
+          class="action-card"
+          title="登录后生成活动回忆卡"
+          description="上面的回忆卡预览会继续保留；登录后再设置展示成员和一句话，并生成分享快照。"
+          @success="handleLoginSuccess"
+        />
+
+        <view v-else-if="mode === 'event'" class="action-card">
           <text class="action-card__title">生成设置</text>
 
           <view class="setting-row">
@@ -131,7 +133,7 @@ import {
 import { mealApi, type DiningEventSummary } from "../apis/meal";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
@@ -278,6 +280,10 @@ onShow(() => {
   startClock();
   void loadPage();
 });
+
+async function handleLoginSuccess() {
+  await loadPage();
+}
 
 onHide(() => {
   stopClock();

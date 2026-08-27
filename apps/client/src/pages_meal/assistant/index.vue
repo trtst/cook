@@ -1,7 +1,7 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout title="做饭助手" full-screen>
-    <Login
+    <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       title="登录后查看做饭建议"
       description="这桌菜的准备顺序、开做节奏和上桌安排，都需要登录后继续处理。"
@@ -150,7 +150,7 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";

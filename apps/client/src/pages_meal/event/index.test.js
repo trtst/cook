@@ -32,4 +32,13 @@ describe("pages_meal/event/index", () => {
     expect(texts).toContain("餐次");
     expect(texts).toContain("时间");
   });
+
+  it("未登录点击右下角发起饭局先呼起登录，不直接打开创建 sheet", async () => {
+    expect(await page.callMethod("automatorOpenCreateSheet")).toEqual({
+      loggedIn: false,
+      createSheetVisible: false,
+      loginVisible: true,
+      loginMode: "wechat"
+    });
+  });
 });

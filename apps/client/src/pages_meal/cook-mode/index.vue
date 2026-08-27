@@ -1,7 +1,7 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout :title="pageTitle" full-screen>
-    <Login
+    <LoginEmptyState
       v-if="requiresLogin && !sessionStore.isLoggedIn"
       title="登录后继续做饭"
       description="计划、饭局和整桌菜的做饭步骤，需要登录后继续处理。"
@@ -187,7 +187,7 @@ import type { UUID } from "@/apis/http";
 import { recipeApi, type RecipeAssistantSnapshot, type RecipeContentSnapshot } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";

@@ -1,7 +1,12 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout :title="pageTitle">
-    <Login v-if="!sessionStore.isLoggedIn" :title="loginTitle" description="冰箱条目只归你本人所有。" />
+    <LoginEmptyState
+      v-if="!sessionStore.isLoggedIn"
+      :title="loginTitle"
+      description="冰箱条目只归你本人所有。"
+      @success="handleLoginSuccess"
+    />
 
     <template v-else>
       <view v-if="errorText" class="notice" @click="loadContext">{{ errorText }}</view>
@@ -107,7 +112,7 @@ import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary, type UnitSummary } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { fridgeApi } from "../apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -161,6 +166,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadContext();
 });
+
+async function handleLoginSuccess() {
+  await loadContext();
+}
 
 async function loadContext() {
   if (!sessionStore.isLoggedIn || loading.value) return;

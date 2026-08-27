@@ -32,7 +32,12 @@
           </view>
 
           <view class="gap-content">
-            <Login v-if="!sessionStore.isLoggedIn" title="登录后看现在缺什么" description="缺口只按你自己的冰箱和待处理饭局来判断。" />
+            <LoginEmptyState
+              v-if="!sessionStore.isLoggedIn"
+              title="登录后看现在缺什么"
+              description="缺口只按你自己的冰箱和待处理饭局来判断。"
+              @success="handleLoginSuccess"
+            />
 
             <template v-else>
               <view v-if="errorText" class="notice" @click="loadPage">
@@ -149,7 +154,7 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
@@ -266,6 +271,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadPage();
 });
+
+async function handleLoginSuccess() {
+  await loadPage();
+}
 
 async function loadPage() {
   if (loading.value) return;

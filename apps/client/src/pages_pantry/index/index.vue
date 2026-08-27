@@ -5,15 +5,9 @@
       <text class="home-nav__title" :style="navTitleStyle">食材</text>
     </template>
 
-    <view v-if="sessionStore.isLoggedIn" class="home-nav-backdrop" :style="navBackdropStyle" />
+    <view class="home-nav-backdrop" :style="navBackdropStyle" />
 
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      title="登录后查看食材"
-      description="库存、到期和补货安排都归你本人所有。"
-    />
-
-    <view v-else class="pantry-home">
+    <view class="pantry-home">
       <view class="top-dock" :style="topDockStyle">
         <view class="summary-strip summary-strip--dock">
           <view v-for="item in summaryItems" :key="item.label" class="summary-strip__item">
@@ -92,22 +86,32 @@
               </view>
             </view>
 
-            <view v-if="errorText" class="notice" @click="loadPage">
-              <text class="notice__text">{{ errorText }}</text>
-              <text class="notice__action">重新加载</text>
-            </view>
-            <view v-else-if="loading && !cards.length" class="notice">
-              <text class="notice__text">正在整理现有库存...</text>
-            </view>
-            <Empty
-              v-else-if="!filteredCards.length"
+            <LoginEmptyState
+              v-if="!sessionStore.isLoggedIn"
               class="pantry-empty"
               :art="emptyStateArt"
-              :title="emptyTitle"
-              :description="emptyDescription"
+              title="登录后查看你的库存"
+              description="这些统计先按 0 展示；登录后再看真实库存、到期和补货安排。"
+              @success="handleLoginSuccess"
             />
 
-            <view v-else class="item-list">
+            <template v-else>
+              <view v-if="errorText" class="notice" @click="loadPage">
+                <text class="notice__text">{{ errorText }}</text>
+                <text class="notice__action">重新加载</text>
+              </view>
+              <view v-else-if="loading && !cards.length" class="notice">
+                <text class="notice__text">正在整理现有库存...</text>
+              </view>
+              <Empty
+                v-else-if="!filteredCards.length"
+                class="pantry-empty"
+                :art="emptyStateArt"
+                :title="emptyTitle"
+                :description="emptyDescription"
+              />
+
+              <view v-else class="item-list">
               <view v-for="card in filteredCards" :key="card.id" class="item-card" hover-class="item-card--hover" hover-stay-time="100" @click="handleCardClick(card)">
                 <view class="item-card__media">
                   <image v-if="card.imageUrl" class="item-card__image" :src="card.imageUrl" mode="aspectFill" />
@@ -133,7 +137,8 @@
                   </view>
                 </view>
               </view>
-            </view>
+              </view>
+            </template>
           </view>
         </scroll-view>
       </view>
@@ -243,7 +248,7 @@ import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
@@ -483,6 +488,10 @@ onShow(() => {
   void loadPage();
 });
 
+async function handleLoginSuccess() {
+  await loadPage();
+}
+
 function resolveCardRank(item: Pick<PantryCard, "expireSoon" | "hasReservation" | "needExact">) {
   if (item.expireSoon) return 0;
   if (item.hasReservation) return 1;
@@ -703,6 +712,33 @@ async function submitShopping() {
     shoppingSubmitting.value = false;
   }
 }
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+}
+
+async function automatorHandleLoginSuccess() {
+  await handleLoginSuccess();
+  return automatorReadState();
+}
+
+function automatorReadState() {
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    loading: loading.value,
+    errorText: errorText.value,
+    cardCount: cards.value.length,
+    firstCardName: cards.value[0]?.name || "",
+    gapCount: gapCount.value,
+    pendingShoppingCount: pendingShoppingCount.value
+  };
+}
+
+defineExpose({
+  automatorApplySession,
+  automatorHandleLoginSuccess,
+  automatorReadState
+});
 </script>
 
 <style scoped lang="scss">

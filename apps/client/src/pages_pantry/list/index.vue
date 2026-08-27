@@ -18,14 +18,7 @@
       </view>
     </template>
 
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      title="登录后查看采购清单"
-      description="共享清单、协作采购和分享加入都需要登录后处理。"
-      @success="handleLoginSuccess"
-    />
-
-    <view v-else class="shopping-home">
+    <view class="shopping-home">
       <view class="shopping-home__scroll-wrap">
         <RecipeSearchLoading
           :pull-distance="pullDistance"
@@ -48,26 +41,35 @@
           @refresherabort="onRefresherRestore"
         >
           <view class="shopping-home__body">
-            <view v-if="errorText" class="notice" @click="loadPage">{{ errorText }}</view>
-            <view v-else-if="loading && !lists.length" class="notice">加载中...</view>
-            <template v-else>
-              <Empty
-                v-if="!lists.length"
-                :title="emptyTitle"
-                :description="emptyDescription"
-                :art="emptyStateArt"
-              />
+            <LoginEmptyState
+              v-if="!sessionStore.isLoggedIn"
+              :art="emptyStateArt"
+              title="登录后查看你的采购清单"
+              description="顶部状态筛选会继续保留；登录后再看共享清单、采购进度和协作入口。"
+              @success="handleLoginSuccess"
+            />
 
-              <view v-else class="list">
-                <view
-                  v-for="item in lists"
-                  :key="item.id"
-                  class="list-card"
-                  :class="{ 'list-card--shared': showBadge(item) }"
-                  hover-class="list-card--hover"
-                  hover-stay-time="100"
-                  @click="openList(item.id)"
-                >
+            <template v-else>
+              <view v-if="errorText" class="notice" @click="loadPage">{{ errorText }}</view>
+              <view v-else-if="loading && !lists.length" class="notice">加载中...</view>
+              <template v-else>
+                <Empty
+                  v-if="!lists.length"
+                  :title="emptyTitle"
+                  :description="emptyDescription"
+                  :art="emptyStateArt"
+                />
+
+                <view v-else class="list">
+                  <view
+                    v-for="item in lists"
+                    :key="item.id"
+                    class="list-card"
+                    :class="{ 'list-card--shared': showBadge(item) }"
+                    hover-class="list-card--hover"
+                    hover-stay-time="100"
+                    @click="openList(item.id)"
+                  >
                   <text v-if="showBadge(item)" class="list-card__badge" :class="badgeClass(item)">{{ badgeText(item) }}</text>
                   <text v-if="cardNote(item)" class="list-card__note">{{ cardNote(item) }}</text>
                   <view class="list-card__head">
@@ -145,8 +147,9 @@
                       </button>
                     </template>
                   </view>
+                  </view>
                 </view>
-              </view>
+              </template>
             </template>
           </view>
         </scroll-view>
@@ -277,7 +280,7 @@ import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";

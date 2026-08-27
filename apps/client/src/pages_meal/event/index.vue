@@ -23,13 +23,6 @@
       <text class="event-redirect__desc">旧饭局入口已经并入统一餐次详情页。</text>
     </view>
 
-    <Login
-      v-else-if="!sessionStore.isLoggedIn"
-      title="登录后查看饭局"
-      description="你发起的、你参加的、已经结束的饭局，都会收在这里。"
-      @success="handleLoginSuccess"
-    />
-
     <view v-else class="event-page">
       <view class="ingredient-page-head">
         <view class="sticky-wrap">
@@ -75,6 +68,16 @@
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
+          <LoginEmptyState
+            v-if="!sessionStore.isLoggedIn"
+            class="page-empty"
+            :art="emptyStateArt"
+            title="登录后查看你的饭局"
+            description="上面的分组会先保留；登录后再看你发起的、你参加的和已经结束的饭局。"
+            @success="handleLoginSuccess"
+          />
+
+          <template v-else>
           <view v-if="loading && !eventCards.length" class="notice">正在同步饭局...</view>
 
           <view v-if="visibleCards.length" class="event-list">
@@ -139,6 +142,7 @@
             title="还没有饭局安排"
             :description="emptyDescription"
           />
+          </template>
         </scroll-view>
       </view>
 
@@ -174,18 +178,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ApiClientError, type UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
@@ -497,6 +502,12 @@ function openEvent(item: EventCardItem) {
 }
 
 function openCreateSheet() {
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openCreateSheet();
+    });
+    return;
+  }
   const initialDate = resolveCreateStartDate();
   const initialSlot = resolveFirstAvailableCreateSlot(initialDate) ?? "BREAKFAST";
   createPlanDate.value = initialDate;
@@ -592,6 +603,10 @@ function goBack() {
   void uniPlatform.navigation.navigateBack();
 }
 
+function openLogin(action: (() => void) | null = null) {
+  useLoginModalStore().open(null, action);
+}
+
 function parseQueryText(value: unknown) {
   const raw = Array.isArray(value) ? value[0] : value;
   return typeof raw === "string" ? decodeURIComponent(raw).trim() : "";
@@ -642,6 +657,22 @@ function todayText() {
   const day = `${now.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+async function automatorOpenCreateSheet() {
+  openCreateSheet();
+  await nextTick();
+  const loginModalStore = useLoginModalStore();
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    createSheetVisible: createSheetVisible.value,
+    loginVisible: loginModalStore.visible,
+    loginMode: loginModalStore.mode
+  };
+}
+
+defineExpose({
+  automatorOpenCreateSheet
+});
 </script>
 
 <style scoped lang="scss">

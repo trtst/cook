@@ -11,33 +11,36 @@
         </view>
 
         <view class="random-content">
-          <Login
-            v-if="!sessionStore.isLoggedIn"
-            title="登录后随机一桌"
-            description="先选早餐、午餐或晚餐，再围绕这一桌菜做保留、换菜和缺口确认。"
+          <RandomConditionBar
+            :meal-slot="state.conditions.mealSlot"
+            :people-count="state.conditions.peopleCount"
+            :fridge-preferred="state.conditions.fridgePreferred"
+            :slot-plan="state.slotPlan"
+            :has-menu="hasMenu"
+            :loading="conditionLoading"
+            :generate-disabled="generateDisabled"
+            @select-meal-slot="selectMealSlot"
+            @select-people-count="selectPeopleCount"
+            @toggle-fridge-preferred="toggleFridgePreferred"
+            @adjust-slot-plan="adjustSlotPlan"
+            @generate="generateMenu"
+            @reroll="rerollMenu"
           />
+
+          <template v-if="!sessionStore.isLoggedIn">
+            <view class="empty-card">
+              <LoginEmptyState
+                title="登录后随机一桌"
+                description="先选餐次、人数和冰箱优先；登录后再围绕这一桌菜做保留、换菜和缺口确认。"
+              />
+            </view>
+          </template>
 
           <template v-else>
             <view v-if="errorText" class="notice" @click="clearError">
               <text class="notice__text">{{ errorText }}</text>
               <text class="notice__action">知道了</text>
             </view>
-
-            <RandomConditionBar
-              :meal-slot="state.conditions.mealSlot"
-              :people-count="state.conditions.peopleCount"
-              :fridge-preferred="state.conditions.fridgePreferred"
-              :slot-plan="state.slotPlan"
-              :has-menu="hasMenu"
-              :loading="conditionLoading"
-              :generate-disabled="generateDisabled"
-              @select-meal-slot="selectMealSlot"
-              @select-people-count="selectPeopleCount"
-              @toggle-fridge-preferred="toggleFridgePreferred"
-              @adjust-slot-plan="adjustSlotPlan"
-              @generate="generateMenu"
-              @reroll="rerollMenu"
-            />
 
             <view v-if="warnings.length" class="warning-card">
               <view v-for="warning in warnings" :key="warning.code + warning.message" class="warning-card__item">
@@ -159,11 +162,12 @@ import type { UUID } from "@/apis/http";
 import { recipeApi } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { mealApi, type CreateMealPlanRequest } from "../apis/meal";
@@ -197,6 +201,7 @@ import {
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
+const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 
 const RANDOM_NAV_GAP = 16;
@@ -399,6 +404,9 @@ function clearMenuAndGap() {
 }
 
 async function generateMenu() {
+  if (!ensureLoggedIn(() => {
+    void generateMenu();
+  })) return;
   if (generateDisabled.value || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || !state.value.slotPlan || pageMutating.value) return;
   pageMutating.value = true;
   state.value.pageStatus = "MENU_MUTATING";
@@ -424,6 +432,9 @@ async function generateMenu() {
 }
 
 async function rerollMenu() {
+  if (!ensureLoggedIn(() => {
+    void rerollMenu();
+  })) return;
   if (!hasMenu.value || pageMutating.value) return;
   const replaceTargets = state.value.slots.filter(item => item.status !== "LOCKED");
   if (!replaceTargets.length) {
@@ -560,6 +571,9 @@ function toggleConstraint(slotId: string, kind: RandomReplaceConstraintKind, val
 }
 
 async function openGap() {
+  if (!ensureLoggedIn(() => {
+    void openGap();
+  })) return;
   if (conditionLoading.value) return;
   if (!activeSlots.value.length || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount) return;
   await refreshGap(true);
@@ -672,6 +686,9 @@ function removeGapSlot(slotId: string) {
 }
 
 async function openPlanSheet() {
+  if (!ensureLoggedIn(() => {
+    void openPlanSheet();
+  })) return;
   if (state.value.gap.loading) return;
   if (!canCreatePlan.value || planSubmitting.value) return;
   planDate.value = todayText();
@@ -706,6 +723,9 @@ function handlePlanDateChange(event: { detail?: { value?: string } }) {
 }
 
 async function createPlan() {
+  if (!ensureLoggedIn(() => {
+    void createPlan();
+  })) return;
   if (!state.value.conditions.mealSlot || !canCreatePlan.value || planSubmitting.value) return;
   planSubmitting.value = true;
   try {
@@ -759,6 +779,9 @@ async function createPlan() {
 }
 
 async function createShopping() {
+  if (!ensureLoggedIn(() => {
+    void createShopping();
+  })) return;
   if (state.value.gap.loading) return;
   if (!canCreateShopping.value || shoppingSubmitting.value) return;
   shoppingSubmitting.value = true;
@@ -948,10 +971,21 @@ function parseBoolean(value: unknown) {
   return null;
 }
 
+function ensureLoggedIn(action: () => void) {
+  if (sessionStore.isLoggedIn) return true;
+  loginModalStore.open(null, action);
+  return false;
+}
+
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
   await sessionStore.setSession(snapshot);
   clearError();
   syncSlotPlan();
+}
+
+async function automatorClearSession() {
+  loginModalStore.close();
+  await sessionStore.clearSession();
 }
 
 function automatorPrimeConditions(next: { mealSlot?: MealSlot | null; peopleCount?: number | null; fridgePreferred?: boolean }) {
@@ -968,9 +1002,19 @@ function automatorPrimeConditions(next: { mealSlot?: MealSlot | null; peopleCoun
   clearMenuAndGap();
 }
 
+async function automatorTriggerGuestGenerate() {
+  await generateMenu();
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    loginVisible: loginModalStore.visible
+  };
+}
+
 defineExpose({
   automatorApplySession,
-  automatorPrimeConditions
+  automatorClearSession,
+  automatorPrimeConditions,
+  automatorTriggerGuestGenerate
 });
 </script>
 

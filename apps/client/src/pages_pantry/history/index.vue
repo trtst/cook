@@ -1,21 +1,27 @@
 <template>
   <page-meta :page-style="pageStyle" />
   <Layout title="采购记录">
-    <Login v-if="!sessionStore.isLoggedIn" title="登录后查看采购记录" description="采购记录只保留你自己的已完成条目。" />
+    <view class="filter-row">
+      <view
+        v-for="item in filters"
+        :key="item.value"
+        class="filter-chip"
+        :class="{ 'filter-chip--active': status === item.value }"
+        @click="changeStatus(item.value)"
+      >
+        {{ item.label }}
+      </view>
+    </view>
+
+    <template v-if="!sessionStore.isLoggedIn">
+      <LoginEmptyState
+        title="登录后查看采购记录"
+        description="顶部筛选会继续保留；登录后再看你自己的已买和已删记录。"
+        @success="handleLoginSuccess"
+      />
+    </template>
 
     <template v-else>
-      <view class="filter-row">
-        <view
-          v-for="item in filters"
-          :key="item.value"
-          class="filter-chip"
-          :class="{ 'filter-chip--active': status === item.value }"
-          @click="changeStatus(item.value)"
-        >
-          {{ item.label }}
-        </view>
-      </view>
-
       <view v-if="errorText" class="notice" @click="loadItems">{{ errorText }}</view>
       <view v-else-if="loading" class="notice">加载中...</view>
       <Empty v-else-if="!items.length" title="还没有记录" description="先去采购清单里完成一次采购。" />
@@ -37,7 +43,7 @@ import { ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { useSessionStore } from "@/stores/session";
 
@@ -58,6 +64,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadItems();
 });
+
+async function handleLoginSuccess() {
+  await loadItems();
+}
 
 async function loadItems() {
   if (!sessionStore.isLoggedIn || loading.value) return;

@@ -15,21 +15,28 @@
       </view>
     </template>
 
-    <Login
-      v-if="!sessionStore.isLoggedIn"
-      title="登录后查看餐次详情"
-      description="安排这顿饭、继续发起饭局和查看参与情况，都需要登录后处理。"
-    />
-
-    <view v-else class="meal-detail-page">
+    <view class="meal-detail-page">
       <view class="detail-nav-backdrop" :style="navBackdropStyle" />
-      <view v-if="loading && !planDetail && !eventDetail" class="meal-detail-state">加载中...</view>
-      <view v-else-if="errorText && !planDetail && !eventDetail" class="meal-detail-state meal-detail-state--error" @click="loadDetail">
-        {{ errorText }}
-      </view>
-      <view v-else-if="!planDetail && !eventDetail" class="meal-detail-empty">
-        <Empty title="未找到这条安排" description="可能已被删除，或当前日期范围里暂无这条餐次安排。" />
-      </view>
+      <LoginEmptyState
+        v-if="!sessionStore.isLoggedIn"
+        class="meal-detail-empty"
+        title="登录后查看餐次详情"
+        description="顶部标题会继续保留；登录后再安排这顿饭、继续发起饭局和查看参与情况。"
+      />
+
+      <template v-else-if="loading && !planDetail && !eventDetail">
+        <view class="meal-detail-state">加载中...</view>
+      </template>
+      <template v-else-if="errorText && !planDetail && !eventDetail">
+        <view class="meal-detail-state meal-detail-state--error" @click="loadDetail">
+          {{ errorText }}
+        </view>
+      </template>
+      <template v-else-if="!planDetail && !eventDetail">
+        <view class="meal-detail-empty">
+          <Empty title="未找到这条安排" description="可能已被删除，或当前日期范围里暂无这条餐次安排。" />
+        </view>
+      </template>
 
       <template v-else>
         <scroll-view
@@ -738,7 +745,7 @@ import { mealApi, type DiningEventSummary, type MealPlanCookAssistant, type Meal
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import MenuConfirmSheet from "@/components/Meal/MenuConfirmSheet.vue";

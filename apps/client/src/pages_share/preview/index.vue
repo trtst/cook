@@ -158,6 +158,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { shareApi, type SharePreviewResponse, type SharePreviewViewerResponse } from "../apis/share";
+import { resolveShareGuestName } from "../display-name";
 import { resolveSharePreviewActionState } from "./action-state";
 import { uniPlatform } from "@/platform/uni";
 import { createOperationId } from "@/utils/operation-id";
@@ -183,7 +184,7 @@ const nowMs = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 const organizerFallback = computed(() => buildAvatarFallback(preview.value?.organizerName || "友"));
-const guestDisplayName = computed(() => userStore.profile?.nickname?.trim() || `用户 ${sessionStore.uid || ""}`.trim() || "你");
+const guestDisplayName = computed(() => resolveShareGuestName(userStore.profile, sessionStore.uid));
 const participantItems = computed(() => preview.value?.participants ?? []);
 const menuItems = computed(() => preview.value?.menuPreview ?? []);
 

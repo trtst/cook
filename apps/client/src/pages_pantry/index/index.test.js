@@ -16,23 +16,6 @@ async function clearSession() {
   await program.callUniMethod("removeStorageSync", "cook_meal_user_profile");
 }
 
-async function collectTexts(page) {
-  const nodes = await page.$$(`text`);
-  const texts = [];
-
-  for (const node of nodes) {
-    const value = (await node.text()).trim();
-    if (value) texts.push(value);
-  }
-
-  return texts;
-}
-
-function hasNormalizedText(texts, expected) {
-  const normalizedExpected = expected.replace(/\s+/g, "");
-  return texts.some((item) => item.replace(/\s+/g, "") === normalizedExpected);
-}
-
 async function request(path, options = {}) {
   const target = new URL(`${API_BASE_URL}${path}`);
   const transport = target.protocol === "https:" ? https : http;
@@ -49,10 +32,10 @@ async function request(path, options = {}) {
           ...(options.headers || {})
         }
       },
-      (response) => {
+      response => {
         let rawBody = "";
         response.setEncoding("utf8");
-        response.on("data", (chunk) => {
+        response.on("data", chunk => {
           rawBody += chunk;
         });
         response.on("end", () => {
@@ -61,7 +44,7 @@ async function request(path, options = {}) {
               status: response.statusCode || 0,
               body: JSON.parse(rawBody || "null")
             });
-          } catch (error) {
+          } catch {
             reject(new Error(`invalid json response from ${path}: ${rawBody}`));
           }
         });
@@ -122,36 +105,27 @@ async function resolveSystemIngredient(authHeaders) {
   return ingredients.items[0];
 }
 
-async function createShoppingListFixture(authHeaders) {
+async function createFridgeItemFixture(authHeaders) {
   const ingredient = await resolveSystemIngredient(authHeaders);
-  const listName = `采购详情验收清单${nextIdempotencyKey().slice(-6)}`;
-  const created = await requestData("/shopping-lists", {
-    method: "POST",
-    headers: withIdempotencyKey(authHeaders),
-    body: JSON.stringify({
-      name: listName
-    })
-  });
-  const quantityText = `2${ingredient.defaultUnit.name}`;
-  const updated = await requestData(`/shopping-lists/${created.id}/items`, {
+  await requestData("/fridge-items", {
     method: "POST",
     headers: withIdempotencyKey(authHeaders),
     body: JSON.stringify({
       name: ingredient.name,
       ingredientId: ingredient.id,
-      quantityText,
-      note: "采购详情自动化验收食材"
+      quantityText: `2${ingredient.defaultUnit.name}`,
+      exactQuantity: "2",
+      exactUnitId: ingredient.defaultUnit.id,
+      expireAt: null,
+      note: "食材首页自动化验收食材"
     })
   });
   return {
-    listId: created.id,
-    listName,
-    ingredientName: ingredient.name,
-    quantityText
+    ingredientName: ingredient.name
   };
 }
 
-describe("pages_pantry/list-detail/index", () => {
+describe("pages_pantry/index/index", () => {
   let page;
   let session;
   let fixture;
@@ -161,46 +135,23 @@ describe("pages_pantry/list-detail/index", () => {
     const authHeaders = {
       authorization: `Bearer ${session.token}`
     };
-    fixture = await createShoppingListFixture(authHeaders);
+    fixture = await createFridgeItemFixture(authHeaders);
 
     await clearSession();
-    page = await program.reLaunch(`/pages_pantry/list-detail/index?id=${fixture.listId}`);
+    page = await program.reLaunch("/pages_pantry/index/index");
     await page.waitFor(300);
+  });
+
+  it("未登录直达后补登录成功，会立即拉回库存首页", async () => {
     await page.callMethod("automatorApplySession", {
       token: session.token,
       uid: session.user.uid,
       expiresAt: session.expiresAt
     });
-    await page.callMethod("automatorHandleLoginSuccess");
-    await page.waitFor(".item-row__title", 8000);
-  });
+    const state = await page.callMethod("automatorHandleLoginSuccess");
 
-  it("采购清单详情页可以完成真实登录并展示清单正文主状态", async () => {
-    expect(await page.path).toBe("pages_pantry/list-detail/index");
-
-    const title = await page.$(".detail-hero__title");
-    expect(await title.text()).toBe(fixture.listName);
-
-    const texts = await collectTexts(page);
-    expect(texts).toContain("采购进度");
-    expect(texts).toContain(fixture.ingredientName);
-    expect(hasNormalizedText(texts, fixture.quantityText)).toBe(true);
-    expect(texts).toContain("查看来源");
-  });
-
-  it("未登录直达后补登录成功，会立即拉回清单详情", async () => {
-    await clearSession();
-    const guestPage = await program.reLaunch(`/pages_pantry/list-detail/index?id=${fixture.listId}`);
-    await guestPage.waitFor(300);
-    await guestPage.callMethod("automatorApplySession", {
-      token: session.token,
-      uid: session.user.uid,
-      expiresAt: session.expiresAt
-    });
-
-    const state = await guestPage.callMethod("automatorHandleLoginSuccess");
     expect(state.loggedIn).toBe(true);
-    expect(state.title).toBe(fixture.listName);
-    expect(state.itemNames).toContain(fixture.ingredientName);
+    expect(state.cardCount).toBeGreaterThan(0);
+    expect(state.firstCardName).toBe(fixture.ingredientName);
   });
 });

@@ -27,7 +27,12 @@
           </view>
 
           <view class="detail-content">
-            <Login v-if="!sessionStore.isLoggedIn" title="登录后查看食材详情" description="库存条目只归你本人所有。" />
+            <LoginEmptyState
+              v-if="!sessionStore.isLoggedIn"
+              title="登录后查看食材详情"
+              description="库存条目只归你本人所有。"
+              @success="handleLoginSuccess"
+            />
 
             <template v-else>
               <view v-if="errorText" class="notice" @click="loadContext">
@@ -196,7 +201,7 @@ import { computed, ref } from "vue";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import Login from "@/components/Login/Login.vue";
+import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -268,6 +273,10 @@ onShow(() => {
   if (!sessionStore.isLoggedIn) return;
   void loadContext();
 });
+
+async function handleLoginSuccess() {
+  await loadContext();
+}
 
 async function loadContext() {
   if (!sessionStore.isLoggedIn || loading.value || !itemId.value) return;

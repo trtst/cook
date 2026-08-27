@@ -3,7 +3,8 @@ const https = require("https");
 const { URL } = require("url");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
-const TEST_CODE = "123456";
+const TEST_OWNER_PHONE = process.env.TEST_OWNER_PHONE || "13800000000";
+const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD || "change-me";
 
 jest.setTimeout(30000);
 
@@ -14,18 +15,6 @@ function assert(condition, message) {
 async function clearSession() {
   await program.callUniMethod("removeStorageSync", "cook_meal_session");
   await program.callUniMethod("removeStorageSync", "cook_meal_user_profile");
-}
-
-async function collectTexts(page) {
-  const nodes = await page.$$("text");
-  const texts = [];
-
-  for (const node of nodes) {
-    const value = (await node.text()).trim();
-    if (value) texts.push(value);
-  }
-
-  return texts;
 }
 
 async function request(path, options = {}) {
@@ -80,64 +69,63 @@ async function requestData(path, options = {}) {
   return result.body.data;
 }
 
-function createFreshPhone() {
-  const suffix = `${Date.now()}`.slice(-8).padStart(8, "0");
-  return `139${suffix}`;
-}
-
-async function loginWithCode(phone) {
-  return requestData("/auth/code-login", {
+async function loginWithPassword() {
+  return requestData("/auth/login", {
     method: "POST",
     body: JSON.stringify({
-      phone,
-      code: TEST_CODE
+      phone: TEST_OWNER_PHONE,
+      password: TEST_USER_PASSWORD
     })
   });
 }
 
-describe("pages_meal/random/index", () => {
+async function fetchCurrentUser(token) {
+  return requestData("/users/me", {
+    headers: {
+      authorization: `Bearer ${token}`
+    }
+  });
+}
+
+describe("pages_share/import/index", () => {
   let page;
   let session;
+  let profile;
 
   beforeAll(async () => {
-    session = await loginWithCode(createFreshPhone());
-
+    session = await loginWithPassword();
+    profile = await fetchCurrentUser(session.token);
     await clearSession();
-    page = await program.reLaunch("/pages_meal/random/index");
+    page = await program.reLaunch("/pages_share/import/index?token=share-import-test-token");
+    await page.waitFor(300);
+  });
+
+  it("未登录直达后补登录成功，会立即补齐默认展示名称", async () => {
     await page.callMethod("automatorApplySession", {
       token: session.token,
       uid: session.user.uid,
       expiresAt: session.expiresAt
-    });
-    await page.callMethod("automatorPrimeConditions", {
-      mealSlot: "DINNER",
-      peopleCount: 4,
-      fridgePreferred: true
-    });
-    await page.waitFor(1500);
+    }, profile);
+    const state = await page.callMethod("automatorHandleLoginSuccess");
+
+    expect(state.loggedIn).toBe(true);
+    expect(state.shareToken).toBe("share-import-test-token");
+    expect(state.guestName).toBe((profile.nickname || "").trim() || `用户 ${session.user.uid}` || "你");
+    expect(state.canSubmit).toBe(true);
   });
 
-  it("随机页可以完成真实登录并展示决策台初始主状态", async () => {
-    expect(await page.path).toBe("pages_meal/random/index");
-
-    const texts = await collectTexts(page);
-    expect(texts).toContain("帮我决定");
-    expect(texts).toContain("先生成一桌，再逐道决定保留还是换掉");
-    expect(texts).toContain("随机页不是三套候选对比，而是一桌可拆解菜单：满意就保留，不满意就换一道。");
-  });
-
-  it("游客点生成一桌时，会先打开登录弹窗", async () => {
-    const guestPage = await program.reLaunch("/pages_meal/random/index");
+  it("用户资料和 uid 都不可用时，会退回到“你”", async () => {
+    const guestPage = await program.reLaunch("/pages_share/import/index?token=share-import-test-token");
     await guestPage.callMethod("automatorClearSession");
     await guestPage.waitFor(300);
-    await guestPage.callMethod("automatorPrimeConditions", {
-      mealSlot: "DINNER",
-      peopleCount: 4,
-      fridgePreferred: true
+    await guestPage.callMethod("automatorApplySession", {
+      token: session.token,
+      expiresAt: session.expiresAt
     });
 
-    const state = await guestPage.callMethod("automatorTriggerGuestGenerate");
-    expect(state.loggedIn).toBe(false);
-    expect(state.loginVisible).toBe(true);
+    const state = await guestPage.callMethod("automatorHandleLoginSuccess");
+    expect(state.loggedIn).toBe(true);
+    expect(state.guestName).toBe("你");
+    expect(state.canSubmit).toBe(true);
   });
 });
