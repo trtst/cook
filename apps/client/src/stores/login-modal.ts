@@ -2,27 +2,32 @@ import { defineStore } from "pinia";
 import { useAppConfigStore } from "./app-config";
 import { uniPlatform } from "@/platform/uni";
 import type { AuthSessionResult } from "@/apis/auth";
+import { createLoginActionRegistry, type LoginModalAction } from "./login-modal-actions";
 
 type LoginModalMode = "wechat" | "phone";
 
-let pendingAction: (() => void) | null = null;
+const actionRegistry = createLoginActionRegistry();
 
 export const useLoginModalStore = defineStore("login-modal", {
 	state: () => ({
 		visible: false,
 		mode: "phone" as LoginModalMode,
 		sourceId: null as string | null,
+		actionId: null as string | null,
 		openImageUrl: "",
 		openSeed: 0,
 		openedInMiniProgram: false
 	}),
 	actions: {
-		open(sourceId: string | null = null, action: (() => void) | null = null) {
+		open(sourceId: string | null = null, action: LoginModalAction = null) {
 			const isMiniProgram = uniPlatform.system.getRuntimeChannel() === "mini_program";
 			const appConfigStore = useAppConfigStore();
 
-			pendingAction = action;
 			this.sourceId = sourceId;
+			this.actionId = sourceId ? sourceId : actionRegistry.register(action);
+			if (sourceId) {
+				actionRegistry.set(sourceId, action);
+			}
 			this.openedInMiniProgram = isMiniProgram;
 			this.mode = isMiniProgram ? "wechat" : "phone";
 			this.openImageUrl = appConfigStore.loginImageUrl;
@@ -52,22 +57,26 @@ export const useLoginModalStore = defineStore("login-modal", {
 			this.visible = false;
 			this.mode = this.openedInMiniProgram ? "wechat" : "phone";
 			this.sourceId = null;
+			this.actionId = null;
 			this.openImageUrl = "";
 			this.openedInMiniProgram = false;
-			pendingAction = null;
+			actionRegistry.clear();
 		},
 		complete(_session: AuthSessionResult) {
+			return this.completeForSource(this.sourceId, this.actionId);
+		},
+		completeForSource(sourceId: string | null, actionId: string | null = sourceId) {
 			const result = {
-				sourceId: this.sourceId,
-				action: pendingAction
+				sourceId,
+				action: actionRegistry.take(actionId)
 			};
 
 			this.visible = false;
 			this.mode = this.openedInMiniProgram ? "wechat" : "phone";
 			this.sourceId = null;
+			this.actionId = null;
 			this.openImageUrl = "";
 			this.openedInMiniProgram = false;
-			pendingAction = null;
 
 			return result;
 		}
