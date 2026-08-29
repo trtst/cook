@@ -1,3 +1,4 @@
+import { log } from "console";
 import { APP_VERSION } from "./app";
 import { ENV_PROFILES, type AppMode } from "./env_profiles";
 

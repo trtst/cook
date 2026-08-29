@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="饭局邀请">
     <view v-if="loading && !preview" class="preview-shell">
       <view class="invite-card invite-skeleton">
@@ -156,6 +156,8 @@ import { computed, ref, watch } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { shareApi, type SharePreviewResponse, type SharePreviewViewerResponse } from "../apis/share";
 import { resolveShareGuestName } from "../display-name";
@@ -168,6 +170,8 @@ import { formatDateTimeMinute } from "../utils/date";
 import type { UUID } from "@/apis/http";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 const loginModalStore = useLoginModalStore();
@@ -437,9 +441,11 @@ function formatInviteDateTime(value: string) {
 
 .notice,
 .invite-card {
-  background: var(--color-surface);
   border-radius: 24rpx;
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .notice {
@@ -459,7 +465,7 @@ function formatInviteDateTime(value: string) {
   position: relative;
   overflow: hidden;
   border-radius: 8rpx;
-  background: color-mix(in srgb, var(--color-border) 48%, var(--color-surface) 52%);
+  background: var(--color-surface-muted);
 }
 
 .skeleton-block::after {
@@ -467,7 +473,7 @@ function formatInviteDateTime(value: string) {
   inset: 0;
   content: "";
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+  background: linear-gradient(90deg, transparent, var(--color-shimmer-strong), transparent);
   animation: skeleton-shimmer 1.35s ease-in-out infinite;
 }
 
@@ -531,7 +537,7 @@ function formatInviteDateTime(value: string) {
 .invite-card__divider {
   height: 1rpx;
   margin: 0 28rpx;
-  background: color-mix(in srgb, var(--color-border) 72%, transparent 28%);
+  background: var(--color-divider);
 }
 
 .invite-card__host {
@@ -585,7 +591,7 @@ function formatInviteDateTime(value: string) {
   width: 76rpx;
   height: 76rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-primary-soft) 68%, var(--color-surface) 32%);
+  background: var(--color-tag-primary-bg);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -607,7 +613,7 @@ function formatInviteDateTime(value: string) {
 }
 
 .avatar__fallback {
-  color: var(--color-primary);
+  color: var(--color-tag-primary-text);
   font-size: 28rpx;
   font-weight: 700;
 }
@@ -674,7 +680,7 @@ function formatInviteDateTime(value: string) {
 }
 
 .menu-list__row + .menu-list__row {
-  border-top: 1rpx solid color-mix(in srgb, var(--color-border) 58%, transparent 42%);
+  border-top: 1rpx solid var(--color-divider);
 }
 
 .menu-list__row--link {
@@ -689,13 +695,12 @@ function formatInviteDateTime(value: string) {
 }
 
 .menu-list__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 22rpx;
 }
 
 .menu-list__empty,
-.invite-footer__status,
-.invite-footer__error {
+.invite-footer__status {
   color: var(--color-text-secondary);
   font-size: 22rpx;
   line-height: 1.6;
@@ -775,8 +780,8 @@ function formatInviteDateTime(value: string) {
   height: 40rpx;
   padding: 0 8rpx;
   border-radius: 10rpx;
-  background: color-mix(in srgb, var(--color-danger) 88%, white 12%);
-  color: #fff;
+  background: var(--color-state-danger-soft);
+  color: var(--color-text-inverse);
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1;
@@ -785,11 +790,11 @@ function formatInviteDateTime(value: string) {
 .invite-footer__hint {
   padding: 18rpx 20rpx;
   border-radius: 14rpx;
-  background: color-mix(in srgb, var(--color-primary-soft) 58%, var(--color-surface) 42%);
+  background: var(--color-support-notice);
 }
 
 .invite-footer__hint-text {
-  color: var(--color-primary);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -797,12 +802,15 @@ function formatInviteDateTime(value: string) {
 .invite-footer__button {
   width: 100%;
   margin: 0;
+  border: 0;
   border-radius: 14rpx;
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-size: 30rpx;
   font-weight: 700;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .invite-footer__button::after {
@@ -810,8 +818,11 @@ function formatInviteDateTime(value: string) {
 }
 
 .invite-footer__button--secondary {
-  background: color-mix(in srgb, var(--color-primary-soft) 60%, var(--color-surface) 40%);
-  color: var(--color-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .invite-footer__status {
@@ -820,6 +831,8 @@ function formatInviteDateTime(value: string) {
 }
 
 .invite-footer__error {
-  color: var(--color-danger-text);
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: var(--color-state-danger-text);
 }
 </style>

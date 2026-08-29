@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="detail-nav__title" :style="navTitleStyle">{{ currentItem?.name || "食材详情" }}</text>
@@ -204,6 +204,8 @@ import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -213,6 +215,8 @@ import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
 import { buildIngredientAvatarText, formatExpireLabel, isExpiringSoon, resolveFridgeImageMap } from "../utils/fridge";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 
@@ -408,12 +412,11 @@ async function submitShopping() {
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -446,11 +449,7 @@ async function submitShopping() {
 
 .detail-hero {
   padding: 60rpx var(--space-page) 160rpx;
-  background:
-    linear-gradient(180deg, rgba(255, 251, 244, 0.88), rgba(248, 243, 235, 0.96)),
-    radial-gradient(circle at 18% 18%, rgba(255, 216, 156, 0.5), transparent 28%),
-    radial-gradient(circle at 82% 20%, rgba(176, 216, 184, 0.34), transparent 26%),
-    radial-gradient(circle at 66% 76%, rgba(255, 234, 198, 0.28), transparent 24%);
+  background: var(--page-cover-fresh-bg);
 }
 
 .detail-content {
@@ -495,9 +494,7 @@ async function submitShopping() {
   width: 148rpx;
   height: 148rpx;
   border-radius: 40rpx;
-  background:
-    linear-gradient(180deg, rgba(255, 250, 241, 0.96), rgba(244, 239, 229, 0.96)),
-    radial-gradient(circle at 28% 26%, rgba(255, 219, 156, 0.52), transparent 34%);
+  background: var(--page-cover-fresh-bg);
   overflow: hidden;
 }
 
@@ -507,7 +504,7 @@ async function submitShopping() {
 }
 
 .detail-hero__avatar-text {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 56rpx;
   font-weight: var(--font-weight-heavy);
 }
@@ -556,13 +553,13 @@ async function submitShopping() {
 }
 
 .badge--warning {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .badge--info {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .badge--muted {
@@ -573,7 +570,7 @@ async function submitShopping() {
 .notice,
 .section-card {
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
@@ -588,7 +585,7 @@ async function submitShopping() {
 
 .notice__action {
   margin-top: 8rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
 }
 
@@ -734,7 +731,7 @@ async function submitShopping() {
 }
 
 .action-button--accent {
-  background: linear-gradient(180deg, rgba(250, 244, 232, 0.96), rgba(255, 250, 243, 0.98));
+  background: var(--color-state-warning-soft);
 }
 
 .action-button--disabled {
@@ -815,12 +812,14 @@ async function submitShopping() {
 }
 
 .sheet-actions__button--cancel {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 </style>

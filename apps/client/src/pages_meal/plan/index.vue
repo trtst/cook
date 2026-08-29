@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="美食计划" full-screen>
     <view class="plan-page">
         <view class="plan-fixed-head">
@@ -344,6 +344,8 @@ import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerShe
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -399,6 +401,8 @@ type PlanOrderState = Record<string, UUID[]>;
 type PlanDockActionKey = "copy" | "add" | "recipe" | "shopping";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 
 const today = todayText();
@@ -1389,17 +1393,6 @@ defineExpose({
 }
 
 .plan-page {
-  --plan-card-radius: var(--radius-lg);
-  --plan-card-bg: var(--color-surface);
-  --plan-card-bg-soft: var(--color-surface-muted);
-  --plan-card-border: color-mix(in srgb, var(--color-divider) 72%, transparent);
-  --plan-card-shadow: var(--shadow-card);
-  --plan-tag-bg: color-mix(in srgb, var(--color-surface-muted) 72%, var(--color-primary-soft) 28%);
-  --plan-tag-text: var(--color-text-secondary);
-  --plan-tag-accent-bg: color-mix(in srgb, var(--color-surface) 68%, var(--color-primary-soft) 32%);
-  --plan-tag-accent-text: var(--color-primary);
-  --plan-tag-done-bg: var(--color-success-soft);
-  --plan-tag-done-text: var(--color-success);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -1555,19 +1548,19 @@ defineExpose({
 }
 
 .week-day--selected .week-day__number-shell {
-  background: var(--color-primary);
+  background: var(--color-tag-primary-bg);
 }
 
 .week-day--selected .week-day__number {
-  color: var(--color-primary-foreground);
+  color: var(--color-tag-primary-text);
 }
 
 .week-day--selected .week-day__label {
-  color: var(--color-primary);
+  color: var(--color-tag-primary-text);
 }
 
 .week-day--today:not(.week-day--selected) .week-day__number-shell {
-  background: color-mix(in srgb, var(--meal-slot-dinner-soft) 62%, transparent);
+  background: var(--meal-slot-dinner-soft);
 }
 
 .day-head {
@@ -1596,10 +1589,11 @@ defineExpose({
 
 .notice,
 .meal-card {
-  border: 1rpx solid var(--plan-card-border);
-  border-radius: var(--plan-card-radius);
-  background: var(--plan-card-bg);
-  box-shadow: var(--plan-card-shadow);
+  border-radius: var(--radius-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .notice {
@@ -1629,10 +1623,9 @@ defineExpose({
   display: block;
   overflow: hidden;
   min-height: 220rpx;
-  border: 1rpx solid var(--plan-card-border);
   border-radius: var(--radius-xs);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--plan-slot-soft) 84%, var(--color-surface)) 0%, var(--color-surface) 100%);
-  box-shadow: var(--plan-card-shadow);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
 }
 
 .meal-card::before {
@@ -1643,9 +1636,7 @@ defineExpose({
   bottom: 0;
   width: 176rpx;
   border-radius: 32rpx 0 0 32rpx;
-  background:
-    linear-gradient(160deg, color-mix(in srgb, var(--plan-slot-color) 10%, var(--color-surface)) 0%, var(--plan-slot-soft) 100%);
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--plan-slot-color) 6%, transparent);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-light);
   transform: skewX(-12deg);
   transform-origin: left center;
 }
@@ -1669,73 +1660,108 @@ defineExpose({
 }
 
 .meal-card--breakfast {
-  --plan-slot-color: var(--meal-slot-breakfast);
-  --plan-slot-soft: var(--meal-slot-breakfast-soft);
-  --plan-slot-band-pattern:
-    radial-gradient(circle at 28% 28%, color-mix(in srgb, var(--plan-slot-color) 13%, transparent) 0 18%, transparent 19%),
-    radial-gradient(circle at 46% 18%, color-mix(in srgb, var(--plan-slot-color) 10%, transparent) 0 14%, transparent 15%),
-    radial-gradient(circle at 62% 38%, color-mix(in srgb, var(--plan-slot-color) 9%, transparent) 0 13%, transparent 14%),
-    radial-gradient(circle at 54% 70%, color-mix(in srgb, var(--plan-slot-color) 7%, transparent) 0 16%, transparent 17%);
-  --plan-slot-panel-bg:
-    radial-gradient(circle at 10% 20%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 74% 24%, color-mix(in srgb, var(--meal-slot-breakfast) 5%, transparent) 0 14%, transparent 15%),
-    radial-gradient(circle at 58% 82%, color-mix(in srgb, var(--meal-slot-breakfast) 4%, transparent) 0 16%, transparent 17%);
+  background: linear-gradient(135deg, var(--meal-slot-breakfast-soft) 0%, var(--color-surface) 100%);
+}
+
+.meal-card--breakfast::before {
+  background: linear-gradient(160deg, var(--color-surface) 0%, var(--meal-slot-breakfast-soft) 100%);
+}
+
+.meal-card--breakfast::after {
+  background:
+    radial-gradient(circle at 28% 28%, var(--meal-slot-breakfast-soft) 0 18%, transparent 19%),
+    radial-gradient(circle at 46% 18%, var(--meal-slot-breakfast-soft) 0 14%, transparent 15%),
+    radial-gradient(circle at 62% 38%, var(--meal-slot-breakfast-soft) 0 13%, transparent 14%),
+    radial-gradient(circle at 54% 70%, var(--meal-slot-breakfast-soft) 0 16%, transparent 17%);
+}
+
+.meal-card--breakfast .meal-card__slot {
+  background: var(--meal-slot-breakfast-soft);
+  color: var(--meal-slot-breakfast);
 }
 
 .meal-card--lunch {
-  --plan-slot-color: var(--meal-slot-lunch);
-  --plan-slot-soft: var(--meal-slot-lunch-soft);
-  --plan-slot-band-pattern:
-    radial-gradient(circle at 32% 72%, color-mix(in srgb, var(--plan-slot-color) 12%, transparent) 0 18%, transparent 19%),
-    radial-gradient(circle at 68% 58%, color-mix(in srgb, var(--plan-slot-color) 9%, transparent) 0 14%, transparent 15%),
-    radial-gradient(circle at 70% 20%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 20% 38%, color-mix(in srgb, var(--plan-slot-color) 6%, transparent) 0 12%, transparent 13%);
-  --plan-slot-panel-bg:
-    radial-gradient(circle at 84% 16%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 28% 72%, color-mix(in srgb, var(--meal-slot-lunch) 5%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 54% 36%, color-mix(in srgb, var(--meal-slot-lunch) 4%, transparent) 0 13%, transparent 14%);
+  background: linear-gradient(135deg, var(--meal-slot-lunch-soft) 0%, var(--color-surface) 100%);
+}
+
+.meal-card--lunch::before {
+  background: linear-gradient(160deg, var(--color-surface) 0%, var(--meal-slot-lunch-soft) 100%);
+}
+
+.meal-card--lunch::after {
+  background:
+    radial-gradient(circle at 32% 72%, var(--meal-slot-lunch-soft) 0 18%, transparent 19%),
+    radial-gradient(circle at 68% 58%, var(--meal-slot-lunch-soft) 0 14%, transparent 15%),
+    radial-gradient(circle at 70% 20%, var(--meal-slot-lunch-soft) 0 12%, transparent 13%),
+    radial-gradient(circle at 20% 38%, var(--meal-slot-lunch-soft) 0 12%, transparent 13%);
+}
+
+.meal-card--lunch .meal-card__slot {
+  background: var(--meal-slot-lunch-soft);
+  color: var(--meal-slot-lunch);
 }
 
 .meal-card--dinner {
-  --plan-slot-color: var(--meal-slot-dinner);
-  --plan-slot-soft: var(--meal-slot-dinner-soft);
-  --plan-slot-band-pattern:
-    radial-gradient(circle at 72% 24%, color-mix(in srgb, var(--plan-slot-color) 12%, transparent) 0 18%, transparent 19%),
-    radial-gradient(circle at 46% 48%, color-mix(in srgb, var(--plan-slot-color) 9%, transparent) 0 14%, transparent 15%),
-    radial-gradient(circle at 24% 72%, color-mix(in srgb, var(--plan-slot-color) 7%, transparent) 0 13%, transparent 14%),
-    radial-gradient(circle at 62% 78%, color-mix(in srgb, var(--plan-slot-color) 5%, transparent) 0 12%, transparent 13%);
-  --plan-slot-panel-bg:
-    radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 22% 74%, color-mix(in srgb, var(--meal-slot-dinner) 5%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 58% 42%, color-mix(in srgb, var(--meal-slot-dinner) 4%, transparent) 0 13%, transparent 14%);
+  background: linear-gradient(135deg, var(--meal-slot-dinner-soft) 0%, var(--color-surface) 100%);
+}
+
+.meal-card--dinner::before {
+  background: linear-gradient(160deg, var(--color-surface) 0%, var(--meal-slot-dinner-soft) 100%);
+}
+
+.meal-card--dinner::after {
+  background:
+    radial-gradient(circle at 72% 24%, var(--meal-slot-dinner-soft) 0 18%, transparent 19%),
+    radial-gradient(circle at 46% 48%, var(--meal-slot-dinner-soft) 0 14%, transparent 15%),
+    radial-gradient(circle at 24% 72%, var(--meal-slot-dinner-soft) 0 13%, transparent 14%),
+    radial-gradient(circle at 62% 78%, var(--meal-slot-dinner-soft) 0 12%, transparent 13%);
+}
+
+.meal-card--dinner .meal-card__slot {
+  background: var(--meal-slot-dinner-soft);
+  color: var(--meal-slot-dinner);
 }
 
 .meal-card--afternoon-tea {
-  --plan-slot-color: var(--meal-slot-afternoon-tea);
-  --plan-slot-soft: var(--meal-slot-afternoon-tea-soft);
-  --plan-slot-band-pattern:
-    radial-gradient(circle at 24% 26%, color-mix(in srgb, var(--plan-slot-color) 11%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 74% 70%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 15%, transparent 16%),
-    radial-gradient(circle at 38% 74%, color-mix(in srgb, var(--plan-slot-color) 6%, transparent) 0 12%, transparent 13%);
-  --plan-slot-panel-bg:
-    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 80% 72%, color-mix(in srgb, var(--meal-slot-afternoon-tea) 5%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 56% 38%, color-mix(in srgb, var(--meal-slot-afternoon-tea) 4%, transparent) 0 13%, transparent 14%);
+  background: linear-gradient(135deg, var(--meal-slot-afternoon-tea-soft) 0%, var(--color-surface) 100%);
+}
+
+.meal-card--afternoon-tea::before {
+  background: linear-gradient(160deg, var(--color-surface) 0%, var(--meal-slot-afternoon-tea-soft) 100%);
+}
+
+.meal-card--afternoon-tea::after {
+  background:
+    radial-gradient(circle at 24% 26%, var(--meal-slot-afternoon-tea-soft) 0 16%, transparent 17%),
+    radial-gradient(circle at 50% 18%, var(--meal-slot-afternoon-tea-soft) 0 12%, transparent 13%),
+    radial-gradient(circle at 74% 70%, var(--meal-slot-afternoon-tea-soft) 0 15%, transparent 16%),
+    radial-gradient(circle at 38% 74%, var(--meal-slot-afternoon-tea-soft) 0 12%, transparent 13%);
+}
+
+.meal-card--afternoon-tea .meal-card__slot {
+  background: var(--meal-slot-afternoon-tea-soft);
+  color: var(--meal-slot-afternoon-tea);
 }
 
 .meal-card--late-night {
-  --plan-slot-color: var(--meal-slot-late-night);
-  --plan-slot-soft: var(--meal-slot-late-night-soft);
-  --plan-slot-band-pattern:
-    radial-gradient(circle at 24% 26%, color-mix(in srgb, var(--plan-slot-color) 11%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 74% 70%, color-mix(in srgb, var(--plan-slot-color) 8%, transparent) 0 15%, transparent 16%),
-    radial-gradient(circle at 38% 74%, color-mix(in srgb, var(--plan-slot-color) 6%, transparent) 0 12%, transparent 13%);
-  --plan-slot-panel-bg:
-    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--color-surface) 88%, transparent) 0 12%, transparent 13%),
-    radial-gradient(circle at 80% 72%, color-mix(in srgb, var(--meal-slot-late-night) 5%, transparent) 0 16%, transparent 17%),
-    radial-gradient(circle at 56% 38%, color-mix(in srgb, var(--meal-slot-late-night) 4%, transparent) 0 13%, transparent 14%);
+  background: linear-gradient(135deg, var(--meal-slot-late-night-soft) 0%, var(--color-surface) 100%);
+}
+
+.meal-card--late-night::before {
+  background: linear-gradient(160deg, var(--color-surface) 0%, var(--meal-slot-late-night-soft) 100%);
+}
+
+.meal-card--late-night::after {
+  background:
+    radial-gradient(circle at 24% 26%, var(--meal-slot-late-night-soft) 0 16%, transparent 17%),
+    radial-gradient(circle at 50% 18%, var(--meal-slot-late-night-soft) 0 12%, transparent 13%),
+    radial-gradient(circle at 74% 70%, var(--meal-slot-late-night-soft) 0 15%, transparent 16%),
+    radial-gradient(circle at 38% 74%, var(--meal-slot-late-night-soft) 0 12%, transparent 13%);
+}
+
+.meal-card--late-night .meal-card__slot {
+  background: var(--meal-slot-late-night-soft);
+  color: var(--meal-slot-late-night);
 }
 
 .meal-card__event-badge {
@@ -1746,11 +1772,13 @@ defineExpose({
   max-width: 220rpx;
   padding: 10rpx 18rpx;
   border-radius: 0 0 0 var(--radius-xs);
-  color: var(--color-primary-foreground);
+  color: var(--color-tag-primary-text);
   font-size: 20rpx;
   line-height: 1;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--button-primary-gradient-end) 100%);
-  box-shadow: 0 14rpx 28rpx color-mix(in srgb, var(--color-primary-soft) 72%, transparent);
+  background: var(--button-primary-bg);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .meal-card__panel {
@@ -1796,8 +1824,8 @@ defineExpose({
   flex: 0 0 auto;
   padding: 8rpx 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--plan-tag-done-bg);
-  color: var(--plan-tag-done-text);
+  background: var(--color-state-success-soft);
+  color: var(--color-state-success-text);
   font-size: 20rpx;
 }
 
@@ -1805,8 +1833,6 @@ defineExpose({
   flex: 0 0 auto;
   padding: 8rpx 18rpx;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--plan-slot-color) 14%, var(--color-surface));
-  color: var(--plan-slot-color);
   font-size: 20rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -1847,7 +1873,7 @@ defineExpose({
   flex: 1;
   min-width: 32rpx;
   height: 0;
-  border-bottom: 2rpx dashed color-mix(in srgb, var(--plan-slot-color) 22%, var(--color-divider));
+  border-bottom: 2rpx dashed var(--color-divider);
   transform: translateY(2rpx);
 }
 
@@ -1954,9 +1980,10 @@ defineExpose({
 }
 
 .sheet-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .sheet-chip--filled {
@@ -1996,14 +2023,18 @@ defineExpose({
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .sheet-actions__button--cancel {
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .floating-dock {
@@ -2052,16 +2083,15 @@ defineExpose({
   height: 92rpx;
   padding: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
-  box-shadow:
-    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 30%, transparent),
-    0 8rpx 18rpx color-mix(in srgb, var(--color-primary) 12%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 85%, transparent);
+  background: var(--button-secondary-bg);
+  box-shadow: var(--material-card-shadow);
   color: var(--color-text);
   white-space: nowrap;
   opacity: 0;
   transform: translateX(26rpx) scale(0.92);
   pointer-events: none;
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
   transition:
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease;
@@ -2078,7 +2108,7 @@ defineExpose({
 }
 
 .manage-dock__action-icon {
-  color: color-mix(in srgb, var(--color-text) 84%, var(--color-primary) 16%);
+  color: var(--color-icon-active);
   font-size: 34rpx;
 }
 
@@ -2102,8 +2132,10 @@ defineExpose({
   width: 92rpx;
   height: 92rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .manage-dock__button--hover {
@@ -2163,9 +2195,10 @@ defineExpose({
   gap: 18rpx;
   padding: 24rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
-  border: 2rpx solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .plan-sort-card--placeholder {
@@ -2173,7 +2206,7 @@ defineExpose({
 }
 
 .plan-sort-card--ghost {
-  box-shadow: 0 22rpx 56rpx color-mix(in srgb, var(--color-primary-soft) 62%, transparent);
+  box-shadow: var(--shadow-card);
 }
 
 .plan-sort-card__order {
@@ -2209,8 +2242,8 @@ defineExpose({
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-primary-soft) 42%, var(--color-surface));
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 20rpx;
 }
 
@@ -2229,7 +2262,7 @@ defineExpose({
 }
 
 .plan-sort-card__drag--ghost {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .plan-sort__footer {
@@ -2250,13 +2283,13 @@ defineExpose({
 }
 
 .plan-sort__button--ghost {
-  background: color-mix(in srgb, var(--color-primary-soft) 42%, var(--color-surface));
-  color: var(--color-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 .plan-sort__button--primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--button-primary-gradient-end) 100%);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .plan-sort__ghost {

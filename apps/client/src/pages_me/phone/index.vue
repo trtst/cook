@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="phone-navbar__title">绑定手机号</text>
@@ -80,12 +80,16 @@ import { userApi } from "@/apis/user";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -223,10 +227,7 @@ function stopCountdown() {
   padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
   overflow: hidden;
-  background:
-    radial-gradient(circle at top center, color-mix(in srgb, var(--theme-primary) 8%, transparent), transparent 42%),
-    radial-gradient(circle at 12% 24%, color-mix(in srgb, var(--theme-primary) 5%, transparent), transparent 30%),
-    var(--color-page);
+  background: var(--page-primary-soft-bg);
 }
 
 .phone-navbar__title {
@@ -271,9 +272,8 @@ function stopCountdown() {
 
 .phone-form-card {
   overflow: hidden;
-  border: 1rpx solid var(--color-divider);
   border-radius: 22rpx;
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--theme-primary) 6%);
+  background: var(--color-surface-primary-panel);
   box-shadow: var(--shadow-card);
 }
 
@@ -322,7 +322,7 @@ function stopCountdown() {
 
 .phone-input-row__input::placeholder,
 .code-row__input::placeholder {
-  color: color-mix(in srgb, var(--color-text-tertiary) 68%, var(--color-page));
+  color: var(--color-text-tertiary);
 }
 
 .code-row__button {
@@ -335,8 +335,8 @@ function stopCountdown() {
   padding: 0 22rpx;
   border: 0;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--theme-primary) 16%, var(--color-surface));
-  color: color-mix(in srgb, var(--theme-primary) 68%, var(--color-text));
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   line-height: 1;
@@ -362,8 +362,8 @@ function stopCountdown() {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
-  background: var(--theme-primary);
-  box-shadow: 0 0 0 4rpx color-mix(in srgb, var(--theme-primary) 18%, transparent);
+  background: var(--color-support-action);
+  box-shadow: 0 0 0 4rpx var(--color-support-notice);
 }
 
 .phone-tip__text {
@@ -387,7 +387,7 @@ function stopCountdown() {
 }
 
 .phone-error {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
 }
 
 .phone-submit {
@@ -399,7 +399,7 @@ function stopCountdown() {
   margin-top: 28rpx;
   border: 0;
   border-radius: 999rpx;
-  background: linear-gradient(90deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   font-size: 38rpx;
   font-weight: var(--font-weight-bold);

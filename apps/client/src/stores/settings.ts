@@ -13,6 +13,7 @@ import {
 	type ThemePalette,
 	type ThemeSkin
 } from "@/themes";
+import { resolveThemeSettingsSnapshot, type ThemeSettingsSnapshot } from "./theme-settings";
 
 // Re-export theme constants and types so pages can consume one store-facing entry.
 export {
@@ -27,50 +28,30 @@ export {
 };
 export type { ThemeMode, ThemePalette, ThemeSkin };
 
-// Local-only settings persisted for app relaunch.
-interface SettingsSnapshot {
-	themeMode?: ThemeMode;
-	themeSkin?: ThemeSkin;
-	themePalette?: ThemePalette;
+function readInitialThemeSettings() {
+	return resolveThemeSettingsSnapshot(uniPlatform.storage.getSync<ThemeSettingsSnapshot>(APP_STORAGE_KEYS.theme));
 }
 
-// Runtime guards keep old or malformed local snapshots from polluting store state.
-function isThemeMode(value: unknown): value is ThemeMode {
-	return value === "system" || value === "light" || value === "dark";
-}
-
-function isThemeSkin(value: unknown): value is ThemeSkin {
-	return THEME_SKIN_OPTIONS.some((option) => option.value === value);
-}
-
-function isThemePalette(value: unknown): value is ThemePalette {
-	return THEME_PALETTE_OPTIONS.includes(value as ThemePalette);
-}
+const initialThemeSettings = readInitialThemeSettings();
 
 // Settings store owns local preferences only.
 // It does not resolve entitlement or system theme listeners by itself.
 export const useSettingsStore = defineStore("settings", {
 	state: () => ({
 		// User-selected theme mode or system-following mode.
-		themeMode: "system" as ThemeMode,
+		themeMode: initialThemeSettings.themeMode,
 		// Active visual skin.
-		themeSkin: DEFAULT_THEME_SKIN as ThemeSkin,
+		themeSkin: initialThemeSettings.themeSkin,
 		// Active palette inside the selected skin.
-		themePalette: DEFAULT_THEME_PALETTE as ThemePalette
+		themePalette: initialThemeSettings.themePalette
 	}),
 	actions: {
 		// Restores local settings snapshot and repairs unsupported skin/palette combinations.
 		async restore() {
-			const snapshot = await uniPlatform.storage.get<SettingsSnapshot>(APP_STORAGE_KEYS.theme);
-			const restoredSkin = isThemeSkin(snapshot?.themeSkin) ? snapshot.themeSkin : DEFAULT_THEME_SKIN;
-			const restoredPalette =
-				isThemePalette(snapshot?.themePalette) && isPaletteSupportedBySkin(restoredSkin, snapshot.themePalette)
-					? snapshot.themePalette
-					: getDefaultPaletteForSkin(restoredSkin);
-
-			this.themeMode = isThemeMode(snapshot?.themeMode) ? snapshot.themeMode : "system";
-			this.themeSkin = restoredSkin;
-			this.themePalette = restoredPalette;
+			const restored = resolveThemeSettingsSnapshot(await uniPlatform.storage.get<ThemeSettingsSnapshot>(APP_STORAGE_KEYS.theme));
+			this.themeMode = restored.themeMode;
+			this.themeSkin = restored.themeSkin;
+			this.themePalette = restored.themePalette;
 		},
 		// Updates theme mode and persists immediately because pages depend on it across relaunches.
 		async setThemeMode(themeMode: ThemeMode) {

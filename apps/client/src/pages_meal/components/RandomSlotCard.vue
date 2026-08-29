@@ -181,12 +181,14 @@ function replaceSlot() {
 .slot-card {
   padding: 24rpx;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
 .slot-card--locked {
-  box-shadow: 0 18rpx 36rpx var(--color-primary-soft);
+  box-shadow:
+    var(--shadow-card),
+    inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .slot-card--removed {
@@ -207,7 +209,7 @@ function replaceSlot() {
 
 .slot-card__slot {
   display: block;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -225,8 +227,8 @@ function replaceSlot() {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -244,8 +246,7 @@ function replaceSlot() {
   margin-top: 16rpx;
 }
 
-.slot-card__meta-item,
-.tag-row__item {
+.slot-card__meta-item {
   padding: 8rpx 14rpx;
   border-radius: var(--radius-pill);
   font-size: var(--font-size-xs);
@@ -262,8 +263,11 @@ function replaceSlot() {
 }
 
 .tag-row__item {
-  background: rgba(255, 220, 168, 0.24);
-  color: #8b4d12;
+  padding: 8rpx 14rpx;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .constraint-row {
@@ -280,8 +284,9 @@ function replaceSlot() {
 }
 
 .constraint-chip--active {
-  background: rgba(213, 236, 255, 0.9);
-  color: var(--color-text);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .constraint-chip--disabled,

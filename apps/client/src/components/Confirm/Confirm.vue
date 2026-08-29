@@ -66,7 +66,7 @@ function acceptConfirm() {
 .confirm-mask {
   position: absolute;
   inset: 0;
-  background: var(--login-popup-backdrop-bg);
+  background: var(--color-surface-mask-medium);
   opacity: 0;
   transition: opacity 220ms ease;
 }
@@ -94,10 +94,11 @@ function acceptConfirm() {
   width: 100%;
   max-width: 620rpx;
   overflow: hidden;
-  border: 1rpx solid var(--color-border);
   border-radius: 0 0 var(--radius-xs) var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   opacity: 0;
   transform: translate3d(0, 20rpx, 0) scale(0.96);
   transition: opacity 240ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -125,23 +126,23 @@ function acceptConfirm() {
   width: 400rpx;
   height: 208rpx;
   border-radius: 0 0 0 220rpx;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--color-primary-soft) 100%);
+  background: linear-gradient(180deg, var(--feedback-glow-start) 0%, var(--feedback-glow-primary-end) 100%);
   opacity: 0.82;
 }
 
 .confirm-card--danger .confirm-card__glow {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--color-danger-soft) 100%);
+  background: linear-gradient(180deg, var(--feedback-glow-start) 0%, var(--feedback-glow-danger-end) 100%);
 }
 
 .confirm-card__accent {
   position: relative;
   z-index: 1;
   height: 10rpx;
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--theme-accent) 100%);
+  background: var(--feedback-line-primary);
 }
 
 .confirm-card--danger .confirm-card__accent {
-  background: linear-gradient(90deg, var(--color-danger) 0%, #f6ab62 100%);
+  background: var(--feedback-line-danger);
 }
 
 .confirm-card__body {
@@ -187,24 +188,25 @@ function acceptConfirm() {
 }
 
 .confirm-card__button--ghost {
-  border: 1rpx solid var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .confirm-card__button--primary {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .confirm-card__button--danger {
-  background: var(--color-danger-button-bg);
-  color: var(--color-danger-button-text);
-  box-shadow: 0 18rpx 32rpx var(--color-danger-soft);
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+  box-shadow: var(--button-danger-shadow);
+  -webkit-backdrop-filter: var(--button-danger-filter);
+  backdrop-filter: var(--button-danger-filter);
 }
 </style>

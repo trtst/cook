@@ -110,9 +110,7 @@ function handleFieldClick() {
   min-height: 0;
   padding: 36rpx;
   padding-top: calc(75% - 36rpx);
-  background:
-    linear-gradient(140deg, var(--entry-side-mint-bg) 0%, var(--entry-board-bg) 48%, var(--entry-photo-bg) 100%),
-    linear-gradient(180deg, var(--color-surface-mask-weak) 0%, var(--color-surface-mask-medium) 100%);
+  background: var(--page-cover-fresh-shell-bg);
 }
 
 .image-field--cover.image-field--filled {
@@ -136,14 +134,14 @@ function handleFieldClick() {
 }
 
 .image-field--cover .image-field__title {
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.2;
 }
 
 .image-field--cover .image-field__desc {
-  color: var(--entry-side-muted-text);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -216,19 +214,26 @@ function handleFieldClick() {
   z-index: 19;
   height: 50rpx;
   padding: 0 15rpx;
+  border: 0;
   border-radius: var(--radius-xs);
-  background: var(--entry-button-bg);
-  color: var(--entry-button-color);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-size: 20rpx;
   line-height: 50rpx;
-  box-shadow: var(--entry-button-shadow);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
+}
+
+.image-field__action::after {
+  border: 0;
 }
 
 .image-field__clear {
   z-index: 1;
-  color: var(--color-white);
+  color: var(--color-text-inverse);
   font-size: 24rpx;
   line-height: 1.4;
-  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.18);
+  text-shadow: 0 2rpx 10rpx var(--color-shadow-overlay);
 }
 </style>

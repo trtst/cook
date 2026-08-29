@@ -226,7 +226,10 @@ function submit() {
   justify-content: center;
   height: 70rpx;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--color-surface-muted) 78%, var(--color-surface));
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   color: var(--color-text-secondary);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
@@ -286,18 +289,18 @@ function submit() {
 }
 
 .plan-arrange-sheet__button--confirm {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .plan-arrange-sheet__button--cancel {
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .plan-arrange-sheet__submit {
@@ -307,15 +310,13 @@ function submit() {
   width: 100%;
   height: 92rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 28rpx;
   font-weight: 700;
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .plan-arrange-sheet__submit--disabled {

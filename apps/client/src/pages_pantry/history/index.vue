@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="采购记录">
     <view class="filter-row">
       <view
@@ -39,15 +39,19 @@
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { useSessionStore } from "@/stores/session";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
 const status = ref<"BOUGHT" | "DELETED">("BOUGHT");
@@ -105,8 +109,9 @@ function changeStatus(next: "BOUGHT" | "DELETED") {
 }
 
 .filter-chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .notice,
@@ -114,7 +119,10 @@ function changeStatus(next: "BOUGHT" | "DELETED") {
   margin-top: var(--space-md);
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .list {

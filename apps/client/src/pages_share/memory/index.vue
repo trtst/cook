@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="活动回忆卡">
     <template>
       <view v-if="errorText" class="notice" @click="loadPage">
@@ -91,7 +91,7 @@
               <text class="setting-row__title">展示参与成员</text>
               <text class="setting-row__desc">只展示确认昵称与头像摘要，不带出投票、购物和冰箱信息。</text>
             </view>
-            <switch :checked="showParticipants" color="#d66a1f" @change="handleParticipantsChange" />
+            <switch :checked="showParticipants" color="var(--color-support-action)" @change="handleParticipantsChange" />
           </view>
 
           <view class="field-block">
@@ -136,6 +136,8 @@ import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatMealSlot, type MealSlot } from "@/utils/meal-slot";
@@ -159,6 +161,8 @@ interface MemoryCardView {
 }
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const mode = ref<PageMode>("empty");
 const loading = ref(false);
@@ -522,8 +526,10 @@ function stopClock() {
 .share-box,
 .action-card {
   padding: var(--space-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .empty-wrap {
@@ -534,8 +540,8 @@ function stopClock() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 243, 219, 0.96);
-  color: #8b4d12;
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .notice__text,
@@ -563,13 +569,11 @@ function stopClock() {
 }
 
 .memory-card {
-  background:
-    radial-gradient(circle at top right, rgba(255, 219, 145, 0.32), transparent 36%),
-    linear-gradient(160deg, rgba(255, 248, 236, 0.98), rgba(255, 255, 255, 0.98));
+  background: var(--material-card-accent-bg);
 }
 
 .memory-card__eyebrow {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -621,7 +625,7 @@ function stopClock() {
 .quote-card {
   padding: 20rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--color-surface-soft-card);
 }
 
 .memory-menu__name,
@@ -649,7 +653,7 @@ function stopClock() {
 .memory-card__footer {
   margin-top: 24rpx;
   padding-top: 24rpx;
-  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+  border-top: 1rpx solid var(--color-divider);
 }
 
 .share-box__header {
@@ -700,10 +704,13 @@ function stopClock() {
   min-height: 180rpx;
   margin-top: 16rpx;
   padding: 20rpx 24rpx;
-  border: 1rpx solid var(--color-border);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   box-sizing: border-box;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .action-row {
@@ -720,12 +727,19 @@ function stopClock() {
 }
 
 .primary {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  border: 0;
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .secondary {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  border: 0;
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 </style>

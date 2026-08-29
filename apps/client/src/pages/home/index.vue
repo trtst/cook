@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     title=""
     current-tab="home"
@@ -18,56 +18,38 @@
     <view class="home-nav-backdrop" :style="navBackdropStyle" />
     <scroll-view class="table-scroll" scroll-y :show-scrollbar="false" @scroll="handleHomeScroll">
       <view class="table-page">
+        <view class="theme-probe" aria-hidden="true">
+          <view class="theme-probe__input" />
+          <view class="theme-probe__control" />
+        </view>
         <view class="table-hero" :style="heroStyle">
-          <view class="hero-main">
-            <view class="hero-copy">
-              <text class="hero-copy__eyebrow">{{ heroEyebrow }}</text>
-              <text class="hero-copy__title">{{ heroTitle }}</text>
-              <text class="hero-copy__description">{{ heroDescription }}</text>
-              <view class="hero-copy__actions">
-                <view class="hero-copy__button hero-copy__button--primary" @click="triggerHeroPrimaryAction">
-                  <text class="hero-copy__button-text">{{ heroPrimaryActionText }}</text>
-                </view>
-                <view
-                  v-if="heroSecondaryActionText"
-                  class="hero-copy__button hero-copy__button--ghost"
-                  @click="triggerHeroSecondaryAction"
-                >
-                  <text class="hero-copy__button-text hero-copy__button-text--ghost">{{ heroSecondaryActionText }}</text>
-                </view>
+          <view class="hero-banner" hover-class="hero-banner--hover" hover-stay-time="100" @click="openHomeEntry(mainFeatureCard)">
+            <image v-if="mainFeatureCard?.imageUrl" class="hero-banner__image" :src="mainFeatureCard.imageUrl" mode="aspectFill" />
+            <view class="hero-banner__shade" />
+            <view class="hero-banner__copy">
+              <text class="hero-banner__eyebrow">本周厨房主题</text>
+              <text class="hero-banner__title">{{ heroTitle }}</text>
+              <text class="hero-banner__description">{{ heroDescription }}</text>
+              <view v-if="mainFeatureCard" class="hero-banner__action">
+                <text class="hero-banner__action-text">{{ heroPrimaryActionText }}</text>
               </view>
-            </view>
-
-            <view class="table-scene">
-              <view class="table-scene__cloth" />
-              <view class="table-scene__plate">
-                <view class="table-scene__rice" />
-                <view class="table-scene__leaf table-scene__leaf--left" />
-                <view class="table-scene__leaf table-scene__leaf--right" />
-                <view class="table-scene__egg" />
-              </view>
-              <view class="table-scene__bowl" />
-              <view class="table-scene__cup" />
             </view>
           </view>
         </view>
 
         <view class="table-content">
           <view v-if="hasFeatureEntries" class="feature-board">
-            <view class="feature-card feature-card--main" hover-class="feature-card--hover" hover-stay-time="100" @click="openHomeEntry(mainFeatureCard)">
-              <view class="feature-card__copy">
-                <text class="feature-card__title">{{ mainFeatureCard?.title }}</text>
-                <text class="feature-card__subtitle">{{ mainFeatureCard?.subtitle }}</text>
-              </view>
-              <view class="feature-card__art feature-card__art--meal">
-                <image
-                  v-if="mainFeatureCard?.imageUrl"
-                  class="feature-card__art-image"
-                  :src="mainFeatureCard.imageUrl"
-                  mode="aspectFill"
-                />
-                <view v-else class="feature-card__plate">
-                  <view class="feature-card__food" />
+            <view class="feature-card feature-card--main feature-card--status" hover-class="feature-card--hover" hover-stay-time="100" @click="openWeekOverview">
+              <view class="feature-card__copy feature-card__copy--status">
+                <view class="feature-card__status-body">
+                  <view class="feature-card__title-row">
+                    <text class="cookfont feature-card__weekmark-icon" :class="currentWeekIconClass" aria-hidden="true" />
+                    <text class="feature-card__title">{{ weekOverviewState?.title || "这周吃饭安排" }}</text>
+                  </view>
+                  <text class="feature-card__subtitle">{{ weekOverviewSummary }}</text>
+                </view>
+                <view class="feature-card__status-action">
+                  <text class="feature-card__status-action-text">{{ weekOverviewActionText }}</text>
                 </view>
               </view>
             </view>
@@ -102,9 +84,7 @@
               <view class="feature-card__copy feature-card__copy--skeleton">
                 <Skeleton width="160rpx" height="30rpx" />
                 <Skeleton width="220rpx" height="22rpx" />
-              </view>
-              <view class="feature-card__art feature-card__art--skeleton">
-                <Skeleton width="100%" height="160rpx" radius="var(--radius-xs)" />
+                <Skeleton width="200rpx" height="22rpx" />
               </view>
             </view>
             <view class="feature-side">
@@ -136,14 +116,14 @@
               class="dock-action"
               hover-class="dock-action--hover"
               hover-stay-time="100"
-              @click="openHomeEntry(item)"
+              @click="openQuickEntry(item)"
             >
               <view class="dock-action__icon" :class="resolveQuickEntryClass(item.placement)">
                 <image v-if="item.imageUrl" class="dock-action__image" :src="item.imageUrl" mode="aspectFit" />
                 <text v-else-if="item.badgeText" class="dock-action__badge">{{ item.badgeText }}</text>
                 <view v-else class="dock-action__dot" />
               </view>
-              <text class="dock-action__title">{{ item.title }}</text>
+              <text class="dock-action__title">{{ resolveQuickEntryTitle(item) }}</text>
             </view>
           </view>
           <view v-else-if="showQuickEntriesSkeleton" class="action-dock">
@@ -177,6 +157,9 @@
               <text class="recent-arrangement__meta">{{ recentArrangementMeta }}</text>
               <text class="recent-arrangement__hint">{{ recentArrangementHintText }}</text>
               <view class="recent-arrangement__actions">
+                <view class="recent-arrangement__button" @click.stop="openRecentArrangementPrimaryAction(recentArrangement)">
+                  <text class="recent-arrangement__button-text">{{ resolveRecentArrangementActionText(recentArrangement.status) }}</text>
+                </view>
                 <view class="recent-arrangement__link" @click.stop="openRecentArrangementDetail(recentArrangement)">
                   <text class="recent-arrangement__link-text">查看详情</text>
                 </view>
@@ -203,8 +186,8 @@
 
           <view class="table-section table-section--recipes">
             <view class="section-heading">
-              <text class="section-heading__title">冰箱里现在能做</text>
-              <text class="section-heading__action" @click="navigateTo('/pages_meal/random/index')">随机一桌</text>
+              <text class="section-heading__title">基于当前库存推荐</text>
+              <text class="section-heading__action" @click="navigateTo('/pages_meal/random/index')">更多推荐</text>
             </view>
             <scroll-view v-if="fridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
               <view
@@ -240,16 +223,16 @@
                 </view>
               </view>
             </view>
-            <Empty v-else title="还没找到当前能做的菜" description="先录一点私房菜，或去随机一桌重新搭这顿饭。" />
+            <Empty v-else title="还没找到当前合适的推荐" description="先记一点食材，或者直接去随机一桌看看。" />
           </view>
 
           <view class="pantry-panel">
             <view class="pantry-panel__header">
               <view>
-                <text class="pantry-panel__label">买菜和冰箱</text>
-                <text class="pantry-panel__title">个人清单和冰箱</text>
+                <text class="pantry-panel__label">采购和库存都在这里</text>
+                <text class="pantry-panel__title">清单和冰箱</text>
               </view>
-              <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去买菜</text>
+              <text class="pantry-panel__action" @click="navigateTo('/pages_pantry/list/index')">去补清单</text>
             </view>
 
             <view class="pantry-list">
@@ -271,7 +254,7 @@
                 </view>
                 <text class="pantry-summary__hint">{{ pantrySummaryHintText }}</text>
               </view>
-              <Empty v-else title="暂无买菜和冰箱数据" description="开始记录购物和食材后会显示在这里。" />
+              <Empty v-else title="还没有记录购物和食材" description="先记食材，或者先建一张清单。" />
             </view>
           </view>
         </view>
@@ -292,7 +275,9 @@ import {
   type HomeNextMealState,
   type HomeNextMealStatus,
   type HomeRecentArrangement,
-  type HomeRecentArrangementStatus
+  type HomeRecentArrangementStatus,
+  type HomeWeekOverview,
+  type HomeWeekOverviewStatus
 } from "@/apis/home";
 import { fridgeApi } from "@/apis/fridge";
 import { shoppingApi } from "@/apis/shopping";
@@ -300,11 +285,14 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
-import { useUserStore } from "@/stores/user";
+import { useSettingsStore } from "@/stores/settings";
+import { formatThemeText, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/themes";
 import {
   buildRecentArrangementDetailUrl,
   resolveRecentArrangementFocus
@@ -316,6 +304,10 @@ import {
 } from "./pantry-summary";
 
 const pageStyle = usePageScrollStyle();
+const settingsStore = useSettingsStore();
+const { themeVars, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
+const currentThemeText = computed(() => formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value));
 
 const HOME_NAV_GAP = 16;
 const HOME_NAV_FADE_DISTANCE = 96;
@@ -323,7 +315,6 @@ const HIDDEN_HOME_TARGET_PREFIXES = ["/pages_restaurant/", "/pages_meal/poll/ind
 const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
-const userStore = useUserStore();
 const homeScrollTop = ref(0);
 const homeEntriesLoading = ref(false);
 const homeEntriesLoaded = ref(false);
@@ -333,6 +324,9 @@ const quickEntryItems = ref<HomeEntryItem[]>([]);
 const nextMealStateLoading = ref(false);
 const nextMealStateLoaded = ref(false);
 const nextMealState = ref<HomeNextMealState | null>(null);
+const weekOverviewLoading = ref(false);
+const weekOverviewLoaded = ref(false);
+const weekOverview = ref<HomeWeekOverview | null>(null);
 const fridgeRecipesLoading = ref(false);
 const fridgeRecipesLoaded = ref(false);
 const fridgeRecipes = ref<HomeFridgeRecipeItem[]>([]);
@@ -344,14 +338,15 @@ const pantryPendingShoppingCount = ref(0);
 const pantryActiveListCount = ref(0);
 let homeEntriesLoadPromise: Promise<void> | null = null;
 let nextMealStateLoadPromise: Promise<void> | null = null;
+let weekOverviewLoadPromise: Promise<void> | null = null;
 let fridgeRecipesLoadPromise: Promise<void> | null = null;
 let pantrySummaryLoadPromise: Promise<void> | null = null;
 
 const heroStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
-  backgroundImage: userStore.profile?.display?.homeBackgroundUrl ? `url(${userStore.profile.display.homeBackgroundUrl})` : undefined,
-  backgroundSize: userStore.profile?.display?.homeBackgroundUrl ? "cover" : undefined,
-  backgroundPosition: userStore.profile?.display?.homeBackgroundUrl ? "center" : undefined
+  backgroundImage: mainFeatureCard.value?.imageUrl ? `url(${mainFeatureCard.value.imageUrl})` : undefined,
+  backgroundSize: mainFeatureCard.value?.imageUrl ? "cover" : undefined,
+  backgroundPosition: mainFeatureCard.value?.imageUrl ? "center" : undefined
 }));
 const navProgress = computed(() => Math.min(1, Math.max(0, homeScrollTop.value / HOME_NAV_FADE_DISTANCE)));
 const navBackdropStyle = computed(() => ({
@@ -371,6 +366,7 @@ const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideF
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
 const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
+const showWeekOverviewSkeleton = computed(() => sessionStore.isLoggedIn && weekOverviewLoading.value && !weekOverviewLoaded.value);
 const showFridgeRecipesSkeleton = computed(
   () => sessionStore.isLoggedIn && !fridgeRecipes.value.length && (fridgeRecipesLoading.value || !fridgeRecipesLoaded.value)
 );
@@ -400,6 +396,30 @@ const pantrySummaryHintText = computed(() => {
   });
 });
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
+const weekOverviewState = computed<HomeWeekOverview | null>(() => weekOverview.value);
+const weekOverviewStatus = computed<HomeWeekOverviewStatus>(() => weekOverviewState.value?.status ?? "NO_ARRANGEMENT");
+const currentWeekIconClass = computed(() => {
+  const day = new Date().getDay();
+  const iconMap = [
+    "icon-week-sun",
+    "icon-week-mon",
+    "icon-week-tue",
+    "icon-week-wed",
+    "icon-week-thu",
+    "icon-week-fri",
+    "icon-week-sat"
+  ] as const;
+  return iconMap[day] ?? "icon-week-thu";
+});
+const weekOverviewSummary = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后再看这周怎么安排。";
+  if (showWeekOverviewSkeleton.value) return "正在整理这周安排。";
+  return weekOverviewState.value?.summary ?? "先安排几顿";
+});
+const weekOverviewActionText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "去安排";
+  return weekOverviewState.value?.actionText ?? "去安排";
+});
 const recentArrangement = computed(() => nextMealState.value?.arrangement ?? null);
 const showRecentArrangementCard = computed(() => Boolean(recentArrangement.value));
 const showRecentArrangementSkeleton = computed(
@@ -415,53 +435,21 @@ const recentArrangementMeta = computed(() => {
 });
 const recentArrangementStatusText = computed(() => (recentArrangement.value ? resolveRecentArrangementStatusText(recentArrangement.value.status) : ""));
 const recentArrangementHintText = computed(() => (recentArrangement.value ? resolveRecentArrangementHintText(recentArrangement.value) : ""));
-const heroEyebrow = computed(() => {
-  if (!sessionStore.isLoggedIn) return "下一顿状态";
-  if (nextMealStateLoading.value && !nextMealStateLoaded.value) return "正在整理安排";
-  if (homeNextStatus.value === "NO_ARRANGEMENT") return "还没有安排";
-  if (homeNextStatus.value === "COMPLETED") return "上一顿刚刚结束";
-  return recentArrangement.value ? formatRecentArrangementMetaLead(recentArrangement.value) : "下一步继续";
-});
-
 const heroTitle = computed(() => {
-  return "今晚吃什么？";
+  return mainFeatureCard.value?.title || "今晚吃什么？";
 });
 const heroDescription = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后把下一顿、购物清单和冰箱状态接起来。";
-  if (nextMealStateLoading.value && !nextMealStateLoaded.value) return "正在按你的安排、缺口和采购状态整理下一步。";
-  if (homeNextStatus.value === "NO_ARRANGEMENT") return "还没有安排，试试随机一桌，或者先看看冰箱里现在能做什么。";
-  if (homeNextStatus.value === "NEED_GAP_CHECK") {
-    if (!recentArrangement.value) return "先把这顿饭安排起来，再看缺什么。";
-    if (recentArrangement.value.menuCount > 0) return `${recentArrangementMeta.value}，先把菜单和缺口过一遍。`;
-    return `${formatRecentArrangementTime(recentArrangement.value)}，先把这顿要吃什么定下来。`;
-  }
-  if (homeNextStatus.value === "NEED_SHOPPING") {
-    if (!recentArrangement.value) return "还差一些食材，先去采购。";
-    return `${recentArrangementMeta.value}，先把缺的食材补齐。`;
-  }
-  if (homeNextStatus.value === "READY_TO_COOK") {
-    if (!recentArrangement.value) return "食材差不多齐了，可以开始做饭。";
-    return `${recentArrangementMeta.value}，这顿饭可以开始做了。`;
-  }
-  return recentArrangement.value ? `${recentArrangementMeta.value}，回看一下这顿饭，再决定下一顿。` : "上一顿已经结束，接下来继续安排新的一顿。";
+  return mainFeatureCard.value?.subtitle || "这一周吃什么，可以慢慢安排。";
 });
 const heroPrimaryActionText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "随机一桌";
-  if (homeNextStatus.value === "NO_ARRANGEMENT") return "随机一桌";
-  if (homeNextStatus.value === "NEED_GAP_CHECK") return recentArrangement.value?.menuCount ? "看看缺什么" : "去加菜";
-  if (homeNextStatus.value === "NEED_SHOPPING") return "去采购";
-  if (homeNextStatus.value === "READY_TO_COOK") return "开始做饭";
-  return "分享回忆";
+  return mainFeatureCard.value?.targetType === "WEB_VIEW" ? "查看专题" : "去看看";
 });
 const heroSecondaryActionText = computed(() => {
-  if (!sessionStore.isLoggedIn) return "看冰箱";
-  if (homeNextStatus.value === "NO_ARRANGEMENT") return "看冰箱";
-  if (homeNextStatus.value === "COMPLETED") return "看冰箱";
-  return "查看详情";
+  return "";
 });
 
 onShow(() => {
-  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
+  void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
 });
 
 async function loadHomeEntries(force = false) {
@@ -544,6 +532,40 @@ async function loadNextMealState(force = false) {
     });
 
   await nextMealStateLoadPromise;
+}
+
+async function loadWeekOverview(force = false) {
+  if (!sessionStore.isLoggedIn) {
+    weekOverview.value = null;
+    weekOverviewLoading.value = false;
+    weekOverviewLoaded.value = false;
+    return;
+  }
+
+  if (weekOverviewLoadPromise) {
+    await weekOverviewLoadPromise;
+    return;
+  }
+
+  if (!force && weekOverviewLoaded.value) return;
+
+  weekOverviewLoading.value = true;
+  weekOverviewLoadPromise = homeApi
+    .getWeekOverview()
+    .then(result => {
+      weekOverview.value = result;
+      weekOverviewLoaded.value = true;
+    })
+    .catch(() => {
+      weekOverview.value = null;
+      weekOverviewLoaded.value = true;
+    })
+    .finally(() => {
+      weekOverviewLoading.value = false;
+      weekOverviewLoadPromise = null;
+    });
+
+  await weekOverviewLoadPromise;
 }
 
 async function loadFridgeRecipes(force = false) {
@@ -644,6 +666,13 @@ function resolveQuickEntryClass(placement: HomeEntryPlacement) {
   return "quick-action--soft";
 }
 
+function resolveQuickEntryTitle(item: HomeEntryItem) {
+  if (item.placement === "QUICK_1") return "安排下一顿";
+  if (item.placement === "QUICK_2") return "看看食材";
+  if (item.placement === "QUICK_3") return "随机一桌";
+  return "补缺食材";
+}
+
 function resolveNavGreeting(hour: number) {
   if (hour >= 1 && hour < 7) {
     return {
@@ -703,6 +732,50 @@ function openHomeEntry(item: HomeEntryItem | null) {
   navigateTo(item.targetValue);
 }
 
+function openWeekOverview() {
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openWeekOverview();
+    });
+    return;
+  }
+  navigateTo(weekOverviewState.value?.targetValue || "/pages_meal/plan/index");
+}
+
+function openQuickEntry(item: HomeEntryItem) {
+  if (item.placement === "QUICK_1") {
+    if (!sessionStore.isLoggedIn) {
+      openLogin(() => {
+        openQuickEntry(item);
+      });
+      return;
+    }
+    navigateTo(weekOverviewState.value?.targetValue || "/pages_meal/plan/index");
+    return;
+  }
+  if (item.placement === "QUICK_2") {
+    if (!sessionStore.isLoggedIn) {
+      openLogin(() => {
+        openQuickEntry(item);
+      });
+      return;
+    }
+    navigateTo("/pages_pantry/index/index");
+    return;
+  }
+  if (item.placement === "QUICK_3") {
+    navigateTo("/pages_meal/random/index");
+    return;
+  }
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openQuickEntry(item);
+    });
+    return;
+  }
+  navigateTo(pantryActiveListCount.value > 0 ? "/pages_pantry/list/index" : "/pages_pantry/gap/index");
+}
+
 function requiresLoginForQuickEntry(item: HomeEntryItem) {
   if (item.placement !== "QUICK_1" && item.placement !== "QUICK_2" && item.placement !== "QUICK_3" && item.placement !== "QUICK_4") {
     return false;
@@ -724,30 +797,6 @@ function openFridgeRecipe(item: HomeFridgeRecipeItem) {
   navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.recipeId))}&kind=${kind}`);
 }
 
-function triggerHeroPrimaryAction() {
-  if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT") {
-    navigateTo("/pages_meal/random/index");
-    return;
-  }
-  if (!recentArrangement.value) {
-    navigateTo("/pages_pantry/index/index");
-    return;
-  }
-  if (homeNextStatus.value === "NEED_GAP_CHECK") {
-    navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, recentArrangement.value.menuCount > 0 ? "shopping" : "menu"));
-    return;
-  }
-  if (homeNextStatus.value === "NEED_SHOPPING") {
-    navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "shopping"));
-    return;
-  }
-  if (homeNextStatus.value === "READY_TO_COOK") {
-    navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "assistant"));
-    return;
-  }
-  navigateTo(buildRecentArrangementDetailUrl(recentArrangement.value, "memory"));
-}
-
 function fridgeFitText(value: HomeFridgeRecipeItem["fridgeFit"]) {
   if (value === "HIGH") return "现在就能做";
   if (value === "MEDIUM") return "差一点就能做";
@@ -762,16 +811,6 @@ function fridgeRecipeMeta(item: HomeFridgeRecipeItem) {
     segments.push(`已配上${item.matchedIngredientCount}样`);
   }
   return segments.join(" · ");
-}
-
-function triggerHeroSecondaryAction() {
-  if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT" || homeNextStatus.value === "COMPLETED") {
-    navigateTo("/pages_pantry/index/index");
-    return;
-  }
-  if (recentArrangement.value) {
-    openRecentArrangementDetail(recentArrangement.value);
-  }
 }
 
 function openRecentArrangementPrimaryAction(item: HomeRecentArrangement) {
@@ -790,16 +829,20 @@ function navigateTo(url: string) {
   void uniPlatform.navigation.navigateTo(url);
 }
 
-function formatRecentArrangementMetaLead(item: HomeRecentArrangement) {
-  return `${formatRecentArrangementTime(item)} · ${item.participantCount}人`;
-}
-
 function resolveRecentArrangementStatusText(status: HomeRecentArrangementStatus) {
   if (status === "EMPTY_MENU") return "还没定菜单";
   if (status === "PENDING_CONFIRM") return "待确认菜单";
   if (status === "PENDING_SHOPPING") return "待采购";
   if (status === "READY_TO_COOK") return "可以开始做饭";
   return "该分享回忆了";
+}
+
+function resolveRecentArrangementActionText(status: HomeRecentArrangementStatus) {
+  if (status === "EMPTY_MENU") return "去加菜";
+  if (status === "PENDING_CONFIRM") return "确认菜单";
+  if (status === "PENDING_SHOPPING") return "去采购";
+  if (status === "READY_TO_COOK") return "开始做饭";
+  return "分享回忆";
 }
 
 function resolveRecentArrangementHintText(item: HomeRecentArrangement) {
@@ -833,34 +876,56 @@ function resolveDayDiff(target: Date, base: Date) {
   return Math.round((targetDay - baseDay) / 86400000);
 }
 
+function readComputedStyle(selector: string, styleNames: string[]) {
+  return new Promise<Record<string, string>>((resolve) => {
+    uni
+      .createSelectorQuery()
+      .select(selector)
+      .fields({ computedStyle: styleNames } as never, (result) => {
+        resolve((result as Record<string, string> | null) ?? {});
+      })
+      .exec();
+  });
+}
+
+async function readThemeProbeState() {
+  const [inputStyle] = await Promise.all([readComputedStyle(".theme-probe__input", ["borderTopColor"])]);
+
+  return {
+    materialInputBorder: inputStyle.borderTopColor
+  };
+}
+
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
   await sessionStore.setSession(snapshot);
-  await Promise.all([loadHomeEntries(true), loadNextMealState(true), loadFridgeRecipes(true)]);
+  await Promise.all([loadHomeEntries(true), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
+}
+
+async function buildAutomatorThemeState() {
+  const probeState = await readThemeProbeState();
+  return {
+    themeMode: themeMode.value,
+    effectiveSkin: effectiveSkin.value,
+    effectivePalette: effectivePalette.value,
+    canSwitchPalette: canSwitchPalette.value,
+    currentThemeText: currentThemeText.value,
+    themePageStyle: themePageStyle.value,
+    colorPage: themeVars.value["--color-page"] ?? "",
+    pagePrimarySoftBg: themeVars.value["--page-primary-soft-bg"] ?? "",
+    materialCardBorder: themeVars.value["--material-card-border"] ?? "",
+    materialInputBorder: probeState.materialInputBorder ?? themeVars.value["--material-input-border"] ?? "",
+    materialControlBorder: themeVars.value["--material-control-border"] ?? "",
+    materialTabbarBorder: themeVars.value["--material-tabbar-border"] ?? "",
+    buttonSecondaryBorder: themeVars.value["--button-secondary-border"] ?? ""
+  };
 }
 
 function automatorReadRecentArrangementState() {
-  let heroPrimaryTarget = "";
-  if (!sessionStore.isLoggedIn || homeNextStatus.value === "NO_ARRANGEMENT") {
-    heroPrimaryTarget = "/pages_meal/random/index";
-  } else if (!recentArrangement.value) {
-    heroPrimaryTarget = "/pages_pantry/index/index";
-  } else if (homeNextStatus.value === "NEED_GAP_CHECK") {
-    heroPrimaryTarget = buildRecentArrangementDetailUrl(
-      recentArrangement.value,
-      recentArrangement.value.menuCount > 0 ? "shopping" : "menu"
-    );
-  } else if (homeNextStatus.value === "NEED_SHOPPING") {
-    heroPrimaryTarget = buildRecentArrangementDetailUrl(recentArrangement.value, "shopping");
-  } else if (homeNextStatus.value === "READY_TO_COOK") {
-    heroPrimaryTarget = buildRecentArrangementDetailUrl(recentArrangement.value, "assistant");
-  } else if (recentArrangement.value) {
-    heroPrimaryTarget = buildRecentArrangementDetailUrl(recentArrangement.value, "memory");
-  }
-
   return {
     homeNextStatus: homeNextStatus.value,
+    weekOverviewStatus: weekOverviewStatus.value,
     arrangementStatus: recentArrangement.value?.status ?? "",
-    heroPrimaryTarget,
+    weekOverviewTarget: weekOverviewState.value?.targetValue ?? "/pages_meal/plan/index",
     cardPrimaryTarget: recentArrangement.value
       ? buildRecentArrangementDetailUrl(recentArrangement.value, resolveRecentArrangementFocus(recentArrangement.value.status))
       : "",
@@ -868,9 +933,33 @@ function automatorReadRecentArrangementState() {
   };
 }
 
+async function automatorResetThemeSettings() {
+  await settingsStore.clearSettings();
+  return await buildAutomatorThemeState();
+}
+
+async function automatorApplyThemeSettings(snapshot: {
+  themeMode?: ThemeMode;
+  themeSkin?: ThemeSkin;
+  themePalette?: ThemePalette;
+}) {
+  if (snapshot.themeMode) {
+    await settingsStore.setThemeMode(snapshot.themeMode);
+  }
+  if (snapshot.themeSkin) {
+    await settingsStore.setThemeSkin(snapshot.themeSkin);
+  }
+  if (snapshot.themePalette) {
+    await settingsStore.setThemePalette(snapshot.themePalette);
+  }
+  return await buildAutomatorThemeState();
+}
+
 defineExpose({
   automatorApplySession,
-  automatorReadRecentArrangementState
+  automatorReadRecentArrangementState,
+  automatorResetThemeSettings,
+  automatorApplyThemeSettings
 });
 </script>
 
@@ -882,12 +971,11 @@ defineExpose({
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -900,16 +988,33 @@ defineExpose({
   min-height: 100%;
 }
 
+.theme-probe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-probe__input {
+  border: 1rpx solid var(--material-input-border);
+  background: var(--material-input-bg);
+}
+
+.theme-probe__control {
+  background: var(--material-control-bg);
+}
+
 .table-hero {
   position: relative;
   overflow: hidden;
   min-height: 560rpx;
   padding: 64rpx var(--space-page) 200rpx;
-  background:
-    linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),
-    radial-gradient(circle at 18% 26%, var(--entry-side-mint-bg) 0, transparent 30%),
-    radial-gradient(circle at 84% 18%, var(--entry-side-aqua-bg) 0, transparent 28%),
-    linear-gradient(145deg, var(--entry-primary-bg), var(--entry-board-bg));
+  background: var(--page-hero-shell-bg);
 }
 
 .table-hero::before {
@@ -919,15 +1024,7 @@ defineExpose({
   left: -42%;
   z-index: 3;
   height: 300rpx;
-  background:
-    radial-gradient(
-      100% 120% at 50% -30%,
-      transparent 46%,
-      var(--color-surface-mask-weak) 53%,
-      var(--color-surface-mask-medium) 62%,
-      var(--color-surface-mask-strong) 75%,
-      var(--color-surface) 90%
-    );
+  background: var(--page-hero-mask-bg);
   content: "";
   pointer-events: none;
 }
@@ -939,7 +1036,7 @@ defineExpose({
   width: 390rpx;
   height: 390rpx;
   border-radius: 50%;
-  background: var(--color-surface-mask-medium);
+  background: var(--page-hero-orb-bg);
   content: "";
 }
 
@@ -964,7 +1061,7 @@ defineExpose({
 }
 
 .restaurant-bar__label {
-  color: var(--entry-muted-text);
+  color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
@@ -973,12 +1070,96 @@ defineExpose({
 .restaurant-bar__name {
   overflow: hidden;
   max-width: 420rpx;
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-heavy);
   line-height: var(--line-height-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hero-banner {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  min-height: 340rpx;
+  margin-top: 30rpx;
+  border-radius: 40rpx;
+  background: var(--page-hero-halo-bg);
+  box-shadow: var(--material-card-shadow);
+}
+
+.hero-banner__shade,
+.hero-banner__image {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-banner__image {
+  width: 100%;
+  height: 100%;
+}
+
+.hero-banner__shade {
+  background: var(--overlay-hero-banner-shade);
+}
+
+.hero-banner__copy {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 340rpx;
+  padding: 36rpx;
+}
+
+.hero-banner__eyebrow,
+.hero-banner__title,
+.hero-banner__description {
+  display: block;
+  color: var(--color-text-inverse);
+}
+
+.hero-banner__eyebrow {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  opacity: 0.78;
+}
+
+.hero-banner__title {
+  margin-top: 14rpx;
+  font-size: 46rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.08;
+}
+
+.hero-banner__description {
+  margin-top: 14rpx;
+  max-width: 520rpx;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  opacity: 0.92;
+}
+
+.hero-banner__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  height: 88rpx;
+  margin-top: 22rpx;
+  padding: 0 26rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-overlay-control);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
+}
+
+.hero-banner__action-text {
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
 }
 
 .hero-main {
@@ -995,14 +1176,14 @@ defineExpose({
 }
 
 .hero-copy__eyebrow {
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
 }
 
 .hero-copy__title {
   margin-top: 18rpx;
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: 58rpx;
   font-weight: var(--font-weight-bold);
   line-height: 1.04;
@@ -1010,7 +1191,7 @@ defineExpose({
 
 .hero-copy__description {
   margin-top: 20rpx;
-  color: var(--entry-muted-text);
+  color: var(--color-text-tertiary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
 }
@@ -1033,17 +1214,20 @@ defineExpose({
 }
 
 .hero-copy__button--primary {
-  background: var(--entry-ink);
-  box-shadow: var(--shadow-card);
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .hero-copy__button--ghost {
-  border: 1rpx solid var(--color-border);
-  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  background: var(--button-secondary-bg);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .hero-copy__button-text {
-  color: var(--color-white);
+  color: var(--color-text-inverse);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1076,10 +1260,10 @@ defineExpose({
   bottom: 82rpx;
   width: 206rpx;
   height: 138rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  border: 4rpx solid var(--color-illustration-ink);
   border-radius: 50%;
-  background: var(--entry-photo-plate-bg);
-  box-shadow: var(--entry-board-shadow);
+  background: var(--color-illustration-plate);
+  box-shadow: var(--shadow-illustration);
   transform: rotate(-8deg);
 }
 
@@ -1090,20 +1274,20 @@ defineExpose({
   width: 78rpx;
   height: 58rpx;
   border-radius: 50%;
-  background: var(--entry-food-rice);
+  background: var(--color-illustration-rice);
   box-shadow:
-    -38rpx 12rpx 0 var(--entry-food-orange),
-    42rpx 10rpx 0 var(--entry-food-green),
-    4rpx 44rpx 0 var(--entry-food-yellow);
+    -38rpx 12rpx 0 var(--color-illustration-warm),
+    42rpx 10rpx 0 var(--color-illustration-fresh),
+    4rpx 44rpx 0 var(--color-illustration-sunny);
 }
 
 .table-scene__leaf {
   position: absolute;
   width: 68rpx;
   height: 30rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  border: 4rpx solid var(--color-illustration-ink);
   border-radius: 50%;
-  background: var(--entry-leaf-left);
+  background: var(--color-illustration-leaf-soft);
 }
 
 .table-scene__leaf--left {
@@ -1115,7 +1299,7 @@ defineExpose({
 .table-scene__leaf--right {
   right: 18rpx;
   bottom: 10rpx;
-  background: var(--entry-leaf-right);
+  background: var(--color-illustration-leaf-strong);
   transform: rotate(-20deg);
 }
 
@@ -1125,9 +1309,9 @@ defineExpose({
   right: 48rpx;
   width: 46rpx;
   height: 46rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  border: 4rpx solid var(--color-illustration-ink);
   border-radius: 50%;
-  background: var(--entry-egg-bg);
+  background: var(--color-illustration-egg);
 }
 
 .table-scene__bowl {
@@ -1136,10 +1320,10 @@ defineExpose({
   bottom: 54rpx;
   width: 128rpx;
   height: 88rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  border: 4rpx solid var(--color-illustration-ink);
   border-radius: 28rpx 28rpx 68rpx 68rpx;
-  background: var(--entry-side-aqua-bg);
-  box-shadow: var(--entry-board-shadow);
+  background: var(--color-illustration-bowl);
+  box-shadow: var(--shadow-illustration);
   transform: rotate(7deg);
 }
 
@@ -1149,9 +1333,9 @@ defineExpose({
   bottom: 56rpx;
   width: 66rpx;
   height: 78rpx;
-  border: var(--entry-illustration-border-width) solid var(--entry-outline);
+  border: 4rpx solid var(--color-illustration-ink);
   border-radius: 18rpx 18rpx 28rpx 28rpx;
-  background: var(--entry-side-mint-bg);
+  background: var(--color-illustration-cup);
   transform: rotate(-10deg);
 }
 
@@ -1175,8 +1359,15 @@ defineExpose({
 
 .feature-card--main {
   flex: 1 1 0;
-  padding: 20rpx;
-  background: var(--entry-primary-bg);
+  padding: 28rpx;
+  background: var(--color-illustration-panel-warm);
+}
+
+.feature-card--status {
+  display: flex;
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .feature-side {
@@ -1193,11 +1384,39 @@ defineExpose({
 }
 
 .feature-card--mint {
-  background: var(--entry-side-mint-bg);
+  background: var(--color-illustration-panel-fresh);
 }
 
 .feature-card--green {
-  background: var(--entry-side-aqua-bg);
+  background: var(--color-illustration-panel-accent);
+}
+
+.feature-card__title-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.feature-card__copy--status {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100%;
+}
+
+.feature-card__status-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.feature-card__weekmark-icon {
+  color: var(--color-icon-accent);
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .feature-card__title,
@@ -1208,18 +1427,53 @@ defineExpose({
 }
 
 .feature-card__title {
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: 28rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1;
 }
 
+.feature-card__status-action-text {
+  position: relative;
+  z-index: 2;
+  display: block;
+}
+
 .feature-card__subtitle {
   margin-top: 10rpx;
-  color: var(--entry-muted-text);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-  line-height: 1;
+  line-height: var(--line-height-normal);
+}
+
+.feature-card__copy--status .feature-card__title {
+  font-size: 36rpx;
+  line-height: 1.18;
+}
+
+.feature-card__copy--status .feature-card__subtitle {
+  margin-top: 18rpx;
+}
+
+.feature-card__status-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  height: 56rpx;
+  margin-top: 20rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-pill);
+  background: var(--button-secondary-bg);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
+}
+
+.feature-card__status-action-text {
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
 }
 
 .feature-card__art {
@@ -1230,8 +1484,8 @@ defineExpose({
   height: 160rpx;
   border-radius: var(--radius-xs);
   overflow: hidden;
-  background: var(--entry-photo-bg);
-  box-shadow: var(--entry-photo-shadow);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
 }
 
 .feature-card__art-image,
@@ -1246,9 +1500,9 @@ defineExpose({
   left: 50%;
   width: 132rpx;
   height: 88rpx;
-  border: 5rpx solid var(--entry-outline);
+  border: 5rpx solid var(--color-illustration-ink);
   border-radius: 50%;
-  background: var(--entry-photo-plate-bg);
+  background: var(--color-illustration-plate);
   transform: translateX(-50%) rotate(-6deg);
 }
 
@@ -1259,11 +1513,11 @@ defineExpose({
   width: 48rpx;
   height: 36rpx;
   border-radius: 50%;
-  background: var(--entry-food-rice);
+  background: var(--color-illustration-rice);
   box-shadow:
-    -24rpx 8rpx 0 var(--entry-food-orange),
-    26rpx 7rpx 0 var(--entry-food-green),
-    3rpx 28rpx 0 var(--entry-food-yellow);
+    -24rpx 8rpx 0 var(--color-illustration-warm),
+    26rpx 7rpx 0 var(--color-illustration-fresh),
+    3rpx 28rpx 0 var(--color-illustration-sunny);
 }
 
 .feature-card__mini {
@@ -1305,7 +1559,7 @@ defineExpose({
 }
 
 .feature-card__mini-text {
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-heavy);
 }
@@ -1314,8 +1568,8 @@ defineExpose({
   width: 22rpx;
   height: 22rpx;
   border-radius: var(--radius-pill);
-  background: var(--entry-food-yellow);
-  box-shadow: 12rpx -12rpx 0 -3rpx var(--entry-accent);
+  background: var(--color-illustration-sunny);
+  box-shadow: var(--shadow-illustration-dot);
 }
 
 .action-dock {
@@ -1335,10 +1589,10 @@ defineExpose({
 .recent-arrangement__panel {
   padding: 28rpx;
   border-radius: var(--radius-xs);
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--entry-side-mint-bg) 70%, transparent) 0, transparent 34%),
-    linear-gradient(135deg, color-mix(in srgb, var(--entry-board-bg) 90%, white 10%), var(--color-surface));
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   position: relative;
   z-index: 2;
 }
@@ -1354,10 +1608,8 @@ defineExpose({
   position: absolute;
   inset: 18rpx 0 0 0;
   border-radius: var(--radius-xs);
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--entry-side-mint-bg) 56%, transparent) 0, transparent 36%),
-    linear-gradient(135deg, color-mix(in srgb, var(--entry-board-bg) 82%, white 18%), color-mix(in srgb, var(--color-surface) 94%, white 6%));
-  box-shadow: 0 16rpx 44rpx rgba(34, 33, 31, 0.08);
+  background: var(--page-cover-fresh-bg);
+  box-shadow: var(--shadow-card);
   transform-origin: center top;
 }
 
@@ -1433,7 +1685,7 @@ defineExpose({
 
 .recent-arrangement__status--head {
   flex: 0 0 auto;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
   line-height: 1.3;
@@ -1448,7 +1700,7 @@ defineExpose({
 }
 
 .recent-arrangement__status {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .recent-arrangement__hint {
@@ -1459,11 +1711,33 @@ defineExpose({
 }
 
 .recent-arrangement__actions {
+  gap: 18rpx;
   justify-content: flex-end;
 }
 
 .recent-arrangement__actions--skeleton {
   justify-content: flex-start;
+}
+
+.recent-arrangement__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 164rpx;
+  height: 72rpx;
+  padding: 0 26rpx;
+  border-radius: var(--radius-pill);
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
+}
+
+.recent-arrangement__button-text {
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.2;
 }
 
 .recent-arrangement__link {
@@ -1505,19 +1779,22 @@ defineExpose({
   width: 64rpx;
   height: 64rpx;
   border-radius: var(--radius-xs);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .dock-action__icon.quick-action--primary {
-  background: var(--entry-primary-bg);
+  background: var(--color-tag-primary-bg);
 }
 
 .dock-action__icon.quick-action--mint {
-  background: var(--entry-side-mint-bg);
+  background: var(--color-surface-muted);
 }
 
 .dock-action__icon.quick-action--aqua {
-  background: var(--entry-side-aqua-bg);
+  background: var(--color-tag-secondary-bg);
 }
 
 .dock-action__icon.quick-action--soft {
@@ -1530,7 +1807,7 @@ defineExpose({
 }
 
 .dock-action__badge {
-  color: var(--entry-ink);
+  color: var(--color-tag-primary-text);
   font-size: 28rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1;
@@ -1540,8 +1817,8 @@ defineExpose({
   width: 18rpx;
   height: 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--entry-food-yellow);
-  box-shadow: 10rpx -10rpx 0 -3rpx var(--entry-accent);
+  background: var(--color-illustration-sunny);
+  box-shadow: var(--shadow-illustration-dot);
 }
 
 .dock-action__title {
@@ -1555,16 +1832,17 @@ defineExpose({
 }
 
 .decision-card,
-.table-section,
-.pantry-panel {
-  box-shadow: var(--shadow-card);
+.table-section {
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .decision-card {
   overflow: hidden;
   padding: 30rpx;
-  border-radius: var(--entry-board-radius);
-  background: var(--entry-board-bg);
+  border-radius: var(--radius-card);
+  background: var(--material-card-bg);
 }
 
 .decision-card__header,
@@ -1588,7 +1866,7 @@ defineExpose({
 }
 
 .decision-card__label {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1605,11 +1883,11 @@ defineExpose({
   flex: 0 0 auto;
   padding: 12rpx 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
 }
 
 .decision-card__badge-text {
-  color: var(--color-primary-active);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
 }
@@ -1638,11 +1916,11 @@ defineExpose({
   width: 44rpx;
   height: 44rpx;
   border-radius: var(--radius-pill);
-  background: var(--entry-button-bg);
+  background: var(--color-tag-primary-bg);
 }
 
 .candidate-item__rank-text {
-  color: var(--entry-button-color);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -1675,7 +1953,7 @@ defineExpose({
 .candidate-item__votes {
   flex: 0 0 auto;
   margin-left: 14rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1697,7 +1975,7 @@ defineExpose({
   width: 50%;
   height: 100%;
   border-radius: var(--radius-pill);
-  background: var(--color-primary);
+  background: var(--button-primary-bg);
 }
 
 .decision-progress__text {
@@ -1726,17 +2004,16 @@ defineExpose({
 
 .decision-card__action {
   flex: 0 0 auto;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
 
-.table-section,
-.pantry-panel {
+.table-section {
   margin-top: 50rpx;
   padding: 28rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
 }
 
 .section-heading {
@@ -1753,7 +2030,7 @@ defineExpose({
 }
 
 .section-heading__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
@@ -1780,19 +2057,19 @@ defineExpose({
 }
 
 .feed-item__avatar--rose {
-  background: var(--entry-primary-bg);
+  background: var(--color-tag-primary-bg);
 }
 
 .feed-item__avatar--green {
-  background: var(--entry-side-mint-bg);
+  background: var(--color-surface-muted);
 }
 
 .feed-item__avatar--blue {
-  background: var(--entry-side-aqua-bg);
+  background: var(--color-tag-secondary-bg);
 }
 
 .feed-item__avatar-text {
-  color: var(--entry-ink);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1832,7 +2109,13 @@ defineExpose({
 }
 
 .pantry-panel {
-  background: linear-gradient(135deg, var(--entry-side-aqua-bg), var(--color-surface));
+  margin-top: 50rpx;
+  padding: 28rpx;
+  border-radius: var(--radius-xs);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
+  background: var(--color-illustration-panel-accent);
 }
 
 .pantry-panel__header {
@@ -1864,8 +2147,8 @@ defineExpose({
   flex: 0 0 auto;
   padding: 14rpx 22rpx;
   border-radius: var(--radius-pill);
-  background: var(--entry-button-bg);
-  color: var(--entry-button-color);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
@@ -1895,7 +2178,7 @@ defineExpose({
   gap: 10rpx;
   padding: 20rpx 18rpx;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--color-surface) 90%, white 10%);
+  background: var(--color-surface-raised);
 }
 
 .pantry-summary__value,
@@ -1927,7 +2210,7 @@ defineExpose({
   min-height: 72rpx;
   padding: 0 18rpx;
   border-radius: var(--radius-md);
-  background: var(--entry-photo-bg);
+  background: var(--color-surface-soft);
 }
 
 .pantry-item__dot {
@@ -1938,15 +2221,15 @@ defineExpose({
 }
 
 .pantry-item__dot--danger {
-  background: var(--entry-food-orange);
+  background: var(--color-state-danger-base);
 }
 
 .pantry-item__dot--warning {
-  background: var(--entry-food-yellow);
+  background: var(--color-state-warning-base);
 }
 
 .pantry-item__dot--ok {
-  background: var(--entry-food-green);
+  background: var(--color-state-success-base);
 }
 
 .pantry-item__name {
@@ -1985,19 +2268,19 @@ defineExpose({
   overflow: hidden;
   height: 180rpx;
   border-radius: var(--radius-xs);
-  background: var(--entry-board-bg);
+  background: var(--color-surface-raised);
 }
 
 .family-recipe__visual--warm {
-  background: linear-gradient(145deg, var(--entry-primary-bg), var(--entry-photo-plate-bg));
+  background: var(--color-illustration-panel-warm);
 }
 
 .family-recipe__visual--fresh {
-  background: linear-gradient(145deg, var(--entry-side-mint-bg), var(--entry-board-bg));
+  background: var(--color-illustration-panel-fresh);
 }
 
 .family-recipe__visual--cool {
-  background: linear-gradient(145deg, var(--entry-side-aqua-bg), var(--entry-board-bg));
+  background: var(--color-illustration-panel-accent);
 }
 
 .family-recipe__plate {
@@ -2006,9 +2289,9 @@ defineExpose({
   bottom: 50rpx;
   width: 148rpx;
   height: 104rpx;
-  border: 6rpx solid var(--entry-outline);
+  border: 6rpx solid var(--color-illustration-ink);
   border-radius: 50%;
-  background: var(--entry-photo-plate-bg);
+  background: var(--color-illustration-plate);
   transform: rotate(-8deg);
 }
 
@@ -2019,11 +2302,11 @@ defineExpose({
   width: 48rpx;
   height: 38rpx;
   border-radius: 50%;
-  background: var(--entry-food-rice);
+  background: var(--color-illustration-rice);
   box-shadow:
-    -28rpx 8rpx 0 var(--entry-food-orange),
-    30rpx 8rpx 0 var(--entry-food-green),
-    2rpx 30rpx 0 var(--entry-food-yellow);
+    -28rpx 8rpx 0 var(--color-illustration-warm),
+    30rpx 8rpx 0 var(--color-illustration-fresh),
+    2rpx 30rpx 0 var(--color-illustration-sunny);
 }
 
 .family-recipe__name,

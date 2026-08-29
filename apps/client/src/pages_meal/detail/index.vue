@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     title=""
     full-screen
@@ -755,6 +755,8 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import ImageField from "@/components/ImageField.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingGapWindow, type ShoppingListSummary } from "@/apis/shopping";
 import { uniPlatform } from "@/platform/uni";
@@ -861,6 +863,8 @@ const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
 
 const NAV_FADE_DISTANCE = 132;
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const { navBarTotalHeight } = useSystemInfo();
 const loading = ref(false);
@@ -2914,12 +2918,11 @@ function clearFocusedSection() {
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -2960,7 +2963,7 @@ function clearFocusedSection() {
 }
 
 .meal-detail-state--error {
-  color: var(--color-danger);
+  color: var(--color-state-danger-text);
 }
 
 .meal-detail-scroll {
@@ -2984,10 +2987,7 @@ function clearFocusedSection() {
 }
 
 .meal-hero--plan {
-  background:
-    radial-gradient(circle at 12% 12%, color-mix(in srgb, var(--color-warning-soft) 70%, transparent) 0, transparent 28%),
-    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--color-primary-soft) 58%, transparent) 0, transparent 26%),
-    linear-gradient(160deg, color-mix(in srgb, var(--entry-board-bg) 88%, white 12%), color-mix(in srgb, var(--entry-primary-bg) 86%, var(--color-warning-soft) 14%));
+  background: var(--color-cover-empty-warm-bg);
 }
 
 .meal-hero--event {
@@ -3010,14 +3010,10 @@ function clearFocusedSection() {
   height: 100%;
 }
 
-.meal-hero__cover-static,
-.meal-hero__cover-empty {
+.meal-hero__cover-static {
   position: relative;
   width: 100%;
   height: 100%;
-}
-
-.meal-hero__cover-static {
   overflow: hidden;
 }
 
@@ -3028,15 +3024,16 @@ function clearFocusedSection() {
 }
 
 .meal-hero__cover-empty {
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   gap: 10rpx;
   padding: 36rpx;
   padding-top: calc(var(--hero-header-offset) + 24rpx);
-  background:
-    linear-gradient(140deg, var(--entry-side-mint-bg) 0%, var(--entry-board-bg) 48%, var(--entry-photo-bg) 100%),
-    linear-gradient(180deg, var(--color-surface-mask-weak) 0%, var(--color-surface-mask-medium) 100%);
+  background: var(--page-cover-fresh-shell-bg);
   box-sizing: border-box;
 }
 
@@ -3046,14 +3043,14 @@ function clearFocusedSection() {
 }
 
 .meal-hero__cover-empty-title {
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.2;
 }
 
 .meal-hero__cover-empty-desc {
-  color: var(--entry-side-muted-text);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -3066,7 +3063,7 @@ function clearFocusedSection() {
   width: 240rpx;
   height: 186rpx;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-surface-mask-weak) 82%, white 18%);
+  background: var(--color-surface-raised);
   content: "";
   pointer-events: none;
   transform: rotate(-18deg);
@@ -3079,7 +3076,7 @@ function clearFocusedSection() {
   left: 0;
   z-index: 1;
   height: 160rpx;
-  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--color-page) 92%, transparent) 100%);
+  background: linear-gradient(180deg, transparent 0%, var(--color-page) 100%);
   content: "";
   pointer-events: none;
 }
@@ -3153,13 +3150,13 @@ function clearFocusedSection() {
 }
 
 .meal-hero__tag--accent {
-  background: color-mix(in srgb, var(--color-warning-soft) 68%, var(--color-surface) 32%);
-  color: var(--color-warning-text);
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .meal-hero__tag--done {
-  background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface) 22%);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .meal-detail-content {
@@ -3168,7 +3165,7 @@ function clearFocusedSection() {
   padding: 116rpx var(--space-page) calc(200rpx + env(safe-area-inset-bottom));
   border-top-left-radius: 38rpx;
   border-top-right-radius: 38rpx;
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-page) 6%);
+  background: var(--color-surface-overlay-soft);
 }
 
 .meal-detail-content--plan-ended {
@@ -3191,16 +3188,18 @@ function clearFocusedSection() {
 .summary-card,
 .store-card {
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .summary-card {
   padding: 28rpx 30rpx;
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-page) 6%);
+  background: var(--material-card-bg);
   box-shadow:
-    0 18rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 32%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 74%, transparent);
+    var(--material-card-shadow),
+    inset 0 0 0 1rpx var(--color-surface-muted-frost);
 }
 
 .summary-card__topline {
@@ -3222,7 +3221,7 @@ function clearFocusedSection() {
 .summary-card__edit {
   flex: 0 0 auto;
   margin-top: 10rpx;
-  color: var(--theme-primary);
+  color: var(--color-icon-active);
   font-size: 32rpx;
 }
 
@@ -3256,19 +3255,19 @@ function clearFocusedSection() {
 }
 
 .summary-card__badge--planned {
-  background: color-mix(in srgb, var(--color-warning-soft) 76%, var(--color-surface) 24%);
-  color: var(--color-warning-text);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .summary-card__badge--confirmed,
 .summary-card__badge--done {
-  background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface) 22%);
-  color: var(--color-primary);
+  background: var(--color-tag-success-bg);
+  color: var(--color-tag-success-text);
 }
 
 .summary-card__badge--cancelled {
-  background: color-mix(in srgb, var(--color-danger-soft) 76%, var(--color-surface) 24%);
-  color: var(--color-danger-text);
+  background: var(--color-tag-danger-bg);
+  color: var(--color-tag-danger-text);
 }
 
 .summary-card__facts {
@@ -3278,7 +3277,7 @@ function clearFocusedSection() {
   margin-top: 24rpx;
   padding: 4rpx 0;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface-muted) 68%, transparent);
+  background: var(--color-surface-muted-frost);
 }
 
 .summary-card__fact {
@@ -3291,7 +3290,7 @@ function clearFocusedSection() {
 }
 
 .summary-card__fact + .summary-card__fact {
-  border-top: 1rpx solid color-mix(in srgb, var(--color-border-light) 82%, transparent);
+  border-top: 1rpx solid var(--color-border-light);
 }
 
 .summary-card__fact-main {
@@ -3304,7 +3303,7 @@ function clearFocusedSection() {
 .summary-card__fact-icon {
   flex: 0 0 auto;
   font-size: 30rpx;
-  color: var(--theme-primary);
+  color: var(--color-icon-active);
 }
 
 .summary-card__fact-label {
@@ -3334,7 +3333,7 @@ function clearFocusedSection() {
   align-items: stretch;
   gap: 16rpx;
   padding-top: 18rpx;
-  border-top: 1rpx solid color-mix(in srgb, var(--color-border-light) 78%, transparent);
+  border-top: 1rpx solid var(--color-border-light);
 }
 
 .summary-card__avatars-head {
@@ -3377,8 +3376,8 @@ function clearFocusedSection() {
   height: 64rpx;
   overflow: hidden;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--theme-primary) 12%, var(--color-surface));
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--theme-primary) 14%, transparent);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border);
 }
 
 .summary-card__avatar-image {
@@ -3389,7 +3388,7 @@ function clearFocusedSection() {
 
 .summary-card__avatar-fallback,
 .summary-card__avatar-more {
-  color: var(--theme-primary);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
   line-height: 1;
@@ -3399,7 +3398,7 @@ function clearFocusedSection() {
   flex: 0 0 auto;
   width: 1rpx;
   height: 38rpx;
-  background: color-mix(in srgb, var(--color-border) 78%, transparent);
+  background: var(--color-border);
 }
 
 .summary-card__invite {
@@ -3407,12 +3406,12 @@ function clearFocusedSection() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64rpx;
-  height: 64rpx;
+  width: 72rpx;
+  height: 72rpx;
   padding: 0;
-  border: 2rpx dashed color-mix(in srgb, var(--color-primary) 52%, var(--color-text-tertiary) 48%);
+  border: 2rpx dashed var(--color-border-active);
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-primary-soft) 18%);
+  background: var(--color-surface-primary-panel);
   box-sizing: border-box;
 }
 
@@ -3425,35 +3424,27 @@ function clearFocusedSection() {
 }
 
 .summary-card__invite-icon {
-  color: var(--color-primary);
+  color: var(--color-icon-active);
   font-size: 24rpx;
   font-weight: 700;
   line-height: 1;
 }
 
 .summary-card__avatar--more {
-  background: color-mix(in srgb, var(--color-warning-soft) 72%, var(--color-surface) 28%);
+  background: var(--color-state-warning-soft);
   box-shadow: none;
 }
 
 .store-card {
   margin-top: 18rpx;
   padding: 28rpx 30rpx;
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-warning-soft) 68%, transparent) 0 26%, transparent 27%),
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-warning-soft) 5%) 0%, var(--color-surface) 100%);
-  box-shadow:
-    0 20rpx 42rpx color-mix(in srgb, var(--color-warning-soft) 26%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-warning-soft) 34%, transparent);
+  background: var(--color-state-warning-card-bg);
+  box-shadow: var(--material-card-shadow);
 }
 
 .store-card--event {
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-primary-soft) 62%, transparent) 0 26%, transparent 27%),
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-primary-soft) 5%) 0%, var(--color-surface) 100%);
-  box-shadow:
-    0 20rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 24%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary-soft) 28%, transparent);
+  background: var(--color-state-primary-card-bg);
+  box-shadow: var(--material-card-shadow);
 }
 
 .store-card__head {
@@ -3521,18 +3512,18 @@ function clearFocusedSection() {
   min-height: 76rpx;
   padding: 0 18rpx;
   border-radius: 20rpx;
-  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  background: var(--color-surface-overlay-soft);
   color: var(--color-text-secondary);
 }
 
 .store-card__step--done {
-  background: color-mix(in srgb, var(--theme-primary) 14%, var(--color-surface));
-  color: var(--theme-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .store-card__step--current {
-  background: color-mix(in srgb, var(--color-warning-soft) 70%, var(--color-surface) 30%);
-  color: var(--color-warning-text);
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .store-card__step-dot {
@@ -3554,8 +3545,10 @@ function clearFocusedSection() {
   margin-top: 24rpx;
   padding: 32rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   transition:
     box-shadow 180ms ease,
     transform 180ms ease;
@@ -3563,13 +3556,13 @@ function clearFocusedSection() {
 
 .meal-panel--focus {
   box-shadow:
-    0 0 0 3rpx color-mix(in srgb, var(--color-primary) 22%, transparent),
+    0 0 0 3rpx var(--color-border-active),
     var(--shadow-card);
   transform: translateY(-4rpx);
 }
 
 .meal-panel--warning {
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  background: var(--color-state-warning-soft);
 }
 
 .meal-panel__head {
@@ -3634,8 +3627,9 @@ function clearFocusedSection() {
   flex-shrink: 0;
   padding: 14rpx 26rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
-  color: var(--theme-primary);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 600;
 }
@@ -3644,10 +3638,12 @@ function clearFocusedSection() {
   display: inline-flex;
   align-items: center;
   gap: 8rpx;
+  min-height: 72rpx;
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--theme-primary);
+  box-shadow: none;
+  color: var(--color-support-action);
 }
 
 .meal-inline-action--disabled {
@@ -3692,7 +3688,7 @@ function clearFocusedSection() {
 .meal-menu__dash {
   flex: 1;
   min-width: 32rpx;
-  border-bottom: 2rpx dashed color-mix(in srgb, var(--theme-primary) 18%, var(--color-divider));
+  border-bottom: 2rpx dashed var(--color-divider);
 }
 
 .meal-menu__status {
@@ -3718,7 +3714,7 @@ function clearFocusedSection() {
 }
 
 .meal-menu__status-text--action {
-  color: var(--theme-primary);
+  color: var(--color-support-action);
   font-weight: 600;
 }
 
@@ -3736,8 +3732,8 @@ function clearFocusedSection() {
   width: 44rpx;
   height: 44rpx;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--theme-primary) 12%, var(--color-surface));
-  color: var(--theme-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 20rpx;
   font-weight: 700;
 }
@@ -3757,7 +3753,7 @@ function clearFocusedSection() {
   margin-top: 28rpx;
   padding: 28rpx 26rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--theme-primary) 5%, var(--color-surface));
+  background: var(--color-support-notice);
 }
 
 .meal-menu-empty__title {
@@ -3783,8 +3779,8 @@ function clearFocusedSection() {
   min-height: 72rpx;
   padding: 0 26rpx;
   border-radius: 999rpx;
-  background: rgba(255, 245, 229, 0.96);
-  color: #8a561d;
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -3806,7 +3802,7 @@ function clearFocusedSection() {
   gap: 18rpx;
   padding: 20rpx 22rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--theme-primary) 4%, var(--color-surface-muted) 96%);
+  background: var(--color-surface-primary-panel-soft);
 }
 
 .wish-list__main {
@@ -3840,12 +3836,12 @@ function clearFocusedSection() {
 }
 
 .wish-list__tag {
-  background: color-mix(in srgb, var(--color-primary-soft) 84%, var(--color-surface) 16%);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .wish-list__count {
-  background: color-mix(in srgb, var(--theme-primary) 8%, var(--color-surface));
+  background: var(--color-support-notice);
   color: var(--color-text-secondary);
 }
 
@@ -3864,8 +3860,9 @@ function clearFocusedSection() {
   padding: 0 22rpx;
   border: none;
   border-radius: 999rpx;
-  background: var(--theme-primary);
-  color: #fff;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: var(--button-primary-shadow);
   font-size: 22rpx;
   font-weight: 700;
   line-height: 72rpx;
@@ -3876,8 +3873,8 @@ function clearFocusedSection() {
 }
 
 .wish-list__action--ghost {
-  background: color-mix(in srgb, var(--theme-primary) 8%, var(--color-surface));
-  color: var(--theme-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 .wish-list__action--disabled {
@@ -3897,7 +3894,7 @@ function clearFocusedSection() {
   gap: 18rpx;
   padding: 20rpx 22rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface-muted) 78%, transparent);
+  background: var(--color-surface-muted);
 }
 
 .bring-list__avatar {
@@ -3908,7 +3905,7 @@ function clearFocusedSection() {
   height: 64rpx;
   overflow: hidden;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  background: var(--color-tag-primary-bg);
   flex: 0 0 auto;
 }
 
@@ -3919,7 +3916,7 @@ function clearFocusedSection() {
 }
 
 .bring-list__avatar-fallback {
-  color: var(--theme-primary);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -3952,8 +3949,8 @@ function clearFocusedSection() {
   flex: 0 0 auto;
   padding: 10rpx 16rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-primary-soft) 82%, var(--color-surface) 18%);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 20rpx;
   font-weight: 700;
 }
@@ -3962,12 +3959,12 @@ function clearFocusedSection() {
   margin-top: 24rpx;
   padding: 22rpx 24rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  background: var(--color-state-warning-soft);
 }
 
 .meal-helper-banner__title {
   display: block;
-  color: var(--color-warning);
+  color: var(--color-state-warning-text);
   font-size: 24rpx;
   font-weight: 600;
 }
@@ -4000,7 +3997,7 @@ function clearFocusedSection() {
 .meal-helper__summary-item {
   padding: 20rpx 22rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--theme-primary) 6%, var(--color-surface));
+  background: var(--color-support-notice);
 }
 
 .meal-helper__summary-label {
@@ -4045,8 +4042,8 @@ function clearFocusedSection() {
 }
 
 .meal-helper__button--primary {
-  color: #fff;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  color: var(--color-text-inverse);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
@@ -4108,7 +4105,7 @@ function clearFocusedSection() {
 }
 
 .recipe-sheet__tip-link {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-weight: 600;
 }
 
@@ -4120,7 +4117,7 @@ function clearFocusedSection() {
 }
 
 .recipe-sheet__state--error {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
 }
 
 .recipe-sheet__scroll {
@@ -4144,21 +4141,21 @@ function clearFocusedSection() {
   padding: 22rpx 24rpx;
   border: 1rpx solid transparent;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface-muted) 76%, transparent);
+  background: var(--color-surface-muted-frost);
 }
 
 .recipe-sheet__row--pending-add {
-  border-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
-  background: color-mix(in srgb, var(--color-primary-soft) 82%, var(--color-surface) 18%);
+  border-color: var(--color-border-active);
+  background: var(--color-support-notice);
 }
 
 .recipe-sheet__row--selected {
-  border-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  border-color: var(--color-border-active);
 }
 
 .recipe-sheet__row--pending-remove {
-  border-color: color-mix(in srgb, var(--color-danger) 20%, transparent);
-  background: color-mix(in srgb, var(--color-danger-soft) 68%, var(--color-surface) 32%);
+  border-color: var(--color-state-danger-border);
+  background: var(--color-state-danger-soft);
 }
 
 .recipe-sheet__row--submitting {
@@ -4171,7 +4168,7 @@ function clearFocusedSection() {
   height: 112rpx;
   overflow: hidden;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  background: var(--color-support-info);
 }
 
 .recipe-sheet__cover-image,
@@ -4191,7 +4188,7 @@ function clearFocusedSection() {
 }
 
 .recipe-sheet__cover-icon {
-  color: color-mix(in srgb, var(--theme-primary) 72%, white 28%);
+  color: var(--color-icon-active);
   font-size: 34rpx;
 }
 
@@ -4222,34 +4219,34 @@ function clearFocusedSection() {
   min-width: 116rpx;
   min-height: 54rpx;
   padding: 0 18rpx;
-  border: 1rpx solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border: 1rpx solid var(--color-border-light);
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  background: var(--color-surface-overlay-weak);
   box-sizing: border-box;
 }
 
 .recipe-sheet__status--pending-add {
-  border-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
-  background: color-mix(in srgb, var(--color-primary-soft) 84%, var(--color-surface) 16%);
+  border-color: var(--color-border-active);
+  background: var(--color-tag-primary-bg);
 }
 
 .recipe-sheet__status--selected {
-  border-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
-  background: color-mix(in srgb, var(--color-primary-soft) 84%, var(--color-surface) 16%);
+  border-color: var(--color-border-active);
+  background: var(--color-tag-primary-bg);
 }
 
 .recipe-sheet__status--added {
   border-color: transparent;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  background: var(--color-support-notice);
 }
 
 .recipe-sheet__status--pending-remove {
   border-color: transparent;
-  background: color-mix(in srgb, var(--color-danger-soft) 76%, var(--color-surface) 24%);
+  background: var(--color-tag-danger-bg);
 }
 
 .recipe-sheet__status-text {
-  color: var(--color-primary);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -4269,11 +4266,11 @@ function clearFocusedSection() {
 }
 
 .recipe-sheet__status--added .recipe-sheet__status-text {
-  color: var(--theme-primary);
+  color: var(--color-tag-primary-text);
 }
 
 .recipe-sheet__status--pending-remove .recipe-sheet__status-text {
-  color: var(--color-danger-text);
+  color: var(--color-tag-danger-text);
 }
 
 .sheet-section {
@@ -4357,8 +4354,8 @@ function clearFocusedSection() {
 }
 
 .share-member--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 2rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .share-member__avatar,
@@ -4373,8 +4370,8 @@ function clearFocusedSection() {
   width: 64rpx;
   height: 64rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
 }
@@ -4401,7 +4398,7 @@ function clearFocusedSection() {
 }
 
 .share-member--active .share-member__check {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -4410,7 +4407,7 @@ function clearFocusedSection() {
 }
 
 .sheet-note--error {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
 }
 
 .participant-row__name {
@@ -4453,12 +4450,14 @@ function clearFocusedSection() {
 }
 
 .sheet-actions__button--cancel {
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }
@@ -4466,7 +4465,7 @@ function clearFocusedSection() {
 .menu-confirm__item {
   padding: 24rpx;
   border-radius: var(--radius-lg);
-  background: rgba(255, 249, 238, 0.96);
+  background: var(--color-state-warning-soft);
 }
 
 .menu-confirm__item-name {
@@ -4525,8 +4524,8 @@ function clearFocusedSection() {
 }
 
 .field-actions__button--ghost {
-  background: color-mix(in srgb, var(--theme-primary) 8%, var(--color-surface));
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 .field-actions__button--primary {
@@ -4543,7 +4542,7 @@ function clearFocusedSection() {
 }
 
 .meal-menu__deadline-action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .meal-footer {
@@ -4553,10 +4552,10 @@ function clearFocusedSection() {
   left: 0;
   z-index: 40;
   padding: 18rpx var(--space-page) calc(18rpx + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--color-surface) 94%, white 6%);
-  box-shadow: var(--shadow-floating);
-  -webkit-backdrop-filter: blur(12rpx);
-  backdrop-filter: blur(12rpx);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   box-sizing: border-box;
   transition:
     box-shadow 180ms ease,
@@ -4565,7 +4564,7 @@ function clearFocusedSection() {
 
 .meal-footer--focus {
   box-shadow:
-    0 0 0 3rpx color-mix(in srgb, var(--color-primary) 22%, transparent),
+    0 0 0 3rpx var(--color-border-active),
     var(--shadow-floating);
   transform: translateY(-4rpx);
 }
@@ -4615,8 +4614,8 @@ function clearFocusedSection() {
   height: 40rpx;
   padding: 0 8rpx;
   border-radius: 10rpx;
-  background: color-mix(in srgb, var(--color-danger) 88%, white 12%);
-  color: #fff;
+  background: var(--color-tag-danger-bg);
+  color: var(--color-tag-danger-text);
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1;
@@ -4638,12 +4637,12 @@ function clearFocusedSection() {
 }
 
 .meal-footer__join-label {
-  color: var(--color-warning);
+  color: var(--color-state-warning-text);
   font-size: 22rpx;
 }
 
 .meal-footer__join-value {
-  color: var(--color-warning);
+  color: var(--color-state-warning-text);
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -4658,7 +4657,7 @@ function clearFocusedSection() {
 .meal-footer__status-icon {
   flex: 0 0 auto;
   font-size: 24rpx;
-  color: var(--color-primary);
+  color: var(--color-icon-active);
 }
 
 .meal-footer__status-text,
@@ -4678,7 +4677,7 @@ function clearFocusedSection() {
 
 .meal-footer__status-meta {
   flex: 0 0 auto;
-  color: var(--color-warning);
+  color: var(--color-state-warning-text);
   font-weight: 600;
 }
 
@@ -4753,7 +4752,7 @@ function clearFocusedSection() {
   padding: 0 24rpx;
   border: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   box-sizing: border-box;
@@ -4794,13 +4793,13 @@ function clearFocusedSection() {
 }
 
 .meal-footer__button--ghost {
-  color: var(--theme-primary);
-  background: color-mix(in srgb, var(--theme-primary) 8%, var(--color-surface));
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
 }
 
 .meal-footer__button--primary {
   color: var(--button-primary-text);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
@@ -4812,7 +4811,7 @@ function clearFocusedSection() {
   margin-left: 10rpx;
   padding: 8rpx 12rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--color-surface-mask-weak);
   font-size: 22rpx;
   line-height: 1;
 }

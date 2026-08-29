@@ -5,6 +5,10 @@ async function clearSession() {
   await program.callUniMethod("removeStorageSync", "cook_meal_user_profile");
 }
 
+async function clearThemeSettings() {
+  await program.callUniMethod("removeStorageSync", "cook_meal_theme");
+}
+
 async function collectTexts(nodes) {
   const values = [];
 
@@ -21,21 +25,29 @@ describe("pages/me/index", () => {
 
   beforeAll(async () => {
     await clearSession();
+    await clearThemeSettings();
     page = await program.reLaunch("/pages/me/index");
     await page.waitFor(".service-row__title", 8000);
+    await page.callMethod("automatorClearSession");
+    await page.callMethod("automatorResetThemeSettings");
   });
 
   it("我的页维持通知中心后紧跟勋章且会员入口默认隐藏", async () => {
     expect(await page.path).toBe("pages/me/index");
 
     const serviceTitles = await collectTexts(await page.$$(".service-row__title"));
-    expect(serviceTitles.slice(0, 5)).toEqual(["通知中心", "我的勋章", "我的口味", "食材与单位", "厨具"]);
+    expect(serviceTitles.slice(0, 4)).toEqual(["通知中心", "我的勋章", "我的口味", "食材与单位"]);
+    expect(serviceTitles).not.toContain("厨具");
     expect(serviceTitles).not.toContain("权益中心");
     expect(serviceTitles).not.toContain("会员兑换码");
     expect(serviceTitles).not.toContain("我的会员");
 
     const overviewGrids = await page.$$(".overview-grid");
     expect(overviewGrids).toHaveLength(0);
+
+    expect(await page.$$(".quick-entry__icon")).toHaveLength(0);
+    expect(await page.$$(".service-row__icon")).toHaveLength(0);
+    expect(await page.$$(".knowledge-entry__icon")).toHaveLength(0);
   });
 
   it("未登录点击我的勋章直接进入落地页，不再在入口层拦登录", async () => {
@@ -74,5 +86,34 @@ describe("pages/me/index", () => {
     expect(await page.callMethod("automatorResolveEntryAuth", "购物清单")).toEqual({ found: true, requiresLogin: false });
     expect(await page.callMethod("automatorResolveEntryAuth", "食材")).toEqual({ found: true, requiresLogin: false });
     expect(await page.callMethod("automatorResolveEntryAuth", "我的勋章")).toEqual({ found: true, requiresLogin: false });
+  });
+
+  it("我的页的主题摘要和页面底色会跟随主题切换同步更新", async () => {
+    const defaultState = await page.callMethod("automatorReadThemeState");
+    expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");
+    expect(defaultState.colorPage).toBe("#f4f7f5");
+    expect(defaultState.themePageStyle).toContain("background-color: #f4f7f5;");
+
+    const minimalState = await page.callMethod("automatorApplyThemeSettings", {
+      themeSkin: "minimal-white"
+    });
+    expect(minimalState.currentThemeText).toBe("跟随系统 · 简白");
+    expect(minimalState.colorPage).toBe("#ffffff");
+    expect(minimalState.themePageStyle).toContain("background-color: #ffffff;");
+
+    const glassState = await page.callMethod("automatorApplyThemeSettings", {
+      themeSkin: "apple-glass"
+    });
+    expect(glassState.currentThemeText).toBe("跟随系统 · 磨砂玻璃");
+    expect(glassState.colorPage).toBe("#eef1f4");
+    expect(glassState.themePageStyle).toContain("background-color: #eef1f4;");
+
+    const warmState = await page.callMethod("automatorApplyThemeSettings", {
+      themeSkin: "default",
+      themePalette: "warm"
+    });
+    expect(warmState.currentThemeText).toBe("跟随系统 · 默认主题 · 暖黄");
+    expect(warmState.colorPage).toBe("#fbf4e5");
+    expect(warmState.themePageStyle).toContain("background-color: #fbf4e5;");
   });
 });

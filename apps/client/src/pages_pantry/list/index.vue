@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :show-left="false" navbar-layout="custom-left">
     <template #navbar-left>
       <view class="home-nav">
@@ -288,6 +288,8 @@ import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
@@ -305,6 +307,8 @@ import {
 import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 
@@ -1081,7 +1085,7 @@ defineExpose({
   z-index: -1;
   height: 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--theme-primary);
+  background: var(--color-support-action);
   opacity: 0.3;
   transform: rotate(-5deg);
 }
@@ -1090,8 +1094,10 @@ defineExpose({
 .list-card,
 .share-preview {
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .list-card__title,
@@ -1213,14 +1219,13 @@ defineExpose({
 }
 
 .list-card__badge--owner {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .list-card__badge--shared {
-  background: var(--color-surface-muted);
-  color: var(--color-info);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--color-state-info-soft);
+  color: var(--color-state-info-text);
 }
 
 .progress-block {
@@ -1231,14 +1236,14 @@ defineExpose({
   height: 14rpx;
   margin-top: 12rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
+  background: var(--color-support-notice);
   overflow: hidden;
 }
 
 .progress-block__value-bar {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
 }
 
 .list-card__actions {
@@ -1258,7 +1263,7 @@ defineExpose({
   width: 92rpx;
   height: 92rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
@@ -1281,12 +1286,14 @@ defineExpose({
 }
 
 .sheet-actions__button--cancel {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
@@ -1299,8 +1306,10 @@ defineExpose({
   margin-top: 20rpx;
   padding: 24rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .share-preview__title {
@@ -1404,8 +1413,8 @@ defineExpose({
 }
 
 .collaborator-chip__avatar {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
 }
@@ -1442,12 +1451,12 @@ defineExpose({
   width: 34rpx;
   height: 34rpx;
   border-radius: 50%;
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
 .collaborator-chip__remove-icon {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
   font-size: 18rpx;
 }
 
@@ -1462,7 +1471,11 @@ defineExpose({
   margin: 0;
   padding: 24rpx;
   border: 0;
-  background: var(--color-surface);
+  border-radius: var(--radius-xs);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   box-sizing: border-box;
   line-height: 1.5;
   text-align: left;
@@ -1492,7 +1505,7 @@ defineExpose({
 }
 
 .member-tag__icon {
-  color: #7c5600;
+  color: var(--color-state-warning-text);
   font-size: 28rpx;
 }
 
@@ -1513,8 +1526,8 @@ defineExpose({
 }
 
 .share-member--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 2rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .share-member__avatar,
@@ -1529,8 +1542,8 @@ defineExpose({
   width: 68rpx;
   height: 68rpx;
   border-radius: 50%;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
 }
@@ -1541,7 +1554,7 @@ defineExpose({
 }
 
 .share-member--active .share-member__check {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .sheet-facts {
@@ -1578,6 +1591,6 @@ defineExpose({
 }
 
 .sheet-note--error {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
 }
 </style>

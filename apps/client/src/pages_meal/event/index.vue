@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" :show-left="false" navbar-layout="custom-left" full-screen>
     <template #navbar-left>
       <view class="header-tabs">
@@ -189,6 +189,8 @@ import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
@@ -222,6 +224,8 @@ type EventCardItem = {
 };
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const EVENT_PAGE_SIZE = 20;
 const EMPTY_STAGE_COUNTS: DiningEventStageCounts = {
@@ -745,7 +749,7 @@ defineExpose({
   z-index: -1;
   height: 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--theme-primary);
+  background: var(--color-support-action);
   opacity: 0.3;
   transform: rotate(-5deg);
 }
@@ -803,8 +807,9 @@ defineExpose({
 }
 
 .filter-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .filter-chip__label,
@@ -818,7 +823,7 @@ defineExpose({
 
 .filter-chip--active .filter-chip__label,
 .filter-chip--active .filter-chip__count {
-  color: var(--color-primary-active);
+  color: var(--color-tag-primary-text);
 }
 
 .list-scroll-wrap {
@@ -842,14 +847,14 @@ defineExpose({
   margin-top: 20rpx;
   padding: 24rpx 26rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface-muted) 74%, transparent);
+  background: var(--color-surface-muted-frost);
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
 
 .notice--soft {
-  background: color-mix(in srgb, var(--color-warning-soft) 68%, var(--color-surface) 32%);
+  background: var(--color-state-warning-soft);
 }
 
 .event-list {
@@ -865,24 +870,23 @@ defineExpose({
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .event-card--hover {
   transform: translateY(-2rpx);
-  box-shadow:
-    0 20rpx 36rpx color-mix(in srgb, var(--color-surface-mask-strong) 20%, transparent),
-    0 8rpx 18rpx color-mix(in srgb, var(--color-primary-soft) 14%, transparent);
+  box-shadow: var(--material-card-shadow);
 }
 
 .event-card__top {
   position: relative;
   overflow: hidden;
   height: 260rpx;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--entry-photo-bg) 88%, white 12%) 0%, color-mix(in srgb, var(--entry-board-bg) 88%, var(--entry-side-mint-bg) 12%) 100%);
+  background: var(--page-cover-fresh-bg);
 }
 
 .event-card__body {
@@ -896,8 +900,8 @@ defineExpose({
   z-index: 2;
   padding: 10rpx 18rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
-  color: var(--color-warning-text);
+  background: var(--color-surface-overlay-soft);
+  color: var(--color-state-warning-text);
   font-size: 22rpx;
   font-weight: 600;
   line-height: 1;
@@ -928,7 +932,7 @@ defineExpose({
 }
 
 .event-card__cover-empty {
-  color: color-mix(in srgb, var(--entry-ink) 72%, white 28%);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   font-weight: 600;
   line-height: 1.4;
@@ -949,7 +953,7 @@ defineExpose({
 
 .event-card__row-icon {
   margin-top: 2rpx;
-  color: color-mix(in srgb, var(--color-text-secondary) 72%, transparent);
+  color: var(--color-icon-secondary);
   font-size: 22rpx;
   text-align: center;
 }
@@ -979,13 +983,13 @@ defineExpose({
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-primary-soft) 66%, var(--color-surface) 34%);
+  background: var(--color-support-notice);
   color: var(--color-text);
   font-size: 22rpx;
 }
 
 .event-card__menu-chip--more {
-  background: color-mix(in srgb, var(--color-surface-muted) 76%, transparent);
+  background: var(--color-surface-muted-frost);
   color: var(--color-text-secondary);
 }
 
@@ -996,7 +1000,7 @@ defineExpose({
   gap: 18rpx;
   margin-top: 22rpx;
   padding-top: 18rpx;
-  border-top: 1rpx solid color-mix(in srgb, var(--color-border) 62%, transparent);
+  border-top: 1rpx solid var(--color-border-light);
 }
 
 .event-card__organizer {
@@ -1007,7 +1011,7 @@ defineExpose({
 }
 
 .event-card__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: 600;
   white-space: nowrap;
@@ -1029,7 +1033,7 @@ defineExpose({
   width: 96rpx;
   height: 96rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 

@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="勋章详情" full-screen>
     <template #navbar-center>
       <text class="medal-navbar__title">勋章详情</text>
@@ -89,10 +89,14 @@ import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSessionStore } from "@/stores/session";
 import { formatMedalDate, formatMedalRange, formatMedalState, formatMedalStateHint, getMedalIconClass, resolveMedalImageUrl } from "@/pages_me/medal/present";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("medal-detail-sheet"));
 const sessionStore = useSessionStore();
 const loading = ref(false);
@@ -238,7 +242,7 @@ defineExpose({
 .notice,
 .hero-card {
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
 }
 
 .notice,
@@ -278,11 +282,10 @@ defineExpose({
   height: 26rpx;
   margin-top: -22rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, var(--color-divider) 100%);
+  background: linear-gradient(180deg, var(--color-shimmer-soft) 0%, var(--color-divider) 100%);
   box-shadow:
-    0 8rpx 18rpx rgba(44, 35, 30, 0.06),
-    inset 0 2rpx 6rpx rgba(255, 255, 255, 0.36);
-  filter: blur(0.4rpx);
+    0 8rpx 18rpx var(--color-shadow-overlay),
+    inset 0 2rpx 6rpx var(--color-shimmer-strong);
 }
 
 .hero-card--locked .hero-card__image,
@@ -291,7 +294,7 @@ defineExpose({
 }
 
 .hero-card__icon {
-  color: #fffdf5;
+  color: var(--color-text-inverse);
   font-size: 70rpx;
 }
 
@@ -320,19 +323,19 @@ defineExpose({
   line-height: 52rpx;
   padding: 0 18rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
 }
 
 .hero-card__pill--limited {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .hero-card__pill--earned {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .hero-card__pill--locked {
@@ -378,10 +381,10 @@ defineExpose({
   align-items: center;
   justify-content: center;
   padding: 24rpx var(--space-page) calc(24rpx + env(safe-area-inset-bottom));
-  background: var(--color-surface);
-  box-shadow: var(--shadow-floating);
-  -webkit-backdrop-filter: blur(12rpx);
-  backdrop-filter: blur(12rpx);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
 }
 
 .detail-footer__status {

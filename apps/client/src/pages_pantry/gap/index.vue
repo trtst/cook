@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="现在缺什么" full-screen :navbar-placeholder="false" navbar-transparent>
     <view class="gap-nav-backdrop" :style="navBackdropStyle" />
     <view class="gap-scroll-wrap">
@@ -159,6 +159,8 @@ import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -169,6 +171,8 @@ import { shoppingApi, type ShoppingGapItem, type ShoppingGapResponse, type Shopp
 import type { UUID } from "@/apis/http";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 
@@ -476,12 +480,11 @@ defineExpose({
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -503,11 +506,7 @@ defineExpose({
 
 .gap-hero {
   padding: 64rpx var(--space-page) 164rpx;
-  background:
-    linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),
-    radial-gradient(circle at 18% 26%, rgba(255, 220, 168, 0.46), transparent 30%),
-    radial-gradient(circle at 84% 18%, rgba(190, 228, 188, 0.34), transparent 28%),
-    linear-gradient(145deg, rgba(255, 246, 230, 0.96), rgba(252, 249, 242, 0.98));
+  background: var(--page-hero-bg);
 }
 
 .gap-content {
@@ -541,7 +540,7 @@ defineExpose({
 }
 
 .gap-hero__eyebrow {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -599,8 +598,8 @@ defineExpose({
   justify-content: space-between;
   padding: 22rpx 24rpx;
   border-radius: var(--radius-lg);
-  background: rgba(255, 243, 219, 0.96);
-  color: #8b4d12;
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .notice__action {
@@ -613,8 +612,8 @@ defineExpose({
   justify-content: space-between;
   padding: 24rpx;
   border-radius: var(--radius-lg);
-  background: rgba(255, 250, 241, 0.96);
-  box-shadow: 0 14rpx 28rpx rgba(120, 86, 33, 0.08);
+  background: var(--color-state-warning-soft);
+  box-shadow: var(--shadow-card);
 }
 
 .target-card--hover {
@@ -631,7 +630,7 @@ defineExpose({
 }
 
 .target-card__action {
-  color: #83511b;
+  color: var(--color-state-warning-text);
   font-weight: var(--font-weight-heavy);
 }
 
@@ -653,7 +652,7 @@ defineExpose({
 }
 
 .gap-section__toggle {
-  color: #83511b;
+  color: var(--color-state-warning-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -696,8 +695,11 @@ defineExpose({
   min-width: 156rpx;
   margin: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, #2f6f4e, #4d8f6d);
-  color: #fffdf8;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
   line-height: 1;
@@ -717,7 +719,7 @@ defineExpose({
 .gap-event {
   padding: 16rpx 18rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--color-surface-soft-card);
 }
 
 .gap-event__head {
@@ -771,13 +773,18 @@ defineExpose({
 }
 
 .sheet-actions__button--cancel {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, #2f6f4e, #4d8f6d);
-  color: #fffdf8;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .shopping-fab {
@@ -788,9 +795,11 @@ defineExpose({
   min-width: 200rpx;
   margin: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, #2f6f4e, #4d8f6d);
-  color: #fffdf8;
-  box-shadow: 0 18rpx 36rpx rgba(47, 111, 78, 0.26);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }

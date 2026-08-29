@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" :show-left="false" navbar-layout="custom-left" full-screen>
     <template #navbar-left>
       <view class="header-tabs">
@@ -301,6 +301,8 @@ import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
@@ -311,6 +313,8 @@ type SheetMode = IngredientUnitsTab | "ingredient-feedback";
 type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("ingredient-units-sheet"));
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
@@ -926,7 +930,7 @@ defineExpose({
   min-height: 84rpx;
   margin-top: 20rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 28rpx;
@@ -995,7 +999,7 @@ defineExpose({
   z-index: -1;
   height: 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--theme-primary);
+  background: var(--color-support-action);
   opacity: 0.3;
   transform: rotate(-5deg);
 }
@@ -1071,8 +1075,9 @@ defineExpose({
 }
 
 .category-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .category-chip__name {
@@ -1084,7 +1089,7 @@ defineExpose({
 }
 
 .category-chip--active .category-chip__name {
-  color: var(--color-primary-active);
+  color: var(--color-tag-primary-text);
 }
 
 .notice,
@@ -1092,7 +1097,7 @@ defineExpose({
 .ingredient-card,
 .unit-card {
   border-radius: var(--radius-xs);
-  background: var(--color-card);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
@@ -1106,7 +1111,7 @@ defineExpose({
 }
 
 .notice--error {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .empty-state__title {
@@ -1184,14 +1189,15 @@ defineExpose({
   max-width: calc(100% - 112rpx);
   padding: 8rpx 14rpx;
   border-radius: var(--radius-pill);
-  background: rgba(59, 40, 21, 0.42);
-  color: rgba(255, 255, 255, 0.94);
+  background: var(--color-surface-mask-medium);
+  color: var(--color-text-inverse-strong);
   font-size: 24rpx;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  backdrop-filter: blur(8rpx);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
 }
 
 .ingredient-card__notice {
@@ -1204,11 +1210,12 @@ defineExpose({
   gap: 6rpx;
   padding: 8rpx 14rpx;
   border-radius: var(--radius-pill);
-  background: rgba(59, 40, 21, 0.2);
+  background: var(--color-surface-mask-weak);
   color: var(--color-text-secondary);
   font-size: 20rpx;
   line-height: 1;
-  backdrop-filter: blur(8rpx);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
 }
 
 .ingredient-card__notice-icon {
@@ -1266,11 +1273,7 @@ defineExpose({
   width: 90rpx;
   height: 90rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }
@@ -1305,9 +1308,12 @@ defineExpose({
   width: 100%;
   height: 82rpx;
   padding: 0 24rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
   color: var(--color-text);
   font-size: 28rpx;
@@ -1321,9 +1327,12 @@ defineExpose({
   width: 100%;
   min-height: 164rpx;
   padding: 20rpx 24rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
   color: var(--color-text);
   font-size: 28rpx;
@@ -1355,9 +1364,9 @@ defineExpose({
 }
 
 .sheet-chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .sheet-unit-list {
@@ -1381,9 +1390,9 @@ defineExpose({
   gap: 10rpx;
   margin-bottom: 24rpx;
   padding: 24rpx;
-  border: 1rpx solid color-mix(in srgb, var(--color-primary) 14%, transparent);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-primary) 12%);
+  background: var(--color-surface-primary-panel);
+  box-shadow: var(--shadow-card);
 }
 
 .unit-guide__title {
@@ -1415,7 +1424,7 @@ defineExpose({
 
 .sheet__error {
   margin-top: 24rpx;
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -1445,16 +1454,14 @@ defineExpose({
 }
 
 .sheet-button--ghost {
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-button--primary {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   box-shadow: var(--button-primary-shadow);
 }

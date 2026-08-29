@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="我的口味" full-screen>
     <template #navbar-center>
       <text class="taste-navbar__title">我的口味</text>
@@ -79,13 +79,15 @@
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import tasteEmptyArt from "@/assets/me-page/taste-empty-state.svg";
 import { ApiClientError, UnauthorizedError } from "@/apis/http";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
@@ -94,6 +96,8 @@ type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "fl
 type TasteField = { key: TasteListKey; label: string; placeholder: string };
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const tasteItemMaxLength = 64;
 const tasteItemMaxCount = 50;
 
@@ -320,12 +324,14 @@ function getSaveErrorText(error: unknown) {
   flex: 0 0 auto;
   min-height: 60rpx;
   padding: 0 20rpx;
-  border: 1rpx solid var(--color-border);
+  border: 0;
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
-  color: var(--color-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .taste-status {
@@ -378,10 +384,12 @@ function getSaveErrorText(error: unknown) {
   min-height: 84rpx;
   margin-top: var(--space-sm);
   padding: 20rpx var(--space-md);
-  border: 0;
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface-muted);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   color: var(--color-text);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
@@ -402,7 +410,7 @@ function getSaveErrorText(error: unknown) {
 .taste-form__error {
   display: block;
   margin-top: var(--space-md);
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
   font-size: var(--font-size-sm);
 }
 
@@ -416,11 +424,7 @@ function getSaveErrorText(error: unknown) {
   padding: 0 34rpx;
   border: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 32rpx;

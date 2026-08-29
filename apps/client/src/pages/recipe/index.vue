@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout current-tab="recipe" :show-left="false" navbar-layout="custom-left" full-screen>
     <template #navbar-left>
       <view class="nav-tabs">
@@ -323,10 +323,14 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { getRecipeViewVersion } from "@/pages/recipe/utils/recipe-view-sync";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
+import { formatThemeText } from "@/themes";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 
 type RecipeTab = "my" | "inspiration";
@@ -363,8 +367,14 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
+const settingsStore = useSettingsStore();
+const { themeVars, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
+const currentThemeText = computed(() => {
+  return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
+});
 
 const pageSizeMap: Record<RecipeTab, number> = {
 	my: 20,
@@ -1004,8 +1014,45 @@ async function automatorApplySession(snapshot: { token: string; uid?: number; ex
 	await loadActiveTab({ force: true, source: "switch" });
 }
 
+function automatorReadThemeState() {
+	return {
+		themeMode: themeMode.value,
+		effectiveSkin: effectiveSkin.value,
+		effectivePalette: effectivePalette.value,
+		canSwitchPalette: canSwitchPalette.value,
+		currentThemeText: currentThemeText.value,
+		themePageStyle: themePageStyle.value,
+		colorPage: themeVars.value["--color-page"] ?? ""
+	};
+}
+
+async function automatorResetThemeSettings() {
+	await settingsStore.clearSettings();
+	return automatorReadThemeState();
+}
+
+async function automatorApplyThemeSettings(snapshot: {
+	themeMode?: ThemeMode;
+	themeSkin?: ThemeSkin;
+	themePalette?: ThemePalette;
+}) {
+	if (snapshot.themeMode) {
+		await settingsStore.setThemeMode(snapshot.themeMode);
+	}
+	if (snapshot.themeSkin) {
+		await settingsStore.setThemeSkin(snapshot.themeSkin);
+	}
+	if (snapshot.themePalette) {
+		await settingsStore.setThemePalette(snapshot.themePalette);
+	}
+	return automatorReadThemeState();
+}
+
 defineExpose({
-	automatorApplySession
+	automatorApplySession,
+	automatorReadThemeState,
+	automatorResetThemeSettings,
+	automatorApplyThemeSettings
 });
 
 </script>
@@ -1053,7 +1100,7 @@ defineExpose({
   z-index: -1;
   height: 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--theme-primary);
+  background: var(--color-support-action);
   opacity: 0.3;
   transform: rotate(-5deg);
 }
@@ -1158,9 +1205,10 @@ defineExpose({
 
 .category-chip--active,
 .filter-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .category-chip__name,
@@ -1174,7 +1222,7 @@ defineExpose({
 
 .category-chip--active .category-chip__name,
 .filter-chip--active {
-  color: var(--color-primary-active);
+  color: var(--color-tag-primary-text);
 }
 
 .filter-trigger-wrap {
@@ -1186,7 +1234,7 @@ defineExpose({
   display: flex;
   align-items: center;
   padding-left: 28rpx;
-  background: linear-gradient(90deg, var(--color-surface-mask-weak), var(--color-page) 28%);
+  background: var(--page-edge-fade-bg);
 }
 
 .filter-trigger {
@@ -1205,7 +1253,7 @@ defineExpose({
 }
 
 .filter-trigger--active {
-  color: var(--color-primary-active);
+  color: var(--color-support-action);
 }
 
 .filter-trigger__text {
@@ -1230,9 +1278,9 @@ defineExpose({
   padding: 0 8rpx;
   border: 4rpx solid var(--color-page);
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
   box-sizing: border-box;
-  color: var(--color-primary-foreground);
+  color: var(--color-tag-primary-text);
   font-size: 20rpx;
   font-weight: var(--font-weight-bold);
   line-height: 1;
@@ -1252,8 +1300,10 @@ defineExpose({
   max-width: calc(100% - 40rpx);
   padding: var(--space-md);
   border-radius: var(--radius-xs);
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
-  box-shadow: var(--shadow-floating);
+  background: var(--material-panel-bg);
+  box-shadow: var(--material-panel-shadow);
+  -webkit-backdrop-filter: var(--material-panel-filter);
+  backdrop-filter: var(--material-panel-filter);
   opacity: 0;
   pointer-events: none;
   transform: translateY(-8rpx) scale(0.98);
@@ -1306,7 +1356,7 @@ defineExpose({
 }
 
 .filter-actions__button--primary {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }
@@ -1315,7 +1365,10 @@ defineExpose({
 .recipe-card {
   padding: var(--space-md);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .notice {
@@ -1339,7 +1392,6 @@ defineExpose({
   min-width: 0;
   padding: 0;
   border: none;
-  box-shadow: 0 6rpx 14rpx rgba(57, 44, 31, 0.035);
 }
 
 .recipe-card--hover,
@@ -1351,7 +1403,7 @@ defineExpose({
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.94) 0%, rgba(245, 238, 227, 0.96) 100%);
+  background: var(--page-cover-fresh-bg);
 }
 
 .recipe-card__cover-tag {
@@ -1493,9 +1545,9 @@ defineExpose({
   gap: 8rpx;
   padding: 14rpx 24rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
-  box-shadow: var(--shadow-floating);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  box-shadow: var(--button-primary-shadow);
   transform: translateX(0);
   transition: transform 180ms ease, opacity 180ms ease;
 }
@@ -1544,7 +1596,7 @@ defineExpose({
 }
 
 .action-card__icon-text {
-  color: var(--entry-outline);
+  color: var(--color-icon-accent);
   font-size: 42rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1;

@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     :title="''"
     full-screen
@@ -805,6 +805,8 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { buildIngredientUnitHint, resolveRecommendedIngredientUnitName } from "@/pages_recipe/ingredient-unit-policy";
 import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
@@ -912,6 +914,8 @@ type CropTarget =
     };
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -3430,7 +3434,7 @@ function nextSlotKey() {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--entry-board-bg);
+  background: var(--color-page);
 }
 
 .edit-scroll {
@@ -3496,7 +3500,7 @@ function nextSlotKey() {
 .title-block__field--story {
   margin-top: 26rpx;
   padding-top: 22rpx;
-  border-top: 1rpx solid rgba(95, 79, 63, 0.12);
+  border-top: 1rpx solid var(--color-border);
 }
 
 .title-block__input,
@@ -3690,7 +3694,7 @@ function nextSlotKey() {
 
 .panel__pill--ghost {
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .ingredient-empty {
@@ -3753,7 +3757,7 @@ function nextSlotKey() {
 }
 
 .ingredient-line__drag--ghost {
-  color: var(--color-primary);
+  color: var(--color-icon-active);
 }
 
 .ingredient-line__field--name {
@@ -3798,7 +3802,7 @@ function nextSlotKey() {
   position: fixed;
   gap: 14rpx;
   padding: 0;
-  box-shadow: 0 20rpx 54rpx rgba(95, 79, 63, 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 .ingredient-add {
@@ -3809,9 +3813,9 @@ function nextSlotKey() {
   width: 100%;
   min-height: 84rpx;
   margin-top: 20rpx;
-  border: 1rpx dashed var(--entry-accent);
+  border: 1rpx dashed var(--color-border-active);
   border-radius: var(--radius-xs);
-  color: var(--entry-accent);
+  color: var(--color-support-action);
   font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -3823,13 +3827,13 @@ function nextSlotKey() {
 .ingredient-add__icon {
   font-size: 26rpx;
   line-height: 1;
-  color: var(--entry-accent);
+  color: var(--color-support-action);
 }
 
 .ingredient-card,
 .step-card {
   padding: 26rpx 0;
-  border-bottom: 1rpx solid rgba(95, 79, 63, 0.1);
+  border-bottom: 1rpx solid var(--color-divider);
   border-radius: 0;
   background: transparent;
 }
@@ -3850,15 +3854,15 @@ function nextSlotKey() {
 .group-badge {
   padding: 8rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--entry-accent);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 22rpx;
   font-weight: var(--font-weight-semibold);
 }
 
 .ingredient-card__remove,
 .step-card__remove {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
   font-size: 24rpx;
 }
 
@@ -3874,7 +3878,7 @@ function nextSlotKey() {
   width: 100%;
   padding: 10rpx 14rpx;
   height: 64rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border: 1rpx solid var(--color-border-light);
   border-radius: var(--radius-xs);
   background: var(--color-surface);
   box-sizing: border-box;
@@ -3907,8 +3911,8 @@ function nextSlotKey() {
 
 .mode-pill--active,
 .chip--active {
-  background: var(--color-primary-soft);
-  color: var(--entry-accent);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .sheet-section__head {
@@ -3934,7 +3938,7 @@ function nextSlotKey() {
 }
 
 .sheet-section__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -3951,9 +3955,12 @@ function nextSlotKey() {
   min-width: 0;
   height: 82rpx;
   padding: 0 24rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
   color: var(--color-text);
   font-size: 28rpx;
@@ -3980,14 +3987,14 @@ function nextSlotKey() {
 }
 
 .editor-field__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
 }
 
 .editor-field__action--active {
-  color: var(--entry-accent);
+  color: var(--color-tag-secondary-text);
 }
 
 .servings-chip-row {
@@ -4046,8 +4053,8 @@ function nextSlotKey() {
 }
 
 .ingredient-filter__chip--active {
-  background: var(--color-primary-soft);
-  color: var(--entry-accent);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .ingredient-filter__icon {
@@ -4058,7 +4065,7 @@ function nextSlotKey() {
 
 .ingredient-filter__action {
   padding: 18rpx 20rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   line-height: 1;
 }
@@ -4107,8 +4114,8 @@ function nextSlotKey() {
 
 .ingredient-category--active {
   border-color: transparent;
-  background: var(--color-primary-soft);
-  color: var(--entry-accent);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .ingredient-picker__main {
@@ -4174,8 +4181,8 @@ function nextSlotKey() {
 }
 
 .ingredient-grid--create .ingredient-choice--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .ingredient-search__count {
@@ -4206,8 +4213,8 @@ function nextSlotKey() {
 }
 
 .ingredient-choice--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .ingredient-choice__head {
@@ -4228,8 +4235,8 @@ function nextSlotKey() {
   flex-shrink: 0;
   padding: 4rpx 12rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--entry-accent);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 20rpx;
   line-height: 1.2;
 }
@@ -4247,7 +4254,7 @@ function nextSlotKey() {
 }
 
 .ingredient-choice__action--primary {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .ingredient-choice__status {
@@ -4282,8 +4289,8 @@ function nextSlotKey() {
   line-height: 60rpx;
   padding: 0 28rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -4315,8 +4322,8 @@ function nextSlotKey() {
   gap: 10rpx;
   padding: 8rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 22rpx;
 }
 
@@ -4331,7 +4338,7 @@ function nextSlotKey() {
   width: 22rpx;
   height: 22rpx;
   flex: 0 0 auto;
-  color: var(--color-primary);
+  color: currentColor;
   font-size: 18rpx;
   line-height: 22rpx;
 }
@@ -4350,7 +4357,7 @@ function nextSlotKey() {
 }
 
 .ingredient-create__hint {
-  color: var(--color-warning, #c77800);
+  color: var(--color-state-warning-text);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -4362,7 +4369,7 @@ function nextSlotKey() {
   min-height: 92rpx;
   padding: 0 20rpx;
   border-radius: var(--radius-xs);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--color-surface-soft-card);
 }
 
 .ingredient-create__card--action {
@@ -4374,8 +4381,8 @@ function nextSlotKey() {
 }
 
 .ingredient-create__card--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .ingredient-create__input {
@@ -4447,17 +4454,13 @@ function nextSlotKey() {
 }
 
 .sheet-confirm {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }
 
 .sheet-cancel {
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--color-surface-soft-muted);
   color: var(--color-text-secondary);
 }
 
@@ -4470,11 +4473,7 @@ function nextSlotKey() {
   height: 76rpx;
   margin-top: 20rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 26rpx;
@@ -4548,9 +4547,9 @@ function nextSlotKey() {
 .step-sort__mask {
   position: absolute;
   inset: 0;
-  background: var(--login-popup-backdrop-bg);
-  -webkit-backdrop-filter: blur(10rpx) saturate(145%);
-  backdrop-filter: blur(10rpx) saturate(145%);
+  background: var(--page-overlay-veil-bg);
+  -webkit-backdrop-filter: var(--page-overlay-veil-filter);
+  backdrop-filter: var(--page-overlay-veil-filter);
   opacity: 0;
   transition: opacity 220ms ease;
 }
@@ -4563,8 +4562,8 @@ function nextSlotKey() {
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
-  box-shadow: 0 -12rpx 60rpx rgba(59, 40, 21, 0.12);
+  background: var(--color-surface-overlay);
+  box-shadow: var(--shadow-floating);
   opacity: 0.98;
   transform: translateY(calc(100% + env(safe-area-inset-bottom)));
   transition:
@@ -4641,13 +4640,11 @@ function nextSlotKey() {
   gap: 18rpx;
   padding: 18rpx;
   border-radius: var(--radius-xs);
-  border: 1rpx solid rgba(109, 92, 72, 0.08);
   background: var(--color-surface);
-  box-shadow: 0 12rpx 40rpx rgba(95, 79, 63, 0.08);
+  box-shadow: var(--shadow-card);
   box-sizing: border-box;
   transition:
     transform 180ms ease,
-    border-color 180ms ease,
     box-shadow 180ms ease;
 }
 
@@ -4656,8 +4653,8 @@ function nextSlotKey() {
 }
 
 .step-sort-card--ghost {
-  border-color: var(--color-primary);
-  box-shadow: 0 20rpx 54rpx rgba(95, 79, 63, 0.18);
+  background: var(--color-support-notice);
+  box-shadow: var(--shadow-floating);
 }
 
 .step-sort-card__index {
@@ -4668,8 +4665,8 @@ function nextSlotKey() {
   height: 50rpx;
   flex: 0 0 50rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 22rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1;
@@ -4743,11 +4740,7 @@ function nextSlotKey() {
   padding: 0 34rpx;
   border: 0;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 32rpx;
@@ -4764,7 +4757,7 @@ function nextSlotKey() {
 }
 
 .ghost-action--primary {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .advanced-row__arrow {
@@ -4777,8 +4770,8 @@ function nextSlotKey() {
   flex: 0 0 auto;
   padding: 8rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 22rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -4822,8 +4815,8 @@ function nextSlotKey() {
   justify-content: center;
   min-height: 88rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
+  background: var(--color-state-danger-soft);
+  color: var(--color-state-danger-text);
   font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -4836,9 +4829,9 @@ function nextSlotKey() {
   z-index: 1100;
   gap: 20rpx;
   padding: 18rpx var(--space-page) calc(18rpx + env(safe-area-inset-bottom));
-  background: var(--color-tabbar-bg);
-  box-shadow: var(--shadow-floating);
-  backdrop-filter: blur(18rpx);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: transform 180ms ease, opacity 180ms ease;
 }
 
@@ -4877,11 +4870,7 @@ function nextSlotKey() {
 
 .bar-button--primary {
   flex: 1.08;
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   box-shadow: var(--button-primary-shadow);
 }
@@ -4929,7 +4918,7 @@ function nextSlotKey() {
 
 .notice__action {
   margin-top: 18rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-normal);

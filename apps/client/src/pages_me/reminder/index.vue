@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="reminder-navbar__title">提醒设置</text>
@@ -37,11 +37,15 @@ import { computed } from "vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const pageBodyStyle = computed(() => ({
@@ -77,24 +81,21 @@ function goRecommend() {
   padding-bottom: calc(var(--space-xl) + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
   overflow: hidden;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 9%, transparent), transparent 36%),
-    var(--color-page);
+  background: var(--page-primary-soft-bg);
 }
 
 .reminder-card {
   margin-top: var(--space-lg);
   padding: 28rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .reminder-card--hero {
   margin-top: 0;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--color-surface) 88%, var(--theme-primary) 12%), var(--color-surface)),
-    var(--color-surface);
 }
 
 .reminder-card__eyebrow,
@@ -109,7 +110,7 @@ function goRecommend() {
   min-height: 42rpx;
   padding: 0 18rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--theme-primary) 12%, white);
+  background: var(--color-support-notice);
   font-size: var(--font-size-xs);
   font-weight: 700;
 }

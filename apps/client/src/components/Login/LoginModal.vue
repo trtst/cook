@@ -431,8 +431,8 @@ function stopMotionTimer() {
   inset: 0;
   z-index: 0;
   background: var(--login-popup-backdrop-bg);
-  -webkit-backdrop-filter: blur(24rpx) saturate(145%);
-  backdrop-filter: blur(24rpx) saturate(145%);
+  -webkit-backdrop-filter: var(--login-popup-backdrop-filter);
+  backdrop-filter: var(--login-popup-backdrop-filter);
 }
 
 .login-popup__panel {
@@ -540,7 +540,7 @@ function stopMotionTimer() {
   font-weight: 700;
   line-height: 1.02;
   color: var(--login-popup-hero-copy);
-  text-shadow: 0 8rpx 24rpx rgba(33, 64, 41, 0.08);
+  text-shadow: 0 8rpx 24rpx var(--login-popup-hero-shadow);
 }
 
 .login-popup__slogan {
@@ -564,12 +564,11 @@ function stopMotionTimer() {
   gap: 22rpx;
   margin-top: auto;
   padding: 36rpx;
-  border: 2rpx solid var(--login-popup-sheet-border);
   border-radius: 36rpx;
   background: linear-gradient(180deg, var(--login-popup-sheet-overlay-start) 0%, var(--login-popup-sheet-overlay-end) 100%);
   box-shadow: var(--login-popup-sheet-shadow);
-  -webkit-backdrop-filter: blur(28rpx) saturate(150%);
-  backdrop-filter: blur(28rpx) saturate(150%);
+  -webkit-backdrop-filter: var(--login-popup-sheet-filter);
+  backdrop-filter: var(--login-popup-sheet-filter);
 }
 
 .login-popup__phone-header {
@@ -655,11 +654,7 @@ function stopMotionTimer() {
   min-height: 96rpx;
   padding: 0 32rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 30rpx;
@@ -700,7 +695,7 @@ function stopMotionTimer() {
 }
 
 .login-popup__checkbox--checked {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .login-popup__agreement-text,
@@ -710,7 +705,7 @@ function stopMotionTimer() {
 }
 
 .login-popup__agreement-link {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-weight: 600;
 }
 

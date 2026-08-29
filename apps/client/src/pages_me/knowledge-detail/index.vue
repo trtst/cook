@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="detail-navbar__title" :style="navTitleStyle">{{ navTitle }}</text>
@@ -94,6 +94,8 @@ import { onLoad } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { createOperationId } from "@/utils/operation-id";
 import { uniPlatform } from "@/platform/uni";
@@ -103,6 +105,8 @@ import { UnauthorizedError } from "@/apis/http";
 import { knowledgeApi, type KnowledgeArticleDetail } from "../apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
@@ -280,8 +284,8 @@ defineExpose({
   right: 0;
   left: 0;
   z-index: 10;
-  background: color-mix(in srgb, var(--color-surface) 94%, white);
-  box-shadow: 0 10rpx 32rpx color-mix(in srgb, var(--theme-primary) 10%, transparent);
+  background: var(--color-surface-soft-panel);
+  box-shadow: var(--shadow-card);
 }
 
 .detail-navbar__title {
@@ -294,9 +298,7 @@ defineExpose({
 .detail-page {
   min-height: 100vh;
   padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 12%, transparent), transparent 34%),
-    linear-gradient(180deg, var(--color-page) 0%, color-mix(in srgb, var(--color-page) 84%, white) 100%);
+  background: var(--page-primary-soft-bg);
 }
 
 .detail-skeleton {
@@ -338,7 +340,7 @@ defineExpose({
 }
 
 .detail-state__action {
-  color: var(--theme-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
 }
@@ -353,7 +355,7 @@ defineExpose({
   inset: 0;
   width: 100%;
   height: 100%;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  background: var(--color-support-notice);
 }
 
 .detail-hero__cover--empty {
@@ -363,7 +365,7 @@ defineExpose({
 }
 
 .detail-hero__empty-text {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--color-text-inverse-strong);
   font-size: 34rpx;
   font-weight: var(--font-weight-bold);
 }
@@ -371,9 +373,7 @@ defineExpose({
 .detail-hero__mask {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(180deg, rgba(12, 18, 28, 0.08) 0%, rgba(12, 18, 28, 0.5) 68%, rgba(12, 18, 28, 0.72) 100%),
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 26%, transparent), transparent 28%);
+  background: var(--overlay-image-mask);
 }
 
 .detail-hero__content {
@@ -394,8 +394,8 @@ defineExpose({
   min-height: 42rpx;
   padding: 0 18rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.92);
+  background: var(--color-surface-mask-weak);
+  color: var(--color-text-inverse);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   align-items: center;
@@ -404,7 +404,7 @@ defineExpose({
 .detail-hero__title {
   display: block;
   margin-top: 18rpx;
-  color: #fff;
+  color: var(--color-text-inverse);
   font-size: 46rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.24;
@@ -415,7 +415,7 @@ defineExpose({
   gap: 18rpx;
   flex-wrap: wrap;
   margin-top: 18rpx;
-  color: rgba(255, 255, 255, 0.84);
+  color: var(--color-text-inverse-muted);
   font-size: 24rpx;
 }
 
@@ -428,7 +428,7 @@ defineExpose({
 .detail-note {
   padding: 24rpx 26rpx;
   border-radius: 28rpx;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  background: var(--color-support-notice);
   box-shadow: var(--shadow-card);
 }
 
@@ -442,7 +442,7 @@ defineExpose({
   margin-top: var(--space-lg);
   padding: 34rpx 30rpx 42rpx;
   border-radius: 32rpx;
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
@@ -462,12 +462,11 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   padding: 18rpx 18rpx 18rpx 26rpx;
-  border: 1rpx solid color-mix(in srgb, var(--theme-primary) 12%, transparent);
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-surface) 92%, white);
-  box-shadow: var(--shadow-floating);
-  backdrop-filter: blur(16rpx);
-  -webkit-backdrop-filter: blur(16rpx);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  backdrop-filter: var(--material-tabbar-filter);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
 }
 
 .detail-toolbar__meta {
@@ -489,15 +488,16 @@ defineExpose({
   min-height: 72rpx;
   padding: 0 28rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
 }
 
 .detail-toolbar__button--active {
-  background: color-mix(in srgb, var(--theme-primary) 18%, var(--color-surface));
-  color: var(--theme-primary);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .detail-toolbar__button--disabled {

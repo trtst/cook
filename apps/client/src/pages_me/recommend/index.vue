@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :show-left="false" :navbar-placeholder="false" navbar-transparent>
     <template #navbar-left>
       <view class="cookfont icon-back notification-nav__back" hover-class="notification-nav__back--hover" hover-stay-time="100" @click="handleBack" />
@@ -50,6 +50,8 @@ import { recipeApi, type IngredientRecommendationSummary, type UnitRecommendatio
 import { shoppingApi, type ShoppingListInviteSummary } from "../apis/shopping";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -61,6 +63,8 @@ type RecommendKind = "ingredient" | "unit";
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 
@@ -330,11 +334,7 @@ defineExpose({
   padding-right: var(--space-page);
   padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
-  background:
-    radial-gradient(circle at 14% 18%, var(--entry-side-mint-bg) 0, transparent 31%),
-    radial-gradient(circle at 46% 8%, var(--entry-primary-bg) 0, transparent 24%),
-    radial-gradient(circle at 78% 36%, var(--entry-side-aqua-bg) 0, transparent 28%),
-    linear-gradient(154deg, var(--entry-board-bg), var(--color-page));
+  background: var(--page-ambient-duo-bg);
 }
 
 .notification-title {
@@ -363,8 +363,10 @@ defineExpose({
   gap: 0;
   overflow: hidden;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .category-card {
@@ -372,7 +374,7 @@ defineExpose({
   align-items: center;
   gap: 24rpx;
   padding: var(--space-md);
-  background: var(--color-surface);
+  background: transparent;
 }
 
 .category-card--hover {
@@ -394,21 +396,15 @@ defineExpose({
 }
 
 .category-card__icon-shell--recommend {
-  background:
-    radial-gradient(circle at 18% 18%, var(--entry-side-mint-bg) 0, transparent 58%),
-    radial-gradient(circle at 86% 10%, var(--entry-side-aqua-bg) 0, transparent 52%),
-    linear-gradient(148deg, var(--entry-primary-bg), var(--entry-board-bg));
+  background: var(--color-illustration-panel-fresh);
 }
 
 .category-card__icon-shell--shopping {
-  background:
-    radial-gradient(circle at 20% 20%, var(--entry-side-aqua-bg) 0, transparent 54%),
-    radial-gradient(circle at 78% 18%, rgba(255, 196, 122, 0.52) 0, transparent 50%),
-    linear-gradient(148deg, var(--entry-side-mint-bg), var(--entry-board-bg));
+  background: var(--color-illustration-panel-accent);
 }
 
 .category-card__icon {
-  color: #ffffff;
+  color: var(--color-text-inverse);
   font-size: 44rpx;
 }
 
@@ -429,7 +425,7 @@ defineExpose({
 }
 
 .category-card__title {
-  color: #1f2740;
+  color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.3;
@@ -438,7 +434,7 @@ defineExpose({
 .category-card__time,
 .category-card__desc,
 .notice {
-  color: #8d97b5;
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -457,7 +453,7 @@ defineExpose({
   width: 14rpx;
   height: 14rpx;
   border-radius: 50%;
-  background: #ff5d66;
+  background: var(--color-state-danger-base);
 }
 
 .notice {
@@ -466,6 +462,6 @@ defineExpose({
 }
 
 .notice--error {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="topic-nav-title" :style="navTitleStyle">{{ navTitle }}</text>
@@ -171,6 +171,8 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
@@ -179,6 +181,8 @@ import { uniPlatform } from "@/platform/uni";
 import { formatMonthDay, formatSort } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
@@ -348,12 +352,11 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -378,14 +381,17 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   margin: 24rpx;
   padding: 28rpx 24rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
   color: var(--color-text-secondary);
   font-size: 26rpx;
   text-align: center;
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .topic-state--error {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .topic-empty {
@@ -401,7 +407,10 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 .topic-empty :deep(.empty-state) {
   width: 100%;
   border-radius: var(--radius-xs);
-  box-shadow: 0 14rpx 36rpx var(--color-surface-mask-weak);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .topic-backdrop {
@@ -414,8 +423,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 }
 
 .topic-backdrop__image,
-.topic-backdrop__blur,
-.topic-backdrop__veil {
+.topic-backdrop__blur {
   position: absolute;
   inset: 0;
 }
@@ -424,7 +432,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, var(--color-primary-soft) 0%, var(--color-page) 100%);
+  background: var(--page-primary-fade-bg);
 }
 
 .topic-backdrop__empty-text {
@@ -438,15 +446,17 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
-  filter: blur(28rpx);
+  filter: var(--page-backdrop-blur-filter);
   transform: scale(1.08);
 }
 
 .topic-backdrop__veil {
+  position: absolute;
+  inset: 0;
   opacity: 0.8;
-  background:
-    linear-gradient(180deg, var(--color-surface-mask-medium) 0%, var(--color-surface-mask-strong) 58%, var(--color-page) 100%);
-    backdrop-filter: saturate(180%) blur(22rpx);
+  background: var(--page-overlay-veil-bg);
+  -webkit-backdrop-filter: var(--page-overlay-veil-filter);
+  backdrop-filter: var(--page-overlay-veil-filter);
 }
 
 .topic-content {
@@ -469,8 +479,10 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   flex: 0 0 auto;
   border-radius: var(--radius-xs);
   overflow: hidden;
-  background: var(--color-surface);
-  box-shadow: 0 8rpx 20rpx var(--color-surface-mask-medium);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .topic-summary__cover--empty {
@@ -502,8 +514,8 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 .topic-chip {
   padding: 8rpx 16rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 22rpx;
   font-weight: 600;
 }
@@ -561,38 +573,34 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   isolation: isolate;
 }
 
-.topic-section::before,
-.topic-section::after {
+.topic-section::before {
   content: "";
   position: absolute;
+  left: -168rpx;
   top: 96rpx;
   width: 360rpx;
   height: 520rpx;
   border-radius: 50%;
   pointer-events: none;
-  filter: blur(24rpx);
+  filter: var(--page-glow-cluster-filter);
   z-index: 0;
-}
-
-.topic-section::before {
-  left: -168rpx;
   opacity: 0.92;
-  background:
-    radial-gradient(circle at 68% 14%, var(--color-primary-soft) 0%, transparent 34%),
-    radial-gradient(circle at 22% 34%, var(--color-primary-soft) 0%, transparent 38%),
-    radial-gradient(circle at 60% 58%, var(--color-primary-soft) 0%, transparent 36%),
-    radial-gradient(circle at 28% 84%, var(--color-primary-soft) 0%, transparent 32%);
+  background: var(--page-glow-cluster-start-bg);
 }
 
 .topic-section::after {
+  content: "";
+  position: absolute;
   right: -176rpx;
   top: 188rpx;
+  width: 360rpx;
+  height: 520rpx;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: var(--page-glow-cluster-filter);
+  z-index: 0;
   opacity: 0.84;
-  background:
-    radial-gradient(circle at 34% 12%, var(--color-primary-soft) 0%, transparent 34%),
-    radial-gradient(circle at 76% 36%, var(--color-primary-soft) 0%, transparent 38%),
-    radial-gradient(circle at 36% 62%, var(--color-primary-soft) 0%, transparent 36%),
-    radial-gradient(circle at 70% 86%, var(--color-primary-soft) 0%, transparent 34%);
+  background: var(--page-glow-cluster-end-bg);
 }
 
 .topic-section > .topic-section__head,
@@ -712,7 +720,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   border-radius: var(--radius-xs);
   overflow: hidden;
   background: var(--color-surface-muted);
-  box-shadow: 0 18rpx 38rpx var(--color-surface-mask-weak);
+  box-shadow: var(--shadow-card);
 }
 
 .recipe-card__cover--empty {
@@ -779,7 +787,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 }
 
 .recipe-card__action--queued {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .recipe-note {
@@ -793,7 +801,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 .recipe-note__icon {
   flex: 0 0 auto;
   margin-top: 8rpx;
-  color: var(--color-primary);
+  color: var(--color-icon-accent);
   opacity: 0.54;
   font-size: 22rpx;
   line-height: 1;
@@ -831,9 +839,11 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   height: 300rpx;
   flex: 0 0 auto;
   overflow: hidden;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   transition: transform 0.18s ease;
 }
 
@@ -902,11 +912,14 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 .panel-note {
   padding: 28rpx 24rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
   text-align: center;
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .panel-note--sheet {
@@ -927,7 +940,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   padding: 18rpx;
   border-radius: var(--radius-xs);
   background: var(--color-surface);
-  box-shadow: 0 12rpx 30rpx var(--color-surface-mask-weak);
+  box-shadow: var(--shadow-card);
 }
 
 .add-sheet__cover {
@@ -1002,7 +1015,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 }
 
 .sheet-section__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: 600;
   white-space: nowrap;
@@ -1025,10 +1038,15 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   min-width: 0;
   height: 84rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   color: var(--color-text);
   font-size: 26rpx;
+  box-sizing: border-box;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .sheet-creator__button {
@@ -1037,8 +1055,8 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   padding: 0 28rpx;
   border: none;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
   line-height: 84rpx;
@@ -1065,8 +1083,8 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 }
 
 .chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-weight: 700;
 }
 
@@ -1081,11 +1099,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   height: 92rpx;
   padding: 0 28rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }
@@ -1113,7 +1127,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   height: 40rpx;
   padding: 0 10rpx;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--color-surface-mask-weak);
 }
 
 .plan-queue__badge-text {

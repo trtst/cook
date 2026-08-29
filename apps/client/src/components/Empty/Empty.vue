@@ -42,9 +42,11 @@ function handleClick() {
 <style scoped lang="scss">
 .empty-state {
   padding: 48rpx 32rpx;
-  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .empty-state--hover {
@@ -67,9 +69,11 @@ function handleClick() {
   align-items: center;
   margin-top: var(--space-md);
   padding: 40rpx 28rpx 44rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: 36rpx;
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--entry-board-bg) 100%);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   text-align: center;
 }
 

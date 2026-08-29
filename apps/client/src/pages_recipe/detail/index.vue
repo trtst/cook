@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     title=""
     full-screen
@@ -482,6 +482,8 @@ import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
@@ -540,6 +542,8 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const DETAIL_ACTIONS_SHOW_OFFSET = 24;
 const reportReasonOptions: ReportReasonOption[] = [
   { value: "AD", label: "广告营销" },
@@ -1513,9 +1517,9 @@ function formatNutritionValue(value: number | null, unit: string) {
 }
 
 function resolveNutritionColor(key: NutritionMetricCard["key"]) {
-  if (key === "fat") return "#F45151";
-  if (key === "protein") return "#F7B731";
-  return "#1FAA67";
+  if (key === "fat") return "var(--color-nutrition-fat)";
+  if (key === "protein") return "var(--color-nutrition-protein)";
+  return "var(--color-nutrition-carbohydrate)";
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -1556,8 +1560,10 @@ defineExpose({
 .notice {
   padding: var(--space-md);
   border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18rpx 42rpx rgba(86, 63, 40, 0.06);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .notice--floating {
@@ -1628,21 +1634,18 @@ defineExpose({
   z-index: -1;
   height: 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--theme-primary);
+  background: var(--color-icon-accent);
   opacity: 0.3;
   transform: rotate(-5deg);
 }
 
 .detail-page {
-  --detail-step-index-color: var(--color-text-tertiary);
+  background: var(--page-ambient-duo-bg);
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at top left, var(--entry-side-aqua-bg) 0%, transparent 34%),
-    linear-gradient(180deg, var(--entry-board-bg) 0%, var(--color-page) 260rpx);
 }
 
 .detail-scroll {
@@ -1667,7 +1670,7 @@ defineExpose({
   min-height: 0;
   padding-top: 75%;
   border-radius: 0;
-  background: var(--entry-photo-bg);
+  background: var(--color-surface);
   box-shadow: none;
 }
 
@@ -1677,7 +1680,7 @@ defineExpose({
   display: block;
   width: 100%;
   height: 100%;
-  background: var(--entry-photo-bg);
+  background: var(--color-surface);
 }
 
 .hero__cover-fill {
@@ -1687,9 +1690,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   padding: 36rpx;
-  background:
-    linear-gradient(140deg, var(--entry-side-mint-bg) 0%, var(--entry-board-bg) 48%, var(--entry-photo-bg) 100%),
-    linear-gradient(180deg, var(--color-surface-mask-weak) 0%, var(--color-surface-mask-medium) 100%);
+  background: var(--page-cover-fresh-shell-bg);
 }
 
 .hero__cover-copy {
@@ -1712,14 +1713,14 @@ defineExpose({
 }
 
 .hero__cover-title {
-  color: var(--entry-ink);
+  color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.2;
 }
 
 .hero__cover-sub {
-  color: var(--entry-side-muted-text);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -1731,7 +1732,7 @@ defineExpose({
   margin-top: -54rpx;
   min-height: 0;
   padding: 32rpx 0 max(48rpx, env(safe-area-inset-bottom));
-  background: var(--entry-board-bg);
+  background: var(--color-surface);
   border-radius: 36rpx 36rpx 0 0;
 }
 
@@ -1740,7 +1741,13 @@ defineExpose({
 }
 
 .summary-card {
-  padding: 0 32rpx 24rpx;
+  margin: 0 var(--space-page);
+  padding: 28rpx 32rpx 24rpx;
+  border-radius: var(--radius-xs);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .summary-card__title,
@@ -1921,12 +1928,12 @@ defineExpose({
   -webkit-mask: radial-gradient(
     farthest-side,
     transparent calc(100% - var(--nutrition-ring-thickness)),
-    #000 calc(100% - var(--nutrition-ring-thickness) + 1rpx)
+    var(--color-mask-solid) calc(100% - var(--nutrition-ring-thickness) + 1rpx)
   );
   mask: radial-gradient(
     farthest-side,
     transparent calc(100% - var(--nutrition-ring-thickness)),
-    #000 calc(100% - var(--nutrition-ring-thickness) + 1rpx)
+    var(--color-mask-solid) calc(100% - var(--nutrition-ring-thickness) + 1rpx)
   );
 }
 
@@ -1972,15 +1979,15 @@ defineExpose({
 }
 
 .nutrition-metric__dot--protein {
-  background: #f7b731;
+  background: var(--color-nutrition-protein);
 }
 
 .nutrition-metric__dot--fat {
-  background: #f45151;
+  background: var(--color-nutrition-fat);
 }
 
 .nutrition-metric__dot--carbohydrate {
-  background: #1faa67;
+  background: var(--color-nutrition-carbohydrate);
 }
 
 .nutrition-metric__label {
@@ -1998,19 +2005,19 @@ defineExpose({
 }
 
 .nutrition-metric__amount--fat {
-  color: #f45151;
+  color: var(--color-nutrition-fat);
 }
 
 .nutrition-metric__amount--protein {
-  color: #f7b731;
+  color: var(--color-nutrition-protein);
 }
 
 .nutrition-metric__amount--carbohydrate {
-  color: #1faa67;
+  color: var(--color-nutrition-carbohydrate);
 }
 
 .nutrition-metric__amount--empty {
-  color: var(--color-text-quaternary);
+  color: var(--color-text-tertiary);
 }
 
 .nutrition-grid__summary {
@@ -2095,7 +2102,7 @@ defineExpose({
 }
 
 .nutrition-toggle__item--active {
-  color: var(--theme-primary);
+  color: var(--color-support-action);
 }
 
 .section {
@@ -2146,7 +2153,7 @@ defineExpose({
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--theme-primary);
+  color: var(--color-support-action);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -2163,7 +2170,7 @@ defineExpose({
 }
 
 .section__link {
-  color: var(--theme-primary);
+  color: var(--color-support-action);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -2197,8 +2204,8 @@ defineExpose({
   justify-content: space-between;
   gap: 20rpx;
   padding: 14rpx 0 10rpx;
-  border-top: 1rpx solid rgba(109, 92, 72, 0.08);
-  border-bottom: 1rpx solid rgba(109, 92, 72, 0.08);
+  border-top: 1rpx solid var(--color-border-light);
+  border-bottom: 1rpx solid var(--color-border-light);
 }
 
 .plan-link-entry--hover {
@@ -2235,7 +2242,7 @@ defineExpose({
 }
 
 .ingredient-row + .ingredient-row {
-  border-top: 1rpx solid rgba(111, 98, 86, 0.08);
+  border-top: 1rpx solid var(--color-border-light);
 }
 
 .ingredient-row__name,
@@ -2323,8 +2330,9 @@ defineExpose({
 }
 
 .chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .panel-note {
@@ -2344,9 +2352,12 @@ defineExpose({
   min-height: 180rpx;
   margin-top: var(--space-sm);
   padding: 20rpx 24rpx;
-  border: 1rpx solid var(--color-border);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
 }
 
@@ -2385,7 +2396,7 @@ defineExpose({
 
 .sheet-section__action {
   flex: 0 0 auto;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -2425,9 +2436,11 @@ defineExpose({
   justify-content: space-between;
   gap: 20rpx;
   padding: 22rpx 24rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .plan-link-row--hover {
@@ -2463,7 +2476,7 @@ defineExpose({
 }
 
 .plan-link-row__action-text {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
@@ -2471,7 +2484,7 @@ defineExpose({
 
 .plan-link-row__icon {
   flex: 0 0 auto;
-  color: var(--color-primary);
+  color: var(--color-icon-accent);
   font-size: 24rpx;
   line-height: 1;
 }
@@ -2486,9 +2499,12 @@ defineExpose({
   flex: 1;
   height: 76rpx;
   padding: 0 22rpx;
-  border: 1rpx solid rgba(109, 92, 72, 0.1);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
   color: var(--color-text);
   font-size: 26rpx;
@@ -2501,11 +2517,7 @@ defineExpose({
   min-width: 132rpx;
   height: 76rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 26rpx;
@@ -2537,17 +2549,13 @@ defineExpose({
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }
 
 .sheet-actions__button--cancel {
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--color-surface-soft-muted);
   color: var(--color-text-secondary);
 }
 
@@ -2568,10 +2576,10 @@ defineExpose({
   inset: 0;
   z-index: 0;
   background: var(--color-tabbar-bg);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
-  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-mask-image: var(--frosted-mask-image);
+  mask-image: var(--frosted-mask-image);
+  -webkit-backdrop-filter: var(--page-overlay-veil-filter);
+  backdrop-filter: var(--page-overlay-veil-filter);
   pointer-events: none;
   content: "";
 }
@@ -2589,13 +2597,13 @@ defineExpose({
   display: flex;
   gap: 16rpx;
   padding: 10rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-pill);
-  background: var(--color-tabbar-bg);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   overflow: hidden;
   pointer-events: auto;
-  -webkit-backdrop-filter: saturate(180%) blur(28rpx);
-  backdrop-filter: saturate(180%) blur(28rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transform: translateY(calc(100% + env(safe-area-inset-bottom) + 40rpx));
   transition:
     transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -2718,9 +2726,12 @@ defineExpose({
   gap: 20rpx;
   margin-top: 24rpx;
   padding: 24rpx 28rpx;
-  border: 1rpx solid var(--color-border);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .report-picker__label {
@@ -2750,14 +2761,13 @@ defineExpose({
 
 .primary,
 .secondary,
-.light,
 .danger {
   border-radius: var(--radius-md);
 }
 
 .primary {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .secondary {
@@ -2765,15 +2775,9 @@ defineExpose({
   color: var(--color-text);
 }
 
-.light {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1rpx solid var(--color-border);
-}
-
 .danger {
   margin-top: var(--space-md);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }

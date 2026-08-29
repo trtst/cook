@@ -160,11 +160,15 @@ function handleMealSlotSelect(item: EventScheduleMealSlot) {
   align-items: center;
   min-height: 88rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: 24rpx;
-  background: var(--color-surface-muted);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   color: var(--color-text);
   font-size: 26rpx;
   box-sizing: border-box;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .event-schedule-sheet__chip-grid {
@@ -187,14 +191,15 @@ function handleMealSlotSelect(item: EventScheduleMealSlot) {
 }
 
 .event-schedule-sheet__chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .event-schedule-sheet__chip--disabled {
-  border-color: color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(in srgb, var(--color-surface-muted) 86%, white 14%);
+  border-color: var(--color-border-light);
+  background: var(--color-surface-raised);
   color: var(--color-text-tertiary);
   opacity: 0.68;
 }
@@ -205,7 +210,7 @@ function handleMealSlotSelect(item: EventScheduleMealSlot) {
 
 .event-schedule-sheet__time-icon,
 .event-schedule-sheet__time-text {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .event-schedule-sheet__time-icon {
@@ -239,13 +244,17 @@ function handleMealSlotSelect(item: EventScheduleMealSlot) {
 }
 
 .event-schedule-sheet__button--cancel {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .event-schedule-sheet__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 </style>

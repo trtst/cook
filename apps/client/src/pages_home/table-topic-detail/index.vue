@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="topic-nav-title" :style="navTitleStyle">{{ navTitle }}</text>
@@ -69,6 +69,8 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
@@ -78,6 +80,8 @@ import { createOperationId } from "@/utils/operation-id";
 import { formatDateTimeMinute } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
@@ -182,12 +186,12 @@ function openTopicTarget() {
   left: 0;
   right: 0;
   z-index: 10;
-  background: rgba(255, 253, 248, 0.96);
-  box-shadow: 0 10rpx 32rpx rgba(17, 24, 39, 0.08);
+  background: var(--color-surface-soft-card);
+  box-shadow: var(--shadow-card);
 }
 
 .topic-nav-title {
-  color: #111827;
+  color: var(--color-text);
   font-size: 30rpx;
   font-weight: 700;
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -195,9 +199,7 @@ function openTopicTarget() {
 
 .topic-page {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top right, rgba(255, 215, 160, 0.24), transparent 34%),
-    linear-gradient(180deg, #fff7eb 0%, #fffdf8 34%, #f7f4ee 100%);
+  background: var(--page-secondary-soft-bg);
 }
 
 .topic-state {
@@ -205,11 +207,11 @@ function openTopicTarget() {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  color: #6b7280;
+  color: var(--color-text-secondary);
 }
 
 .topic-state--error {
-  color: #c2410c;
+  color: var(--color-state-danger-text);
 }
 
 .topic-hero {
@@ -222,20 +224,18 @@ function openTopicTarget() {
   inset: 0;
   width: 100%;
   height: 100%;
-  background: #f3f4f6;
+  background: var(--color-surface-muted);
 }
 
 .topic-hero__cover--empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at top right, rgba(255, 177, 109, 0.42), transparent 40%),
-    linear-gradient(135deg, #fff5e4, #ffe6ca);
+  background: var(--color-cover-empty-warm-bg);
 }
 
 .topic-hero__empty-text {
-  color: #9a5a2c;
+  color: var(--color-state-warning-text);
   font-size: 40rpx;
   font-weight: 700;
 }
@@ -243,7 +243,7 @@ function openTopicTarget() {
 .topic-hero__mask {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(17, 24, 39, 0.1), rgba(17, 24, 39, 0.58));
+  background: var(--overlay-image-mask);
 }
 
 .topic-hero__content {
@@ -260,13 +260,13 @@ function openTopicTarget() {
 }
 
 .topic-hero__eyebrow {
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--color-text-inverse);
   font-size: 24rpx;
   letter-spacing: 4rpx;
 }
 
 .topic-hero__title {
-  color: #fff;
+  color: var(--color-text-inverse);
   font-size: 54rpx;
   font-weight: 700;
   line-height: 1.16;
@@ -276,7 +276,7 @@ function openTopicTarget() {
   display: flex;
   flex-wrap: wrap;
   gap: 18rpx;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--color-text-inverse-muted);
   font-size: 24rpx;
 }
 
@@ -293,18 +293,18 @@ function openTopicTarget() {
   gap: 16rpx;
   padding: 28rpx 26rpx;
   border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 18rpx 40rpx rgba(17, 24, 39, 0.06);
+  background: var(--color-surface-soft-panel);
+  box-shadow: var(--shadow-card);
 }
 
 .topic-panel__label {
-  color: #9a5a2c;
+  color: var(--color-state-warning-text);
   font-size: 24rpx;
   letter-spacing: 2rpx;
 }
 
 .topic-panel__summary {
-  color: #111827;
+  color: var(--color-text);
   font-size: 30rpx;
   line-height: 1.8;
 }
@@ -321,13 +321,13 @@ function openTopicTarget() {
 }
 
 .topic-panel__joined {
-  color: #1f7a45;
+  color: var(--color-state-success-text);
   font-size: 24rpx;
   font-weight: 600;
 }
 
 .topic-panel__hint {
-  color: #6b7280;
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -338,14 +338,15 @@ function openTopicTarget() {
   justify-content: center;
   min-height: 88rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, #f07f35, #d8602a);
-  color: #fff;
+  background: var(--feedback-line-danger);
+  color: var(--color-text-inverse);
   font-size: 30rpx;
   font-weight: 700;
 }
 
 .topic-panel__button--joined {
-  background: linear-gradient(135deg, #2f6f4e, #24583d);
+  background: var(--color-state-success-soft);
+  color: var(--color-state-success-text);
 }
 
 .topic-panel__button--disabled {
@@ -357,11 +358,11 @@ function openTopicTarget() {
   align-items: center;
   justify-content: center;
   min-height: 84rpx;
-  border: 2rpx solid rgba(47, 111, 78, 0.18);
+  border: 2rpx solid var(--color-border);
   border-radius: var(--radius-pill);
-  color: #2f6f4e;
+  color: var(--color-state-success-text);
   font-size: 28rpx;
   font-weight: 600;
-  background: rgba(47, 111, 78, 0.06);
+  background: var(--color-state-success-soft);
 }
 </style>

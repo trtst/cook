@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="">
     <template #navbar-center>
       <text class="knowledge-navbar__title">{{ channelMeta?.title || "厨房知识" }}</text>
@@ -111,6 +111,8 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import {
   buildKnowledgeDetailPath,
   getKnowledgeChannel,
@@ -123,6 +125,8 @@ import { UnauthorizedError } from "@/apis/http";
 import { knowledgeApi, type KnowledgeArticleSummary } from "../apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
 const {
@@ -260,9 +264,7 @@ defineExpose({
   position: relative;
   height: 100%;
   min-height: 0;
-  background:
-    radial-gradient(circle at bottom right, color-mix(in srgb, var(--theme-primary) 10%, transparent), transparent 34%),
-    linear-gradient(0deg, color-mix(in srgb, var(--color-page) 78%, white) 0%, var(--color-page) 100%);
+  background: var(--page-ambient-primary-bg);
 }
 
 .knowledge-scroll {
@@ -291,7 +293,7 @@ defineExpose({
   min-height: 40rpx;
   padding: 0 18rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--theme-primary) 16%, white);
+  background: var(--color-support-notice);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
@@ -333,7 +335,10 @@ defineExpose({
   margin-top: var(--space-lg);
   padding: 0 var(--space-md);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface-muted) 84%, white);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .knowledge-status__text {
@@ -345,12 +350,13 @@ defineExpose({
   flex: 0 0 auto;
   min-height: 60rpx;
   padding: 0 20rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .knowledge-item {
@@ -358,7 +364,7 @@ defineExpose({
   align-items: flex-start;
   gap: var(--space-md);
   padding: 30rpx 0;
-  border-bottom: 1rpx solid color-mix(in srgb, var(--color-border-light) 80%, transparent);
+  border-bottom: 1rpx solid var(--color-border-light);
 }
 
 .knowledge-item--hover {
@@ -410,7 +416,7 @@ defineExpose({
   height: 136rpx;
   overflow: hidden;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  background: var(--color-surface-soft-panel);
 }
 
 .knowledge-item__thumb-text {

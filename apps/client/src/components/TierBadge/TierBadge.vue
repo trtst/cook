@@ -56,22 +56,22 @@ const badgeClass = computed(() => {
 }
 
 .tier-badge--free {
-  background: linear-gradient(135deg, #f0f2f5 0%, #d7dbe2 100%);
-  color: #5f6672;
+  background: var(--tier-badge-free-bg);
+  color: var(--tier-badge-free-text);
 }
 
 .tier-badge--plus {
-  background: linear-gradient(135deg, #ffe8a3 0%, #f6c94c 100%);
-  color: #7c5600;
+  background: var(--tier-badge-plus-bg);
+  color: var(--tier-badge-plus-text);
 }
 
 .tier-badge--pro {
-  background: linear-gradient(135deg, #2d2418 0%, #121212 55%, #a97826 100%);
-  color: #f6df9f;
+  background: var(--tier-badge-pro-bg);
+  color: var(--tier-badge-pro-text);
 }
 
 .tier-badge--ultra {
-  background: linear-gradient(135deg, #1f1710 0%, #0d0d0d 45%, #d9b35b 100%);
-  color: #fff1c7;
+  background: var(--tier-badge-ultra-bg);
+  color: var(--tier-badge-ultra-text);
 }
 </style>

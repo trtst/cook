@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="超市模式">
     <view class="summary">
       <text class="summary__title">待买清单</text>
@@ -33,11 +33,13 @@
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { uniPlatform } from "@/platform/uni";
@@ -45,6 +47,8 @@ import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
 const loading = ref(false);
@@ -121,7 +125,7 @@ defineExpose({
 .card {
   padding: var(--space-md);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
 }
 
 .summary__title,
@@ -167,7 +171,7 @@ defineExpose({
 .primary {
   margin-left: var(--space-md);
   border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 </style>

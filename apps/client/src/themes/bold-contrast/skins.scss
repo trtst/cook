@@ -1,0 +1,42 @@
+.theme-skin-bold-contrast {
+  --button-primary-gradient-end: #2a2a2a;
+  --button-primary-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.08);
+  --color-primary-active: #1a1a1a;
+  --color-primary-soft: rgba(0, 0, 0, 0.06);
+  --color-surface-mask-weak: rgba(255, 255, 255, 0.22);
+  --color-surface-mask-medium: rgba(255, 255, 255, 0.54);
+  --color-surface-mask-strong: rgba(255, 255, 255, 0.88);
+  --color-surface-muted: #f2f2f2;
+  --color-text-secondary: #4d4d4d;
+  --color-text-tertiary: #8e8e8e;
+  --color-text-inverse: #ffffff;
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-light: rgba(0, 0, 0, 0.08);
+  --color-divider: rgba(0, 0, 0, 0.1);
+  --color-tabbar-bg: rgba(255, 255, 255, 1);
+  --shadow-card: 0 2rpx 8rpx rgba(0, 0, 0, 0.03);
+  --shadow-floating: 0 -2rpx 8rpx rgba(0, 0, 0, 0.04);
+  --shadow-tabbar: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.theme-dark.theme-skin-bold-contrast {
+  --button-primary-gradient-end: #d9d9d9;
+  --button-primary-text: #000000;
+  --button-primary-shadow: 0 3rpx 10rpx rgba(0, 0, 0, 0.14);
+  --color-primary-active: #d9d9d9;
+  --color-primary-soft: rgba(255, 255, 255, 0.1);
+  --color-surface-mask-weak: rgba(5, 5, 5, 0.22);
+  --color-surface-mask-medium: rgba(5, 5, 5, 0.6);
+  --color-surface-mask-strong: rgba(5, 5, 5, 0.9);
+  --color-surface-muted: #101010;
+  --color-text-secondary: #c1c1c1;
+  --color-text-tertiary: #7e7e7e;
+  --color-text-inverse: #000000;
+  --color-border: rgba(255, 255, 255, 0.16);
+  --color-border-light: rgba(255, 255, 255, 0.1);
+  --color-divider: rgba(255, 255, 255, 0.12);
+  --color-tabbar-bg: rgba(0, 0, 0, 1);
+  --shadow-card: 0 2rpx 8rpx rgba(0, 0, 0, 0.12);
+  --shadow-floating: 0 -2rpx 8rpx rgba(0, 0, 0, 0.16);
+  --shadow-tabbar: 0 2rpx 8rpx rgba(0, 0, 0, 0.12);
+}

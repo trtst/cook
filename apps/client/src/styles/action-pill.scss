@@ -24,13 +24,13 @@
 }
 
 .action-pill--primary {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
 .action-pill--danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
+  background: var(--color-state-danger-soft);
+  color: var(--color-state-danger-text);
 }
 
 .action-pill--hover {

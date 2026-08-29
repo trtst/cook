@@ -147,7 +147,7 @@ const createNameModel = computed({
 }
 
 .shopping-sheet__state--error {
-  color: var(--color-danger);
+  color: var(--color-state-danger-text);
 }
 
 .shopping-list-grid {
@@ -161,16 +161,19 @@ const createNameModel = computed({
   gap: 10rpx;
   padding: 24rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .shopping-list-option--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 2rpx color-mix(in srgb, var(--color-primary) 24%, transparent);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 2rpx var(--color-border-active);
 }
 
 .shopping-list-option--active .shopping-list-option__title {
-  color: var(--color-primary);
+  color: var(--color-tag-primary-text);
 }
 
 .shopping-list-option__title,
@@ -200,10 +203,14 @@ const createNameModel = computed({
   flex: 1;
   min-height: 88rpx;
   padding: 0 28rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   color: var(--color-text);
   font-size: 28rpx;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .shopping-create__button {
@@ -214,8 +221,8 @@ const createNameModel = computed({
   min-height: 88rpx;
   padding: 0 28rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -245,13 +252,17 @@ const createNameModel = computed({
 }
 
 .sheet-actions__button--cancel {
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 </style>

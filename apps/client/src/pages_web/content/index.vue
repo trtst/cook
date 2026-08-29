@@ -51,7 +51,7 @@ onLoad((query) => {
 }
 
 .content-fallback__text {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-size: 28rpx;
   line-height: 1.6;
 }

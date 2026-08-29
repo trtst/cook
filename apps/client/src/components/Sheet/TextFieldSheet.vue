@@ -93,12 +93,15 @@ const model = computed({
   min-height: 88rpx;
   height: 88rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   box-sizing: border-box;
   color: var(--color-text);
   font-size: var(--font-size-sm);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .text-field-sheet__input--textarea {
@@ -137,13 +140,17 @@ const model = computed({
 }
 
 .text-field-sheet__button--cancel {
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .text-field-sheet__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 </style>

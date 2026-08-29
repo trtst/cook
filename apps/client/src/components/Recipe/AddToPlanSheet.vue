@@ -432,7 +432,7 @@ onUnmounted(() => {
 }
 
 .sheet-section__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -465,14 +465,18 @@ onUnmounted(() => {
   min-height: 50rpx;
   padding: 0 24rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
   color: var(--color-text-secondary);
   font-size: 24rpx;
 }
 
 .chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -524,10 +528,14 @@ onUnmounted(() => {
   min-width: 0;
   height: 84rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: 24rpx;
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   color: var(--color-text);
   font-size: 26rpx;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .sheet-creator__button {
@@ -536,8 +544,8 @@ onUnmounted(() => {
   padding: 0 28rpx;
   border: 0;
   border-radius: 24rpx;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 84rpx;
@@ -550,11 +558,14 @@ onUnmounted(() => {
 .panel-note {
   padding: 28rpx 24rpx;
   border-radius: 24rpx;
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
   text-align: center;
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .sheet-actions {
@@ -581,13 +592,17 @@ onUnmounted(() => {
 }
 
 .sheet-actions__button--cancel {
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 </style>

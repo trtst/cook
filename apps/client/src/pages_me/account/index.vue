@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="account-navbar__title">账号设置</text>
@@ -43,6 +43,8 @@ import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import type { MeResponse } from "@/apis/user";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
@@ -51,6 +53,8 @@ import { useUserStore } from "@/stores/user";
 import { clearUserSessionState } from "@/utils/session-cleanup";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
@@ -119,9 +123,7 @@ defineExpose({
   padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
   overflow: hidden;
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 7%, transparent), transparent 34%),
-    var(--color-page);
+  background: var(--page-primary-soft-bg);
 }
 
 .account-navbar__title {
@@ -141,10 +143,11 @@ defineExpose({
 .account-panel {
   margin-top: var(--space-lg);
   overflow: hidden;
-  border: 1rpx solid var(--color-divider);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .account-panel:first-child {
@@ -195,12 +198,12 @@ defineExpose({
 }
 
 .account-panel--danger {
-  border-color: color-mix(in srgb, #d95c4f 20%, var(--color-divider));
+  border-color: var(--color-state-danger-border);
 }
 
 .account-row--danger .account-row__title,
 .account-row--danger .account-row__arrow {
-  color: #d95c4f;
+  color: var(--color-state-danger-text);
 }
 
 .account-row--danger {

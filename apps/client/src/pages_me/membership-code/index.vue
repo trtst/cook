@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="兑换" full-screen>
     <template #navbar-center>
       <text class="redeem-nav-title">兑换</text>
@@ -56,6 +56,8 @@ import { userApi } from "@/apis/user";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { membershipApi } from "@/pages_me/apis/membership";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -63,6 +65,8 @@ import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 const redeemCode = ref("");
@@ -113,10 +117,7 @@ async function submitRedeem() {
   position: relative;
   height: 100%;
   padding: var(--space-lg) var(--space-page) calc(var(--space-xl) + env(safe-area-inset-bottom));
-  background:
-    radial-gradient(circle at 14% 10%, color-mix(in srgb, var(--theme-primary) 7%, transparent), transparent 28%),
-    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--theme-accent) 6%, transparent), transparent 24%),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-page) 92%, white 8%), var(--color-page));
+  background: var(--page-ambient-duo-bg);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -128,13 +129,9 @@ async function submitRedeem() {
   width: 460rpx;
   height: 320rpx;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 24% 38%, var(--entry-side-aqua-bg) 0, transparent 46%),
-    radial-gradient(circle at 74% 42%, var(--entry-primary-bg) 0, transparent 52%),
-    linear-gradient(156deg, color-mix(in srgb, var(--entry-side-mint-bg) 84%, var(--color-page) 16%), color-mix(in srgb, var(--entry-board-bg) 80%, var(--color-page) 20%));
+  background: var(--color-cover-empty-warm-bg);
   opacity: 0.98;
   content: "";
-  filter: blur(8rpx);
   pointer-events: none;
   transform: rotate(-10deg);
 }
@@ -153,13 +150,12 @@ async function submitRedeem() {
 .redeem-card {
   position: relative;
   z-index: 1;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
-}
-
-.redeem-card {
   padding: 30rpx 30rpx 32rpx;
+  border-radius: var(--radius-xs);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .redeem-card__description,
@@ -196,12 +192,14 @@ async function submitRedeem() {
   margin-top: 26rpx;
   min-height: 96rpx;
   padding: 0 28rpx;
-  border: 1rpx solid color-mix(in srgb, var(--color-border) 84%, transparent);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--color-page) 30%, var(--color-surface));
+  background: var(--material-input-bg);
   color: var(--color-text);
   font-size: var(--font-size-lg);
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 82%, transparent);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .redeem-input__placeholder {
@@ -223,7 +221,7 @@ async function submitRedeem() {
   height: 88rpx;
   border: none;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   font-size: 30rpx;
   font-weight: var(--font-weight-bold);
@@ -243,7 +241,7 @@ async function submitRedeem() {
 .rule-block {
   margin-top: 32rpx;
   padding-top: 28rpx;
-  border-top: 1rpx solid color-mix(in srgb, var(--color-border) 74%, transparent);
+  border-top: 1rpx solid var(--color-divider);
 }
 
 .rule-block__head {
@@ -253,7 +251,7 @@ async function submitRedeem() {
 }
 
 .rule-block__icon {
-  color: var(--theme-primary);
+  color: var(--color-support-action);
   font-size: 30rpx;
   font-weight: 700;
   line-height: 1;
@@ -285,7 +283,7 @@ async function submitRedeem() {
   width: 12rpx;
   height: 12rpx;
   border-radius: 999rpx;
-  background: linear-gradient(180deg, var(--color-primary), var(--theme-accent));
+  background: var(--button-primary-bg);
   content: "";
 }
 </style>

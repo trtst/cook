@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="加入分享饭局">
     <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
@@ -22,11 +22,13 @@
 
 <script setup lang="ts">
 import { onLoad } from "@dcloudio/uni-app";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import type { MeResponse } from "@/apis/user";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { shareApi } from "../apis/share";
 import { resolveShareGuestName } from "../display-name";
 import { uniPlatform } from "@/platform/uni";
@@ -35,6 +37,8 @@ import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -132,21 +136,24 @@ defineExpose({
   width: 100%;
   margin-top: var(--space-sm);
   padding: 20rpx 24rpx;
-  border: 1rpx solid var(--color-border);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
 }
 
 .primary {
   margin-top: var(--space-sm);
   border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .notice {
   margin-top: var(--space-md);
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
 }
 </style>

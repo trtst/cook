@@ -126,9 +126,9 @@ function handlePanelTransitionEnd(event: Event) {
 .sheet-shell__mask {
   position: absolute;
   inset: 0;
-  background: var(--login-popup-backdrop-bg);
-  -webkit-backdrop-filter: blur(10rpx) saturate(145%);
-  backdrop-filter: blur(10rpx) saturate(145%);
+  background: var(--color-surface-mask-medium);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
   opacity: 0;
   transition: opacity 220ms ease;
 }
@@ -142,8 +142,10 @@ function handlePanelTransitionEnd(event: Event) {
   flex-direction: column;
   max-height: 82vh;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-page) 100%);
-  box-shadow: var(--login-popup-sheet-shadow, var(--shadow-floating));
+  background: var(--material-panel-bg);
+  box-shadow: var(--material-panel-shadow);
+  -webkit-backdrop-filter: var(--material-panel-filter);
+  backdrop-filter: var(--material-panel-filter);
   overflow: hidden;
   opacity: 0.98;
   transform: translateY(calc(100% + env(safe-area-inset-bottom)));

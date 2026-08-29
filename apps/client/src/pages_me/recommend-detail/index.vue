@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :show-left="false" navbar-layout="custom-left">
     <template #navbar-left>
       <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
@@ -251,6 +251,8 @@ import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -264,6 +266,8 @@ type RecommendationListItem =
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recommend-detail-editor"));
 const sessionStore = useSessionStore();
 const {
@@ -805,7 +809,7 @@ defineExpose({
 .editor-panel,
 .inline-notice {
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
@@ -825,7 +829,7 @@ defineExpose({
 
 .notice--error,
 .inline-notice__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .empty-state__art {
@@ -838,7 +842,7 @@ defineExpose({
 .empty-state__title,
 .recommend-card__name,
 .editor-panel__title {
-  color: #1f2740;
+  color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.3;
@@ -861,9 +865,8 @@ defineExpose({
 .recommend-card__meta,
 .recommend-card__time,
 .recommend-card__desc,
-.inline-notice,
-.recommend-card__advice {
-  color: #8d97b5;
+.inline-notice {
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -978,23 +981,23 @@ defineExpose({
 }
 
 .recommend-card__status--pending {
-  color: #8c5a13;
-  background: #fdf2d5;
+  color: var(--color-state-warning-text);
+  background: var(--color-state-warning-soft);
 }
 
 .recommend-card__status--rejected {
-  color: #a5412a;
-  background: #fde4dd;
+  color: var(--color-state-danger-text);
+  background: var(--color-state-danger-soft);
 }
 
 .recommend-card__status--adopted {
-  color: #1d7a4f;
-  background: #dff4e9;
+  color: var(--color-state-success-text);
+  background: var(--color-state-success-soft);
 }
 
 .recommend-card__status--merged {
-  color: #2a5d93;
-  background: #e1eefb;
+  color: var(--color-state-info-text);
+  background: var(--color-state-info-soft);
 }
 
 .recommend-card__reject {
@@ -1004,7 +1007,9 @@ defineExpose({
 }
 
 .recommend-card__advice {
-  color: #d29322;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: var(--color-state-warning-text);
 }
 
 .recommend-card__actions {
@@ -1019,20 +1024,23 @@ defineExpose({
   padding: 0 30rpx;
   border: 0;
   border-radius: 999rpx;
-  color: var(--color-primary-foreground);
+  color: var(--button-primary-text);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 76rpx;
-  background: var(--color-primary);
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
 }
 
 .invite-card {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 86%, var(--theme-primary) 14%), var(--color-surface));
+  background: var(--color-surface-soft-card);
 }
 
 .invite-card--pending {
-  border: 1rpx solid color-mix(in srgb, var(--theme-primary) 18%, transparent);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .invite-card .recommend-card__actions {
@@ -1049,16 +1057,14 @@ defineExpose({
 }
 
 .invite-card__button--cancel {
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .invite-card__button--confirm {
-  background: linear-gradient(
-    135deg,
-    var(--button-primary-gradient-start) 0%,
-    var(--button-primary-gradient-end) 100%
-  );
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   box-shadow: var(--button-primary-shadow);
 }
@@ -1070,7 +1076,7 @@ defineExpose({
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(26, 26, 26, 0.42);
+  background: var(--color-mask-mid);
 }
 
 .editor-panel {
@@ -1081,7 +1087,7 @@ defineExpose({
 }
 
 .editor-panel__close {
-  color: #a0a8c0;
+  color: var(--color-text-tertiary);
   font-size: 40rpx;
   line-height: 1;
 }
@@ -1094,7 +1100,7 @@ defineExpose({
 }
 
 .editor-field__label {
-  color: #1f2740;
+  color: var(--color-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -1102,10 +1108,14 @@ defineExpose({
 .editor-input {
   height: 88rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: 18rpx;
-  background: #f6f7fb;
-  color: #1f2740;
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  color: var(--color-text);
   font-size: 28rpx;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .chip-row {
@@ -1120,18 +1130,21 @@ defineExpose({
   justify-content: center;
   min-height: 56rpx;
   padding: 0 28rpx;
-  border: 1rpx solid #e7eaf4;
   border-radius: 18rpx;
   box-sizing: border-box;
-  background: #f6f7fb;
-  color: #68718d;
+  background: var(--material-control-bg);
+  box-shadow: var(--material-control-shadow);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
+  -webkit-backdrop-filter: var(--material-control-filter);
+  backdrop-filter: var(--material-control-filter);
 }
 
 .chip--active {
-  border-color: rgba(255, 114, 87, 0.35);
-  background: rgba(255, 114, 87, 0.12);
-  color: var(--color-primary);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .editor-actions {
@@ -1139,7 +1152,9 @@ defineExpose({
 }
 
 .editor-button--ghost {
-  color: var(--color-text);
-  background: var(--color-surface-muted);
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 </style>

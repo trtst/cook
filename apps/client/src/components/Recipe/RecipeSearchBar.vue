@@ -61,11 +61,13 @@ function handleClear() {
   align-items: center;
   height: 80rpx;
   padding: 0 28rpx;
-  border: 1rpx solid var(--color-border);
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
   box-sizing: border-box;
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .recipe-search__field--disabled {

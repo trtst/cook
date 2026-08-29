@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen navbar-transparent :navbar-placeholder="false">
     <template #navbar-center>
       <text class="home-nav__title" :style="navTitleStyle">食材</text>
@@ -256,6 +256,8 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -292,6 +294,8 @@ interface PantryCard {
 }
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const { navBarTotalHeight } = useSystemInfo();
 const {
@@ -749,12 +753,11 @@ defineExpose({
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -795,24 +798,16 @@ defineExpose({
 }
 
 .pantry-hero {
-  --pantry-hero-end: var(--color-page);
-
   position: relative;
   min-height: 418rpx;
   padding: 56rpx var(--space-page) 138rpx;
   border-bottom-right-radius: 56rpx;
   border-bottom-left-radius: 56rpx;
-  background:
-    radial-gradient(circle at 14% 72%, var(--color-primary-soft) 0, transparent 34%),
-    radial-gradient(circle at 86% 18%, color-mix(in srgb, var(--color-primary-soft) 72%, var(--color-surface) 28%) 0, transparent 30%),
-    linear-gradient(155deg,
-      color-mix(in srgb, var(--color-surface) 84%, var(--color-page) 16%),
-      color-mix(in srgb, var(--color-page) 84%, var(--color-primary-soft) 16%));
+  background: var(--page-hero-halo-bg);
   overflow: hidden;
 }
 
-.pantry-hero::before,
-.pantry-hero::after {
+.pantry-hero::before {
   content: "";
   position: absolute;
   pointer-events: none;
@@ -830,43 +825,18 @@ defineExpose({
 }
 
 .pantry-hero::after {
-  --pantry-mask-solid: #000;
-  --pantry-mask-strong: rgba(0, 0, 0, 0.76);
-  --pantry-mask-mid: rgba(0, 0, 0, 0.42);
-
+  content: "";
+  position: absolute;
+  pointer-events: none;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 1;
   height: 240rpx;
-  background: var(--pantry-hero-end);
-  mask-image:
-    radial-gradient(ellipse at 14% 100%,
-      var(--pantry-mask-solid) 0%,
-      var(--pantry-mask-strong) 36%,
-      transparent 72%),
-    radial-gradient(ellipse at 86% 100%,
-      var(--pantry-mask-solid) 0%,
-      var(--pantry-mask-strong) 36%,
-      transparent 72%),
-    linear-gradient(to bottom,
-      transparent 0%,
-      var(--pantry-mask-mid) 48%,
-      var(--pantry-mask-solid) 100%);
+  background: var(--color-page);
+  mask-image: var(--page-bottom-mask-image);
   mask-size: 100% 100%;
-  -webkit-mask-image:
-    radial-gradient(ellipse at 14% 100%,
-      var(--pantry-mask-solid) 0%,
-      var(--pantry-mask-strong) 36%,
-      transparent 72%),
-    radial-gradient(ellipse at 86% 100%,
-      var(--pantry-mask-solid) 0%,
-      var(--pantry-mask-strong) 36%,
-      transparent 72%),
-    linear-gradient(to bottom,
-      transparent 0%,
-      var(--pantry-mask-mid) 48%,
-      var(--pantry-mask-solid) 100%);
+  -webkit-mask-image: var(--page-bottom-mask-image);
   -webkit-mask-size: 100% 100%;
 }
 
@@ -920,12 +890,22 @@ defineExpose({
 .quick-card,
 .notice,
 .item-card,
-.sheet-card,
+.sheet-card {
+  border-radius: var(--radius-xs);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
+}
+
 .sheet-input,
 .sheet-picker {
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .summary-strip {
@@ -1041,15 +1021,17 @@ defineExpose({
   align-items: center;
   gap: 10rpx;
   padding: 14rpx 22rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  box-shadow: 0 8rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-control-bg);
+  box-shadow: var(--material-control-shadow);
+  -webkit-backdrop-filter: var(--material-control-filter);
+  backdrop-filter: var(--material-control-filter);
 }
 
 .filter-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .filter-chip__label {
@@ -1063,8 +1045,9 @@ defineExpose({
   font-size: var(--font-size-xs);
 }
 
+.filter-chip--active .filter-chip__label,
 .filter-chip--active .filter-chip__count {
-  color: var(--color-primary);
+  color: var(--color-tag-primary-text);
 }
 
 .notice,
@@ -1084,7 +1067,7 @@ defineExpose({
 
 .notice__action {
   margin-top: 8rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
 }
 
@@ -1104,8 +1087,7 @@ defineExpose({
   flex: 0 0 128rpx;
 }
 
-.item-card__image,
-.item-card__placeholder {
+.item-card__image {
   width: 128rpx;
   height: 128rpx;
   border-radius: var(--radius-sm);
@@ -1117,13 +1099,14 @@ defineExpose({
 }
 
 .item-card__placeholder {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at 24% 24%, var(--color-primary-soft), transparent 46%),
-    linear-gradient(180deg, var(--color-surface), var(--color-surface-muted));
-  color: var(--color-primary);
+  background: var(--page-cover-fresh-bg);
+  color: var(--color-icon-accent);
   font-size: 44rpx;
   font-weight: var(--font-weight-heavy);
 }
@@ -1181,8 +1164,8 @@ defineExpose({
 }
 
 .expiry-badge--warning {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .item-card__actions {
@@ -1209,13 +1192,13 @@ defineExpose({
 }
 
 .item-card__action--restock {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .item-card__action--shopping {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .sheet-meta__title {
@@ -1301,9 +1284,12 @@ defineExpose({
   display: flex;
   align-items: center;
   overflow: hidden;
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
 }
 
 .sheet-input--grow {
@@ -1349,12 +1335,14 @@ defineExpose({
 }
 
 .sheet-actions__button--cancel {
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
 }

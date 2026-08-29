@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="做饭助手" full-screen>
     <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
@@ -152,6 +152,8 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatMealSlot } from "@/utils/meal-slot";
@@ -166,6 +168,8 @@ type MenuEntry = {
 };
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loading = ref(false);
 const submitting = ref(false);
@@ -384,7 +388,7 @@ defineExpose({
   display: flex;
   flex: 1;
   min-height: 0;
-  background: linear-gradient(180deg, #f8f4ea 0%, #f5efe2 20%, #f7f4ee 100%);
+  background: var(--page-warm-bg);
 }
 
 .assistant-empty {
@@ -405,7 +409,7 @@ defineExpose({
 }
 
 .assistant-state--error {
-  color: var(--color-danger);
+  color: var(--color-state-danger-text);
 }
 
 .assistant-body {
@@ -419,11 +423,10 @@ defineExpose({
 .assistant-hero,
 .assistant-summary-card,
 .assistant-menu,
-.assistant-panel,
-.assistant-banner {
+.assistant-panel {
   border-radius: 28rpx;
-  background: color-mix(in srgb, var(--color-surface) 92%, #fff 8%);
-  box-shadow: 0 20rpx 44rpx color-mix(in srgb, #8a6b3d 10%, transparent);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
 }
 
 .assistant-hero {
@@ -435,7 +438,7 @@ defineExpose({
 
 .assistant-hero__eyebrow {
   font-size: 24rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .assistant-hero__title {
@@ -487,7 +490,7 @@ defineExpose({
   justify-content: space-between;
   gap: 16rpx;
   padding-bottom: 18rpx;
-  border-bottom: 1rpx solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-bottom: 1rpx solid var(--color-border-light);
 }
 
 .assistant-menu__item:last-child {
@@ -517,14 +520,15 @@ defineExpose({
   flex-direction: column;
   gap: 8rpx;
   padding: 24rpx 28rpx;
-  background: color-mix(in srgb, #fff3dd 86%, var(--color-surface) 14%);
+  border-radius: 28rpx;
+  background: var(--color-state-warning-soft);
   box-shadow: none;
 }
 
 .assistant-banner__title {
   font-size: 28rpx;
   font-weight: var(--font-weight-heavy);
-  color: #9a5f00;
+  color: var(--color-state-warning-text);
 }
 
 .assistant-banner__text,
@@ -558,7 +562,7 @@ defineExpose({
   gap: 8rpx;
   padding: 20rpx;
   border-radius: 22rpx;
-  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface) 93%);
+  background: var(--color-support-notice);
 }
 
 .assistant-grid__label {
@@ -584,7 +588,7 @@ defineExpose({
   gap: 8rpx;
   padding: 22rpx 24rpx;
   border-radius: 22rpx;
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface) 95%);
+  background: var(--color-surface-primary-panel-soft);
 }
 
 .assistant-step__title {
@@ -602,13 +606,13 @@ defineExpose({
 }
 
 .assistant-step__dish {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .assistant-note {
   padding: 18rpx 22rpx;
   border-radius: 20rpx;
-  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface) 94%);
+  background: var(--color-support-notice);
 }
 
 .assistant-actions {
@@ -630,8 +634,8 @@ defineExpose({
 }
 
 .assistant-actions__button--primary {
-  color: #fff;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  color: var(--color-text-inverse);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 

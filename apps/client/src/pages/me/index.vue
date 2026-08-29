@@ -1,5 +1,5 @@
 <template>
-	<page-meta :page-style="pageStyle" />
+	<page-meta :page-style="themePageStyle" />
 	<Layout title="我的" current-tab="me" :show-left="false" full-screen :navbar-placeholder="false" navbar-transparent>
 		<scroll-view class="me-page" scroll-y>
 			<view class="profile-hero" :class="profileHeroVariant" :style="profileHeroStyle">
@@ -51,7 +51,7 @@
 							<view v-for="item in coreEntries" :key="item.title" class="quick-entry"
 								hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(item)">
 								<view class="quick-entry__icon-wrap">
-									<image class="quick-entry__icon" :src="item.iconSrc" mode="aspectFit" />
+									<text class="quick-entry__icon-font cookfont" :class="item.iconClass" aria-hidden="true" />
 								</view>
 								<text class="quick-entry__title">{{ item.title }}</text>
 								<text v-if="isDisabledEntry(item)" class="quick-entry__badge">待开放</text>
@@ -101,21 +101,19 @@
 						<view class="service-list">
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleBenefitCenter">
 								<view class="service-row__icon-wrap service-row__icon-wrap--benefit">
-									<text class="service-row__icon-mark">益</text>
+									<text class="service-row__icon-font cookfont icon-wave" aria-hidden="true" />
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">权益中心</text>
-									<text class="service-row__description">看看你现在能用哪些会员权益</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMembershipCode">
 								<view class="service-row__icon-wrap service-row__icon-wrap--membership">
-									<text class="service-row__icon-mark">码</text>
+									<text class="service-row__icon-font cookfont icon-qa" aria-hidden="true" />
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">会员兑换码</text>
-									<text class="service-row__description">有兑换码的话，在这里兑换到账</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
@@ -127,33 +125,29 @@
 						<view class="service-list">
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(notificationEntry)">
 								<view class="service-row__icon-wrap">
-									<image class="service-row__icon" :src="notificationEntry.iconSrc" mode="aspectFit" />
+									<text class="service-row__icon-font cookfont" :class="notificationEntry.iconClass" aria-hidden="true" />
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">{{ notificationEntry.title }}</text>
-									<text v-if="notificationEntry.description" class="service-row__description">{{ notificationEntry.description }}</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMedalClick">
-								<view class="service-row__icon-wrap service-row__icon-wrap--medal">
-									<text class="service-row__icon-mark">勋</text>
+								<view class="service-row__icon-wrap">
+									<text class="service-row__icon-font cookfont icon-my-medal" aria-hidden="true" />
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">我的勋章</text>
-									<text class="service-row__description">{{ medalEntryDescription }}</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 							<view v-for="item in personalEntries" :key="item.title" class="service-row"
 								hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(item)">
 								<view class="service-row__icon-wrap">
-									<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
+									<text class="service-row__icon-font cookfont" :class="item.iconClass" aria-hidden="true" />
 								</view>
 								<view class="service-row__copy">
 									<text class="service-row__title">{{ item.title }}</text>
-									<text v-if="item.description" class="service-row__description">{{ item.description
-										}}</text>
 								</view>
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
@@ -165,12 +159,11 @@
 						<view class="knowledge-grid">
 							<view v-for="item in knowledgeEntries" :key="item.title" class="knowledge-entry"
 								hover-class="is-pressed" hover-stay-time="100" @click="handleEntryClick(item)">
-								<view class="knowledge-entry__icon-wrap">
-									<image class="knowledge-entry__icon" :src="item.iconSrc" mode="aspectFit" />
+									<view class="knowledge-entry__icon-wrap">
+										<text class="knowledge-entry__icon-font cookfont" :class="item.iconClass" aria-hidden="true" />
+									</view>
+									<text class="knowledge-entry__title">{{ item.title }}</text>
 								</view>
-								<text class="knowledge-entry__title">{{ item.title }}</text>
-								<text class="knowledge-entry__description">{{ item.description }}</text>
-							</view>
 						</view>
 					</view>
 
@@ -180,25 +173,23 @@
 							<template v-for="item in settingEntries" :key="item.title">
 								<button v-if="item.openType === 'contact'" class="service-row service-row-button" open-type="contact"
 									hover-class="is-pressed" hover-stay-time="100" session-from="source=me-settings">
-									<view class="service-row__icon-wrap">
-										<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
-									</view>
-										<view class="service-row__copy">
-											<text class="service-row__title">{{ item.title }}</text>
-											<text v-if="item.description" class="service-row__description">{{ item.description }}</text>
+										<view class="service-row__icon-wrap">
+											<text class="service-row__icon-font cookfont" :class="item.iconClass" aria-hidden="true" />
 										</view>
+											<view class="service-row__copy">
+												<text class="service-row__title">{{ item.title }}</text>
+											</view>
 									<text class="service-row__arrow cookfont icon-back" />
 								</button>
 
 								<view v-else class="service-row" hover-class="is-pressed" hover-stay-time="100"
 									@click="handleEntryClick(item)">
-									<view class="service-row__icon-wrap">
-										<image class="service-row__icon" :src="item.iconSrc" mode="aspectFit" />
-									</view>
-										<view class="service-row__copy">
-											<text class="service-row__title">{{ item.title }}</text>
-											<text v-if="item.description" class="service-row__description">{{ item.description }}</text>
+										<view class="service-row__icon-wrap">
+											<text class="service-row__icon-font cookfont" :class="item.iconClass" aria-hidden="true" />
 										</view>
+											<view class="service-row__copy">
+												<text class="service-row__title">{{ item.title }}</text>
+											</view>
 									<text class="service-row__arrow cookfont icon-back" />
 								</view>
 							</template>
@@ -244,26 +235,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import aboutIcon from "@/assets/me-actions/about.svg";
-import categoriesUnitsIcon from "@/assets/me-actions/categories-units.svg";
-import cookingSkillsIcon from "@/assets/me-actions/cooking-skills.svg";
-import cookwareIcon from "@/assets/me-actions/cookware.svg";
-import diningEventIcon from "@/assets/me-actions/dining-event.svg";
-import feedbackIcon from "@/assets/me-actions/feedback.svg";
-import kitchenPrepIcon from "@/assets/me-actions/kitchen-prep.svg";
-import mealPlanIcon from "@/assets/me-actions/meal-plan.svg";
-import notificationsIcon from "@/assets/me-actions/notifications.svg";
-import pantryIcon from "@/assets/me-actions/pantry.svg";
-import privacyIcon from "@/assets/me-actions/privacy.svg";
-import recipeSkillsIcon from "@/assets/me-actions/recipe-skills.svg";
-import remindersIcon from "@/assets/me-actions/reminders.svg";
-import shoppingListIcon from "@/assets/me-actions/shopping-list.svg";
-import tasteIcon from "@/assets/me-actions/taste.svg";
-import themeIcon from "@/assets/me-actions/theme.svg";
 import { medalApi } from "@/apis/medal";
 import { userApi } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import TierBadge from "@/components/TierBadge/TierBadge.vue";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -274,13 +250,14 @@ import { useTheme } from "@/composables/useTheme";
 import { APP_NAME, APP_VERSION } from "@/config/app";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
-import type { ThemePalette } from "@/themes";
+import { formatThemeText } from "@/themes";
 import { restoreAppSession } from "@/utils/session";
 
 interface PageEntry {
 	title: string;
-	iconSrc: string;
+	iconClass: string;
 	url?: string;
 	openType?: "contact";
 	disabledText?: string;
@@ -289,10 +266,13 @@ interface PageEntry {
 }
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
 const loginModalStore = useLoginModalStore();
+const settingsStore = useSettingsStore();
 const { effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
 const { navBarTotalHeight } = useSystemInfo();
 
@@ -333,66 +313,40 @@ const profileAvatarText = computed(() => {
 const profileUidText = computed(() =>
 	sessionStore.isLoggedIn ? `UID: ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
 );
-const medalEntryDescription = computed(() => {
-	if (!sessionStore.isLoggedIn) return "登录后查看你已经获得的勋章";
-	if (medalCount.value === null) return "看看已经获得的勋章";
-	return `已获得 ${medalCount.value} 枚勋章`;
-});
 const membershipCardDescription = computed(() => (
 	sessionStore.isLoggedIn ? "你的容量、展示和减广告权益都收在这里" : "登录后查看会员状态"
 ));
 const membershipCardTitle = computed(() => `你当前是 ${formatMembershipTier(userStore.profile?.membership?.tier)}`);
 const membershipCardMeta = computed(() => formatMembershipValidUntil(userStore.profile?.membership?.validUntil ?? null));
 const currentThemeText = computed(() => {
-	const modeLabel = themeModeLabels[themeMode.value];
-	const skinLabel = skinLabelMap[effectiveSkin.value] || "基础";
-	if (!canSwitchPalette.value) return `${modeLabel} · ${skinLabel}`;
-	return `${modeLabel} · ${skinLabel} · ${paletteLabels[effectivePalette.value]}`;
+	return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
 });
-
-const themeModeLabels = {
-	system: "跟随系统",
-	light: "浅色",
-	dark: "深色"
-} as const;
-const skinLabelMap = {
-	default: "基础",
-	"apple-glass": "玻璃",
-	"warm-couple": "暖调",
-	"handdrawn-food": "手绘"
-} as const;
-const paletteLabels: Record<ThemePalette, string> = {
-	default: "默认",
-	warm: "暖黄",
-	olive: "橄榄",
-	cool: "冷蓝"
-};
 const coreEntries: PageEntry[] = [
 	{
 		title: "饭局",
-		iconSrc: diningEventIcon,
+		iconClass: "icon-meal-event",
 		url: "/pages_meal/event/index"
 	},
 	{
 		title: "计划",
-		iconSrc: mealPlanIcon,
+		iconClass: "icon-meal-plan",
 		url: "/pages_meal/plan/index"
 	},
 	{
 		title: "购物清单",
-		iconSrc: shoppingListIcon,
+		iconClass: "icon-shopping",
 		url: "/pages_pantry/list/index"
 	},
 	{
 		title: "食材",
-		iconSrc: pantryIcon,
+		iconClass: "icon-pantry",
 		url: "/pages_pantry/index/index"
 	}
 ];
 
 const notificationEntry: PageEntry = {
 	title: "通知中心",
-	iconSrc: notificationsIcon,
+	iconClass: "icon-notification-center",
 	description: "邀请提醒、进度通知和系统消息都在这里",
 	url: "/pages_me/recommend/index",
 	requiresLogin: true
@@ -401,42 +355,36 @@ const notificationEntry: PageEntry = {
 const personalEntries: PageEntry[] = [
 	{
 		title: "我的口味",
-		iconSrc: tasteIcon,
+		iconClass: "icon-my-taste",
 		description: "把爱吃、不吃和过敏信息整理清楚",
 		url: "/pages_me/taste/index",
 		requiresLogin: true
 	},
 	{
 		title: "食材与单位",
-		iconSrc: categoriesUnitsIcon,
+		iconClass: "icon-ingredient-units",
 		description: "常用食材、分类和单位集中管理",
 		url: "/pages_me/ingredient-units/index",
 		requiresLogin: false
-	},
-	{
-		title: "厨具",
-		iconSrc: cookwareIcon,
-		description: "收着常见厨具的基础资料",
-		disabledText: "厨具"
 	}
 ];
 
 const knowledgeEntries: PageEntry[] = [
 	{
 		title: "厨房准备",
-		iconSrc: kitchenPrepIcon,
+		iconClass: "icon-kitchen-prep",
 		description: "下厨前的备菜和收纳小知识",
 		url: buildKnowledgeListPath("KITCHEN_PREP")
 	},
 	{
 		title: "烹饪技巧",
-		iconSrc: cookingSkillsIcon,
+		iconClass: "icon-cooking-skills",
 		description: "火候、步骤和做法上的实用经验",
 		url: buildKnowledgeListPath("COOKING_SKILLS")
 	},
 	{
 		title: "食谱技巧",
-		iconSrc: recipeSkillsIcon,
+		iconClass: "icon-recipe-skills",
 		description: "配比调整、替换思路和做菜小窍门",
 		url: buildKnowledgeListPath("RECIPE_SKILLS")
 	}
@@ -445,49 +393,49 @@ const knowledgeEntries: PageEntry[] = [
 const settingEntries = computed<PageEntry[]>(() => [
 	{
 		title: "提醒设置",
-		iconSrc: remindersIcon,
+		iconClass: "icon-reminder-settings",
 		description: "看看现在有哪些提醒入口",
 		url: "/pages_me/reminder/index",
 		requiresLogin: false
 	},
 	{
 		title: "主题皮肤",
-		iconSrc: themeIcon,
+		iconClass: "icon-theme-skin",
 		description: `当前${currentThemeText.value}，换一个你更喜欢的页面风格`,
 		url: "/pages_me/theme/index",
 		requiresLogin: false
 	},
 	{
 		title: "在线客服",
-		iconSrc: feedbackIcon,
+		iconClass: "icon-service",
 		description: "有问题时直接联系客服",
 		openType: "contact",
 		requiresLogin: false
 	},
 	{
 		title: "账号设置",
-		iconSrc: notificationsIcon,
+		iconClass: "icon-account-settings",
 		description: sessionStore.isLoggedIn ? "处理当前账号、缓存和登录状态" : "登录后处理账号和登录状态",
 		url: "/pages_me/account/index",
 		requiresLogin: true
 	},
 	{
 		title: "隐私政策",
-		iconSrc: privacyIcon,
+		iconClass: "icon-policy-privacy",
 		description: "了解你的信息会如何被使用",
 		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/privacy")}`,
 		requiresLogin: false
 	},
 	{
 		title: "用户协议",
-		iconSrc: privacyIcon,
+		iconClass: "icon-policy-user",
 		description: "查看产品使用说明和规则",
 		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/terms")}`,
 		requiresLogin: false
 	},
 	{
 		title: `关于${APP_NAME}`,
-		iconSrc: aboutIcon,
+		iconClass: "icon-about-app",
 		description: "看看产品介绍和当前版本",
 		url: `/pages_web/content/index?url=${encodeURIComponent("https://www.trtst.com/about")}`,
 		requiresLogin: false
@@ -677,6 +625,13 @@ async function automatorOpenNotificationLogin() {
 	};
 }
 
+async function automatorClearSession() {
+	await sessionStore.clearSession();
+	userStore.clearProfile();
+	medalCount.value = null;
+	await nextTick();
+}
+
 async function automatorSwitchLoginModalPhoneMode() {
 	loginModalStore.openPhoneMode();
 	await nextTick();
@@ -718,12 +673,50 @@ function automatorResolveEntryAuth(title: string) {
 	};
 }
 
+function automatorReadThemeState() {
+	return {
+		themeMode: themeMode.value,
+		effectiveSkin: effectiveSkin.value,
+		effectivePalette: effectivePalette.value,
+		canSwitchPalette: canSwitchPalette.value,
+		currentThemeText: currentThemeText.value,
+		themePageStyle: themePageStyle.value,
+		colorPage: themeVars.value["--color-page"] ?? ""
+	};
+}
+
+async function automatorResetThemeSettings() {
+	await settingsStore.clearSettings();
+	return automatorReadThemeState();
+}
+
+async function automatorApplyThemeSettings(snapshot: {
+	themeMode?: ThemeMode;
+	themeSkin?: ThemeSkin;
+	themePalette?: ThemePalette;
+}) {
+	if (snapshot.themeMode) {
+		await settingsStore.setThemeMode(snapshot.themeMode);
+	}
+	if (snapshot.themeSkin) {
+		await settingsStore.setThemeSkin(snapshot.themeSkin);
+	}
+	if (snapshot.themePalette) {
+		await settingsStore.setThemePalette(snapshot.themePalette);
+	}
+	return automatorReadThemeState();
+}
+
 defineExpose({
 	automatorOpenMedalLogin,
 	automatorOpenNotificationLogin,
+	automatorClearSession,
 	automatorSwitchLoginModalPhoneMode,
 	automatorReadLoginModalState,
-	automatorResolveEntryAuth
+	automatorResolveEntryAuth,
+	automatorReadThemeState,
+	automatorResetThemeSettings,
+	automatorApplyThemeSettings
 });
 
 function openProfileEditor() {
@@ -785,29 +778,24 @@ function showComingSoon(name: string) {
 
 <style scoped lang="scss">
 .nav-title {
-	color: var(--entry-ink);
+	color: var(--color-text);
 	font-size: var(--font-size-lg);
 	font-weight: var(--font-weight-bold);
 }
 
 .me-page {
-	--me-card-shadow: var(--shadow-card);
 	height: 100%;
 	background: var(--color-page);
 }
 
 .profile-hero {
-	--profile-hero-end: var(--color-page);
 	--profile-hero-padding-top: var(--size-navbar-content);
 
 	position: relative;
 	min-height: 520rpx;
 	overflow: hidden;
 	padding: var(--profile-hero-padding-top) var(--space-page) 74rpx;
-	background:
-		radial-gradient(circle at 16% 18%, var(--entry-side-mint-bg) 0, transparent 32%),
-		radial-gradient(circle at 86% 12%, var(--entry-side-aqua-bg) 0, transparent 30%),
-		linear-gradient(148deg, var(--entry-primary-bg), var(--entry-board-bg));
+	background: var(--page-hero-bg);
 }
 
 .profile-hero::before {
@@ -825,10 +813,7 @@ function showComingSoon(name: string) {
 }
 
 .profile-hero--halo {
-	background:
-		radial-gradient(circle at 78% 16%, var(--entry-primary-bg) 0, transparent 34%),
-		radial-gradient(circle at 8% 42%, var(--entry-side-aqua-bg) 0, transparent 30%),
-		linear-gradient(132deg, var(--entry-board-bg), var(--entry-side-mint-bg));
+	background: var(--page-hero-halo-bg);
 }
 
 .profile-hero--halo::before {
@@ -852,54 +837,24 @@ function showComingSoon(name: string) {
 	position: absolute;
 	inset: 0;
 	z-index: 1;
-	background:
-		linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),
-		radial-gradient(circle at 50% 12%, transparent 0%, var(--color-surface-mask-weak) 72%);
-	backdrop-filter: blur(10rpx);
+	background: var(--page-hero-mask-bg);
+	backdrop-filter: var(--material-mask-filter);
 	pointer-events: none;
-	-webkit-backdrop-filter: blur(10rpx);
+	-webkit-backdrop-filter: var(--material-mask-filter);
 }
 
 .profile-hero__mask {
-	--profile-mask-solid: #000;
-	--profile-mask-strong: rgba(0, 0, 0, 0.76);
-	--profile-mask-mid: rgba(0, 0, 0, 0.42);
-
 	position: absolute;
 	right: 0;
 	bottom: 0;
 	left: 0;
 	z-index: 2;
 	height: 260rpx;
-	background: var(--profile-hero-end);
-	mask-image:
-		radial-gradient(ellipse at 15% 100%,
-			var(--profile-mask-solid) 0%,
-			var(--profile-mask-strong) 36%,
-			transparent 72%),
-		radial-gradient(ellipse at 85% 100%,
-			var(--profile-mask-solid) 0%,
-			var(--profile-mask-strong) 36%,
-			transparent 72%),
-		linear-gradient(to bottom,
-			transparent 0%,
-			var(--profile-mask-mid) 50%,
-			var(--profile-mask-solid) 100%);
+	background: var(--color-page);
+	mask-image: var(--page-bottom-mask-image);
 	mask-size: 100% 100%;
 	pointer-events: none;
-	-webkit-mask-image:
-		radial-gradient(ellipse at 15% 100%,
-			var(--profile-mask-solid) 0%,
-			var(--profile-mask-strong) 36%,
-			transparent 72%),
-		radial-gradient(ellipse at 85% 100%,
-			var(--profile-mask-solid) 0%,
-			var(--profile-mask-strong) 36%,
-			transparent 72%),
-		linear-gradient(to bottom,
-			transparent 0%,
-			var(--profile-mask-mid) 50%,
-			var(--profile-mask-solid) 100%);
+	-webkit-mask-image: var(--page-bottom-mask-image);
 	-webkit-mask-size: 100% 100%;
 }
 
@@ -926,8 +881,8 @@ function showComingSoon(name: string) {
 	overflow: hidden;
 	border: 4rpx solid var(--color-surface);
 	border-radius: var(--radius-pill);
-	background: var(--entry-primary-bg);
-	box-shadow: var(--entry-board-shadow);
+	background: var(--color-tag-primary-bg);
+	box-shadow: var(--shadow-card);
 }
 
 .profile-row__avatar-image {
@@ -936,7 +891,7 @@ function showComingSoon(name: string) {
 }
 
 .profile-row__avatar-text {
-	color: var(--entry-ink);
+	color: var(--color-tag-primary-text);
 	font-size: var(--font-size-xl);
 	font-weight: var(--font-weight-heavy);
 }
@@ -1025,19 +980,19 @@ function showComingSoon(name: string) {
 	height: 62rpx;
 }
 
-.quick-entry__icon {
-	display: block;
-	width: 64rpx;
-	height: 64rpx;
+.quick-entry__icon-font {
+	color: var(--color-text);
+	font-size: 52rpx;
+	line-height: 1;
 }
 
 .quick-entry__title {
 	overflow: hidden;
 	max-width: 136rpx;
 	margin-top: 10rpx;
-	color: var(--color-text-secondary);
-	font-size: var(--font-size-xs);
-	font-weight: var(--font-weight-semibold);
+	color: var(--color-text);
+	font-size: var(--font-size-sm);
+	font-weight: var(--font-weight-medium);
 	text-align: center;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -1067,8 +1022,10 @@ function showComingSoon(name: string) {
 .service-list,
 .knowledge-grid {
 	border-radius: var(--radius-xs);
-	background: var(--color-surface);
-	box-shadow: var(--me-card-shadow);
+	background: var(--material-card-bg);
+	box-shadow: var(--material-card-shadow);
+	-webkit-backdrop-filter: var(--material-card-filter);
+	backdrop-filter: var(--material-card-filter);
 }
 
 .membership-card {
@@ -1110,7 +1067,7 @@ function showComingSoon(name: string) {
 
 .membership-card__status {
 	margin-top: 26rpx;
-	color: var(--color-primary);
+	color: var(--color-support-action);
 	font-weight: var(--font-weight-bold);
 }
 
@@ -1201,32 +1158,20 @@ function showComingSoon(name: string) {
 	height: 58rpx;
 }
 
-.service-row__icon {
-	display: block;
-	width: 58rpx;
-	height: 58rpx;
+.service-row__icon-font {
+	color: var(--color-text);
+	font-size: 46rpx;
+	line-height: 1;
 }
 
 .service-row__icon-wrap--membership {
-	background: color-mix(in srgb, var(--theme-primary) 9%, var(--color-page));
+	background: var(--color-support-notice);
 	border-radius: 20rpx;
 }
 
 .service-row__icon-wrap--benefit {
-	background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-page));
+	background: var(--color-support-info);
 	border-radius: 20rpx;
-}
-
-.service-row__icon-wrap--medal {
-	background: color-mix(in srgb, var(--theme-primary) 11%, var(--color-page));
-	border-radius: 20rpx;
-}
-
-.service-row__icon-mark {
-	color: var(--theme-primary);
-	font-size: 30rpx;
-	font-weight: 700;
-	line-height: 1;
 }
 
 .service-row__copy {
@@ -1235,24 +1180,14 @@ function showComingSoon(name: string) {
 	margin-left: var(--space-md);
 }
 
-.service-row__title,
-.service-row__description {
+.service-row__title {
 	display: block;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.service-row__title {
-	color: var(--color-text-secondary);
+	color: var(--color-text);
 	font-size: var(--font-size-md);
-	font-weight: var(--font-weight-semibold);
-}
-
-.service-row__description {
-	margin-top: 5rpx;
-	color: var(--color-text-tertiary);
-	font-size: var(--font-size-xs);
+	font-weight: var(--font-weight-medium);
 }
 
 .service-row__arrow {
@@ -1288,29 +1223,19 @@ function showComingSoon(name: string) {
 	height: 72rpx;
 }
 
-.knowledge-entry__icon {
-	display: block;
-	width: 72rpx;
-	height: 72rpx;
+.knowledge-entry__icon-font {
+	color: var(--color-text);
+	font-size: 46rpx;
+	line-height: 1;
 }
 
 .knowledge-entry__title {
 	overflow: hidden;
 	max-width: 100%;
 	margin-top: 14rpx;
-	color: var(--color-text-secondary);
-	font-size: var(--font-size-sm);
-	font-weight: var(--font-weight-bold);
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.knowledge-entry__description {
-	overflow: hidden;
-	max-width: 100%;
-	margin-top: 6rpx;
-	color: var(--color-text-tertiary);
-	font-size: var(--font-size-xs);
+	color: var(--color-text);
+	font-size: var(--font-size-md);
+	font-weight: var(--font-weight-medium);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -1322,12 +1247,12 @@ function showComingSoon(name: string) {
 }
 
 .service-version__text {
-	color: color-mix(in srgb, var(--color-text-tertiary) 46%, var(--color-page));
+	color: var(--color-text-tertiary);
 	font-size: var(--font-size-md);
 }
 
 .option-chip--active .option-chip__text {
-	color: var(--color-primary);
+	color: var(--color-tag-primary-text);
 }
 
 .is-pressed {
@@ -1343,9 +1268,9 @@ function showComingSoon(name: string) {
 	align-items: center;
 	justify-content: center;
 	padding: var(--space-page);
-	background: var(--login-popup-backdrop-bg);
-	-webkit-backdrop-filter: blur(24rpx) saturate(145%);
-	backdrop-filter: blur(24rpx) saturate(145%);
+	background: var(--page-overlay-veil-bg);
+	-webkit-backdrop-filter: var(--page-overlay-veil-filter);
+	backdrop-filter: var(--page-overlay-veil-filter);
 }
 
 .profile-modal__panel {
@@ -1353,7 +1278,7 @@ function showComingSoon(name: string) {
 	overflow: hidden;
 	border-radius: var(--radius-sheet);
 	background: var(--color-surface);
-	box-shadow: var(--login-popup-sheet-shadow);
+	box-shadow: var(--shadow-floating);
 }
 
 .profile-modal__header {
@@ -1395,9 +1320,12 @@ function showComingSoon(name: string) {
 	min-height: var(--size-input);
 	margin-top: var(--space-lg);
 	padding: 0 var(--space-md);
-	border: 1rpx solid var(--color-border);
+	border: 1rpx solid var(--material-input-border);
 	border-radius: var(--radius-md);
-	background: var(--color-surface-muted);
+	background: var(--material-input-bg);
+	box-shadow: var(--material-input-shadow);
+	-webkit-backdrop-filter: var(--material-input-filter);
+	backdrop-filter: var(--material-input-filter);
 	color: var(--color-text);
 	font-size: var(--font-size-md);
 }
@@ -1405,7 +1333,7 @@ function showComingSoon(name: string) {
 .profile-form__error {
 	display: block;
 	margin-top: var(--space-lg);
-	color: var(--color-danger-text);
+	color: var(--color-state-danger-text);
 	font-size: var(--font-size-sm);
 }
 
@@ -1428,9 +1356,12 @@ function showComingSoon(name: string) {
 	min-height: var(--size-input);
 	margin-top: 14rpx;
 	padding: 0 var(--space-md);
-	border: 1rpx solid var(--color-border);
+	border: 1rpx solid var(--material-input-border);
 	border-radius: var(--radius-md);
-	background: var(--color-surface-muted);
+	background: var(--material-input-bg);
+	box-shadow: var(--material-input-shadow);
+	-webkit-backdrop-filter: var(--material-input-filter);
+	backdrop-filter: var(--material-input-filter);
 	color: var(--color-text);
 	font-size: var(--font-size-md);
 }
@@ -1438,7 +1369,7 @@ function showComingSoon(name: string) {
 .password-form__error {
 	display: block;
 	margin-top: var(--space-lg);
-	color: var(--color-danger-text);
+	color: var(--color-state-danger-text);
 	font-size: var(--font-size-sm);
 }
 
@@ -1457,13 +1388,15 @@ function showComingSoon(name: string) {
 }
 
 .profile-modal__button--ghost {
-	border: 1rpx solid var(--color-border);
-	background: var(--color-surface);
-	color: var(--color-text-secondary);
+	border: 0;
+	background: var(--button-secondary-bg);
+	color: var(--button-secondary-text);
+	-webkit-backdrop-filter: var(--button-secondary-filter);
+	backdrop-filter: var(--button-secondary-filter);
 }
 
 .profile-modal__button--primary {
-	background: var(--color-primary);
-	color: var(--color-primary-foreground);
+	background: var(--button-primary-bg);
+	color: var(--button-primary-text);
 }
 </style>

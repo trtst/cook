@@ -2,6 +2,12 @@ export {
   DEFAULT_THEME_PALETTE,
   DEFAULT_THEME_SKIN,
   FALLBACK_ASSET_SKIN,
+  formatThemeText,
+  THEME_MODE_LABELS,
+  THEME_PALETTE_LABELS,
+  THEME_PICKER_SKINS,
+  THEME_SKIN_LABELS,
+  THEME_SOURCE_MODE_LABELS,
   THEME_PALETTE_OPTIONS,
   THEME_SKIN_OPTIONS
 } from "./config";
@@ -14,6 +20,7 @@ export type {
   ThemeSeed,
   ThemeSeedSet,
   ThemeSkin,
+  ThemeSourceMode,
   ThemeSkinAccess,
   ThemeSkinOption,
   ThemeSvgAsset,
@@ -29,7 +36,8 @@ import {
   type ThemePalette,
   type ThemeSeed,
   type ThemeSeedSet,
-  type ThemeSkin
+  type ThemeSkin,
+  type ThemeSourceMode
 } from "./config";
 
 export function getThemeSkinOption(themeSkin: ThemeSkin) {
@@ -58,6 +66,10 @@ export function supportsPaletteForSkin(themeSkin: ThemeSkin) {
 
 export function supportsDarkForSkin(themeSkin: ThemeSkin) {
   return getThemeSkinOption(themeSkin).supportsDark;
+}
+
+export function getThemeSourceModeForSkin(themeSkin: ThemeSkin): ThemeSourceMode {
+  return getThemeSkinOption(themeSkin).sourceMode;
 }
 
 export function getThemeSeedSet(themeSkin: ThemeSkin, themePalette: ThemePalette): ThemeSeedSet | null {

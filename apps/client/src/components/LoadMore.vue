@@ -59,10 +59,10 @@ function handleClick() {
 .load-more-footer__text {
   font-size: 24rpx;
   line-height: 1.6;
-  color: #8c8c8c;
+  color: var(--color-text-tertiary);
 }
 
 .load-more-footer__text--action {
-  color: #5f6f52;
+  color: var(--color-support-action);
 }
 </style>

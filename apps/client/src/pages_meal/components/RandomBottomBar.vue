@@ -59,11 +59,10 @@ const emit = defineEmits<{
   margin-top: var(--space-md);
   padding: 24rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(255, 253, 248, 0.99));
-  box-shadow: 0 -16rpx 32rpx var(--color-surface-mask-weak);
-  -webkit-backdrop-filter: saturate(180%) blur(18rpx);
-  backdrop-filter: saturate(180%) blur(18rpx);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
 }
 
 .bottom-bar__summary {
@@ -100,8 +99,8 @@ const emit = defineEmits<{
 }
 
 .primary {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .secondary {

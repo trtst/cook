@@ -16,7 +16,29 @@ pnpm dev:mp-weixin
 pnpm type-check
 pnpm lint
 pnpm build:mp-weixin
+pnpm check:theme:static
 ```
+
+## 主题验证
+
+主题系统收口后，优先按两层验证：
+
+1. 静态主题规则：`pnpm check:theme:static`
+2. 运行态主题切换：从仓库根目录串行执行 HBuilderX CLI
+
+```bash
+/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/home/theme.test.js
+/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages/recipe/theme.test.js
+/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_me/theme/index.test.js
+/Applications/HBuilderX.app/Contents/MacOS/cli uniapp.test mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --testcaseFile pages_meal/random/theme.test.js
+```
+
+注意：
+
+- `HBuilderX CLI uniapp.test` 会改写 `src/jest.config.js` 的 `testMatch`，一次只跑一个用例，避免并发抢占 automator 端口。
+- 当前环境下，通过 `pnpm` 或 bash 脚本二次包裹 HBuilderX CLI 可能触发 Qt `neon` 崩溃；运行态主题回归请直接执行上面的原始命令。
+- 运行态测试依赖微信开发者工具已开启服务端口，并且 `apps/client/src/env.js` 可被 HBuilderX 自动写入测试配置。
+- `pages_me/theme/visual-capture.test.js` 当前保留为手工视觉留档候选，并已显式 `it.skip(...)`；在 CLI 下 `program.screenshot()` 会卡在 `App.captureScreenshot` 超时，不算稳定回归项。
 
 ## 请求环境切换
 

@@ -1,6 +1,7 @@
 <template>
   <view class="tabbar-shell" :class="`tabbar-shell--${effectiveSkin}`">
     <view class="tabbar">
+      <view class="tabbar__active-pill" :style="activePillStyle" />
       <view
         v-for="item in TAB_ITEMS"
         :key="item.key"
@@ -19,7 +20,7 @@
           />
           <text
             v-else
-            class="tabbar__font-icon cookFont"
+            class="tabbar__font-icon cookfont"
             :class="getFontIconClass(item.iconName)"
             aria-hidden="true"
           />
@@ -31,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { TAB_ITEMS, type TabKey } from "./tabs";
 import { uniPlatform } from "@/platform/uni";
 import { useTheme } from "@/composables/useTheme";
@@ -47,6 +49,10 @@ const props = withDefaults(
 );
 
 const { effectiveSkin } = useTheme();
+const activeIndex = computed(() => Math.max(TAB_ITEMS.findIndex(item => item.key === props.current), 0));
+const activePillStyle = computed(() => ({
+  transform: `translateX(calc(${activeIndex.value} * 100%))`
+}));
 
 function getTabbarAsset(iconName: ThemeTabbarIconName) {
   const currentAsset = getThemeSkinAssets(effectiveSkin.value).tabbar?.[iconName];
@@ -90,11 +96,11 @@ function switchTab(pagePath: string) {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--color-tabbar-bg);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
-  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.1) 36%, rgba(0, 0, 0, 1) 100%);
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  background: var(--material-tabbar-bg);
+  -webkit-mask-image: var(--frosted-mask-image);
+  mask-image: var(--frosted-mask-image);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
   content: "";
 }
 
@@ -108,15 +114,28 @@ function switchTab(pagePath: string) {
   height: var(--tabbar-panel-height);
   padding: 10rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-tabbar-bg);
-  box-shadow: var(--shadow-tabbar);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: auto;
-  -webkit-backdrop-filter: saturate(180%) blur(28rpx);
-  backdrop-filter: saturate(180%) blur(28rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
+}
+
+.tabbar__active-pill {
+  position: absolute;
+  top: 10rpx;
+  left: 10rpx;
+  z-index: 0;
+  width: calc((100% - 20rpx) / 3);
+  height: 88rpx;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  transition: transform 0.22s ease;
 }
 
 .tabbar__item {
   position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   align-items: center;
@@ -133,8 +152,7 @@ function switchTab(pagePath: string) {
 }
 
 .tabbar__item--active {
-  background: var(--color-surface-muted);
-  color: var(--entry-ink);
+  color: var(--color-text);
 }
 
 .tabbar__icon-wrap {
@@ -154,11 +172,8 @@ function switchTab(pagePath: string) {
 
 .tabbar__font-icon {
   display: block;
-  width: 38rpx;
-  height: 38rpx;
   color: var(--color-text-tertiary);
-  font-size: 38rpx;
-  line-height: 38rpx;
+  line-height: 1;
   text-align: center;
 }
 
@@ -168,18 +183,18 @@ function switchTab(pagePath: string) {
   overflow: hidden;
   max-width: 120rpx;
   font-size: var(--font-size-sm);
-  font-weight: var(--entry-subtitle-weight);
+  font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tabbar__item--active .tabbar__label {
-  color: var(--entry-ink);
+  color: var(--color-text);
 }
 
 .tabbar__item--active .tabbar__font-icon {
-  color: var(--entry-ink);
+  color: var(--color-text);
 }
 
 .tabbar-shell--default .tabbar__icon-wrap,
@@ -189,8 +204,8 @@ function switchTab(pagePath: string) {
 }
 
 .tabbar-shell--default .tabbar__label {
-  font-size: 28rpx;
-  font-weight: var(--font-weight-bold);
+  font-size: 24rpx;
+  font-weight: normal;
 }
 
 .tabbar-shell--default .tabbar__item--active .tabbar__label {

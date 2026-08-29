@@ -1,10 +1,10 @@
 /* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
 @font-face {
-    font-family: 'cookfont';  /* Project id 5215640 */
-    src: url('//at.alicdn.com/t/c/font_5215640_4sr0zcpa96k.woff2?t=1787743634850') format('woff2'),
-         url('//at.alicdn.com/t/c/font_5215640_4sr0zcpa96k.woff?t=1787743634850') format('woff'),
-         url('//at.alicdn.com/t/c/font_5215640_4sr0zcpa96k.ttf?t=1787743634850') format('truetype');
-  }
+  font-family: 'cookfont';  /* Project id 5215640 */
+  src: url('//at.alicdn.com/t/c/font_5215640_rga2no5832.woff2?t=1787994387775') format('woff2'),
+       url('//at.alicdn.com/t/c/font_5215640_rga2no5832.woff?t=1787994387775') format('woff'),
+       url('//at.alicdn.com/t/c/font_5215640_rga2no5832.ttf?t=1787994387775') format('truetype');
+}
 
 .cookfont {
     font-family: "cookfont" !important;
@@ -31,8 +31,16 @@
     content: "\e625";
 }
 
+.icon-meal-event::before {
+    content: "\e794";
+}
+
 .icon-plan::before {
     content: "\e61f";
+}
+
+.icon-meal-plan::before {
+    content: "\e6e3";
 }
 
 .icon-shopping::before {
@@ -41,6 +49,10 @@
 
 .icon-ingredient::before {
     content: "\e61b";
+}
+
+.icon-pantry::before {
+    content: "\e797";
 }
 
 .icon-add::before {
@@ -95,6 +107,10 @@
     content: "\e65b";
 }
 
+.icon-my-taste::before {
+    content: "\e62f";
+}
+
 .icon-collect::before {
     content: "\e60a";
 }
@@ -103,8 +119,16 @@
     content: "\e60b";
 }
 
+.icon-notification-center::before {
+    content: "\e6e6";
+}
+
 .icon-qa::before {
     content: "\e610";
+}
+
+.icon-service::before {
+    content: "\e6d1";
 }
 
 .icon-medal-right::before {
@@ -113,6 +137,10 @@
 
 .icon-medal-left::before {
     content: "\e612";
+}
+
+.icon-my-medal::before {
+    content: "\e684";
 }
 
 .icon-add-plan::before {
@@ -135,6 +163,86 @@
     content: "\e715";
 }
 
+.icon-theme-skin::before {
+    content: "\e70f";
+}
+
+.icon-reminder-settings::before {
+    content: "\e720";
+}
+
+.icon-ingredient-units::before {
+    content: "\e721";
+}
+
+.icon-account-settings::before {
+    content: "\e6da";
+}
+
+.icon-about-app::before {
+    content: "\e6d6";
+}
+
+.icon-policy-privacy::before {
+    content: "\e789";
+}
+
+.icon-policy-user::before {
+    content: "\e788";
+}
+
+.icon-tab-dining::before {
+    content: "\e704";
+}
+
+.icon-tab-recipe::before {
+    content: "\e711";
+}
+
+.icon-tab-me::before {
+    content: "\e6d3";
+}
+
 .icon-more::before {
     content: "\e716";
+}
+
+.icon-week-sun::before {
+    content: "\e602";
+}
+
+.icon-week-mon::before {
+    content: "\e615";
+}
+
+.icon-kitchen-prep::before {
+    content: "\e61e";
+}
+
+.icon-cooking-skills::before {
+    content: "\e61c";
+}
+
+.icon-recipe-skills::before {
+    content: "\e61d";
+}
+
+.icon-week-tue::before {
+    content: "\e601";
+}
+
+.icon-week-wed::before {
+    content: "\e618";
+}
+
+.icon-week-thu::before {
+    content: "\e616";
+}
+
+.icon-week-fri::before {
+    content: "\e600";
+}
+
+.icon-week-sat::before {
+    content: "\e617";
 }

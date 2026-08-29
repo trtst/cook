@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="出错了">
     <text class="title">页面暂时不可用</text>
     <text class="description">请返回上一页后重试。</text>
@@ -7,10 +7,15 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useTheme } from "@/composables/useTheme";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 </script>
 
 

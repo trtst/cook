@@ -205,8 +205,10 @@ function inventoryLabel(status: "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN") {
   margin-top: var(--space-md);
   padding: var(--space-md);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .gap-panel__head {
@@ -219,7 +221,7 @@ function inventoryLabel(status: "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN") {
 .gap-panel__eyebrow,
 .gap-card__slot {
   display: block;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -281,15 +283,15 @@ function inventoryLabel(status: "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN") {
 }
 
 .gap-card__status--ok {
-  background: rgba(107, 196, 92, 0.18);
-  color: #2e7d32;
+  background: var(--color-state-success-soft);
+  color: var(--color-state-success-text);
 }
 
 .gap-card__status--partial,
 .gap-card__status--missing,
 .gap-card__status--unknown {
-  background: rgba(255, 220, 168, 0.28);
-  color: #8b4d12;
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .gap-card__ingredients {
@@ -338,13 +340,13 @@ function inventoryLabel(status: "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN") {
 .gap-row__decision {
   padding: 10rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--color-surface-soft-panel);
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 
 .gap-row__decision--active {
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
   color: var(--color-text);
 }
 

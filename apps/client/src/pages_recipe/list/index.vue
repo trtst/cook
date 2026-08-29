@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" :show-left="false" navbar-layout="custom-left" full-screen>
     <template #navbar-left>
       <view class="list-nav">
@@ -139,6 +139,8 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { getRecipeViewVersion, markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -171,6 +173,8 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loadingTips = [
 	"帮你翻翻最近做过的菜",
@@ -568,7 +572,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	z-index: -1;
 	height: 18rpx;
 	border-radius: var(--radius-pill);
-	background: var(--theme-primary);
+	background: var(--color-tag-primary-bg);
 	opacity: 0.3;
 	transform: rotate(-5deg);
 }
@@ -615,10 +619,11 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	gap: 20rpx;
 	align-items: stretch;
 	padding: 20rpx;
-	border: 1rpx solid rgba(77, 64, 47, 0.08);
 	border-radius: var(--radius-xs);
-	background: var(--color-surface);
-	box-shadow: 0 12rpx 28rpx rgba(57, 44, 31, 0.05);
+	background: var(--material-card-bg);
+	box-shadow: var(--material-card-shadow);
+	-webkit-backdrop-filter: var(--material-card-filter);
+	backdrop-filter: var(--material-card-filter);
 }
 
 .card + .card {
@@ -631,7 +636,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	width: 208rpx;
 	height: 156rpx;
 	border-radius: var(--radius-xs);
-	background: linear-gradient(180deg, rgba(255, 252, 247, 0.94) 0%, rgba(245, 238, 227, 0.96) 100%);
+	background: var(--page-cover-fresh-bg);
 }
 
 .card__cover-image,
@@ -713,7 +718,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 }
 
 .card__danger {
-	color: var(--color-danger-text);
+	color: var(--color-state-danger-text);
 	flex: 0 0 auto;
 	white-space: nowrap;
 }

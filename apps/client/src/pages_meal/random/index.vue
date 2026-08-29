@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="随机一下" full-screen :navbar-placeholder="false" navbar-transparent>
     <view class="random-nav-backdrop" :style="navBackdropStyle" />
     <scroll-view class="random-scroll" scroll-y :show-scrollbar="false" @scroll="handleRandomScroll">
@@ -164,11 +164,15 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
+import { useTheme } from "@/composables/useTheme";
+import { formatThemeText } from "@/themes";
 import { createOperationId } from "@/utils/operation-id";
 import { mealApi, type CreateMealPlanRequest } from "../apis/meal";
 import {
@@ -203,10 +207,16 @@ const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
+const settingsStore = useSettingsStore();
+const { themeVars, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const RANDOM_NAV_GAP = 16;
 const RANDOM_NAV_FADE_DISTANCE = 96;
 const MAX_SLOT_TOTAL = 12;
+const currentThemeText = computed(() => {
+  return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
+});
 
 const state = ref<RandomPageState>({
   pageStatus: "IDLE",
@@ -1010,11 +1020,48 @@ async function automatorTriggerGuestGenerate() {
   };
 }
 
+function automatorReadThemeState() {
+  return {
+    themeMode: themeMode.value,
+    effectiveSkin: effectiveSkin.value,
+    effectivePalette: effectivePalette.value,
+    canSwitchPalette: canSwitchPalette.value,
+    currentThemeText: currentThemeText.value,
+    themePageStyle: themePageStyle.value,
+    colorPage: themeVars.value["--color-page"] ?? ""
+  };
+}
+
+async function automatorResetThemeSettings() {
+  await settingsStore.clearSettings();
+  return automatorReadThemeState();
+}
+
+async function automatorApplyThemeSettings(snapshot: {
+  themeMode?: ThemeMode;
+  themeSkin?: ThemeSkin;
+  themePalette?: ThemePalette;
+}) {
+  if (snapshot.themeMode) {
+    await settingsStore.setThemeMode(snapshot.themeMode);
+  }
+  if (snapshot.themeSkin) {
+    await settingsStore.setThemeSkin(snapshot.themeSkin);
+  }
+  if (snapshot.themePalette) {
+    await settingsStore.setThemePalette(snapshot.themePalette);
+  }
+  return automatorReadThemeState();
+}
+
 defineExpose({
   automatorApplySession,
   automatorClearSession,
   automatorPrimeConditions,
-  automatorTriggerGuestGenerate
+  automatorTriggerGuestGenerate,
+  automatorReadThemeState,
+  automatorResetThemeSettings,
+  automatorApplyThemeSettings
 });
 </script>
 
@@ -1026,12 +1073,11 @@ defineExpose({
   left: 0;
   z-index: 799;
   overflow: hidden;
-  border-bottom: 1rpx solid var(--color-border);
-  background: var(--color-tabbar-bg);
-  box-shadow: 0 10rpx 24rpx var(--color-surface-mask-weak);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
-  -webkit-backdrop-filter: saturate(180%) blur(22rpx);
-  backdrop-filter: saturate(180%) blur(22rpx);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -1047,11 +1093,7 @@ defineExpose({
 
 .random-hero {
   padding: 64rpx var(--space-page) 164rpx;
-  background:
-    linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),
-    radial-gradient(circle at 18% 26%, rgba(168, 224, 255, 0.42), transparent 30%),
-    radial-gradient(circle at 84% 18%, rgba(206, 230, 255, 0.38), transparent 28%),
-    linear-gradient(145deg, rgba(234, 247, 255, 0.96), rgba(250, 252, 255, 0.98));
+  background: var(--page-hero-halo-bg);
 }
 
 .random-content {
@@ -1076,7 +1118,7 @@ defineExpose({
 
 .random-hero__eyebrow,
 .board-card__eyebrow {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1104,8 +1146,10 @@ defineExpose({
 .board-card {
   margin-top: var(--space-md);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .notice {
@@ -1122,7 +1166,7 @@ defineExpose({
 }
 
 .notice__action {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1136,7 +1180,7 @@ defineExpose({
 }
 
 .warning-card__title {
-  color: #8b4d12;
+  color: var(--color-state-warning-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1167,8 +1211,8 @@ defineExpose({
   flex: 0 0 auto;
   padding: 10rpx 18rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary-active);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -1230,12 +1274,12 @@ defineExpose({
 .plan-sheet__tips {
   padding: 18rpx 20rpx;
   border-radius: var(--radius-md);
-  background: rgba(255, 220, 168, 0.18);
+  background: var(--color-state-warning-soft);
 }
 
 .plan-sheet__tips-text {
   display: block;
-  color: #8b4d12;
+  color: var(--color-state-warning-text);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
 }
@@ -1253,8 +1297,8 @@ defineExpose({
 }
 
 .primary {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .secondary {

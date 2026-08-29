@@ -1,27 +1,37 @@
 <template>
-	<view class="layout"
-		:class="[themeClasses, { 'layout--with-tabbar': showTabbar, 'layout--full-screen': fullScreen }]"
-		:style="themeVars">
-		<NavBar v-if="showNavbar" :title="title" :show-left="showLeft" :layout="navbarLayout"
-			:placeholder="navbarPlaceholder" :transparent="navbarTransparent" :background-opacity="navbarOpacity">
-			<template v-if="$slots['navbar-left']" #left>
-				<slot name="navbar-left" />
-			</template>
-			<template v-if="$slots['navbar-center']" #default>
-				<slot name="navbar-center" />
-			</template>
-			<template v-if="$slots['navbar-right']" #right>
-				<slot name="navbar-right" />
-			</template>
-		</NavBar>
-		<view class="layout__body">
-			<slot />
-		</view>
-		<TabBar v-if="showTabbar && currentTab" :current="currentTab" />
-		<Toast :top-offset="toastTop" />
-		<Confirm />
-		<LoginModal />
-	</view>
+  <view class="layout" :style="themeVars">
+    <view
+      class="layout__theme"
+      :class="[themeClasses, { 'layout__theme--with-tabbar': showTabbar, 'layout__theme--full-screen': fullScreen }]"
+    >
+      <NavBar
+        v-if="showNavbar"
+        :title="title"
+        :show-left="showLeft"
+        :layout="navbarLayout"
+        :placeholder="navbarPlaceholder"
+        :transparent="navbarTransparent"
+        :background-opacity="navbarOpacity"
+      >
+        <template v-if="$slots['navbar-left']" #left>
+          <slot name="navbar-left" />
+        </template>
+        <template v-if="$slots['navbar-center']" #default>
+          <slot name="navbar-center" />
+        </template>
+        <template v-if="$slots['navbar-right']" #right>
+          <slot name="navbar-right" />
+        </template>
+      </NavBar>
+      <view class="layout__body">
+        <slot />
+      </view>
+      <TabBar v-if="showTabbar && currentTab" :current="currentTab" />
+      <Toast :top-offset="toastTop" />
+      <Confirm />
+      <LoginModal />
+    </view>
+  </view>
 </template>
 
 <script setup lang="ts">
@@ -36,28 +46,28 @@ import { useTheme } from "@/composables/useTheme";
 import type { TabKey } from "@/components/TabBar/tabs";
 
 const props = withDefaults(
-	defineProps<{
-		title?: string;
-		showNavbar?: boolean;
-		showLeft?: boolean;
-		currentTab?: TabKey;
-		fullScreen?: boolean;
-		navbarPlaceholder?: boolean;
-		navbarTransparent?: boolean;
-		navbarOpacity?: number;
-		navbarLayout?: "title" | "custom-left";
-	}>(),
-	{
-		title: "",
-		showNavbar: true,
-		showLeft: true,
-		currentTab: undefined,
-		fullScreen: false,
-		navbarPlaceholder: true,
-		navbarTransparent: false,
-		navbarOpacity: 1,
-		navbarLayout: "title"
-	}
+  defineProps<{
+    title?: string;
+    showNavbar?: boolean;
+    showLeft?: boolean;
+    currentTab?: TabKey;
+    fullScreen?: boolean;
+    navbarPlaceholder?: boolean;
+    navbarTransparent?: boolean;
+    navbarOpacity?: number;
+    navbarLayout?: "title" | "custom-left";
+  }>(),
+  {
+    title: "",
+    showNavbar: true,
+    showLeft: true,
+    currentTab: undefined,
+    fullScreen: false,
+    navbarPlaceholder: true,
+    navbarTransparent: false,
+    navbarOpacity: 1,
+    navbarLayout: "title"
+  }
 );
 
 const { themeClasses, themeVars } = useTheme();
@@ -68,17 +78,21 @@ const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : sy
 
 <style scoped lang="scss">
 .layout {
-	display: flex;
-	flex-direction: column;
-	height: 100vh;
-	overflow: hidden;
-	background: var(--color-page);
-	color: var(--color-text);
-	font-family: var(--font-family-base);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+}
+
+.layout__theme {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .layout__body {
-	flex: 1;
-	min-height: 0;
+  flex: 1;
+  min-height: 0;
 }
 </style>

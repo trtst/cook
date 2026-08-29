@@ -180,7 +180,7 @@ function handleCreateClick() {
   gap: 8rpx;
   padding: 22rpx 24rpx;
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--color-surface-soft);
 }
 
 .shopping-target-sheet__meta-title,
@@ -221,7 +221,7 @@ function handleCreateClick() {
 
 .shopping-target-sheet__action,
 .shopping-target-sheet__create-button {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
 }
@@ -239,8 +239,12 @@ function handleCreateClick() {
   width: 100%;
   min-height: 88rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   color: var(--color-text);
   font-size: var(--font-size-sm);
   box-sizing: border-box;
@@ -259,7 +263,7 @@ function handleCreateClick() {
   min-height: 88rpx;
   padding: 0 28rpx;
   border-radius: var(--radius-xs);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: var(--font-size-sm);
@@ -278,14 +282,18 @@ function handleCreateClick() {
 
 .shopping-target-sheet__option {
   padding: 22rpx 24rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-xs);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .shopping-target-sheet__option--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
+  box-shadow:
+    var(--material-card-shadow),
+    inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .shopping-target-sheet__option-meta {

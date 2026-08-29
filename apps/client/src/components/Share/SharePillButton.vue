@@ -25,8 +25,8 @@ withDefaults(
   height: 52rpx;
   border: 0;
   border-radius: var(--radius-xs);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
   line-height: 1;
 }

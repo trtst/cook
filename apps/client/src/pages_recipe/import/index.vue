@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="灵感入口">
     <view class="panel">
       <text class="panel__title">独立导入页已下线</text>
@@ -10,11 +10,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 function goRecipeHome() {
 	void uniPlatform.navigation.switchTab("/pages/recipe/index");
@@ -24,8 +29,11 @@ function goRecipeHome() {
 <style scoped lang="scss">
 .panel {
 	padding: var(--space-lg);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface);
+	border-radius: var(--radius-xs);
+	background: var(--material-card-bg);
+	box-shadow: var(--material-card-shadow);
+	-webkit-backdrop-filter: var(--material-card-filter);
+	backdrop-filter: var(--material-card-filter);
 }
 
 .panel__title,
@@ -48,8 +56,11 @@ function goRecipeHome() {
 
 .panel__button {
 	margin-top: var(--space-lg);
-	border-radius: var(--radius-md);
-	background: var(--color-primary);
-	color: var(--color-primary-foreground);
+	border-radius: var(--radius-pill);
+	background: var(--button-primary-bg);
+	box-shadow: var(--button-primary-shadow);
+	color: var(--button-primary-text);
+	border: 0;
+	filter: var(--button-primary-filter);
 }
 </style>

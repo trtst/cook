@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     title=""
     full-screen
@@ -449,6 +449,8 @@ import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -504,6 +506,8 @@ const NAV_FADE_DISTANCE = 132;
 const SWIPE_DELETE_WIDTH = typeof uni !== "undefined" && typeof uni.upx2px === "function" ? uni.upx2px(156) : 78;
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -2055,8 +2059,7 @@ defineExpose({
 
 .detail-page {
   position: relative;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-page) 84%, var(--color-primary-soft) 16%) 0%, var(--color-page) 48%, var(--color-page) 100%);
+  background: var(--color-page);
 }
 
 .detail-empty {
@@ -2084,10 +2087,11 @@ defineExpose({
   right: 0;
   left: 0;
   z-index: 790;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-surface-mask-strong) 82%, var(--color-surface) 18%) 0%, color-mix(in srgb, var(--color-surface) 92%, transparent) 100%);
-  box-shadow: 0 10rpx 26rpx color-mix(in srgb, var(--color-surface-mask-medium) 64%, transparent);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
   pointer-events: none;
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
   transition: opacity 180ms ease;
 }
 
@@ -2110,8 +2114,6 @@ defineExpose({
 }
 
 .detail-hero {
-  --detail-hero-end: var(--color-page);
-
   position: relative;
   overflow: hidden;
   min-height: 452rpx;
@@ -2120,10 +2122,7 @@ defineExpose({
   padding-left: 32rpx;
   border-bottom-right-radius: 56rpx;
   border-bottom-left-radius: 56rpx;
-  background:
-    radial-gradient(circle at 16% 18%, var(--entry-side-mint-bg) 0, transparent 32%),
-    radial-gradient(circle at 86% 12%, var(--entry-side-aqua-bg) 0, transparent 30%),
-    linear-gradient(148deg, var(--entry-primary-bg), var(--entry-board-bg));
+  background: var(--page-hero-bg);
 }
 
 .detail-hero::before {
@@ -2141,46 +2140,18 @@ defineExpose({
 }
 
 .detail-hero::after {
-  --detail-mask-solid: #000;
-  --detail-mask-strong: rgba(0, 0, 0, 0.76);
-  --detail-mask-mid: rgba(0, 0, 0, 0.42);
-
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 1;
   height: 248rpx;
-  background: var(--detail-hero-end);
+  background: var(--color-page);
   content: "";
-  mask-image:
-    radial-gradient(ellipse at 15% 100%,
-      var(--detail-mask-solid) 0%,
-      var(--detail-mask-strong) 36%,
-      transparent 72%),
-    radial-gradient(ellipse at 85% 100%,
-      var(--detail-mask-solid) 0%,
-      var(--detail-mask-strong) 36%,
-      transparent 72%),
-    linear-gradient(to bottom,
-      transparent 0%,
-      var(--detail-mask-mid) 50%,
-      var(--detail-mask-solid) 100%);
+  mask-image: var(--page-bottom-mask-image);
   mask-size: 100% 100%;
   pointer-events: none;
-  -webkit-mask-image:
-    radial-gradient(ellipse at 15% 100%,
-      var(--detail-mask-solid) 0%,
-      var(--detail-mask-strong) 36%,
-      transparent 72%),
-    radial-gradient(ellipse at 85% 100%,
-      var(--detail-mask-solid) 0%,
-      var(--detail-mask-strong) 36%,
-      transparent 72%),
-    linear-gradient(to bottom,
-      transparent 0%,
-      var(--detail-mask-mid) 50%,
-      var(--detail-mask-solid) 100%);
+  -webkit-mask-image: var(--page-bottom-mask-image);
   -webkit-mask-size: 100% 100%;
 }
 
@@ -2240,7 +2211,7 @@ defineExpose({
 .detail-hero__edit {
   flex: 0 0 auto;
   margin-top: 16rpx;
-  color: var(--color-primary);
+  color: var(--color-icon-active);
   font-size: 32rpx;
 }
 
@@ -2274,13 +2245,13 @@ defineExpose({
 }
 
 .detail-hero__tag--done {
-  background: color-mix(in srgb, var(--color-primary-soft) 78%, var(--color-surface) 22%);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .detail-hero__tag--voided {
-  background: color-mix(in srgb, var(--color-danger-soft) 72%, var(--color-surface) 28%);
-  color: var(--color-danger-text);
+  background: var(--color-state-danger-soft);
+  color: var(--color-state-danger-text);
 }
 
 .detail-content {
@@ -2289,7 +2260,7 @@ defineExpose({
   padding: 126rpx var(--space-page) calc(24rpx + env(safe-area-inset-bottom));
   border-top-left-radius: 38rpx;
   border-top-right-radius: 38rpx;
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-page) 6%);
+  background: var(--color-surface-overlay-soft);
 }
 
 .detail-panel {
@@ -2307,8 +2278,10 @@ defineExpose({
 .complete-card,
 .editor-card {
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .notice,
@@ -2327,10 +2300,10 @@ defineExpose({
 
 .summary-card {
   padding: 28rpx 30rpx;
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-page) 6%);
+  background: var(--material-card-bg);
   box-shadow:
-    0 18rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 32%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 74%, transparent);
+    var(--material-card-shadow),
+    inset 0 0 0 1rpx var(--color-surface-muted-frost);
 }
 
 .store-card {
@@ -2339,39 +2312,19 @@ defineExpose({
   gap: 20rpx;
   margin-top: 18rpx;
   padding: 28rpx 30rpx;
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-warning-soft) 68%, transparent) 0 26%, transparent 27%),
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-warning-soft) 5%) 0%, var(--color-surface) 100%);
-  box-shadow:
-    0 20rpx 42rpx color-mix(in srgb, var(--color-warning-soft) 26%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-warning-soft) 34%, transparent);
+  background: var(--color-state-warning-card-bg);
+  box-shadow: var(--material-card-shadow);
 }
 
-.store-card--finish {
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-primary-soft) 62%, transparent) 0 26%, transparent 27%),
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-primary-soft) 5%) 0%, var(--color-surface) 100%);
-  box-shadow:
-    0 20rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 22%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary-soft) 26%, transparent);
-}
-
+.store-card--finish,
 .store-card--done {
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-primary-soft) 60%, transparent) 0 26%, transparent 27%),
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-primary-soft) 5%) 0%, var(--color-surface) 100%);
-  box-shadow:
-    0 20rpx 42rpx color-mix(in srgb, var(--color-primary-soft) 24%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary-soft) 24%, transparent);
+  background: var(--color-state-primary-card-bg);
+  box-shadow: var(--material-card-shadow);
 }
 
 .store-card--voided {
-  background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-danger-soft) 60%, transparent) 0 26%, transparent 27%),
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 95%, var(--color-danger-soft) 5%) 0%, var(--color-surface) 100%);
-  box-shadow:
-    0 20rpx 42rpx color-mix(in srgb, var(--color-danger-soft) 24%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-danger-soft) 22%, transparent);
+  background: var(--color-state-danger-card-bg);
+  box-shadow: var(--material-card-shadow);
 }
 
 .item-card,
@@ -2431,24 +2384,23 @@ defineExpose({
 }
 
 .summary-card__badge--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .summary-card__badge--shared {
-  background: var(--color-surface-muted);
-  color: var(--color-info);
-  box-shadow: inset 0 0 0 1rpx var(--color-border);
+  background: var(--color-state-info-soft);
+  color: var(--color-state-info-text);
 }
 
 .summary-card__badge--done {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
 }
 
 .summary-card__badge--voided {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
+  background: var(--color-state-danger-soft);
+  color: var(--color-state-danger-text);
 }
 
 .summary-card__head {
@@ -2484,7 +2436,7 @@ defineExpose({
 
 .summary-card__percent {
   flex: 0 0 auto;
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .store-card__title {
@@ -2543,23 +2495,29 @@ defineExpose({
   min-height: 72rpx;
   padding: 0 24rpx;
   border-radius: var(--radius-pill);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-heavy);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .store-card__button--finish {
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
-  box-shadow: var(--shadow-card);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  box-shadow: var(--material-card-shadow);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .store-card__button--plain {
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
-  box-shadow: var(--shadow-card);
-  color: var(--color-text);
+  background: var(--button-secondary-bg);
+  box-shadow: var(--material-card-shadow);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .store-card__button--disabled {
@@ -2570,14 +2528,14 @@ defineExpose({
   height: 16rpx;
   margin-top: 12rpx;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-primary-soft) 62%, var(--color-surface));
+  background: var(--color-surface-primary-panel-soft);
   overflow: hidden;
 }
 
 .progress-card__bar {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
 }
 
 .share-actions {
@@ -2607,11 +2565,10 @@ defineExpose({
 .search-box__button,
 .sheet-actions__button--cancel,
 .mini-pill {
-  background: color-mix(in srgb, var(--color-surface) 82%, var(--color-primary-soft) 18%);
-  color: color-mix(in srgb, var(--color-text) 86%, var(--color-primary) 14%);
-  box-shadow:
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary) 18%, var(--color-border) 82%),
-    0 6rpx 14rpx color-mix(in srgb, var(--color-surface-mask-medium) 10%, transparent);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button {
@@ -2619,8 +2576,10 @@ defineExpose({
 }
 
 .sheet-actions__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .sheet-section + .sheet-section {
@@ -2640,13 +2599,13 @@ defineExpose({
 .sheet-option {
   padding: 24rpx;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: var(--color-surface-overlay);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-light);
 }
 
 .sheet-option--active {
-  background: color-mix(in srgb, var(--color-primary-soft) 38%, var(--color-surface) 62%);
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary) 26%, transparent);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .sheet-option__main {
@@ -2668,8 +2627,8 @@ defineExpose({
 }
 
 .mini-pill--danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
+  background: var(--color-state-danger-soft);
+  color: var(--color-state-danger-text);
 }
 
 .group-card + .group-card {
@@ -2701,8 +2660,8 @@ defineExpose({
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
+  background: var(--color-state-danger-soft);
+  color: var(--color-state-danger-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
 }
@@ -2711,7 +2670,7 @@ defineExpose({
   position: relative;
   z-index: 1;
   padding: 24rpx;
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   transition: transform 180ms ease;
 }
 
@@ -2749,7 +2708,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--color-primary-soft) 34%, var(--color-surface) 66%);
+  background: var(--color-support-notice);
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
 }
@@ -2801,7 +2760,7 @@ defineExpose({
 }
 
 .item-row__origin-toggle--open {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .item-row__info {
@@ -2818,7 +2777,7 @@ defineExpose({
 }
 
 .item-row__inventory--warning {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -2864,7 +2823,7 @@ defineExpose({
   margin-top: 16rpx;
   padding-top: 14rpx;
   max-width: 100%;
-  border-top: 1rpx solid color-mix(in srgb, var(--color-border) 72%, var(--color-surface) 28%);
+  border-top: 1rpx solid var(--color-divider);
 }
 
 .item-origin--link {
@@ -2875,8 +2834,8 @@ defineExpose({
   flex: 0 0 auto;
   padding: 6rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
 }
 
@@ -2896,16 +2855,16 @@ defineExpose({
 }
 
 .mini-pill--active {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   color: var(--button-primary-text);
   box-shadow: none;
 }
 
 .mini-pill--disabled {
-  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-page) 12%);
-  color: color-mix(in srgb, var(--color-text-tertiary) 82%, var(--color-text) 18%);
+  background: var(--color-surface-overlay-weak);
+  color: var(--color-text-tertiary);
   box-shadow:
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-border) 88%, transparent),
+    inset 0 0 0 1rpx var(--color-border-light),
     none;
   opacity: 1;
 }
@@ -2949,7 +2908,7 @@ defineExpose({
   min-height: 92rpx;
   padding: 0;
   box-sizing: border-box;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
   font-size: 24rpx;
@@ -2957,12 +2916,16 @@ defineExpose({
   line-height: 1.2;
   text-align: center;
   white-space: normal;
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .floating-dock__store--finish {
-  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-page) 8%);
-  color: var(--color-text);
-  box-shadow: var(--shadow-card);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .manage-dock {
@@ -2998,16 +2961,15 @@ defineExpose({
   height: 92rpx;
   padding: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--color-surface) 96%, white 4%);
-  box-shadow:
-    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 30%, transparent),
-    0 8rpx 18rpx color-mix(in srgb, var(--color-primary) 12%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-surface) 85%, transparent);
+  background: var(--button-secondary-bg);
+  box-shadow: var(--material-card-shadow);
   color: var(--color-text);
   white-space: nowrap;
   opacity: 0;
   transform: translateX(26rpx) scale(0.92);
   pointer-events: none;
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
   transition:
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease;
@@ -3020,20 +2982,17 @@ defineExpose({
 }
 
 .manage-dock__action--danger {
-  background: color-mix(in srgb, var(--color-danger-soft) 66%, var(--color-surface) 34%);
-  box-shadow:
-    0 18rpx 34rpx color-mix(in srgb, var(--color-danger-soft) 34%, transparent),
-    0 8rpx 18rpx color-mix(in srgb, var(--color-danger-text) 12%, transparent),
-    inset 0 0 0 1rpx color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+  background: var(--color-state-danger-soft);
+  box-shadow: var(--material-card-shadow);
 }
 
 .manage-dock__action-icon {
-  color: color-mix(in srgb, var(--color-text) 84%, var(--color-primary) 16%);
+  color: var(--color-icon-active);
   font-size: 34rpx;
 }
 
 .manage-dock__action-icon--danger {
-  color: color-mix(in srgb, var(--color-danger-text) 78%, var(--color-text) 22%);
+  color: var(--color-state-danger-text);
 }
 
 .manage-dock__action-label {
@@ -3050,7 +3009,7 @@ defineExpose({
 }
 
 .manage-dock__action-label--danger {
-  color: color-mix(in srgb, var(--color-danger-text) 82%, var(--color-text) 18%);
+  color: var(--color-state-danger-text);
 }
 
 .manage-dock__button {
@@ -3059,8 +3018,10 @@ defineExpose({
   justify-content: center;
   width: 92rpx;
   height: 92rpx;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 
 .manage-dock__button--hover {
@@ -3136,7 +3097,7 @@ defineExpose({
 
 .ingredient-item--active {
   border: 2rpx solid var(--color-border);
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
 }
 
 .ingredient-item__title,
@@ -3238,8 +3199,8 @@ defineExpose({
 }
 
 .collaborator-chip__avatar {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
 }
@@ -3276,12 +3237,12 @@ defineExpose({
   width: 34rpx;
   height: 34rpx;
   border-radius: 50%;
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
 .collaborator-chip__remove-icon {
-  color: var(--color-danger-text);
+  color: var(--color-state-danger-text);
   font-size: 18rpx;
 }
 
@@ -3292,7 +3253,7 @@ defineExpose({
   margin: 0;
   padding: 24rpx;
   border: 0;
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-sizing: border-box;
   line-height: 1.5;
   text-align: left;
@@ -3323,7 +3284,7 @@ defineExpose({
 }
 
 .member-tag__icon {
-  color: #7c5600;
+  color: var(--color-state-warning-text);
   font-size: 28rpx;
 }
 
@@ -3344,8 +3305,8 @@ defineExpose({
 }
 
 .share-member--active {
-  background: var(--color-primary-soft);
-  box-shadow: inset 0 0 0 2rpx var(--color-border);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .share-member__avatar,
@@ -3360,8 +3321,8 @@ defineExpose({
   width: 64rpx;
   height: 64rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
 }
@@ -3394,7 +3355,7 @@ defineExpose({
 }
 
 .share-member--active .share-member__check {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -3444,8 +3405,8 @@ defineExpose({
 }
 
 .day-chip--active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
 }
 
 .picker-row {

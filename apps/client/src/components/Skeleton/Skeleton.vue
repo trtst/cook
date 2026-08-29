@@ -71,14 +71,14 @@ const itemStyle = computed(() => ({
 .skeleton--animated .skeleton__item::after {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.42) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--color-shimmer-strong) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
   content: "";
 }
 
 .theme-dark .skeleton--animated .skeleton__item::after {
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.14) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--color-shimmer-soft) 50%, transparent 100%);
 }
 
 @keyframes skeleton-shimmer {

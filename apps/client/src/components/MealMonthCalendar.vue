@@ -204,7 +204,7 @@ function handleSelect(cell: CalendarCell) {
   width: 64rpx;
   height: 64rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-surface) 84%, var(--color-primary-soft) 16%);
+  background: var(--color-surface-primary-panel);
   transition: transform 0.16s ease, background-color 0.16s ease;
 }
 
@@ -254,7 +254,7 @@ function handleSelect(cell: CalendarCell) {
   padding: 10rpx;
   box-sizing: border-box;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-primary-soft) 10%);
+  background: var(--color-surface-soft-panel);
   transition: transform 0.16s ease, background-color 0.16s ease;
 }
 
@@ -267,12 +267,12 @@ function handleSelect(cell: CalendarCell) {
 }
 
 .month-calendar__cell--today:not(.month-calendar__cell--selected):not(.month-calendar__cell--disabled) {
-  box-shadow: inset 0 0 0 2rpx color-mix(in srgb, var(--color-primary) 28%, transparent);
+  box-shadow: inset 0 0 0 2rpx var(--color-border-active);
 }
 
 .month-calendar__cell--selected {
-  background: color-mix(in srgb, var(--color-primary-soft) 72%, white 28%);
-  box-shadow: inset 0 0 0 2rpx color-mix(in srgb, var(--color-primary) 42%, transparent);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 2rpx var(--color-border-active);
 }
 
 .month-calendar__cell--disabled {

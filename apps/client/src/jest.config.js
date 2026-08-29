@@ -10,7 +10,7 @@ module.exports = {
     moduleFileExtensions: ['js', 'json'],
     rootDir: __dirname,
     testMatch: [
-      "<rootDir>/pages_share/import/index.test.js"
+      "<rootDir>/pages/me/index.test.js"
     ],
     testPathIgnorePatterns: ['/node_modules/'],
 };

@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="topic-nav-title" :style="navTitleStyle">餐桌话题</text>
@@ -57,12 +57,16 @@ import { onLoad } from "@dcloudio/uni-app";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { tableTopicsApi, type TableTopicListItem } from "../apis/table-topics";
 import { formatDateTimeMinute } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const loading = ref(false);
 const errorText = ref("");
@@ -124,12 +128,12 @@ function openTopic(topicId: number) {
   left: 0;
   right: 0;
   z-index: 10;
-  background: rgba(255, 253, 248, 0.96);
-  box-shadow: 0 10rpx 32rpx rgba(17, 24, 39, 0.08);
+  background: var(--color-surface-soft-card);
+  box-shadow: var(--shadow-card);
 }
 
 .topic-nav-title {
-  color: #111827;
+  color: var(--color-text);
   font-size: 30rpx;
   font-weight: 700;
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -143,9 +147,7 @@ function openTopic(topicId: number) {
   padding-right: 28rpx;
   padding-left: 28rpx;
   padding-bottom: 40rpx;
-  background:
-    radial-gradient(circle at top right, rgba(255, 215, 160, 0.28), transparent 34%),
-    linear-gradient(180deg, #fff7eb 0%, #fffdf8 28%, #f7f4ee 100%);
+  background: var(--page-secondary-soft-bg);
 }
 
 .topic-hero {
@@ -156,20 +158,20 @@ function openTopic(topicId: number) {
 }
 
 .topic-hero__eyebrow {
-  color: #9a5a2c;
+  color: var(--color-state-warning-text);
   font-size: 24rpx;
   letter-spacing: 4rpx;
 }
 
 .topic-hero__title {
-  color: #111827;
+  color: var(--color-text);
   font-size: 56rpx;
   font-weight: 700;
   line-height: 1.1;
 }
 
 .topic-hero__desc {
-  color: #5b6473;
+  color: var(--color-text-secondary);
   font-size: 28rpx;
   line-height: 1.7;
 }
@@ -180,12 +182,12 @@ function openTopic(topicId: number) {
   justify-content: center;
   min-height: 320rpx;
   border-radius: 28rpx;
-  background: rgba(255, 255, 255, 0.88);
-  color: #6b7280;
+  background: var(--color-surface-soft-card);
+  color: var(--color-text-secondary);
 }
 
 .topic-state--error {
-  color: #c2410c;
+  color: var(--color-state-danger-text);
 }
 
 .topic-list {
@@ -197,34 +199,32 @@ function openTopic(topicId: number) {
 .topic-card {
   overflow: hidden;
   border-radius: 32rpx;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 20rpx 48rpx rgba(17, 24, 39, 0.08);
+  background: var(--color-surface-soft-panel);
+  box-shadow: var(--shadow-card);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .topic-card--hover {
   transform: translateY(-4rpx);
-  box-shadow: 0 28rpx 56rpx rgba(17, 24, 39, 0.12);
+  box-shadow: var(--shadow-floating);
 }
 
 .topic-card__cover {
   display: block;
   width: 100%;
   height: 320rpx;
-  background: #f3f4f6;
+  background: var(--color-surface-muted);
 }
 
 .topic-card__cover--empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at top right, rgba(255, 177, 109, 0.42), transparent 40%),
-    linear-gradient(135deg, #fff5e4, #ffe6ca);
+  background: var(--color-cover-empty-warm-bg);
 }
 
 .topic-card__empty-text {
-  color: #9a5a2c;
+  color: var(--color-state-warning-text);
   font-size: 34rpx;
   font-weight: 700;
 }
@@ -237,7 +237,7 @@ function openTopic(topicId: number) {
 }
 
 .topic-card__title {
-  color: #111827;
+  color: var(--color-text);
   font-size: 36rpx;
   font-weight: 700;
   line-height: 1.4;
@@ -248,7 +248,7 @@ function openTopic(topicId: number) {
   flex-wrap: wrap;
   align-items: center;
   gap: 12rpx;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   font-size: 24rpx;
 }
 
@@ -256,6 +256,6 @@ function openTopic(topicId: number) {
   width: 8rpx;
   height: 8rpx;
   border-radius: var(--radius-pill);
-  background: rgba(107, 114, 128, 0.48);
+  background: var(--color-text-tertiary);
 }
 </style>

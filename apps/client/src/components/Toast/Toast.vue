@@ -58,12 +58,11 @@ const layerStyle = computed(() => {
   overflow: hidden;
   width: auto;
   max-width: 80vw;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-  background: linear-gradient(180deg, var(--color-tabbar-bg) 0%, var(--color-surface-mask-strong) 100%);
-  box-shadow: var(--shadow-floating);
-  // -webkit-backdrop-filter: blur(18rpx) saturate(145%);
-  // backdrop-filter: blur(18rpx) saturate(145%);
+  background: var(--material-panel-bg);
+  box-shadow: var(--material-panel-shadow);
+  -webkit-backdrop-filter: var(--material-panel-filter);
+  backdrop-filter: var(--material-panel-filter);
   opacity: 0;
   transform: translate3d(0, -18rpx, 0) scale(0.98);
   transition: opacity 240ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -92,12 +91,12 @@ const layerStyle = computed(() => {
   width: 252rpx;
   height: 126rpx;
   border-radius: 0 0 0 126rpx;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--color-primary-soft) 100%);
+  background: linear-gradient(180deg, var(--feedback-glow-start) 0%, var(--feedback-glow-primary-end) 100%);
   opacity: 0.86;
 }
 
 .toast-card--error .toast-card__glow {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--color-danger-soft) 100%);
+  background: linear-gradient(180deg, var(--feedback-glow-start) 0%, var(--feedback-glow-danger-end) 100%);
 }
 
 .toast-card__body {
@@ -126,10 +125,10 @@ const layerStyle = computed(() => {
 
 .toast-card__line {
   height: 8rpx;
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--theme-accent) 100%);
+  background: var(--feedback-line-primary);
 }
 
 .toast-card--error .toast-card__line {
-  background: linear-gradient(90deg, var(--color-danger) 0%, #f6ab62 100%);
+  background: var(--feedback-line-danger);
 }
 </style>

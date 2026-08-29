@@ -1,79 +1,82 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="theme-navbar__title">主题皮肤</text>
     </template>
 
-    <scroll-view scroll-y class="theme-scroll" :show-scrollbar="false">
-      <view class="theme-page" :style="pageBodyStyle">
-        <view class="theme-hero">
-          <view class="theme-hero__blob theme-hero__blob--left" />
-          <view class="theme-hero__blob theme-hero__blob--right" />
-          <text class="theme-card__eyebrow">当前主题</text>
-          <text class="theme-card__title">{{ currentThemeText }}</text>
-          <text class="theme-card__description">切换后会实时保存到本机。底部导航仅用于预览当前主题效果，不可点击。</text>
-        </view>
+    <view class="theme-shell" :style="pageBodyStyle">
+      <view class="theme-page">
+        <view class="theme-page__main">
+          <view class="theme-hero">
+            <view class="theme-hero__blob theme-hero__blob--left" />
+            <view class="theme-hero__blob theme-hero__blob--right" />
+            <text class="theme-card__eyebrow">当前主题</text>
+            <text class="theme-card__title">{{ currentThemeText }}</text>
+            <text class="theme-card__description">个性皮肤</text>
+          </view>
 
-        <view class="theme-card">
-          <text class="theme-card__section-title">显示模式</text>
-          <view class="option-row">
-            <view
-              v-for="option in themeModeOptions"
-              :key="option.value"
-              class="option-chip"
-              :class="{ 'option-chip--active': option.value === themeMode }"
-              hover-class="is-pressed"
-              hover-stay-time="100"
-              @click="handleThemeModeChange(option.value)"
-            >
-              <text class="option-chip__text">{{ option.label }}</text>
+          <view class="theme-card">
+            <text class="theme-card__section-title">主题</text>
+            <view class="option-row">
+              <view
+                v-for="option in themeOptions"
+                :key="option.value"
+                class="option-chip"
+                :class="{ 'option-chip--active': option.value === currentThemeFamily }"
+                hover-class="is-pressed"
+                hover-stay-time="100"
+                @click="handleThemeFamilyChange(option.value)"
+              >
+                <text class="option-chip__text">{{ option.label }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view v-if="showSchemeCard" class="theme-card">
+            <text class="theme-card__section-title">色系</text>
+            <view class="option-row">
+              <view
+                v-for="option in schemeOptions"
+                :key="option.value"
+                class="option-chip"
+                :class="{ 'option-chip--active': option.value === currentSchemeValue }"
+                hover-class="is-pressed"
+                hover-stay-time="100"
+                @click="handleThemeSchemeChange(option.value)"
+              >
+                <text class="option-chip__text">{{ option.label }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view v-if="showModeCard" class="theme-card">
+            <text class="theme-card__section-title">模式</text>
+            <view class="option-row">
+              <view
+                v-for="option in modeOptions"
+                :key="option.value"
+                class="option-chip"
+                :class="{ 'option-chip--active': option.value === currentModeValue }"
+                hover-class="is-pressed"
+                hover-stay-time="100"
+                @click="handleThemeModeChange(option.value)"
+              >
+                <text class="option-chip__text">{{ option.label }}</text>
+              </view>
             </view>
           </view>
         </view>
 
-        <view class="theme-card">
-          <text class="theme-card__section-title">主题皮肤</text>
-          <view class="option-row">
-            <view
-              v-for="option in skinOptions"
-              :key="option.value"
-              class="option-chip"
-              :class="{ 'option-chip--active': option.value === effectiveSkin }"
-              hover-class="is-pressed"
-              hover-stay-time="100"
-              @click="handleSkinChange(option.value)"
-            >
-              <text class="option-chip__text">{{ option.label }}</text>
-            </view>
+        <view class="theme-page__preview">
+          <view class="theme-preview-note">
+            <text class="theme-preview-note__title">TabBar 预览</text>
+            <text class="theme-preview-note__text">仅预览当前底部导航，不可点击。</text>
           </view>
-        </view>
-
-        <view v-if="canSwitchPalette" class="theme-card">
-          <text class="theme-card__section-title">色系</text>
-          <view class="option-row">
-            <view
-              v-for="palette in supportedPalettes"
-              :key="palette"
-              class="option-chip"
-              :class="{ 'option-chip--active': palette === effectivePalette }"
-              hover-class="is-pressed"
-              hover-stay-time="100"
-              @click="handlePaletteChange(palette)"
-            >
-              <text class="option-chip__text">{{ paletteLabels[palette] }}</text>
-            </view>
-          </view>
-        </view>
-
-        <view class="theme-preview-note">
-          <text class="theme-preview-note__title">底部导航预览</text>
-          <text class="theme-preview-note__text">这里固定展示当前主题下的 TabBar 样式，只用于预览，不参与跳转。</text>
+          <TabBar class="theme-page__preview-tabbar" current="me" :interactive="false" />
         </view>
       </view>
-    </scroll-view>
-
-    <TabBar class="theme-page__preview-tabbar" current="me" :interactive="false" />
+    </view>
   </Layout>
 </template>
 
@@ -82,97 +85,229 @@ import { computed } from "vue";
 import Layout from "@/components/Layout/Layout.vue";
 import TabBar from "@/components/TabBar/TabBar.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
-import { THEME_SKIN_OPTIONS, type ThemePalette, type ThemeSkin } from "@/themes";
+import { useSettingsStore } from "@/stores/settings";
+import {
+  DEFAULT_THEME_PALETTE,
+  THEME_MODE_LABELS,
+  THEME_PALETTE_LABELS,
+  THEME_SKIN_LABELS,
+  supportsDarkForSkin,
+  type ThemePalette,
+  type ThemeSkin
+} from "@/themes";
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
+const settingsStore = useSettingsStore();
 const {
+  themeVars,
   effectiveSkin,
   effectivePalette,
   themeMode,
-  supportedPalettes,
-  canSwitchPalette,
   setThemeMode,
   setThemeSkin,
   setThemePalette
 } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
-const VISIBLE_SKINS: ThemeSkin[] = ["default", "handdrawn-food"];
-const skinOptions = THEME_SKIN_OPTIONS.filter((option) => VISIBLE_SKINS.includes(option.value));
+const THEME_MODE_OPTIONS = [
+  { label: THEME_MODE_LABELS.system, value: "system" },
+  { label: THEME_MODE_LABELS.light, value: "light" },
+  { label: THEME_MODE_LABELS.dark, value: "dark" }
+] as const;
+const DEFAULT_THEME_SCHEME_OPTIONS = [
+  { label: THEME_PALETTE_LABELS.default, value: "default" },
+  { label: THEME_PALETTE_LABELS.warm, value: "warm" },
+  { label: THEME_PALETTE_LABELS.olive, value: "olive" },
+  { label: THEME_PALETTE_LABELS.cool, value: "cool" },
+  { label: THEME_SKIN_LABELS["minimal-white"], value: "minimal-white" },
+  { label: THEME_SKIN_LABELS["bold-contrast"], value: "bold-contrast" }
+] as const;
+const THEME_OPTIONS = [
+  { label: "默认主题", value: "default-theme" },
+  { label: THEME_SKIN_LABELS["fresh-ingredient"], value: "fresh-ingredient" },
+  { label: THEME_SKIN_LABELS["handdrawn-food"], value: "handdrawn-food" },
+  { label: THEME_SKIN_LABELS["apple-glass"], value: "apple-glass" }
+] as const;
+
+type ThemeFamily = (typeof THEME_OPTIONS)[number]["value"];
+type ThemeSchemeValue = (typeof DEFAULT_THEME_SCHEME_OPTIONS)[number]["value"];
+
 const pageBodyStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + 12}px`
 }));
-const themeModeLabels = {
-  system: "跟随系统",
-  light: "浅色",
-  dark: "深色"
-} as const;
-const themeModeOptions = [
-  { label: "跟随系统", value: "system" },
-  { label: "浅色", value: "light" },
-  { label: "深色", value: "dark" }
-] as const;
-const paletteLabels: Record<ThemePalette, string> = {
-  default: "默认",
-  warm: "暖黄",
-  olive: "橄榄",
-  cool: "冷蓝"
-};
 
-const currentThemeText = computed(() => {
-  const modeLabel = themeModeLabels[themeMode.value];
-  const skinLabel = skinOptions.find((item) => item.value === effectiveSkin.value)?.label || "基础";
-  if (!canSwitchPalette.value) return `${modeLabel} · ${skinLabel}`;
-  return `${modeLabel} · ${skinLabel} · ${paletteLabels[effectivePalette.value]}`;
+const currentThemeFamily = computed<ThemeFamily>(() => {
+  if (
+    effectiveSkin.value === "default" ||
+    effectiveSkin.value === "minimal-white" ||
+    effectiveSkin.value === "bold-contrast" ||
+    effectiveSkin.value === "warm-couple"
+  ) {
+    return "default-theme";
+  }
+  if (effectiveSkin.value === "fresh-ingredient") return "fresh-ingredient";
+  if (effectiveSkin.value === "handdrawn-food") return "handdrawn-food";
+  return "apple-glass";
 });
+const themeOptions = THEME_OPTIONS;
+const currentThemeLabel = computed(() => themeOptions.find((option) => option.value === currentThemeFamily.value)?.label ?? "");
+const schemeOptions = computed(() => (currentThemeFamily.value === "default-theme" ? DEFAULT_THEME_SCHEME_OPTIONS : []));
+const showSchemeCard = computed(() => schemeOptions.value.length > 0);
+const showModeCard = computed(() => currentThemeFamily.value === "default-theme" && supportsDarkForSkin(effectiveSkin.value));
+const currentSchemeValue = computed<ThemeSchemeValue>(() => {
+  if (effectiveSkin.value === "default") {
+    return effectivePalette.value;
+  }
 
-async function handleThemeModeChange(mode: (typeof themeModeOptions)[number]["value"]) {
+  if (effectiveSkin.value === "bold-contrast") {
+    return "bold-contrast";
+  }
+
+  return "minimal-white";
+});
+const currentSchemeLabel = computed(() => {
+  if (!showSchemeCard.value) return "";
+  if (effectiveSkin.value === "minimal-white" || effectiveSkin.value === "bold-contrast") {
+    return THEME_SKIN_LABELS[effectiveSkin.value];
+  }
+  return THEME_PALETTE_LABELS[effectivePalette.value];
+});
+const modeOptions = computed(() => (showModeCard.value ? THEME_MODE_OPTIONS : []));
+const currentModeValue = computed(() => (showModeCard.value ? themeMode.value : ""));
+const currentModeLabel = computed(() => (showModeCard.value ? THEME_MODE_LABELS[themeMode.value] : ""));
+const currentThemeText = computed(() =>
+  [currentThemeLabel.value, currentSchemeLabel.value, currentModeLabel.value].filter(Boolean).join(" · ")
+);
+
+function buildAutomatorState() {
+  return {
+    themeMode: themeMode.value,
+    effectiveSkin: effectiveSkin.value,
+    effectivePalette: effectivePalette.value,
+    currentThemeFamily: currentThemeFamily.value,
+    currentThemeText: currentThemeText.value,
+    showSchemeCard: showSchemeCard.value,
+    showModeCard: showModeCard.value,
+    themeOptions: themeOptions.map((option) => option.value),
+    themeOptionLabels: themeOptions.map((option) => option.label),
+    schemeOptionLabels: schemeOptions.value.map((option) => option.label),
+    themeModeOptions: modeOptions.value.map((option) => option.value)
+  };
+}
+
+async function handleThemeModeChange(mode: (typeof THEME_MODE_OPTIONS)[number]["value"]) {
+  if (!showModeCard.value) return;
   await setThemeMode(mode);
 }
 
-async function handleSkinChange(skin: ThemeSkin) {
-  await setThemeSkin(skin);
+async function applyThemeFamily(themeFamily: ThemeFamily) {
+  if (themeFamily === "default-theme") {
+    await setThemeSkin("default");
+    await setThemePalette(DEFAULT_THEME_PALETTE);
+    return;
+  }
+
+  await setThemeSkin(themeFamily as ThemeSkin);
+  await setThemePalette(DEFAULT_THEME_PALETTE);
+  await setThemeMode("light");
 }
 
-async function handlePaletteChange(palette: ThemePalette) {
-  await setThemePalette(palette);
+async function handleThemeFamilyChange(themeFamily: ThemeFamily) {
+  await applyThemeFamily(themeFamily);
 }
+
+async function handleThemeSchemeChange(value: ThemeSchemeValue) {
+  if (currentThemeFamily.value !== "default-theme") return;
+
+  if (value === "minimal-white" || value === "bold-contrast") {
+    await setThemeSkin(value);
+    await setThemePalette(DEFAULT_THEME_PALETTE);
+    return;
+  }
+
+  await setThemeSkin("default");
+  await setThemePalette(value as ThemePalette);
+}
+
+async function automatorReadState() {
+  return buildAutomatorState();
+}
+
+async function automatorResetThemeSettings() {
+  await settingsStore.clearSettings();
+  return buildAutomatorState();
+}
+
+async function automatorSetThemeSkin(skin: ThemeSkin) {
+  await setThemeSkin(skin);
+  return buildAutomatorState();
+}
+
+async function automatorSetThemePalette(palette: ThemePalette) {
+  await setThemePalette(palette);
+  return buildAutomatorState();
+}
+
+async function automatorSelectThemeFamily(themeFamily: ThemeFamily) {
+  await handleThemeFamilyChange(themeFamily);
+  return buildAutomatorState();
+}
+
+defineExpose({
+  automatorReadState,
+  automatorResetThemeSettings,
+  automatorSetThemeSkin,
+  automatorSetThemePalette,
+  automatorSelectThemeFamily
+});
 </script>
 
 <style scoped lang="scss">
-.theme-scroll {
-  height: 100vh;
-}
-
 .theme-navbar__title {
   color: var(--color-text);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
 }
 
+.theme-shell {
+  height: 100%;
+  background: var(--page-primary-soft-bg);
+}
+
 .theme-page {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
   box-sizing: border-box;
   padding-right: var(--space-page);
-  padding-bottom: calc(220rpx + var(--space-xl) + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-primary) 9%, transparent), transparent 38%),
-    var(--color-page);
+}
+
+.theme-page__main {
+  min-height: 0;
+  padding-bottom: var(--space-lg);
+}
+
+.theme-page__preview {
+  position: relative;
+  flex: 0 0 auto;
+  padding-bottom: calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom));
 }
 
 .theme-hero {
   position: relative;
   overflow: hidden;
-  padding: 34rpx 32rpx 40rpx;
+  padding: 32rpx;
   border-radius: 34rpx;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--color-surface) 88%, var(--theme-primary) 12%), var(--color-surface)),
-    var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .theme-hero__blob {
@@ -186,7 +321,7 @@ async function handlePaletteChange(palette: ThemePalette) {
   left: -54rpx;
   width: 220rpx;
   height: 220rpx;
-  background: color-mix(in srgb, var(--theme-primary) 16%, transparent);
+  background: var(--color-tag-primary-bg);
 }
 
 .theme-hero__blob--right {
@@ -194,7 +329,7 @@ async function handlePaletteChange(palette: ThemePalette) {
   right: -40rpx;
   width: 260rpx;
   height: 260rpx;
-  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+  background: var(--color-tag-secondary-bg);
 }
 
 .theme-card {
@@ -202,8 +337,10 @@ async function handlePaletteChange(palette: ThemePalette) {
   margin-top: var(--space-lg);
   padding: 28rpx;
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .theme-card__eyebrow,
@@ -217,7 +354,7 @@ async function handlePaletteChange(palette: ThemePalette) {
   min-height: 42rpx;
   padding: 0 18rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--theme-primary) 12%, white);
+  background: var(--color-support-notice);
   font-size: var(--font-size-xs);
   font-weight: 700;
   align-items: center;
@@ -228,7 +365,7 @@ async function handlePaletteChange(palette: ThemePalette) {
   position: relative;
   margin-top: 20rpx;
   color: var(--color-text);
-  font-size: 40rpx;
+  font-size: 38rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.2;
 }
@@ -238,7 +375,7 @@ async function handlePaletteChange(palette: ThemePalette) {
   position: relative;
   margin-top: 12rpx;
   font-size: var(--font-size-sm);
-  line-height: 1.6;
+  line-height: 1.4;
 }
 
 .theme-card__section-title {
@@ -251,23 +388,30 @@ async function handlePaletteChange(palette: ThemePalette) {
 .option-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-lg);
-  margin-top: var(--space-lg);
+  gap: 20rpx;
+  margin-top: 20rpx;
 }
 
 .option-chip {
   display: flex;
   align-items: center;
-  min-height: 58rpx;
+  min-height: 72rpx;
   padding: 0 22rpx;
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
+  background: var(--material-control-bg);
+  box-shadow: var(--material-control-shadow);
+  -webkit-backdrop-filter: var(--material-control-filter);
+  backdrop-filter: var(--material-control-filter);
 }
 
 .option-chip--active {
-  border-color: var(--theme-primary);
-  background: color-mix(in srgb, var(--theme-primary) 10%, var(--color-surface));
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+}
+
+.option-chip--active .option-chip__text {
+  color: var(--color-tag-primary-text);
 }
 
 .option-chip__text {
@@ -277,7 +421,7 @@ async function handlePaletteChange(palette: ThemePalette) {
 }
 
 .theme-preview-note {
-  padding: 10rpx 2rpx 0;
+  padding: 0 2rpx 6rpx;
 }
 
 .theme-preview-note__title {

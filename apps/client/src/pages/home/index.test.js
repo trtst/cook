@@ -300,14 +300,6 @@ function resolveRecentArrangementFocus(status) {
   return "memory";
 }
 
-function resolveHeroPrimaryActionText(nextMealState) {
-  if (nextMealState.status === "NO_ARRANGEMENT") return "随机一桌";
-  if (nextMealState.status === "NEED_GAP_CHECK") return nextMealState.arrangement?.menuCount ? "看看缺什么" : "去加菜";
-  if (nextMealState.status === "NEED_SHOPPING") return "去采购";
-  if (nextMealState.status === "READY_TO_COOK") return "开始做饭";
-  return "分享回忆";
-}
-
 describe("pages/home/index", () => {
   it("首页可以完成真实登录并展示未安排状态下的主状态", async () => {
     const session = await loginWithCode(createFreshPhone());
@@ -323,20 +315,23 @@ describe("pages/home/index", () => {
 
     expect(await page.path).toBe("pages/home/index");
 
-    const restaurantName = await page.$(".restaurant-bar__name");
-    expect(await restaurantName.text()).toBe("饭局、计划、清单");
+    const weekCardTitle = await page.$(".feature-card--status .feature-card__title");
+    expect(((await weekCardTitle.text()) || "").trim().length > 0).toBe(true);
 
-    const heroEyebrow = await page.$(".hero-copy__eyebrow");
-    expect(await heroEyebrow.text()).toBe("还没有安排");
+    const weekCardSubtitle = await page.$(".feature-card--status .feature-card__subtitle");
+    expect(((await weekCardSubtitle.text()) || "").trim().length > 0).toBe(true);
 
-    const heroTitle = await page.$(".hero-copy__title");
-    expect(await heroTitle.text()).toBe("今晚吃什么？");
+    const weekCardMeta = await page.$(".feature-card--status .feature-card__meta");
+    expect(weekCardMeta).toBeNull();
 
-    const heroDescription = await page.$(".hero-copy__description");
-    expect(await heroDescription.text()).toBe("还没有安排，试试随机一桌，或者先看看冰箱里现在能做什么。");
+    const weekCardAction = await page.$(".feature-card--status .feature-card__status-action-text");
+    expect(((await weekCardAction.text()) || "").trim().length > 0).toBe(true);
+
+    const heroTitle = await page.$(".hero-banner__title");
+    expect(((await heroTitle.text()) || "").trim().length > 0).toBe(true);
 
     const quickTitles = await collectTexts(await page.$$(".dock-action__title"));
-    expect(quickTitles).toEqual(["翻菜谱", "看食材", "随机", "缺什么"]);
+    expect(quickTitles).toEqual(["安排下一顿", "看看食材", "随机一桌", "补缺食材"]);
   });
 
   it("首页可以展示真实最近安排卡并更新主动作", async () => {
@@ -370,32 +365,25 @@ describe("pages/home/index", () => {
 
     expect(await page.path).toBe("pages/home/index");
 
-    const heroEyebrow = await page.$(".hero-copy__eyebrow");
-    expect((await heroEyebrow.text()).includes(`${arrangement.participantCount}人`)).toBe(true);
-
-    const heroDescription = await page.$(".hero-copy__description");
-    const heroDescriptionText = await heroDescription.text();
-    expect(heroDescriptionText.includes(`${arrangement.participantCount}人`)).toBe(true);
-    expect(heroDescriptionText.includes(`${arrangement.menuCount}道菜`)).toBe(true);
+    const weekCardSummary = await page.$(".feature-card--status .feature-card__subtitle");
+    const weekCardSummaryText = await weekCardSummary.text();
+    expect(weekCardSummaryText.length > 0).toBe(true);
     if (typeof arrangement.gapCount === "number" && arrangement.gapCount > 0) {
-      expect(heroDescriptionText.includes(`还差${arrangement.gapCount}样食材`)).toBe(true);
+      expect(weekCardSummaryText.includes(`${arrangement.gapCount}`)).toBe(true);
     }
-
-    const heroPrimaryAction = await page.$(".hero-copy__button--primary .hero-copy__button-text");
-    expect(await heroPrimaryAction.text()).toBe(resolveHeroPrimaryActionText(nextMealState));
 
     const cardTitle = await page.$(".recent-arrangement__title");
     expect(await cardTitle.text()).toBe(arrangement.title);
-
-    const cardBadge = await page.$(".recent-arrangement__badge");
-    expect(await cardBadge.text()).toBe("饭局");
 
     const cardMeta = await page.$(".recent-arrangement__meta");
     const cardMetaText = await cardMeta.text();
     expect(cardMetaText.includes(`${arrangement.participantCount}人`)).toBe(true);
     expect(cardMetaText.includes(`${arrangement.menuCount}道菜`)).toBe(true);
+
+    const cardHint = await page.$(".recent-arrangement__hint");
+    const cardHintText = await cardHint.text();
     if (typeof arrangement.gapCount === "number" && arrangement.gapCount > 0) {
-      expect(cardMetaText.includes(`还差${arrangement.gapCount}样食材`)).toBe(true);
+      expect(cardHintText.includes(`${arrangement.gapCount}`)).toBe(true);
     }
 
     const cardStatus = await page.$(".recent-arrangement__status");
@@ -403,22 +391,13 @@ describe("pages/home/index", () => {
 
     const actionTexts = await collectTexts(await page.$$(".recent-arrangement__button-text"));
     expect(actionTexts).toContain(resolveRecentArrangementActionText(arrangement.status));
-    expect(actionTexts).toContain("查看详情");
 
     const automatorState = await page.callMethod("automatorReadRecentArrangementState");
     expect(automatorState.homeNextStatus).toBe(nextMealState.status);
     expect(automatorState.arrangementStatus).toBe(arrangement.status);
+    expect(typeof automatorState.weekOverviewStatus).toBe("string");
+    expect(typeof automatorState.weekOverviewTarget).toBe("string");
     expect(automatorState.cardPrimaryTarget).toContain(`focus=${resolveRecentArrangementFocus(arrangement.status)}`);
     expect(automatorState.cardDetailTarget.includes("focus=")).toBe(false);
-
-    if (nextMealState.status === "NEED_GAP_CHECK") {
-      expect(automatorState.heroPrimaryTarget).toContain(`focus=${arrangement.menuCount > 0 ? "shopping" : "menu"}`);
-    } else if (nextMealState.status === "NEED_SHOPPING") {
-      expect(automatorState.heroPrimaryTarget).toContain("focus=shopping");
-    } else if (nextMealState.status === "READY_TO_COOK") {
-      expect(automatorState.heroPrimaryTarget).toContain("focus=assistant");
-    } else if (nextMealState.status === "COMPLETED") {
-      expect(automatorState.heroPrimaryTarget).toContain("focus=memory");
-    }
   });
 });

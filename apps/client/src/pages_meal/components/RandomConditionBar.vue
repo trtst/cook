@@ -38,7 +38,13 @@
           <text class="condition-group__title">优先使用冰箱食材</text>
           <text class="toggle-row__hint">只影响当前这轮随机和替换，不修改全局偏好。</text>
         </view>
-        <switch :checked="fridgePreferred" :disabled="loading" class="toggle-row__switch" @change.stop="toggleFridgePreferred" />
+        <switch
+          :checked="fridgePreferred"
+          :disabled="loading"
+          color="var(--color-support-action)"
+          class="toggle-row__switch"
+          @change.stop="toggleFridgePreferred"
+        />
       </view>
     </view>
 
@@ -162,8 +168,10 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
   margin-top: var(--space-md);
   padding: var(--space-md);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .condition-group + .condition-group {
@@ -204,7 +212,7 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
 }
 
 .option-chip--active {
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
 }
 
 .option-chip__text {
@@ -282,7 +290,7 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
   width: 48rpx;
   height: 48rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--color-surface-soft-panel);
   color: var(--color-text);
   font-size: 34rpx;
   line-height: 1;
@@ -318,8 +326,8 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
 }
 
 .primary {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .secondary {

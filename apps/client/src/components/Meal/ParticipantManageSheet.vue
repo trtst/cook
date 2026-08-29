@@ -199,7 +199,7 @@ function buildAvatarFallback(name: string) {
   gap: 18rpx;
   padding: 20rpx 22rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface-muted) 68%, transparent);
+  background: var(--color-surface-muted-frost);
 }
 
 .participant-sheet__row--dimmed {
@@ -214,7 +214,7 @@ function buildAvatarFallback(name: string) {
   height: 72rpx;
   overflow: hidden;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--theme-primary) 12%, var(--color-surface));
+  background: var(--color-tag-primary-bg);
 }
 
 .participant-sheet__avatar-image {
@@ -224,7 +224,7 @@ function buildAvatarFallback(name: string) {
 }
 
 .participant-sheet__avatar-fallback {
-  color: var(--theme-primary);
+  color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
 }
@@ -260,7 +260,7 @@ function buildAvatarFallback(name: string) {
   margin: 0;
   border: 0;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-surface-soft);
   color: var(--color-text-secondary);
   font-size: 22rpx;
   font-weight: 600;
@@ -272,8 +272,9 @@ function buildAvatarFallback(name: string) {
 }
 
 .participant-sheet__action--primary {
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  color: var(--color-tag-primary-text);
 }
 
 .participant-sheet__invite {
@@ -283,9 +284,9 @@ function buildAvatarFallback(name: string) {
   gap: 12rpx;
   min-height: 92rpx;
   padding: 0 24rpx;
-  border: 2rpx dashed color-mix(in srgb, var(--color-primary) 38%, var(--color-border) 62%);
+  border: 2rpx dashed var(--color-border-active);
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--color-surface) 86%, var(--color-primary-soft) 14%);
+  background: var(--color-surface-primary-panel-soft);
   box-sizing: border-box;
 }
 
@@ -302,7 +303,7 @@ function buildAvatarFallback(name: string) {
 }
 
 .participant-sheet__invite-text {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 26rpx;
   font-weight: 600;
 }
@@ -330,7 +331,7 @@ function buildAvatarFallback(name: string) {
   display: inline-flex;
   align-items: center;
   gap: 8rpx;
-  color: var(--theme-primary);
+  color: var(--color-support-action);
   font-size: 24rpx;
   font-weight: 600;
 }
@@ -356,7 +357,7 @@ function buildAvatarFallback(name: string) {
 .participant-note__empty {
   padding: 28rpx 26rpx;
   border-radius: 24rpx;
-  background: color-mix(in srgb, var(--theme-primary) 5%, var(--color-surface));
+  background: var(--color-support-notice);
 }
 
 .participant-note__empty-title,

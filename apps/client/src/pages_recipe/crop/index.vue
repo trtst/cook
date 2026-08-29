@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     :title="cropTitle"
     full-screen
@@ -140,6 +140,8 @@ import { computed, getCurrentInstance, nextTick, reactive, ref } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import {
@@ -177,6 +179,8 @@ const ratioOptions = [
 ] as const;
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight, safeAreaBottom, systemInfo } = useSystemInfo();
 const instance = getCurrentInstance();
 
@@ -762,7 +766,7 @@ function resetCropState() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #0c0f12;
+  background: var(--color-overlay-strong);
 }
 
 .crop-nav-backdrop {
@@ -771,7 +775,7 @@ function resetCropState() {
   right: 0;
   left: 0;
   z-index: 799;
-  background: rgba(12, 15, 18, 0.96);
+  background: var(--color-overlay-strong);
 }
 
 .crop-state {
@@ -780,14 +784,14 @@ function resetCropState() {
   justify-content: center;
   box-sizing: border-box;
   padding: 0 48rpx;
-  color: rgba(247, 244, 238, 0.92);
-  background: #0c0f12;
+  color: var(--color-overlay-text);
+  background: var(--color-overlay-strong);
   font-size: 28rpx;
   text-align: center;
 }
 
 .crop-state--error {
-  color: rgba(255, 209, 209, 0.92);
+  color: var(--color-state-danger-text);
 }
 
 .crop-stage {
@@ -795,8 +799,8 @@ function resetCropState() {
   overflow: hidden;
   flex: 0 0 auto;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%),
-    #050607;
+    linear-gradient(180deg, var(--color-overlay-sheen-top) 0%, var(--color-overlay-sheen-bottom) 100%),
+    var(--color-overlay-stage);
 }
 
 .crop-image {
@@ -812,8 +816,8 @@ function resetCropState() {
 .crop-box {
   position: absolute;
   box-shadow:
-    0 0 0 9999px rgba(0, 0, 0, 0.56),
-    inset 0 0 0 2px rgba(255, 255, 255, 0.9);
+    0 0 0 9999px var(--color-overlay-scrim),
+    inset 0 0 0 2px var(--color-overlay-text);
 }
 
 .crop-box__grid {
@@ -825,7 +829,7 @@ function resetCropState() {
   right: 0;
   left: 0;
   height: 1px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-overlay-line);
 }
 
 .crop-box__grid--h.top {
@@ -845,7 +849,7 @@ function resetCropState() {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-overlay-line);
 }
 
 .crop-box__grid--v.left {
@@ -904,34 +908,34 @@ function resetCropState() {
 .crop-box__handle--lt {
   top: -22rpx;
   left: -22rpx;
-  border-top: 6rpx solid #ffffff;
-  border-left: 6rpx solid #ffffff;
+  border-top: 6rpx solid var(--color-overlay-text);
+  border-left: 6rpx solid var(--color-overlay-text);
 }
 
 .crop-box__handle--rt {
   top: -22rpx;
   right: -22rpx;
-  border-top: 6rpx solid #ffffff;
-  border-right: 6rpx solid #ffffff;
+  border-top: 6rpx solid var(--color-overlay-text);
+  border-right: 6rpx solid var(--color-overlay-text);
 }
 
 .crop-box__handle--lb {
   bottom: -22rpx;
   left: -22rpx;
-  border-bottom: 6rpx solid #ffffff;
-  border-left: 6rpx solid #ffffff;
+  border-bottom: 6rpx solid var(--color-overlay-text);
+  border-left: 6rpx solid var(--color-overlay-text);
 }
 
 .crop-box__handle--rb {
   right: -22rpx;
   bottom: -22rpx;
-  border-right: 6rpx solid #ffffff;
-  border-bottom: 6rpx solid #ffffff;
+  border-right: 6rpx solid var(--color-overlay-text);
+  border-bottom: 6rpx solid var(--color-overlay-text);
 }
 
 .crop-tip {
   padding: 26rpx 36rpx 12rpx;
-  color: rgba(247, 244, 238, 0.7);
+  color: var(--color-overlay-text-muted);
   font-size: 24rpx;
   line-height: 1.6;
   text-align: center;
@@ -949,18 +953,18 @@ function resetCropState() {
   justify-content: center;
   flex: 1;
   height: 64rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.14);
+  border: 1rpx solid var(--color-overlay-control);
   border-radius: var(--radius-pill);
-  color: rgba(247, 244, 238, 0.76);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-overlay-text-muted);
+  background: transparent;
   font-size: 24rpx;
   line-height: 1;
 }
 
 .crop-ratio-tabs__item--active {
-  border-color: rgba(240, 143, 80, 0.72);
-  color: #fff2e8;
-  background: rgba(240, 143, 80, 0.24);
+  border-color: var(--color-state-warning-soft);
+  color: var(--color-overlay-text);
+  background: var(--color-state-warning-soft);
 }
 
 .crop-actions {
@@ -983,13 +987,13 @@ function resetCropState() {
 }
 
 .crop-actions__button--light {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(247, 244, 238, 0.92);
+  background: var(--color-overlay-control);
+  color: var(--color-overlay-text);
 }
 
 .crop-actions__button--primary {
-  background: linear-gradient(135deg, #f08f50 0%, #e26a2c 100%);
-  color: #fff9f4;
+  background: var(--feedback-line-danger);
+  color: var(--color-overlay-text);
 }
 
 .crop-canvas {

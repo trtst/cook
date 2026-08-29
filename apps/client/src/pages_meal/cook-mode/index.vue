@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout :title="pageTitle" full-screen>
     <LoginEmptyState
       v-if="requiresLogin && !sessionStore.isLoggedIn"
@@ -52,7 +52,7 @@
         <view class="cook-tools">
           <view class="cook-tools__item">
             <text class="cook-tools__label">页面常亮</text>
-            <switch :checked="keepScreenOn" color="#2f6f4e" @change="handleKeepScreenOnChange" />
+            <switch :checked="keepScreenOn" color="var(--color-support-action)" @change="handleKeepScreenOnChange" />
           </view>
           <button v-if="canOpenRecipe" class="cook-tools__link" @click="openCurrentRecipe">查看原菜谱</button>
         </view>
@@ -189,6 +189,8 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatMealSlot } from "@/utils/meal-slot";
@@ -219,6 +221,8 @@ type CookStep = {
 };
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loading = ref(false);
 const errorText = ref("");
@@ -803,7 +807,7 @@ defineExpose({
   min-height: 0;
   width: 100%;
   flex-direction: column;
-  background: linear-gradient(180deg, #f7f2e7 0%, #f4edde 18%, #f7f4ee 100%);
+  background: var(--page-warm-bg);
 }
 
 .cook-mode-state,
@@ -820,7 +824,7 @@ defineExpose({
 }
 
 .cook-mode-state--error {
-  color: var(--color-danger);
+  color: var(--color-state-danger-text);
 }
 
 .cook-mode-empty {
@@ -866,8 +870,8 @@ defineExpose({
   gap: 8rpx;
   padding: 8rpx;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.7);
-  box-shadow: inset 0 0 0 1rpx rgba(47, 111, 78, 0.08);
+  background: var(--color-surface-soft-card);
+  box-shadow: inset 0 0 0 1rpx var(--color-border);
 }
 
 .cook-toolbar__flow-mode {
@@ -878,8 +882,8 @@ defineExpose({
 }
 
 .cook-toolbar__flow-mode--active {
-  color: var(--color-primary);
-  background: rgba(47, 111, 78, 0.12);
+  color: var(--color-tag-primary-text);
+  background: var(--color-tag-primary-bg);
   font-weight: var(--font-weight-medium);
 }
 
@@ -888,7 +892,7 @@ defineExpose({
   gap: 10rpx;
   padding: 8rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-primary) 8%, #fff 92%);
+  background: var(--color-surface-raised);
 }
 
 .cook-toolbar__mode {
@@ -899,8 +903,8 @@ defineExpose({
 }
 
 .cook-toolbar__mode--active {
-  color: #fff;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  color: var(--color-text-inverse);
+  background: var(--button-primary-bg);
 }
 
 .cook-tools {
@@ -925,7 +929,7 @@ defineExpose({
 .cook-tools__link {
   padding: 0;
   font-size: 24rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
   background: transparent;
 }
 
@@ -962,14 +966,14 @@ defineExpose({
   gap: 16rpx;
   padding: 24rpx;
   border-radius: 28rpx;
-  background: color-mix(in srgb, var(--color-surface) 94%, #fff 6%);
-  box-shadow: 0 18rpx 40rpx color-mix(in srgb, #8a6b3d 10%, transparent);
+  background: var(--color-surface-soft-panel);
+  box-shadow: var(--shadow-card);
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .cook-card--active {
   transform: translateY(-4rpx);
-  box-shadow: 0 24rpx 52rpx color-mix(in srgb, #8a6b3d 16%, transparent);
+  box-shadow: var(--shadow-floating);
 }
 
 .cook-card--done {
@@ -1005,16 +1009,17 @@ defineExpose({
 .cook-card__index,
 .cook-card__tag,
 .cook-card__time {
-  color: var(--color-text-secondary);
-  background: color-mix(in srgb, var(--color-primary) 8%, #fff 92%);
+  color: var(--color-tag-primary-text);
+  background: var(--color-tag-primary-bg);
 }
 
 .cook-slide__index,
 .cook-slide__tag,
 .cook-slide__time {
-  color: #fff;
-  backdrop-filter: blur(18rpx);
-  background: rgba(17, 15, 11, 0.42);
+  color: var(--color-overlay-text);
+  background: var(--color-overlay-control);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
 }
 
 .cook-card__text {
@@ -1026,7 +1031,7 @@ defineExpose({
 .cook-card__dish,
 .cook-slide__dish {
   font-size: 24rpx;
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .cook-card__title {
@@ -1069,7 +1074,7 @@ defineExpose({
   bottom: 0;
   left: 0;
   height: 58%;
-  background: linear-gradient(180deg, rgba(10, 9, 7, 0) 0%, rgba(10, 9, 7, 0.18) 28%, rgba(10, 9, 7, 0.92) 100%);
+  background: var(--overlay-image-mask);
 }
 
 .cook-card__mixed-copy,
@@ -1087,21 +1092,21 @@ defineExpose({
 
 .cook-card__dish--overlay,
 .cook-slide__dish--overlay {
-  color: rgba(255, 242, 224, 0.9);
+  color: var(--color-overlay-text);
 }
 
 .cook-card__mixed-title,
 .cook-slide__copy-title {
   font-size: 32rpx;
   font-weight: var(--font-weight-heavy);
-  color: #fffdf7;
+  color: var(--color-overlay-text);
 }
 
 .cook-card__mixed-body,
 .cook-slide__copy-text {
   font-size: 25rpx;
   line-height: 1.7;
-  color: rgba(255, 250, 242, 0.92);
+  color: var(--color-overlay-text-muted);
 }
 
 .cook-card__note,
@@ -1126,7 +1131,7 @@ defineExpose({
 .cook-slide {
   position: relative;
   overflow: hidden;
-  background: #15120d;
+  background: var(--color-overlay-medium);
 }
 
 .cook-slide__top {
@@ -1152,14 +1157,14 @@ defineExpose({
 .cook-slide__plain-title {
   font-size: 32rpx;
   font-weight: var(--font-weight-heavy);
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--color-overlay-text-muted);
 }
 
 .cook-slide__plain-text {
   font-size: 54rpx;
   line-height: 1.45;
   font-weight: var(--font-weight-heavy);
-  color: #fff9f0;
+  color: var(--color-overlay-text);
 }
 
 .cook-bottom {
@@ -1172,8 +1177,8 @@ defineExpose({
   flex-direction: column;
   gap: 14rpx;
   padding: 18rpx var(--space-page) calc(18rpx + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--color-surface) 94%, #fff 6%);
-  box-shadow: 0 -18rpx 40rpx color-mix(in srgb, var(--color-surface-mask-medium) 40%, transparent);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-floating);
 }
 
 .cook-bottom__main,
@@ -1216,8 +1221,8 @@ defineExpose({
   border-radius: 999rpx;
   font-size: 26rpx;
   font-weight: var(--font-weight-heavy);
-  color: #fff;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  color: var(--color-text-inverse);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
@@ -1235,14 +1240,14 @@ defineExpose({
 }
 
 .cook-bottom__action--primary {
-  color: #fff;
-  background: linear-gradient(135deg, var(--button-primary-gradient-start), var(--button-primary-gradient-end));
+  color: var(--color-text-inverse);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
 .cook-bottom__action--ghost {
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 9%, #fff 91%);
+  color: var(--color-tag-primary-text);
+  background: var(--color-tag-primary-bg);
 }
 
 .cook-complete {
@@ -1256,19 +1261,21 @@ defineExpose({
   gap: 14rpx;
   padding: 28rpx;
   border-radius: 28rpx;
-  background: rgba(18, 16, 12, 0.92);
-  backdrop-filter: blur(22rpx);
+  background: var(--color-overlay-medium);
+  box-shadow: var(--shadow-floating);
+  -webkit-backdrop-filter: var(--page-overlay-veil-filter);
+  backdrop-filter: var(--page-overlay-veil-filter);
 }
 
 .cook-complete__title {
   font-size: 36rpx;
   font-weight: var(--font-weight-heavy);
-  color: #fffdf7;
+  color: var(--color-overlay-text);
 }
 
 .cook-complete__text {
   font-size: 25rpx;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--color-overlay-text-muted);
 }
 </style>

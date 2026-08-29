@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     title=""
     full-screen
@@ -254,6 +254,8 @@ import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import type { UUID } from "@/apis/http";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -299,6 +301,8 @@ const expireShortcuts: ExpireShortcut[] = [
 ];
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 
@@ -705,8 +709,7 @@ async function goBack() {
 
 .complete-page {
   position: relative;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-page) 84%, var(--color-primary-soft) 16%) 0%, var(--color-page) 48%, var(--color-page) 100%);
+  background: var(--color-page);
 }
 
 .complete-nav,
@@ -754,9 +757,8 @@ async function goBack() {
   right: 0;
   left: 0;
   z-index: 790;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-surface-mask-strong) 82%, var(--color-surface) 18%) 0%, color-mix(in srgb, var(--color-surface) 92%, transparent) 100%);
-  box-shadow: 0 10rpx 26rpx color-mix(in srgb, var(--color-surface-mask-medium) 64%, transparent);
+  background: linear-gradient(180deg, var(--color-surface-mask-strong) 0%, var(--color-surface-mask-medium) 100%);
+  box-shadow: var(--shadow-tabbar);
   pointer-events: none;
   transition: opacity 180ms ease;
 }
@@ -788,8 +790,6 @@ async function goBack() {
 }
 
 .complete-hero {
-  --complete-hero-end: var(--color-page);
-
   position: relative;
   overflow: hidden;
   min-height: 420rpx;
@@ -798,10 +798,7 @@ async function goBack() {
   padding-left: 32rpx;
   border-bottom-right-radius: 56rpx;
   border-bottom-left-radius: 56rpx;
-  background:
-    radial-gradient(circle at 18% 18%, var(--entry-side-mint-bg) 0, transparent 30%),
-    radial-gradient(circle at 82% 14%, var(--entry-side-aqua-bg) 0, transparent 30%),
-    linear-gradient(148deg, var(--entry-primary-bg), var(--entry-board-bg));
+  background: var(--page-hero-bg);
 }
 
 .complete-hero::before {
@@ -819,33 +816,20 @@ async function goBack() {
 }
 
 .complete-hero::after {
-  --complete-mask-solid: #000;
-  --complete-mask-strong: rgba(0, 0, 0, 0.76);
-  --complete-mask-mid: rgba(0, 0, 0, 0.42);
-
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 1;
   height: 228rpx;
-  background: var(--complete-hero-end);
+  background: var(--color-page);
   content: "";
-  mask-image:
-    radial-gradient(ellipse at 15% 100%,
-      var(--complete-mask-solid) 0%,
-      var(--complete-mask-strong) 36%,
-      transparent 72%),
-    radial-gradient(ellipse at 85% 100%,
-      var(--complete-mask-solid) 0%,
-      var(--complete-mask-strong) 36%,
-      transparent 72%),
-    linear-gradient(to bottom,
-      transparent 0%,
-      var(--complete-mask-mid) 50%,
-      var(--complete-mask-solid) 100%);
+  mask-image: var(--page-bottom-mask-image);
   mask-size: 100% 100%;
   mask-repeat: no-repeat;
+  -webkit-mask-image: var(--page-bottom-mask-image);
+  -webkit-mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
 }
 
 .complete-hero__title,
@@ -899,10 +883,9 @@ async function goBack() {
 .complete-card,
 .complete-empty,
 .field-block,
-.complete-footer,
 .quantity-sheet__editor {
   border-radius: var(--radius-xs);
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   box-shadow: var(--shadow-card);
 }
 
@@ -915,8 +898,10 @@ async function goBack() {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
-  -webkit-backdrop-filter: saturate(180%) blur(18rpx);
-  backdrop-filter: saturate(180%) blur(18rpx);
+  background: var(--material-control-bg);
+  box-shadow: var(--material-control-shadow);
+  -webkit-backdrop-filter: var(--material-control-filter);
+  backdrop-filter: var(--material-control-filter);
 }
 
 .complete-filter__item {
@@ -928,11 +913,12 @@ async function goBack() {
   min-width: 0;
   min-height: 120rpx;
   padding: 28rpx 12rpx;
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-page) 10%);
+  background: var(--color-surface-overlay-weak);
 }
 
 .complete-filter__item--active {
-  background: color-mix(in srgb, var(--color-primary-soft) 18%, var(--color-surface) 82%);
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .complete-filter__item + .complete-filter__item::before {
@@ -958,7 +944,7 @@ async function goBack() {
 }
 
 .complete-filter__count--accent {
-  color: #d6a108;
+  color: var(--color-state-warning-text);
 }
 
 .complete-filter__label {
@@ -979,7 +965,7 @@ async function goBack() {
 
 .complete-card--pending {
   box-shadow:
-    0 18rpx 34rpx color-mix(in srgb, var(--color-primary-soft) 18%, transparent),
+    var(--shadow-card),
     var(--shadow-card);
 }
 
@@ -996,7 +982,7 @@ async function goBack() {
   height: 112rpx;
   border-radius: var(--radius-xs);
   overflow: hidden;
-  background: color-mix(in srgb, var(--color-page) 72%, var(--color-surface) 28%);
+  background: var(--color-surface-soft-card);
 }
 
 .complete-card__image,
@@ -1011,7 +997,7 @@ async function goBack() {
   justify-content: center;
   color: var(--color-text-tertiary);
   font-size: 24rpx;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--color-page) 82%, var(--color-primary-soft) 18%) 0%, var(--color-page) 100%);
+  background: var(--color-surface-primary-panel-soft);
 }
 
 .complete-card__info {
@@ -1045,7 +1031,7 @@ async function goBack() {
 }
 
 .complete-card__state {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   margin-bottom: 8rpx;
   font-size: 22rpx;
   line-height: 1.2;
@@ -1069,12 +1055,12 @@ async function goBack() {
 }
 
 .complete-card__toggle-icon {
-  color: var(--color-text-quaternary);
+  color: var(--color-text-tertiary);
   line-height: 1;
 }
 
 .complete-card__toggle .icon-select-on {
-  color: var(--color-primary);
+  color: var(--color-icon-accent);
 }
 
 .complete-card__fields {
@@ -1152,15 +1138,16 @@ async function goBack() {
   flex: 0 0 auto;
   padding: 10rpx 20rpx;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-page) 76%, var(--color-surface) 24%);
+  background: var(--color-surface-soft-card);
   color: var(--color-text-secondary);
   font-size: 22rpx;
   line-height: 1.2;
 }
 
 .quick-chip--active {
-  background: color-mix(in srgb, var(--color-primary-soft) 34%, var(--color-surface) 66%);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
   font-weight: var(--font-weight-heavy);
 }
 
@@ -1174,10 +1161,10 @@ async function goBack() {
   align-items: center;
   justify-content: center;
   padding: 24rpx var(--space-page) calc(24rpx + env(safe-area-inset-bottom));
-  background: var(--color-surface);
-  box-shadow: var(--shadow-floating);
-  -webkit-backdrop-filter: blur(12rpx);
-  backdrop-filter: blur(12rpx);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
 }
 
 .complete-footer__button,
@@ -1193,7 +1180,7 @@ async function goBack() {
   height: 92rpx;
   line-height: 92rpx;
   color: var(--button-primary-text);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
@@ -1276,7 +1263,7 @@ async function goBack() {
   gap: 16rpx;
   margin-top: 18rpx;
   padding: 0 6rpx 12rpx;
-  border-bottom: 1rpx solid color-mix(in srgb, var(--color-divider) 82%, transparent);
+  border-bottom: 1rpx solid var(--color-divider);
 }
 
 .quantity-sheet__input {
@@ -1314,13 +1301,15 @@ async function goBack() {
 }
 
 .sheet-actions__button--cancel {
-  color: var(--color-text-secondary);
-  background: color-mix(in srgb, var(--color-page) 80%, var(--color-surface) 20%);
+  color: var(--button-secondary-text);
+  background: var(--button-secondary-bg);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .sheet-actions__button--confirm {
   color: var(--button-primary-text);
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 

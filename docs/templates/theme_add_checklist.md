@@ -4,9 +4,9 @@
 
 ## 先认规则
 
-1. 一级主题源头只认 `bg / surface / text / primary / accent`。
+1. 一级主题源头只认 `bg / surface / text / primary / secondary`。
 2. `primary` 必填，表示主题高亮色。
-3. `accent` 可选，表示次级点缀色；不填时运行态会从 `primary` 自动派生。
+3. `secondary` 可选，表示第二主题色；不填时运行态会从 `primary` 自动派生。
 4. `--button-primary-gradient-start/end` 只是组件层 token，不是一级主题源头。
 5. 普通主题按统一模板接入；`apple-glass` 这种玻璃特例单独处理，不反推成公共规则。
 
@@ -20,6 +20,7 @@
 - `label`：主题展示名。
 - `access`：`free` 或 `member`。
 - `assetType`：`icon` 或 `svg`。
+- `sourceMode`：`mono` 或 `duo`，且必须与 seed 实际源头数量一致。
 - `supportsPalette`：是否支持色系切换。
 - `supportsDark`：是否支持暗黑模式。
 - `palettes`：支持的 palette 列表；不支持时传空数组。
@@ -33,6 +34,7 @@
   label: "新主题",
   access: "member",
   assetType: "icon",
+  sourceMode: "duo",
   supportsPalette: false,
   supportsDark: false,
   palettes: [],
@@ -43,7 +45,7 @@
         surface: "#ffffff",
         text: "#1f2a24",
         primary: "#5f9f86",
-        accent: "#f0b16b"
+        secondary: "#f0b16b"
       }
     }
   }
@@ -58,6 +60,7 @@
   label: "新主题",
   access: "member",
   assetType: "icon",
+  sourceMode: "mono",
   supportsPalette: false,
   supportsDark: false,
   palettes: [],
@@ -76,8 +79,8 @@
 
 说明：
 
-- 只有一个主题色时，`primary` 同时承担高亮色，运行态自动派生 `accent`。
-- 需要显式区分“高亮色”和“次级点缀色”时，同时填写 `primary` 和 `accent`。
+- 只有一个主题色时，`primary` 同时承担高亮色，运行态自动派生第二色。
+- 需要显式区分“高亮色”和“第二主题色”时，同时填写 `primary` 和 `secondary`。
 - `supportsDark: true` 时，补 `dark` seed；否则运行态固定走 `light`。
 - `supportsPalette: true` 时，至少补齐 `palettes` 里每个 palette 对应的 seed。
 

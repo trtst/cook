@@ -7,13 +7,13 @@
  * 3. 在 `src/themes/skins.scss` 里显式 `@use` 新皮肤样式文件。
  *
  * 源头色和能力声明都只放在 `src/themes/presets.ts`，不要在这里重复定义。
- * `seed` 语义固定为：`primary` 必填、`accent` 可选。
- * `--button-primary-gradient-start/end` 只是按钮层 token，运行态会由 `primary/accent` 映射生成，
+ * `seed` 语义固定为：`primary` 必填；`mono` 不声明 `secondary`，`duo` 必须声明 `secondary`。
+ * `--button-primary-gradient-start/end` 只是按钮层 token，运行态会由 `primary/secondary` 映射生成，
  * 不要反过来把 start/end 当成一级主题源头。
  *
  * 新增 `icon` 字体图标皮肤：
  * 1. 在 `src/themes/{skinId}/skins.scss` 中注册本地字体文件和 icon class。
- * 2. 必须提供三个固定 class：`icon-home`、`icon-recipe`、`icon-me`。
+ * 2. 必须提供三个固定 class：`icon-tab-dining`、`icon-tab-recipe`、`icon-tab-me`。
  * 3. 在 `src/themes/presets.ts` 中设置 `assetType: "icon"`。
  * 4. 在 `src/themes/skins.scss` 中添加 `@use "./{skinId}/skins.scss" as {skinId}Skin;`。
  * 5. 字体图标会跟随 CSS `color` 变色，适合支持换色或暗黑模式的主题。
@@ -43,6 +43,12 @@ import {
   DEFAULT_THEME_PALETTE,
   DEFAULT_THEME_SKIN,
   FALLBACK_ASSET_SKIN,
+  formatThemeText,
+  THEME_MODE_LABELS,
+  THEME_PALETTE_LABELS,
+  THEME_SOURCE_MODE_LABELS,
+  THEME_PICKER_SKINS,
+  THEME_SKIN_LABELS,
   THEME_PALETTE_OPTIONS,
   THEME_SKIN_PRESETS,
   THEME_TABBAR_ICON_NAMES,
@@ -52,6 +58,7 @@ import {
   type ThemeSeed,
   type ThemeSeedSet,
   type ThemeSkin,
+  type ThemeSourceMode,
   type ThemeSkinAccess,
   type ThemeSkinPreset,
   type ThemeTabbarIconName
@@ -79,6 +86,7 @@ export interface ThemeSkinOption {
   label: string;
   access: ThemeSkinAccess;
   assetType: ThemeAssetType;
+  sourceMode: ThemeSourceMode;
   supportsPalette: boolean;
   supportsDark: boolean;
   palettes: ThemePalette[];
@@ -87,9 +95,9 @@ export interface ThemeSkinOption {
 }
 
 const FONT_TABBAR_CLASS_BY_NAME: Record<ThemeTabbarIconName, string> = {
-  home: "icon-home",
-  recipe: "icon-recipe",
-  me: "icon-me"
+  home: "icon-tab-dining",
+  recipe: "icon-tab-recipe",
+  me: "icon-tab-me"
 };
 
 function createIconTabbarAssets(): Record<ThemeTabbarIconName, ThemeIconAsset> {
@@ -140,6 +148,7 @@ export const THEME_SKIN_OPTIONS: ThemeSkinOption[] = THEME_SKIN_PRESETS.map((con
   label: config.label,
   access: config.access,
   assetType: config.assetType,
+  sourceMode: config.sourceMode,
   supportsPalette: config.supportsPalette,
   supportsDark: config.supportsDark,
   palettes: [...config.palettes],
@@ -151,8 +160,14 @@ export {
   DEFAULT_THEME_PALETTE,
   DEFAULT_THEME_SKIN,
   FALLBACK_ASSET_SKIN,
+  formatThemeText,
+  THEME_MODE_LABELS,
+  THEME_PALETTE_LABELS,
+  THEME_SOURCE_MODE_LABELS,
+  THEME_PICKER_SKINS,
+  THEME_SKIN_LABELS,
   THEME_PALETTE_OPTIONS,
   THEME_TABBAR_ICON_NAMES
 };
 
-export type { ThemeAssetType, ThemeMode, ThemePalette, ThemeSeed, ThemeSeedSet, ThemeSkin, ThemeSkinAccess, ThemeTabbarIconName };
+export type { ThemeAssetType, ThemeMode, ThemePalette, ThemeSeed, ThemeSeedSet, ThemeSkin, ThemeSourceMode, ThemeSkinAccess, ThemeTabbarIconName };

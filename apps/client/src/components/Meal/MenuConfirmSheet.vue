@@ -79,7 +79,10 @@ const emit = defineEmits<{
 .menu-confirm-sheet__item {
   padding: 24rpx;
   border-radius: var(--radius-lg);
-  background: rgba(255, 249, 238, 0.96);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .menu-confirm-sheet__summary-title,
@@ -128,11 +131,14 @@ const emit = defineEmits<{
 .menu-confirm-sheet__state {
   padding: 24rpx;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .menu-confirm-sheet__state--empty {
-  background: rgba(245, 247, 241, 0.96);
+  background: var(--color-surface-muted);
 }
 
 .menu-confirm-sheet__tip {
@@ -164,13 +170,17 @@ const emit = defineEmits<{
 }
 
 .menu-confirm-sheet__button--cancel {
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 
 .menu-confirm-sheet__button--confirm {
-  background: linear-gradient(135deg, var(--button-primary-gradient-start) 0%, var(--button-primary-gradient-end) 100%);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+  -webkit-backdrop-filter: var(--button-primary-filter);
+  backdrop-filter: var(--button-primary-filter);
 }
 </style>

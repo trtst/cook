@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout :title="pageTitle">
     <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
@@ -112,6 +112,8 @@ import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary, type UnitSummary } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { fridgeApi } from "../apis/fridge";
 import { uniPlatform } from "@/platform/uni";
@@ -119,6 +121,8 @@ import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const notePresets = ["先吃这个", "已开封", "只剩一点", "今晚要用", "早餐要用", "冷冻保存", "冷藏保存", "临期先用"];
 
@@ -349,9 +353,7 @@ function resetCreateForm() {
 <style scoped lang="scss">
 .section,
 .notice,
-.readonly-card,
-.input,
-.picker {
+.readonly-card {
   border-radius: var(--radius-md);
   background: var(--color-surface);
 }
@@ -384,6 +386,12 @@ function resetCreateForm() {
 .picker {
   min-height: 88rpx;
   padding: 0 24rpx;
+  border: 1rpx solid var(--material-input-border);
+  border-radius: var(--radius-md);
+  background: var(--material-input-bg);
+  box-shadow: var(--material-input-shadow);
+  -webkit-backdrop-filter: var(--material-input-filter);
+  backdrop-filter: var(--material-input-filter);
   box-sizing: border-box;
 }
 
@@ -413,14 +421,18 @@ function resetCreateForm() {
 .ingredient-item,
 .readonly-card {
   padding: var(--space-md);
-  border: 1rpx solid var(--color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .ingredient-item--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  background: var(--color-tag-primary-bg);
+  box-shadow:
+    var(--material-card-shadow),
+    inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .ingredient-item__title,
@@ -454,8 +466,8 @@ function resetCreateForm() {
 .day-chip {
   padding: 10rpx 20rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
   font-size: var(--font-size-sm);
 }
 

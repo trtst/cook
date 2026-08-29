@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout
     title=""
     full-screen
@@ -110,6 +110,8 @@ import { medalApi, type MedalWallResponse } from "@/apis/medal";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -118,6 +120,8 @@ import { formatMedalState, formatMedalStateHint, getMedalIconClass, resolveMedal
 const NAV_FADE_DISTANCE = 96;
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const loading = ref(false);
@@ -314,7 +318,7 @@ defineExpose({
 }
 
 .hero-card__tone {
-  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+  background: var(--button-primary-bg);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -433,8 +437,9 @@ defineExpose({
 }
 
 .category-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: transparent;
+  background: var(--color-tag-primary-bg);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .category-chip__name {
@@ -454,7 +459,7 @@ defineExpose({
 
 .category-chip--active .category-chip__name,
 .category-chip--active .category-chip__meta {
-  color: var(--color-primary-active);
+  color: var(--color-tag-primary-text);
 }
 
 .medal-grid {
@@ -494,7 +499,7 @@ defineExpose({
 }
 
 .medal-card__icon {
-  color: #fffdf5;
+  color: var(--color-text-inverse);
   font-size: 48rpx;
 }
 
@@ -524,18 +529,18 @@ defineExpose({
 }
 
 .medal-card__tag--earned {
-  background: rgba(255, 214, 133, 0.28);
-  color: #9a6114;
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .medal-card__tag--limited {
-  background: rgba(245, 166, 35, 0.12);
-  color: #b26a08;
+  background: var(--color-tag-warning-bg);
+  color: var(--color-tag-warning-text);
 }
 
 .medal-card__tag--locked {
-  background: rgba(148, 163, 184, 0.14);
-  color: #64748b;
+  background: var(--color-surface-overlay-soft);
+  color: var(--color-text-tertiary);
 }
 
 .medal-card__meta {
@@ -546,7 +551,7 @@ defineExpose({
 }
 
 .empty-card {
-  background: var(--color-surface);
+  background: var(--color-surface-soft-card);
   text-align: center;
 }
 

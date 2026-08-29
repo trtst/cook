@@ -1,5 +1,5 @@
 <template>
-  <page-meta :page-style="pageStyle" />
+  <page-meta :page-style="themePageStyle" />
   <Layout title="冰箱库存">
     <view class="redirect-state">
       <text class="redirect-state__title">正在进入食材主页...</text>
@@ -10,11 +10,16 @@
 
 <script setup lang="ts">
 import { onLoad } from "@dcloudio/uni-app";
+import { computed } from "vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 
 const pageStyle = usePageScrollStyle();
+const { themeVars } = useTheme();
+const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 onLoad(() => {
   void uniPlatform.navigation.redirectTo("/pages_pantry/index/index");

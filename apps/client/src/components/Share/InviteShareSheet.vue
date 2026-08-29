@@ -125,10 +125,13 @@ const emit = defineEmits<{
   padding: 24rpx;
   border: 0;
   border-radius: 28rpx;
-  background: var(--color-surface);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
   box-sizing: border-box;
   line-height: 1.5;
   text-align: left;
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .invite-share__action-card::after {
@@ -151,7 +154,7 @@ const emit = defineEmits<{
 }
 
 .invite-share__tag-icon {
-  color: #7c5600;
+  color: var(--color-state-warning-text);
   font-size: 28rpx;
 }
 
@@ -210,7 +213,9 @@ const emit = defineEmits<{
 }
 
 .invite-share__footer-button--cancel {
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  -webkit-backdrop-filter: var(--button-secondary-filter);
+  backdrop-filter: var(--button-secondary-filter);
 }
 </style>
