@@ -227,14 +227,15 @@ onMounted(() => {
 <style scoped lang="scss">
 .dashboard-top-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .dashboard-top-card {
-  min-height: 132px;
+  min-height: 88px;
+  padding: 12px 14px;
   background:
-    linear-gradient(135deg, rgb(37 99 235 / 12%), transparent 52%),
+    linear-gradient(135deg, rgb(37 99 235 / 8%), transparent 56%),
     #fff;
 }
 
@@ -248,15 +249,15 @@ onMounted(() => {
 .trend-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  padding: 0 16px 16px;
+  gap: 12px;
+  padding: 0 12px 12px;
 }
 
 .trend-card {
   border: 1px solid #ebeef5;
-  border-radius: 20px;
-  padding: 16px;
-  background: linear-gradient(180deg, #fff, #f8fafc);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
 }
 
 .trend-card__header {
@@ -302,12 +303,14 @@ onMounted(() => {
 }
 
 .dashboard-empty {
-  padding: 32px 16px;
+  padding: 24px 12px;
   color: #909399;
 }
 
 .dashboard-section__grid {
-  padding: 0 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 12px 12px;
 }
 
 .metric-panel--link,
@@ -319,6 +322,8 @@ onMounted(() => {
 }
 
 .metric-panel--link {
+  gap: 6px;
+  padding: 12px 14px;
   transition:
     border-color 0.2s ease,
     transform 0.2s ease,
@@ -326,13 +331,18 @@ onMounted(() => {
 }
 
 .metric-panel--link:hover {
-  border-color: #93c5fd;
-  box-shadow: 0 12px 28px rgb(37 99 235 / 10%);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgb(15 23 42 / 6%);
   transform: translateY(-1px);
 }
 
+.metric-panel--link strong {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
 .metric-meta {
-  font-size: 13px;
+  font-size: 12px;
   color: #6b7280;
 }
 
@@ -340,9 +350,32 @@ onMounted(() => {
   font: inherit;
 }
 
+.entry-grid {
+  padding: 12px;
+}
+
+.entry-item--button {
+  padding: 12px 14px;
+  background: #fafaf9;
+  color: #57534e;
+  border-color: #e7e5e4;
+}
+
+.panel-heading {
+  padding: 12px 12px 0;
+}
+
+.panel-heading h2 {
+  font-size: 15px;
+}
+
 @media (max-width: 1200px) {
   .dashboard-top-grid,
   .trend-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-section__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -360,6 +393,10 @@ onMounted(() => {
 
   .trend-card__legend {
     justify-content: flex-start;
+  }
+
+  .dashboard-section__grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
