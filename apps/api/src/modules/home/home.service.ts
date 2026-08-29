@@ -16,6 +16,10 @@ import type {
   HomeEntryPageTarget,
   HomeRecentArrangement,
   HomeRecentArrangementStatus,
+  HomeWeekDayStatus,
+  HomeWeekOverview,
+  HomeWeekOverviewDay,
+  HomeWeekOverviewStatus,
   OperationId,
   RecipeDifficulty,
   RecipeDuration,
@@ -47,6 +51,8 @@ const fallbackWindowMs = 36 * 60 * 60 * 1000;
 const pastShareWindowMs = 24 * 60 * 60 * 1000;
 const maxHomeFridgeRecipeCount = 3;
 const maxHomeFridgeMissingCount = 2;
+const homeWeekDayCount = 7;
+const weekDayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const arrangementStatusPriority: Record<HomeRecentArrangementStatus, number> = {
   TIME_UP_SHARE: 5,
   READY_TO_COOK: 4,
@@ -138,6 +144,20 @@ type RecentArrangementCandidate = HomeRecentArrangement & {
   bucket: RecentArrangementBucket;
   scheduledMs: number;
 };
+type WeekPlanRow = {
+  id: UUID;
+  planDate: Date;
+  mealSlot: MealSlot;
+  menuLockedAt: Date | null;
+  status: "PLANNED" | "COMPLETED";
+  completedAt: Date | null;
+  diningEvent: {
+    id: UUID;
+    status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+    completedAt: Date | null;
+  } | null;
+  dishes: Array<{ id: UUID }>;
+};
 
 function cleanText(value: string | null | undefined) {
   const text = value?.trim() ?? "";
@@ -185,6 +205,20 @@ function resolvePlanScheduledAt(planDate: Date, mealSlot: MealSlot) {
   const next = new Date(planDate);
   next.setHours(Number(hoursText), Number(minutesText), 0, 0);
   return next;
+}
+
+function buildRecentArrangementTarget(
+  item: Pick<HomeRecentArrangement, "eventId" | "planDate" | "planItemId">,
+  focus?: "menu" | "shopping" | "assistant"
+) {
+  const query = [`planItemId=${encodeURIComponent(String(item.planItemId))}`, `planDate=${encodeURIComponent(item.planDate)}`];
+  if (item.eventId) {
+    query.push(`eventId=${encodeURIComponent(String(item.eventId))}`);
+  }
+  if (focus) {
+    query.push(`focus=${encodeURIComponent(focus)}`);
+  }
+  return `/pages_meal/detail/index?${query.join("&")}`;
 }
 
 function resolveCandidateBucket(scheduledMs: number, status: HomeRecentArrangementStatus, nowMs: number): RecentArrangementBucket | null {
@@ -410,6 +444,97 @@ export class HomeService {
     return {
       status: this.resolveNextMealStatus(arrangement),
       arrangement
+    };
+  }
+
+  async getWeekOverview(userId: UUID): Promise<HomeWeekOverview> {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(today);
+    end.setDate(end.getDate() + homeWeekDayCount - 1);
+    end.setHours(23, 59, 59, 999);
+
+    const [nextMealState, fridgeSummary, shoppingSummary, plans] = await Promise.all([
+      this.getNextMealState(userId),
+      this.pantryService.getFridgeSummary(userId),
+      this.pantryService.getShoppingListSummary(userId),
+      this.prisma.mealPlanItem.findMany({
+        where: {
+          userId,
+          planDate: {
+            gte: today,
+            lte: end
+          }
+        },
+        orderBy: [{ planDate: "asc" }, { mealSlot: "asc" }, { id: "asc" }],
+        select: {
+          id: true,
+          planDate: true,
+          mealSlot: true,
+          menuLockedAt: true,
+          status: true,
+          completedAt: true,
+          diningEvent: {
+            select: {
+              id: true,
+              status: true,
+              completedAt: true
+            }
+          },
+          dishes: {
+            select: {
+              id: true
+            }
+          }
+        }
+      })
+    ]);
+
+    const arrangement = nextMealState.arrangement;
+    const dayMap = new Map<string, HomeWeekDayStatus>();
+    let plannedDayCount = 0;
+    for (let index = 0; index < homeWeekDayCount; index += 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + index);
+      dayMap.set(date.toISOString().slice(0, 10), "EMPTY");
+    }
+
+    for (const plan of plans as WeekPlanRow[]) {
+      const dateKey = plan.planDate.toISOString().slice(0, 10);
+      const current = dayMap.get(dateKey) ?? "EMPTY";
+      const scheduledMs = resolvePlanScheduledAt(plan.planDate, plan.mealSlot).getTime();
+      const dayStatus = await this.resolveWeekPlanDayStatus(userId, plan, scheduledMs, now.getTime());
+      if (current === "EMPTY" && dayStatus !== "EMPTY") {
+        plannedDayCount += 1;
+      }
+      dayMap.set(dateKey, this.pickHigherDayStatus(current, dayStatus));
+    }
+
+    const days: HomeWeekOverviewDay[] = Array.from({ length: homeWeekDayCount }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() + index);
+      const dateKey = date.toISOString().slice(0, 10);
+      return {
+        date: dateKey,
+        label: index === 0 ? "今天" : index === 1 ? "明天" : weekDayNames[date.getDay()],
+        status: dayMap.get(dateKey) ?? "EMPTY"
+      };
+    });
+
+    const status = this.resolveWeekOverviewStatus(nextMealState);
+    return {
+      status,
+      title: this.resolveWeekOverviewTitle(status, plannedDayCount),
+      summary: this.buildWeekOverviewSummary(status),
+      actionText: this.resolveWeekOverviewActionText(status),
+      targetType: "PAGE",
+      targetValue: this.resolveWeekOverviewTarget(status, arrangement, shoppingSummary.activeListCount),
+      plannedDayCount,
+      totalDayCount: homeWeekDayCount,
+      activeListCount: shoppingSummary.activeListCount,
+      expiringCount: fridgeSummary.expiringCount,
+      arrangement,
+      days
     };
   }
 
@@ -868,6 +993,100 @@ export class HomeService {
     if (arrangement.status === "PENDING_SHOPPING") return "NEED_SHOPPING";
     if (arrangement.status === "READY_TO_COOK") return "READY_TO_COOK";
     return "NEED_GAP_CHECK";
+  }
+
+  private resolveWeekOverviewStatus(nextMealState: HomeNextMealState): HomeWeekOverviewStatus {
+    if (nextMealState.arrangement) {
+      if (nextMealState.status === "NO_ARRANGEMENT") return "NO_ARRANGEMENT";
+      if (nextMealState.status === "COMPLETED") return "COMPLETED";
+      if (nextMealState.status === "READY_TO_COOK") return "READY_TO_COOK";
+      if (nextMealState.status === "NEED_SHOPPING") return "PENDING_SHOPPING";
+      return nextMealState.arrangement.menuCount > 0 ? "PENDING_CONFIRM" : "EMPTY_MENU";
+    }
+    return "NO_ARRANGEMENT";
+  }
+
+  private resolveWeekOverviewTitle(status: HomeWeekOverviewStatus, plannedDayCount: number) {
+    if (status === "EMPTY_MENU") return `这周先排了 ${Math.max(plannedDayCount, 1)} 顿`;
+    if (status === "PENDING_CONFIRM") return `这周已安排 ${Math.max(plannedDayCount, 1)} 顿`;
+    if (status === "PENDING_SHOPPING") return "这周安排差一点";
+    if (status === "READY_TO_COOK") return "下一顿已经定好";
+    if (status === "COMPLETED") return "这周基本排好了";
+    return "这周还没安排";
+  }
+
+  private buildWeekOverviewSummary(status: HomeWeekOverviewStatus) {
+    if (status === "EMPTY_MENU") return "继续往后排";
+    if (status === "PENDING_CONFIRM") return "还有几天空着";
+    if (status === "PENDING_SHOPPING") return "还差几样食材";
+    if (status === "READY_TO_COOK") return "可以提前准备";
+    if (status === "COMPLETED") return "这周基本排好";
+    return "先安排几顿";
+  }
+
+  private resolveWeekOverviewActionText(status: HomeWeekOverviewStatus) {
+    if (status === "EMPTY_MENU") return "继续安排";
+    if (status === "PENDING_CONFIRM") return "查看本周";
+    if (status === "PENDING_SHOPPING") return "去补食材";
+    if (status === "READY_TO_COOK") return "查看安排";
+    if (status === "COMPLETED") return "查看本周";
+    return "开始安排";
+  }
+
+  private resolveWeekOverviewTarget(
+    status: HomeWeekOverviewStatus,
+    arrangement: HomeRecentArrangement | null,
+    activeListCount: number
+  ) {
+    if (arrangement) {
+      if (status === "EMPTY_MENU") return buildRecentArrangementTarget(arrangement, "menu");
+      if (status === "PENDING_CONFIRM") return buildRecentArrangementTarget(arrangement, "shopping");
+      if (status === "PENDING_SHOPPING") return activeListCount > 0 ? "/pages_pantry/list/index" : "/pages_pantry/gap/index";
+      if (status === "READY_TO_COOK") return buildRecentArrangementTarget(arrangement, "assistant");
+      if (status === "COMPLETED") return "/pages_meal/plan/index";
+    }
+    if (status === "ACTIVE_LIST") return "/pages_pantry/list/index";
+    if (status === "EXPIRING") return "/pages_pantry/index/index";
+    return "/pages_meal/plan/index";
+  }
+
+  private async resolveWeekPlanDayStatus(userId: UUID, plan: WeekPlanRow, scheduledMs: number, nowMs: number): Promise<HomeWeekDayStatus> {
+    if (plan.status === "COMPLETED" || plan.completedAt || plan.diningEvent?.status === "COMPLETED" || plan.diningEvent?.completedAt) {
+      return "COMPLETED";
+    }
+    if (!plan.dishes.length) return "PLANNED";
+    const gapCount = await this.resolvePlanGapCount(userId, plan.id);
+    const arrangementStatus = this.resolvePlanArrangementStatus(plan.menuLockedAt, plan.dishes.length, gapCount, scheduledMs, nowMs);
+    if (arrangementStatus === "PENDING_SHOPPING") return "PENDING_SHOPPING";
+    if (arrangementStatus === "READY_TO_COOK") return "READY_TO_COOK";
+    if (arrangementStatus === "PENDING_CONFIRM") return "PENDING_CONFIRM";
+    return "PLANNED";
+  }
+
+  private pickHigherDayStatus(current: HomeWeekDayStatus, next: HomeWeekDayStatus): HomeWeekDayStatus {
+    const priority: Record<HomeWeekDayStatus, number> = {
+      EMPTY: 0,
+      COMPLETED: 1,
+      PLANNED: 2,
+      PENDING_CONFIRM: 3,
+      READY_TO_COOK: 4,
+      PENDING_SHOPPING: 5
+    };
+    return priority[next] > priority[current] ? next : current;
+  }
+
+  private formatWeekOverviewTime(arrangement: HomeRecentArrangement) {
+    if (!arrangement.scheduledAt) return arrangement.planDate;
+    const date = new Date(arrangement.scheduledAt);
+    const now = new Date();
+    const targetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const baseDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const diff = Math.round((targetDay - baseDay) / 86400000);
+    const timeText = `${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")}`;
+    if (diff === 0) return `今天 ${timeText}`;
+    if (diff === 1) return `明天 ${timeText}`;
+    if (diff === -1) return `昨天 ${timeText}`;
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${timeText}`;
   }
 
   private async resolveEventGapCount(userId: UUID, eventId: UUID) {

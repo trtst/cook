@@ -165,6 +165,39 @@ export interface HomeNextMealState {
   arrangement: HomeRecentArrangement | null;
 }
 
+export type HomeWeekOverviewStatus =
+  | "NO_ARRANGEMENT"
+  | "EMPTY_MENU"
+  | "PENDING_CONFIRM"
+  | "PENDING_SHOPPING"
+  | "READY_TO_COOK"
+  | "COMPLETED"
+  | "ACTIVE_LIST"
+  | "EXPIRING";
+
+export type HomeWeekDayStatus = "EMPTY" | "PLANNED" | "PENDING_CONFIRM" | "PENDING_SHOPPING" | "READY_TO_COOK" | "COMPLETED";
+
+export interface HomeWeekOverviewDay {
+  date: string;
+  label: string;
+  status: HomeWeekDayStatus;
+}
+
+export interface HomeWeekOverview {
+  status: HomeWeekOverviewStatus;
+  title: string;
+  summary: string;
+  actionText: string;
+  targetType: "PAGE";
+  targetValue: string;
+  plannedDayCount: number;
+  totalDayCount: number;
+  activeListCount: number;
+  expiringCount: number;
+  arrangement: HomeRecentArrangement | null;
+  days: HomeWeekOverviewDay[];
+}
+
 export type HomeFridgeRecipeKind = "MY" | "INSPIRATION";
 export type HomeFridgeRecipeFit = "HIGH" | "MEDIUM" | "LOW";
 

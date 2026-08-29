@@ -11,7 +11,8 @@ import {
   HomeEntriesResponseModel,
   HomeFridgeRecipesResponseModel,
   HomeNextMealStateModel,
-  HomeRecentArrangementModel
+  HomeRecentArrangementModel,
+  HomeWeekOverviewModel
 } from "../../contracts/openapi";
 import { HomeService } from "./home.service";
 
@@ -64,6 +65,14 @@ export class HomeController {
   @ApiOkModel(HomeNextMealStateModel, "读取首页下一顿状态卡")
   getNextMealState(@Req() request: RequestWithUser) {
     return this.homeService.getNextMealState(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("home/week-overview")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(HomeWeekOverviewModel, "读取首页这周吃饭安排主卡")
+  getWeekOverview(@Req() request: RequestWithUser) {
+    return this.homeService.getWeekOverview(request.user.userId).then(result => ok(result));
   }
 
   @Get("home/fridge-recipes")

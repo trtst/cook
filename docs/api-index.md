@@ -21,7 +21,8 @@
 | Auth | POST | `/auth/wechat-login` | 小程序微信登录 |
 | Auth | POST | `/auth/code-login` | 手机号验证码登录 |
 | Auth | POST | `/auth/refresh` | 刷新用户 token |
-| Home | GET | `/home-entries` | 小程序首页入口配置：固定返回 3 张首屏主卡，四宫格只返回当前已上架入口，统一按布局顺序排序 |
+| Home | GET | `/home-entries` | 小程序首页入口配置：`MAIN` 作为 hero 运营位，`SIDE_TOP / SIDE_BOTTOM` 为右侧运营卡，四宫格只返回当前已上架入口 |
+| Home | GET | `/home/week-overview` | 首页左侧“这周吃饭安排”状态聚合主卡 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
 | HomeTopic | GET | `/home-topics/{topicId}` | 指定本周灵感专题页 |
 | TableTopic | GET | `/table-topics` | 餐桌话题列表，按活动时间倒序返回历次话题摘要 |

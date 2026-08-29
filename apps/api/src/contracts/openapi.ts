@@ -138,6 +138,29 @@ export class HomeNextMealStateModel {
   arrangement!: HomeRecentArrangementModel | null;
 }
 
+export class HomeWeekOverviewDayModel {
+  @ApiProperty({ type: String }) date!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty({ type: String, enum: ["EMPTY", "PLANNED", "PENDING_CONFIRM", "PENDING_SHOPPING", "READY_TO_COOK", "COMPLETED"] })
+  status!: string;
+}
+
+export class HomeWeekOverviewModel {
+  @ApiProperty({ type: String, enum: ["NO_ARRANGEMENT", "EMPTY_MENU", "PENDING_CONFIRM", "PENDING_SHOPPING", "READY_TO_COOK", "COMPLETED", "ACTIVE_LIST", "EXPIRING"] })
+  status!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty({ type: String }) actionText!: string;
+  @ApiProperty({ type: String, enum: ["PAGE"] }) targetType!: string;
+  @ApiProperty({ type: String }) targetValue!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) plannedDayCount!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) totalDayCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) activeListCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) expiringCount!: number;
+  @ApiProperty({ type: HomeRecentArrangementModel, nullable: true }) arrangement!: HomeRecentArrangementModel | null;
+  @ApiProperty({ type: [HomeWeekOverviewDayModel] }) days!: HomeWeekOverviewDayModel[];
+}
+
 export class HomeFridgeRecipeItemModel {
   @ApiProperty(uuid) recipeId!: string;
   @ApiProperty({ type: String }) title!: string;
