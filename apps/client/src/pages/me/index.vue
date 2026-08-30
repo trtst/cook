@@ -130,6 +130,8 @@
 								<view class="service-row__copy">
 									<text class="service-row__title">{{ notificationEntry.title }}</text>
 								</view>
+								<text v-if="notificationBadge.unreadCount > 0" class="service-row__badge-count">{{ notificationBadgeText }}</text>
+								<view v-else-if="notificationBadge.showReminderDot" class="service-row__badge-dot" />
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMedalClick">
@@ -249,6 +251,12 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { APP_NAME, APP_VERSION } from "@/config/app";
 import { useLoginModalStore } from "@/stores/login-modal";
+import {
+	EMPTY_BADGE_SNAPSHOT,
+	readNotificationBadgeSnapshot,
+	refreshNotificationBadgeSnapshot,
+	writeNotificationBadgeSnapshot
+} from "@/services/notification-badge";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
 import { useUserStore } from "@/stores/user";
@@ -282,6 +290,7 @@ const profileSaving = ref(false);
 const medalCount = ref<number | null>(null);
 const profileNameDraft = ref("");
 const profileEditErrorText = ref("");
+const notificationBadge = ref(readNotificationBadgeSnapshot());
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
@@ -318,6 +327,7 @@ const membershipCardDescription = computed(() => (
 ));
 const membershipCardTitle = computed(() => `你当前是 ${formatMembershipTier(userStore.profile?.membership?.tier)}`);
 const membershipCardMeta = computed(() => formatMembershipValidUntil(userStore.profile?.membership?.validUntil ?? null));
+const notificationBadgeText = computed(() => (notificationBadge.value.unreadCount > 99 ? "99+" : String(notificationBadge.value.unreadCount)));
 const currentThemeText = computed(() => {
 	return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
 });
@@ -347,7 +357,7 @@ const coreEntries: PageEntry[] = [
 const notificationEntry: PageEntry = {
 	title: "通知中心",
 	iconClass: "icon-notification-center",
-	description: "邀请提醒、进度通知和系统消息都在这里",
+		description: "审核、协作、提醒和官方消息都在这里",
 	url: "/pages_me/recommend/index",
 	requiresLogin: true
 };
@@ -479,12 +489,25 @@ async function syncPageState() {
 	}
 
 	if (sessionStore.isLoggedIn) {
-		await Promise.allSettled([loadMe(), loadMedals()]);
+		await Promise.allSettled([loadMe(), loadMedals(), syncNotificationBadge()]);
 		return;
 	}
 
 	profileLoading.value = false;
 	medalCount.value = null;
+	notificationBadge.value = readNotificationBadgeSnapshot();
+}
+
+async function syncNotificationBadge() {
+	notificationBadge.value = readNotificationBadgeSnapshot();
+	if (!sessionStore.isLoggedIn) {
+		writeNotificationBadgeSnapshot(EMPTY_BADGE_SNAPSHOT);
+		notificationBadge.value = EMPTY_BADGE_SNAPSHOT;
+		return;
+	}
+	const snapshot = await refreshNotificationBadgeSnapshot().catch(() => null);
+	if (!snapshot) return;
+	notificationBadge.value = snapshot;
 }
 
 async function loadMe() {
@@ -707,6 +730,25 @@ async function automatorApplyThemeSettings(snapshot: {
 	return automatorReadThemeState();
 }
 
+function automatorApplyNotificationBadgeSnapshot(snapshot: {
+	unreadCount: number;
+	reminderUnreadCount: number;
+	showReminderDot: boolean;
+	latestTime?: string;
+}) {
+	writeNotificationBadgeSnapshot({
+		unreadCount: snapshot.unreadCount,
+		reminderUnreadCount: snapshot.reminderUnreadCount,
+		showReminderDot: snapshot.showReminderDot,
+		latestTime: snapshot.latestTime ?? ""
+	});
+	notificationBadge.value = readNotificationBadgeSnapshot();
+	return {
+		unreadCount: notificationBadge.value.unreadCount,
+		showReminderDot: notificationBadge.value.showReminderDot
+	};
+}
+
 defineExpose({
 	automatorOpenMedalLogin,
 	automatorOpenNotificationLogin,
@@ -716,7 +758,8 @@ defineExpose({
 	automatorResolveEntryAuth,
 	automatorReadThemeState,
 	automatorResetThemeSettings,
-	automatorApplyThemeSettings
+	automatorApplyThemeSettings,
+	automatorApplyNotificationBadgeSnapshot
 });
 
 function openProfileEditor() {
@@ -788,6 +831,13 @@ function showComingSoon(name: string) {
 	background: var(--color-page);
 }
 
+.me-page::before {
+	content: "";
+	width: 100%;
+	min-height: 520rpx;
+	background: var(--page-hero-bg);
+}
+
 .profile-hero {
 	--profile-hero-padding-top: var(--size-navbar-content);
 
@@ -795,7 +845,7 @@ function showComingSoon(name: string) {
 	min-height: 520rpx;
 	overflow: hidden;
 	padding: var(--profile-hero-padding-top) var(--space-page) 74rpx;
-	background: var(--page-hero-bg);
+
 }
 
 .profile-hero::before {
@@ -1197,6 +1247,34 @@ function showComingSoon(name: string) {
 	font-size: 24rpx;
 	line-height: 1;
 	transform: rotate(180deg);
+}
+
+.service-row__badge-count,
+.service-row__badge-dot {
+	flex: 0 0 auto;
+	margin-left: auto;
+}
+
+.service-row__badge-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 40rpx;
+	height: 40rpx;
+	padding: 0 10rpx;
+	border-radius: 999rpx;
+	background: var(--color-state-danger-base);
+	color: var(--notification-badge-text);
+	font-size: 22rpx;
+	font-weight: var(--font-weight-bold);
+	line-height: 1;
+}
+
+.service-row__badge-dot {
+	width: 16rpx;
+	height: 16rpx;
+	border-radius: 50%;
+	background: var(--color-state-danger-base);
 }
 
 .knowledge-grid {

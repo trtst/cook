@@ -31,6 +31,36 @@ export interface MeResponse extends SessionUser {
 	membership: UserMembership;
 }
 
+export interface NotificationMealTimes {
+	breakfast: string;
+	lunch: string;
+	afternoonTea: string;
+	dinner: string;
+	lateNight: string;
+}
+
+export interface NotificationSettingsResponse {
+	reminderDotOnly: boolean;
+	meal: {
+		enabled: boolean;
+		times: NotificationMealTimes;
+	};
+	fridge: {
+		enabled: boolean;
+		days: 1 | 2 | 3 | 5 | 7;
+	};
+	recommend: {
+		enabled: boolean;
+	};
+}
+
+export interface NotificationBadgeResponse {
+	unreadCount: number;
+	reminderUnreadCount: number;
+	showReminderDot: boolean;
+	latestTime: IsoDateTime | "";
+}
+
 export type UserSummary = SessionUser;
 
 export interface UpdateCurrentUserRequest {
@@ -48,6 +78,8 @@ export interface ChangeCurrentPasswordRequest {
 	currentPassword: string;
 	newPassword: string;
 }
+
+export interface UpdateNotificationSettingsRequest extends NotificationSettingsResponse {}
 
 export interface ChangeCurrentPasswordResult {
 	changedAt: IsoDateTime;
@@ -82,6 +114,18 @@ export const userApi = {
 	 */
 	getCurrent() {
 		return get<MeResponse>(`${cfg.domain}/api/users/me`);
+	},
+	getNotificationSettings() {
+		return get<NotificationSettingsResponse>(`${cfg.domain}/api/users/me/notification-settings`);
+	},
+	updateNotificationSettings(body: UpdateNotificationSettingsRequest) {
+		return put<NotificationSettingsResponse>(`${cfg.domain}/api/users/me/notification-settings`, body);
+	},
+	getNotificationBadge() {
+		return get<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-badge`);
+	},
+	markNotificationFeedRead() {
+		return put<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-feed-read`);
 	},
 	/**
 	 * 更新当前用户基础资料。

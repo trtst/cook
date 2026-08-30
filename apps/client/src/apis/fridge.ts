@@ -28,6 +28,11 @@ export interface FridgeItemSummary {
 export interface FridgeSummaryResponse {
   totalCount: number;
   expiringCount: number;
+  latestTime: string | "";
+}
+
+export interface FridgeExpiryReminderSendResponse {
+  sentAt: string;
 }
 
 export interface CreateFridgeItemRequest {
@@ -78,8 +83,15 @@ export const fridgeApi = {
       items: result.items.map(item => normalizeFridgeItem(item))
     }));
   },
-  getSummary() {
-    return get<FridgeSummaryResponse>(`${cfg.domain}/api/fridge-items/summary`);
+  getSummary(days?: 1 | 2 | 3 | 5 | 7) {
+    return get<FridgeSummaryResponse>(`${cfg.domain}/api/fridge-items/summary`, days ? { days } : undefined);
+  },
+  sendExpiryReminder(itemId: UUID, operationId: OperationId) {
+    return post<FridgeExpiryReminderSendResponse>(
+      `${cfg.domain}/api/fridge-items/${encodeURIComponent(itemId)}/expiry-reminder`,
+      {},
+      { idempotencyKey: operationId }
+    );
   },
   create(body: CreateFridgeItemRequest) {
     const { operationId, ...payload } = body;

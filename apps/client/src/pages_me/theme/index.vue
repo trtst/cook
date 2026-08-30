@@ -395,8 +395,8 @@ defineExpose({
 .option-chip {
   display: flex;
   align-items: center;
-  min-height: 72rpx;
-  padding: 0 22rpx;
+  min-height: 60rpx;
+  padding: 0 20rpx;
   border-radius: var(--radius-pill);
   background: var(--material-control-bg);
   box-shadow: var(--material-control-shadow);
@@ -407,7 +407,7 @@ defineExpose({
 .option-chip--active {
   border-color: transparent;
   background: var(--color-tag-primary-bg);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
+  // box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .option-chip--active .option-chip__text {

@@ -47,6 +47,25 @@ export function mealSlotDefaultTime(slot: MealSlot) {
   return "21:30";
 }
 
+export function resolveMealSlotByTime(timeText: string): MealSlot | null {
+  const match = timeText.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  const totalMinutes = hours * 60 + minutes;
+
+  if (totalMinutes >= 5 * 60 && totalMinutes < 10 * 60 + 30) return "BREAKFAST";
+  if (totalMinutes >= 10 * 60 + 30 && totalMinutes < 14 * 60 + 30) return "LUNCH";
+  if (totalMinutes >= 14 * 60 + 30 && totalMinutes < 17 * 60 + 30) return "AFTERNOON_TEA";
+  if (totalMinutes >= 17 * 60 + 30 && totalMinutes < 21 * 60) return "DINNER";
+  return "LATE_NIGHT";
+}
+
 function formatLocalDate(date: Date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");

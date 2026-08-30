@@ -24,6 +24,8 @@
             :class="getFontIconClass(item.iconName)"
             aria-hidden="true"
           />
+          <text v-if="item.key === 'me' && badgeSnapshot.unreadCount > 0" class="tabbar__badge">{{ badgeText }}</text>
+          <view v-else-if="item.key === 'me' && badgeSnapshot.showReminderDot" class="tabbar__dot" />
         </view>
         <text class="tabbar__label">{{ item.text }}</text>
       </view>
@@ -33,10 +35,19 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { onShow } from "@dcloudio/uni-app";
 import { TAB_ITEMS, type TabKey } from "./tabs";
 import { uniPlatform } from "@/platform/uni";
 import { useTheme } from "@/composables/useTheme";
+import {
+  EMPTY_BADGE_SNAPSHOT,
+  notificationBadgeState,
+  readNotificationBadgeSnapshot,
+  refreshNotificationBadgeSnapshot,
+  writeNotificationBadgeSnapshot
+} from "@/services/notification-badge";
 import { FALLBACK_ASSET_SKIN, getThemeSkinAssets, type ThemeTabbarIconName } from "@/themes";
+import { useSessionStore } from "@/stores/session";
 
 const props = withDefaults(
   defineProps<{
@@ -49,10 +60,17 @@ const props = withDefaults(
 );
 
 const { effectiveSkin } = useTheme();
+const sessionStore = useSessionStore();
 const activeIndex = computed(() => Math.max(TAB_ITEMS.findIndex(item => item.key === props.current), 0));
 const activePillStyle = computed(() => ({
   transform: `translateX(calc(${activeIndex.value} * 100%))`
 }));
+const badgeSnapshot = computed(() => notificationBadgeState.value);
+const badgeText = computed(() => (badgeSnapshot.value.unreadCount > 99 ? "99+" : String(badgeSnapshot.value.unreadCount)));
+
+onShow(() => {
+  void syncBadgeSnapshot();
+});
 
 function getTabbarAsset(iconName: ThemeTabbarIconName) {
   const currentAsset = getThemeSkinAssets(effectiveSkin.value).tabbar?.[iconName];
@@ -78,6 +96,16 @@ function getFontIconClass(iconName: ThemeTabbarIconName) {
 function switchTab(pagePath: string) {
   if (!props.interactive) return;
   void uniPlatform.navigation.switchTab(pagePath);
+}
+
+async function syncBadgeSnapshot() {
+  readNotificationBadgeSnapshot();
+
+  if (!sessionStore.isLoggedIn) {
+    writeNotificationBadgeSnapshot(EMPTY_BADGE_SNAPSHOT);
+    return;
+  }
+  await refreshNotificationBadgeSnapshot().catch(() => null);
 }
 </script>
 
@@ -163,6 +191,37 @@ function switchTab(pagePath: string) {
   width: 38rpx;
   height: 38rpx;
   margin-bottom: 4rpx;
+}
+
+.tabbar__badge,
+.tabbar__dot {
+  position: absolute;
+  top: -5rpx;
+  left: 40rpx;
+  z-index: 2;
+}
+
+.tabbar__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  background: var(--color-state-danger-base);
+  color: var(--notification-badge-text);
+  font-size: 20rpx;
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.tabbar__dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: var(--color-state-danger-base);
+  box-shadow: 0 0 0 4rpx var(--material-tabbar-bg);
 }
 
 .tabbar__icon {

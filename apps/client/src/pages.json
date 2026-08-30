@@ -52,6 +52,7 @@
         { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } },
         { "path": "recommend/index", "style": { "navigationBarTitleText": "通知中心", "navigationStyle": "custom" } },
         { "path": "recommend-detail/index", "style": { "navigationBarTitleText": "通知详情", "navigationStyle": "custom" } },
+        { "path": "official-message/index", "style": { "navigationBarTitleText": "官方消息", "navigationStyle": "custom" } },
         { "path": "ingredient-units/index", "style": { "navigationBarTitleText": "食材与单位", "navigationStyle": "custom" } }
       ]
     },

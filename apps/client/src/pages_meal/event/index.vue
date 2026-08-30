@@ -195,13 +195,14 @@ import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
+import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
 import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
 import { formatDateTimeMinute } from "../utils/date";
 import { mealApi, type DiningEventListStage, type DiningEventListSummary, type MealPlanSummary, type DiningEventStageCounts, type DiningEventListRole } from "../apis/meal";
 
 type EventStage = DiningEventListStage;
 type RoleFilter = DiningEventListRole;
+type MealSlot = MealPlanSummary["mealSlot"];
 
 type EventCardItem = {
   id: string;
@@ -558,6 +559,9 @@ function handleCreateMonthChange(nextValue: string) {
 
 function handleCreateTimeSelect(nextValue: string) {
   createTime.value = nextValue;
+  const nextSlot = resolveMealSlotByTime(nextValue);
+  if (!nextSlot) return;
+  createMealSlot.value = nextSlot;
 }
 
 function selectCreateMealSlot(nextSlot: MealPlanSummary["mealSlot"]) {
@@ -674,8 +678,61 @@ async function automatorOpenCreateSheet() {
   };
 }
 
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+}
+
+async function automatorClearSession() {
+  await sessionStore.clearSession();
+}
+
+async function automatorSelectCreateMealSlot(nextSlot: MealSlot) {
+  if (!createSheetVisible.value) {
+    openCreateSheet();
+  }
+  await nextTick();
+  selectCreateMealSlot(nextSlot);
+  await nextTick();
+  return {
+    createMealSlot: createMealSlot.value,
+    createTime: createTime.value
+  };
+}
+
+async function automatorSelectCreateDate(nextValue: string) {
+  if (!createSheetVisible.value) {
+    openCreateSheet();
+  }
+  await nextTick();
+  handleCreateDateSelect(nextValue);
+  await nextTick();
+  return {
+    createPlanDate: createPlanDate.value,
+    createMealSlot: createMealSlot.value,
+    createTime: createTime.value
+  };
+}
+
+async function automatorSelectCreateTime(nextValue: string) {
+  if (!createSheetVisible.value) {
+    openCreateSheet();
+  }
+  await nextTick();
+  handleCreateTimeSelect(nextValue);
+  await nextTick();
+  return {
+    createMealSlot: createMealSlot.value,
+    createTime: createTime.value
+  };
+}
+
 defineExpose({
-  automatorOpenCreateSheet
+  automatorApplySession,
+  automatorClearSession,
+  automatorOpenCreateSheet,
+  automatorSelectCreateDate,
+  automatorSelectCreateMealSlot,
+  automatorSelectCreateTime
 });
 </script>
 

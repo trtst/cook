@@ -210,6 +210,7 @@ export function buildThemeVars(seed: ThemeColorSeed, themeMode: EffectiveTheme, 
   const buttonText = getContrastText(seed.primary);
   const secondaryTextOnColor = getContrastText(secondary);
   const dangerButtonText = getContrastText(dangerBase);
+  const notificationBadgeText = getContrastText(dangerBase);
   const iconSecondary = tertiaryText;
   const buttonSecondaryBg = surfaceSoft;
   const buttonSecondaryText = secondaryText;
@@ -387,6 +388,7 @@ export function buildThemeVars(seed: ThemeColorSeed, themeMode: EffectiveTheme, 
     "--button-secondary-filter": "none",
     "--button-danger-bg": dangerBase,
     "--button-danger-text": dangerButtonText,
+    "--notification-badge-text": notificationBadgeText,
     "--button-danger-shadow": `0 3rpx 10rpx ${toRgba(dangerBase, themeMode === "dark" ? 0.18 : 0.14)}`,
     "--button-danger-border": "transparent",
     "--button-danger-filter": "none",

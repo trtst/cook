@@ -327,6 +327,12 @@ describe("pages/home/index", () => {
     const weekCardAction = await page.$(".feature-card--status .feature-card__status-action-text");
     expect(((await weekCardAction.text()) || "").trim().length > 0).toBe(true);
 
+    const heroSwiper = await page.$(".hero-swiper");
+    expect(heroSwiper).not.toBeNull();
+
+    const heroSlides = await page.$$(".hero-swiper__item");
+    expect(heroSlides.length).toBe(2);
+
     const heroTitle = await page.$(".hero-banner__title");
     expect(((await heroTitle.text()) || "").trim().length > 0).toBe(true);
 

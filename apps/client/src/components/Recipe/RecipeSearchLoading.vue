@@ -101,7 +101,7 @@ const rootClass = computed(() => ({
   justify-content: center;
   overflow: hidden;
   pointer-events: none;
-  background: var(--color-page);
+  background: transparent;
   transition: opacity 180ms ease;
 }
 

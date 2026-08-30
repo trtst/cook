@@ -3,6 +3,8 @@ import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis
 
 export type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
 export type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
+export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
+export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
 
 export interface ShoppingGapEventSummary {
   eventId: UUID;
@@ -65,6 +67,36 @@ export interface ShoppingListSummaryResponse {
 
 export interface ShoppingListDetail extends ShoppingListSummary {}
 
+export interface ShoppingListInviteSummary {
+  id: UUID;
+  listId: UUID;
+  name: string;
+  ownerUid: number;
+  ownerNickname: string | null;
+  memberCount: number;
+  memberLimit: number;
+  itemCount: number;
+  status: ShoppingListStatus;
+  inviteStatus: ShoppingListInviteStatus;
+  canJoin: boolean;
+  invitedAt: IsoDateTime;
+  handledAt: IsoDateTime | null;
+}
+
+interface ShoppingListInvitePageResponse {
+  items: ShoppingListInviteSummary[];
+}
+
+interface AcceptedShoppingListDetail {
+  id: UUID;
+}
+
+interface ShoppingListInviteActionResponse {
+  inviteId: UUID;
+  status: ShoppingListInviteStatus;
+  updatedAt: IsoDateTime;
+}
+
 export interface CreateShoppingListRequest {
   operationId: OperationId;
   name: string | null;
@@ -100,6 +132,9 @@ export const shoppingApi = {
   getListSummary() {
     return get<ShoppingListSummaryResponse>(`${cfg.domain}/api/shopping-lists/summary`);
   },
+  listInvites(filter?: ShoppingListInviteFilter) {
+    return get<ShoppingListInvitePageResponse>(`${cfg.domain}/api/shopping-list-invites`, { filter });
+  },
   listLists(status?: ShoppingListStatus) {
     return get<ShoppingListPageResponse>(`${cfg.domain}/api/shopping-lists`, { status });
   },
@@ -130,5 +165,19 @@ export const shoppingApi = {
     return post<ShoppingListDetail>(`${cfg.domain}/api/shopping-lists/${encodeURIComponent(String(listId))}/items/from-recipe`, payload, {
       idempotencyKey: operationId
     });
+  },
+  acceptInvite(inviteId: UUID, operationId: OperationId) {
+    return post<AcceptedShoppingListDetail>(
+      `${cfg.domain}/api/shopping-list-invites/${encodeURIComponent(String(inviteId))}/accept`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  declineInvite(inviteId: UUID, operationId: OperationId) {
+    return post<ShoppingListInviteActionResponse>(
+      `${cfg.domain}/api/shopping-list-invites/${encodeURIComponent(String(inviteId))}/decline`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
   }
 };

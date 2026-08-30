@@ -79,7 +79,7 @@ export const THEME_SKIN_PRESETS = [
     seeds: {
       default: {
         light: {
-          bg: "#f4f7f5",
+          bg: "#fff",
           surface: "#ffffff",
           text: "#17231d",
           primary: "#216e4e",

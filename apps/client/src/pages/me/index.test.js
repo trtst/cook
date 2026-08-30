@@ -3,6 +3,7 @@ jest.setTimeout(30000);
 async function clearSession() {
   await program.callUniMethod("removeStorageSync", "cook_meal_session");
   await program.callUniMethod("removeStorageSync", "cook_meal_user_profile");
+  await program.callUniMethod("removeStorageSync", "cook_meal_notification_badge_v1");
 }
 
 async function clearThemeSettings() {
@@ -48,6 +49,26 @@ describe("pages/me/index", () => {
     expect(await page.$$(".quick-entry__icon")).toHaveLength(0);
     expect(await page.$$(".service-row__icon")).toHaveLength(0);
     expect(await page.$$(".knowledge-entry__icon")).toHaveLength(0);
+  });
+
+  it("通知中心入口和 TabBar 的我的都支持展示未读数或提醒红点", async () => {
+    await page.callMethod("automatorApplyNotificationBadgeSnapshot", {
+      unreadCount: 3,
+      reminderUnreadCount: 1,
+      showReminderDot: false
+    });
+    await page.waitFor(".service-row__badge-count", 2000);
+    await page.waitFor(".tabbar__badge", 2000);
+    expect((await (await page.$(".service-row__badge-count")).text()).trim()).toBe("3");
+    expect((await (await page.$(".tabbar__badge")).text()).trim()).toBe("3");
+
+    await page.callMethod("automatorApplyNotificationBadgeSnapshot", {
+      unreadCount: 0,
+      reminderUnreadCount: 2,
+      showReminderDot: true
+    });
+    await page.waitFor(".service-row__badge-dot", 2000);
+    await page.waitFor(".tabbar__dot", 2000);
   });
 
   it("未登录点击我的勋章直接进入落地页，不再在入口层拦登录", async () => {

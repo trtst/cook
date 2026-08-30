@@ -45,6 +45,10 @@ export interface UpdateFridgeItemRequest {
   note?: string | null;
 }
 
+export interface FridgeExpiryReminderSendResponse {
+  sentAt: string;
+}
+
 function normalizeFridgeItem(item: Partial<FridgeItemSummary> & Pick<FridgeItemSummary, "id" | "name" | "available" | "updatedAt">): FridgeItemSummary {
   return {
     id: item.id,
@@ -72,6 +76,13 @@ export const fridgeApi = {
       ...result,
       items: result.items.map(item => normalizeFridgeItem(item))
     }));
+  },
+  sendExpiryReminder(itemId: UUID, operationId: OperationId) {
+    return post<FridgeExpiryReminderSendResponse>(
+      `${cfg.domain}/api/fridge-items/${encodeURIComponent(itemId)}/expiry-reminder`,
+      {},
+      { idempotencyKey: operationId }
+    );
   },
   create(body: CreateFridgeItemRequest) {
     const { operationId, ...payload } = body;

@@ -613,7 +613,7 @@ async function acceptInvite(item: ShoppingListInviteSummary) {
     const detail = await shoppingApi.acceptInvite(item.id, createOperationId());
     await uniPlatform.feedback.toast({ title: "已加入共享清单", icon: "success" });
     await loadPage();
-    void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?listId=${encodeURIComponent(String(detail.id))}`);
+    void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(detail.id))}`);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入失败", icon: "none" });
   } finally {
@@ -641,7 +641,7 @@ async function declineInvite(item: ShoppingListInviteSummary) {
 }
 
 function openInviteList(item: ShoppingListInviteSummary) {
-  void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?listId=${encodeURIComponent(String(item.listId))}`);
+  void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(item.listId))}`);
 }
 
 function goBack() {

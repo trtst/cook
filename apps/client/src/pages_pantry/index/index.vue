@@ -125,6 +125,14 @@
                   <view class="item-card__bottom">
                     <text class="item-card__meta">{{ card.stockText }} · {{ card.categoryText }}</text>
                     <view class="item-card__actions">
+                      <view
+                        v-if="card.expireSoon"
+                        class="item-card__action item-card__action--notice"
+                        @click.stop="sendExpiryReminder(card)"
+                      >
+                        <view class="cookfont icon-notification-center item-card__action-icon" />
+                        <view>{{ reminderSubmittingId === card.id ? "发送中" : "提醒" }}</view>
+                      </view>
                       <view class="item-card__action item-card__action--restock" @click.stop="openRestockSheet(card)">
                         <view class="cookfont icon-add item-card__action-icon" />
                         <view>补货</view>
@@ -264,6 +272,7 @@ import { useSessionStore } from "@/stores/session";
 import { formatDateOnly, parseDateOnly } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { buildDefaultShoppingListName } from "@/utils/shopping";
+import { requestFridgeExpirySubscribeMessage, resolveFridgeExpirySubscribeOutcome } from "@/services/subscribe-message";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
 import {
@@ -346,6 +355,8 @@ const selectedListId = ref<UUID | "">("");
 const newListName = ref("");
 const shoppingQuantityText = ref("");
 const shoppingExactQuantity = ref("");
+const reminderSubmittingId = ref<UUID | "">("");
+const lastReminderFeedback = ref("");
 
 const cards = computed<PantryCard[]>(() =>
   [...fridgeItems.value]
@@ -717,12 +728,78 @@ async function submitShopping() {
   }
 }
 
+async function sendExpiryReminder(card: PantryCard) {
+  if (reminderSubmittingId.value) return;
+  reminderSubmittingId.value = card.id;
+  try {
+    const subscribeResult = await requestFridgeExpirySubscribeMessage();
+    const outcome = resolveFridgeExpirySubscribeOutcome(subscribeResult);
+    if (outcome !== "accepted") {
+      const title =
+        outcome === "rejected"
+          ? "你已取消订阅授权"
+          : outcome === "blocked"
+            ? "订阅消息已被微信禁用"
+            : "当前环境不支持订阅消息";
+      lastReminderFeedback.value = title;
+      await uniPlatform.feedback.toast({ title, icon: "none" });
+      return;
+    }
+
+    await fridgeApi.sendExpiryReminder(card.id, createOperationId());
+    lastReminderFeedback.value = "到期提醒已发送";
+    await uniPlatform.feedback.toast({ title: "到期提醒已发送", icon: "success" });
+  } catch (error) {
+    lastReminderFeedback.value = error instanceof Error ? error.message : "发送提醒失败";
+    await uniPlatform.feedback.toast({ title: lastReminderFeedback.value, icon: "none" });
+  } finally {
+    reminderSubmittingId.value = "";
+  }
+}
+
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
   await sessionStore.setSession(snapshot);
 }
 
 async function automatorHandleLoginSuccess() {
   await handleLoginSuccess();
+  return automatorReadState();
+}
+
+async function automatorSendExpiryReminder(
+  index = 0,
+  mockOutcome?: "accepted" | "rejected" | "blocked" | "unsupported",
+  mockSendResult?: "success" | "error"
+) {
+  const card = cards.value.filter(item => item.expireSoon)[index] ?? null;
+  if (!card) {
+    throw new Error("missing expiring pantry card");
+  }
+  if (mockOutcome && mockOutcome !== "accepted") {
+    reminderSubmittingId.value = card.id;
+    const title =
+      mockOutcome === "rejected"
+        ? "你已取消订阅授权"
+        : mockOutcome === "blocked"
+          ? "订阅消息已被微信禁用"
+          : "当前环境不支持订阅消息";
+    lastReminderFeedback.value = title;
+    reminderSubmittingId.value = "";
+    return automatorReadState();
+  }
+  if (mockOutcome === "accepted" && mockSendResult) {
+    reminderSubmittingId.value = card.id;
+    try {
+      if (mockSendResult === "error") {
+        throw new Error("发送提醒失败");
+      }
+      lastReminderFeedback.value = "到期提醒已发送";
+      return automatorReadState();
+    } finally {
+      reminderSubmittingId.value = "";
+    }
+  }
+  await sendExpiryReminder(card);
   return automatorReadState();
 }
 
@@ -734,13 +811,17 @@ function automatorReadState() {
     cardCount: cards.value.length,
     firstCardName: cards.value[0]?.name || "",
     gapCount: gapCount.value,
-    pendingShoppingCount: pendingShoppingCount.value
+    pendingShoppingCount: pendingShoppingCount.value,
+    reminderSubmittingId: reminderSubmittingId.value,
+    expiringCardCount: cards.value.filter(item => item.expireSoon).length,
+    lastReminderFeedback: lastReminderFeedback.value
   };
 }
 
 defineExpose({
   automatorApplySession,
   automatorHandleLoginSuccess,
+  automatorSendExpiryReminder,
   automatorReadState
 });
 </script>

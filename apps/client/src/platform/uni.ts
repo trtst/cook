@@ -77,6 +77,9 @@ interface ClientPlatform {
 	auth: {
 		login(): Promise<LoginCodeResult>;
 	};
+	subscription: {
+		requestSubscribeMessage(templateIds: string[]): Promise<SubscribeMessageResult>;
+	};
 	/**
 	 * 剪贴板能力。
 	 * 目前只需要写入；读取能力没有真实场景时不提前增加。
@@ -214,6 +217,9 @@ interface LoginCodeResult {
 	code: string;
 }
 
+export type SubscribeMessageStatus = "accept" | "reject" | "ban" | "filter" | "back" | "unsupported";
+export type SubscribeMessageResult = Record<string, SubscribeMessageStatus>;
+
 type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
 interface UniSystemApi {
@@ -338,6 +344,33 @@ function login() {
 				}
 
 				resolve({ code });
+			},
+			fail: reject
+		});
+	});
+}
+
+function requestSubscribeMessage(templateIds: string[]) {
+	return callUni<SubscribeMessageResult>((resolve, reject) => {
+		if (getRuntimeChannel() !== "mini_program" || typeof uni.requestSubscribeMessage !== "function") {
+			resolve({});
+			return;
+		}
+
+		uni.requestSubscribeMessage({
+			tmplIds: templateIds,
+			success: (result) => {
+				const rawResult = result as unknown as Record<string, unknown>;
+				const mapped: SubscribeMessageResult = {};
+				for (const templateId of templateIds) {
+					const status = rawResult?.[templateId];
+					if (status === "accept" || status === "reject" || status === "ban" || status === "filter" || status === "back") {
+						mapped[templateId] = status;
+						continue;
+					}
+					mapped[templateId] = "unsupported";
+				}
+				resolve(mapped);
 			},
 			fail: reject
 		});
@@ -644,6 +677,9 @@ export const uniPlatform: ClientPlatform = {
 	},
 	auth: {
 		login
+	},
+	subscription: {
+		requestSubscribeMessage
 	},
 	clipboard: {
 		set: setClipboardData

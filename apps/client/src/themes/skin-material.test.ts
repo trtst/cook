@@ -181,6 +181,7 @@ expectIncludes(themeVarsSource, '"--color-state-disabled-text"');
 expectIncludes(themeVarsSource, '"--color-state-disabled-border"');
 expectIncludes(themeVarsSource, '"--color-support-action"');
 expectIncludes(themeVarsSource, '"--color-icon-accent"');
+expectIncludes(themeVarsSource, '"--notification-badge-text"');
 
 expectIncludes(fallbackColorsSource, "--material-mask-filter:");
 expectIncludes(fallbackColorsSource, "--material-card-bg:");
@@ -207,6 +208,7 @@ expectIncludes(fallbackColorsSource, "--button-secondary-border:");
 expectIncludes(fallbackColorsSource, "--button-secondary-filter:");
 expectIncludes(fallbackColorsSource, "--button-danger-bg:");
 expectIncludes(fallbackColorsSource, "--button-danger-text:");
+expectIncludes(fallbackColorsSource, "--notification-badge-text:");
 expectIncludes(fallbackColorsSource, "--button-danger-shadow:");
 expectIncludes(fallbackColorsSource, "--button-danger-border:");
 expectIncludes(fallbackColorsSource, "--button-danger-filter:");
@@ -230,18 +232,26 @@ expectExcludes(mePageSource, 'class="service-row__description"');
 expectExcludes(mePageSource, 'class="knowledge-entry__description"');
 expectSelectorIncludes(mePageSource, ".service-row__title", [
   "color: var(--color-text);",
-  "font-weight: var(--font-weight-regular);"
+  "font-weight: var(--font-weight-medium);"
 ]);
 expectSelectorExcludes(mePageSource, ".service-row__title", ["font-weight: var(--font-weight-semibold);"]);
 expectSelectorIncludes(mePageSource, ".knowledge-entry__title", [
   "font-size: var(--font-size-md);",
-  "font-weight: var(--font-weight-regular);"
+  "font-weight: var(--font-weight-medium);"
 ]);
 expectSelectorExcludes(mePageSource, ".knowledge-entry__title", ["font-weight: var(--font-weight-bold);"]);
 expectSelectorIncludes(tabbarSource, ".tabbar__font-icon", ['color: var(--color-text-tertiary);']);
 expectSelectorExcludes(tabbarSource, ".tabbar__font-icon", ["--color-icon-accent", "--color-primary"]);
 expectSelectorIncludes(tabbarSource, ".tabbar__item--active .tabbar__font-icon", ['color: var(--color-text);']);
 expectSelectorExcludes(tabbarSource, ".tabbar__item--active .tabbar__font-icon", ["--color-icon-accent", "--color-primary"]);
+expectSelectorIncludes(tabbarSource, ".tabbar__badge", [
+  "color: var(--notification-badge-text);"
+]);
+expectSelectorExcludes(tabbarSource, ".tabbar__badge", ["color: #fff;"]);
+expectSelectorIncludes(mePageSource, ".service-row__badge-count", [
+  "color: var(--notification-badge-text);"
+]);
+expectSelectorExcludes(mePageSource, ".service-row__badge-count", ["color: #fff;"]);
 expectIncludes(fallbackColorsSource, "--page-hero-shell-bg:");
 expectIncludes(fallbackColorsSource, "--page-overlay-veil-bg:");
 expectIncludes(fallbackColorsSource, "--page-overlay-veil-filter:");
@@ -435,7 +445,7 @@ expectIncludes(fontSource, '.icon-pantry::before {\n    content: "\\e797";\n}');
 expectIncludes(reminderPageSource, "background: var(--material-card-bg);");
 expectIncludes(reminderPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(reminderPageSource, "backdrop-filter: var(--material-card-filter);");
-expectSelectorExcludes(reminderPageSource, ".reminder-card", ["border: 1rpx solid var(--material-card-border);"]);
+expectSelectorExcludes(reminderPageSource, ".reminder-card,\n.permission-strip", ["border: 1rpx solid var(--material-card-border);"]);
 expectSelectorIncludes(reminderPageSource, ".reminder-card__eyebrow", [
   "background: var(--color-support-notice);"
 ]);
@@ -884,7 +894,7 @@ expectIncludes(recommendPageSource, "background: var(--material-card-bg);");
 expectIncludes(recommendPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(recommendPageSource, "backdrop-filter: var(--material-card-filter);");
 expectExcludes(recommendDetailPageSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorExcludes(recommendPageSource, ".category-list", ["border: 1rpx solid var(--material-card-border);"]);
+expectSelectorExcludes(recommendPageSource, ".message-list", ["border: 1rpx solid var(--material-card-border);"]);
 
 expectIncludes(pantryHistoryPageSource, "background: var(--material-card-bg);");
 expectIncludes(pantryHistoryPageSource, "box-shadow: var(--material-card-shadow);");
@@ -902,17 +912,14 @@ expectSelectorIncludes(knowledgeListPageSource, ".knowledge-scroll-wrap", [
 expectSelectorIncludes(recommendPageSource, ".notification-page", [
   "background: var(--page-ambient-duo-bg);"
 ]);
-expectSelectorIncludes(recommendPageSource, ".category-card__icon-shell--recommend", [
-  "background: var(--color-illustration-panel-fresh);"
+expectSelectorIncludes(recommendPageSource, ".message-card__type--review", [
+  "background: var(--color-state-warning-soft);"
 ]);
-expectSelectorExcludes(recommendPageSource, ".category-card__icon-shell--recommend", [
-  "radial-gradient(circle at 18% 18%, var(--color-primary-halo) 0, transparent 58%)"
+expectSelectorIncludes(recommendPageSource, ".message-card__type--shopping", [
+  "background: var(--color-tag-secondary-bg);"
 ]);
-expectSelectorIncludes(recommendPageSource, ".category-card__icon-shell--shopping", [
-  "background: var(--color-illustration-panel-accent);"
-]);
-expectSelectorExcludes(recommendPageSource, ".category-card__icon-shell--shopping", [
-  "radial-gradient(circle at 20% 20%, var(--color-secondary-halo) 0, transparent 54%)"
+expectSelectorIncludes(recommendPageSource, ".message-card__type--reminder", [
+  "background: var(--color-state-danger-soft);"
 ]);
 expectSelectorIncludes(membershipCodePageSource, ".redeem-page", [
   "background: var(--page-ambient-duo-bg);"

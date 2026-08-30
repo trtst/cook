@@ -23,18 +23,30 @@
           <view class="theme-probe__control" />
         </view>
         <view class="table-hero" :style="heroStyle">
-          <view class="hero-banner" hover-class="hero-banner--hover" hover-stay-time="100" @click="openHomeEntry(mainFeatureCard)">
-            <image v-if="mainFeatureCard?.imageUrl" class="hero-banner__image" :src="mainFeatureCard.imageUrl" mode="aspectFill" />
-            <view class="hero-banner__shade" />
-            <view class="hero-banner__copy">
-              <text class="hero-banner__eyebrow">本周厨房主题</text>
-              <text class="hero-banner__title">{{ heroTitle }}</text>
-              <text class="hero-banner__description">{{ heroDescription }}</text>
-              <view v-if="mainFeatureCard" class="hero-banner__action">
-                <text class="hero-banner__action-text">{{ heroPrimaryActionText }}</text>
+          <swiper
+            class="hero-swiper"
+            circular
+            :autoplay="false"
+            :interval="0"
+            :duration="280"
+            :current="heroSwiperCurrent"
+            @change="handleHeroSwiperChange"
+          >
+            <swiper-item v-for="item in heroSlides" :key="item.key" class="hero-swiper__item">
+              <view class="hero-banner" hover-class="hero-banner--hover" hover-stay-time="100" @click="openHomeEntry(item.entry)">
+                <image class="hero-banner__image" :src="item.imageUrl" mode="aspectFill" />
+                <view class="hero-banner__shade" />
+                <view class="hero-banner__copy">
+                  <text class="hero-banner__eyebrow">{{ item.eyebrow }}</text>
+                  <text class="hero-banner__title">{{ item.title }}</text>
+                  <text class="hero-banner__description">{{ item.description }}</text>
+                  <view v-if="item.entry" class="hero-banner__action">
+                    <text class="hero-banner__action-text">{{ item.actionText }}</text>
+                  </view>
+                </view>
               </view>
-            </view>
-          </view>
+            </swiper-item>
+          </swiper>
         </view>
 
         <view class="table-content">
@@ -302,6 +314,8 @@ import {
   buildPantrySummaryState,
   hasPantrySummaryData as resolveHasPantrySummaryData
 } from "./pantry-summary";
+import banner01 from "@/assets/home-actions/banner_01.png";
+import banner02 from "@/assets/home-actions/banner_02.png";
 
 const pageStyle = usePageScrollStyle();
 const settingsStore = useSettingsStore();
@@ -341,13 +355,9 @@ let nextMealStateLoadPromise: Promise<void> | null = null;
 let weekOverviewLoadPromise: Promise<void> | null = null;
 let fridgeRecipesLoadPromise: Promise<void> | null = null;
 let pantrySummaryLoadPromise: Promise<void> | null = null;
+const heroSwiperCurrent = ref(0);
 
-const heroStyle = computed(() => ({
-  paddingTop: `${navBarTotalHeight.value + HOME_NAV_GAP}px`,
-  backgroundImage: mainFeatureCard.value?.imageUrl ? `url(${mainFeatureCard.value.imageUrl})` : undefined,
-  backgroundSize: mainFeatureCard.value?.imageUrl ? "cover" : undefined,
-  backgroundPosition: mainFeatureCard.value?.imageUrl ? "center" : undefined
-}));
+const heroStyle = computed(() => ({}));
 const navProgress = computed(() => Math.min(1, Math.max(0, homeScrollTop.value / HOME_NAV_FADE_DISTANCE)));
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
@@ -361,6 +371,33 @@ const sideFeatureCards = computed(() =>
     .filter(item => item.placement === "SIDE_TOP" || item.placement === "SIDE_BOTTOM")
     .sort((left, right) => (left.placement === "SIDE_TOP" ? 0 : 1) - (right.placement === "SIDE_TOP" ? 0 : 1))
 );
+const heroEntries = computed(() => {
+  const items = [mainFeatureCard.value, ...sideFeatureCards.value].filter((item): item is HomeEntryItem => Boolean(item));
+  return items.slice(0, 2);
+});
+const heroSlides = computed(() => {
+  const fallbackItems = [
+    {
+      key: "banner-01",
+      entry: heroEntries.value[0] ?? null,
+      imageUrl: banner01,
+      eyebrow: "本周厨房主题",
+      title: heroEntries.value[0]?.title ?? "今晚吃什么？",
+      description: heroEntries.value[0]?.subtitle ?? "这一周吃什么，可以慢慢安排。",
+      actionText: heroEntries.value[0]?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
+    },
+    {
+      key: "banner-02",
+      entry: heroEntries.value[1] ?? heroEntries.value[0] ?? null,
+      imageUrl: banner02,
+      eyebrow: "今日餐桌灵感",
+      title: heroEntries.value[1]?.title ?? "看看今天能做什么",
+      description: heroEntries.value[1]?.subtitle ?? "从首页入口继续往下安排这一顿。",
+      actionText: (heroEntries.value[1] ?? heroEntries.value[0])?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
+    }
+  ];
+  return fallbackItems;
+});
 const quickEntryPlacementList: HomeEntryPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
 const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideFeatureCards.value.length === 2);
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
@@ -435,18 +472,6 @@ const recentArrangementMeta = computed(() => {
 });
 const recentArrangementStatusText = computed(() => (recentArrangement.value ? resolveRecentArrangementStatusText(recentArrangement.value.status) : ""));
 const recentArrangementHintText = computed(() => (recentArrangement.value ? resolveRecentArrangementHintText(recentArrangement.value) : ""));
-const heroTitle = computed(() => {
-  return mainFeatureCard.value?.title || "今晚吃什么？";
-});
-const heroDescription = computed(() => {
-  return mainFeatureCard.value?.subtitle || "这一周吃什么，可以慢慢安排。";
-});
-const heroPrimaryActionText = computed(() => {
-  return mainFeatureCard.value?.targetType === "WEB_VIEW" ? "查看专题" : "去看看";
-});
-const heroSecondaryActionText = computed(() => {
-  return "";
-});
 
 onShow(() => {
   void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
@@ -825,6 +850,10 @@ function handleHomeScroll(event: { detail?: { scrollTop?: number } }) {
   homeScrollTop.value = event.detail?.scrollTop ?? 0;
 }
 
+function handleHeroSwiperChange(event: { detail?: { current?: number } }) {
+  heroSwiperCurrent.value = event.detail?.current ?? 0;
+}
+
 function navigateTo(url: string) {
   void uniPlatform.navigation.navigateTo(url);
 }
@@ -1012,31 +1041,23 @@ defineExpose({
 .table-hero {
   position: relative;
   overflow: hidden;
-  min-height: 560rpx;
-  padding: 64rpx var(--space-page) 200rpx;
-  background: var(--page-hero-shell-bg);
-}
-
-.table-hero::before {
-  position: absolute;
-  right: -42%;
-  bottom: -2rpx;
-  left: -42%;
-  z-index: 3;
-  height: 300rpx;
-  background: var(--page-hero-mask-bg);
-  content: "";
-  pointer-events: none;
+  height: 680rpx;
+  border-bottom-right-radius: 42rpx;
+  border-bottom-left-radius: 42rpx;
 }
 
 .table-hero::after {
   position: absolute;
-  right: -144rpx;
-  bottom: -138rpx;
-  width: 390rpx;
-  height: 390rpx;
-  border-radius: 50%;
-  background: var(--page-hero-orb-bg);
+  left: 0;
+  bottom: -10rpx;
+  z-index: 2;
+  width: 100%;
+  height: 140rpx;
+  background: var(--material-tabbar-bg);
+  -webkit-mask-image: var(--frosted-mask-image);
+  mask-image: var(--frosted-mask-image);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
   content: "";
 }
 
@@ -1078,15 +1099,19 @@ defineExpose({
   white-space: nowrap;
 }
 
-.hero-banner {
+.hero-swiper,
+.hero-swiper__item {
   position: relative;
   z-index: 2;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-banner {
+  position: relative;
   overflow: hidden;
-  min-height: 340rpx;
-  margin-top: 30rpx;
-  border-radius: 40rpx;
-  background: var(--page-hero-halo-bg);
-  box-shadow: var(--material-card-shadow);
+  width: 100%;
+  height: 100%;
 }
 
 .hero-banner__shade,
@@ -1100,18 +1125,14 @@ defineExpose({
   height: 100%;
 }
 
-.hero-banner__shade {
-  background: var(--overlay-hero-banner-shade);
-}
-
 .hero-banner__copy {
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: 340rpx;
-  padding: 36rpx;
+  height: 100%;
+  padding: calc(36rpx + var(--status-bar-height, 0px) + 88rpx) var(--space-page) 164rpx;
 }
 
 .hero-banner__eyebrow,

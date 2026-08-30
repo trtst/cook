@@ -58,9 +58,7 @@ export type HomeWeekOverviewStatus =
   | "PENDING_CONFIRM"
   | "PENDING_SHOPPING"
   | "READY_TO_COOK"
-  | "COMPLETED"
-  | "ACTIVE_LIST"
-  | "EXPIRING";
+  | "COMPLETED";
 
 export type HomeWeekDayStatus = "EMPTY" | "PLANNED" | "PENDING_CONFIRM" | "PENDING_SHOPPING" | "READY_TO_COOK" | "COMPLETED";
 
@@ -77,6 +75,7 @@ export interface HomeWeekOverview {
   actionText: string;
   targetType: "PAGE";
   targetValue: string;
+  notificationTime: IsoDateTime | "";
   plannedDayCount: number;
   totalDayCount: number;
   activeListCount: number;

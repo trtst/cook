@@ -1591,7 +1591,7 @@ defineExpose({
   justify-content: center;
   width: 92rpx;
   height: 92rpx;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted);
 }
 

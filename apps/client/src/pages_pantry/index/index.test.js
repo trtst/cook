@@ -107,7 +107,7 @@ async function resolveSystemIngredient(authHeaders) {
 
 async function createFridgeItemFixture(authHeaders) {
   const ingredient = await resolveSystemIngredient(authHeaders);
-  await requestData("/fridge-items", {
+  const item = await requestData("/fridge-items", {
     method: "POST",
     headers: withIdempotencyKey(authHeaders),
     body: JSON.stringify({
@@ -121,14 +121,51 @@ async function createFridgeItemFixture(authHeaders) {
     })
   });
   return {
+    itemId: item.id,
     ingredientName: ingredient.name
   };
+}
+
+async function createExpiringFridgeItemFixture(authHeaders) {
+  const ingredient = await resolveSystemIngredient(authHeaders);
+  const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const item = await requestData("/fridge-items", {
+    method: "POST",
+    headers: withIdempotencyKey(authHeaders),
+    body: JSON.stringify({
+      name: `${ingredient.name}临期`,
+      ingredientId: ingredient.id,
+      quantityText: `1${ingredient.defaultUnit.name}`,
+      exactQuantity: "1",
+      exactUnitId: ingredient.defaultUnit.id,
+      expireAt,
+      note: "食材首页提醒验收食材"
+    })
+  });
+  return {
+    itemId: item.id,
+    ingredientName: item.name
+  };
+}
+
+async function waitForState(page, matcher, timeoutMs = 8000) {
+  const startedAt = Date.now();
+  let lastState = null;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    lastState = await page.callMethod("automatorReadState");
+    if (matcher(lastState)) return lastState;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+
+  throw new Error(`pantry state not ready: ${JSON.stringify(lastState)}`);
 }
 
 describe("pages_pantry/index/index", () => {
   let page;
   let session;
   let fixture;
+  let expiringFixture;
 
   beforeAll(async () => {
     session = await loginWithCode(createFreshPhone());
@@ -136,6 +173,7 @@ describe("pages_pantry/index/index", () => {
       authorization: `Bearer ${session.token}`
     };
     fixture = await createFridgeItemFixture(authHeaders);
+    expiringFixture = await createExpiringFridgeItemFixture(authHeaders);
 
     await clearSession();
     page = await program.reLaunch("/pages_pantry/index/index");
@@ -151,7 +189,41 @@ describe("pages_pantry/index/index", () => {
     const state = await page.callMethod("automatorHandleLoginSuccess");
 
     expect(state.loggedIn).toBe(true);
-    expect(state.cardCount).toBeGreaterThan(0);
-    expect(state.firstCardName).toBe(fixture.ingredientName);
+    expect(state.cardCount).toBeGreaterThanOrEqual(2);
+    expect(state.expiringCardCount).toBeGreaterThanOrEqual(1);
+    expect(state.firstCardName).toBe(expiringFixture.ingredientName);
+  });
+
+  it("临期食材存在提醒入口，订阅未通过时不会卡死", async () => {
+    await page.callMethod("automatorApplySession", {
+      token: session.token,
+      uid: session.user.uid,
+      expiresAt: session.expiresAt
+    });
+    await page.callMethod("automatorHandleLoginSuccess");
+    await waitForState(page, state => state && state.expiringCardCount >= 1);
+
+    const state = await page.callMethod("automatorSendExpiryReminder", 0, "unsupported");
+
+    expect(state.loggedIn).toBe(true);
+    expect(state.expiringCardCount).toBeGreaterThanOrEqual(1);
+    expect(state.reminderSubmittingId).toBe("");
+    expect(state.lastReminderFeedback).toBe("当前环境不支持订阅消息");
+  });
+
+  it("临期食材提醒在授权通过后会收口成功态", async () => {
+    await page.callMethod("automatorApplySession", {
+      token: session.token,
+      uid: session.user.uid,
+      expiresAt: session.expiresAt
+    });
+    await page.callMethod("automatorHandleLoginSuccess");
+    await waitForState(page, state => state && state.expiringCardCount >= 1);
+
+    const state = await page.callMethod("automatorSendExpiryReminder", 0, "accepted", "success");
+
+    expect(state.loggedIn).toBe(true);
+    expect(state.reminderSubmittingId).toBe("");
+    expect(state.lastReminderFeedback).toBe("到期提醒已发送");
   });
 });
