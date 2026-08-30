@@ -19,6 +19,7 @@ import {
   CreateShoppingItemDto,
   DeleteShoppingListDto,
   CompleteShoppingListDto,
+  FridgeSummaryQueryDto,
   LeaveShoppingListDto,
   OperationDto,
   PageQueryDto,
@@ -40,6 +41,7 @@ import {
   ApiOkPage,
   FridgeItemModel,
   FridgeSummaryModel,
+  SubscribeMessageSendResultModel,
   ShoppingBoardModel,
   ShoppingGapResponseModel,
   ShoppingItemModel,
@@ -69,8 +71,19 @@ export class PantryController {
 
   @Get("fridge-items/summary")
   @ApiOkModel(FridgeSummaryModel, "读取当前用户冰箱摘要")
-  getFridgeSummary(@Req() request: RequestWithUser) {
-    return this.pantryService.getFridgeSummary(request.user.userId).then(result => ok(result));
+  getFridgeSummary(@Req() request: RequestWithUser, @Query() query: FridgeSummaryQueryDto) {
+    return this.pantryService.getFridgeSummary(request.user.userId, query.days).then(result => ok(result));
+  }
+
+  @Post("fridge-items/:itemId/expiry-reminder")
+  @ApiIdempotencyKey()
+  @ApiOkModel(SubscribeMessageSendResultModel, "发送一条食材到期订阅消息")
+  sendFridgeExpiryReminder(
+    @Req() request: RequestWithUser,
+    @Param("itemId", ParseIntPipe) itemId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.pantryService.sendFridgeExpiryReminder(request.user.userId, itemId, operationId).then(result => ok(result));
   }
 
   @Post("fridge-items")

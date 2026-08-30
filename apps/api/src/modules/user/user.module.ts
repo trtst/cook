@@ -6,6 +6,7 @@ import { DisplayService } from "./display.service";
 import { MedalImageService } from "./medal-image.service";
 import { MembershipCodeController } from "./membership-code.controller";
 import { MembershipCodeService } from "./membership-code.service";
+import { NotificationService } from "./notification.service";
 import { StorageUsageController, UserController } from "./user.controller";
 import { MedalService } from "./medal.service";
 import { TasteProfileService } from "./taste-profile.service";
@@ -13,7 +14,7 @@ import { TasteProfileService } from "./taste-profile.service";
 @Module({
   imports: [AuthModule, EntitlementModule],
   controllers: [UserController, StorageUsageController, MembershipCodeController],
-  providers: [CurrentUserService, TasteProfileService, DisplayService, MedalService, MedalImageService, MembershipCodeService],
+  providers: [CurrentUserService, TasteProfileService, DisplayService, MedalService, MedalImageService, MembershipCodeService, NotificationService],
   exports: [MedalService, MedalImageService]
 })
 export class UserModule {}

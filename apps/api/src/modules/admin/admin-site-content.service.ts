@@ -52,11 +52,12 @@ const defaultChannelSeeds = [
   { code: "ABOUT", name: "关于", description: "官网品牌与团队固定页", sortOrder: 0 },
   { code: "LEGAL", name: "法务", description: "隐私政策与用户协议", sortOrder: 1 },
   { code: "HELP", name: "帮助", description: "FAQ 与内容帮助页", sortOrder: 2 },
-  { code: "PRE_MEAL", name: "餐前准备", description: "备菜与准备类文章", sortOrder: 3 },
-  { code: "KITCHEN_KNOWLEDGE", name: "厨房知识", description: "厨房经验与做饭知识文章", sortOrder: 4 },
-  { code: "KITCHEN_PREP", name: "厨房准备", description: "厨房准备类文章", sortOrder: 5 },
-  { code: "COOKING_SKILLS", name: "烹饪技巧", description: "烹饪技巧类文章", sortOrder: 6 },
-  { code: "RECIPE_SKILLS", name: "食谱技巧", description: "食谱技巧类文章", sortOrder: 7 }
+  { code: "OFFICIAL_NOTICE", name: "官方消息", description: "站内官方消息与通知中心承接", sortOrder: 3 },
+  { code: "PRE_MEAL", name: "餐前准备", description: "备菜与准备类文章", sortOrder: 4 },
+  { code: "KITCHEN_KNOWLEDGE", name: "厨房知识", description: "厨房经验与做饭知识文章", sortOrder: 5 },
+  { code: "KITCHEN_PREP", name: "厨房准备", description: "厨房准备类文章", sortOrder: 6 },
+  { code: "COOKING_SKILLS", name: "烹饪技巧", description: "烹饪技巧类文章", sortOrder: 7 },
+  { code: "RECIPE_SKILLS", name: "食谱技巧", description: "食谱技巧类文章", sortOrder: 8 }
 ] as const;
 
 const publicArticleChannels = [
@@ -66,6 +67,7 @@ const publicArticleChannels = [
 ] as const;
 
 type PublicArticleChannelCode = (typeof publicArticleChannels)[number]["code"];
+const officialMessageChannelCode = "OFFICIAL_NOTICE" as const;
 
 const fixedPageSeeds: FixedPageSeed[] = [
   { slug: "about", path: "/about", title: "关于我们", label: "关于", channelCode: "ABOUT", sortOrder: 0 },
@@ -493,6 +495,64 @@ export class AdminSiteContentService {
     return this.toPublicArticleDetail(row);
   }
 
+  async listOfficialMessages(userId: number, page: number, pageSize: number): Promise<PageResult<SiteContentDetail>> {
+    await this.requireUser(userId);
+    await this.ensureDefaultChannels();
+
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = Math.min(50, toPositiveInt(pageSize, 20));
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const where: Prisma.SiteContentWhereInput = {
+      type: "ARTICLE",
+      status: "PUBLISHED",
+      channel: {
+        code: officialMessageChannelCode
+      }
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.siteContent.findMany({
+        where,
+        include: { channel: true },
+        orderBy: [{ publishedAt: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize
+      }),
+      this.prisma.siteContent.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => this.toSiteContentDetail(item)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
+  async getOfficialMessageDetail(userId: number, contentId: number): Promise<SiteContentDetail> {
+    await this.requireUser(userId);
+    await this.ensureDefaultChannels();
+
+    const row = await this.prisma.siteContent.findFirst({
+      where: {
+        id: contentId,
+        type: "ARTICLE",
+        status: "PUBLISHED",
+        channel: {
+          code: officialMessageChannelCode
+        }
+      },
+      include: {
+        channel: true
+      }
+    });
+    if (!row) {
+      throw new NotFoundException("官方消息不存在");
+    }
+    return this.toSiteContentDetail(row);
+  }
+
   async recordPublicArticleView(userId: number, articleId: number, operationId: string): Promise<SiteContentArticleViewResult> {
     await this.requireUser(userId);
     const requestHash = toRequestHash({ articleId });
@@ -808,6 +868,31 @@ export class AdminSiteContentService {
       publishedAt: (row.publishedAt ?? row.updatedAt).toISOString(),
       viewCount: row.viewCount,
       likeCount: row.likeCount
+    };
+  }
+
+  private toSiteContentDetail(
+    row: Pick<ContentRow, "id" | "type" | "slug" | "path" | "title" | "summary" | "label" | "heroNote" | "coverImageUrl" | "bodyHtml" | "bodyText" | "publishedAt" | "effectiveAt" | "updatedAt"> & {
+      channel?: Pick<ChannelRow, "code" | "name"> | null;
+    }
+  ): SiteContentDetail {
+    return {
+      id: row.id,
+      type: row.type,
+      slug: row.slug,
+      path: row.path,
+      title: row.title,
+      summary: row.summary,
+      label: row.label,
+      heroNote: row.heroNote,
+      coverImageUrl: row.coverImageUrl,
+      bodyHtml: row.bodyHtml,
+      bodyText: row.bodyText,
+      publishedAt: toIsoDate(row.publishedAt),
+      effectiveAt: toIsoDate(row.effectiveAt),
+      updatedAt: row.updatedAt.toISOString(),
+      channelCode: row.channel?.code ?? null,
+      channelName: row.channel?.name ?? null
     };
   }
 

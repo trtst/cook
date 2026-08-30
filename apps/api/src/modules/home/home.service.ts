@@ -151,6 +151,7 @@ type WeekPlanRow = {
   menuLockedAt: Date | null;
   status: "PLANNED" | "COMPLETED";
   completedAt: Date | null;
+  updatedAt: Date;
   diningEvent: {
     id: UUID;
     status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
@@ -166,6 +167,12 @@ function cleanText(value: string | null | undefined) {
 
 function hashText(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function maxDate(left: Date | null, right: Date | null) {
+  if (!left) return right;
+  if (!right) return left;
+  return left.getTime() >= right.getTime() ? left : right;
 }
 
 function fridgeFitRank(value: HomeFridgeRecipeItem["fridgeFit"]) {
@@ -454,7 +461,7 @@ export class HomeService {
     end.setDate(end.getDate() + homeWeekDayCount - 1);
     end.setHours(23, 59, 59, 999);
 
-    const [nextMealState, fridgeSummary, shoppingSummary, plans] = await Promise.all([
+    const [nextMealState, fridgeSummary, shoppingSummary, plans, latestShoppingList] = await Promise.all([
       this.getNextMealState(userId),
       this.pantryService.getFridgeSummary(userId),
       this.pantryService.getShoppingListSummary(userId),
@@ -474,6 +481,7 @@ export class HomeService {
           menuLockedAt: true,
           status: true,
           completedAt: true,
+          updatedAt: true,
           diningEvent: {
             select: {
               id: true,
@@ -486,6 +494,26 @@ export class HomeService {
               id: true
             }
           }
+        }
+      }),
+      this.prisma.shoppingList.findFirst({
+        where: {
+          ownerUserId: userId,
+          status: "ACTIVE",
+          mealPlans: {
+            some: {
+              userId,
+              status: "PLANNED",
+              planDate: {
+                gte: today,
+                lte: end
+              }
+            }
+          }
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: {
+          updatedAt: true
         }
       })
     ]);
@@ -522,6 +550,11 @@ export class HomeService {
     });
 
     const status = this.resolveWeekOverviewStatus(nextMealState);
+    const latestPlanAt = plans.reduce<Date | null>(
+      (current, item) => (item.status === "PLANNED" ? maxDate(current, item.updatedAt) : current),
+      null
+    );
+    const notificationTime = maxDate(latestPlanAt, latestShoppingList?.updatedAt ?? null)?.toISOString() ?? "";
     return {
       status,
       title: this.resolveWeekOverviewTitle(status, plannedDayCount),
@@ -529,6 +562,7 @@ export class HomeService {
       actionText: this.resolveWeekOverviewActionText(status),
       targetType: "PAGE",
       targetValue: this.resolveWeekOverviewTarget(status, arrangement, shoppingSummary.activeListCount),
+      notificationTime,
       plannedDayCount,
       totalDayCount: homeWeekDayCount,
       activeListCount: shoppingSummary.activeListCount,
@@ -1045,8 +1079,6 @@ export class HomeService {
       if (status === "READY_TO_COOK") return buildRecentArrangementTarget(arrangement, "assistant");
       if (status === "COMPLETED") return "/pages_meal/plan/index";
     }
-    if (status === "ACTIVE_LIST") return "/pages_pantry/list/index";
-    if (status === "EXPIRING") return "/pages_pantry/index/index";
     return "/pages_meal/plan/index";
   }
 

@@ -136,6 +136,36 @@ interface MeResponse extends SessionUser {
   membership: UserMembership;
 }
 
+interface NotificationMealTimes {
+  breakfast: string;
+  lunch: string;
+  afternoonTea: string;
+  dinner: string;
+  lateNight: string;
+}
+
+interface NotificationSettings {
+  reminderDotOnly: boolean;
+  meal: {
+    enabled: boolean;
+    times: NotificationMealTimes;
+  };
+  fridge: {
+    enabled: boolean;
+    days: 1 | 2 | 3 | 5 | 7;
+  };
+  recommend: {
+    enabled: boolean;
+  };
+}
+
+interface NotificationBadgeResponse {
+  unreadCount: number;
+  reminderUnreadCount: number;
+  showReminderDot: boolean;
+  latestTime: IsoDateTime | "";
+}
+
 interface UserSummary {
   uid: number;
   nickname: string | null;
@@ -206,7 +236,11 @@ GET  /home-entries
 GET  /home/recent-arrangement
 GET  /users/me
 GET  /users/me/medals
+GET  /users/me/notification-settings
+GET  /users/me/notification-badge
 PUT  /users/me
+PUT  /users/me/notification-settings
+PUT  /users/me/notification-feed-read
 POST /membership-codes/redeem
 PUT  /users/me/display
 PUT  /users/me/password
@@ -456,6 +490,8 @@ interface UpdateCurrentUserRequest {
   avatarUrl?: string;
 }
 
+interface UpdateNotificationSettingsRequest extends NotificationSettings {}
+
 interface ChangeCurrentPasswordRequest {
   currentPassword: string;
   newPassword: string;
@@ -475,6 +511,14 @@ interface RedeemMembershipCodeResult {
 }
 ```
 
+`GET /users/me/notification-settings` 只返回当前登录用户自己的提醒偏好：`饭点提醒 / 食材提醒 / 每日推荐提醒 / 消息免打扰`，以及服务端当前用于提醒计算的餐次默认时间和食材提前天数。当前前台提醒设置页只开放开关与 `fridge.days` 调整，不提供早餐 / 午餐 / 下午茶 / 晚餐 / 夜宵具体时钟编辑入口。它不混入未读数、消息列表、微信订阅授权状态或后台发送配置。
+
+`PUT /users/me/notification-settings` 完整替换当前用户的提醒偏好，请求体固定提交完整 `NotificationSettings`。服务端继续校验布尔值、餐次时间格式和 `fridge.days` 只允许 `1 | 2 | 3 | 5 | 7`；但当前前台页面只提交现有开关和提前天数对应的完整快照，不承诺开放餐次时间编辑。前端不再以本地 `storage` 作为权威来源。
+
+`GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / reminderUnreadCount / showReminderDot / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。
+
+`PUT /users/me/notification-feed-read` 只负责把“当前通知中心时间流的最新消息时间”写入当前用户自己的已读游标，并返回最新 `NotificationBadgeResponse`。进入通知中心后客户端调用这一写入口，后续未读清除逻辑以服务端游标为准，不再以本地时间戳作为 owner。
+
 `POST /auth/wechat-login` 是当前小程序主登录入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端再调用微信 `code2session` 换取 `openid`，按 `openid` 识别或创建用户，并在可取到时同步记录 `unionid`。请求体只收 `code`；响应仍只返回 `token + expiresAt + user` 这组建立业务会话所需的最小摘要，不返回 `openid / unionid / session_key` 等微信身份细节。若微信配置缺失或微信侧不可达，统一返回“微信登录暂不可用”；若 `code` 无效或已失效，统一返回“微信登录失败，请重试”。
 
 `POST /auth/code-send` 是当前手机号验证码链路的统一发码入口，请求体只收 `phone + scene`，其中 `scene` 当前只允许 `LOGIN | BIND_PHONE`。测试阶段它不接真实短信服务，不落验证码表，也不新增验证码核销中心；服务端只做手机号格式和场景校验，返回本次发码的 `scene + sentAt`，供登录弹窗和绑定手机号页共用同一条未来短信契约。
@@ -485,7 +529,9 @@ interface RedeemMembershipCodeResult {
 
 `GET /home-entries` 只返回小程序首页入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 既可服务 hero 运营大图，也可服务右侧运营卡或图标区；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN` 固定作为首页 hero 运营位，`SIDE_TOP / SIDE_BOTTOM` 固定作为 hero 下方右侧两张运营卡并始终返回，`QUICK_1 ... QUICK_4` 固定对应首页四个动作入口坑位，但公开接口只返回当前 `LISTED` 的四宫格入口；客户端仍按 `placement` 自己拆出 hero、右侧运营卡和下方快捷入口。
 
-`GET /home/week-overview` 只服务首页左侧“这周吃饭安排”状态聚合主卡，职责上与 `GET /home-entries`、`GET /home/recent-arrangement` 分离。它返回当前登录用户首页主卡真正需要的最小摘要：`status + title + summary + actionText + targetType + targetValue + plannedDayCount + totalDayCount + activeListCount + expiringCount + arrangement + days[]`。其中 `status` 只允许 `NO_ARRANGEMENT / EMPTY_MENU / PENDING_CONFIRM / PENDING_SHOPPING / READY_TO_COOK / COMPLETED / ACTIVE_LIST / EXPIRING`；`targetType` 当前固定为 `PAGE`，`targetValue` 由服务端按当前最值得处理的状态给出真实落地页；`plannedDayCount` 与 `days[]` 只覆盖从今天起未来 `7` 天的轻量周视图，不扩成完整计划详情；`arrangement` 复用现有首页最近安排最小摘要，供主卡在存在近期餐次时显示更具体的时间与状态。该接口不得返回完整菜单、购物清单明细、冰箱明细、参与人 UID、运营样式或通用任务流字段；首页左侧主卡点击后只跳转到真实页面继续处理，不在首页直接写入。
+`GET /home/week-overview` 只服务首页左侧“这周吃饭安排”状态聚合主卡，职责上与 `GET /home-entries`、`GET /home/recent-arrangement` 分离。它返回当前登录用户首页主卡真正需要的最小摘要：`status + title + summary + actionText + targetType + targetValue + notificationTime + plannedDayCount + totalDayCount + activeListCount + expiringCount + arrangement + days[]`。其中 `status` 只允许 `NO_ARRANGEMENT / EMPTY_MENU / PENDING_CONFIRM / PENDING_SHOPPING / READY_TO_COOK / COMPLETED`；`targetType` 当前固定为 `PAGE`，`targetValue` 由服务端按当前最值得处理的状态给出真实落地页；`notificationTime` 是给通知中心排序和已读游标对齐用的服务端时间，不要求首页卡片直接展示；`plannedDayCount` 与 `days[]` 只覆盖从今天起未来 `7` 天的轻量周视图，不扩成完整计划详情；`arrangement` 复用现有首页最近安排最小摘要，供主卡在存在近期餐次时显示更具体的时间与状态。该接口不得返回完整菜单、购物清单明细、冰箱明细、参与人 UID、运营样式或通用任务流字段；首页左侧主卡点击后只跳转到真实页面继续处理，不在首页直接写入。
+
+`GET /fridge-items/summary` 继续作为当前用户冰箱摘要接口，默认返回 `3` 天窗口，也允许通过 `days=1|2|3|5|7` 按提醒设置读取对应临期窗口。返回字段固定为 `totalCount + expiringCount + latestTime`；其中 `expiringCount` 和 `latestTime` 只统计当前仍 `available=true` 且落在窗口内的食材，`latestTime` 供通知中心排序与已读游标对齐使用，避免前端再拉分页列表自行推导临期提醒时间。
 
 `GET /home/recent-arrangement` 只服务首页“最近安排”条件卡，和 `GET /home-entries` 的运营入口配置职责分离。它只返回当前登录用户最近一顿、且还有下一步动作的计划或饭局摘要；若当前没有符合窗口与权限条件的候选，则返回 `data = null`。候选窗口固定为：先看未来 `24` 小时，若没有再补看未来 `24~36` 小时；在同一窗口内若同时存在饭局和计划候选，统一优先饭局，再按状态优先级 `TIME_UP_SHARE > READY_TO_COOK > PENDING_SHOPPING > PENDING_CONFIRM > EMPTY_MENU` 和离当前时间更近排序。接口最小只返回当前首页卡真正需要的字段：`sourceType + planItemId + planDate + eventId + title + scheduledAt + participantCount + menuCount + gapCount + status`。其中 `planDate` 用于客户端继续复用现有统一餐次详情页路由；`participantCount` 对饭局返回当前参与人数，对纯计划固定返回 `1`；`gapCount` 只有在当前服务端已存在可靠缺口事实时才返回数字，否则返回 `null`。该接口不得返回菜单明细、投票明细、冰箱明细、购物清单明细、参与人 UID、内部备注，也不直接返回首页按钮文案或跳转 URL；客户端根据 `status` 本地映射“去加菜 / 确认菜单 / 去采购 / 开始做饭 / 分享回忆”等主动作。
 
@@ -579,6 +625,8 @@ GET  /site-contents/articles/{articleId}
 POST /site-contents/articles/{articleId}/view
 POST /site-contents/articles/{articleId}/like
 DELETE /site-contents/articles/{articleId}/like
+GET  /site-contents/official-messages
+GET  /site-contents/official-messages/{contentId}
 GET  /site-contents/resolve?path={path}
 GET  /public-assets/site-content-images/{fileName}
 ```
@@ -740,13 +788,15 @@ POST /admin/content
 PUT  /admin/content/{contentId}
 POST /admin/content/{contentId}/status
 POST /admin/content/images
+GET  /site-contents/official-messages
+GET  /site-contents/official-messages/{contentId}
 GET  /site-contents/resolve?path={path}
 GET  /public-assets/site-content-images/{fileName}
 ```
 
 这一组接口共同承接后台“内容治理”。栏目治理只服务站点内容栏目，不扩成通用分类中心。`GET /admin/content/channels` 固定返回分页 `PageResult<AdminSiteContentChannelSummary>`，支持按 `code` 模糊过滤；`POST /admin/content/channels` 与 `PUT /admin/content/channels/{channelId}` 都要求 `Idempotency-Key`，只维护 `code / name / description / sortOrder`，并通过 `expectedVersion` 防并发覆盖。
 
-`GET /admin/content/pages` 固定返回 5 个受控固定页：`about / privacy / terms / product / faq`。这些固定页在服务端自动落种，后台只能编辑正文与展示信息，路径固定分别为 `/about / /privacy / /terms / /product / /faq`，不得新增第 6 个固定页，也不得改成其他路径。
+`GET /admin/content/pages` 固定返回 5 个受控固定页：`about / privacy / terms / product / faq`。这些固定页在服务端自动落种，后台只能编辑正文与展示信息，路径固定分别为 `/about / /privacy / /terms / /product / /faq`，不得新增第 6 个固定页，也不得改成其他路径。服务端同时自动保留受控栏目 `OFFICIAL_NOTICE`，专门承接系统官方消息，不额外新建消息表。
 
 `GET /admin/content/articles` 返回文章分页，查询参数固定为 `page / pageSize`，并支持 `channelId / status / keyword` 过滤；`status` 只允许 `DRAFT / PUBLISHED / UNLISTED`。`GET /admin/content/{contentId}` 返回后台详情。`POST /admin/content` 与 `PUT /admin/content/{contentId}` 都要求 `Idempotency-Key`，当前只治理两类内容：`PAGE` 与 `ARTICLE`。`PAGE` 必须命中受控固定页 slug；`ARTICLE` 必须选择栏目，路径由服务端固定生成 `/guides/{slug}`，后台提交的自定义 `path` 不生效。正文固定使用 `bodyHtml + bodyText` 双写；服务端会做基础 HTML 清洗，并在 `bodyText` 为空时从 HTML 提取纯文本兜底。
 
@@ -757,6 +807,8 @@ GET  /public-assets/site-content-images/{fileName}
 `GET /site-contents/resolve` 是站点和官网的公开内容读取接口，只按 `path` 返回已发布内容。当前只返回 `PUBLISHED` 内容，固定响应 `id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`，不返回草稿和下架内容。
 
 `GET /site-contents/articles`、`GET /site-contents/articles/{articleId}`、`POST /site-contents/articles/{articleId}/view`、`POST /site-contents/articles/{articleId}/like` 和 `DELETE /site-contents/articles/{articleId}/like` 共同承接小程序“厨房准备 / 烹饪技巧 / 食谱技巧”三条知识文章链路。五个接口都要求 `UserBearerAuth`：未登录时客户端先呼起登录，不直接请求文章数据。列表查询参数固定为 `channelCode + page + pageSize`，其中 `channelCode` 只允许 `KITCHEN_PREP / COOKING_SKILLS / RECIPE_SKILLS` 三个受控栏目；列表只返回当前栏目下 `PUBLISHED` 的文章分页，摘要固定为 `id / title / summary / coverImageUrl / publishedAt / viewCount / likeCount`，按 `sortOrder asc, publishedAt desc, id desc` 排序。详情接口只读取同三类受控栏目里的已发布文章，固定返回 `id / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / updatedAt / channelCode / channelName / viewCount / likeCount / viewerHasLiked`，不返回作者、评论、收藏或相关推荐。`POST /site-contents/articles/{articleId}/view` 用于在详情页成功进入后累积一次阅读数，请求头必须带 `Idempotency-Key`，响应只返回最新 `articleId / viewCount`；当前只累计总阅读数，不保留阅读明细。点赞与取消点赞也都要求 `Idempotency-Key`，服务端以 `site_content_likes` 做单用户单文章唯一约束；重复点赞或重复取消点赞都返回当前最新状态，不再报错。点赞相关响应固定返回 `articleId / likeCount / viewerHasLiked`。这组接口当前不开放评论、收藏、点赞用户列表、作者主页、推荐排序或其他社区能力。
+
+`GET /site-contents/official-messages` 与 `GET /site-contents/official-messages/{contentId}` 共同承接小程序通知中心里的“系统官方消息”。两个接口都要求 `UserBearerAuth`，未登录时客户端先走登录链路。列表查询参数固定为 `page + pageSize`，只返回 `channel.code = OFFICIAL_NOTICE` 且 `status = PUBLISHED` 的内容，按 `publishedAt desc, updatedAt desc, id desc` 排序。列表和详情当前统一返回最小站内承接字段：`id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`。通知中心只消费其中的 `title / summary / publishedAt|updatedAt` 生成消息卡；若正文里存在 `https://` 链接，则前台可直接跳内嵌 H5，否则进入站内官方消息详情页。这组接口当前不开放阅读数、点赞、评论、已读回执、定向投放或发送统计。
 
 `POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status` 和 `POST /admin/users/{userId}/reset-password` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用和重置密码；不支持物理删除用户，也不通过后台直接改用户归属数据。
 
@@ -1192,6 +1244,7 @@ interface UpdateFridgeItemRequest {
 3. `exactUnitId` 当前只接受系统单位；若数量或单位不可比较，购物清单详情只能给出“库存待确认”，不能自动算剩余采购量。
 4. `PUT /fridge-items/{itemId}` 只维护这条个人库存事实，不改系统食材资料，也不支持在这里重绑食材身份。
 5. `POST /fridge-items/consume` 继续只接收既有冰箱条目 ID 批量消耗，返回最新的 `PageResult<FridgeItemSummary>`。
+6. `POST /fridge-items/{itemId}/expiry-reminder` 只作为当前首条微信订阅消息的发送入口使用，要求调用前已完成该模板的一次性订阅授权；服务端只读取当前登录用户自己这条仍 `available=true` 且已进入提醒窗口的冰箱食材，按固定模板 `保质期到期提醒` 组装并发送，不接收页面自传文案或目标用户字段。提醒窗口默认 3 天；若用户已保存提醒设置，则按 `notification-settings.fridge.days` 校验。当前页面落地固定为 `pages_pantry/index/index`，字段固定映射 `thing1=物品名称`、`date2=到期日期`、`number5=剩余天数`、`number12=已放天数`、`thing8=温馨提醒`，成功仅返回 `sentAt`。
 
 `POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但当前一个餐次可同时承载多道菜；请求体固定提交：
 

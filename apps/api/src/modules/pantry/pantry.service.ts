@@ -10,7 +10,7 @@ import { randomBytes } from "node:crypto";
 import { Prisma, type ShoppingSourceType } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
-import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
+import { completeIdempotentOperation, getIdempotentResult, hashIdempotencyRequest, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
   CompleteShoppingListEntryRequest,
@@ -51,6 +51,7 @@ import type {
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
 import { IngredientImageService } from "../admin/ingredient-image.service";
+import { WechatSubscribeService } from "../wechat/wechat-subscribe.service";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -112,6 +113,7 @@ const gapWindowMeta: Record<ShoppingGapWindow, { title: string; description: str
     description: "更后面的安排先收起，不打扰最近做饭。"
   }
 };
+const fridgeExpiryReminderDuplicateWindowMs = 5 * 60 * 1000;
 
 function resolveGapWindow(scheduledAt: Date, now: Date): ShoppingGapWindow | null {
   const diffMs = scheduledAt.getTime() - now.getTime();
@@ -338,7 +340,8 @@ export class PantryService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
-    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService
+    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService,
+    @Inject(WechatSubscribeService) private readonly wechatSubscribeService: WechatSubscribeService
   ) {}
 
   async listFridge(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeItemSummary>> {
@@ -390,25 +393,33 @@ export class PantryService {
     });
   }
 
-  async getFridgeSummary(userId: UUID): Promise<FridgeSummaryResponse> {
-    const cutoff = this.resolveFridgeExpireCutoff(3);
+  async getFridgeSummary(userId: UUID, days: 1 | 2 | 3 | 5 | 7 = 3): Promise<FridgeSummaryResponse> {
+    const cutoff = this.resolveFridgeExpireCutoff(days);
     const where = { userId };
-    const [totalCount, expiringCount] = await Promise.all([
+    const expiringWhere = {
+      ...where,
+      available: true,
+      expireAt: {
+        not: null,
+        lte: cutoff
+      }
+    } as const;
+    const [totalCount, expiringCount, latest] = await Promise.all([
       this.prisma.fridgeItem.count({ where }),
       this.prisma.fridgeItem.count({
-        where: {
-          ...where,
-          expireAt: {
-            not: null,
-            lte: cutoff
-          }
-        }
+        where: expiringWhere
+      }),
+      this.prisma.fridgeItem.findFirst({
+        where: expiringWhere,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: { updatedAt: true }
       })
     ]);
 
     return {
       totalCount,
-      expiringCount
+      expiringCount,
+      latestTime: latest?.updatedAt.toISOString() ?? ""
     };
   }
 
@@ -468,6 +479,132 @@ export class PantryService {
       await completeIdempotentOperation(tx, operationId, "fridge:create", userId, null, requestHash, result);
       return result;
     });
+  }
+
+  async sendFridgeExpiryReminder(userId: UUID, itemId: UUID, operationId: OperationId) {
+    const requestHash = `${itemId}:expiry-reminder`;
+    const normalizedRequestHash = hashIdempotencyRequest(requestHash);
+    const duplicateWindowStart = new Date(Date.now() - fridgeExpiryReminderDuplicateWindowMs);
+    let startedRecordId = 0;
+    let item: { name: string; expireAt: Date | null; createdAt: Date; available: boolean } | null = null;
+
+    const repeated = await this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<{ sentAt: string }>(tx, operationId, "fridge:expiry-reminder", userId, null, requestHash);
+      if (repeated) return repeated;
+      const [processing, recentSuccess] = await Promise.all([
+        tx.idempotencyRecord.findFirst({
+          where: {
+            operationType: "fridge:expiry-reminder",
+            userId,
+            diningGroupId: null,
+            requestHash: normalizedRequestHash,
+            status: "PROCESSING"
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+        }),
+        tx.idempotencyRecord.findFirst({
+          where: {
+            operationType: "fridge:expiry-reminder",
+            userId,
+            diningGroupId: null,
+            requestHash: normalizedRequestHash,
+            status: "SUCCEEDED",
+            createdAt: {
+              gte: duplicateWindowStart
+            }
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+        })
+      ]);
+      if (processing) {
+        throw new ConflictException("提醒发送中，请稍后重试");
+      }
+      if (recentSuccess?.resultJson) {
+        return fromJson<{ sentAt: string }>(recentSuccess.resultJson);
+      }
+      const existing = await tx.idempotencyRecord.findFirst({
+        where: {
+          operationType: "fridge:expiry-reminder",
+          userId,
+          diningGroupId: null,
+          requestHash: normalizedRequestHash,
+          createdAt: {
+            gte: duplicateWindowStart
+          }
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+      });
+      if (existing?.status === "SUCCEEDED" && existing.resultJson) return fromJson<{ sentAt: string }>(existing.resultJson);
+      const started = await startIdempotentOperation(tx, operationId, "fridge:expiry-reminder", userId, null, requestHash);
+      startedRecordId = started.id;
+      const settings = await tx.userNotificationSettings.findUnique({
+        where: { userId },
+        select: {
+          fridgeDays: true
+        }
+      });
+      const cutoff = this.resolveFridgeExpireCutoff(settings?.fridgeDays ?? 3);
+
+      item = await tx.fridgeItem.findFirst({
+        where: {
+          id: itemId,
+          userId
+        },
+        select: {
+          name: true,
+          expireAt: true,
+          createdAt: true,
+          available: true
+        }
+      });
+      if (!item) {
+        throw new NotFoundException("食材不存在");
+      }
+      if (!item.available) {
+        throw new BadRequestException("当前食材已不在可用库存中");
+      }
+      if (!item.expireAt) {
+        throw new BadRequestException("当前食材未设置到期时间");
+      }
+      if (item.expireAt.getTime() > cutoff.getTime()) {
+        throw new BadRequestException("当前食材还未到提醒时间");
+      }
+      return null;
+    });
+
+    if (repeated) {
+      return repeated;
+    }
+
+    try {
+      const result = await this.wechatSubscribeService.sendFridgeExpiryReminder({
+        userId,
+        ingredientName: item!.name,
+        expireAt: item!.expireAt!.toISOString(),
+        daysLeft: this.calculateDaySpan(new Date(), item!.expireAt!),
+        storedDays: this.calculateDaySpan(item!.createdAt, new Date()),
+        tipText: "记得优先安排，减少浪费",
+        pagePath: "pages_pantry/index/index"
+      });
+
+      await this.prisma.$transaction(async tx => {
+        await completeIdempotentOperation(tx, operationId, "fridge:expiry-reminder", userId, null, requestHash, result);
+      });
+
+      return result;
+    } catch (error) {
+      if (startedRecordId) {
+        await this.prisma.$transaction(async tx => {
+          await tx.idempotencyRecord.deleteMany({
+            where: {
+              id: startedRecordId,
+              status: "PROCESSING"
+            }
+          });
+        });
+      }
+      throw error;
+    }
   }
 
   async updateFridgeItem(
@@ -4662,6 +4799,11 @@ export class PantryService {
       throw new BadRequestException("到期时间参数错误");
     }
     return resolved;
+  }
+
+  private calculateDaySpan(startAt: Date, endAt: Date) {
+    const diffMs = endAt.getTime() - startAt.getTime();
+    return Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
   }
 
   private resolveFridgeExpireCutoff(days: number) {

@@ -9,7 +9,13 @@ import { AdminDashboardController } from "./admin-dashboard.controller";
 import { AdminDashboardService } from "./admin-dashboard.service";
 import { AdminRecipeImageController, AdminRecipeImagePublicController } from "./admin-recipe-image.controller";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
-import { AdminSiteContentController, SiteContentArticleController, SiteContentController, SiteContentImagePublicController } from "./admin-site-content.controller";
+import {
+  AdminSiteContentController,
+  SiteContentArticleController,
+  SiteContentController,
+  SiteContentImagePublicController,
+  SiteOfficialMessageController
+} from "./admin-site-content.controller";
 import { AdminSiteContentService } from "./admin-site-content.service";
 import { AdminService } from "./admin.service";
 import { IngredientImageService } from "./ingredient-image.service";
@@ -24,6 +30,7 @@ import { SiteContentImageService } from "./site-content-image.service";
     AdminSiteContentController,
     SiteContentController,
     SiteContentArticleController,
+    SiteOfficialMessageController,
     SiteContentImagePublicController,
     AdminRecipeImageController,
     AdminRecipeImagePublicController

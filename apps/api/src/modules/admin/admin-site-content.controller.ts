@@ -15,6 +15,7 @@ import {
   CreateAdminSiteContentDto,
   ResolveSiteContentDto,
   SiteContentArticleQueryDto,
+  SiteOfficialMessageQueryDto,
   UpdateAdminSiteContentChannelDto,
   UpdateAdminSiteContentDto,
   UpdateAdminSiteContentStatusDto
@@ -31,7 +32,9 @@ import {
   SiteContentArticleLikeResultModel,
   SiteContentArticleSummaryModel,
   SiteContentArticleViewResultModel,
-  SiteContentDetailModel
+  SiteContentDetailModel,
+  SiteOfficialMessageDetailModel,
+  SiteOfficialMessageSummaryModel
 } from "../../contracts/openapi";
 import { AdminSiteContentService } from "./admin-site-content.service";
 import { SiteContentImageService } from "./site-content-image.service";
@@ -215,6 +218,26 @@ export class SiteContentArticleController {
   @ApiOkModel(SiteContentArticleLikeResultModel, "取消点赞文章")
   unlike(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number, @ReadIdempotencyKey() operationId: string) {
     return this.adminSiteContentService.unlikePublicArticle(request.user.userId, articleId, operationId).then(result => ok(result));
+  }
+}
+
+@ApiTags("site-content")
+@Controller("site-contents/official-messages")
+@UseGuards(UserAuthGuard)
+@ApiBearerAuth("UserBearerAuth")
+export class SiteOfficialMessageController {
+  constructor(@Inject(AdminSiteContentService) private readonly adminSiteContentService: AdminSiteContentService) {}
+
+  @Get()
+  @ApiOkPage(SiteOfficialMessageSummaryModel, "读取系统官方消息列表")
+  list(@Req() request: RequestWithUser, @Query() query: SiteOfficialMessageQueryDto) {
+    return this.adminSiteContentService.listOfficialMessages(request.user.userId, query.page, query.pageSize).then(result => ok(result));
+  }
+
+  @Get(":contentId")
+  @ApiOkModel(SiteOfficialMessageDetailModel, "读取系统官方消息详情")
+  getDetail(@Req() request: RequestWithUser, @Param("contentId", ParseIntPipe) contentId: number) {
+    return this.adminSiteContentService.getOfficialMessageDetail(request.user.userId, contentId).then(result => ok(result));
   }
 }
 

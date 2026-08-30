@@ -43,6 +43,36 @@ export interface MeResponse extends SessionUser {
   membership: UserMembership;
 }
 
+export interface NotificationMealTimes {
+  breakfast: string;
+  lunch: string;
+  afternoonTea: string;
+  dinner: string;
+  lateNight: string;
+}
+
+export interface NotificationSettings {
+  reminderDotOnly: boolean;
+  meal: {
+    enabled: boolean;
+    times: NotificationMealTimes;
+  };
+  fridge: {
+    enabled: boolean;
+    days: 1 | 2 | 3 | 5 | 7;
+  };
+  recommend: {
+    enabled: boolean;
+  };
+}
+
+export interface NotificationBadgeResponse {
+  unreadCount: number;
+  reminderUnreadCount: number;
+  showReminderDot: boolean;
+  latestTime: string;
+}
+
 export interface UserSummary {
   uid: number;
   nickname: string | null;
@@ -171,9 +201,7 @@ export type HomeWeekOverviewStatus =
   | "PENDING_CONFIRM"
   | "PENDING_SHOPPING"
   | "READY_TO_COOK"
-  | "COMPLETED"
-  | "ACTIVE_LIST"
-  | "EXPIRING";
+  | "COMPLETED";
 
 export type HomeWeekDayStatus = "EMPTY" | "PLANNED" | "PENDING_CONFIRM" | "PENDING_SHOPPING" | "READY_TO_COOK" | "COMPLETED";
 
@@ -190,6 +218,7 @@ export interface HomeWeekOverview {
   actionText: string;
   targetType: "PAGE";
   targetValue: string;
+  notificationTime: IsoDateTime | "";
   plannedDayCount: number;
   totalDayCount: number;
   activeListCount: number;
@@ -449,6 +478,8 @@ export interface UpdateCurrentUserRequest {
   nickname?: string;
   avatarUrl?: string;
 }
+
+export interface UpdateNotificationSettingsRequest extends NotificationSettings {}
 
 export interface ChangeCurrentPasswordRequest {
   currentPassword: string;
@@ -2412,6 +2443,7 @@ export interface FridgeItemSummary {
 export interface FridgeSummaryResponse {
   totalCount: number;
   expiringCount: number;
+  latestTime: IsoDateTime | "";
 }
 
 export interface CreateFridgeItemRequest {

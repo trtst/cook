@@ -60,6 +60,8 @@ const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
 const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
 const siteContentArticleChannelCodeValues = ["KITCHEN_PREP", "COOKING_SKILLS", "RECIPE_SKILLS"] as const;
 const authCodeSceneValues = ["LOGIN", "BIND_PHONE"] as const;
+const notificationReminderDayValues = [1, 2, 3, 5, 7] as const;
+const notificationTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 function toOptionalBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
@@ -207,6 +209,92 @@ export class UpdateTasteProfileDto {
   @IsString()
   @MaxLength(1000)
   note!: string | null;
+}
+
+export class NotificationMealTimesDto {
+  @ApiProperty({ example: "08:00" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(notificationTimePattern)
+  breakfast!: string;
+
+  @ApiProperty({ example: "12:00" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(notificationTimePattern)
+  lunch!: string;
+
+  @ApiProperty({ example: "15:30" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(notificationTimePattern)
+  afternoonTea!: string;
+
+  @ApiProperty({ example: "18:30" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(notificationTimePattern)
+  dinner!: string;
+
+  @ApiProperty({ example: "21:30" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(notificationTimePattern)
+  lateNight!: string;
+}
+
+export class NotificationMealSettingsDto {
+  @ApiProperty({ example: true })
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiProperty({ type: NotificationMealTimesDto })
+  @Type(() => NotificationMealTimesDto)
+  @ValidateNested()
+  times!: NotificationMealTimesDto;
+}
+
+export class NotificationFridgeSettingsDto {
+  @ApiProperty({ example: true })
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  enabled!: boolean;
+
+  @ApiProperty({ enum: notificationReminderDayValues, example: 3 })
+  @Type(() => Number)
+  @IsInt()
+  @IsIn(notificationReminderDayValues)
+  days!: 1 | 2 | 3 | 5 | 7;
+}
+
+export class NotificationRecommendSettingsDto {
+  @ApiProperty({ example: false })
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  enabled!: boolean;
+}
+
+export class UpdateNotificationSettingsDto {
+  @ApiProperty({ example: false })
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  reminderDotOnly!: boolean;
+
+  @ApiProperty({ type: NotificationMealSettingsDto })
+  @Type(() => NotificationMealSettingsDto)
+  @ValidateNested()
+  meal!: NotificationMealSettingsDto;
+
+  @ApiProperty({ type: NotificationFridgeSettingsDto })
+  @Type(() => NotificationFridgeSettingsDto)
+  @ValidateNested()
+  fridge!: NotificationFridgeSettingsDto;
+
+  @ApiProperty({ type: NotificationRecommendSettingsDto })
+  @Type(() => NotificationRecommendSettingsDto)
+  @ValidateNested()
+  recommend!: NotificationRecommendSettingsDto;
 }
 
 export class OperationDto {
@@ -602,6 +690,14 @@ export class PageQueryDto {
   @IsString()
   @MaxLength(120)
   keyword?: string;
+}
+
+export class FridgeSummaryQueryDto {
+  @ApiPropertyOptional({ enum: notificationReminderDayValues })
+  @IsOptional()
+  @Type(() => Number)
+  @IsIn(notificationReminderDayValues)
+  days?: 1 | 2 | 3 | 5 | 7;
 }
 
 export class AdminMedalTemplateQueryDto extends PageQueryDto {
@@ -3666,3 +3762,5 @@ export class SiteContentArticleQueryDto extends PageQueryDto {
   @IsIn(siteContentArticleChannelCodeValues)
   channelCode!: "KITCHEN_PREP" | "COOKING_SKILLS" | "RECIPE_SKILLS";
 }
+
+export class SiteOfficialMessageQueryDto extends PageQueryDto {}

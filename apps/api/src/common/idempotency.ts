@@ -15,6 +15,10 @@ function toRequestHash(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function hashIdempotencyRequest(value: string) {
+  return toRequestHash(value);
+}
+
 async function lockOperation(tx: Prisma.TransactionClient, key: string) {
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))::text`;
 }

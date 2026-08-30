@@ -84,6 +84,10 @@ export class SendAuthCodeResultModel {
   @ApiProperty(dateTime) sentAt!: string;
 }
 
+export class SubscribeMessageSendResultModel {
+  @ApiProperty(dateTime) sentAt!: string;
+}
+
 export class CodeLoginResultModel extends PasswordLoginResultModel {}
 
 export class WechatLoginResultModel extends PasswordLoginResultModel {}
@@ -146,13 +150,14 @@ export class HomeWeekOverviewDayModel {
 }
 
 export class HomeWeekOverviewModel {
-  @ApiProperty({ type: String, enum: ["NO_ARRANGEMENT", "EMPTY_MENU", "PENDING_CONFIRM", "PENDING_SHOPPING", "READY_TO_COOK", "COMPLETED", "ACTIVE_LIST", "EXPIRING"] })
+  @ApiProperty({ type: String, enum: ["NO_ARRANGEMENT", "EMPTY_MENU", "PENDING_CONFIRM", "PENDING_SHOPPING", "READY_TO_COOK", "COMPLETED"] })
   status!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) summary!: string;
   @ApiProperty({ type: String }) actionText!: string;
   @ApiProperty({ type: String, enum: ["PAGE"] }) targetType!: string;
   @ApiProperty({ type: String }) targetValue!: string;
+  @ApiProperty({ type: String, example: "2026-08-30T12:00:00.000Z" }) notificationTime!: string;
   @ApiProperty({ type: Number, minimum: 0 }) plannedDayCount!: number;
   @ApiProperty({ type: Number, minimum: 1 }) totalDayCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) activeListCount!: number;
@@ -256,6 +261,42 @@ export class MeResponseModel extends SessionUserModel {
   @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: UserDisplayModel }) display!: UserDisplayModel;
   @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
+}
+
+export class NotificationMealTimesModel {
+  @ApiProperty({ type: String, example: "08:00" }) breakfast!: string;
+  @ApiProperty({ type: String, example: "12:00" }) lunch!: string;
+  @ApiProperty({ type: String, example: "15:30" }) afternoonTea!: string;
+  @ApiProperty({ type: String, example: "18:30" }) dinner!: string;
+  @ApiProperty({ type: String, example: "21:30" }) lateNight!: string;
+}
+
+export class NotificationMealSettingsModel {
+  @ApiProperty({ type: Boolean }) enabled!: boolean;
+  @ApiProperty({ type: NotificationMealTimesModel }) times!: NotificationMealTimesModel;
+}
+
+export class NotificationFridgeSettingsModel {
+  @ApiProperty({ type: Boolean }) enabled!: boolean;
+  @ApiProperty({ type: Number, enum: [1, 2, 3, 5, 7] }) days!: number;
+}
+
+export class NotificationRecommendSettingsModel {
+  @ApiProperty({ type: Boolean }) enabled!: boolean;
+}
+
+export class NotificationSettingsModel {
+  @ApiProperty({ type: Boolean }) reminderDotOnly!: boolean;
+  @ApiProperty({ type: NotificationMealSettingsModel }) meal!: NotificationMealSettingsModel;
+  @ApiProperty({ type: NotificationFridgeSettingsModel }) fridge!: NotificationFridgeSettingsModel;
+  @ApiProperty({ type: NotificationRecommendSettingsModel }) recommend!: NotificationRecommendSettingsModel;
+}
+
+export class NotificationBadgeModel {
+  @ApiProperty({ type: Number, minimum: 0 }) unreadCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) reminderUnreadCount!: number;
+  @ApiProperty({ type: Boolean }) showReminderDot!: boolean;
+  @ApiProperty({ type: String, example: "2026-08-30T00:00:00.000Z" }) latestTime!: string;
 }
 
 export class UserProfileModel extends SessionUserModel {
@@ -613,6 +654,10 @@ export class SiteContentArticleViewResultModel {
   @ApiProperty(uuid) articleId!: string;
   @ApiProperty({ type: Number, minimum: 0 }) viewCount!: number;
 }
+
+export class SiteOfficialMessageSummaryModel extends SiteContentDetailModel {}
+
+export class SiteOfficialMessageDetailModel extends SiteContentDetailModel {}
 
 export class RecipeCategoryModel {
   @ApiProperty(uuid) id!: string;
@@ -1940,6 +1985,7 @@ export class FridgeItemModel {
 export class FridgeSummaryModel {
   @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) expiringCount!: number;
+  @ApiProperty({ type: String, example: "2026-08-30T00:00:00.000Z" }) latestTime!: string;
 }
 
 export class ShoppingItemModel {

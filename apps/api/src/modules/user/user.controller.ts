@@ -4,12 +4,28 @@ import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
-import { ChangeCurrentPasswordDto, UpdateCurrentUserDto, UpdateTasteProfileDto, UpdateUserDisplayDto } from "../../contracts/dtos";
-import { ApiOkModel, ChangePasswordResultModel, MedalWallModel, MeResponseModel, StorageUsageModel, TasteProfileModel } from "../../contracts/openapi";
+import {
+  ChangeCurrentPasswordDto,
+  UpdateCurrentUserDto,
+  UpdateNotificationSettingsDto,
+  UpdateTasteProfileDto,
+  UpdateUserDisplayDto
+} from "../../contracts/dtos";
+import {
+  ApiOkModel,
+  ChangePasswordResultModel,
+  MedalWallModel,
+  MeResponseModel,
+  NotificationBadgeModel,
+  NotificationSettingsModel,
+  StorageUsageModel,
+  TasteProfileModel
+} from "../../contracts/openapi";
 import { AuthService } from "../auth/auth.service";
 import { CurrentUserService } from "./current-user.service";
 import { DisplayService } from "./display.service";
 import { MedalService } from "./medal.service";
+import { NotificationService } from "./notification.service";
 import { TasteProfileService } from "./taste-profile.service";
 
 type AssetRequest = { protocol?: string; get?: (name: string) => string | undefined };
@@ -24,6 +40,7 @@ export class UserController {
     @Inject(CurrentUserService) private readonly currentUserService: CurrentUserService,
     @Inject(DisplayService) private readonly displayService: DisplayService,
     @Inject(MedalService) private readonly medalService: MedalService,
+    @Inject(NotificationService) private readonly notificationService: NotificationService,
     @Inject(TasteProfileService) private readonly tasteProfileService: TasteProfileService
   ) {}
 
@@ -55,6 +72,30 @@ export class UserController {
   @ApiOkModel(TasteProfileModel, "当前用户的口味、过敏与忌口资料")
   getTasteProfile(@Req() request: RequestWithUser) {
     return this.tasteProfileService.getCurrent(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("me/notification-settings")
+  @ApiOkModel(NotificationSettingsModel, "当前用户的提醒设置")
+  getNotificationSettings(@Req() request: RequestWithUser) {
+    return this.notificationService.getSettings(request.user.userId).then(result => ok(result));
+  }
+
+  @Put("me/notification-settings")
+  @ApiOkModel(NotificationSettingsModel, "完整替换当前用户的提醒设置")
+  updateNotificationSettings(@Req() request: RequestWithUser, @Body() body: UpdateNotificationSettingsDto) {
+    return this.notificationService.updateSettings(request.user.userId, body).then(result => ok(result));
+  }
+
+  @Get("me/notification-badge")
+  @ApiOkModel(NotificationBadgeModel, "当前用户通知中心的未读徽标")
+  getNotificationBadge(@Req() request: RequestWithUser) {
+    return this.notificationService.getBadge(request.user.userId).then(result => ok(result));
+  }
+
+  @Put("me/notification-feed-read")
+  @ApiOkModel(NotificationBadgeModel, "标记当前用户通知中心为已读")
+  markNotificationFeedRead(@Req() request: RequestWithUser) {
+    return this.notificationService.markFeedRead(request.user.userId).then(result => ok(result));
   }
 
   @Put("me/taste-profile")
