@@ -7,7 +7,7 @@ import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentSumm
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
-type ContentPageMode = "pages" | "articles" | "channels";
+type ContentPageMode = "pages" | "articles" | "official-messages" | "channels";
 
 const route = useRoute();
 const router = useRouter();
@@ -27,6 +27,7 @@ const articleQuery = reactive({
   page: 1,
   pageSize: 20,
   channelId: undefined as number | undefined,
+  channelCode: "",
   status: undefined as SiteContentStatus | undefined,
   keyword: ""
 });
@@ -47,13 +48,14 @@ const channelForm = reactive({
 
 const pageMode = computed<ContentPageMode>(() => {
   const mode = route.meta.contentPage;
-  if (mode === "articles" || mode === "channels") return mode;
+  if (mode === "articles" || mode === "official-messages" || mode === "channels") return mode;
   return "pages";
 });
 
 const pageNote = computed(() => {
   if (pageMode.value === "pages") return "固定页服务官网与小程序内容承接，未发布前不会覆盖线上展示。";
   if (pageMode.value === "channels") return "栏目只做内容归类与后台筛选，不扩成标签或专题系统。";
+  if (pageMode.value === "official-messages") return "官方消息会进入小程序通知中心，支持站内详情和正文链接跳转。";
   return "普通文章统一走 /guides/* 路径，餐前准备与厨房知识共用一套内容主事实。";
 });
 
@@ -69,9 +71,16 @@ function formatTime(value: string | null) {
 }
 
 function openEditor(id?: number) {
+  const officialQuery = { channelCode: "OFFICIAL_NOTICE", source: "official-message" };
   void router.push({
     path: "/content/articles/editor",
-    query: id ? { id: String(id) } : { type: "ARTICLE" }
+    query: id
+      ? pageMode.value === "official-messages"
+        ? { id: String(id), ...officialQuery }
+        : { id: String(id) }
+      : pageMode.value === "official-messages"
+        ? { type: "ARTICLE", ...officialQuery }
+        : { type: "ARTICLE" }
   });
 }
 
@@ -109,6 +118,13 @@ async function loadPages() {
 }
 
 async function loadArticles() {
+  if (pageMode.value === "official-messages" && articleQuery.channelCode) {
+    if (!channelOptions.value.length) {
+      await loadChannelOptions();
+    }
+    const matched = channelOptions.value.find(item => item.code === articleQuery.channelCode);
+    articleQuery.channelId = matched?.id;
+  }
   const result = await contentApi.listArticles({
     page: articleQuery.page,
     pageSize: articleQuery.pageSize,
@@ -141,7 +157,15 @@ async function loadCurrentPage() {
       await loadChannels();
       return;
     }
-    await Promise.all([loadArticles(), loadChannelOptions()]);
+    await loadChannelOptions();
+    articleQuery.channelCode = pageMode.value === "official-messages" ? "OFFICIAL_NOTICE" : "";
+    if (pageMode.value === "official-messages") {
+      const officialChannel = channelOptions.value.find(item => item.code === "OFFICIAL_NOTICE");
+      articleQuery.channelId = officialChannel?.id;
+    } else {
+      articleQuery.channelId = undefined;
+    }
+    await loadArticles();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载内容治理数据失败");
   } finally {
@@ -204,7 +228,9 @@ onMounted(() => {
 <template>
   <section class="page-stack content-page" v-loading="pageLoading">
     <div class="toolbar-panel page-toolbar">
-      <el-button v-if="pageMode === 'articles'" type="primary" :icon="Plus" @click="openEditor()">新建文章</el-button>
+      <el-button v-if="pageMode === 'articles' || pageMode === 'official-messages'" type="primary" :icon="Plus" @click="openEditor()">
+        {{ pageMode === "official-messages" ? "新建官方消息" : "新建文章" }}
+      </el-button>
       <el-button v-if="pageMode === 'channels'" type="primary" :icon="Plus" @click="openChannelCreate()">新建栏目</el-button>
       <el-button :icon="Refresh" @click="loadCurrentPage">刷新</el-button>
       <div class="toolbar-spacer" />
@@ -239,11 +265,12 @@ onMounted(() => {
       </el-table>
     </div>
 
-    <div v-else-if="pageMode === 'articles'" class="table-panel">
+    <div v-else-if="pageMode === 'articles' || pageMode === 'official-messages'" class="table-panel">
       <div class="toolbar-panel page-toolbar content-filter">
-        <el-select v-model="articleQuery.channelId" class="toolbar-select" placeholder="全部栏目" clearable>
+        <el-select v-if="pageMode !== 'official-messages'" v-model="articleQuery.channelId" class="toolbar-select" placeholder="全部栏目" clearable>
           <el-option v-for="item in channelOptions" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
+        <el-tag v-else type="success" effect="light">系统官方消息</el-tag>
         <el-select v-model="articleQuery.status" class="toolbar-select" placeholder="全部状态" clearable>
           <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>

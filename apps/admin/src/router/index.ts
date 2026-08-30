@@ -264,6 +264,12 @@ const router = createRouter({
           meta: { title: "文章列表", contentPage: "articles" }
         },
         {
+          path: "content/official-messages",
+          name: "content-official-messages",
+          component: () => import("@/pages/ContentGovernancePage.vue"),
+          meta: { title: "官方消息", contentPage: "official-messages" }
+        },
+        {
           path: "content/channels",
           name: "content-channels",
           component: () => import("@/pages/ContentGovernancePage.vue"),

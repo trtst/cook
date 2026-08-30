@@ -23,6 +23,11 @@ const currentStatus = ref<SiteContentStatus>("DRAFT");
 const currentVersion = ref(1);
 const updatedAt = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const sourceMode = computed(() => {
+  const raw = Array.isArray(route.query.source) ? route.query.source[0] : route.query.source;
+  return raw === "official-message" ? "official-message" : "";
+});
+const editorRouteQuery = computed(() => (sourceMode.value === "official-message" ? { source: "official-message", channelCode: "OFFICIAL_NOTICE" } : {}));
 
 const form = reactive({
   type: "ARTICLE" as SiteContentType,
@@ -42,7 +47,11 @@ const form = reactive({
 
 const isEdit = computed(() => contentId.value !== null);
 const isPage = computed(() => form.type === "PAGE");
-const pageTitle = computed(() => (isEdit.value ? "编辑内容" : isPage.value ? "新建固定页" : "新建文章"));
+const pageTitle = computed(() => {
+  if (isEdit.value) return "编辑内容";
+  if (isPage.value) return "新建固定页";
+  return sourceMode.value === "official-message" ? "新建官方消息" : "新建文章";
+});
 const articlePath = computed(() => (form.slug.trim() ? `/guides/${normalizeSlug(form.slug)}` : "/guides/<slug>"));
 const previewHtml = computed(() => sanitizeContentHtml(form.bodyHtml || "<p>正文预览区域</p>"));
 
@@ -55,6 +64,11 @@ function parseRouteContentId(value: unknown) {
 function parseRouteContentType(value: unknown): SiteContentType {
   const raw = Array.isArray(value) ? value[0] : value;
   return raw === "PAGE" ? "PAGE" : "ARTICLE";
+}
+
+function parseRouteChannelCode(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" ? raw.trim().toUpperCase() : "";
 }
 
 function normalizeSlug(value: string) {
@@ -142,6 +156,18 @@ async function loadPage() {
   try {
     syncRouteState();
     await Promise.all([loadChannels(), loadDetail()]);
+    if (!contentId.value && form.type === "ARTICLE") {
+      const channelCode = parseRouteChannelCode(route.query.channelCode);
+      if (channelCode) {
+        const matched = channels.value.find(item => item.code === channelCode);
+        if (matched) {
+          form.channelId = matched.id;
+          if (channelCode === "OFFICIAL_NOTICE" && !form.label.trim()) {
+            form.label = "官方消息";
+          }
+        }
+      }
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载内容详情失败");
   } finally {
@@ -208,7 +234,7 @@ async function saveDraft() {
     if (route.query.id !== String(detail.id)) {
       await router.replace({
         path: "/content/articles/editor",
-        query: { id: String(detail.id) }
+        query: { id: String(detail.id), ...editorRouteQuery.value }
       });
     }
     ElMessage.success("草稿已保存");
@@ -226,7 +252,7 @@ async function updateStatus(status: SiteContentStatus) {
     applyDetail(detail);
     await router.replace({
       path: "/content/articles/editor",
-      query: { id: String(detail.id) }
+      query: { id: String(detail.id), ...editorRouteQuery.value }
     });
   }
 
@@ -277,7 +303,11 @@ async function handleCoverFileChange(event: Event) {
 }
 
 function goBack() {
-  void router.push(isPage.value ? "/content/pages" : "/content/articles");
+  if (isPage.value) {
+    void router.push("/content/pages");
+    return;
+  }
+  void router.push(sourceMode.value === "official-message" ? "/content/official-messages" : "/content/articles");
 }
 
 watch(
@@ -289,7 +319,7 @@ watch(
 );
 
 watch(
-  () => [route.query.id, route.query.type],
+  () => [route.query.id, route.query.type, route.query.channelCode, route.query.source],
   () => {
     void loadPage();
   }
