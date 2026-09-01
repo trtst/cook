@@ -6,7 +6,7 @@ async function clearSession() {
 }
 
 describe("pages_meal/plan/index", () => {
-  it("游客直达时，不展示计划管理浮层", async () => {
+  it("游客直达时，仍展示计划管理按钮，但点击先呼起登录", async () => {
     await clearSession();
     const page = await program.reLaunch("/pages_meal/plan/index");
     await page.callMethod("automatorClearSession");
@@ -14,6 +14,11 @@ describe("pages_meal/plan/index", () => {
 
     const state = await page.callMethod("automatorReadGuestState");
     expect(state.loggedIn).toBe(false);
-    expect(state.showPlanDock).toBe(false);
+    expect(state.showPlanDock).toBe(true);
+    expect(state.loginModalVisible).toBe(false);
+
+    const opened = await page.callMethod("automatorTapGuestDock");
+    expect(opened.dockOpen).toBe(false);
+    expect(opened.loginModalVisible).toBe(true);
   });
 });

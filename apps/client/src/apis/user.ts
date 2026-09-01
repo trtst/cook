@@ -5,7 +5,7 @@
  * 目的是让页面只理解“用户业务对象”，不需要再回到请求层关心域名和 method。
  */
 import { cfg } from "@/config";
-import { get, post, put, type IsoDateTime } from "./http";
+import { get, post, put, type IsoDateTime, type PageResult } from "./http";
 
 export interface SessionUser {
 	uid: number;
@@ -59,6 +59,24 @@ export interface NotificationBadgeResponse {
 	reminderUnreadCount: number;
 	showReminderDot: boolean;
 	latestTime: IsoDateTime | "";
+}
+
+export type NotificationFeedTypeLabel = "系统审核消息" | "系统清单协作消息" | "系统提醒消息" | "系统官方消息";
+export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official";
+
+export interface NotificationFeedItem {
+	id: string;
+	typeLabel: NotificationFeedTypeLabel;
+	tone: NotificationFeedTone;
+	title: string;
+	desc: string;
+	timeValue: IsoDateTime;
+	targetPath: string | null;
+}
+
+export interface NotificationFeedQuery {
+	page?: number;
+	pageSize?: number;
 }
 
 export type UserSummary = SessionUser;
@@ -123,6 +141,12 @@ export const userApi = {
 	},
 	getNotificationBadge() {
 		return get<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-badge`);
+	},
+	getNotificationFeed(query: NotificationFeedQuery = {}) {
+		return get<PageResult<NotificationFeedItem>>(
+			`${cfg.domain}/api/users/me/notification-feed`,
+			query as Record<string, string | number | boolean | null | undefined>
+		);
 	},
 	markNotificationFeedRead() {
 		return put<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-feed-read`);

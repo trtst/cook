@@ -26,6 +26,11 @@ export function writeNotificationBadgeSnapshot(snapshot: NotificationBadgeSnapsh
   notificationBadgeState.value = snapshot;
 }
 
+export function clearNotificationBadgeSnapshot() {
+  uniPlatform.storage.removeSync(NOTIFICATION_BADGE_KEY);
+  notificationBadgeState.value = EMPTY_BADGE_SNAPSHOT;
+}
+
 export async function refreshNotificationBadgeSnapshot() {
   const snapshot = await userApi.getNotificationBadge();
   writeNotificationBadgeSnapshot(snapshot);

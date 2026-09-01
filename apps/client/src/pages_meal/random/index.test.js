@@ -95,6 +95,16 @@ async function loginWithCode(phone) {
   });
 }
 
+async function openRandomPageWithSession(session) {
+  const homePage = await program.reLaunch("/pages/home/index");
+  await homePage.callMethod("automatorApplySessionOnly", {
+    token: session.token,
+    uid: session.user.uid,
+    expiresAt: session.expiresAt
+  });
+  return program.reLaunch("/pages_meal/random/index");
+}
+
 describe("pages_meal/random/index", () => {
   let page;
   let session;
@@ -103,12 +113,7 @@ describe("pages_meal/random/index", () => {
     session = await loginWithCode(createFreshPhone());
 
     await clearSession();
-    page = await program.reLaunch("/pages_meal/random/index");
-    await page.callMethod("automatorApplySession", {
-      token: session.token,
-      uid: session.user.uid,
-      expiresAt: session.expiresAt
-    });
+    page = await openRandomPageWithSession(session);
     await page.callMethod("automatorPrimeConditions", {
       mealSlot: "DINNER",
       peopleCount: 4,
@@ -122,12 +127,51 @@ describe("pages_meal/random/index", () => {
 
     const texts = await collectTexts(page);
     expect(texts).toContain("帮我决定");
-    expect(texts).toContain("先生成一桌，再逐道决定保留还是换掉");
-    expect(texts).toContain("随机页不是三套候选对比，而是一桌可拆解菜单：满意就保留，不满意就换一道。");
+    expect(texts).toContain("先生成一桌，再慢慢挑合适的");
+    expect(texts).toContain("会先给你一桌参考菜单，喜欢的留着，不合适的再换一道，不用一下子做完决定。");
+  });
+
+  it("随机页生成结果会在菜位卡片里展示菜名、理由和来源", async () => {
+    await page.callMethod("automatorPrimeSlots", [
+      {
+        slotId: "slot-meat-1",
+        slotType: "MEAT",
+        slotIndex: 0,
+        sourceType: "MY",
+        recipeId: 1001,
+        recipeVersionId: 2001,
+        title: "番茄牛腩",
+        coverUrl: null,
+        servings: 2,
+        duration: "BETWEEN_30_60",
+        durationText: "45分钟",
+        estimatedCalories: null,
+        flavorTags: ["家常"],
+        mainProteinType: "BEEF",
+        fridgeFit: "HIGH",
+        recommendationReason: "冰箱里有"
+      }
+    ]);
+
+    const state = await page.callMethod("automatorReadSlotCards");
+    expect(state.hasMenu).toBe(true);
+    expect(state.cards).toEqual([
+      {
+        slotType: "MEAT",
+        title: "番茄牛腩",
+        recommendationReason: "冰箱里有",
+        sourceType: "MY",
+        fridgeFit: "HIGH",
+        durationText: "45分钟",
+        servings: 2,
+        mainProteinType: "BEEF",
+        flavorTags: ["家常"]
+      }
+    ]);
   });
 
   it("游客点生成一桌时，会先打开登录弹窗", async () => {
-    const guestPage = await program.reLaunch("/pages_meal/random/index");
+    const guestPage = await openRandomPageWithSession(session);
     await guestPage.callMethod("automatorClearSession");
     await guestPage.waitFor(300);
     await guestPage.callMethod("automatorPrimeConditions", {
@@ -139,5 +183,36 @@ describe("pages_meal/random/index", () => {
     const state = await guestPage.callMethod("automatorTriggerGuestGenerate");
     expect(state.loggedIn).toBe(false);
     expect(state.loginVisible).toBe(true);
+  });
+
+  it("游客点冰箱优先勾选时，会先打开登录弹窗且不改本地状态", async () => {
+    const guestPage = await openRandomPageWithSession(session);
+    await guestPage.callMethod("automatorClearSession");
+    await guestPage.waitFor(300);
+    await guestPage.callMethod("automatorPrimeConditions", {
+      mealSlot: "DINNER",
+      peopleCount: 4,
+      fridgePreferred: false
+    });
+
+    const state = await guestPage.callMethod("automatorTriggerGuestToggleFridge");
+    expect(state.loggedIn).toBe(false);
+    expect(state.loginVisible).toBe(true);
+    expect(state.fridgePreferred).toBe(false);
+  });
+
+  it("游客直达随机页时会回首页并呼起登录，不停留在随机页", async () => {
+    await clearSession();
+    const homePage = await program.reLaunch("/pages/home/index");
+    await homePage.callMethod("automatorClearSession");
+
+    const blockedPage = await program.reLaunch("/pages_meal/random/index");
+    await blockedPage.waitFor(800);
+
+    expect(await blockedPage.path).toBe("pages/home/index");
+    expect(await blockedPage.callMethod("automatorReadLoginGateState")).toEqual({
+      loggedIn: false,
+      loginVisible: true
+    });
   });
 });

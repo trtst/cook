@@ -128,6 +128,18 @@ describe("pages_me/reminder/index", () => {
   let page;
   let session;
 
+  it("未登录打开提醒设置时不展示登录引导空状态文案", async () => {
+    await clearSession();
+    page = await program.reLaunch("/pages_me/reminder/index");
+    await page.waitFor(300);
+
+    const texts = await collectTexts(page);
+    expect(texts).toContain("提醒设置");
+    expect(texts).not.toContain("登录后查看提醒设置");
+    expect(texts).not.toContain("登录后可分别设置餐次、食材和推荐提醒。");
+    expect(await page.$$(".reminder-login-shell")).toHaveLength(0);
+  });
+
   beforeAll(async () => {
     session = await loginWithCode(createFreshPhone());
     await clearSession();

@@ -37,7 +37,7 @@ describe("pages/me/index", () => {
     expect(await page.path).toBe("pages/me/index");
 
     const serviceTitles = await collectTexts(await page.$$(".service-row__title"));
-    expect(serviceTitles.slice(0, 4)).toEqual(["通知中心", "我的勋章", "我的口味", "食材与单位"]);
+    expect(serviceTitles.slice(0, 5)).toEqual(["通知中心", "我的勋章", "最近看过", "我的口味", "食材与单位"]);
     expect(serviceTitles).not.toContain("厨具");
     expect(serviceTitles).not.toContain("权益中心");
     expect(serviceTitles).not.toContain("会员兑换码");
@@ -71,8 +71,12 @@ describe("pages/me/index", () => {
     await page.waitFor(".tabbar__dot", 2000);
   });
 
-  it("未登录点击我的勋章直接进入落地页，不再在入口层拦登录", async () => {
-    expect(await page.callMethod("automatorOpenMedalLogin")).toEqual({ path: "/pages_me/medal/index" });
+  it("未登录点击我的勋章只呼起登录，不直接跳详情页", async () => {
+    expect(await page.callMethod("automatorOpenMedalLogin")).toEqual({ path: null });
+
+    const modalState = await page.callMethod("automatorReadLoginModalState");
+    expect(modalState.visible).toBe(true);
+    expect(modalState.mode).toBe("wechat");
   });
 
   it("未登录点击通知中心会呼起全局登录弹窗并可切到手机号验证码表单", async () => {
@@ -98,22 +102,24 @@ describe("pages/me/index", () => {
     expect(phoneState.codeButtonText).toBe("发送验证码");
   });
 
-  it("未登录时只有通知中心、我的口味和账号设置在入口层拦登录，其余入口允许进入落地页", async () => {
+  it("未登录时通知中心、我的口味、最近看过、提醒设置、我的勋章和账号设置都在入口层拦登录", async () => {
     expect(await page.callMethod("automatorResolveEntryAuth", "通知中心")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "我的口味")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "最近看过")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "提醒设置")).toEqual({ found: true, requiresLogin: true });
+    expect(await page.callMethod("automatorResolveEntryAuth", "我的勋章")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "账号设置")).toEqual({ found: true, requiresLogin: true });
     expect(await page.callMethod("automatorResolveEntryAuth", "饭局")).toEqual({ found: true, requiresLogin: false });
     expect(await page.callMethod("automatorResolveEntryAuth", "计划")).toEqual({ found: true, requiresLogin: false });
     expect(await page.callMethod("automatorResolveEntryAuth", "购物清单")).toEqual({ found: true, requiresLogin: false });
     expect(await page.callMethod("automatorResolveEntryAuth", "食材")).toEqual({ found: true, requiresLogin: false });
-    expect(await page.callMethod("automatorResolveEntryAuth", "我的勋章")).toEqual({ found: true, requiresLogin: false });
   });
 
   it("我的页的主题摘要和页面底色会跟随主题切换同步更新", async () => {
     const defaultState = await page.callMethod("automatorReadThemeState");
     expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");
-    expect(defaultState.colorPage).toBe("#f4f7f5");
-    expect(defaultState.themePageStyle).toContain("background-color: #f4f7f5;");
+    expect(defaultState.colorPage).toBe("#fff");
+    expect(defaultState.themePageStyle).toContain("background-color: #fff;");
 
     const minimalState = await page.callMethod("automatorApplyThemeSettings", {
       themeSkin: "minimal-white"

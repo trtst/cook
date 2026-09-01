@@ -896,11 +896,14 @@ async function loadDetail() {
   if (!recipeId.value || loading.value || mode.value !== "published") return;
   loading.value = true;
   errorText.value = "";
-	try {
-		detail.value = kind.value === "inspiration"
-			? await recipeApi.getInspirationRecipe(recipeId.value)
-			: await recipeApi.getMyRecipe(recipeId.value);
-    scheduleMeasure();
+		try {
+			detail.value = kind.value === "inspiration"
+				? await recipeApi.getInspirationRecipe(recipeId.value)
+				: await recipeApi.getMyRecipe(recipeId.value);
+			if (sessionStore.isLoggedIn) {
+				void recipeApi.recordRecipeView(recipeId.value, createOperationId()).catch(() => undefined);
+			}
+	    scheduleMeasure();
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "菜谱加载失败";
   } finally {

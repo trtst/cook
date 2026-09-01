@@ -246,6 +246,8 @@ function buildStorageKey(name: string) {
 export const APP_STORAGE_KEYS = Object.freeze({
 	session: buildStorageKey("session"),
 	theme: buildStorageKey("theme"),
+	randomMenuConditions: buildStorageKey("random_menu_conditions"),
+	randomMenuCategory: buildStorageKey("random_menu_category"),
 	systemInfoSnapshot: buildStorageKey("system_info_snapshot"),
 	userProfile: buildStorageKey("user_profile"),
 	imageCrop(token: string) {

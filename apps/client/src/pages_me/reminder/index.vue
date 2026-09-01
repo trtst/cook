@@ -8,14 +8,7 @@
     <view class="reminder-page" :style="pageBodyStyle">
       <scroll-view class="reminder-scroll-view" scroll-y enhanced show-scrollbar="false">
         <view class="reminder-scroll">
-          <LoginEmptyState
-            v-if="!sessionStore.isLoggedIn"
-            class="reminder-login-shell"
-            title="登录后查看提醒设置"
-            description="登录后可分别设置餐次、食材和推荐提醒。"
-          />
-
-          <template v-else>
+          <template v-if="sessionStore.isLoggedIn">
             <view class="reminder-card">
               <view class="setting-group">
                 <view class="setting-row setting-row--switch">
@@ -100,7 +93,6 @@
 import { computed, reactive, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { userApi, type NotificationSettingsResponse } from "@/apis/user";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -297,13 +289,6 @@ defineExpose({
   padding-right: var(--space-page);
   padding-bottom: calc(168rpx + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
-}
-
-.reminder-login-shell {
-  padding-top: 0;
-  padding-right: 0;
-  padding-bottom: 0;
-  padding-left: 0;
 }
 
 .reminder-card {

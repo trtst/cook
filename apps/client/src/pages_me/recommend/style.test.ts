@@ -9,5 +9,11 @@ assert.ok(
   "Expected notification page top padding to follow the +12px page baseline."
 );
 assert.ok(!source.includes("paddingTop: `${navBarTotalHeight.value + 20}px`"), "Expected legacy +20px top padding to be removed.");
+assert.ok(source.includes(".notification-page {\n  display: flex;"), "Expected notification page to keep a flex layout.");
+assert.ok(source.includes("height: 100%;"), "Expected notification page to occupy the full available height for scrolling.");
+assert.ok(!source.includes("min-height: 100%;"), "Expected legacy min-height based notification layout to be removed.");
+assert.ok(source.includes(".notification-scroll-wrap {\n  position: relative;\n  display: flex;"), "Expected notification scroll wrapper to be a flex container.");
+assert.ok(source.includes(".notification-scroll {\n  flex: 1;"), "Expected notification scroll view to consume remaining height.");
+assert.ok(source.includes("min-height: 0;"), "Expected notification scroll chain to explicitly allow shrinking for scrolling.");
 
 console.log("recommend page style passed");

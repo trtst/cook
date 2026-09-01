@@ -36,7 +36,7 @@
               <view class="hero-banner" hover-class="hero-banner--hover" hover-stay-time="100" @click="openHomeEntry(item.entry)">
                 <image class="hero-banner__image" :src="item.imageUrl" mode="aspectFill" />
                 <view class="hero-banner__shade" />
-                <view class="hero-banner__copy">
+                <view class="hero-banner__copy" :class="`hero-banner__copy--${item.key}`">
                   <text class="hero-banner__eyebrow">{{ item.eyebrow }}</text>
                   <text class="hero-banner__title">{{ item.title }}</text>
                   <text class="hero-banner__description">{{ item.description }}</text>
@@ -199,7 +199,7 @@
           <view class="table-section table-section--recipes">
             <view class="section-heading">
               <text class="section-heading__title">基于当前库存推荐</text>
-              <text class="section-heading__action" @click="navigateTo('/pages_meal/random/index')">更多推荐</text>
+              <text class="section-heading__action" @click="openRandomEntry">更多推荐</text>
             </view>
             <scroll-view v-if="fridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
               <view
@@ -276,7 +276,7 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import { isUniRequestBlockedError } from "@/apis/adapters/uni";
 import {
@@ -330,6 +330,7 @@ const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const homeScrollTop = ref(0);
+const pendingLoginPrompt = ref<"random" | null>(null);
 const homeEntriesLoading = ref(false);
 const homeEntriesLoaded = ref(false);
 const homeEntriesRequestBlocked = ref(false);
@@ -473,9 +474,25 @@ const recentArrangementMeta = computed(() => {
 const recentArrangementStatusText = computed(() => (recentArrangement.value ? resolveRecentArrangementStatusText(recentArrangement.value.status) : ""));
 const recentArrangementHintText = computed(() => (recentArrangement.value ? resolveRecentArrangementHintText(recentArrangement.value) : ""));
 
+onLoad(query => {
+  pendingLoginPrompt.value = parseHomeLoginPrompt(query?.login);
+});
+
 onShow(() => {
+  openPendingLoginPrompt();
   void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
 });
+
+function parseHomeLoginPrompt(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "random" ? "random" : null;
+}
+
+function openPendingLoginPrompt() {
+  if (!pendingLoginPrompt.value || sessionStore.isLoggedIn) return;
+  pendingLoginPrompt.value = null;
+  openLogin();
+}
 
 async function loadHomeEntries(force = false) {
   if (homeEntriesLoadPromise) {
@@ -789,7 +806,7 @@ function openQuickEntry(item: HomeEntryItem) {
     return;
   }
   if (item.placement === "QUICK_3") {
-    navigateTo("/pages_meal/random/index");
+    openRandomEntry();
     return;
   }
   if (!sessionStore.isLoggedIn) {
@@ -808,9 +825,20 @@ function requiresLoginForQuickEntry(item: HomeEntryItem) {
 
   return (
     item.targetValue === "/pages_meal/plan/index" ||
+    item.targetValue === "/pages_meal/random/index" ||
     item.targetValue === "/pages_pantry/index/index" ||
     item.targetValue === "/pages_pantry/gap/index"
   );
+}
+
+function openRandomEntry() {
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openRandomEntry();
+    });
+    return;
+  }
+  navigateTo("/pages_meal/random/index");
 }
 
 function openLogin(action: (() => void) | null = null) {
@@ -930,6 +958,16 @@ async function automatorApplySession(snapshot: { token: string; uid?: number; ex
   await Promise.all([loadHomeEntries(true), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
 }
 
+async function automatorApplySessionOnly(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+}
+
+async function automatorClearSession() {
+  loginModalStore.close();
+  await sessionStore.clearSession();
+  await Promise.all([loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
+}
+
 async function buildAutomatorThemeState() {
   const probeState = await readThemeProbeState();
   return {
@@ -962,6 +1000,13 @@ function automatorReadRecentArrangementState() {
   };
 }
 
+function automatorReadLoginGateState() {
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    loginVisible: loginModalStore.visible
+  };
+}
+
 async function automatorResetThemeSettings() {
   await settingsStore.clearSettings();
   return await buildAutomatorThemeState();
@@ -986,7 +1031,10 @@ async function automatorApplyThemeSettings(snapshot: {
 
 defineExpose({
   automatorApplySession,
+  automatorApplySessionOnly,
+  automatorClearSession,
   automatorReadRecentArrangementState,
+  automatorReadLoginGateState,
   automatorResetThemeSettings,
   automatorApplyThemeSettings
 });
@@ -1135,11 +1183,16 @@ defineExpose({
   padding: calc(36rpx + var(--status-bar-height, 0px) + 88rpx) var(--space-page) 164rpx;
 }
 
+.hero-banner__copy--banner-02 {
+  align-items: flex-end;
+  text-align: right;
+}
+
 .hero-banner__eyebrow,
 .hero-banner__title,
 .hero-banner__description {
   display: block;
-  color: var(--color-text-inverse);
+  color: var(--color-text);
 }
 
 .hero-banner__eyebrow {
@@ -1178,7 +1231,7 @@ defineExpose({
 }
 
 .hero-banner__action-text {
-  color: var(--color-text-inverse);
+  color: var(--color-text);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-heavy);
 }
@@ -1435,7 +1488,7 @@ defineExpose({
 }
 
 .feature-card__weekmark-icon {
-  color: var(--color-icon-accent);
+  color: var(--color-text);
   line-height: 1;
   flex-shrink: 0;
 }

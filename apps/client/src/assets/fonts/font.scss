@@ -1,9 +1,9 @@
 /* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
 @font-face {
   font-family: 'cookfont';  /* Project id 5215640 */
-  src: url('//at.alicdn.com/t/c/font_5215640_rga2no5832.woff2?t=1787994387775') format('woff2'),
-       url('//at.alicdn.com/t/c/font_5215640_rga2no5832.woff?t=1787994387775') format('woff'),
-       url('//at.alicdn.com/t/c/font_5215640_rga2no5832.ttf?t=1787994387775') format('truetype');
+  src: url('//at.alicdn.com/t/c/font_5215640_v5m841t7rqh.woff2?t=1788247948218') format('woff2'),
+       url('//at.alicdn.com/t/c/font_5215640_v5m841t7rqh.woff?t=1788247948218') format('woff'),
+       url('//at.alicdn.com/t/c/font_5215640_v5m841t7rqh.ttf?t=1788247948218') format('truetype');
 }
 
 .cookfont {
@@ -57,6 +57,14 @@
 
 .icon-add::before {
     content: "\e604";
+}
+
+.icon-stepper-add::before {
+    content: "\e6d7";
+}
+
+.icon-stepper-minus::before {
+    content: "\e6d8";
 }
 
 .icon-time::before {
@@ -245,4 +253,9 @@
 
 .icon-week-sat::before {
     content: "\e617";
+}
+
+
+.icon-history::before {
+    content: "\e717";
 }

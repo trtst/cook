@@ -217,15 +217,12 @@
 
                 <view class="recipe-card__body">
                   <text class="recipe-card__title">{{ item.title }}</text>
-                  <view class="recipe-card__info">
-                    <view class="recipe-card__meta">
+                  <view v-if="item.durationText || item.caloriesText" class="recipe-card__info">
+                    <view v-if="item.durationText" class="recipe-card__meta">
                       <text class="cookfont icon-time recipe-card__meta-icon" />
-                      <text class="recipe-card__meta-text">{{ item.meta }}</text>
+                      <text class="recipe-card__meta-text">{{ item.durationText }}</text>
                     </view>
-                    <view v-if="item.tag" class="recipe-card__tag" :class="{ 'recipe-card__tag--metric': item.kind === 'inspiration' }">
-                      <text v-if="item.kind === 'inspiration'" class="cookfont icon-collect recipe-card__tag-icon" />
-                      <text>{{ item.tag }}</text>
-                    </view>
+                    <text v-if="item.caloriesText" class="recipe-card__calories">{{ item.caloriesText }}</text>
                   </view>
                   <text v-if="item.subline" class="recipe-card__sub">{{ item.subline }}</text>
                 </view>
@@ -348,8 +345,9 @@ interface CardItem {
 	title: string;
 	coverImageUrl: string | null;
 	coverTag: string;
-	meta: string;
-	tag: string;
+	durationText: string;
+	estimatedCalories: number | null;
+	caloriesText: string;
 	subline: string;
 	kind: "my" | "inspiration";
 }
@@ -364,6 +362,13 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 		return null;
 	}
 	return trimmed;
+}
+
+function formatCardCalories(value: number | null | undefined) {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+		return "";
+	}
+	return `${Math.round(value)} kcal`;
 }
 
 const pageStyle = usePageScrollStyle();
@@ -971,20 +976,15 @@ function goToInspiration() {
 	void loadActiveTab({ source: "switch" });
 }
 
-function formatMetricCount(value: number) {
-	if (value <= 999) return "";
-	if (value < 10000) return `${Math.floor(value / 100) / 10}`.replace(/\.0$/, "") + "k";
-	return `${Math.floor(value / 1000) / 10}`.replace(/\.0$/, "") + "w";
-}
-
 function toMyCard(item: MyRecipeSummary): CardItem {
 	return {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		coverTag: item.category.name,
-		meta: item.durationText || "未设时长",
-		tag: "",
+		durationText: item.durationText || "",
+		estimatedCalories: item.estimatedCalories,
+		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
 		kind: "my"
 	};
@@ -996,8 +996,9 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
 		coverTag: item.category.name,
-		meta: item.durationText || "未设时长",
-		tag: formatMetricCount(item.collectCount),
+		durationText: item.durationText || "",
+		estimatedCalories: item.estimatedCalories,
+		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
 		kind: "inspiration"
 	};
@@ -1464,7 +1465,7 @@ defineExpose({
 
 .recipe-card__title,
 .recipe-card__meta,
-.recipe-card__tag,
+.recipe-card__calories,
 .recipe-card__sub {
   display: block;
 }
@@ -1509,30 +1510,16 @@ defineExpose({
   line-height: 1.6;
 }
 
-.recipe-card__tag {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
+.recipe-card__calories {
   flex: 0 0 auto;
+  margin-left: auto;
   max-width: 40%;
   overflow: hidden;
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recipe-card__tag--metric {
   color: var(--color-text-secondary);
   font-size: 22rpx;
   line-height: 1.6;
-}
-
-.recipe-card__tag-icon {
-  color: inherit;
-  font-size: 20rpx;
-  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .manage-fab {

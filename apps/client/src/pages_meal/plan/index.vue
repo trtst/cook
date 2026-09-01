@@ -347,6 +347,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import {
@@ -403,6 +404,7 @@ type PlanDockActionKey = "copy" | "add" | "recipe" | "shopping";
 const pageStyle = usePageScrollStyle();
 const { themeVars } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
+const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 
 const today = todayText();
@@ -519,7 +521,7 @@ const hasPlans = computed(() => selectedPlanCount.value > 0);
 const selectedDateHint = computed(() => {
   return "先把这天想吃的安排上，买菜和约饭都会顺手很多。";
 });
-const canShowPlanDock = computed(() => sessionStore.isLoggedIn && !loading.value && !errorText.value);
+const canShowPlanDock = computed(() => !loading.value && !errorText.value);
 const planDockActions = computed(() => {
   if (hasPlans.value) {
     return [
@@ -849,6 +851,10 @@ function openShoppingListPage() {
 
 function toggleEmptyDock() {
   if (!canShowPlanDock.value) return;
+  if (!sessionStore.isLoggedIn) {
+    loginModalStore.open();
+    return;
+  }
   emptyDockOpen.value = !emptyDockOpen.value;
 }
 
@@ -1372,17 +1378,25 @@ function automatorReadGuestState() {
   return {
     loggedIn: sessionStore.isLoggedIn,
     showPlanDock: canShowPlanDock.value,
-    dockOpen: emptyDockOpen.value
+    dockOpen: emptyDockOpen.value,
+    loginModalVisible: loginModalStore.visible
   };
 }
 
 async function automatorClearSession() {
   await sessionStore.clearSession();
+  loginModalStore.close();
+}
+
+async function automatorTapGuestDock() {
+  toggleEmptyDock();
+  return automatorReadGuestState();
 }
 
 defineExpose({
   automatorClearSession,
-  automatorReadGuestState
+  automatorReadGuestState,
+  automatorTapGuestDock
 });
 
 </script>

@@ -47,6 +47,7 @@
         { "path": "phone/index", "style": { "navigationBarTitleText": "绑定手机号", "navigationStyle": "custom" } },
         { "path": "medal/index", "style": { "navigationBarTitleText": "我的勋章", "navigationStyle": "custom" } },
         { "path": "medal-detail/index", "style": { "navigationBarTitleText": "勋章详情", "navigationStyle": "custom" } },
+        { "path": "recipe-history/index", "style": { "navigationBarTitleText": "最近看过", "navigationStyle": "custom" } },
         { "path": "benefit/index", "style": { "navigationBarTitleText": "权益中心", "navigationStyle": "custom" } },
         { "path": "membership-code/index", "style": { "navigationBarTitleText": "会员兑换码", "navigationStyle": "custom" } },
         { "path": "taste/index", "style": { "navigationBarTitleText": "我的口味", "navigationStyle": "custom" } },

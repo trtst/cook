@@ -253,6 +253,7 @@ import { APP_NAME, APP_VERSION } from "@/config/app";
 import { useLoginModalStore } from "@/stores/login-modal";
 import {
 	EMPTY_BADGE_SNAPSHOT,
+	clearNotificationBadgeSnapshot,
 	readNotificationBadgeSnapshot,
 	refreshNotificationBadgeSnapshot,
 	writeNotificationBadgeSnapshot
@@ -271,6 +272,7 @@ interface PageEntry {
 	disabledText?: string;
 	description?: string;
 	requiresLogin?: boolean;
+	loginOnlyWhenGuest?: boolean;
 }
 
 const pageStyle = usePageScrollStyle();
@@ -364,6 +366,13 @@ const notificationEntry: PageEntry = {
 
 const personalEntries: PageEntry[] = [
 	{
+		title: "最近看过",
+		iconClass: "icon-history",
+		description: "找回最近看过的菜谱",
+		url: "/pages_me/recipe-history/index",
+		requiresLogin: true
+	},
+	{
 		title: "我的口味",
 		iconClass: "icon-my-taste",
 		description: "把爱吃、不吃和过敏信息整理清楚",
@@ -406,7 +415,8 @@ const settingEntries = computed<PageEntry[]>(() => [
 		iconClass: "icon-reminder-settings",
 		description: "看看现在有哪些提醒入口",
 		url: "/pages_me/reminder/index",
-		requiresLogin: false
+		requiresLogin: true,
+		loginOnlyWhenGuest: true
 	},
 	{
 		title: "主题皮肤",
@@ -495,16 +505,17 @@ async function syncPageState() {
 
 	profileLoading.value = false;
 	medalCount.value = null;
-	notificationBadge.value = readNotificationBadgeSnapshot();
+	clearNotificationBadgeSnapshot();
+	notificationBadge.value = EMPTY_BADGE_SNAPSHOT;
 }
 
 async function syncNotificationBadge() {
-	notificationBadge.value = readNotificationBadgeSnapshot();
 	if (!sessionStore.isLoggedIn) {
-		writeNotificationBadgeSnapshot(EMPTY_BADGE_SNAPSHOT);
+		clearNotificationBadgeSnapshot();
 		notificationBadge.value = EMPTY_BADGE_SNAPSHOT;
 		return;
 	}
+	notificationBadge.value = readNotificationBadgeSnapshot();
 	const snapshot = await refreshNotificationBadgeSnapshot().catch(() => null);
 	if (!snapshot) return;
 	notificationBadge.value = snapshot;
@@ -603,6 +614,11 @@ function handleEntryClick(entry: PageEntry) {
 		return;
 	}
 
+	if (entry.loginOnlyWhenGuest) {
+		openLogin();
+		return;
+	}
+
 	requireLogin(openEntry);
 }
 
@@ -616,7 +632,12 @@ function handleProfileAction() {
 }
 
 function handleMedalClick() {
-	navigateTo("/pages_me/medal/index");
+	if (sessionStore.isLoggedIn) {
+		navigateTo("/pages_me/medal/index");
+		return;
+	}
+
+	openLogin();
 }
 
 function requireLogin(action: () => void) {
@@ -636,7 +657,7 @@ async function automatorOpenMedalLogin() {
 	handleMedalClick();
 	await nextTick();
 	return {
-		path: "/pages_me/medal/index"
+		path: sessionStore.isLoggedIn ? "/pages_me/medal/index" : null
 	};
 }
 
@@ -686,7 +707,7 @@ function automatorResolveEntryAuth(title: string) {
 			...settingEntries.value,
 			{
 				title: "我的勋章",
-				requiresLogin: false
+				requiresLogin: true
 			}
 		];
 	const entry = entries.find(item => item.title === title);

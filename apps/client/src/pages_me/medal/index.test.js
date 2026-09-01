@@ -23,6 +23,18 @@ describe("pages_me/medal/index", () => {
   let page;
   let fixture;
 
+  it("未登录打开我的勋章时不展示登录引导空状态文案", async () => {
+    await clearSession();
+    page = await program.reLaunch("/pages_me/medal/index");
+    await page.waitFor(300);
+
+    const texts = await collectTexts(page);
+    expect(texts).toContain("我的勋章");
+    expect(texts).not.toContain("登录后查看我的勋章");
+    expect(texts).not.toContain("勋章只记录你真实完成和真实贡献的做饭事实。");
+    expect(await page.$$(".hero-card__title")).toHaveLength(0);
+  });
+
   beforeAll(async () => {
     fixture = await createMedalFixture();
     await clearSession();

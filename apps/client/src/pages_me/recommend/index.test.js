@@ -223,7 +223,6 @@ async function createExpiringFridgeItemFixture(session) {
       "Idempotency-Key": nextIdempotencyKey()
     },
     body: JSON.stringify({
-      operationId: nextIdempotencyKey(),
       name: `临期食材${nextIdempotencyKey().slice(-6)}`,
       quantityText: "1 份",
       expireAt
@@ -330,6 +329,25 @@ describe("pages_me/recommend/index", () => {
     expect(texts).not.toContain("消息历史");
   });
 
+  it("通知中心统一时间流接口支持分页返回", async () => {
+    const feed = await requestData("/users/me/notification-feed?page=1&pageSize=1", {
+      headers: buildAuthHeaders(session)
+    });
+
+    expect(feed.page).toBe(1);
+    expect(feed.pageSize).toBe(1);
+    expect(feed.total).toBeGreaterThanOrEqual(2);
+    expect(feed.hasNext).toBe(true);
+    expect(feed.items).toHaveLength(1);
+    expect(["系统审核消息", "系统清单协作消息", "系统提醒消息", "系统官方消息"]).toContain(feed.items[0].typeLabel);
+    expect(feed.items[0].timeValue).toBeTruthy();
+  });
+
+  it("通知中心列表底部会显示已经翻到底啦", async () => {
+    const texts = await collectTexts(page);
+    expect(texts).toContain("已经翻到底啦");
+  });
+
   it("进入通知中心后会把服务端未读徽标清零", async () => {
     const unreadFixture = await createUnitRecommendationFixture(session);
     const beforeBadge = await requestData("/users/me/notification-badge", {
@@ -402,6 +420,7 @@ describe("pages_me/recommend/index", () => {
   });
 
   it("未登录直达通知中心会拉起登录而不是直接落加载失败", async () => {
+    await page.callMethod("automatorClearSession");
     await clearSession();
     const guestPage = await program.reLaunch("/pages_me/recommend/index");
     const state = await waitForState(guestPage, (nextState) => nextState && nextState.needLogin === true);

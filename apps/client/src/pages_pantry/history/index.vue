@@ -103,7 +103,7 @@ function changeStatus(next: "BOUGHT" | "DELETED") {
 
 .filter-chip {
   padding: 12rpx 24rpx;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
 }

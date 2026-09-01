@@ -16,108 +16,79 @@
             :people-count="state.conditions.peopleCount"
             :fridge-preferred="state.conditions.fridgePreferred"
             :slot-plan="state.slotPlan"
-            :has-menu="hasMenu"
             :loading="conditionLoading"
-            :generate-disabled="generateDisabled"
             @select-meal-slot="selectMealSlot"
             @select-people-count="selectPeopleCount"
             @toggle-fridge-preferred="toggleFridgePreferred"
             @adjust-slot-plan="adjustSlotPlan"
-            @generate="generateMenu"
-            @reroll="rerollMenu"
           />
+          <view v-if="errorText" class="notice" @click="clearError">
+            <text class="notice__text">{{ errorText }}</text>
+            <text class="notice__action">知道了</text>
+          </view>
 
-          <template v-if="!sessionStore.isLoggedIn">
-            <view class="empty-card">
-              <LoginEmptyState
-                title="登录后随机一桌"
-                description="先选餐次、人数和冰箱优先；登录后再围绕这一桌菜做保留、换菜和缺口确认。"
-              />
-            </view>
-          </template>
+          <template v-if="hasMenu">
+            <view class="board-card">
+              <view class="board-card__head">
+                <view>
+                  <text class="board-card__eyebrow">当前这一桌</text>
+                  <text class="board-card__title">{{ boardTitle }}</text>
+                </view>
+                <text class="board-card__badge">{{ boardBadge }}</text>
+              </view>
+              <text class="board-card__description">{{ boardDescription }}</text>
 
-          <template v-else>
-            <view v-if="errorText" class="notice" @click="clearError">
-              <text class="notice__text">{{ errorText }}</text>
-              <text class="notice__action">知道了</text>
-            </view>
+              <view class="board-card__summary">
+                <text class="board-card__summary-item">当前 {{ activeSlots.length }} 道</text>
+                <text class="board-card__summary-item">已划掉 {{ removedCount }} 道</text>
+                <text class="board-card__summary-item">待补 {{ shortageDishCount }} 道</text>
+              </view>
 
-            <view v-if="warnings.length" class="warning-card">
-              <view v-for="warning in warnings" :key="warning.code + warning.message" class="warning-card__item">
-                <text class="warning-card__title">{{ warning.message }}</text>
-                <text class="warning-card__desc">当前条件下能选的菜不多，已按现有菜谱尽量推荐。</text>
+              <view class="slot-list">
+                <RandomSlotCard
+                  v-for="menuSlot in state.slots"
+                  :key="menuSlot.slotId"
+                  :item="menuSlot"
+                  :disabled="slotActionLocked"
+                  @toggle-lock="toggleSlotLock"
+                  @remove="removeSlot"
+                  @replace="replaceSlot"
+                  @toggle-constraint="toggleConstraint"
+                />
               </view>
             </view>
 
-            <view v-if="!hasMenu" class="empty-card">
-              <Empty
-                title="先定这一顿再开始"
-                description="先选餐次、人数和冰箱优先，再生成一桌可执行菜单。"
-              />
-            </view>
+            <RandomGapPanel
+              v-if="state.gap.visible"
+              :items="state.gap.items"
+              :summary="state.gap.summary"
+              :loading="state.gap.loading"
+            />
 
-            <template v-else>
-              <view class="board-card">
-                <view class="board-card__head">
-                  <view>
-                    <text class="board-card__eyebrow">当前这一桌</text>
-                    <text class="board-card__title">{{ boardTitle }}</text>
-                  </view>
-                  <text class="board-card__badge">{{ boardBadge }}</text>
-                </view>
-                <text class="board-card__description">{{ boardDescription }}</text>
-
-                <view class="board-card__summary">
-                  <text class="board-card__summary-item">已保留 {{ lockedCount }} 道</text>
-                  <text class="board-card__summary-item">已划掉 {{ removedCount }} 道</text>
-                  <text class="board-card__summary-item">待处理 {{ activeSlots.length }} 道</text>
-                </view>
-
-                <view class="slot-list">
-                  <RandomSlotCard
-                    v-for="slot in state.slots"
-                    :key="slot.slotId"
-                    :slot="slot"
-                    :disabled="slotActionLocked"
-                    @lock="lockSlot"
-                    @unlock="unlockSlot"
-                    @remove="removeSlot"
-                    @replace="replaceSlot"
-                    @toggle-constraint="toggleConstraint"
-                  />
-                </view>
-              </view>
-
-              <RandomGapPanel
-                v-if="state.gap.visible"
-                :items="state.gap.items"
-                :summary="state.gap.summary"
-                :loading="state.gap.loading"
-                @update-decision="updateGapDecision"
-                @remove-slot="removeSlotFromGap"
-                @replace-slot="replaceSlotFromGap"
-                @keep-pending="keepPending"
-                @buy-slot="markBuyGap"
-              />
-
-              <RandomBottomBar
-                :title="bottomTitle"
-                :description="bottomDescription"
-                :loading="conditionLoading"
-                :show-gap-button="!state.gap.visible"
-                :show-plan-button="state.gap.visible"
-                :show-shopping-button="state.gap.visible && state.gap.items.length > 0"
-                :plan-disabled="!canCreatePlan"
-                :shopping-disabled="!canCreateShopping"
-                @open-gap="openGap"
-                @create-plan="openPlanSheet"
-                @create-shopping="createShopping"
-              />
-            </template>
+            <RandomBottomBar
+              :title="bottomTitle"
+              :description="bottomDescription"
+              :loading="conditionLoading"
+              :plan-disabled="!canCreatePlan"
+              @create-plan="openPlanSheet"
+            />
           </template>
         </view>
       </view>
     </scroll-view>
+
+    <view class="random-generate-bar">
+      <text class="random-generate-bar__quota">{{ quotaText }}</text>
+      <view class="random-generate-bar__buttons">
+        <button
+          class="random-generate-bar__button random-generate-bar__button--primary"
+          :disabled="generateDisabled || conditionLoading"
+          @click="generateMenu"
+        >
+          {{ conditionLoading ? "处理中..." : hasMenu ? "再来一桌" : "生成一桌" }}
+        </button>
+      </view>
+    </view>
 
     <SheetShell
       v-if="planSheetMounted"
@@ -139,14 +110,47 @@
           </picker>
         </view>
         <view class="plan-sheet__tips">
-          <text class="plan-sheet__tips-text">保留但暂不采购的菜位会写入计划，并带 `待采购` 状态。</text>
+          <text class="plan-sheet__tips-text">这桌里食材不足的菜会一起写入计划，并标记为 `待采购`。</text>
+        </view>
+        <view v-if="inspirationSlots.length" class="plan-sheet__inspiration">
+          <view class="plan-sheet__section-head">
+            <view>
+              <text class="plan-sheet__section-title">灵感菜谱归入私房菜</text>
+              <text class="plan-sheet__section-note">每道菜可单独选择分类，默认沿用上次选择。</text>
+            </view>
+            <view class="plan-sheet__category-action" @click="toggleCategoryCreator">
+              {{ showCategoryCreator ? "取消" : "创建分类" }}
+            </view>
+          </view>
+          <view v-if="showCategoryCreator" class="plan-sheet__creator">
+            <input v-model="categoryDraftName" class="plan-sheet__creator-input" maxlength="4" placeholder="输入分类名称" :disabled="categorySubmitting" />
+            <button class="plan-sheet__creator-button" :disabled="categorySubmitting || !categoryDraftName.trim()" @click="createCategory">
+              {{ categorySubmitting ? "创建中" : "确定" }}
+            </button>
+          </view>
+          <text v-if="categoryLoading" class="plan-sheet__section-note">正在加载你的分类...</text>
+          <text v-else-if="!categories.length" class="plan-sheet__section-note">还没有个人分类，请先创建一个。</text>
+          <view v-for="item in inspirationSlots" :key="item.recipeVersionId" class="plan-sheet__category-row">
+            <text class="plan-sheet__category-title">{{ item.title }}</text>
+            <view class="plan-sheet__category-chips">
+              <view
+                v-for="category in categories"
+                :key="category.id"
+                class="plan-sheet__category-chip"
+                :class="{ 'plan-sheet__category-chip--active': selectedCategoryIds[item.recipeVersionId] === category.id }"
+                @click="selectCategory(item.recipeVersionId, category.id)"
+              >
+                {{ category.name }}
+              </view>
+            </view>
+          </view>
         </view>
       </view>
 
       <template #footer>
         <view class="plan-sheet__footer">
           <button class="secondary plan-sheet__button" @click="closePlanSheet">取消</button>
-          <button class="primary plan-sheet__button" :disabled="planSubmitting" @click="createPlan">
+          <button class="primary plan-sheet__button" :disabled="planSubmitting || !planReady" @click="createPlan">
             {{ planSubmitting ? "保存中..." : "确认加入计划" }}
           </button>
         </view>
@@ -159,29 +163,27 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
-import { recipeApi } from "@/apis/recipe";
-import Empty from "@/components/Empty/Empty.vue";
+import { recipeApi, type RecipeCategorySummary } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { uniPlatform } from "@/platform/uni";
+import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
 import { useTheme } from "@/composables/useTheme";
+import { restoreAppSession } from "@/utils/session";
+import { formatMealSlot, resolveMealSlotByTime } from "@/utils/meal-slot";
 import { formatThemeText } from "@/themes";
 import { createOperationId } from "@/utils/operation-id";
 import { mealApi, type CreateMealPlanRequest } from "../apis/meal";
 import {
   randomMealApi,
-  type CheckRandomMenuGapResponse,
   type MealSlot,
-  type RandomGapDecision,
-  type RandomGapSummary,
-  type RandomMenuWarning,
+  type RandomMenuItem,
+  type RandomMenuQuotaResponse,
   type RandomReplaceConstraintKind,
   type RandomSlotPlan,
   type RecipeSlotType
@@ -195,8 +197,6 @@ import {
   buildGapState,
   createEmptyGapState,
   createRandomSlotViewModel,
-  toGapDecisionItems,
-  type RandomGapAction,
   type RandomGapItemViewModel,
   type RandomPageState,
   type RandomPlanMenuItemInput,
@@ -214,6 +214,13 @@ const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageS
 const RANDOM_NAV_GAP = 16;
 const RANDOM_NAV_FADE_DISTANCE = 96;
 const MAX_SLOT_TOTAL = 12;
+
+interface RandomMenuConditionSnapshot {
+  mealSlot?: MealSlot | null;
+  peopleCount?: number | null;
+  fridgePreferred?: boolean;
+}
+
 const currentThemeText = computed(() => {
   return formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value);
 });
@@ -229,7 +236,6 @@ const state = ref<RandomPageState>({
   slots: [],
   gap: createEmptyGapState()
 });
-const warnings = ref<RandomMenuWarning[]>([]);
 const errorText = ref("");
 const randomScrollTop = ref(0);
 const pageMutating = ref(false);
@@ -238,35 +244,42 @@ const planSheetMounted = ref(false);
 const planSheetVisible = ref(false);
 const planDate = ref(todayText());
 const planSubmitting = ref(false);
-const shoppingSubmitting = ref(false);
+const categoryLoading = ref(false);
+const categorySubmitting = ref(false);
+const categories = ref<RecipeCategorySummary[]>([]);
+const selectedCategoryIds = ref<Record<string, UUID>>({});
+const categoryDraftName = ref("");
+const showCategoryCreator = ref(false);
+const quota = ref<RandomMenuQuotaResponse | null>(null);
+const quotaLoading = ref(false);
+const rejectedRecipeVersionIds = ref<UUID[]>([]);
+const loginRedirecting = ref(false);
 
 const hasMenu = computed(() => state.value.slots.length > 0);
 const activeSlots = computed(() => state.value.slots.filter(item => item.status !== "REMOVED"));
-const lockedCount = computed(() => state.value.slots.filter(item => item.status === "LOCKED").length);
 const removedCount = computed(() => state.value.slots.filter(item => item.status === "REMOVED").length);
-const generateDisabled = computed(() => !state.value.conditions.mealSlot || !state.value.conditions.peopleCount);
-const submitLoading = computed(() => planSubmitting.value || shoppingSubmitting.value);
+const quotaDepleted = computed(() => Boolean(quota.value && quota.value.remainingCount <= 0));
+const generateDisabled = computed(() => !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || quotaDepleted.value);
+const submitLoading = computed(() => planSubmitting.value);
 const conditionLoading = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
 const slotActionLocked = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
-const canCreateShopping = computed(() => state.value.gap.items.some(item => item.action === "BUY"));
-const canCreatePlan = computed(() => {
-  if (!state.value.gap.visible || !activeSlots.value.length) return false;
-  return state.value.gap.items.every(item => {
-    if (!item.missingIngredients.length) return true;
-    return item.action === "BUY" || item.action === "KEEP_PENDING";
-  });
-});
+const shortageDishCount = computed(() => state.value.gap.items.filter(item => item.missingIngredients.length > 0).length);
+const canCreatePlan = computed(() => activeSlots.value.length > 0);
+const inspirationSlots = computed(() => activeSlots.value.filter(item => item.sourceType === "INSPIRATION"));
+const planReady = computed(
+  () => canCreatePlan.value && inspirationSlots.value.every(item => Boolean(selectedCategoryIds.value[item.recipeVersionId]))
+);
 
 const heroTitle = computed(() => {
-  if (!state.value.conditions.mealSlot) return "这一顿吃什么，先定早餐、午餐还是晚餐";
-  if (!hasMenu.value) return "先生成一桌，再逐道决定保留还是换掉";
-  return "先围着这一桌做决定，不用整桌全收或整桌推翻";
+  if (!state.value.conditions.mealSlot) return "想轻松定下这顿饭，先选个餐次吧";
+  if (!hasMenu.value) return "先生成一桌，再慢慢挑合适的";
+  return "先看看这一桌合不合适，再决定下一步";
 });
 
 const heroDescription = computed(() => {
-  if (!state.value.conditions.mealSlot) return "这页不再默认“今晚”。先选餐次、人数和是否优先清冰箱，再给你一桌可执行菜单。";
-  if (!hasMenu.value) return "随机页不是三套候选对比，而是一桌可拆解菜单：满意就保留，不满意就换一道。";
-  return "先把这桌能不能做、缺什么、哪些先不买处理清楚，再决定要不要写进计划。";
+  if (!state.value.conditions.mealSlot) return "先选餐次、人数和是否优先用冰箱食材，我再按这顿饭的节奏帮你搭一桌菜单。";
+  if (!hasMenu.value) return "会先给你一桌参考菜单，喜欢的留着，不合适的再换一道，不用一下子做完决定。";
+  return "把想保留的、想更换的和缺什么理清楚，再决定要不要写进计划。";
 });
 
 const boardTitle = computed(() => {
@@ -280,22 +293,27 @@ const boardBadge = computed(() => {
   return "优先用冰箱";
 });
 
+const quotaText = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后查看本周生成次数";
+  if (quotaLoading.value) return "正在同步生成次数";
+  if (!quota.value) return "生成次数以后台为准";
+  return `本周还可生成 ${quota.value.remainingCount}/${quota.value.limitCount} 次`;
+});
+
 const boardDescription = computed(() => {
-  if (!warnings.value.length) return "每道菜都可以单独保留、划掉或换一道；替换约束只作用于当前菜位。";
-  return "当前条件下可选菜不多，先按现有菜谱尽量搭出一桌；你也可以继续换菜或手动减位。";
+  return "不合适的直接划掉，想换口味就换一道；下面会顺手告诉你这桌还缺哪些食材。";
 });
 
 const bottomTitle = computed(() => {
-  if (!state.value.gap.visible) return "先看看这桌现在缺什么";
-  if (canCreatePlan.value) return "这桌已经可以进入下一步";
-  return "先把库存未确认和缺料处理完，再决定计划或采购";
+  if (state.value.gap.loading) return "正在比对这桌和冰箱";
+  if (!shortageDishCount.value) return "这桌已经可以直接安排";
+  return `这桌有 ${shortageDishCount.value} 道菜还缺食材`;
 });
 
 const bottomDescription = computed(() => {
-  if (!state.value.gap.visible) return "缺口预检只检查当前这桌，不混用全局缺口。";
-  if (canCreateShopping.value && !canCreatePlan.value) return "把准备采购的菜位标出来，再去采购清单处理。";
-  if (canCreatePlan.value) return "去采购的菜位继续缺口采购，保留待采购的菜位会写入计划但标记为待采购。";
-  return "库存未确认的食材需要先确认有/无；缺料菜位也要明确是去采购还是保留待采购。";
+  if (state.value.gap.loading) return "这一步只对比冰箱现有食材，不在这里逐个确认库存。";
+  if (!shortageDishCount.value) return "喜欢这桌的话，直接加入计划就行。";
+  return "喜欢这桌的话，可以直接加入计划；缺口会在计划里继续处理。";
 });
 
 const navProgress = computed(() => Math.min(1, Math.max(0, randomScrollTop.value / RANDOM_NAV_FADE_DISTANCE)));
@@ -311,33 +329,41 @@ onLoad(query => {
   const mealSlot = parseMealSlot(query?.mealSlot);
   const peopleCount = parsePeopleCount(query?.peopleCount);
   const fridgePreferred = parseBoolean(query?.fridgePreferred);
+  const cachedConditions = readRandomMenuConditionSnapshot();
 
-  if (mealSlot) {
-    state.value.conditions.mealSlot = mealSlot;
-  }
-  if (peopleCount) {
-    state.value.conditions.peopleCount = peopleCount;
-  }
-  if (fridgePreferred !== null) {
-    state.value.conditions.fridgePreferred = fridgePreferred;
-  }
+  state.value.conditions.mealSlot = mealSlot ?? cachedConditions.mealSlot ?? resolveDefaultRandomMealSlot();
+  state.value.conditions.peopleCount = peopleCount ?? cachedConditions.peopleCount ?? 2;
+  state.value.conditions.fridgePreferred = fridgePreferred ?? cachedConditions.fridgePreferred ?? false;
 
   syncSlotPlan();
 });
 
 onShow(() => {
-  if (!sessionStore.isLoggedIn) return;
-  syncSlotPlan();
+  void ensureRandomPageAccess();
 });
+
+async function ensureRandomPageAccess() {
+  if (!sessionStore.restored) {
+    await restoreAppSession();
+  }
+  if (!sessionStore.isLoggedIn) {
+    redirectGuestToHomeLogin();
+    return;
+  }
+  syncSlotPlan();
+  void loadRandomQuota();
+}
 
 watch(
   () => sessionStore.isLoggedIn,
   isLoggedIn => {
     if (!isLoggedIn) {
+      quota.value = null;
       resetRandomState();
       return;
     }
     syncSlotPlan();
+    void loadRandomQuota();
   }
 );
 
@@ -363,12 +389,34 @@ function resetRandomState() {
     slots: [],
     gap: createEmptyGapState()
   };
-  warnings.value = [];
   errorText.value = "";
+  rejectedRecipeVersionIds.value = [];
 }
 
 function clearError() {
   errorText.value = "";
+}
+
+function redirectGuestToHomeLogin() {
+  if (loginRedirecting.value) return;
+  loginRedirecting.value = true;
+  void uniPlatform.navigation.reLaunch("/pages/home/index?login=random").finally(() => {
+    loginRedirecting.value = false;
+  });
+}
+
+async function loadRandomQuota() {
+  if (!sessionStore.isLoggedIn || quotaLoading.value) return;
+  quotaLoading.value = true;
+  try {
+    quota.value = await randomMealApi.getQuota();
+  } catch (error) {
+    if (!quota.value) {
+      errorText.value = error instanceof Error ? error.message : "生成次数同步失败";
+    }
+  } finally {
+    quotaLoading.value = false;
+  }
 }
 
 function syncSlotPlan() {
@@ -378,18 +426,24 @@ function syncSlotPlan() {
 function selectMealSlot(value: MealSlot) {
   if (conditionLoading.value) return;
   state.value.conditions.mealSlot = value;
+  void persistRandomMenuConditions();
   clearMenuAndGap();
 }
 
 function selectPeopleCount(value: number) {
   if (conditionLoading.value) return;
   state.value.conditions.peopleCount = value;
+  void persistRandomMenuConditions();
   clearMenuAndGap();
 }
 
 function toggleFridgePreferred() {
+  if (!ensureLoggedIn(() => {
+    toggleFridgePreferred();
+  })) return;
   if (conditionLoading.value) return;
   state.value.conditions.fridgePreferred = !state.value.conditions.fridgePreferred;
+  void persistRandomMenuConditions();
   clearMenuAndGap();
 }
 
@@ -406,7 +460,7 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
 function clearMenuAndGap() {
   state.value.slots = [];
   state.value.gap = createEmptyGapState();
-  warnings.value = [];
+  rejectedRecipeVersionIds.value = [];
   errorText.value = "";
   if (sessionStore.isLoggedIn) {
     state.value.pageStatus = generateDisabled.value ? "IDLE" : "CONFIG_READY";
@@ -418,6 +472,20 @@ async function generateMenu() {
     void generateMenu();
   })) return;
   if (generateDisabled.value || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || !state.value.slotPlan || pageMutating.value) return;
+  const isReroll = hasMenu.value;
+  const lockedSlots = state.value.slots.filter(item => item.status === "LOCKED");
+  const openSlots = state.value.slots.filter(item => item.status !== "LOCKED");
+  if (isReroll && openSlots.length === 0) {
+    await uniPlatform.feedback.toast({ title: "已锁定整桌，先解锁再重摇", icon: "none" });
+    return;
+  }
+  const requestSlotPlan = isReroll ? buildSlotPlanForSlots(openSlots) : state.value.slotPlan;
+  const requestRejectedVersionIds = isReroll
+    ? uniqueIds([
+        ...rejectedRecipeVersionIds.value,
+        ...openSlots.map(item => item.recipeVersionId)
+      ])
+    : [];
   pageMutating.value = true;
   state.value.pageStatus = "MENU_MUTATING";
   errorText.value = "";
@@ -426,12 +494,20 @@ async function generateMenu() {
       mealSlot: state.value.conditions.mealSlot,
       peopleCount: state.value.conditions.peopleCount,
       fridgePreferred: state.value.conditions.fridgePreferred,
-      slotPlan: state.value.slotPlan
-    });
-    state.value.slotPlan = result.slotPlan;
-    state.value.slots = result.items.map(createRandomSlotViewModel);
-    state.value.gap = createEmptyGapState();
-    warnings.value = result.warnings;
+      slotPlan: requestSlotPlan,
+      currentItems: lockedSlots.map(toCurrentRandomItem),
+      rejectedRecipeVersionIds: requestRejectedVersionIds
+    }, createOperationId());
+    quota.value = result.quota;
+    if (isReroll) {
+      rejectedRecipeVersionIds.value = requestRejectedVersionIds;
+      state.value.slots = mergeRerollSlots(lockedSlots, openSlots, result.items);
+    } else {
+      rejectedRecipeVersionIds.value = [];
+      state.value.slotPlan = result.slotPlan;
+      state.value.slots = result.items.map(createRandomSlotViewModel);
+    }
+    await refreshGap(true);
     state.value.pageStatus = "MENU_READY";
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "生成失败";
@@ -441,63 +517,28 @@ async function generateMenu() {
   }
 }
 
-async function rerollMenu() {
-  if (!ensureLoggedIn(() => {
-    void rerollMenu();
-  })) return;
-  if (!hasMenu.value || pageMutating.value) return;
-  const replaceTargets = state.value.slots.filter(item => item.status !== "LOCKED");
-  if (!replaceTargets.length) {
-    await uniPlatform.feedback.toast({ title: "这桌已经全部保留了", icon: "none" });
-    return;
-  }
-  pageMutating.value = true;
-  state.value.pageStatus = "MENU_MUTATING";
-  errorText.value = "";
-  try {
-    for (const item of replaceTargets) {
-      await replaceSlot(item.slotId, true);
-    }
-    state.value.gap = createEmptyGapState();
-    state.value.pageStatus = "MENU_READY";
-  } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "重摇失败";
-    state.value.pageStatus = "MENU_READY";
-  } finally {
-    pageMutating.value = false;
-  }
-}
-
-function lockSlot(slotId: string) {
-  if (slotActionLocked.value) return;
-  if (isSlotReplacing(slotId)) return;
-  updateSlot(slotId, slot => {
-    slot.status = "LOCKED";
-  });
-}
-
-function unlockSlot(slotId: string) {
-  if (slotActionLocked.value) return;
-  if (isSlotReplacing(slotId)) return;
-  updateSlot(slotId, slot => {
-    if (slot.status === "LOCKED") {
-      slot.status = "RECOMMENDED";
-    }
-  });
-}
-
 function removeSlot(slotId: string) {
   if (slotActionLocked.value) return;
   if (isSlotReplacing(slotId)) return;
+  const slot = state.value.slots.find(item => item.slotId === slotId);
+  if (slot) markRejectedRecipeVersion(slot.recipeVersionId);
   updateSlot(slotId, slot => {
     slot.status = "REMOVED";
-    slot.gapAction = "REMOVE";
   });
-  removeGapSlot(slotId);
+  syncGapPreview();
 }
 
-async function replaceSlot(slotId: string, fromBatch = false) {
-  if (!fromBatch && (state.value.gap.loading || submitLoading.value)) return;
+function toggleSlotLock(slotId: string) {
+  if (slotActionLocked.value) return;
+  if (isSlotReplacing(slotId)) return;
+  updateSlot(slotId, slot => {
+    if (slot.status === "REMOVED") return;
+    slot.status = slot.status === "LOCKED" ? "RECOMMENDED" : "LOCKED";
+  });
+}
+
+async function replaceSlot(slotId: string) {
+  if (state.value.gap.loading || submitLoading.value) return;
   const slot = state.value.slots.find(item => item.slotId === slotId);
   if (!slot || slot.status === "REPLACING" || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || !state.value.slotPlan) return;
 
@@ -507,9 +548,7 @@ async function replaceSlot(slotId: string, fromBatch = false) {
     current.requestSeq = requestSeq;
     current.status = "REPLACING";
   });
-  if (!fromBatch) {
-    state.value.pageStatus = "MENU_MUTATING";
-  }
+  state.value.pageStatus = "MENU_MUTATING";
   errorText.value = "";
 
   try {
@@ -522,19 +561,17 @@ async function replaceSlot(slotId: string, fromBatch = false) {
       targetSlotId: slot.slotId,
       targetSlotType: slot.slotType,
       replaceConstraints: slot.replaceConstraints,
-      rejectedRecipeVersionIds: [slot.recipeVersionId],
+      rejectedRecipeVersionIds: uniqueIds([...rejectedRecipeVersionIds.value, slot.recipeVersionId]),
       requestSeq
     });
 
     if (result.requestSeq !== requestSeq) return;
+    markRejectedRecipeVersion(slot.recipeVersionId);
 
     if (!result.slot) {
       updateSlot(slotId, current => {
-        current.status = previousStatus === "REMOVED" ? "REMOVED" : previousStatus === "LOCKED" ? "LOCKED" : "RECOMMENDED";
+        current.status = previousStatus === "REMOVED" ? "REMOVED" : "RECOMMENDED";
       });
-      if (result.warning) {
-        warnings.value = [result.warning];
-      }
       return;
     }
 
@@ -552,21 +589,19 @@ async function replaceSlot(slotId: string, fromBatch = false) {
       current.flavorTags = next.flavorTags;
       current.mainProteinType = next.mainProteinType;
       current.fridgeFit = next.fridgeFit;
+      current.sourceType = next.sourceType;
+      current.recommendationReason = next.recommendationReason;
       current.latestAppliedSeq = requestSeq;
-      current.status = previousStatus === "LOCKED" ? "LOCKED" : "RECOMMENDED";
-      current.gapAction = null;
+      current.status = "RECOMMENDED";
     });
-    warnings.value = result.warning ? [result.warning] : [];
-    removeGapSlot(slotId);
+    await refreshGap(true);
   } catch (error) {
     updateSlot(slotId, current => {
-      current.status = previousStatus === "REMOVED" ? "REMOVED" : previousStatus === "LOCKED" ? "LOCKED" : "RECOMMENDED";
+      current.status = previousStatus === "REMOVED" ? "REMOVED" : "RECOMMENDED";
     });
     errorText.value = error instanceof Error ? error.message : "替换失败";
   } finally {
-    if (!fromBatch) {
-      state.value.pageStatus = "MENU_READY";
-    }
+    state.value.pageStatus = "MENU_READY";
   }
 }
 
@@ -580,22 +615,16 @@ function toggleConstraint(slotId: string, kind: RandomReplaceConstraintKind, val
   });
 }
 
-async function openGap() {
-  if (!ensureLoggedIn(() => {
-    void openGap();
-  })) return;
-  if (conditionLoading.value) return;
-  if (!activeSlots.value.length || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount) return;
-  await refreshGap(true);
-}
-
 async function refreshGap(openPanel = false) {
+  if (!activeSlots.value.length) {
+    state.value.gap = createEmptyGapState();
+    return;
+  }
   if (!state.value.conditions.mealSlot || !state.value.conditions.peopleCount) return;
   const requestSeq = gapRequestSeq.value + 1;
   gapRequestSeq.value = requestSeq;
   state.value.pageStatus = "GAP_CHECKING";
   state.value.gap.loading = true;
-  errorText.value = "";
   if (openPanel) {
     state.value.gap.visible = true;
   }
@@ -610,25 +639,10 @@ async function refreshGap(openPanel = false) {
         recipeId: item.recipeId,
         recipeVersionId: item.recipeVersionId
       })),
-      inventoryDecisions: toGapDecisionItems(state.value.gap.items)
+      inventoryDecisions: []
     });
     if (requestSeq !== gapRequestSeq.value) return;
-    const nextGap = buildGapState(result);
-    const actionMap = new Map(state.value.gap.items.map(item => [item.slotId, item.action]));
-    const decisionMap = new Map(
-      state.value.gap.items.flatMap(item =>
-        item.decisions.map(decision => [`${item.slotId}:${decision.decisionKey}`, decision.decision] as const)
-      )
-    );
-    nextGap.items = nextGap.items.map(item => ({
-      ...item,
-      action: actionMap.get(item.slotId) ?? null,
-      decisions: item.decisions.map(decision => ({
-        ...decision,
-        decision: decisionMap.get(`${item.slotId}:${decision.decisionKey}`) ?? decision.decision
-      }))
-    }));
-    state.value.gap = nextGap;
+    state.value.gap = buildGapState(result);
     state.value.pageStatus = "MENU_READY";
   } catch (error) {
     if (requestSeq !== gapRequestSeq.value) return;
@@ -638,61 +652,12 @@ async function refreshGap(openPanel = false) {
   }
 }
 
-async function updateGapDecision(slotId: string, decisionKey: string, decision: RandomGapDecision) {
-  if (state.value.gap.loading || submitLoading.value) return;
-  if (isSlotReplacing(slotId)) return;
-  const item = state.value.gap.items.find(current => current.slotId === slotId);
-  if (!item) return;
-  item.decisions = item.decisions.map(current => (current.decisionKey === decisionKey ? { ...current, decision } : current));
-  await refreshGap(true);
-}
-
-function keepPending(slotId: string) {
-  if (state.value.gap.loading || submitLoading.value) return;
-  updateGapAction(slotId, "KEEP_PENDING");
-}
-
-function markBuyGap(slotId: string) {
-  if (state.value.gap.loading || submitLoading.value) return;
-  updateGapAction(slotId, "BUY");
-}
-
-function removeSlotFromGap(slotId: string) {
-  if (state.value.gap.loading || submitLoading.value) return;
-  removeSlot(slotId);
-}
-
-async function replaceSlotFromGap(slotId: string) {
-  if (state.value.gap.loading || submitLoading.value) return;
-  await replaceSlot(slotId);
-  await refreshGap(true);
-}
-
-function updateGapAction(slotId: string, action: RandomGapAction) {
-  if (isSlotReplacing(slotId)) return;
-  state.value.gap.items = state.value.gap.items.map(item => (item.slotId === slotId ? { ...item, action } : item));
-  updateSlot(slotId, slot => {
-    slot.gapAction = action;
-  });
-}
-
-function removeGapSlot(slotId: string) {
-  if (!state.value.gap.visible) return;
-  state.value.gap.items = state.value.gap.items.filter(item => item.slotId !== slotId);
-  if (!state.value.gap.items.length) {
-    state.value.gap = activeSlots.value.length
-      ? {
-          visible: true,
-          loading: false,
-          items: [],
-          summary: createZeroGapSummary(),
-          canCreatePlan: true
-        }
-      : createEmptyGapState();
-    state.value.pageStatus = "MENU_READY";
+function syncGapPreview() {
+  if (!hasMenu.value || !activeSlots.value.length) {
+    state.value.gap = createEmptyGapState();
     return;
   }
-  state.value.gap.summary = summarizeGapItems(state.value.gap.items);
+  void refreshGap(true);
 }
 
 async function openPlanSheet() {
@@ -702,9 +667,13 @@ async function openPlanSheet() {
   if (state.value.gap.loading) return;
   if (!canCreatePlan.value || planSubmitting.value) return;
   planDate.value = todayText();
+  selectedCategoryIds.value = {};
+  categoryDraftName.value = "";
+  showCategoryCreator.value = false;
   planSheetMounted.value = true;
   await uniPlatform.feedback.hideKeyboard();
   planSheetVisible.value = true;
+  void loadPlanCategories();
 }
 
 function closePlanSheet() {
@@ -732,49 +701,87 @@ function handlePlanDateChange(event: { detail?: { value?: string } }) {
   planDate.value = nextValue;
 }
 
+async function loadPlanCategories() {
+  if (!inspirationSlots.value.length) return;
+  categoryLoading.value = true;
+  try {
+    categories.value = await recipeApi.listCategories();
+    const lastCategoryId = uniPlatform.storage.getSync<UUID>(APP_STORAGE_KEYS.randomMenuCategory);
+    const defaultCategoryId = categories.value.some(item => item.id === lastCategoryId) ? lastCategoryId : categories.value[0]?.id;
+    selectedCategoryIds.value = inspirationSlots.value.reduce<Record<string, UUID>>((result, item) => {
+      if (defaultCategoryId) result[item.recipeVersionId] = defaultCategoryId;
+      return result;
+    }, {});
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分类加载失败", icon: "none" });
+  } finally {
+    categoryLoading.value = false;
+  }
+}
+
+function selectCategory(recipeVersionId: UUID, categoryId: UUID) {
+  selectedCategoryIds.value = { ...selectedCategoryIds.value, [recipeVersionId]: categoryId };
+}
+
+function toggleCategoryCreator() {
+  showCategoryCreator.value = !showCategoryCreator.value;
+  if (!showCategoryCreator.value) categoryDraftName.value = "";
+}
+
+async function createCategory() {
+  const name = categoryDraftName.value.trim();
+  if (!name || categorySubmitting.value) return;
+  categorySubmitting.value = true;
+  try {
+    const created = await recipeApi.createCategory({ operationId: createOperationId(), name });
+    categories.value = [...categories.value, created];
+    for (const item of inspirationSlots.value) selectCategory(item.recipeVersionId, created.id);
+    await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuCategory, created.id);
+    categoryDraftName.value = "";
+    showCategoryCreator.value = false;
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
+  } finally {
+    categorySubmitting.value = false;
+  }
+}
+
 async function createPlan() {
   if (!ensureLoggedIn(() => {
     void createPlan();
   })) return;
-  if (!state.value.conditions.mealSlot || !canCreatePlan.value || planSubmitting.value) return;
+  if (!state.value.conditions.mealSlot || !planReady.value || planSubmitting.value) return;
   planSubmitting.value = true;
   try {
     const plans = await mealApi.listPlans({ from: planDate.value, to: planDate.value, page: 1, pageSize: 10 });
     const currentPlan = plans.items.find(item => item.mealSlot === state.value.conditions.mealSlot) ?? null;
     const existingItems = currentPlan?.menuItems ?? [];
-    const randomItems = buildPlanMenuItems();
-    const recipeIds = [...existingItems.map(item => item.recipeId), ...randomItems.map(item => item.recipeId)].filter(
-      (item, index, list): item is UUID => Boolean(item) && list.indexOf(item) === index
-    );
-    const recipes = await Promise.all(recipeIds.map(recipeId => recipeApi.getMyRecipe(recipeId)));
-    const recipeMap = new Map(recipes.map(recipe => [recipe.id, recipe]));
-    const randomItemMap = new Map(randomItems.map(item => [item.recipeId, item]));
-    const menuItems = recipeIds.map((recipeId, index) => {
-      const recipe = recipeMap.get(recipeId);
-      const existing = existingItems.find(item => item.recipeId === recipeId) ?? null;
-      const random = randomItemMap.get(recipeId) ?? null;
-      if (!recipe) return null;
-      return {
-        slotType: random?.slotType ?? existing?.slotType ?? null,
-        sortOrder: index,
-        recipeId: recipe.id,
-        recipeVersionId: recipe.contentVersionId,
-        purchaseState:
-          random?.purchaseState === "PENDING" || existing?.purchaseState === "PENDING"
-            ? ("PENDING" as const)
-            : ("READY" as const)
-      };
-    });
-    if (menuItems.some(item => item === null)) {
-      await uniPlatform.feedback.toast({ title: "当前计划包含已变化的菜谱，请刷新后重试", icon: "none" });
-      return;
+    const randomItems = await buildPlanMenuItems();
+    const existingMenuItems = existingItems
+      .flatMap((item, index) => {
+        if (!item.recipeId) return [];
+        return [{
+          slotType: item.slotType,
+          sortOrder: index,
+          recipeId: item.recipeId,
+          recipeVersionId: item.recipeVersionId,
+          purchaseState: item.purchaseState
+        }];
+      });
+    const menuItemMap = new Map(existingMenuItems.map(item => [item.recipeVersionId, item]));
+    for (const item of randomItems) {
+      menuItemMap.set(item.recipeVersionId, item);
     }
+    const menuItems = Array.from(menuItemMap.values()).map((item, index) => ({
+      ...item,
+      sortOrder: index
+    }));
     const body: CreateMealPlanRequest = {
       operationId: createOperationId(),
       planDate: planDate.value,
       mealSlot: state.value.conditions.mealSlot,
       expectedVersion: currentPlan?.version ?? null,
-      menuItems: menuItems.filter((item): item is NonNullable<typeof item> => Boolean(item))
+      menuItems
     };
     await mealApi.createPlan(body);
     state.value.pageStatus = "COMPLETED";
@@ -788,64 +795,96 @@ async function createPlan() {
   }
 }
 
-async function createShopping() {
-  if (!ensureLoggedIn(() => {
-    void createShopping();
-  })) return;
-  if (state.value.gap.loading) return;
-  if (!canCreateShopping.value || shoppingSubmitting.value) return;
-  shoppingSubmitting.value = true;
-  try {
-    await randomMealApi.createShoppingItems({
+async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
+  const shortageMap = new Map(
+    state.value.gap.items.map(item => [item.slotId, item.missingIngredients.some(ingredient => ingredient.inventoryStatus !== "ENOUGH")])
+  );
+  const imported = new Map<UUID, { recipeId: UUID; recipeVersionId: UUID }>();
+  for (const item of inspirationSlots.value) {
+    const categoryId = selectedCategoryIds.value[item.recipeVersionId];
+    if (!categoryId) throw new Error("请为每道灵感菜谱选择分类");
+    const result = await recipeApi.createMyRecipeFromInspiration({
       operationId: createOperationId(),
-      items: state.value.gap.items
-        .filter(item => item.action === "BUY")
-        .map(item => ({
-          slotId: item.slotId,
-          recipeId: item.recipeId,
-          recipeVersionId: item.recipeVersionId,
-          ingredients: item.missingIngredients
-            .filter(ingredient => ingredient.inventoryStatus !== "UNKNOWN")
-            .map(ingredient => ({
-              ingredientId: ingredient.ingredientId,
-              ingredientName: ingredient.ingredientName,
-              quantityText: ingredient.quantityText
-            }))
-        }))
+      sourceRecipeId: item.recipeId,
+      sourceVersionId: item.recipeVersionId,
+      categoryId
     });
-    state.value.pageStatus = "COMPLETED";
-    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
-    void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
+    imported.set(item.recipeVersionId, {
+      recipeId: result.recipe.id,
+      recipeVersionId: result.recipe.contentVersionId
+    });
+    await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuCategory, categoryId);
   }
-}
-
-function buildPlanMenuItems(): RandomPlanMenuItemInput[] {
-  const actionMap = new Map(state.value.gap.items.map(item => [item.slotId, item.action]));
   return activeSlots.value
     .slice()
     .sort((left, right) => left.slotIndex - right.slotIndex)
     .map(item => ({
       slotType: item.slotType,
       sortOrder: item.slotIndex,
-      recipeId: item.recipeId,
-      recipeVersionId: item.recipeVersionId,
-      purchaseState: actionMap.get(item.slotId) === "KEEP_PENDING" ? "PENDING" : "READY"
+      recipeId: imported.get(item.recipeVersionId)?.recipeId ?? item.recipeId,
+      recipeVersionId: imported.get(item.recipeVersionId)?.recipeVersionId ?? item.recipeVersionId,
+      purchaseState: shortageMap.get(item.slotId) ? "PENDING" : "READY"
     }));
 }
 
 function buildCurrentItems(targetSlotId: string) {
   return state.value.slots
     .filter(item => item.status !== "REMOVED" || item.slotId === targetSlotId)
-    .map(item => ({
-      slotId: item.slotId,
-      slotType: item.slotType,
-      recipeId: item.recipeId,
-      recipeVersionId: item.recipeVersionId
-    }));
+    .map(toCurrentRandomItem);
+}
+
+function toCurrentRandomItem(item: RandomSlotViewModel) {
+  return {
+    slotId: item.slotId,
+    slotType: item.slotType,
+    sourceType: item.sourceType,
+    recipeId: item.recipeId,
+    recipeVersionId: item.recipeVersionId
+  };
+}
+
+function buildSlotPlanForSlots(slots: RandomSlotViewModel[]): RandomSlotPlan {
+  return {
+    meatCount: slots.filter(item => item.slotType === "MEAT").length,
+    vegetableCount: slots.filter(item => item.slotType === "VEGETABLE").length,
+    soupCount: slots.filter(item => item.slotType === "SOUP").length,
+    stapleCount: slots.filter(item => item.slotType === "STAPLE").length,
+    breakfastStapleCount: slots.filter(item => item.slotType === "BREAKFAST_STAPLE").length,
+    breakfastProteinCount: slots.filter(item => item.slotType === "BREAKFAST_PROTEIN").length,
+    breakfastSideCount: slots.filter(item => item.slotType === "BREAKFAST_SIDE").length
+  };
+}
+
+function mergeRerollSlots(
+  lockedSlots: RandomSlotViewModel[],
+  openSlots: RandomSlotViewModel[],
+  generatedItems: RandomMenuItem[]
+) {
+  const generatedByType = new Map<RecipeSlotType, RandomMenuItem[]>();
+  for (const item of generatedItems) {
+    const bucket = generatedByType.get(item.slotType) ?? [];
+    bucket.push(item);
+    generatedByType.set(item.slotType, bucket);
+  }
+  const nextOpenSlots = openSlots.flatMap(slot => {
+    const bucket = generatedByType.get(slot.slotType) ?? [];
+    const generated = bucket.shift();
+    if (!generated) return [];
+    return [{
+      ...createRandomSlotViewModel(generated),
+      slotId: slot.slotId,
+      slotIndex: slot.slotIndex
+    }];
+  });
+  return [...lockedSlots, ...nextOpenSlots].sort((left, right) => left.slotIndex - right.slotIndex);
+}
+
+function uniqueIds(ids: UUID[]) {
+  return Array.from(new Set(ids.filter(item => Number.isInteger(item) && item > 0)));
+}
+
+function markRejectedRecipeVersion(recipeVersionId: UUID) {
+  rejectedRecipeVersionIds.value = uniqueIds([...rejectedRecipeVersionIds.value, recipeVersionId]);
 }
 
 function updateSlot(slotId: string, updater: (slot: RandomSlotViewModel) => void) {
@@ -859,43 +898,6 @@ function updateSlot(slotId: string, updater: (slot: RandomSlotViewModel) => void
 
 function isSlotReplacing(slotId: string) {
   return state.value.slots.some(item => item.slotId === slotId && item.status === "REPLACING");
-}
-
-function summarizeGapItems(items: RandomGapItemViewModel[]): RandomGapSummary {
-  return items.reduce<RandomGapSummary>(
-    (summary, item) => {
-      switch (item.status) {
-        case "OK":
-          summary.okCount += 1;
-          break;
-        case "PARTIAL":
-          summary.partialCount += 1;
-          break;
-        case "MISSING":
-          summary.missingCount += 1;
-          break;
-        case "UNKNOWN":
-          summary.unknownCount += 1;
-          break;
-      }
-      return summary;
-    },
-    {
-      okCount: 0,
-      partialCount: 0,
-      missingCount: 0,
-      unknownCount: 0
-    }
-  );
-}
-
-function createZeroGapSummary(): RandomGapSummary {
-  return {
-    okCount: 0,
-    partialCount: 0,
-    missingCount: 0,
-    unknownCount: 0
-  };
 }
 
 function handleRandomScroll(event: { detail?: { scrollTop?: number } }) {
@@ -919,7 +921,7 @@ function buildDefaultSlotPlan(mealSlot: MealSlot | null, peopleCount: number | n
   return {
     meatCount: Math.ceil(dishCount / 2),
     vegetableCount: Math.floor(dishCount / 2),
-    soupCount: 1,
+    soupCount: peopleCount >= 3 ? 1 : 0,
     stapleCount: 1,
     breakfastStapleCount: 0,
     breakfastProteinCount: 0,
@@ -944,16 +946,7 @@ function clampCount(value: number) {
 }
 
 function mealSlotLabel(value: MealSlot | null) {
-  switch (value) {
-    case "BREAKFAST":
-      return "早餐";
-    case "LUNCH":
-      return "午餐";
-    case "DINNER":
-      return "晚餐";
-    default:
-      return "未选择";
-  }
+  return formatMealSlot(value) || "未选择";
 }
 
 function peopleCountLabel(value: number | null) {
@@ -962,6 +955,31 @@ function peopleCountLabel(value: number | null) {
   if (value <= 4) return "3-4人";
   if (value <= 6) return "5-6人";
   return "7人以上";
+}
+
+function readRandomMenuConditionSnapshot(): RandomMenuConditionSnapshot {
+  const snapshot = uniPlatform.storage.getSync<RandomMenuConditionSnapshot>(APP_STORAGE_KEYS.randomMenuConditions);
+  return {
+    mealSlot: parseMealSlot(snapshot?.mealSlot),
+    peopleCount: parsePeopleCount(snapshot?.peopleCount),
+    fridgePreferred: typeof snapshot?.fridgePreferred === "boolean" ? snapshot.fridgePreferred : undefined
+  };
+}
+
+async function persistRandomMenuConditions() {
+  await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuConditions, {
+    mealSlot: state.value.conditions.mealSlot,
+    peopleCount: state.value.conditions.peopleCount,
+    fridgePreferred: state.value.conditions.fridgePreferred
+  } satisfies RandomMenuConditionSnapshot);
+}
+
+function resolveDefaultRandomMealSlot(): MealSlot {
+  const now = new Date();
+  const timeText = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const resolved = resolveMealSlotByTime(timeText);
+  if (resolved === "BREAKFAST" || resolved === "LUNCH" || resolved === "DINNER") return resolved;
+  return "DINNER";
 }
 
 function parseMealSlot(value: unknown): MealSlot | null {
@@ -993,6 +1011,10 @@ async function automatorApplySession(snapshot: { token: string; uid?: number; ex
   syncSlotPlan();
 }
 
+async function automatorApplySessionOnly(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+  await sessionStore.setSession(snapshot);
+}
+
 async function automatorClearSession() {
   loginModalStore.close();
   await sessionStore.clearSession();
@@ -1012,11 +1034,44 @@ function automatorPrimeConditions(next: { mealSlot?: MealSlot | null; peopleCoun
   clearMenuAndGap();
 }
 
+function automatorPrimeSlots(items: RandomMenuItem[]) {
+  state.value.slots = items.map(createRandomSlotViewModel);
+  state.value.gap = createEmptyGapState();
+  state.value.pageStatus = items.length ? "MENU_READY" : "CONFIG_READY";
+  errorText.value = "";
+}
+
+function automatorReadSlotCards() {
+  return {
+    hasMenu: hasMenu.value,
+    cards: state.value.slots.map(item => ({
+      slotType: item.slotType,
+      title: item.title,
+      recommendationReason: item.recommendationReason,
+      sourceType: item.sourceType,
+      fridgeFit: item.fridgeFit,
+      durationText: item.durationText,
+      servings: item.servings,
+      mainProteinType: item.mainProteinType,
+      flavorTags: item.flavorTags
+    }))
+  };
+}
+
 async function automatorTriggerGuestGenerate() {
   await generateMenu();
   return {
     loggedIn: sessionStore.isLoggedIn,
     loginVisible: loginModalStore.visible
+  };
+}
+
+function automatorTriggerGuestToggleFridge() {
+  toggleFridgePreferred();
+  return {
+    loggedIn: sessionStore.isLoggedIn,
+    loginVisible: loginModalStore.visible,
+    fridgePreferred: state.value.conditions.fridgePreferred
   };
 }
 
@@ -1056,9 +1111,13 @@ async function automatorApplyThemeSettings(snapshot: {
 
 defineExpose({
   automatorApplySession,
+  automatorApplySessionOnly,
   automatorClearSession,
   automatorPrimeConditions,
+  automatorPrimeSlots,
+  automatorReadSlotCards,
   automatorTriggerGuestGenerate,
+  automatorTriggerGuestToggleFridge,
   automatorReadThemeState,
   automatorResetThemeSettings,
   automatorApplyThemeSettings
@@ -1088,7 +1147,7 @@ defineExpose({
 
 .random-page {
   min-height: 100%;
-  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(288rpx + env(safe-area-inset-bottom));
 }
 
 .random-hero {
@@ -1109,8 +1168,6 @@ defineExpose({
 .board-card__eyebrow,
 .board-card__title,
 .board-card__description,
-.warning-card__title,
-.warning-card__desc,
 .notice__text,
 .notice__action {
   display: block;
@@ -1118,7 +1175,7 @@ defineExpose({
 
 .random-hero__eyebrow,
 .board-card__eyebrow {
-  color: var(--color-support-action);
+  color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -1135,14 +1192,12 @@ defineExpose({
 .random-hero__description,
 .board-card__description {
   margin-top: 12rpx;
-  color: var(--color-text-secondary);
+  color: var(--color-text);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
 }
 
 .notice,
-.warning-card,
-.empty-card,
 .board-card {
   margin-top: var(--space-md);
   border-radius: var(--radius-lg);
@@ -1171,33 +1226,9 @@ defineExpose({
   font-weight: var(--font-weight-heavy);
 }
 
-.warning-card {
-  padding: 22rpx 24rpx;
-}
-
-.warning-card__item + .warning-card__item {
-  margin-top: 14rpx;
-}
-
-.warning-card__title {
-  color: var(--color-state-warning-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
-}
-
-.warning-card__desc {
-  margin-top: 6rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.empty-card {
-  padding: 18rpx;
-}
-
 .board-card {
   padding: var(--space-md);
+  background: var(--material-card-accent-bg);
 }
 
 .board-card__head {
@@ -1227,9 +1258,61 @@ defineExpose({
 .board-card__summary-item {
   padding: 10rpx 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
+  background: var(--color-surface-mask-weak);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+}
+
+.random-generate-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 820;
+  padding: 20rpx var(--space-page) calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
+}
+
+.random-generate-bar__buttons {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.random-generate-bar__quota {
+  display: block;
+  margin-bottom: 12rpx;
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.random-generate-bar__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 96rpx;
+  margin: 0;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.random-generate-bar__button::after {
+  border: none;
+}
+
+.random-generate-bar__button--primary {
+  width: 100%;
+  flex: 1 1 100%;
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
 }
 
 .slot-list {
@@ -1282,6 +1365,103 @@ defineExpose({
   color: var(--color-state-warning-text);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
+}
+
+.plan-sheet__inspiration {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 20rpx;
+  border-radius: var(--radius-md);
+  background: var(--material-card-accent-bg);
+}
+
+.plan-sheet__section-head,
+.plan-sheet__category-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.plan-sheet__section-head {
+  align-items: flex-start;
+}
+
+.plan-sheet__section-title,
+.plan-sheet__category-title {
+  display: block;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-heavy);
+}
+
+.plan-sheet__section-note {
+  display: block;
+  margin-top: 6rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.plan-sheet__category-action {
+  flex: 0 0 auto;
+  color: var(--color-support-action);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-heavy);
+}
+
+.plan-sheet__creator {
+  display: flex;
+  gap: 12rpx;
+}
+
+.plan-sheet__creator-input {
+  flex: 1;
+  min-width: 0;
+  height: 68rpx;
+  padding: 0 18rpx;
+  border: 1rpx solid var(--material-input-border);
+  border-radius: var(--radius-md);
+  background: var(--material-input-bg);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.plan-sheet__creator-button {
+  flex: 0 0 104rpx;
+  height: 68rpx;
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  font-size: var(--font-size-xs);
+}
+
+.plan-sheet__category-row {
+  flex-direction: column;
+  padding-top: 14rpx;
+  border-top: 1rpx solid var(--material-card-border);
+}
+
+.plan-sheet__category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.plan-sheet__category-chip {
+  min-height: 50rpx;
+  padding: 0 20rpx;
+  border-radius: var(--radius-pill);
+  background: var(--material-input-bg);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 50rpx;
+}
+
+.plan-sheet__category-chip--active {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 .plan-sheet__footer {

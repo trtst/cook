@@ -245,6 +245,7 @@ export interface MyRecipeSummary {
 	duration: RecipeDuration | null;
 	difficultyText: string | null;
 	durationText: string | null;
+	estimatedCalories: number | null;
 	category: RecipeCategorySummary;
 	contentVersionId: UUID;
 	version: number;
@@ -357,6 +358,7 @@ export interface InspirationRecipeSummary {
 	duration: RecipeDuration | null;
 	difficultyText: string | null;
 	durationText: string | null;
+	estimatedCalories: number | null;
 	category: InspirationCategorySummary;
 	likeCount: number;
 	collectCount: number;
@@ -380,6 +382,23 @@ export interface InspirationRecipeDetail {
 	ownedRecipeId: UUID | null;
 	curatedByName: string | null;
 	updatedAt: IsoDateTime;
+}
+
+export type RecipeViewSourceType = "MY" | "INSPIRATION";
+
+export interface RecipeViewHistoryItem {
+	id: UUID;
+	recipeId: UUID | null;
+	title: string;
+	coverImageUrl: string | null;
+	sourceType: RecipeViewSourceType;
+	lastViewedAt: IsoDateTime;
+	isAvailable: boolean;
+}
+
+export interface RecipeViewHistoryQuery {
+	page?: number;
+	pageSize?: number;
 }
 
 export interface RecipeReportResult {
@@ -774,6 +793,16 @@ export const recipeApi = {
 	},
 	getMyRecipe(recipeId: UUID) {
 		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
+	},
+	recordRecipeView(recipeId: UUID, operationId: OperationId) {
+		return post<RecipeViewHistoryItem>(
+			`${cfg.domain}/api/users/me/recipe-history`,
+			{ recipeId },
+			{ idempotencyKey: operationId }
+		);
+	},
+	listRecipeViewHistory(query: RecipeViewHistoryQuery) {
+		return get<PageResult<RecipeViewHistoryItem>>(`${cfg.domain}/api/users/me/recipe-history`, { ...query });
 	},
 	generateMyRecipeAssistant(recipeId: UUID, body: GenerateRecipeAssistantRequest) {
 		return post<RecipeAssistantSnapshot>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}/assistant`, undefined, {

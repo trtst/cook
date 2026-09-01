@@ -1,7 +1,6 @@
 import { cfg } from "@/config";
-import { post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
+import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
 import type { RecipeDuration } from "@/apis/recipe";
-import type { ShoppingItemSummary } from "@/pages_pantry/apis/shopping";
 
 export type MealSlot = "BREAKFAST" | "LUNCH" | "DINNER";
 export type RecipeSlotType =
@@ -19,6 +18,7 @@ export type RandomGapStatus = "OK" | "PARTIAL" | "MISSING" | "UNKNOWN";
 export type RandomGapInventoryStatus = "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN";
 export type RandomGapDecision = "HAS" | "MISSING";
 export type RandomFridgeFit = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+export type RandomRecipeSourceType = "MY" | "INSPIRATION";
 
 export interface RandomSlotPlan {
   meatCount: number;
@@ -40,6 +40,7 @@ export interface RandomMenuItem {
   slotId: string;
   slotType: RecipeSlotType;
   slotIndex: number;
+  sourceType: RandomRecipeSourceType;
   recipeId: UUID;
   recipeVersionId: UUID;
   title: string;
@@ -51,6 +52,15 @@ export interface RandomMenuItem {
   flavorTags: string[];
   mainProteinType: RecipeProteinType | null;
   fridgeFit: RandomFridgeFit;
+  recommendationReason: string;
+}
+
+export interface RandomMenuQuotaResponse {
+  limitCount: number;
+  usedCount: number;
+  remainingCount: number;
+  windowStartedAt: IsoDateTime;
+  windowEndsAt: IsoDateTime;
 }
 
 export interface RandomMenuResponse {
@@ -60,6 +70,7 @@ export interface RandomMenuResponse {
   slotPlan: RandomSlotPlan;
   items: RandomMenuItem[];
   warnings: RandomMenuWarning[];
+  quota: RandomMenuQuotaResponse;
   generatedAt: IsoDateTime;
 }
 
@@ -68,11 +79,14 @@ export interface GenerateRandomMenuRequest {
   peopleCount: number;
   fridgePreferred: boolean;
   slotPlan?: RandomSlotPlan | null;
+  currentItems?: ReplaceRandomMenuCurrentItem[];
+  rejectedRecipeVersionIds?: UUID[];
 }
 
 export interface ReplaceRandomMenuCurrentItem {
   slotId: string;
   slotType: RecipeSlotType;
+  sourceType: RandomRecipeSourceType;
   recipeId: UUID;
   recipeVersionId: UUID;
 }
@@ -163,34 +177,17 @@ export interface CheckRandomMenuGapResponse {
   canCreatePlan: boolean;
 }
 
-export interface CreateRandomMenuShoppingItemsRequest {
-  operationId: OperationId;
-  items: Array<{
-    slotId: string;
-    recipeId: UUID;
-    recipeVersionId: UUID;
-    ingredients: Array<{
-      ingredientId?: UUID | null;
-      ingredientName: string;
-      quantityText: string | null;
-    }>;
-  }>;
-}
-
 export const randomMealApi = {
-  generateMenu(body: GenerateRandomMenuRequest) {
-    return post<RandomMenuResponse>(`${cfg.domain}/api/random-menus/generate`, body);
+  generateMenu(body: GenerateRandomMenuRequest, operationId: OperationId) {
+    return post<RandomMenuResponse>(`${cfg.domain}/api/random-menus/generate`, body, { idempotencyKey: operationId });
+  },
+  getQuota() {
+    return get<RandomMenuQuotaResponse>(`${cfg.domain}/api/random-menu-quota`);
   },
   replaceSlot(body: ReplaceRandomMenuSlotRequest) {
     return post<ReplaceRandomMenuSlotResponse>(`${cfg.domain}/api/random-menu-slots/replace`, body);
   },
   previewGap(body: CheckRandomMenuGapRequest) {
     return post<CheckRandomMenuGapResponse>(`${cfg.domain}/api/random-menu-gap/preview`, body);
-  },
-  createShoppingItems(body: CreateRandomMenuShoppingItemsRequest) {
-    const { operationId, ...payload } = body;
-    return post<ShoppingItemSummary[]>(`${cfg.domain}/api/shopping-items/from-random-menu`, payload, {
-      idempotencyKey: operationId
-    });
   }
 };

@@ -301,6 +301,41 @@ function resolveRecentArrangementFocus(status) {
 }
 
 describe("pages/home/index", () => {
+  it("未登录点击首页随机一桌快捷入口时只呼起登录，不直接跳随机页", async () => {
+    await clearSession();
+    const page = await program.reLaunch("/pages/home/index");
+    await page.callMethod("automatorClearSession");
+    await page.waitFor(".dock-action", 8000);
+
+    const actions = await page.$$(".dock-action");
+    expect(actions.length).toBeGreaterThanOrEqual(3);
+    await actions[2].tap();
+    await page.waitFor(300);
+
+    expect(await page.path).toBe("pages/home/index");
+    expect(await page.callMethod("automatorReadLoginGateState")).toEqual({
+      loggedIn: false,
+      loginVisible: true
+    });
+  });
+
+  it("未登录点击首页更多推荐时只呼起登录，不直接跳随机页", async () => {
+    await clearSession();
+    const page = await program.reLaunch("/pages/home/index");
+    await page.callMethod("automatorClearSession");
+    await page.waitFor(".section-heading__action", 8000);
+
+    const action = await page.$(".section-heading__action");
+    await action.tap();
+    await page.waitFor(300);
+
+    expect(await page.path).toBe("pages/home/index");
+    expect(await page.callMethod("automatorReadLoginGateState")).toEqual({
+      loggedIn: false,
+      loginVisible: true
+    });
+  });
+
   it("首页可以完成真实登录并展示未安排状态下的主状态", async () => {
     const session = await loginWithCode(createFreshPhone());
 

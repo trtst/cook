@@ -4,29 +4,8 @@
       <text class="bottom-bar__title">{{ title }}</text>
       <text class="bottom-bar__desc">{{ description }}</text>
     </view>
-    <view class="bottom-bar__actions">
-      <button
-        v-if="showGapButton"
-        class="secondary bottom-bar__button"
-        :disabled="loading"
-        @click="emit('openGap')"
-      >
-        {{ loading ? "处理中..." : "看看缺什么" }}
-      </button>
-      <button
-        v-if="showShoppingButton"
-        class="secondary bottom-bar__button"
-        :disabled="shoppingDisabled || loading"
-        @click="emit('createShopping')"
-      >
-        去采购缺口
-      </button>
-      <button
-        v-if="showPlanButton"
-        class="primary bottom-bar__button"
-        :disabled="planDisabled || loading"
-        @click="emit('createPlan')"
-      >
+    <view class="bottom-bar__actions bottom-bar__actions--single">
+      <button class="primary bottom-bar__button" :disabled="planDisabled || loading" @click="emit('createPlan')">
         加入计划
       </button>
     </view>
@@ -38,27 +17,19 @@ const props = defineProps<{
   title: string;
   description: string;
   loading: boolean;
-  showGapButton: boolean;
-  showPlanButton: boolean;
-  showShoppingButton: boolean;
   planDisabled: boolean;
-  shoppingDisabled: boolean;
 }>();
 
 const emit = defineEmits<{
-  openGap: [];
   createPlan: [];
-  createShopping: [];
 }>();
 </script>
 
 <style scoped lang="scss">
 .bottom-bar {
-  position: sticky;
-  bottom: 0;
   margin-top: var(--space-md);
-  padding: 24rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 24rpx;
+  border-radius: var(--radius-lg);
   background: var(--material-tabbar-bg);
   box-shadow: var(--material-tabbar-shadow);
   -webkit-backdrop-filter: var(--material-tabbar-filter);
@@ -88,6 +59,11 @@ const emit = defineEmits<{
   display: flex;
   gap: 16rpx;
   margin-top: 20rpx;
+}
+
+.bottom-bar__actions--single .bottom-bar__button {
+  width: 100%;
+  flex: 1 1 100%;
 }
 
 .bottom-bar__button {

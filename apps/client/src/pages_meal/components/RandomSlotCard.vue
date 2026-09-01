@@ -1,54 +1,56 @@
 <template>
-  <view :class="['slot-card', `slot-card--${slot.status.toLowerCase()}`]">
+  <view :class="['slot-card', `slot-card--${item.status.toLowerCase()}`]">
     <view class="slot-card__head">
       <view class="slot-card__head-main">
         <text class="slot-card__slot">{{ slotTypeLabel }}</text>
-        <text class="slot-card__title">{{ slot.title }}</text>
+        <text class="slot-card__title">{{ item.title }}</text>
+        <text class="slot-card__reason">{{ item.recommendationReason }}</text>
       </view>
       <text class="slot-card__badge">{{ fridgeFitLabel }}</text>
     </view>
 
     <view class="slot-card__meta">
-      <text v-if="slot.durationText" class="slot-card__meta-item">{{ slot.durationText }}</text>
-      <text v-if="slot.servings" class="slot-card__meta-item">{{ slot.servings }}人份</text>
-      <text v-if="slot.mainProteinType" class="slot-card__meta-item">{{ proteinLabel }}</text>
+      <text class="slot-card__meta-item">{{ sourceLabel }}</text>
+      <text v-if="item.durationText" class="slot-card__meta-item">{{ item.durationText }}</text>
+      <text v-if="item.servings" class="slot-card__meta-item">{{ item.servings }}人份</text>
+      <text v-if="item.mainProteinType" class="slot-card__meta-item">{{ proteinLabel }}</text>
     </view>
 
-    <view v-if="slot.flavorTags.length" class="tag-row">
-      <text v-for="item in slot.flavorTags" :key="item" class="tag-row__item">{{ item }}</text>
+    <view v-if="item.flavorTags.length" class="tag-row">
+      <text v-for="tag in item.flavorTags" :key="tag" class="tag-row__item">{{ tag }}</text>
     </view>
 
     <view class="constraint-row">
       <view
-        v-for="item in replaceChipOptions"
-        :key="`${item.key}-${item.value}`"
+        v-for="option in replaceChipOptions"
+        :key="`${option.key}-${option.value}`"
         :class="[
           'constraint-chip',
-          isConstraintActive(item.key, item.value) ? 'constraint-chip--active' : '',
-          interactionDisabled ? 'constraint-chip--disabled' : ''
+          isConstraintActive(option.key, option.value) ? 'constraint-chip--active' : '',
+          changeDisabled ? 'constraint-chip--disabled' : ''
         ]"
-        :hover-class="interactionDisabled ? '' : 'constraint-chip--hover'"
+        :hover-class="changeDisabled ? '' : 'constraint-chip--hover'"
         hover-stay-time="100"
-        @click="toggleConstraint(item.key, item.value)"
+        @click="toggleConstraint(option.key, option.value)"
       >
-        {{ item.label }}
+        {{ option.label }}
       </view>
     </view>
 
     <view class="action-row">
       <view
-        class="action-pill action-pill--muted action-pill--subtle"
+        class="action-pill action-pill--muted"
         :class="{ 'action-pill--disabled': interactionDisabled }"
         :hover-class="interactionDisabled ? '' : 'action-pill--hover'"
         hover-stay-time="100"
         @click="toggleLock()"
       >
-        {{ slot.status === "LOCKED" ? "取消保留" : "保留" }}
+        {{ item.status === "LOCKED" ? "已锁定" : "锁定" }}
       </view>
       <view
         class="action-pill action-pill--muted action-pill--subtle"
-        :class="{ 'action-pill--disabled': interactionDisabled }"
-        :hover-class="interactionDisabled ? '' : 'action-pill--hover'"
+        :class="{ 'action-pill--disabled': changeDisabled }"
+        :hover-class="changeDisabled ? '' : 'action-pill--hover'"
         hover-stay-time="100"
         @click="removeSlot()"
       >
@@ -56,12 +58,12 @@
       </view>
       <view
         class="action-pill action-pill--primary"
-        :class="{ 'action-pill--disabled': interactionDisabled }"
-        :hover-class="interactionDisabled ? '' : 'action-pill--hover'"
+        :class="{ 'action-pill--disabled': changeDisabled }"
+        :hover-class="changeDisabled ? '' : 'action-pill--hover'"
         hover-stay-time="100"
         @click="replaceSlot()"
       >
-        {{ slot.status === "REPLACING" ? "替换中..." : "换一道" }}
+        {{ item.status === "REPLACING" ? "替换中..." : "换一道" }}
       </view>
     </view>
   </view>
@@ -73,20 +75,19 @@ import type { RandomReplaceConstraintKind } from "../apis/random";
 import type { RandomSlotViewModel } from "../types/random";
 
 const props = defineProps<{
-  slot: RandomSlotViewModel;
+  item: RandomSlotViewModel;
   disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
-  lock: [slotId: string];
-  unlock: [slotId: string];
+  toggleLock: [slotId: string];
   remove: [slotId: string];
   replace: [slotId: string];
   toggleConstraint: [slotId: string, kind: RandomReplaceConstraintKind, value: string];
 }>();
 
 const slotTypeLabel = computed(() => {
-  switch (props.slot.slotType) {
+  switch (props.item.slotType) {
     case "MEAT":
       return "荤菜";
     case "VEGETABLE":
@@ -102,12 +103,12 @@ const slotTypeLabel = computed(() => {
     case "BREAKFAST_SIDE":
       return "水果/小食";
     default:
-      return props.slot.slotType;
+      return props.item.slotType;
   }
 });
 
 const fridgeFitLabel = computed(() => {
-  switch (props.slot.fridgeFit) {
+  switch (props.item.fridgeFit) {
     case "HIGH":
       return "冰箱匹配高";
     case "MEDIUM":
@@ -119,8 +120,10 @@ const fridgeFitLabel = computed(() => {
   }
 });
 
+const sourceLabel = computed(() => (props.item.sourceType === "MY" ? "我的菜谱" : "灵感菜谱"));
+
 const proteinLabel = computed(() => {
-  switch (props.slot.mainProteinType) {
+  switch (props.item.mainProteinType) {
     case "PORK":
       return "猪肉";
     case "CHICKEN":
@@ -138,7 +141,8 @@ const proteinLabel = computed(() => {
   }
 });
 
-const interactionDisabled = computed(() => props.disabled || props.slot.status === "REPLACING");
+const interactionDisabled = computed(() => props.disabled || props.item.status === "REPLACING");
+const changeDisabled = computed(() => interactionDisabled.value || props.item.status === "LOCKED");
 
 const replaceChipOptions = [
   { key: "FLAVOR" as const, value: "NOT_SPICY", label: "不辣" },
@@ -149,31 +153,27 @@ const replaceChipOptions = [
 ];
 
 function isConstraintActive(kind: RandomReplaceConstraintKind, value: string) {
-  return props.slot.replaceConstraints.some(item => item.kind === kind && item.value === value);
+  return props.item.replaceConstraints.some(item => item.kind === kind && item.value === value);
 }
 
 function toggleConstraint(kind: RandomReplaceConstraintKind, value: string) {
-  if (interactionDisabled.value) return;
-  emit("toggleConstraint", props.slot.slotId, kind, value);
+  if (changeDisabled.value) return;
+  emit("toggleConstraint", props.item.slotId, kind, value);
 }
 
 function toggleLock() {
   if (interactionDisabled.value) return;
-  if (props.slot.status === "LOCKED") {
-    emit("unlock", props.slot.slotId);
-    return;
-  }
-  emit("lock", props.slot.slotId);
+  emit("toggleLock", props.item.slotId);
 }
 
 function removeSlot() {
-  if (interactionDisabled.value) return;
-  emit("remove", props.slot.slotId);
+  if (changeDisabled.value) return;
+  emit("remove", props.item.slotId);
 }
 
 function replaceSlot() {
-  if (interactionDisabled.value) return;
-  emit("replace", props.slot.slotId);
+  if (changeDisabled.value) return;
+  emit("replace", props.item.slotId);
 }
 </script>
 
@@ -221,6 +221,13 @@ function replaceSlot() {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-heavy);
   line-height: var(--line-height-tight);
+}
+
+.slot-card__reason {
+  display: block;
+  margin-top: 8rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .slot-card__badge {
