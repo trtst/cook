@@ -5100,6 +5100,7 @@ export class AdminService {
       duration: content.duration,
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
+      estimatedCalories: content.estimatedCalories,
       category: toRecipeCategorySummary(recipe.category!),
       contentVersionId: recipe.currentVersionId,
       version: recipe.version,

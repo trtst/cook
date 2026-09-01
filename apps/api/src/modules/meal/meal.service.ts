@@ -3,6 +3,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException
@@ -39,8 +41,10 @@ import type {
   RandomGapItem,
   RandomGapSummary,
   RandomMenuItem,
+  RandomMenuQuotaResponse,
   RandomMenuResponse,
   RandomMenuWarning,
+  RandomRecipeSourceType,
   RandomReplaceConstraint,
   RandomSlotPlan,
   ReplaceRandomMenuCurrentItem,
@@ -277,6 +281,7 @@ type RandomRecipeRow = Prisma.RecipeGetPayload<{
 type RandomRecipeCandidate = {
   recipeId: UUID;
   recipeVersionId: UUID;
+  sourceType: RandomRecipeSourceType;
   title: string;
   coverUrl: string | null;
   content: RecipeContentSnapshot;
@@ -291,6 +296,11 @@ type RandomRecipeSlotSeed = {
   slotId: string;
   slotType: RecipeSlotType;
   slotIndex: number;
+};
+
+type RandomRecipePick = {
+  candidate: RandomRecipeCandidate;
+  recommendationReason: string;
 };
 
 type RandomInventoryFacts = {
@@ -308,6 +318,14 @@ type RandomTagSnapshot = {
 const recipeVersionTagSourcePriority = ["USER", "OPS", "AI", "AUTO"] as const;
 const mealAssistantRealtimeFillMissingCountThreshold = 2;
 const mealAssistantRealtimeFillMissingRatioThreshold = 0.4;
+const randomMenuQuotaWindowDays = 7;
+const defaultRandomMenuWeeklyLimit = 21;
+
+function randomMenuWeeklyLimit() {
+  const configured = Number(process.env.RANDOM_MENU_WEEKLY_LIMIT);
+  if (Number.isInteger(configured) && configured > 0) return configured;
+  return defaultRandomMenuWeeklyLimit;
+}
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -973,56 +991,183 @@ export class MealService {
 
   async generateRandomMenu(
     userId: UUID,
+    operationId: OperationId,
     mealSlot: string,
     peopleCount: number,
     fridgePreferred: boolean,
-    slotPlan?: RandomSlotPlan | null
+    slotPlan?: RandomSlotPlan | null,
+    currentItems: ReplaceRandomMenuCurrentItem[] = [],
+    rejectedRecipeVersionIds: UUID[] = []
   ): Promise<RandomMenuResponse> {
-    const normalizedMealSlot = normalizeCoreMealSlot(mealSlot);
-    const normalizedPeopleCount = this.normalizePeopleCount(peopleCount);
-    const normalizedSlotPlan = this.normalizeRandomSlotPlan(normalizedMealSlot, normalizedPeopleCount, slotPlan ?? null);
-    const [candidates, inventoryFacts] = await Promise.all([
-      this.loadRandomRecipeCandidates(userId),
-      this.loadRandomInventoryFacts(userId)
-    ]);
-
-    const seeds = this.buildRandomSlotSeeds(normalizedMealSlot, normalizedSlotPlan);
-    const selected = new Set<UUID>();
-    const items: RandomMenuItem[] = [];
-    const missingSlotTypes: RecipeSlotType[] = [];
-
-    for (const seed of seeds) {
-      const candidate = this.pickRandomRecipeCandidate({
+    return this.prisma.$transaction(async tx => {
+      const normalizedMealSlot = normalizeCoreMealSlot(mealSlot);
+      const normalizedPeopleCount = this.normalizePeopleCount(peopleCount);
+      const normalizedSlotPlan = this.normalizeRandomSlotPlan(normalizedMealSlot, normalizedPeopleCount, slotPlan ?? null);
+      const normalizedCurrentItems = currentItems.map(item => ({
+        slotId: item.slotId,
+        slotType: normalizeRecipeSlotType(item.slotType),
+        sourceType: item.sourceType,
+        recipeId: item.recipeId,
+        recipeVersionId: item.recipeVersionId
+      }));
+      const requestHash = JSON.stringify({
         mealSlot: normalizedMealSlot,
-        slotType: seed.slotType,
-        candidates,
-        excludedVersionIds: selected,
-        currentItems: items.map(item => ({
-          slotId: item.slotId,
-          slotType: item.slotType,
-          recipeId: item.recipeId,
-          recipeVersionId: item.recipeVersionId
-        })),
-        inventoryFacts,
+        peopleCount: normalizedPeopleCount,
         fridgePreferred,
-        replaceConstraints: []
+        slotPlan: normalizedSlotPlan,
+        currentItems: normalizedCurrentItems,
+        rejectedRecipeVersionIds
       });
-      if (!candidate) {
-        missingSlotTypes.push(seed.slotType);
-        continue;
-      }
-      selected.add(candidate.recipeVersionId);
-      items.push(this.toRandomMenuItem(seed, candidate, inventoryFacts));
-    }
+      const repeated = await getIdempotentResult<RandomMenuResponse>(
+        tx,
+        operationId,
+        "random-menu:generate",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "random-menu:generate", userId, null, requestHash);
 
+      const [candidates, inventoryFacts, recentRecipeVersionIds] = await Promise.all([
+        this.loadRandomRecipeCandidates(userId, tx),
+        this.loadRandomInventoryFacts(userId, tx),
+        this.loadRecentRandomRecipeVersionIds(userId, tx)
+      ]);
+
+      const seeds = this.buildRandomSlotSeeds(normalizedMealSlot, normalizedSlotPlan);
+      const sourcePlans = this.buildRandomSourcePlans(seeds);
+      const selected = new Set<UUID>(
+        [
+          ...normalizedCurrentItems.map(item => item.recipeVersionId),
+          ...rejectedRecipeVersionIds
+        ].filter((item): item is UUID => Number.isInteger(item) && item > 0)
+      );
+      const items: RandomMenuItem[] = [];
+      const missingSlotTypes: RecipeSlotType[] = [];
+
+      for (const seed of seeds) {
+        const picked = this.pickRandomRecipeCandidate({
+          mealSlot: normalizedMealSlot,
+          slotType: seed.slotType,
+          candidates,
+          excludedVersionIds: selected,
+          currentItems: [
+            ...normalizedCurrentItems,
+            ...items.map(item => ({
+              slotId: item.slotId,
+              slotType: item.slotType,
+              recipeId: item.recipeId,
+              recipeVersionId: item.recipeVersionId
+            }))
+          ],
+          inventoryFacts,
+          fridgePreferred,
+          recentRecipeVersionIds,
+          sourcePriority: this.resolveRandomSourcePriority(sourcePlans, seed.slotType),
+          replaceConstraints: []
+        });
+        if (!picked) {
+          missingSlotTypes.push(seed.slotType);
+          continue;
+        }
+        const candidate = picked.candidate;
+        selected.add(candidate.recipeVersionId);
+        this.consumeRandomSourcePlan(sourcePlans, seed.slotType, candidate.sourceType);
+        items.push(this.toRandomMenuItem(seed, candidate, inventoryFacts, picked.recommendationReason));
+      }
+      const quota = await this.consumeRandomMenuQuota(tx, userId);
+
+      const result = {
+        mealSlot: normalizedMealSlot,
+        peopleCount: normalizedPeopleCount,
+        fridgePreferred,
+        slotPlan: normalizedSlotPlan,
+        items,
+        warnings: this.buildRandomMenuWarnings(seeds.length, items.length, missingSlotTypes),
+        quota,
+        generatedAt: toIsoDate(new Date())
+      };
+      await completeIdempotentOperation(tx, operationId, "random-menu:generate", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async getRandomMenuQuota(userId: UUID): Promise<RandomMenuQuotaResponse> {
+    const limitCount = randomMenuWeeklyLimit();
+    const now = new Date();
+    const usage = await this.prisma.randomMenuUsage.findUnique({
+      where: { userId }
+    });
+    if (!usage || usage.windowEndsAt <= now) {
+      const windowStartedAt = now;
+      const windowEndsAt = this.addRandomMenuQuotaWindow(windowStartedAt);
+      return {
+        limitCount,
+        usedCount: 0,
+        remainingCount: limitCount,
+        windowStartedAt: toIsoDate(windowStartedAt),
+        windowEndsAt: toIsoDate(windowEndsAt)
+      };
+    }
+    return this.toRandomMenuQuota(usage, limitCount);
+  }
+
+  private async consumeRandomMenuQuota(db: MealDb, userId: UUID): Promise<RandomMenuQuotaResponse> {
+    const limitCount = randomMenuWeeklyLimit();
+    const now = new Date();
+    const quotaLockKey = BigInt(userId) * 100000n + 2901n;
+    await db.$queryRaw`SELECT 1 AS "locked" FROM pg_advisory_xact_lock(${quotaLockKey})`;
+    await db.$queryRaw`SELECT "id" FROM "random_menu_usages" WHERE "user_id" = ${userId} FOR UPDATE`;
+    const current = await db.randomMenuUsage.findUnique({
+        where: { userId }
+    });
+    if (!current || current.windowEndsAt <= now) {
+      const created = await db.randomMenuUsage.upsert({
+          where: { userId },
+          create: {
+            userId,
+            windowStartedAt: now,
+            windowEndsAt: this.addRandomMenuQuotaWindow(now),
+            usedCount: 1
+          },
+          update: {
+            windowStartedAt: now,
+            windowEndsAt: this.addRandomMenuQuotaWindow(now),
+            usedCount: 1,
+            version: { increment: 1 }
+          }
+      });
+      return this.toRandomMenuQuota(created, limitCount);
+    }
+    if (current.usedCount >= limitCount) {
+      throw new HttpException("本周随机次数已用完", HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const updated = await db.randomMenuUsage.update({
+        where: { userId },
+        data: {
+          usedCount: { increment: 1 },
+          version: { increment: 1 }
+        }
+    });
+    return this.toRandomMenuQuota(updated, limitCount);
+  }
+
+  private addRandomMenuQuotaWindow(startedAt: Date) {
+    return new Date(startedAt.getTime() + randomMenuQuotaWindowDays * 24 * 60 * 60 * 1000);
+  }
+
+  private toRandomMenuQuota(
+    usage: { windowStartedAt: Date; windowEndsAt: Date; usedCount: number },
+    limitCount: number
+  ): RandomMenuQuotaResponse {
+    const usedCount = Math.min(limitCount, Math.max(0, usage.usedCount));
     return {
-      mealSlot: normalizedMealSlot,
-      peopleCount: normalizedPeopleCount,
-      fridgePreferred,
-      slotPlan: normalizedSlotPlan,
-      items,
-      warnings: this.buildRandomMenuWarnings(seeds.length, items.length, missingSlotTypes),
-      generatedAt: toIsoDate(new Date())
+      limitCount,
+      usedCount,
+      remainingCount: Math.max(0, limitCount - usedCount),
+      windowStartedAt: toIsoDate(usage.windowStartedAt),
+      windowEndsAt: toIsoDate(usage.windowEndsAt)
     };
   }
 
@@ -1056,6 +1201,7 @@ export class MealService {
     const normalizedCurrentItems = currentItems.map(item => ({
       slotId: item.slotId,
       slotType: normalizeRecipeSlotType(item.slotType),
+      sourceType: item.sourceType,
       recipeId: item.recipeId,
       recipeVersionId: item.recipeVersionId
     }));
@@ -1065,12 +1211,13 @@ export class MealService {
     }
     excludedVersionIds.add(currentTarget.recipeVersionId);
 
-    const [candidates, inventoryFacts] = await Promise.all([
+    const [candidates, inventoryFacts, recentRecipeVersionIds] = await Promise.all([
       this.loadRandomRecipeCandidates(userId),
-      this.loadRandomInventoryFacts(userId)
+      this.loadRandomInventoryFacts(userId),
+      this.loadRecentRandomRecipeVersionIds(userId)
     ]);
 
-    const candidate = this.pickRandomRecipeCandidate({
+    const picked = this.pickRandomRecipeCandidate({
       mealSlot: normalizedMealSlot,
       slotType: normalizedTargetSlotType,
       candidates,
@@ -1078,10 +1225,12 @@ export class MealService {
       currentItems: normalizedCurrentItems.filter(item => item.slotId !== targetSlotId),
       inventoryFacts,
       fridgePreferred,
+      recentRecipeVersionIds,
+      sourcePriority: this.resolveReplaceSourcePriority(currentTarget.sourceType),
       replaceConstraints
     });
 
-    if (!candidate) {
+    if (!picked) {
       return {
         requestSeq,
         slot: null,
@@ -1095,7 +1244,7 @@ export class MealService {
 
     return {
       requestSeq,
-      slot: this.toRandomMenuItem(slotSeed, candidate, inventoryFacts),
+      slot: this.toRandomMenuItem(slotSeed, picked.candidate, inventoryFacts, picked.recommendationReason),
       warning: null
     };
   }
@@ -1122,8 +1271,14 @@ export class MealService {
       this.prisma.recipe.findMany({
         where: {
           id: { in: items.map(item => item.recipeId) },
-          ownerId: userId,
-          status: "ACTIVE"
+          status: "ACTIVE",
+          OR: [
+            { ownerId: userId },
+            {
+              ownerId: null,
+              inspirationCategoryId: { not: null }
+            }
+          ]
         },
         include: {
           currentVersion: true
@@ -1189,7 +1344,7 @@ export class MealService {
     return {
       items: gapItems,
       summary,
-      canCreatePlan: gapItems.every(item => item.missingIngredients.length === 0)
+      canCreatePlan: gapItems.length > 0
     };
   }
 
@@ -3545,7 +3700,25 @@ export class MealService {
   ): Promise<PlanMenuItemInput[]> {
     const resolved: PlanMenuItemInput[] = [];
     for (const item of menuItems) {
-      const recipe = await this.requireOwnedRecipe(tx, userId, item.recipeId);
+      const recipe = await tx.recipe.findFirst({
+        where: {
+          id: item.recipeId,
+          status: "ACTIVE",
+          OR: [
+            { ownerId: userId },
+            {
+              ownerId: null,
+              inspirationCategoryId: { not: null }
+            }
+          ]
+        },
+        include: {
+          currentVersion: true
+        }
+      });
+      if (!recipe) {
+        throw new NotFoundException("菜谱不存在");
+      }
       if (recipe.currentVersionId !== item.recipeVersionId) {
         throw new ConflictException("菜谱版本已变化，请重新选择");
       }
@@ -3641,7 +3814,7 @@ export class MealService {
     return {
       meatCount: Math.ceil(dishCount / 2),
       vegetableCount: Math.floor(dishCount / 2),
-      soupCount: 1,
+      soupCount: peopleCount >= 3 ? 1 : 0,
       stapleCount: 1,
       breakfastStapleCount: 0,
       breakfastProteinCount: 0,
@@ -3675,12 +3848,87 @@ export class MealService {
     return slots;
   }
 
-  private async loadRandomRecipeCandidates(userId: UUID): Promise<RandomRecipeCandidate[]> {
+  private buildRandomSourcePlans(seeds: RandomRecipeSlotSeed[]) {
+    const plans = new Map<RecipeSlotType, Record<RandomRecipeSourceType, number>>();
+    const slotTypes = Array.from(new Set(seeds.map(seed => seed.slotType)));
+    for (const slotType of slotTypes) {
+      const count = seeds.filter(seed => seed.slotType === slotType).length;
+      plans.set(slotType, this.allocateRandomSourceCounts(slotType, count));
+    }
+    return plans;
+  }
+
+  private allocateRandomSourceCounts(slotType: RecipeSlotType, count: number): Record<RandomRecipeSourceType, number> {
+    const myRatio = this.randomMyRecipeRatio(slotType);
+    const raw = {
+      MY: count * myRatio,
+      INSPIRATION: count * (1 - myRatio)
+    };
+    const result: Record<RandomRecipeSourceType, number> = {
+      MY: Math.floor(raw.MY),
+      INSPIRATION: Math.floor(raw.INSPIRATION)
+    };
+    let remaining = count - result.MY - result.INSPIRATION;
+    const order: RandomRecipeSourceType[] = ["MY", "INSPIRATION"];
+    order.sort((left, right) => {
+      const diff = raw[right] - Math.floor(raw[right]) - (raw[left] - Math.floor(raw[left]));
+      if (diff !== 0) return diff;
+      return left === "MY" ? -1 : 1;
+    });
+    for (const sourceType of order) {
+      if (remaining <= 0) break;
+      result[sourceType] += 1;
+      remaining -= 1;
+    }
+    return result;
+  }
+
+  private randomMyRecipeRatio(slotType: RecipeSlotType) {
+    if (slotType === "MEAT" || slotType === "BREAKFAST_PROTEIN") return 0.7;
+    if (slotType === "STAPLE" || slotType === "BREAKFAST_STAPLE") return 0.6;
+    return 0.5;
+  }
+
+  private resolveRandomSourcePriority(
+    plans: Map<RecipeSlotType, Record<RandomRecipeSourceType, number>>,
+    slotType: RecipeSlotType
+  ): RandomRecipeSourceType[] {
+    const plan = plans.get(slotType);
+    if (!plan) return ["MY", "INSPIRATION"];
+    return plan.MY > 0 ? ["MY", "INSPIRATION"] : ["INSPIRATION", "MY"];
+  }
+
+  private consumeRandomSourcePlan(
+    plans: Map<RecipeSlotType, Record<RandomRecipeSourceType, number>>,
+    slotType: RecipeSlotType,
+    sourceType: RandomRecipeSourceType
+  ) {
+    const plan = plans.get(slotType);
+    if (!plan) return;
+    if (plan[sourceType] > 0) {
+      plan[sourceType] -= 1;
+      return;
+    }
+    const other = sourceType === "MY" ? "INSPIRATION" : "MY";
+    if (plan[other] > 0) plan[other] -= 1;
+  }
+
+  private resolveReplaceSourcePriority(sourceType: RandomRecipeSourceType): RandomRecipeSourceType[] {
+    return sourceType === "MY" ? ["MY", "INSPIRATION"] : ["INSPIRATION", "MY"];
+  }
+
+  private async loadRandomRecipeCandidates(userId: UUID, db: MealDb = this.prisma): Promise<RandomRecipeCandidate[]> {
     const [recipes, profile] = await Promise.all([
-      this.prisma.recipe.findMany({
+      db.recipe.findMany({
         where: {
-          ownerId: userId,
-          status: "ACTIVE"
+          status: "ACTIVE",
+          OR: [
+            { ownerId: userId },
+            {
+              ownerId: null,
+              inspirationCategoryId: { not: null }
+            }
+          ]
         },
         include: {
           currentVersion: {
@@ -3690,7 +3938,7 @@ export class MealService {
           }
         }
       }),
-      this.prisma.userTasteProfile.findUnique({
+      db.userTasteProfile.findUnique({
         where: { userId }
       })
     ]);
@@ -3713,6 +3961,7 @@ export class MealService {
         return {
           recipeId: recipe.id,
           recipeVersionId: recipe.currentVersionId,
+          sourceType: recipe.ownerId === userId ? "MY" : "INSPIRATION",
           title: recipe.title,
           coverUrl: recipe.coverImageUrl ?? null,
           content,
@@ -3732,8 +3981,8 @@ export class MealService {
     return !content.ingredients.some(ingredient => blockedNames.has(normalizeNameKey(ingredient.ingredientName)));
   }
 
-  private async loadRandomInventoryFacts(userId: UUID): Promise<RandomInventoryFacts> {
-    const fridgeItems = await this.prisma.fridgeItem.findMany({
+  private async loadRandomInventoryFacts(userId: UUID, db: MealDb = this.prisma): Promise<RandomInventoryFacts> {
+    const fridgeItems = await db.fridgeItem.findMany({
       where: {
         userId,
         available: true
@@ -3751,6 +4000,32 @@ export class MealService {
     };
   }
 
+  private async loadRecentRandomRecipeVersionIds(userId: UUID, db: MealDb = this.prisma): Promise<Set<UUID>> {
+    const today = new Date();
+    const todayOnly = parseDateOnly(today.toISOString().slice(0, 10));
+    const since = new Date(todayOnly);
+    since.setUTCDate(since.getUTCDate() - 13);
+    const rows = await db.mealPlanDish.findMany({
+      where: {
+        planItem: {
+          userId,
+          planDate: {
+            gte: since,
+            lte: todayOnly
+          },
+          OR: [
+            { status: "COMPLETED" },
+            { menuLockedAt: { not: null } }
+          ]
+        }
+      },
+      select: {
+        recipeVersionId: true
+      }
+    });
+    return new Set(rows.map(item => item.recipeVersionId));
+  }
+
   private pickRandomRecipeCandidate(params: {
     mealSlot: MealSlot;
     slotType: RecipeSlotType;
@@ -3759,8 +4034,10 @@ export class MealService {
     currentItems: Array<{ slotId: string; slotType: RecipeSlotType; recipeId: UUID; recipeVersionId: UUID }>;
     inventoryFacts: RandomInventoryFacts;
     fridgePreferred: boolean;
+    recentRecipeVersionIds: Set<UUID>;
+    sourcePriority: RandomRecipeSourceType[];
     replaceConstraints: RandomReplaceConstraint[];
-  }): RandomRecipeCandidate | null {
+  }): RandomRecipePick | null {
     const candidateMap = new Map(params.candidates.map(item => [item.recipeVersionId, item]));
     const avoidNames = new Set(
       params.replaceConstraints
@@ -3803,16 +4080,14 @@ export class MealService {
 
     if (!filtered.length) return null;
 
-    return filtered
-      .map(candidate => ({
-        candidate,
-        score: this.scoreRandomCandidate(candidate, params.slotType, existingProteinTypes, params.inventoryFacts, useFridgeFirst),
-        tieBreaker: Math.random()
-      }))
-      .sort((left, right) => {
-        if (right.score !== left.score) return right.score - left.score;
-        return right.tieBreaker - left.tieBreaker;
-      })[0]?.candidate ?? null;
+    for (const sourceType of params.sourcePriority) {
+      const scoped = filtered.filter(candidate => candidate.sourceType === sourceType);
+      if (scoped.length) {
+        return this.pickBestRandomCandidate(scoped, params.slotType, existingProteinTypes, params.inventoryFacts, useFridgeFirst, params.recentRecipeVersionIds);
+      }
+    }
+
+    return this.pickBestRandomCandidate(filtered, params.slotType, existingProteinTypes, params.inventoryFacts, useFridgeFirst, params.recentRecipeVersionIds);
   }
 
   private randomCandidateSupportsMealSlot(candidate: RandomRecipeCandidate, mealSlot: MealSlot) {
@@ -3828,30 +4103,91 @@ export class MealService {
     return false;
   }
 
+  private pickBestRandomCandidate(
+    candidates: RandomRecipeCandidate[],
+    slotType: RecipeSlotType,
+    existingProteinTypes: Set<RecipeProteinType>,
+    inventoryFacts: RandomInventoryFacts,
+    useFridgeFirst: boolean,
+    recentRecipeVersionIds: Set<UUID>
+  ): RandomRecipePick | null {
+    return candidates
+      .map(candidate => ({
+        candidate,
+        ...this.scoreRandomCandidate(candidate, slotType, existingProteinTypes, inventoryFacts, useFridgeFirst, recentRecipeVersionIds),
+        tieBreaker: Math.random()
+      }))
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        return right.tieBreaker - left.tieBreaker;
+      })
+      .map(item => ({
+        candidate: item.candidate,
+        recommendationReason: item.recommendationReason
+      }))[0] ?? null;
+  }
+
   private scoreRandomCandidate(
     candidate: RandomRecipeCandidate,
     slotType: RecipeSlotType,
     existingProteinTypes: Set<RecipeProteinType>,
     inventoryFacts: RandomInventoryFacts,
-    useFridgeFirst: boolean
+    useFridgeFirst: boolean,
+    recentRecipeVersionIds: Set<UUID>
   ) {
     let score = Math.random();
     const fridgeFit = this.computeRandomFridgeFit(candidate.content, inventoryFacts);
+    score += fridgeFit === "HIGH" ? 40 : fridgeFit === "MEDIUM" ? 24 : fridgeFit === "LOW" ? 8 : 0;
     if (useFridgeFirst) {
-      score += fridgeFit === "HIGH" ? 4 : fridgeFit === "MEDIUM" ? 2 : fridgeFit === "LOW" ? 1 : 0;
+      score += fridgeFit === "HIGH" ? 20 : fridgeFit === "MEDIUM" ? 12 : fridgeFit === "LOW" ? 4 : 0;
     }
+    const notRecentlyEaten = !recentRecipeVersionIds.has(candidate.recipeVersionId);
+    score += notRecentlyEaten ? 12 : -18;
+    const proteinComplementary =
+      slotType === "MEAT" &&
+      Boolean(candidate.mainProteinType) &&
+      candidate.mainProteinType !== "NONE" &&
+      !existingProteinTypes.has(candidate.mainProteinType as RecipeProteinType);
     if (slotType === "MEAT" && candidate.mainProteinType && candidate.mainProteinType !== "NONE") {
-      score += existingProteinTypes.has(candidate.mainProteinType) ? -2 : 2;
+      score += proteinComplementary ? 8 : -8;
     }
-    if (candidate.content.duration === "WITHIN_15") score += 0.5;
-    return score;
+    const quick = candidate.content.duration === "WITHIN_15";
+    if (quick) score += 2;
+    return {
+      score,
+      recommendationReason: this.resolveRandomRecommendationReason({
+        fridgeFit,
+        notRecentlyEaten,
+        proteinComplementary,
+        quick
+      })
+    };
   }
 
-  private toRandomMenuItem(seed: RandomRecipeSlotSeed, candidate: RandomRecipeCandidate, inventoryFacts: RandomInventoryFacts): RandomMenuItem {
+  private resolveRandomRecommendationReason(input: {
+    fridgeFit: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+    notRecentlyEaten: boolean;
+    proteinComplementary: boolean;
+    quick: boolean;
+  }) {
+    if (input.fridgeFit === "HIGH" || input.fridgeFit === "MEDIUM") return "冰箱里有";
+    if (input.notRecentlyEaten) return "最近没吃";
+    if (input.proteinComplementary) return "搭配互补";
+    if (input.quick) return "做起来快";
+    return "推荐尝试";
+  }
+
+  private toRandomMenuItem(
+    seed: RandomRecipeSlotSeed,
+    candidate: RandomRecipeCandidate,
+    inventoryFacts: RandomInventoryFacts,
+    recommendationReason: string
+  ): RandomMenuItem {
     return {
       slotId: seed.slotId,
       slotType: seed.slotType,
       slotIndex: seed.slotIndex,
+      sourceType: candidate.sourceType,
       recipeId: candidate.recipeId,
       recipeVersionId: candidate.recipeVersionId,
       title: candidate.title,
@@ -3862,7 +4198,8 @@ export class MealService {
       estimatedCalories: candidate.content.estimatedCalories ?? null,
       flavorTags: candidate.flavorTags,
       mainProteinType: candidate.mainProteinType,
-      fridgeFit: this.computeRandomFridgeFit(candidate.content, inventoryFacts)
+      fridgeFit: this.computeRandomFridgeFit(candidate.content, inventoryFacts),
+      recommendationReason
     };
   }
 

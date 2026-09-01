@@ -42,6 +42,7 @@ import {
   MealPlanCookAssistantModel,
   MealPlanModel,
   RandomGapPreviewModel,
+  RandomMenuQuotaModel,
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
   SharePreviewModel,
@@ -177,11 +178,46 @@ export class MealController {
   @Post("random-menus/generate")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
   @ApiOkModel(RandomMenuModel, "按餐次、人数和冰箱优先生成一桌随机菜单")
-  generateRandomMenu(@Req() request: RequestWithUser, @Body() body: GenerateRandomMenuDto) {
+  generateRandomMenu(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: GenerateRandomMenuDto
+  ) {
     return this.mealService
-      .generateRandomMenu(request.user.userId, body.mealSlot, body.peopleCount, body.fridgePreferred, body.slotPlan ?? null)
+      .generateRandomMenu(
+        request.user.userId,
+        operationId,
+        body.mealSlot,
+        body.peopleCount,
+        body.fridgePreferred,
+        body.slotPlan ?? null,
+        (body.currentItems ?? []).map(item => ({
+          slotId: item.slotId,
+          slotType: item.slotType as
+            | "MEAT"
+            | "VEGETABLE"
+            | "SOUP"
+            | "STAPLE"
+            | "BREAKFAST_STAPLE"
+            | "BREAKFAST_PROTEIN"
+            | "BREAKFAST_SIDE",
+          sourceType: item.sourceType,
+          recipeId: item.recipeId,
+          recipeVersionId: item.recipeVersionId
+        })),
+        body.rejectedRecipeVersionIds ?? []
+      )
       .then(result => ok(result));
+  }
+
+  @Get("random-menu-quota")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(RandomMenuQuotaModel, "读取当前用户随机一桌生成次数")
+  getRandomMenuQuota(@Req() request: RequestWithUser) {
+    return this.mealService.getRandomMenuQuota(request.user.userId).then(result => ok(result));
   }
 
   @Post("random-menu-slots/replace")
@@ -206,6 +242,7 @@ export class MealController {
             | "BREAKFAST_STAPLE"
             | "BREAKFAST_PROTEIN"
             | "BREAKFAST_SIDE",
+          sourceType: item.sourceType,
           recipeId: item.recipeId,
           recipeVersionId: item.recipeVersionId
         })),

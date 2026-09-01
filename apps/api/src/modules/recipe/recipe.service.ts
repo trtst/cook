@@ -43,6 +43,7 @@ import type {
   RecipeIngredientInput,
   RecipeReportSummary,
   RecipeSceneSummary,
+  RecipeViewHistoryItem,
   ReorderItem,
   SaveCollectionRecipeResponse,
   SaveRecipeDraftResponse,
@@ -157,6 +158,20 @@ type RecipeRecommendationRow = Prisma.RecipeRecommendationGetPayload<{
   };
 }>;
 
+type RecipeViewHistoryRow = Prisma.RecipeViewHistoryGetPayload<{
+  include: {
+    recipe: {
+      select: {
+        ownerId: true;
+        inspirationCategoryId: true;
+        status: true;
+        title: true;
+        coverImageUrl: true;
+      };
+    };
+  };
+}>;
+
 type EditRefs = {
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
@@ -178,9 +193,30 @@ type VersionImageState = {
 
 const activeRecipeStatuses: RecipeStatus[] = ["ACTIVE", "RECYCLED", "BLOCKED"];
 const recipeImageUrlPattern = /\/api\/public-assets\/recipe-images\/([^/?#]+)/i;
+const recipeViewHistoryLimit = 100;
+const recipeViewHistoryPageSize = 20;
 
 function toIsoDate(value: Date) {
   return value.toISOString();
+}
+
+function toRecipeViewHistoryItem(row: RecipeViewHistoryRow, userId: UUID): RecipeViewHistoryItem {
+  const recipe = row.recipe;
+  const isAvailable = Boolean(
+    recipe &&
+      ((row.sourceType === "MY" && recipe.ownerId === userId && activeRecipeStatuses.includes(recipe.status)) ||
+        (row.sourceType === "INSPIRATION" && recipe.ownerId === null && recipe.inspirationCategoryId !== null && recipe.status === "ACTIVE"))
+  );
+
+  return {
+    id: row.id,
+    recipeId: row.recipeId,
+    title: isAvailable && recipe ? recipe.title : "该菜谱已不可用",
+    coverImageUrl: isAvailable && recipe ? recipe.coverImageUrl : null,
+    sourceType: row.sourceType,
+    lastViewedAt: toIsoDate(row.lastViewedAt),
+    isAvailable
+  };
 }
 
 const mealSlotRank: Record<MealSlot, number> = {
@@ -1455,6 +1491,121 @@ export class RecipeService {
     };
   }
 
+  async recordRecipeView(userId: UUID, operationId: OperationId, recipeId: UUID): Promise<RecipeViewHistoryItem> {
+    const requestHash = String(recipeId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<RecipeViewHistoryItem>(tx, operationId, "recipe:view-history", userId, null, requestHash);
+      if (repeated) return repeated;
+
+      await startIdempotentOperation(tx, operationId, "recipe:view-history", userId, null, requestHash);
+      const recipe = await tx.recipe.findFirst({
+        where: {
+          id: recipeId,
+          OR: [
+            { ownerId: userId, status: { in: activeRecipeStatuses } },
+            { ownerId: null, inspirationCategoryId: { not: null }, status: "ACTIVE" }
+          ]
+        },
+        select: {
+          id: true,
+          ownerId: true,
+          inspirationCategoryId: true,
+          title: true,
+          coverImageUrl: true,
+          status: true
+        }
+      });
+      if (!recipe) throw new NotFoundException("菜谱不存在或暂不可查看");
+
+      const sourceType = recipe.ownerId === userId ? "MY" : "INSPIRATION";
+      const history = await tx.recipeViewHistory.upsert({
+        where: {
+          userId_recipeId: {
+            userId,
+            recipeId
+          }
+        },
+        create: {
+          userId,
+          recipeId,
+          sourceType,
+          titleAtViewed: recipe.title,
+          lastViewedAt: new Date()
+        },
+        update: {
+          sourceType,
+          titleAtViewed: recipe.title,
+          lastViewedAt: new Date()
+        },
+        include: {
+          recipe: {
+            select: {
+              ownerId: true,
+              inspirationCategoryId: true,
+              status: true,
+              title: true,
+              coverImageUrl: true
+            }
+          }
+        }
+      });
+
+      const stale = await tx.recipeViewHistory.findMany({
+        where: { userId },
+        orderBy: [{ lastViewedAt: "desc" }, { id: "desc" }],
+        skip: recipeViewHistoryLimit,
+        select: { id: true }
+      });
+      if (stale.length) {
+        await tx.recipeViewHistory.deleteMany({
+          where: {
+            userId,
+            id: { in: stale.map(item => item.id) }
+          }
+        });
+      }
+
+      const result = toRecipeViewHistoryItem(history, userId);
+      await completeIdempotentOperation(tx, operationId, "recipe:view-history", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async listRecipeViewHistory(userId: UUID, page: number, pageSize: number): Promise<PageResult<RecipeViewHistoryItem>> {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = Math.min(recipeViewHistoryPageSize, toPositiveInt(pageSize, recipeViewHistoryPageSize));
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const where = { userId };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.recipeViewHistory.findMany({
+        where,
+        orderBy: [{ lastViewedAt: "desc" }, { id: "desc" }],
+        skip,
+        take: normalizedPageSize,
+        include: {
+          recipe: {
+            select: {
+              ownerId: true,
+              inspirationCategoryId: true,
+              status: true,
+              title: true,
+              coverImageUrl: true
+            }
+          }
+        }
+      }),
+      this.prisma.recipeViewHistory.count({ where })
+    ]);
+
+    return {
+      items: items.map(item => toRecipeViewHistoryItem(item, userId)),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      hasNext: skip + items.length < total
+    };
+  }
+
   async getMyRecipe(userId: UUID, recipeId: UUID) {
     const recipe = await this.loadOwnedRecipe(this.prisma, userId, recipeId);
     return this.toMyRecipeDetail(this.prisma, userId, recipe);
@@ -2440,6 +2591,7 @@ export class RecipeService {
       duration: content.duration,
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
+      estimatedCalories: content.estimatedCalories,
       category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
       contentVersionId: recipe.currentVersionId,
       version: recipe.version,
@@ -2712,6 +2864,7 @@ export class RecipeService {
       duration: content.duration,
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
+      estimatedCalories: content.estimatedCalories,
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
       likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,

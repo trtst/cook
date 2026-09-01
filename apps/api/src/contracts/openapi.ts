@@ -299,6 +299,16 @@ export class NotificationBadgeModel {
   @ApiProperty({ type: String, example: "2026-08-30T00:00:00.000Z" }) latestTime!: string;
 }
 
+export class NotificationFeedItemModel {
+  @ApiProperty({ type: String, example: "unit:12" }) id!: string;
+  @ApiProperty({ type: String, enum: ["系统审核消息", "系统清单协作消息", "系统提醒消息", "系统官方消息"] }) typeLabel!: string;
+  @ApiProperty({ type: String, enum: ["review", "shopping", "reminder", "official"] }) tone!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) desc!: string;
+  @ApiProperty(dateTime) timeValue!: string;
+  @ApiProperty({ type: String, nullable: true }) targetPath!: string | null;
+}
+
 export class UserProfileModel extends SessionUserModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
@@ -1030,6 +1040,7 @@ export class MyRecipeSummaryModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: RecipeCategoryModel }) category!: RecipeCategoryModel;
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
@@ -1143,6 +1154,7 @@ export class InspirationRecipeSummaryModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
@@ -1166,6 +1178,16 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
   @ApiProperty(nullableString) curatedByName!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class RecipeViewHistoryItemModel {
+  @ApiProperty(uuid) id!: number;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: number | null;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: String, enum: ["MY", "INSPIRATION"] }) sourceType!: string;
+  @ApiProperty(dateTime) lastViewedAt!: string;
+  @ApiProperty({ type: Boolean }) isAvailable!: boolean;
 }
 
 export class RecipeRecommendationModel {
@@ -1656,6 +1678,14 @@ export class RandomMenuWarningModel {
   slotTypes!: string[];
 }
 
+export class RandomMenuQuotaModel {
+  @ApiProperty({ type: Number, minimum: 0 }) limitCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) usedCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) remainingCount!: number;
+  @ApiProperty(dateTime) windowStartedAt!: string;
+  @ApiProperty(dateTime) windowEndsAt!: string;
+}
+
 export class RandomMenuItemModel {
   @ApiProperty({ type: String }) slotId!: string;
   @ApiProperty({
@@ -1664,6 +1694,7 @@ export class RandomMenuItemModel {
   })
   slotType!: string;
   @ApiProperty({ type: Number, minimum: 0 }) slotIndex!: number;
+  @ApiProperty({ type: String, enum: ["MY", "INSPIRATION"] }) sourceType!: string;
   @ApiProperty(uuid) recipeId!: string;
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
@@ -1677,6 +1708,7 @@ export class RandomMenuItemModel {
   @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"] })
   mainProteinType!: string | null;
   @ApiProperty({ type: String, enum: ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] }) fridgeFit!: string;
+  @ApiProperty({ type: String }) recommendationReason!: string;
 }
 
 export class RandomMenuModel {
@@ -1686,6 +1718,7 @@ export class RandomMenuModel {
   @ApiProperty({ type: RandomSlotPlanModel }) slotPlan!: RandomSlotPlanModel;
   @ApiProperty({ type: [RandomMenuItemModel] }) items!: RandomMenuItemModel[];
   @ApiProperty({ type: [RandomMenuWarningModel] }) warnings!: RandomMenuWarningModel[];
+  @ApiProperty({ type: RandomMenuQuotaModel }) quota!: RandomMenuQuotaModel;
   @ApiProperty(dateTime) generatedAt!: string;
 }
 

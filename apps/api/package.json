@@ -38,6 +38,7 @@
     "verify:meal-assistant-flow": "tsx scripts/verify-meal-assistant-flow.ts",
     "verify:medal-flow": "tsx scripts/verify-medal-flow.ts",
     "verify:recipe-search-alias-flow": "tsx scripts/verify-recipe-search-alias-flow.ts",
+    "verify:recipe-history-flow": "tsx scripts/verify-recipe-history-flow.ts",
     "verify:recommendation-review-flow": "tsx scripts/verify-recommendation-review-flow.ts",
     "verify:recipe-nutrition": "tsx scripts/verify-recipe-nutrition.ts",
     "verify:openapi": "tsx scripts/verify-openapi.ts",

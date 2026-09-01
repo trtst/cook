@@ -238,6 +238,7 @@ GET  /users/me
 GET  /users/me/medals
 GET  /users/me/notification-settings
 GET  /users/me/notification-badge
+GET  /users/me/notification-feed
 PUT  /users/me
 PUT  /users/me/notification-settings
 PUT  /users/me/notification-feed-read
@@ -516,6 +517,8 @@ interface RedeemMembershipCodeResult {
 `PUT /users/me/notification-settings` 完整替换当前用户的提醒偏好，请求体固定提交完整 `NotificationSettings`。服务端继续校验布尔值、餐次时间格式和 `fridge.days` 只允许 `1 | 2 | 3 | 5 | 7`；但当前前台页面只提交现有开关和提前天数对应的完整快照，不承诺开放餐次时间编辑。前端不再以本地 `storage` 作为权威来源。
 
 `GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / reminderUnreadCount / showReminderDot / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。
+
+`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核消息 / 系统清单协作消息 / 系统提醒消息 / 系统官方消息` 四类消息。每条消息统一返回 `id / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
 
 `PUT /users/me/notification-feed-read` 只负责把“当前通知中心时间流的最新消息时间”写入当前用户自己的已读游标，并返回最新 `NotificationBadgeResponse`。进入通知中心后客户端调用这一写入口，后续未读清除逻辑以服务端游标为准，不再以本地时间戳作为 owner。
 
@@ -1371,17 +1374,17 @@ interface MealPlanCookAssistant {
 随机页当前已确认的业务目标不是“娱乐型摇一摇”，而是：
 
 ```text
-选条件 -> 生成一桌 -> 逐道调整 -> 本桌缺口预检 -> 加入计划或去采购
+选条件 -> 生成一桌 -> 逐道调整 -> 本桌缺口预检 -> 加入计划
 ```
 
 这部分当前已落地为**最小真实流程**。当前现行接口先固定为 5 个最小动作：
 
 ```text
 POST /random-menus/generate
+GET  /random-menu-quota
 POST /random-menu-slots/replace
 POST /random-menu-gap/preview
 POST /meal-plans
-POST /shopping-items/from-random-menu
 ```
 
 #### 生成一桌
@@ -1402,6 +1405,22 @@ interface GenerateRandomMenuRequest {
     breakfastProteinCount: number;
     breakfastSideCount: number;
   } | null;
+  currentItems?: Array<{
+    slotId: string;
+    slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+    sourceType: "MY" | "INSPIRATION";
+    recipeId: UUID;
+    recipeVersionId: UUID;
+  }>;
+  rejectedRecipeVersionIds?: UUID[];
+}
+
+interface RandomMenuQuotaResponse {
+  limitCount: number;
+  usedCount: number;
+  remainingCount: number;
+  windowStartedAt: IsoDateTime;
+  windowEndsAt: IsoDateTime;
 }
 ```
 
@@ -1409,8 +1428,11 @@ interface GenerateRandomMenuRequest {
 
 1. `peopleCount` 当前建议限制为 `1 ~ 12`。
 2. 单次总菜位数当前建议最大 `12`。
-3. 接口不落库、不写幂等记录、不做缓存。
-4. 响应只返回当前菜单摘要，不返回完整菜谱正文、步骤或全量食材明细。
+3. 生成次数由服务端按 7 天窗口校验并扣减，V1 默认 21 次；具体额度以后端返回为准，前端不得写死。
+4. 接口不写随机结果历史、不做缓存。
+5. 响应只返回当前菜单摘要、来源、推荐理由和最新次数摘要，不返回完整菜谱正文、步骤或全量食材明细。
+
+`GET /random-menu-quota` 用于读取当前用户随机一桌生成次数，不扣减次数，响应为 `RandomMenuQuotaResponse`。
 
 #### 替换单个菜位
 
@@ -1433,6 +1455,7 @@ interface ReplaceRandomMenuSlotRequest {
   currentItems: Array<{
     slotId: string;
     slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
+    sourceType: "MY" | "INSPIRATION";
     recipeId: UUID;
     recipeVersionId: UUID;
   }>;
@@ -1489,8 +1512,8 @@ interface CheckRandomMenuGapRequest {
 规则：
 
 1. `UNKNOWN` 不自动降成 `MISSING`。
-2. 用户未处理 `UNKNOWN` 时，不允许直接加入计划。
-3. 当前建议 `inventoryDecisions` 最大 `80` 条。
+2. 缺口预检不阻断保存计划；食材不足或未知的菜保存到计划后继续由计划缺口处理。
+3. 当前建议 `inventoryDecisions` 最大 `80` 条，V1 随机页默认不提交人工库存确认。
 4. 响应只返回当前菜单相关缺口，不得混入全局冰箱或全局购物清单数据。
 
 #### 计划写入升级
@@ -1549,29 +1572,7 @@ interface AddMealPlanItemRequest {
 
 #### 购物写入
 
-`POST /shopping-items/from-random-menu` 用于把当前缺口写入本人购物域。请求最小字段：
-
-```ts
-interface CreateRandomMenuShoppingItemsRequest {
-  items: Array<{
-    slotId: string;
-    recipeId: UUID;
-    recipeVersionId: UUID;
-    ingredients: Array<{
-      ingredientId?: UUID | null;
-      ingredientName: string;
-      quantityText: string | null;
-    }>;
-  }>;
-}
-```
-
-规则：
-
-1. 该接口写入 owner 仍是当前用户，不扩成共享清单批处理接口。
-2. 来源 `sourceKey` 必须由服务端生成，不信任客户端拼接。
-3. 接口应使用 `Idempotency-Key`。
-4. 当前建议总缺口食材项最大 `80`。
+随机页 V1 不提供直接写入采购清单入口，也不接入随机菜单购物写入接口。用户确认这一桌后先保存到计划，食材缺口由计划详情和采购清单链路继续处理。
 
 #### 安全、性能与过渡边界
 
@@ -1695,9 +1696,8 @@ interface ShoppingListItemPatchResponse {
 
 补充说明：
 
-1. `POST /shopping-items/from-random-menu` 当前返回的仍是旧购物事实摘要 `ShoppingItemSummary[]`，来源类型固定为 `RANDOM_MENU`。
-2. 这条随机菜单写链路当前只保证 `sourceType + sourceKey + note/sourceTitles` 可用于来源识别与去重，不进入旧 `RECIPE` 聚合口径，也不要求返回 `recipeId / sourceVersionId / servings` 这组菜谱聚合字段。
-3. `/shopping-items` 与 `/shopping-items/board` 继续共存于过渡期：前者保留个人购物事实读取与兼容写链路，后者保留旧聚合板读取；共享购物清单首页和详情仍以 `/shopping-lists*` 为主。
+1. `POST /shopping-items/from-random-menu` 属于历史兼容写链路，不再作为随机页 V1 主链路，客户端随机页不得调用。
+2. `/shopping-items` 与 `/shopping-items/board` 继续共存于过渡期：前者保留个人购物事实读取与兼容写链路，后者保留旧聚合板读取；共享购物清单首页和详情仍以 `/shopping-lists*` 为主。
 
 `GET /shopping-lists/summary` 返回购物首页顶部 3 张状态卡片所需的统计：
 
@@ -2449,6 +2449,7 @@ interface MyRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  estimatedCalories: number | null;
   category: { id: UUID; name: string; version: number };
   version: number;
   updatedAt: IsoDateTime;
@@ -2537,6 +2538,7 @@ interface InspirationRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  estimatedCalories: number | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -2557,6 +2559,18 @@ interface InspirationRecipeDetail {
   collectCount: number;
   curatedByName: string | null;
   updatedAt: IsoDateTime;
+}
+
+type RecipeViewSourceType = "MY" | "INSPIRATION";
+
+interface RecipeViewHistoryItem {
+  id: ResourceId;
+  recipeId: ResourceId | null;
+  title: string;
+  coverImageUrl: string | null;
+  sourceType: RecipeViewSourceType;
+  lastViewedAt: IsoDateTime;
+  isAvailable: boolean;
 }
 
 interface AdminUserRecipeDomainOverview {
@@ -2599,10 +2613,14 @@ POST /recipes/from-inspiration
 GET /recipes/{recipeId}
 POST /recipes/{recipeId}/assistant
 POST /recipes/reorder
-POST /recipes/{recipeId}/delete
+  POST /recipes/{recipeId}/delete
+  POST /users/me/recipe-history
+  GET /users/me/recipe-history
 ```
 
 `GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。`POST /recipes/{recipeId}/assistant` 只对本人已发布私房菜开放，且请求头必须带 `Idempotency-Key`：若当前固定版本已经有助理快照，则直接返回现有结果；若没有，则仅会员可触发首次生成并固化到该 `contentVersionId`。免费用户调用返回权限错误，但仍可继续读取原始步骤和做饭模式降级链路。
+
+`POST /users/me/recipe-history` 只允许登录用户调用，请求体只接收当前可访问的 `recipeId`，请求头必须带 `Idempotency-Key`。服务端按用户和菜谱 ID 去重，重复查看更新 `lastViewedAt`，返回 `RecipeViewHistoryItem`。`GET /users/me/recipe-history` 只返回当前用户记录，按 `lastViewedAt desc, id desc` 分页，服务端当前最多返回最近 `100` 条，单页最多 `20` 条。列表会关联菜谱当前最新摘要；菜谱不可用时保留记录并返回 `isAvailable = false`、`title = "该菜谱已不可用"`、`coverImageUrl = null`。这组接口不返回固定正文版本，也不参与随机一桌推荐。
 
 调用方不要再使用以下旧路径或旧参数：
 

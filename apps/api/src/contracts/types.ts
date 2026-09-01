@@ -73,6 +73,19 @@ export interface NotificationBadgeResponse {
   latestTime: string;
 }
 
+export type NotificationFeedTypeLabel = "系统审核消息" | "系统清单协作消息" | "系统提醒消息" | "系统官方消息";
+export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official";
+
+export interface NotificationFeedItem {
+  id: string;
+  typeLabel: NotificationFeedTypeLabel;
+  tone: NotificationFeedTone;
+  title: string;
+  desc: string;
+  timeValue: IsoDateTime;
+  targetPath: string | null;
+}
+
 export interface UserSummary {
   uid: number;
   nickname: string | null;
@@ -1374,6 +1387,7 @@ export interface MyRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  estimatedCalories: number | null;
   category: RecipeCategorySummary;
   contentVersionId: UUID;
   version: number;
@@ -1508,6 +1522,7 @@ export interface InspirationRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  estimatedCalories: number | null;
   category: InspirationCategorySummary;
   likeCount: number;
   collectCount: number;
@@ -1531,6 +1546,18 @@ export interface InspirationRecipeDetail {
   ownedRecipeId: UUID | null;
   curatedByName: string | null;
   updatedAt: IsoDateTime;
+}
+
+export type RecipeViewSourceType = "MY" | "INSPIRATION";
+
+export interface RecipeViewHistoryItem {
+  id: UUID;
+  recipeId: UUID | null;
+  title: string;
+  coverImageUrl: string | null;
+  sourceType: RecipeViewSourceType;
+  lastViewedAt: IsoDateTime;
+  isAvailable: boolean;
 }
 
 export interface RecipeReportSummary {
@@ -1916,6 +1943,15 @@ export interface RandomSlotPlan {
 export type RandomMenuWarningCode = "INSUFFICIENT_CANDIDATES" | "PARTIAL_MENU";
 export type RandomFridgeFit = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
 export type RandomReplaceConstraintKind = "FLAVOR" | "DURATION" | "INGREDIENT" | "AVOID_INGREDIENT";
+export type RandomRecipeSourceType = "MY" | "INSPIRATION";
+
+export interface RandomMenuQuotaResponse {
+  limitCount: number;
+  usedCount: number;
+  remainingCount: number;
+  windowStartedAt: IsoDateTime;
+  windowEndsAt: IsoDateTime;
+}
 
 export interface RandomMenuWarning {
   code: RandomMenuWarningCode;
@@ -1927,6 +1963,7 @@ export interface RandomMenuItem {
   slotId: string;
   slotType: RecipeSlotType;
   slotIndex: number;
+  sourceType: RandomRecipeSourceType;
   recipeId: UUID;
   recipeVersionId: UUID;
   title: string;
@@ -1938,6 +1975,7 @@ export interface RandomMenuItem {
   flavorTags: string[];
   mainProteinType: RecipeProteinType | null;
   fridgeFit: RandomFridgeFit;
+  recommendationReason: string;
 }
 
 export interface GenerateRandomMenuRequest {
@@ -1945,6 +1983,8 @@ export interface GenerateRandomMenuRequest {
   peopleCount: number;
   fridgePreferred: boolean;
   slotPlan?: RandomSlotPlan | null;
+  currentItems?: ReplaceRandomMenuCurrentItem[];
+  rejectedRecipeVersionIds?: UUID[];
 }
 
 export interface RandomMenuResponse {
@@ -1954,12 +1994,14 @@ export interface RandomMenuResponse {
   slotPlan: RandomSlotPlan;
   items: RandomMenuItem[];
   warnings: RandomMenuWarning[];
+  quota: RandomMenuQuotaResponse;
   generatedAt: IsoDateTime;
 }
 
 export interface ReplaceRandomMenuCurrentItem {
   slotId: string;
   slotType: RecipeSlotType;
+  sourceType: RandomRecipeSourceType;
   recipeId: UUID;
   recipeVersionId: UUID;
 }

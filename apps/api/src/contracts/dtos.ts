@@ -297,6 +297,23 @@ export class UpdateNotificationSettingsDto {
   recommend!: NotificationRecommendSettingsDto;
 }
 
+export class NotificationFeedQueryDto {
+  @ApiPropertyOptional({ default: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 20, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 20;
+}
+
 export class OperationDto {
 }
 
@@ -935,6 +952,14 @@ export class RecipeListQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
   duration?: string;
+}
+
+export class CreateRecipeViewHistoryDto {
+  @ApiProperty({ example: resourceIdExample, minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
 }
 
 export class RecipeDraftListQueryDto extends PageQueryDto {}
@@ -1760,6 +1785,35 @@ export class RandomSlotPlanDto {
   breakfastSideCount!: number;
 }
 
+export class GenerateRandomMenuCurrentItemDto {
+  @ApiProperty({ minLength: 1, maxLength: 64 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  slotId!: string;
+
+  @ApiProperty({ enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"] })
+  @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
+  slotType!: string;
+
+  @ApiProperty({ enum: ["MY", "INSPIRATION"] })
+  @IsIn(["MY", "INSPIRATION"])
+  sourceType!: "MY" | "INSPIRATION";
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeId!: number;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recipeVersionId!: number;
+}
+
 export class GenerateRandomMenuDto extends OperationDto {
   @ApiProperty({ enum: ["BREAKFAST", "LUNCH", "DINNER"] })
   @IsIn(["BREAKFAST", "LUNCH", "DINNER"])
@@ -1782,6 +1836,24 @@ export class GenerateRandomMenuDto extends OperationDto {
   @ValidateNested()
   @Type(() => RandomSlotPlanDto)
   slotPlan?: RandomSlotPlanDto | null;
+
+  @ApiPropertyOptional({ type: [GenerateRandomMenuCurrentItemDto], maxItems: 12 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(12)
+  @ValidateNested({ each: true })
+  @Type(() => GenerateRandomMenuCurrentItemDto)
+  currentItems?: GenerateRandomMenuCurrentItemDto[];
+
+  @ApiPropertyOptional({ type: [Number], maxItems: 50 })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  rejectedRecipeVersionIds?: number[];
 }
 
 export class ReplaceRandomMenuCurrentItemDto {
@@ -1795,6 +1867,10 @@ export class ReplaceRandomMenuCurrentItemDto {
   @ApiProperty({ enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"] })
   @IsIn(["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"])
   slotType!: string;
+
+  @ApiProperty({ enum: ["MY", "INSPIRATION"] })
+  @IsIn(["MY", "INSPIRATION"])
+  sourceType!: "MY" | "INSPIRATION";
 
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)

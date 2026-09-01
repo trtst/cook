@@ -16,8 +16,8 @@
   - `pages_me/reminder` 提醒设置
   - `pages/me` 通知中心入口文案
 - 后端 API：
-  - 新增当前用户自有 `notification-settings / notification-badge / notification-feed-read` 接口
-  - 继续复用现有真实来源，不新增独立消息表
+  - 新增当前用户自有 `notification-settings / notification-badge / notification-feed / notification-feed-read` 接口
+  - 继续复用现有真实来源，不新增独立消息表，但由服务端统一输出通知时间流分页结果
 - 后台管理：
   - 实现系统官方消息后台发送与发布入口
 - 共享契约：
@@ -33,8 +33,8 @@
 
 补充说明：
 
-- 本轮新增的是“当前用户提醒偏好 + 当前用户未读徽标 + 当前用户通知中心已读游标”这组 user-owned 接口。
-- 通知中心可见消息列表仍继续复用各真实来源读取，不在本轮扩成单独的聚合明细接口。
+- 本轮新增的是“当前用户提醒偏好 + 当前用户未读徽标 + 当前用户通知中心统一时间流 + 当前用户通知中心已读游标”这组 user-owned 接口。
+- 通知中心可见消息列表仍继续复用各真实来源事实，不新增独立消息表，但首页不再由前端自行分类型拉取后混排。
 
 ## 四、已确认产品口径
 

@@ -6,7 +6,8 @@ import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-
 import { OptionalUserAuthGuard } from "../../common/optional-user-auth.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
-  CreateMyRecipeFromInspirationDto,
+    CreateMyRecipeFromInspirationDto,
+    CreateRecipeViewHistoryDto,
   CreateIngredientDto,
   CreateIngredientFeedbackDto,
   IngredientRecommendationListQueryDto,
@@ -20,6 +21,7 @@ import {
     IngredientListQueryDto,
     InspirationRecipeListQueryDto,
     OperationDto,
+    PageQueryDto,
     PublishRecipeDraftDto,
     RecommendIngredientDto,
     RecommendRecipeDto,
@@ -63,7 +65,8 @@ import {
   RecipeDraftDetailModel,
   RecipeDraftSummaryModel,
   RecipeReportModel,
-  RecipeSceneModel,
+    RecipeSceneModel,
+    RecipeViewHistoryItemModel,
   SaveRecipeDraftResultModel,
   SaveCollectionRecipeResultModel,
   UnitModel,
@@ -493,6 +496,27 @@ export class RecipeController {
         query.duration as "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | undefined
       )
       .then(result => ok(result));
+  }
+
+  @Post("users/me/recipe-history")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RecipeViewHistoryItemModel, "记录当前用户查看的菜谱")
+  recordRecipeView(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateRecipeViewHistoryDto
+  ) {
+    return this.recipeService.recordRecipeView(request.user.userId, operationId, body.recipeId).then(result => ok(result));
+  }
+
+  @Get("users/me/recipe-history")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkPage(RecipeViewHistoryItemModel, "分页读取当前用户最近查看的菜谱")
+  listRecipeViewHistory(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
+    return this.recipeService.listRecipeViewHistory(request.user.userId, query.page, query.pageSize).then(result => ok(result));
   }
 
   @Get("recipes/:recipeId")

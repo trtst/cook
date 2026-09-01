@@ -6,12 +6,12 @@ import type {
   MyRecipeDetail,
   PageResult,
   RandomMenuItem,
+  RandomMenuQuotaResponse,
   RandomMenuResponse,
   RecipeCategorySummary,
   RecipeDraftDetail,
   ReplaceRandomMenuSlotResponse,
-  SaveRecipeDraftResponse,
-  ShoppingItemSummary
+  SaveRecipeDraftResponse
 } from "../src/contracts/types";
 
 loadLocalEnv();
@@ -276,7 +276,7 @@ async function main() {
 
   const generated = await requestData<RandomMenuResponse>("/random-menus/generate", {
     method: "POST",
-    headers: ownerAuth,
+    headers: withIdempotencyKey(ownerAuth),
     body: JSON.stringify({
       mealSlot: "DINNER",
       peopleCount: 2,
@@ -293,10 +293,57 @@ async function main() {
     })
   });
   assert(generated.items.length === 2, "random generate should return the requested two-slot dinner menu");
+  assert(
+    generated.items.every(item => ["MY", "INSPIRATION"].includes((item as { sourceType?: string }).sourceType ?? "")),
+    "random generate should return each item source type"
+  );
+  assert(
+    generated.items.every(item => typeof (item as { recommendationReason?: unknown }).recommendationReason === "string"),
+    "random generate should return one recommendation reason per item"
+  );
   const meatSlot = generated.items.find(item => item.slotType === "MEAT") ?? null;
   const vegetableSlot = generated.items.find(item => item.slotType === "VEGETABLE") ?? null;
   assert(meatSlot, "generated menu should include a meat slot");
   assert(vegetableSlot, "generated menu should include a vegetable slot");
+
+  const quotaBefore = await requestData<RandomMenuQuotaResponse>("/random-menu-quota", {
+    headers: ownerAuth
+  });
+  const generateKey = nextIdempotencyKey();
+  const defaultDinner = await requestData<RandomMenuResponse>("/random-menus/generate", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth, generateKey),
+    body: JSON.stringify({
+      mealSlot: "DINNER",
+      peopleCount: 2,
+      fridgePreferred: false
+    })
+  });
+  assert(defaultDinner.slotPlan.meatCount === 2, "default two-person dinner should include two meat slots");
+  assert(defaultDinner.slotPlan.vegetableCount === 1, "default two-person dinner should include one vegetable slot");
+  assert(defaultDinner.slotPlan.soupCount === 0, "default two-person dinner should not include soup");
+  assert(defaultDinner.slotPlan.stapleCount === 1, "default two-person dinner should include one staple slot");
+  assert(
+    defaultDinner.quota.remainingCount === Math.max(0, quotaBefore.remainingCount - 1),
+    "random generate should consume one server quota"
+  );
+  const repeatedDinner = await requestData<RandomMenuResponse>("/random-menus/generate", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth, generateKey),
+    body: JSON.stringify({
+      mealSlot: "DINNER",
+      peopleCount: 2,
+      fridgePreferred: false
+    })
+  });
+  assert(
+    repeatedDinner.quota.remainingCount === defaultDinner.quota.remainingCount,
+    "repeated random generate with the same idempotency key should not consume quota again"
+  );
+  assert(
+    JSON.stringify(repeatedDinner.items.map(item => item.recipeVersionId)) === JSON.stringify(defaultDinner.items.map(item => item.recipeVersionId)),
+    "repeated random generate with the same idempotency key should return the original menu"
+  );
 
   const replace = await requestData<ReplaceRandomMenuSlotResponse>("/random-menu-slots/replace", {
     method: "POST",
@@ -309,6 +356,7 @@ async function main() {
       currentItems: generated.items.map(item => ({
         slotId: item.slotId,
         slotType: item.slotType,
+        sourceType: (item as { sourceType?: string }).sourceType,
         recipeId: item.recipeId,
         recipeVersionId: item.recipeVersionId
       })),
@@ -323,6 +371,14 @@ async function main() {
   assert(replace.slot, "replace response should return a replacement slot");
   assert(replace.slot.slotId === meatSlot.slotId, "replacement slot should target the same slot");
   assert(replace.slot.recipeVersionId !== meatSlot.recipeVersionId, "replacement slot should change the meat recipe");
+  assert(
+    ["MY", "INSPIRATION"].includes((replace.slot as { sourceType?: string }).sourceType ?? ""),
+    "replacement slot should return its source type"
+  );
+  assert(
+    typeof (replace.slot as { recommendationReason?: unknown }).recommendationReason === "string",
+    "replacement slot should return one recommendation reason"
+  );
 
   const finalItems = replaceMenuItem(generated.items, replace.slot);
   const gap = await requestData<CheckRandomMenuGapResponse>("/random-menu-gap/preview", {
@@ -342,46 +398,12 @@ async function main() {
   });
   assert(gap.items.length === finalItems.length, "gap preview should return one record per menu slot");
   assert(gap.summary.missingCount + gap.summary.partialCount + gap.summary.unknownCount >= 1, "gap preview should surface unresolved ingredients");
-  assert(gap.canCreatePlan === false, "gap preview should block create plan before inventory decisions are handled");
+  assert(gap.canCreatePlan === true, "gap preview should allow saving unresolved gaps to a plan");
   const unresolvedInventoryStatuses = gap.items.flatMap(item => item.missingIngredients.map(ingredient => ingredient.inventoryStatus));
   assert(
     unresolvedInventoryStatuses.some(status => status === "MISSING" || status === "PARTIAL" || status === "UNKNOWN"),
     "gap preview should expose at least one unresolved inventory status before decisions are handled"
   );
-
-  const shoppingPayload = gap.items
-    .filter(item => item.missingIngredients.length > 0)
-    .map(item => ({
-      slotId: item.slotId,
-      recipeId: item.recipeId,
-      recipeVersionId: item.recipeVersionId,
-      ingredients: item.missingIngredients
-        .filter(ingredient => ingredient.inventoryStatus !== "UNKNOWN")
-        .map(ingredient => ({
-          ingredientId: ingredient.ingredientId,
-          ingredientName: ingredient.ingredientName,
-          quantityText: ingredient.quantityText
-        }))
-    }))
-    .filter(item => item.ingredients.length > 0);
-  assert(shoppingPayload.length > 0, "shopping payload should contain at least one missing ingredient");
-
-  const shoppingOperationId = nextIdempotencyKey();
-  const [shoppingA, shoppingB] = await Promise.all([
-    requestData<ShoppingItemSummary[]>("/shopping-items/from-random-menu", {
-      method: "POST",
-      headers: withIdempotencyKey(ownerAuth, shoppingOperationId),
-      body: JSON.stringify({ items: shoppingPayload })
-    }),
-    requestData<ShoppingItemSummary[]>("/shopping-items/from-random-menu", {
-      method: "POST",
-      headers: withIdempotencyKey(ownerAuth, shoppingOperationId),
-      body: JSON.stringify({ items: shoppingPayload })
-    })
-  ]);
-  assert(shoppingA.length === shoppingB.length, "random shopping idempotency replay should keep the same item count");
-  assert(shoppingA.length > 0, "random shopping write should create shopping items");
-  assert(shoppingA.every(item => item.sourceType === "RANDOM_MENU"), "random shopping write should keep RANDOM_MENU source type");
 
   const resolvedGap = await requestData<CheckRandomMenuGapResponse>("/random-menu-gap/preview", {
     method: "POST",
@@ -427,9 +449,9 @@ async function main() {
       {
         apiBaseUrl,
         generatedCount: generated.items.length,
+        quotaRemaining: defaultDinner.quota.remainingCount,
         replacedSlotId: replace.slot.slotId,
         replacedRecipeVersionId: replace.slot.recipeVersionId,
-        shoppingItemCount: shoppingA.length,
         planId: createdPlan.id,
         planMenuCount: createdPlan.menuItems.length,
         canCreatePlanBefore: gap.canCreatePlan,

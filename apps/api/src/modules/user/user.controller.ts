@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import type { RequestWithUser } from "../../common/auth-context";
@@ -6,17 +6,20 @@ import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
   ChangeCurrentPasswordDto,
+  NotificationFeedQueryDto,
   UpdateCurrentUserDto,
   UpdateNotificationSettingsDto,
   UpdateTasteProfileDto,
   UpdateUserDisplayDto
 } from "../../contracts/dtos";
 import {
+  ApiOkPage,
   ApiOkModel,
   ChangePasswordResultModel,
   MedalWallModel,
   MeResponseModel,
   NotificationBadgeModel,
+  NotificationFeedItemModel,
   NotificationSettingsModel,
   StorageUsageModel,
   TasteProfileModel
@@ -90,6 +93,12 @@ export class UserController {
   @ApiOkModel(NotificationBadgeModel, "当前用户通知中心的未读徽标")
   getNotificationBadge(@Req() request: RequestWithUser) {
     return this.notificationService.getBadge(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("me/notification-feed")
+  @ApiOkPage(NotificationFeedItemModel, "当前用户通知中心的统一时间流分页列表")
+  getNotificationFeed(@Req() request: RequestWithUser, @Query() query: NotificationFeedQueryDto) {
+    return this.notificationService.getFeed(request.user.userId, query.page, query.pageSize).then(result => ok(result));
   }
 
   @Put("me/notification-feed-read")

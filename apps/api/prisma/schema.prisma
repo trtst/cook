@@ -110,6 +110,11 @@ enum RecipeProteinType {
   NONE
 }
 
+enum RecipeViewSourceType {
+  MY
+  INSPIRATION
+}
+
 enum IngredientProteinType {
   PORK
   CHICKEN
@@ -638,6 +643,8 @@ model User {
   recipeReports             RecipeReport[]             @relation("RecipeReportReporter")
   recipeRecommendations    RecipeRecommendation[]
   recipeCollections         RecipeCollection[]
+  recipeViewHistories       RecipeViewHistory[]
+  randomMenuUsage           RandomMenuUsage?
   ingredients               Ingredient[]               @relation("IngredientOwner")
   ingredientRecommendations IngredientRecommendation[]
   ingredientFeedbacks       IngredientFeedback[]
@@ -1394,12 +1401,45 @@ model Recipe {
   diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
   diningEventWishItems    DiningEventWishItem[]
   homeTopicItems          HomeTopicItem[]
+  viewHistories           RecipeViewHistory[]
 
   @@index([ownerId, status, categoryId, sortOrder, id])
   @@index([inspirationCategoryId, status, updatedAt, id])
   @@index([ownerId, status, updatedAt])
   @@index([ownerId, originVersionId])
   @@map("recipes")
+}
+
+model RandomMenuUsage {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique @map("user_id")
+  windowStartedAt DateTime @map("window_started_at") @db.Timestamptz(3)
+  windowEndsAt    DateTime @map("window_ends_at") @db.Timestamptz(3)
+  usedCount       Int      @default(0) @map("used_count")
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, windowEndsAt])
+  @@map("random_menu_usages")
+}
+
+model RecipeViewHistory {
+  id            Int                  @id @default(autoincrement())
+  userId        Int                  @map("user_id")
+  recipeId      Int?                 @map("recipe_id")
+  sourceType    RecipeViewSourceType @map("source_type")
+  titleAtViewed String               @map("title_at_viewed") @db.VarChar(120)
+  lastViewedAt  DateTime             @default(now()) @map("last_viewed_at") @db.Timestamptz(3)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe Recipe? @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, recipeId])
+  @@index([userId, lastViewedAt, id])
+  @@map("recipe_view_histories")
 }
 
 model RecipeSceneLink {
