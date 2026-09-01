@@ -15,7 +15,7 @@
               <image v-if="itemImageUrl" class="detail-hero__image" :src="itemImageUrl" mode="aspectFill" />
               <text v-else class="detail-hero__avatar-text">{{ currentItem ? buildIngredientAvatarText(currentItem.name) : "食" }}</text>
             </view>
-            <text class="detail-hero__eyebrow">库存食材</text>
+            <text class="detail-hero__eyebrow">厨房小管家</text>
             <text class="detail-hero__title">{{ currentItem?.name || "食材详情" }}</text>
             <text class="detail-hero__stock">{{ stockSummary }}</text>
             <text class="detail-hero__description">{{ expireSummary }}</text>
@@ -53,8 +53,8 @@
               <template v-else>
                 <view class="section-card">
                   <view class="section-card__header">
-                    <text class="section-card__title">库存概览</text>
-                    <text class="section-card__hint">这里只管理你自己的库存事实，不改系统食材资料。</text>
+                    <text class="section-card__title">现在还剩多少</text>
+                    <text class="section-card__hint">帮你把这份食材的库存、预占和可用量看清楚，做饭前心里更有数。</text>
                   </view>
                   <view v-if="showExactMetrics" class="metric-grid">
                     <view class="metric-card">
@@ -90,8 +90,8 @@
 
                 <view v-if="currentItem.reservations.length" class="section-card">
                   <view class="section-card__header">
-                    <text class="section-card__title">预占明细</text>
-                    <text class="section-card__hint">这些库存已经被采购清单暂时占用，但还没有正式结算。</text>
+                    <text class="section-card__title">哪些安排已经用上它</text>
+                    <text class="section-card__hint">这里会提醒你哪些清单先占了这份库存，避免重复买或误扣。</text>
                   </view>
                   <view class="reservation-list">
                     <view
@@ -110,8 +110,8 @@
 
                 <view class="section-card">
                   <view class="section-card__header">
-                    <text class="section-card__title">库存操作</text>
-                    <text class="section-card__hint">编辑库存、补货和扣减都在这里处理。</text>
+                    <text class="section-card__title">接下来怎么处理</text>
+                    <text class="section-card__hint">想改数量、补一点，还是记一笔消耗，都可以在这里顺手完成。</text>
                   </view>
                   <view class="action-grid">
                     <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openEdit">
@@ -137,8 +137,8 @@
 
                 <view class="section-card">
                   <view class="section-card__header">
-                    <text class="section-card__title">采购补货</text>
-                    <text class="section-card__hint">需要补货时，直接把这项食材加到采购清单。</text>
+                    <text class="section-card__title">缺了就顺手记进清单</text>
+                    <text class="section-card__hint">发现快用完时，直接把它放进采购清单，回头买菜不容易漏。</text>
                   </view>
                   <view class="shopping-card" hover-class="shopping-card--hover" hover-stay-time="100" @click="openShoppingSheet">
                     <view class="shopping-card__main">

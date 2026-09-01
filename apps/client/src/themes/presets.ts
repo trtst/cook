@@ -170,48 +170,6 @@ export const THEME_SKIN_PRESETS = [
     }
   },
   {
-    value: "handdrawn-food",
-    label: "手绘食物",
-    access: "member",
-    assetType: "svg",
-    sourceMode: "duo",
-    supportsPalette: false,
-    supportsDark: false,
-    palettes: [],
-    seeds: {
-      default: {
-        light: {
-          bg: "#fff6e3",
-          surface: "#fffdf8",
-          text: "#2a241d",
-          primary: "#ff8b42",
-          secondary: "#ffb347"
-        }
-      }
-    }
-  },
-  {
-    value: "warm-couple",
-    label: "暖黄情侣",
-    access: "member",
-    assetType: "icon",
-    sourceMode: "duo",
-    supportsPalette: false,
-    supportsDark: false,
-    palettes: [],
-    seeds: {
-      default: {
-        light: {
-          bg: "#fff4dc",
-          surface: "#fffaf0",
-          text: "#322217",
-          primary: "#cf7f59",
-          secondary: "#efb06c"
-        }
-      }
-    }
-  },
-  {
     value: "apple-glass",
     label: "磨砂玻璃",
     access: "member",
@@ -231,39 +189,11 @@ export const THEME_SKIN_PRESETS = [
         }
       }
     }
-  },
-  {
-    value: "bold-contrast",
-    label: "反差",
-    access: "free",
-    assetType: "icon",
-    sourceMode: "duo",
-    supportsPalette: false,
-    supportsDark: true,
-    palettes: [],
-    seeds: {
-      default: {
-        light: {
-          bg: "#ffffff",
-          surface: "#ffffff",
-          text: "#050505",
-          primary: "#000000",
-          secondary: "#d6d6d6"
-        },
-        dark: {
-          bg: "#000000",
-          surface: "#050505",
-          text: "#ffffff",
-          primary: "#ffffff",
-          secondary: "#5c5c5c"
-        }
-      }
-    }
   }
 ] as const satisfies readonly ThemeSkinPreset[];
 
 export type ThemeSkin = (typeof THEME_SKIN_PRESETS)[number]["value"];
-export const THEME_PICKER_SKINS = ["default", "fresh-ingredient", "minimal-white", "apple-glass", "handdrawn-food", "bold-contrast"] as const satisfies readonly ThemeSkin[];
+export const THEME_PICKER_SKINS = ["default", "fresh-ingredient", "minimal-white", "apple-glass"] as const satisfies readonly ThemeSkin[];
 export const THEME_SKIN_LABELS = Object.fromEntries(THEME_SKIN_PRESETS.map((item) => [item.value, item.label])) as Record<ThemeSkin, string>;
 
 const DISPLAY_MODE_LABELS = {

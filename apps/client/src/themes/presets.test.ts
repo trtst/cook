@@ -11,7 +11,7 @@ import {
   THEME_SOURCE_MODE_LABELS
 } from "./presets";
 
-assert.deepEqual(THEME_PICKER_SKINS, ["default", "fresh-ingredient", "minimal-white", "apple-glass", "handdrawn-food", "bold-contrast"]);
+assert.deepEqual(THEME_PICKER_SKINS, ["default", "fresh-ingredient", "minimal-white", "apple-glass"]);
 assert.equal(THEME_SKIN_LABELS["minimal-white"], "简白");
 assert.equal(THEME_SKIN_LABELS["apple-glass"], "磨砂玻璃");
 assert.equal(THEME_MODE_LABELS.dark, "深色");
@@ -25,6 +25,10 @@ assert.equal(THEME_SKIN_LABELS[DEFAULT_THEME_SKIN], "默认主题");
 assert.equal(formatThemeText("system", "default", "warm", true), "跟随系统 · 默认主题 · 暖黄");
 assert.equal(THEME_SKIN_PRESETS.find((preset) => preset.value === "minimal-white")?.sourceMode, "mono");
 assert.equal(THEME_SKIN_PRESETS.find((preset) => preset.value === "default")?.sourceMode, "duo");
+const presetValues = THEME_SKIN_PRESETS.map((preset) => String(preset.value));
+
+assert.equal(presetValues.includes("bold-contrast"), false);
+assert.equal(presetValues.includes("handdrawn-food"), false);
 
 const defaultPreset = THEME_SKIN_PRESETS.find((preset) => preset.value === DEFAULT_THEME_SKIN);
 const freshPreset = THEME_SKIN_PRESETS.find((preset) => preset.value === "fresh-ingredient");
@@ -36,8 +40,9 @@ assert.ok(minimalPreset, "minimal-white preset must exist");
 assert.equal(defaultPreset.sourceMode, "duo");
 assert.equal(defaultPreset.supportsPalette, true);
 assert.equal(defaultPreset.supportsDark, true);
+assert.deepEqual(defaultPreset.palettes, ["default", "warm", "olive", "cool"]);
 assert.deepEqual(defaultPreset.seeds.default?.light, {
-  bg: "#f4f7f5",
+  bg: "#fff",
   surface: "#ffffff",
   text: "#17231d",
   primary: "#216e4e",

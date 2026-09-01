@@ -1,5 +1,5 @@
 <template>
-  <view class="tabbar-shell" :class="`tabbar-shell--${effectiveSkin}`">
+  <view class="tabbar-shell" :class="[`tabbar-shell--${effectiveSkin}`, { 'tabbar-shell--embedded': !fixed }]">
     <view class="tabbar">
       <view class="tabbar__active-pill" :style="activePillStyle" />
       <view
@@ -53,9 +53,11 @@ const props = withDefaults(
   defineProps<{
     current: TabKey;
     interactive?: boolean;
+    fixed?: boolean;
   }>(),
   {
-    interactive: true
+    interactive: true,
+    fixed: true
   }
 );
 
@@ -111,13 +113,20 @@ async function syncBadgeSnapshot() {
 
 <style scoped lang="scss">
 .tabbar-shell {
-  position: fixed;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 900;
   height: calc(var(--tabbar-shell-height) + env(safe-area-inset-bottom));
   pointer-events: none;
+}
+
+.tabbar-shell:not(.tabbar-shell--embedded) {
+  position: fixed;
+}
+
+.tabbar-shell--embedded {
+  position: relative;
 }
 
 .tabbar-shell::after {
@@ -149,6 +158,12 @@ async function syncBadgeSnapshot() {
   backdrop-filter: var(--material-tabbar-filter);
 }
 
+.tabbar-shell--embedded .tabbar {
+  right: 0;
+  bottom: env(safe-area-inset-bottom);
+  left: 0;
+}
+
 .tabbar__active-pill {
   position: absolute;
   top: 10rpx;
@@ -172,7 +187,7 @@ async function syncBadgeSnapshot() {
   min-width: 0;
   height: 88rpx;
   border-radius: var(--radius-pill);
-  color: var(--color-text-tertiary);
+  color: var(--color-text);
 }
 
 .tabbar__item--hover {
@@ -180,7 +195,7 @@ async function syncBadgeSnapshot() {
 }
 
 .tabbar__item--active {
-  color: var(--color-text);
+  color: var(--color-icon-active);
 }
 
 .tabbar__icon-wrap {
@@ -231,7 +246,7 @@ async function syncBadgeSnapshot() {
 
 .tabbar__font-icon {
   display: block;
-  color: var(--color-text-tertiary);
+  color: var(--color-text);
   line-height: 1;
   text-align: center;
 }
@@ -241,6 +256,7 @@ async function syncBadgeSnapshot() {
   z-index: 1;
   overflow: hidden;
   max-width: 120rpx;
+  color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
@@ -249,11 +265,11 @@ async function syncBadgeSnapshot() {
 }
 
 .tabbar__item--active .tabbar__label {
-  color: var(--color-text);
+  color: var(--color-icon-active);
 }
 
 .tabbar__item--active .tabbar__font-icon {
-  color: var(--color-text);
+  color: var(--color-icon-active);
 }
 
 .tabbar-shell--default .tabbar__icon-wrap,

@@ -10,12 +10,12 @@ assert.deepEqual(resolveThemeSettingsSnapshot(null), {
 assert.deepEqual(
   resolveThemeSettingsSnapshot({
     themeMode: "dark",
-    themeSkin: "bold-contrast",
+    themeSkin: "minimal-white",
     themePalette: "default"
   }),
   {
     themeMode: "dark",
-    themeSkin: "bold-contrast",
+    themeSkin: "minimal-white",
     themePalette: "default"
   }
 );

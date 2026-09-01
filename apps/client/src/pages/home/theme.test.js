@@ -23,8 +23,8 @@ describe("pages/home/index theme runtime", () => {
     expect(defaultState.effectiveSkin).toBe("default");
     expect(defaultState.effectivePalette).toBe("default");
     expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");
-    expect(defaultState.colorPage).toBe("#f4f7f5");
-    expect(defaultState.themePageStyle).toContain("background-color: #f4f7f5;");
+    expect(defaultState.colorPage).toBe("#fff");
+    expect(defaultState.themePageStyle).toContain("background-color: #fff;");
     expect(defaultState.materialCardBorder).toBe("transparent");
     expect(defaultState.materialInputBorder).toBe("rgba(33, 110, 78, 0.08)");
     expect(defaultState.materialControlBorder).toBe("transparent");

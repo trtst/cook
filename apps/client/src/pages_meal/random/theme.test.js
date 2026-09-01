@@ -24,8 +24,8 @@ describe("pages_meal/random/index theme runtime", () => {
   it("随机页的主题摘要和页面底色会跟随主题切换同步更新", async () => {
     const defaultState = await page.callMethod("automatorReadThemeState");
     expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");
-    expect(defaultState.colorPage).toBe("#f4f7f5");
-    expect(defaultState.themePageStyle).toContain("background-color: #f4f7f5;");
+    expect(defaultState.colorPage).toBe("#fff");
+    expect(defaultState.themePageStyle).toContain("background-color: #fff;");
 
     const minimalState = await page.callMethod("automatorApplyThemeSettings", {
       themeSkin: "minimal-white"

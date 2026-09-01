@@ -32,6 +32,14 @@ function readInitialThemeSettings() {
 	return resolveThemeSettingsSnapshot(uniPlatform.storage.getSync<ThemeSettingsSnapshot>(APP_STORAGE_KEYS.theme));
 }
 
+function buildThemeSnapshot(themeMode: ThemeMode, themeSkin: ThemeSkin, themePalette: ThemePalette): ThemeSettingsSnapshot {
+	return {
+		themeMode,
+		themeSkin,
+		themePalette
+	};
+}
+
 const initialThemeSettings = readInitialThemeSettings();
 
 // Settings store owns local preferences only.
@@ -54,26 +62,52 @@ export const useSettingsStore = defineStore("settings", {
 			this.themePalette = restored.themePalette;
 		},
 		// Updates theme mode and persists immediately because pages depend on it across relaunches.
-		async setThemeMode(themeMode: ThemeMode) {
+		async setThemeMode(themeMode: ThemeMode, persist = true) {
 			this.themeMode = themeMode;
-			await this.persist();
+			if (persist) {
+				await this.persist();
+			}
 		},
 		// Changing skin can invalidate the current palette, so palette is repaired before persistence.
-		async setThemeSkin(themeSkin: ThemeSkin) {
+		async setThemeSkin(themeSkin: ThemeSkin, persist = true) {
 			this.themeSkin = themeSkin;
 			if (!isPaletteSupportedBySkin(themeSkin, this.themePalette)) {
 				this.themePalette = getDefaultPaletteForSkin(themeSkin);
 			}
-			await this.persist();
+			if (persist) {
+				await this.persist();
+			}
 		},
 		// Rejects unsupported palette/skin pairs by falling back to the skin default.
-		async setThemePalette(themePalette: ThemePalette) {
+		async setThemePalette(themePalette: ThemePalette, persist = true) {
 			if (!isPaletteSupportedBySkin(this.themeSkin, themePalette)) {
 				this.themePalette = getDefaultPaletteForSkin(this.themeSkin);
-				await this.persist();
+				if (persist) {
+					await this.persist();
+				}
 				return;
 			}
 			this.themePalette = themePalette;
+			if (persist) {
+				await this.persist();
+			}
+		},
+		async applyThemeSettings(snapshot: ThemeSettingsSnapshot, persist = false) {
+			const resolved = resolveThemeSettingsSnapshot(snapshot);
+			this.themeMode = resolved.themeMode;
+			this.themeSkin = resolved.themeSkin;
+			this.themePalette = resolved.themePalette;
+			if (persist) {
+				await this.persist();
+			}
+		},
+		readPersistedThemeSettings() {
+			return resolveThemeSettingsSnapshot(uniPlatform.storage.getSync<ThemeSettingsSnapshot>(APP_STORAGE_KEYS.theme));
+		},
+		readCurrentThemeSettings() {
+			return resolveThemeSettingsSnapshot(buildThemeSnapshot(this.themeMode, this.themeSkin, this.themePalette));
+		},
+		async persistCurrentThemeSettings() {
 			await this.persist();
 		},
 		// Resets local settings to default values and clears persisted storage.
@@ -85,11 +119,7 @@ export const useSettingsStore = defineStore("settings", {
 		},
 		// Central persistence path so every setting write uses one storage shape.
 		async persist() {
-			await uniPlatform.storage.set(APP_STORAGE_KEYS.theme, {
-				themeMode: this.themeMode,
-				themeSkin: this.themeSkin,
-				themePalette: this.themePalette
-			});
+			await uniPlatform.storage.set(APP_STORAGE_KEYS.theme, buildThemeSnapshot(this.themeMode, this.themeSkin, this.themePalette));
 		}
 	}
 });

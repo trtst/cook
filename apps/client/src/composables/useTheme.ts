@@ -107,17 +107,17 @@ export function useTheme() {
     return THEME_SKIN_OPTIONS.some((option) => option.value === skin);
   }
 
-  async function setThemeMode(mode: ThemeMode) {
-    await settingsStore.setThemeMode(mode);
+  async function setThemeMode(mode: ThemeMode, persist = true) {
+    await settingsStore.setThemeMode(mode, persist);
   }
 
-  async function setThemeSkin(skin: ThemeSkin) {
-    await settingsStore.setThemeSkin(skin);
+  async function setThemeSkin(skin: ThemeSkin, persist = true) {
+    await settingsStore.setThemeSkin(skin, persist);
     return true;
   }
 
-  async function setThemePalette(palette: ThemePalette) {
-    await settingsStore.setThemePalette(palette);
+  async function setThemePalette(palette: ThemePalette, persist = true) {
+    await settingsStore.setThemePalette(palette, persist);
   }
 
   return {

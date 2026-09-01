@@ -198,7 +198,7 @@ function openTopic(topicId: number) {
 
 .topic-card {
   overflow: hidden;
-  border-radius: 32rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-soft-panel);
   box-shadow: var(--shadow-card);
   transition: transform 0.16s ease, box-shadow 0.16s ease;

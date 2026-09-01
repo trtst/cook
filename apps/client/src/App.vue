@@ -73,7 +73,6 @@ onShow(() => {
 page {
 	height: 100vh;
 	overflow: hidden;
-	background: var(--color-page);
 	color: var(--color-text);
 	font-family: var(--font-family-base);
 }

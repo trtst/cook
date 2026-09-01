@@ -1102,7 +1102,7 @@ defineExpose({
   align-items: center;
   gap: 10rpx;
   padding: 14rpx 22rpx;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--material-control-bg);
   box-shadow: var(--material-control-shadow);
   -webkit-backdrop-filter: var(--material-control-filter);

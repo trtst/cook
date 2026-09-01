@@ -38,9 +38,8 @@ const LEGACY_SECONDARY_OUTLINE = "box-shadow: inset 0 0 0 1rpx var(--button-seco
 
 const themeVarsSource = readFile("../composables/theme-vars.ts");
 const fallbackColorsSource = readFile("../styles/colors.scss");
+const skinsEntrypointSource = readFile("./skins.scss");
 const appleGlassSkinSource = readFile("./apple-glass/skins.scss");
-const handdrawnFoodSkinSource = readFile("./handdrawn-food/skins.scss");
-const warmCoupleSkinSource = readFile("./warm-couple/skins.scss");
 const confirmSource = readFile("../components/Confirm/Confirm.vue");
 const emptySource = readFile("../components/Empty/Empty.vue");
 const imageFieldSource = readFile("../components/ImageField.vue");
@@ -336,8 +335,7 @@ expectIncludes(appleGlassSkinSource, "--button-secondary-filter:");
 expectIncludes(appleGlassSkinSource, "--login-popup-sheet-border: transparent;");
 expectIncludes(appleGlassSkinSource, "--login-popup-backdrop-filter:");
 expectIncludes(appleGlassSkinSource, "--login-popup-sheet-filter:");
-expectIncludes(handdrawnFoodSkinSource, "--login-popup-sheet-border: transparent;");
-expectIncludes(warmCoupleSkinSource, "--login-popup-sheet-border: transparent;");
+expectExcludes(skinsEntrypointSource, '@use "./handdrawn-food/skins.scss"');
 
 expectIncludes(confirmSource, "background: var(--material-card-bg);");
 expectIncludes(confirmSource, "box-shadow: var(--material-card-shadow);");
@@ -445,11 +443,7 @@ expectIncludes(fontSource, '.icon-pantry::before {\n    content: "\\e797";\n}');
 expectIncludes(reminderPageSource, "background: var(--material-card-bg);");
 expectIncludes(reminderPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(reminderPageSource, "backdrop-filter: var(--material-card-filter);");
-expectSelectorExcludes(reminderPageSource, ".reminder-card,\n.permission-strip", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorIncludes(reminderPageSource, ".reminder-card__eyebrow", [
-  "background: var(--color-support-notice);"
-]);
-expectSelectorExcludes(reminderPageSource, ".reminder-card__eyebrow", ["background: var(--color-primary-soft-fill);"]);
+expectSelectorExcludes(reminderPageSource, ".reminder-card", ["border: 1rpx solid var(--material-card-border);"]);
 
 expectIncludes(knowledgeListPageSource, "background: var(--material-card-bg);");
 expectIncludes(knowledgeListPageSource, "box-shadow: var(--material-card-shadow);");
@@ -495,6 +489,23 @@ expectSelectorIncludes(homePageSource, ".table-hero::after", [
 ]);
 expectSelectorIncludes(homePageSource, ".hero-banner__shade", [
   "background: var(--overlay-hero-banner-shade);"
+]);
+expectSelectorIncludes(homePageSource, ".hero-banner__eyebrow,\n.hero-banner__title,\n.hero-banner__description", [
+  "color: var(--color-text);"
+]);
+expectSelectorExcludes(homePageSource, ".hero-banner__eyebrow,\n.hero-banner__title,\n.hero-banner__description", [
+  "color: var(--color-text-inverse);"
+]);
+expectSelectorIncludes(homePageSource, ".hero-banner__action-text", [
+  "color: var(--color-text);"
+]);
+expectSelectorExcludes(homePageSource, ".hero-banner__action-text", [
+  "color: var(--color-text-inverse);"
+]);
+expectIncludes(homePageSource, "class=\"hero-banner__copy\" :class=\"`hero-banner__copy--${item.key}`\"");
+expectSelectorIncludes(homePageSource, ".hero-banner__copy--banner-02", [
+  "align-items: flex-end;",
+  "text-align: right;"
 ]);
 expectSelectorIncludes(homePageSource, ".hero-banner__action", [
   "-webkit-backdrop-filter: var(--material-mask-filter);",
