@@ -556,7 +556,7 @@ export class RecipeController {
         operationId,
         body.sourceRecipeId,
         body.sourceVersionId,
-        body.categoryId
+        body.categoryId ?? null
       )
       .then(result => ok(result));
   }

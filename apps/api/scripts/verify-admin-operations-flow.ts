@@ -8,6 +8,7 @@ const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
 const expectedFixedPageSlugs = ["about", "privacy", "terms", "product", "faq"] as const;
+const articlePublishChannelCode = "KITCHEN";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -74,6 +75,7 @@ interface AdminSiteContentDetail {
   path: string;
   title: string;
   summary: string;
+  keywords: string | null;
   label: string;
   heroNote: string | null;
   coverImageUrl: string | null;
@@ -237,7 +239,6 @@ async function main() {
         method: "PUT",
         headers: withIdempotencyKey(adminAuth),
         body: JSON.stringify({
-          code: channelCode,
           name: `运营验证栏目 ${suffix} 已更新`,
           description: "后台运营治理验证栏目已更新",
           sortOrder: 92,
@@ -246,6 +247,23 @@ async function main() {
       }
     );
     assert(updatedChannel.version === channelA.version + 1, "channel update should increment version");
+    assert(updatedChannel.code === channelCode, "channel update should keep code unchanged");
+
+    const codeUpdate = await request<AdminSiteContentChannelItem>(
+      `/admin/content/channels/${channelA.id}`,
+      {
+        method: "PUT",
+        headers: withIdempotencyKey(adminAuth),
+        body: JSON.stringify({
+          code: `${channelCode}_NEXT`,
+          name: `运营验证栏目 ${suffix} 改 code`,
+          description: "栏目 code 不允许编辑",
+          sortOrder: 92,
+          expectedVersion: updatedChannel.version
+        })
+      }
+    );
+    assert(codeUpdate.status === 400, "channel code update should be rejected");
 
     const staleChannelUpdate = await request<AdminSiteContentChannelItem>(
       `/admin/content/channels/${channelA.id}`,
@@ -253,7 +271,6 @@ async function main() {
         method: "PUT",
         headers: withIdempotencyKey(adminAuth),
         body: JSON.stringify({
-          code: channelCode,
           name: `运营验证栏目 ${suffix} 旧版本`,
           description: "旧版本冲突校验",
           sortOrder: 93,
@@ -263,14 +280,21 @@ async function main() {
     );
     assert(staleChannelUpdate.status === 409, "stale channel expectedVersion should return 409");
 
+    const articleChannel = await prisma.siteContentChannel.findUnique({
+      where: { code: articlePublishChannelCode },
+      select: { id: true, name: true }
+    });
+    assert(articleChannel, `missing article publish channel ${articlePublishChannelCode}`);
+
     const createContentOperationId = nextIdempotencyKey();
     const createContentBody = {
       type: "ARTICLE" as const,
-      channelId: updatedChannel.id,
+      channelId: articleChannel.id,
       slug,
       title: `运营治理验证文章 ${suffix}`,
       summary: "用于校验后台内容治理的幂等、状态和公开读取。",
-      label: "验证",
+      keywords: "厨房; 技法; 验证",
+      label: articleChannel.name,
       heroNote: "自动化验证",
       coverImageUrl: null,
       bodyHtml: "<p>运营治理验证正文</p>",
@@ -290,6 +314,7 @@ async function main() {
     assert(contentA.id === contentB.id, "content idempotent replay should return the same row");
     assert(contentA.status === "DRAFT", "new content should start as draft");
     assert(contentA.path === articlePath, "article path should be normalized by server");
+    assert(contentA.keywords === "厨房; 技法; 验证", "article keywords should be saved");
 
     const changedContentReplay = await request<AdminSiteContentDetail>(
       "/admin/content",
@@ -323,6 +348,7 @@ async function main() {
     );
     assert(publishedContent.status === "PUBLISHED", "content should be published");
     assert(publishedContent.version === contentA.version + 1, "publish should increment content version");
+    assert(publishedContent.keywords === "厨房; 技法; 验证", "article keywords should remain after publish");
 
     const publicContent = await requestData<SiteContentDetail>(`/site-contents/resolve?path=${encodeURIComponent(articlePath)}`, {
       headers: {
@@ -333,6 +359,14 @@ async function main() {
     });
     assert(publicContent.path === articlePath, "published content public path mismatch");
     assert(publicContent.title === publishedContent.title, "published content public title mismatch");
+
+    const keywordMatchedArticles = await requestData<PageResult<AdminSiteContentDetail>>(
+      `/admin/content/articles?keyword=${encodeURIComponent("技法")}&page=1&pageSize=20`,
+      {
+        headers: adminAuth
+      }
+    );
+    assert(keywordMatchedArticles.items.some(item => item.id === publishedContent.id), "article list keyword filter should match keywords");
 
     const staleStatusUpdate = await request<AdminSiteContentDetail>(
       `/admin/content/${contentA.id}/status`,

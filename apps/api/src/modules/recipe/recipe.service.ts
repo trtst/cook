@@ -1698,7 +1698,7 @@ export class RecipeService {
     operationId: OperationId,
     sourceRecipeId: UUID,
     sourceVersionId: UUID,
-    categoryId: UUID
+    categoryId: UUID | null
   ): Promise<PublishRecipeDraftResponse> {
     const requestHash = JSON.stringify({ sourceRecipeId, sourceVersionId, categoryId });
     return this.prisma.$transaction(async tx => {
@@ -1713,7 +1713,7 @@ export class RecipeService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "recipe:create-from-inspiration", userId, null, requestHash);
 
-      const category = await this.requireOwnedCategory(tx, userId, categoryId);
+      const category = categoryId ? await this.requireOwnedCategory(tx, userId, categoryId) : null;
       await tx.$queryRaw`SELECT "id" FROM "recipes" WHERE "id" = ${sourceRecipeId} FOR UPDATE`;
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
@@ -1760,6 +1760,14 @@ export class RecipeService {
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
       });
       if (existing) {
+        if (category && !existing.category) {
+          const sortOrder = await this.nextRecipeSortOrder(tx, userId, category.id);
+          await tx.recipe.update({
+            where: { id: existing.id },
+            data: { categoryId: category.id, sortOrder }
+          });
+          existing.category = category;
+        }
         const result = {
           recipe: await this.toMyRecipeDetail(tx, userId, existing)
         } satisfies PublishRecipeDraftResponse;
@@ -1770,11 +1778,11 @@ export class RecipeService {
       const recipeBytes = await this.getRecipeBytes(tx, sourceRecipe);
       await this.assertRecipeQuota(tx, userId, 1);
       await this.assertStorageDelta(tx, userId, recipeBytes);
-      const sortOrder = await this.nextRecipeSortOrder(tx, userId, category.id);
+      const sortOrder = category ? await this.nextRecipeSortOrder(tx, userId, category.id) : 0;
       const created = await tx.recipe.create({
         data: {
           ownerId: userId,
-          categoryId: category.id,
+          categoryId: category?.id ?? null,
           inspirationCategoryId: sourceRecipe.inspirationCategoryId,
           currentVersionId: sourceRecipe.currentVersionId,
           originVersionId: sourceVersionId,
@@ -2592,7 +2600,7 @@ export class RecipeService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       estimatedCalories: content.estimatedCalories,
-      category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
+      category: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
       contentVersionId: recipe.currentVersionId,
       version: recipe.version,
       updatedAt: toIsoDate(recipe.updatedAt)
@@ -2615,7 +2623,7 @@ export class RecipeService {
       coverImageUrl: recipe.coverImageUrl,
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
-      category: toRecipeCategorySummary(recipe.category as RecipeCategoryRow),
+      category: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
       inspirationCategory: recipe.inspirationCategory
         ? toInspirationCategorySummary(recipe.inspirationCategory)
         : null,

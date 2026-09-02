@@ -2,8 +2,9 @@ import { PrismaClient, type EntitlementTier, type UnitType } from "@prisma/clien
 import { loadLocalEnv } from "../src/common/load-env";
 import { hashPassword } from "../src/common/security/password";
 import { ensureMembershipSkuCatalog } from "../src/modules/user/membership-code.catalog";
-import { buildSearchKey } from "../src/modules/recipe/recipe-content";
+import { buildSearchKey, versionToContent } from "../src/modules/recipe/recipe-content";
 import { inferIngredientTagFacts } from "../src/modules/recipe/ingredient-tag-facts";
+import { replaceAutoRecipeVersionTags } from "../src/modules/recipe/recipe-version-tags";
 import { allowedSystemUnitNames } from "../src/modules/recipe/system-unit-policy";
 
 loadLocalEnv();
@@ -799,7 +800,7 @@ async function upsertRecipeVersion(
     images: Array<{ key: string; url: string; sizeBytes: number }>;
   }
 ) {
-  return prisma.recipeContentVersion.upsert({
+  const version = await prisma.recipeContentVersion.upsert({
     where: { id },
     update: {
       createdByUserId,
@@ -863,6 +864,12 @@ async function upsertRecipeVersion(
       )
     }
   });
+
+  await prisma.$transaction(async tx => {
+    await replaceAutoRecipeVersionTags(tx, version.id, versionToContent(version));
+  });
+
+  return version;
 }
 
 async function seedSystemRecipes(

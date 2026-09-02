@@ -33,6 +33,7 @@
     "verify:home-action-dock-flow": "tsx scripts/verify-home-action-dock-flow.ts",
     "verify:home-weekly-topic-flow": "tsx scripts/verify-home-weekly-topic-flow.ts",
     "verify:knowledge-article-flow": "tsx scripts/verify-knowledge-article-flow.ts",
+    "import:howtocook-articles": "tsx scripts/import-howtocook-articles.ts",
     "verify:login-flow": "tsx scripts/verify-login-flow.ts",
     "verify:login-modal-flow": "tsx scripts/verify-login-modal-flow.ts",
     "verify:meal-assistant-flow": "tsx scripts/verify-meal-assistant-flow.ts",

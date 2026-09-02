@@ -495,6 +495,7 @@ model SiteContent {
   path             String            @unique @db.VarChar(160)
   title            String            @db.VarChar(80)
   summary          String            @db.VarChar(240)
+  keywords         String?           @db.VarChar(200)
   label            String            @db.VarChar(16)
   heroNote         String?           @map("hero_note") @db.VarChar(200)
   coverImageUrl    String?           @map("cover_image_url") @db.VarChar(512)

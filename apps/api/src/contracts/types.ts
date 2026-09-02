@@ -765,6 +765,7 @@ export interface AdminSiteContentSummary {
   path: string;
   title: string;
   summary: string;
+  keywords: string | null;
   label: string;
   heroNote: string | null;
   coverImageUrl: string | null;
@@ -799,6 +800,7 @@ export interface CreateAdminSiteContentRequest {
   path?: string | null;
   title: string;
   summary: string;
+  keywords?: string | null;
   label: string;
   heroNote?: string | null;
   coverImageUrl?: string | null;
@@ -826,7 +828,11 @@ export interface CreateAdminSiteContentChannelRequest {
   sortOrder?: number;
 }
 
-export interface UpdateAdminSiteContentChannelRequest extends CreateAdminSiteContentChannelRequest {
+export interface UpdateAdminSiteContentChannelRequest {
+  operationId: OperationId;
+  name: string;
+  description?: string | null;
+  sortOrder?: number;
   expectedVersion: number;
 }
 
@@ -853,10 +859,21 @@ export interface SiteContentArticleSummary {
   id: UUID;
   title: string;
   summary: string;
+  keywords: string | null;
   coverImageUrl: string | null;
   publishedAt: IsoDateTime;
   viewCount: number;
   likeCount: number;
+}
+
+export interface SiteContentArticleChannel {
+  code: "KITCHEN" | "COOK" | "FOOD";
+  name: string;
+  description: string;
+}
+
+export interface SiteContentArticleList extends PageResult<SiteContentArticleSummary> {
+  channel: SiteContentArticleChannel;
 }
 
 export interface SiteContentArticleDetail extends SiteContentArticleSummary {
@@ -867,7 +884,7 @@ export interface SiteContentArticleDetail extends SiteContentArticleSummary {
   bodyHtml: string;
   bodyText: string;
   updatedAt: IsoDateTime;
-  channelCode: "KITCHEN_PREP" | "COOKING_SKILLS" | "RECIPE_SKILLS";
+  channelCode: "KITCHEN" | "COOK" | "FOOD";
   channelName: string;
   viewerHasLiked: boolean;
 }
@@ -1388,7 +1405,7 @@ export interface MyRecipeSummary {
   difficultyText: string | null;
   durationText: string | null;
   estimatedCalories: number | null;
-  category: RecipeCategorySummary;
+  category: RecipeCategorySummary | null;
   contentVersionId: UUID;
   version: number;
   updatedAt: IsoDateTime;
@@ -1400,7 +1417,7 @@ export interface MyRecipeDetail {
   coverImageUrl: string | null;
   difficultyText: string | null;
   durationText: string | null;
-  category: RecipeCategorySummary;
+  category: RecipeCategorySummary | null;
   inspirationCategory: InspirationCategorySummary | null;
   scenes: RecipeSceneSummary[];
   contentVersionId: UUID;
@@ -1975,6 +1992,7 @@ export interface RandomMenuItem {
   flavorTags: string[];
   mainProteinType: RecipeProteinType | null;
   fridgeFit: RandomFridgeFit;
+  matchedIngredients: string[];
   recommendationReason: string;
 }
 

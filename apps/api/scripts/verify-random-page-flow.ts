@@ -1,6 +1,7 @@
 import { loadLocalEnv } from "../src/common/load-env";
 import type {
   CheckRandomMenuGapResponse,
+  FridgeItemSummary,
   IngredientSummary,
   MealPlanSummary,
   MyRecipeDetail,
@@ -17,8 +18,6 @@ import type {
 loadLocalEnv();
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
-const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
-const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -63,6 +62,10 @@ function formatDateOnly(date: Date) {
 function buildPlanDate(daysFromNow: number) {
   const extraDays = Number(nextIdempotencyKey().slice(-2)) % 20;
   return formatDateOnly(new Date(Date.now() + (daysFromNow + extraDays) * 24 * 60 * 60 * 1000));
+}
+
+function createFreshPhone() {
+  return `139${String(Date.now()).slice(-8).padStart(8, "0")}`;
 }
 
 async function createMealPlanFromRandom(
@@ -123,10 +126,10 @@ async function requestData<T>(path: string, options: RequestInit = {}) {
   return result.body.data;
 }
 
-async function login() {
-  return requestData<LoginResult>("/auth/login", {
+async function loginWithCode(phone: string) {
+  return requestData<LoginResult>("/auth/code-login", {
     method: "POST",
-    body: JSON.stringify({ phone: ownerPhone, password })
+    body: JSON.stringify({ phone, code: "123456" })
   });
 }
 
@@ -229,12 +232,58 @@ async function createOwnedRecipe(
   return published.recipe;
 }
 
+async function createFridgeItem(headers: Record<string, string>, ingredient: IngredientSummary, quantityText: string) {
+  return requestData<FridgeItemSummary>("/fridge-items", {
+    method: "POST",
+    headers: withIdempotencyKey(headers),
+    body: JSON.stringify({
+      name: ingredient.name,
+      ingredientId: ingredient.id,
+      quantityText,
+      exactQuantity: null,
+      exactUnitId: null,
+      expireAt: null,
+      note: "随机页验收库存"
+    })
+  });
+}
+
 function replaceMenuItem(items: RandomMenuItem[], slot: RandomMenuItem) {
   return items.map(item => (item.slotId === slot.slotId ? slot : item));
 }
 
 async function main() {
-  const owner = await login();
+  const freshUser = await loginWithCode(createFreshPhone());
+  const freshAuth = { authorization: `Bearer ${freshUser.token}` };
+  const inspirationOnly = await requestData<RandomMenuResponse>("/random-menus/generate", {
+    method: "POST",
+    headers: withIdempotencyKey(freshAuth),
+    body: JSON.stringify({
+      mealSlot: "DINNER",
+      peopleCount: 2,
+      fridgePreferred: false,
+      slotPlan: {
+        meatCount: 1,
+        vegetableCount: 1,
+        soupCount: 0,
+        stapleCount: 0,
+        breakfastStapleCount: 0,
+        breakfastProteinCount: 0,
+        breakfastSideCount: 0
+      }
+    })
+  });
+  assert(inspirationOnly.items.length === 2, "fresh user should get missing dinner slots from inspiration recipes");
+  assert(
+    inspirationOnly.items.every(item => item.sourceType === "INSPIRATION"),
+    "fresh user without private recipes should receive inspiration candidates"
+  );
+  assert(
+    inspirationOnly.items.some(item => item.slotType === "MEAT") && inspirationOnly.items.some(item => item.slotType === "VEGETABLE"),
+    "inspiration fallback should cover both meat and vegetable slots"
+  );
+
+  const owner = await loginWithCode(createFreshPhone());
   const ownerAuth = { authorization: `Bearer ${owner.token}` };
   const ingredients = await listSystemIngredients(ownerAuth);
   const category = await resolveRecipeCategory(ownerAuth);
@@ -273,6 +322,13 @@ async function main() {
       ]
     })
   ]);
+  await Promise.all([
+    createFridgeItem(ownerAuth, chicken, "200g"),
+    createFridgeItem(ownerAuth, pork, "200g"),
+    createFridgeItem(ownerAuth, cabbage, "1棵"),
+    createFridgeItem(ownerAuth, pepper, "2个"),
+    createFridgeItem(ownerAuth, onion, "1个")
+  ]);
 
   const generated = await requestData<RandomMenuResponse>("/random-menus/generate", {
     method: "POST",
@@ -300,6 +356,10 @@ async function main() {
   assert(
     generated.items.every(item => typeof (item as { recommendationReason?: unknown }).recommendationReason === "string"),
     "random generate should return one recommendation reason per item"
+  );
+  assert(
+    generated.items.every(item => item.matchedIngredients.length > 0),
+    "random generate should return concrete matched ingredient names for fridge-positive recipes"
   );
   const meatSlot = generated.items.find(item => item.slotType === "MEAT") ?? null;
   const vegetableSlot = generated.items.find(item => item.slotType === "VEGETABLE") ?? null;

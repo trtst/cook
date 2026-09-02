@@ -29,8 +29,8 @@ import {
   ApiOkModel,
   ApiOkPage,
   SiteContentArticleDetailModel,
+  SiteContentArticleListModel,
   SiteContentArticleLikeResultModel,
-  SiteContentArticleSummaryModel,
   SiteContentArticleViewResultModel,
   SiteContentDetailModel,
   SiteOfficialMessageDetailModel,
@@ -182,7 +182,7 @@ export class SiteContentArticleController {
   constructor(@Inject(AdminSiteContentService) private readonly adminSiteContentService: AdminSiteContentService) {}
 
   @Get()
-  @ApiOkPage(SiteContentArticleSummaryModel, "读取文章列表")
+  @ApiOkModel(SiteContentArticleListModel, "读取文章列表")
   list(@Req() request: RequestWithUser, @Query() query: SiteContentArticleQueryDto) {
     return this.adminSiteContentService
       .listPublicArticles(request.user.userId, query.page, query.pageSize, query.channelCode)

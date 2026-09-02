@@ -6,7 +6,7 @@ loadLocalEnv();
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
-const articleChannelCode = "KITCHEN_PREP";
+const articleChannelCode = "KITCHEN";
 const testCode = "123456";
 
 interface ApiEnvelope<T> {
@@ -51,14 +51,25 @@ interface PageResult<T> {
   hasNext: boolean;
 }
 
+interface KnowledgeArticleChannel {
+  code: "KITCHEN" | "COOK" | "FOOD";
+  name: string;
+  description: string;
+}
+
 interface KnowledgeArticleSummary {
   id: number;
   title: string;
   summary: string;
+  keywords: string | null;
   coverImageUrl: string | null;
   publishedAt: string;
   viewCount: number;
   likeCount: number;
+}
+
+interface KnowledgeArticleList extends PageResult<KnowledgeArticleSummary> {
+  channel: KnowledgeArticleChannel;
 }
 
 interface KnowledgeArticleDetail extends KnowledgeArticleSummary {
@@ -153,7 +164,7 @@ async function main() {
   try {
     const channel = await prisma.siteContentChannel.findUnique({
       where: { code: articleChannelCode },
-      select: { id: true, code: true, name: true }
+      select: { id: true, code: true, name: true, description: true }
     });
     assert(channel, `missing fixed channel ${articleChannelCode}`);
 
@@ -179,6 +190,7 @@ async function main() {
       slug,
       title: `厨房知识验收文章 ${suffix}`,
       summary: "用于验证厨房知识列表、详情、阅读和点赞链路。",
+      keywords: "焯水; 去腥",
       label: "验收",
       heroNote: "自动化验收",
       coverImageUrl: null,
@@ -217,18 +229,25 @@ async function main() {
     const userLogin = await loginWithCode(createFreshPhone());
     const userAuth = { authorization: `Bearer ${userLogin.token}` };
 
-    const articleList = await requestData<PageResult<KnowledgeArticleSummary>>(
+    const articleList = await requestData<KnowledgeArticleList>(
       `/site-contents/articles?channelCode=${articleChannelCode}&page=1&pageSize=20`,
       { headers: userAuth }
     );
+    assert(articleList.channel.code === channel.code, "article list should expose current channel code");
+    assert(articleList.channel.name === channel.name, "article list should expose current channel name");
+    assert(articleList.channel.description === channel.description, "article list should expose current channel description");
     const listed = articleList.items.find(item => item.id === published.id);
     assert(listed, "published knowledge article should appear in list");
+    assert(listed.summary === createBody.summary, "article list should expose summary");
+    assert(listed.keywords === "焯水; 去腥", "article list should expose keywords");
 
     const detail = await requestData<KnowledgeArticleDetail>(`/site-contents/articles/${published.id}`, {
       headers: userAuth
     });
     assert(detail.id === published.id, "knowledge detail id mismatch");
     assert(detail.channelCode === articleChannelCode, "knowledge detail channel mismatch");
+    assert(detail.summary === createBody.summary, "knowledge detail should expose summary");
+    assert(detail.keywords === "焯水; 去腥", "knowledge detail should expose keywords");
     assert(detail.viewerHasLiked === false, "newly published knowledge article should start unliked");
 
     const initialViewCount = detail.viewCount;

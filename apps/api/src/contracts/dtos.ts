@@ -58,7 +58,7 @@ const membershipCodeStatusValues = ["ACTIVE", "REDEEMED", "DISABLED"] as const;
 const dashboardTrendRangeValues = ["7D", "30D"] as const;
 const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
 const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
-const siteContentArticleChannelCodeValues = ["KITCHEN_PREP", "COOKING_SKILLS", "RECIPE_SKILLS"] as const;
+const siteContentArticleChannelCodeValues = ["KITCHEN", "COOK", "FOOD"] as const;
 const authCodeSceneValues = ["LOGIN", "BIND_PHONE"] as const;
 const notificationReminderDayValues = [1, 2, 3, 5, 7] as const;
 const notificationTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -1567,11 +1567,13 @@ export class CreateMyRecipeFromInspirationDto extends OperationDto {
   @Min(1)
   sourceVersionId!: number;
 
-  @ApiProperty({ example: resourceIdExample })
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
   @Type(() => Number)
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
   @IsInt()
   @Min(1)
-  categoryId!: number;
+  categoryId?: number | null;
 
 }
 
@@ -3705,7 +3707,29 @@ export class CreateAdminSiteContentChannelDto extends OperationDto {
   sortOrder?: number;
 }
 
-export class UpdateAdminSiteContentChannelDto extends CreateAdminSiteContentChannelDto {
+export class UpdateAdminSiteContentChannelDto extends OperationDto {
+  @ApiProperty({ maxLength: 32 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  name!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(200)
+  description?: string | null;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  sortOrder?: number;
+
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
   @IsInt()
@@ -3754,6 +3778,14 @@ export class CreateAdminSiteContentDto extends OperationDto {
   @MinLength(1)
   @MaxLength(240)
   summary!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 200 })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(200)
+  keywords?: string | null;
 
   @ApiProperty({ maxLength: 16 })
   @Transform(({ value }) => trimString(value))
@@ -3836,7 +3868,7 @@ export class ResolveSiteContentDto {
 export class SiteContentArticleQueryDto extends PageQueryDto {
   @ApiProperty({ enum: siteContentArticleChannelCodeValues })
   @IsIn(siteContentArticleChannelCodeValues)
-  channelCode!: "KITCHEN_PREP" | "COOKING_SKILLS" | "RECIPE_SKILLS";
+  channelCode!: "KITCHEN" | "COOK" | "FOOD";
 }
 
 export class SiteOfficialMessageQueryDto extends PageQueryDto {}

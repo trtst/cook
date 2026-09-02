@@ -20,6 +20,7 @@ import type {
   CreateAdminSiteContentRequest,
   PageResult,
   SiteContentArticleDetail,
+  SiteContentArticleList,
   SiteContentArticleLikeResult,
   SiteContentArticleSummary,
   SiteContentArticleViewResult,
@@ -55,20 +56,19 @@ const defaultChannelSeeds = [
   { code: "OFFICIAL_NOTICE", name: "官方消息", description: "站内官方消息与通知中心承接", sortOrder: 3 },
   { code: "PRE_MEAL", name: "餐前准备", description: "备菜与准备类文章", sortOrder: 4 },
   { code: "KITCHEN_KNOWLEDGE", name: "厨房知识", description: "厨房经验与做饭知识文章", sortOrder: 5 },
-  { code: "KITCHEN_PREP", name: "厨房准备", description: "厨房准备类文章", sortOrder: 6 },
-  { code: "COOKING_SKILLS", name: "烹饪技巧", description: "烹饪技巧类文章", sortOrder: 7 },
-  { code: "RECIPE_SKILLS", name: "食谱技巧", description: "食谱技巧类文章", sortOrder: 8 }
+  { code: "KITCHEN", name: "厨房百事", description: "用什么、怎么买、怎么存、怎么备", sortOrder: 6 },
+  { code: "COOK", name: "烹调技法", description: "怎么做、为什么这样做、失败怎么救", sortOrder: 7 },
+  { code: "FOOD", name: "饮食文化", description: "餐桌上的节气、地域、传统、人情", sortOrder: 8 }
 ] as const;
 
 const publicArticleChannels = [
-  { code: "KITCHEN_PREP", name: "厨房准备" },
-  { code: "COOKING_SKILLS", name: "烹饪技巧" },
-  { code: "RECIPE_SKILLS", name: "食谱技巧" }
+  { code: "KITCHEN", name: "厨房百事" },
+  { code: "COOK", name: "烹调技法" },
+  { code: "FOOD", name: "饮食文化" }
 ] as const;
 
 type PublicArticleChannelCode = (typeof publicArticleChannels)[number]["code"];
 const officialMessageChannelCode = "OFFICIAL_NOTICE" as const;
-
 const fixedPageSeeds: FixedPageSeed[] = [
   { slug: "about", path: "/about", title: "关于我们", label: "关于", channelCode: "ABOUT", sortOrder: 0 },
   { slug: "privacy", path: "/privacy", title: "隐私政策", label: "法务", channelCode: "LEGAL", sortOrder: 1 },
@@ -112,6 +112,19 @@ function buildTextFromHtml(value: string) {
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+function normalizeKeywords(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return null;
+  const items = text
+    .replace(/；/g, ";")
+    .split(";")
+    .map(item => item.trim())
+    .filter(Boolean);
+  const keywords = items.join("; ");
+  if (keywords.length > 200) throw new BadRequestException("关键词不能超过 200 字符");
+  return keywords || null;
 }
 
 function toRequestHash(value: unknown) {
@@ -179,10 +192,8 @@ export class AdminSiteContentService {
 
   async updateChannel(channelId: UUID, body: UpdateAdminSiteContentChannelRequest, adminId: UUID) {
     await this.requireSuperAdmin(adminId);
-    const code = normalizeCode(body.code);
     const requestHash = toRequestHash({
       channelId,
-      code,
       name: body.name,
       description: body.description ?? null,
       sortOrder: body.sortOrder ?? null,
@@ -200,7 +211,6 @@ export class AdminSiteContentService {
       const updated = await tx.siteContentChannel.update({
         where: { id: channelId },
         data: {
-          code,
           name: body.name.trim(),
           description: body.description?.trim() || null,
           sortOrder: body.sortOrder ?? current.sortOrder,
@@ -251,6 +261,7 @@ export class AdminSiteContentService {
             OR: [
               { title: { contains: keyword, mode: "insensitive" } },
               { summary: { contains: keyword, mode: "insensitive" } },
+              { keywords: { contains: keyword, mode: "insensitive" } },
               { slug: { contains: keyword, mode: "insensitive" } }
             ]
           }
@@ -313,6 +324,7 @@ export class AdminSiteContentService {
           path: input.path,
           title: input.title,
           summary: input.summary,
+          keywords: input.keywords,
           label: input.label,
           heroNote: input.heroNote,
           coverImageUrl: input.coverImageUrl,
@@ -356,6 +368,7 @@ export class AdminSiteContentService {
           path: input.path,
           title: input.title,
           summary: input.summary,
+          keywords: input.keywords,
           label: input.label,
           heroNote: input.heroNote,
           coverImageUrl: input.coverImageUrl,
@@ -395,6 +408,12 @@ export class AdminSiteContentService {
       });
       if (!current) throw new NotFoundException("内容不存在");
       if (current.version !== body.expectedVersion) throw new ConflictException("内容已被更新，请刷新后重试");
+      if (body.status === "PUBLISHED" && current.type === "ARTICLE") {
+        if (!current.channel) throw new BadRequestException("文章发布前必须选择栏目");
+        if (current.channel.code !== officialMessageChannelCode && !isPublicArticleChannelCode(current.channel.code)) {
+          throw new BadRequestException("文章栏目不支持发布");
+        }
+      }
 
       const updated = await tx.siteContent.update({
         where: { id: contentId },
@@ -448,15 +467,18 @@ export class AdminSiteContentService {
     };
   }
 
-  async listPublicArticles(
-    userId: number,
-    page: number,
-    pageSize: number,
-    channelCode: string
-  ): Promise<PageResult<SiteContentArticleSummary>> {
+  async listPublicArticles(userId: number, page: number, pageSize: number, channelCode: string): Promise<SiteContentArticleList> {
     await this.requireUser(userId);
     await this.ensureDefaultChannels();
     if (!isPublicArticleChannelCode(channelCode)) {
+      throw new BadRequestException("文章栏目不支持");
+    }
+
+    const channel = await this.prisma.siteContentChannel.findUnique({
+      where: { code: channelCode },
+      select: { id: true, code: true, name: true, description: true }
+    });
+    if (!channel || !isPublicArticleChannelCode(channel.code)) {
       throw new BadRequestException("文章栏目不支持");
     }
 
@@ -466,7 +488,7 @@ export class AdminSiteContentService {
     const where: Prisma.SiteContentWhereInput = {
       type: "ARTICLE",
       status: "PUBLISHED",
-      channel: { code: channelCode }
+      channelId: channel.id
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -484,7 +506,12 @@ export class AdminSiteContentService {
       page: normalizedPage,
       pageSize: normalizedPageSize,
       total,
-      hasNext: skip + items.length < total
+      hasNext: skip + items.length < total,
+      channel: {
+        code: channel.code,
+        name: channel.name,
+        description: channel.description ?? ""
+      }
     };
   }
 
@@ -695,6 +722,7 @@ export class AdminSiteContentService {
         path: fixedPage.path,
         title: body.title.trim(),
         summary: body.summary.trim(),
+        keywords: null,
         label: body.label.trim(),
         heroNote: body.heroNote?.trim() || null,
         coverImageUrl: body.coverImageUrl?.trim() || null,
@@ -713,6 +741,7 @@ export class AdminSiteContentService {
       path: `/guides/${slug}`,
       title: body.title.trim(),
       summary: body.summary.trim(),
+      keywords: normalizeKeywords(body.keywords),
       label: body.label.trim(),
       heroNote: body.heroNote?.trim() || null,
       coverImageUrl: body.coverImageUrl?.trim() || null,
@@ -754,6 +783,7 @@ export class AdminSiteContentService {
         path: item.path,
         title: item.title,
         summary: "",
+        keywords: null,
         label: item.label,
         heroNote: null,
         coverImageUrl: null,
@@ -814,6 +844,7 @@ export class AdminSiteContentService {
       path: row.path,
       title: row.title,
       summary: row.summary,
+      keywords: row.keywords,
       label: row.label,
       heroNote: row.heroNote,
       coverImageUrl: row.coverImageUrl,
@@ -859,11 +890,12 @@ export class AdminSiteContentService {
     }
   }
 
-  private toPublicArticleSummary(row: Pick<ContentRow, "id" | "title" | "summary" | "coverImageUrl" | "publishedAt" | "updatedAt" | "viewCount" | "likeCount">): SiteContentArticleSummary {
+  private toPublicArticleSummary(row: Pick<ContentRow, "id" | "title" | "summary" | "keywords" | "coverImageUrl" | "publishedAt" | "updatedAt" | "viewCount" | "likeCount">): SiteContentArticleSummary {
     return {
       id: row.id,
       title: row.title,
       summary: row.summary,
+      keywords: row.keywords,
       coverImageUrl: row.coverImageUrl,
       publishedAt: (row.publishedAt ?? row.updatedAt).toISOString(),
       viewCount: row.viewCount,

@@ -586,6 +586,7 @@ export class AdminSiteContentSummaryModel {
   @ApiProperty({ type: String }) path!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty(nullableString) keywords!: string | null;
   @ApiProperty({ type: String }) label!: string;
   @ApiProperty(nullableString) heroNote!: string | null;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
@@ -635,10 +636,26 @@ export class SiteContentArticleSummaryModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) summary!: string;
+  @ApiProperty(nullableString) keywords!: string | null;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty(dateTime) publishedAt!: string;
   @ApiProperty({ type: Number, minimum: 0 }) viewCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
+}
+
+export class SiteContentArticleChannelModel {
+  @ApiProperty({ type: String, enum: ["KITCHEN", "COOK", "FOOD"] }) code!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: String }) description!: string;
+}
+
+export class SiteContentArticleListModel {
+  @ApiProperty({ type: [SiteContentArticleSummaryModel] }) items!: SiteContentArticleSummaryModel[];
+  @ApiProperty({ type: Number, minimum: 1 }) page!: number;
+  @ApiProperty({ type: Number, minimum: 1, maximum: 50 }) pageSize!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Boolean }) hasNext!: boolean;
+  @ApiProperty({ type: SiteContentArticleChannelModel }) channel!: SiteContentArticleChannelModel;
 }
 
 export class SiteContentArticleDetailModel extends SiteContentArticleSummaryModel {
@@ -649,7 +666,7 @@ export class SiteContentArticleDetailModel extends SiteContentArticleSummaryMode
   @ApiProperty({ type: String }) bodyHtml!: string;
   @ApiProperty({ type: String }) bodyText!: string;
   @ApiProperty(dateTime) updatedAt!: string;
-  @ApiProperty({ type: String, enum: ["KITCHEN_PREP", "COOKING_SKILLS", "RECIPE_SKILLS"] }) channelCode!: string;
+  @ApiProperty({ type: String, enum: ["KITCHEN", "COOK", "FOOD"] }) channelCode!: string;
   @ApiProperty({ type: String }) channelName!: string;
   @ApiProperty({ type: Boolean }) viewerHasLiked!: boolean;
 }
@@ -1041,7 +1058,7 @@ export class MyRecipeSummaryModel {
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
-  @ApiProperty({ type: RecipeCategoryModel }) category!: RecipeCategoryModel;
+  @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -1062,7 +1079,7 @@ export class MyRecipeDetailModel {
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
-  @ApiProperty({ type: RecipeCategoryModel }) category!: RecipeCategoryModel;
+  @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
   @ApiProperty({ type: InspirationCategoryModel, nullable: true }) inspirationCategory!: InspirationCategoryModel | null;
   @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
   @ApiProperty(uuid) contentVersionId!: string;
@@ -1708,6 +1725,7 @@ export class RandomMenuItemModel {
   @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"] })
   mainProteinType!: string | null;
   @ApiProperty({ type: String, enum: ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] }) fridgeFit!: string;
+  @ApiProperty({ type: [String] }) matchedIngredients!: string[];
   @ApiProperty({ type: String }) recommendationReason!: string;
 }
 

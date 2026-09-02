@@ -305,6 +305,7 @@ type RandomRecipePick = {
 
 type RandomInventoryFacts = {
   fridgeIngredientIds: Set<UUID>;
+  fridgeIngredientNames: Map<UUID, string>;
 };
 
 type RandomTagSnapshot = {
@@ -3988,15 +3989,23 @@ export class MealService {
         available: true
       },
       select: {
-        ingredientId: true
+        ingredientId: true,
+        name: true
       }
     });
+    const fridgeIngredientNames = new Map<UUID, string>();
+    for (const item of fridgeItems) {
+      if (typeof item.ingredientId === "number" && item.ingredientId > 0 && item.name.trim()) {
+        fridgeIngredientNames.set(item.ingredientId, item.name.trim());
+      }
+    }
     return {
       fridgeIngredientIds: new Set(
         fridgeItems
           .map(item => item.ingredientId)
           .filter((item): item is UUID => typeof item === "number" && item > 0)
-      )
+      ),
+      fridgeIngredientNames
     };
   }
 
@@ -4111,7 +4120,7 @@ export class MealService {
     useFridgeFirst: boolean,
     recentRecipeVersionIds: Set<UUID>
   ): RandomRecipePick | null {
-    return candidates
+    const scored = candidates
       .map(candidate => ({
         candidate,
         ...this.scoreRandomCandidate(candidate, slotType, existingProteinTypes, inventoryFacts, useFridgeFirst, recentRecipeVersionIds),
@@ -4120,11 +4129,27 @@ export class MealService {
       .sort((left, right) => {
         if (right.score !== left.score) return right.score - left.score;
         return right.tieBreaker - left.tieBreaker;
-      })
-      .map(item => ({
-        candidate: item.candidate,
-        recommendationReason: item.recommendationReason
-      }))[0] ?? null;
+      });
+    const scoped = scored.slice(0, Math.min(scored.length, 5));
+    const lowestScore = scoped.at(-1)?.score ?? 0;
+    const totalWeight = scoped.reduce((sum, item) => sum + Math.max(1, item.score - lowestScore + 1), 0);
+    let cursor = Math.random() * totalWeight;
+    for (const item of scoped) {
+      cursor -= Math.max(1, item.score - lowestScore + 1);
+      if (cursor <= 0) {
+        return {
+          candidate: item.candidate,
+          recommendationReason: item.recommendationReason
+        };
+      }
+    }
+    const fallback = scoped[0];
+    return fallback
+      ? {
+          candidate: fallback.candidate,
+          recommendationReason: fallback.recommendationReason
+        }
+      : null;
   }
 
   private scoreRandomCandidate(
@@ -4199,8 +4224,24 @@ export class MealService {
       flavorTags: candidate.flavorTags,
       mainProteinType: candidate.mainProteinType,
       fridgeFit: this.computeRandomFridgeFit(candidate.content, inventoryFacts),
+      matchedIngredients: this.resolveRandomMatchedIngredients(candidate.content, inventoryFacts),
       recommendationReason
     };
+  }
+
+  private resolveRandomMatchedIngredients(content: RecipeContentSnapshot, inventoryFacts: RandomInventoryFacts): string[] {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const ingredient of content.ingredients) {
+      const ingredientId = ingredient.ingredientId ?? null;
+      if (typeof ingredientId !== "number" || !inventoryFacts.fridgeIngredientIds.has(ingredientId)) continue;
+      const name = (inventoryFacts.fridgeIngredientNames.get(ingredientId) ?? ingredient.ingredientName).trim();
+      const key = normalizeNameKey(name);
+      if (!name || seen.has(key)) continue;
+      names.push(name);
+      seen.add(key);
+    }
+    return names;
   }
 
   private computeRandomFridgeFit(content: RecipeContentSnapshot, inventoryFacts: RandomInventoryFacts): "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN" {

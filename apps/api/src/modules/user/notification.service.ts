@@ -30,18 +30,6 @@ function addDays(base: Date, days: number) {
   return new Date(base.getTime() + days * dayMs);
 }
 
-function startOfDay(base: Date) {
-  const next = new Date(base);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function endOfDay(base: Date) {
-  const next = new Date(base);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
 function maxDate(...values: Array<Date | null | undefined>) {
   return values.reduce<Date | null>((current, value) => {
     if (!value) return current;
@@ -138,23 +126,21 @@ export class NotificationService {
       const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
       const sourceLimit = nextPage * nextPageSize;
       const now = new Date();
-      const [ingredientSource, unitSource, inviteSource, officialSource, fridgeSource, mealSource] = await Promise.all([
+      const [ingredientSource, unitSource, inviteSource, officialSource, fridgeSource] = await Promise.all([
         this.loadIngredientFeed(tx, userId, sourceLimit),
         this.loadUnitFeed(tx, userId, sourceLimit),
         this.loadInviteFeed(tx, userId, sourceLimit),
         this.loadOfficialFeed(tx, sourceLimit),
-        this.loadFridgeReminderFeed(tx, userId, now, settings),
-        this.loadMealReminderFeed(tx, userId, now, settings)
+        this.loadFridgeReminderFeed(tx, userId, now, settings)
       ]);
       const mergedItems = [
         ...ingredientSource.items,
         ...unitSource.items,
         ...inviteSource.items,
         ...officialSource.items,
-        ...fridgeSource.items,
-        ...mealSource.items
+        ...fridgeSource.items
       ].sort((left, right) => new Date(right.timeValue).getTime() - new Date(left.timeValue).getTime());
-      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + fridgeSource.total + mealSource.total;
+      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + fridgeSource.total;
       const start = (nextPage - 1) * nextPageSize;
       const end = start + nextPageSize;
       return {
@@ -462,75 +448,13 @@ export class NotificationService {
           id: "reminder:fridge-expiring",
           typeLabel: "系统提醒消息",
           tone: "reminder",
-          title: "食材到期提醒",
-          desc: expiringCount === 1 ? "有 1 样食材快到期，记得优先安排" : `有 ${expiringCount} 样食材快到期，记得优先安排`,
+          title: "食材临期提醒",
+          desc:
+            expiringCount === 1
+              ? `${settings.fridge.days} 天内有 1 样食材将到期，建议优先安排`
+              : `${settings.fridge.days} 天内有 ${expiringCount} 样食材将到期，建议优先安排`,
           timeValue: toIsoDate(latest.updatedAt),
           targetPath: "/pages_pantry/index/index"
-        }
-      ]
-    };
-  }
-
-  private async loadMealReminderFeed(
-    db: NotificationDb,
-    userId: UUID,
-    now: Date,
-    settings: NotificationSettings
-  ): Promise<FeedSourceResult> {
-    if (!settings.meal.enabled) {
-      return { items: [], total: 0 };
-    }
-
-    const windowStart = startOfDay(now);
-    const windowEnd = endOfDay(addDays(windowStart, 6));
-    const planWhere = {
-      userId,
-      status: "PLANNED" as const,
-      planDate: {
-        gte: windowStart,
-        lte: windowEnd
-      }
-    };
-    const [latestPlan, latestList, plannedDays] = await Promise.all([
-      db.mealPlanItem.findFirst({
-        where: planWhere,
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
-      }),
-      db.shoppingList.findFirst({
-        where: {
-          ownerUserId: userId,
-          status: "ACTIVE",
-          mealPlans: {
-            some: planWhere
-          }
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
-      }),
-      db.mealPlanItem.findMany({
-        where: planWhere,
-        distinct: ["planDate"],
-        select: { planDate: true }
-      })
-    ]);
-    const latestAt = maxDate(latestPlan?.updatedAt, latestList?.updatedAt);
-
-    if (!latestAt || !plannedDays.length) {
-      return { items: [], total: 0 };
-    }
-
-    return {
-      total: 1,
-      items: [
-        {
-          id: "reminder:week-overview",
-          typeLabel: "系统提醒消息",
-          tone: "reminder",
-          title: "计划提醒",
-          desc: plannedDays.length === 1 ? "你本周还有 1 天安排待处理" : `你本周还有 ${plannedDays.length} 天安排待处理`,
-          timeValue: toIsoDate(latestAt),
-          targetPath: "/pages_meal/plan/index"
         }
       ]
     };
@@ -543,16 +467,15 @@ export class NotificationService {
     settings: NotificationSettings
   ): Promise<NotificationBadgeResponse> {
     const now = new Date();
-    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, fridgeSummary, mealSummary] = await Promise.all([
+    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, fridgeSummary] = await Promise.all([
       this.loadIngredientSummary(db, userId, readAt),
       this.loadUnitSummary(db, userId, readAt),
       this.loadInviteSummary(db, userId, readAt),
       this.loadOfficialSummary(db, readAt),
-      this.loadFridgeReminderSummary(db, userId, readAt, now, settings),
-      this.loadMealReminderSummary(db, userId, readAt, now, settings)
+      this.loadFridgeReminderSummary(db, userId, readAt, now, settings)
     ]);
 
-    const reminderUnreadCount = fridgeSummary.unreadCount + mealSummary.unreadCount;
+    const reminderUnreadCount = fridgeSummary.unreadCount;
     const unreadCount =
       ingredientSummary.unreadCount +
       unitSummary.unreadCount +
@@ -565,8 +488,7 @@ export class NotificationService {
       unitSummary.latestAt,
       inviteSummary.latestAt,
       officialSummary.latestAt,
-      fridgeSummary.latestAt,
-      mealSummary.latestAt
+      fridgeSummary.latestAt
     );
 
     return {
@@ -709,62 +631,6 @@ export class NotificationService {
     });
 
     const latestAt = latest?.updatedAt ?? null;
-    return {
-      unreadCount: latestAt && (!readAt || latestAt.getTime() > readAt.getTime()) ? 1 : 0,
-      latestAt
-    };
-  }
-
-  private async loadMealReminderSummary(
-    db: NotificationDb,
-    userId: UUID,
-    readAt: Date | null,
-    now: Date,
-    settings: NotificationSettings
-  ): Promise<TimedUnreadSummary> {
-    if (!settings.meal.enabled) {
-      return {
-        unreadCount: 0,
-        latestAt: null
-      };
-    }
-
-    const windowStart = startOfDay(now);
-    const windowEnd = endOfDay(addDays(windowStart, 6));
-    const [latestPlan, latestList] = await Promise.all([
-      db.mealPlanItem.findFirst({
-        where: {
-          userId,
-          status: "PLANNED",
-          planDate: {
-            gte: windowStart,
-            lte: windowEnd
-          }
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
-      }),
-      db.shoppingList.findFirst({
-        where: {
-          ownerUserId: userId,
-          status: "ACTIVE",
-          mealPlans: {
-            some: {
-              userId,
-              status: "PLANNED",
-              planDate: {
-                gte: windowStart,
-                lte: windowEnd
-              }
-            }
-          }
-        },
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
-      })
-    ]);
-
-    const latestAt = maxDate(latestPlan?.updatedAt, latestList?.updatedAt);
     return {
       unreadCount: latestAt && (!readAt || latestAt.getTime() > readAt.getTime()) ? 1 : 0,
       latestAt
