@@ -89,12 +89,14 @@
 ### 5.3 系统提醒消息
 
 - 食材临期提醒
-- 近期计划提醒
 
 来源：
 
 - `fridgeApi.getSummary(days)` 返回服务端统计的 `expiringCount + latestTime`
-- `homeApi.getWeekOverview` 返回服务端给通知中心排序用的 `notificationTime`
+
+约束：
+
+- 首页周计划状态摘要不进入通知中心。`homeApi.getWeekOverview.notificationTime` 只服务首页周计划主卡自己的排序/状态表达，不再合成 `计划提醒 / 你本周还有 N 天安排待处理` 这类站内消息。
 
 ### 5.4 系统官方消息
 
@@ -236,8 +238,8 @@
    - 触发时机：存在临期食材且达到提醒窗口时
    - 订阅授权建议时机：用户在提醒设置里打开“食材临期提醒”时
    - 标题建议：`食材临期提醒`
-   - 主要文案：`你有 {expiringCount} 样食材快到期了`
-   - 补充文案：`记得优先安排，减少浪费`
+   - 主要文案：`{days} 天内有 {expiringCount} 样食材将到期`
+   - 补充文案：`建议优先安排，减少浪费`
    - 落地页：`/pages_pantry/index/index`
 2. 每日推荐
    - 触发时机：用户开启每日推荐且到达设定提醒时间

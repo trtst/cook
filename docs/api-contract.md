@@ -518,7 +518,7 @@ interface RedeemMembershipCodeResult {
 
 `GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / reminderUnreadCount / showReminderDot / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。
 
-`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核消息 / 系统清单协作消息 / 系统提醒消息 / 系统官方消息` 四类消息。每条消息统一返回 `id / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
+`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核消息 / 系统清单协作消息 / 系统提醒消息 / 系统官方消息` 四类消息，其中站内 `系统提醒消息` 只保留食材临期这类明确时效风险，首页周计划状态摘要不得合成通知中心消息。每条消息统一返回 `id / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
 
 `PUT /users/me/notification-feed-read` 只负责把“当前通知中心时间流的最新消息时间”写入当前用户自己的已读游标，并返回最新 `NotificationBadgeResponse`。进入通知中心后客户端调用这一写入口，后续未读清除逻辑以服务端游标为准，不再以本地时间戳作为 owner。
 
@@ -797,19 +797,21 @@ GET  /site-contents/resolve?path={path}
 GET  /public-assets/site-content-images/{fileName}
 ```
 
-这一组接口共同承接后台“内容治理”。栏目治理只服务站点内容栏目，不扩成通用分类中心。`GET /admin/content/channels` 固定返回分页 `PageResult<AdminSiteContentChannelSummary>`，支持按 `code` 模糊过滤；`POST /admin/content/channels` 与 `PUT /admin/content/channels/{channelId}` 都要求 `Idempotency-Key`，只维护 `code / name / description / sortOrder`，并通过 `expectedVersion` 防并发覆盖。
+这一组接口共同承接后台“内容治理”。栏目治理只服务站点内容栏目，不扩成通用分类中心。`GET /admin/content/channels` 固定返回分页 `PageResult<AdminSiteContentChannelSummary>`，支持按 `code` 模糊过滤；`POST /admin/content/channels` 要求 `Idempotency-Key`，创建时维护 `code / name / description / sortOrder`；`PUT /admin/content/channels/{channelId}` 也要求 `Idempotency-Key`，但只维护 `name / description / sortOrder`，并通过 `expectedVersion` 防并发覆盖，已创建栏目的 `code` 不支持修改。V1 后台“栏目配置”页面只展示和维护前台知识文章可用的 `KITCHEN / COOK / FOOD` 三个栏目，对应 `厨房百事 / 烹调技法 / 饮食文化`，不在运营入口继续开放新建栏目。
 
-`GET /admin/content/pages` 固定返回 5 个受控固定页：`about / privacy / terms / product / faq`。这些固定页在服务端自动落种，后台只能编辑正文与展示信息，路径固定分别为 `/about / /privacy / /terms / /product / /faq`，不得新增第 6 个固定页，也不得改成其他路径。服务端同时自动保留受控栏目 `OFFICIAL_NOTICE`，专门承接系统官方消息，不额外新建消息表。
+`GET /admin/content/pages` 固定返回 5 个受控官网固定页：`about / privacy / terms / product / faq`。这些固定页在服务端自动落种，后台只能编辑正文与展示信息，路径固定分别为 `/about / /privacy / /terms / /product / /faq`，不得新增第 6 个固定页，也不得改成其他路径。服务端同时自动保留受控栏目 `OFFICIAL_NOTICE`，专门承接系统官方消息，不额外新建消息表。
 
-`GET /admin/content/articles` 返回文章分页，查询参数固定为 `page / pageSize`，并支持 `channelId / status / keyword` 过滤；`status` 只允许 `DRAFT / PUBLISHED / UNLISTED`。`GET /admin/content/{contentId}` 返回后台详情。`POST /admin/content` 与 `PUT /admin/content/{contentId}` 都要求 `Idempotency-Key`，当前只治理两类内容：`PAGE` 与 `ARTICLE`。`PAGE` 必须命中受控固定页 slug；`ARTICLE` 必须选择栏目，路径由服务端固定生成 `/guides/{slug}`，后台提交的自定义 `path` 不生效。正文固定使用 `bodyHtml + bodyText` 双写；服务端会做基础 HTML 清洗，并在 `bodyText` 为空时从 HTML 提取纯文本兜底。
+`GET /admin/content/articles` 返回文章分页，查询参数固定为 `page / pageSize`，并支持 `channelId / status / keyword` 过滤；`keyword` 匹配标题、摘要、关键词和 slug；`status` 只允许 `DRAFT / PUBLISHED / UNLISTED`。`GET /admin/content/{contentId}` 返回后台详情。`POST /admin/content` 与 `PUT /admin/content/{contentId}` 都要求 `Idempotency-Key`，当前只治理两类内容：`PAGE` 与 `ARTICLE`。`PAGE` 必须命中受控固定页 slug；后台手工保存 `ARTICLE` 必须选择栏目，路径由服务端固定生成 `/guides/{slug}`，后台提交的自定义 `path` 不生效。导入脚本可以先写入无栏目草稿，但这类文章必须重新编辑选择栏目后才能发布；发布 `ARTICLE` 时服务端必须校验栏目存在且属于 `KITCHEN / COOK / FOOD / OFFICIAL_NOTICE`。文章关键词是后台运营字段，最多 200 字符，多个词用分号分隔；服务端会把中文分号规范为英文分号并去掉空项。正文固定使用 `bodyHtml + bodyText` 双写；服务端会做基础 HTML 清洗，并在 `bodyText` 为空时从 HTML 提取纯文本兜底。
 
-`POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
+后台普通文章发布页只暴露 `标题 / 摘要 / 关键词 / 栏目 / 封面图 / 正文` 六类运营输入；`slug / path / label / heroNote / effectiveAt / sortOrder / type` 由页面和服务端自动处理或沿用既有值。普通文章正文支持从本地 Markdown 文件导入为富文本，转换结果仍走同一套 `bodyHtml + bodyText` 保存和服务端 HTML 清洗。该入口只负责文章富文本转换，不替代菜谱 Markdown 导入的食材、用量、步骤等结构化解析。
+
+`POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
 
 `POST /admin/content/images` 是后台富文本图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`，单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`。服务端把文件落到站内资源目录，并返回 `imageUrl`；公开读取统一走 `GET /public-assets/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。
 
 `GET /site-contents/resolve` 是站点和官网的公开内容读取接口，只按 `path` 返回已发布内容。当前只返回 `PUBLISHED` 内容，固定响应 `id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`，不返回草稿和下架内容。
 
-`GET /site-contents/articles`、`GET /site-contents/articles/{articleId}`、`POST /site-contents/articles/{articleId}/view`、`POST /site-contents/articles/{articleId}/like` 和 `DELETE /site-contents/articles/{articleId}/like` 共同承接小程序“厨房准备 / 烹饪技巧 / 食谱技巧”三条知识文章链路。五个接口都要求 `UserBearerAuth`：未登录时客户端先呼起登录，不直接请求文章数据。列表查询参数固定为 `channelCode + page + pageSize`，其中 `channelCode` 只允许 `KITCHEN_PREP / COOKING_SKILLS / RECIPE_SKILLS` 三个受控栏目；列表只返回当前栏目下 `PUBLISHED` 的文章分页，摘要固定为 `id / title / summary / coverImageUrl / publishedAt / viewCount / likeCount`，按 `sortOrder asc, publishedAt desc, id desc` 排序。详情接口只读取同三类受控栏目里的已发布文章，固定返回 `id / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / updatedAt / channelCode / channelName / viewCount / likeCount / viewerHasLiked`，不返回作者、评论、收藏或相关推荐。`POST /site-contents/articles/{articleId}/view` 用于在详情页成功进入后累积一次阅读数，请求头必须带 `Idempotency-Key`，响应只返回最新 `articleId / viewCount`；当前只累计总阅读数，不保留阅读明细。点赞与取消点赞也都要求 `Idempotency-Key`，服务端以 `site_content_likes` 做单用户单文章唯一约束；重复点赞或重复取消点赞都返回当前最新状态，不再报错。点赞相关响应固定返回 `articleId / likeCount / viewerHasLiked`。这组接口当前不开放评论、收藏、点赞用户列表、作者主页、推荐排序或其他社区能力。
+`GET /site-contents/articles`、`GET /site-contents/articles/{articleId}`、`POST /site-contents/articles/{articleId}/view`、`POST /site-contents/articles/{articleId}/like` 和 `DELETE /site-contents/articles/{articleId}/like` 共同承接小程序“厨房百事 / 烹调技法 / 饮食文化”三条知识文章链路。五个接口都要求 `UserBearerAuth`：未登录时客户端先呼起登录，不直接请求文章数据。列表查询参数固定为 `channelCode + page + pageSize`，其中 `channelCode` 只允许 `KITCHEN / COOK / FOOD` 三个受控栏目；列表只返回当前栏目下 `PUBLISHED` 的文章分页，响应为 `PageResult<SiteContentArticleSummary> + channel`，其中 `channel` 固定返回当前栏目 `code / name / description`，摘要固定为 `id / title / summary / keywords / coverImageUrl / publishedAt / viewCount / likeCount`，按 `sortOrder asc, publishedAt desc, id desc` 排序。三类栏目关系固定为：`KITCHEN` 表示“厨房百事”，承接用什么、怎么买、怎么存、怎么备；`COOK` 表示“烹调技法”，承接怎么做、为什么这样做、失败怎么救；`FOOD` 表示“饮食文化”，承接餐桌上的节气、地域、传统、人情。详情接口只读取同三类受控栏目里的已发布文章，固定返回 `id / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / updatedAt / channelCode / channelName / viewCount / likeCount / viewerHasLiked`，不返回作者、评论、收藏或相关推荐。`POST /site-contents/articles/{articleId}/view` 用于在详情页成功进入后累积一次阅读数，请求头必须带 `Idempotency-Key`，响应只返回最新 `articleId / viewCount`；当前只累计总阅读数，不保留阅读明细。点赞与取消点赞也都要求 `Idempotency-Key`，服务端以 `site_content_likes` 做单用户单文章唯一约束；重复点赞或重复取消点赞都返回当前最新状态，不再报错。点赞相关响应固定返回 `articleId / likeCount / viewerHasLiked`。这组接口当前不开放评论、收藏、点赞用户列表、作者主页、推荐排序或其他社区能力。
 
 `GET /site-contents/official-messages` 与 `GET /site-contents/official-messages/{contentId}` 共同承接小程序通知中心里的“系统官方消息”。两个接口都要求 `UserBearerAuth`，未登录时客户端先走登录链路。列表查询参数固定为 `page + pageSize`，只返回 `channel.code = OFFICIAL_NOTICE` 且 `status = PUBLISHED` 的内容，按 `publishedAt desc, updatedAt desc, id desc` 排序。列表和详情当前统一返回最小站内承接字段：`id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`。通知中心只消费其中的 `title / summary / publishedAt|updatedAt` 生成消息卡；若正文里存在 `https://` 链接，则前台可直接跳内嵌 H5，否则进入站内官方消息详情页。这组接口当前不开放阅读数、点赞、评论、已读回执、定向投放或发送统计。
 
@@ -1430,7 +1432,7 @@ interface RandomMenuQuotaResponse {
 2. 单次总菜位数当前建议最大 `12`。
 3. 生成次数由服务端按 7 天窗口校验并扣减，V1 默认 21 次；具体额度以后端返回为准，前端不得写死。
 4. 接口不写随机结果历史、不做缓存。
-5. 响应只返回当前菜单摘要、来源、推荐理由和最新次数摘要，不返回完整菜谱正文、步骤或全量食材明细。
+5. 响应只返回当前菜单摘要、来源、推荐理由、`matchedIngredients: string[]` 和最新次数摘要；`matchedIngredients` 仅包含当前用户可用冰箱食材与该菜谱食材交集的展示名称，不返回库存数量、冰箱条目 ID、完整菜谱正文、步骤或全量食材明细。
 
 `GET /random-menu-quota` 用于读取当前用户随机一桌生成次数，不扣减次数，响应为 `RandomMenuQuotaResponse`。
 
@@ -2618,7 +2620,7 @@ POST /recipes/reorder
   GET /users/me/recipe-history
 ```
 
-`GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。`POST /recipes/{recipeId}/assistant` 只对本人已发布私房菜开放，且请求头必须带 `Idempotency-Key`：若当前固定版本已经有助理快照，则直接返回现有结果；若没有，则仅会员可触发首次生成并固化到该 `contentVersionId`。免费用户调用返回权限错误，但仍可继续读取原始步骤和做饭模式降级链路。
+`GET /recipes` 只返回本人已发布私房菜，支持分页、关键词、个人分类、系统分类、难度和时长筛选。查询参数为 `page`、`pageSize`、`keyword`、`categoryId`、`inspirationCategoryId`、`difficulty` 和 `duration`。私房菜固定按个人分类顺序、更新时间返回，不提供灵感专属的推荐/最新排序；加入计划时从灵感同步保存的菜谱允许 `category = null`，客户端展示为“未分类”，用户可之后在编辑时归类。新建和编辑正文统一经过草稿发布，系统分类可由用户在高级设置中选择。`POST /recipes/{recipeId}/assistant` 只对本人已发布私房菜开放，且请求头必须带 `Idempotency-Key`：若当前固定版本已经有助理快照，则直接返回现有结果；若没有，则仅会员可触发首次生成并固化到该 `contentVersionId`。免费用户调用返回权限错误，但仍可继续读取原始步骤和做饭模式降级链路。
 
 `POST /users/me/recipe-history` 只允许登录用户调用，请求体只接收当前可访问的 `recipeId`，请求头必须带 `Idempotency-Key`。服务端按用户和菜谱 ID 去重，重复查看更新 `lastViewedAt`，返回 `RecipeViewHistoryItem`。`GET /users/me/recipe-history` 只返回当前用户记录，按 `lastViewedAt desc, id desc` 分页，服务端当前最多返回最近 `100` 条，单页最多 `20` 条。列表会关联菜谱当前最新摘要；菜谱不可用时保留记录并返回 `isAvailable = false`、`title = "该菜谱已不可用"`、`coverImageUrl = null`。这组接口不返回固定正文版本，也不参与随机一桌推荐。
 
@@ -2727,7 +2729,15 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 
 `GET /admin/users/{userId}/recipe-domain` 返回用户菜谱域概览；`/recipes` 与 `/recipe-drafts` 继续返回分页摘要；历史 `/collections` 路径仍返回该用户合集场景摘要，供旧固定引用治理。后台本轮只读，不返回编辑、发布、移出合集或改场景入口。
 
+当前有效规则：灵感菜谱通过加入计划 Sheet 同步保存到我的菜谱时，`categoryId` 可为空；客户端展示为“未分类”，用户可在后续编辑时归类。普通草稿发布仍必须选择个人分类。
+
+<!-- 历史接口说明：其中 categoryId 必填仅适用于普通“添加到我的”入口，不适用于加入计划 Sheet。 -->
+
 `GET /ingredient-categories` 允许匿名读取，只返回系统食材正式分类的最小摘要 `id + name`，隐藏兜底分类 `待归类` 不下发给前台录入入口。`GET /ingredients` 支持 `page`、`pageSize`、`keyword`、`categoryId` 和 `source`。`source` 只允许 `SYSTEM`、`PERSONAL` 或 `ALL`；登录态保持原有三种口径，匿名态服务端会强制按 `SYSTEM` 处理，因此不会混入任何个人食材。`SYSTEM` 和 `ALL` 都只返回当前启用中且分类可选的系统食材，`PERSONAL` 只返回本人仍可直接使用的个人食材，不返回已归并条目；当请求命中“全部食材”口径时，系统食材部分按后台全局展示顺序返回；当传了真实 `categoryId` 时，系统食材仍按该分类内顺序返回。食材摘要新增 `imageUrl`，仅系统食材在后台已补图时返回可读图片地址，个人食材固定返回 `null`；同时新增 `recommendationStatus`，当前只返回 `PENDING | REJECTED | null`，用于“我的食材”选择态最小展示 `审核中 / 拒绝后隐藏推荐入口`。`POST /ingredients` 新建一个个人食材，并在创建时拦截与现有系统食材重名的重复项，包括已下架但仍保留治理身份的系统食材；同时禁止使用隐藏兜底分类。`PUT /ingredients/{ingredientId}` 只允许编辑本人未处于审核中的个人食材，并继续禁止切到隐藏兜底分类。`POST /ingredients/{ingredientId}/recommendations` 是显式推荐入口：若系统库已存在启用中的同名食材，则服务端直接归并并生成一条“已归并”记录；否则进入待审核队列。`POST /ingredients/{ingredientId}/feedbacks` 是系统食材纠错入口，只允许对当前可用系统食材提交，请求体固定提交 `name + categoryId + note?`，并要求“名字、分类、备注”至少有一项真正发生变化；同一用户对同一系统食材同一时间只允许保留一条 `PENDING` 纠错。成功后返回 `IngredientFeedbackResult`，前台只做成功提示，不在当前页展开审核态。`GET /ingredient-recommendations` 分页返回“我的推荐”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，响应额外返回 `reviewNote + reviewAdvice`，分别承载后台拒绝原因和修改建议。`GET /units` 支持 `page`、`pageSize`、`keyword`、`type` 和 `source`，并允许匿名读取系统单位；登录态保持原有口径，匿名态服务端同样强制按 `SYSTEM` 处理，因此只会返回系统单位。`POST /units` 不再创建个人单位，而是提交一条单位建议；若系统库已存在同名系统单位，则服务端直接归并并生成一条 `MERGED` 记录，否则进入待审核队列。`GET /unit-recommendations` 分页返回“我的单位建议”记录，用于显示 `审核中 / 已拒绝 / 已收录 / 已归并`；当状态为 `REJECTED` 时，同样返回 `reviewNote + reviewAdvice`。`GET /recipe-drafts` 只返回本人草稿箱，查询参数为 `page`、`pageSize` 和 `keyword`；`GET /recipes`、`GET /inspiration-recipes`、`GET /collections/recipes` 与它统一使用同一搜索语义，`keyword` 都按 `菜名 + 故事 + 食材名` 匹配，其中合集基于已收藏固定版本正文检索。`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 只返回最小保存结果 `id + recipeId + version + updatedAt`。`GET /recipe-drafts/{draftId}` 与 `GET /recipes/{recipeId}` 额外返回当前内容实际引用到的 `ingredientRefs`、`unitRefs`，用于编辑页补齐超出首屏分页的历史食材与单位；其中 `ingredientRefs.defaultUnit` 只表示食材默认单位，不等于正文里所有真实 `unitId`，因此详情接口仍需单独返回 `unitRefs`。`GET /recipes/{recipeId}`、`GET /inspiration-recipes/{recipeId}` 与 `GET /collections/recipes/{collectionRecipeId}` 现统一补充只读 `nutrition` block，字段固定为 `status / qualityLabel / perServing / perRecipe / calculatedAt / sourceVersion`；前台只展示 `热量 / 蛋白质 / 脂肪 / 碳水` 四项结果，不上传、也不回写任何营养值。`status = COMPLETE` 表示当前固定正文的主要系统食材映射和重量换算较完整；`ESTIMATED` 表示至少一部分食材通过代表值或近似单位换算得出；`INSUFFICIENT` 表示当前仍无法稳定算出结果；`NONE` 只用于当前库里还没有可读营养源版本时的静默空态。该营养结果属于平台派生快照，不进入草稿正文，也不把原始营养库明细、映射候选、人工审校记录暴露给前台。`GET /recipes/{recipeId}` 还返回布尔字段 `canRecommend`，由服务端统一结算当前版本是否允许继续“自荐美食”，前台只按这个结论显示或隐藏入口，不再自行根据来源字段猜测。`POST /recipes/from-inspiration` 是灵感详情的显式“添加到我的”入口：请求体固定提交 `sourceRecipeId / sourceVersionId / categoryId / sceneIds`，其中 `categoryId` 必填，`sceneIds` 可为空数组；服务端直接把当前灵感固定版本加入“我的”，不先创建草稿，也不要求客户端跳转编辑页。若同一用户已持有同一 `sourceVersionId` 的有效“我的”菜谱，本轮直接返回已有入口，不再额外创建第二条。`POST /recipes/{recipeId}/recommendations` 是显式“推荐到灵感”入口：只允许本人对当前已发布个人菜谱提交当前固定正文版本，请求体只提交建议系统分类 `inspirationCategoryId`；服务端创建独立推荐记录，并把 `GET /recipes/{recipeId}` 的 `recommendation` 字段更新为最新推荐摘要。审核中时，该个人菜谱不允许继续创建编辑草稿、发布编辑草稿或删除，保证后台审核的固定内容不漂移；用户可通过 `POST /recipe-recommendations/{recommendationId}/withdraw` 撤回待审推荐，撤回后恢复可编辑/可删除。若该个人菜谱最初来自灵感菜谱升级为“我的”，且当前正文与封面仍与当时来源版本完全一致，服务端直接拒绝推荐，不允许把未改动的灵感菜谱再次作为个人投稿提交；对于历史上还没有来源快照的旧个人菜谱，服务端会按“是否与现有系统菜谱的正文和封面完全一致”做同样的识别与拦截。后台审核通过后，服务端复制一份 `sourceVersionId` 指向的固定正文到系统菜谱，新建 `ownerId = null`、挂系统分类的系统菜谱，并把审核通过时的昵称快照写入 `curatedByName`；原个人菜谱继续保留在“我的”下，不被替换或删除。
+
+<!-- /历史接口说明 -->
+
+补充：灵感菜谱通过“加入计划”Sheet 同步保存到我的菜谱时，`categoryId` 可为空，客户端展示为“未分类”，用户后续可在编辑时完成归类；这不改变普通草稿发布必须选择个人分类的规则。
 
 创建和保存草稿时，服务端按以下逻辑计量草稿空间：
 
