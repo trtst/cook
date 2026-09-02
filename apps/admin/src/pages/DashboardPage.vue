@@ -213,7 +213,7 @@ onMounted(() => {
         <div class="entry-grid">
           <button type="button" class="entry-item entry-item--button" @click="open('/membership/skus')">SKU 管理</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/membership/redemptions')">核销记录</button>
-          <button type="button" class="entry-item entry-item--button" @click="open('/content/pages')">固定页</button>
+          <button type="button" class="entry-item entry-item--button" @click="open('/content/pages')">官网固定页</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/content/articles')">文章列表</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/recipes/reports')">菜谱举报</button>
           <button type="button" class="entry-item entry-item--button" @click="open('/recipes/pending')">待审核菜谱</button>

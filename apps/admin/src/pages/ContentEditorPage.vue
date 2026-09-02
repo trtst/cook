@@ -7,6 +7,7 @@ import RichTextEditor from "@/components/RichTextEditor.vue";
 import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentDetail, type SiteContentStatus, type SiteContentType } from "@/apis/content";
 import { useAdminHeaderState } from "@/composables/useAdminHeader";
 import { sanitizeContentHtml } from "@/utils/content-html";
+import { markdownToRichText } from "@/utils/markdown-rich-text";
 import { createOperationId } from "@/utils/operation-id";
 
 const route = useRoute();
@@ -23,6 +24,8 @@ const currentStatus = ref<SiteContentStatus>("DRAFT");
 const currentVersion = ref(1);
 const updatedAt = ref<string | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const markdownInputRef = ref<HTMLInputElement | null>(null);
+const publicArticleChannelCodes = new Set(["KITCHEN", "COOK", "FOOD"]);
 const sourceMode = computed(() => {
   const raw = Array.isArray(route.query.source) ? route.query.source[0] : route.query.source;
   return raw === "official-message" ? "official-message" : "";
@@ -36,6 +39,7 @@ const form = reactive({
   path: "",
   title: "",
   summary: "",
+  keywords: "",
   label: "",
   heroNote: "",
   coverImageUrl: "",
@@ -47,12 +51,19 @@ const form = reactive({
 
 const isEdit = computed(() => contentId.value !== null);
 const isPage = computed(() => form.type === "PAGE");
+const selectedChannel = computed(() => channels.value.find(item => item.id === form.channelId) ?? null);
+const isOfficialMessage = computed(() => sourceMode.value === "official-message" || selectedChannel.value?.code === "OFFICIAL_NOTICE");
+const articleChannels = computed(() => channels.value.filter(item => publicArticleChannelCodes.has(item.code)));
+const editableChannels = computed(() => {
+  if (isPage.value) return channels.value;
+  if (isOfficialMessage.value) return channels.value.filter(item => item.code === "OFFICIAL_NOTICE");
+  return articleChannels.value;
+});
 const pageTitle = computed(() => {
   if (isEdit.value) return "编辑内容";
-  if (isPage.value) return "新建固定页";
+  if (isPage.value) return "新建官网固定页";
   return sourceMode.value === "official-message" ? "新建官方消息" : "新建文章";
 });
-const articlePath = computed(() => (form.slug.trim() ? `/guides/${normalizeSlug(form.slug)}` : "/guides/<slug>"));
 const previewHtml = computed(() => sanitizeContentHtml(form.bodyHtml || "<p>正文预览区域</p>"));
 
 function parseRouteContentId(value: unknown) {
@@ -80,6 +91,27 @@ function normalizeSlug(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function buildSummary(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+function resolveArticleSlug() {
+  const current = normalizeSlug(form.slug);
+  if (current) return current;
+  const titleSlug = normalizeSlug(form.title);
+  const nextSlug = titleSlug || `article-${Date.now().toString(36)}`;
+  form.slug = nextSlug;
+  return nextSlug;
+}
+
+function resolveLabel() {
+  if (isPage.value) return form.label.trim();
+  return selectedChannel.value?.name ?? (isOfficialMessage.value ? "官方消息" : "知识文章");
+}
+
 function formatTime(value: string | null) {
   if (!value) return "-";
   return value.replace("T", " ").replace(/\.\d{3}Z$/, "Z");
@@ -95,6 +127,7 @@ function resetForm(type: SiteContentType) {
   form.path = "";
   form.title = "";
   form.summary = "";
+  form.keywords = "";
   form.label = "";
   form.heroNote = "";
   form.coverImageUrl = "";
@@ -131,6 +164,7 @@ function applyDetail(detail: AdminSiteContentDetail) {
   form.path = detail.path;
   form.title = detail.title;
   form.summary = detail.summary;
+  form.keywords = detail.keywords ?? "";
   form.label = detail.label;
   form.heroNote = detail.heroNote ?? "";
   form.coverImageUrl = detail.coverImageUrl ?? "";
@@ -176,28 +210,29 @@ async function loadPage() {
 }
 
 function buildSavePayload() {
-  const slug = normalizeSlug(form.slug);
+  const slug = isPage.value ? normalizeSlug(form.slug) : resolveArticleSlug();
   return {
     type: form.type,
-    channelId: isPage.value ? form.channelId : form.channelId,
+    channelId: form.channelId,
     slug,
     path: isPage.value ? form.path || null : null,
     title: form.title.trim(),
     summary: form.summary.trim(),
-    label: form.label.trim(),
-    heroNote: form.heroNote.trim() || null,
+    keywords: isPage.value ? null : form.keywords.trim() || null,
+    label: resolveLabel(),
+    heroNote: isPage.value ? form.heroNote.trim() || null : null,
     coverImageUrl: form.coverImageUrl.trim() || null,
     bodyHtml: form.bodyHtml.trim(),
     bodyText: form.bodyText.trim(),
-    effectiveAt: form.effectiveAt ? new Date(form.effectiveAt).toISOString() : null,
-    sortOrder: form.sortOrder
+    effectiveAt: isPage.value && form.effectiveAt ? new Date(form.effectiveAt).toISOString() : null,
+    sortOrder: isPage.value ? form.sortOrder : 0
   };
 }
 
 function validateForm() {
   const payload = buildSavePayload();
   if (!payload.slug || !payload.title || !payload.summary || !payload.label || !payload.bodyHtml || !payload.bodyText) {
-    ElMessage.error("请完整填写标题、摘要、标签、slug 和正文");
+    ElMessage.error(isPage.value ? "请完整填写标题、摘要、标签、slug 和正文" : "请完整填写标题、摘要和正文");
     return null;
   }
   if (!isPage.value && !payload.channelId) {
@@ -246,24 +281,22 @@ async function saveDraft() {
 }
 
 async function updateStatus(status: SiteContentStatus) {
-  if (!contentId.value) {
-    const detail = await persistContent();
-    if (!detail) return;
-    applyDetail(detail);
-    await router.replace({
-      path: "/content/articles/editor",
-      query: { id: String(detail.id), ...editorRouteQuery.value }
-    });
-  }
-
-  if (!contentId.value) return;
-
   statusSaving.value = true;
   try {
-    const detail = await contentApi.setStatus(contentId.value, {
+    const saved = await persistContent();
+    if (!saved) return;
+    applyDetail(saved);
+    if (route.query.id !== String(saved.id)) {
+      await router.replace({
+        path: "/content/articles/editor",
+        query: { id: String(saved.id), ...editorRouteQuery.value }
+      });
+    }
+
+    const detail = await contentApi.setStatus(saved.id, {
       operationId: createOperationId(),
       status,
-      expectedVersion: currentVersion.value
+      expectedVersion: saved.version
     });
     applyDetail(detail);
     ElMessage.success(status === "PUBLISHED" ? "内容已发布" : status === "UNLISTED" ? "内容已下架" : "内容已转为草稿");
@@ -297,6 +330,33 @@ async function handleCoverFileChange(event: Event) {
     ElMessage.success("封面图已上传");
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "上传封面图失败");
+  } finally {
+    if (input) input.value = "";
+  }
+}
+
+function chooseMarkdownFile() {
+  markdownInputRef.value?.click();
+}
+
+async function handleMarkdownFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0] ?? null;
+  if (!file) return;
+  try {
+    const markdown = await file.text();
+    const result = markdownToRichText(markdown);
+    form.bodyHtml = sanitizeContentHtml(result.html);
+    form.bodyText = result.text;
+    if (!form.title.trim() && result.title) {
+      form.title = result.title.slice(0, 80);
+    }
+    if (!form.summary.trim()) {
+      form.summary = buildSummary(result.text);
+    }
+    ElMessage.success("Markdown 已导入正文");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "导入 Markdown 失败");
   } finally {
     if (input) input.value = "";
   }
@@ -350,36 +410,39 @@ onMounted(() => {
 
         <el-form label-position="top">
           <div class="editor-grid">
-            <el-form-item label="内容类型">
-              <el-input :model-value="isPage ? '固定页' : '文章'" disabled />
+            <el-form-item v-if="isPage" label="内容类型">
+              <el-input model-value="官网固定页" disabled />
             </el-form-item>
             <el-form-item label="栏目">
               <el-select v-model="form.channelId" :disabled="isPage" placeholder="请选择栏目">
-                <el-option v-for="item in channels" :key="item.id" :label="item.name" :value="item.id" />
+                <el-option v-for="item in editableChannels" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="标题">
               <el-input v-model="form.title" maxlength="80" show-word-limit />
             </el-form-item>
-            <el-form-item label="标签">
+            <el-form-item v-if="isPage" label="标签">
               <el-input v-model="form.label" maxlength="16" show-word-limit />
             </el-form-item>
-            <el-form-item label="slug">
+            <el-form-item v-if="isPage" label="slug">
               <el-input v-model="form.slug" :disabled="isPage" maxlength="80" />
             </el-form-item>
-            <el-form-item label="访问路径">
-              <el-input :model-value="isPage ? form.path : articlePath" disabled />
+            <el-form-item v-if="isPage" label="访问路径">
+              <el-input :model-value="form.path" disabled />
             </el-form-item>
             <el-form-item class="editor-grid__full" label="摘要">
               <el-input v-model="form.summary" type="textarea" :rows="3" maxlength="240" show-word-limit />
             </el-form-item>
-            <el-form-item class="editor-grid__full" label="头部说明">
+            <el-form-item v-if="!isPage" class="editor-grid__full" label="关键词">
+              <el-input v-model="form.keywords" maxlength="200" show-word-limit placeholder="多个关键词用分号隔开，例如：焯水; 去腥; 火候" />
+            </el-form-item>
+            <el-form-item v-if="isPage" class="editor-grid__full" label="头部说明">
               <el-input v-model="form.heroNote" type="textarea" :rows="2" maxlength="200" show-word-limit />
             </el-form-item>
-            <el-form-item label="生效时间">
+            <el-form-item v-if="isPage" label="生效时间">
               <el-date-picker v-model="form.effectiveAt" type="datetime" value-format="YYYY-MM-DDTHH:mm" placeholder="选填" />
             </el-form-item>
-            <el-form-item label="排序">
+            <el-form-item v-if="isPage" label="排序">
               <el-input-number v-model="form.sortOrder" :min="0" />
             </el-form-item>
             <el-form-item class="editor-grid__full" label="封面图">
@@ -395,7 +458,13 @@ onMounted(() => {
                 </div>
               </div>
             </el-form-item>
-            <el-form-item class="editor-grid__full" label="正文">
+            <el-form-item class="editor-grid__full">
+              <template #label>
+                <div class="form-label-row">
+                  <span>正文</span>
+                  <el-button v-if="!isPage" size="small" :icon="Upload" @click="chooseMarkdownFile">导入 Markdown</el-button>
+                </div>
+              </template>
               <RichTextEditor v-model="form.bodyHtml" :upload-image="uploadImage" @update:text="form.bodyText = $event" />
             </el-form-item>
           </div>
@@ -424,6 +493,7 @@ onMounted(() => {
     </div>
 
     <input ref="fileInputRef" class="hidden-file-input" type="file" accept="image/png,image/jpeg,image/webp" @change="handleCoverFileChange" />
+    <input ref="markdownInputRef" class="hidden-file-input" type="file" accept=".md,text/markdown,text/plain" @change="handleMarkdownFileChange" />
   </section>
 </template>
 
@@ -442,6 +512,14 @@ onMounted(() => {
 
 .editor-grid__full {
   grid-column: 1 / -1;
+}
+
+.form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
 }
 
 .editor-actions {

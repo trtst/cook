@@ -165,9 +165,10 @@ function triggerHeaderRefresh() {
             <el-icon><Files /></el-icon>
             <span>内容治理</span>
           </template>
-          <el-menu-item index="/content/pages">固定页</el-menu-item>
+          <el-menu-item index="/content/pages">官网固定页</el-menu-item>
           <el-menu-item index="/content/articles">文章列表</el-menu-item>
-          <el-menu-item index="/content/channels">栏目管理</el-menu-item>
+          <el-menu-item index="/content/official-messages">官方消息</el-menu-item>
+          <el-menu-item index="/content/channels">栏目配置</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

@@ -29,6 +29,7 @@ export interface AdminSiteContentSummary {
   path: string;
   title: string;
   summary: string;
+  keywords: string | null;
   label: string;
   heroNote: string | null;
   coverImageUrl: string | null;
@@ -69,7 +70,11 @@ export interface CreateAdminSiteContentChannelRequest {
   sortOrder?: number;
 }
 
-export interface UpdateAdminSiteContentChannelRequest extends CreateAdminSiteContentChannelRequest {
+export interface UpdateAdminSiteContentChannelRequest {
+  operationId: OperationId;
+  name: string;
+  description?: string | null;
+  sortOrder?: number;
   expectedVersion: number;
 }
 
@@ -81,6 +86,7 @@ export interface SaveAdminSiteContentRequest {
   path?: string | null;
   title: string;
   summary: string;
+  keywords?: string | null;
   label: string;
   heroNote?: string | null;
   coverImageUrl?: string | null;

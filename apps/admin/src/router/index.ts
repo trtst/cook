@@ -255,7 +255,7 @@ const router = createRouter({
           path: "content/pages",
           name: "content-pages",
           component: () => import("@/pages/ContentGovernancePage.vue"),
-          meta: { title: "固定页", contentPage: "pages" }
+          meta: { title: "官网固定页", contentPage: "pages" }
         },
         {
           path: "content/articles",
@@ -273,7 +273,7 @@ const router = createRouter({
           path: "content/channels",
           name: "content-channels",
           component: () => import("@/pages/ContentGovernancePage.vue"),
-          meta: { title: "栏目管理", contentPage: "channels" }
+          meta: { title: "内容栏目配置", contentPage: "channels" }
         },
         {
           path: "content/articles/editor",
