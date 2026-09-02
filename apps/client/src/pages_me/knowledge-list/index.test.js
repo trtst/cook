@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const ADMIN_USERNAME = process.env.ADMIN_SEED_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || "change-me";
 const TEST_CODE = "123456";
-const KNOWLEDGE_CHANNEL_CODE = "KITCHEN_PREP";
+const KNOWLEDGE_CHANNEL_CODE = "KITCHEN";
 
 jest.setTimeout(30000);
 
@@ -143,6 +143,7 @@ async function createPublishedArticle() {
         slug,
         title,
         summary: "用于验证小程序文章列表页真实登录态。",
+        keywords: "焯水; 去腥",
         label: "验收",
         heroNote: "官方 mp-weixin 自动化",
         coverImageUrl: null,
@@ -172,6 +173,8 @@ async function createPublishedArticle() {
 
   return {
     title,
+    summary: "用于验证小程序文章列表页真实登录态。",
+    keywords: ["焯水", "去腥"],
     phone: createFreshPhone()
   };
 }
@@ -194,7 +197,7 @@ describe("pages_me/knowledge-list/index", () => {
     fixture = await createPublishedArticle();
     const session = await loginWithCode(fixture.phone);
     await clearSession();
-    page = await program.reLaunch("/pages_me/knowledge-list/index?channelCode=KITCHEN_PREP");
+    page = await program.reLaunch("/pages_me/knowledge-list/index?channelCode=KITCHEN");
     await page.callMethod("automatorApplySession", {
       token: session.token,
       uid: session.user.uid,
@@ -208,6 +211,8 @@ describe("pages_me/knowledge-list/index", () => {
 
     const texts = await collectTexts(page);
     expect(texts).toContain(fixture.title);
+    expect(texts).toContain(fixture.summary);
+    expect(texts).toEqual(expect.arrayContaining(fixture.keywords));
     expect(texts.some((item) => item.includes("阅读"))).toBe(true);
     expect(texts.some((item) => item.includes("点赞"))).toBe(true);
   });

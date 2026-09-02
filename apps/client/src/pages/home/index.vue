@@ -7,9 +7,8 @@
     full-screen
     :navbar-placeholder="false"
     navbar-transparent
-    navbar-layout="custom-left"
   >
-    <template #navbar-left>
+    <template #navbar-center>
       <view class="table-nav__selector">
         <text class="restaurant-bar__label">{{ navGreeting.subtitle }}</text>
         <text class="restaurant-bar__name">{{ navGreeting.title }}</text>
@@ -1110,7 +1109,7 @@ defineExpose({
 }
 
 .table-nav__selector {
-  min-width: 0;
+  width: 100%;
 }
 
 .table-nav__selector--hover,

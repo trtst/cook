@@ -2,7 +2,9 @@
   <page-meta :page-style="themePageStyle" />
   <Layout title="">
     <template #navbar-center>
-      <text class="knowledge-navbar__title">{{ channelMeta?.title || "厨房知识" }}</text>
+      <text class="knowledge-navbar__title" :style="{ opacity: navbarTitleOpacity }">
+        {{ channelMeta?.title || "厨房知识" }}
+      </text>
     </template>
 
     <view class="knowledge-scroll-wrap">
@@ -26,6 +28,7 @@
         @refresherrefresh="handleRefresherRefresh"
         @refresherrestore="onRefresherRestore"
         @refresherabort="onRefresherRestore"
+        @scroll="handleScroll"
       >
         <view class="knowledge-page">
           <view class="knowledge-hero">
@@ -36,6 +39,7 @@
 
           <view v-if="showSkeleton" class="knowledge-list">
             <view v-for="index in 4" :key="index" class="knowledge-item knowledge-item--skeleton">
+              <Skeleton width="100%" height="360rpx" radius="0" />
               <view class="knowledge-item__body knowledge-item__body--skeleton">
                 <Skeleton width="72%" height="34rpx" />
                 <Skeleton width="48%" height="34rpx" />
@@ -45,7 +49,6 @@
                   <Skeleton width="120rpx" height="24rpx" />
                 </view>
               </view>
-              <Skeleton width="188rpx" height="136rpx" radius="24rpx" />
             </view>
           </view>
 
@@ -76,15 +79,6 @@
               hover-stay-time="100"
               @click="openArticle(item.id)"
             >
-              <view class="knowledge-item__body">
-                <text class="knowledge-item__title">{{ item.title }}</text>
-                <view class="knowledge-item__meta-row">
-                  <text>{{ formatMonthDay(item.publishedAt) }}</text>
-                  <text>{{ item.viewCount }} 阅读</text>
-                  <text>{{ item.likeCount }} 点赞</text>
-                </view>
-              </view>
-
               <image
                 v-if="item.coverImageUrl"
                 class="knowledge-item__thumb"
@@ -93,6 +87,32 @@
               />
               <view v-else class="knowledge-item__thumb knowledge-item__thumb--empty">
                 <text class="knowledge-item__thumb-text">{{ channelMeta?.title || "文章" }}</text>
+              </view>
+
+              <view class="knowledge-item__body">
+                <text class="knowledge-item__title">{{ item.title }}</text>
+                <text v-if="item.summary" class="knowledge-item__summary">{{ item.summary }}</text>
+                <view v-if="splitKeywords(item.keywords).length" class="knowledge-item__keywords">
+                  <text v-for="keyword in splitKeywords(item.keywords)" :key="keyword" class="knowledge-item__keyword">
+                    {{ keyword }}
+                  </text>
+                </view>
+                <view class="knowledge-item__meta-row">
+                  <view class="knowledge-item__meta-item">
+                    <text class="knowledge-item__meta-icon cookfont icon-time" />
+                    <text>{{ formatMonthDay(item.publishedAt) }}</text>
+                  </view>
+                  <text class="knowledge-item__meta-sep">·</text>
+                  <view class="knowledge-item__meta-item">
+                    <text class="knowledge-item__meta-icon cookfont icon-read" />
+                    <text>{{ item.viewCount }} 阅读</text>
+                  </view>
+                  <text class="knowledge-item__meta-sep">·</text>
+                  <view class="knowledge-item__meta-item">
+                    <text class="knowledge-item__meta-icon cookfont icon-like" />
+                    <text>{{ item.likeCount }} 点赞</text>
+                  </view>
+                </view>
               </view>
             </view>
           </view>
@@ -112,6 +132,7 @@ import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import {
   buildKnowledgeDetailPath,
@@ -122,9 +143,10 @@ import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { UnauthorizedError } from "@/apis/http";
-import { knowledgeApi, type KnowledgeArticleSummary } from "../apis/knowledge";
+import { knowledgeApi, type KnowledgeArticleSummary } from "@/apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
+const { navBarTotalHeight } = useSystemInfo();
 const { themeVars } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
@@ -149,14 +171,23 @@ const {
 });
 
 const channelCode = ref<KnowledgeChannelCode | null>(null);
+const serverChannel = ref<{ code: KnowledgeChannelCode; title: string; description: string } | null>(null);
 const articles = ref<KnowledgeArticleSummary[]>([]);
 const loading = ref(true);
 const loaded = ref(false);
 const errorText = ref("");
 const needLogin = ref(false);
+const scrollTop = ref(0);
 
-const channelMeta = computed(() => getKnowledgeChannel(channelCode.value));
+const staticChannelMeta = computed(() => getKnowledgeChannel(channelCode.value));
+const channelMeta = computed(() => serverChannel.value ?? staticChannelMeta.value);
 const showSkeleton = computed(() => loading.value && !loaded.value);
+const KNOWLEDGE_LIST_TOP = 180;
+const NAVBAR_TITLE_FADE_DISTANCE = 96;
+const navbarTitleOpacity = computed(() => {
+  const distanceToNavbar = KNOWLEDGE_LIST_TOP - (scrollTop.value + navBarTotalHeight.value);
+  return Math.min(1, Math.max(0, (NAVBAR_TITLE_FADE_DISTANCE - distanceToNavbar) / NAVBAR_TITLE_FADE_DISTANCE));
+});
 
 onLoad((query) => {
   const rawCode = Array.isArray(query?.channelCode) ? query.channelCode[0] : query?.channelCode;
@@ -189,6 +220,11 @@ async function loadArticles() {
   errorText.value = "";
   try {
     const result = await knowledgeApi.listArticles(channelCode.value);
+    serverChannel.value = {
+      code: result.channel.code,
+      title: result.channel.name,
+      description: result.channel.description
+    };
     articles.value = result.items;
     loaded.value = true;
   } catch (error) {
@@ -241,10 +277,24 @@ function openArticle(articleId: number) {
   void uniPlatform.navigation.navigateTo(buildKnowledgeDetailPath(articleId));
 }
 
+function handleScroll(event: { detail?: { scrollTop?: number } }) {
+  scrollTop.value = event.detail?.scrollTop ?? 0;
+}
+
 function formatMonthDay(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "最近更新";
   return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function splitKeywords(value: string | null) {
+  return value
+    ? value
+        .replace(/；/gu, ";")
+        .split(";")
+        .map(item => item.trim())
+        .filter(Boolean)
+    : [];
 }
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
@@ -361,7 +411,8 @@ defineExpose({
 
 .knowledge-item {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-md);
   padding: 30rpx 0;
   border-bottom: 1rpx solid var(--color-border-light);
@@ -372,7 +423,7 @@ defineExpose({
 }
 
 .knowledge-item--skeleton {
-  align-items: center;
+  align-items: stretch;
 }
 
 .knowledge-item__body {
@@ -397,25 +448,70 @@ defineExpose({
   -webkit-line-clamp: 2;
 }
 
+.knowledge-item__summary {
+  display: -webkit-box;
+  margin-top: 12rpx;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.knowledge-item__keywords {
+  display: flex;
+  gap: 10rpx;
+  flex-wrap: wrap;
+  margin-top: 14rpx;
+}
+
+.knowledge-item__keyword {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36rpx;
+  padding: 0 14rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
 .knowledge-item__meta-row {
   display: flex;
-  gap: 18rpx;
+  gap: 8rpx;
+  align-items: center;
   flex-wrap: wrap;
   margin-top: 18rpx;
   color: var(--color-text-tertiary);
   font-size: 24rpx;
 }
 
+.knowledge-item__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.knowledge-item__meta-icon.cookfont {
+  font-size: 24rpx;
+  line-height: 1;
+  color: var(--color-text-quaternary);
+}
+
+.knowledge-item__meta-sep {
+  color: var(--color-text-quaternary);
+}
+
 .knowledge-item__thumb {
-  flex: 0 0 188rpx;
   display: flex;
-  gap: 14rpx;
   align-items: center;
   justify-content: center;
-  width: 188rpx;
-  height: 136rpx;
+  width: 100%;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-soft-panel);
 }
 

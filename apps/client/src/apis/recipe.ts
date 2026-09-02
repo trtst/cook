@@ -246,7 +246,7 @@ export interface MyRecipeSummary {
 	difficultyText: string | null;
 	durationText: string | null;
 	estimatedCalories: number | null;
-	category: RecipeCategorySummary;
+	category: RecipeCategorySummary | null;
 	contentVersionId: UUID;
 	version: number;
 	updatedAt: IsoDateTime;
@@ -258,7 +258,7 @@ export interface MyRecipeDetail {
 	coverImageUrl: string | null;
 	difficultyText: string | null;
 	durationText: string | null;
-	category: RecipeCategorySummary;
+	category: RecipeCategorySummary | null;
 	inspirationCategory: InspirationCategorySummary | null;
 	scenes: RecipeSceneSummary[];
 	contentVersionId: UUID;
@@ -615,7 +615,7 @@ export interface CreateMyRecipeFromInspirationRequest {
 	operationId: OperationId;
 	sourceRecipeId: UUID;
 	sourceVersionId: UUID;
-	categoryId: UUID;
+	categoryId?: UUID | null;
 }
 
 export interface GenerateRecipeAssistantRequest {

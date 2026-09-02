@@ -1,13 +1,9 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :show-left="false" :navbar-placeholder="false" navbar-transparent>
-    <template #navbar-left>
-      <view class="cookfont icon-back notification-nav__back" hover-class="notification-nav__back--hover" hover-stay-time="100" @click="handleBack" />
-    </template>
+  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
-      <text class="notification-title">通知中心</text>
+      <text class="notification-nav-title">通知中心</text>
     </template>
-
     <view class="notification-page" :style="pageBodyStyle">
       <view class="notification-scroll-wrap">
         <RecipeSearchLoading
@@ -337,6 +333,17 @@ defineExpose({
   background: var(--page-ambient-duo-bg);
 }
 
+.notification-nav-title {
+  overflow: hidden;
+  max-width: 420rpx;
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .notification-scroll-wrap {
   position: relative;
   display: flex;
@@ -356,13 +363,6 @@ defineExpose({
   padding-left: var(--space-page);
 }
 
-.notification-title {
-  color: var(--color-text);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  text-align: center;
-}
-
 .notification-nav__back {
   display: flex;
   align-items: center;
@@ -376,15 +376,6 @@ defineExpose({
   opacity: 0.68;
 }
 
-.message-list,
-.empty-block {
-  border-radius: var(--radius-xs);
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
-}
-
 .message-list {
   overflow: hidden;
 }
@@ -393,7 +384,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 12rpx;
-  padding: var(--space-md);
+  padding: var(--space-md) 0;
 }
 
 .message-card + .message-card {
@@ -416,9 +407,9 @@ defineExpose({
   align-items: center;
   min-height: 40rpx;
   padding: 0 16rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-xs);
   font-size: var(--font-size-xs);
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .message-card__type--review {

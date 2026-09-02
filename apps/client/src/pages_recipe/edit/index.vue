@@ -3,13 +3,14 @@
   <Layout
     :title="''"
     full-screen
+    :navbar-capsule-guard="true"
     :navbar-transparent="true"
     :navbar-opacity="navOpacity"
     :navbar-placeholder="false"
   >
     <view class="edit-nav-backdrop" :style="navBackdropStyle" />
 
-    <template #navbar-right>
+    <template #navbar-center>
       <view class="edit-nav-actions">
         <view
           class="edit-nav-action"
@@ -1719,7 +1720,7 @@ function fillFromRecipe(recipe: MyRecipeDetail) {
   const content: RecipeDraftContentInput = {
     name: recipe.content.name,
     story: recipe.content.story,
-    categoryId: recipe.category.id,
+    categoryId: recipe.category?.id ?? null,
     inspirationCategoryId: recipe.inspirationCategory?.id ?? null,
     sceneIds: recipe.scenes.map(item => item.id),
     coverUploadId: null,
@@ -3456,8 +3457,10 @@ function nextSlotKey() {
 
 .edit-nav-actions {
   display: flex;
+  justify-content: flex-end;
   align-items: center;
   gap: 24rpx;
+  width: 100%;
 }
 
 .edit-nav-action {

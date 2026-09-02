@@ -52,6 +52,7 @@ export interface RandomMenuItem {
   flavorTags: string[];
   mainProteinType: RecipeProteinType | null;
   fridgeFit: RandomFridgeFit;
+  matchedIngredients: string[];
   recommendationReason: string;
 }
 

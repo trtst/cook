@@ -13,8 +13,9 @@
     <template v-if="sessionStore.isLoggedIn">
       <view class="medal-nav-backdrop" :style="navBackdropStyle" />
 
-      <view class="medal-page">
+      <view class="medal-page" :style="pageVars">
         <scroll-view scroll-y class="medal-scroll" show-scrollbar="false" @scroll="handleScroll">
+          <view class="medal-content">
           <view class="hero-card" :style="scrollStyle">
             <text class="cookfont hero-card__laurel hero-card__laurel--left hero-card__tone icon-medal-left" />
 
@@ -35,7 +36,11 @@
           <view v-else-if="loading" class="notice">加载中...</view>
 
           <template v-else>
-            <view v-if="showCategoryBar" class="sticky-wrap" :style="stickyStyle">
+            <view
+              v-if="showCategoryBar"
+              class="sticky-wrap"
+              :class="{ 'sticky-wrap--fixed': stickyFixed }"
+            >
               <view class="sticky-bar">
                 <view class="category-fixed">
                   <view
@@ -64,6 +69,7 @@
                 </scroll-view>
               </view>
             </view>
+            <view v-if="stickyFixed" class="sticky-spacer" />
 
             <view v-if="filteredItems.length" class="medal-grid">
               <view
@@ -90,6 +96,7 @@
               <text class="empty-card__desc">先看看别的分类，或者稍后再回来。</text>
             </view>
           </template>
+          </view>
         </scroll-view>
       </view>
     </template>
@@ -110,6 +117,7 @@ import { useSessionStore } from "@/stores/session";
 import { formatMedalState, formatMedalStateHint, getMedalIconClass, resolveMedalImageUrl } from "./present";
 
 const NAV_FADE_DISTANCE = 96;
+const STICKY_TRIGGER_TOP = 260;
 
 const pageStyle = usePageScrollStyle();
 const { themeVars } = useTheme();
@@ -130,12 +138,13 @@ const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
   opacity: `${navProgress.value}`
 }));
+const pageVars = computed(() => ({
+  "--medal-sticky-top": `${navBarTotalHeight.value}px`
+}));
 const scrollStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value}px`
 }));
-const stickyStyle = computed(() => ({
-  top: `${navBarTotalHeight.value}px`
-}));
+const stickyFixed = computed(() => scrollTop.value >= STICKY_TRIGGER_TOP);
 
 const tabs = computed(() => [
   {
@@ -276,6 +285,11 @@ defineExpose({
   overflow: hidden;
 }
 
+.medal-content {
+  min-height: 100%;
+  padding-bottom: calc(var(--space-xl) + env(safe-area-inset-bottom));
+}
+
 .medal-scroll {
   flex: 1;
   min-height: 0;
@@ -378,11 +392,23 @@ defineExpose({
 }
 
 .sticky-wrap {
-  position: sticky;
+  position: relative;
   z-index: 20;
   margin-top: var(--space-md);
   padding: 0 var(--space-page) 16rpx;
   background: var(--color-page);
+}
+
+.sticky-wrap--fixed {
+  position: fixed;
+  top: var(--medal-sticky-top);
+  right: 0;
+  left: 0;
+  margin-top: 0;
+}
+
+.sticky-spacer {
+  height: 72rpx;
 }
 
 .sticky-bar {

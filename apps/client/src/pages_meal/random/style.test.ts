@@ -52,6 +52,17 @@ expectIncludes(randomPageSource, ':item="menuSlot"');
 expectExcludes(randomPageSource, '@click="rerollMenu"');
 expectExcludes(randomPageSource, ':slot="slot"');
 expectExcludes(randomPageSource, 'class="warning-card"');
+expectExcludes(randomPageSource, "<RandomGapPanel");
+expectExcludes(randomPageSource, 'from "../components/RandomGapPanel.vue"');
+expectExcludes(randomPageSource, ':gap-summary=');
+expectExcludes(randomPageSource, "gapSummaryMap");
+expectExcludes(randomPageSource, "shortageDishCount");
+expectExcludes(randomPageSource, "待补");
+expectExcludes(randomPageSource, "还缺食材");
+expectExcludes(randomPageSource, "和缺什么理清楚");
+expectIncludes(randomPageSource, "暂时没有更多可换的菜了");
+expectIncludes(randomPageSource, "if (isReroll) {");
+expectIncludes(randomPageSource, "if (result.items.length === 0) {");
 
 expectSelectorIncludes(randomPageSource, ".random-generate-bar", [
   "position: fixed;",
@@ -85,8 +96,9 @@ expectSelectorIncludes(randomConditionBarSource, ".toggle-row__head", [
   "display: flex;",
   "justify-content: space-between;"
 ]);
-expectIncludes(randomConditionBarSource, "icon-stepper-minus");
-expectIncludes(randomConditionBarSource, "icon-stepper-add");
+expectIncludes(randomConditionBarSource, 'class="cookfont slot-plan__button icon-stepper-minus"');
+expectIncludes(randomConditionBarSource, 'class="cookfont slot-plan__button icon-stepper-add"');
+expectExcludes(randomConditionBarSource, 'class="cookfont slot-plan__button-icon');
 expectSelectorIncludes(randomConditionBarSource, ".option-chip--active", [
   "background: var(--color-primary);",
   "box-shadow: var(--button-primary-shadow);"
@@ -114,6 +126,21 @@ expectIncludes(randomSlotCardSource, "划掉");
 expectIncludes(randomSlotCardSource, "换一道");
 expectIncludes(randomSlotCardSource, "item: RandomSlotViewModel;");
 expectExcludes(randomSlotCardSource, "slot: RandomSlotViewModel;");
+expectExcludes(randomSlotCardSource, 'class="constraint-row"');
+expectExcludes(randomSlotCardSource, 'class="constraint-chip');
+expectExcludes(randomSlotCardSource, 'label: "15分钟"');
+expectExcludes(randomSlotCardSource, 'label: "30-60分钟"');
+expectExcludes(randomSlotCardSource, 'label: "优先用冰箱"');
+expectIncludes(randomSlotCardSource, "metaTags");
+expectIncludes(randomSlotCardSource, "fridgeNote");
+expectIncludes(randomSlotCardSource, "props.item.matchedIngredients");
+expectIncludes(randomSlotCardSource, 'return `已有：${names}${suffix}`;');
+expectIncludes(randomSlotCardSource, 'MILD: "微辣"');
+expectExcludes(randomSlotCardSource, 'v-for="tag in item.flavorTags"');
+expectIncludes(randomSlotCardSource, 'v-for="tag in metaTags"');
+expectExcludes(randomSlotCardSource, 'class="tag-row"');
+expectExcludes(randomSlotCardSource, 'class="slot-card__gap"');
+expectExcludes(randomSlotCardSource, "缺 ");
 
 expectIncludes(fontSource, ".icon-stepper-add::before");
 expectIncludes(fontSource, 'content: "\\e6d7";');

@@ -1,13 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :show-left="false" navbar-layout="custom-left">
-    <template #navbar-left>
-      <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
-    </template>
-    <template #navbar-center>
-      <text class="detail-nav__title">{{ currentTypeName }}</text>
-    </template>
-
+  <Layout :title="currentTypeName" full-screen :show-left="false">
     <view class="detail-page">
       <view class="detail-scroll-wrap">
         <RecipeSearchLoading

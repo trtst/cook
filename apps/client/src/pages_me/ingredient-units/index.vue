@@ -1,10 +1,8 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" :show-left="false" navbar-layout="custom-left" full-screen>
-    <template #navbar-left>
-      <view class="header-tabs">
-        <view class="cookfont icon-back header-tabs__back" hover-class="header-tabs__back--hover" hover-stay-time="100" @click="goBack" />
-        <view class="nav-tabs">
+  <Layout title="" full-screen>
+    <template #navbar-center>
+      <view class="nav-tabs">
           <view
             v-for="item in tabs"
             :key="item.value"
@@ -15,7 +13,6 @@
             {{ item.label }}
           </view>
         </view>
-      </view>
     </template>
 
     <view class="ingredient-units-page">
@@ -970,8 +967,7 @@ defineExpose({
   display: flex;
   gap: 52rpx;
   align-items: flex-end;
-  min-width: 0;
-  padding-top: 6rpx;
+  width: 100%;
 }
 
 .nav-tabs__item {

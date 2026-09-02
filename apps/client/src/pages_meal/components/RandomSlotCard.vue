@@ -10,32 +10,10 @@
     </view>
 
     <view class="slot-card__meta">
-      <text class="slot-card__meta-item">{{ sourceLabel }}</text>
-      <text v-if="item.durationText" class="slot-card__meta-item">{{ item.durationText }}</text>
-      <text v-if="item.servings" class="slot-card__meta-item">{{ item.servings }}人份</text>
-      <text v-if="item.mainProteinType" class="slot-card__meta-item">{{ proteinLabel }}</text>
+      <text v-for="tag in metaTags" :key="tag" class="slot-card__meta-item">{{ tag }}</text>
     </view>
 
-    <view v-if="item.flavorTags.length" class="tag-row">
-      <text v-for="tag in item.flavorTags" :key="tag" class="tag-row__item">{{ tag }}</text>
-    </view>
-
-    <view class="constraint-row">
-      <view
-        v-for="option in replaceChipOptions"
-        :key="`${option.key}-${option.value}`"
-        :class="[
-          'constraint-chip',
-          isConstraintActive(option.key, option.value) ? 'constraint-chip--active' : '',
-          changeDisabled ? 'constraint-chip--disabled' : ''
-        ]"
-        :hover-class="changeDisabled ? '' : 'constraint-chip--hover'"
-        hover-stay-time="100"
-        @click="toggleConstraint(option.key, option.value)"
-      >
-        {{ option.label }}
-      </view>
-    </view>
+    <text v-if="fridgeNote" class="slot-card__fridge-note">{{ fridgeNote }}</text>
 
     <view class="action-row">
       <view
@@ -71,7 +49,6 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import type { RandomReplaceConstraintKind } from "../apis/random";
 import type { RandomSlotViewModel } from "../types/random";
 
 const props = defineProps<{
@@ -79,11 +56,21 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 
+const FLAVOR_LABELS: Record<string, string> = {
+  LIGHT: "清淡",
+  NOT_SPICY: "不辣",
+  MILD: "微辣",
+  SPICY: "辣味",
+  SOUR: "酸口",
+  SWEET: "甜口",
+  SALTY: "咸鲜",
+  UMAMI: "鲜味"
+};
+
 const emit = defineEmits<{
   toggleLock: [slotId: string];
   remove: [slotId: string];
   replace: [slotId: string];
-  toggleConstraint: [slotId: string, kind: RandomReplaceConstraintKind, value: string];
 }>();
 
 const slotTypeLabel = computed(() => {
@@ -141,24 +128,49 @@ const proteinLabel = computed(() => {
   }
 });
 
+const displayFlavorTags = computed(() => {
+  return props.item.flavorTags.flatMap(tag => {
+    const label = formatFlavorTag(tag);
+    return label ? [label] : [];
+  });
+});
+
+const metaTags = computed<string[]>(() => {
+  return [
+    sourceLabel.value,
+    props.item.durationText,
+    props.item.servings ? `${props.item.servings}人份` : "",
+    props.item.mainProteinType ? proteinLabel.value : "",
+    ...displayFlavorTags.value
+  ].flatMap(tag => (tag ? [tag] : []));
+});
+
+const fridgeNote = computed(() => {
+  if (props.item.matchedIngredients.length) {
+    const names = props.item.matchedIngredients.slice(0, 2).join("、");
+    const suffix = props.item.matchedIngredients.length > 2 ? "等" : "";
+    return `已有：${names}${suffix}`;
+  }
+  switch (props.item.fridgeFit) {
+    case "HIGH":
+      return "冰箱里主料基本都有";
+    case "MEDIUM":
+      return "有一部分食材可直接用";
+    default:
+      return "";
+  }
+});
+
 const interactionDisabled = computed(() => props.disabled || props.item.status === "REPLACING");
 const changeDisabled = computed(() => interactionDisabled.value || props.item.status === "LOCKED");
 
-const replaceChipOptions = [
-  { key: "FLAVOR" as const, value: "NOT_SPICY", label: "不辣" },
-  { key: "FLAVOR" as const, value: "LIGHT", label: "清淡" },
-  { key: "DURATION" as const, value: "WITHIN_15", label: "15分钟" },
-  { key: "DURATION" as const, value: "BETWEEN_30_60", label: "30-60分钟" },
-  { key: "INGREDIENT" as const, value: "USE_FRIDGE_FIRST", label: "优先用冰箱" }
-];
-
-function isConstraintActive(kind: RandomReplaceConstraintKind, value: string) {
-  return props.item.replaceConstraints.some(item => item.kind === kind && item.value === value);
-}
-
-function toggleConstraint(kind: RandomReplaceConstraintKind, value: string) {
-  if (changeDisabled.value) return;
-  emit("toggleConstraint", props.item.slotId, kind, value);
+function formatFlavorTag(tag: string) {
+  const value = tag.trim();
+  if (!value) return "";
+  const key = value.toUpperCase();
+  if (FLAVOR_LABELS[key]) return FLAVOR_LABELS[key];
+  if (/^[A-Z0-9_]+$/.test(value)) return "";
+  return value;
 }
 
 function toggleLock() {
@@ -241,8 +253,6 @@ function replaceSlot() {
 }
 
 .slot-card__meta,
-.tag-row,
-.constraint-row,
 .action-row {
   display: flex;
   flex-wrap: wrap;
@@ -264,41 +274,12 @@ function replaceSlot() {
   color: var(--color-text-secondary);
 }
 
-.tag-row {
-  gap: 10rpx;
-  margin-top: 12rpx;
-}
-
-.tag-row__item {
-  padding: 8rpx 14rpx;
-  border-radius: var(--radius-pill);
+.slot-card__fridge-note {
+  display: block;
+  margin-top: 16rpx;
+  color: var(--color-state-success-text);
   font-size: var(--font-size-xs);
-  background: var(--color-tag-warning-bg);
-  color: var(--color-tag-warning-text);
-}
-
-.constraint-row {
-  gap: 12rpx;
-  margin-top: 18rpx;
-}
-
-.constraint-chip {
-  padding: 10rpx 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.constraint-chip--active {
-  background: var(--color-tag-primary-bg);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
-  color: var(--color-tag-primary-text);
-}
-
-.constraint-chip--disabled,
-.constraint-chip--hover {
-  opacity: 0.86;
+  line-height: var(--line-height-normal);
 }
 
 .action-row {

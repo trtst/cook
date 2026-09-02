@@ -3,14 +3,11 @@
   <Layout
     title=""
     full-screen
-    navbar-layout="custom-left"
-    :show-left="false"
     :navbar-transparent="sessionStore.isLoggedIn"
     :navbar-placeholder="!sessionStore.isLoggedIn"
   >
-    <template #navbar-left>
+    <template #navbar-center>
       <view class="complete-nav">
-        <view class="cookfont icon-back complete-nav__back" hover-class="complete-nav__back--hover" hover-stay-time="100" @click="goBack" />
         <text class="complete-nav__title" :style="navTitleStyle">标记完成并入库</text>
       </view>
     </template>
@@ -748,7 +745,7 @@ async function goBack() {
 
 .complete-nav {
   gap: 18rpx;
-  min-width: 0;
+  width: 100%;
 }
 
 .complete-nav-backdrop {

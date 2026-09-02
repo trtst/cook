@@ -1,17 +1,14 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" :show-left="false" navbar-layout="custom-left" full-screen>
-    <template #navbar-left>
+  <Layout title="" full-screen :navbar-capsule-guard="true">
+    <template #navbar-center>
       <view class="list-nav">
-        <view class="cookfont icon-back list-nav__back" hover-class="list-nav__back--hover" hover-stay-time="100" @click="goBack" />
         <view class="tabs">
           <view class="tab" :class="{ 'tab--active': mode === 'recipes' }" @click="switchMode('recipes')">我的菜谱</view>
           <view class="tab" :class="{ 'tab--active': mode === 'drafts' }" @click="switchMode('drafts')">草稿箱</view>
         </view>
+		<view class="list-nav__action" @click="createRecipe">新建菜谱</view>
       </view>
-    </template>
-    <template v-if="sessionStore.isLoggedIn" #navbar-right>
-      <view class="list-nav__action" @click="createRecipe">新建菜谱</view>
     </template>
 
     <view class="list-page">
@@ -483,7 +480,7 @@ function toRecipeItem(item: MyRecipeSummary): DisplayItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		meta: `${item.category.name} · ${item.difficultyText || "未设置难度"} · ${item.durationText || "未设置时长"}`,
+		meta: `${item.category?.name || "未分类"} · ${item.difficultyText || "未设置难度"} · ${item.durationText || "未设置时长"}`,
 		updatedAt: item.updatedAt,
 		updatedAtText: formatDateTimeSecond(item.updatedAt),
 		raw: item
@@ -512,9 +509,9 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 }
 
 .list-nav {
-	align-items: center;
+	width: 100%;
+	align-items: flex-start;
 	gap: 18rpx;
-	min-width: 0;
 }
 
 .list-nav__back {
@@ -572,7 +569,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	z-index: -1;
 	height: 18rpx;
 	border-radius: var(--radius-pill);
-	background: var(--color-tag-primary-bg);
+	background: var(--color-support-action);
 	opacity: 0.3;
 	transform: rotate(-5deg);
 }

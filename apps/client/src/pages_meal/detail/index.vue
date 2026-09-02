@@ -3,14 +3,11 @@
   <Layout
     title=""
     full-screen
-    :show-left="false"
-    navbar-layout="custom-left"
     :navbar-transparent="true"
     :navbar-placeholder="false"
   >
-    <template #navbar-left>
+    <template #navbar-center>
       <view class="detail-nav">
-        <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
         <text class="detail-nav__title" :style="navTitleStyle">{{ navTitle }}</text>
       </view>
     </template>
@@ -642,7 +639,7 @@
                   <view class="recipe-sheet__main">
                     <text class="recipe-sheet__name">{{ item.title }}</text>
                     <text class="recipe-sheet__meta">
-                      {{ item.category.name }}<text v-if="item.durationText"> · {{ item.durationText }}</text>
+                      {{ item.category?.name || "未分类" }}<text v-if="item.durationText"> · {{ item.durationText }}</text>
                     </text>
                   </view>
                   <view
@@ -2930,7 +2927,7 @@ function clearFocusedSection() {
   display: flex;
   align-items: center;
   gap: 18rpx;
-  min-width: 0;
+  width: 100%;
 }
 
 .detail-nav__back {

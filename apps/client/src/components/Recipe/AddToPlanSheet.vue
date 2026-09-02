@@ -2,7 +2,7 @@
   <SheetShell
     :visible="visible"
     title="加入计划"
-    :subtitle="needAddToPrivate ? '这道灵感菜谱会先保存到私房菜，再加入你选定的日期和餐次，之后可以直接从私房菜安排做饭。' : '选择日期和餐次，这道私房菜会固定到计划中，之后可以按计划准备食材和做饭。'"
+    :subtitle="needAddToPrivate ? '加入计划会同步保存到私房菜；分类可现在选择，也可以之后再整理。' : '选择日期和餐次，这道私房菜会固定到计划中，之后可以按计划准备食材和做饭。'"
     @close="emit('close')"
   >
     <view v-if="loading" class="panel-note">加载中...</view>
@@ -12,7 +12,7 @@
         <view class="sheet-section__head">
           <view class="sheet-section__meta">
             <text class="sheet-section__title">私房菜分类</text>
-            <text class="sheet-section__tag">方便以后快速找到</text>
+            <text class="sheet-section__tag">可选，之后也能整理</text>
           </view>
           <view class="sheet-section__action" @click="toggleCategoryCreator">
             {{ showCategoryCreator ? "取消" : "创建" }}
@@ -47,7 +47,16 @@
             {{ item.name }}
           </view>
         </view>
-        <text v-else class="sheet-section__hint">还没有个人分类，请先创建一个。</text>
+        <view class="chip-row">
+          <view
+            class="chip"
+            :class="{ 'chip--active': !selectedCategoryId }"
+            @click="selectedCategoryId = ''"
+          >
+            稍后分类
+          </view>
+        </view>
+        <text v-if="!categories.length" class="sheet-section__hint">还没有个人分类，也可以先加入计划，之后再整理。</text>
       </view>
 
       <view class="sheet-section">
@@ -158,7 +167,6 @@ const mealSlotItems = computed(() => {
   }));
 });
 const canSubmit = computed(() => {
-  if (props.needAddToPrivate && !selectedCategoryId.value) return false;
   return !mealSlotItems.value.find(item => item.value === mealSlot.value)?.expired;
 });
 const planDateText = computed(() => {
@@ -332,14 +340,14 @@ async function submit() {
     let recipeId = props.recipeId ?? null;
     let recipeVersionId: UUID | null = null;
     if (props.needAddToPrivate) {
-      if (!props.sourceRecipeId || !props.sourceVersionId || !selectedCategoryId.value) {
-        throw new Error("请选择私房菜分类");
+      if (!props.sourceRecipeId || !props.sourceVersionId) {
+        throw new Error("当前灵感菜谱信息不完整");
       }
       const result = await recipeApi.createMyRecipeFromInspiration({
         operationId: createOperationId(),
         sourceRecipeId: props.sourceRecipeId,
         sourceVersionId: props.sourceVersionId,
-        categoryId: selectedCategoryId.value
+        categoryId: selectedCategoryId.value || null
       });
       recipeId = result.recipe.id;
       recipeVersionId = result.recipe.contentVersionId;
@@ -370,7 +378,7 @@ async function submit() {
     await uniPlatform.feedback.toast({ title: addedToPrivate ? "已保存到私房菜并加入计划" : "已加入计划", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({
-      title: addedToPrivate ? "已保存到私房菜，但加入计划失败" : error instanceof Error ? error.message : "加入计划失败",
+      title: addedToPrivate ? "私房菜已保存，请重试加入计划" : error instanceof Error ? error.message : "加入计划失败",
       icon: "none"
     });
   } finally {

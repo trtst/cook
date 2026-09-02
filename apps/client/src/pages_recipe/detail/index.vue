@@ -3,25 +3,21 @@
   <Layout
     title=""
     full-screen
-    :show-left="false"
-    navbar-layout="custom-left"
     :navbar-transparent="true"
     :navbar-opacity="navOpacity"
     :navbar-placeholder="false"
+    :navbar-center-visible="showAnchorTabs"
   >
-    <template #navbar-left>
-      <view class="detail-nav">
-        <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
-        <view v-if="showAnchorTabs" class="detail-nav-tabs">
-          <view
-            v-for="item in anchorTabs"
-            :key="item.value"
-            class="detail-nav-tabs__item font-medium"
-            :class="{ 'detail-nav-tabs__item--active': activeAnchor === item.value }"
-            @click="scrollToSection(item.value)"
-          >
-            {{ item.label }}
-          </view>
+    <template #navbar-center>
+      <view class="detail-nav-tabs">
+        <view
+          v-for="item in anchorTabs"
+          :key="item.value"
+          class="detail-nav-tabs__item font-medium"
+          :class="{ 'detail-nav-tabs__item--active': activeAnchor === item.value }"
+          @click="scrollToSection(item.value)"
+        >
+          {{ item.label }}
         </view>
       </view>
     </template>
@@ -650,7 +646,7 @@ const detailCategoryName = computed(() => {
   if (previewDetail.value) {
     return previewDetail.value.categoryName || "";
   }
-  return publishedDetail.value?.category.name || "";
+  return publishedDetail.value?.category?.name || "";
 });
 
 const detailStory = computed(() => detailContent.value.story?.trim() || "");
@@ -957,10 +953,6 @@ async function updateAnchorMetrics() {
   if (stepRect) {
     stepTop.value = Math.max(0, stepRect.top - scrollRect.top + currentScrollTop - 20);
   }
-}
-
-function goBack() {
-  void uniPlatform.navigation.navigateBack();
 }
 
 function scrollToSection(section: AnchorKey) {
@@ -1584,32 +1576,11 @@ defineExpose({
   transition: opacity 160ms ease;
 }
 
-.detail-nav {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.detail-nav__back {
-  display: flex;
-  align-items: center;
-  width: 64rpx;
-  height: 64rpx;
-  color: var(--color-text);
-  line-height: 1;
-}
-
-.detail-nav__back--hover {
-  opacity: 0.68;
-}
-
 .detail-nav-tabs {
   display: flex;
   gap: 40rpx;
-  align-items: flex-end;
-  min-width: 0;
-  margin-left: 22rpx;
-  padding-top: 6rpx;
+  align-items: flex-start;
+  width: 100%;
 }
 
 .detail-nav-tabs__item {
@@ -1637,7 +1608,7 @@ defineExpose({
   z-index: -1;
   height: 16rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-icon-accent);
+  background: var(--color-support-action);
   opacity: 0.3;
   transform: rotate(-5deg);
 }

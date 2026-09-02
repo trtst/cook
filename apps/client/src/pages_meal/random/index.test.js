@@ -149,6 +149,7 @@ describe("pages_meal/random/index", () => {
         flavorTags: ["家常"],
         mainProteinType: "BEEF",
         fridgeFit: "HIGH",
+        matchedIngredients: ["牛腩"],
         recommendationReason: "冰箱里有"
       }
     ]);
@@ -165,6 +166,7 @@ describe("pages_meal/random/index", () => {
         durationText: "45分钟",
         servings: 2,
         mainProteinType: "BEEF",
+        matchedIngredients: ["牛腩"],
         flavorTags: ["家常"]
       }
     ]);

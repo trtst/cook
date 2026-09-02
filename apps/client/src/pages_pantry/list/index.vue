@@ -1,19 +1,16 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :show-left="false" navbar-layout="custom-left">
-    <template #navbar-left>
-      <view class="home-nav">
-        <view class="cookfont icon-back home-nav__back" hover-class="home-nav__back--hover" hover-stay-time="100" @click="goBack" />
-        <view class="nav-tabs">
-          <view
-            v-for="item in statusTabs"
-            :key="item.status"
-            class="nav-tabs__item"
-            :class="{ 'nav-tabs__item--active': status === item.status }"
-            @click="changeStatus(item.status)"
-          >
-            {{ item.label }}
-          </view>
+  <Layout title="" full-screen>
+    <template #navbar-center>
+      <view class="nav-tabs">
+        <view
+          v-for="item in statusTabs"
+          :key="item.status"
+          class="nav-tabs__item"
+          :class="{ 'nav-tabs__item--active': status === item.status }"
+          @click="changeStatus(item.status)"
+        >
+          {{ item.label }}
         </view>
       </view>
     </template>
@@ -1056,8 +1053,7 @@ defineExpose({
   display: flex;
   gap: 36rpx;
   align-items: flex-end;
-  min-width: 0;
-  padding-top: 6rpx;
+  width: 100%;
 }
 
 .nav-tabs__item {

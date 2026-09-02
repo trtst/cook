@@ -179,6 +179,13 @@ export function useSystemInfo() {
     return Math.ceil(rect.width + rightGap);
   });
 
+  const navCapsuleWidth = computed(() => {
+    const rect = systemInfo.value.menuButtonRect;
+    if (!rect) return navBarHeight.value;
+
+    return Math.ceil(rect.width);
+  });
+
   const safeAreaBottom = computed(() => {
     const safeArea = systemInfo.value.safeArea;
     if (!safeArea || !systemInfo.value.windowHeight) return DEFAULT_SAFE_AREA_BOTTOM;
@@ -192,6 +199,7 @@ export function useSystemInfo() {
     navBarHeight,
     navBarTotalHeight,
     navSideGuardWidth,
+    navCapsuleWidth,
     safeAreaBottom,
     tabBarHeight
   };

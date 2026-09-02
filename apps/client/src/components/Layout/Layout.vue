@@ -2,14 +2,16 @@
 	<view class="layout" :style="themeVars">
 		<view class="layout__theme"
 			:class="[themeClasses, { 'layout__theme--with-tabbar': showTabbar, 'layout__theme--full-screen': fullScreen }]">
-			<NavBar v-if="showNavbar" :title="title" :show-left="showLeft" :layout="navbarLayout"
+			<NavBar v-if="showNavbar && navbarCenterVisible && $slots['navbar-center']" :title="title" :show-left="showLeft" :capsule-guard="navbarCapsuleGuard"
+				:custom-center="true"
 				:placeholder="navbarPlaceholder" :transparent="navbarTransparent" :background-opacity="navbarOpacity">
-				<template v-if="$slots['navbar-left']" #left>
-					<slot name="navbar-left" />
+				<slot name="navbar-center" />
+				<template v-if="$slots['navbar-right']" #right>
+					<slot name="navbar-right" />
 				</template>
-				<template v-if="$slots['navbar-center']" #default>
-					<slot name="navbar-center" />
-				</template>
+			</NavBar>
+			<NavBar v-else-if="showNavbar" :title="title" :show-left="showLeft" :capsule-guard="navbarCapsuleGuard"
+				:placeholder="navbarPlaceholder" :transparent="navbarTransparent" :background-opacity="navbarOpacity">
 				<template v-if="$slots['navbar-right']" #right>
 					<slot name="navbar-right" />
 				</template>
@@ -46,7 +48,8 @@ const props = withDefaults(
 		navbarPlaceholder?: boolean;
 		navbarTransparent?: boolean;
 		navbarOpacity?: number;
-		navbarLayout?: "title" | "custom-left";
+		navbarCapsuleGuard?: boolean;
+		navbarCenterVisible?: boolean;
 	}>(),
 	{
 		title: "",
@@ -57,7 +60,8 @@ const props = withDefaults(
 		navbarPlaceholder: true,
 		navbarTransparent: false,
 		navbarOpacity: 1,
-		navbarLayout: "title"
+		navbarCapsuleGuard: false,
+		navbarCenterVisible: true
 	}
 );
 

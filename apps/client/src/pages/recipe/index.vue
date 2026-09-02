@@ -1,7 +1,7 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout current-tab="recipe" :show-left="false" navbar-layout="custom-left" full-screen>
-    <template #navbar-left>
+  <Layout current-tab="recipe" :show-left="false" full-screen>
+    <template #navbar-center>
       <view class="nav-tabs">
         <view
           v-for="item in tabs"
@@ -981,7 +981,7 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		coverTag: item.category.name,
+		coverTag: item.category?.name || "未分类",
 		durationText: item.durationText || "",
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
@@ -1071,9 +1071,8 @@ defineExpose({
 .nav-tabs {
   display: flex;
   gap: 52rpx;
-  align-items: flex-end;
-  min-width: 0;
-  padding-top: 6rpx;
+  align-items: flex-start;
+  width: 100%;
 }
 
 .nav-tabs__item {

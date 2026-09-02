@@ -7,7 +7,7 @@
     >
       <view class="navbar__status" :style="statusStyle" />
       <view class="navbar__inner" :style="innerStyle">
-        <view class="navbar__side" :class="{ 'navbar__side--custom-left': isCustomLeft && !showLeft && hasLeftSlot }">
+        <view class="navbar__side" :class="{ 'navbar__side--hidden': !showLeft }">
           <view
             v-if="showLeft"
             class="cookfont navbar__icon"
@@ -16,20 +16,17 @@
             hover-stay-time="100"
             @click="handleLeftClick"
           />
-          <slot v-else name="left" />
         </view>
 
         <view class="navbar__center">
-          <slot>
-            <text class="navbar__title">{{ title }}</text>
-          </slot>
+          <slot v-if="customCenter" />
+          <text v-else-if="title" class="navbar__title">{{ title }}</text>
         </view>
 
         <view
           class="navbar__side navbar__side--right"
           :class="{
-            'navbar__side--custom-right': isCustomLeft && hasRightSlot,
-            'navbar__side--slot-right': hasRightSlot
+            'navbar__side--capsule': useCapsuleRight
           }"
         >
           <slot name="right" />
@@ -41,19 +38,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useSlots } from "vue";
+import { computed } from "vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 
 const props = withDefaults(
   defineProps<{
+    // 普通标题文本。没有传默认 slot 时展示；传了默认 slot 时由调用方完全接管中间内容。
     title?: string;
+    // 是否显示左侧区域。false 时左侧 side 整体折叠为 0，不保留图标宽度。
     showLeft?: boolean;
+    // 是否固定在页面顶部。false 时导航栏按普通文档流占位。
     fixed?: boolean;
+    // fixed=true 时是否额外渲染等高占位，避免页面内容顶到导航栏下方。
     placeholder?: boolean;
+    // 是否使用透明背景，常用于首页、详情页这类有顶部封面或渐变背景的页面。
     transparent?: boolean;
+    // 导航栏背景透明度。当前预留给滚动渐变类页面使用，实际背景色仍由样式层控制。
     backgroundOpacity?: number;
-    layout?: "title" | "custom-left";
+    // 是否显式避让微信右上角胶囊。只在小程序端生效，会把右侧 side 宽度改为胶囊宽度。
+    capsuleGuard?: boolean;
+    // 是否由默认 slot 接管中间区域。小程序端不能可靠依赖 $slots 判断 fallback。
+    customCenter?: boolean;
   }>(),
   {
     title: "",
@@ -62,18 +68,17 @@ const props = withDefaults(
     placeholder: true,
     transparent: false,
     backgroundOpacity: 1,
-    layout: "title"
+    capsuleGuard: false,
+    customCenter: false
   }
 );
 
-const { navBarHeight, navBarTotalHeight, navSideGuardWidth, systemInfo } = useSystemInfo();
-const slots = useSlots();
+const { navBarHeight, navBarTotalHeight, navCapsuleWidth, systemInfo } = useSystemInfo();
 
 const canGoBack = computed(() => getCurrentPages().length > 1);
 const leftIconClass = computed(() => (canGoBack.value ? "icon-back" : "icon-homepage"));
-const hasLeftSlot = computed(() => Boolean(slots.left));
-const hasRightSlot = computed(() => Boolean(slots.right));
-const isCustomLeft = computed(() => props.layout === "custom-left");
+const isMiniProgram = computed(() => uniPlatform.system.getRuntimeChannel() === "mini_program");
+const useCapsuleRight = computed(() => isMiniProgram.value && props.capsuleGuard);
 
 const fixedStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`
@@ -84,8 +89,7 @@ const statusStyle = computed(() => ({
 }));
 
 const innerStyle = computed(() => ({
-  "--navbar-side-width": `${navSideGuardWidth.value}px`,
-  "--navbar-capsule-width": `${navSideGuardWidth.value}px`,
+  "--navbar-capsule-width": `${navCapsuleWidth.value}px`,
   height: `${navBarHeight.value}px`
 }));
 
@@ -127,7 +131,8 @@ function handleLeftClick() {
 }
 
 .navbar__inner {
-  --navbar-side-width: 44px;
+  --navbar-side-width: 64rpx;
+  --navbar-capsule-width: 44px;
 
   display: flex;
   align-items: center;
@@ -142,27 +147,21 @@ function handleLeftClick() {
   min-width: var(--navbar-side-width);
 }
 
-.navbar__side--custom-left {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-}
-
 .navbar__side--right {
   justify-content: flex-end;
 }
 
-.navbar__side--slot-right {
-  flex: 0 0 auto;
-  width: auto;
-  min-width: 0;
-  padding-right: var(--navbar-capsule-width);
+.navbar__side--capsule {
+  flex-basis: var(--navbar-capsule-width);
+  width: var(--navbar-capsule-width);
+  min-width: var(--navbar-capsule-width);
 }
 
-.navbar__side--custom-right {
-  flex: 0 0 auto;
-  width: auto;
+.navbar__side--hidden {
+  flex-basis: 0;
+  width: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .navbar__center {

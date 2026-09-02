@@ -3,14 +3,11 @@
   <Layout
     title=""
     full-screen
-    navbar-layout="custom-left"
-    :show-left="false"
     :navbar-transparent="sessionStore.isLoggedIn"
     :navbar-placeholder="!sessionStore.isLoggedIn"
   >
-    <template #navbar-left>
+    <template #navbar-center>
       <view class="detail-nav">
-        <view class="cookfont icon-back detail-nav__back" hover-class="detail-nav__back--hover" hover-stay-time="100" @click="goBack" />
         <text class="detail-nav__title" :style="navTitleStyle">{{ detail?.name || "采购清单" }}</text>
       </view>
     </template>
@@ -2078,7 +2075,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 18rpx;
-  min-width: 0;
+  width: 100%;
 }
 
 .detail-nav-backdrop {

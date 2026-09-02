@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const ADMIN_USERNAME = process.env.ADMIN_SEED_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || "change-me";
 const TEST_CODE = "123456";
-const KNOWLEDGE_CHANNEL_CODE = "KITCHEN_PREP";
+const KNOWLEDGE_CHANNEL_CODE = "KITCHEN";
 
 jest.setTimeout(30000);
 
@@ -148,6 +148,7 @@ async function createPublishedArticle() {
         slug,
         title,
         summary: "用于验证小程序文章详情页登录与内容展示。",
+        keywords: "焯水; 去腥",
         label: "验收",
         heroNote: "官方 mp-weixin 自动化",
         coverImageUrl: null,
@@ -178,6 +179,8 @@ async function createPublishedArticle() {
   return {
     articleId: published.id,
     title,
+    summary: "用于验证小程序文章详情页登录与内容展示。",
+    keywords: ["焯水", "去腥"],
     phone: createFreshPhone()
   };
 }
@@ -217,22 +220,24 @@ describe("pages_me/knowledge-detail/index", () => {
       uid: session.user.uid,
       expiresAt: session.expiresAt
     });
-    await page.waitFor(".detail-hero__title", 8000);
+    await page.waitFor(".detail-title", 8000);
   });
 
   it("文章详情页可以完成真实登录并展示正文主状态", async () => {
     expect(await page.path).toBe("pages_me/knowledge-detail/index");
 
-    const title = await page.$(".detail-hero__title");
+    const title = await page.$(".detail-title");
     expect(await title.text()).toBe(fixture.title);
 
     const texts = await collectTexts(page);
+    expect(texts).toContain(fixture.summary);
+    expect(texts).toEqual(expect.arrayContaining(fixture.keywords));
     expect(texts.some((item) => item.includes("阅读"))).toBe(true);
     expect(texts.some((item) => item.includes("点赞"))).toBe(true);
 
-    const likeButton = await page.$(".detail-toolbar__button");
-    expect(await likeButton.text()).toBe("点赞");
+    const likeButton = await page.$(".detail-meta__item--like");
+    expect((await likeButton.text()).includes("点赞")).toBe(true);
     await likeButton.tap();
-    await waitForButtonText(likeButton, "已点赞");
+    await waitForButtonText(likeButton, "1 点赞");
   });
 });

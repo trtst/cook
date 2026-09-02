@@ -55,24 +55,20 @@
           <text class="slot-plan__label">{{ item.label }}</text>
           <view class="slot-plan__stepper">
             <view
-              class="slot-plan__button"
+              class="cookfont slot-plan__button icon-stepper-minus"
               :class="{ 'slot-plan__button--disabled': loading }"
               :hover-class="loading ? '' : 'slot-plan__button--hover'"
               hover-stay-time="100"
               @click="adjustSlotPlan(item.key, -1)"
-            >
-              <text class="cookfont slot-plan__button-icon icon-stepper-minus" />
-            </view>
+            />
             <text class="slot-plan__value">{{ item.value }}</text>
             <view
-              class="slot-plan__button"
+              class="cookfont slot-plan__button icon-stepper-add"
               :class="{ 'slot-plan__button--disabled': loading }"
               :hover-class="loading ? '' : 'slot-plan__button--hover'"
               hover-stay-time="100"
               @click="adjustSlotPlan(item.key, 1)"
-            >
-              <text class="cookfont slot-plan__button-icon icon-stepper-add" />
-            </view>
+            />
           </view>
         </view>
       </view>
@@ -298,12 +294,7 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 999rpx;
-  background: var(--color-surface-soft-panel);
   color: var(--color-text);
-  font-size: 34rpx;
   line-height: 1;
 }
 
@@ -315,17 +306,11 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
   opacity: 0.6;
 }
 
-.slot-plan__button-icon {
-  color: inherit;
-  font-size: 26rpx;
-  line-height: 1;
-}
-
 .slot-plan__value {
   min-width: 40rpx;
   text-align: center;
   color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
 }
 </style>

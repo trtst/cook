@@ -425,11 +425,11 @@ expectIncludes(mePageSource, 'title: "我的口味"');
 expectIncludes(mePageSource, 'iconClass: "icon-my-taste"');
 expectIncludes(mePageSource, 'title: "食材与单位"');
 expectIncludes(mePageSource, 'iconClass: "icon-ingredient-units"');
-expectIncludes(mePageSource, 'title: "厨房准备"');
+expectIncludes(mePageSource, 'title: "厨房百事"');
 expectIncludes(mePageSource, 'iconClass: "icon-kitchen-prep"');
-expectIncludes(mePageSource, 'title: "烹饪技巧"');
+expectIncludes(mePageSource, 'title: "烹调技法"');
 expectIncludes(mePageSource, 'iconClass: "icon-cooking-skills"');
-expectIncludes(mePageSource, 'title: "食谱技巧"');
+expectIncludes(mePageSource, 'title: "饮食文化"');
 expectIncludes(mePageSource, 'iconClass: "icon-recipe-skills"');
 expectIncludes(fontSource, '.icon-my-taste::before {\n    content: "\\e62f";\n}');
 expectIncludes(fontSource, '.icon-ingredient-units::before {\n    content: "\\e721";\n}');
@@ -439,6 +439,8 @@ expectIncludes(fontSource, '.icon-recipe-skills::before {\n    content: "\\e61d"
 expectIncludes(fontSource, '.icon-meal-event::before {\n    content: "\\e794";\n}');
 expectIncludes(fontSource, '.icon-meal-plan::before {\n    content: "\\e6e3";\n}');
 expectIncludes(fontSource, '.icon-pantry::before {\n    content: "\\e797";\n}');
+expectIncludes(fontSource, '.icon-read::before {\n    content: "\\e6df";\n}');
+expectIncludes(fontSource, '.icon-like::before {\n    content: "\\e6f9";\n}');
 
 expectIncludes(reminderPageSource, "background: var(--material-card-bg);");
 expectIncludes(reminderPageSource, "box-shadow: var(--material-card-shadow);");
@@ -1547,24 +1549,11 @@ expectSelectorIncludes(shoppingTargetSheetSource, ".shopping-target-sheet__optio
 ]);
 expectSelectorExcludes(shoppingTargetSheetSource, ".shopping-target-sheet__option", ["border: 1rpx solid var(--color-border);"]);
 expectSelectorExcludes(phonePageSource, ".phone-form-card", ["border: 1rpx solid var(--color-divider);"]);
-expectSelectorExcludes(knowledgeDetailPageSource, ".detail-toolbar", ["border: 1rpx solid var(--color-border);"]);
-expectSelectorIncludes(knowledgeDetailPageSource, ".detail-toolbar", [
-  "background: var(--material-tabbar-bg);",
-  "box-shadow: var(--material-tabbar-shadow);",
-  "backdrop-filter: var(--material-tabbar-filter);"
-]);
-expectSelectorExcludes(knowledgeDetailPageSource, ".detail-toolbar", ["backdrop-filter: blur(16rpx);"]);
-expectSelectorIncludes(knowledgeDetailPageSource, ".detail-toolbar__button--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(knowledgeDetailPageSource, ".detail-toolbar__button--active", ["background: var(--color-primary-soft-fill);"]);
-expectSelectorIncludes(knowledgeDetailPageSource, ".detail-hero__mask", [
-  "background: var(--overlay-image-mask);"
-]);
-expectSelectorExcludes(knowledgeDetailPageSource, ".detail-hero__mask", [
-  "radial-gradient(circle at top right, var(--color-primary-soft), transparent 28%)"
+expectExcludes(knowledgeDetailPageSource, 'class="detail-toolbar"');
+expectSelectorExcludes(knowledgeDetailPageSource, ".detail-article", [
+  "border-radius:",
+  "background:",
+  "box-shadow:"
 ]);
 expectIncludes(pantryItemEditPageSource, "border: 1rpx solid var(--material-input-border);");
 expectIncludes(pantryItemEditPageSource, "background: var(--material-input-bg);");

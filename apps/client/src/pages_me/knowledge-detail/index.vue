@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout title="" full-screen :navbar-capsule-guard="true" :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="detail-navbar__title" :style="navTitleStyle">{{ navTitle }}</text>
     </template>
@@ -38,27 +38,42 @@
         </view>
 
         <template v-else-if="detail">
-          <view class="detail-hero">
-            <image v-if="detail.coverImageUrl" class="detail-hero__cover" :src="detail.coverImageUrl" mode="aspectFill" />
-            <view v-else class="detail-hero__cover detail-hero__cover--empty">
-              <text class="detail-hero__empty-text">{{ detail.channelName }}</text>
-            </view>
-            <view class="detail-hero__mask" />
-
-            <view class="detail-hero__content" :style="pageBodyStyle">
-              <text class="detail-hero__eyebrow">{{ detail.channelName }}</text>
-              <text class="detail-hero__title">{{ detail.title }}</text>
-              <view class="detail-hero__meta">
-                <text>{{ formatFullDate(detail.publishedAt) }}</text>
-                <text>{{ detail.viewCount }} 阅读</text>
-                <text>{{ detail.likeCount }} 点赞</text>
-              </view>
+          <view class="detail-cover">
+            <image v-if="detail.coverImageUrl" class="detail-cover__image" :src="detail.coverImageUrl" mode="aspectFill" />
+            <view v-else class="detail-cover__empty" :style="pageBodyStyle">
+              <text class="detail-cover__empty-title">{{ detail.channelName }}</text>
+              <text class="detail-cover__empty-text">文章封面图</text>
             </view>
           </view>
 
           <view class="detail-content">
-            <view v-if="detail.heroNote" class="detail-note">
-              <text class="detail-note__text">{{ detail.heroNote }}</text>
+            <text class="detail-title">{{ detail.title }}</text>
+            <view class="detail-meta">
+              <view class="detail-meta__item">
+                <text class="detail-meta__icon cookfont icon-time" />
+                <text>{{ formatFullDate(detail.publishedAt) }}</text>
+              </view>
+              <view class="detail-meta__item">
+                <text class="detail-meta__icon cookfont icon-read" />
+                <text>{{ detail.viewCount }} 阅读</text>
+              </view>
+              <view
+                class="detail-meta__item detail-meta__item--like"
+                :class="{
+                  'detail-meta__item--active': detail.viewerHasLiked,
+                  'detail-meta__item--disabled': likeSubmitting
+                }"
+                hover-class="detail-meta__item--hover"
+                hover-stay-time="100"
+                @click="toggleLike"
+              >
+                <text class="detail-meta__icon cookfont icon-like" />
+                <text>{{ detail.likeCount }} 点赞</text>
+              </view>
+            </view>
+            <text v-if="detail.summary" class="detail-summary">{{ detail.summary }}</text>
+            <view v-if="keywordList.length" class="detail-keywords">
+              <text v-for="keyword in keywordList" :key="keyword" class="detail-keyword">{{ keyword }}</text>
             </view>
 
             <view class="detail-article">
@@ -68,23 +83,6 @@
         </template>
       </view>
     </scroll-view>
-
-    <view v-if="detail" class="detail-toolbar">
-      <view class="detail-toolbar__meta">
-        <text class="detail-toolbar__meta-text">{{ detail.viewCount }} 阅读</text>
-        <text class="detail-toolbar__meta-text">{{ detail.likeCount }} 点赞</text>
-      </view>
-      <view
-        :class="[
-          'detail-toolbar__button',
-          detail.viewerHasLiked ? 'detail-toolbar__button--active' : '',
-          likeSubmitting ? 'detail-toolbar__button--disabled' : ''
-        ]"
-        @click="toggleLike"
-      >
-        {{ likeSubmitting ? "处理中..." : detail.viewerHasLiked ? "已点赞" : "点赞" }}
-      </view>
-    </view>
   </Layout>
 </template>
 
@@ -102,7 +100,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { UnauthorizedError } from "@/apis/http";
-import { knowledgeApi, type KnowledgeArticleDetail } from "../apis/knowledge";
+import { knowledgeApi, type KnowledgeArticleDetail } from "@/apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars } = useTheme();
@@ -123,6 +121,7 @@ const viewRecorded = ref(false);
 
 const NAV_FADE_DISTANCE = 100;
 const navTitle = computed(() => detail.value?.title || "文章详情");
+const keywordList = computed(() => splitKeywords(detail.value?.keywords ?? null));
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const navBackdropStyle = computed(() => ({
   height: `${navBarTotalHeight.value}px`,
@@ -260,6 +259,16 @@ function formatFullDate(value: string) {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+function splitKeywords(value: string | null) {
+  return value
+    ? value
+        .replace(/；/gu, ";")
+        .split(";")
+        .map(item => item.trim())
+        .filter(Boolean)
+    : [];
+}
+
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
   await sessionStore.setSession(snapshot);
   needLogin.value = false;
@@ -289,16 +298,23 @@ defineExpose({
 }
 
 .detail-navbar__title {
+  display: block;
+  width: 100%;
+  overflow: hidden;
   color: var(--color-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
+  text-align: left;
+  text-overflow: ellipsis;
   transition: opacity 0.16s ease, transform 0.16s ease;
+  white-space: nowrap;
+  padding-right: var(--space-page);
 }
 
 .detail-page {
   min-height: 100vh;
-  padding-bottom: calc(140rpx + env(safe-area-inset-bottom));
-  background: var(--page-primary-soft-bg);
+  padding-bottom: max(48rpx, env(safe-area-inset-bottom));
+  background: var(--color-surface);
 }
 
 .detail-skeleton {
@@ -345,162 +361,134 @@ defineExpose({
   font-weight: var(--font-weight-semibold);
 }
 
-.detail-hero {
+.detail-cover {
   position: relative;
-  min-height: 560rpx;
+  min-height: 0;
+  padding-top: 75%;
+  overflow: hidden;
+  background: var(--page-cover-fresh-shell-bg);
 }
 
-.detail-hero__cover {
+.detail-cover__image {
   position: absolute;
   inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
-  background: var(--color-support-notice);
+  background: var(--color-surface);
 }
 
-.detail-hero__cover--empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.detail-hero__empty-text {
-  color: var(--color-text-inverse-strong);
-  font-size: 34rpx;
-  font-weight: var(--font-weight-bold);
-}
-
-.detail-hero__mask {
+.detail-cover__empty {
   position: absolute;
   inset: 0;
-  background: var(--overlay-image-mask);
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  align-items: center;
+  justify-content: center;
+  padding-right: var(--space-page);
+  padding-left: var(--space-page);
+  text-align: center;
 }
 
-.detail-hero__content {
+.detail-cover__empty-title {
+  color: var(--color-text);
+  font-size: 34rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1.2;
+}
+
+.detail-cover__empty-text {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.detail-content {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  min-height: 560rpx;
-  justify-content: flex-end;
+  gap: 24rpx;
   padding-right: var(--space-page);
-  padding-bottom: 40rpx;
   padding-left: var(--space-page);
+  padding-top: 34rpx;
 }
 
-.detail-hero__eyebrow {
-  display: inline-flex;
-  width: fit-content;
-  min-height: 42rpx;
-  padding: 0 18rpx;
-  border-radius: 999rpx;
-  background: var(--color-surface-mask-weak);
-  color: var(--color-text-inverse);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  align-items: center;
-}
-
-.detail-hero__title {
+.detail-title {
   display: block;
-  margin-top: 18rpx;
-  color: var(--color-text-inverse);
-  font-size: 46rpx;
+  color: var(--color-text);
+  font-size: 50rpx;
   font-weight: var(--font-weight-heavy);
-  line-height: 1.24;
+  line-height: 1.3;
 }
 
-.detail-hero__meta {
+.detail-meta {
   display: flex;
   gap: 18rpx;
   flex-wrap: wrap;
-  margin-top: 18rpx;
-  color: var(--color-text-inverse-muted);
+  color: var(--color-text-tertiary);
   font-size: 24rpx;
 }
 
-.detail-content {
-  margin-top: -28rpx;
-  padding-right: var(--space-page);
-  padding-left: var(--space-page);
+.detail-meta__item {
+  display: inline-flex;
+  gap: 8rpx;
+  align-items: center;
+  min-height: 42rpx;
 }
 
-.detail-note {
-  padding: 24rpx 26rpx;
-  border-radius: 28rpx;
-  background: var(--color-support-notice);
-  box-shadow: var(--shadow-card);
+.detail-meta__icon.cookfont {
+  color: inherit;
+  font-size: 26rpx;
+  line-height: 1;
 }
 
-.detail-note__text {
+.detail-meta__item--active {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.detail-meta__item--disabled {
+  opacity: 0.7;
+}
+
+.detail-meta__item--hover {
+  opacity: 0.72;
+}
+
+.detail-summary {
+  display: block;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.6;
+  font-size: var(--font-size-md);
+  line-height: 1.8;
+}
+
+.detail-keywords {
+  display: flex;
+  gap: 10rpx;
+  flex-wrap: wrap;
+}
+
+.detail-keyword {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38rpx;
+  padding: 0 16rpx;
+  border-radius: 999rpx;
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
 }
 
 .detail-article {
-  margin-top: var(--space-lg);
-  padding: 34rpx 30rpx 42rpx;
-  border-radius: 32rpx;
-  background: var(--color-surface-soft-card);
-  box-shadow: var(--shadow-card);
+  padding-top: 8rpx;
 }
 
 .detail-article__rich {
   color: var(--color-text);
   font-size: 30rpx;
   line-height: 1.8;
-}
-
-.detail-toolbar {
-  position: fixed;
-  right: 28rpx;
-  bottom: calc(24rpx + env(safe-area-inset-bottom));
-  left: 28rpx;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18rpx 18rpx 18rpx 26rpx;
-  border-radius: 999rpx;
-  background: var(--material-tabbar-bg);
-  box-shadow: var(--material-tabbar-shadow);
-  backdrop-filter: var(--material-tabbar-filter);
-  -webkit-backdrop-filter: var(--material-tabbar-filter);
-}
-
-.detail-toolbar__meta {
-  display: flex;
-  gap: 18rpx;
-  flex-wrap: wrap;
-}
-
-.detail-toolbar__meta-text {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-}
-
-.detail-toolbar__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 156rpx;
-  min-height: 72rpx;
-  padding: 0 28rpx;
-  border-radius: 999rpx;
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.detail-toolbar__button--active {
-  background: var(--color-tag-primary-bg);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
-  color: var(--color-tag-primary-text);
-}
-
-.detail-toolbar__button--disabled {
-  opacity: 0.7;
 }
 </style>

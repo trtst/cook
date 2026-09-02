@@ -1,18 +1,18 @@
 export const KNOWLEDGE_CHANNELS = {
-  KITCHEN_PREP: {
-    code: "KITCHEN_PREP",
-    title: "厨房准备",
-    description: "备菜与收纳"
+  KITCHEN: {
+    code: "KITCHEN",
+    title: "厨房百事",
+    description: "用什么、怎么买、怎么存、怎么备"
   },
-  COOKING_SKILLS: {
-    code: "COOKING_SKILLS",
-    title: "烹饪技巧",
-    description: "火候与做法"
+  COOK: {
+    code: "COOK",
+    title: "烹调技法",
+    description: "怎么做、为什么这样做、失败怎么救"
   },
-  RECIPE_SKILLS: {
-    code: "RECIPE_SKILLS",
-    title: "食谱技巧",
-    description: "配方与替换"
+  FOOD: {
+    code: "FOOD",
+    title: "饮食文化",
+    description: "餐桌上的节气、地域、传统、人情"
   }
 } as const;
 

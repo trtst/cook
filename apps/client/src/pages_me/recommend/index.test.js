@@ -112,6 +112,11 @@ function createFreshPhone() {
   return `139${suffix}`;
 }
 
+function buildPlanDate(daysFromNow) {
+  const date = new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 10);
+}
+
 async function loginWithCode(phone) {
   return requestData("/auth/code-login", {
     method: "POST",
@@ -230,6 +235,34 @@ async function createExpiringFridgeItemFixture(session) {
   });
 }
 
+async function createFutureMealPlanFixture(session) {
+  const suffix = nextIdempotencyKey().slice(-6);
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    const result = await request("/meal-plans", {
+      method: "POST",
+      headers: {
+        ...buildAuthHeaders(session),
+        "Idempotency-Key": nextIdempotencyKey()
+      },
+      body: JSON.stringify({
+        planDate: buildPlanDate(attempt),
+        mealSlot: "DINNER",
+        title: `通知中心计划验收-${suffix}-${attempt}`,
+        menuItems: []
+      })
+    });
+    if (result.status >= 200 && result.status < 300 && result.body.code === 0) {
+      return result.body.data;
+    }
+    if (result.status === 409 && result.body.message.includes("计划已存在")) {
+      continue;
+    }
+    throw new Error(`/meal-plans HTTP ${result.status}: ${result.body.message}`);
+  }
+
+  throw new Error("failed to create notification meal plan fixture");
+}
+
 async function updateNotificationSettings(session, overrides = {}) {
   return requestData("/users/me/notification-settings", {
     method: "PUT",
@@ -343,7 +376,24 @@ describe("pages_me/recommend/index", () => {
     expect(feed.items[0].timeValue).toBeTruthy();
   });
 
+  it("未来计划只作为计划页状态，不生成通知中心周摘要消息", async () => {
+    await createFutureMealPlanFixture(session);
+
+    const feed = await requestData("/users/me/notification-feed?page=1&pageSize=20", {
+      headers: buildAuthHeaders(session)
+    });
+
+    expect(feed.items.some((item) => item.id === "reminder:week-overview")).toBe(false);
+    expect(feed.items.some((item) => item.title === "计划提醒")).toBe(false);
+  });
+
   it("通知中心列表底部会显示已经翻到底啦", async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const state = await page.callMethod("automatorReadState");
+      if (!state.hasNext) break;
+      await page.callMethod("loadMore");
+    }
+
     const texts = await collectTexts(page);
     expect(texts).toContain("已经翻到底啦");
   });
@@ -416,7 +466,7 @@ describe("pages_me/recommend/index", () => {
     });
     const state = await waitForState(page, (nextState) => nextState && nextState.loading === false);
 
-    expect(state.items.some((item) => item.title === "食材到期提醒")).toBe(false);
+    expect(state.items.some((item) => item.title === "食材临期提醒")).toBe(false);
   });
 
   it("未登录直达通知中心会拉起登录而不是直接落加载失败", async () => {

@@ -13,7 +13,7 @@ function readAppMode(value: unknown): AppMode | null {
 	return value === "dev" || value === "prod" ? value : null;
 }
 
-const mode: AppMode = readAppMode(import.meta.env.VITE_APP_MODE) ?? "prod";
+const mode: AppMode = readAppMode(import.meta.env.VITE_APP_MODE) ?? "dev";
 const profile = ENV_PROFILES[mode];
 
 export const cfg = {

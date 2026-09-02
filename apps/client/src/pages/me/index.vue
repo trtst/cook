@@ -1,6 +1,6 @@
 <template>
 	<page-meta :page-style="themePageStyle" />
-	<Layout title="我的" current-tab="me" :show-left="false" full-screen :navbar-placeholder="false" navbar-transparent>
+	<Layout title="" current-tab="me" :show-left="false" full-screen :navbar-placeholder="false" navbar-transparent>
 		<scroll-view class="me-page" scroll-y>
 			<view class="profile-hero" :class="profileHeroVariant" :style="profileHeroStyle">
 				<image v-if="profileCoverUrl" class="profile-hero__cover" :src="profileCoverUrl" mode="aspectFill" />
@@ -197,7 +197,7 @@
 							</template>
 						</view>
 						<view class="service-version">
-							<text class="service-version__text">-- Ver {{ APP_VERSION }} --</text>
+							<text class="service-version__text"> version {{ APP_VERSION }} </text>
 						</view>
 					</view>
 				</template>
@@ -245,7 +245,7 @@ import { buildThemePageStyle } from "@/composables/theme-page-style";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import TierBadge from "@/components/TierBadge/TierBadge.vue";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
-import { buildKnowledgeListPath } from "@/config/knowledge-articles";
+import { KNOWLEDGE_CHANNELS, buildKnowledgeListPath, type KnowledgeChannelCode } from "@/config/knowledge-articles";
 import { uniPlatform } from "@/platform/uni";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
@@ -263,6 +263,7 @@ import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } f
 import { useUserStore } from "@/stores/user";
 import { formatThemeText } from "@/themes";
 import { restoreAppSession } from "@/utils/session";
+import { knowledgeApi } from "@/apis/knowledge";
 
 interface PageEntry {
 	title: string;
@@ -299,6 +300,7 @@ const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 let loadMedalsPromise: Promise<void> | null = null;
+let loadKnowledgeChannelsPromise: Promise<void> | null = null;
 const showMemberEntrances = false;
 
 const profileHeroStyle = computed(() => ({
@@ -388,26 +390,33 @@ const personalEntries: PageEntry[] = [
 	}
 ];
 
-const knowledgeEntries: PageEntry[] = [
-	{
-		title: "厨房准备",
-		iconClass: "icon-kitchen-prep",
-		description: "下厨前的备菜和收纳小知识",
-		url: buildKnowledgeListPath("KITCHEN_PREP")
-	},
-	{
-		title: "烹饪技巧",
-		iconClass: "icon-cooking-skills",
-		description: "火候、步骤和做法上的实用经验",
-		url: buildKnowledgeListPath("COOKING_SKILLS")
-	},
-	{
-		title: "食谱技巧",
-		iconClass: "icon-recipe-skills",
-		description: "配比调整、替换思路和做菜小窍门",
-		url: buildKnowledgeListPath("RECIPE_SKILLS")
-	}
-];
+const knowledgeEntryIcons: Record<KnowledgeChannelCode, string> = {
+	KITCHEN: "icon-kitchen-prep",
+	COOK: "icon-cooking-skills",
+	FOOD: "icon-city"
+};
+
+type KnowledgeEntryMeta = {
+	code: KnowledgeChannelCode;
+	title: string;
+	description: string;
+};
+
+const knowledgeChannelCodes: KnowledgeChannelCode[] = ["KITCHEN", "COOK", "FOOD"];
+const knowledgeChannelMeta = ref<Record<KnowledgeChannelCode, KnowledgeEntryMeta>>({
+	KITCHEN: KNOWLEDGE_CHANNELS.KITCHEN,
+	COOK: KNOWLEDGE_CHANNELS.COOK,
+	FOOD: KNOWLEDGE_CHANNELS.FOOD
+});
+const knowledgeEntries = computed<PageEntry[]>(() => knowledgeChannelCodes.map(code => {
+	const channel = knowledgeChannelMeta.value[code];
+	return {
+		title: channel.title,
+		iconClass: knowledgeEntryIcons[code],
+		description: channel.description,
+		url: buildKnowledgeListPath(code)
+	};
+}));
 
 const settingEntries = computed<PageEntry[]>(() => [
 	{
@@ -494,12 +503,13 @@ async function syncPageState() {
 
 		if (sessionStore.isLoggedIn && userStore.profile) {
 			profileLoading.value = false;
+			void loadKnowledgeChannels();
 			return;
 		}
 	}
 
 	if (sessionStore.isLoggedIn) {
-		await Promise.allSettled([loadMe(), loadMedals(), syncNotificationBadge()]);
+		await Promise.allSettled([loadMe(), loadMedals(), syncNotificationBadge(), loadKnowledgeChannels()]);
 		return;
 	}
 
@@ -519,6 +529,37 @@ async function syncNotificationBadge() {
 	const snapshot = await refreshNotificationBadgeSnapshot().catch(() => null);
 	if (!snapshot) return;
 	notificationBadge.value = snapshot;
+}
+
+async function loadKnowledgeChannels() {
+	if (!sessionStore.isLoggedIn) return;
+	if (loadKnowledgeChannelsPromise) {
+		await loadKnowledgeChannelsPromise;
+		return;
+	}
+
+	loadKnowledgeChannelsPromise = doLoadKnowledgeChannels().finally(() => {
+		loadKnowledgeChannelsPromise = null;
+	});
+
+	await loadKnowledgeChannelsPromise;
+}
+
+async function doLoadKnowledgeChannels() {
+	const results = await Promise.allSettled(knowledgeChannelCodes.map(code => knowledgeApi.listArticles(code, 1, 1)));
+	const nextMeta = { ...knowledgeChannelMeta.value };
+
+	for (const result of results) {
+		if (result.status !== "fulfilled") continue;
+		const channel = result.value.channel;
+		nextMeta[channel.code] = {
+			code: channel.code,
+			title: channel.name,
+			description: channel.description
+		};
+	}
+
+	knowledgeChannelMeta.value = nextMeta;
 }
 
 async function loadMe() {
@@ -703,13 +744,13 @@ function automatorResolveEntryAuth(title: string) {
 		...coreEntries,
 		notificationEntry,
 		...personalEntries,
-			...knowledgeEntries,
-			...settingEntries.value,
-			{
-				title: "我的勋章",
-				requiresLogin: true
-			}
-		];
+		...knowledgeEntries.value,
+		...settingEntries.value,
+		{
+			title: "我的勋章",
+			requiresLogin: true
+		}
+	];
 	const entry = entries.find(item => item.title === title);
 	return {
 		found: Boolean(entry),

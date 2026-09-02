@@ -41,7 +41,6 @@
               <view class="board-card__summary">
                 <text class="board-card__summary-item">当前 {{ activeSlots.length }} 道</text>
                 <text class="board-card__summary-item">已划掉 {{ removedCount }} 道</text>
-                <text class="board-card__summary-item">待补 {{ shortageDishCount }} 道</text>
               </view>
 
               <view class="slot-list">
@@ -53,17 +52,9 @@
                   @toggle-lock="toggleSlotLock"
                   @remove="removeSlot"
                   @replace="replaceSlot"
-                  @toggle-constraint="toggleConstraint"
                 />
               </view>
             </view>
-
-            <RandomGapPanel
-              v-if="state.gap.visible"
-              :items="state.gap.items"
-              :summary="state.gap.summary"
-              :loading="state.gap.loading"
-            />
 
             <RandomBottomBar
               :title="bottomTitle"
@@ -184,20 +175,17 @@ import {
   type MealSlot,
   type RandomMenuItem,
   type RandomMenuQuotaResponse,
-  type RandomReplaceConstraintKind,
   type RandomSlotPlan,
   type RecipeSlotType
 } from "../apis/random";
 import RandomBottomBar from "../components/RandomBottomBar.vue";
 import RandomConditionBar from "../components/RandomConditionBar.vue";
-import RandomGapPanel from "../components/RandomGapPanel.vue";
 import RandomSlotCard from "../components/RandomSlotCard.vue";
 import { todayText } from "../utils/date";
 import {
   buildGapState,
   createEmptyGapState,
   createRandomSlotViewModel,
-  type RandomGapItemViewModel,
   type RandomPageState,
   type RandomPlanMenuItemInput,
   type RandomSlotViewModel
@@ -263,7 +251,6 @@ const generateDisabled = computed(() => !state.value.conditions.mealSlot || !sta
 const submitLoading = computed(() => planSubmitting.value);
 const conditionLoading = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
 const slotActionLocked = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
-const shortageDishCount = computed(() => state.value.gap.items.filter(item => item.missingIngredients.length > 0).length);
 const canCreatePlan = computed(() => activeSlots.value.length > 0);
 const inspirationSlots = computed(() => activeSlots.value.filter(item => item.sourceType === "INSPIRATION"));
 const planReady = computed(
@@ -279,7 +266,7 @@ const heroTitle = computed(() => {
 const heroDescription = computed(() => {
   if (!state.value.conditions.mealSlot) return "先选餐次、人数和是否优先用冰箱食材，我再按这顿饭的节奏帮你搭一桌菜单。";
   if (!hasMenu.value) return "会先给你一桌参考菜单，喜欢的留着，不合适的再换一道，不用一下子做完决定。";
-  return "把想保留的、想更换的和缺什么理清楚，再决定要不要写进计划。";
+  return "把想保留的和想更换的先定下来，再决定要不要写进计划。";
 });
 
 const boardTitle = computed(() => {
@@ -301,19 +288,17 @@ const quotaText = computed(() => {
 });
 
 const boardDescription = computed(() => {
-  return "不合适的直接划掉，想换口味就换一道；下面会顺手告诉你这桌还缺哪些食材。";
+  return "不合适的直接划掉，想换口味就换一道；喜欢这桌，再安排进计划。";
 });
 
 const bottomTitle = computed(() => {
   if (state.value.gap.loading) return "正在比对这桌和冰箱";
-  if (!shortageDishCount.value) return "这桌已经可以直接安排";
-  return `这桌有 ${shortageDishCount.value} 道菜还缺食材`;
+  return "这桌可以加入计划";
 });
 
 const bottomDescription = computed(() => {
   if (state.value.gap.loading) return "这一步只对比冰箱现有食材，不在这里逐个确认库存。";
-  if (!shortageDishCount.value) return "喜欢这桌的话，直接加入计划就行。";
-  return "喜欢这桌的话，可以直接加入计划；缺口会在计划里继续处理。";
+  return "喜欢这桌的话，直接加入计划，后续在计划里继续处理食材。";
 });
 
 const navProgress = computed(() => Math.min(1, Math.max(0, randomScrollTop.value / RANDOM_NAV_FADE_DISTANCE)));
@@ -501,6 +486,11 @@ async function generateMenu() {
     quota.value = result.quota;
     if (isReroll) {
       rejectedRecipeVersionIds.value = requestRejectedVersionIds;
+      if (result.items.length === 0) {
+        state.value.pageStatus = "MENU_READY";
+        await uniPlatform.feedback.toast({ title: "暂时没有更多可换的菜了", icon: "none" });
+        return;
+      }
       state.value.slots = mergeRerollSlots(lockedSlots, openSlots, result.items);
     } else {
       rejectedRecipeVersionIds.value = [];
@@ -589,6 +579,7 @@ async function replaceSlot(slotId: string) {
       current.flavorTags = next.flavorTags;
       current.mainProteinType = next.mainProteinType;
       current.fridgeFit = next.fridgeFit;
+      current.matchedIngredients = next.matchedIngredients;
       current.sourceType = next.sourceType;
       current.recommendationReason = next.recommendationReason;
       current.latestAppliedSeq = requestSeq;
@@ -603,16 +594,6 @@ async function replaceSlot(slotId: string) {
   } finally {
     state.value.pageStatus = "MENU_READY";
   }
-}
-
-function toggleConstraint(slotId: string, kind: RandomReplaceConstraintKind, value: string) {
-  if (slotActionLocked.value) return;
-  if (isSlotReplacing(slotId)) return;
-  updateSlot(slotId, slot => {
-    const exists = slot.replaceConstraints.some(item => item.kind === kind && item.value === value);
-    const remaining = slot.replaceConstraints.filter(item => item.kind !== kind);
-    slot.replaceConstraints = exists ? remaining : [...remaining, { kind, value }];
-  });
 }
 
 async function refreshGap(openPanel = false) {
@@ -1053,6 +1034,7 @@ function automatorReadSlotCards() {
       durationText: item.durationText,
       servings: item.servings,
       mainProteinType: item.mainProteinType,
+      matchedIngredients: item.matchedIngredients,
       flavorTags: item.flavorTags
     }))
   };
