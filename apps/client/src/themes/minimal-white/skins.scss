@@ -1,7 +1,13 @@
 @use "@/styles/colors.scss" as colors;
 
+/*
+ * 极简白主题。
+ * 第一段是浅色基础源头；
+ * 后续这批变量是为了把通用派生值压得更干净，减少灰雾感和厚重阴影。
+ */
 .theme-skin-minimal-white {
   @include colors.theme-derived-colors(#ffffff, #ffffff, #161616, #7da35b, #94b873, #ffffff, #161616);
+  /* 次按钮、页面背景、面板层次做极简白专属收紧。 */
   --button-secondary-bg: rgba(255, 255, 255, 0.96);
   --button-secondary-text: rgba(22, 22, 22, 0.68);
   --page-primary-soft-bg: var(--color-page);
@@ -40,6 +46,7 @@
   --shadow-tabbar: 0 2rpx 8rpx rgba(22, 22, 22, 0.04);
 }
 
+/* 深色模式走独立暗底色，避免直接复用浅色极简方案。 */
 .theme-skin-minimal-white.theme-dark {
   @include colors.theme-derived-colors(#101211, #171a18, #f5f7f6, #9db488, #b8d783, #101211, #101211, #ffffff, dark);
 }

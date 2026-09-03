@@ -1,5 +1,10 @@
 @use "@/styles/colors.scss" as colors;
 
+/*
+ * 清新食材主题。
+ * 这是最轻的一套皮肤，目前只覆盖一组浅色源头；
+ * 需要调整“食材感”时，优先改这里的背景、主色、辅色。
+ */
 .theme-skin-fresh-ingredient {
   @include colors.theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);
 }

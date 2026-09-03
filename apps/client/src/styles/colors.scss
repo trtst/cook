@@ -25,6 +25,15 @@
   $on-danger: #ffffff,
   $mode: light
 ) {
+  /*
+   * 这里的入参就是每个主题真正需要维护的“颜色源头”：
+   * - $bg: 页面底色
+   * - $surface: 卡片、弹层、输入框等容器底色
+   * - $text: 主文案颜色
+   * - $primary: 主操作色
+   * - $secondary: 辅助强调色
+   * 其他 `--color-*` 基本都由这里派生出来。
+   */
   $dark: $mode == dark;
   $success: theme-value($dark, #6eca94, #216e4e);
   $warning: #d9902f;
@@ -72,6 +81,10 @@
   $dinner: color.mix($secondary, $danger, theme-value($dark, 22%, 20%));
   $late-night: color.mix($primary, $info, theme-value($dark, 28%, 24%));
 
+  /*
+   * 第一层：主题源头变量。
+   * 页面里如果只想换一套主题主色，优先看这一组。
+   */
   --theme-bg: #{$bg};
   --theme-surface: #{$surface};
   --theme-text: #{$text};
@@ -84,6 +97,12 @@
   --theme-state-warning: #{$warning};
   --theme-state-danger: #{$danger};
   --theme-state-info: #{$info};
+
+  /*
+   * 第二层：通用 UI token。
+   * 大部分页面组件、卡片、按钮、标签、状态色都读取这一层，
+   * 所以主题异常时，通常先从这里向上追溯到 `--theme-*`。
+   */
   --color-raw-bg: var(--theme-bg);
   --color-raw-surface: var(--theme-surface);
   --color-raw-text: var(--theme-text);
@@ -217,6 +236,11 @@
   --color-state-warning-card-bg: radial-gradient(circle at 100% 0%, var(--color-warning-halo) 0 26%, transparent 27%), linear-gradient(135deg, var(--color-state-warning-soft) 0%, var(--color-surface-soft-card) 100%);
   --color-state-primary-card-bg: radial-gradient(circle at 100% 0%, var(--color-primary-halo) 0 26%, transparent 27%), linear-gradient(135deg, var(--color-primary-soft-fill-subtle) 0%, var(--color-surface-soft-card) 100%);
   --color-state-danger-card-bg: radial-gradient(circle at 100% 0%, var(--color-danger-halo) 0 26%, transparent 27%), linear-gradient(135deg, var(--color-state-danger-soft) 0%, var(--color-surface-soft-card) 100%);
+
+  /*
+   * 第三层：业务语义色。
+   * 这组是餐次、营养、分享等业务模块直接使用的颜色别名。
+   */
   --color-nutrition-fat: var(--color-state-danger-base);
   --color-nutrition-protein: var(--color-state-warning-base);
   --color-nutrition-carbohydrate: var(--color-state-success-base);
@@ -421,14 +445,39 @@
   --size-list-item: 104rpx;
 }
 
+/*
+ * 这里开始不是“某个主题皮肤”的专属配置，而是全局兜底层：
+ * 1. `page`       : 默认浅色兜底，未挂任何 theme class 时也能正常显示。
+ * 2. `@media ...` : 跟随系统暗黑时的兜底。
+ * 3. `.theme-dark`: 用户手动切到暗黑模式时的统一兜底。
+ *
+ * 真正区分主题/色系的地方不在这一段，而在：
+ * - `src/themes/default/skins.scss`
+ *   - default + warm / olive / cool
+ *   - default + dark
+ * - `src/themes/fresh-ingredient/skins.scss`
+ *   - fresh-ingredient 浅色
+ * - `src/themes/minimal-white/skins.scss`
+ *   - minimal-white 浅色
+ *   - minimal-white dark
+ * - `src/themes/apple-glass/skins.scss`
+ *   - apple-glass 浅色
+ *
+ * 所以如果你要判断“哪个主题、哪个色系、是不是暗黑”：
+ * - 先看 DOM class：`theme-skin-*`、`theme-palette-*`、`theme-light` / `theme-dark`
+ * - 再去对应 `themes/{skin}/skins.scss` 找源头颜色
+ * - 这一段只负责没有命中皮肤时的保底显示
+ */
 page {
-  @include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);
+  /* 全局默认浅色兜底：视觉上接近 `fresh-ingredient`，但它不是主题切换配置入口。 */
+  @include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);
   @include global-layout-tokens;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   page {
+    /* 跟随系统进入暗黑模式时的全局兜底，不区分具体 skin。 */
     @include theme-derived-colors(#111715, #18201d, #f6efe8, #5a9d90, #8fbf8c, #0f1713, #0f1713, #ffffff, dark);
     --color-text-inverse: #0f1713;
     --color-text-inverse-strong: rgba(15, 23, 19, 0.92);
@@ -444,10 +493,12 @@ page {
 }
 
 .theme-light {
+  /* 用户显式指定浅色模式时，只声明 color-scheme，本身不改皮肤色。 */
   color-scheme: light;
 }
 
 .theme-dark {
+  /* 用户显式指定暗黑模式时的统一暗色兜底。 */
   @include theme-derived-colors(#111715, #18201d, #f6efe8, #5a9d90, #8fbf8c, #0f1713, #0f1713, #ffffff, dark);
   --color-text-inverse: #0f1713;
   --color-text-inverse-strong: rgba(15, 23, 19, 0.92);

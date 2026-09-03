@@ -1,5 +1,10 @@
 @use "@/styles/colors.scss" as colors;
 
+/*
+ * 默认主题。
+ * 这里按 warm / olive / cool 三套浅色盘分开维护；
+ * 如果你想改默认主题的整体观感，优先改下面这几个 `theme-derived-colors` 入参。
+ */
 .theme-skin-default.theme-palette-warm.theme-light {
   @include colors.theme-derived-colors(#fbf4e5, #fffaf0, #2d2418, #d67a54, #f0b16b, #ffffff, #2d2418);
 }
@@ -12,6 +17,7 @@
   @include colors.theme-derived-colors(#f0f5f8, #ffffff, #17242d, #4e93bf, #83b6df, #ffffff, #17242d);
 }
 
+/* 深色模式不再分 palette，统一走一套暗色源头。 */
 .theme-skin-default.theme-dark {
   @include colors.theme-derived-colors(#111715, #18201d, #f6efe8, #5a9d90, #8fbf8c, #0f1713, #0f1713, #ffffff, dark);
 }
