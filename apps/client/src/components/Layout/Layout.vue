@@ -1,5 +1,5 @@
 <template>
-	<view class="layout" :style="themeVars">
+	<view class="layout">
 		<view class="layout__theme"
 			:class="[themeClasses, { 'layout__theme--with-tabbar': showTabbar, 'layout__theme--full-screen': fullScreen }]">
 			<NavBar v-if="showNavbar && navbarCenterVisible && $slots['navbar-center']" :title="title" :show-left="showLeft" :capsule-guard="navbarCapsuleGuard"
@@ -26,6 +26,14 @@
 		</view>
 	</view>
 </template>
+
+<script lang="ts">
+export default {
+	options: {
+		virtualHost: true
+	}
+};
+</script>
 
 <script setup lang="ts">
 import { computed } from "vue";
@@ -65,18 +73,22 @@ const props = withDefaults(
 	}
 );
 
-const { themeClasses, themeVars } = useTheme();
+const { themeClasses } = useTheme();
 const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const showTabbar = computed(() => Boolean(props.currentTab));
 const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : systemInfo.value.statusBarHeight));
 </script>
 
 <style scoped lang="scss">
+@use "@/styles/colors.scss";
+@use "@/themes/skins.scss";
+
 .layout {
 	height: 100vh;
 	overflow: hidden;
 	color: var(--color-text);
 	font-family: var(--font-family-base);
+	background: var(--color-page);
 }
 
 .layout__theme {

@@ -1,5 +1,7 @@
+@use "@/styles/colors.scss" as colors;
+
 .theme-skin-minimal-white {
-  --button-primary-gradient-end: #94b873;
+  @include colors.theme-derived-colors(#ffffff, #ffffff, #161616, #7da35b, #94b873, #ffffff, #161616);
   --button-secondary-bg: rgba(255, 255, 255, 0.96);
   --button-secondary-text: rgba(22, 22, 22, 0.68);
   --page-primary-soft-bg: var(--color-page);
@@ -36,4 +38,8 @@
   --shadow-card: 0 2rpx 8rpx rgba(22, 22, 22, 0.03);
   --shadow-floating: 0 -2rpx 8rpx rgba(22, 22, 22, 0.04);
   --shadow-tabbar: 0 2rpx 8rpx rgba(22, 22, 22, 0.04);
+}
+
+.theme-skin-minimal-white.theme-dark {
+  @include colors.theme-derived-colors(#101211, #171a18, #f5f7f6, #9db488, #b8d783, #101211, #101211, #ffffff, dark);
 }

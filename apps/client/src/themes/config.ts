@@ -2,14 +2,12 @@
  * 主题配置使用说明
  *
  * 新增皮肤需要改三处：
- * 1. 先在 `src/themes/presets.ts` 增加主题能力和源头色定义。
+ * 1. 先在 `src/themes/presets.ts` 增加主题能力声明。
  * 2. 新建 `src/themes/{skinId}/skins.scss`。
  * 3. 在 `src/themes/skins.scss` 里显式 `@use` 新皮肤样式文件。
  *
- * 源头色和能力声明都只放在 `src/themes/presets.ts`，不要在这里重复定义。
- * `seed` 语义固定为：`primary` 必填；`mono` 不声明 `secondary`，`duo` 必须声明 `secondary`。
- * `--button-primary-gradient-start/end` 只是按钮层 token，运行态会由 `primary/secondary` 映射生成，
- * 不要反过来把 start/end 当成一级主题源头。
+ * 颜色源头只放在对应 `src/themes/{skinId}/skins.scss` 或全局 fallback。
+ * `presets.ts` 不保存颜色，避免 TS inline 变量覆盖皮肤样式。
  *
  * 新增 `icon` 字体图标皮肤：
  * 1. 在 `src/themes/{skinId}/skins.scss` 中注册本地字体文件和 icon class。
@@ -55,8 +53,6 @@ import {
   type ThemeAssetType,
   type ThemeMode,
   type ThemePalette,
-  type ThemeSeed,
-  type ThemeSeedSet,
   type ThemeSkin,
   type ThemeSourceMode,
   type ThemeSkinAccess,
@@ -90,7 +86,6 @@ export interface ThemeSkinOption {
   supportsPalette: boolean;
   supportsDark: boolean;
   palettes: ThemePalette[];
-  seeds: Partial<Record<ThemePalette, ThemeSeedSet>>;
   assets: ThemeAssets;
 }
 
@@ -152,7 +147,6 @@ export const THEME_SKIN_OPTIONS: ThemeSkinOption[] = THEME_SKIN_PRESETS.map((con
   supportsPalette: config.supportsPalette,
   supportsDark: config.supportsDark,
   palettes: [...config.palettes],
-  seeds: config.seeds,
   assets: createThemeAssets(config)
 }));
 
@@ -170,4 +164,4 @@ export {
   THEME_TABBAR_ICON_NAMES
 };
 
-export type { ThemeAssetType, ThemeMode, ThemePalette, ThemeSeed, ThemeSeedSet, ThemeSkin, ThemeSourceMode, ThemeSkinAccess, ThemeTabbarIconName };
+export type { ThemeAssetType, ThemeMode, ThemePalette, ThemeSkin, ThemeSourceMode, ThemeSkinAccess, ThemeTabbarIconName };

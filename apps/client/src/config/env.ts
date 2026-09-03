@@ -1,4 +1,3 @@
-import { log } from "console";
 import { APP_VERSION } from "./app";
 import { ENV_PROFILES, type AppMode } from "./env_profiles";
 
@@ -6,7 +5,7 @@ export type CookFrom = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmo
 
 /**
  * 请求地址切换统一收口在配置层。
- * 如果要在开发环境和正式环境间切换，只改这里的 `mode`；
+ * 如果要在开发环境和正式环境间切换，使用 package.json 里的 VITE_APP_MODE 脚本；
  * 不再让 `VITE_API_BASE_URL / VITE_API_DOMAIN / VITE_AUTH_DOMAIN` 成为第二套真相来源。
  */
 function readAppMode(value: unknown): AppMode | null {

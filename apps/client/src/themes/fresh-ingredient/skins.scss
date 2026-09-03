@@ -1,2 +1,5 @@
+@use "@/styles/colors.scss" as colors;
+
 .theme-skin-fresh-ingredient {
+  @include colors.theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);
 }

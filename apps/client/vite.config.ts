@@ -7,6 +7,13 @@ const uni = require("@dcloudio/vite-plugin-uni").default as typeof import("@dclo
 
 export default defineConfig({
   plugins: [uni()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        silenceDeprecations: ["legacy-js-api"]
+      }
+    }
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url))

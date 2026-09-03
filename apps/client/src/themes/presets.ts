@@ -9,31 +9,7 @@ export const THEME_TABBAR_ICON_NAMES = ["home", "recipe", "me"] as const;
 export type ThemePalette = (typeof THEME_PALETTE_OPTIONS)[number];
 export type ThemeTabbarIconName = (typeof THEME_TABBAR_ICON_NAMES)[number];
 
-interface ThemeSeedBase {
-  bg: string;
-  surface: string;
-  text: string;
-  // 必填主题高亮色。
-  primary: string;
-}
-
-export interface MonoThemeSeed extends ThemeSeedBase {
-  secondary?: never;
-}
-
-export interface DuoThemeSeed extends ThemeSeedBase {
-  // 双色主题必须显式声明第二主题色。
-  secondary: string;
-}
-
-export type ThemeSeed = MonoThemeSeed | DuoThemeSeed;
-
-export interface ThemeSeedSet<TSeed extends ThemeSeed = ThemeSeed> {
-  light: TSeed;
-  dark?: TSeed;
-}
-
-interface ThemeSkinPresetBase<TSourceMode extends ThemeSourceMode, TSeed extends ThemeSeed> {
+interface ThemeSkinPresetBase<TSourceMode extends ThemeSourceMode> {
   value: string;
   label: string;
   access: ThemeSkinAccess;
@@ -42,10 +18,9 @@ interface ThemeSkinPresetBase<TSourceMode extends ThemeSourceMode, TSeed extends
   supportsPalette: boolean;
   supportsDark: boolean;
   palettes: readonly ThemePalette[];
-  seeds: Partial<Record<ThemePalette, ThemeSeedSet<TSeed>>>;
 }
 
-export type ThemeSkinPreset = ThemeSkinPresetBase<"mono", MonoThemeSeed> | ThemeSkinPresetBase<"duo", DuoThemeSeed>;
+export type ThemeSkinPreset = ThemeSkinPresetBase<"mono"> | ThemeSkinPresetBase<"duo">;
 
 export const DEFAULT_THEME_SKIN = "default" as const;
 export const DEFAULT_THEME_PALETTE = "default" as const;
@@ -75,52 +50,7 @@ export const THEME_SKIN_PRESETS = [
     sourceMode: "duo",
     supportsPalette: true,
     supportsDark: true,
-    palettes: ["default", "warm", "olive", "cool"],
-    seeds: {
-      default: {
-        light: {
-          bg: "#fff",
-          surface: "#ffffff",
-          text: "#17231d",
-          primary: "#216e4e",
-          secondary: "#dff1e8"
-        },
-        dark: {
-          bg: "#111715",
-          surface: "#18201d",
-          text: "#f6efe8",
-          primary: "#5a9d90",
-          secondary: "#8fbf8c"
-        }
-      },
-      warm: {
-        light: {
-          bg: "#fbf4e5",
-          surface: "#fffaf0",
-          text: "#2d2418",
-          primary: "#d67a54",
-          secondary: "#f0b16b"
-        }
-      },
-      olive: {
-        light: {
-          bg: "#f2f4ea",
-          surface: "#fffef8",
-          text: "#202719",
-          primary: "#7a9b61",
-          secondary: "#b7c76f"
-        }
-      },
-      cool: {
-        light: {
-          bg: "#f0f5f8",
-          surface: "#ffffff",
-          text: "#17242d",
-          primary: "#4e93bf",
-          secondary: "#83b6df"
-        }
-      }
-    }
+    palettes: ["default", "warm", "olive", "cool"]
   },
   {
     value: "fresh-ingredient",
@@ -130,18 +60,7 @@ export const THEME_SKIN_PRESETS = [
     sourceMode: "duo",
     supportsPalette: false,
     supportsDark: false,
-    palettes: [],
-    seeds: {
-      default: {
-        light: {
-          bg: "#f4f7f5",
-          surface: "#ffffff",
-          text: "#17231d",
-          primary: "#216e4e",
-          secondary: "#dff1e8"
-        }
-      }
-    }
+    palettes: []
   },
   {
     value: "minimal-white",
@@ -151,23 +70,7 @@ export const THEME_SKIN_PRESETS = [
     sourceMode: "mono",
     supportsPalette: false,
     supportsDark: true,
-    palettes: [],
-    seeds: {
-      default: {
-        light: {
-          bg: "#ffffff",
-          surface: "#ffffff",
-          text: "#161616",
-          primary: "#7da35b"
-        },
-        dark: {
-          bg: "#101211",
-          surface: "#171a18",
-          text: "#f5f7f6",
-          primary: "#9db488"
-        }
-      }
-    }
+    palettes: []
   },
   {
     value: "apple-glass",
@@ -177,18 +80,7 @@ export const THEME_SKIN_PRESETS = [
     sourceMode: "duo",
     supportsPalette: false,
     supportsDark: false,
-    palettes: [],
-    seeds: {
-      default: {
-        light: {
-          bg: "#eef1f4",
-          surface: "rgba(255, 255, 255, 0.74)",
-          text: "#1d1d1f",
-          primary: "#0a84ff",
-          secondary: "#78b9ff"
-        }
-      }
-    }
+    palettes: []
   }
 ] as const satisfies readonly ThemeSkinPreset[];
 

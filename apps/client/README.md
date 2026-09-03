@@ -42,10 +42,13 @@ pnpm check:theme:static
 
 ## 请求环境切换
 
-请求地址通过 `src/config/env.ts` 的 `mode` 切换，地址映射集中放在 `src/config/env_profiles.ts`：
+请求地址通过 `VITE_APP_MODE` 切换，地址映射集中放在 `src/config/env_profiles.ts`，不要手改 `src/config/env.ts`：
 
-```ts
-const mode: AppMode = "dev"; // dev, prod
+```bash
+pnpm dev:mp-weixin:dev
+pnpm dev:mp-weixin:prod
+pnpm build:mp-weixin:dev
+pnpm build:mp-weixin:prod
 ```
 
 - `dev` 默认走 `http://127.0.0.1:3100/api` 和 `http://127.0.0.1:5176`

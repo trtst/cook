@@ -174,6 +174,7 @@ async function syncBadgeSnapshot() {
   border-radius: var(--radius-pill);
   background: var(--color-surface-muted);
   transition: transform 0.22s ease;
+  backdrop-filter: var(--material-tabbar-filter);
 }
 
 .tabbar__item {
@@ -246,7 +247,7 @@ async function syncBadgeSnapshot() {
 
 .tabbar__font-icon {
   display: block;
-  color: var(--color-text);
+  color: var(--color-text-tertiary);
   line-height: 1;
   text-align: center;
 }
@@ -269,7 +270,7 @@ async function syncBadgeSnapshot() {
 }
 
 .tabbar__item--active .tabbar__font-icon {
-  color: var(--color-icon-active);
+  color: var(--color-text);
 }
 
 .tabbar-shell--default .tabbar__icon-wrap,

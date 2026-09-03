@@ -17,8 +17,6 @@ export type {
   ThemeIconAsset,
   ThemeMode,
   ThemePalette,
-  ThemeSeed,
-  ThemeSeedSet,
   ThemeSkin,
   ThemeSourceMode,
   ThemeSkinAccess,
@@ -34,8 +32,6 @@ import {
   THEME_SKIN_OPTIONS,
   type ThemeAssets,
   type ThemePalette,
-  type ThemeSeed,
-  type ThemeSeedSet,
   type ThemeSkin,
   type ThemeSourceMode
 } from "./config";
@@ -70,22 +66,4 @@ export function supportsDarkForSkin(themeSkin: ThemeSkin) {
 
 export function getThemeSourceModeForSkin(themeSkin: ThemeSkin): ThemeSourceMode {
   return getThemeSkinOption(themeSkin).sourceMode;
-}
-
-export function getThemeSeedSet(themeSkin: ThemeSkin, themePalette: ThemePalette): ThemeSeedSet | null {
-  const option = getThemeSkinOption(themeSkin);
-
-  if (option.seeds[themePalette]) {
-    return option.seeds[themePalette] ?? null;
-  }
-
-  return option.seeds[DEFAULT_THEME_PALETTE] ?? null;
-}
-
-export function getThemeSeed(themeSkin: ThemeSkin, themePalette: ThemePalette, themeMode: "light" | "dark"): ThemeSeed | null {
-  const seedSet = getThemeSeedSet(themeSkin, themePalette);
-
-  if (!seedSet) return null;
-  if (themeMode === "dark" && seedSet.dark) return seedSet.dark;
-  return seedSet.light;
 }

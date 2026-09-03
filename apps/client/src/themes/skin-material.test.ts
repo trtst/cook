@@ -36,9 +36,11 @@ function expectSelectorExcludes(source: string, selector: string, snippets: stri
 
 const LEGACY_SECONDARY_OUTLINE = "box-shadow: inset 0 0 0 1rpx var(--button-secondary-outline);";
 
-const themeVarsSource = readFile("../composables/theme-vars.ts");
 const fallbackColorsSource = readFile("../styles/colors.scss");
 const skinsEntrypointSource = readFile("./skins.scss");
+const defaultSkinSource = readFile("./default/skins.scss");
+const freshIngredientSkinSource = readFile("./fresh-ingredient/skins.scss");
+const minimalWhiteSkinSource = readFile("./minimal-white/skins.scss");
 const appleGlassSkinSource = readFile("./apple-glass/skins.scss");
 const confirmSource = readFile("../components/Confirm/Confirm.vue");
 const emptySource = readFile("../components/Empty/Empty.vue");
@@ -49,6 +51,7 @@ const eventScheduleSheetSource = readFile("../components/Meal/EventScheduleSheet
 const participantManageSheetSource = readFile("../components/Meal/ParticipantManageSheet.vue");
 const accountPageSource = readFile("../pages_me/account/index.vue");
 const mePageSource = readFile("../pages/me/index.vue");
+const knowledgeArticlesSource = readFile("../config/knowledge-articles.ts");
 const fontSource = readFile("../assets/fonts/font.scss");
 const reminderPageSource = readFile("../pages_me/reminder/index.vue");
 const knowledgeListPageSource = readFile("../pages_me/knowledge-list/index.vue");
@@ -105,82 +108,18 @@ const textFieldSheetSource = readFile("../components/Sheet/TextFieldSheet.vue");
 const tabbarSource = readFile("../components/TabBar/TabBar.vue");
 const toastSource = readFile("../components/Toast/Toast.vue");
 
-expectIncludes(themeVarsSource, '"--material-mask-filter"');
-expectIncludes(themeVarsSource, '"--material-card-bg"');
-expectIncludes(themeVarsSource, '"--material-card-accent-bg"');
-expectIncludes(themeVarsSource, '"--material-card-border"');
-expectIncludes(themeVarsSource, '"--material-card-filter"');
-expectIncludes(themeVarsSource, '"--material-panel-bg"');
-expectIncludes(themeVarsSource, '"--material-panel-border"');
-expectIncludes(themeVarsSource, '"--material-panel-filter"');
-expectIncludes(themeVarsSource, '"--material-tabbar-bg"');
-expectIncludes(themeVarsSource, '"--material-tabbar-border"');
-expectIncludes(themeVarsSource, '"--material-tabbar-filter"');
-expectIncludes(themeVarsSource, '"--material-input-bg"');
-expectIncludes(themeVarsSource, '"--material-input-border"');
-expectIncludes(themeVarsSource, '"--material-input-shadow"');
-expectIncludes(themeVarsSource, '"--material-input-filter"');
-expectIncludes(themeVarsSource, '"--material-control-bg"');
-expectIncludes(themeVarsSource, '"--material-control-border"');
-expectIncludes(themeVarsSource, '"--material-control-shadow"');
-expectIncludes(themeVarsSource, '"--material-control-filter"');
-expectIncludes(themeVarsSource, '"--button-primary-border"');
-expectIncludes(themeVarsSource, '"--button-primary-filter"');
-expectIncludes(themeVarsSource, '"--button-secondary-border"');
-expectIncludes(themeVarsSource, '"--button-secondary-filter"');
-expectIncludes(themeVarsSource, '"--page-hero-mask-bg"');
-expectIncludes(themeVarsSource, '"--page-hero-orb-bg"');
-expectIncludes(themeVarsSource, '"--page-bottom-mask-image"');
-expectIncludes(themeVarsSource, '"--page-cover-fresh-shell-bg"');
-expectIncludes(themeVarsSource, '"--page-primary-fade-bg"');
-expectIncludes(themeVarsSource, '"--page-secondary-soft-bg"');
-expectIncludes(themeVarsSource, '"--page-overlay-veil-bg"');
-expectIncludes(themeVarsSource, '"--page-overlay-veil-filter"');
-expectIncludes(themeVarsSource, '"--page-backdrop-blur-filter"');
-expectIncludes(themeVarsSource, '"--page-glow-cluster-filter"');
-expectIncludes(themeVarsSource, '"--page-glow-cluster-start-bg"');
-expectIncludes(themeVarsSource, '"--page-glow-cluster-end-bg"');
-expectIncludes(themeVarsSource, '"--overlay-hero-banner-shade"');
-expectIncludes(themeVarsSource, '"--color-cover-empty-warm-bg"');
-expectIncludes(themeVarsSource, '"--color-illustration-panel-warm"');
-expectIncludes(themeVarsSource, '"--color-illustration-panel-fresh"');
-expectIncludes(themeVarsSource, '"--color-illustration-panel-accent"');
-expectIncludes(themeVarsSource, '"--color-state-warning-card-bg"');
-expectIncludes(themeVarsSource, '"--color-state-primary-card-bg"');
-expectIncludes(themeVarsSource, '"--color-state-danger-card-bg"');
-expectIncludes(themeVarsSource, '"--color-tag-primary-bg"');
-expectIncludes(themeVarsSource, '"--color-tag-primary-text"');
-expectIncludes(themeVarsSource, '"--color-tag-secondary-bg"');
-expectIncludes(themeVarsSource, '"--color-tag-secondary-text"');
-expectIncludes(themeVarsSource, '"--color-tag-success-bg"');
-expectIncludes(themeVarsSource, '"--color-tag-success-text"');
-expectIncludes(themeVarsSource, '"--color-tag-warning-bg"');
-expectIncludes(themeVarsSource, '"--color-tag-warning-text"');
-expectIncludes(themeVarsSource, '"--color-tag-danger-bg"');
-expectIncludes(themeVarsSource, '"--color-tag-danger-text"');
-expectIncludes(themeVarsSource, '"--color-state-success-base"');
-expectIncludes(themeVarsSource, '"--color-state-success-soft"');
-expectIncludes(themeVarsSource, '"--color-state-success-text"');
-expectIncludes(themeVarsSource, '"--color-state-success-border"');
-expectIncludes(themeVarsSource, '"--color-state-warning-base"');
-expectIncludes(themeVarsSource, '"--color-state-warning-soft"');
-expectIncludes(themeVarsSource, '"--color-state-warning-text"');
-expectIncludes(themeVarsSource, '"--color-state-warning-border"');
-expectIncludes(themeVarsSource, '"--color-state-danger-base"');
-expectIncludes(themeVarsSource, '"--color-state-danger-soft"');
-expectIncludes(themeVarsSource, '"--color-state-danger-text"');
-expectIncludes(themeVarsSource, '"--color-state-danger-border"');
-expectIncludes(themeVarsSource, '"--color-state-info-base"');
-expectIncludes(themeVarsSource, '"--color-state-info-soft"');
-expectIncludes(themeVarsSource, '"--color-state-info-text"');
-expectIncludes(themeVarsSource, '"--color-state-info-border"');
-expectIncludes(themeVarsSource, '"--color-state-disabled-base"');
-expectIncludes(themeVarsSource, '"--color-state-disabled-soft"');
-expectIncludes(themeVarsSource, '"--color-state-disabled-text"');
-expectIncludes(themeVarsSource, '"--color-state-disabled-border"');
-expectIncludes(themeVarsSource, '"--color-support-action"');
-expectIncludes(themeVarsSource, '"--color-icon-accent"');
-expectIncludes(themeVarsSource, '"--notification-badge-text"');
+expectIncludes(fallbackColorsSource, "@include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);");
+expectIncludes(fallbackColorsSource, "--color-raw-primary: var(--theme-primary);");
+expectIncludes(fallbackColorsSource, "--button-primary-gradient-start: var(--theme-primary);");
+expectIncludes(fallbackColorsSource, "--button-primary-bg: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);");
+expectExcludes(fallbackColorsSource, "--color-raw-primary: #");
+expectExcludes(fallbackColorsSource, "--button-primary-gradient-start: #");
+expectExcludes(fallbackColorsSource, "--color-primary: #");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-dark");
+expectIncludes(freshIngredientSkinSource, "theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);");
+expectIncludes(minimalWhiteSkinSource, "theme-derived-colors(#ffffff, #ffffff, #161616, #7da35b, #94b873, #ffffff, #161616);");
+expectIncludes(appleGlassSkinSource, "theme-derived-colors(#eef1f4, rgba(255, 255, 255, 0.74), #1d1d1f, #0a84ff, #78b9ff, #ffffff, #1d1d1f);");
 
 expectIncludes(fallbackColorsSource, "--material-mask-filter:");
 expectIncludes(fallbackColorsSource, "--material-card-bg:");
@@ -193,6 +132,7 @@ expectIncludes(fallbackColorsSource, "--material-panel-filter:");
 expectIncludes(fallbackColorsSource, "--material-tabbar-bg:");
 expectIncludes(fallbackColorsSource, "--material-tabbar-border:");
 expectIncludes(fallbackColorsSource, "--material-tabbar-filter:");
+expectIncludes(fallbackColorsSource, "--page-navbar-backdrop-bg:");
 expectIncludes(fallbackColorsSource, "--material-input-bg:");
 expectIncludes(fallbackColorsSource, "--material-input-border:");
 expectIncludes(fallbackColorsSource, "--material-input-shadow:");
@@ -425,12 +365,13 @@ expectIncludes(mePageSource, 'title: "我的口味"');
 expectIncludes(mePageSource, 'iconClass: "icon-my-taste"');
 expectIncludes(mePageSource, 'title: "食材与单位"');
 expectIncludes(mePageSource, 'iconClass: "icon-ingredient-units"');
-expectIncludes(mePageSource, 'title: "厨房百事"');
-expectIncludes(mePageSource, 'iconClass: "icon-kitchen-prep"');
-expectIncludes(mePageSource, 'title: "烹调技法"');
-expectIncludes(mePageSource, 'iconClass: "icon-cooking-skills"');
-expectIncludes(mePageSource, 'title: "饮食文化"');
-expectIncludes(mePageSource, 'iconClass: "icon-recipe-skills"');
+expectIncludes(mePageSource, "KITCHEN: KNOWLEDGE_CHANNELS.KITCHEN");
+expectIncludes(knowledgeArticlesSource, 'title: "厨房百事"');
+expectIncludes(mePageSource, 'KITCHEN: "icon-kitchen-prep"');
+expectIncludes(knowledgeArticlesSource, 'title: "烹调技法"');
+expectIncludes(mePageSource, 'COOK: "icon-cooking-skills"');
+expectIncludes(knowledgeArticlesSource, 'title: "饮食文化"');
+expectIncludes(mePageSource, 'FOOD: "icon-city"');
 expectIncludes(fontSource, '.icon-my-taste::before {\n    content: "\\e62f";\n}');
 expectIncludes(fontSource, '.icon-ingredient-units::before {\n    content: "\\e721";\n}');
 expectIncludes(fontSource, '.icon-kitchen-prep::before {\n    content: "\\e61e";\n}');
@@ -829,7 +770,7 @@ expectSelectorIncludes(randomPageSource, ".random-nav-backdrop", [
 ]);
 expectSelectorExcludes(randomPageSource, ".random-nav-backdrop", ["backdrop-filter: saturate(180%) blur(22rpx);"]);
 expectSelectorExcludes(randomPageSource, ".random-nav-backdrop", ["border-bottom: 1rpx solid var(--color-border);"]);
-expectSelectorExcludes(randomPageSource, ".notice,\n.warning-card,\n.empty-card,\n.board-card", ["border: 1rpx solid var(--material-card-border);"]);
+expectSelectorExcludes(randomPageSource, ".notice,\n.board-card", ["border: 1rpx solid var(--material-card-border);"]);
 
 expectIncludes(randomConditionBarSource, "background: var(--material-card-bg);");
 expectIncludes(randomConditionBarSource, "box-shadow: var(--material-card-shadow);");
@@ -854,30 +795,17 @@ expectSelectorIncludes(randomGapPanelSource, ".gap-card__status--partial,\n.gap-
   "background: var(--color-state-warning-soft);",
   "color: var(--color-state-warning-text);"
 ]);
-expectSelectorIncludes(randomPageSource, ".warning-card__title", [
-  "color: var(--color-state-warning-text);"
-]);
 expectSelectorIncludes(randomPageSource, ".plan-sheet__tips", [
   "background: var(--color-state-warning-soft);"
 ]);
 expectSelectorIncludes(randomPageSource, ".plan-sheet__tips-text", [
   "color: var(--color-state-warning-text);"
 ]);
-expectSelectorIncludes(randomSlotCardSource, ".tag-row__item", [
-  "background: var(--color-tag-warning-bg);",
-  "color: var(--color-tag-warning-text);"
-]);
 expectSelectorIncludes(randomSlotCardSource, ".slot-card__badge", [
   "background: var(--color-tag-primary-bg);",
   "color: var(--color-tag-primary-text);"
 ]);
 expectSelectorExcludes(randomSlotCardSource, ".slot-card__badge", ["background: var(--color-primary-soft);"]);
-expectSelectorIncludes(randomSlotCardSource, ".constraint-chip--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(randomSlotCardSource, ".constraint-chip--active", ["background: var(--color-primary-soft-fill);"]);
 
 expectSelectorIncludes(assistantPageSource, ".assistant-state--error", [
   "color: var(--color-state-danger-text);"

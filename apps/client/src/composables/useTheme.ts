@@ -1,6 +1,5 @@
 import { computed, ref } from "vue";
 import {
-  getThemeSeed,
   getDefaultPaletteForSkin,
   getSupportedPalettesForSkin,
   getThemeSourceModeForSkin,
@@ -13,14 +12,51 @@ import {
 } from "@/themes";
 import { uniPlatform } from "@/platform/uni";
 import { THEME_SKIN_OPTIONS, useSettingsStore } from "@/stores/settings";
-import { buildThemeVars } from "./theme-vars";
 
 type EffectiveTheme = "light" | "dark";
 type ThemeVars = Record<string, string>;
+type ThemePageColors = {
+  light: Partial<Record<ThemePalette, string>>;
+  dark?: string;
+};
+
+const themePageColors: Record<ThemeSkin, ThemePageColors> = {
+  default: {
+    light: {
+      default: "#fff",
+      warm: "#fbf4e5",
+      olive: "#f2f4ea",
+      cool: "#f0f5f8"
+    },
+    dark: "#111715"
+  },
+  "fresh-ingredient": {
+    light: {
+      default: "#f4f7f5"
+    }
+  },
+  "minimal-white": {
+    light: {
+      default: "#ffffff"
+    },
+    dark: "#101211"
+  },
+  "apple-glass": {
+    light: {
+      default: "#eef1f4"
+    }
+  }
+};
 
 const systemTheme = ref<EffectiveTheme>("light");
 let initialized = false;
 let mediaQueryCleanup: (() => void) | undefined;
+
+function themePageColor(skin: ThemeSkin, palette: ThemePalette, theme: EffectiveTheme) {
+  const colors = themePageColors[skin];
+  if (theme === "dark" && colors.dark) return colors.dark;
+  return colors.light[palette] ?? colors.light.default ?? "#fff";
+}
 
 function readMiniProgramTheme() {
   const appBaseInfo = uniPlatform.system.getAppBaseInfo();
@@ -95,12 +131,9 @@ export function useTheme() {
     return `theme-palette-${effectivePalette.value}`;
   });
   const themeClasses = computed(() => [themeClass.value, skinClass.value, paletteClass.value].filter(Boolean).join(" "));
-  const themeVars = computed<ThemeVars>(() => {
-    const seed = getThemeSeed(effectiveSkin.value, effectivePalette.value, effectiveTheme.value);
-    if (!seed) return {};
-
-    return buildThemeVars(seed, effectiveTheme.value, sourceMode.value);
-  });
+  const themeVars = computed<ThemeVars>(() => ({
+    "--color-page": themePageColor(effectiveSkin.value, effectivePalette.value, effectiveTheme.value)
+  }));
   const supportedPalettes = computed(() => getSupportedPalettesForSkin(effectiveSkin.value));
   const canSwitchPalette = computed(() => supportedPalettes.value.length > 1);
   function canUseThemeSkin(skin: ThemeSkin) {

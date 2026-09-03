@@ -14,7 +14,7 @@
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
     "lint": "eslint src",
     "check": "pnpm lint && pnpm type-check && pnpm build:mp-weixin",
-    "check:theme:static": "pnpm exec tsx src/composables/theme-page-style.test.ts && pnpm exec tsx src/composables/theme-vars.test.ts && pnpm exec tsx src/composables/useTheme.test.ts && pnpm exec tsx src/stores/theme-settings.test.ts && pnpm exec tsx src/themes/presets.test.ts && pnpm exec tsx src/themes/token-usage.test.ts && pnpm exec tsx src/themes/skin-material.test.ts && pnpm type-check && pnpm build:mp-weixin"
+    "check:theme:static": "pnpm exec tsx src/composables/theme-page-style.test.ts && pnpm exec tsx src/composables/useTheme.test.ts && pnpm exec tsx src/stores/theme-settings.test.ts && pnpm exec tsx src/themes/presets.test.ts && pnpm exec tsx src/themes/token-usage.test.ts && pnpm exec tsx src/themes/skin-material.test.ts && pnpm type-check && pnpm build:mp-weixin"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5020120260710001",

@@ -33,6 +33,7 @@ assert.equal(presetValues.includes("handdrawn-food"), false);
 const defaultPreset = THEME_SKIN_PRESETS.find((preset) => preset.value === DEFAULT_THEME_SKIN);
 const freshPreset = THEME_SKIN_PRESETS.find((preset) => preset.value === "fresh-ingredient");
 const minimalPreset = THEME_SKIN_PRESETS.find((preset) => preset.value === "minimal-white");
+const presetsSourceKeys = THEME_SKIN_PRESETS.flatMap((preset) => Object.keys(preset));
 
 assert.ok(defaultPreset, "default theme preset must exist");
 assert.ok(freshPreset, "fresh-ingredient preset must exist");
@@ -41,67 +42,19 @@ assert.equal(defaultPreset.sourceMode, "duo");
 assert.equal(defaultPreset.supportsPalette, true);
 assert.equal(defaultPreset.supportsDark, true);
 assert.deepEqual(defaultPreset.palettes, ["default", "warm", "olive", "cool"]);
-assert.deepEqual(defaultPreset.seeds.default?.light, {
-  bg: "#fff",
-  surface: "#ffffff",
-  text: "#17231d",
-  primary: "#216e4e",
-  secondary: "#dff1e8"
-});
 assert.equal(freshPreset.sourceMode, "duo");
 assert.equal(freshPreset.supportsPalette, false);
 assert.equal(freshPreset.supportsDark, false);
-assert.deepEqual(freshPreset.seeds.default?.light, {
-  bg: "#f4f7f5",
-  surface: "#ffffff",
-  text: "#17231d",
-  primary: "#216e4e",
-  secondary: "#dff1e8"
-});
 assert.equal(minimalPreset.supportsDark, true);
-assert.deepEqual(minimalPreset.seeds.default?.dark, {
-  bg: "#101211",
-  surface: "#171a18",
-  text: "#f5f7f6",
-  primary: "#9db488"
-});
+assert.equal(presetsSourceKeys.includes("seeds"), false, "theme colors belong to skin scss, not preset metadata");
 
 for (const preset of THEME_SKIN_PRESETS) {
   assert.equal(preset.supportsPalette, preset.palettes.length > 0, `${preset.value} palette capability should match palette declarations`);
   assert.deepEqual(
-    Object.keys(preset.seeds).sort(),
-    (preset.supportsPalette ? preset.palettes : [DEFAULT_THEME_PALETTE]).slice().sort(),
-    `${preset.value} should only define seeds for declared palettes`
+    Object.keys(preset).sort(),
+    ["access", "assetType", "label", "palettes", "sourceMode", "supportsDark", "supportsPalette", "value"].sort(),
+    `${preset.value} should only expose theme metadata`
   );
-  assert.equal(Boolean(preset.seeds[DEFAULT_THEME_PALETTE]), true, `${preset.value} should define the fallback palette seed`);
-  const fallbackSeedSet = preset.seeds[DEFAULT_THEME_PALETTE];
-  const fallbackDarkSeed = fallbackSeedSet && "dark" in fallbackSeedSet ? fallbackSeedSet.dark : undefined;
-
-  assert.equal(Boolean(fallbackDarkSeed), preset.supportsDark, `${preset.value} dark capability should match fallback seed`);
-
-  for (const seedSet of Object.values(preset.seeds)) {
-    if (!seedSet) continue;
-
-    if (!preset.supportsDark) {
-      const darkSeed = "dark" in seedSet ? seedSet.dark : undefined;
-
-      assert.equal(darkSeed, undefined, `${preset.value} should not define dark seeds when dark mode is disabled`);
-    }
-
-    for (const seed of [seedSet.light, seedSet.dark].filter(Boolean)) {
-      assert.equal(
-        preset.sourceMode,
-        seed.secondary ? "duo" : "mono",
-        `${preset.value} source mode should match every seed source count`
-      );
-      assert.deepEqual(
-        Object.keys(seed).sort(),
-        (seed.secondary ? ["bg", "primary", "secondary", "surface", "text"] : ["bg", "primary", "surface", "text"]).sort(),
-        `${preset.value} should only expose 1-color or 2-color theme sources`
-      );
-      assert.equal("accent" in seed, false, `${preset.value} should not expose legacy accent source`);
-    }
-  }
 }
 
 console.log("theme presets tests passed");

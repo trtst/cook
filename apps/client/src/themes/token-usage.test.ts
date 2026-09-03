@@ -13,6 +13,9 @@ const SOURCE_DIRS = [
   resolve(__dirname, "../pages_share"),
   resolve(__dirname, "../pages_web")
 ] as const;
+const THEME_COLORS_FILE = resolve(__dirname, "../styles/colors.scss");
+const ENV_CONFIG_FILE = resolve(__dirname, "../config/env.ts");
+const CLIENT_README_FILE = resolve(__dirname, "../../README.md");
 
 const DISALLOWED_TOKENS = [
   "var(--theme-",
@@ -68,6 +71,16 @@ const DISALLOWED_RAW_FILTER_PATTERNS = [
   /\bbackdrop-filter:\s*(?!var\()[^;\n]*\b(?:blur|saturate)\(/g
 ] as const;
 const LEGACY_PAGE_META_BINDING = '<page-meta :page-style="pageStyle"';
+const DEPRECATED_THEME_SASS_PATTERNS = [
+  {
+    name: "global mix()",
+    pattern: /(^|[^.A-Za-z0-9_-])mix\(/g
+  },
+  {
+    name: "legacy if()",
+    pattern: /(^|[^A-Za-z0-9_-])if\(/g
+  }
+] as const;
 
 const ALLOWED_LOCAL_CSS_VARS = [
   {
@@ -76,7 +89,7 @@ const ALLOWED_LOCAL_CSS_VARS = [
   },
   {
     file: resolve(__dirname, "../components/NavBar/NavBar.vue"),
-    tokens: ["--navbar-side-width"]
+    tokens: ["--navbar-side-width", "--navbar-capsule-width"]
   },
   {
     file: resolve(__dirname, "../pages_recipe/detail/index.vue"),
@@ -275,6 +288,24 @@ for (const rule of DISALLOWED_LOCAL_THEME_ALIASES) {
     if (source.includes(token)) {
       violations.push(`${rule.file}: ${token}`);
     }
+  }
+}
+
+const themeColorSource = readFileSync(THEME_COLORS_FILE, "utf8");
+const envConfigSource = readFileSync(ENV_CONFIG_FILE, "utf8");
+const clientReadmeSource = readFileSync(CLIENT_README_FILE, "utf8");
+
+if (/from\s+["']console["']/.test(envConfigSource)) {
+  violations.push(`${ENV_CONFIG_FILE}: env config must not import Node console`);
+}
+
+if (/const mode:\s*AppMode\s*=\s*["']dev["']/.test(clientReadmeSource)) {
+  violations.push(`${CLIENT_README_FILE}: README must document VITE_APP_MODE scripts instead of manual env.ts editing`);
+}
+
+for (const { name, pattern } of DEPRECATED_THEME_SASS_PATTERNS) {
+  for (const match of themeColorSource.matchAll(pattern)) {
+    violations.push(`${THEME_COLORS_FILE}: deprecated-sass ${name} ${match[0].trim()}`);
   }
 }
 

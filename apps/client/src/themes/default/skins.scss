@@ -1,0 +1,17 @@
+@use "@/styles/colors.scss" as colors;
+
+.theme-skin-default.theme-palette-warm.theme-light {
+  @include colors.theme-derived-colors(#fbf4e5, #fffaf0, #2d2418, #d67a54, #f0b16b, #ffffff, #2d2418);
+}
+
+.theme-skin-default.theme-palette-olive.theme-light {
+  @include colors.theme-derived-colors(#f2f4ea, #fffef8, #202719, #7a9b61, #b7c76f, #ffffff, #202719);
+}
+
+.theme-skin-default.theme-palette-cool.theme-light {
+  @include colors.theme-derived-colors(#f0f5f8, #ffffff, #17242d, #4e93bf, #83b6df, #ffffff, #17242d);
+}
+
+.theme-skin-default.theme-dark {
+  @include colors.theme-derived-colors(#111715, #18201d, #f6efe8, #5a9d90, #8fbf8c, #0f1713, #0f1713, #ffffff, dark);
+}
