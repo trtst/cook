@@ -1,8 +1,8 @@
-const allowedTags = new Set(["p", "br", "h1", "h2", "h3", "strong", "em", "u", "s", "blockquote", "ul", "ol", "li", "a", "img"]);
+const allowedTags = new Set(["p", "br", "h2", "h3", "strong", "b", "u", "blockquote", "ul", "ol", "li", "a", "img"]);
 const forbiddenTags = new Set(["script", "style", "iframe", "object", "embed", "form", "input", "button", "textarea", "select", "template", "svg", "math"]);
 const imagePathPattern = /^\/api\/public-assets\/site-content-images\/[a-z0-9-]+\.(?:jpg|png|webp)$/i;
 
-function normalizeLink(value: string) {
+function resolveLinkHref(value: string) {
   const trimmed = value.trim();
   if (trimmed.startsWith("#") || (trimmed.startsWith("/") && !trimmed.startsWith("//"))) return trimmed;
   try {
@@ -12,7 +12,7 @@ function normalizeLink(value: string) {
   }
 }
 
-function normalizeImage(value: string) {
+function resolveImageSrc(value: string) {
   try {
     const url = new URL(value.trim(), window.location.origin);
     if (!/^https?:$/.test(url.protocol) || !imagePathPattern.test(url.pathname) || url.search || url.hash) return null;
@@ -44,13 +44,13 @@ function cleanElement(element: Element) {
   for (const attribute of Array.from(element.attributes)) {
     const name = attribute.name.toLowerCase();
     if (tagName === "a" && name === "href") {
-      const href = normalizeLink(attribute.value);
+      const href = resolveLinkHref(attribute.value);
       if (href) element.setAttribute("href", href);
       else element.removeAttribute(name);
       continue;
     }
     if (tagName === "img" && name === "src") {
-      const src = normalizeImage(attribute.value);
+      const src = resolveImageSrc(attribute.value);
       if (src) element.setAttribute("src", src);
       else {
         element.remove();

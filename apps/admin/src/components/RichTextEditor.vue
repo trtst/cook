@@ -70,10 +70,9 @@ onMounted(async () => {
     modules: {
       toolbar: {
         container: [
-          [{ header: [1, 2, 3, false] }],
-          ["bold", "italic", "underline", "blockquote"],
+          [{ header: [2, 3, false] }],
+          ["bold", "underline", "blockquote"],
           [{ list: "ordered" }, { list: "bullet" }],
-          [{ align: [] }],
           ["link", "image"],
           ["clean"]
         ],
