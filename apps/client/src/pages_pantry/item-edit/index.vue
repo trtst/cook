@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :title="pageTitle">
+  <Layout :class="themeClasses" :title="pageTitle">
     <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       :title="loginTitle"
@@ -121,7 +121,7 @@ import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const notePresets = ["先吃这个", "已开封", "只剩一点", "今晚要用", "早餐要用", "冷冻保存", "冷藏保存", "临期先用"];

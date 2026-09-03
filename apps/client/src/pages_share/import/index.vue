@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="加入分享饭局">
+  <Layout :class="themeClasses" title="加入分享饭局">
     <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       title="登录后加入饭局"
@@ -37,7 +37,7 @@ import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();

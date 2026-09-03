@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="现在缺什么" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="现在缺什么" full-screen :navbar-placeholder="false" navbar-transparent>
     <view class="gap-nav-backdrop" :style="navBackdropStyle" />
     <view class="gap-scroll-wrap">
       <RecipeSearchLoading
@@ -171,7 +171,7 @@ import { shoppingApi, type ShoppingGapItem, type ShoppingGapResponse, type Shopp
 import type { UUID } from "@/apis/http";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();

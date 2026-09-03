@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     title=""
     full-screen
     :navbar-transparent="sessionStore.isLoggedIn"
@@ -503,7 +503,7 @@ const NAV_FADE_DISTANCE = 132;
 const SWIPE_DELETE_WIDTH = typeof uni !== "undefined" && typeof uni.upx2px === "function" ? uni.upx2px(156) : 78;
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();

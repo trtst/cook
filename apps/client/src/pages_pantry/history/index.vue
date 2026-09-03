@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="采购记录">
+  <Layout :class="themeClasses" title="采购记录">
     <view class="filter-row">
       <view
         v-for="item in filters"
@@ -50,7 +50,7 @@ import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { useSessionStore } from "@/stores/session";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();

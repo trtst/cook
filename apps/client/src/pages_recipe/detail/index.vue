@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     title=""
     full-screen
     :navbar-transparent="true"
@@ -538,7 +538,7 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const DETAIL_ACTIONS_SHOW_OFFSET = 24;
 const reportReasonOptions: ReportReasonOption[] = [

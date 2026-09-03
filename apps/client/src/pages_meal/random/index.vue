@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="随机一下" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="随机一下" full-screen :navbar-placeholder="false" navbar-transparent>
     <view class="random-nav-backdrop" :style="navBackdropStyle" />
     <scroll-view class="random-scroll" scroll-y :show-scrollbar="false" @scroll="handleRandomScroll">
       <view class="random-page">
@@ -107,7 +107,7 @@
           <view class="plan-sheet__section-head">
             <view>
               <text class="plan-sheet__section-title">灵感菜谱归入私房菜</text>
-              <text class="plan-sheet__section-note">每道菜可单独选择分类，默认沿用上次选择。</text>
+              <text class="plan-sheet__section-note">每道菜可单独选择分类，也可以稍后再分。</text>
             </view>
             <view class="plan-sheet__category-action" @click="toggleCategoryCreator">
               {{ showCategoryCreator ? "取消" : "创建分类" }}
@@ -120,10 +120,17 @@
             </button>
           </view>
           <text v-if="categoryLoading" class="plan-sheet__section-note">正在加载你的分类...</text>
-          <text v-else-if="!categories.length" class="plan-sheet__section-note">还没有个人分类，请先创建一个。</text>
+          <text v-else-if="!categories.length" class="plan-sheet__section-note">还没有个人分类，可先稍后分类。</text>
           <view v-for="item in inspirationSlots" :key="item.recipeVersionId" class="plan-sheet__category-row">
             <text class="plan-sheet__category-title">{{ item.title }}</text>
             <view class="plan-sheet__category-chips">
+              <view
+                class="plan-sheet__category-chip"
+                :class="{ 'plan-sheet__category-chip--active': !selectedCategoryIds[item.recipeVersionId] }"
+                @click="selectCategory(item.recipeVersionId, null)"
+              >
+                稍后分类
+              </view>
               <view
                 v-for="category in categories"
                 :key="category.id"
@@ -196,7 +203,7 @@ const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const settingsStore = useSettingsStore();
-const { themeVars, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
+const { themeVars, themeClasses, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const RANDOM_NAV_GAP = 16;
@@ -235,7 +242,7 @@ const planSubmitting = ref(false);
 const categoryLoading = ref(false);
 const categorySubmitting = ref(false);
 const categories = ref<RecipeCategorySummary[]>([]);
-const selectedCategoryIds = ref<Record<string, UUID>>({});
+const selectedCategoryIds = ref<Record<string, UUID | null>>({});
 const categoryDraftName = ref("");
 const showCategoryCreator = ref(false);
 const quota = ref<RandomMenuQuotaResponse | null>(null);
@@ -253,9 +260,7 @@ const conditionLoading = computed(() => pageMutating.value || state.value.gap.lo
 const slotActionLocked = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
 const canCreatePlan = computed(() => activeSlots.value.length > 0);
 const inspirationSlots = computed(() => activeSlots.value.filter(item => item.sourceType === "INSPIRATION"));
-const planReady = computed(
-  () => canCreatePlan.value && inspirationSlots.value.every(item => Boolean(selectedCategoryIds.value[item.recipeVersionId]))
-);
+const planReady = computed(() => canCreatePlan.value);
 
 const heroTitle = computed(() => {
   if (!state.value.conditions.mealSlot) return "想轻松定下这顿饭，先选个餐次吧";
@@ -687,10 +692,8 @@ async function loadPlanCategories() {
   categoryLoading.value = true;
   try {
     categories.value = await recipeApi.listCategories();
-    const lastCategoryId = uniPlatform.storage.getSync<UUID>(APP_STORAGE_KEYS.randomMenuCategory);
-    const defaultCategoryId = categories.value.some(item => item.id === lastCategoryId) ? lastCategoryId : categories.value[0]?.id;
-    selectedCategoryIds.value = inspirationSlots.value.reduce<Record<string, UUID>>((result, item) => {
-      if (defaultCategoryId) result[item.recipeVersionId] = defaultCategoryId;
+    selectedCategoryIds.value = inspirationSlots.value.reduce<Record<string, UUID | null>>((result, item) => {
+      result[item.recipeVersionId] = null;
       return result;
     }, {});
   } catch (error) {
@@ -700,7 +703,7 @@ async function loadPlanCategories() {
   }
 }
 
-function selectCategory(recipeVersionId: UUID, categoryId: UUID) {
+function selectCategory(recipeVersionId: UUID, categoryId: UUID | null) {
   selectedCategoryIds.value = { ...selectedCategoryIds.value, [recipeVersionId]: categoryId };
 }
 
@@ -717,7 +720,6 @@ async function createCategory() {
     const created = await recipeApi.createCategory({ operationId: createOperationId(), name });
     categories.value = [...categories.value, created];
     for (const item of inspirationSlots.value) selectCategory(item.recipeVersionId, created.id);
-    await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuCategory, created.id);
     categoryDraftName.value = "";
     showCategoryCreator.value = false;
   } catch (error) {
@@ -782,8 +784,7 @@ async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
   );
   const imported = new Map<UUID, { recipeId: UUID; recipeVersionId: UUID }>();
   for (const item of inspirationSlots.value) {
-    const categoryId = selectedCategoryIds.value[item.recipeVersionId];
-    if (!categoryId) throw new Error("请为每道灵感菜谱选择分类");
+    const categoryId = selectedCategoryIds.value[item.recipeVersionId] ?? null;
     const result = await recipeApi.createMyRecipeFromInspiration({
       operationId: createOperationId(),
       sourceRecipeId: item.recipeId,
@@ -794,7 +795,7 @@ async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
       recipeId: result.recipe.id,
       recipeVersionId: result.recipe.contentVersionId
     });
-    await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuCategory, categoryId);
+    if (categoryId) await uniPlatform.storage.set(APP_STORAGE_KEYS.randomMenuCategory, categoryId);
   }
   return activeSlots.value
     .slice()

@@ -204,8 +204,8 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
 }
 
 .option-chip--active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
+  border-color: var(--button-primary-border);
+  background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
 }
 
@@ -217,7 +217,7 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
 }
 
 .option-chip--active .option-chip__text {
-  color: var(--color-primary-contrast);
+  color: var(--button-primary-text);
 }
 
 .toggle-row {

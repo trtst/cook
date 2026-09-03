@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="美食计划" full-screen>
+  <Layout :class="themeClasses" title="美食计划" full-screen>
     <view class="plan-page">
         <view class="plan-fixed-head">
           <view class="month-bar">
@@ -402,7 +402,7 @@ type PlanOrderState = Record<string, UUID[]>;
 type PlanDockActionKey = "copy" | "add" | "recipe" | "shopping";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();

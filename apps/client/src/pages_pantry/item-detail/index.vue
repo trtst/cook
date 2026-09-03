@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="detail-nav__title" :style="navTitleStyle">{{ currentItem?.name || "食材详情" }}</text>
     </template>
@@ -215,7 +215,7 @@ import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
 import { buildIngredientAvatarText, formatExpireLabel, isExpiringSoon, resolveFridgeImageMap } from "../utils/fridge";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();

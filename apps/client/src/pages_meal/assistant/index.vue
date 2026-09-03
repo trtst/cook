@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="做饭助手" full-screen>
+  <Layout :class="themeClasses" title="做饭助手" full-screen>
     <LoginEmptyState
       v-if="!sessionStore.isLoggedIn"
       title="登录后查看做饭建议"
@@ -168,7 +168,7 @@ type MenuEntry = {
 };
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loading = ref(false);

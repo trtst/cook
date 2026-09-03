@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen navbar-transparent :navbar-placeholder="false">
+  <Layout :class="themeClasses" title="" full-screen navbar-transparent :navbar-placeholder="false">
     <template #navbar-center>
       <text class="home-nav__title" :style="navTitleStyle">食材</text>
     </template>
@@ -303,7 +303,7 @@ interface PantryCard {
 }
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const { navBarTotalHeight } = useSystemInfo();

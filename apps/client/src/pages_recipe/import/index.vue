@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="灵感入口">
+  <Layout :class="themeClasses" title="灵感入口">
     <view class="panel">
       <text class="panel__title">独立导入页已下线</text>
       <text class="panel__text">从 2026-07-25 起，灵感浏览、搜索和筛选统一回到菜谱主页面的“灵感”标签。</text>
@@ -18,7 +18,7 @@ import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 function goRecipeHome() {

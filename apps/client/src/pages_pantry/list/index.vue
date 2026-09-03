@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen>
+  <Layout :class="themeClasses" title="" full-screen>
     <template #navbar-center>
       <view class="nav-tabs">
         <view
@@ -304,7 +304,7 @@ import {
 import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
@@ -1232,14 +1232,14 @@ defineExpose({
   height: 14rpx;
   margin-top: 12rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-support-notice);
+  background: var(--color-surface-muted);
   overflow: hidden;
 }
 
 .progress-block__value-bar {
   height: 100%;
   border-radius: inherit;
-  background: var(--button-primary-bg);
+  background: var(--color-support-action);
 }
 
 .list-card__actions {

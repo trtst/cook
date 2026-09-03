@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     :title="''"
     full-screen
     :navbar-capsule-guard="true"
@@ -915,7 +915,7 @@ type CropTarget =
     };
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();

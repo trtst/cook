@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     title=""
     full-screen
     :navbar-transparent="true"
@@ -860,7 +860,7 @@ const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
 
 const NAV_FADE_DISTANCE = 132;
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const { navBarTotalHeight } = useSystemInfo();
@@ -3749,7 +3749,7 @@ function clearFocusedSection() {
 .meal-menu-empty {
   margin-top: 28rpx;
   padding: 28rpx 26rpx;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-support-notice);
 }
 

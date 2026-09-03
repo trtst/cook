@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     :title="cropTitle"
     full-screen
     :navbar-transparent="true"
@@ -179,7 +179,7 @@ const ratioOptions = [
 ] as const;
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight, safeAreaBottom, systemInfo } = useSystemInfo();
 const instance = getCurrentInstance();

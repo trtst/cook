@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="饭局邀请">
+  <Layout :class="themeClasses" title="饭局邀请">
     <view v-if="loading && !preview" class="preview-shell">
       <view class="invite-card invite-skeleton">
         <view class="invite-card__section invite-card__host">
@@ -170,7 +170,7 @@ import { formatDateTimeMinute } from "../utils/date";
 import type { UUID } from "@/apis/http";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();

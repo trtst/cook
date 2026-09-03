@@ -47,6 +47,7 @@ expectIncludes(randomPageSource, 'class="plan-sheet__inspiration"');
 expectIncludes(randomPageSource, 'class="plan-sheet__category-row"');
 expectIncludes(randomPageSource, 'class="plan-sheet__category-chip"');
 expectIncludes(randomPageSource, '@click="createPlan"');
+expectIncludes(randomPageSource, "for (const item of inspirationSlots.value) selectCategory(item.recipeVersionId, created.id);");
 expectIncludes(randomPageSource, 'v-for="menuSlot in state.slots"');
 expectIncludes(randomPageSource, ':item="menuSlot"');
 expectExcludes(randomPageSource, '@click="rerollMenu"');
@@ -100,11 +101,11 @@ expectIncludes(randomConditionBarSource, 'class="cookfont slot-plan__button icon
 expectIncludes(randomConditionBarSource, 'class="cookfont slot-plan__button icon-stepper-add"');
 expectExcludes(randomConditionBarSource, 'class="cookfont slot-plan__button-icon');
 expectSelectorIncludes(randomConditionBarSource, ".option-chip--active", [
-  "background: var(--color-primary);",
+  "background: var(--button-primary-bg);",
   "box-shadow: var(--button-primary-shadow);"
 ]);
 expectSelectorExcludes(randomConditionBarSource, ".option-chip--active", ["background: var(--color-tag-primary-bg);"]);
-expectSelectorIncludes(randomConditionBarSource, ".option-chip--active .option-chip__text", ["color: var(--color-primary-contrast);"]);
+expectSelectorIncludes(randomConditionBarSource, ".option-chip--active .option-chip__text", ["color: var(--button-primary-text);"]);
 
 expectSelectorExcludes(randomBottomBarSource, ".bottom-bar", ["position: sticky;"]);
 expectExcludes(randomBottomBarSource, "看看缺什么");

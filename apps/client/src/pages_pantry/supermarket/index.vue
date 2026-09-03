@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="超市模式">
+  <Layout :class="themeClasses" title="超市模式">
     <view class="summary">
       <text class="summary__title">待买清单</text>
       <text class="summary__description">边买边勾，买完后会自动进入采购记录。</text>
@@ -47,7 +47,7 @@ import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();

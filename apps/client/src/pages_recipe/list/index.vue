@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-capsule-guard="true">
+  <Layout :class="themeClasses" title="" full-screen :navbar-capsule-guard="true">
     <template #navbar-center>
       <view class="list-nav">
         <view class="tabs">
@@ -170,7 +170,7 @@ function resolveCoverImageUrl(value: string | null | undefined) {
 }
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loadingTips = [

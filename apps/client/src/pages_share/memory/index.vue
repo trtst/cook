@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="活动回忆卡">
+  <Layout :class="themeClasses" title="活动回忆卡">
     <template>
       <view v-if="errorText" class="notice" @click="loadPage">
         <text class="notice__text">{{ errorText }}</text>
@@ -161,7 +161,7 @@ interface MemoryCardView {
 }
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const mode = ref<PageMode>("empty");

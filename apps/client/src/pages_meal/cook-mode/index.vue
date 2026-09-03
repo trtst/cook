@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :title="pageTitle" full-screen>
+  <Layout :class="themeClasses" :title="pageTitle" full-screen>
     <LoginEmptyState
       v-if="requiresLogin && !sessionStore.isLoggedIn"
       title="登录后继续做饭"
@@ -221,7 +221,7 @@ type CookStep = {
 };
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loading = ref(false);

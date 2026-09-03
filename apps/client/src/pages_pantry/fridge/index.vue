@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="冰箱库存">
+  <Layout :class="themeClasses" title="冰箱库存">
     <view class="redirect-state">
       <text class="redirect-state__title">正在进入食材主页...</text>
       <text class="redirect-state__description">旧的冰箱库存入口已并到食材主页，这里会自动跳转。</text>
@@ -18,7 +18,7 @@ import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 onLoad(() => {

@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen>
+  <Layout :class="themeClasses" title="" full-screen>
     <template #navbar-center>
       <view class="nav-tabs">
           <view
@@ -222,7 +222,7 @@ type EventCardItem = {
 };
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const EVENT_PAGE_SIZE = 20;
@@ -813,7 +813,6 @@ defineExpose({
   flex: none;
   box-sizing: border-box;
   padding: 10rpx var(--space-page) 0;
-  background: var(--color-page);
 }
 
 .sticky-wrap {
@@ -822,7 +821,6 @@ defineExpose({
   flex: none;
   margin-top: 20rpx;
   padding-bottom: 16rpx;
-  background: var(--color-page);
 }
 
 .sticky-bar {
