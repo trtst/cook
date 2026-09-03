@@ -239,8 +239,8 @@ pages_pantry/components/
 | skin | 权限标识 | 色系 | 说明 |
 | --- | --- | --- | --- |
 | `default` | 免费 | `default` / `warm` / `olive` / `cool` | 基础皮肤，免费用户可切 4 套色系 |
-| `handdrawn-food` | 会员标识，当前测试期放开 | 无 | 手绘食物皮肤，样式和素材由 skin 自身决定 |
-| `warm-couple` | 会员标识，当前测试期放开 | 无 | 温馨插画皮肤，样式和素材由 skin 自身决定 |
+| `fresh-ingredient` | 免费 | 无 | 清新食材图标皮肤，样式和素材由 skin 自身决定 |
+| `minimal-white` | 免费 | 无 | 简白皮肤，样式由 skin 自身决定 |
 | `apple-glass` | 会员标识，当前测试期放开 | 无 | 轻玻璃皮肤，样式和素材由 skin 自身决定 |
 
 暗黑模式只保留一套，不随浅色色系切换。
@@ -342,6 +342,8 @@ pages_pantry/components/
 
 浅色色系也属于本地配置，归 `stores/settings.ts` 管理。页面只绑定 `useTheme()` 返回的主题 class，不直接判断某个色系。
 
+主题颜色的唯一 CSS 真值源为全局 fallback 和对应 `src/themes/{skinId}/skins.scss`。`src/themes/presets.ts` 只保存主题注册、权限、是否支持 palette/dark、素材类型等元数据，不保存颜色 seed，也不通过运行态 inline style 覆盖 skin 样式。
+
 没有 `palettes` 的 skin 不叠加 `theme-palette-*` class。此类 skin 的颜色、圆角、阴影和素材由 `theme-skin-*` 自身提供。
 
 skin 的样式和素材集中放在 `src/themes/`。
@@ -351,33 +353,33 @@ src/
   themes/                  # theme 公共文件 + 皮肤包目录
     config.ts              # skin 注册、资源约定说明、tabbarAssetType、assets 自动生成
     index.ts               # theme 查询函数与统一导出
-    tokens.scss            # 全局 token、palette token，不引用具体 skin
     default/
-      skins.scss           # 默认皮肤样式与字体图标
-    handdrawn-food/
-      skins.scss           # 手绘皮肤样式
+      skins.scss           # 默认皮肤 palette 与暗黑源头变量
+    fresh-ingredient/
+      skins.scss           # 清新食材皮肤源头变量
       home.svg
       home-active.svg
       recipe.svg
       recipe-active.svg
       me.svg
       me-active.svg
-    warm-couple/
-      skins.scss
+    minimal-white/
+      skins.scss           # 简白皮肤源头变量与少量材质覆盖
     apple-glass/
-      skins.scss
+      skins.scss           # 玻璃皮肤源头变量与材质覆盖
 ```
 
 组件不直接拼素材路径。组件通过 `src/themes/index.ts` 读取当前 skin 的 `assets`，没有素材时回退到 `FALLBACK_ASSET_SKIN`。
 
 皮肤包目录直接使用 skin id，不再增加 `skins/` 或 `template/` 中间目录。主题配置统一放在 `src/themes/config.ts`，并用 `tabbarAssetType` 区分 tabbar 使用 `font` 还是 `svg`。默认主题使用字体图标；带独立素材的皮肤使用 SVG 图片。
 
-新增皮肤只做两件事：
+新增皮肤只做三件事：
 
 1. 新增 `src/themes/{skinId}/`，至少包含 `skins.scss`。
-2. 修改 `src/themes/config.ts` 的 `THEME_SKIN_CONFIGS`，增加一条皮肤元信息。
+2. 在 `skins.scss` 开头定义该主题的 `--theme-*` 源头变量，其他颜色只能继承或派生。
+3. 修改 `src/themes/presets.ts` 的 `THEME_SKIN_PRESETS`，增加一条皮肤元信息。
 
-新增皮肤时不修改 `src/themes/` 下其他皮肤目录，也不修改 `src/themes/tokens.scss`。
+新增皮肤时不修改 `src/themes/` 下其他皮肤目录，也不在 TypeScript 中新增颜色。
 
 `src/themes/config.ts` 会自动收集 `src/themes/*/skins.scss` 和 `src/themes/*/*.svg`。SVG 皮肤只需要按固定文件名放置素材，不需要在配置里逐个 import。
 

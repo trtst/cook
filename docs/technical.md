@@ -203,10 +203,11 @@
 1. 代码标识符使用简短驼峰命名。
 2. 名称最多 3 个单词，优先表达业务含义或结果角色。
 3. 禁止使用 `normalized`、`formatted`、`processed` 这类只描述加工过程的命名。
-4. 禁止使用 `manager`、`serviceAdapter`、`handlerCenter`、`commonBaseX` 这类边界模糊或无实际语义的抽象名词。
-5. 变量名描述“它现在是什么”，函数名描述“它要做什么”。
-6. 推荐 `searchKey`、`dishName`、`currentDish`、`buildMeal`、`resolveQuota`、`createPlan` 这类短名称。
-7. 如果短命名不足以让开发理解，通过注释说明职责、边界或特殊原因，不要把完整解释塞进变量名。
+4. 禁止把 `resolve*` 当成“算一下 / 映射一下 / 取一下 / 选一下”的通用动词；新代码和被触碰代码必须改成真实业务结果或动作命名。
+5. 禁止使用 `manager`、`serviceAdapter`、`handlerCenter`、`commonBaseX` 这类边界模糊或无实际语义的抽象名词。
+6. 变量名描述“它现在是什么”，函数名描述“它要做什么”。
+7. 推荐 `searchKey`、`dishName`、`currentDish`、`buildMeal`、`quotaPolicy`、`createPlan`、`pickCopy`、`hintText` 这类短名称。
+8. 如果短命名不足以让开发理解，通过注释说明职责、边界或特殊原因，不要把完整解释塞进变量名。
 
 ## 组件规则
 

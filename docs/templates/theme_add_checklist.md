@@ -6,11 +6,11 @@
 
 1. 一级主题源头只认 `bg / surface / text / primary / secondary`。
 2. `primary` 必填，表示主题高亮色。
-3. `secondary` 可选，表示第二主题色；不填时运行态会从 `primary` 自动派生。
+3. `secondary` 可选，表示第二主题色；不填时在 `skins.scss` 内从 `primary` 派生。
 4. `--button-primary-gradient-start/end` 只是组件层 token，不是一级主题源头。
 5. 普通主题按统一模板接入；`apple-glass` 这种玻璃特例单独处理，不反推成公共规则。
 
-## 步骤 1：在 `presets.ts` 声明主题源头和能力
+## 步骤 1：在 `presets.ts` 声明主题能力
 
 文件：`apps/client/src/themes/presets.ts`
 
@@ -20,11 +20,10 @@
 - `label`：主题展示名。
 - `access`：`free` 或 `member`。
 - `assetType`：`icon` 或 `svg`。
-- `sourceMode`：`mono` 或 `duo`，且必须与 seed 实际源头数量一致。
+- `sourceMode`：`mono` 或 `duo`，且必须与 stylesheet 中的源头色模型一致。
 - `supportsPalette`：是否支持色系切换。
 - `supportsDark`：是否支持暗黑模式。
 - `palettes`：支持的 palette 列表；不支持时传空数组。
-- `seeds`：每个 palette 下的 `light/dark` 源头色。
 
 双主题色示例：
 
@@ -37,18 +36,7 @@
   sourceMode: "duo",
   supportsPalette: false,
   supportsDark: false,
-  palettes: [],
-  seeds: {
-    default: {
-      light: {
-        bg: "#f5f7f4",
-        surface: "#ffffff",
-        text: "#1f2a24",
-        primary: "#5f9f86",
-        secondary: "#f0b16b"
-      }
-    }
-  }
+  palettes: []
 }
 ```
 
@@ -63,26 +51,17 @@
   sourceMode: "mono",
   supportsPalette: false,
   supportsDark: false,
-  palettes: [],
-  seeds: {
-    default: {
-      light: {
-        bg: "#f5f7f4",
-        surface: "#ffffff",
-        text: "#1f2a24",
-        primary: "#5f9f86"
-      }
-    }
-  }
+  palettes: []
 }
 ```
 
 说明：
 
-- 只有一个主题色时，`primary` 同时承担高亮色，运行态自动派生第二色。
-- 需要显式区分“高亮色”和“第二主题色”时，同时填写 `primary` 和 `secondary`。
-- `supportsDark: true` 时，补 `dark` seed；否则运行态固定走 `light`。
-- `supportsPalette: true` 时，至少补齐 `palettes` 里每个 palette 对应的 seed。
+- `presets.ts` 不写颜色。
+- 只有一个主题色时，`primary` 同时承担高亮色，第二色在 `skins.scss` 里用 CSS 变量或 `color-mix` 派生。
+- 需要显式区分“高亮色”和“第二主题色”时，在 `skins.scss` 同时填写 `--theme-primary` 和 `--theme-secondary`。
+- `supportsDark: true` 时，补 `.theme-dark` 选择器；否则运行态固定走 `light`。
+- `supportsPalette: true` 时，至少补齐 `palettes` 里每个 palette 对应的选择器。
 
 ## 步骤 2：新增皮肤目录和 `skins.scss`
 
@@ -94,8 +73,9 @@
 
 `skins.scss` 只放主题专属表现层：
 
-- 可以放本主题专属的 `entry-*`、局部插画、局部材质、字体图标注册。
-- 不要重复声明已经由运行态 `themeVars` 下发的通用语义色。
+- 开头先定义 `--theme-bg`、`--theme-surface`、`--theme-text`、`--theme-primary`，双色主题再定义 `--theme-secondary`。
+- 后续颜色只能继承或从这些源头变量派生。
+- 可以放本主题专属的局部插画、局部材质、字体图标注册。
 - 不要把页面局部结构遮罩、业务态颜色随手抬成全局主题变量。
 
 ## 步骤 3：准备 tabbar 资源

@@ -129,11 +129,10 @@ Material 层禁止新增独立源头色。
 1. 每个主题 preset 必须显式声明自身属于 `mono` 或 `duo`
 2. `mono` 只能暴露 `primary`
 3. `duo` 只能暴露 `primary + secondary`
-4. preset 声明与实际 seed 数量不一致时，测试必须直接失败
-5. 运行时派生必须显式接收 `mono / duo`，不能仅靠 `secondary` 是否存在来猜测主题模式
-6. `mono` 模式下即使误传 `secondary`，派生结果也必须按单色规则生成
-7. TypeScript 类型也必须表达该关系：`mono` seed 不得声明 `secondary`，`duo` seed 必须声明 `secondary`
-8. `supportsPalette`、`palettes`、`seeds` 与 `supportsDark` 必须一致：仅声明的 palette 可有 seed，未支持 palette 的主题只保留默认 seed，默认 seed 的 dark 存在性必须与 `supportsDark` 相同
+4. `presets.ts` 只声明 `mono / duo`、palette、dark、权限和素材类型，不保存颜色 seed
+5. 颜色 seed 只写在全局 fallback 或对应 `themes/{skin}/skins.scss` 的开头
+6. `mono` 主题的 `skins.scss` 仍可声明 `--theme-secondary` 作为派生后的辅助色，但它不是第二个源头色
+7. `supportsPalette`、`palettes` 与 `supportsDark` 必须和对应 skin stylesheet 中的选择器能力一致
 
 ### 3.1.1 当前默认基线
 
@@ -516,9 +515,9 @@ Material 层禁止新增独立源头色。
 新增主题时，至少应经过：
 
 1. 确认是 `1 色主题` 还是 `2 色主题`
-2. 定义 seed
-3. 按统一规则派生 semantic token
-4. 按统一规则派生 material token
+2. 在 `presets.ts` 定义主题能力元数据
+3. 在对应 `themes/{skin}/skins.scss` 开头定义 `--theme-*` 源头变量
+4. 只从 `--theme-*` 或 semantic token 派生 material token
 5. 验证 light 与 dark
 6. 验证基础组件与高频页面
 7. 通过静态检查与真实界面验收
@@ -561,7 +560,7 @@ Material 层禁止新增独立源头色。
 3. 禁止直接写 `backdrop-filter`
 4. 禁止直接写页面级自定义阴影公式
 5. 禁止继续引用已经废弃的 token
-6. 验证 preset 的 `mono / duo` 声明、seed 数量、palette 能力和暗黑能力是否一致
+6. 验证 preset 的 `mono / duo` 声明、palette 能力、暗黑能力和 skin stylesheet 是否一致
 7. 验证共享消费层不会以格式差异绕过普通 `card / panel / tabbar / button` 的默认无可见 border 规则
 
 ### 7.3 真实界面验收

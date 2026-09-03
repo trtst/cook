@@ -139,10 +139,16 @@ Forbidden naming style:
 - `normalizedX`
 - `formattedX`
 - `processedX`
+- meaningless `resolve*` helper names
 - `dataManager`
 - `serviceAdapter`
 - `handlerCenter`
 - `commonBaseX`
+
+Do not use `resolve*` as a generic helper name for "figure out / map / choose /
+format / get a value". Name the business result or action instead. Existing
+well-scoped policy terms may remain until touched, but new or edited code should
+avoid vague `resolve*` names.
 
 Prefer names that describe the role or result:
 
@@ -150,7 +156,7 @@ Prefer names that describe the role or result:
 - `dishName`
 - `currentDish`
 - `buildMeal`
-- `resolveQuota`
+- `quotaPolicy`
 - `createPlan`
 
 If a short name needs context, add a comment. Do not make the name longer to carry the whole explanation.

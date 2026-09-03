@@ -165,7 +165,7 @@
 - `plans/membership-code-execution.md`
   - 会员兑换码、体验码、广告减免与“我的”页权益入口的现行执行单，覆盖本轮页面范围和后续核销门禁。
 - `theme-system-rule.md`
-  - 脱离具体业务的通用主题系统规范，定义 `seed -> semantic -> material -> component/page` 四层模型、`1 色 / 2 色 / 3 色` 源头规则、轻玻璃材质边界，以及设计规范与开发落地约束。
+  - 脱离具体业务的通用主题系统规范，定义 `seed -> semantic -> material -> component/page` 四层模型、CSS/SCSS 颜色真值源、`1 色 / 2 色 / 3 色` 源头规则、轻玻璃材质边界，以及设计规范与开发落地约束。
 - `plans/theme-token-audit-2026-08-27.md`
   - 客户端主题 token 收口方案，冻结 `1 色 / 2 色` 主题源头规则、语义分层、第二色边界和现有 token 的保留/合并/废弃/改派生清单。
 - `plans/implementation-checklist.md`

@@ -597,6 +597,24 @@ Idempotency-Key: 172251000003
 }
 ```
 
+### 5.5 从灵感保存到私房菜
+
+`POST /api/recipes/from-inspiration` 供灵感详情和加入计划 Sheet 复用；分类可稍后再分，不再提交场景。
+
+```text
+POST /api/recipes/from-inspiration
+Auth: UserBearerAuth
+Idempotency-Key: 172251000004
+```
+
+```json
+{
+  "sourceRecipeId": 2001,
+  "sourceVersionId": 1001,
+  "categoryId": null
+}
+```
+
 ## 6. 客户端规则
 
 1. 小程序和后台分别通过本端 `apis/` 请求层调用接口，不跨应用导入类型。
