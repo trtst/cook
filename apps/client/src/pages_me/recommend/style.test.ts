@@ -8,7 +8,8 @@ assert.ok(
   source.includes("paddingTop: `${navBarTotalHeight.value + 12}px`"),
   "Expected notification page top padding to follow the +12px page baseline."
 );
-assert.ok(source.includes('<Layout title=""'), "Expected notification page to let the page-owned center slot render the visible title.");
+assert.ok(source.includes('title=""'), "Expected notification page to keep an empty Layout title.");
+assert.ok(source.includes(':class="themeClasses"'), "Expected notification page Layout host to carry theme classes.");
 assert.ok(source.includes("<template #navbar-center>"), "Expected notification navbar to render its title through a page-owned center slot.");
 assert.ok(source.includes("notification-nav-title"), "Expected notification navbar title to have a local style hook.");
 assert.ok(!source.includes("paddingTop: `${navBarTotalHeight.value + 20}px`"), "Expected legacy +20px top padding to be removed.");

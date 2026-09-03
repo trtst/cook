@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="最近看过">
+  <Layout :class="themeClasses" title="最近看过">
     <template v-if="!sessionStore.isLoggedIn">
       <view class="recipe-history-login">
         <LoginEmptyState
@@ -103,7 +103,7 @@ import { useSessionStore } from "@/stores/session";
 import { formatDateTimeSecond } from "@/utils/date";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const {

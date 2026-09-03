@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     title=""
     current-tab="home"
     :show-left="false"
@@ -169,10 +169,7 @@
               <text class="recent-arrangement__hint">{{ recentArrangementHintText }}</text>
               <view class="recent-arrangement__actions">
                 <view class="recent-arrangement__button" @click.stop="openRecentArrangementPrimaryAction(recentArrangement)">
-                  <text class="recent-arrangement__button-text">{{ resolveRecentArrangementActionText(recentArrangement.status) }}</text>
-                </view>
-                <view class="recent-arrangement__link" @click.stop="openRecentArrangementDetail(recentArrangement)">
-                  <text class="recent-arrangement__link-text">查看详情</text>
+                  <text class="recent-arrangement__button-text">{{ recentArrangementActionText(recentArrangement.status) }}</text>
                 </view>
               </view>
             </view>
@@ -197,12 +194,15 @@
 
           <view class="table-section table-section--recipes">
             <view class="section-heading">
-              <text class="section-heading__title">基于当前库存推荐</text>
-              <text class="section-heading__action" @click="openRandomEntry">更多推荐</text>
+              <view class="section-heading__copy">
+                <text class="section-heading__eyebrow">按冰箱食材</text>
+                <text class="section-heading__title">先看看能做的菜</text>
+              </view>
+              <text class="section-heading__action" @click="refreshFridgeRecipeRecommendations">换一换</text>
             </view>
-            <scroll-view v-if="fridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
+            <scroll-view v-if="visibleFridgeRecipes.length" scroll-x class="recipe-scroll" show-scrollbar="false">
               <view
-                v-for="item in fridgeRecipes"
+                v-for="item in visibleFridgeRecipes"
                 :key="`${item.kind}-${item.recipeId}`"
                 class="family-recipe"
                 hover-class="family-recipe--hover"
@@ -226,7 +226,7 @@
               </view>
             </scroll-view>
             <view v-else-if="showFridgeRecipesSkeleton" class="recipe-scroll">
-              <view v-for="index in 3" :key="index" class="family-recipe">
+              <view v-for="index in 3" :key="index" class="family-recipe family-recipe--skeleton">
                 <Skeleton width="204rpx" height="220rpx" radius="var(--radius-card)" />
                 <view class="family-recipe__skeleton-copy">
                   <Skeleton width="160rpx" height="24rpx" />
@@ -234,7 +234,22 @@
                 </view>
               </view>
             </view>
-            <Empty v-else title="还没找到当前合适的推荐" description="先记一点食材，或者直接去随机一桌看看。" />
+            <view v-else class="fridge-empty">
+              <Empty
+                :title="fridgeRecipesEmptyTitle"
+                :description="fridgeRecipesEmptyDescription"
+                :clickable="!sessionStore.isLoggedIn"
+                @click="openLogin()"
+              />
+              <view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">
+                <view class="fridge-empty__button fridge-empty__button--primary" @click="openFridgeEmptyPrimaryAction">
+                  <text>{{ fridgeRecipesEmptyPrimaryActionText }}</text>
+                </view>
+                <view class="fridge-empty__button fridge-empty__button--secondary" @click="openRandomEntry">
+                  <text>随机一桌</text>
+                </view>
+              </view>
+            </view>
           </view>
 
           <view class="pantry-panel">
@@ -286,7 +301,6 @@ import {
   type HomeNextMealState,
   type HomeNextMealStatus,
   type HomeRecentArrangement,
-  type HomeRecentArrangementStatus,
   type HomeWeekOverview,
   type HomeWeekOverviewStatus
 } from "@/apis/home";
@@ -309,6 +323,10 @@ import {
   resolveRecentArrangementFocus
 } from "@/utils/recent-arrangement-focus";
 import {
+  recentArrangementActionText,
+  recentArrangementCopyPicker
+} from "@/utils/recent-arrangement-copy";
+import {
   buildPantrySummaryHint,
   buildPantrySummaryState,
   hasPantrySummaryData as resolveHasPantrySummaryData
@@ -318,7 +336,7 @@ import banner02 from "@/assets/home-actions/banner_02.png";
 
 const pageStyle = usePageScrollStyle();
 const settingsStore = useSettingsStore();
-const { themeVars, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
+const { themeVars, themeClasses, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const currentThemeText = computed(() => formatThemeText(themeMode.value, effectiveSkin.value, effectivePalette.value, canSwitchPalette.value));
 
@@ -344,6 +362,7 @@ const weekOverview = ref<HomeWeekOverview | null>(null);
 const fridgeRecipesLoading = ref(false);
 const fridgeRecipesLoaded = ref(false);
 const fridgeRecipes = ref<HomeFridgeRecipeItem[]>([]);
+const fridgeRecipePageIndex = ref(0);
 const pantrySummaryLoading = ref(false);
 const pantrySummaryLoaded = ref(false);
 const pantryIngredientCount = ref(0);
@@ -356,6 +375,7 @@ let weekOverviewLoadPromise: Promise<void> | null = null;
 let fridgeRecipesLoadPromise: Promise<void> | null = null;
 let pantrySummaryLoadPromise: Promise<void> | null = null;
 const heroSwiperCurrent = ref(0);
+const homeFridgeRecipeDisplayCount = 3;
 
 const heroStyle = computed(() => ({}));
 const navProgress = computed(() => Math.min(1, Math.max(0, homeScrollTop.value / HOME_NAV_FADE_DISTANCE)));
@@ -405,7 +425,10 @@ const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (h
 const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showWeekOverviewSkeleton = computed(() => sessionStore.isLoggedIn && weekOverviewLoading.value && !weekOverviewLoaded.value);
 const showFridgeRecipesSkeleton = computed(
-  () => sessionStore.isLoggedIn && !fridgeRecipes.value.length && (fridgeRecipesLoading.value || !fridgeRecipesLoaded.value)
+  () =>
+    sessionStore.isLoggedIn &&
+    !fridgeRecipes.value.length &&
+    (fridgeRecipesLoading.value || !fridgeRecipesLoaded.value || (pantrySummaryLoading.value && !pantrySummaryLoaded.value))
 );
 const showPantrySummarySkeleton = computed(
   () => sessionStore.isLoggedIn && !pantrySummaryLoaded.value && pantrySummaryLoading.value
@@ -432,6 +455,24 @@ const pantrySummaryHintText = computed(() => {
     activeListCount: pantryActiveListCount.value
   });
 });
+const visibleFridgeRecipes = computed(() => {
+  const items = fridgeRecipes.value;
+  if (items.length <= homeFridgeRecipeDisplayCount) return items;
+
+  const startIndex = (fridgeRecipePageIndex.value * homeFridgeRecipeDisplayCount) % items.length;
+  return Array.from({ length: homeFridgeRecipeDisplayCount }, (_, index) => items[(startIndex + index) % items.length]);
+});
+const hasFridgeIngredients = computed(() => pantryIngredientCount.value > 0);
+const fridgeRecipesEmptyTitle = computed(() => {
+  if (!sessionStore.isLoggedIn) return "登录后看看能做什么";
+  return hasFridgeIngredients.value ? "还没匹配到合适的菜" : "先记几样冰箱食材";
+});
+const fridgeRecipesEmptyDescription = computed(() => {
+  if (!sessionStore.isLoggedIn) return "记下冰箱里的食材后，这里会按已有食材匹配菜谱。";
+  if (hasFridgeIngredients.value) return "可以去菜谱里找找想吃的，或先随机一桌换个思路。";
+  return "有了食材记录，首页就能帮你挑更顺手的菜。";
+});
+const fridgeRecipesEmptyPrimaryActionText = computed(() => (hasFridgeIngredients.value ? "去看食谱" : "去记食材"));
 const homeNextStatus = computed<HomeNextMealStatus>(() => nextMealState.value?.status ?? "NO_ARRANGEMENT");
 const weekOverviewState = computed<HomeWeekOverview | null>(() => weekOverview.value);
 const weekOverviewStatus = computed<HomeWeekOverviewStatus>(() => weekOverviewState.value?.status ?? "NO_ARRANGEMENT");
@@ -470,8 +511,8 @@ const recentArrangementMeta = computed(() => {
     `${recentArrangement.value.menuCount}道菜`
   ].join(" · ");
 });
-const recentArrangementStatusText = computed(() => (recentArrangement.value ? resolveRecentArrangementStatusText(recentArrangement.value.status) : ""));
-const recentArrangementHintText = computed(() => (recentArrangement.value ? resolveRecentArrangementHintText(recentArrangement.value) : ""));
+const recentArrangementStatusText = computed(() => (recentArrangement.value ? recentArrangementCopyPicker.statusText(recentArrangement.value) : ""));
+const recentArrangementHintText = computed(() => (recentArrangement.value ? recentArrangementCopyPicker.hintText(recentArrangement.value) : ""));
 
 onLoad(query => {
   pendingLoginPrompt.value = parseHomeLoginPrompt(query?.login);
@@ -612,6 +653,7 @@ async function loadWeekOverview(force = false) {
 async function loadFridgeRecipes(force = false) {
   if (!sessionStore.isLoggedIn) {
     fridgeRecipes.value = [];
+    fridgeRecipePageIndex.value = 0;
     fridgeRecipesLoading.value = false;
     fridgeRecipesLoaded.value = false;
     return;
@@ -629,10 +671,12 @@ async function loadFridgeRecipes(force = false) {
     .getFridgeRecipes()
     .then(result => {
       fridgeRecipes.value = result.items;
+      fridgeRecipePageIndex.value = 0;
       fridgeRecipesLoaded.value = true;
     })
     .catch(() => {
       fridgeRecipes.value = [];
+      fridgeRecipePageIndex.value = 0;
       fridgeRecipesLoaded.value = true;
     })
     .finally(() => {
@@ -840,6 +884,30 @@ function openRandomEntry() {
   navigateTo("/pages_meal/random/index");
 }
 
+async function refreshFridgeRecipeRecommendations() {
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      void refreshFridgeRecipeRecommendations();
+    });
+    return;
+  }
+
+  if (fridgeRecipes.value.length > homeFridgeRecipeDisplayCount) {
+    fridgeRecipePageIndex.value += 1;
+    return;
+  }
+
+  await loadFridgeRecipes(true);
+}
+
+function openFridgeEmptyPrimaryAction() {
+  if (hasFridgeIngredients.value) {
+    navigateTo("/pages/recipe/index");
+    return;
+  }
+  navigateTo("/pages_pantry/index/index");
+}
+
 function openLogin(action: (() => void) | null = null) {
   loginModalStore.open(null, action);
 }
@@ -883,31 +951,6 @@ function handleHeroSwiperChange(event: { detail?: { current?: number } }) {
 
 function navigateTo(url: string) {
   void uniPlatform.navigation.navigateTo(url);
-}
-
-function resolveRecentArrangementStatusText(status: HomeRecentArrangementStatus) {
-  if (status === "EMPTY_MENU") return "还没定菜单";
-  if (status === "PENDING_CONFIRM") return "待确认菜单";
-  if (status === "PENDING_SHOPPING") return "待采购";
-  if (status === "READY_TO_COOK") return "可以开始做饭";
-  return "该分享回忆了";
-}
-
-function resolveRecentArrangementActionText(status: HomeRecentArrangementStatus) {
-  if (status === "EMPTY_MENU") return "去加菜";
-  if (status === "PENDING_CONFIRM") return "确认菜单";
-  if (status === "PENDING_SHOPPING") return "去采购";
-  if (status === "READY_TO_COOK") return "开始做饭";
-  return "分享回忆";
-}
-
-function resolveRecentArrangementHintText(item: HomeRecentArrangement) {
-  const gapCount = item.gapCount ?? 0;
-  if (item.status === "EMPTY_MENU") return "还没定菜";
-  if (item.status === "PENDING_CONFIRM") return gapCount > 0 ? `还差 ${gapCount} 样食材` : "菜单还没完全定好";
-  if (item.status === "PENDING_SHOPPING") return gapCount > 0 ? `还差 ${gapCount} 样食材` : "还差一些食材";
-  if (item.status === "READY_TO_COOK") return "食材差不多齐了";
-  return "这顿饭已经结束，可以回看一下";
 }
 
 function formatRecentArrangementTime(item: HomeRecentArrangement) {
@@ -1091,6 +1134,16 @@ defineExpose({
   height: 680rpx;
   border-bottom-right-radius: 42rpx;
   border-bottom-left-radius: 42rpx;
+  background: var(--page-hero-shell-bg);
+}
+
+.table-hero::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--page-hero-mask-bg);
+  pointer-events: none;
+  content: "";
 }
 
 .table-hero::after {
@@ -1100,7 +1153,7 @@ defineExpose({
   z-index: 2;
   width: 100%;
   height: 140rpx;
-  background: var(--material-tabbar-bg);
+  background: var(--page-hero-orb-bg);
   -webkit-mask-image: var(--frosted-mask-image);
   mask-image: var(--frosted-mask-image);
   -webkit-backdrop-filter: var(--material-mask-filter);
@@ -1159,12 +1212,17 @@ defineExpose({
   overflow: hidden;
   width: 100%;
   height: 100%;
+  box-shadow: var(--material-card-shadow);
 }
 
 .hero-banner__shade,
 .hero-banner__image {
   position: absolute;
   inset: 0;
+}
+
+.hero-banner__shade {
+  background: var(--overlay-hero-banner-shade);
 }
 
 .hero-banner__image {
@@ -1219,10 +1277,10 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
-  height: 88rpx;
-  margin-top: 22rpx;
-  padding: 0 26rpx;
+  max-width: 130rpx;
+  height: 60rpx;
+  margin: 22rpx 0;
+  padding: 0 24rpx;
   border-radius: var(--radius-pill);
   background: var(--color-overlay-control);
   -webkit-backdrop-filter: var(--material-mask-filter);
@@ -1648,7 +1706,7 @@ defineExpose({
 .action-dock {
   display: flex;
   justify-content: space-evenly;
-  margin-top: 32rpx;
+  margin-top: 50rpx;
 }
 
 .recent-arrangement {
@@ -1777,7 +1835,7 @@ defineExpose({
 }
 
 .recent-arrangement__hint {
-  margin-top: 18rpx;
+  margin: 18rpx 0;
   color: var(--color-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-heavy);
@@ -1797,7 +1855,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   min-width: 164rpx;
-  height: 72rpx;
+  height: 60rpx;
   padding: 0 26rpx;
   border-radius: var(--radius-pill);
   background: var(--button-primary-bg);
@@ -1811,20 +1869,6 @@ defineExpose({
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
   line-height: 1.2;
-}
-
-.recent-arrangement__link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4rpx 0;
-}
-
-.recent-arrangement__link-text {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.4;
 }
 
 .recent-arrangement__body-skeleton {
@@ -1896,10 +1940,10 @@ defineExpose({
 
 .dock-action__title {
   display: block;
-  margin-top: 12rpx;
+  margin-top: 24rpx;
   color: var(--color-text);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-heavy);
+  font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
   text-align: center;
 }
@@ -2096,10 +2140,27 @@ defineExpose({
   margin-bottom: 22rpx;
 }
 
+.section-heading__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.section-heading__eyebrow {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
 .section-heading__title {
+  display: block;
   color: var(--color-text);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-heavy);
+  line-height: var(--line-height-tight);
 }
 
 .section-heading__action {
@@ -2192,7 +2253,7 @@ defineExpose({
 }
 
 .pantry-panel__header {
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
@@ -2218,12 +2279,18 @@ defineExpose({
 
 .pantry-panel__action {
   flex: 0 0 auto;
-  padding: 14rpx 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 164rpx;
+  height: 60rpx;
+  padding: 0 26rpx;
   border-radius: var(--radius-pill);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
+  box-sizing: border-box;
 }
 
 .pantry-list {
@@ -2325,6 +2392,36 @@ defineExpose({
   white-space: nowrap;
 }
 
+.fridge-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 18rpx;
+}
+
+.fridge-empty__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 164rpx;
+  height: 60rpx;
+  padding: 0 26rpx;
+  border-radius: var(--radius-pill);
+  box-sizing: border-box;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.fridge-empty__button--primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.fridge-empty__button--secondary {
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+}
+
 .family-recipe {
   display: inline-block;
   width: 240rpx;
@@ -2334,6 +2431,10 @@ defineExpose({
 
 .family-recipe:last-child {
   margin-right: 0;
+}
+
+.family-recipe--skeleton:not(:last-child) {
+  margin-right: 44rpx;
 }
 
 .family-recipe__visual {

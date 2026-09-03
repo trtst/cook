@@ -22,5 +22,9 @@ assert.ok(
   source.includes(".theme-footer {\n  margin-top: var(--space-lg);\n  padding-bottom: 0;"),
   "Expected theme footer spacing to be tightened once preview TabBar is embedded."
 );
+assert.ok(
+  source.includes('await uniPlatform.feedback.toast({ title: "主题已保存", icon: "success" })'),
+  "Expected confirmed theme persistence to show a success toast."
+);
 
 console.log("theme page style passed");

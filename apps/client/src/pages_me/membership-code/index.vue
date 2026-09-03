@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="兑换" full-screen>
+  <Layout :class="themeClasses" title="兑换" full-screen>
     <template #navbar-center>
       <text class="redeem-nav-title">兑换</text>
     </template>
@@ -65,7 +65,7 @@ import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();

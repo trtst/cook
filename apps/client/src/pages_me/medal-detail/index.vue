@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="勋章详情" full-screen>
+  <Layout :class="themeClasses" title="勋章详情" full-screen>
     <template #navbar-center>
       <text class="medal-navbar__title">勋章详情</text>
     </template>
@@ -95,7 +95,7 @@ import { useSessionStore } from "@/stores/session";
 import { formatMedalDate, formatMedalRange, formatMedalState, formatMedalStateHint, getMedalIconClass, resolveMedalImageUrl } from "@/pages_me/medal/present";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("medal-detail-sheet"));
 const sessionStore = useSessionStore();

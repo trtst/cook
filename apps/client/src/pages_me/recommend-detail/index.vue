@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :title="currentTypeName" full-screen :show-left="false">
+  <Layout :class="themeClasses" :title="currentTypeName" full-screen :show-left="false">
     <view class="detail-page">
       <view class="detail-scroll-wrap">
         <RecipeSearchLoading
@@ -259,7 +259,7 @@ type RecommendationListItem =
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recommend-detail-editor"));
 const sessionStore = useSessionStore();

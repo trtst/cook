@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="topic-nav-title" :style="navTitleStyle">{{ navTitle }}</text>
     </template>
@@ -80,7 +80,7 @@ import { createOperationId } from "@/utils/operation-id";
 import { formatDateTimeMinute } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();

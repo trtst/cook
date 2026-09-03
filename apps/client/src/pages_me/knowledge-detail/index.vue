@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-capsule-guard="true" :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-capsule-guard="true" :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="detail-navbar__title" :style="navTitleStyle">{{ navTitle }}</text>
     </template>
@@ -23,12 +23,6 @@
           <Skeleton width="88%" height="30rpx" />
           <Skeleton width="100%" height="30rpx" />
           <Skeleton width="76%" height="30rpx" />
-        </view>
-
-        <view v-else-if="needLogin" class="detail-state" :style="pageBodyStyle" @click="reload">
-          <text class="detail-state__title">请先登录</text>
-          <text class="detail-state__text">登录后查看文章内容</text>
-          <text class="detail-state__action">点击登录</text>
         </view>
 
         <view v-else-if="errorText" class="detail-state detail-state--error" :style="pageBodyStyle" @click="reload">
@@ -55,7 +49,7 @@
               </view>
               <view class="detail-meta__item">
                 <text class="detail-meta__icon cookfont icon-read" />
-                <text>{{ detail.viewCount }} 阅读</text>
+                <text>{{ detail.viewCount }}</text>
               </view>
               <view
                 class="detail-meta__item detail-meta__item--like"
@@ -68,16 +62,31 @@
                 @click="toggleLike"
               >
                 <text class="detail-meta__icon cookfont icon-like" />
-                <text>{{ detail.likeCount }} 点赞</text>
+                <text>{{ detail.likeCount }}</text>
               </view>
             </view>
             <text v-if="detail.summary" class="detail-summary">{{ detail.summary }}</text>
             <view v-if="keywordList.length" class="detail-keywords">
-              <text v-for="keyword in keywordList" :key="keyword" class="detail-keyword">{{ keyword }}</text>
+              <view v-for="keyword in keywordList" :key="keyword" class="detail-keyword">{{ keyword }}</view>
             </view>
 
             <view class="detail-article">
-              <rich-text class="detail-article__rich" :nodes="detail.bodyHtml" />
+              <ArticleBody :html="detail.bodyHtml" />
+            </view>
+
+            <view class="detail-bottom-like">
+              <view
+                class="detail-bottom-like__button"
+                :class="{
+                  'detail-bottom-like__button--active': detail.viewerHasLiked,
+                  'detail-bottom-like__button--disabled': likeSubmitting
+                }"
+                hover-class="detail-bottom-like__button--hover"
+                hover-stay-time="100"
+                @click="toggleLike"
+              >
+                <text class="cookfont icon-like detail-bottom-like__icon" />
+              </view>
             </view>
           </view>
         </template>
@@ -91,6 +100,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
+import ArticleBody from "../components/ArticleBody.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -103,7 +113,7 @@ import { UnauthorizedError } from "@/apis/http";
 import { knowledgeApi, type KnowledgeArticleDetail } from "@/apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
@@ -114,7 +124,6 @@ const detail = ref<KnowledgeArticleDetail | null>(null);
 const loading = ref(true);
 const loaded = ref(false);
 const errorText = ref("");
-const needLogin = ref(false);
 const scrollTop = ref(0);
 const likeSubmitting = ref(false);
 const viewRecorded = ref(false);
@@ -144,40 +153,19 @@ onLoad((query) => {
 
 async function loadDetail() {
   if (!articleId.value) {
-    needLogin.value = false;
     loading.value = false;
     loaded.value = true;
     errorText.value = "文章不存在";
     return;
   }
 
-  if (!sessionStore.isLoggedIn) {
-    showLoginState();
-    loginModalStore.open(null, () => {
-      needLogin.value = false;
-      loaded.value = false;
-      void loadDetail();
-    });
-    return;
-  }
-
   loading.value = true;
-  needLogin.value = false;
   errorText.value = "";
   try {
     detail.value = await knowledgeApi.getArticleDetail(articleId.value);
     loaded.value = true;
     await recordViewOnce();
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      showLoginState();
-      loginModalStore.open(null, () => {
-        needLogin.value = false;
-        loaded.value = false;
-        void loadDetail();
-      });
-      return;
-    }
     detail.value = null;
     loaded.value = true;
     errorText.value = error instanceof Error ? error.message : "文章加载失败";
@@ -187,7 +175,7 @@ async function loadDetail() {
 }
 
 async function recordViewOnce() {
-  if (!detail.value || viewRecorded.value) return;
+  if (!detail.value || viewRecorded.value || !sessionStore.isLoggedIn) return;
   viewRecorded.value = true;
   try {
     const result = await knowledgeApi.recordArticleView(detail.value.id, createOperationId());
@@ -241,14 +229,6 @@ function reload() {
   void loadDetail();
 }
 
-function showLoginState() {
-  detail.value = null;
-  loading.value = false;
-  loaded.value = true;
-  errorText.value = "";
-  needLogin.value = true;
-}
-
 function handleScroll(event: { detail?: { scrollTop?: number } }) {
   scrollTop.value = event.detail?.scrollTop ?? 0;
 }
@@ -271,7 +251,6 @@ function splitKeywords(value: string | null) {
 
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
   await sessionStore.setSession(snapshot);
-  needLogin.value = false;
   loaded.value = false;
   viewRecorded.value = false;
   await loadDetail();
@@ -313,7 +292,7 @@ defineExpose({
 
 .detail-page {
   min-height: 100vh;
-  padding-bottom: max(48rpx, env(safe-area-inset-bottom));
+  padding-bottom: max(80rpx, calc(env(safe-area-inset-bottom) + 48rpx));
   background: var(--color-surface);
 }
 
@@ -445,7 +424,7 @@ defineExpose({
 }
 
 .detail-meta__item--active {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -459,6 +438,9 @@ defineExpose({
 
 .detail-summary {
   display: block;
+  padding: 8rpx 18rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-soft-panel);
   color: var(--color-text-secondary);
   font-size: var(--font-size-md);
   line-height: 1.8;
@@ -475,7 +457,7 @@ defineExpose({
   align-items: center;
   min-height: 38rpx;
   padding: 0 16rpx;
-  border-radius: 999rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-tag-primary-bg);
   color: var(--color-tag-primary-text);
   font-size: var(--font-size-xs);
@@ -483,12 +465,45 @@ defineExpose({
 }
 
 .detail-article {
-  padding-top: 8rpx;
+  padding-top: 12rpx;
 }
 
-.detail-article__rich {
-  color: var(--color-text);
-  font-size: 30rpx;
-  line-height: 1.8;
+.detail-bottom-like {
+  display: flex;
+  justify-content: center;
+  padding-top: 30rpx;
+  padding-bottom: 12rpx;
+}
+
+.detail-bottom-like__button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100rpx;
+  height: 100rpx;
+  border: 1rpx solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-tertiary);
+  background: var(--color-surface-soft-panel);
+}
+
+.detail-bottom-like__button--active {
+  border-color: var(--color-border-active);
+  color: var(--color-support-action);
+  background: var(--color-tag-primary-bg);
+}
+
+.detail-bottom-like__button--disabled {
+  opacity: 0.7;
+}
+
+.detail-bottom-like__button--hover {
+  opacity: 0.72;
+}
+
+.detail-bottom-like__icon {
+  color: inherit;
+  font-size: 38rpx;
+  line-height: 1;
 }
 </style>

@@ -3,9 +3,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const pageSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
+const readLabel = ["阅", "读"].join("");
+const likeLabel = ["点", "赞"].join("");
 
 function expectIncludes(snippet: string) {
   assert.ok(pageSource.includes(snippet), `Expected knowledge-list page to include: ${snippet}`);
+}
+
+function expectExcludes(snippet: string) {
+  assert.ok(!pageSource.includes(snippet), `Expected knowledge-list page to exclude: ${snippet}`);
 }
 
 function expectSelectorIncludes(selector: string, snippets: string[]) {
@@ -35,6 +41,8 @@ assert.ok(metaIndex > keywordsIndex, "Expected meta row below keywords");
 expectIncludes('class="knowledge-item__meta-icon cookfont icon-time"');
 expectIncludes('class="knowledge-item__meta-icon cookfont icon-read"');
 expectIncludes('class="knowledge-item__meta-icon cookfont icon-like"');
+expectExcludes(readLabel);
+expectExcludes(likeLabel);
 expectIncludes("const serverChannel = ref<");
 expectIncludes("const channelMeta = computed(() => serverChannel.value ?? staticChannelMeta.value)");
 expectIncludes("title: result.channel.name");

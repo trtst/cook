@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="">
+  <Layout :class="themeClasses" title="">
     <template #navbar-center>
       <text class="knowledge-navbar__title" :style="{ opacity: navbarTitleOpacity }">
         {{ channelMeta?.title || "厨房知识" }}
@@ -34,7 +34,7 @@
           <view class="knowledge-hero">
             <text class="knowledge-hero__eyebrow">厨房知识</text>
             <text class="knowledge-hero__title">{{ channelMeta?.title || "内容准备中" }}</text>
-            <text class="knowledge-hero__description">{{ channelMeta?.description || "登录后查看文章内容" }}</text>
+            <text class="knowledge-hero__description">{{ channelMeta?.description || "这里暂时还没有内容" }}</text>
           </view>
 
           <view v-if="showSkeleton" class="knowledge-list">
@@ -50,11 +50,6 @@
                 </view>
               </view>
             </view>
-          </view>
-
-          <view v-else-if="needLogin" class="knowledge-status">
-            <text class="knowledge-status__text">请先登录后查看文章</text>
-            <button class="knowledge-status__button" @click="reload">去登录</button>
           </view>
 
           <view v-else-if="errorText" class="knowledge-status">
@@ -105,12 +100,12 @@
                   <text class="knowledge-item__meta-sep">·</text>
                   <view class="knowledge-item__meta-item">
                     <text class="knowledge-item__meta-icon cookfont icon-read" />
-                    <text>{{ item.viewCount }} 阅读</text>
+                    <text>{{ item.viewCount }}</text>
                   </view>
                   <text class="knowledge-item__meta-sep">·</text>
                   <view class="knowledge-item__meta-item">
                     <text class="knowledge-item__meta-icon cookfont icon-like" />
-                    <text>{{ item.likeCount }} 点赞</text>
+                    <text>{{ item.likeCount }}</text>
                   </view>
                 </view>
               </view>
@@ -140,17 +135,12 @@ import {
   type KnowledgeChannelCode
 } from "@/config/knowledge-articles";
 import { uniPlatform } from "@/platform/uni";
-import { useLoginModalStore } from "@/stores/login-modal";
-import { useSessionStore } from "@/stores/session";
-import { UnauthorizedError } from "@/apis/http";
 import { knowledgeApi, type KnowledgeArticleSummary } from "@/apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
-const sessionStore = useSessionStore();
-const loginModalStore = useLoginModalStore();
 const {
   threshold: refresherThreshold,
   pullDistance,
@@ -176,7 +166,6 @@ const articles = ref<KnowledgeArticleSummary[]>([]);
 const loading = ref(true);
 const loaded = ref(false);
 const errorText = ref("");
-const needLogin = ref(false);
 const scrollTop = ref(0);
 
 const staticChannelMeta = computed(() => getKnowledgeChannel(channelCode.value));
@@ -198,25 +187,13 @@ onLoad((query) => {
 
 async function loadArticles() {
   if (!channelCode.value) {
-    needLogin.value = false;
     loading.value = false;
     loaded.value = true;
     errorText.value = "栏目不存在";
     return;
   }
 
-  if (!sessionStore.isLoggedIn) {
-    showLoginState();
-    loginModalStore.open(null, () => {
-      needLogin.value = false;
-      loaded.value = false;
-      void loadArticles();
-    });
-    return;
-  }
-
   loading.value = true;
-  needLogin.value = false;
   errorText.value = "";
   try {
     const result = await knowledgeApi.listArticles(channelCode.value);
@@ -228,15 +205,6 @@ async function loadArticles() {
     articles.value = result.items;
     loaded.value = true;
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      showLoginState();
-      loginModalStore.open(null, () => {
-        needLogin.value = false;
-        loaded.value = false;
-        void loadArticles();
-      });
-      return;
-    }
     articles.value = [];
     loaded.value = true;
     errorText.value = error instanceof Error ? error.message : "文章加载失败";
@@ -248,14 +216,6 @@ async function loadArticles() {
 function reload() {
   loaded.value = false;
   void loadArticles();
-}
-
-function showLoginState() {
-  articles.value = [];
-  loading.value = false;
-  loaded.value = true;
-  errorText.value = "";
-  needLogin.value = true;
 }
 
 async function handleRefresherRefresh() {
@@ -297,16 +257,6 @@ function splitKeywords(value: string | null) {
     : [];
 }
 
-async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
-  await sessionStore.setSession(snapshot);
-  needLogin.value = false;
-  loaded.value = false;
-  await loadArticles();
-}
-
-defineExpose({
-  automatorApplySession
-});
 </script>
 
 <style scoped lang="scss">

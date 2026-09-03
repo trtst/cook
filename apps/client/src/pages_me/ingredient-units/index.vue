@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen>
+  <Layout :class="themeClasses" title="" full-screen>
     <template #navbar-center>
       <view class="nav-tabs">
           <view
@@ -310,7 +310,7 @@ type SheetMode = IngredientUnitsTab | "ingredient-feedback";
 type LoadSource = "idle" | "initial" | "search" | "refresh" | "switch" | "retry";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("ingredient-units-sheet"));
 const loginModalStore = useLoginModalStore();
@@ -1031,7 +1031,6 @@ defineExpose({
   flex: none;
   margin-top: 20rpx;
   padding-bottom: 16rpx;
-  background: var(--color-page);
 }
 
 .sticky-bar {

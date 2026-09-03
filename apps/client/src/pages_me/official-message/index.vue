@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="detail-navbar__title" :style="navTitleStyle">{{ navTitle }}</text>
     </template>
@@ -80,7 +80,7 @@ import { UnauthorizedError } from "@/apis/http";
 import { officialMessageApi, type OfficialMessageDetail } from "../apis/official-message";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
@@ -225,9 +225,9 @@ defineExpose({
   right: 0;
   left: 0;
   z-index: 1;
-  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background: var(--page-navbar-backdrop-bg);
+  -webkit-backdrop-filter: var(--page-backdrop-blur-filter);
+  backdrop-filter: var(--page-backdrop-blur-filter);
   pointer-events: none;
 }
 
@@ -289,13 +289,11 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at top, rgba(92, 151, 114, 0.28), transparent 56%),
-    linear-gradient(135deg, rgba(255, 252, 245, 0.98), rgba(234, 244, 235, 0.96));
+  background: var(--page-cover-fresh-bg);
 }
 
 .detail-hero__empty-text {
-  color: rgba(47, 111, 78, 0.9);
+  color: var(--color-support-action);
   font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
   letter-spacing: 4rpx;
@@ -304,7 +302,7 @@ defineExpose({
 .detail-hero__mask {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(25, 33, 28, 0.08), rgba(25, 33, 28, 0.72));
+  background: var(--overlay-image-mask);
 }
 
 .detail-hero__content {
@@ -323,12 +321,12 @@ defineExpose({
 
 .detail-hero__eyebrow,
 .detail-hero__meta text {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--color-overlay-text-muted);
   font-size: 24rpx;
 }
 
 .detail-hero__title {
-  color: #fff;
+  color: var(--color-overlay-text);
   font-size: 44rpx;
   font-weight: var(--font-weight-bold);
   line-height: 1.28;

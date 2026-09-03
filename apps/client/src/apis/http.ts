@@ -78,7 +78,7 @@ interface ApiResponse<T> {
 }
 
 interface RequestOptions {
-	auth?: boolean;
+	auth?: boolean | "optional";
 	query?: Record<string, string | number | boolean | null | undefined>;
 	body?: unknown;
 	headers?: Record<string, string>;
@@ -140,6 +140,7 @@ async function clearUnauthorized(error: UnauthorizedError) {
 async function requestByMethod<T>(method: HttpMethod, url: string, options: RequestOptions = {}) {
 	const auth = options.auth ?? true;
 	const token = auth ? useSessionStore().token : "";
+	const shouldClearUnauthorized = auth === true;
 	const idempotencyKey = options.idempotencyKey ? normalizeIdempotencyKey(options.idempotencyKey) : undefined;
 	const result = await uniRequestAdapter({
 		url: buildUrl(url, options.query),
@@ -156,7 +157,7 @@ async function requestByMethod<T>(method: HttpMethod, url: string, options: Requ
 	if (!isApiResponse<T>(result.body)) {
 		if (result.status === 401) {
 			const error = new UnauthorizedError();
-			if (auth) await clearUnauthorized(error);
+			if (shouldClearUnauthorized) await clearUnauthorized(error);
 			throw error;
 		}
 
@@ -169,7 +170,7 @@ async function requestByMethod<T>(method: HttpMethod, url: string, options: Requ
 
 	if (result.body.code === 401) {
 		const error = new UnauthorizedError(result.body.message, result.body.data);
-		if (auth) await clearUnauthorized(error);
+		if (shouldClearUnauthorized) await clearUnauthorized(error);
 		throw error;
 	}
 

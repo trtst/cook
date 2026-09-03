@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="topic-nav-title" :style="navTitleStyle">{{ navTitle }}</text>
     </template>
@@ -181,7 +181,7 @@ import { uniPlatform } from "@/platform/uni";
 import { formatMonthDay, formatSort } from "../utils/date";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { setLocked } = usePageScrollLock(Symbol("home-topic-sheet"));
 const { navBarTotalHeight } = useSystemInfo();

@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="reminder-navbar__title">提醒设置</text>
     </template>
@@ -113,7 +113,7 @@ type PickerValueEvent = Event & {
 };
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
@@ -341,14 +341,14 @@ defineExpose({
   width: 80rpx;
   height: 48rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-text-tertiary) 20%, var(--color-surface) 80%);
+  background: var(--color-surface-muted);
   box-shadow: inset 0 0 0 1rpx var(--color-border-light);
   transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .setting-toggle--on {
-  background: var(--color-primary);
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary) 68%, transparent);
+  background: var(--color-support-action);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .setting-toggle__thumb {
@@ -358,8 +358,8 @@ defineExpose({
   width: 40rpx;
   height: 40rpx;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 6rpx 16rpx rgba(15, 23, 42, 0.14);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
   transition: transform 0.18s ease;
 }
 
@@ -388,7 +388,7 @@ defineExpose({
 }
 
 .setting-row__value {
-  color: var(--color-primary);
+  color: var(--color-support-action);
   font-size: 40rpx;
   font-weight: var(--font-weight-semibold);
 }
@@ -408,13 +408,13 @@ defineExpose({
   height: 56rpx;
   padding: 0 20rpx;
   border-radius: 999rpx;
-  background: color-mix(in srgb, var(--color-surface-muted) 78%, transparent);
+  background: var(--color-surface-soft-muted);
   box-shadow: inset 0 0 0 1rpx var(--color-divider);
 }
 
 .day-chip--active {
-  background: var(--color-primary-soft-fill);
-  box-shadow: inset 0 0 0 1rpx color-mix(in srgb, var(--color-primary) 24%, transparent);
+  background: var(--color-support-notice);
+  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
 }
 
 .day-chip__text {
@@ -425,7 +425,7 @@ defineExpose({
 }
 
 .day-chip--active .day-chip__text {
-  color: var(--color-primary);
+  color: var(--color-support-action);
 }
 
 .reminder-footer {

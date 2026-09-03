@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout current-tab="recipe" :show-left="false" full-screen>
+  <Layout :class="themeClasses" current-tab="recipe" :show-left="false" full-screen>
     <template #navbar-center>
       <view class="nav-tabs">
         <view
@@ -373,7 +373,7 @@ function formatCardCalories(value: number | null | undefined) {
 
 const pageStyle = usePageScrollStyle();
 const settingsStore = useSettingsStore();
-const { themeVars, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
+const { themeVars, themeClasses, effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
@@ -1128,7 +1128,6 @@ defineExpose({
   flex: none;
   margin-top: 20rpx;
   padding-bottom: 16rpx;
-  background: var(--color-page);
 }
 
 .recipe-scroll {

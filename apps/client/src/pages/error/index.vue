@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="出错了">
+  <Layout :class="themeClasses" title="出错了">
     <text class="title">页面暂时不可用</text>
     <text class="description">请返回上一页后重试。</text>
   </Layout>
@@ -14,7 +14,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useTheme } from "@/composables/useTheme";
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 </script>
 

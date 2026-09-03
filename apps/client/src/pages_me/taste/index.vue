@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="我的口味" full-screen>
+  <Layout :class="themeClasses" title="我的口味" full-screen>
     <template #navbar-center>
       <text class="taste-navbar__title">我的口味</text>
     </template>
@@ -96,7 +96,7 @@ type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "fl
 type TasteField = { key: TasteListKey; label: string; placeholder: string };
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const tasteItemMaxLength = 64;
 const tasteItemMaxCount = 50;

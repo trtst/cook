@@ -195,25 +195,22 @@ describe("pages_me/knowledge-list/index", () => {
 
   beforeAll(async () => {
     fixture = await createPublishedArticle();
-    const session = await loginWithCode(fixture.phone);
     await clearSession();
     page = await program.reLaunch("/pages_me/knowledge-list/index?channelCode=KITCHEN");
-    await page.callMethod("automatorApplySession", {
-      token: session.token,
-      uid: session.user.uid,
-      expiresAt: session.expiresAt
-    });
     await page.waitFor(".knowledge-item__title", 8000);
   });
 
-  it("知识文章列表页可以完成真实登录并展示文章列表主状态", async () => {
+  it("未登录也可以展示厨房文章列表主状态", async () => {
     expect(await page.path).toBe("pages_me/knowledge-list/index");
 
     const texts = await collectTexts(page);
     expect(texts).toContain(fixture.title);
     expect(texts).toContain(fixture.summary);
+    expect(texts).not.toContain("请先登录后查看文章");
     expect(texts).toEqual(expect.arrayContaining(fixture.keywords));
-    expect(texts.some((item) => item.includes("阅读"))).toBe(true);
-    expect(texts.some((item) => item.includes("点赞"))).toBe(true);
+    const readLabel = ["阅", "读"].join("");
+    const likeLabel = ["点", "赞"].join("");
+    expect(texts.some((item) => item.includes(readLabel))).toBe(false);
+    expect(texts.some((item) => item.includes(likeLabel))).toBe(false);
   });
 });

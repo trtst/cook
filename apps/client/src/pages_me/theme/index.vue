@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout title="" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
       <text class="theme-navbar__title">主题皮肤</text>
     </template>
@@ -93,6 +93,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
+import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
@@ -113,6 +114,7 @@ const sessionStore = useSessionStore();
 const settingsStore = useSettingsStore();
 const {
   themeVars,
+  themeClasses,
   effectiveSkin,
   effectivePalette,
   themeMode,
@@ -219,6 +221,7 @@ async function persistCurrentTheme() {
   await settingsStore.persistCurrentThemeSettings();
   committedTheme = settingsStore.readCurrentThemeSettings();
   confirmedThisVisit = true;
+  await uniPlatform.feedback.toast({ title: "主题已保存", icon: "success" });
 }
 
 function openThemeLogin() {

@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout
+  <Layout :class="themeClasses"
     title=""
     full-screen
     :navbar-transparent="sessionStore.isLoggedIn"
@@ -120,7 +120,7 @@ const NAV_FADE_DISTANCE = 96;
 const STICKY_TRIGGER_TOP = 260;
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
@@ -396,7 +396,6 @@ defineExpose({
   z-index: 20;
   margin-top: var(--space-md);
   padding: 0 var(--space-page) 16rpx;
-  background: var(--color-page);
 }
 
 .sticky-wrap--fixed {

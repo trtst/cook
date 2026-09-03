@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { del, get, post, type OperationId, type PageResult } from "@/apis/http";
+import { del, get, post, UnauthorizedError, type OperationId, type PageResult } from "@/apis/http";
 import type { KnowledgeChannelCode } from "@/config/knowledge-articles";
 
 export interface KnowledgeArticleSummary {
@@ -79,9 +79,20 @@ function normalizeDetail(item: KnowledgeArticleDetail): KnowledgeArticleDetail {
   };
 }
 
+async function getReadable<T>(url: string, query?: Record<string, string | number | boolean | null | undefined>) {
+  try {
+    return await get<T>(url, query, { auth: "optional" });
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return get<T>(url, query, { auth: false });
+    }
+    throw error;
+  }
+}
+
 export const knowledgeApi = {
   listArticles(channelCode: KnowledgeChannelCode, page = 1, pageSize = 20) {
-    return get<KnowledgeArticleList>(baseUrl, {
+    return getReadable<KnowledgeArticleList>(baseUrl, {
       channelCode,
       page,
       pageSize
@@ -91,7 +102,7 @@ export const knowledgeApi = {
     }));
   },
   getArticleDetail(articleId: number) {
-    return get<KnowledgeArticleDetail>(`${baseUrl}/${encodeURIComponent(String(articleId))}`).then(normalizeDetail);
+    return getReadable<KnowledgeArticleDetail>(`${baseUrl}/${encodeURIComponent(String(articleId))}`).then(normalizeDetail);
   },
   recordArticleView(articleId: number, operationId: OperationId) {
     return post<KnowledgeArticleViewResult>(`${baseUrl}/${encodeURIComponent(String(articleId))}/view`, undefined, {

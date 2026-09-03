@@ -1,6 +1,6 @@
 <template>
 	<page-meta :page-style="themePageStyle" />
-	<Layout title="" current-tab="me" :show-left="false" full-screen :navbar-placeholder="false" navbar-transparent>
+	<Layout :class="themeClasses" title="" current-tab="me" :show-left="false" full-screen :navbar-placeholder="false" navbar-transparent>
 		<scroll-view class="me-page" scroll-y>
 			<view class="profile-hero" :class="profileHeroVariant" :style="profileHeroStyle">
 				<image v-if="profileCoverUrl" class="profile-hero__cover" :src="profileCoverUrl" mode="aspectFill" />
@@ -277,7 +277,7 @@ interface PageEntry {
 }
 
 const pageStyle = usePageScrollStyle();
-const { themeVars } = useTheme();
+const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
