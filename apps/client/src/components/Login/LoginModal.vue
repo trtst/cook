@@ -418,7 +418,7 @@ function stopMotionTimer() {
 </script>
 
 <style lang="scss">
-@import "@/assets/fonts/font.scss";
+@use "@/assets/fonts/font.scss";
 
 .login-popup {
   position: fixed;

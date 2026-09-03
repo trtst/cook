@@ -5,8 +5,12 @@
   "packageManager": "pnpm@10.22.0",
   "type": "module",
   "scripts": {
-    "dev:mp-weixin": "uni -p mp-weixin",
-    "build:mp-weixin": "uni build -p mp-weixin",
+    "dev:mp-weixin": "pnpm dev:mp-weixin:dev",
+    "dev:mp-weixin:dev": "VITE_APP_MODE=dev uni -p mp-weixin",
+    "dev:mp-weixin:prod": "VITE_APP_MODE=prod uni -p mp-weixin",
+    "build:mp-weixin": "pnpm build:mp-weixin:prod",
+    "build:mp-weixin:dev": "VITE_APP_MODE=dev uni build -p mp-weixin",
+    "build:mp-weixin:prod": "VITE_APP_MODE=prod uni build -p mp-weixin",
     "type-check": "vue-tsc --noEmit -p tsconfig.json",
     "lint": "eslint src",
     "check": "pnpm lint && pnpm type-check && pnpm build:mp-weixin",
@@ -32,8 +36,5 @@
     "vite": "5.2.8",
     "vue-eslint-parser": "10.4.1",
     "vue-tsc": "3.3.7"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["@parcel/watcher", "esbuild", "vue-demi"]
   }
 }
