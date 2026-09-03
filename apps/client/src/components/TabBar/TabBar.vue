@@ -270,7 +270,7 @@ async function syncBadgeSnapshot() {
 }
 
 .tabbar__item--active .tabbar__font-icon {
-  color: var(--color-text);
+  color: var(--color-icon-active);
 }
 
 .tabbar-shell--default .tabbar__icon-wrap,

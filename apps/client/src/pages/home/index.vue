@@ -1222,7 +1222,6 @@ defineExpose({
 }
 
 .hero-banner__shade {
-  background: var(--overlay-hero-banner-shade);
 }
 
 .hero-banner__image {
