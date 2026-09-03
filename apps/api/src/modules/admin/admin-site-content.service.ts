@@ -467,8 +467,10 @@ export class AdminSiteContentService {
     };
   }
 
-  async listPublicArticles(userId: number, page: number, pageSize: number, channelCode: string): Promise<SiteContentArticleList> {
-    await this.requireUser(userId);
+  async listPublicArticles(userId: number | null, page: number, pageSize: number, channelCode: string): Promise<SiteContentArticleList> {
+    if (userId !== null) {
+      await this.requireUser(userId);
+    }
     await this.ensureDefaultChannels();
     if (!isPublicArticleChannelCode(channelCode)) {
       throw new BadRequestException("文章栏目不支持");
@@ -515,8 +517,10 @@ export class AdminSiteContentService {
     };
   }
 
-  async getPublicArticleDetail(userId: number, articleId: number): Promise<SiteContentArticleDetail> {
-    await this.requireUser(userId);
+  async getPublicArticleDetail(userId: number | null, articleId: number): Promise<SiteContentArticleDetail> {
+    if (userId !== null) {
+      await this.requireUser(userId);
+    }
     await this.ensureDefaultChannels();
     const row = await this.findPublicArticle(userId, articleId);
     return this.toPublicArticleDetail(row);
@@ -959,7 +963,7 @@ export class AdminSiteContentService {
     };
   }
 
-  private async findPublicArticle(userId: number, articleId: number) {
+  private async findPublicArticle(userId: number | null, articleId: number) {
     const row = await this.prisma.siteContent.findFirst({
       where: {
         id: articleId,
@@ -974,7 +978,7 @@ export class AdminSiteContentService {
       include: {
         channel: true,
         likes: {
-          where: { userId },
+          where: userId === null ? { id: -1 } : { userId },
           select: { id: true }
         }
       }

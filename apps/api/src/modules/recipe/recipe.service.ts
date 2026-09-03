@@ -2469,7 +2469,7 @@ export class RecipeService {
         }
       }
     });
-    if (!recipe || !recipe.category) throw new NotFoundException("菜谱不存在");
+    if (!recipe) throw new NotFoundException("菜谱不存在");
     return recipe;
   }
 

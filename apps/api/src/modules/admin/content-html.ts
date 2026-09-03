@@ -1,13 +1,11 @@
 const allowedTags = new Set([
   "p",
   "br",
-  "h1",
   "h2",
   "h3",
   "strong",
-  "em",
+  "b",
   "u",
-  "s",
   "blockquote",
   "ul",
   "ol",
@@ -93,7 +91,7 @@ function parseAttributes(raw: string, start: number, end: number) {
   return attributes;
 }
 
-function normalizeLink(value: string) {
+function resolveLinkHref(value: string) {
   const trimmed = value.trim();
   if (trimmed.startsWith("#") || (trimmed.startsWith("/") && !trimmed.startsWith("//"))) return trimmed;
   try {
@@ -104,7 +102,7 @@ function normalizeLink(value: string) {
   }
 }
 
-function normalizeImage(value: string) {
+function resolveImageSrc(value: string) {
   const trimmed = value.trim();
   try {
     const url = new URL(trimmed, "https://cook.invalid");
@@ -122,13 +120,13 @@ function buildAttributes(tagName: string, raw: string, start: number, end: numbe
   for (const attribute of parseAttributes(raw, start, end)) {
     if (!allowed.has(attribute.name)) continue;
     if (attribute.name === "href") {
-      href = normalizeLink(attribute.value);
+      href = resolveLinkHref(attribute.value);
       if (!href) continue;
       attributes.push(` href="${escapeAttribute(href)}"`);
       continue;
     }
     if (attribute.name === "src") {
-      const src = normalizeImage(attribute.value);
+      const src = resolveImageSrc(attribute.value);
       if (!src) return null;
       attributes.push(` src="${escapeAttribute(src)}"`);
       continue;

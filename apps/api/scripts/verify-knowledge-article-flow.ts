@@ -168,11 +168,6 @@ async function main() {
     });
     assert(channel, `missing fixed channel ${articleChannelCode}`);
 
-    const unauthenticatedList = await request<PageResult<KnowledgeArticleSummary>>(
-      `/site-contents/articles?channelCode=${articleChannelCode}&page=1&pageSize=20`
-    );
-    assert(unauthenticatedList.status === 401, "unauthenticated article list should return 401");
-
     const adminLogin = await requestData<LoginResult>(
       "/admin/auth/login",
       {
@@ -225,6 +220,25 @@ async function main() {
     );
     assert(published.status === "PUBLISHED", "knowledge article should be published");
     assert(published.path === expectedPath, "knowledge article path should be normalized");
+
+    const unauthenticatedList = await requestData<KnowledgeArticleList>(
+      `/site-contents/articles?channelCode=${articleChannelCode}&page=1&pageSize=20`
+    );
+    assert(unauthenticatedList.channel.code === channel.code, "guest article list should expose current channel code");
+    assert(
+      unauthenticatedList.items.some(item => item.id === published.id),
+      "guest article list should include published knowledge article"
+    );
+
+    const unauthenticatedDetail = await requestData<KnowledgeArticleDetail>(`/site-contents/articles/${published.id}`);
+    assert(unauthenticatedDetail.id === published.id, "guest knowledge detail id mismatch");
+    assert(unauthenticatedDetail.viewerHasLiked === false, "guest knowledge detail should not be marked liked");
+
+    const unauthenticatedLike = await request(`/site-contents/articles/${published.id}/like`, {
+      method: "POST",
+      headers: withIdempotencyKey({})
+    });
+    assert(unauthenticatedLike.status === 401, "guest like should still require login");
 
     const userLogin = await loginWithCode(createFreshPhone());
     const userAuth = { authorization: `Bearer ${userLogin.token}` };
@@ -307,7 +321,9 @@ async function main() {
           apiBaseUrl,
           channelCode: articleChannelCode,
           articleId: published.id,
-          unauthenticatedListStatus: unauthenticatedList.status,
+          unauthenticatedListStatus: 200,
+          unauthenticatedDetailStatus: 200,
+          unauthenticatedLikeStatus: unauthenticatedLike.status,
           listedArticleId: listed.id,
           finalViewCount: finalDetail.viewCount,
           finalLikeCount: finalDetail.likeCount

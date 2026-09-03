@@ -49,7 +49,7 @@ const allPlacements: HomeFeatureBoardPlacement[] = [...featurePlacements, ...qui
 const primaryWindowMs = 24 * 60 * 60 * 1000;
 const fallbackWindowMs = 36 * 60 * 60 * 1000;
 const pastShareWindowMs = 24 * 60 * 60 * 1000;
-const maxHomeFridgeRecipeCount = 3;
+const maxHomeFridgeRecipeCount = 9;
 const maxHomeFridgeMissingCount = 2;
 const homeWeekDayCount = 7;
 const weekDayNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -600,6 +600,8 @@ export class HomeService {
         .map(item => item.ingredientId)
         .filter((item): item is UUID => typeof item === "number" && item > 0)
     );
+    if (fridgeIngredientIds.size === 0) return { items: [] };
+
     const inspirationVersionIds = recipes
       .filter(item => item.ownerId === null && item.inspirationCategoryId !== null)
       .map(item => item.currentVersionId);
@@ -1178,6 +1180,8 @@ export class HomeService {
     const totalIngredientCount = ingredientIds.length;
     if (!totalIngredientCount) return null;
     const matchedIngredientCount = ingredientIds.filter(item => fridgeIngredientIds.has(item)).length;
+    if (matchedIngredientCount === 0) return null;
+
     const missingIngredientCount = totalIngredientCount - matchedIngredientCount;
     if (missingIngredientCount > maxHomeFridgeMissingCount) return null;
     const kind = recipe.ownerId === null ? "INSPIRATION" : "MY";

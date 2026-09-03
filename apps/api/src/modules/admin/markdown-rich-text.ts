@@ -7,6 +7,8 @@ export interface RichTextMarkdownResult {
 const listPattern = /^(\s*)([-*+]|\d+[.)])\s+(.+)$/;
 const headingPattern = /^(#{1,6})\s+(.+)$/;
 const tableDividerPattern = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/;
+const imageLinePattern = /^!\[([^\]]*)]\(([^)]+)\)$/;
+const imagePathPattern = /^\/api\/public-assets\/site-content-images\/[a-z0-9-]+\.(?:jpg|png|webp)$/i;
 
 function escapeText(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -16,7 +18,7 @@ function escapeAttribute(value: string) {
   return escapeText(value).replace(/"/g, "&quot;");
 }
 
-function normalizeLink(value: string) {
+function resolveLinkHref(value: string) {
   const trimmed = value.trim();
   if (trimmed.startsWith("#") || (trimmed.startsWith("/") && !trimmed.startsWith("//"))) return trimmed;
   try {
@@ -25,6 +27,12 @@ function normalizeLink(value: string) {
   } catch {
     return null;
   }
+}
+
+function resolveImageSrc(value: string) {
+  const trimmed = value.trim();
+  if (imagePathPattern.test(trimmed)) return trimmed;
+  return null;
 }
 
 function renderInline(value: string) {
@@ -38,7 +46,7 @@ function renderInline(value: string) {
   let output = value
     .replace(/!\[([^\]]*)]\([^)]+\)/g, "$1")
     .replace(/\[([^\]]+)]\(([^)]+)\)/g, (_match, label: string, href: string) => {
-      const link = normalizeLink(href);
+      const link = resolveLinkHref(href);
       if (!link) return label;
       return reserve(`<a href="${escapeAttribute(link)}" target="_blank" rel="noopener noreferrer">${escapeText(label)}</a>`);
     });
@@ -46,8 +54,8 @@ function renderInline(value: string) {
   output = escapeText(output)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/_([^_]+)_/g, "<em>$1</em>")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
     .replace(/`([^`]+)`/g, "$1");
 
   tokens.forEach((html, index) => {
@@ -152,13 +160,22 @@ export function markdownToRichText(markdown: string): RichTextMarkdownResult {
     const heading = trimmed.match(headingPattern);
     if (heading) {
       closeList();
-      const level = Math.min(heading[1].length, 3);
+      const level = Math.min(Math.max(heading[1].length, 2), 3);
       const headingText = heading[2].trim();
-      if (!title && level === 1) {
+      if (!title && heading[1].length === 1) {
         title = stripMarkdown(headingText);
         continue;
       }
       htmlParts.push(`<h${level}>${renderInline(headingText)}</h${level}>`);
+      continue;
+    }
+
+    const image = trimmed.match(imageLinePattern);
+    if (image) {
+      closeList();
+      const src = resolveImageSrc(image[2]);
+      if (src) htmlParts.push(`<img src="${escapeAttribute(src)}" alt="${escapeAttribute(stripMarkdown(image[1]))}">`);
+      else htmlParts.push(`<p>${renderInline(image[1])}</p>`);
       continue;
     }
 

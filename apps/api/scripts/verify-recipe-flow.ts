@@ -13,6 +13,7 @@ import type {
   RecipeDraftDetail,
   RecipeReportSummary,
   RecipeSceneSummary,
+  PublishRecipeDraftResponse,
   SaveCollectionRecipeResponse,
   SaveRecipeDraftResponse,
   StorageUsageSummary
@@ -115,6 +116,39 @@ async function main() {
       body: JSON.stringify({ name: `验收合集${suffix.slice(-6)}` })
     });
     assert(typeof category.id === "number" && typeof scene.id === "number", "category and scene ids should be numeric");
+
+    const importWithoutCategory = await requestData<PublishRecipeDraftResponse>("/recipes/from-inspiration", {
+      method: "POST",
+      headers: withIdempotencyKey(ownerAuth),
+      body: JSON.stringify({
+        sourceRecipeId: inspirationDetail.id,
+        sourceVersionId: inspirationDetail.contentVersionId
+      })
+    });
+    assert(typeof importWithoutCategory.recipe.id === "number", "from-inspiration should accept omitted categoryId");
+
+    const importWithNullCategory = await requestData<PublishRecipeDraftResponse>("/recipes/from-inspiration", {
+      method: "POST",
+      headers: withIdempotencyKey(ownerAuth),
+      body: JSON.stringify({
+        sourceRecipeId: inspirationDetail.id,
+        sourceVersionId: inspirationDetail.contentVersionId,
+        categoryId: null
+      })
+    });
+    assert(typeof importWithNullCategory.recipe.id === "number", "from-inspiration should accept null categoryId");
+
+    const importWithOldScenes = await request<PublishRecipeDraftResponse>("/recipes/from-inspiration", {
+      method: "POST",
+      headers: withIdempotencyKey(ownerAuth),
+      body: JSON.stringify({
+        sourceRecipeId: inspirationDetail.id,
+        sourceVersionId: inspirationDetail.contentVersionId,
+        categoryId: null,
+        sceneIds: [scene.id]
+      })
+    });
+    assert(importWithOldScenes.status === 400, `from-inspiration should reject retired sceneIds: ${importWithOldScenes.status}`);
 
     const forgedDraft = await request<SaveRecipeDraftResponse>("/recipe-drafts", {
       method: "POST",
@@ -391,6 +425,9 @@ async function main() {
           publishedRecipeId: publishedRecipe.id,
           collectionRecipeId: collect1.recipe.id,
           reportedRecipeId: reportResult.recipeId,
+          fromInspirationOmittedCategoryRecipeId: importWithoutCategory.recipe.id,
+          fromInspirationNullCategoryRecipeId: importWithNullCategory.recipe.id,
+          fromInspirationSceneIdsStatus: importWithOldScenes.status,
           storageUsedBytes: storageUsage.usedBytes,
           staleDraftUpdateStatus: staleDraftUpdate.status,
           invalidRecipeIdStatus: invalidRecipeId.status

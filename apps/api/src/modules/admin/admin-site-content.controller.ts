@@ -6,6 +6,7 @@ import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import type { RequestWithAdmin, RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
+import { OptionalUserAuthGuard } from "../../common/optional-user-auth.guard";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
@@ -176,26 +177,28 @@ export class SiteContentController {
 
 @ApiTags("site-content")
 @Controller("site-contents/articles")
-@UseGuards(UserAuthGuard)
-@ApiBearerAuth("UserBearerAuth")
 export class SiteContentArticleController {
   constructor(@Inject(AdminSiteContentService) private readonly adminSiteContentService: AdminSiteContentService) {}
 
   @Get()
+  @UseGuards(OptionalUserAuthGuard)
   @ApiOkModel(SiteContentArticleListModel, "读取文章列表")
-  list(@Req() request: RequestWithUser, @Query() query: SiteContentArticleQueryDto) {
+  list(@Req() request: Partial<RequestWithUser>, @Query() query: SiteContentArticleQueryDto) {
     return this.adminSiteContentService
-      .listPublicArticles(request.user.userId, query.page, query.pageSize, query.channelCode)
+      .listPublicArticles(request.user?.userId ?? null, query.page, query.pageSize, query.channelCode)
       .then(result => ok(result));
   }
 
   @Get(":articleId")
+  @UseGuards(OptionalUserAuthGuard)
   @ApiOkModel(SiteContentArticleDetailModel, "读取文章详情")
-  getDetail(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number) {
-    return this.adminSiteContentService.getPublicArticleDetail(request.user.userId, articleId).then(result => ok(result));
+  getDetail(@Req() request: Partial<RequestWithUser>, @Param("articleId", ParseIntPipe) articleId: number) {
+    return this.adminSiteContentService.getPublicArticleDetail(request.user?.userId ?? null, articleId).then(result => ok(result));
   }
 
   @Post(":articleId/view")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
   @ApiOkModel(SiteContentArticleViewResultModel, "累积文章阅读数")
   recordView(
@@ -207,6 +210,8 @@ export class SiteContentArticleController {
   }
 
   @Post(":articleId/like")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
   @ApiOkModel(SiteContentArticleLikeResultModel, "点赞文章")
   like(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number, @ReadIdempotencyKey() operationId: string) {
@@ -214,6 +219,8 @@ export class SiteContentArticleController {
   }
 
   @Delete(":articleId/like")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
   @ApiOkModel(SiteContentArticleLikeResultModel, "取消点赞文章")
   unlike(@Req() request: RequestWithUser, @Param("articleId", ParseIntPipe) articleId: number, @ReadIdempotencyKey() operationId: string) {
