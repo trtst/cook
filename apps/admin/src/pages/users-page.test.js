@@ -17,3 +17,6 @@ expectIncludes("查看完整手机号会记录审计日志");
 expectIncludes("revealUserPhone");
 expectIncludes("revealPhone(userId: UUID)", userApiSource);
 expectIncludes("/phone/reveal", userApiSource);
+expectIncludes("密码需要 8-20 位字符");
+expectIncludes("密码需至少包含字母、数字、符号中的两种");
+expectIncludes('maxlength="20" placeholder="8-20 位，至少两类字符"');

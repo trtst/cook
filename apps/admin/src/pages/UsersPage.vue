@@ -221,13 +221,29 @@ function validatePhone(value: string) {
   return /^1[3-9]\d{9}$/.test(value.trim());
 }
 
+function validatePassword(value: string) {
+  const password = value.trim();
+  if (password.length < 8 || password.length > 20) return "密码需要 8-20 位字符";
+
+  const categoryCount = [
+    /[A-Za-z]/.test(password),
+    /\d/.test(password),
+    /[^A-Za-z0-9]/.test(password)
+  ].filter(Boolean).length;
+
+  return categoryCount >= 2 ? "" : "密码需至少包含字母、数字、符号中的两种";
+}
+
 async function submitUser() {
   const phone = userForm.phone.trim();
   const nickname = userForm.nickname.trim();
 
-  if (userDialogMode.value === "create" && userForm.password.trim().length < 6) {
-    ElMessage.error("初始密码至少 6 位");
-    return;
+  if (userDialogMode.value === "create") {
+    const passwordError = validatePassword(userForm.password);
+    if (passwordError) {
+      ElMessage.error(passwordError);
+      return;
+    }
   }
 
   if (userDialogMode.value === "edit" && !editingUserId.value) {
@@ -290,8 +306,9 @@ function openResetPassword(row: UserProfile) {
 
 async function submitResetPassword() {
   if (!resetPasswordUser.value) return;
-  if (resetPasswordDraft.value.trim().length < 6) {
-    ElMessage.error("新密码至少 6 位");
+  const passwordError = validatePassword(resetPasswordDraft.value);
+  if (passwordError) {
+    ElMessage.error(passwordError);
     return;
   }
 
@@ -445,7 +462,7 @@ onMounted(loadUsers);
           <el-input v-model="userForm.nickname" maxlength="64" placeholder="留空则不设置昵称" />
         </el-form-item>
         <el-form-item v-if="userDialogMode === 'create'" label="初始密码" required>
-          <el-input v-model="userForm.password" type="password" show-password maxlength="128" placeholder="至少 6 位" />
+          <el-input v-model="userForm.password" type="password" show-password maxlength="20" placeholder="8-20 位，至少两类字符" />
         </el-form-item>
         <el-form-item v-if="userDialogMode === 'create'" label="状态">
           <el-select v-model="userForm.status" style="width: 100%">
@@ -473,7 +490,7 @@ onMounted(loadUsers);
           <el-text>{{ resetPasswordUser?.phone || resetPasswordUser?.nickname || resetPasswordUser?.uid || "-" }}</el-text>
         </el-form-item>
         <el-form-item label="新密码" required>
-          <el-input v-model="resetPasswordDraft" type="password" show-password maxlength="128" placeholder="至少 6 位" />
+          <el-input v-model="resetPasswordDraft" type="password" show-password maxlength="20" placeholder="8-20 位，至少两类字符" />
         </el-form-item>
       </el-form>
 
