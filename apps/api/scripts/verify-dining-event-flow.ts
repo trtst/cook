@@ -282,7 +282,7 @@ async function createMealPlan(
     if (result.status >= 200 && result.status < 300 && result.body.code === 0) {
       return result.body.data;
     }
-    if (result.status === 409 && result.body.message.includes("计划已存在")) {
+    if (result.body.code === 409 && result.body.message.includes("计划已存在")) {
       continue;
     }
     throw new Error(`/meal-plans HTTP ${result.status}: ${result.body.message}`);
@@ -292,7 +292,10 @@ async function createMealPlan(
 
 async function verifyRecentArrangementBoundaries() {
   const unauthenticated = await request<HomeRecentArrangement | null>("/home/recent-arrangement");
-  assert(unauthenticated.status === 401, "unauthenticated /home/recent-arrangement should return 401");
+  assert(
+    unauthenticated.status === 200 && unauthenticated.body.code === 401,
+    "unauthenticated /home/recent-arrangement should return business code 401"
+  );
 
   const boundaryPhone = createFreshPhone();
   const boundaryUser = await loginWithCode(boundaryPhone);

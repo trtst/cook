@@ -146,7 +146,10 @@ async function main() {
         sceneIds: [scene.id]
       })
     });
-    assert(importWithOldScenes.status === 400, `from-inspiration should reject retired sceneIds: ${importWithOldScenes.status}`);
+    assert(
+      importWithOldScenes.status === 200 && importWithOldScenes.body.code === 400,
+      `from-inspiration should reject retired sceneIds with business code 400: HTTP ${importWithOldScenes.status} code ${importWithOldScenes.body.code}`
+    );
 
     const forgedDraft = await request<SaveRecipeDraftResponse>("/recipe-drafts", {
       method: "POST",
@@ -185,7 +188,10 @@ async function main() {
         }
       })
     });
-    assert(forgedDraft.status === 400, `client-supplied draft images should return HTTP 400: ${forgedDraft.status}`);
+    assert(
+      forgedDraft.status === 200 && forgedDraft.body.code === 400,
+      `client-supplied draft images should return business code 400: HTTP ${forgedDraft.status} code ${forgedDraft.body.code}`
+    );
 
     const rawDraftBody = JSON.stringify({
       recipeId: null,
@@ -263,7 +269,10 @@ async function main() {
         }
       })
     });
-    assert(blankDraft.status === 400, `blank draft title should return HTTP 400: ${blankDraft.status}`);
+    assert(
+      blankDraft.status === 200 && blankDraft.body.code === 400,
+      `blank draft title should return business code 400: HTTP ${blankDraft.status} code ${blankDraft.body.code}`
+    );
 
     const updatedDraft = await requestData<SaveRecipeDraftResponse>(`/recipe-drafts/${draft1.id}`, {
       method: "PUT",
@@ -307,10 +316,16 @@ async function main() {
         }
       })
     });
-    assert(staleDraftUpdate.status === 409, `stale draft version should return HTTP 409: ${staleDraftUpdate.status}`);
+    assert(
+      staleDraftUpdate.status === 200 && staleDraftUpdate.body.code === 409,
+      `stale draft version should return business code 409: HTTP ${staleDraftUpdate.status} code ${staleDraftUpdate.body.code}`
+    );
 
     const invalidRecipeId = await request<MyRecipeDetail>("/recipes/not-a-number", { headers: ownerAuth });
-    assert(invalidRecipeId.status === 400, `invalid recipe id should return HTTP 400: ${invalidRecipeId.status}`);
+    assert(
+      invalidRecipeId.status === 200 && invalidRecipeId.body.code === 400,
+      `invalid recipe id should return business code 400: HTTP ${invalidRecipeId.status} code ${invalidRecipeId.body.code}`
+    );
 
     const publishOperationId = nextIdempotencyKey();
     const publishBody = JSON.stringify({ expectedVersion: updatedDraft.version });
@@ -334,7 +349,7 @@ async function main() {
     const draftAfterPublish = await request<RecipeDraftDetail>(`/recipe-drafts/${draft1.id}`, {
       headers: ownerAuth
     });
-    assert(draftAfterPublish.status === 404, "published draft should be removed");
+    assert(draftAfterPublish.status === 200 && draftAfterPublish.body.code === 404, "published draft should be removed");
 
     const mineBeforeDelete = await requestData<PageResult<MyRecipeSummary>>("/recipes?page=1&pageSize=50", {
       headers: ownerAuth

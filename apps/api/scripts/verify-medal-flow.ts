@@ -416,7 +416,7 @@ async function createMealPlan(ownerAuth: Record<string, string>, recipe: MyRecip
     if (result.status >= 200 && result.status < 300 && result.body.code === 0) {
       return result.body.data;
     }
-    if (result.status === 409 && result.body.message.includes("计划已存在")) {
+    if (result.body.code === 409 && result.body.message.includes("计划已存在")) {
       continue;
     }
     throw new Error(`/meal-plans HTTP ${result.status}: ${result.body.message}`);
@@ -509,7 +509,10 @@ function findWallItem(wall: MedalWallResponse, code: string) {
 
 async function main() {
   const unauthenticatedMedals = await getCurrentMedals();
-  assert(unauthenticatedMedals.status === 401, "unauthenticated /users/me/medals should return 401");
+  assert(
+    unauthenticatedMedals.status === 200 && unauthenticatedMedals.body.code === 401,
+    "unauthenticated /users/me/medals should return business code 401"
+  );
 
   const adminSession = await loginAdmin();
   const listBefore = await listMedalTemplates(adminSession.token);

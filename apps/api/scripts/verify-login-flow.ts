@@ -62,7 +62,7 @@ async function main() {
 
   try {
     const unauthenticatedMe = await request<MeResponse>("/users/me");
-    assert(unauthenticatedMe.status === 401, "unauthenticated GET /users/me should return 401");
+    assert(unauthenticatedMe.status === 200 && unauthenticatedMe.body.code === 401, "unauthenticated GET /users/me should return business code 401");
 
     const login = await requestData<AuthSessionResult>("/auth/password/login", {
       method: "POST",
@@ -87,7 +87,7 @@ async function main() {
         phone: "13700000000"
       })
     });
-    assert(oldFieldUpdate.status === 400, "old phone field should return 400");
+    assert(oldFieldUpdate.status === 200 && oldFieldUpdate.body.code === 400, "old phone field should return business code 400");
 
     const updatedUser = await requestData<MeResponse>("/users/me", {
       method: "PUT",
@@ -124,12 +124,12 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ refreshToken: refreshed.refreshToken, deviceId })
     });
-    assert(disabledRefresh.status === 401, "disabled user refresh should return 401");
+    assert(disabledRefresh.status === 200 && disabledRefresh.body.code === 401, "disabled user refresh should return business code 401");
 
     const disabledMe = await request<MeResponse>("/users/me", {
       headers: { authorization: refreshedAuthorization }
     });
-    assert(disabledMe.status === 401, "disabled user GET /users/me should return 401");
+    assert(disabledMe.status === 200 && disabledMe.body.code === 401, "disabled user GET /users/me should return business code 401");
 
     console.log(
       JSON.stringify(

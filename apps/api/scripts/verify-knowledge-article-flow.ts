@@ -236,7 +236,7 @@ async function main() {
       method: "POST",
       headers: withIdempotencyKey({})
     });
-    assert(unauthenticatedLike.status === 401, "guest like should still require login");
+    assert(unauthenticatedLike.status === 200 && unauthenticatedLike.body.code === 401, "guest like should still require login");
 
     const userLogin = await loginWithCode(createFreshPhone());
     const userAuth = { authorization: `Bearer ${userLogin.token}` };

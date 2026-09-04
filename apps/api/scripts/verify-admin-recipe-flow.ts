@@ -124,7 +124,10 @@ async function main() {
       },
       true
     );
-    assert(changedBlock.status === 409, "reusing an Idempotency-Key with another block reason should return 409");
+    assert(
+      changedBlock.status === 200 && changedBlock.body.code === 409,
+      "reusing an Idempotency-Key with another block reason should return business code 409"
+    );
     assert(
       (await prisma.auditEvent.count({ where: { action: "RECIPE_BLOCKED", objectId: targetRecipe.id } })) === blockAuditCount + 1,
       "concurrent block replay should write one audit event"
@@ -136,7 +139,7 @@ async function main() {
     assert(blockedList.items.some(item => item.id === targetRecipe.id), "blocked recipe should appear in admin blocked list");
 
     const blockedDetail = await request<InspirationRecipeDetail>(`/inspiration-recipes/${targetRecipe.id}`);
-    assert(blockedDetail.status === 404, "blocked inspiration recipe should not remain visible publicly");
+    assert(blockedDetail.status === 200 && blockedDetail.body.code === 404, "blocked inspiration recipe should not remain visible publicly");
 
     const resolveAuditCount = await prisma.auditEvent.count({
       where: { action: "RECIPE_REPORT_RESOLVED", objectId: report.id }

@@ -150,10 +150,16 @@ async function main() {
 
   try {
     const unauthenticatedTrends = await request<AdminDashboardTrendsResponse>("/admin/dashboard/trends?range=7D");
-    assert(unauthenticatedTrends.status === 401, "unauthenticated dashboard trends should return 401");
+    assert(
+      unauthenticatedTrends.status === 200 && unauthenticatedTrends.body.code === 401,
+      "unauthenticated dashboard trends should return business code 401"
+    );
 
     const unauthenticatedArticles = await request<PageResult<AdminSiteContentDetail>>("/admin/content/articles?page=1&pageSize=20");
-    assert(unauthenticatedArticles.status === 401, "unauthenticated content articles should return 401");
+    assert(
+      unauthenticatedArticles.status === 200 && unauthenticatedArticles.body.code === 401,
+      "unauthenticated content articles should return business code 401"
+    );
 
     await prisma.adminAccount.create({
       data: {
@@ -174,12 +180,12 @@ async function main() {
     const limitedTrends = await request<AdminDashboardTrendsResponse>("/admin/dashboard/trends?range=7D", {
       headers: limitedAuth
     });
-    assert(limitedTrends.status === 403, "non-super-admin dashboard trends should return 403");
+    assert(limitedTrends.status === 200 && limitedTrends.body.code === 403, "non-super-admin dashboard trends should return business code 403");
 
     const limitedChannels = await request<PageResult<AdminSiteContentChannelItem>>("/admin/content/channels?page=1&pageSize=20", {
       headers: limitedAuth
     });
-    assert(limitedChannels.status === 403, "non-super-admin content channels should return 403");
+    assert(limitedChannels.status === 200 && limitedChannels.body.code === 403, "non-super-admin content channels should return business code 403");
 
     const adminLogin = await requestData<AdminLoginResult>("/admin/auth/login", {
       method: "POST",
@@ -231,7 +237,10 @@ async function main() {
         body: JSON.stringify({ ...createChannelBody, name: `运营验证栏目 ${suffix} B` })
       }
     );
-    assert(changedChannelReplay.status === 409, "reusing channel Idempotency-Key with different body should return 409");
+    assert(
+      changedChannelReplay.status === 200 && changedChannelReplay.body.code === 409,
+      "reusing channel Idempotency-Key with different body should return business code 409"
+    );
 
     const updatedChannel = await requestData<AdminSiteContentChannelItem>(
       `/admin/content/channels/${channelA.id}`,
@@ -263,7 +272,7 @@ async function main() {
         })
       }
     );
-    assert(codeUpdate.status === 400, "channel code update should be rejected");
+    assert(codeUpdate.status === 200 && codeUpdate.body.code === 400, "channel code update should be rejected with business code 400");
 
     const staleChannelUpdate = await request<AdminSiteContentChannelItem>(
       `/admin/content/channels/${channelA.id}`,
@@ -278,7 +287,7 @@ async function main() {
         })
       }
     );
-    assert(staleChannelUpdate.status === 409, "stale channel expectedVersion should return 409");
+    assert(staleChannelUpdate.status === 200 && staleChannelUpdate.body.code === 409, "stale channel expectedVersion should return business code 409");
 
     const articleChannel = await prisma.siteContentChannel.findUnique({
       where: { code: articlePublishChannelCode },
@@ -324,7 +333,10 @@ async function main() {
         body: JSON.stringify({ ...createContentBody, title: `运营治理验证文章 ${suffix} B` })
       }
     );
-    assert(changedContentReplay.status === 409, "reusing content Idempotency-Key with different body should return 409");
+    assert(
+      changedContentReplay.status === 200 && changedContentReplay.body.code === 409,
+      "reusing content Idempotency-Key with different body should return business code 409"
+    );
 
     const draftResolve = await request<SiteContentDetail>(`/site-contents/resolve?path=${encodeURIComponent(articlePath)}`, {
       headers: {
@@ -333,7 +345,7 @@ async function main() {
         "x-cook-build": "1"
       }
     });
-    assert(draftResolve.status === 404, "draft content should not be publicly resolvable");
+    assert(draftResolve.status === 200 && draftResolve.body.code === 404, "draft content should not be publicly resolvable");
 
     const publishedContent = await requestData<AdminSiteContentDetail>(
       `/admin/content/${contentA.id}/status`,
@@ -379,7 +391,7 @@ async function main() {
         })
       }
     );
-    assert(staleStatusUpdate.status === 409, "stale content expectedVersion should return 409");
+    assert(staleStatusUpdate.status === 200 && staleStatusUpdate.body.code === 409, "stale content expectedVersion should return business code 409");
 
     const unpublishedContent = await requestData<AdminSiteContentDetail>(
       `/admin/content/${contentA.id}/status`,
@@ -401,7 +413,7 @@ async function main() {
         "x-cook-build": "1"
       }
     });
-    assert(hiddenResolve.status === 404, "unlisted content should not be publicly resolvable");
+    assert(hiddenResolve.status === 200 && hiddenResolve.body.code === 404, "unlisted content should not be publicly resolvable");
 
     console.log(
       JSON.stringify(

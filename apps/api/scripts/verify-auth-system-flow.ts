@@ -55,7 +55,10 @@ async function main() {
 
   try {
     const unauthenticatedAuthMe = await request<AuthMeResponse>("/auth/me");
-    assert(unauthenticatedAuthMe.status === 401, "unauthenticated /auth/me should return 401");
+    assert(
+      unauthenticatedAuthMe.status === 200 && unauthenticatedAuthMe.body.code === 401,
+      "unauthenticated /auth/me should return business code 401"
+    );
 
     const first = await requestData<AuthSessionResult>("/auth/password/login", {
       method: "POST",
@@ -82,7 +85,7 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ refreshToken: first.refreshToken, deviceId })
     });
-    assert(rotatedReplay.status === 401, "rotated refresh token should be rejected");
+    assert(rotatedReplay.status === 200 && rotatedReplay.body.code === 401, "rotated refresh token should be rejected");
 
     const logoutData = await requestData<null>("/auth/logout", {
       method: "POST",
@@ -93,7 +96,7 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ refreshToken: refreshed.refreshToken, deviceId })
     });
-    assert(revokedReplay.status === 401, "logged-out refresh token should be rejected");
+    assert(revokedReplay.status === 200 && revokedReplay.body.code === 401, "logged-out refresh token should be rejected");
 
     const disabledDeviceId = `${deviceId}-disabled`;
     const second = await requestData<AuthSessionResult>("/auth/password/login", {
@@ -107,7 +110,7 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ phone: ownerPhone, password, deviceId: `${deviceId}-blocked` })
     });
-    assert(disabledLogin.status === 401, "disabled user password login should return 401");
+    assert(disabledLogin.status === 200 && disabledLogin.body.code === 401, "disabled user password login should return business code 401");
 
     for (const oldPath of ["/auth/login", "/auth/code-send", "/auth/code-login", "/auth/wechat-login"]) {
       const legacy = await request<null>(oldPath, { method: "POST", body: JSON.stringify({}) });
@@ -127,7 +130,10 @@ async function main() {
         method: "POST",
         body: JSON.stringify({ phone: ownerPhone, scene: "LOGIN", deviceId: `${deviceId}-sms` })
       });
-      assert(smsUnavailable.status === 503, "SMS should report missing provider configuration as 503");
+      assert(
+        smsUnavailable.status === 200 && smsUnavailable.body.code === 503,
+        "SMS should report missing provider configuration as business code 503"
+      );
     }
 
     if (wechatConfigReady) {
@@ -135,7 +141,7 @@ async function main() {
         method: "POST",
         body: JSON.stringify({ code: `invalid-${process.pid}`, deviceId: `${deviceId}-wechat` })
       });
-      assert(invalidWechat.status === 400, "invalid WeChat code should map to 400");
+      assert(invalidWechat.status === 200 && invalidWechat.body.code === 400, "invalid WeChat code should map to business code 400");
     }
 
     console.log(
@@ -145,9 +151,9 @@ async function main() {
           passwordLoginUid: first.user.uid,
           authMePhoneMasked: authMe.phone === maskPhone(ownerPhone),
           refreshRotated: refreshed.refreshToken !== first.refreshToken,
-          rotatedReplayStatus: rotatedReplay.status,
-          revokedReplayStatus: revokedReplay.status,
-          disabledLoginStatus: disabledLogin.status,
+          rotatedReplayCode: rotatedReplay.body.code,
+          revokedReplayCode: revokedReplay.body.code,
+          disabledLoginCode: disabledLogin.body.code,
           legacyRoutesRemoved: true,
           smsProvider: smsConfigReady ? "configured-not-called" : "missing-503-verified",
           wechatProvider: wechatConfigReady ? "configured-invalid-code-400-verified" : "missing-not-called"

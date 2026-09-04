@@ -45,7 +45,10 @@ async function login() {
 
 async function main() {
   const anonymous = await request<{ items: RecipeViewHistoryItem[] }>("/users/me/recipe-history?page=1&pageSize=20");
-  assert(anonymous.status === 401, `anonymous history request should return 401, got ${anonymous.status}`);
+  assert(
+    anonymous.status === 200 && anonymous.body.code === 401,
+    `anonymous history request should return business code 401, got HTTP ${anonymous.status} code ${anonymous.body.code}`
+  );
 
   const session = await login();
   const headers = { authorization: `Bearer ${session.token}` };

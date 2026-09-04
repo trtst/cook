@@ -156,7 +156,7 @@ async function main() {
   const firstToken = parseShareToken(shareA.shareUrl);
 
   const guestPreview = await request<ShoppingSharePreview>(`/shopping-shares/${firstToken}`, {});
-  assert(guestPreview.status === 401, "share preview should require login");
+  assert(guestPreview.status === 200 && guestPreview.body.code === 401, "share preview should require login");
 
   const memberPreviewBeforeJoin = await requestData<ShoppingSharePreview>(`/shopping-shares/${firstToken}`, {
     headers: memberAuth
@@ -233,7 +233,7 @@ async function main() {
   const expiredFirstPreview = await request<ShoppingSharePreview>(`/shopping-shares/${firstToken}`, {
     headers: collaboratorAuth
   });
-  assert(expiredFirstPreview.status === 404, "previous share token should expire after share-link refresh");
+  assert(expiredFirstPreview.status === 200 && expiredFirstPreview.body.code === 404, "previous share token should expire after share-link refresh");
 
   const collaboratorPreview = await requestData<ShoppingSharePreview>(`/shopping-shares/${secondToken}`, {
     headers: collaboratorAuth
@@ -279,7 +279,7 @@ async function main() {
   const closedPreview = await request<ShoppingSharePreview>(`/shopping-shares/${secondToken}`, {
     headers: collaboratorAuth
   });
-  assert(closedPreview.status === 404, "share-close should invalidate the active token");
+  assert(closedPreview.status === 200 && closedPreview.body.code === 404, "share-close should invalidate the active token");
 
   console.log(
     JSON.stringify(

@@ -154,7 +154,7 @@ async function main() {
   const resetOldToken = await request<UserProfile>("/users/me", {
     headers: { authorization: `Bearer ${initialLogin.token}` }
   }, userHeaders);
-  assert(resetOldToken.status === 401, "reset password should invalidate existing token");
+  assert(resetOldToken.status === 200 && resetOldToken.body.code === 401, "reset password should invalidate existing token");
 
   const resetLogin = await loginWithPassword(userRequestData, updatedPhone, resetPassword);
 
@@ -173,7 +173,7 @@ async function main() {
   const disabledOldToken = await request<UserProfile>("/users/me", {
     headers: { authorization: `Bearer ${resetLogin.token}` }
   }, userHeaders);
-  assert(disabledOldToken.status === 401, "disabled user existing token should return 401");
+  assert(disabledOldToken.status === 200 && disabledOldToken.body.code === 401, "disabled user existing token should return business code 401");
 
   const disabledLogin = await request<AuthSessionResult>(
     "/auth/password/login",
@@ -187,7 +187,7 @@ async function main() {
     },
     userHeaders
   );
-  assert(disabledLogin.status === 401, "disabled user login should return 401");
+  assert(disabledLogin.status === 200 && disabledLogin.body.code === 401, "disabled user login should return business code 401");
 
   const enabled = await requestData<UserProfile>(
     `/admin/users/${created.id}/status`,

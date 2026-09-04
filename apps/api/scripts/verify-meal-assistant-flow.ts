@@ -352,7 +352,10 @@ async function main() {
     method: "POST",
     headers: withIdempotencyKey(freeAuth)
   });
-  assert(freeRecipeAssistant.status === 403, `free user recipe assistant should return HTTP 403, got ${freeRecipeAssistant.status}`);
+  assert(
+    freeRecipeAssistant.status === 200 && freeRecipeAssistant.body.code === 403,
+    `free user recipe assistant should return business code 403, got HTTP ${freeRecipeAssistant.status} code ${freeRecipeAssistant.body.code}`
+  );
   assert(freeRecipeAssistant.body.message.includes("开通会员"), "free recipe assistant should explain membership gating");
 
   const paidMissingRecipe = await createPublishedRecipe(paidAuth, "做饭助手待补洞菜谱");
@@ -399,7 +402,10 @@ async function main() {
     method: "POST",
     headers: withIdempotencyKey(freeAuth)
   });
-  assert(freePlanAssistant.status === 403, `free meal assistant should return HTTP 403, got ${freePlanAssistant.status}`);
+  assert(
+    freePlanAssistant.status === 200 && freePlanAssistant.body.code === 403,
+    `free meal assistant should return business code 403, got HTTP ${freePlanAssistant.status} code ${freePlanAssistant.body.code}`
+  );
   assert(freePlanAssistant.body.message.includes("开通会员"), "free meal assistant should explain membership gating");
 
   const freePlans = await requestData<PageResult<MealPlanSummary>>(

@@ -34,7 +34,7 @@ async function main() {
     password: "change-me",
     deviceId: "verify-dto"
   });
-  assert(invalidPhone.status === 400 && invalidPhone.body.code === 400, "invalid login field should return 400");
+  assert(invalidPhone.status === 200 && invalidPhone.body.code === 400, "invalid login field should return business code 400");
 
   const oldField = await post("/auth/password/login", {
     phone: "13800000000",
@@ -42,10 +42,10 @@ async function main() {
     deviceId: "verify-dto",
     currentSpaceId: "old-field"
   });
-  assert(oldField.status === 400 && oldField.body.code === 400, "unknown login field should return 400");
+  assert(oldField.status === 200 && oldField.body.code === 400, "unknown login field should return business code 400");
 
   const longAdminName = await post("/admin/auth/login", { username: "a".repeat(65), password: "change-me" });
-  assert(longAdminName.status === 400 && longAdminName.body.code === 400, "oversized admin login field should return 400");
+  assert(longAdminName.status === 200 && longAdminName.body.code === 400, "oversized admin login field should return business code 400");
 
   console.log(JSON.stringify({ apiBaseUrl, invalidPhone: 400, oldField: 400, longAdminName: 400 }, null, 2));
 }

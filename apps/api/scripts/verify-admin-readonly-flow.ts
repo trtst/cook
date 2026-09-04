@@ -54,7 +54,10 @@ async function requestData<T>(path: string, options: RequestInit = {}) {
 
 async function main() {
   const unauthenticatedUsers = await request<PageResult<UserProfile>>("/admin/users?page=1&pageSize=20");
-  assert(unauthenticatedUsers.status === 401, "unauthenticated admin users should return 401");
+  assert(
+    unauthenticatedUsers.status === 200 && unauthenticatedUsers.body.code === 401,
+    "unauthenticated admin users should return business code 401"
+  );
 
   const lowVersionLogin = await request<AdminLoginResult>("/admin/auth/login", {
     method: "POST",

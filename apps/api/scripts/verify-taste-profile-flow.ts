@@ -106,7 +106,10 @@ async function main() {
     });
 
     const unauthenticatedGet = await request<TasteProfileResponse>("/users/me/taste-profile");
-    assert(unauthenticatedGet.status === 401, "unauthenticated taste profile GET should return 401");
+    assert(
+      unauthenticatedGet.status === 200 && unauthenticatedGet.body.code === 401,
+      "unauthenticated taste profile GET should return business code 401"
+    );
 
     const unauthenticatedPut = await request<TasteProfileResponse>("/users/me/taste-profile", {
       method: "PUT",
@@ -118,7 +121,10 @@ async function main() {
         note: null
       })
     });
-    assert(unauthenticatedPut.status === 401, "unauthenticated taste profile PUT should return 401");
+    assert(
+      unauthenticatedPut.status === 200 && unauthenticatedPut.body.code === 401,
+      "unauthenticated taste profile PUT should return business code 401"
+    );
 
     const empty = await requestData<TasteProfileResponse>("/users/me/taste-profile", {
       headers: { authorization: ownerAuthorization }
@@ -186,21 +192,21 @@ async function main() {
       headers: { authorization: ownerAuthorization },
       body: JSON.stringify({ ...ownerProfile, allergies: Array.from({ length: 51 }, (_, index) => `食材${index}`) })
     });
-    assert(oversized.status === 400, "oversized taste profile should return 400");
+    assert(oversized.status === 200 && oversized.body.code === 400, "oversized taste profile should return business code 400");
 
     const blankItem = await request<TasteProfileResponse>("/users/me/taste-profile", {
       method: "PUT",
       headers: { authorization: ownerAuthorization },
       body: JSON.stringify({ ...ownerProfile, allergies: ["   "] })
     });
-    assert(blankItem.status === 400, "blank taste profile item should return 400");
+    assert(blankItem.status === 200 && blankItem.body.code === 400, "blank taste profile item should return business code 400");
 
     const duplicateItem = await request<TasteProfileResponse>("/users/me/taste-profile", {
       method: "PUT",
       headers: { authorization: ownerAuthorization },
       body: JSON.stringify({ ...ownerProfile, allergies: ["花生", " 花生 "] })
     });
-    assert(duplicateItem.status === 400, "duplicate taste profile item should return 400");
+    assert(duplicateItem.status === 200 && duplicateItem.body.code === 400, "duplicate taste profile item should return business code 400");
 
     console.log(
       JSON.stringify(

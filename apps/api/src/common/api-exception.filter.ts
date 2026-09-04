@@ -17,18 +17,31 @@ interface ExceptionPayload {
   data?: unknown;
 }
 
+interface NormalizedException {
+  httpStatus: number;
+  code: number;
+  message: string;
+  data: unknown | null;
+  shouldLog: boolean;
+}
+
 function normalizeMessage(message: string | string[] | undefined, fallback: string) {
   if (Array.isArray(message)) return message.join("; ");
   return message || fallback;
 }
 
-function extractPayload(exception: unknown): { status: number; code: number; message: string; data: unknown | null } {
+function isRouteMiss(status: number, message: string) {
+  return status === HttpStatus.NOT_FOUND && /^Cannot (GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD) /.test(message);
+}
+
+function extractPayload(exception: unknown): NormalizedException {
   if (!(exception instanceof HttpException)) {
     return {
-      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      httpStatus: HttpStatus.INTERNAL_SERVER_ERROR,
       code: 500,
       message: "服务异常",
-      data: null
+      data: null,
+      shouldLog: true
     };
   }
 
@@ -38,10 +51,11 @@ function extractPayload(exception: unknown): { status: number; code: number; mes
   const message = typeof response === "string" ? response : normalizeMessage(payload.message, exception.message);
 
   return {
-    status,
+    httpStatus: isRouteMiss(status, message) ? status : HttpStatus.OK,
     code: payload.code ?? status,
     message,
-    data: payload.data ?? null
+    data: payload.data ?? null,
+    shouldLog: false
   };
 }
 
@@ -55,13 +69,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<HttpRequest>();
     const payload = extractPayload(exception);
 
-    if (payload.status >= 500) {
+    if (payload.shouldLog) {
       const message = exception instanceof Error ? exception.message : String(exception);
       const stack = exception instanceof Error ? exception.stack : undefined;
       this.logger.error(`${request.context?.requestId ?? "unknown"} ${request.path ?? ""} ${message}`, stack);
     }
 
-    response.status(payload.status).json({
+    response.status(payload.httpStatus).json({
       code: payload.code,
       message: payload.message,
       data: payload.data,
