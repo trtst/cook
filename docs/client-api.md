@@ -27,6 +27,7 @@ http://127.0.0.1:3100/api
 
 | 日期 | 变更 |
 | --- | --- |
+| 2026-09-04 | 登录改为真实微信手机号授权、真实短信验证码、手机号密码和可轮换 refresh session；旧 `/api/auth/login`、`/api/auth/code-*`、`/api/auth/wechat-login` 已移除。 |
 | 2026-08-19 | 饭搭子功能已整体下线，客户端不再保留 `/api/dining-groups*`、`/api/dining-group-invites*` 和后台饭搭子审计字段。 |
 | 2026-07-26 | 冻结菜谱 R1 契约，新增个人分类/场景、食材单位、草稿发布、我的菜谱和匿名灵感路径；当前客户端尚未实现，不可按已可调用功能使用。 |
 | 2026-07-23 | 用户、会员事实、饭搭子关系和存储用量按领域拆分；移除客户端全局权益快照依赖。 |
@@ -37,10 +38,16 @@ http://127.0.0.1:3100/api
 
 | 方法 | Path | 客户端调用 | 职责 |
 | --- | --- | --- | --- |
-| POST | `/api/auth/wechat-login` | `authApi.loginWithWechat` | 小程序微信登录并创建会话 |
-| POST | `/api/auth/login` | `authApi.loginWithPassword` | 登录并创建会话 |
-| POST | `/api/auth/code-login` | `authApi.loginWithCode` | 手机号验证码登录并创建会话 |
-| POST | `/api/auth/refresh` | `authApi.refreshSession` | 刷新会话 |
+| POST | `/api/auth/wechat/session` | `authApi.wechatSession` | 识别微信身份并返回绑定状态 |
+| POST | `/api/auth/wechat/phone-login` | `authApi.loginWithWechatPhone` | 使用微信手机号组件授权登录 |
+| POST | `/api/auth/sms/send` | `authApi.sendSmsCode` | 发送真实短信登录验证码 |
+| POST | `/api/auth/sms/login` | `authApi.loginWithSms` | 使用短信验证码登录或创建手机号账号 |
+| POST | `/api/auth/password/login` | `authApi.loginWithPassword` | 使用手机号密码登录并创建会话 |
+| POST | `/api/auth/password/set` | `authApi.setPassword` | 设置初始密码 |
+| POST | `/api/auth/password/change` | `authApi.changePassword` | 修改当前密码 |
+| POST | `/api/auth/refresh` | `authApi.refresh` | 轮换 refresh token 并刷新会话 |
+| POST | `/api/auth/logout` | `authApi.logout` | 吊销 refresh token |
+| GET | `/api/auth/me` | `authApi.getMe` | 读取最小认证资料 |
 | GET | `/api/users/me` | `userApi.getCurrent` | 身份、展示占位和会员事实 |
 | PUT | `/api/users/me` | `userApi.updateCurrent` | 更新昵称和头像 |
 | PUT | `/api/users/me/display` | `userApi.updateDisplay` | 预留背景设置，当前返回 `503` |
@@ -56,10 +63,10 @@ http://127.0.0.1:3100/api
 
 ## 1. 用户与会员
 
-### 1.1 登录
+### 1.1 微信手机号快捷登录
 
 ```text
-POST /api/auth/wechat-login
+POST /api/auth/wechat/session
 Auth: none
 ```
 
@@ -67,27 +74,97 @@ Auth: none
 
 ```json
 {
-  "code": "081xYfll2l7mBh4sFEnl2H0jQY0xYfli"
+  "code": "081xYfll2l7mBh4sFEnl2H0jQY0xYfli",
+  "deviceId": "device-8c5c"
 }
 ```
 
-成功 `data`：
+已绑定微信身份成功 `data`：
 
 ```ts
-interface WechatLoginResult {
-  token: string;
-  expiresAt: IsoDateTime;
-  user: {
-    uid: number;
-    nickname: string | null;
-    avatarUrl: string | null;
-  };
+interface WechatSessionResult {
+  status: "BOUND" | "UNBOUND" | "BLOCKED";
+  session: AuthSessionResult | null;
+  wechatSessionId: string | null;
+  retryAfterSeconds: number | null;
 }
 ```
 
-小程序当前主链路是微信登录：前端先拿微信 `code`，服务端按 `openid` 识别或创建用户，再返回业务会话。登录响应只提供建立会话所需的最小用户摘要。登录成功后调用 `/api/users/me` 拉取完整本人资料。
+未绑定时，客户端使用返回的短期 `wechatSessionId` 和微信按钮的 `getPhoneNumber` 事件 `phoneCode` 调用：
 
-### 1.2 当前用户
+```text
+POST /api/auth/wechat/phone-login
+Auth: none
+```
+
+```json
+{
+  "wechatSessionId": "short-wechat-session",
+  "phoneCode": "phone-code-from-wechat",
+  "deviceId": "device-8c5c"
+}
+```
+
+该接口返回 `AuthSessionResult`。已绑定身份不需要手机号组件二次绑定；未绑定身份会按微信授权手机号创建或复用手机号账号，并在同一事务中绑定微信身份。
+
+### 1.2 短信验证码登录
+
+```text
+POST /api/auth/sms/send
+Auth: none
+```
+
+```json
+{
+  "phone": "13800000000",
+  "scene": "LOGIN",
+  "deviceId": "device-8c5c"
+}
+```
+
+返回 `{ "cooldownSeconds": 60 }`。验证码有效期为 5 分钟且只能消费一次；当前个人资质阶段由阿里云 PNVS 平台生成并核验，服务端不保存明文验证码。
+
+```text
+POST /api/auth/sms/login
+Auth: none
+```
+
+```json
+{
+  "phone": "13800000000",
+  "code": "123456",
+  "deviceId": "device-8c5c"
+}
+```
+
+返回 `AuthSessionResult`。手机号不存在时，验证成功后创建手机号账号。
+
+### 1.3 密码登录与会话
+
+```text
+POST /api/auth/password/login
+POST /api/auth/password/set
+POST /api/auth/password/change
+POST /api/auth/refresh
+POST /api/auth/logout
+GET  /api/auth/me
+```
+
+登录、刷新返回：
+
+```ts
+interface AuthSessionResult {
+  accessToken: string;
+  refreshToken: string;
+  accessExpiresAt: IsoDateTime;
+  refreshExpiresAt: IsoDateTime;
+  user: SessionUser;
+}
+```
+
+`/api/auth/password/set` 和 `/api/auth/password/change` 使用 `UserBearerAuth`。`/api/auth/refresh` 和 `/api/auth/logout` 使用请求体中的 `refreshToken` 与 `deviceId`，不要求 access token；refresh token 每次刷新后立即轮换，旧 token 不能再次使用；logout 成功时 `data=null`。
+
+### 1.4 当前用户
 
 ```text
 GET /api/users/me

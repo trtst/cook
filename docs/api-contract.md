@@ -226,11 +226,16 @@ interface StorageUsageSummary {
 ### Auth 与 User
 
 ```text
-POST /auth/login
-POST /auth/code-send
-POST /auth/code-login
-POST /auth/wechat-login
+POST /auth/wechat/session
+POST /auth/wechat/phone-login
+POST /auth/sms/send
+POST /auth/sms/login
+POST /auth/password/login
+POST /auth/password/set
+POST /auth/password/change
 POST /auth/refresh
+POST /auth/logout
+GET  /auth/me
 GET  /app-config
 GET  /home-entries
 GET  /home/recent-arrangement
@@ -248,53 +253,85 @@ PUT  /users/me/password
 ```
 
 ```ts
+interface WechatSessionRequest {
+  code: string;
+  deviceId: string;
+}
+
+interface WechatPhoneLoginRequest {
+  wechatSessionId: string;
+  phoneCode: string;
+  deviceId: string;
+}
+
+interface SmsSendRequest {
+  phone: string;
+  scene: "LOGIN";
+  deviceId: string;
+}
+
+interface SmsLoginRequest {
+  phone: string;
+  code: string;
+  deviceId: string;
+  wechatSessionId?: string;
+}
+
 interface PasswordLoginRequest {
   phone: string;
   password: string;
+  deviceId: string;
 }
 
-type AuthCodeScene = "LOGIN" | "BIND_PHONE";
-
-interface SendAuthCodeRequest {
-  phone: string;
-  scene: AuthCodeScene;
+interface SetPasswordRequest {
+  password: string;
 }
 
-interface CodeLoginRequest {
-  phone: string;
-  code: string;
+interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
 
-interface WechatLoginRequest {
-  code: string;
+interface RefreshSessionRequest {
+  refreshToken: string;
+  deviceId: string;
 }
 
-interface PasswordLoginResult {
-  token: string;
-  expiresAt: IsoDateTime;
+interface LogoutSessionRequest extends RefreshSessionRequest {}
+
+type LogoutSessionResult = null;
+
+interface AuthSessionResult {
+  accessToken: string;
+  refreshToken: string;
+  accessExpiresAt: IsoDateTime;
+  refreshExpiresAt: IsoDateTime;
   user: SessionUser;
 }
 
-interface SendAuthCodeResult {
-  scene: AuthCodeScene;
-  sentAt: IsoDateTime;
+type WechatSessionResult =
+  | { status: "BOUND"; session: AuthSessionResult; wechatSessionId: null; retryAfterSeconds: null }
+  | { status: "UNBOUND"; session: null; wechatSessionId: string; retryAfterSeconds: null }
+  | { status: "BLOCKED"; session: null; wechatSessionId: null; retryAfterSeconds: number | null };
+
+interface SmsSendResult {
+  cooldownSeconds: number;
 }
 
-interface CodeLoginResult {
-  token: string;
-  expiresAt: IsoDateTime;
-  user: SessionUser;
+interface ChangePasswordResult {
+  changedAt: IsoDateTime;
 }
 
-interface WechatLoginResult {
-  token: string;
-  expiresAt: IsoDateTime;
-  user: SessionUser;
-}
+旧的 `/auth/login`、`/auth/code-send`、`/auth/code-login` 和 `/auth/wechat-login` 已从当前实现移除，不提供兼容别名。短信验证码只支持 `scene="LOGIN"`；绑定手机号是独立业务，不属于本次登录短信契约。
 
-interface RefreshSessionResult {
-  token: string;
-  expiresAt: IsoDateTime;
+`/auth/wechat/session` 只识别微信身份：已绑定身份直接返回完整会话，未绑定身份返回短期 `wechatSessionId`，不会提前创建用户。随后小程序通过微信 `getPhoneNumber` 组件取得 `phoneCode`，提交 `/auth/wechat/phone-login` 完成手机号账号创建或绑定微信身份。
+
+`/auth/logout` 吊销 refresh token，成功时 `data=null`；`/auth/refresh` 每次轮换 refresh token。refresh token 仅以哈希形式落库，微信 `session_key` 仅在服务端短期使用并以哈希形式保存。
+
+interface AuthMeResponse extends SessionUser {
+  id: UUID;
+  phone: string | null;
+  status: "ACTIVE" | "DISABLED";
 }
 
 interface AppConfigResponse {
@@ -522,11 +559,13 @@ interface RedeemMembershipCodeResult {
 
 `PUT /users/me/notification-feed-read` 只负责把“当前通知中心时间流的最新消息时间”写入当前用户自己的已读游标，并返回最新 `NotificationBadgeResponse`。进入通知中心后客户端调用这一写入口，后续未读清除逻辑以服务端游标为准，不再以本地时间戳作为 owner。
 
-`POST /auth/wechat-login` 是当前小程序主登录入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端再调用微信 `code2session` 换取 `openid`，按 `openid` 识别或创建用户，并在可取到时同步记录 `unionid`。请求体只收 `code`；响应仍只返回 `token + expiresAt + user` 这组建立业务会话所需的最小摘要，不返回 `openid / unionid / session_key` 等微信身份细节。若微信配置缺失或微信侧不可达，统一返回“微信登录暂不可用”；若 `code` 无效或已失效，统一返回“微信登录失败，请重试”。
+`POST /auth/wechat/session` 是当前小程序的微信身份识别入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端调用微信 `code2session` 识别微信身份；已绑定身份直接返回 `BOUND` 和完整会话，未绑定身份返回短期 `wechatSessionId`，`BLOCKED` 则返回风控冷却信息。响应不返回 `openid / unionid / session_key` 等微信身份细节，也不会在未绑定时提前创建用户。
 
-`POST /auth/code-send` 是当前手机号验证码链路的统一发码入口，请求体只收 `phone + scene`，其中 `scene` 当前只允许 `LOGIN | BIND_PHONE`。测试阶段它不接真实短信服务，不落验证码表，也不新增验证码核销中心；服务端只做手机号格式和场景校验，返回本次发码的 `scene + sentAt`，供登录弹窗和绑定手机号页共用同一条未来短信契约。
+`POST /auth/wechat/phone-login` 接收微信 `getPhoneNumber` 组件返回的一次性 `phoneCode`，消费短期 `wechatSessionId`，按授权手机号创建或复用唯一手机号账号，并在同一事务内绑定微信身份后签发完整会话。微信配置缺失或微信侧不可达时返回服务不可用；微信 code 或手机号授权 code 无效时返回登录失败，不暴露外部凭据。
 
-`POST /auth/code-login` 保留为手机号验证码链路。测试阶段固定验证码为 `123456`，服务端按手机号自动注册并复用同手机号唯一账号；它不新增短信表，也不复用密码登录 DTO。`POST /auth/login` 仍保留给现有脚本和旧链路，未在本轮下线。
+`POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信兜底链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，也可在携带有效微信短会话时完成身份绑定。
+
+`POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 

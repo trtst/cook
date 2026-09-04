@@ -16,11 +16,16 @@
 
 | 模块 | 方法 | 路径 | 说明 |
 | --- | --- | --- | --- |
-| Auth | POST | `/auth/login` | 手机号密码登录 |
-| Auth | POST | `/auth/code-send` | 手机号验证码发码 |
-| Auth | POST | `/auth/wechat-login` | 小程序微信登录 |
-| Auth | POST | `/auth/code-login` | 手机号验证码登录 |
-| Auth | POST | `/auth/refresh` | 刷新用户 token |
+| Auth | POST | `/auth/wechat/session` | 识别微信身份，返回已绑定会话或短期手机号授权会话 |
+| Auth | POST | `/auth/wechat/phone-login` | 使用微信手机号组件授权登录或绑定手机号账号 |
+| Auth | POST | `/auth/sms/send` | 发送真实短信登录验证码，仅支持 `scene=LOGIN` |
+| Auth | POST | `/auth/sms/login` | 使用短信验证码登录或创建手机号账号 |
+| Auth | POST | `/auth/password/login` | 使用手机号密码登录 |
+| Auth | POST | `/auth/password/set` | 为当前手机号账号设置初始密码 |
+| Auth | POST | `/auth/password/change` | 修改当前手机号账号密码 |
+| Auth | POST | `/auth/refresh` | 轮换 refresh token 并刷新会话 |
+| Auth | POST | `/auth/logout` | 吊销 refresh token |
+| Auth | GET | `/auth/me` | 读取当前登录用户的最小认证资料 |
 | Home | GET | `/home-entries` | 小程序首页入口配置：`MAIN` 作为 hero 运营位，`SIDE_TOP / SIDE_BOTTOM` 为右侧运营卡，四宫格只返回当前已上架入口 |
 | Home | GET | `/home/week-overview` | 首页左侧“这周吃饭安排”状态聚合主卡 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |

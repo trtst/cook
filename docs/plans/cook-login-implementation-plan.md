@@ -321,9 +321,8 @@ POST /api/auth/sms/send
 校验手机号格式
 校验短信频控
 校验全局风控
-生成 6 位验证码
-保存 code_hash、过期时间、场景、IP、设备
-调用阿里云短信服务
+调用阿里云 PNVS 短信认证生成 6 位验证码
+保存 provider_out_id、过期时间、场景、IP、设备
 返回 cooldownSeconds
 ```
 
@@ -359,7 +358,7 @@ POST /api/auth/sms/login
 
 ```text
 校验验证码存在、未过期、未消费
-校验 code_hash
+调用 PNVS 校验验证码
 按 phone 查询用户
   有用户：登录
   无用户：创建用户
@@ -571,7 +570,8 @@ created_at
 id
 phone
 scene
-code_hash
+code_hash（企业短信本地核销时使用，个人资质 PNVS 阶段可空）
+provider_out_id
 expires_at
 consumed_at
 ip
@@ -703,7 +703,7 @@ USER_BLOCKED
 - [ ] 实现短信发送频控。
 - [ ] 实现微信手机号快捷验证频控。
 - [ ] 实现全局账号安全风控。
-- [ ] 所有验证码和 refresh token 只保存 hash。
+- [ ] PNVS 验证码不保存明文，refresh token 只保存 hash。
 - [ ] 所有登录入口记录登录日志和风险事件。
 
 ## 10. 安全要求
@@ -712,7 +712,7 @@ USER_BLOCKED
 - 不允许前端、小程序、仓库里出现短信密钥。
 - 使用 RAM 子账号，只授予短信发送所需权限。
 - 短信模板固定，不允许前端传短信内容。
-- 验证码只保存 hash，不保存明文。
+- PNVS 验证码由平台生成和校验，服务端只保存挑战流水和消费状态，不保存明文。
 - refresh_token 只保存 hash，不保存明文。
 - 微信 openid/session_key 不直接返回给前端。
 - 登录日志记录 IP、设备、场景、结果。

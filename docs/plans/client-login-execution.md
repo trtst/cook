@@ -1,5 +1,7 @@
 # 功能执行单：小程序用户手机号密码登录子纵切
 
+> 历史执行单：已被 `docs/superpowers/plans/2026-09-03-cook-login.md` 的真实微信手机号授权、短信、密码与 session 方案替代。文中的旧 `/auth/login`、`/auth/code-login` 和单 token 描述仅保留作历史记录，不是当前接口合同。
+
 ## 目标
 
 - 本功能要跑通的最小业务闭环：用户在小程序 `我的` 页面输入手机号和密码，调用 `/auth/login` 登录，保存用户 token，恢复 session，并在 401 时清理登录态。

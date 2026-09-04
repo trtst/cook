@@ -53,6 +53,8 @@
 
 ### 2.3 营养、知识与内容后台相关
 
+> 登录相关历史条目保留旧执行证据；当前认证合同以 `docs/api-contract.md`、`docs/api-index.md` 和 `docs/superpowers/plans/2026-09-03-cook-login.md` 为准。
+
 | 状态 | 功能 | 当前结论 | 文档 |
 | --- | --- | --- | --- |
 | `[x]` | 营养展示 | 后端营养子集导入、快照与详情返回已实现并完成脚本和真实接口联调；`verify:recipe-nutrition` 已于 Sunday, August 23, 2026 再次跑通并输出 `COMPLETE / ESTIMATED / INSUFFICIENT` 三档真实结果；同日 `/pages_recipe/detail/index` 官方 `mp-weixin` 页面自动化也已覆盖真实灵感菜谱正文主状态，以及我的菜谱详情 `COMPLETE / ESTIMATED / INSUFFICIENT` 三档营养展示；真机或小程序预览手验仍建议继续补齐 | `docs/plans/nutrition-display-execution.md` |
