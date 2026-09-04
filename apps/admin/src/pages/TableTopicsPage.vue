@@ -6,7 +6,7 @@ import { useRouter } from "vue-router";
 import { tableTopicsApi, type AdminTableTopicItem, type AdminTableTopicsResponse, type TableTopicStatus } from "@/apis/table-topics";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
-import { formatDateTimeMinute } from "@/utils/date";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(true);
@@ -155,7 +155,7 @@ onMounted(() => {
             </div>
             <p class="topic-row__summary">{{ item.summary }}</p>
             <p class="topic-row__meta">
-              {{ formatDateTimeMinute(item.activityAt) }} · {{ item.participantCount }} 人参与 · {{ item.targetType === "WEB_VIEW" ? "H5 详情" : "站内详情" }}
+              {{ formatDateTime(item.activityAt) }} · {{ item.participantCount }} 人参与 · {{ item.targetType === "WEB_VIEW" ? "H5 详情" : "站内详情" }}
             </p>
           </div>
 

@@ -72,7 +72,7 @@ export interface StorageUsageSummary {
 }
 
 export interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "phone" | "status">;
   membership: UserMembership;
   display: {
     canUseProfileBackground: boolean;
@@ -89,6 +89,10 @@ export interface AdminUserEntitlementResponse {
     memberLimit: number;
   };
   imagePolicy: EffectiveImagePolicy;
+}
+
+export interface AdminUserPhoneRevealResponse {
+  phone: string | null;
 }
 
 export const userApi = {
@@ -127,6 +131,11 @@ export const userApi = {
       method: "POST",
       body: payload,
       idempotencyKey: operationId
+    });
+  },
+  revealPhone(userId: UUID) {
+    return requestData<AdminUserPhoneRevealResponse>(`/admin/users/${encodeURIComponent(String(userId))}/phone/reveal`, {
+      method: "POST"
     });
   },
   getEntitlements(userId: UUID) {

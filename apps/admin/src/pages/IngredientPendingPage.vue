@@ -12,6 +12,7 @@ import {
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { buildIngredientUnitHint } from "@/utils/ingredient-unit-policy";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
@@ -360,7 +361,11 @@ onUnmounted(() => {
         <el-table-column label="推荐默认单位" width="140">
           <template #default="{ row }">{{ row.defaultUnitName || "-" }}</template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="推荐时间" min-width="180" />
+        <el-table-column label="推荐时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag type="warning">{{ formatStatusText(row.status) }}</el-tag>

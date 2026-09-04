@@ -6,6 +6,7 @@ import { ElMessage } from "element-plus";
 import { recipeApi, type RecipeImportItemSummary, type RecipeImportJobDetail } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { formatStatusText } from "@/utils/status";
 
 const route = useRoute();
@@ -114,8 +115,8 @@ onMounted(() => {
       </div>
       <div class="metric-panel">
         <span class="metric-label">最近更新时间</span>
-        <strong>{{ detail.updatedAt }}</strong>
-        <span class="table-hint">创建于 {{ detail.createdAt }}</span>
+        <strong>{{ formatDateTime(detail.updatedAt) }}</strong>
+        <span class="table-hint">创建于 {{ formatDateTime(detail.createdAt) }}</span>
       </div>
     </div>
 
@@ -132,7 +133,11 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="errorCount" label="错误" width="80" />
         <el-table-column prop="warnCount" label="提醒" width="80" />
-        <el-table-column prop="updatedAt" label="更新时间" width="200" />
+        <el-table-column label="更新时间" width="200">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updatedAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" @click="openItem(row.id)">查看 / 修正</el-button>

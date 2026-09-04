@@ -19,6 +19,7 @@ import {
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { difficultyOptions, difficultyText, durationOptions, durationText } from "@/utils/recipe-meta";
 import { formatStatusText } from "@/utils/status";
@@ -758,8 +759,8 @@ onBeforeUnmount(() => {
             <el-descriptions-item label="下架原因">{{ detail.blockedReason ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="点赞数">{{ detail.likeCount }}</el-descriptions-item>
             <el-descriptions-item label="收藏数">{{ detail.collectCount }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ detail.createdAt }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ detail.updatedAt }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createdAt) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updatedAt) }}</el-descriptions-item>
           </el-descriptions>
         </div>
 
@@ -807,8 +808,8 @@ onBeforeUnmount(() => {
               }}
             </el-descriptions-item>
             <el-descriptions-item label="可用快照">{{ detail.assistantState.hasSnapshot ? "有" : "无" }}</el-descriptions-item>
-            <el-descriptions-item label="最近成功时间">{{ detail.assistantState.generatedAt ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="最近尝试时间">{{ detail.assistantState.lastAttemptAt ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="最近成功时间">{{ formatDateTime(detail.assistantState.generatedAt) }}</el-descriptions-item>
+            <el-descriptions-item label="最近尝试时间">{{ formatDateTime(detail.assistantState.lastAttemptAt) }}</el-descriptions-item>
             <el-descriptions-item label="累计尝试次数">{{ detail.assistantState.attemptCount }}</el-descriptions-item>
             <el-descriptions-item label="最近错误">{{ detail.assistantState.lastError ?? "-" }}</el-descriptions-item>
           </el-descriptions>

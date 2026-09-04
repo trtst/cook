@@ -12,7 +12,7 @@ import {
 } from "@/apis/user-recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh, useAdminHeaderTitle } from "@/composables/useAdminHeader";
-import { formatDateDay } from "@/utils/date";
+import { formatDateDay, formatDateTime } from "@/utils/date";
 
 type RecipeDomainTab = "published" | "drafts" | "collections";
 
@@ -337,7 +337,11 @@ onMounted(() => {
               </template>
             </el-table-column>
             <el-table-column prop="version" label="版本" width="100" />
-            <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
+            <el-table-column label="更新时间" min-width="180">
+              <template #default="{ row }">
+                {{ formatDateTime(row.updatedAt) }}
+              </template>
+            </el-table-column>
           </el-table>
 
           <div class="pagination-row">
@@ -379,7 +383,11 @@ onMounted(() => {
               </template>
             </el-table-column>
             <el-table-column prop="version" label="版本" width="100" />
-            <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
+            <el-table-column label="更新时间" min-width="180">
+              <template #default="{ row }">
+                {{ formatDateTime(row.updatedAt) }}
+              </template>
+            </el-table-column>
           </el-table>
 
           <div class="pagination-row">
@@ -410,7 +418,7 @@ onMounted(() => {
             <el-table-column prop="version" label="版本" width="100" />
             <el-table-column label="更新时间" min-width="180">
               <template #default="{ row }">
-                {{ row.updatedAt || "-" }}
+                {{ formatDateTime(row.updatedAt) }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="140" fixed="right">

@@ -7,6 +7,7 @@ import RichTextEditor from "@/components/RichTextEditor.vue";
 import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentDetail, type SiteContentStatus, type SiteContentType } from "@/apis/content";
 import { useAdminHeaderState } from "@/composables/useAdminHeader";
 import { sanitizeContentHtml } from "@/utils/content-html";
+import { formatDateTime } from "@/utils/date";
 import { markdownToRichText } from "@/utils/markdown-rich-text";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -113,8 +114,7 @@ function resolveLabel() {
 }
 
 function formatTime(value: string | null) {
-  if (!value) return "-";
-  return value.replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+  return formatDateTime(value);
 }
 
 function resetForm(type: SiteContentType) {

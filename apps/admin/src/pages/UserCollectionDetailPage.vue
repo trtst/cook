@@ -11,6 +11,7 @@ import {
 } from "@/apis/user-recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh, useAdminHeaderTitle } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 
 const route = useRoute();
 const router = useRouter();
@@ -174,7 +175,7 @@ onMounted(loadDetail);
           <el-descriptions-item label="合集名称">{{ collection.name }}</el-descriptions-item>
           <el-descriptions-item label="内容数量">{{ total }}</el-descriptions-item>
           <el-descriptions-item label="合集版本">{{ collection.version }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ collection.updatedAt || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="更新时间">{{ formatDateTime(collection.updatedAt) }}</el-descriptions-item>
         </el-descriptions>
       </template>
     </div>
@@ -196,8 +197,16 @@ onMounted(loadDetail);
           </template>
         </el-table-column>
         <el-table-column prop="contentVersionId" label="固定版本 ID" min-width="260" />
-        <el-table-column prop="collectedAt" label="收藏时间" min-width="180" />
-        <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
+        <el-table-column label="收藏时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.collectedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="更新时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updatedAt) }}
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="pagination-row">

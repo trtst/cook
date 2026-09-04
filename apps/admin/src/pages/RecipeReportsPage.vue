@@ -6,6 +6,7 @@ import { ElMessage } from "element-plus";
 import { recipeApi, type RecipeReportSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -88,7 +89,11 @@ function openDetail(recipeId: UUID) {
             {{ formatStatusText(row.status) }}
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="举报时间" min-width="180" />
+        <el-table-column label="举报时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row.recipeId)">查看菜谱</el-button>

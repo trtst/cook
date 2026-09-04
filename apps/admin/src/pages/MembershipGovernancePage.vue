@@ -14,6 +14,7 @@ import {
   type MembershipSkuCode
 } from "@/apis/membership-code";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type MembershipPageMode = "skus" | "batches" | "generations" | "codes" | "redemptions";
@@ -160,8 +161,7 @@ function getSkuLabel(code: MembershipSkuCode) {
 }
 
 function formatTime(value: string | null) {
-  if (!value) return "-";
-  return value.replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+  return formatDateTime(value);
 }
 
 function formatCodeStatus(status: MembershipCodeStatus) {

@@ -5,6 +5,7 @@ import { Edit, Plus, Refresh } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentSummary, type AdminSitePageSummary, type SiteContentStatus } from "@/apis/content";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type ContentPageMode = "pages" | "articles" | "official-messages" | "channels";
@@ -61,8 +62,7 @@ const statusOptions: Array<{ label: string; value: SiteContentStatus }> = [
 ];
 
 function formatTime(value: string | null) {
-  if (!value) return "-";
-  return value.replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+  return formatDateTime(value);
 }
 
 function openEditor(id?: number) {

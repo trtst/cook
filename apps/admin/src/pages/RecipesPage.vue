@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { recipeApi, type AdminInspirationCategorySummary, type AdminRecipeSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -188,7 +189,7 @@ onMounted(() => {
           <div class="recipe-card__body">
             <div class="recipe-card__title" @click="openDetail(row.id)">{{ row.title }}</div>
             <div class="recipe-card__meta">
-              <span>{{ row.updatedAt }}</span>
+              <span>{{ formatDateTime(row.updatedAt) }}</span>
               <span v-if="row.ownerUid !== null">源自 UID {{ row.ownerUid }}</span>
             </div>
           </div>

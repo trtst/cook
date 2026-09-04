@@ -5,6 +5,7 @@ import { ElMessage } from "element-plus";
 import { recipeApi, type AdminInspirationCategorySummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(false);
@@ -150,7 +151,11 @@ onMounted(() => {
       <el-table v-loading="loading" :data="filteredCategories" row-key="id">
         <el-table-column prop="name" label="分类" min-width="220" />
         <el-table-column prop="recipeCount" label="系统菜谱数" width="120" />
-        <el-table-column prop="updatedAt" label="更新时间" min-width="180" />
+        <el-table-column label="更新时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updatedAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEditCategory(row)">编辑</el-button>

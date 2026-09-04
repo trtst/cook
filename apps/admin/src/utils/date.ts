@@ -3,24 +3,36 @@ function parseDate(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function formatDateDay(value?: string | null, emptyText = "-") {
-  if (!value) return emptyText;
+function dateParts(value: string) {
   const date = parseDate(value);
-  if (!date) return value;
-  const year = `${date.getFullYear()}`;
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+  if (!date) return null;
 
-export function formatDateTimeMinute(value?: string | null, emptyText = "-") {
-  if (!value) return emptyText;
-  const date = parseDate(value);
-  if (!date) return value;
   const year = `${date.getFullYear()}`;
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
   const hour = `${date.getHours()}`.padStart(2, "0");
   const minute = `${date.getMinutes()}`.padStart(2, "0");
-  return `${year}-${month}-${day} ${hour}:${minute}`;
+  const second = `${date.getSeconds()}`.padStart(2, "0");
+  return { year, month, day, hour, minute, second };
+}
+
+export function formatDateDay(value?: string | null, emptyText = "-") {
+  if (!value) return emptyText;
+  const parts = dateParts(value);
+  if (!parts) return value;
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function formatDateTimeMinute(value?: string | null, emptyText = "-") {
+  if (!value) return emptyText;
+  const parts = dateParts(value);
+  if (!parts) return value;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}
+
+export function formatDateTime(value?: string | null, emptyText = "-") {
+  if (!value) return emptyText;
+  const parts = dateParts(value);
+  if (!parts) return value;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }

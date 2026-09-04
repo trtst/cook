@@ -6,7 +6,7 @@ import { useRouter } from "vue-router";
 import { homeTopicsApi, type AdminHomeTopicItem, type AdminHomeTopicsResponse, type HomeTopicStatus } from "@/apis/home-topics";
 import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
-import { formatDateTimeMinute } from "@/utils/date";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(true);
@@ -155,7 +155,7 @@ onMounted(() => {
             </div>
             <p v-if="item.subTitle" class="topic-row__sub">{{ item.subTitle }}</p>
             <p class="topic-row__meta">
-              第 {{ item.issueNo }} 期 · {{ item.recTypeText }} · {{ item.items.length }} 道菜 · 更新于 {{ formatDateTimeMinute(item.updatedAt) }}
+              第 {{ item.issueNo }} 期 · {{ item.recTypeText }} · {{ item.items.length }} 道菜 · 更新于 {{ formatDateTime(item.updatedAt) }}
             </p>
           </div>
 

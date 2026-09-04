@@ -11,6 +11,7 @@ import {
 } from "@/apis/user";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { useSessionStore } from "@/stores/session";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -24,6 +25,9 @@ const entitlementVisible = ref(false);
 const entitlementLoading = ref(false);
 const entitlement = ref<AdminUserEntitlementResponse | null>(null);
 const entitlementError = ref("");
+const revealedPhone = ref<string | null>(null);
+const phoneRevealed = ref(false);
+const phoneRevealLoading = ref(false);
 const userDialogVisible = ref(false);
 const userDialogMode = ref<UserFormMode>("create");
 const userSaving = ref(false);
@@ -126,6 +130,9 @@ function clearEntitlement() {
   entitlementLoading.value = false;
   entitlement.value = null;
   entitlementError.value = "";
+  revealedPhone.value = null;
+  phoneRevealed.value = false;
+  phoneRevealLoading.value = false;
 }
 
 async function openEntitlement(row: UserProfile) {
@@ -134,6 +141,8 @@ async function openEntitlement(row: UserProfile) {
   entitlementLoading.value = true;
   entitlement.value = null;
   entitlementError.value = "";
+  revealedPhone.value = null;
+  phoneRevealed.value = false;
 
   try {
     const result = await userApi.getEntitlements(row.id);
@@ -148,6 +157,38 @@ async function openEntitlement(row: UserProfile) {
     if (requestId === entitlementRequest) {
       entitlementLoading.value = false;
     }
+  }
+}
+
+function entitlementPhoneText() {
+  if (!entitlement.value) return "-";
+  if (phoneRevealed.value) return revealedPhone.value || "-";
+  return entitlement.value.user.phone || "-";
+}
+
+async function revealUserPhone() {
+  if (!entitlement.value) return;
+
+  try {
+    await ElMessageBox.confirm("查看完整手机号会记录审计日志，确认查看？", "查看完整手机号", {
+      type: "warning",
+      confirmButtonText: "查看",
+      cancelButtonText: "取消"
+    });
+  } catch {
+    return;
+  }
+
+  phoneRevealLoading.value = true;
+  try {
+    const result = await userApi.revealPhone(entitlement.value.user.id);
+    revealedPhone.value = result.phone;
+    phoneRevealed.value = true;
+    ElMessage.success("手机号已显示");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "手机号查看失败");
+  } finally {
+    phoneRevealLoading.value = false;
   }
 }
 
@@ -334,8 +375,16 @@ onMounted(loadUsers);
             <el-tag :type="statusTagType(row.status)">{{ formatStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" min-width="190" />
-        <el-table-column prop="updatedAt" label="更新时间" min-width="190" />
+        <el-table-column prop="createdAt" label="创建时间" min-width="190">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="updatedAt" label="更新时间" min-width="190">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updatedAt) }}
+          </template>
+        </el-table-column>
         <el-table-column v-if="showActionColumn" label="操作" width="360" fixed="right">
           <template #default="{ row }">
             <el-button v-if="canViewRecipeDomain" link type="primary" @click="openRecipeDomain(row)">查看菜谱域</el-button>
@@ -445,13 +494,28 @@ onMounted(loadUsers);
           <el-descriptions-item label="用户 ID">{{ entitlement.user.id }}</el-descriptions-item>
           <el-descriptions-item label="UID">{{ entitlement.user.uid }}</el-descriptions-item>
           <el-descriptions-item label="昵称">{{ entitlement.user.nickname || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="手机号">
+            <div class="phone-row">
+              <span>{{ entitlementPhoneText() }}</span>
+              <el-button
+                v-if="entitlement.user.phone"
+                link
+                type="primary"
+                :loading="phoneRevealLoading"
+                :disabled="phoneRevealed"
+                @click="revealUserPhone"
+              >
+                {{ phoneRevealed ? "已查看" : "查看手机号" }}
+              </el-button>
+            </div>
+          </el-descriptions-item>
           <el-descriptions-item label="状态">{{ formatStatusText(entitlement.user.status) }}</el-descriptions-item>
         </el-descriptions>
 
         <el-divider content-position="left">个人会员</el-divider>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="个人套餐">{{ entitlement.membership.tier }}</el-descriptions-item>
-          <el-descriptions-item label="有效期">{{ entitlement.membership.validUntil || "长期有效" }}</el-descriptions-item>
+          <el-descriptions-item label="有效期">{{ formatDateTime(entitlement.membership.validUntil, "长期有效") }}</el-descriptions-item>
           <el-descriptions-item label="我的页背景图">
             {{ entitlement.display.canUseProfileBackground ? "已开放" : "未开放" }}
           </el-descriptions-item>
@@ -466,7 +530,7 @@ onMounted(loadUsers);
           <el-descriptions-item label="已用空间">{{ formatBytes(entitlement.storage.usedBytes) }}</el-descriptions-item>
           <el-descriptions-item label="空间上限">{{ formatBytes(entitlement.storage.limitBytes) }}</el-descriptions-item>
           <el-descriptions-item label="剩余空间">{{ formatBytes(entitlement.storage.remainingBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="计算时间">{{ entitlement.storage.calculatedAt }}</el-descriptions-item>
+          <el-descriptions-item label="计算时间">{{ formatDateTime(entitlement.storage.calculatedAt) }}</el-descriptions-item>
         </el-descriptions>
 
         <el-divider content-position="left">策略摘要</el-divider>
@@ -503,5 +567,11 @@ onMounted(loadUsers);
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.phone-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

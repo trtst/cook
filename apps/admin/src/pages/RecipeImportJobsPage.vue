@@ -6,6 +6,7 @@ import { FolderAdd } from "@element-plus/icons-vue";
 import { recipeApi, type AdminInspirationCategorySummary, type RecipeImportJobSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -142,7 +143,11 @@ onMounted(() => {
         <el-table-column prop="readyCount" label="可发布" width="90" />
         <el-table-column prop="needsFixCount" label="待补全" width="90" />
         <el-table-column prop="failedCount" label="失败" width="80" />
-        <el-table-column prop="updatedAt" label="最近更新时间" width="200" />
+        <el-table-column label="最近更新时间" width="200">
+          <template #default="{ row }">
+            {{ formatDateTime(row.updatedAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" @click="openJob(row.id)">查看</el-button>

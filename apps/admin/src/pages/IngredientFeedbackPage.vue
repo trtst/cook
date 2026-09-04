@@ -8,6 +8,7 @@ import {
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -200,7 +201,11 @@ onMounted(() => {
             <div class="table-subtext">UID {{ row.user.uid }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="提交时间" min-width="180" />
+        <el-table-column label="提交时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag type="warning">{{ formatStatusText(row.status) }}</el-tag>

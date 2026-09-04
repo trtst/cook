@@ -9,6 +9,7 @@ import {
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
@@ -179,7 +180,11 @@ onMounted(() => {
         <el-table-column label="建议系统分类" min-width="160">
           <template #default="{ row }">{{ row.suggestedCategory.name }}</template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="推荐时间" min-width="180" />
+        <el-table-column label="推荐时间" min-width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.createdAt) }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag type="warning">{{ formatStatusText(row.status) }}</el-tag>
