@@ -39,6 +39,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { authApi } from "@/apis/auth";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import type { MeResponse } from "@/apis/user";
@@ -78,8 +79,12 @@ async function handleLogout() {
   });
   if (!confirmed) return;
 
-  loginModalStore.close();
-  await clearUserSessionState();
+	loginModalStore.close();
+	await authApi.logout({
+		refreshToken: sessionStore.refreshToken,
+		deviceId: uniPlatform.auth.getDeviceId()
+	}).catch(() => undefined);
+	await clearUserSessionState({ explicitLogout: true });
   await uniPlatform.feedback.toast({
     title: "已退出登录",
     icon: "success"

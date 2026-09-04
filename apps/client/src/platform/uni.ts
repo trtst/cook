@@ -76,6 +76,8 @@ interface ClientPlatform {
 	};
 	auth: {
 		login(): Promise<LoginCodeResult>;
+		getPhoneNumberCode(event: unknown): Promise<string>;
+		getDeviceId(): string;
 	};
 	subscription: {
 		requestSubscribeMessage(templateIds: string[]): Promise<SubscribeMessageResult>;
@@ -245,10 +247,12 @@ function buildStorageKey(name: string) {
  */
 export const APP_STORAGE_KEYS = Object.freeze({
 	session: buildStorageKey("session"),
+	logoutExplicit: buildStorageKey("logout_explicit"),
 	theme: buildStorageKey("theme"),
 	randomMenuConditions: buildStorageKey("random_menu_conditions"),
 	randomMenuCategory: buildStorageKey("random_menu_category"),
 	systemInfoSnapshot: buildStorageKey("system_info_snapshot"),
+	deviceId: buildStorageKey("device_id"),
 	userProfile: buildStorageKey("user_profile"),
 	imageCrop(token: string) {
 		return buildStorageKey(`image_crop_${String(token || "").trim()}`);
@@ -350,6 +354,30 @@ function login() {
 			fail: reject
 		});
 	});
+}
+
+function getPhoneNumberCode(event: unknown) {
+	return Promise.resolve().then(() => {
+		if (getRuntimeChannel() !== "mini_program") throw new Error("当前环境不支持微信手机号授权");
+
+		const detail =
+			typeof event === "object" && event !== null && "detail" in event
+				? (event as { detail?: { code?: unknown; errMsg?: unknown } }).detail
+				: undefined;
+		const code = typeof detail?.code === "string" ? detail.code.trim() : "";
+		if (code) return code;
+
+		throw new Error(typeof detail?.errMsg === "string" ? "未完成微信手机号授权" : "微信手机号授权失败，请重试");
+	});
+}
+
+function getDeviceId() {
+	const current = uni.getStorageSync(APP_STORAGE_KEYS.deviceId);
+	if (typeof current === "string" && current.trim()) return current.trim();
+
+	const next = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+	uni.setStorageSync(APP_STORAGE_KEYS.deviceId, next);
+	return next;
 }
 
 function requestSubscribeMessage(templateIds: string[]) {
@@ -678,7 +706,9 @@ export const uniPlatform: ClientPlatform = {
 		hideKeyboard
 	},
 	auth: {
-		login
+		login,
+		getPhoneNumberCode,
+		getDeviceId
 	},
 	subscription: {
 		requestSubscribeMessage

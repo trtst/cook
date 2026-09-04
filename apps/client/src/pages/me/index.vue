@@ -729,13 +729,13 @@ function automatorReadLoginModalState() {
 		openedInMiniProgram: loginModalStore.openedInMiniProgram,
 		appName: APP_NAME,
 		slogan: "炊烟晚，人归缓，烟火暖流年",
-		wechatButtonText: "微信一键登录",
-		switchText: "手机号验证码登录",
-		phoneTitle: "手机号验证码登录",
-		phoneDescription: "请输入手机号并获取验证码后登录。",
-		phoneSubmitText: "手机号登录",
+		wechatButtonText: null,
+		switchText: "密码登录",
+		phoneTitle: "手机号登录",
+		phoneDescription: "验证码会发送到你的手机号",
+		phoneSubmitText: "登录",
 		codeButtonText: "发送验证码",
-		backText: "返回微信一键登录"
+		backText: null
 	};
 }
 

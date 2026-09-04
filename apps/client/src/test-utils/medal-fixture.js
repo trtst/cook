@@ -1,11 +1,11 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { loginWithPassword } = require("./auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const ADMIN_USERNAME = process.env.ADMIN_SEED_USERNAME || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || "change-me";
-const TEST_CODE = "123456";
 
 let idempotencySeed = Date.now();
 
@@ -103,16 +103,6 @@ async function loginAdmin() {
     true
   );
   return result.token;
-}
-
-async function loginWithCode(phone) {
-  return requestData("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone,
-      code: TEST_CODE
-    })
-  });
 }
 
 async function createMedalTemplate(adminToken, payload) {
@@ -417,8 +407,8 @@ async function createMedalFixture() {
 
   const ownerPhone = createFreshPhone();
   const memberPhone = createFreshPhone();
-  const ownerSession = await loginWithCode(ownerPhone);
-  const memberSession = await loginWithCode(memberPhone);
+  const ownerSession = await loginWithPassword(ownerPhone);
+  const memberSession = await loginWithPassword(memberPhone);
   const ownerAuth = {
     authorization: `Bearer ${ownerSession.token}`
   };

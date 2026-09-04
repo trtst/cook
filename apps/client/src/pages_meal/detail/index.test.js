@@ -1,9 +1,9 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
-const TEST_CODE = "123456";
 
 jest.setTimeout(30000);
 
@@ -119,13 +119,7 @@ function buildFutureIso(hoursFromNow) {
 }
 
 async function loginWithCode(phone) {
-  return requestData("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone,
-      code: TEST_CODE
-    })
-  });
+  return loginWithPassword(phone);
 }
 
 async function resolveRecipeCategory(authHeaders) {

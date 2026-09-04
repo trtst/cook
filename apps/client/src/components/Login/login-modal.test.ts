@@ -1,0 +1,165 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import test from "node:test";
+
+const source = readFileSync(resolve(__dirname, "./LoginModal.vue"), "utf8");
+const storeSource = readFileSync(resolve(__dirname, "../../stores/login-modal.ts"), "utf8");
+const fontSource = readFileSync(resolve(__dirname, "../../assets/fonts/font.scss"), "utf8");
+
+function styleBlock(selector: string) {
+  const match = source.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
+  assert.ok(match, `${selector} style block should exist`);
+  return match[1];
+}
+
+test("login modal keeps WeChat phone code hidden from the rendered entry", () => {
+  assert.doesNotMatch(source, /open-type="getPhoneNumber"/);
+  assert.doesNotMatch(source, /@getphonenumber="handleWeChatPhoneLogin"/);
+  assert.doesNotMatch(source, /微信手机号登录|微信快捷登录/);
+  assert.match(source, /uniPlatform\.auth\.getPhoneNumberCode/);
+  assert.match(source, /authApi\.wechatSession/);
+  assert.match(source, /authApi\.loginWithWechatPhone/);
+  assert.match(source, /uniPlatform\.auth\.getDeviceId/);
+  assert.ok(
+    source.indexOf("await uniPlatform.auth.login()") < source.indexOf("await uniPlatform.auth.getPhoneNumberCode(event)"),
+    "the identity session must be checked before requesting phone authorization"
+  );
+  assert.doesNotMatch(source, /authApi\.loginWithWechat\(/);
+});
+
+test("login modal opens directly to SMS login in mini program", () => {
+  assert.match(storeSource, /mode: "phone" as LoginModalMode/);
+  assert.doesNotMatch(storeSource, /this\.mode = isMiniProgram \? "wechat" : "phone"/);
+  assert.match(storeSource, /this\.mode = "phone"/);
+  assert.doesNotMatch(storeSource, /this\.mode = this\.openedInMiniProgram \? "wechat" : "phone"/);
+  assert.doesNotMatch(source, /renderMode === 'wechat'|renderMode === "wechat"/);
+});
+
+test("login modal exposes SMS and password login without legacy routes", () => {
+  assert.match(source, /authApi\.sendSmsCode/);
+  assert.match(source, /authApi\.loginWithSms/);
+  assert.match(source, /authApi\.loginWithPassword/);
+  assert.match(source, /loginModalStore\.openPasswordMode/);
+  assert.doesNotMatch(source, /authApi\.(sendCode|loginWithCode)\(/);
+});
+
+test("login form inputs use phone password and visibility font icons", () => {
+  assert.match(source, /class="login-popup__field-icon cookfont icon-login-phone"/);
+  assert.match(source, /class="login-popup__field-icon cookfont icon-login-password"/);
+  assert.match(fontSource, /\.icon-login-phone::before \{\s*content: "\\e6eb";\s*\}/);
+  assert.match(fontSource, /\.icon-login-password::before \{\s*content: "\\e6d5";\s*\}/);
+  assert.match(fontSource, /\.icon-login-visible::before \{\s*content: "\\e6df";\s*\}/);
+  assert.match(fontSource, /\.icon-login-hidden::before \{\s*content: "\\e6e0";\s*\}/);
+  assert.match(source, /const passwordVisible = ref\(false\)/);
+  assert.match(source, /:password="!passwordVisible"/);
+  assert.match(source, /@click="togglePasswordVisible"/);
+  assert.match(source, /passwordVisible \? 'icon-login-visible' : 'icon-login-hidden'/);
+  assert.match(source, /\.login-popup__field[\s\S]*height: 92rpx/);
+  assert.match(source, /\.login-popup__visibility[\s\S]*min-width: 64rpx/);
+});
+
+test("login action button copy hides WeChat and uses generic form login text", () => {
+  assert.doesNotMatch(source, /loading \? "登录中\.\.\." : "微信手机号登录"/);
+  assert.match(source, /@click="handlePhoneLogin"[\s\S]*loading \? "登录中\.\.\." : "登录"/);
+  assert.match(source, /@click="handlePasswordLogin"[\s\S]*loading \? "登录中\.\.\." : "登录"/);
+  assert.doesNotMatch(source, /@click="handlePhoneLogin"[\s\S]*loading \? "登录中\.\.\." : "手机号登录"/);
+  assert.doesNotMatch(source, /@click="handlePasswordLogin"[\s\S]*loading \? "登录中\.\.\." : "手机号登录"/);
+});
+
+test("login modal uses local theme logos, plain-color decoration, and stable copy", () => {
+  assert.match(source, /@\/assets\/logo\.png/);
+  assert.match(source, /@\/assets\/assets-logo\.png/);
+  assert.match(source, /useTheme\(\)/);
+  assert.match(source, /effectiveTheme/);
+  assert.match(source, /pickLoginCopy/);
+  assert.match(source, /loginCopy/);
+  assert.doesNotMatch(source, /raw\.githubusercontent\.com/);
+  assert.doesNotMatch(source, /linear-gradient|radial-gradient/);
+});
+
+test("login modal uses the soft page background without pseudo decoration and has no guest skip entry", () => {
+  assert.match(source, /\.login-popup__panel[\s\S]*background: var\(--page-primary-soft-bg\)/);
+  assert.doesNotMatch(source, /\.login-popup__panel::before|\.login-popup__panel::after/);
+  assert.doesNotMatch(source, /filter: var\(--page-glow-cluster-filter\)/);
+  assert.doesNotMatch(source, /background: var\(--color-primary-soft-fill-medium\)|background: var\(--color-secondary-soft\)/);
+  assert.doesNotMatch(source, /login-popup__decor-block/);
+  assert.doesNotMatch(source, /login-popup__decor-cloud/);
+  assert.doesNotMatch(source, /login-popup__text-link--muted/);
+  assert.doesNotMatch(source, /暂不登录/);
+});
+
+test("login modal layout keeps actions near bottom and agreement inside the action section", () => {
+  const mainStyle = styleBlock(".login-popup__main");
+  const mainButtonStyle = styleBlock(".login-popup__main-button");
+
+  assert.ok(source.indexOf('class="login-popup__brand"') < source.indexOf('class="login-popup__main"'));
+  assert.ok(source.indexOf('class="login-popup__main"') < source.indexOf('class="login-popup__copy" aria-live="polite"'));
+  assert.ok(source.indexOf('class="login-popup__auth-card"') < source.indexOf('class="login-popup__agreement"'));
+  assert.ok(source.indexOf('class="login-popup__agreement"') < source.indexOf('class="login-popup__copy" aria-live="polite"'));
+  assert.match(mainStyle, /flex: 1/);
+  assert.match(mainStyle, /justify-content: flex-end/);
+  assert.match(mainStyle, /padding: 0 0 200rpx/);
+  assert.match(mainButtonStyle, /height: 90rpx/);
+  assert.match(mainButtonStyle, /padding: 0/);
+  assert.match(source, /\.login-popup__auth-card/);
+});
+
+test("phone login secondary links are one row plain text", () => {
+  const textLinkStyle = styleBlock(".login-popup__text-link");
+
+  assert.match(source, /login-popup__link-row/);
+  assert.match(source, /\.login-popup__link-row[\s\S]*justify-content: center/);
+  assert.doesNotMatch(source, /\.login-popup__link-row[\s\S]*justify-content: space-between/);
+  assert.doesNotMatch(source, /goBackToWechatMode|微信快捷登录/);
+  assert.match(source, /<view class="login-popup__text-link" @click="openPasswordMode">密码登录<\/view>/);
+  assert.match(source, /<view class="login-popup__text-link" @click="openPhoneMode">验证码登录<\/view>/);
+  assert.match(textLinkStyle, /align-self: center/);
+  assert.match(textLinkStyle, /color: var\(--color-text\)/);
+  assert.doesNotMatch(textLinkStyle, /color: var\(--color-primary\)/);
+});
+
+test("login modal copy uses a single background rule and no highlighted line", () => {
+  assert.match(source, /\.login-popup__copy-rule/);
+  assert.match(source, /\.login-popup__copy-text/);
+  assert.match(source, /background: var\(--color-page\)/);
+  assert.doesNotMatch(source, /login-popup__copy-line--accent/);
+  assert.doesNotMatch(source, /\.login-popup__copy::before|\.login-popup__copy::after/);
+});
+
+test("every login action keeps the agreement gate", () => {
+  assert.match(source, /handleWeChatPhoneLogin[\s\S]*ensureAgreementAccepted/);
+  assert.match(source, /handlePhoneLogin[\s\S]*ensureAgreementAccepted/);
+  assert.match(source, /handlePasswordLogin[\s\S]*ensureAgreementAccepted/);
+});
+
+test("login failures show a Toast and stay in the current login mode", () => {
+  assert.match(source, /async function showAuthError\(error: unknown\)/);
+
+  for (const handler of ["handleWeChatPhoneLogin", "sendCode", "handlePhoneLogin", "handlePasswordLogin"]) {
+    const start = source.indexOf(`async function ${handler}`);
+    const end = source.indexOf("\nasync function ", start + 1);
+    const body = source.slice(start, end === -1 ? source.length : end);
+
+    assert.match(body, /await showAuthError\(error\)/, `${handler} must show an error Toast`);
+    assert.doesNotMatch(body, /openPhoneMode\(\)|openPasswordMode\(\)|goBackToWechatMode\(\)/);
+  }
+});
+
+test("login modal toasts are shown from the bottom", () => {
+  assert.match(source, /async function showAuthError\(error: unknown\)[\s\S]*placement: "bottom"/);
+  assert.match(source, /title: "请勾选协议"[\s\S]*placement: "bottom"/);
+  assert.match(source, /title: "请勾选协议"[\s\S]*tone: "error"/);
+  assert.match(source, /title: "验证码已发送"[\s\S]*placement: "bottom"/);
+});
+
+test("agreement and inline error keep stable warning states", () => {
+  assert.match(source, /const agreementWarn = ref\(false\)/);
+  assert.match(source, /login-popup__checkbox--warning/);
+  assert.match(source, /\.login-popup__checkbox--warning[\s\S]*color: var\(--color-state-danger-text\)/);
+  assert.match(source, /<text class="login-popup__error">\{\{ errorText \|\| " " \}\}<\/text>/);
+  assert.match(source, /\.login-popup__error[\s\S]*height: 40rpx[\s\S]*line-height: 40rpx/);
+  assert.doesNotMatch(source, /v-if="errorText" class="login-popup__error"/);
+});
+
+console.log("login modal contract tests loaded");

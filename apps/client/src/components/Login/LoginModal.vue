@@ -4,6 +4,7 @@
     class="login-popup"
     :class="{
       'login-popup--phone': renderMode === 'phone',
+      'login-popup--password': renderMode === 'password',
       'login-popup--mini': renderOpenedInMiniProgram,
       'login-popup--ready': motionState !== 'entering',
       'login-popup--closing': motionState === 'closing'
@@ -12,98 +13,159 @@
   >
     <view class="login-popup__backdrop" @click="handleClose" />
     <view class="login-popup__panel">
-      <image class="login-popup__image" :src="heroImageUrl" mode="aspectFill" @error="imageFailed = true" />
-      <view class="login-popup__hero-mask" />
-
       <view class="login-popup__nav" @click="handleNav">
         <text class="login-popup__nav-icon cookfont" :class="navIconClass" aria-hidden="true" />
       </view>
 
-      <view class="login-popup__content" :class="{ 'login-popup__content--phone': renderMode === 'phone' }">
+      <view class="login-popup__content">
         <view class="login-popup__brand">
-          <text class="login-popup__app">{{ APP_NAME }}</text>
+          <image class="login-popup__logo" :src="logoUrl" mode="widthFix" />
           <text class="login-popup__slogan">{{ APP_SLOGAN }}</text>
         </view>
 
-        <template v-if="renderMode === 'wechat'">
-          <view class="login-popup__wechat">
-            <view
-              class="login-popup__main-button"
-              :class="{ 'login-popup__main-button--disabled': loading }"
-              @click="handleWeChatLogin"
-            >
-              {{ loading ? "登录中..." : "微信一键登录" }}
-            </view>
-            <view class="login-popup__text-link" @click="openPhoneMode">手机号验证码登录</view>
-            <view class="login-popup__text-link login-popup__text-link--muted" @click="handleClose">暂不登录</view>
-          </view>
-        </template>
+        <view class="login-popup__main">
+          <view class="login-popup__auth-card">
+            <template v-if="renderMode === 'phone'">
+              <view class="login-popup__auth-actions">
+                <view class="login-popup__auth-heading">
+                  <text class="login-popup__auth-title">手机号登录</text>
+                  <text class="login-popup__auth-description">验证码会发送到你的手机号</text>
+                </view>
 
-        <template v-else>
-            <view class="login-popup__phone-card">
-              <view class="login-popup__phone-header">
-                <text class="login-popup__phone-title font-black">手机号验证码登录</text>
-                <text class="login-popup__phone-description">请输入手机号并获取验证码后登录。</text>
-              </view>
+                <view class="login-popup__fields">
+                  <view class="login-popup__field">
+                    <text class="login-popup__field-icon cookfont icon-login-phone" />
+                    <input
+                      v-model="phone"
+                      class="login-popup__input"
+                      placeholder-class="login-popup__placeholder"
+                      type="number"
+                      maxlength="11"
+                      placeholder="请输入手机号"
+                      :disabled="loading"
+                    />
+                  </view>
 
-            <view class="login-popup__fields">
-              <input
-                v-model="phone"
-                class="login-popup__input"
-                placeholder-class="login-popup__placeholder"
-                type="number"
-                maxlength="11"
-                placeholder="请输入手机号"
-                :disabled="loading"
-              />
+                  <view class="login-popup__code-row">
+                    <input
+                      v-model="code"
+                      class="login-popup__input login-popup__input--code"
+                      placeholder-class="login-popup__placeholder"
+                      type="number"
+                      maxlength="6"
+                      placeholder="请输入验证码"
+                      :disabled="loading"
+                    />
+                    <button
+                      class="login-popup__code-button"
+                      :class="{ 'login-popup__code-button--disabled': loading || countdown > 0 }"
+                      :disabled="loading || countdown > 0"
+                      @click="sendCode"
+                    >
+                      {{ countdownText }}
+                    </button>
+                  </view>
+                </view>
 
-              <view class="login-popup__code-row">
-                <input
-                  v-model="code"
-                  class="login-popup__input login-popup__input--code"
-                  placeholder-class="login-popup__placeholder"
-                  type="number"
-                  maxlength="6"
-                  placeholder="请输入验证码"
+                <text class="login-popup__hint">{{ helperText }}</text>
+                <text class="login-popup__error">{{ errorText || " " }}</text>
+
+                <button
+                  class="login-popup__main-button"
+                  :class="{ 'login-popup__main-button--disabled': loading }"
                   :disabled="loading"
-                />
-                <view
-                  class="login-popup__code-button"
-                  :class="{ 'login-popup__code-button--disabled': loading || countdown > 0 }"
-                  @click="sendCode"
+                  @click="handlePhoneLogin"
                 >
-                  {{ countdownText }}
+                  {{ loading ? "登录中..." : "登录" }}
+                </button>
+
+                <view class="login-popup__link-row">
+                  <view class="login-popup__text-link" @click="openPasswordMode">密码登录</view>
                 </view>
               </view>
-            </view>
+            </template>
 
-            <text class="login-popup__hint">{{ helperText }}</text>
-            <text v-if="errorText" class="login-popup__error">{{ errorText }}</text>
+            <template v-else>
+              <view class="login-popup__auth-actions">
+                <view class="login-popup__auth-heading">
+                  <text class="login-popup__auth-title">密码登录</text>
+                  <text class="login-popup__auth-description">使用已设置的手机号和密码登录</text>
+                </view>
 
-            <view
-              class="login-popup__main-button"
-              :class="{ 'login-popup__main-button--disabled': loading }"
-              @click="handlePhoneLogin"
-            >
-              {{ loading ? "登录中..." : "手机号登录" }}
-            </view>
+                <view class="login-popup__fields">
+                  <view class="login-popup__field">
+                    <text class="login-popup__field-icon cookfont icon-login-phone" />
+                    <input
+                      v-model="phone"
+                      class="login-popup__input"
+                      placeholder-class="login-popup__placeholder"
+                      type="number"
+                      maxlength="11"
+                      placeholder="请输入手机号"
+                      :disabled="loading"
+                    />
+                  </view>
+                  <view class="login-popup__field">
+                    <text class="login-popup__field-icon cookfont icon-login-password" />
+                    <input
+                      v-model="password"
+                      class="login-popup__input"
+                      placeholder-class="login-popup__placeholder"
+                      :password="!passwordVisible"
+                      maxlength="128"
+                      placeholder="请输入密码"
+                      :disabled="loading"
+                    />
+                    <text
+                      class="login-popup__visibility cookfont"
+                      :class="passwordVisible ? 'icon-login-visible' : 'icon-login-hidden'"
+                      @click="togglePasswordVisible"
+                    />
+                  </view>
+                </view>
 
-            <view v-if="renderOpenedInMiniProgram" class="login-popup__text-link" @click="goBackToWechatMode">
-              返回微信一键登录
+                <text class="login-popup__error">{{ errorText || " " }}</text>
+
+                <button
+                  class="login-popup__main-button"
+                  :class="{ 'login-popup__main-button--disabled': loading }"
+                  :disabled="loading"
+                  @click="handlePasswordLogin"
+                >
+                  {{ loading ? "登录中..." : "登录" }}
+                </button>
+
+                <view class="login-popup__link-row">
+                  <view class="login-popup__text-link" @click="openPhoneMode">验证码登录</view>
+                </view>
+              </view>
+            </template>
+
+            <view class="login-popup__agreement" @click="toggleAgreement">
+              <text
+                class="login-popup__checkbox cookfont"
+                :class="
+                  agreementChecked
+                    ? 'icon-select-on login-popup__checkbox--checked'
+                    : agreementWarn
+                      ? 'icon-select-off login-popup__checkbox--warning'
+                      : 'icon-select-off'
+                "
+              />
+              <text class="login-popup__agreement-text">登录即表示同意</text>
+              <text class="login-popup__agreement-link" @click.stop="openAgreement('terms')">《用户协议》</text>
+              <text class="login-popup__agreement-text">与</text>
+              <text class="login-popup__agreement-link" @click.stop="openAgreement('privacy')">《隐私政策》</text>
             </view>
-            <view class="login-popup__text-link login-popup__text-link--muted" @click="handleClose">暂不登录</view>
           </view>
-        </template>
+        </view>
 
-        <view class="login-popup__agreement" @click="toggleAgreement">
-          <text
-            class="login-popup__checkbox cookfont"
-            :class="agreementChecked ? 'icon-select-on login-popup__checkbox--checked' : 'icon-select-off'"
-          />
-          <text class="login-popup__agreement-text">登录即表示同意</text>
-          <text class="login-popup__agreement-link" @click.stop="openAgreement('terms')">《用户协议》</text>
-          <text class="login-popup__agreement-text">与</text>
-          <text class="login-popup__agreement-link" @click.stop="openAgreement('privacy')">《隐私政策》</text>
+        <view class="login-popup__copy" aria-live="polite">
+          <view class="login-popup__copy-rule" />
+          <view class="login-popup__copy-text">
+            <text class="login-popup__copy-line">{{ loginCopy.firstLine }}</text>
+            <text class="login-popup__copy-line">{{ loginCopy.secondLine }}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -113,32 +175,40 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { authApi, type AuthSessionResult } from "@/apis/auth";
-import { APP_NAME, APP_SLOGAN } from "@/config";
+import { APP_SLOGAN } from "@/config";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
+import { useTheme } from "@/composables/useTheme";
 import { userApi } from "@/apis/user";
 import { ApiClientError } from "@/apis/http";
+import lightLogo from "@/assets/logo.png";
+import darkLogo from "@/assets/assets-logo.png";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { emitLoginSuccess } from "@/utils/session-events";
+import { pickLoginCopy } from "./types";
 
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { effectiveTheme } = useTheme();
 
 const phone = ref("");
 const code = ref("");
+const password = ref("");
+const passwordVisible = ref(false);
+const wechatSessionId = ref("");
 const loading = ref(false);
 const countdown = ref(0);
 const errorText = ref("");
 const helperText = ref("验证码将发送到你的手机号");
 const agreementChecked = ref(false);
-const imageFailed = ref(false);
+const agreementWarn = ref(false);
+const loginCopy = ref(pickLoginCopy());
 const renderVisible = ref(false);
-const renderMode = ref<"wechat" | "phone">("phone");
+const renderMode = ref<"wechat" | "phone" | "password">("phone");
 const renderOpenedInMiniProgram = ref(false);
-const renderImageUrl = ref("");
 const motionState = ref<"entering" | "open" | "closing">("entering");
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("login-modal"));
 
@@ -146,274 +216,371 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let motionTimer: ReturnType<typeof setTimeout> | null = null;
 const MINI_MOTION_MS = 280;
 
-const heroImageUrl = computed(() => {
-	if (imageFailed.value || !renderImageUrl.value) return "https://raw.githubusercontent.com/trtst/img/refs/heads/master/login-bg.jpg";
-	return renderImageUrl.value;
+const logoUrl = computed(() => (effectiveTheme.value === "dark" ? darkLogo : lightLogo));
+const countdownText = computed(() => (countdown.value > 0 ? `${countdown.value}s` : "发送验证码"));
+const navIconClass = computed(() => {
+  if (renderMode.value === "password") return "icon-back";
+  return "icon-close";
 });
 
-const countdownText = computed(() => (countdown.value > 0 ? `${countdown.value}s` : "发送验证码"));
-const navIconClass = computed(() =>
-	renderMode.value === "phone" && renderOpenedInMiniProgram.value ? "icon-back" : "icon-close"
+watch(
+  () => loginModalStore.visible,
+  async visible => {
+    if (!visible) {
+      startCloseMotion();
+      stopCountdown();
+      return;
+    }
+
+    syncRenderState();
+    renderVisible.value = true;
+    motionState.value = "entering";
+    resetForm();
+    stopMotionTimer();
+    await nextTick();
+    motionTimer = setTimeout(() => {
+      motionState.value = "open";
+      motionTimer = null;
+    }, 16);
+  }
 );
 
 watch(
-	() => loginModalStore.visible,
-	async (visible) => {
-		if (!visible) {
-			startCloseMotion();
-			stopCountdown();
-			return;
-		}
-
-		syncRenderState();
-		renderVisible.value = true;
-		motionState.value = "entering";
-		resetForm();
-		imageFailed.value = false;
-		stopMotionTimer();
-		await nextTick();
-		motionTimer = setTimeout(() => {
-			motionState.value = "open";
-			motionTimer = null;
-		}, 16);
-	}
+  () => [loginModalStore.mode, loginModalStore.openedInMiniProgram] as const,
+  () => {
+    if (!loginModalStore.visible) return;
+    syncRenderState();
+  }
 );
 
 watch(
-	() => [loginModalStore.mode, loginModalStore.openedInMiniProgram, loginModalStore.openImageUrl] as const,
-	() => {
-		if (!loginModalStore.visible) return;
-		syncRenderState();
-	}
-);
-
-watch(
-	() => renderVisible.value,
-	(visible) => {
-		setPageLocked(visible);
-	},
-	{ immediate: true }
+  () => renderVisible.value,
+  visible => {
+    setPageLocked(visible);
+  },
+  { immediate: true }
 );
 
 onBeforeUnmount(() => {
-	stopCountdown();
-	stopMotionTimer();
+  stopCountdown();
+  stopMotionTimer();
 });
 
 function handleNav() {
-	if (renderMode.value === "phone" && renderOpenedInMiniProgram.value) {
-		goBackToWechatMode();
-		return;
-	}
+  if (renderMode.value === "password") {
+    openPhoneMode();
+    return;
+  }
 
-	handleClose();
+  handleClose();
 }
 
 function handleClose() {
-	stopCountdown();
-	loginModalStore.close();
+  stopCountdown();
+  loginModalStore.close();
 }
 
 function openPhoneMode() {
-	errorText.value = "";
-	loginModalStore.openPhoneMode();
+  errorText.value = "";
+  agreementWarn.value = false;
+  wechatSessionId.value = sessionStore.wechatSessionId;
+  loginModalStore.openPhoneMode();
 }
 
-function goBackToWechatMode() {
-	errorText.value = "";
-	loginModalStore.back();
+function openPasswordMode() {
+  errorText.value = "";
+  agreementWarn.value = false;
+  loginModalStore.openPasswordMode();
 }
 
 function toggleAgreement() {
-	agreementChecked.value = !agreementChecked.value;
+  agreementChecked.value = !agreementChecked.value;
+  agreementWarn.value = false;
+}
+
+function togglePasswordVisible() {
+  passwordVisible.value = !passwordVisible.value;
 }
 
 function openAgreement(slug: "terms" | "privacy") {
-	void uniPlatform.navigation.navigateTo(`/pages_web/content/index?slug=${slug}`).catch(() => undefined);
+  void uniPlatform.navigation.navigateTo(`/pages_web/content/index?slug=${slug}`).catch(() => undefined);
 }
 
 async function ensureAgreementAccepted() {
-	if (agreementChecked.value) return true;
+  if (agreementChecked.value) return true;
 
-	await uniPlatform.feedback.toast({
-		title: "请勾选协议",
-		icon: "none"
-	});
-	return false;
+  agreementWarn.value = true;
+  await uniPlatform.feedback.toast({
+    title: "请勾选协议",
+    icon: "none",
+    tone: "error",
+    placement: "bottom"
+  });
+  return false;
 }
 
-async function handleWeChatLogin() {
-	if (loading.value) return;
-	if (!(await ensureAgreementAccepted())) return;
+async function handleWeChatPhoneLogin(event: unknown) {
+  if (loading.value) return;
+  if (!(await ensureAgreementAccepted())) return;
 
-	loading.value = true;
-	errorText.value = "";
+  loading.value = true;
+  errorText.value = "";
 
-	try {
-		const login = await uniPlatform.auth.login();
-		const session = await authApi.loginWithWechat({
-			code: login.code
-		});
-		await applySession(session);
-	} catch (error) {
-		errorText.value = getErrorText(error);
-	} finally {
-		loading.value = false;
-	}
+  try {
+    const deviceId = uniPlatform.auth.getDeviceId();
+    let currentWechatSessionId = sessionStore.wechatSessionId;
+
+    if (!currentWechatSessionId) {
+      const login = await uniPlatform.auth.login();
+      const result = await authApi.wechatSession({
+        code: login.code,
+        deviceId
+      });
+
+      if (result.status === "BLOCKED") {
+        await showAuthError(blockedText(result.retryAfterSeconds));
+        return;
+      }
+
+      if (result.status === "BOUND") {
+        await applySession(result.session);
+        return;
+      }
+
+      currentWechatSessionId = result.wechatSessionId;
+      sessionStore.setWechatSessionId(currentWechatSessionId);
+    }
+
+    const phoneCode = await uniPlatform.auth.getPhoneNumberCode(event);
+    wechatSessionId.value = currentWechatSessionId;
+    const session = await authApi.loginWithWechatPhone({
+      wechatSessionId: currentWechatSessionId,
+      phoneCode,
+      deviceId
+    });
+    await applySession(session);
+  } catch (error) {
+    await showAuthError(error);
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function sendCode() {
-	if (loading.value || countdown.value > 0) return;
+  if (loading.value || countdown.value > 0) return;
+  if (!(await ensureAgreementAccepted())) return;
 
-	const phoneText = phone.value.trim();
-	if (!phoneText) {
-		errorText.value = "请输入手机号";
-		return;
-	}
+  const phoneText = phone.value.trim();
+  const validationError = validatePhone(phoneText);
+  if (validationError) {
+    await showAuthError(validationError);
+    return;
+  }
 
-	if (!/^1[3-9]\d{9}$/.test(phoneText)) {
-		errorText.value = "请输入正确的手机号";
-		return;
-	}
+  loading.value = true;
+  errorText.value = "";
 
-	loading.value = true;
-	errorText.value = "";
-
-	try {
-		await authApi.sendCode({
-			phone: phoneText,
-			scene: "LOGIN"
-		});
-		helperText.value = "验证码已发送，请留意短信";
-		startCountdown();
-		await uniPlatform.feedback.toast({ title: "验证码已发送", icon: "success" }).catch(() => undefined);
-	} catch (error) {
-		errorText.value = getErrorText(error);
-	} finally {
-		loading.value = false;
-	}
+  try {
+    const result = await authApi.sendSmsCode({
+      phone: phoneText,
+      deviceId: uniPlatform.auth.getDeviceId()
+    });
+    helperText.value = "验证码已发送，请留意短信";
+    startCountdown(result.cooldownSeconds);
+    await uniPlatform.feedback.toast({ title: "验证码已发送", icon: "success", placement: "bottom" }).catch(() => undefined);
+  } catch (error) {
+    await showAuthError(error);
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function handlePhoneLogin() {
-	if (loading.value) return;
-	if (!(await ensureAgreementAccepted())) return;
+  if (loading.value) return;
+  if (!(await ensureAgreementAccepted())) return;
 
-	const phoneText = phone.value.trim();
-	const codeText = code.value.trim();
-	const validationError = validateLogin(phoneText, codeText);
-	if (validationError) {
-		errorText.value = validationError;
-		return;
-	}
+  const phoneText = phone.value.trim();
+  const codeText = code.value.trim();
+  const validationError = validateSmsLogin(phoneText, codeText);
+  if (validationError) {
+    await showAuthError(validationError);
+    return;
+  }
 
-	loading.value = true;
-	errorText.value = "";
+  loading.value = true;
+  errorText.value = "";
 
-	try {
-		const session = await authApi.loginWithCode({
-			phone: phoneText,
-			code: codeText
-		});
-		await applySession(session);
-	} catch (error) {
-		errorText.value = getErrorText(error);
-	} finally {
-		loading.value = false;
-	}
+  try {
+    const request: Parameters<typeof authApi.loginWithSms>[0] = {
+      phone: phoneText,
+      code: codeText,
+      deviceId: uniPlatform.auth.getDeviceId()
+    };
+    if (wechatSessionId.value) request.wechatSessionId = wechatSessionId.value;
+    const session = await authApi.loginWithSms(request);
+    await applySession(session);
+  } catch (error) {
+    await showAuthError(error);
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handlePasswordLogin() {
+  if (loading.value) return;
+  if (!(await ensureAgreementAccepted())) return;
+
+  const phoneText = phone.value.trim();
+  const passwordText = password.value;
+  const validationError = validatePasswordLogin(phoneText, passwordText);
+  if (validationError) {
+    await showAuthError(validationError);
+    return;
+  }
+
+  loading.value = true;
+  errorText.value = "";
+
+  try {
+    const session = await authApi.loginWithPassword({
+      phone: phoneText,
+      password: passwordText,
+      deviceId: uniPlatform.auth.getDeviceId()
+    });
+    await applySession(session);
+  } catch (error) {
+    await showAuthError(error);
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function applySession(session: AuthSessionResult) {
-	await sessionStore.setSession({
-		token: session.token,
-		uid: session.user.uid,
-		expiresAt: session.expiresAt
-	});
-	userStore.setProfile(await userApi.getCurrent());
+  await sessionStore.setSession({
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+    uid: session.user.uid,
+    user: session.user,
+    expiresAt: session.accessExpiresAt,
+    refreshExpiresAt: session.refreshExpiresAt
+  });
+  userStore.setProfile(await userApi.getCurrent());
 
-	const { sourceId, action } = loginModalStore.complete(session);
-	await emitLoginSuccess({
-		sourceId,
-		session
-	});
-	action?.();
+  const { sourceId, action } = loginModalStore.complete();
+  await emitLoginSuccess({
+    sourceId,
+    session
+  });
+  action?.();
 }
 
-function validateLogin(phoneText: string, codeText: string) {
-	if (!phoneText) return "请输入手机号";
-	if (!/^1[3-9]\d{9}$/.test(phoneText)) return "请输入正确的手机号";
-	if (!codeText) return "请输入验证码";
-	if (!/^\d{6}$/.test(codeText)) return "请输入 6 位验证码";
-	return "";
+function validatePhone(phoneText: string) {
+  if (!phoneText) return "请输入手机号";
+  if (!/^1[3-9]\d{9}$/.test(phoneText)) return "请输入正确的手机号";
+  return "";
+}
+
+function validateSmsLogin(phoneText: string, codeText: string) {
+  const phoneError = validatePhone(phoneText);
+  if (phoneError) return phoneError;
+  if (!codeText) return "请输入验证码";
+  if (!/^\d{6}$/.test(codeText)) return "请输入 6 位验证码";
+  return "";
+}
+
+function validatePasswordLogin(phoneText: string, passwordText: string) {
+  const phoneError = validatePhone(phoneText);
+  if (phoneError) return phoneError;
+  if (!passwordText) return "请输入密码";
+  if (passwordText.length < 6) return "密码至少 6 位";
+  return "";
+}
+
+function blockedText(retryAfterSeconds: number | null) {
+  if (retryAfterSeconds && retryAfterSeconds > 0) return `登录请求过于频繁，请 ${retryAfterSeconds} 秒后再试`;
+  return "登录请求过于频繁，请稍后再试";
+}
+
+async function showAuthError(error: unknown) {
+  const message = typeof error === "string" ? error : getErrorText(error);
+  errorText.value = message;
+  await uniPlatform.feedback.toast({
+    title: message,
+    icon: "none",
+    tone: "error",
+    placement: "bottom"
+  }).catch(() => undefined);
 }
 
 function getErrorText(error: unknown) {
-	if (error instanceof ApiClientError) {
-		if (error.code === 400) return error.message || "登录失败，请重试";
-		if (error.code === 429) return error.message || "请求过于频繁，请稍后重试";
-		if (error.code === 503) return error.message || "微信登录暂不可用";
-	}
+  if (error instanceof ApiClientError) {
+    if (error.code === 400) return error.message || "登录失败，请重试";
+    if (error.code === 401) return error.message || "登录凭证无效，请重试";
+    if (error.code === 429) return error.message || "请求过于频繁，请稍后重试";
+    if (error.code === 503) return error.message || "登录服务暂不可用";
+  }
 
-	if (error instanceof Error && error.message) {
-		return error.message;
-	}
-
-	return "登录失败，请稍后重试";
+  if (error instanceof Error && error.message) return error.message;
+  return "登录失败，请稍后重试";
 }
 
 function resetForm() {
-	phone.value = "";
-	code.value = "";
-	errorText.value = "";
-	helperText.value = "验证码将发送到你的手机号";
-	agreementChecked.value = false;
-	countdown.value = 0;
-	stopCountdown();
+  phone.value = "";
+  code.value = "";
+  password.value = "";
+  passwordVisible.value = false;
+  wechatSessionId.value = sessionStore.wechatSessionId;
+  errorText.value = "";
+  helperText.value = "验证码将发送到你的手机号";
+  agreementChecked.value = false;
+  agreementWarn.value = false;
+  loginCopy.value = pickLoginCopy();
+  countdown.value = 0;
+  stopCountdown();
 }
 
-function startCountdown() {
-	countdown.value = 60;
-	stopCountdown();
-	countdownTimer = setInterval(() => {
-		if (countdown.value <= 1) {
-			stopCountdown();
-			countdown.value = 0;
-			return;
-		}
+function startCountdown(seconds: number) {
+  countdown.value = Math.max(1, Math.floor(seconds));
+  stopCountdown();
+  countdownTimer = setInterval(() => {
+    if (countdown.value <= 1) {
+      stopCountdown();
+      countdown.value = 0;
+      return;
+    }
 
-		countdown.value -= 1;
-	}, 1000);
+    countdown.value -= 1;
+  }, 1000);
 }
 
 function stopCountdown() {
-	if (!countdownTimer) return;
-	clearInterval(countdownTimer);
-	countdownTimer = null;
+  if (!countdownTimer) return;
+  clearInterval(countdownTimer);
+  countdownTimer = null;
 }
 
 function syncRenderState() {
-	renderMode.value = loginModalStore.mode;
-	renderOpenedInMiniProgram.value = loginModalStore.openedInMiniProgram;
-	renderImageUrl.value = loginModalStore.openImageUrl;
+  renderMode.value = loginModalStore.mode;
+  renderOpenedInMiniProgram.value = loginModalStore.openedInMiniProgram;
 }
 
 function startCloseMotion() {
-	if (!renderVisible.value) return;
-	stopMotionTimer();
-	motionState.value = "closing";
-	motionTimer = setTimeout(() => {
-		renderVisible.value = false;
-		renderMode.value = "phone";
-		renderOpenedInMiniProgram.value = false;
-		renderImageUrl.value = "";
-		motionState.value = "entering";
-		motionTimer = null;
-	}, renderOpenedInMiniProgram.value ? MINI_MOTION_MS : 0);
+  if (!renderVisible.value) return;
+  stopMotionTimer();
+  motionState.value = "closing";
+  motionTimer = setTimeout(() => {
+    renderVisible.value = false;
+    renderMode.value = "phone";
+    renderOpenedInMiniProgram.value = false;
+    motionState.value = "entering";
+    motionTimer = null;
+  }, renderOpenedInMiniProgram.value ? MINI_MOTION_MS : 0);
 }
 
 function stopMotionTimer() {
-	if (!motionTimer) return;
-	clearTimeout(motionTimer);
-	motionTimer = null;
+  if (!motionTimer) return;
+  clearTimeout(motionTimer);
+  motionTimer = null;
 }
 </script>
 
@@ -431,8 +598,6 @@ function stopMotionTimer() {
   inset: 0;
   z-index: 0;
   background: var(--login-popup-backdrop-bg);
-  -webkit-backdrop-filter: var(--login-popup-backdrop-filter);
-  backdrop-filter: var(--login-popup-backdrop-filter);
 }
 
 .login-popup__panel {
@@ -440,29 +605,10 @@ function stopMotionTimer() {
   inset: 0;
   z-index: 1;
   overflow: hidden;
+  background: var(--page-primary-soft-bg);
 }
 
-.login-popup__image {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.login-popup__hero-mask {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    radial-gradient(circle at 24% 18%, var(--login-popup-hero-mask-spot), transparent 38%),
-    linear-gradient(180deg, var(--login-popup-hero-mask-top), var(--login-popup-hero-mask-bottom));
-  pointer-events: none;
-}
-
-.login-popup--mini .login-popup__backdrop,
-.login-popup--mini .login-popup__image,
-.login-popup--mini .login-popup__hero-mask {
+.login-popup--mini .login-popup__backdrop {
   transition: opacity 220ms ease;
 }
 
@@ -480,20 +626,13 @@ function stopMotionTimer() {
   transform: translate3d(0, 100%, 0);
 }
 
-.login-popup--mini.login-popup--closing .login-popup__backdrop,
-.login-popup--mini.login-popup--closing .login-popup__image,
-.login-popup--mini.login-popup--closing .login-popup__hero-mask {
+.login-popup--mini.login-popup--closing .login-popup__backdrop {
   opacity: 0;
   transition-duration: 140ms;
 }
 
 .login-popup--mini:not(.login-popup--ready) .login-popup__backdrop {
   opacity: 0;
-}
-
-.login-popup--mini:not(.login-popup--ready) .login-popup__image,
-.login-popup--mini:not(.login-popup--ready) .login-popup__hero-mask {
-  opacity: 0.72;
 }
 
 .login-popup__nav {
@@ -504,12 +643,13 @@ function stopMotionTimer() {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 48rpx;
-  min-height: 48rpx;
+  min-width: 64rpx;
+  min-height: 64rpx;
 }
 
 .login-popup__nav-icon {
   color: var(--color-text);
+  font-size: 34rpx;
   line-height: 1;
 }
 
@@ -517,13 +657,11 @@ function stopMotionTimer() {
   position: relative;
   z-index: 2;
   display: flex;
+  box-sizing: border-box;
   min-height: 100%;
   flex-direction: column;
-  padding: calc(var(--size-navbar-content, 88rpx) + 136rpx) 48rpx calc(72rpx + env(safe-area-inset-bottom));
-}
-
-.login-popup__content--phone {
-  padding-top: calc(var(--size-navbar-content, 88rpx) + 112rpx);
+  padding: calc(var(--size-navbar-content, 88rpx) + 96rpx) 52rpx calc(34rpx + env(safe-area-inset-bottom));
+  overflow-y: auto;
 }
 
 .login-popup__brand {
@@ -531,68 +669,105 @@ function stopMotionTimer() {
   flex-direction: column;
   gap: 16rpx;
   align-items: center;
-  text-align: center;
+  padding-top: 100rpx;
 }
 
-.login-popup__app {
-  font-family: "阿里妈妈方圆体 VF Regular";
-  font-size: 96rpx;
-  font-weight: 700;
-  line-height: 1.02;
-  color: var(--login-popup-hero-copy);
-  text-shadow: 0 8rpx 24rpx var(--login-popup-hero-shadow);
+.login-popup__logo {
+  display: block;
+  width: 320rpx;
+  height: auto;
 }
 
 .login-popup__slogan {
   max-width: 520rpx;
-  color: var(--login-popup-hero-copy-secondary);
-  font-size: 30rpx;
+  color: var(--color-text-secondary);
+  font-size: 28rpx;
   line-height: 1.6;
 }
 
-.login-popup__wechat {
+.login-popup__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 0 200rpx;
+}
+
+.login-popup__auth-card {
   display: flex;
   flex-direction: column;
-  gap: 34rpx;
-  margin-top: auto;
+  gap: 28rpx;
 }
 
-.login-popup__phone-card {
-  position: relative;
+.login-popup__wechat-actions,
+.login-popup__auth-actions {
   display: flex;
   flex-direction: column;
-  gap: 22rpx;
-  margin-top: auto;
-  padding: 36rpx;
-  border-radius: 36rpx;
-  background: linear-gradient(180deg, var(--login-popup-sheet-overlay-start) 0%, var(--login-popup-sheet-overlay-end) 100%);
-  box-shadow: var(--login-popup-sheet-shadow);
-  -webkit-backdrop-filter: var(--login-popup-sheet-filter);
-  backdrop-filter: var(--login-popup-sheet-filter);
+  gap: 24rpx;
 }
 
-.login-popup__phone-header {
+.login-popup__auth-heading {
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: 8rpx;
 }
 
-.login-popup__phone-title {
-  color: var(--login-popup-title);
-  font-size: 38rpx;
-  line-height: 1.3;
+.login-popup__auth-title {
+  color: var(--color-text);
+  font-size: 42rpx;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
-.login-popup__phone-description {
-  color: var(--login-popup-description);
-  font-size: 26rpx;
+.login-popup__auth-description,
+.login-popup__hint {
+  color: var(--color-text-secondary);
+  font-size: 25rpx;
   line-height: 1.6;
 }
 
 .login-popup__fields {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 16rpx;
+}
+
+.login-popup__field {
+  display: flex;
+  box-sizing: border-box;
+  height: 92rpx;
+  align-items: center;
+  gap: 16rpx;
+  padding: 0 22rpx;
+  border: 2rpx solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+}
+
+.login-popup__field .login-popup__input {
+  flex: 1;
+  min-width: 0;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.login-popup__field-icon {
+  color: var(--color-text-tertiary);
+  font-size: 34rpx;
+  line-height: 1;
+}
+
+.login-popup__visibility {
+  display: flex;
+  min-width: 64rpx;
+  min-height: 64rpx;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  font-size: 34rpx;
+  line-height: 1;
 }
 
 .login-popup__input {
@@ -600,20 +775,22 @@ function stopMotionTimer() {
   min-height: 92rpx;
   box-sizing: border-box;
   padding: 0 28rpx;
-  border: 2rpx solid var(--login-popup-input-border);
-  border-radius: 28rpx;
-  background: var(--login-popup-input-bg);
-  color: var(--login-popup-input-text);
+  border: 2rpx solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-size: 30rpx;
 }
 
 .login-popup__code-row {
   display: flex;
   gap: 16rpx;
+  align-items: stretch;
 }
 
 .login-popup__input--code {
   flex: 1;
+  min-width: 0;
 }
 
 .login-popup__code-button {
@@ -622,28 +799,25 @@ function stopMotionTimer() {
   justify-content: center;
   min-width: 188rpx;
   min-height: 92rpx;
-  padding: 0 20rpx;
-  border-radius: 28rpx;
-  background: var(--login-popup-code-bg);
-  color: var(--login-popup-code-text);
-  font-size: 28rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-soft-fill);
+  color: var(--color-primary);
+  font-size: 27rpx;
   font-weight: 600;
+  line-height: 1.2;
 }
 
-.login-popup__code-button--disabled {
-  opacity: 0.5;
+.login-popup__code-button::after,
+.login-popup__main-button::after {
+  border: 0;
 }
 
-.login-popup__hint {
-  color: var(--login-popup-hint);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
-
-.login-popup__error {
-  color: var(--login-popup-error);
-  font-size: 24rpx;
-  line-height: 1.5;
+.login-popup__code-button--disabled,
+.login-popup__main-button--disabled {
+  opacity: 0.52;
 }
 
 .login-popup__main-button {
@@ -651,65 +825,116 @@ function stopMotionTimer() {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 96rpx;
-  padding: 0 32rpx;
-  border-radius: var(--radius-pill);
-  background: var(--button-primary-bg);
+  height: 90rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary);
   box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
+  color: var(--theme-on-primary);
   font-size: 30rpx;
   font-weight: 600;
-  letter-spacing: 1rpx;
-}
-
-.login-popup__main-button--disabled {
-  opacity: 0.6;
+  line-height: 1;
 }
 
 .login-popup__text-link {
   align-self: center;
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 27rpx;
   line-height: 1.5;
 }
 
-.login-popup__text-link--muted {
-  color: var(--login-popup-description);
+.login-popup__link-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+}
+
+.login-popup__error {
+  display: block;
+  height: 40rpx;
+  color: var(--color-state-danger-text);
+  font-size: 25rpx;
+  line-height: 40rpx;
+}
+
+.login-popup__copy {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 82rpx;
+  text-align: center;
+}
+
+.login-popup__copy-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2rpx;
+  background: var(--color-border);
+  opacity: 0.62;
+  transform: translateY(-50%);
+}
+
+.login-popup__copy-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  max-width: 440rpx;
+  padding: 0 24rpx;
+  background: var(--color-page);
+}
+
+.login-popup__copy-line {
+  color: var(--color-text-tertiary);
+  font-size: 25rpx;
+  line-height: 1.45;
 }
 
 .login-popup__agreement {
   display: flex;
   flex-wrap: wrap;
-  gap: 10rpx 6rpx;
+  gap: 8rpx 6rpx;
   align-items: center;
   justify-content: center;
-  margin-top: 44rpx;
-  color: var(--login-popup-description);
+  margin-top: 28rpx;
+  color: var(--color-text-tertiary);
   text-align: center;
 }
 
 .login-popup__checkbox {
   color: var(--color-text-tertiary);
-  font-size: 34rpx;
+  font-size: 32rpx;
   line-height: 1;
 }
 
 .login-popup__checkbox--checked {
-  color: var(--color-support-action);
+  color: var(--color-primary);
+}
+
+.login-popup__checkbox--warning {
+  color: var(--color-state-danger-text);
 }
 
 .login-popup__agreement-text,
 .login-popup__agreement-link {
-  font-size: 24rpx;
+  font-size: 23rpx;
   line-height: 1.7;
 }
 
 .login-popup__agreement-link {
-  color: var(--color-support-action);
+  color: var(--color-primary);
   font-weight: 600;
 }
 
 :deep(.login-popup__placeholder) {
-  color: var(--login-popup-description);
+  color: var(--color-text-tertiary);
 }
 </style>

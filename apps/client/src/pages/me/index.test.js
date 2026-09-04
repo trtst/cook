@@ -76,30 +76,25 @@ describe("pages/me/index", () => {
 
     const modalState = await page.callMethod("automatorReadLoginModalState");
     expect(modalState.visible).toBe(true);
-    expect(modalState.mode).toBe("wechat");
+    expect(modalState.mode).toBe("phone");
   });
 
-  it("未登录点击通知中心会呼起全局登录弹窗并可切到手机号验证码表单", async () => {
+  it("未登录点击通知中心会呼起默认手机号验证码登录弹窗", async () => {
     expect(await page.callMethod("automatorOpenNotificationLogin")).toEqual({ path: null });
 
     const modalState = await page.callMethod("automatorReadLoginModalState");
     expect(modalState.visible).toBe(true);
-    expect(modalState.mode).toBe("wechat");
+    expect(modalState.mode).toBe("phone");
     expect(modalState.openedInMiniProgram).toBe(true);
     expect(modalState.appName).toBe("炊火记");
     expect(modalState.slogan).toBe("炊烟晚，人归缓，烟火暖流年");
-    expect(modalState.wechatButtonText).toBe("微信一键登录");
-    expect(modalState.switchText).toBe("手机号验证码登录");
-
-    await page.callMethod("automatorSwitchLoginModalPhoneMode");
-    const phoneState = await page.callMethod("automatorReadLoginModalState");
-    expect(phoneState.visible).toBe(true);
-    expect(phoneState.mode).toBe("phone");
-    expect(phoneState.phoneTitle).toBe("手机号验证码登录");
-    expect(phoneState.phoneDescription).toBe("请输入手机号并获取验证码后登录。");
-    expect(phoneState.backText).toBe("返回微信一键登录");
-    expect(phoneState.phoneSubmitText).toBe("手机号登录");
-    expect(phoneState.codeButtonText).toBe("发送验证码");
+    expect(modalState.wechatButtonText).toBe(null);
+    expect(modalState.switchText).toBe("密码登录");
+    expect(modalState.phoneTitle).toBe("手机号登录");
+    expect(modalState.phoneDescription).toBe("验证码会发送到你的手机号");
+    expect(modalState.backText).toBe(null);
+    expect(modalState.phoneSubmitText).toBe("登录");
+    expect(modalState.codeButtonText).toBe("发送验证码");
   });
 
   it("未登录时通知中心、我的口味、最近看过、提醒设置、我的勋章和账号设置都在入口层拦登录", async () => {

@@ -125,9 +125,9 @@ async function handleSendCode() {
   errorText.value = "";
 
   try {
-    await authApi.sendCode({
+    await authApi.sendSmsCode({
       phone,
-      scene: "BIND_PHONE"
+      deviceId: uniPlatform.auth.getDeviceId()
     });
     helperText.value = "验证码已发送，请留意短信";
     startCountdown();

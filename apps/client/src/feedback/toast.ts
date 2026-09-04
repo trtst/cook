@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 
 export type ToastTone = "default" | "error";
+export type ToastPlacement = "top" | "bottom";
 
 export interface ToastOptions {
   title: string;
@@ -8,6 +9,7 @@ export interface ToastOptions {
   icon?: "success" | "error" | "loading" | "none";
   tone?: ToastTone;
   duration?: number;
+  placement?: ToastPlacement;
 }
 
 type ToastPhase = "idle" | "enter" | "shown" | "leave";
@@ -19,6 +21,7 @@ interface ToastState {
   title: string;
   content: string;
   tone: ToastTone;
+  placement: ToastPlacement;
 }
 
 const toastState = reactive<ToastState>({
@@ -27,7 +30,8 @@ const toastState = reactive<ToastState>({
   nonce: 0,
   title: "",
   content: "",
-  tone: "default"
+  tone: "default",
+  placement: "top"
 });
 
 let enterTimer: ReturnType<typeof setTimeout> | null = null;
@@ -64,6 +68,7 @@ function finalizeToast(expectedNonce: number) {
   toastState.title = "";
   toastState.content = "";
   toastState.tone = "default";
+  toastState.placement = "top";
 }
 
 export function useToastState() {
@@ -91,7 +96,8 @@ export function showToast(options: ToastOptions) {
 
   const content = String(options.content || "").trim();
   const tone = resolveTone(options);
-  const toastKey = `${title}::${content}::${tone}`;
+  const placement = options.placement ?? "top";
+  const toastKey = `${title}::${content}::${tone}::${placement}`;
   const now = Date.now();
 
   if (toastKey === lastToastKey && now - lastToastAt < 300) {
@@ -110,6 +116,7 @@ export function showToast(options: ToastOptions) {
   toastState.title = title;
   toastState.content = content;
   toastState.tone = tone;
+  toastState.placement = placement;
 
   enterTimer = setTimeout(() => {
     if (toastState.nonce !== nonce || !toastState.visible) return;

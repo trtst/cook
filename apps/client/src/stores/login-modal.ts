@@ -1,10 +1,9 @@
 import { defineStore } from "pinia";
 import { useAppConfigStore } from "./app-config";
 import { uniPlatform } from "@/platform/uni";
-import type { AuthSessionResult } from "@/apis/auth";
 import { createLoginActionRegistry, type LoginModalAction } from "./login-modal-actions";
 
-type LoginModalMode = "wechat" | "phone";
+export type LoginModalMode = "wechat" | "phone" | "password";
 
 const actionRegistry = createLoginActionRegistry();
 
@@ -29,7 +28,7 @@ export const useLoginModalStore = defineStore("login-modal", {
 				actionRegistry.set(sourceId, action);
 			}
 			this.openedInMiniProgram = isMiniProgram;
-			this.mode = isMiniProgram ? "wechat" : "phone";
+			this.mode = "phone";
 			this.openImageUrl = appConfigStore.loginImageUrl;
 			this.visible = true;
 			this.openSeed += 1;
@@ -45,24 +44,27 @@ export const useLoginModalStore = defineStore("login-modal", {
 		openPhoneMode() {
 			this.mode = "phone";
 		},
+		openPasswordMode() {
+			this.mode = "password";
+		},
 		back() {
 			if (!this.openedInMiniProgram) {
 				this.close();
 				return;
 			}
 
-			this.mode = "wechat";
+			this.mode = "phone";
 		},
 		close() {
 			this.visible = false;
-			this.mode = this.openedInMiniProgram ? "wechat" : "phone";
+			this.mode = "phone";
 			this.sourceId = null;
 			this.actionId = null;
 			this.openImageUrl = "";
 			this.openedInMiniProgram = false;
 			actionRegistry.clear();
 		},
-		complete(_session: AuthSessionResult) {
+		complete() {
 			return this.completeForSource(this.sourceId, this.actionId);
 		},
 		completeForSource(sourceId: string | null, actionId: string | null = sourceId) {
@@ -72,7 +74,7 @@ export const useLoginModalStore = defineStore("login-modal", {
 			};
 
 			this.visible = false;
-			this.mode = this.openedInMiniProgram ? "wechat" : "phone";
+			this.mode = "phone";
 			this.sourceId = null;
 			this.actionId = null;
 			this.openImageUrl = "";

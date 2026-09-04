@@ -1,96 +1,168 @@
 import { defineStore } from "pinia";
 import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
 
-// Snapshot persisted in local storage for session restore on app relaunch.
-interface SessionSnapshot {
-	token: string;
-	uid?: number;
-	userId?: string;
-	expiresAt: string;
-	refreshCheckedAt?: number;
+export type AuthStatus = "guest" | "authenticated" | "refreshing" | "expired" | "blocked";
+
+export interface SessionUserSnapshot {
+	uid: number;
+	nickname: string | null;
+	avatarUrl: string | null;
 }
 
-// Expired local sessions are discarded before they re-enter app state.
+export interface SessionSnapshot {
+	accessToken?: string;
+	refreshToken?: string;
+	uid?: number;
+	user?: SessionUserSnapshot | null;
+	expiresAt: string;
+	refreshExpiresAt?: string;
+	refreshCheckedAt?: number;
+	/** The old key is accepted only for the current local-storage migration. */
+	token?: string;
+}
+
 function isExpired(expiresAt: string) {
 	const expiresTime = Date.parse(expiresAt);
 	return Number.isNaN(expiresTime) || expiresTime <= Date.now();
 }
 
-// The app treats invalid or missing uid as logged-out shape `0`.
 function resolveUid(uid?: number) {
 	return typeof uid === "number" && uid > 0 ? uid : 0;
 }
 
-// Session store owns login token, uid, expiry, restore status,
-// and the local persistence rules for those fields.
+function accessTokenOf(snapshot: SessionSnapshot) {
+	return snapshot.accessToken?.trim() || snapshot.token?.trim() || "";
+}
+
 export const useSessionStore = defineStore("session", {
 	state: () => ({
-		// Current access token returned by the login flow.
+		accessToken: "",
+		/** Kept as a synchronized compatibility alias for existing page automators. */
 		token: "",
-		// User-facing numeric uid used by client APIs and page logic.
+		refreshToken: "",
+		user: null as SessionUserSnapshot | null,
+		authStatus: "guest" as AuthStatus,
+		logoutExplicit: false,
 		uid: 0,
-		// Absolute expiry time returned by the server.
 		expiresAt: "",
-		// Timestamp of the last refresh check to throttle silent refresh.
-		refreshCheckedAt: 0,
-		// Tells the app whether restore has already finished at least once.
-		restored: false
+		refreshExpiresAt: "",
+			refreshCheckedAt: 0,
+			refreshing: false,
+			wechatSessionId: "",
+			restored: false
 	}),
 	getters: {
-		isLoggedIn: (state) => Boolean(state.token)
+		isLoggedIn: state => Boolean(state.accessToken) && state.authStatus !== "guest"
 	},
-	actions: {
-		// Restores session state from local storage during app startup.
-		// Invalid or expired snapshots are cleared instead of being reused.
-		async restore() {
-			const snapshot = await uniPlatform.storage.get<SessionSnapshot>(APP_STORAGE_KEYS.session);
+		actions: {
+			async restore() {
+				const snapshot = await uniPlatform.storage.get<SessionSnapshot>(APP_STORAGE_KEYS.session);
+				const explicitLogout = (await uniPlatform.storage.get<boolean>(APP_STORAGE_KEYS.logoutExplicit)) === true;
+				this.logoutExplicit = explicitLogout;
+				const accessToken = snapshot ? accessTokenOf(snapshot) : "";
+			const refreshToken = snapshot?.refreshToken?.trim() || "";
 
-			if (snapshot?.token) {
-				if (isExpired(snapshot.expiresAt)) {
-					await uniPlatform.storage.remove(APP_STORAGE_KEYS.session);
-					this.restored = true;
-					return;
-				}
-
-				this.token = snapshot.token;
-				this.uid = resolveUid(snapshot.uid);
-				this.expiresAt = snapshot.expiresAt;
-				this.refreshCheckedAt = snapshot.refreshCheckedAt ?? 0;
+			if (!accessToken && !refreshToken) {
+				this.authStatus = "guest";
+				this.restored = true;
+				return;
 			}
 
+			if (refreshToken && snapshot?.refreshExpiresAt && isExpired(snapshot.refreshExpiresAt)) {
+				await this.clearSession();
+				this.restored = true;
+				return;
+			}
+
+			this.accessToken = accessToken;
+			this.token = accessToken;
+			this.refreshToken = refreshToken;
+			this.user = snapshot?.user ?? null;
+			this.uid = resolveUid(snapshot?.uid ?? snapshot?.user?.uid);
+			this.expiresAt = snapshot?.expiresAt ?? "";
+			this.refreshExpiresAt = snapshot?.refreshExpiresAt ?? "";
+			this.refreshCheckedAt = snapshot?.refreshCheckedAt ?? 0;
+			this.logoutExplicit = explicitLogout;
+			this.authStatus = accessToken && isExpired(this.expiresAt) ? "expired" : "authenticated";
 			this.restored = true;
 		},
-		// Writes the current session into both Pinia state and local storage.
-		async setSession(snapshot: SessionSnapshot) {
-			this.token = snapshot.token;
-			this.uid = resolveUid(snapshot.uid);
-			this.expiresAt = snapshot.expiresAt;
-			this.refreshCheckedAt = snapshot.refreshCheckedAt ?? this.refreshCheckedAt;
-			await uniPlatform.storage.set(APP_STORAGE_KEYS.session, {
-				...snapshot,
-				refreshCheckedAt: this.refreshCheckedAt
-			});
-		},
-		// Records that the current token has already passed a refresh check.
-		// This avoids calling the refresh path on every page entry.
-		async markRefreshChecked() {
-			if (!this.token) return;
 
-			this.refreshCheckedAt = Date.now();
-			await uniPlatform.storage.set(APP_STORAGE_KEYS.session, {
-				token: this.token,
-				uid: this.uid,
-				expiresAt: this.expiresAt,
-				refreshCheckedAt: this.refreshCheckedAt
-			});
+		async setSession(snapshot: SessionSnapshot) {
+			const accessToken = accessTokenOf(snapshot);
+			this.accessToken = accessToken;
+			this.token = accessToken;
+			this.refreshToken = snapshot.refreshToken?.trim() ?? this.refreshToken;
+			this.user = snapshot.user ?? this.user;
+			this.uid = resolveUid(snapshot.uid ?? snapshot.user?.uid ?? this.uid);
+			this.expiresAt = snapshot.expiresAt;
+			this.refreshExpiresAt = snapshot.refreshExpiresAt ?? this.refreshExpiresAt;
+			this.refreshCheckedAt = snapshot.refreshCheckedAt ?? this.refreshCheckedAt;
+			this.wechatSessionId = "";
+			this.logoutExplicit = false;
+			await uniPlatform.storage.remove(APP_STORAGE_KEYS.logoutExplicit);
+			this.authStatus = "authenticated";
+			await this.persist();
 		},
-		// Clears all in-memory and persisted session fields.
-		async clearSession() {
+
+		async markRefreshing() {
+			if (!this.accessToken) return;
+			this.refreshing = true;
+			this.authStatus = "refreshing";
+		},
+
+		async markRefreshChecked() {
+			if (!this.accessToken) return;
+			this.refreshCheckedAt = Date.now();
+			this.refreshing = false;
+			if (this.authStatus === "refreshing" || this.authStatus === "expired") this.authStatus = "authenticated";
+			await this.persist();
+		},
+
+		async clearSession(options: { explicitLogout?: boolean } = {}) {
+			this.accessToken = "";
 			this.token = "";
+			this.refreshToken = "";
+			this.user = null;
 			this.uid = 0;
 			this.expiresAt = "";
+			this.refreshExpiresAt = "";
 			this.refreshCheckedAt = 0;
+			this.refreshing = false;
+			this.wechatSessionId = "";
+			this.authStatus = "guest";
+			this.logoutExplicit = options.explicitLogout === true;
 			await uniPlatform.storage.remove(APP_STORAGE_KEYS.session);
+			if (this.logoutExplicit) {
+				await uniPlatform.storage.set(APP_STORAGE_KEYS.logoutExplicit, true);
+			} else {
+				await uniPlatform.storage.remove(APP_STORAGE_KEYS.logoutExplicit);
+			}
+		},
+
+		setWechatSessionId(wechatSessionId: string) {
+			this.wechatSessionId = wechatSessionId.trim();
+			this.authStatus = "guest";
+		},
+
+		markBlocked() {
+			this.authStatus = "blocked";
+		},
+
+		async persist() {
+			if (!this.accessToken && !this.refreshToken) {
+				await uniPlatform.storage.remove(APP_STORAGE_KEYS.session);
+				return;
+			}
+
+			await uniPlatform.storage.set(APP_STORAGE_KEYS.session, {
+				accessToken: this.accessToken,
+				refreshToken: this.refreshToken,
+				uid: this.uid,
+				user: this.user,
+				expiresAt: this.expiresAt,
+				refreshExpiresAt: this.refreshExpiresAt,
+				refreshCheckedAt: this.refreshCheckedAt
+			} satisfies SessionSnapshot);
 		}
 	}
 });

@@ -12,6 +12,8 @@
  */
 import { useSessionStore } from "@/stores/session";
 import { clearUserSessionState } from "@/utils/session-cleanup";
+import { cfg } from "@/config";
+import { uniPlatform } from "@/platform/uni";
 import {
 	downloadFile as uniDownloadFile,
 	uniRequestAdapter,
@@ -85,6 +87,8 @@ interface RequestOptions {
 	idempotencyKey?: OperationId;
 }
 
+let refreshPromise: Promise<void> | null = null;
+
 function normalizeIdempotencyKey(value: string) {
 	const normalized = value.trim();
 	if (/^\d+$/.test(normalized)) return normalized;
@@ -123,6 +127,10 @@ function isApiResponse<T>(body: unknown): body is ApiResponse<T> {
 	);
 }
 
+function isRefreshUnauthorized(result: { status: number; body: unknown }) {
+	return result.status === 401 || (isApiResponse(result.body) && result.body.code === 401);
+}
+
 /**
  * 401 的收口处理必须只保留在请求层：
  * 这样可以确保所有需要登录的接口在 token 失效时执行同一套清理流程，
@@ -134,55 +142,109 @@ async function clearUnauthorized(error: UnauthorizedError) {
 }
 
 /**
+ * Refresh is kept below the public auth API so request replay and startup
+ * refresh share exactly one in-flight operation.
+ */
+export async function refreshAccessToken() {
+	const sessionStore = useSessionStore();
+	if (sessionStore.logoutExplicit || !sessionStore.refreshToken) {
+		throw new UnauthorizedError("刷新凭证已失效");
+	}
+
+	refreshPromise ??= (async () => {
+		const authStatusBeforeRefresh = sessionStore.authStatus;
+		await sessionStore.markRefreshing();
+		try {
+			const result = await uniRequestAdapter({
+				url: `${cfg.authDomain}/api/auth/refresh`,
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: {
+					refreshToken: sessionStore.refreshToken,
+					deviceId: uniPlatform.auth.getDeviceId()
+				}
+			});
+
+			if (isRefreshUnauthorized(result)) {
+				throw new UnauthorizedError("刷新凭证已失效");
+			}
+			if (!isApiResponse(result.body)) {
+				if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
+				throw new HttpError(result.status, "响应格式不符合契约");
+			}
+			if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
+			if (result.body.code !== 0) throw new ApiClientError(result.body.code, result.body.message, result.body.data);
+
+			await sessionStore.setSession(result.body.data as Parameters<typeof sessionStore.setSession>[0]);
+			await sessionStore.markRefreshChecked();
+		} catch (error) {
+			if (error instanceof UnauthorizedError) {
+				await clearUserSessionState();
+				throw error;
+			}
+			sessionStore.refreshing = false;
+			if (sessionStore.authStatus === "refreshing") sessionStore.authStatus = authStatusBeforeRefresh;
+			throw error;
+		} finally {
+			refreshPromise = null;
+		}
+	})();
+
+	return refreshPromise;
+}
+
+async function readResponse<T>(result: { status: number; body: unknown }) {
+	if (!isApiResponse<T>(result.body)) {
+		if (result.status === 401) throw new UnauthorizedError();
+		if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
+		throw new HttpError(result.status, "响应格式不符合契约");
+	}
+
+	if (result.body.code === 401) throw new UnauthorizedError(result.body.message, result.body.data);
+	if (result.body.code !== 0) throw new ApiClientError(result.body.code, result.body.message, result.body.data);
+	if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
+
+	return result.body.data as T;
+}
+
+/**
  * 统一的底层请求方法。
  * 公开的 `get/post/put/del` 都会走这里，从而共享同一套鉴权与错误处理逻辑。
  */
 async function requestByMethod<T>(method: HttpMethod, url: string, options: RequestOptions = {}) {
 	const auth = options.auth ?? true;
-	const token = auth ? useSessionStore().token : "";
 	const shouldClearUnauthorized = auth === true;
 	const idempotencyKey = options.idempotencyKey ? normalizeIdempotencyKey(options.idempotencyKey) : undefined;
-	const result = await uniRequestAdapter({
-		url: buildUrl(url, options.query),
-		method,
-		headers: {
-			"content-type": "application/json",
-			...(token ? { Authorization: `Bearer ${token}` } : {}),
-			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
-			...(options.headers ?? {})
-		},
-		body: options.body
-	});
+	let replayed = false;
 
-	if (!isApiResponse<T>(result.body)) {
-		if (result.status === 401) {
-			const error = new UnauthorizedError();
-			if (shouldClearUnauthorized) await clearUnauthorized(error);
+	while (true) {
+		const token = auth ? useSessionStore().accessToken : "";
+		const result = await uniRequestAdapter({
+			url: buildUrl(url, options.query),
+			method,
+			headers: {
+				"content-type": "application/json",
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+				...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+				...(options.headers ?? {})
+			},
+			body: options.body
+		});
+
+		try {
+			return await readResponse<T>(result);
+		} catch (error) {
+			const canRefresh = error instanceof UnauthorizedError && auth === true && !replayed;
+			if (canRefresh && useSessionStore().refreshToken && !useSessionStore().logoutExplicit) {
+				replayed = true;
+				await refreshAccessToken();
+				continue;
+			}
+
+			if (error instanceof UnauthorizedError && shouldClearUnauthorized) await clearUnauthorized(error);
 			throw error;
 		}
-
-		if (result.status < 200 || result.status >= 300) {
-			throw new HttpError(result.status, "请求失败");
-		}
-
-		throw new HttpError(result.status, "响应格式不符合契约");
 	}
-
-	if (result.body.code === 401) {
-		const error = new UnauthorizedError(result.body.message, result.body.data);
-		if (shouldClearUnauthorized) await clearUnauthorized(error);
-		throw error;
-	}
-
-	if (result.body.code !== 0) {
-		throw new ApiClientError(result.body.code, result.body.message, result.body.data);
-	}
-
-	if (result.status < 200 || result.status >= 300) {
-		throw new HttpError(result.status, "请求失败");
-	}
-
-	return result.body.data;
 }
 
 /**

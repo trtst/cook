@@ -1,5 +1,5 @@
 <template>
-  <view v-if="toast.visible" class="toast-layer" :style="layerStyle">
+  <view v-if="toast.visible" class="toast-layer" :class="`toast-layer--${toast.placement}`" :style="layerStyle">
     <view class="toast-shell">
       <view class="toast-card" :class="[`toast-card--${toast.phase}`, `toast-card--${toast.tone}`]">
         <view class="toast-card__glow" />
@@ -32,6 +32,12 @@ const toast = useToastState();
 const layerStyle = computed(() => {
   const statusBarHeight = uniPlatform.system.getWindowInfo()?.statusBarHeight ?? 0;
   const topOffset = Math.max(props.topOffset, statusBarHeight);
+  if (toast.placement === "bottom") {
+    return {
+      paddingBottom: `calc(env(safe-area-inset-bottom) + 32rpx)`
+    };
+  }
+
   return {
     paddingTop: `calc(${topOffset}px + 18rpx)`
   };
@@ -43,11 +49,23 @@ const layerStyle = computed(() => {
   position: fixed;
   inset: 0;
   z-index: 1600;
+  display: flex;
+  box-sizing: border-box;
   pointer-events: none;
+}
+
+.toast-layer--top {
+  align-items: flex-start;
+}
+
+.toast-layer--bottom {
+  align-items: flex-end;
 }
 
 .toast-shell {
   display: flex;
+  width: 100%;
+  box-sizing: border-box;
   justify-content: center;
   padding: 0 var(--space-page);
 }
@@ -57,6 +75,7 @@ const layerStyle = computed(() => {
   position: relative;
   overflow: hidden;
   width: auto;
+  min-width: 400rpx;
   max-width: 80vw;
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   background: var(--material-panel-bg);
@@ -64,9 +83,16 @@ const layerStyle = computed(() => {
   -webkit-backdrop-filter: var(--material-panel-filter);
   backdrop-filter: var(--material-panel-filter);
   opacity: 0;
-  transform: translate3d(0, -18rpx, 0) scale(0.98);
   transition: opacity 240ms ease, transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: auto;
+}
+
+.toast-layer--top .toast-card {
+  transform: translate3d(0, -18rpx, 0) scale(0.98);
+}
+
+.toast-layer--bottom .toast-card {
+  transform: translate3d(0, 28rpx, 0) scale(0.98);
 }
 
 .toast-card--shown {
@@ -82,6 +108,10 @@ const layerStyle = computed(() => {
 .toast-card--leave {
   transform: translate3d(0, -10rpx, 0) scale(0.98);
   transition-duration: 180ms;
+}
+
+.toast-layer--bottom .toast-card--leave {
+  transform: translate3d(0, 18rpx, 0) scale(0.98);
 }
 
 .toast-card__glow {
@@ -103,6 +133,7 @@ const layerStyle = computed(() => {
   position: relative;
   z-index: 1;
   padding: 28rpx 28rpx 26rpx;
+  text-align: center;
 }
 
 .toast-card__title {

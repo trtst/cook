@@ -1,9 +1,9 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
-const TEST_CODE = "123456";
 const READ_STORAGE_KEY = "cook_meal_notification_category_read_v1";
 
 jest.setTimeout(30000);
@@ -95,13 +95,7 @@ function createFreshPhone() {
 }
 
 async function loginWithCode(phone) {
-  return requestData("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone,
-      code: TEST_CODE
-    })
-  });
+  return loginWithPassword(phone);
 }
 
 async function createUnitRecommendationFixture(session) {

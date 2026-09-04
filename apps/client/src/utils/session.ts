@@ -1,7 +1,9 @@
 import { refreshSessionIfNeeded } from "@/apis/auth";
 import { userApi } from "@/apis/user";
+import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
+import { restoreWechatSession } from "./wechat-session";
 
 // 当前用户资料的本地缓存只保留短时间。
 // 登录 token 才是真正的会话事实，资料缓存只是为了减少额外 `/me` 请求。
@@ -27,39 +29,54 @@ export function restoreAppSession() {
 // 真正的恢复链路放在这里，外层只负责“一次性”和并发去重。
 async function restoreCurrentUser() {
 	const sessionStore = useSessionStore();
-	const userStore = useUserStore();
 
 	// 第一步：先从本地恢复登录 session。
 	await sessionStore.restore();
-	if (!sessionStore.isLoggedIn) return;
+	if (!sessionStore.isLoggedIn) {
+		await tryRestoreWechatIdentity();
+		return;
+	}
+	await restoreAuthenticatedUser();
+}
+
+async function tryRestoreWechatIdentity() {
+	const sessionStore = useSessionStore();
+	if (sessionStore.logoutExplicit || uniPlatform.system.getRuntimeChannel() !== "mini_program") return;
 
 	try {
-		// 第二步：如果 uid 还匹配，优先复用短时有效的本地 `/me` 缓存。
+		const restored = await restoreWechatSession(sessionStore);
+		if (restored) await restoreAuthenticatedUser();
+	} catch {
+		// 启动静默识别失败时保留 guest，让用户仍可从登录弹窗重试。
+	}
+}
+
+async function restoreAuthenticatedUser() {
+	const sessionStore = useSessionStore();
+	const userStore = useUserStore();
+
+	try {
 		const restoredProfile =
 			sessionStore.uid > 0 && (await userStore.restoreProfile(sessionStore.uid, USER_PROFILE_CACHE_MS));
 
 		if (!restoredProfile) {
-			// 缓存失效或不存在时，回退到真实 `/me` 请求。
 			const profile = await userApi.getCurrent();
-
 			if (sessionStore.uid !== profile.uid) {
-				// 服务端返回的 uid 优先于旧的本地 session 快照。
 				await sessionStore.setSession({
-					token: sessionStore.token,
+					accessToken: sessionStore.accessToken,
 					uid: profile.uid,
 					expiresAt: sessionStore.expiresAt,
+					refreshToken: sessionStore.refreshToken,
+					refreshExpiresAt: sessionStore.refreshExpiresAt,
 					refreshCheckedAt: sessionStore.refreshCheckedAt
 				});
 			}
-
 			userStore.setProfile(profile);
 		}
 	} catch {
-		// 用户资料恢复失败时，只清理依赖用户的本地状态，不在这里继续扩散异常。
 		userStore.clearProfile();
 		return;
 	}
 
-	// 第三步：在页面已经有可用状态后，再尝试一次静默续期检查。
 	await refreshSessionIfNeeded().catch(() => undefined);
 }

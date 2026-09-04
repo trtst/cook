@@ -1,9 +1,9 @@
 /* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
 @font-face {
   font-family: 'cookfont';  /* Project id 5215640 */
-  src: url('//at.alicdn.com/t/c/font_5215640_fos69oosmij.woff2?t=1788330022911') format('woff2'),
-       url('//at.alicdn.com/t/c/font_5215640_fos69oosmij.woff?t=1788330022911') format('woff'),
-       url('//at.alicdn.com/t/c/font_5215640_fos69oosmij.ttf?t=1788330022911') format('truetype');
+  src: url('//at.alicdn.com/t/c/font_5215640_w2fr9f46o4e.woff2?t=1788507684845') format('woff2'),
+       url('//at.alicdn.com/t/c/font_5215640_w2fr9f46o4e.woff?t=1788507684845') format('woff'),
+       url('//at.alicdn.com/t/c/font_5215640_w2fr9f46o4e.ttf?t=1788507684845') format('truetype');
 }
 
 .cookfont {
@@ -73,6 +73,22 @@
 
 .icon-read::before {
     content: "\e6df";
+}
+
+.icon-login-phone::before {
+    content: "\e6eb";
+}
+
+.icon-login-password::before {
+    content: "\e6d5";
+}
+
+.icon-login-visible::before {
+    content: "\e6df";
+}
+
+.icon-login-hidden::before {
+    content: "\e6e0";
 }
 
 .icon-like::before {

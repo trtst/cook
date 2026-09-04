@@ -1,10 +1,10 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const TEST_OWNER_PHONE = process.env.TEST_OWNER_PHONE || "13800000000";
-const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD || "change-me";
 
 jest.setTimeout(30000);
 
@@ -69,16 +69,6 @@ async function requestData(path, options = {}) {
   return result.body.data;
 }
 
-async function loginWithPassword() {
-  return requestData("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone: TEST_OWNER_PHONE,
-      password: TEST_USER_PASSWORD
-    })
-  });
-}
-
 async function fetchCurrentUser(token) {
   return requestData("/users/me", {
     headers: {
@@ -93,7 +83,7 @@ describe("pages_share/import/index", () => {
   let profile;
 
   beforeAll(async () => {
-    session = await loginWithPassword();
+    session = await loginWithPassword(TEST_OWNER_PHONE);
     profile = await fetchCurrentUser(session.token);
     await clearSession();
     page = await program.reLaunch("/pages_share/import/index?token=share-import-test-token");

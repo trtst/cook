@@ -4,12 +4,12 @@ import { emitSessionCleared } from "@/utils/session-events";
 import { clearAllRecipeEditCacheStores, clearRecipeEditCacheStore } from "@/utils/recipe-edit-cache";
 import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
 
-export async function clearUserSessionState() {
+export async function clearUserSessionState(options: { explicitLogout?: boolean } = {}) {
 	const sessionStore = useSessionStore();
 	const userStore = useUserStore();
 	const currentUid = sessionStore.uid;
 
-	await sessionStore.clearSession();
+	await sessionStore.clearSession(options);
 	userStore.clearProfile();
 	if (currentUid > 0) {
 		clearRecipeEditCacheStore(currentUid);

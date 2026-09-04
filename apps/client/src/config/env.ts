@@ -12,7 +12,15 @@ function readAppMode(value: unknown): AppMode | null {
 	return value === "dev" || value === "prod" ? value : null;
 }
 
-const mode: AppMode = readAppMode(import.meta.env.VITE_APP_MODE) ?? "prod";
+const runtimeEnv = (import.meta as ImportMeta & {
+	env?: {
+		VITE_APP_MODE?: unknown;
+		VITE_COOK_FROM?: string;
+		VITE_COOK_VERSION?: string;
+	};
+}).env ?? {};
+
+const mode: AppMode = readAppMode(runtimeEnv.VITE_APP_MODE) ?? "prod";
 const profile = ENV_PROFILES[mode];
 
 export const cfg = {
@@ -25,6 +33,6 @@ export const cfg = {
 	 * 只有像认证网关这类确实可能单独拆出的场景，才额外提供专用覆盖项。
 	 */
 	authDomain: profile.authDomain,
-	cookFrom: import.meta.env.VITE_COOK_FROM,
-	cookVersion: import.meta.env.VITE_COOK_VERSION ?? APP_VERSION
+	cookFrom: runtimeEnv.VITE_COOK_FROM,
+	cookVersion: runtimeEnv.VITE_COOK_VERSION ?? APP_VERSION
 };

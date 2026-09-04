@@ -1,10 +1,10 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { loginWithPassword } = require("./auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
 const MEMBER_PHONE = process.env.TEST_MEMBER_PHONE || "13700000000";
-const TEST_CODE = "123456";
 
 let idempotencySeed = Date.now();
 
@@ -95,16 +95,6 @@ async function requestData(path, options = {}) {
   assert(result.status >= 200 && result.status < 300, `${path} HTTP ${result.status}: ${result.body.message}`);
   assert(result.body.code === 0, `${path} code ${result.body.code}: ${result.body.message}`);
   return result.body.data;
-}
-
-async function loginWithCode(phone) {
-  return requestData("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone,
-      code: TEST_CODE
-    })
-  });
 }
 
 async function resolveRecipeCategory(authHeaders) {
@@ -242,8 +232,8 @@ async function createDiningEvent(authHeaders, plan, hoursFromNow) {
 }
 
 async function createMealAssistantFixture() {
-  const paidSession = await loginWithCode(MEMBER_PHONE);
-  const freeSession = await loginWithCode(createFreshPhone());
+  const paidSession = await loginWithPassword(MEMBER_PHONE);
+  const freeSession = await loginWithPassword(createFreshPhone());
   const paidAuth = { authorization: `Bearer ${paidSession.token}` };
   const freeAuth = { authorization: `Bearer ${freeSession.token}` };
 
