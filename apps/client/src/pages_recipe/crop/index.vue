@@ -149,7 +149,7 @@ import {
   writeImageCropResult,
   type ImageCropMode,
   type ImageCropRequest
-} from "../utils/image-crop";
+} from "@/utils/image-crop";
 
 type DragEdge =
   | ""

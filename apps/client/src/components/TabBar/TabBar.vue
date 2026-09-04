@@ -247,7 +247,7 @@ async function syncBadgeSnapshot() {
 
 .tabbar__font-icon {
   display: block;
-  color: var(--color-text-tertiary);
+  color: var(--color-text);
   line-height: 1;
   text-align: center;
 }

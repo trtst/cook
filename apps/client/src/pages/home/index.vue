@@ -314,6 +314,7 @@ import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
+import { useAppConfigStore } from "@/stores/app-config";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
@@ -520,6 +521,7 @@ onLoad(query => {
 
 onShow(() => {
   openPendingLoginPrompt();
+  void useAppConfigStore().refreshForHomeShow();
   void Promise.all([loadHomeEntries(), loadNextMealState(true), loadWeekOverview(true), loadFridgeRecipes(true), loadPantrySummary(true)]);
 });
 

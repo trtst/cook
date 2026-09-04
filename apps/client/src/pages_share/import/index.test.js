@@ -94,13 +94,14 @@ describe("pages_share/import/index", () => {
     await page.callMethod("automatorApplySession", {
       token: session.token,
       uid: session.user.uid,
+      user: session.user,
       expiresAt: session.expiresAt
     }, profile);
     const state = await page.callMethod("automatorHandleLoginSuccess");
 
     expect(state.loggedIn).toBe(true);
     expect(state.shareToken).toBe("share-import-test-token");
-    expect(state.guestName).toBe((profile.nickname || "").trim() || `用户 ${session.user.uid}` || "你");
+    expect(state.guestName).toBe((session.user.nickname || "").trim() || `用户 ${session.user.uid}`);
     expect(state.canSubmit).toBe(true);
   });
 

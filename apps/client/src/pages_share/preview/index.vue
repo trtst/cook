@@ -188,7 +188,7 @@ const nowMs = ref(Date.now());
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 const organizerFallback = computed(() => buildAvatarFallback(preview.value?.organizerName || "友"));
-const guestDisplayName = computed(() => resolveShareGuestName(userStore.profile, sessionStore.uid));
+const guestDisplayName = computed(() => resolveShareGuestName(sessionStore.user, sessionStore.uid));
 const participantItems = computed(() => preview.value?.participants ?? []);
 const menuItems = computed(() => preview.value?.menuPreview ?? []);
 

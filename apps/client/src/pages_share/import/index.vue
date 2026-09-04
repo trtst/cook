@@ -55,7 +55,7 @@ onLoad((query) => {
 
 function syncGuestName() {
   if (!sessionStore.isLoggedIn) return;
-  guestName.value = resolveShareGuestName(userStore.profile, sessionStore.uid);
+  guestName.value = resolveShareGuestName(sessionStore.user, sessionStore.uid);
 }
 
 async function handleLoginSuccess() {
@@ -83,7 +83,7 @@ async function automatorApplySession(
 ) {
   await sessionStore.setSession(snapshot);
   if (profile) {
-    userStore.setProfile(profile);
+    userStore.setProfile(profile, sessionStore.uid);
     return;
   }
   userStore.clearProfile();

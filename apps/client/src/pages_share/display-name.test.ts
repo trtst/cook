@@ -7,17 +7,7 @@ assert.equal(
       uid: 104,
       nickname: " 下一餐主理人 ",
       avatarUrl: null,
-      phone: null,
-      display: {
-        profileBackgroundUrl: null,
-        homeBackgroundUrl: null,
-        canUseProfileBackground: false,
-        canUseHomeBackground: false
-      },
-      membership: {
-        tier: "FREE",
-        validUntil: null
-      }
+      phone: "138xxxxx104"
     },
     104
   ),
