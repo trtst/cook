@@ -48,7 +48,7 @@ http://127.0.0.1:3100/api
 | POST | `/api/auth/refresh` | `authApi.refresh` | 轮换 refresh token 并刷新会话 |
 | POST | `/api/auth/logout` | `authApi.logout` | 吊销 refresh token |
 | GET | `/api/auth/me` | `authApi.getMe` | 读取最小认证资料 |
-| GET | `/api/users/me` | `userApi.getCurrent` | 身份、展示占位和会员事实 |
+| GET | `/api/users/me` | `userApi.getCurrent` | 账号状态、展示占位和会员事实 |
 | PUT | `/api/users/me` | `userApi.updateCurrent` | 更新昵称和头像 |
 | PUT | `/api/users/me/display` | `userApi.updateDisplay` | 预留背景设置，当前返回 `503` |
 | PUT | `/api/users/me/password` | `userApi.changeCurrentPassword` | 修改密码 |
@@ -158,11 +158,11 @@ interface AuthSessionResult {
   refreshToken: string;
   accessExpiresAt: IsoDateTime;
   refreshExpiresAt: IsoDateTime;
-  user: SessionUser;
+  user: SessionUser & { phone: string | null };
 }
 ```
 
-`/api/auth/password/set` 和 `/api/auth/password/change` 使用 `UserBearerAuth`。`/api/auth/refresh` 和 `/api/auth/logout` 使用请求体中的 `refreshToken` 与 `deviceId`，不要求 access token；refresh token 每次刷新后立即轮换，旧 token 不能再次使用；logout 成功时 `data=null`。
+`/api/auth/password/set` 和 `/api/auth/password/change` 使用 `UserBearerAuth`，写入的新密码统一要求 8-20 位字符，且至少包含字母、数字、符号中的任意两类。`/api/auth/refresh` 和 `/api/auth/logout` 使用请求体中的 `refreshToken` 与 `deviceId`，不要求 access token；refresh token 每次刷新后立即轮换，旧 token 不能再次使用；logout 成功时 `data=null`。
 
 ### 1.4 当前用户
 
@@ -175,10 +175,14 @@ Auth: UserBearerAuth
 
 ```ts
 interface MeResponse {
-  uid: number;
-  nickname: string | null;
   avatarUrl: string | null;
-  phone: string | null;
+  profile: {
+    cookNo: string | null;
+    bio: string | null;
+    gender: "MALE" | "FEMALE" | "UNSPECIFIED" | null;
+    birthDate: string | null;
+  };
+  hasPassword: boolean;
   display: {
     profileBackgroundUrl: string | null;
     homeBackgroundUrl: string | null;
@@ -212,16 +216,30 @@ PUT /api/users/me
 Auth: UserBearerAuth
 ```
 
-请求只允许昵称和头像：
+请求只允许当前资料页已经确认的可编辑字段，每次字段编辑页只提交一个字段：
 
 ```json
 {
   "nickname": "小明",
-  "avatarUrl": "https://example.com/avatar.png"
+  "cookNo": "cook520",
+  "bio": "喜欢记录家里的晚饭",
+  "gender": "FEMALE",
+  "birthDate": "1990-09-04"
 }
 ```
 
-成功返回 `MeResponse`。背景图不得混入本接口。
+`nickname` 为 2-24 个字符，不能包含 `@<>/`；`cookNo` 为 5-20 位，只允许字母、数字和下划线，服务端用唯一约束兜底；默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改；`bio` 最多 80 个字符；`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`；`birthDate` 使用 `YYYY-MM-DD`，不能晚于今天，年龄小于等于 14 岁时返回“未满14岁需实名认证”，客户端提示后要求重新选择。成功返回 `MeResponse`。背景图不得混入本接口。手机号绑定或换绑成功后，客户端需刷新 `/auth/me` 并同步 session 中的脱敏手机号展示。
+
+`PUT /users/me` 不接受 `avatarUrl`。头像不通过当前资料写入口直接提交本地路径或外部 URL。客户端在编辑资料页点击头像后，先复用菜谱图片裁剪页，使用固定 1:1 的 `profileAvatar` 裁剪策略，再调用：
+
+```text
+POST /api/users/me/avatar
+Auth: UserBearerAuth
+Header: Idempotency-Key
+Content-Type: multipart/form-data
+```
+
+请求文件字段为 `file`，服务端只接受 JPG、PNG、WEBP 图片，上传成功后写入当前用户 `avatarUrl` 并返回最新 `MeResponse`。
 
 ### 1.4 背景设置预留接口
 

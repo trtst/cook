@@ -118,6 +118,10 @@ interface SessionUser {
   avatarUrl: string | null;
 }
 
+interface AuthSessionUser extends SessionUser {
+  phone: string | null;
+}
+
 interface UserDisplay {
   profileBackgroundUrl: string | null;
   homeBackgroundUrl: string | null;
@@ -130,8 +134,9 @@ interface UserMembership {
   validUntil: IsoDateTime | null;
 }
 
-interface MeResponse extends SessionUser {
-  phone: string | null;
+interface MeResponse {
+  avatarUrl: string | null;
+  hasPassword: boolean;
   display: UserDisplay;
   membership: UserMembership;
 }
@@ -181,7 +186,7 @@ interface UserProfile extends SessionUser {
 }
 ```
 
-`MeResponse.phone` 和后台 `UserProfile.phone` 当前统一返回脱敏手机号，格式如 `138xxxxx000`。页面展示可以直接使用返回值，但不能再把响应里的手机号当作可回填的明文表单值。
+登录成功响应里的 `AuthSessionUser.phone`、`/auth/me` 和后台 `UserProfile.phone` 当前统一返回脱敏手机号，格式如 `138xxxxx000`。页面展示可以直接使用返回值，但不能再把响应里的手机号当作可回填的明文表单值。手机号绑定或换绑成功后，客户端必须刷新认证身份摘要并同步本地 session。登录密码只服务于手机号密码登录，未绑定手机号的账号不能设置或修改登录密码。`MeResponse.hasPassword` 只表示当前账号是否已设置登录密码，用于账号设置展示“设置密码 / 修改密码”，不返回密码哈希或密码策略内部信息。`/users/me` 不再返回 `uid / nickname / phone`，这些登录身份摘要只来自登录成功、refresh 后的认证会话或 `/auth/me`。
 
 `uid` 是非连续公开用户号，不是主键，不能用来推算注册量。
 用户侧接口默认不返回 `User.id` 这类数据库内部主键；空间等业务对象如果前端需要定位，保留业务对象自身 id。
@@ -250,6 +255,11 @@ PUT  /users/me/notification-feed-read
 POST /membership-codes/redeem
 PUT  /users/me/display
 PUT  /users/me/password
+POST /users/me/phone/bind
+POST /users/me/phone/change-current-code
+POST /users/me/phone/change-start
+POST /users/me/phone/change-new-code
+POST /users/me/phone/change-complete
 ```
 
 ```ts
@@ -283,12 +293,13 @@ interface PasswordLoginRequest {
   deviceId: string;
 }
 
+// 写入密码统一要求 8-20 位，且至少包含字母、数字、符号中的任意两类。
 interface SetPasswordRequest {
   password: string;
 }
 
 interface ChangePasswordRequest {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
 }
 
@@ -306,7 +317,7 @@ interface AuthSessionResult {
   refreshToken: string;
   accessExpiresAt: IsoDateTime;
   refreshExpiresAt: IsoDateTime;
-  user: SessionUser;
+  user: AuthSessionUser;
 }
 
 type WechatSessionResult =
@@ -322,7 +333,31 @@ interface ChangePasswordResult {
   changedAt: IsoDateTime;
 }
 
-旧的 `/auth/login`、`/auth/code-send`、`/auth/code-login` 和 `/auth/wechat-login` 已从当前实现移除，不提供兼容别名。短信验证码只支持 `scene="LOGIN"`；绑定手机号是独立业务，不属于本次登录短信契约。
+interface PhoneCodeSendRequest {
+  phone: string;
+  deviceId: string;
+}
+
+interface NewPhoneCodeSendRequest extends PhoneCodeSendRequest {
+  changeToken: string;
+}
+
+interface StartPhoneChangeRequest {
+  phone: string;
+  code: string;
+}
+
+interface StartPhoneChangeResult {
+  changeToken: string;
+}
+
+interface CompletePhoneChangeRequest {
+  changeToken: string;
+  phone: string;
+  code: string;
+}
+
+旧的 `/auth/login`、`/auth/code-send`、`/auth/code-login` 和 `/auth/wechat-login` 已从当前实现移除，不提供兼容别名。登录短信验证码只支持 `scene="LOGIN"`；换绑手机号使用用户域专用接口和 `PHONE_CHANGE` 服务端场景，不复用登录路径。
 
 `/auth/wechat/session` 只识别微信身份：已绑定身份直接返回完整会话，未绑定身份返回短期 `wechatSessionId`，不会提前创建用户。随后小程序通过微信 `getPhoneNumber` 组件取得 `phoneCode`，提交 `/auth/wechat/phone-login` 完成手机号账号创建或绑定微信身份。
 
@@ -331,6 +366,7 @@ interface ChangePasswordResult {
 interface AuthMeResponse extends SessionUser {
   id: UUID;
   phone: string | null;
+  hasPassword: boolean;
   status: "ACTIVE" | "DISABLED";
 }
 
@@ -531,7 +567,7 @@ interface UpdateCurrentUserRequest {
 interface UpdateNotificationSettingsRequest extends NotificationSettings {}
 
 interface ChangeCurrentPasswordRequest {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
 }
 
@@ -559,13 +595,17 @@ interface RedeemMembershipCodeResult {
 
 `PUT /users/me/notification-feed-read` 只负责把“当前通知中心时间流的最新消息时间”写入当前用户自己的已读游标，并返回最新 `NotificationBadgeResponse`。进入通知中心后客户端调用这一写入口，后续未读清除逻辑以服务端游标为准，不再以本地时间戳作为 owner。
 
+`PUT /users/me/password` 修改当前登录用户的手机号账号密码，必须携带 `Idempotency-Key`。若当前账号尚未设置密码，请求只提交 `newPassword`；若当前账号已设置密码，请求必须同时提交 `currentPassword` 和 `newPassword`。前端可以先做一致性和强度提示，但服务端仍必须校验新密码长度和强度。新密码统一要求 8-20 位字符，且至少包含字母、数字、符号中的任意两类；`currentPassword` 只用于校验已有密码哈希，不按新强度规则重新判断，避免存量密码阻断改密。
+
+`POST /users/me/phone/bind` 仅用于当前账号尚未绑定手机号时绑定手机号，提交手机号和登录短信验证码，必须携带 `Idempotency-Key`。已绑定账号更换手机号必须走换绑流程：`change-current-code` 先按当前绑定手机号、短信频控和 30 天限制发送原手机号验证码；`change-start` 消费原手机号验证码并返回短期 `changeToken`，必须携带 `Idempotency-Key`；`change-new-code` 提交 `changeToken` 后发送新手机号验证码；`change-complete` 提交 `changeToken`、新手机号和新验证码，必须携带 `Idempotency-Key`，在事务内完成唯一性校验、换绑、换绑时间记录和审计。一个账号 30 天内只能更换一次手机号。
+
 `POST /auth/wechat/session` 是当前小程序的微信身份识别入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端调用微信 `code2session` 识别微信身份；已绑定身份直接返回 `BOUND` 和完整会话，未绑定身份返回短期 `wechatSessionId`，`BLOCKED` 则返回风控冷却信息。响应不返回 `openid / unionid / session_key` 等微信身份细节，也不会在未绑定时提前创建用户。
 
 `POST /auth/wechat/phone-login` 接收微信 `getPhoneNumber` 组件返回的一次性 `phoneCode`，消费短期 `wechatSessionId`，按授权手机号创建或复用唯一手机号账号，并在同一事务内绑定微信身份后签发完整会话。微信配置缺失或微信侧不可达时返回服务不可用；微信 code 或手机号授权 code 无效时返回登录失败，不暴露外部凭据。
 
 `POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信兜底链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，也可在携带有效微信短会话时完成身份绑定。
 
-`POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
+`POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；设置初始密码和修改新密码均执行 8-20 位、字母 / 数字 / 符号任意两类的统一强度规则，登录密码本身只做哈希比对和风控。密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 
@@ -583,7 +623,7 @@ interface RedeemMembershipCodeResult {
 
 `GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回 `404`。
 
-`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
+`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。该响应只承接账号设置、资料展示、展示能力和会员入口所需状态，不返回 `uid / nickname / phone`；登录身份摘要由 `AuthSessionResult.user` 承接。`MeResponse.profile` 返回当前用户可编辑资料：`cookNo / bio / gender / birthDate`。`cookNo` 是公开唯一炊火号，5-20 位，只允许字母、数字和下划线；新用户默认用公开 `uid` 字符串生成，存量用户由迁移回填。默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改。`PUT /users/me` 每次字段编辑页只提交一个字段，允许 `nickname / cookNo / bio / gender / birthDate`，其中 `nickname` 为 2-24 个字符且不能包含 `@<>/`，`nickname / cookNo` 不接受 `null`，`bio` 最多 80 个字符且允许 `null`，`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`，`birthDate` 使用 `YYYY-MM-DD`、不能晚于今天且年龄小于等于 14 岁时返回“未满14岁需实名认证”。`PUT /users/me` 不接收 `avatarUrl`，避免绕过裁剪上传链路。头像由 `POST /users/me/avatar` 承接，客户端必须先复用图片裁剪页按 1:1 裁剪，再以 `multipart/form-data` 的 `file` 字段上传并携带 `Idempotency-Key`；服务端只接受 JPG、PNG、WEBP，成功后写入当前用户 `avatarUrl` 并返回最新 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过背景上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
 `POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、正式码 30 天冷却校验、当前会员冲突校验、有效会员到账、单码置已用和审计。DTO/鉴权/限流仍按 HTTP `400 / 401 / 429` 返回；可预期的兑换业务拒绝改为 HTTP `200` + 业务 `code/message`，其中正式码 30 天冷却返回 `code = 4601, message = "30天内仅可兑换一次"`，无效/停用/未上架/会员状态冲突/超过体验上限等其余内部原因统一收口为 `code = 4602, message = "兑换码无效或不可用"`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
 
@@ -710,6 +750,8 @@ interface AdminUserPhoneRevealResponse {
   phone: string | null;
 }
 ```
+
+后台 `POST /admin/users` 的 `password` 和 `POST /admin/users/{userId}/reset-password` 的 `newPassword` 必须执行与前台一致的写入密码规则：8-20 位字符，且至少包含字母、数字、符号中的任意两类。后台页面可以先做本地提示，但服务端仍必须在哈希前重新校验，避免后台创建或重置出弱密码。
 
 ```ts
 interface AdminUserEntitlementResponse {
