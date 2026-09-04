@@ -24,6 +24,15 @@
             <text class="account-row__arrow cookfont icon-back" />
           </view>
         </view>
+        <view class="account-row" hover-class="is-pressed" hover-stay-time="100" @click="handlePassword">
+          <view class="account-row__copy">
+            <text class="account-row__title">{{ passwordEntryTitle }}</text>
+          </view>
+          <view class="account-row__meta">
+            <text class="account-row__status">{{ passwordStatusText }}</text>
+            <text class="account-row__arrow cookfont icon-back" />
+          </view>
+        </view>
       </view>
 
       <view class="account-panel account-panel--danger">
@@ -64,10 +73,16 @@ const userStore = useUserStore();
 const pageBodyStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + 12}px`
 }));
-const phoneStatusText = computed(() => formatPhoneStatus(userStore.profile?.phone ?? null));
+const phoneStatusText = computed(() => formatPhoneStatus(sessionStore.user?.phone ?? null));
+const passwordEntryTitle = computed(() => (userStore.profile?.hasPassword ? "修改密码" : "设置密码"));
+const passwordStatusText = computed(() => (userStore.profile?.hasPassword ? "已设置" : "未设置"));
 
 function handleBindPhone() {
   void uniPlatform.navigation.navigateTo("/pages_me/phone/index");
+}
+
+function handlePassword() {
+  void uniPlatform.navigation.navigateTo("/pages_me/password/index");
 }
 
 async function handleLogout() {
@@ -101,7 +116,7 @@ function formatPhoneStatus(phone: string | null) {
 async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }, profile?: MeResponse | null) {
   await sessionStore.setSession(snapshot);
   if (profile) {
-    userStore.setProfile(profile);
+    userStore.setProfile(profile, sessionStore.uid);
     return;
   }
   userStore.clearProfile();

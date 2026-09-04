@@ -282,7 +282,7 @@ export function del<T>(url: string, query?: RequestOptions["query"], options: Om
 }
 
 function withAuth(headers: Record<string, string> = {}) {
-	const token = useSessionStore().token;
+	const token = useSessionStore().accessToken;
 
 	return {
 		...headers,
@@ -295,11 +295,28 @@ function withAuth(headers: Record<string, string> = {}) {
  * 这里不暴露 domain 参数，原因是当前上传接口尚未进入多域名细分场景，
  * 过早开放额外入口只会增加调用面的不确定性。
  */
-export function uploadFile(options: UploadFileOptions) {
-	return uniUploadFile({
-		...options,
-		headers: withAuth(options.headers)
-	});
+export async function uploadFile(options: UploadFileOptions) {
+	let replayed = false;
+
+	while (true) {
+		const result = await uniUploadFile({
+			...options,
+			headers: withAuth(options.headers)
+		});
+
+		if (isRefreshUnauthorized(result) && !replayed && useSessionStore().refreshToken && !useSessionStore().logoutExplicit) {
+			replayed = true;
+			await refreshAccessToken();
+			continue;
+		}
+
+		if (isRefreshUnauthorized(result)) {
+			const message = isApiResponse(result.body) ? result.body.message : undefined;
+			await clearUnauthorized(new UnauthorizedError(message));
+		}
+
+		return result;
+	}
 }
 
 /**

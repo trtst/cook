@@ -111,13 +111,15 @@ describe("pages_me/account/index", () => {
     await page.callMethod("automatorApplySession", {
       token: session.token,
       uid: session.user.uid,
+      user: session.user,
       expiresAt: session.expiresAt
     }, profile);
     await page.waitFor(".account-page", 8000);
 
     const loggedTexts = await collectTexts(page);
     expect(loggedTexts).toContain("绑定手机号");
+    expect(loggedTexts).toContain("设置密码");
     expect(loggedTexts).toContain("退出登录");
-    expect(loggedTexts).toContain(profile.phone || "未绑定");
+    expect(loggedTexts).toContain(session.user.phone || "未绑定");
   });
 });

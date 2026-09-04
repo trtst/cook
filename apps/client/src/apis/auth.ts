@@ -70,6 +70,7 @@ export interface RefreshSessionRequest {
 export interface AuthMeResponse extends SessionUserSnapshot {
 	id: number;
 	phone: string | null;
+	hasPassword: boolean;
 	status: string;
 }
 

@@ -5,7 +5,7 @@
  * 目的是让页面只理解“用户业务对象”，不需要再回到请求层关心域名和 method。
  */
 import { cfg } from "@/config";
-import { get, post, put, type IsoDateTime, type PageResult } from "./http";
+import { get, post, put, uploadFile, type IsoDateTime, type OperationId, type PageResult } from "./http";
 
 export interface SessionUser {
 	uid: number;
@@ -25,8 +25,19 @@ export interface UserMembership {
 	validUntil: IsoDateTime | null;
 }
 
-export interface MeResponse extends SessionUser {
-	phone: string | null;
+export type UserGender = "MALE" | "FEMALE" | "UNSPECIFIED";
+
+export interface CurrentUserProfile {
+	cookNo: string | null;
+	bio: string | null;
+	gender: UserGender | null;
+	birthDate: string | null;
+}
+
+export interface MeResponse {
+	avatarUrl: string | null;
+	profile: CurrentUserProfile;
+	hasPassword: boolean;
 	display: UserDisplay;
 	membership: UserMembership;
 }
@@ -83,7 +94,25 @@ export type UserSummary = SessionUser;
 
 export interface UpdateCurrentUserRequest {
 	nickname?: string;
-	avatarUrl?: string;
+	cookNo?: string;
+	bio?: string | null;
+	gender?: UserGender | null;
+	birthDate?: string | null;
+}
+
+export interface UploadCurrentAvatarRequest {
+	filePath: string;
+	operationId: OperationId;
+}
+
+function isUploadProfileResponse(value: unknown): value is { code: number; message?: string; data: MeResponse } {
+	return Boolean(
+		value &&
+		typeof value === "object" &&
+		"code" in value &&
+		typeof (value as { code?: unknown }).code === "number" &&
+		"data" in value
+	);
 }
 
 export interface UpdateUserDisplayRequest {
@@ -93,7 +122,8 @@ export interface UpdateUserDisplayRequest {
 }
 
 export interface ChangeCurrentPasswordRequest {
-	currentPassword: string;
+	operationId: OperationId;
+	currentPassword?: string;
 	newPassword: string;
 }
 
@@ -104,6 +134,33 @@ export interface ChangeCurrentPasswordResult {
 }
 
 export interface BindCurrentPhoneRequest {
+	operationId: OperationId;
+	phone: string;
+	code: string;
+}
+
+export interface PhoneCodeSendRequest {
+	phone: string;
+	deviceId: string;
+}
+
+export interface NewPhoneCodeSendRequest extends PhoneCodeSendRequest {
+	changeToken: string;
+}
+
+export interface StartPhoneChangeRequest {
+	operationId: OperationId;
+	phone: string;
+	code: string;
+}
+
+export interface StartPhoneChangeResult {
+	changeToken: string;
+}
+
+export interface CompletePhoneChangeRequest {
+	operationId: OperationId;
+	changeToken: string;
 	phone: string;
 	code: string;
 }
@@ -152,11 +209,27 @@ export const userApi = {
 		return put<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-feed-read`);
 	},
 	/**
-	 * 更新当前用户基础资料。
-	 * 只允许昵称和头像，不承接背景图、会员或口味资料。
+	 * 更新当前用户基础资料，不承接背景图、会员或口味资料。
 	 */
 	updateCurrent(body: UpdateCurrentUserRequest) {
 		return put<MeResponse>(`${cfg.domain}/api/users/me`, body);
+	},
+	async uploadCurrentAvatar(body: UploadCurrentAvatarRequest) {
+		const result = await uploadFile({
+			url: `${cfg.domain}/api/users/me/avatar`,
+			filePath: body.filePath,
+			name: "file",
+			headers: {
+				"Idempotency-Key": body.operationId
+			}
+		});
+		if (!isUploadProfileResponse(result.body)) {
+			throw new Error("头像上传响应格式不正确");
+		}
+		if (result.status < 200 || result.status >= 300 || result.body.code !== 0) {
+			throw new Error(result.body.message || "头像上传失败");
+		}
+		return result.body.data;
 	},
 	/**
 	 * 预留更新我的页和首页背景图设置。
@@ -173,14 +246,38 @@ export const userApi = {
 	 * 成功后只返回修改时间，不刷新用户展示资料。
 	 */
 	changeCurrentPassword(body: ChangeCurrentPasswordRequest) {
-		return put<ChangeCurrentPasswordResult>(`${cfg.domain}/api/users/me/password`, body);
+		const { operationId, ...payload } = body;
+		return put<ChangeCurrentPasswordResult>(`${cfg.domain}/api/users/me/password`, payload, {
+			idempotencyKey: operationId
+		});
 	},
 	/**
 	 * 绑定当前登录用户手机号。
 	 * 前端只提交手机号和验证码，服务端校验通过后回写最新 `/users/me` 资料。
 	 */
 	bindCurrentPhone(body: BindCurrentPhoneRequest) {
-		return post<MeResponse>(`${cfg.domain}/api/users/me/phone/bind`, body);
+		const { operationId, ...payload } = body;
+		return post<MeResponse>(`${cfg.domain}/api/users/me/phone/bind`, payload, {
+			idempotencyKey: operationId
+		});
+	},
+	sendCurrentPhoneChangeCode(body: PhoneCodeSendRequest) {
+		return post<{ cooldownSeconds: number }>(`${cfg.domain}/api/users/me/phone/change-current-code`, body);
+	},
+	startPhoneChange(body: StartPhoneChangeRequest) {
+		const { operationId, ...payload } = body;
+		return post<StartPhoneChangeResult>(`${cfg.domain}/api/users/me/phone/change-start`, payload, {
+			idempotencyKey: operationId
+		});
+	},
+	sendNewPhoneChangeCode(body: NewPhoneCodeSendRequest) {
+		return post<{ cooldownSeconds: number }>(`${cfg.domain}/api/users/me/phone/change-new-code`, body);
+	},
+	completePhoneChange(body: CompletePhoneChangeRequest) {
+		const { operationId, ...payload } = body;
+		return post<MeResponse>(`${cfg.domain}/api/users/me/phone/change-complete`, payload, {
+			idempotencyKey: operationId
+		});
 	},
 	/**
 	 * 读取当前用户私有口味、安全和忌口资料。

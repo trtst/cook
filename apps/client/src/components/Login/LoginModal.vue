@@ -477,7 +477,7 @@ async function applySession(session: AuthSessionResult) {
     expiresAt: session.accessExpiresAt,
     refreshExpiresAt: session.refreshExpiresAt
   });
-  userStore.setProfile(await userApi.getCurrent());
+  userStore.setProfile(await userApi.getCurrent(), session.user.uid);
 
   const { sourceId, action } = loginModalStore.complete();
   await emitLoginSuccess({
@@ -823,19 +823,23 @@ function stopMotionTimer() {
   line-height: 1.2;
 }
 
-.login-popup__code-button::after,
-.login-popup__main-button::after {
+.login-popup__code-button.login-popup__code-button[disabled] {
   border: 0;
-}
-
-.login-popup__main-button--disabled {
-  opacity: 0.52;
-}
-
-.login-popup__code-button--disabled {
   background: var(--button-primary-bg);
   color: var(--color-overlay-text);
   opacity: 1;
+}
+
+.login-popup__code-button.login-popup__code-button[disabled][type="default"] {
+  border: 0;
+  background: var(--button-primary-bg);
+  color: var(--color-overlay-text);
+  opacity: 1;
+}
+
+.login-popup__code-button::after,
+.login-popup__main-button::after {
+  border: 0;
 }
 
 .login-popup__main-button {
@@ -854,6 +858,30 @@ function stopMotionTimer() {
   font-size: 30rpx;
   font-weight: 600;
   line-height: 1;
+}
+
+.login-popup__main-button.login-popup__main-button[disabled] {
+  border: 0;
+  background: var(--color-primary);
+  color: var(--theme-on-primary);
+  opacity: 1;
+}
+
+.login-popup__main-button.login-popup__main-button[disabled][type="default"] {
+  border: 0;
+  background: var(--color-primary);
+  color: var(--theme-on-primary);
+  opacity: 1;
+}
+
+.login-popup__main-button--disabled {
+  opacity: 0.52;
+}
+
+.login-popup__code-button--disabled {
+  background: var(--button-primary-bg);
+  color: var(--color-overlay-text);
+  opacity: 1;
 }
 
 .login-popup__text-link {

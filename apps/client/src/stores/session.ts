@@ -7,6 +7,7 @@ export interface SessionUserSnapshot {
 	uid: number;
 	nickname: string | null;
 	avatarUrl: string | null;
+	phone: string | null;
 }
 
 export interface SessionSnapshot {

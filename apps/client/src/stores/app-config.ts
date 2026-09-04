@@ -6,9 +6,28 @@ let loadPromise: Promise<void> | null = null;
 export const useAppConfigStore = defineStore("app-config", {
 	state: () => ({
 		loginImageUrl: "" as string,
-		loaded: false
+		loaded: false,
+		homeRefreshPending: false,
+		foregroundStarted: false
 	}),
 	actions: {
+		async loadOnLaunch() {
+			this.homeRefreshPending = false;
+			await this.load();
+		},
+		startForegroundCycle() {
+			if (!this.foregroundStarted) {
+				this.foregroundStarted = true;
+				return;
+			}
+
+			this.homeRefreshPending = true;
+		},
+		async refreshForHomeShow() {
+			if (!this.homeRefreshPending) return;
+			this.homeRefreshPending = false;
+			await this.load();
+		},
 		async load() {
 			if (loadPromise) {
 				await loadPromise;

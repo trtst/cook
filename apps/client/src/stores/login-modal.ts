@@ -1,5 +1,4 @@
 import { defineStore } from "pinia";
-import { useAppConfigStore } from "./app-config";
 import { uniPlatform } from "@/platform/uni";
 import { createLoginActionRegistry, type LoginModalAction } from "./login-modal-actions";
 
@@ -13,14 +12,12 @@ export const useLoginModalStore = defineStore("login-modal", {
 		mode: "phone" as LoginModalMode,
 		sourceId: null as string | null,
 		actionId: null as string | null,
-		openImageUrl: "",
 		openSeed: 0,
 		openedInMiniProgram: false
 	}),
 	actions: {
 		open(sourceId: string | null = null, action: LoginModalAction = null) {
 			const isMiniProgram = uniPlatform.system.getRuntimeChannel() === "mini_program";
-			const appConfigStore = useAppConfigStore();
 
 			this.sourceId = sourceId;
 			this.actionId = sourceId ? sourceId : actionRegistry.register(action);
@@ -29,17 +26,8 @@ export const useLoginModalStore = defineStore("login-modal", {
 			}
 			this.openedInMiniProgram = isMiniProgram;
 			this.mode = "phone";
-			this.openImageUrl = appConfigStore.loginImageUrl;
 			this.visible = true;
 			this.openSeed += 1;
-
-			if (appConfigStore.loaded) return;
-
-			const currentSeed = this.openSeed;
-			void appConfigStore.load().then(() => {
-				if (!this.visible || this.openSeed !== currentSeed) return;
-				this.openImageUrl = appConfigStore.loginImageUrl;
-			});
 		},
 		openPhoneMode() {
 			this.mode = "phone";
@@ -60,7 +48,6 @@ export const useLoginModalStore = defineStore("login-modal", {
 			this.mode = "phone";
 			this.sourceId = null;
 			this.actionId = null;
-			this.openImageUrl = "";
 			this.openedInMiniProgram = false;
 			actionRegistry.clear();
 		},
@@ -77,7 +64,6 @@ export const useLoginModalStore = defineStore("login-modal", {
 			this.mode = "phone";
 			this.sourceId = null;
 			this.actionId = null;
-			this.openImageUrl = "";
 			this.openedInMiniProgram = false;
 
 			return result;

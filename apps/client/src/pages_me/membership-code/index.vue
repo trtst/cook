@@ -96,7 +96,7 @@ async function submitRedeem() {
     }).catch(() => undefined);
     try {
       const profile = await userApi.getCurrent();
-      userStore.setProfile(profile);
+      userStore.setProfile(profile, sessionStore.uid);
     } catch {
       // 兑换已经成功，资料刷新失败只影响本地展示，不回滚成功提示。
     }

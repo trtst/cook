@@ -1,9 +1,9 @@
 /* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
 @font-face {
   font-family: 'cookfont';  /* Project id 5215640 */
-  src: url('//at.alicdn.com/t/c/font_5215640_w2fr9f46o4e.woff2?t=1788507684845') format('woff2'),
-       url('//at.alicdn.com/t/c/font_5215640_w2fr9f46o4e.woff?t=1788507684845') format('woff'),
-       url('//at.alicdn.com/t/c/font_5215640_w2fr9f46o4e.ttf?t=1788507684845') format('truetype');
+  src: url('//at.alicdn.com/t/c/font_5215640_ehc07wlzen.woff2?t=1788541005680') format('woff2'),
+       url('//at.alicdn.com/t/c/font_5215640_ehc07wlzen.woff?t=1788541005680') format('woff'),
+       url('//at.alicdn.com/t/c/font_5215640_ehc07wlzen.ttf?t=1788541005680') format('truetype');
 }
 
 .cookfont {
@@ -129,6 +129,14 @@
 
 .icon-edit::before {
     content: "\e608";
+}
+
+.icon-profile-camera::before {
+    content: "\e6cf";
+}
+
+.icon-calendar-switch::before {
+    content: "\e6a8";
 }
 
 .icon-recommend::before {

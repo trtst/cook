@@ -7,17 +7,25 @@ import { isMaybeString, isRecord } from "@/utils/utils";
 // Cached `/users/me` payload saved locally for faster cold start restore.
 interface UserProfileSnapshot {
   profile?: unknown;
+	cachedUid?: number;
   cachedAt?: number;
 }
 
 // Guards the cached payload before it is accepted back into typed store state.
 // The check stays local because it validates this exact MeResponse shape.
 function isUserProfile(profile: unknown): profile is MeResponse {
-  if (!isRecord(profile) || typeof profile.uid !== "number") return false;
-	if (!isMaybeString(profile.nickname) || !isMaybeString(profile.avatarUrl) || !isMaybeString(profile.phone)) return false;
-	if (!isRecord(profile.display) || !isRecord(profile.membership)) return false;
+  if (!isRecord(profile)) return false;
+	if (
+		!isMaybeString(profile.avatarUrl) ||
+		typeof profile.hasPassword !== "boolean"
+	) return false;
+	if (!isRecord(profile.profile) || !isRecord(profile.display) || !isRecord(profile.membership)) return false;
 
 	return (
+		isMaybeString(profile.profile.cookNo) &&
+		isMaybeString(profile.profile.bio) &&
+		(profile.profile.gender === null || ["MALE", "FEMALE", "UNSPECIFIED"].includes(String(profile.profile.gender))) &&
+		isMaybeString(profile.profile.birthDate) &&
 		isMaybeString(profile.display.profileBackgroundUrl) &&
 		isMaybeString(profile.display.homeBackgroundUrl) &&
 		typeof profile.display.canUseProfileBackground === "boolean" &&
@@ -47,13 +55,14 @@ export const useUserStore = defineStore("user", {
 	},
 	actions: {
 		// Updates in-memory profile state and mirrors the result to local cache.
-		setProfile(profile: MeResponse | null) {
+		setProfile(profile: MeResponse | null, uid = 0) {
 			this.profile = profile;
 			this.profileCachedAt = profile ? Date.now() : 0;
 
 			if (profile) {
 				void uniPlatform.storage.set(APP_STORAGE_KEYS.userProfile, {
 					profile,
+					cachedUid: uid,
 					cachedAt: this.profileCachedAt
 				});
 			} else {
@@ -68,7 +77,7 @@ export const useUserStore = defineStore("user", {
 			if (
 				!snapshot ||
 				!isUserProfile(snapshot.profile) ||
-				snapshot.profile.uid !== uid ||
+				snapshot.cachedUid !== uid ||
 				typeof snapshot.cachedAt !== "number" ||
 				Date.now() - snapshot.cachedAt > maxAgeMs
 			) {

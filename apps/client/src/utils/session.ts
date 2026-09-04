@@ -1,4 +1,4 @@
-import { refreshSessionIfNeeded } from "@/apis/auth";
+import { authApi, refreshSessionIfNeeded } from "@/apis/auth";
 import { userApi } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -61,22 +61,34 @@ async function restoreAuthenticatedUser() {
 
 		if (!restoredProfile) {
 			const profile = await userApi.getCurrent();
-			if (sessionStore.uid !== profile.uid) {
-				await sessionStore.setSession({
-					accessToken: sessionStore.accessToken,
-					uid: profile.uid,
-					expiresAt: sessionStore.expiresAt,
-					refreshToken: sessionStore.refreshToken,
-					refreshExpiresAt: sessionStore.refreshExpiresAt,
-					refreshCheckedAt: sessionStore.refreshCheckedAt
-				});
-			}
-			userStore.setProfile(profile);
+			userStore.setProfile(profile, sessionStore.uid);
 		}
 	} catch {
 		userStore.clearProfile();
 		return;
 	}
 
+	await restoreAuthUserSummary();
 	await refreshSessionIfNeeded().catch(() => undefined);
+}
+
+async function restoreAuthUserSummary() {
+	const sessionStore = useSessionStore();
+	if (!sessionStore.isLoggedIn || !sessionStore.user || "phone" in sessionStore.user) return;
+
+	const authUser = await authApi.getMe();
+	await sessionStore.setSession({
+		accessToken: sessionStore.accessToken,
+		refreshToken: sessionStore.refreshToken,
+		uid: sessionStore.uid,
+		user: {
+			uid: authUser.uid,
+			nickname: authUser.nickname,
+			avatarUrl: authUser.avatarUrl,
+			phone: authUser.phone
+		},
+		expiresAt: sessionStore.expiresAt,
+		refreshExpiresAt: sessionStore.refreshExpiresAt,
+		refreshCheckedAt: sessionStore.refreshCheckedAt
+	});
 }

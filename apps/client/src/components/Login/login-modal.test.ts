@@ -180,6 +180,27 @@ test("SMS countdown button keeps a solid primary background", () => {
   assert.match(mainDisabledStyle, /opacity: 0\.52/);
 });
 
+test("disabled login buttons reset the WeChat default disabled skin", () => {
+  const mainDisabledStyle = styleBlock(".login-popup__main-button.login-popup__main-button[disabled]");
+  const mainDefaultDisabledStyle = styleBlock('.login-popup__main-button.login-popup__main-button[disabled][type="default"]');
+  const codeDisabledStyle = styleBlock(".login-popup__code-button.login-popup__code-button[disabled]");
+  const codeDefaultDisabledStyle = styleBlock('.login-popup__code-button.login-popup__code-button[disabled][type="default"]');
+
+  for (const disabledStyle of [mainDisabledStyle, mainDefaultDisabledStyle, codeDisabledStyle, codeDefaultDisabledStyle]) {
+    assert.match(disabledStyle, /border: 0/);
+    assert.match(disabledStyle, /opacity: 1/);
+  }
+
+  assert.match(mainDisabledStyle, /background: var\(--color-primary\)/);
+  assert.match(mainDisabledStyle, /color: var\(--theme-on-primary\)/);
+  assert.match(mainDefaultDisabledStyle, /background: var\(--color-primary\)/);
+  assert.match(mainDefaultDisabledStyle, /color: var\(--theme-on-primary\)/);
+  assert.match(codeDisabledStyle, /background: var\(--button-primary-bg\)/);
+  assert.match(codeDisabledStyle, /color: var\(--color-overlay-text\)/);
+  assert.match(codeDefaultDisabledStyle, /background: var\(--button-primary-bg\)/);
+  assert.match(codeDefaultDisabledStyle, /color: var\(--color-overlay-text\)/);
+});
+
 test("agreement and inline error keep stable warning states", () => {
   assert.match(source, /const agreementWarn = ref\(false\)/);
   assert.match(source, /login-popup__checkbox--warning/);

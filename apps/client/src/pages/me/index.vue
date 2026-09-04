@@ -203,33 +203,6 @@
 				</template>
 			</view>
 
-			<view v-if="profileEditorOpen" class="profile-modal" @click="closeProfileEditor" @touchmove.stop.prevent>
-				<view class="profile-modal__panel" @click.stop>
-					<view class="profile-modal__header">
-						<text class="profile-modal__title">编辑资料</text>
-						<text class="profile-modal__close" @click="closeProfileEditor">×</text>
-					</view>
-
-					<view class="profile-form">
-						<text class="profile-form__label">昵称</text>
-						<input v-model="profileNameDraft" class="profile-form__input" maxlength="20" placeholder="请输入昵称"
-							:disabled="profileSaving" />
-						<text v-if="profileEditErrorText" class="profile-form__error">{{ profileEditErrorText }}</text>
-					</view>
-
-					<view class="profile-modal__actions">
-						<button class="profile-modal__button profile-modal__button--ghost" :disabled="profileSaving"
-							@click="closeProfileEditor">
-							取消
-						</button>
-						<button class="profile-modal__button profile-modal__button--primary" :loading="profileSaving"
-							:disabled="profileSaving" @click="saveProfile">
-							保存
-						</button>
-					</view>
-				</view>
-			</view>
-
 		</scroll-view>
 	</Layout>
 </template>
@@ -263,7 +236,6 @@ import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } f
 import { useUserStore } from "@/stores/user";
 import { formatThemeText } from "@/themes";
 import { restoreAppSession } from "@/utils/session";
-import { knowledgeApi } from "@/apis/knowledge";
 
 interface PageEntry {
 	title: string;
@@ -288,43 +260,30 @@ const { effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useThem
 const { navBarTotalHeight } = useSystemInfo();
 
 const profileLoading = ref(false);
-const profileEditorOpen = ref(false);
-const profileSaving = ref(false);
 const medalCount = ref<number | null>(null);
-const profileNameDraft = ref("");
-const profileEditErrorText = ref("");
 const notificationBadge = ref(readNotificationBadgeSnapshot());
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
-const { setLocked: setPageLocked } = usePageScrollLock(Symbol("me-page-modal"));
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
 let loadMedalsPromise: Promise<void> | null = null;
-let loadKnowledgeChannelsPromise: Promise<void> | null = null;
 const showMemberEntrances = false;
 
 const profileHeroStyle = computed(() => ({
 	"--profile-hero-padding-top": `${navBarTotalHeight.value}px`
 }));
-watch(
-	() => profileEditorOpen.value,
-	(visible) => {
-		setPageLocked(visible);
-	},
-	{ immediate: true }
-);
 const profileName = computed(() => {
 	if (!sessionStore.isLoggedIn) return "点击登录";
-	return userStore.profile?.nickname || `${APP_NAME}用户`;
+	return sessionStore.user?.nickname || `${APP_NAME}用户`;
 });
 const profileCoverUrl = computed(() => userStore.profile?.display?.profileBackgroundUrl || "");
-const profileAvatarUrl = computed(() => userStore.profile?.avatarUrl || "");
+const profileAvatarUrl = computed(() => sessionStore.user?.avatarUrl || userStore.profile?.avatarUrl || "");
 const profileAvatarText = computed(() => {
 	if (!sessionStore.isLoggedIn) return "我";
 	return profileName.value.trim().slice(0, 1) || "我";
 });
 const profileUidText = computed(() =>
-	sessionStore.isLoggedIn ? `UID: ${userStore.profile?.uid ?? "--"}` : "登录后同步你的数据"
+	sessionStore.isLoggedIn ? `UID: ${sessionStore.uid || "--"}` : "登录后同步你的数据"
 );
 const membershipCardDescription = computed(() => (
 	sessionStore.isLoggedIn ? "你的容量、展示和减广告权益都收在这里" : "登录后查看会员状态"
@@ -403,13 +362,13 @@ type KnowledgeEntryMeta = {
 };
 
 const knowledgeChannelCodes: KnowledgeChannelCode[] = ["KITCHEN", "COOK", "FOOD"];
-const knowledgeChannelMeta = ref<Record<KnowledgeChannelCode, KnowledgeEntryMeta>>({
+const knowledgeChannelMeta: Record<KnowledgeChannelCode, KnowledgeEntryMeta> = {
 	KITCHEN: KNOWLEDGE_CHANNELS.KITCHEN,
 	COOK: KNOWLEDGE_CHANNELS.COOK,
 	FOOD: KNOWLEDGE_CHANNELS.FOOD
-});
+};
 const knowledgeEntries = computed<PageEntry[]>(() => knowledgeChannelCodes.map(code => {
-	const channel = knowledgeChannelMeta.value[code];
+	const channel = knowledgeChannelMeta[code];
 	return {
 		title: channel.title,
 		iconClass: knowledgeEntryIcons[code],
@@ -503,13 +462,12 @@ async function syncPageState() {
 
 		if (sessionStore.isLoggedIn && userStore.profile) {
 			profileLoading.value = false;
-			void loadKnowledgeChannels();
 			return;
 		}
 	}
 
 	if (sessionStore.isLoggedIn) {
-		await Promise.allSettled([loadMe(), loadMedals(), syncNotificationBadge(), loadKnowledgeChannels()]);
+		await Promise.allSettled([loadMe(), loadMedals(), syncNotificationBadge()]);
 		return;
 	}
 
@@ -529,37 +487,6 @@ async function syncNotificationBadge() {
 	const snapshot = await refreshNotificationBadgeSnapshot().catch(() => null);
 	if (!snapshot) return;
 	notificationBadge.value = snapshot;
-}
-
-async function loadKnowledgeChannels() {
-	if (!sessionStore.isLoggedIn) return;
-	if (loadKnowledgeChannelsPromise) {
-		await loadKnowledgeChannelsPromise;
-		return;
-	}
-
-	loadKnowledgeChannelsPromise = doLoadKnowledgeChannels().finally(() => {
-		loadKnowledgeChannelsPromise = null;
-	});
-
-	await loadKnowledgeChannelsPromise;
-}
-
-async function doLoadKnowledgeChannels() {
-	const results = await Promise.allSettled(knowledgeChannelCodes.map(code => knowledgeApi.listArticles(code, 1, 1)));
-	const nextMeta = { ...knowledgeChannelMeta.value };
-
-	for (const result of results) {
-		if (result.status !== "fulfilled") continue;
-		const channel = result.value.channel;
-		nextMeta[channel.code] = {
-			code: channel.code,
-			title: channel.name,
-			description: channel.description
-		};
-	}
-
-	knowledgeChannelMeta.value = nextMeta;
 }
 
 async function loadMe() {
@@ -592,7 +519,7 @@ async function doLoadMe() {
 	]);
 
 	if (shouldLoadProfile && profileResult.status === "fulfilled" && profileResult.value) {
-		userStore.setProfile(profileResult.value);
+		userStore.setProfile(profileResult.value, sessionStore.uid);
 	}
 
 	if (shouldLoadProfile && profileResult.status === "rejected") {
@@ -665,7 +592,7 @@ function handleEntryClick(entry: PageEntry) {
 
 function handleProfileAction() {
 	if (sessionStore.isLoggedIn) {
-		openProfileEditor();
+		navigateTo("/pages_me/profile/index");
 		return;
 	}
 
@@ -823,51 +750,6 @@ defineExpose({
 	automatorApplyThemeSettings,
 	automatorApplyNotificationBadgeSnapshot
 });
-
-function openProfileEditor() {
-	profileNameDraft.value = userStore.profile?.nickname || "";
-	profileEditErrorText.value = "";
-	profileEditorOpen.value = true;
-}
-
-function closeProfileEditor() {
-	if (profileSaving.value) return;
-	profileEditorOpen.value = false;
-	profileEditErrorText.value = "";
-}
-
-async function saveProfile() {
-	if (profileSaving.value) return;
-
-	const nickname = profileNameDraft.value.trim();
-	if (!nickname) {
-		profileEditErrorText.value = "请输入昵称";
-		return;
-	}
-
-	const nicknameUnchanged = nickname === (userStore.profile?.nickname || "").trim();
-
-	if (nicknameUnchanged) {
-		closeProfileEditor();
-		return;
-	}
-
-	profileSaving.value = true;
-	profileEditErrorText.value = "";
-
-	try {
-		const profile = await userApi.updateCurrent({ nickname });
-		userStore.setProfile(profile);
-		profileEditorOpen.value = false;
-	} catch (error) {
-		profileEditErrorText.value = error instanceof Error ? error.message : "保存失败";
-		return;
-	} finally {
-		profileSaving.value = false;
-	}
-
-	await uniPlatform.feedback.toast({ title: "已保存", icon: "success" }).catch(() => undefined);
-}
 
 function navigateTo(url: string) {
 	void uniPlatform.navigation.navigateTo(url);
@@ -1400,83 +1282,6 @@ function showComingSoon(name: string) {
 	transform: scale(0.98);
 }
 
-.profile-modal {
-	position: fixed;
-	inset: 0;
-	z-index: 130;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: var(--space-page);
-	background: var(--page-overlay-veil-bg);
-	-webkit-backdrop-filter: var(--page-overlay-veil-filter);
-	backdrop-filter: var(--page-overlay-veil-filter);
-}
-
-.profile-modal__panel {
-	width: 100%;
-	overflow: hidden;
-	border-radius: var(--radius-sheet);
-	background: var(--color-surface);
-	box-shadow: var(--shadow-floating);
-}
-
-.profile-modal__header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 28rpx 30rpx 0;
-}
-
-.profile-modal__title {
-	color: var(--color-text);
-	font-size: var(--font-size-lg);
-	font-weight: var(--font-weight-bold);
-}
-
-.profile-modal__close {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 56rpx;
-	height: 56rpx;
-	color: var(--color-text-tertiary);
-	font-size: 44rpx;
-	line-height: 1;
-}
-
-.profile-form {
-	padding: var(--space-lg) 30rpx var(--space-md);
-}
-
-.profile-form__label {
-	display: block;
-	color: var(--color-text-secondary);
-	font-size: var(--font-size-sm);
-	font-weight: var(--font-weight-semibold);
-}
-
-.profile-form__input {
-	min-height: var(--size-input);
-	margin-top: var(--space-lg);
-	padding: 0 var(--space-md);
-	border: 1rpx solid var(--material-input-border);
-	border-radius: var(--radius-md);
-	background: var(--material-input-bg);
-	box-shadow: var(--material-input-shadow);
-	-webkit-backdrop-filter: var(--material-input-filter);
-	backdrop-filter: var(--material-input-filter);
-	color: var(--color-text);
-	font-size: var(--font-size-md);
-}
-
-.profile-form__error {
-	display: block;
-	margin-top: var(--space-lg);
-	color: var(--color-state-danger-text);
-	font-size: var(--font-size-sm);
-}
-
 .password-form {
 	padding: var(--space-lg) 30rpx var(--space-md);
 }
@@ -1513,30 +1318,4 @@ function showComingSoon(name: string) {
 	font-size: var(--font-size-sm);
 }
 
-.profile-modal__actions {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--space-lg);
-	padding: 0 30rpx 30rpx;
-}
-
-.profile-modal__button {
-	min-height: var(--size-button-secondary);
-	border-radius: var(--radius-md);
-	font-size: var(--font-size-md);
-	font-weight: var(--font-weight-bold);
-}
-
-.profile-modal__button--ghost {
-	border: 0;
-	background: var(--button-secondary-bg);
-	color: var(--button-secondary-text);
-	-webkit-backdrop-filter: var(--button-secondary-filter);
-	backdrop-filter: var(--button-secondary-filter);
-}
-
-.profile-modal__button--primary {
-	background: var(--button-primary-bg);
-	color: var(--button-primary-text);
-}
 </style>
