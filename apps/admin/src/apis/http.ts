@@ -157,6 +157,8 @@ export async function requestData<T>(path: string, options: RequestOptions = {})
     throw new HttpError(response.status, "响应格式不符合契约");
   }
 
+  if (!response.ok) throw new HttpError(response.status, "请求失败");
+
   if (body.code === 401) {
     const error = new UnauthorizedError(body.message, body.data);
     if (auth) clearUnauthorized();
@@ -167,7 +169,6 @@ export async function requestData<T>(path: string, options: RequestOptions = {})
     throw new ApiClientError(body.code, body.message, body.data);
   }
 
-  if (!response.ok) throw new HttpError(response.status, "请求失败");
   return body.data;
 }
 
@@ -202,6 +203,8 @@ export async function uploadForm<T>(path: string, formData: FormData, options: P
     throw new HttpError(response.status, "响应格式不符合契约");
   }
 
+  if (!response.ok) throw new HttpError(response.status, "请求失败");
+
   if (body.code === 401) {
     const error = new UnauthorizedError(body.message, body.data);
     if (auth) clearUnauthorized();
@@ -212,6 +215,5 @@ export async function uploadForm<T>(path: string, formData: FormData, options: P
     throw new ApiClientError(body.code, body.message, body.data);
   }
 
-  if (!response.ok) throw new HttpError(response.status, "请求失败");
   return body.data;
 }
