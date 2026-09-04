@@ -611,6 +611,7 @@ POST /admin/users
 PUT  /admin/users/{userId}
 POST /admin/users/{userId}/status
 POST /admin/users/{userId}/reset-password
+POST /admin/users/{userId}/phone/reveal
 GET  /admin/user-entitlements?userId={userId}
 GET  /admin/app-config
 GET  /admin/home-entries
@@ -704,11 +705,15 @@ interface AdminResetUserPasswordResponse {
   userId: UUID;
   resetAt: IsoDateTime;
 }
+
+interface AdminUserPhoneRevealResponse {
+  phone: string | null;
+}
 ```
 
 ```ts
 interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "phone" | "status">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
   storage: StorageUsageSummary;
@@ -717,6 +722,8 @@ interface AdminUserEntitlementResponse {
   imagePolicy: EffectiveImagePolicy;
 }
 ```
+
+`AdminUserEntitlementResponse.user.phone` 只返回脱敏手机号，用于后台权益抽屉默认展示。`POST /admin/users/{userId}/phone/reveal` 是后台完整手机号敏感读取接口，仅 `SUPER_ADMIN` 可调用；服务端每次调用都重新校验管理员实时状态和角色、校验目标用户存在、写入 `USER_PHONE_REVEALED` 审计事件，并且响应只返回 `{ phone }`。审计 payload 不记录完整手机号。后台页面点击“查看手机号”前必须二次确认，关闭抽屉后不得继续保留完整手机号状态。
 
 ```ts
 type MembershipCodeKind = "FORMAL" | "TRIAL";
@@ -856,7 +863,7 @@ GET  /public-assets/site-content-images/{fileName}
 
 `GET /site-contents/official-messages` 与 `GET /site-contents/official-messages/{contentId}` 共同承接小程序通知中心里的“系统官方消息”。两个接口都要求 `UserBearerAuth`，未登录时客户端先走登录链路。列表查询参数固定为 `page + pageSize`，只返回 `channel.code = OFFICIAL_NOTICE` 且 `status = PUBLISHED` 的内容，按 `publishedAt desc, updatedAt desc, id desc` 排序。列表和详情当前统一返回最小站内承接字段：`id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`。通知中心只消费其中的 `title / summary / publishedAt|updatedAt` 生成消息卡；若正文里存在 `https://` 链接，则前台可直接跳内嵌 H5，否则进入站内官方消息详情页。这组接口当前不开放阅读数、点赞、评论、已读回执、定向投放或发送统计。
 
-`POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status` 和 `POST /admin/users/{userId}/reset-password` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用和重置密码；不支持物理删除用户，也不通过后台直接改用户归属数据。
+`POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status`、`POST /admin/users/{userId}/reset-password` 和 `POST /admin/users/{userId}/phone/reveal` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用、重置密码和经审计查看完整手机号；不支持物理删除用户，也不通过后台直接改用户归属数据。
 
 用户 token 绑定服务端 `sessionVersion`。后台启用、禁用或重置密码时递增该版本；此前签发的 token 从下一次鉴权请求起统一返回 `401`，重新启用用户不会恢复旧 token。
 
