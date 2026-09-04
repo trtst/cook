@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type {
   AdminMedalTemplateSummary,
   DiningEventShareLinkResponse,
@@ -19,7 +20,7 @@ loadLocalEnv();
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
-const testCode = "123456";
+const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 const pngBytes = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9l9s8AAAAASUVORK5CYII=",
   "base64"
@@ -117,13 +118,7 @@ async function loginAdmin() {
 }
 
 async function loginWithCode(phone: string) {
-  return requestData<LoginResult>("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone,
-      code: testCode
-    })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 async function listMedalTemplates(adminToken: string, keyword?: string) {

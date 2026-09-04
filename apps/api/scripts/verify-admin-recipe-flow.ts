@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type { AdminRecipeSummary, InspirationRecipeDetail, InspirationRecipeSummary, PageResult, RecipeReportSummary } from "../src/contracts/types";
 
 loadLocalEnv();
@@ -70,10 +71,7 @@ async function requestData<T>(path: string, options: RequestInit = {}, admin = f
 async function main() {
   const prisma = new PrismaClient();
   try {
-    const member = await requestData<LoginResult>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ phone: memberPhone, password })
-    });
+    const member = await loginWithPassword(requestData, memberPhone, password);
     const admin = await requestData<LoginResult>(
       "/admin/auth/login",
       {

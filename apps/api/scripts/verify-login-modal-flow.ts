@@ -1,9 +1,8 @@
 import { loadLocalEnv } from "../src/common/load-env";
 import type {
+  AuthSessionResult,
   AppConfigResponse,
-  CodeLoginResult,
   MeResponse,
-  SendAuthCodeResult
 } from "../src/contracts/types";
 
 loadLocalEnv();
@@ -11,6 +10,9 @@ loadLocalEnv();
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
+const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
+const ownerPassword = process.env.TEST_USER_PASSWORD ?? "change-me";
+const deviceId = process.env.TEST_DEVICE_ID ?? `verify-login-modal-${process.pid}`;
 const pngBytes = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9l9s8AAAAASUVORK5CYII=",
   "base64"
@@ -126,13 +128,7 @@ async function loginAdmin() {
   );
 }
 
-function createPhone() {
-  const suffix = nextIdempotencyKey().slice(-9).padStart(9, "0");
-  return `13${suffix}`;
-}
-
 async function main() {
-  const phone = createPhone();
   const publicConfigBefore = await requestData<AppConfigResponse>("/app-config");
   const adminSession = await loginAdmin();
   const adminConfigBefore = await requestData<AppConfigResponse>(
@@ -152,46 +148,21 @@ async function main() {
   let uploaded = false;
 
   try {
-    const loginSend = await requestData<SendAuthCodeResult>("/auth/code-send", {
+    const session = await requestData<AuthSessionResult>("/auth/password/login", {
       method: "POST",
       body: JSON.stringify({
-        phone,
-        scene: "LOGIN"
+        phone: ownerPhone,
+        password: ownerPassword,
+        deviceId
       })
     });
-    assert(loginSend.scene === "LOGIN", `code-send LOGIN scene mismatch: ${loginSend.scene}`);
-
-    const bindSend = await requestData<SendAuthCodeResult>("/auth/code-send", {
-      method: "POST",
-      body: JSON.stringify({
-        phone,
-        scene: "BIND_PHONE"
-      })
-    });
-    assert(bindSend.scene === "BIND_PHONE", `code-send BIND_PHONE scene mismatch: ${bindSend.scene}`);
-
-    const invalidCode = await request<CodeLoginResult>("/auth/code-login", {
-      method: "POST",
-      body: JSON.stringify({
-        phone,
-        code: "000000"
-      })
-    });
-    assert(invalidCode.status === 400, `invalid code-login should return 400, got ${invalidCode.status}`);
-
-    const session = await requestData<CodeLoginResult>("/auth/code-login", {
-      method: "POST",
-      body: JSON.stringify({
-        phone,
-        code: "123456"
-      })
-    });
-    assert(session.token, "code-login token missing");
-    assert(session.user.uid > 0, "code-login uid missing");
+    assert(session.accessToken, "password login access token missing");
+    assert(session.refreshToken, "password login refresh token missing");
+    assert(session.user.uid > 0, "password login uid missing");
 
     const me = await requestData<MeResponse>("/users/me", {
       headers: {
-        authorization: `Bearer ${session.token}`
+        authorization: `Bearer ${session.accessToken}`
       }
     });
     assert(me.uid === session.user.uid, `users/me uid mismatch: ${me.uid} vs ${session.user.uid}`);
@@ -218,9 +189,7 @@ async function main() {
       JSON.stringify(
         {
           apiBaseUrl,
-          phone,
-          sendScenes: [loginSend.scene, bindSend.scene],
-          codeLoginUid: session.user.uid,
+          passwordLoginUid: session.user.uid,
           adminConfigBeforeImage: adminConfigBefore.login.imageUrl,
           publicConfigBeforeImage: publicConfigBefore.login.imageUrl,
           uploadedImageUrl: publicConfigAfterUpload.login.imageUrl,

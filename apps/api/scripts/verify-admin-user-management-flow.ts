@@ -1,11 +1,12 @@
 import type {
   AdminResetUserPasswordResponse,
   PageResult,
-  PasswordLoginResult,
+  AuthSessionResult,
   UserProfile
 } from "../src/contracts/types";
 import { maskPhone } from "../src/common/phone";
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 
 loadLocalEnv();
 
@@ -97,6 +98,7 @@ async function main() {
       })
     }
   );
+  const userRequestData = <T>(path: string, options: RequestInit = {}) => requestData<T>(path, options, userHeaders);
   assert(created.phone === maskPhone(createdPhone), "created phone mismatch");
   assert(created.status === "ACTIVE", "created user should be active");
 
@@ -114,14 +116,7 @@ async function main() {
   assert(updated.phone === maskPhone(updatedPhone), "updated phone mismatch");
   assert(updated.nickname === "后台已编辑用户", "updated nickname mismatch");
 
-  const initialLogin = await requestData<PasswordLoginResult>(
-    "/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone: updatedPhone, password: initialPassword })
-    },
-    userHeaders
-  );
+  const initialLogin = await loginWithPassword(userRequestData, updatedPhone, initialPassword);
 
   const cleared = await requestData<UserProfile>(
     `/admin/users/${created.id}`,
@@ -152,14 +147,7 @@ async function main() {
   }, userHeaders);
   assert(resetOldToken.status === 401, "reset password should invalidate existing token");
 
-  const resetLogin = await requestData<PasswordLoginResult>(
-    "/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone: updatedPhone, password: resetPassword })
-    },
-    userHeaders
-  );
+  const resetLogin = await loginWithPassword(userRequestData, updatedPhone, resetPassword);
 
   const disabled = await requestData<UserProfile>(
     `/admin/users/${created.id}/status`,
@@ -178,11 +166,15 @@ async function main() {
   }, userHeaders);
   assert(disabledOldToken.status === 401, "disabled user existing token should return 401");
 
-  const disabledLogin = await request<PasswordLoginResult>(
-    "/auth/login",
+  const disabledLogin = await request<AuthSessionResult>(
+    "/auth/password/login",
     {
       method: "POST",
-      body: JSON.stringify({ phone: updatedPhone, password: resetPassword })
+      body: JSON.stringify({
+        phone: updatedPhone,
+        password: resetPassword,
+        deviceId: `admin-user-management-disabled-${nextIdempotencyKey()}`
+      })
     },
     userHeaders
   );
@@ -200,14 +192,7 @@ async function main() {
   );
   assert(enabled.status === "ACTIVE", "user should be enabled");
 
-  const userLogin = await requestData<PasswordLoginResult>(
-    "/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify({ phone: updatedPhone, password: resetPassword })
-    },
-    userHeaders
-  );
+  const userLogin = await loginWithPassword(userRequestData, updatedPhone, resetPassword);
   assert(userLogin.user.uid === created.uid, "reset password login uid mismatch");
 
   const users = await requestData<PageResult<UserProfile>>(`/admin/users?page=1&pageSize=20&keyword=${updatedPhone}`, {

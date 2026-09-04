@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type {
   FridgeItemSummary,
   HomeFridgeRecipesResponse,
@@ -13,6 +14,7 @@ import type {
 loadLocalEnv();
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
+const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -68,10 +70,7 @@ async function requestData<T>(path: string, options: RequestInit = {}) {
 }
 
 async function loginWithCode(phone: string) {
-  return requestData<LoginResult>("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({ phone, code: "123456" })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 async function listSystemIngredients(headers: Record<string, string>) {

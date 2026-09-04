@@ -1,6 +1,6 @@
 import { PrismaClient, type UserStatus } from "@prisma/client";
 import { maskPhone } from "../src/common/phone";
-import type { MeResponse, PasswordLoginResult, RefreshSessionResult } from "../src/contracts/types";
+import type { AuthSessionResult, MeResponse } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
 import { APP_NAME } from "../src/config/app";
 
@@ -9,6 +9,7 @@ loadLocalEnv();
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
 const password = process.env.TEST_USER_PASSWORD ?? "change-me";
+const deviceId = process.env.TEST_DEVICE_ID ?? `verify-login-${process.pid}`;
 
 interface ApiEnvelope<T> {
   code: number;
@@ -63,14 +64,14 @@ async function main() {
     const unauthenticatedMe = await request<MeResponse>("/users/me");
     assert(unauthenticatedMe.status === 401, "unauthenticated GET /users/me should return 401");
 
-    const login = await requestData<PasswordLoginResult>("/auth/login", {
+    const login = await requestData<AuthSessionResult>("/auth/password/login", {
       method: "POST",
-      body: JSON.stringify({ phone: ownerPhone, password })
+      body: JSON.stringify({ phone: ownerPhone, password, deviceId })
     });
     assert(login.user.uid === seededUser.uid, "login user uid mismatch");
     assert(!("phone" in login.user), "login response should not expose phone");
 
-    const authorization = `Bearer ${login.token}`;
+    const authorization = `Bearer ${login.accessToken}`;
     const meAfterLogin = await requestData<MeResponse>("/users/me", {
       headers: { authorization }
     });
@@ -100,14 +101,15 @@ async function main() {
     assert(updatedUser.avatarUrl === "https://example.com/avatar.png", "avatarUrl update failed");
     assert(updatedUser.phone === maskPhone(ownerPhone), "phone should stay masked");
 
-    const refreshed = await requestData<RefreshSessionResult>("/auth/refresh", {
+    const refreshed = await requestData<AuthSessionResult>("/auth/refresh", {
       method: "POST",
-      headers: { authorization }
+      body: JSON.stringify({ refreshToken: login.refreshToken, deviceId })
     });
-    assert(refreshed.token, "refresh token missing");
-    assert(refreshed.expiresAt, "refresh expiresAt missing");
+    assert(refreshed.accessToken, "refreshed access token missing");
+    assert(refreshed.refreshToken, "refreshed refresh token missing");
+    assert(refreshed.accessExpiresAt, "refreshed access expiry missing");
 
-    const refreshedAuthorization = `Bearer ${refreshed.token}`;
+    const refreshedAuthorization = `Bearer ${refreshed.accessToken}`;
     const meAfterRefresh = await requestData<MeResponse>("/users/me", {
       headers: { authorization: refreshedAuthorization }
     });
@@ -118,9 +120,9 @@ async function main() {
       data: { status: "DISABLED" }
     });
 
-    const disabledRefresh = await request<RefreshSessionResult>("/auth/refresh", {
+    const disabledRefresh = await request<AuthSessionResult>("/auth/refresh", {
       method: "POST",
-      headers: { authorization: refreshedAuthorization }
+      body: JSON.stringify({ refreshToken: refreshed.refreshToken, deviceId })
     });
     assert(disabledRefresh.status === 401, "disabled user refresh should return 401");
 

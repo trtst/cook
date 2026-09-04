@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type {
   DiningEventShareLinkResponse,
   DiningEventSummary,
@@ -19,7 +20,6 @@ const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
 const memberPhone = process.env.TEST_MEMBER_PHONE ?? "13700000000";
 const password = process.env.TEST_USER_PASSWORD ?? "change-me";
-const testCode = "123456";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -132,17 +132,11 @@ function parseShareToken(shareTokenPath: string) {
 }
 
 async function login(phone: string) {
-  return requestData<LoginResult>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone, password })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 async function loginWithCode(phone: string) {
-  return requestData<LoginResult>("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({ phone, code: testCode })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 function createFreshPhone() {

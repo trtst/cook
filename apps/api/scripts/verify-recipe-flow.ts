@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type {
   CollectionListResponse,
   DeleteRecipeResponse,
@@ -76,10 +77,7 @@ async function requestData<T>(path: string, options: RequestInit = {}) {
 }
 
 async function login(phone: string) {
-  return requestData<LoginResult>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone, password })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 async function main() {

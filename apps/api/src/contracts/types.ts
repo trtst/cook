@@ -149,6 +149,70 @@ export interface RefreshSessionResult {
   expiresAt: IsoDateTime;
 }
 
+export interface AuthSessionResult {
+  accessToken: string;
+  refreshToken: string;
+  accessExpiresAt: IsoDateTime;
+  refreshExpiresAt: IsoDateTime;
+  user: SessionUser;
+}
+
+export interface WechatSessionRequest {
+  code: string;
+  deviceId: string;
+}
+
+export type WechatSessionResult =
+  | { status: "BOUND"; session: AuthSessionResult; wechatSessionId: null; retryAfterSeconds: null }
+  | { status: "UNBOUND"; session: null; wechatSessionId: string; retryAfterSeconds: null }
+  | { status: "BLOCKED"; session: null; wechatSessionId: null; retryAfterSeconds: number | null };
+
+export interface WechatPhoneLoginRequest {
+  wechatSessionId: string;
+  phoneCode: string;
+  deviceId: string;
+}
+
+export interface SmsSendRequest {
+  phone: string;
+  scene: "LOGIN";
+  deviceId: string;
+}
+
+export interface SmsSendResult {
+  cooldownSeconds: number;
+}
+
+export interface SmsLoginRequest {
+  phone: string;
+  code: string;
+  deviceId: string;
+  wechatSessionId?: string;
+}
+
+export interface AuthPasswordLoginRequest {
+  phone: string;
+  password: string;
+  deviceId: string;
+}
+
+export interface SetPasswordRequest {
+  password: string;
+}
+
+export interface RefreshAuthSessionRequest {
+  refreshToken: string;
+  deviceId: string;
+}
+
+export interface LogoutAuthSessionRequest extends RefreshAuthSessionRequest {}
+
+export interface AuthMeResponse extends SessionUser {
+  id: UUID;
+  phone: string | null;
+  status: string;
+}
+
 export interface LoginImageConfig {
   imageUrl: string | null;
 }

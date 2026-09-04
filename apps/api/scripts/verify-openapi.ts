@@ -9,6 +9,10 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 function validateDataSchema(path: string, method: string, data: Record<string, any>, schemas: Record<string, unknown>) {
+  if (data.type === "object" && data.nullable === true && data.example === null && Object.keys(data.properties ?? {}).length === 0) {
+    return;
+  }
+
   if (data.$ref) {
     const name = String(data.$ref).split("/").at(-1);
     assert(name && schemas[name], `${method.toUpperCase()} ${path} references missing schema ${String(data.$ref)}`);

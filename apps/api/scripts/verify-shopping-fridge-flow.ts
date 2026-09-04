@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type {
   CreateFridgeItemRequest,
   DiningEventSummary,
@@ -126,10 +127,7 @@ function buildQuantityText(quantity: string, unitName: string | null | undefined
 }
 
 async function login() {
-  return requestData<LoginResult>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone: ownerPhone, password })
-  });
+  return loginWithPassword(requestData, ownerPhone, password);
 }
 
 async function createPersonalIngredient(ownerAuth: Record<string, string>, template: IngredientSummary, name: string) {

@@ -1,11 +1,12 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 
 loadLocalEnv();
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
-const testCode = "123456";
+const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 
 interface ApiEnvelope<T> {
   code: number;
@@ -143,13 +144,7 @@ async function requestData<T>(path: string, options: RequestInit = {}, admin = f
 }
 
 async function loginUserWithCode(phone: string) {
-  return requestData<CodeLoginResult>("/auth/code-login", {
-    method: "POST",
-    body: JSON.stringify({
-      phone,
-      code: testCode
-    })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 async function loginAdmin() {

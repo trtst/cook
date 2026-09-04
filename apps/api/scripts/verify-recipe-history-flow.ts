@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type { InspirationRecipeSummary, PageResult, RecipeViewHistoryItem } from "../src/contracts/types";
 
 loadLocalEnv();
@@ -39,10 +40,7 @@ async function requestData<T>(path: string, options: RequestInit = {}) {
 }
 
 async function login() {
-  return requestData<{ token: string }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone: ownerPhone, password })
-  });
+  return loginWithPassword(requestData, ownerPhone, password);
 }
 
 async function main() {

@@ -1,4 +1,5 @@
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 import type {
   IngredientSummary,
   PageResult,
@@ -84,10 +85,7 @@ async function requestData<T>(path: string, options: RequestInit = {}) {
 }
 
 async function login(phone: string) {
-  return requestData<LoginResult>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone, password })
-  });
+  return loginWithPassword(requestData, phone, password);
 }
 
 async function resolveSystemIngredient(headers: Record<string, string>) {

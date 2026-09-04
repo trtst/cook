@@ -17,6 +17,10 @@ enum UserStatus {
   DISABLED
 }
 
+enum AuthCodeScene {
+  LOGIN
+}
+
 enum DiningGroupStatus {
   ACTIVE
   ARCHIVED
@@ -684,9 +688,99 @@ model User {
   userMedals                UserMedal[]
   notificationSettings      UserNotificationSettings?
   notificationState         UserNotificationState?
+  wechatIdentities          UserWechatIdentity[]
+  authSessions              AuthSession[]
 
   @@index([createdAt])
   @@map("users")
+}
+
+model UserWechatIdentity {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  appid     String   @db.VarChar(64)
+  openid    String   @db.VarChar(128)
+  unionid   String?  @db.VarChar(128)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([appid, openid])
+  @@unique([userId, appid])
+  @@index([userId, createdAt])
+  @@map("user_wechat_identities")
+}
+
+model AuthSession {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  refreshTokenHash String    @unique @map("refresh_token_hash") @db.VarChar(128)
+  deviceId        String    @map("device_id") @db.VarChar(128)
+  ip              String    @db.VarChar(64)
+  userAgent       String?   @map("user_agent") @db.VarChar(512)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model WechatLoginSession {
+  id                  Int       @id @default(autoincrement())
+  appid               String    @db.VarChar(64)
+  openid              String    @db.VarChar(128)
+  unionid             String?   @db.VarChar(128)
+  sessionKeyHash      String    @map("session_key_hash") @db.VarChar(128)
+  wechatSessionIdHash String    @unique @map("wechat_session_id_hash") @db.VarChar(128)
+  expiresAt           DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt          DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([appid, openid, expiresAt])
+  @@index([expiresAt])
+  @@map("wechat_login_sessions")
+}
+
+model SmsCode {
+  id            Int           @id @default(autoincrement())
+  phone         String        @db.VarChar(32)
+  scene         AuthCodeScene
+  codeHash      String?       @map("code_hash") @db.VarChar(128)
+  providerOutId String?       @map("provider_out_id") @db.VarChar(128)
+  expiresAt     DateTime      @map("expires_at") @db.Timestamptz(3)
+  consumedAt    DateTime?     @map("consumed_at") @db.Timestamptz(3)
+  ip            String        @db.VarChar(64)
+  deviceId      String        @map("device_id") @db.VarChar(128)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([phone, scene, createdAt])
+  @@index([ip, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("sms_codes")
+}
+
+model AuthRiskEvent {
+  id        Int      @id @default(autoincrement())
+  scene     String   @db.VarChar(32)
+  phone     String?  @db.VarChar(32)
+  openid    String?  @db.VarChar(128)
+  ip        String   @db.VarChar(64)
+  deviceId  String   @map("device_id") @db.VarChar(128)
+  decision  String   @db.VarChar(32)
+  reason    String   @db.VarChar(128)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([phone, createdAt])
+  @@index([openid, createdAt])
+  @@index([ip, createdAt])
+  @@index([deviceId, createdAt])
+  @@map("auth_risk_events")
 }
 
 model UserNotificationSettings {

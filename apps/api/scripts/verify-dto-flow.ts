@@ -29,12 +29,17 @@ async function post(path: string, body: unknown) {
 }
 
 async function main() {
-  const invalidPhone = await post("/auth/login", { phone: "not-a-phone", password: "change-me" });
+  const invalidPhone = await post("/auth/password/login", {
+    phone: "not-a-phone",
+    password: "change-me",
+    deviceId: "verify-dto"
+  });
   assert(invalidPhone.status === 400 && invalidPhone.body.code === 400, "invalid login field should return 400");
 
-  const oldField = await post("/auth/login", {
+  const oldField = await post("/auth/password/login", {
     phone: "13800000000",
     password: "change-me",
+    deviceId: "verify-dto",
     currentSpaceId: "old-field"
   });
   assert(oldField.status === 400 && oldField.body.code === 400, "unknown login field should return 400");

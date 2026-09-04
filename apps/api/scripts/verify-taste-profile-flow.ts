@@ -1,6 +1,7 @@
 import { PrismaClient, type UserTasteProfile } from "@prisma/client";
 import type { TasteProfileResponse, UpdateTasteProfileRequest } from "../src/contracts/types";
 import { loadLocalEnv } from "../src/common/load-env";
+import { loginWithPassword } from "./auth-fixture";
 
 loadLocalEnv();
 
@@ -90,14 +91,8 @@ async function main() {
     prisma.user.findFirstOrThrow({ where: { phone: ownerPhone }, select: { id: true, uid: true } }),
     prisma.user.findFirstOrThrow({ where: { phone: guestPhone }, select: { id: true, uid: true } })
   ]);
-  const ownerLogin = await requestData<LoginResult>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone: ownerPhone, password })
-  });
-  const guestLogin = await requestData<LoginResult>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone: guestPhone, password })
-  });
+  const ownerLogin = await loginWithPassword(requestData, ownerPhone, password);
+  const guestLogin = await loginWithPassword(requestData, guestPhone, password);
   const ownerAuthorization = `Bearer ${ownerLogin.token}`;
   const guestAuthorization = `Bearer ${guestLogin.token}`;
   const [ownerBefore, guestBefore] = await Promise.all([

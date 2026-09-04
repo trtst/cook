@@ -31,6 +31,15 @@ export function ApiOkNullableModel(model: Type<unknown>, description: string) {
   );
 }
 
+export function ApiOkNull(description: string) {
+  return applyDecorators(
+    ApiOkResponse({
+      description,
+      schema: envelopeSchema({ type: "object", nullable: true, example: null })
+    })
+  );
+}
+
 export function ApiOkArray(model: Type<unknown>, description: string) {
   return applyDecorators(
     ApiExtraModels(model),
@@ -95,6 +104,31 @@ export class WechatLoginResultModel extends PasswordLoginResultModel {}
 export class RefreshSessionResultModel {
   @ApiProperty({ type: String }) token!: string;
   @ApiProperty(dateTime) expiresAt!: string;
+}
+
+export class AuthSessionResultModel {
+  @ApiProperty({ type: String }) accessToken!: string;
+  @ApiProperty({ type: String }) refreshToken!: string;
+  @ApiProperty(dateTime) accessExpiresAt!: string;
+  @ApiProperty(dateTime) refreshExpiresAt!: string;
+  @ApiProperty({ type: SessionUserModel }) user!: SessionUserModel;
+}
+
+export class WechatSessionResultModel {
+  @ApiProperty({ type: String, enum: ["BOUND", "UNBOUND", "BLOCKED"] }) status!: string;
+  @ApiProperty({ type: AuthSessionResultModel, nullable: true }) session!: AuthSessionResultModel | null;
+  @ApiProperty({ type: String, nullable: true }) wechatSessionId!: string | null;
+  @ApiProperty({ type: Number, nullable: true }) retryAfterSeconds!: number | null;
+}
+
+export class AuthSmsSendResultModel {
+  @ApiProperty({ type: Number, minimum: 1 }) cooldownSeconds!: number;
+}
+
+export class AuthMeResponseModel extends SessionUserModel {
+  @ApiProperty({ type: Number }) id!: number;
+  @ApiProperty(nullableString) phone!: string | null;
+  @ApiProperty({ type: String }) status!: string;
 }
 
 export class LoginImageConfigModel {

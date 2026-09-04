@@ -121,6 +121,141 @@ export class WechatLoginDto {
   code!: string;
 }
 
+export class AuthWechatSessionDto {
+  @ApiProperty({ example: "081xYfll2l7mBh4sFEnl2H0jQY0xYfli" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  code!: string;
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
+export class AuthWechatPhoneLoginDto {
+  @ApiProperty({ example: "short-wechat-session" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  wechatSessionId!: string;
+
+  @ApiProperty({ example: "phone-code-from-wechat" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  phoneCode!: string;
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
+export class AuthSmsSendDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ enum: ["LOGIN"], example: "LOGIN" })
+  @IsIn(["LOGIN"])
+  scene!: "LOGIN";
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
+export class AuthSmsLoginDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ example: "123456" })
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+
+  @ApiPropertyOptional({ example: "short-wechat-session" })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  wechatSessionId?: string;
+}
+
+export class AuthPasswordLoginDto extends PasswordLoginDto {
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
+export class AuthSetPasswordDto {
+  @ApiProperty({ example: "change-me" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  password!: string;
+}
+
+export class AuthChangePasswordDto {
+  @ApiProperty({ example: "old-password" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  currentPassword!: string;
+
+  @ApiProperty({ example: "new-password" })
+  @IsString()
+  @MinLength(6)
+  @MaxLength(128)
+  newPassword!: string;
+}
+
+export class RefreshAuthSessionDto {
+  @ApiProperty({ example: "opaque-refresh-token" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  refreshToken!: string;
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
+export class LogoutAuthSessionDto extends RefreshAuthSessionDto {}
+
 export class AdminLoginDto {
   @ApiProperty({ example: "admin" })
   @IsString()
