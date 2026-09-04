@@ -248,7 +248,7 @@ async function createFutureMealPlanFixture(session) {
     if (result.status >= 200 && result.status < 300 && result.body.code === 0) {
       return result.body.data;
     }
-    if (result.status === 409 && result.body.message.includes("计划已存在")) {
+    if (result.body.code === 409 && result.body.message.includes("计划已存在")) {
       continue;
     }
     throw new Error(`/meal-plans HTTP ${result.status}: ${result.body.message}`);

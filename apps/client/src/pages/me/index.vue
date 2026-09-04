@@ -910,7 +910,7 @@ function showComingSoon(name: string) {
 
 .profile-row__name {
 	overflow: hidden;
-	max-width: 270rpx;
+	max-width: 300rpx;
 	color: var(--color-text);
 	font-size: 38rpx;
 	font-weight: var(--font-weight-bold);

@@ -253,7 +253,7 @@ async function createMealPlanFixture(authHeaders, recipe) {
       return result.body.data;
     }
 
-    if (result.status === 409 && String(result.body.message || "").includes("计划已存在")) {
+    if (result.body.code === 409 && String(result.body.message || "").includes("计划已存在")) {
       continue;
     }
 

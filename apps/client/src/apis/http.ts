@@ -40,6 +40,10 @@ export interface PageResult<T> {
 	hasNext: boolean;
 }
 
+export type ApiResult<T> =
+	| { ok: true; data: T }
+	| { ok: false; code: number; message: string; data: unknown | null };
+
 /**
  * 业务成功返回了 JSON 契约，但 `code !== 0`。
  * 调用方可以读取 `code` 和 `data` 做业务级提示，不需要再关心 transport 层细节。
@@ -200,11 +204,26 @@ async function readResponse<T>(result: { status: number; body: unknown }) {
 		throw new HttpError(result.status, "响应格式不符合契约");
 	}
 
+	if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
 	if (result.body.code === 401) throw new UnauthorizedError(result.body.message, result.body.data);
 	if (result.body.code !== 0) throw new ApiClientError(result.body.code, result.body.message, result.body.data);
-	if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
 
 	return result.body.data as T;
+}
+
+async function readResult<T>(result: { status: number; body: unknown }): Promise<ApiResult<T>> {
+	if (!isApiResponse<T>(result.body)) {
+		if (result.status === 401) throw new UnauthorizedError();
+		if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
+		throw new HttpError(result.status, "响应格式不符合契约");
+	}
+
+	if (result.status < 200 || result.status >= 300) throw new HttpError(result.status, "请求失败");
+	if (result.body.code !== 0) {
+		return { ok: false, code: result.body.code, message: result.body.message, data: result.body.data };
+	}
+
+	return { ok: true, data: result.body.data as T };
 }
 
 /**
@@ -247,6 +266,25 @@ async function requestByMethod<T>(method: HttpMethod, url: string, options: Requ
 	}
 }
 
+async function requestResultByMethod<T>(method: HttpMethod, url: string, options: RequestOptions = {}) {
+	const auth = options.auth ?? true;
+	const idempotencyKey = options.idempotencyKey ? normalizeIdempotencyKey(options.idempotencyKey) : undefined;
+	const token = auth ? useSessionStore().accessToken : "";
+	const result = await uniRequestAdapter({
+		url: buildUrl(url, options.query),
+		method,
+		headers: {
+			"content-type": "application/json",
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+			...(options.headers ?? {})
+		},
+		body: options.body
+	});
+
+	return readResult<T>(result);
+}
+
 /**
  * GET 只接受 query，不接受 body，调用形态贴近常见业务封装。
  */
@@ -262,6 +300,17 @@ export function get<T>(url: string, query?: RequestOptions["query"], options: Om
  */
 export function post<T>(url: string, body?: unknown, options: Omit<RequestOptions, "body" | "query"> & { query?: RequestOptions["query"] } = {}) {
 	return requestByMethod<T>("POST", url, {
+		...options,
+		body
+	});
+}
+
+export function postResult<T>(
+	url: string,
+	body?: unknown,
+	options: Omit<RequestOptions, "body" | "query"> & { query?: RequestOptions["query"] } = {}
+) {
+	return requestResultByMethod<T>("POST", url, {
 		...options,
 		body
 	});

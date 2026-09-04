@@ -21,6 +21,27 @@ interface ApiResponse<T> {
   code: number;
   message: string;
   data: T;
+  serverTime: string;
+}
+
+export class ApiClientError extends Error {
+  constructor(
+    readonly code: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+  }
+}
+
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
 }
 
 export async function resolveSiteContent(path: string) {
@@ -28,8 +49,10 @@ export async function resolveSiteContent(path: string) {
     cache: "no-store"
   });
   const body = (await response.json().catch(() => null)) as ApiResponse<SiteContentDetail> | null;
-  if (!response.ok || !body || body.code !== 0) {
-    throw new Error(body?.message ?? "内容读取失败");
-  }
+
+  if (!body) throw new HttpError(response.status, "响应格式不符合契约");
+  if (!response.ok) throw new HttpError(response.status, "请求失败");
+  if (body.code !== 0) throw new ApiClientError(body.code, body.message);
+
   return body.data;
 }

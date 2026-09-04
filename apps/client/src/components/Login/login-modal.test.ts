@@ -142,13 +142,16 @@ test("every login action keeps the agreement gate", () => {
 
 test("login failures show a Toast and stay in the current login mode", () => {
   assert.match(source, /async function showAuthError\(error: unknown\)/);
+  assert.match(source, /async function showAuthResultError/);
+  assert.match(source, /if \(!result\.ok\) \{\s*await showAuthResultError\(result\);[\s\S]*return;\s*\}/);
+  assert.match(source, /catch \(error\) \{\s*await showAuthError\(error\);\s*\}/);
 
   for (const handler of ["handleWeChatPhoneLogin", "sendCode", "handlePhoneLogin", "handlePasswordLogin"]) {
     const start = source.indexOf(`async function ${handler}`);
     const end = source.indexOf("\nasync function ", start + 1);
     const body = source.slice(start, end === -1 ? source.length : end);
 
-    assert.match(body, /await showAuthError\(error\)/, `${handler} must show an error Toast`);
+    assert.match(body, /await showAuth(Error|ResultError)\(/, `${handler} must show an error Toast`);
     assert.doesNotMatch(body, /openPhoneMode\(\)|openPasswordMode\(\)|goBackToWechatMode\(\)/);
   }
 });
@@ -164,7 +167,7 @@ test("SMS send success reuses the inline feedback area", () => {
   assert.match(source, /const messageTone = ref<"error" \| "success">\("error"\)/);
   assert.match(source, /login-popup__error--success/);
   assert.match(source, /errorText\.value = "【速通互联验证码】您的验证码发送成功。"/);
-  assert.match(source, /messageTone\.value = "success"[\s\S]*startCountdown\(result\.cooldownSeconds\)/);
+  assert.match(source, /messageTone\.value = "success"[\s\S]*startCountdown\(result\.data\.cooldownSeconds\)/);
   assert.match(source, /async function showAuthError\(error: unknown\)[\s\S]*messageTone\.value = "error"/);
   assert.match(source, /\.login-popup__error--success[\s\S]*color: var\(--color-state-success-text\)/);
 });

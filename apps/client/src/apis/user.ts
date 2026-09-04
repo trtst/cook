@@ -233,7 +233,7 @@ export const userApi = {
 	},
 	/**
 	 * 预留更新我的页和首页背景图设置。
-	 * 当前服务端能力未开放，调用方应按 `503` 做“开发中”处理。
+	 * 当前服务端能力未开放，调用方应按业务 `code=503` 做“开发中”处理。
 	 */
 	updateDisplay(body: UpdateUserDisplayRequest) {
 		const { operationId, ...payload } = body;

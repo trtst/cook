@@ -183,7 +183,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { authApi, type AuthSessionResult } from "@/apis/auth";
+import { authApi, type AuthApiResult, type AuthSessionResult } from "@/apis/auth";
 import { APP_SLOGAN } from "@/config";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
 import { useTheme } from "@/composables/useTheme";
@@ -341,33 +341,41 @@ async function handleWeChatPhoneLogin(event: unknown) {
 
     if (!currentWechatSessionId) {
       const login = await uniPlatform.auth.login();
-      const result = await authApi.wechatSession({
+      const result = await authApi.wechatSessionResult({
         code: login.code,
         deviceId
       });
-
-      if (result.status === "BLOCKED") {
-        await showAuthError(blockedText(result.retryAfterSeconds));
+      if (!result.ok) {
+        await showAuthResultError(result);
         return;
       }
 
-      if (result.status === "BOUND") {
-        await applySession(result.session);
+      if (result.data.status === "BLOCKED") {
+        await showAuthError(blockedText(result.data.retryAfterSeconds));
         return;
       }
 
-      currentWechatSessionId = result.wechatSessionId;
+      if (result.data.status === "BOUND") {
+        await applySession(result.data.session);
+        return;
+      }
+
+      currentWechatSessionId = result.data.wechatSessionId;
       sessionStore.setWechatSessionId(currentWechatSessionId);
     }
 
     const phoneCode = await uniPlatform.auth.getPhoneNumberCode(event);
     wechatSessionId.value = currentWechatSessionId;
-    const session = await authApi.loginWithWechatPhone({
+    const result = await authApi.loginWithWechatPhoneResult({
       wechatSessionId: currentWechatSessionId,
       phoneCode,
       deviceId
     });
-    await applySession(session);
+    if (!result.ok) {
+      await showAuthResultError(result);
+      return;
+    }
+    await applySession(result.data);
   } catch (error) {
     await showAuthError(error);
   } finally {
@@ -391,13 +399,17 @@ async function sendCode() {
   messageTone.value = "error";
 
   try {
-    const result = await authApi.sendSmsCode({
+    const result = await authApi.sendSmsCodeResult({
       phone: phoneText,
       deviceId: uniPlatform.auth.getDeviceId()
     });
+    if (!result.ok) {
+      await showAuthResultError(result);
+      return;
+    }
     errorText.value = "【速通互联验证码】您的验证码发送成功。";
     messageTone.value = "success";
-    startCountdown(result.cooldownSeconds);
+    startCountdown(result.data.cooldownSeconds);
     await uniPlatform.feedback.toast({ title: "验证码已发送", icon: "success", placement: "bottom" }).catch(() => undefined);
   } catch (error) {
     await showAuthError(error);
@@ -429,8 +441,12 @@ async function handlePhoneLogin() {
       deviceId: uniPlatform.auth.getDeviceId()
     };
     if (wechatSessionId.value) request.wechatSessionId = wechatSessionId.value;
-    const session = await authApi.loginWithSms(request);
-    await applySession(session);
+    const result = await authApi.loginWithSmsResult(request);
+    if (!result.ok) {
+      await showAuthResultError(result);
+      return;
+    }
+    await applySession(result.data);
   } catch (error) {
     await showAuthError(error);
   } finally {
@@ -455,12 +471,16 @@ async function handlePasswordLogin() {
   messageTone.value = "error";
 
   try {
-    const session = await authApi.loginWithPassword({
+    const result = await authApi.loginWithPasswordResult({
       phone: phoneText,
       password: passwordText,
       deviceId: uniPlatform.auth.getDeviceId()
     });
-    await applySession(session);
+    if (!result.ok) {
+      await showAuthResultError(result);
+      return;
+    }
+    await applySession(result.data);
   } catch (error) {
     await showAuthError(error);
   } finally {
@@ -524,6 +544,10 @@ async function showAuthError(error: unknown) {
     tone: "error",
     placement: "bottom"
   }).catch(() => undefined);
+}
+
+async function showAuthResultError(result: Extract<AuthApiResult<unknown>, { ok: false }>) {
+  await showAuthError(new ApiClientError(result.code, result.message, result.data));
 }
 
 function getErrorText(error: unknown) {

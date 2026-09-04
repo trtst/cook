@@ -4,7 +4,7 @@
  */
 import { cfg } from "@/config";
 import { useSessionStore } from "@/stores/session";
-import { get, post, refreshAccessToken, type IsoDateTime } from "./http";
+import { get, post, postResult, refreshAccessToken, type ApiResult, type IsoDateTime } from "./http";
 import type { SessionUserSnapshot } from "@/stores/session";
 
 export interface AuthSessionResult {
@@ -74,21 +74,38 @@ export interface AuthMeResponse extends SessionUserSnapshot {
 	status: string;
 }
 
+export type AuthApiResult<T> = ApiResult<T>;
+
 export const authApi = {
 	wechatSession(body: WechatSessionRequest) {
 		return post<WechatSessionResult>(`${cfg.authDomain}/api/auth/wechat/session`, body, { auth: false });
 	},
+	wechatSessionResult(body: WechatSessionRequest) {
+		return postResult<WechatSessionResult>(`${cfg.authDomain}/api/auth/wechat/session`, body, { auth: false });
+	},
 	loginWithWechatPhone(body: WechatPhoneLoginRequest) {
 		return post<AuthSessionResult>(`${cfg.authDomain}/api/auth/wechat/phone-login`, body, { auth: false });
+	},
+	loginWithWechatPhoneResult(body: WechatPhoneLoginRequest) {
+		return postResult<AuthSessionResult>(`${cfg.authDomain}/api/auth/wechat/phone-login`, body, { auth: false });
 	},
 	sendSmsCode(body: SmsSendRequest) {
 		return post<SmsSendResult>(`${cfg.authDomain}/api/auth/sms/send`, { ...body, scene: "LOGIN" }, { auth: false });
 	},
+	sendSmsCodeResult(body: SmsSendRequest) {
+		return postResult<SmsSendResult>(`${cfg.authDomain}/api/auth/sms/send`, { ...body, scene: "LOGIN" }, { auth: false });
+	},
 	loginWithSms(body: SmsLoginRequest) {
 		return post<AuthSessionResult>(`${cfg.authDomain}/api/auth/sms/login`, body, { auth: false });
 	},
+	loginWithSmsResult(body: SmsLoginRequest) {
+		return postResult<AuthSessionResult>(`${cfg.authDomain}/api/auth/sms/login`, body, { auth: false });
+	},
 	loginWithPassword(body: PasswordLoginRequest) {
 		return post<AuthSessionResult>(`${cfg.authDomain}/api/auth/password/login`, body, { auth: false });
+	},
+	loginWithPasswordResult(body: PasswordLoginRequest) {
+		return postResult<AuthSessionResult>(`${cfg.authDomain}/api/auth/password/login`, body, { auth: false });
 	},
 	setPassword(body: SetPasswordRequest) {
 		return post<{ changedAt: IsoDateTime }>(`${cfg.authDomain}/api/auth/password/set`, body);
