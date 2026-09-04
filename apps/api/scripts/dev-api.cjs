@@ -1,6 +1,6 @@
 const { spawn, spawnSync } = require("node:child_process");
-const fs = require("node:fs");
 const path = require("node:path");
+const { hasServerEntry, jsStamp } = require("./dev-api-stamp.cjs");
 
 const tsc = require.resolve("typescript/bin/tsc");
 const root = process.cwd();
@@ -34,21 +34,17 @@ let stopping = false;
 let restarting = false;
 let server;
 let restartTimer;
-
-function jsStamp(directory) {
-  let stamp = 0;
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    const file = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      stamp = Math.max(stamp, jsStamp(file));
-    } else if (entry.name.endsWith(".js")) {
-      stamp = Math.max(stamp, fs.statSync(file).mtimeMs);
-    }
-  }
-  return stamp;
-}
+let startTimer;
 
 function startServer() {
+  if (!hasServerEntry(dist)) {
+    clearTimeout(startTimer);
+    startTimer = setTimeout(() => {
+      if (!stopping) startServer();
+    }, 250);
+    return;
+  }
+
   server = spawn(process.execPath, ["dist/main.js"], {
     cwd: root,
     stdio: "inherit"
@@ -92,6 +88,7 @@ function stop(signal) {
   stopping = true;
   clearInterval(poller);
   clearTimeout(restartTimer);
+  clearTimeout(startTimer);
   compiler.kill(signal);
   server?.kill(signal);
 }
