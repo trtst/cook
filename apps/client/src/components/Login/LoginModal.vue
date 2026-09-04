@@ -29,7 +29,7 @@
               <view class="login-popup__auth-actions">
                 <view class="login-popup__auth-heading">
                   <text class="login-popup__auth-title">手机号登录</text>
-                  <text class="login-popup__auth-description">验证码会发送到你的手机号</text>
+                  <text class="login-popup__auth-description">输入手机号，用短信验证码登录</text>
                 </view>
 
                 <view class="login-popup__fields">
@@ -67,8 +67,12 @@
                   </view>
                 </view>
 
-                <text class="login-popup__hint">{{ helperText }}</text>
-                <text class="login-popup__error">{{ errorText || " " }}</text>
+                <text
+                  class="login-popup__error"
+                  :class="{ 'login-popup__error--success': messageTone === 'success' }"
+                >
+                  {{ errorText || " " }}
+                </text>
 
                 <button
                   class="login-popup__main-button"
@@ -124,7 +128,12 @@
                   </view>
                 </view>
 
-                <text class="login-popup__error">{{ errorText || " " }}</text>
+                <text
+                  class="login-popup__error"
+                  :class="{ 'login-popup__error--success': messageTone === 'success' }"
+                >
+                  {{ errorText || " " }}
+                </text>
 
                 <button
                   class="login-popup__main-button"
@@ -202,7 +211,7 @@ const wechatSessionId = ref("");
 const loading = ref(false);
 const countdown = ref(0);
 const errorText = ref("");
-const helperText = ref("验证码将发送到你的手机号");
+const messageTone = ref<"error" | "success">("error");
 const agreementChecked = ref(false);
 const agreementWarn = ref(false);
 const loginCopy = ref(pickLoginCopy());
@@ -379,13 +388,15 @@ async function sendCode() {
 
   loading.value = true;
   errorText.value = "";
+  messageTone.value = "error";
 
   try {
     const result = await authApi.sendSmsCode({
       phone: phoneText,
       deviceId: uniPlatform.auth.getDeviceId()
     });
-    helperText.value = "验证码已发送，请留意短信";
+    errorText.value = "【速通互联验证码】您的验证码发送成功。";
+    messageTone.value = "success";
     startCountdown(result.cooldownSeconds);
     await uniPlatform.feedback.toast({ title: "验证码已发送", icon: "success", placement: "bottom" }).catch(() => undefined);
   } catch (error) {
@@ -409,6 +420,7 @@ async function handlePhoneLogin() {
 
   loading.value = true;
   errorText.value = "";
+  messageTone.value = "error";
 
   try {
     const request: Parameters<typeof authApi.loginWithSms>[0] = {
@@ -440,6 +452,7 @@ async function handlePasswordLogin() {
 
   loading.value = true;
   errorText.value = "";
+  messageTone.value = "error";
 
   try {
     const session = await authApi.loginWithPassword({
@@ -504,6 +517,7 @@ function blockedText(retryAfterSeconds: number | null) {
 async function showAuthError(error: unknown) {
   const message = typeof error === "string" ? error : getErrorText(error);
   errorText.value = message;
+  messageTone.value = "error";
   await uniPlatform.feedback.toast({
     title: message,
     icon: "none",
@@ -531,7 +545,7 @@ function resetForm() {
   passwordVisible.value = false;
   wechatSessionId.value = sessionStore.wechatSessionId;
   errorText.value = "";
-  helperText.value = "验证码将发送到你的手机号";
+  messageTone.value = "error";
   agreementChecked.value = false;
   agreementWarn.value = false;
   loginCopy.value = pickLoginCopy();
@@ -719,8 +733,7 @@ function stopMotionTimer() {
   line-height: 1.25;
 }
 
-.login-popup__auth-description,
-.login-popup__hint {
+.login-popup__auth-description {
   color: var(--color-text-secondary);
   font-size: 25rpx;
   line-height: 1.6;
@@ -815,9 +828,14 @@ function stopMotionTimer() {
   border: 0;
 }
 
-.login-popup__code-button--disabled,
 .login-popup__main-button--disabled {
   opacity: 0.52;
+}
+
+.login-popup__code-button--disabled {
+  background: var(--button-primary-bg);
+  color: var(--color-overlay-text);
+  opacity: 1;
 }
 
 .login-popup__main-button {
@@ -859,6 +877,10 @@ function stopMotionTimer() {
   color: var(--color-state-danger-text);
   font-size: 25rpx;
   line-height: 40rpx;
+}
+
+.login-popup__error--success {
+  color: var(--color-state-success-text);
 }
 
 .login-popup__copy {
@@ -925,8 +947,8 @@ function stopMotionTimer() {
 
 .login-popup__agreement-text,
 .login-popup__agreement-link {
-  font-size: 23rpx;
-  line-height: 1.7;
+  font-size: 24rpx;
+  line-height: 32rpx;
 }
 
 .login-popup__agreement-link {

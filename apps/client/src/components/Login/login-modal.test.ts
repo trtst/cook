@@ -36,6 +36,13 @@ test("login modal opens directly to SMS login in mini program", () => {
   assert.doesNotMatch(source, /renderMode === 'wechat'|renderMode === "wechat"/);
 });
 
+test("SMS login uses one clear description without an extra hint row", () => {
+  assert.match(source, /<text class="login-popup__auth-description">输入手机号，用短信验证码登录<\/text>/);
+  assert.doesNotMatch(source, /login-popup__hint/);
+  assert.doesNotMatch(source, /helperText/);
+  assert.doesNotMatch(source, /验证码会发送到你的手机号|验证码将发送到你的手机号|验证码已发送，请留意短信/);
+});
+
 test("login modal exposes SMS and password login without legacy routes", () => {
   assert.match(source, /authApi\.sendSmsCode/);
   assert.match(source, /authApi\.loginWithSms/);
@@ -153,11 +160,32 @@ test("login modal toasts are shown from the bottom", () => {
   assert.match(source, /title: "验证码已发送"[\s\S]*placement: "bottom"/);
 });
 
+test("SMS send success reuses the inline feedback area", () => {
+  assert.match(source, /const messageTone = ref<"error" \| "success">\("error"\)/);
+  assert.match(source, /login-popup__error--success/);
+  assert.match(source, /errorText\.value = "【速通互联验证码】您的验证码发送成功。"/);
+  assert.match(source, /messageTone\.value = "success"[\s\S]*startCountdown\(result\.cooldownSeconds\)/);
+  assert.match(source, /async function showAuthError\(error: unknown\)[\s\S]*messageTone\.value = "error"/);
+  assert.match(source, /\.login-popup__error--success[\s\S]*color: var\(--color-state-success-text\)/);
+});
+
+test("SMS countdown button keeps a solid primary background", () => {
+  const codeDisabledStyle = styleBlock(".login-popup__code-button--disabled");
+  const mainDisabledStyle = styleBlock(".login-popup__main-button--disabled");
+
+  assert.match(codeDisabledStyle, /background: var\(--button-primary-bg\)/);
+  assert.match(codeDisabledStyle, /color: var\(--color-overlay-text\)/);
+  assert.match(codeDisabledStyle, /opacity: 1/);
+  assert.doesNotMatch(codeDisabledStyle, /opacity: 0\.52/);
+  assert.match(mainDisabledStyle, /opacity: 0\.52/);
+});
+
 test("agreement and inline error keep stable warning states", () => {
   assert.match(source, /const agreementWarn = ref\(false\)/);
   assert.match(source, /login-popup__checkbox--warning/);
   assert.match(source, /\.login-popup__checkbox--warning[\s\S]*color: var\(--color-state-danger-text\)/);
-  assert.match(source, /<text class="login-popup__error">\{\{ errorText \|\| " " \}\}<\/text>/);
+  assert.match(source, /class="login-popup__error"[\s\S]*\{\{ errorText \|\| " " \}\}/);
+  assert.match(source, /:class="\{ 'login-popup__error--success': messageTone === 'success' \}"/);
   assert.match(source, /\.login-popup__error[\s\S]*height: 40rpx[\s\S]*line-height: 40rpx/);
   assert.doesNotMatch(source, /v-if="errorText" class="login-popup__error"/);
 });
