@@ -79,11 +79,11 @@ interface PageResult<T> {
 
 所有时间使用 ISO 8601；数据库使用 `TIMESTAMPTZ(3)`。所有可重试写操作通过请求头 `Idempotency-Key` 携带纯数字字符串幂等键。共享可变对象携带 `version`。
 
-路径中的资源 ID 使用正整数，格式错误统一返回 `400`。`inviteToken`、`shareToken` 和 `Idempotency-Key` 等不透明凭证不是资源 ID，不使用资源 ID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回 `409`，客户端刷新详情后再决定是否重试。
+路径中的资源 ID 使用正整数，格式错误统一返回业务 `code=400`。`inviteToken`、`shareToken` 和 `Idempotency-Key` 等不透明凭证不是资源 ID，不使用资源 ID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回业务 `code=409`，客户端刷新详情后再决定是否重试。
 
 OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema；对象、数组和分页响应不得退化为无字段的 `object`。本文、服务端 OpenAPI 和各应用本地类型共同变更，不直接复用 Prisma Model。
 
-请求 DTO 使用严格白名单：请求体或查询参数包含未声明字段时返回 `400`，不静默忽略旧字段。嵌套对象必须递归校验。当前菜谱正文的 `ingredients` 和 `steps` 分别最多 100 项，批量消耗冰箱条目最多 100 个且不允许空数组或重复 ID。
+请求 DTO 使用严格白名单：请求体或查询参数包含未声明字段时返回业务 `code=400`，不静默忽略旧字段。嵌套对象必须递归校验。当前菜谱正文的 `ingredients` 和 `steps` 分别最多 100 项，批量消耗冰箱条目最多 100 个且不允许空数组或重复 ID。
 
 ## 鉴权
 
@@ -92,9 +92,11 @@ OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema
 | `UserBearerAuth` | 小程序用户接口 |
 | `AdminBearerAuth` | 后台管理接口 |
 
-两种 token 不得混用。任何鉴权接口返回 `401` 时，客户端清理 session 和用户级缓存。
+两种 token 不得混用。任何鉴权接口返回业务 `code=401` 时，客户端清理 session 和用户级缓存。
 
 ## 错误规则
+
+业务接口成功进入服务端处理后，无论成功或可预期业务失败，HTTP 状态统一为 `200`，调用方只按返回体 `code` 判断业务结果。HTTP 非 2xx 只用于路由未命中、协议、网关、网络或未捕获系统异常，不承载业务语义。
 
 | code | 含义 |
 | ---: | --- |
@@ -601,7 +603,7 @@ interface RedeemMembershipCodeResult {
 
 `POST /auth/wechat/session` 是当前小程序的微信身份识别入口。客户端先通过微信 `wx.login / uni.login` 获取一次性 `code`，服务端调用微信 `code2session` 识别微信身份；已绑定身份直接返回 `BOUND` 和完整会话，未绑定身份返回短期 `wechatSessionId`，`BLOCKED` 则返回风控冷却信息。响应不返回 `openid / unionid / session_key` 等微信身份细节，也不会在未绑定时提前创建用户。
 
-`POST /auth/wechat/phone-login` 接收微信 `getPhoneNumber` 组件返回的一次性 `phoneCode`，消费短期 `wechatSessionId`，按授权手机号创建或复用唯一手机号账号，并在同一事务内绑定微信身份后签发完整会话。微信配置缺失或微信侧不可达时返回服务不可用；微信 code 或手机号授权 code 无效时返回登录失败，不暴露外部凭据。
+`POST /auth/wechat/phone-login` 接收微信 `getPhoneNumber` 组件返回的一次性 `phoneCode`，消费短期 `wechatSessionId`，按授权手机号创建或复用唯一手机号账号，并在同一事务内绑定微信身份后签发完整会话。微信配置缺失或微信侧不可达时返回业务 `code=503`；微信 code 或手机号授权 code 无效时返回业务 `code=400`，不暴露外部凭据。
 
 `POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信兜底链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，也可在携带有效微信短会话时完成身份绑定。
 
@@ -619,13 +621,13 @@ interface RedeemMembershipCodeResult {
 
 `GET /home/recent-arrangement` 只服务首页“最近安排”条件卡，和 `GET /home-entries` 的运营入口配置职责分离。它只返回当前登录用户最近一顿、且还有下一步动作的计划或饭局摘要；若当前没有符合窗口与权限条件的候选，则返回 `data = null`。候选窗口固定为：先看未来 `24` 小时，若没有再补看未来 `24~36` 小时；在同一窗口内若同时存在饭局和计划候选，统一优先饭局，再按状态优先级 `TIME_UP_SHARE > READY_TO_COOK > PENDING_SHOPPING > PENDING_CONFIRM > EMPTY_MENU` 和离当前时间更近排序。接口最小只返回当前首页卡真正需要的字段：`sourceType + planItemId + planDate + eventId + title + scheduledAt + participantCount + menuCount + gapCount + status`。其中 `planDate` 用于客户端继续复用现有统一餐次详情页路由；`participantCount` 对饭局返回当前参与人数，对纯计划固定返回 `1`；`gapCount` 只有在当前服务端已存在可靠缺口事实时才返回数字，否则返回 `null`。该接口不得返回菜单明细、投票明细、冰箱明细、购物清单明细、参与人 UID、内部备注，也不直接返回首页按钮文案或跳转 URL；客户端根据 `status` 本地映射“去加菜 / 确认菜单 / 去采购 / 开始做饭 / 分享回忆”等主动作。
 
-`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回 `404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
+`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回业务 `code=404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
 
-`GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回 `404`。
+`GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回业务 `code=404`。
 
-`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。该响应只承接账号设置、资料展示、展示能力和会员入口所需状态，不返回 `uid / nickname / phone`；登录身份摘要由 `AuthSessionResult.user` 承接。`MeResponse.profile` 返回当前用户可编辑资料：`cookNo / bio / gender / birthDate`。`cookNo` 是公开唯一炊火号，5-20 位，只允许字母、数字和下划线；新用户默认用公开 `uid` 字符串生成，存量用户由迁移回填。默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改。`PUT /users/me` 每次字段编辑页只提交一个字段，允许 `nickname / cookNo / bio / gender / birthDate`，其中 `nickname` 为 2-24 个字符且不能包含 `@<>/`，`nickname / cookNo` 不接受 `null`，`bio` 最多 80 个字符且允许 `null`，`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`，`birthDate` 使用 `YYYY-MM-DD`、不能晚于今天且年龄小于等于 14 岁时返回“未满14岁需实名认证”。`PUT /users/me` 不接收 `avatarUrl`，避免绕过裁剪上传链路。头像由 `POST /users/me/avatar` 承接，客户端必须先复用图片裁剪页按 1:1 裁剪，再以 `multipart/form-data` 的 `file` 字段上传并携带 `Idempotency-Key`；服务端只接受 JPG、PNG、WEBP，成功后写入当前用户 `avatarUrl` 并返回最新 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回 `503`，不得通过 URL 绕过背景上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
+`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。该响应只承接账号设置、资料展示、展示能力和会员入口所需状态，不返回 `uid / nickname / phone`；登录身份摘要由 `AuthSessionResult.user` 承接。`MeResponse.profile` 返回当前用户可编辑资料：`cookNo / bio / gender / birthDate`。`cookNo` 是公开唯一炊火号，5-20 位，只允许字母、数字和下划线；新用户默认用公开 `uid` 字符串生成，存量用户由迁移回填。默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改。`PUT /users/me` 每次字段编辑页只提交一个字段，允许 `nickname / cookNo / bio / gender / birthDate`，其中 `nickname` 为 2-24 个字符且不能包含 `@<>/`，`nickname / cookNo` 不接受 `null`，`bio` 最多 80 个字符且允许 `null`，`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`，`birthDate` 使用 `YYYY-MM-DD`、不能晚于今天且年龄小于等于 14 岁时返回“未满14岁需实名认证”。`PUT /users/me` 不接收 `avatarUrl`，避免绕过裁剪上传链路。头像由 `POST /users/me/avatar` 承接，客户端必须先复用图片裁剪页按 1:1 裁剪，再以 `multipart/form-data` 的 `file` 字段上传并携带 `Idempotency-Key`；服务端只接受 JPG、PNG、WEBP，成功后写入当前用户 `avatarUrl` 并返回最新 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回业务 `code=503`，不得通过 URL 绕过背景上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
-`POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、正式码 30 天冷却校验、当前会员冲突校验、有效会员到账、单码置已用和审计。DTO/鉴权/限流仍按 HTTP `400 / 401 / 429` 返回；可预期的兑换业务拒绝改为 HTTP `200` + 业务 `code/message`，其中正式码 30 天冷却返回 `code = 4601, message = "30天内仅可兑换一次"`，无效/停用/未上架/会员状态冲突/超过体验上限等其余内部原因统一收口为 `code = 4602, message = "兑换码无效或不可用"`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
+`POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、正式码 30 天冷却校验、当前会员冲突校验、有效会员到账、单码置已用和审计。DTO/鉴权/限流均返回 HTTP `200`，并分别使用业务 `code=400 / 401 / 429`；可预期的兑换业务拒绝同样返回 HTTP `200` + 业务 `code/message`，其中正式码 30 天冷却返回 `code = 4601, message = "30天内仅可兑换一次"`，无效/停用/未上架/会员状态冲突/超过体验上限等其余内部原因统一收口为 `code = 4602, message = "兑换码无效或不可用"`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
 
 ### 关系功能下线说明
 
@@ -907,7 +909,7 @@ GET  /public-assets/site-content-images/{fileName}
 
 `POST /admin/users`、`PUT /admin/users/{userId}`、`POST /admin/users/{userId}/status`、`POST /admin/users/{userId}/reset-password` 和 `POST /admin/users/{userId}/phone/reveal` 使用 `AdminBearerAuth`，且仅 `SUPER_ADMIN` 可访问。当前范围只支持新增用户、修改昵称/手机号、启用/禁用、重置密码和经审计查看完整手机号；不支持物理删除用户，也不通过后台直接改用户归属数据。
 
-用户 token 绑定服务端 `sessionVersion`。后台启用、禁用或重置密码时递增该版本；此前签发的 token 从下一次鉴权请求起统一返回 `401`，重新启用用户不会恢复旧 token。
+用户 token 绑定服务端 `sessionVersion`。后台启用、禁用或重置密码时递增该版本；此前签发的 token 从下一次鉴权请求起统一返回业务 `code=401`，重新启用用户不会恢复旧 token。
 
 用户权益查询使用 `AdminBearerAuth`，仅 `SUPER_ADMIN` 可访问。它是后台审计视图，按领域分段返回，不作为小程序的聚合契约。背景图能力当前统一返回 `false`。
 
@@ -1360,7 +1362,7 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回 `409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 仍只保留一条计划记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
 
 详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
 
@@ -1657,7 +1659,7 @@ interface AddMealPlanItemRequest {
 1. 这条接口只表达“把当前菜谱追加进对应餐次”，不接收完整 `menuItems[]`。
 2. 若对应餐次不存在，服务端按 `planDate + mealSlot` 自动创建该餐次。
 3. 若该餐次已存在相同 `recipeId` 的有效菜单项，服务端返回当前餐次摘要，不重复追加。
-4. 若该餐次已完成或菜单已固定，返回 `409`。
+4. 若该餐次已完成或菜单已固定，返回业务 `code=409`。
 5. 响应继续返回最新 `MealPlanSummary`，不额外返回无关上下文数据。
 3. `purchaseState = PENDING` 对应“保留但暂不采购”。
 4. `recipeVersionId` 由客户端显式提交，服务端必须校验与 `recipeId` 的真实匹配关系。
@@ -2098,7 +2100,7 @@ interface ShoppingSharePreview {
 3. `sourceCount` 返回该条缺口实际覆盖了几道菜。
 4. 模糊用量保持逐项提示，不自动相加成虚假的精确数量。
 
-共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回 `409`，提示客户端刷新后重试。
+共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回业务 `code=409`，提示客户端刷新后重试。
 
 `POST /dining-events/{eventId}/share-link` 用于生成或重置当前饭局的邀请分享链接，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功。响应最小固定为：
 
@@ -2530,7 +2532,7 @@ interface PublishRecipeDraftResponse {
 
 `GET /recipe-drafts` 的摘要补充 `coverImageUrl`，用于草稿箱列表优先显示当前草稿封面；`POST /recipe-drafts` 与 `PUT /recipe-drafts/{draftId}` 返回 `SaveRecipeDraftResponse`，不再复用 `RecipeDraftDetail`。`GET /recipe-drafts/{draftId}` 继续返回完整 `RecipeDraftDetail`，供编辑页补齐历史食材和历史单位引用。
 
-分类和场景重排提交完整作用域的 `ReorderItem[]`，分类内菜谱重排提交 `ReorderRecipesRequest`。三者都不得缺失、重复或混入越权 ID。服务端锁定最小作用域并逐项比较版本，冲突返回 `409`。
+分类和场景重排提交完整作用域的 `ReorderItem[]`，分类内菜谱重排提交 `ReorderRecipesRequest`。三者都不得缺失、重复或混入越权 ID。服务端锁定最小作用域并逐项比较版本，冲突返回业务 `code=409`。
 
 ```ts
 interface MyRecipeSummary {

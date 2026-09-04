@@ -31,7 +31,7 @@ http://127.0.0.1:3100/api
 | 2026-08-19 | 饭搭子功能已整体下线，客户端不再保留 `/api/dining-groups*`、`/api/dining-group-invites*` 和后台饭搭子审计字段。 |
 | 2026-07-26 | 冻结菜谱 R1 契约，新增个人分类/场景、食材单位、草稿发布、我的菜谱和匿名灵感路径；当前客户端尚未实现，不可按已可调用功能使用。 |
 | 2026-07-23 | 用户、会员事实、饭搭子关系和存储用量按领域拆分；移除客户端全局权益快照依赖。 |
-| 2026-07-23 | 背景图字段暂时保留，当前统一返回空 URL 和 `false` 能力位；背景设置写接口返回 `503`。 |
+| 2026-07-23 | 背景图字段暂时保留，当前统一返回空 URL 和 `false` 能力位；背景设置写接口返回业务 `code=503`。 |
 | 2026-07-23 | 饭搭子切换为多关系列表，关系变化不迁移、不冻结个人数据。 |
 
 ## 快速索引
@@ -50,7 +50,7 @@ http://127.0.0.1:3100/api
 | GET | `/api/auth/me` | `authApi.getMe` | 读取最小认证资料 |
 | GET | `/api/users/me` | `userApi.getCurrent` | 账号状态、展示占位和会员事实 |
 | PUT | `/api/users/me` | `userApi.updateCurrent` | 更新昵称和头像 |
-| PUT | `/api/users/me/display` | `userApi.updateDisplay` | 预留背景设置，当前返回 `503` |
+| PUT | `/api/users/me/display` | `userApi.updateDisplay` | 预留背景设置，当前返回业务 `code=503` |
 | PUT | `/api/users/me/password` | `userApi.changeCurrentPassword` | 修改密码 |
 | GET | `/api/users/me/taste-profile` | `userApi.getTasteProfile` | 本人口味与安全资料 |
 | PUT | `/api/users/me/taste-profile` | `userApi.updateTasteProfile` | 更新本人口味与安全资料 |
@@ -248,7 +248,7 @@ PUT /api/users/me/display
 Auth: UserBearerAuth
 ```
 
-路径和请求类型暂时保留，但能力未开放，当前统一返回：
+路径和请求类型暂时保留，但能力未开放，当前统一返回 HTTP 200 和业务错误码：
 
 ```json
 {

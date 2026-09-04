@@ -186,7 +186,7 @@ All APIs return JSON:
 }
 ```
 
-Disabled features return:
+Disabled features return HTTP 200 with a business code:
 
 ```json
 {

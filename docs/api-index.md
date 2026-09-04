@@ -36,7 +36,7 @@
 | User | GET | `/users/me` | 当前账号状态、展示设置和会员事实 |
 | User | GET | `/users/me/medals` | 当前用户勋章墙、分类与获得状态摘要 |
 | User | PUT | `/users/me` | 更新当前用户昵称和头像 |
-| User | PUT | `/users/me/display` | 背景图能力预留，当前固定返回 `503` |
+| User | PUT | `/users/me/display` | 背景图能力预留，当前固定返回业务 `code=503` |
 | User | PUT | `/users/me/password` | 修改当前用户登录密码 |
 | User | GET | `/users/me/taste-profile` | 当前用户口味与安全资料 |
 | User | PUT | `/users/me/taste-profile` | 更新当前用户口味与安全资料 |
@@ -198,7 +198,7 @@
 
 ## 暂不创建
 
-菜谱图片上传与修改、升级合集快照为“我的”、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回 `400`。
+菜谱图片上传与修改、升级合集快照为“我的”、点赞、背景图上传、完整 Worker 运行、饭票、积分商城、OCR、AI、多家庭、冰箱图片、聊天、评论、关注和私信当前均不开放。R1 草稿请求包含图片字段时返回业务 `code=400`。
 
 ## 维护规则
 

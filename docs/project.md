@@ -176,7 +176,7 @@ modules/meals/recipes/versions/public/adoptions
 | In Development | 存在候选页面、接口或数据结构 | 回到功能执行单逐项确认，不能承诺兼容或上线 |
 | Accepted | 业务、页面、权限、接口、约束和真实流程均已验收 | 才能进入发布口径 |
 | Deferred | 当前明确延期 | 保留必要空返回或记录，不继续补实现 |
-| Disabled | 骨架存在但业务不执行 | Controller 返回 503，客户端不注册入口 |
+| Disabled | 骨架存在但业务不执行 | Controller 返回业务 `code=503`，客户端不注册入口 |
 | Reserved | 只保留方向 | 不创建 Service、Controller 或客户端入口 |
 
 V1 模块状态：
@@ -275,7 +275,7 @@ Prisma Schema 覆盖基础表结构、普通索引和普通唯一约束。Postgr
 }
 ```
 
-Disabled 模块统一返回：
+Disabled 模块统一返回 HTTP 200 和业务错误码：
 
 ```json
 {
@@ -285,7 +285,7 @@ Disabled 模块统一返回：
 }
 ```
 
-前端业务判断优先使用返回体 `code`，但 HTTP 状态码仍保持语义化。
+前台、小程序、后台和官网都按返回体 `code` 判断业务成功或失败；HTTP 非 2xx 只用于路由未命中、协议、网关、网络或未捕获系统异常。
 
 ## 命名规则
 
