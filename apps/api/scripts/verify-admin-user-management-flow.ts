@@ -116,6 +116,15 @@ async function main() {
   assert(updated.phone === maskPhone(updatedPhone), "updated phone mismatch");
   assert(updated.nickname === "后台已编辑用户", "updated nickname mismatch");
 
+  const revealedPhone = await requestData<{ phone: string | null }>(
+    `/admin/users/${created.id}/phone/reveal`,
+    {
+      method: "POST",
+      headers: { authorization }
+    }
+  );
+  assert(revealedPhone.phone === updatedPhone, "revealed phone should return the full updated phone");
+
   const initialLogin = await loginWithPassword(userRequestData, updatedPhone, initialPassword);
 
   const cleared = await requestData<UserProfile>(
@@ -207,6 +216,7 @@ async function main() {
         createdUserId: created.id,
         createdPhone,
         updatedPhone,
+        revealedPhoneOk: revealedPhone.phone === updatedPhone,
         managedUserUid: created.uid,
         disabledLoginStatus: disabledLogin.status,
         resetOldTokenStatus: resetOldToken.status,

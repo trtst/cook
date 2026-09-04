@@ -49,6 +49,7 @@ import type {
   CreateAdminUserRequest,
   AdminLoginRequest,
   AdminUserEntitlementResponse,
+  AdminUserPhoneRevealResponse,
   IngredientProteinType,
   InspirationCategorySummary,
   MyRecipeSummary,
@@ -941,6 +942,37 @@ export class AdminService {
     });
   }
 
+  async revealUserPhone(userId: UUID, adminId: UUID): Promise<AdminUserPhoneRevealResponse> {
+    return this.prisma.$transaction(async tx => {
+      const admin = await tx.adminAccount.findUnique({
+        where: { id: adminId },
+        select: { status: true, roles: true }
+      });
+      if (!admin || admin.status !== "ACTIVE" || !admin.roles.includes("SUPER_ADMIN")) {
+        throw new ForbiddenException("无权查看用户手机号");
+      }
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, phone: true }
+      });
+      if (!user) throw new NotFoundException("用户不存在");
+
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "USER_PHONE_REVEALED",
+          objectType: "USER",
+          objectId: user.id,
+          payload: { reason: "admin-entitlement-phone-reveal" }
+        }
+      });
+
+      return { phone: user.phone };
+    });
+  }
+
   async getUserEntitlements(userId: UUID, adminId: UUID): Promise<AdminUserEntitlementResponse> {
     return this.prisma.$transaction(async tx => {
       const admin = await tx.adminAccount.findUnique({
@@ -957,6 +989,7 @@ export class AdminService {
           id: true,
           uid: true,
           nickname: true,
+          phone: true,
           status: true
         }
       });
@@ -995,6 +1028,7 @@ export class AdminService {
           id: user.id,
           uid: user.uid,
           nickname: user.nickname,
+          phone: maskPhone(user.phone),
           status: user.status
         },
         membership: {

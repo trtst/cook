@@ -86,6 +86,7 @@ import {
   AdminResetUserPasswordResultModel,
   AdminRecipeModel,
   AdminUserEntitlementModel,
+  AdminUserPhoneRevealModel,
   ApiOkArray,
   ApiOkModel,
   ApiOkPage,
@@ -403,6 +404,17 @@ export class AdminController {
     @Body() body: ResetAdminUserPasswordDto
   ) {
     return this.adminService.resetUserPassword(userId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("users/:userId/phone/reveal")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminUserPhoneRevealModel, "后台查看用户完整手机号")
+  revealUserPhone(
+    @Req() request: RequestWithAdmin,
+    @Param("userId", ParseIntPipe) userId: number
+  ) {
+    return this.adminService.revealUserPhone(userId, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("user-entitlements")

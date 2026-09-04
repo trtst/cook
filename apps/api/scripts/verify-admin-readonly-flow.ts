@@ -94,8 +94,15 @@ async function main() {
     headers: { authorization }
   });
   assert(entitlements.user.id === ownerUser.id, "admin entitlement user mismatch");
+  assert(entitlements.user.phone === maskPhone(ownerPhone), "admin entitlement phone should remain masked");
   assert(entitlements.membership.tier.length > 0, "admin membership tier missing");
   assert(entitlements.storage.calculatedAt.length > 0, "admin storage summary missing calculation time");
+
+  const phoneReveal = await requestData<{ phone: string | null }>(`/admin/users/${ownerUser.id}/phone/reveal`, {
+    method: "POST",
+    headers: { authorization }
+  });
+  assert(phoneReveal.phone === ownerPhone, "admin phone reveal should return the full phone");
 
   console.log(
     JSON.stringify(
@@ -108,6 +115,7 @@ async function main() {
         dashboardUnitCount: dashboard.ingredient.unitCount,
         usersTotal: users.total,
         ownerTier: entitlements.membership.tier,
+        phoneRevealOk: phoneReveal.phone === ownerPhone,
         storageState: entitlements.storage.state
       },
       null,

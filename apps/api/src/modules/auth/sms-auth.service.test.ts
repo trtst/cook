@@ -159,3 +159,37 @@ test("checks the provider SMS verification result through PNVS", async () => {
     }
   }
 });
+
+test("wraps malformed provider responses in a service unavailable error", async () => {
+  const previous = {
+    accessKeyId: process.env.SMS_ACCESS_KEY_ID,
+    accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET,
+    signName: process.env.SMS_SIGN_NAME,
+    templateCode: process.env.SMS_TEMPLATE_CODE,
+    endpoint: process.env.SMS_ENDPOINT
+  };
+
+  process.env.SMS_ACCESS_KEY_ID = "access-key";
+  process.env.SMS_ACCESS_KEY_SECRET = "access-secret";
+  process.env.SMS_SIGN_NAME = "炊火记";
+  process.env.SMS_TEMPLATE_CODE = "SMS_123";
+  process.env.SMS_ENDPOINT = "https://pnvs.example.test/";
+
+  try {
+    const http: SmsHttpClient = async () => new Response("temporary upstream page", { status: 200 });
+    const gateway = new AliyunSmsGateway(http);
+
+    await assert.rejects(() => gateway.send("13800000000"), { message: "短信服务暂不可用" });
+  } finally {
+    for (const [key, value] of Object.entries({
+      SMS_ACCESS_KEY_ID: previous.accessKeyId,
+      SMS_ACCESS_KEY_SECRET: previous.accessKeySecret,
+      SMS_SIGN_NAME: previous.signName,
+      SMS_TEMPLATE_CODE: previous.templateCode,
+      SMS_ENDPOINT: previous.endpoint
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});

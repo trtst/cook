@@ -1,5 +1,5 @@
 import { createHmac, randomInt, randomUUID } from "node:crypto";
-import { BadRequestException, Inject, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { PrismaService } from "../../common/prisma.service";
 import { AuthRiskService } from "./auth-risk.service";
 import { AuthCodeScene } from "@prisma/client";
@@ -20,8 +20,6 @@ function encodeRpc(value: string) {
 }
 
 export class AliyunSmsGateway implements SmsGateway {
-  private readonly logger = new Logger(AliyunSmsGateway.name);
-
   constructor(private readonly http: SmsHttpClient) {}
 
   async send(phone: string) {
@@ -94,34 +92,21 @@ export class AliyunSmsGateway implements SmsGateway {
     const endpoint = process.env.SMS_ENDPOINT?.trim() || SMS_ENDPOINT;
     const separator = endpoint.includes("?") ? "&" : "?";
     const response = await this.http(`${endpoint}${separator}${query}`, { method: "GET" });
-    const rawBody = await response.text();
-    const payload = parseSmsBody(rawBody);
-
-    if (!response.ok) {
-      this.logger.error(`Aliyun SMS HTTP ${response.status}: ${smsPayloadSummary(payload, rawBody)}`);
-      throw new ServiceUnavailableException("短信服务暂不可用");
-    }
+    if (!response.ok) throw new ServiceUnavailableException("短信服务暂不可用");
+    const payload = await readSmsBody(response);
+    if (!payload) throw new ServiceUnavailableException("短信服务暂不可用");
     return payload as { Code?: unknown; Success?: unknown; Model?: { VerifyResult?: unknown } };
   }
 }
 
-function parseSmsBody(rawBody: string) {
-  if (!rawBody.trim()) return {};
+async function readSmsBody(response: Response) {
+  const rawBody = await response.text();
+  if (!rawBody.trim()) return null;
   try {
     return JSON.parse(rawBody) as Record<string, unknown>;
   } catch {
-    return {};
+    return null;
   }
-}
-
-function smsPayloadSummary(payload: Record<string, unknown>, rawBody: string) {
-  return JSON.stringify({
-    Code: payload.Code,
-    Message: payload.Message,
-    RequestId: payload.RequestId,
-    HostId: payload.HostId,
-    bodyPrefix: rawBody.slice(0, 120)
-  });
 }
 
 @Injectable()

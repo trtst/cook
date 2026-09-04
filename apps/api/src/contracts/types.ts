@@ -970,13 +970,17 @@ export interface AdminLoginRequest {
 }
 
 export interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "status">;
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "phone" | "status">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
   storage: StorageUsageSummary;
   recipePolicy: Pick<ResolvedPolicy, "recipeLimit" | "recycleDays" | "variantLimitPerRoot">;
   invitePolicy: Pick<ResolvedPolicy, "inviteLimit" | "memberLimit">;
   imagePolicy: EffectiveImagePolicy;
+}
+
+export interface AdminUserPhoneRevealResponse {
+  phone: string | null;
 }
 
 export interface CreateAdminUserRequest {

@@ -499,6 +499,7 @@ export class AdminEntitlementUserModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: Number }) uid!: number;
   @ApiProperty(nullableString) nickname!: string | null;
+  @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: String }) status!: string;
 }
 
@@ -515,6 +516,10 @@ export class AdminUserEntitlementModel {
   @ApiProperty({ type: RecipePolicyModel }) recipePolicy!: RecipePolicyModel;
   @ApiProperty({ type: InvitePolicyModel }) invitePolicy!: InvitePolicyModel;
   @ApiProperty({ type: ImagePolicyModel }) imagePolicy!: ImagePolicyModel;
+}
+
+export class AdminUserPhoneRevealModel {
+  @ApiProperty({ ...nullableString, description: "完整手机号，仅 SUPER_ADMIN 点击查看时返回" }) phone!: string | null;
 }
 
 export class AdminResetUserPasswordResultModel {
