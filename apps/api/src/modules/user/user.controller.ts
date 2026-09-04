@@ -1,12 +1,17 @@
-import { Body, Controller, Get, Inject, Put, Query, Req, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { Body, Controller, Get, Inject, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { ok } from "../../common/api-response";
-import type { RequestWithUser } from "../../common/auth-context";
+import type { RequestWithContext, RequestWithUser } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { UserAuthGuard } from "../../common/user-auth.guard";
 import {
+  CompletePhoneChangeDto,
+  AuthPhoneChangeNewCodeDto,
+  AuthPhoneCodeSendDto,
   ChangeCurrentPasswordDto,
   NotificationFeedQueryDto,
+  StartPhoneChangeDto,
   UpdateCurrentUserDto,
   UpdateNotificationSettingsDto,
   UpdateTasteProfileDto,
@@ -15,12 +20,14 @@ import {
 import {
   ApiOkPage,
   ApiOkModel,
+  AuthSmsSendResultModel,
   ChangePasswordResultModel,
   MedalWallModel,
   MeResponseModel,
   NotificationBadgeModel,
   NotificationFeedItemModel,
   NotificationSettingsModel,
+  StartPhoneChangeResultModel,
   StorageUsageModel,
   TasteProfileModel
 } from "../../contracts/openapi";
@@ -30,6 +37,7 @@ import { DisplayService } from "./display.service";
 import { MedalService } from "./medal.service";
 import { NotificationService } from "./notification.service";
 import { TasteProfileService } from "./taste-profile.service";
+import { UploadService } from "../upload/upload.service";
 
 type AssetRequest = { protocol?: string; get?: (name: string) => string | undefined };
 
@@ -44,7 +52,8 @@ export class UserController {
     @Inject(DisplayService) private readonly displayService: DisplayService,
     @Inject(MedalService) private readonly medalService: MedalService,
     @Inject(NotificationService) private readonly notificationService: NotificationService,
-    @Inject(TasteProfileService) private readonly tasteProfileService: TasteProfileService
+    @Inject(TasteProfileService) private readonly tasteProfileService: TasteProfileService,
+    @Inject(UploadService) private readonly uploadService: UploadService
   ) {}
 
   @Get("me")
@@ -59,10 +68,76 @@ export class UserController {
     return this.currentUserService.updateCurrent(request.user.userId, body).then(result => ok(result));
   }
 
+  @Post("me/avatar")
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
+  @ApiConsumes("multipart/form-data")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MeResponseModel, "上传并更新当前用户头像")
+  async uploadCurrentAvatar(
+    @Req() request: RequestWithUser & AssetRequest,
+    @ReadIdempotencyKey() operationId: string,
+    @UploadedFile() file?: { buffer?: Buffer; size?: number }
+  ) {
+    await this.uploadService.uploadUserAvatar(request, request.user.userId, operationId, file);
+    return ok(await this.currentUserService.getCurrent(request.user.userId));
+  }
+
   @Put("me/password")
+  @ApiIdempotencyKey()
   @ApiOkModel(ChangePasswordResultModel, "修改当前用户登录密码")
-  updateCurrentPassword(@Req() request: RequestWithUser, @Body() body: ChangeCurrentPasswordDto) {
-    return this.authService.updateCurrentPassword(request.user.userId, body).then(result => ok(result));
+  updateCurrentPassword(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: ChangeCurrentPasswordDto
+  ) {
+    return this.authService.updateCurrentPassword(request.user.userId, operationId, body).then(result => ok(result));
+  }
+
+  @Post("me/phone/change-current-code")
+  @ApiOkModel(AuthSmsSendResultModel, "发送当前绑定手机号换绑验证码")
+  sendCurrentPhoneChangeCode(@Req() request: RequestWithUser & RequestWithContext, @Body() body: AuthPhoneCodeSendDto) {
+    return this.authService.sendCurrentPhoneChangeCode(request.user.userId, body, request.context).then(result => ok(result));
+  }
+
+  @Post("me/phone/bind")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MeResponseModel, "绑定当前用户手机号")
+  async bindCurrentPhone(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: StartPhoneChangeDto
+  ) {
+    await this.authService.bindCurrentPhone(request.user.userId, operationId, body);
+    return ok(await this.currentUserService.getCurrent(request.user.userId));
+  }
+
+  @Post("me/phone/change-start")
+  @ApiIdempotencyKey()
+  @ApiOkModel(StartPhoneChangeResultModel, "校验当前绑定手机号并创建短期换绑会话")
+  startPhoneChange(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: StartPhoneChangeDto
+  ) {
+    return this.authService.startPhoneChange(request.user.userId, operationId, body).then(result => ok(result));
+  }
+
+  @Post("me/phone/change-new-code")
+  @ApiOkModel(AuthSmsSendResultModel, "发送新手机号换绑验证码")
+  sendNewPhoneChangeCode(@Req() request: RequestWithUser & RequestWithContext, @Body() body: AuthPhoneChangeNewCodeDto) {
+    return this.authService.sendNewPhoneChangeCode(request.user.userId, body, request.context).then(result => ok(result));
+  }
+
+  @Post("me/phone/change-complete")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MeResponseModel, "完成当前用户手机号更换")
+  async completePhoneChange(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CompletePhoneChangeDto
+  ) {
+    await this.authService.completePhoneChange(request.user.userId, operationId, body);
+    return ok(await this.currentUserService.getCurrent(request.user.userId));
   }
 
   @Get("me/medals")

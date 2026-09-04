@@ -93,7 +93,7 @@ import {
   startAdminIdempotentOperation
 } from "../../common/idempotency";
 import { AdminTokenService } from "../../common/security/admin-token.service";
-import { hashPassword, verifyPassword } from "../../common/security/password";
+import { hashPassword, passwordPolicyError, verifyPassword } from "../../common/security/password";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import {
   buildRecipeAssistantSnapshot,
@@ -730,6 +730,7 @@ export class AdminService {
 
   async createUser(body: CreateAdminUserRequest, adminId: UUID): Promise<UserProfile> {
     await this.requireSuperAdmin(adminId);
+    this.assertUserPassword(body.password);
     const phone = body.phone.trim();
     const nickname = this.readNickname(body.nickname);
     const status = body.status ?? "ACTIVE";
@@ -885,6 +886,7 @@ export class AdminService {
     adminId: UUID
   ): Promise<AdminResetUserPasswordResponse> {
     await this.requireSuperAdmin(adminId);
+    this.assertUserPassword(body.newPassword);
     const requestHash = `${userId}:${this.hashSecret(body.newPassword)}`;
 
     return this.prisma.$transaction(async tx => {
@@ -5204,6 +5206,11 @@ export class AdminService {
     }
   }
 
+  private assertUserPassword(password: string) {
+    const message = passwordPolicyError(password);
+    if (message) throw new BadRequestException(message);
+  }
+
   private async requireIngredientCategory(tx: Prisma.TransactionClient, categoryId: UUID) {
     const category = await tx.ingredientCategory.findUnique({
       where: { id: categoryId }
@@ -5678,9 +5685,11 @@ export class AdminService {
   ) {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
+        const uid = this.createUid();
         return await tx.user.create({
           data: {
-            uid: this.createUid(),
+            uid,
+            cookNo: String(uid),
             phone: input.phone,
             nickname: input.nickname,
             passwordHash: hashPassword(input.password),
@@ -5705,7 +5714,7 @@ export class AdminService {
         if (targets.includes("phone")) {
           throw new ConflictException("手机号已存在");
         }
-        if (!targets.includes("uid")) {
+        if (!targets.includes("uid") && !targets.includes("cook_no") && !targets.includes("cookNo")) {
           throw error;
         }
       }

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import type { Prisma, UploadAsset, UploadAssetScene, UploadAssetStatus } from "@prisma/client";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
@@ -39,6 +39,12 @@ function getContentTypeExtension(contentType: string) {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";
   return "jpg";
+}
+
+function contentTypeOfFileName(fileName: string) {
+  if (fileName.endsWith(".png")) return "image/png";
+  if (fileName.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
 }
 
 function toIsoDate(value: Date): IsoDateTime {
@@ -190,6 +196,62 @@ export class UploadService {
     return `${protocol}://${host}${path}`;
   }
 
+  buildProfileAvatarUrl(request: RequestLike, userId: UUID, fileName: string, updatedAt: Date) {
+    const protocol = request.protocol || "http";
+    const host = request.get?.("host");
+    const path = `/api/public-assets/profile-avatars/${encodeURIComponent(String(userId))}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(updatedAt.toISOString())}`;
+    if (!host) return path;
+    return `${protocol}://${host}${path}`;
+  }
+
+  async uploadUserAvatar(
+    request: RequestLike,
+    userId: UUID,
+    operationId: OperationId,
+    file?: FileUpload
+  ) {
+    if (!file) throw new BadRequestException("请上传图片");
+    const imageMeta = detectImageMeta(file);
+    const requestHash = `${userId}:${imageMeta.sourceHash}`;
+    const tempPath = await this.writeAvatarTempFile(file.buffer as Buffer, imageMeta.extension);
+
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const repeated = await getIdempotentResult<{ avatarUrl: string }>(tx, operationId, "upload:user-avatar", userId, null, requestHash);
+        if (repeated) {
+          await rm(tempPath, { force: true });
+          return repeated;
+        }
+        await startIdempotentOperation(tx, operationId, "upload:user-avatar", userId, null, requestHash);
+
+        const current = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true, status: true }
+        });
+        if (!current || current.status !== "ACTIVE") {
+          throw new UnauthorizedException("未登录或 token 失效");
+        }
+
+        const fileName = `${randomUUID()}.${imageMeta.extension}`;
+        const storageKey = this.buildAvatarStorageKey(userId, fileName);
+        await this.moveTempFile(tempPath, storageKey);
+        const now = new Date();
+        const avatarUrl = this.buildProfileAvatarUrl(request, userId, fileName, now);
+        await tx.user.update({
+          where: { id: userId },
+          data: { avatarUrl },
+          select: { id: true }
+        });
+        const result = { avatarUrl };
+        await completeIdempotentOperation(tx, operationId, "upload:user-avatar", userId, null, requestHash, result);
+        return result;
+      });
+    } catch (error) {
+      await rm(tempPath, { force: true });
+      throw error;
+    }
+  }
+
   async uploadRecipeImage(
     request: RequestLike,
     userId: UUID,
@@ -307,6 +369,22 @@ export class UploadService {
     try {
       return {
         contentType: asset.contentType,
+        stream: createReadStream(filePath),
+        stat: await stat(filePath)
+      };
+    } catch {
+      throw new NotFoundException("图片不存在");
+    }
+  }
+
+  async getProfileAvatarAsset(userId: UUID, fileName: string) {
+    if (!/^[0-9a-f-]+\.(jpg|png|webp)$/.test(fileName)) {
+      throw new NotFoundException("图片不存在");
+    }
+    const filePath = this.getStoragePath(this.buildAvatarStorageKey(userId, fileName));
+    try {
+      return {
+        contentType: contentTypeOfFileName(fileName),
         stream: createReadStream(filePath),
         stat: await stat(filePath)
       };
@@ -521,6 +599,14 @@ export class UploadService {
     return tempPath;
   }
 
+  private async writeAvatarTempFile(buffer: Buffer, extension: string) {
+    const tempDir = join(getAssetRoot(), "profile-avatar-temp");
+    await mkdir(tempDir, { recursive: true });
+    const tempPath = join(tempDir, `${randomUUID()}.${extension}`);
+    await writeFile(tempPath, buffer);
+    return tempPath;
+  }
+
   private async moveTempFile(tempPath: string, storageKey: string) {
     const filePath = this.getStoragePath(storageKey);
     await mkdir(dirname(filePath), { recursive: true });
@@ -542,6 +628,10 @@ export class UploadService {
 
   private buildDiningEventCoverStorageKey(eventId: UUID) {
     return join("dining-event-covers", String(eventId), randomUUID());
+  }
+
+  private buildAvatarStorageKey(userId: UUID, fileName: string) {
+    return join("profile-avatars", String(userId), fileName);
   }
 
 }

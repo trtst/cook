@@ -135,10 +135,36 @@ export class SmsAuthService {
     return { cooldownSeconds: 60 };
   }
 
+  async sendPhoneChangeCode(phone: string, context: { ip: string; deviceId: string }) {
+    await this.risk.assertAllowed({ channel: "SMS", operation: "SEND", phone, ip: context.ip, deviceId: context.deviceId });
+    const challenge = await this.gateway.send(phone);
+    await this.prisma.smsCode.create({
+      data: {
+        phone,
+        scene: AuthCodeScene.PHONE_CHANGE,
+        codeHash: null,
+        providerOutId: challenge.providerOutId,
+        expiresAt: new Date(Date.now() + SMS_CODE_EXPIRES_MS),
+        consumedAt: null,
+        ip: context.ip,
+        deviceId: context.deviceId
+      }
+    });
+    return { cooldownSeconds: 60 };
+  }
+
   async consumeLoginCode(phone: string, code: string) {
+    return this.consumeCode(phone, code, AuthCodeScene.LOGIN);
+  }
+
+  async consumePhoneChangeCode(phone: string, code: string) {
+    return this.consumeCode(phone, code, AuthCodeScene.PHONE_CHANGE);
+  }
+
+  private async consumeCode(phone: string, code: string, scene: AuthCodeScene) {
     if (!/^\d{6}$/.test(code)) throw new BadRequestException("验证码错误");
     const record = await this.prisma.smsCode.findFirst({
-      where: { phone, scene: AuthCodeScene.LOGIN },
+      where: { phone, scene },
       orderBy: { createdAt: "desc" }
     });
     if (!record) throw new BadRequestException("验证码错误");

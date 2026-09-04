@@ -25,6 +25,10 @@ export interface SessionUser {
   avatarUrl: string | null;
 }
 
+export interface AuthSessionUser extends SessionUser {
+  phone: string | null;
+}
+
 export interface UserDisplay {
   profileBackgroundUrl: string | null;
   homeBackgroundUrl: string | null;
@@ -37,8 +41,19 @@ export interface UserMembership {
   validUntil: IsoDateTime | null;
 }
 
-export interface MeResponse extends SessionUser {
-  phone: string | null;
+export type UserGender = "MALE" | "FEMALE" | "UNSPECIFIED";
+
+export interface CurrentUserProfile {
+  cookNo: string | null;
+  bio: string | null;
+  gender: UserGender | null;
+  birthDate: string | null;
+}
+
+export interface MeResponse {
+  avatarUrl: string | null;
+  profile: CurrentUserProfile;
+  hasPassword: boolean;
   display: UserDisplay;
   membership: UserMembership;
 }
@@ -105,7 +120,7 @@ export interface PasswordLoginRequest {
   password: string;
 }
 
-export type AuthCodeScene = "LOGIN" | "BIND_PHONE";
+export type AuthCodeScene = "LOGIN" | "PHONE_CHANGE";
 
 export interface SendAuthCodeRequest {
   phone: string;
@@ -154,7 +169,7 @@ export interface AuthSessionResult {
   refreshToken: string;
   accessExpiresAt: IsoDateTime;
   refreshExpiresAt: IsoDateTime;
-  user: SessionUser;
+  user: AuthSessionUser;
 }
 
 export interface WechatSessionRequest {
@@ -210,6 +225,7 @@ export interface LogoutAuthSessionRequest extends RefreshAuthSessionRequest {}
 export interface AuthMeResponse extends SessionUser {
   id: UUID;
   phone: string | null;
+  hasPassword: boolean;
   status: string;
 }
 
@@ -553,18 +569,45 @@ export interface HomeTopicRecipeSearchResponse {
 
 export interface UpdateCurrentUserRequest {
   nickname?: string;
-  avatarUrl?: string;
+  cookNo?: string;
+  bio?: string | null;
+  gender?: UserGender | null;
+  birthDate?: string | null;
 }
 
 export interface UpdateNotificationSettingsRequest extends NotificationSettings {}
 
 export interface ChangeCurrentPasswordRequest {
-  currentPassword: string;
+  currentPassword?: string;
   newPassword: string;
 }
 
 export interface ChangeCurrentPasswordResult {
   changedAt: IsoDateTime;
+}
+
+export interface PhoneCodeSendRequest {
+  phone: string;
+  deviceId: string;
+}
+
+export interface NewPhoneCodeSendRequest extends PhoneCodeSendRequest {
+  changeToken: string;
+}
+
+export interface StartPhoneChangeRequest {
+  phone: string;
+  code: string;
+}
+
+export interface StartPhoneChangeResult {
+  changeToken: string;
+}
+
+export interface CompletePhoneChangeRequest {
+  changeToken: string;
+  phone: string;
+  code: string;
 }
 
 export interface RedeemMembershipCodeRequest {

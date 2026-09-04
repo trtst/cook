@@ -82,6 +82,10 @@ export class SessionUserModel {
   @ApiProperty(nullableString) avatarUrl!: string | null;
 }
 
+export class AuthSessionUserModel extends SessionUserModel {
+  @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
+}
+
 export class PasswordLoginResultModel {
   @ApiProperty({ type: String }) token!: string;
   @ApiProperty(dateTime) expiresAt!: string;
@@ -89,7 +93,7 @@ export class PasswordLoginResultModel {
 }
 
 export class SendAuthCodeResultModel {
-  @ApiProperty({ type: String, enum: ["LOGIN", "BIND_PHONE"] }) scene!: string;
+  @ApiProperty({ type: String, enum: ["LOGIN", "PHONE_CHANGE"] }) scene!: string;
   @ApiProperty(dateTime) sentAt!: string;
 }
 
@@ -111,7 +115,7 @@ export class AuthSessionResultModel {
   @ApiProperty({ type: String }) refreshToken!: string;
   @ApiProperty(dateTime) accessExpiresAt!: string;
   @ApiProperty(dateTime) refreshExpiresAt!: string;
-  @ApiProperty({ type: SessionUserModel }) user!: SessionUserModel;
+  @ApiProperty({ type: AuthSessionUserModel }) user!: AuthSessionUserModel;
 }
 
 export class WechatSessionResultModel {
@@ -128,6 +132,7 @@ export class AuthSmsSendResultModel {
 export class AuthMeResponseModel extends SessionUserModel {
   @ApiProperty({ type: Number }) id!: number;
   @ApiProperty(nullableString) phone!: string | null;
+  @ApiProperty({ type: Boolean }) hasPassword!: boolean;
   @ApiProperty({ type: String }) status!: string;
 }
 
@@ -291,10 +296,23 @@ export class UserMembershipModel {
   @ApiProperty({ ...dateTime, nullable: true }) validUntil!: string | null;
 }
 
-export class MeResponseModel extends SessionUserModel {
-  @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
+export class CurrentUserProfileModel {
+  @ApiProperty(nullableString) cookNo!: string | null;
+  @ApiProperty(nullableString) bio!: string | null;
+  @ApiProperty({ type: String, enum: ["MALE", "FEMALE", "UNSPECIFIED"], nullable: true }) gender!: string | null;
+  @ApiProperty({ type: String, nullable: true, example: "1990-09-04" }) birthDate!: string | null;
+}
+
+export class MeResponseModel {
+  @ApiProperty(nullableString) avatarUrl!: string | null;
+  @ApiProperty({ type: CurrentUserProfileModel }) profile!: CurrentUserProfileModel;
+  @ApiProperty({ type: Boolean, description: "当前账号是否已设置登录密码" }) hasPassword!: boolean;
   @ApiProperty({ type: UserDisplayModel }) display!: UserDisplayModel;
   @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
+}
+
+export class StartPhoneChangeResultModel {
+  @ApiProperty({ type: String }) changeToken!: string;
 }
 
 export class NotificationMealTimesModel {

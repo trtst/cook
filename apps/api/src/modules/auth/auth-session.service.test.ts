@@ -72,6 +72,12 @@ test("creates an opaque refresh token while persisting only its hash", async () 
   assert.equal(record.refreshToken, undefined);
   assert.equal(typeof record.refreshTokenHash, "string");
   assert.notEqual(record.refreshTokenHash, result.refreshToken);
+  assert.deepEqual(result.user, {
+    uid: user.uid,
+    nickname: user.nickname,
+    avatarUrl: user.avatarUrl,
+    phone: "138xxxxx007"
+  });
 });
 
 test("rotates refresh token and rejects the previous token", async () => {

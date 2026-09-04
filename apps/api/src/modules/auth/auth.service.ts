@@ -1,18 +1,25 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
-import { BadRequestException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
+import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { maskPhone } from "../../common/phone";
-import { hashPassword, verifyPassword } from "../../common/security/password";
+import { hashPassword, passwordPolicyError, verifyPassword } from "../../common/security/password";
 import type {
   AuthMeResponse,
   AuthPasswordLoginRequest,
   AuthSessionResult,
   ChangeCurrentPasswordRequest,
+  CompletePhoneChangeRequest,
+  NewPhoneCodeSendRequest,
+  PhoneCodeSendRequest,
   RefreshAuthSessionRequest,
   SetPasswordRequest,
   SmsLoginRequest,
   SmsSendRequest,
+  OperationId,
+  StartPhoneChangeRequest,
+  StartPhoneChangeResult,
   WechatPhoneLoginRequest,
   WechatSessionRequest,
   WechatSessionResult
@@ -23,6 +30,8 @@ import { SmsAuthService } from "./sms-auth.service";
 import { WechatAuthService, type WechatIdentitySession } from "./wechat-auth.service";
 
 const WECHAT_SESSION_EXPIRES_MS = 10 * 60 * 1000;
+const PHONE_CHANGE_SESSION_EXPIRES_MS = 10 * 60 * 1000;
+const PHONE_CHANGE_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface AuthRequestContext {
   ip: string;
@@ -36,6 +45,7 @@ type AuthUser = {
   avatarUrl: string | null;
   phone: string | null;
   passwordHash: string | null;
+  phoneChangedAt?: Date | null;
   status: "ACTIVE" | "DISABLED";
   sessionVersion: number;
 };
@@ -54,6 +64,11 @@ function toSessionContext(body: { deviceId: string }, context: AuthRequestContex
 
 function assertPhone(phone: string) {
   if (!/^1[3-9]\d{9}$/.test(phone)) throw new BadRequestException("请输入正确的手机号");
+}
+
+function assertPasswordStrength(password: string) {
+  const message = passwordPolicyError(password);
+  if (message) throw new BadRequestException(message);
 }
 
 @Injectable()
@@ -95,11 +110,13 @@ export class AuthService {
   }
 
   async setPassword(userId: number, body: SetPasswordRequest) {
+    assertPasswordStrength(body.password);
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { status: true, passwordHash: true }
+      select: { status: true, phone: true, passwordHash: true }
     });
     this.assertActiveUser(user);
+    this.assertPhoneBound(user.phone);
     if (user.passwordHash) throw new BadRequestException("密码已设置，请使用修改密码");
 
     const updated = await this.prisma.user.update({
@@ -112,12 +129,14 @@ export class AuthService {
   }
 
   async changePassword(userId: number, body: ChangeCurrentPasswordRequest) {
+    assertPasswordStrength(body.newPassword);
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { status: true, passwordHash: true }
+      select: { status: true, phone: true, passwordHash: true }
     });
     this.assertActiveUser(user);
-    if (!user.passwordHash || !verifyPassword(body.currentPassword, user.passwordHash)) {
+    this.assertPhoneBound(user.phone);
+    if (!user.passwordHash || !body.currentPassword || !verifyPassword(body.currentPassword, user.passwordHash)) {
       throw new BadRequestException("当前密码错误");
     }
     if (body.currentPassword === body.newPassword) {
@@ -133,8 +152,264 @@ export class AuthService {
     return { changedAt: updated.updatedAt.toISOString() };
   }
 
-  async updateCurrentPassword(userId: number, body: ChangeCurrentPasswordRequest) {
-    return this.changePassword(userId, body);
+  async updateCurrentPassword(userId: number, operationId: OperationId, body: ChangeCurrentPasswordRequest) {
+    assertPasswordStrength(body.newPassword);
+    const requestHash = JSON.stringify({
+      currentPassword: body.currentPassword ?? null,
+      newPassword: body.newPassword
+    });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<{ changedAt: string }>(tx, operationId, "user:password:update", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "user:password:update", userId, null, requestHash);
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { status: true, phone: true, passwordHash: true }
+      });
+      this.assertActiveUser(user);
+      this.assertPhoneBound(user.phone);
+      if (user.passwordHash) {
+        if (!body.currentPassword || !verifyPassword(body.currentPassword, user.passwordHash)) {
+          throw new BadRequestException("当前密码错误");
+        }
+        if (body.currentPassword === body.newPassword) {
+          throw new BadRequestException("新密码不能与当前密码相同");
+        }
+      }
+
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: hashPassword(body.newPassword) },
+        select: { updatedAt: true }
+      });
+      const result = { changedAt: updated.updatedAt.toISOString() };
+      await completeIdempotentOperation(tx, operationId, "user:password:update", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async sendCurrentPhoneChangeCode(userId: number, body: PhoneCodeSendRequest, context: AuthRequestContext) {
+    assertPhone(body.phone);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, status: true, phone: true, phoneChangedAt: true }
+    });
+    this.assertActiveUser(user);
+    if (!user.phone) throw new BadRequestException("当前账号尚未绑定手机号");
+    if (user.phone !== body.phone) throw new BadRequestException("请输入当前绑定手机号");
+    this.assertPhoneChangeAllowed(user.phoneChangedAt);
+    return this.smsAuth.sendPhoneChangeCode(body.phone, { ip: context.ip, deviceId: body.deviceId });
+  }
+
+  async startPhoneChange(userId: number, operationId: OperationId, body: StartPhoneChangeRequest): Promise<StartPhoneChangeResult> {
+    assertPhone(body.phone);
+    const requestHash = JSON.stringify({ phone: body.phone, code: body.code });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<StartPhoneChangeResult>(tx, operationId, "user:phone-change:start", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "user:phone-change:start", userId, null, requestHash);
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, status: true, phone: true, phoneChangedAt: true }
+      });
+      this.assertActiveUser(user);
+      if (!user.phone) throw new BadRequestException("当前账号尚未绑定手机号");
+      if (user.phone !== body.phone) throw new BadRequestException("请输入当前绑定手机号");
+      this.assertPhoneChangeAllowed(user.phoneChangedAt);
+      await this.smsAuth.consumePhoneChangeCode(body.phone, body.code);
+      const changeToken = randomBytes(32).toString("base64url");
+      await tx.phoneChangeSession.create({
+        data: {
+          userId,
+          tokenHash: hashSecret(changeToken),
+          oldPhone: body.phone,
+          expiresAt: new Date(Date.now() + PHONE_CHANGE_SESSION_EXPIRES_MS),
+          consumedAt: null
+        }
+      });
+      const result = { changeToken };
+      await completeIdempotentOperation(tx, operationId, "user:phone-change:start", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async sendNewPhoneChangeCode(userId: number, body: NewPhoneCodeSendRequest, context: AuthRequestContext) {
+    assertPhone(body.phone);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true, phone: true, phoneChangedAt: true }
+    });
+    this.assertActiveUser(user);
+    if (user.phone === body.phone) throw new BadRequestException("新手机号不能与当前手机号相同");
+    this.assertPhoneChangeAllowed(user.phoneChangedAt);
+    if (!user.phone) throw new BadRequestException("当前账号尚未绑定手机号");
+    await this.assertPhoneChangeSession(userId, user.phone, body.changeToken);
+    const existing = await this.prisma.user.findUnique({ where: { phone: body.phone }, select: { id: true } });
+    if (existing) throw new ConflictException("该手机号已绑定其他账号");
+    return this.smsAuth.sendPhoneChangeCode(body.phone, { ip: context.ip, deviceId: body.deviceId });
+  }
+
+  async bindCurrentPhone(userId: number, operationId: OperationId, body: StartPhoneChangeRequest): Promise<AuthMeResponse> {
+    assertPhone(body.phone);
+    const requestHash = JSON.stringify({ phone: body.phone, code: body.code });
+    const updated = await this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<AuthMeResponse>(tx, operationId, "user:phone:bind", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "user:phone:bind", userId, null, requestHash);
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          passwordHash: true,
+          status: true
+        }
+      });
+      this.assertActiveUser(user);
+      if (user.phone) throw new BadRequestException("当前账号已绑定手机号");
+      const existing = await tx.user.findUnique({ where: { phone: body.phone }, select: { id: true } });
+      if (existing) throw new ConflictException("该手机号已绑定其他账号");
+      await this.smsAuth.consumeLoginCode(body.phone, body.code);
+      const nextUser = await tx.user.update({
+        where: { id: userId },
+        data: { phone: body.phone },
+        select: {
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          passwordHash: true,
+          status: true
+        }
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorType: "USER",
+          actorUserId: userId,
+          action: "USER_PHONE_BOUND",
+          objectType: "USER",
+          objectId: userId,
+          payload: {
+            phone: maskPhone(body.phone)
+          }
+        }
+      });
+      const result = {
+        id: userId,
+        uid: nextUser.uid,
+        nickname: nextUser.nickname,
+        avatarUrl: nextUser.avatarUrl,
+        phone: maskPhone(nextUser.phone),
+        hasPassword: Boolean(nextUser.passwordHash),
+        status: nextUser.status
+      };
+      await completeIdempotentOperation(tx, operationId, "user:phone:bind", userId, null, requestHash, result);
+      return result;
+    });
+    return updated;
+  }
+
+  async completePhoneChange(userId: number, operationId: OperationId, body: CompletePhoneChangeRequest): Promise<AuthMeResponse> {
+    assertPhone(body.phone);
+    const requestHash = JSON.stringify({ changeToken: body.changeToken, phone: body.phone, code: body.code });
+    const updated = await this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<AuthMeResponse>(tx, operationId, "user:phone-change:complete", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "user:phone-change:complete", userId, null, requestHash);
+
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          passwordHash: true,
+          status: true,
+          phoneChangedAt: true
+        }
+      });
+      this.assertActiveUser(user);
+      if (!user.phone) throw new BadRequestException("当前账号尚未绑定手机号");
+      if (user.phone === body.phone) throw new BadRequestException("新手机号不能与当前手机号相同");
+      this.assertPhoneChangeAllowed(user.phoneChangedAt);
+      const session = await tx.phoneChangeSession.findUnique({
+        where: { tokenHash: hashSecret(body.changeToken) }
+      });
+      if (
+        !session ||
+        session.userId !== userId ||
+        session.oldPhone !== user.phone ||
+        session.consumedAt ||
+        session.expiresAt.getTime() <= Date.now()
+      ) {
+        throw new BadRequestException("手机号更换验证已失效");
+      }
+      const existing = await tx.user.findUnique({ where: { phone: body.phone }, select: { id: true } });
+      if (existing) throw new ConflictException("该手机号已绑定其他账号");
+
+      await this.smsAuth.consumePhoneChangeCode(body.phone, body.code);
+      const now = new Date();
+      const consumed = await tx.phoneChangeSession.updateMany({
+        where: {
+          id: session.id,
+          consumedAt: null,
+          expiresAt: { gt: now }
+        },
+        data: { consumedAt: now }
+      });
+      if (consumed.count !== 1) throw new BadRequestException("手机号更换验证已失效");
+
+      const nextUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          phone: body.phone,
+          phoneChangedAt: now
+        },
+        select: {
+          uid: true,
+          nickname: true,
+          avatarUrl: true,
+          phone: true,
+          passwordHash: true,
+          status: true
+        }
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorType: "USER",
+          actorUserId: userId,
+          action: "USER_PHONE_CHANGED",
+          objectType: "USER",
+          objectId: userId,
+          payload: {
+            oldPhone: maskPhone(user.phone),
+            newPhone: maskPhone(body.phone)
+          }
+        }
+      });
+      const result = {
+        id: userId,
+        uid: nextUser.uid,
+        nickname: nextUser.nickname,
+        avatarUrl: nextUser.avatarUrl,
+        phone: maskPhone(nextUser.phone),
+        hasPassword: Boolean(nextUser.passwordHash),
+        status: nextUser.status
+      };
+      await completeIdempotentOperation(tx, operationId, "user:phone-change:complete", userId, null, requestHash, result);
+      return result;
+    });
+    return updated;
   }
 
   async wechatSession(body: WechatSessionRequest, context: AuthRequestContext): Promise<WechatSessionResult> {
@@ -347,8 +622,8 @@ export class AuthService {
 
   async getMe(userId: number): Promise<AuthMeResponse> {
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, uid: true, nickname: true, avatarUrl: true, phone: true, status: true }
+        where: { id: userId },
+      select: { id: true, uid: true, nickname: true, avatarUrl: true, phone: true, passwordHash: true, status: true }
     });
     this.assertActiveUser(user);
     return {
@@ -357,8 +632,35 @@ export class AuthService {
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
       phone: maskPhone(user.phone),
+      hasPassword: Boolean(user.passwordHash),
       status: user.status
     };
+  }
+
+  private assertPhoneChangeAllowed(phoneChangedAt: Date | null | undefined) {
+    if (phoneChangedAt && Date.now() - phoneChangedAt.getTime() < PHONE_CHANGE_INTERVAL_MS) {
+      throw new BadRequestException("一个账号30天内只能更换一次手机号");
+    }
+  }
+
+  private assertPhoneBound(phone: string | null | undefined) {
+    if (!phone) throw new BadRequestException("请先绑定手机号");
+  }
+
+  private async assertPhoneChangeSession(userId: number, oldPhone: string, changeToken: string) {
+    const session = await this.prisma.phoneChangeSession.findUnique({
+      where: { tokenHash: hashSecret(changeToken) }
+    });
+    if (
+      !session ||
+      session.userId !== userId ||
+      session.oldPhone !== oldPhone ||
+      session.consumedAt ||
+      session.expiresAt.getTime() <= Date.now()
+    ) {
+      throw new BadRequestException("手机号更换验证已失效");
+    }
+    return session;
   }
 
   private async findWechatUser(identity: WechatIdentitySession) {
@@ -391,7 +693,8 @@ export class AuthService {
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
-        return (await db.user.create({ data: { phone, uid: this.createUid() } })) as AuthUser;
+        const uid = this.createUid();
+        return (await db.user.create({ data: { phone, uid, cookNo: String(uid) } })) as AuthUser;
       } catch (error) {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
         const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];
@@ -399,7 +702,7 @@ export class AuthService {
           const concurrentUser = await db.user.findUnique({ where: { phone } });
           if (concurrentUser) return concurrentUser as AuthUser;
         }
-        if (!targets.includes("uid")) throw error;
+        if (!targets.includes("uid") && !targets.includes("cook_no") && !targets.includes("cookNo")) throw error;
       }
     }
 

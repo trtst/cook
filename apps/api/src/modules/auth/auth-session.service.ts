@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import type { User } from "@prisma/client";
+import { maskPhone } from "../../common/phone";
 import { PrismaService } from "../../common/prisma.service";
 import { UserTokenService } from "../../common/security/user-token.service";
-import type { SessionUser } from "../../contracts/types";
+import type { AuthSessionUser } from "../../contracts/types";
 
 const DEFAULT_REFRESH_EXPIRES_SECONDS = 30 * 24 * 60 * 60;
 
@@ -18,7 +19,7 @@ export interface AuthSessionResult {
   refreshToken: string;
   accessExpiresAt: string;
   refreshExpiresAt: string;
-  user: SessionUser;
+  user: AuthSessionUser;
 }
 
 type AuthUser = Pick<User, "id" | "uid" | "nickname" | "avatarUrl" | "phone" | "status" | "sessionVersion">;
@@ -32,11 +33,12 @@ function refreshExpiresSeconds() {
   return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_REFRESH_EXPIRES_SECONDS;
 }
 
-function toSessionUser(user: Pick<User, "uid" | "nickname" | "avatarUrl">): SessionUser {
+function toSessionUser(user: Pick<User, "uid" | "nickname" | "avatarUrl" | "phone">): AuthSessionUser {
   return {
     uid: user.uid,
     nickname: user.nickname,
-    avatarUrl: user.avatarUrl
+    avatarUrl: user.avatarUrl,
+    phone: maskPhone(user.phone)
   };
 }
 

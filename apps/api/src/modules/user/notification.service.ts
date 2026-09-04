@@ -12,7 +12,7 @@ import type {
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
 
-type ActiveUserRecord = Pick<User, "id" | "status">;
+type ActiveUserRecord = Pick<User, "id" | "status" | "createdAt">;
 type NotificationDb = Prisma.TransactionClient | PrismaService;
 type TimedUnreadSummary = {
   unreadCount: number;
@@ -83,7 +83,7 @@ export class NotificationService {
 
   async getSettings(userId: UUID): Promise<NotificationSettings> {
     return this.prisma.$transaction(async tx => {
-      await this.loadActiveUser(tx, userId);
+      const user = await this.loadActiveUser(tx, userId);
       const settings = await tx.userNotificationSettings.findUnique({
         where: { userId }
       });
@@ -105,19 +105,19 @@ export class NotificationService {
 
   async getBadge(userId: UUID): Promise<NotificationBadgeResponse> {
     return this.prisma.$transaction(async tx => {
-      await this.loadActiveUser(tx, userId);
+      const user = await this.loadActiveUser(tx, userId);
       const [settingsRow, stateRow] = await Promise.all([
         tx.userNotificationSettings.findUnique({ where: { userId } }),
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
 
-      return this.buildBadge(tx, userId, stateRow?.feedReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
+      return this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
     });
   }
 
   async getFeed(userId: UUID, page: number, pageSize: number): Promise<PageResult<NotificationFeedItem>> {
     return this.prisma.$transaction(async tx => {
-      await this.loadActiveUser(tx, userId);
+      const user = await this.loadActiveUser(tx, userId);
       const settingsRow = await tx.userNotificationSettings.findUnique({
         where: { userId }
       });
@@ -155,13 +155,13 @@ export class NotificationService {
 
   async markFeedRead(userId: UUID): Promise<NotificationBadgeResponse> {
     return this.prisma.$transaction(async tx => {
-      await this.loadActiveUser(tx, userId);
+      const user = await this.loadActiveUser(tx, userId);
       const [settingsRow, stateRow] = await Promise.all([
         tx.userNotificationSettings.findUnique({ where: { userId } }),
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
       const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
-      const currentBadge = await this.buildBadge(tx, userId, stateRow?.feedReadAt ?? null, settings);
+      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settings);
 
       if (!currentBadge.latestTime) {
         return currentBadge;
@@ -179,7 +179,7 @@ export class NotificationService {
         }
       });
 
-      return this.buildBadge(tx, userId, nextReadAt, settings);
+      return this.buildBadge(tx, userId, user.createdAt, nextReadAt, settings);
     });
   }
 
@@ -463,6 +463,7 @@ export class NotificationService {
   private async buildBadge(
     db: NotificationDb,
     userId: UUID,
+    userCreatedAt: Date,
     readAt: Date | null,
     settings: NotificationSettings
   ): Promise<NotificationBadgeResponse> {
@@ -471,7 +472,7 @@ export class NotificationService {
       this.loadIngredientSummary(db, userId, readAt),
       this.loadUnitSummary(db, userId, readAt),
       this.loadInviteSummary(db, userId, readAt),
-      this.loadOfficialSummary(db, readAt),
+      this.loadOfficialSummary(db, userCreatedAt, readAt),
       this.loadFridgeReminderSummary(db, userId, readAt, now, settings)
     ]);
 
@@ -571,7 +572,8 @@ export class NotificationService {
     };
   }
 
-  private async loadOfficialSummary(db: NotificationDb, readAt: Date | null): Promise<TimedUnreadSummary> {
+  private async loadOfficialSummary(db: NotificationDb, userCreatedAt: Date, readAt: Date | null): Promise<TimedUnreadSummary> {
+    const unreadAfter = maxDate(userCreatedAt, readAt) ?? userCreatedAt;
     const where = {
       type: "ARTICLE" as const,
       status: "PUBLISHED" as const,
@@ -579,7 +581,8 @@ export class NotificationService {
         is: {
           code: officialChannelCode
         }
-      }
+      },
+      publishedAt: { gt: unreadAfter }
     };
     const [latest, unreadCount] = await Promise.all([
       db.siteContent.findFirst({
@@ -587,14 +590,7 @@ export class NotificationService {
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         select: { updatedAt: true }
       }),
-      db.siteContent.count({
-        where: readAt
-          ? {
-              ...where,
-              updatedAt: { gt: readAt }
-            }
-          : where
-      })
+      db.siteContent.count({ where })
     ]);
 
     return {
@@ -686,8 +682,9 @@ export class NotificationService {
     const user = await db.user.findUnique({
       where: { id: userId },
       select: {
-        id: true,
-        status: true
+          id: true,
+        status: true,
+        createdAt: true
       }
     });
     this.assertActiveUser(user);

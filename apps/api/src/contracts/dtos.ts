@@ -59,9 +59,10 @@ const dashboardTrendRangeValues = ["7D", "30D"] as const;
 const siteContentTypeValues = ["PAGE", "ARTICLE"] as const;
 const siteContentStatusValues = ["DRAFT", "PUBLISHED", "UNLISTED"] as const;
 const siteContentArticleChannelCodeValues = ["KITCHEN", "COOK", "FOOD"] as const;
-const authCodeSceneValues = ["LOGIN", "BIND_PHONE"] as const;
+const authCodeSceneValues = ["LOGIN", "PHONE_CHANGE"] as const;
 const notificationReminderDayValues = [1, 2, 3, 5, 7] as const;
 const notificationTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+const userGenderValues = ["MALE", "FEMALE", "UNSPECIFIED"] as const;
 
 function toOptionalBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
@@ -96,7 +97,7 @@ export class SendAuthCodeDto {
 
   @ApiProperty({ enum: authCodeSceneValues, example: "LOGIN" })
   @IsIn(authCodeSceneValues)
-  scene!: "LOGIN" | "BIND_PHONE";
+  scene!: "LOGIN" | "PHONE_CHANGE";
 }
 
 export class CodeLoginDto {
@@ -179,6 +180,30 @@ export class AuthSmsSendDto {
   deviceId!: string;
 }
 
+export class AuthPhoneCodeSendDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ example: "device-8c5c" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  deviceId!: string;
+}
+
+export class AuthPhoneChangeNewCodeDto extends AuthPhoneCodeSendDto {
+  @ApiProperty({ example: "opaque-phone-change-token" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  changeToken!: string;
+}
+
 export class AuthSmsLoginDto {
   @ApiProperty({ example: "13800000000" })
   @IsString()
@@ -217,10 +242,10 @@ export class AuthPasswordLoginDto extends PasswordLoginDto {
 }
 
 export class AuthSetPasswordDto {
-  @ApiProperty({ example: "change-me" })
+  @ApiProperty({ example: "abc12345", minLength: 8, maxLength: 20 })
   @IsString()
-  @MinLength(6)
-  @MaxLength(128)
+  @MinLength(8)
+  @MaxLength(20)
   password!: string;
 }
 
@@ -231,10 +256,10 @@ export class AuthChangePasswordDto {
   @MaxLength(128)
   currentPassword!: string;
 
-  @ApiProperty({ example: "new-password" })
+  @ApiProperty({ example: "abc12345", minLength: 8, maxLength: 20 })
   @IsString()
-  @MinLength(6)
-  @MaxLength(128)
+  @MinLength(8)
+  @MaxLength(20)
   newPassword!: string;
 }
 
@@ -269,31 +294,81 @@ export class AdminLoginDto {
 }
 
 export class UpdateCurrentUserDto {
-  @ApiPropertyOptional({ example: "小明" })
-  @IsOptional()
+  @ApiPropertyOptional({ example: "小明", minLength: 2, maxLength: 24 })
+  @ValidateIf((_, value) => value !== undefined)
+  @Transform(({ value }) => trimString(value))
   @IsString()
-  @MaxLength(64)
+  @MinLength(2)
+  @MaxLength(24)
+  @Matches(/^[^@<>/]+$/)
   nickname?: string;
 
-  @ApiPropertyOptional({ example: "https://example.com/avatar.png" })
-  @IsOptional()
+  @ApiPropertyOptional({ example: "cook520", minLength: 5, maxLength: 20 })
+  @ValidateIf((_, value) => value !== undefined)
+  @Transform(({ value }) => trimString(value))
   @IsString()
-  @MaxLength(512)
-  avatarUrl?: string;
+  @MinLength(5)
+  @MaxLength(20)
+  @Matches(/^[A-Za-z0-9_]+$/)
+  cookNo?: string;
+
+  @ApiPropertyOptional({ example: "喜欢记录家里的晚饭", nullable: true, maxLength: 80 })
+  @IsOptional()
+  @Transform(({ value }) => trimString(value))
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(80)
+  bio?: string | null;
+
+  @ApiPropertyOptional({ type: String, enum: userGenderValues, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsIn(userGenderValues)
+  gender?: "MALE" | "FEMALE" | "UNSPECIFIED" | null;
+
+  @ApiPropertyOptional({ example: "1990-09-04", nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  birthDate?: string | null;
 }
 
 export class ChangeCurrentPasswordDto {
   @ApiProperty({ example: "change-me" })
+  @IsOptional()
   @IsString()
   @MinLength(6)
   @MaxLength(128)
-  currentPassword!: string;
+  currentPassword?: string;
 
-  @ApiProperty({ example: "change-me-2" })
+  @ApiProperty({ example: "abc12345", minLength: 8, maxLength: 20 })
   @IsString()
-  @MinLength(6)
-  @MaxLength(128)
+  @MinLength(8)
+  @MaxLength(20)
   newPassword!: string;
+}
+
+export class StartPhoneChangeDto {
+  @ApiProperty({ example: "13800000000" })
+  @IsString()
+  @MaxLength(11)
+  @Matches(/^1[3-9]\d{9}$/)
+  phone!: string;
+
+  @ApiProperty({ example: "123456" })
+  @IsString()
+  @Matches(/^\d{6}$/)
+  code!: string;
+}
+
+export class CompletePhoneChangeDto extends StartPhoneChangeDto {
+  @ApiProperty({ example: "opaque-phone-change-token" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(256)
+  changeToken!: string;
 }
 
 export class UpdateTasteProfileDto {
@@ -459,10 +534,10 @@ export class CreateAdminUserDto extends OperationDto {
   @Matches(/^1[3-9]\d{9}$/)
   phone!: string;
 
-  @ApiProperty({ example: "change-me" })
+  @ApiProperty({ example: "abc12345", minLength: 8, maxLength: 20 })
   @IsString()
-  @MinLength(6)
-  @MaxLength(128)
+  @MinLength(8)
+  @MaxLength(20)
   password!: string;
 
   @ApiPropertyOptional({ example: "小明" })
@@ -499,10 +574,10 @@ export class SetAdminUserStatusDto extends OperationDto {
 }
 
 export class ResetAdminUserPasswordDto extends OperationDto {
-  @ApiProperty({ example: "change-me-2" })
+  @ApiProperty({ example: "abc12345", minLength: 8, maxLength: 20 })
   @IsString()
-  @MinLength(6)
-  @MaxLength(128)
+  @MinLength(8)
+  @MaxLength(20)
   newPassword!: string;
 }
 
