@@ -5,6 +5,10 @@ export interface UserProfile {
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
+  cookNo: string | null;
+  bio: string | null;
+  gender: "MALE" | "FEMALE" | "UNSPECIFIED" | null;
+  birthDate: string | null;
   phone: string | null;
   status: string;
   createdAt: IsoDateTime;
@@ -72,7 +76,7 @@ export interface StorageUsageSummary {
 }
 
 export interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "phone" | "status">;
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "avatarUrl" | "phone" | "status" | "cookNo" | "bio" | "gender" | "birthDate">;
   membership: UserMembership;
   display: {
     canUseProfileBackground: boolean;

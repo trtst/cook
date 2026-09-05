@@ -1,6 +1,6 @@
 const allowedTags = new Set(["p", "br", "h2", "h3", "strong", "b", "u", "blockquote", "ul", "ol", "li", "a", "img"]);
 const forbiddenTags = new Set(["script", "style", "iframe", "object", "embed", "form", "input", "button", "textarea", "select", "template", "svg", "math"]);
-const imagePathPattern = /^\/api\/public-assets\/site-content-images\/[a-z0-9-]+\.(?:jpg|png|webp)$/i;
+const imagePathPattern = /^\/(?:static\/)?uploads\/site-content-images\/[a-z0-9-]+\.(?:jpg|png|webp)$/i;
 
 function resolveLinkHref(value: string) {
   const trimmed = value.trim();

@@ -112,6 +112,7 @@ function triggerHeaderRefresh() {
             <span>运营</span>
           </template>
           <el-menu-item index="/operations/app-home">小程序首页</el-menu-item>
+          <el-menu-item index="/operations/material-images">图片素材库</el-menu-item>
           <el-menu-item index="/operations/weekly-topic">本周灵感</el-menu-item>
           <el-menu-item index="/operations/table-topic">餐桌话题</el-menu-item>
         </el-sub-menu>

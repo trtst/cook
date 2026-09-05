@@ -29,6 +29,9 @@ pnpm build
 
 ```env
 VITE_API_BASE_URL=http://192.168.110.102:3100/api
+VITE_ASSET_PUBLIC_BASE_URL=https://static.example.com
 VITE_DEV_HOST=0.0.0.0
 VITE_DEV_PORT=5174
 ```
+
+`VITE_ASSET_PUBLIC_BASE_URL` 只用于后台图片素材库复制公开图片地址。上传和 OSS 写入仍由 API 处理；生产 API 也应配置同一个静态资源公开域名。

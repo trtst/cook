@@ -116,6 +116,13 @@ function formatBytes(bytes: number) {
   return `${Number.isInteger(value) ? value : value.toFixed(1)} ${unit}`;
 }
 
+function formatGenderText(value: UserProfile["gender"]) {
+  if (value === "MALE") return "男";
+  if (value === "FEMALE") return "女";
+  if (value === "UNSPECIFIED") return "不透露";
+  return "-";
+}
+
 function getEntitlementError(error: unknown) {
   if (error instanceof ApiClientError) {
     if (error.code === 403) return "当前管理员无权查看用户权益";
@@ -366,7 +373,7 @@ onMounted(loadUsers);
       <el-input
         v-model="query.keyword"
         class="toolbar-search"
-        placeholder="UID / 昵称 / 手机号"
+        placeholder="UID / 昵称 / 炊火号 / 手机号"
         clearable
         @keyup.enter="search"
       />
@@ -380,6 +387,11 @@ onMounted(loadUsers);
         <el-table-column prop="nickname" label="昵称" min-width="160">
           <template #default="{ row }">
             {{ row.nickname || "-" }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="cookNo" label="炊火号" min-width="150">
+          <template #default="{ row }">
+            {{ row.cookNo || "-" }}
           </template>
         </el-table-column>
         <el-table-column prop="phone" label="手机号" min-width="150">
@@ -529,6 +541,25 @@ onMounted(loadUsers);
           <el-descriptions-item label="状态">{{ formatStatusText(entitlement.user.status) }}</el-descriptions-item>
         </el-descriptions>
 
+        <el-divider content-position="left">个人资料</el-divider>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="头像">
+            <el-image
+              v-if="entitlement.user.avatarUrl"
+              class="profile-avatar"
+              :src="entitlement.user.avatarUrl"
+              fit="cover"
+              preview-teleported
+              :preview-src-list="[entitlement.user.avatarUrl]"
+            />
+            <span v-else>-</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="炊火号">{{ entitlement.user.cookNo || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="简介">{{ entitlement.user.bio || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="性别">{{ formatGenderText(entitlement.user.gender) }}</el-descriptions-item>
+          <el-descriptions-item label="生日">{{ entitlement.user.birthDate || "-" }}</el-descriptions-item>
+        </el-descriptions>
+
         <el-divider content-position="left">个人会员</el-divider>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="个人套餐">{{ entitlement.membership.tier }}</el-descriptions-item>
@@ -590,5 +621,12 @@ onMounted(loadUsers);
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
 }
 </style>

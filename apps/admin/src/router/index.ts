@@ -64,6 +64,12 @@ const router = createRouter({
           meta: { title: "餐桌话题" }
         },
         {
+          path: "operations/material-images",
+          name: "operations-material-images",
+          component: () => import("@/pages/MaterialImagesPage.vue"),
+          meta: { title: "图片素材库" }
+        },
+        {
           path: "operations/table-topic/editor",
           name: "operations-table-topic-editor",
           component: () => import("@/pages/TableTopicEditorPage.vue"),
