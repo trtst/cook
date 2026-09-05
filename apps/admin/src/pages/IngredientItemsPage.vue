@@ -715,6 +715,25 @@ async function toggleIngredientStatus(row: AdminIngredientSummary, status: "ACTI
   }
 }
 
+async function removeIngredient(row: AdminIngredientSummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除系统食材“${row.name}”？仍被菜谱、冰箱、购物清单或审核记录使用时不能删除。`, "删除系统食材", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.deleteIngredient(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    await Promise.all([loadCategories(), loadIngredients()]);
+    ElMessage.success("系统食材已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除系统食材失败");
+  }
+}
+
 onMounted(() => {
   void loadPage();
 });
@@ -837,6 +856,9 @@ watch(
                 <div class="ingredient-card__action-item">
                   <el-button v-if="row.status === 'ACTIVE'" link type="danger" @click="toggleIngredientStatus(row, 'DISABLED')">下架</el-button>
                   <el-button v-else link type="primary" @click="toggleIngredientStatus(row, 'ACTIVE')">重新上架</el-button>
+                </div>
+                <div class="ingredient-card__action-item">
+                  <el-button link type="danger" @click="removeIngredient(row)">删除</el-button>
                 </div>
               </div>
             </div>

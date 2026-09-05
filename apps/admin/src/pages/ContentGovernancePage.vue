@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { Edit, Plus, Refresh } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { contentApi, type AdminSiteContentChannelItem, type AdminSiteContentSummary, type AdminSitePageSummary, type SiteContentStatus } from "@/apis/content";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
@@ -185,6 +185,49 @@ async function saveChannel() {
   }
 }
 
+async function setContentStatus(row: AdminSiteContentSummary, status: SiteContentStatus) {
+  try {
+    await ElMessageBox.confirm(
+      status === "PUBLISHED" ? `确认上架“${row.title}”？` : `确认下架“${row.title}”？`,
+      status === "PUBLISHED" ? "上架内容" : "下架内容",
+      {
+        type: "warning",
+        confirmButtonText: status === "PUBLISHED" ? "上架" : "下架",
+        cancelButtonText: "取消"
+      }
+    );
+    await contentApi.setStatus(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version,
+      status
+    });
+    await loadArticles();
+    ElMessage.success(status === "PUBLISHED" ? "内容已上架" : "内容已下架");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "更新内容状态失败");
+  }
+}
+
+async function removeContent(row: AdminSiteContentSummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除“${row.title}”？已发布内容需先下架。`, "删除内容", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消"
+    });
+    await contentApi.deleteContent(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    await loadArticles();
+    ElMessage.success("内容已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除内容失败");
+  }
+}
+
 async function loadCurrentPage() {
   pageLoading.value = true;
   try {
@@ -256,9 +299,12 @@ onMounted(() => {
         <el-table-column label="操作人" min-width="140">
           <template #default="{ row }">{{ row.updatedBy?.displayName ?? "-" }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" @click="openEditor(row.id)">编辑</el-button>
+            <el-button v-if="row.status !== 'PUBLISHED'" size="small" type="success" @click="setContentStatus(row, 'PUBLISHED')">上架</el-button>
+            <el-button v-else size="small" type="warning" @click="setContentStatus(row, 'UNLISTED')">下架</el-button>
+            <el-button v-if="pageMode !== 'pages'" size="small" type="danger" :disabled="row.status === 'PUBLISHED'" @click="removeContent(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

@@ -191,11 +191,15 @@ export interface DeleteUnitPayload {
   expectedVersion: number;
 }
 
+export type DeleteGovernancePayload = DeleteUnitPayload;
+
 export interface UpdateIngredientStatusPayload {
   operationId: OperationId;
   expectedVersion: number;
   status: "ACTIVE" | "DISABLED";
 }
+
+export type UpdateIngredientCategoryStatusPayload = UpdateIngredientStatusPayload;
 
 export interface ReorderItem {
   id: UUID;
@@ -249,6 +253,21 @@ export const ingredientApi = {
       method: "PUT",
       body: payload,
       idempotencyKey: operationId
+    });
+  },
+  setCategoryStatus(categoryId: UUID, body: UpdateIngredientCategoryStatusPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminIngredientCategorySummary>(`/admin/ingredient-categories/${encodeURIComponent(String(categoryId))}/status`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  deleteCategory(categoryId: UUID, body: DeleteGovernancePayload) {
+    return requestData<{ categoryId: UUID; deletedAt: IsoDateTime }>(`/admin/ingredient-categories/${encodeURIComponent(String(categoryId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
     });
   },
   reorderCategories(operationId: OperationId, items: ReorderItem[]) {
@@ -314,6 +333,13 @@ export const ingredientApi = {
       }
     );
   },
+  deletePendingUnit(recommendationId: UUID, body: DeleteGovernancePayload) {
+    return requestData<{ id: UUID; deletedAt: IsoDateTime }>(`/admin/pending-units/${encodeURIComponent(String(recommendationId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
+    });
+  },
   listIngredients(query: AdminIngredientListQuery) {
     return requestData<PageResult<AdminIngredientSummary>>("/admin/ingredients", {
       query: {
@@ -348,6 +374,13 @@ export const ingredientApi = {
       method: "POST",
       body: payload,
       idempotencyKey: operationId
+    });
+  },
+  deleteIngredient(ingredientId: UUID, body: DeleteGovernancePayload) {
+    return requestData<{ ingredientId: UUID; deletedAt: IsoDateTime }>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
     });
   },
   uploadIngredientImage(ingredientId: UUID, file: File, operationId: OperationId, expectedVersion: number) {
@@ -401,12 +434,26 @@ export const ingredientApi = {
       idempotencyKey: operationId
     });
   },
+  deletePendingIngredient(ingredientId: UUID, body: DeleteGovernancePayload) {
+    return requestData<{ id: UUID; deletedAt: IsoDateTime }>(`/admin/pending-ingredients/${encodeURIComponent(String(ingredientId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
+    });
+  },
   reviewIngredientFeedback(feedbackId: UUID, body: AdminReviewIngredientFeedbackPayload) {
     const { operationId, ...payload } = body;
     return requestData<AdminReviewIngredientFeedbackResult>(`/admin/ingredient-feedbacks/${encodeURIComponent(String(feedbackId))}/review`, {
       method: "POST",
       body: payload,
       idempotencyKey: operationId
+    });
+  },
+  deleteIngredientFeedback(feedbackId: UUID, body: DeleteGovernancePayload) {
+    return requestData<{ id: UUID; deletedAt: IsoDateTime }>(`/admin/ingredient-feedbacks/${encodeURIComponent(String(feedbackId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
     });
   }
 };

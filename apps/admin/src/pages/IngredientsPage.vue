@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { ingredientApi, type AdminIngredientCategorySummary } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
@@ -119,6 +119,50 @@ async function moveCategory(row: AdminIngredientCategorySummary, action: "top" |
   await applyCategoryOrder(reorderList(categories.value, index, targetIndex));
 }
 
+async function toggleCategoryStatus(row: AdminIngredientCategorySummary) {
+  const status = row.isSelectable ? "DISABLED" : "ACTIVE";
+  try {
+    await ElMessageBox.confirm(
+      status === "DISABLED" ? `确认下架分类“${row.name}”？` : `确认上架分类“${row.name}”？`,
+      status === "DISABLED" ? "下架分类" : "上架分类",
+      {
+        type: "warning",
+        confirmButtonText: status === "DISABLED" ? "下架" : "上架",
+        cancelButtonText: "取消"
+      }
+    );
+    await ingredientApi.setCategoryStatus(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version,
+      status
+    });
+    ElMessage.success(status === "DISABLED" ? "分类已下架" : "分类已上架");
+    await loadCategories();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "更新分类状态失败");
+  }
+}
+
+async function removeCategory(row: AdminIngredientCategorySummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除分类“${row.name}”？仍被食材或纠错记录使用时不能删除。`, "删除分类", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.deleteCategory(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    ElMessage.success("分类已删除");
+    await loadCategories();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除分类失败");
+  }
+}
+
 onMounted(() => {
   void loadCategories();
 });
@@ -135,7 +179,7 @@ onMounted(() => {
         <el-table-column label="分类" min-width="220">
           <template #default="{ row }">
             <div>{{ row.name }}</div>
-            <div class="table-subtext">{{ row.isSelectable ? "正式分类" : "系统兜底，不对录入开放" }}</div>
+            <div class="table-subtext">{{ row.isSelectable ? "启用中" : "已下架 / 系统兜底" }}</div>
           </template>
         </el-table-column>
         <el-table-column prop="ingredientCount" label="系统食材数" width="120" />
@@ -144,9 +188,13 @@ onMounted(() => {
             {{ formatDateTime(row.updatedAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEditCategory(row)">编辑</el-button>
+            <el-button v-if="row.code !== 'UNCLASSIFIED'" link :type="row.isSelectable ? 'warning' : 'success'" @click="toggleCategoryStatus(row)">
+              {{ row.isSelectable ? "下架" : "上架" }}
+            </el-button>
+            <el-button v-if="row.code !== 'UNCLASSIFIED'" link type="danger" @click="removeCategory(row)">删除</el-button>
             <el-button link @click="moveCategory(row, 'top')">置顶</el-button>
             <el-button link @click="moveCategory(row, 'up')">上移</el-button>
             <el-button link @click="moveCategory(row, 'down')">下移</el-button>

@@ -310,6 +310,25 @@ async function submitReview() {
   }
 }
 
+async function removePendingUnit(row: AdminPendingUnitRecommendationSummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除待审核单位建议“${row.name}”？`, "删除单位建议", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.deletePendingUnit(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    await loadPage();
+    ElMessage.success("单位建议已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除单位建议失败");
+  }
+}
+
 function formatTime(value: string) {
   return formatDateTime(value);
 }
@@ -394,6 +413,7 @@ onMounted(() => {
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openReview(row)">审核</el-button>
+            <el-button link type="danger" @click="removePendingUnit(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

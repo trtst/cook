@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import {
   ingredientApi,
   type AdminIngredientCategorySummary,
@@ -295,6 +295,28 @@ async function submitReview() {
   }
 }
 
+async function removePendingIngredient(row: AdminPendingIngredientSummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除待审核个人食材“${row.name}”？不会删除用户自己的食材。`, "删除待审核个人食材", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.deletePendingIngredient(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    if (pendingItems.value.length === 1 && query.page > 1) {
+      query.page -= 1;
+    }
+    await loadPendingItems();
+    ElMessage.success("待审核个人食材已删除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除待审核个人食材失败");
+  }
+}
+
 onMounted(() => {
   void loadPage();
 });
@@ -371,9 +393,10 @@ onUnmounted(() => {
             <el-tag type="warning">{{ formatStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openReview(row)">审核</el-button>
+            <el-button link type="danger" @click="removePendingIngredient(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

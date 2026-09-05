@@ -38,6 +38,10 @@ export interface SetTableTopicStatusRequest {
   expectedVersion: number;
 }
 
+export interface DeleteTableTopicRequest {
+  expectedVersion: number;
+}
+
 export const tableTopicsApi = {
   getTopics() {
     return requestData<AdminTableTopicsResponse>("/admin/table-topics");
@@ -59,6 +63,13 @@ export const tableTopicsApi = {
   setTopicStatus(topicId: number, body: SetTableTopicStatusRequest, operationId: OperationId) {
     return requestData<AdminTableTopicItem>(`/admin/table-topics/${encodeURIComponent(String(topicId))}/status`, {
       method: "POST",
+      idempotencyKey: operationId,
+      body
+    });
+  },
+  deleteTopic(topicId: number, body: DeleteTableTopicRequest, operationId: OperationId) {
+    return requestData<AdminTableTopicsResponse>(`/admin/table-topics/${encodeURIComponent(String(topicId))}`, {
+      method: "DELETE",
       idempotencyKey: operationId,
       body
     });

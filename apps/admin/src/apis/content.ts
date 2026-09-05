@@ -106,6 +106,11 @@ export interface SetAdminSiteContentStatusRequest {
   expectedVersion: number;
 }
 
+export interface DeleteAdminSiteContentRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
 export interface AdminSiteContentImageUploadResult {
   imageUrl: string;
 }
@@ -165,6 +170,13 @@ export const contentApi = {
       method: "POST",
       body: payload,
       idempotencyKey: operationId
+    });
+  },
+  deleteContent(contentId: UUID, body: DeleteAdminSiteContentRequest) {
+    return requestData<{ contentId: UUID; deletedAt: IsoDateTime }>(`/admin/content/${encodeURIComponent(String(contentId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
     });
   },
   uploadImage(file: File, operationId: OperationId) {

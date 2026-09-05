@@ -83,6 +83,10 @@ export interface SetHomeTopicStatusRequest {
   expectedVersion: number;
 }
 
+export interface DeleteHomeTopicRequest {
+  expectedVersion: number;
+}
+
 export const homeTopicsApi = {
   getTopics() {
     return requestData<AdminHomeTopicsResponse>("/admin/home-topics");
@@ -109,6 +113,13 @@ export const homeTopicsApi = {
   setTopicStatus(topicId: UUID, body: SetHomeTopicStatusRequest, operationId: OperationId) {
     return requestData<AdminHomeTopicItem>(`/admin/home-topics/${encodeURIComponent(String(topicId))}/status`, {
       method: "POST",
+      body,
+      idempotencyKey: operationId
+    });
+  },
+  deleteTopic(topicId: UUID, body: DeleteHomeTopicRequest, operationId: OperationId) {
+    return requestData<AdminHomeTopicsResponse>(`/admin/home-topics/${encodeURIComponent(String(topicId))}`, {
+      method: "DELETE",
       body,
       idempotencyKey: operationId
     });

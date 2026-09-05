@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { Plus } from "@element-plus/icons-vue";
+import { Delete, Plus } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useRouter } from "vue-router";
 import { tableTopicsApi, type AdminTableTopicItem, type AdminTableTopicsResponse, type TableTopicStatus } from "@/apis/table-topics";
@@ -11,6 +11,7 @@ import { createOperationId } from "@/utils/operation-id";
 
 const loading = ref(true);
 const statusBusyId = ref<number | null>(null);
+const deleteBusyId = ref<number | null>(null);
 const topics = ref<AdminTableTopicItem[]>([]);
 const router = useRouter();
 const apiOrigin = resolveApiOrigin();
@@ -125,6 +126,41 @@ async function toggleTopicStatus(item: AdminTableTopicItem) {
   }
 }
 
+async function deleteTopic(item: AdminTableTopicItem) {
+  if (item.status === "LISTED") {
+    ElMessage.warning("请先下架话题再删除");
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(`删除后，《${item.title}》和 ${item.participantCount} 条参与事实会被移除。`, "确认删除", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消",
+      confirmButtonClass: "el-button--danger"
+    });
+  } catch {
+    return;
+  }
+
+  deleteBusyId.value = item.id;
+  try {
+    const result = await tableTopicsApi.deleteTopic(
+      item.id,
+      {
+        expectedVersion: item.version
+      },
+      createOperationId()
+    );
+    assignResponse(result);
+    ElMessage.success("话题已删除");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "删除话题失败");
+  } finally {
+    deleteBusyId.value = null;
+  }
+}
+
 onMounted(() => {
   void loadPage();
 });
@@ -163,6 +199,16 @@ onMounted(() => {
             <el-button plain @click="openEdit(item.id)">编辑</el-button>
             <el-button :loading="statusBusyId === item.id" @click="toggleTopicStatus(item)">
               {{ topicActionText(item.status) }}
+            </el-button>
+            <el-button
+              plain
+              type="danger"
+              :icon="Delete"
+              :loading="deleteBusyId === item.id"
+              :disabled="item.status === 'LISTED'"
+              @click="deleteTopic(item)"
+            >
+              删除
             </el-button>
           </div>
         </article>
