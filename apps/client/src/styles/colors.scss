@@ -512,6 +512,16 @@ page {
   color-scheme: dark;
 }
 
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
 button::after {
   border: 0;
   display: none;

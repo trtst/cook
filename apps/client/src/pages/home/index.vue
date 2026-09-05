@@ -335,8 +335,8 @@ import {
 } from "./pantry-summary";
 
 const heroAssetBase = `${cfg.domain}/static/uploads/material-store`;
-const heroImagePrimary = `${heroAssetBase}/e499ecd9-4821-44ee-ab05-db2124e759e0.png?v=2026-09-05T11%3A50%3A52.021Z`;
-const heroImageSecondary = `${heroAssetBase}/bffc3b08-a6c0-4a4f-91a4-96fc9a242751.png?v=2026-09-05T11%3A51%3A08.293Z`;
+const heroImagePrimary = `${heroAssetBase}/3a0414c9-7f44-444c-93fe-873c226c8166.png?v=2026-09-05T15%3A51%3A22.009Z`;
+const heroImageSecondary = `${heroAssetBase}/5a7629a0-c9f7-4075-b36e-5716cee073ba.png?v=2026-09-05T15%3A51%3A32.022Z`;
 
 const pageStyle = usePageScrollStyle();
 const settingsStore = useSettingsStore();
@@ -1711,7 +1711,6 @@ defineExpose({
 .recent-arrangement {
   margin: 50rpx 0;
   position: relative;
-  padding-top: 20rpx;
   padding-left: 12rpx;
   padding-right: 12rpx;
 }
