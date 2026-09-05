@@ -311,6 +311,10 @@ export class MeResponseModel {
   @ApiProperty({ type: UserMembershipModel }) membership!: UserMembershipModel;
 }
 
+export class UploadCurrentAvatarResponseModel {
+  @ApiProperty(nullableString) avatarUrl!: string | null;
+}
+
 export class StartPhoneChangeResultModel {
   @ApiProperty({ type: String }) changeToken!: string;
 }
@@ -363,6 +367,10 @@ export class NotificationFeedItemModel {
 
 export class UserProfileModel extends SessionUserModel {
   @ApiProperty(uuid) id!: string;
+  @ApiProperty(nullableString) cookNo!: string | null;
+  @ApiProperty(nullableString) bio!: string | null;
+  @ApiProperty({ type: String, enum: ["MALE", "FEMALE", "UNSPECIFIED"], nullable: true }) gender!: string | null;
+  @ApiProperty({ type: String, nullable: true, example: "1990-09-04" }) birthDate!: string | null;
   @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: String }) status!: string;
   @ApiProperty(dateTime) createdAt!: string;
@@ -517,8 +525,13 @@ export class AdminEntitlementUserModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: Number }) uid!: number;
   @ApiProperty(nullableString) nickname!: string | null;
+  @ApiProperty(nullableString) avatarUrl!: string | null;
   @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: String }) status!: string;
+  @ApiProperty(nullableString) cookNo!: string | null;
+  @ApiProperty(nullableString) bio!: string | null;
+  @ApiProperty({ type: String, enum: ["MALE", "FEMALE", "UNSPECIFIED"], nullable: true }) gender!: string | null;
+  @ApiProperty({ type: String, nullable: true, example: "1990-09-04" }) birthDate!: string | null;
 }
 
 export class AdminDisplayCapabilityModel {
@@ -668,6 +681,29 @@ export class AdminSiteContentDetailModel extends AdminSiteContentSummaryModel {
 
 export class AdminSiteContentImageUploadResultModel {
   @ApiProperty({ type: String }) imageUrl!: string;
+}
+
+export class AdminMaterialImageUploaderModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) displayName!: string;
+}
+
+export class AdminMaterialImageItemModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) imageUrl!: string;
+  @ApiProperty({ type: String }) note!: string;
+  @ApiProperty({ type: String }) contentType!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) sizeBytes!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) width!: number;
+  @ApiProperty({ type: Number, minimum: 1 }) height!: number;
+  @ApiProperty({ type: AdminMaterialImageUploaderModel }) uploader!: AdminMaterialImageUploaderModel;
+  @ApiProperty(dateTime) createdAt!: string;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminMaterialImageDeleteResultModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: Boolean }) deleted!: boolean;
 }
 
 export class SiteContentDetailModel {

@@ -165,18 +165,20 @@ async function main() {
         authorization: `Bearer ${session.accessToken}`
       }
     });
-    assert(me.uid === session.user.uid, `users/me uid mismatch: ${me.uid} vs ${session.user.uid}`);
+    assert(me.profile, "users/me profile missing");
 
     const uploadedConfig = await uploadLoginImage(adminSession.token, pngBytes);
     uploaded = true;
     assert(uploadedConfig.login.imageUrl, "uploaded login image url missing");
     assert(
-      uploadedConfig.login.imageUrl?.includes("/api/public-assets/login-image"),
+      /\/(?:static\/uploads|uploads)\/admin\/login-image\/login-image\./.test(uploadedConfig.login.imageUrl),
       `uploaded login image url mismatch: ${uploadedConfig.login.imageUrl}`
     );
+    await fetchBinary(uploadedConfig.login.imageUrl);
 
     const publicConfigAfterUpload = await requestData<AppConfigResponse>("/app-config");
     assert(publicConfigAfterUpload.login.imageUrl, "public config login image should be readable after upload");
+    await fetchBinary(publicConfigAfterUpload.login.imageUrl);
 
     const clearedConfig = await clearLoginImage(adminSession.token);
     uploaded = false;

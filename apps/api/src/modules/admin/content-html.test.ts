@@ -9,7 +9,7 @@ const html = [
   '<a href="/guides/demo" target="_blank">站内</a>',
   '<a href="https://example.com" target="_blank">外链</a>',
   '<a href="http://example.com">不安全</a>',
-  '<img src="/api/public-assets/site-content-images/demo.webp" alt="图">',
+  '<img src="/static/uploads/site-content-images/demo.webp" alt="图">',
   '<img src="https://example.com/demo.webp" alt="远程图">'
 ].join("");
 
@@ -28,5 +28,5 @@ assert.ok(!result.includes("<s>"), "Expected s to be removed");
 assert.ok(result.includes('href="/guides/demo"'), "Expected site link to remain");
 assert.ok(result.includes('href="https://example.com/"'), "Expected https link to remain");
 assert.ok(!result.includes('href="http://example.com"'), "Expected unsafe link href to be removed");
-assert.ok(result.includes('src="/api/public-assets/site-content-images/demo.webp"'), "Expected site image to remain");
+assert.ok(result.includes('src="/static/uploads/site-content-images/demo.webp"'), "Expected site image to remain");
 assert.ok(!result.includes('src="https://example.com/demo.webp"'), "Expected remote image to be removed");

@@ -42,7 +42,7 @@ export class AdminRecipeImageController {
 }
 
 @ApiExcludeController()
-@Controller("public-assets/admin-recipe-images")
+@Controller("static/uploads/admin-recipe-images")
 export class AdminRecipeImagePublicController {
   constructor(@Inject(AdminRecipeImageService) private readonly adminRecipeImageService: AdminRecipeImageService) {}
 

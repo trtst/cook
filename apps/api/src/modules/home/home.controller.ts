@@ -85,7 +85,7 @@ export class HomeController {
 }
 
 @ApiExcludeController()
-@Controller("public-assets")
+@Controller("static/uploads")
 export class HomePublicAssetsController {
   constructor(@Inject(HomeService) private readonly homeService: HomeService) {}
 

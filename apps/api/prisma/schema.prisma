@@ -455,8 +455,27 @@ model AdminAccount {
   auditEvents        AuditEvent[]        @relation("AuditEventAdmin")
   recipeImportJobs   RecipeImportJob[]
   updatedSiteContents SiteContent[]
+  materialImages     AdminMaterialImage[] @relation("AdminMaterialImageUploader")
 
   @@map("admin_accounts")
+}
+
+model AdminMaterialImage {
+  id                Int          @id @default(autoincrement())
+  storageKey        String       @unique @map("storage_key") @db.VarChar(256)
+  note              String       @db.VarChar(120)
+  contentType       String       @map("content_type") @db.VarChar(40)
+  sizeBytes         Int          @map("size_bytes")
+  width             Int
+  height            Int
+  uploadedByAdminId Int          @map("uploaded_by_admin_id")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  uploader AdminAccount @relation("AdminMaterialImageUploader", fields: [uploadedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt, id])
+  @@map("admin_material_images")
 }
 
 model HomeFeatureBoardCard {

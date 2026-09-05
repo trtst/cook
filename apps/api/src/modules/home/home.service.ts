@@ -80,7 +80,7 @@ const pageTargets: HomeEntryPageTarget[] = [
   { label: "我的菜谱管理", value: "/pages_recipe/list/index" }
 ];
 const pageTargetSet = new Set(pageTargets.map(item => item.value));
-const imagePathPattern = /^\/api\/public-assets\/home-entries\/(MAIN|SIDE_TOP|SIDE_BOTTOM|QUICK_1|QUICK_2|QUICK_3|QUICK_4)$/i;
+const imagePathPattern = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-entries\/(MAIN|SIDE_TOP|SIDE_BOTTOM|QUICK_1|QUICK_2|QUICK_3|QUICK_4)$/i;
 const defaultCards: Record<HomeFeatureBoardPlacement, Omit<HomeCardInput, "placement">> = {
   MAIN: {
     title: "一起吃饭",
@@ -728,6 +728,7 @@ export class HomeService {
   }
 
   async uploadAdminHomeEntryImage(
+    request: RequestLike,
     adminId: UUID,
     operationId: OperationId,
     placement: HomeFeatureBoardPlacement,
@@ -769,7 +770,7 @@ export class HomeService {
           const updated = await tx.homeFeatureBoardCard.update({
             where: { placement },
             data: {
-              artImageUrl: this.homeImageService.buildImagePath(placement),
+              artImageUrl: this.homeImageService.buildImagePath(request, placement),
               version: { increment: 1 }
             }
           });
@@ -811,10 +812,7 @@ export class HomeService {
         throw new ConflictException(`${getPlacementLabel(placement)}已被更新，请刷新后重试`);
       }
 
-      const backupPath =
-        current.artImageUrl === this.homeImageService.buildImagePath(placement)
-          ? await this.homeImageService.stageClearImage(placement)
-          : null;
+      const backupPath = current.artImageUrl && imagePathPattern.test(current.artImageUrl) ? await this.homeImageService.stageClearImage(placement) : null;
 
       try {
         const updated = await tx.homeFeatureBoardCard.update({
@@ -837,7 +835,7 @@ export class HomeService {
 
   async getHomeEntryImageAsset(placement: HomeFeatureBoardPlacement) {
     const item = await this.requireCard(this.prisma, placement);
-    if (item.artImageUrl !== this.homeImageService.buildImagePath(placement)) {
+    if (!item.artImageUrl || !imagePathPattern.test(item.artImageUrl)) {
       throw new NotFoundException("首页快捷入口图片不存在");
     }
     return this.homeImageService.getImageAsset(placement);

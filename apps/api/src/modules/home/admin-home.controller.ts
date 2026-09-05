@@ -10,6 +10,8 @@ import { SetHomeEntryStatusDto, UpdateHomeEntriesDto, UpdateHomeEntryImageDto } 
 import { AdminHomeEntriesResponseModel, AdminHomeEntryItemModel, ApiOkModel } from "../../contracts/openapi";
 import { HomeService } from "./home.service";
 
+type AssetRequest = RequestWithAdmin & { protocol?: string; get?: (name: string) => string | undefined };
+
 function parsePlacement(placement: string): HomeFeatureBoardPlacement {
   if (
     placement === "MAIN" ||
@@ -42,7 +44,7 @@ export class AdminHomeController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminHomeEntriesResponseModel, "更新小程序首页快捷入口配置")
   updateHomeEntries(
-    @Req() request: RequestWithAdmin,
+    @Req() request: AssetRequest,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateHomeEntriesDto
   ) {
@@ -53,7 +55,7 @@ export class AdminHomeController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminHomeEntryItemModel, "切换首页四宫格入口上架状态")
   setHomeEntryStatus(
-    @Req() request: RequestWithAdmin,
+    @Req() request: AssetRequest,
     @Param("placement") placement: string,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: SetHomeEntryStatusDto
@@ -69,14 +71,14 @@ export class AdminHomeController {
   @ApiIdempotencyKey()
   @ApiOkModel(AdminHomeEntryItemModel, "上传或替换首页快捷入口图片")
   uploadHomeEntryImage(
-    @Req() request: RequestWithAdmin,
+    @Req() request: AssetRequest,
     @Param("placement") placement: string,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: UpdateHomeEntryImageDto,
     @UploadedFile() file?: { buffer?: Buffer; size?: number }
   ) {
     return this.homeService
-      .uploadAdminHomeEntryImage(request.admin.adminId, operationId, parsePlacement(placement), body.expectedVersion, file)
+      .uploadAdminHomeEntryImage(request, request.admin.adminId, operationId, parsePlacement(placement), body.expectedVersion, file)
       .then(result => ok(result));
   }
 

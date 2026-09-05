@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { loadLocalEnv } from "./common/load-env";
-import { ValidationPipe } from "@nestjs/common";
+import { RequestMethod, ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
@@ -19,7 +19,9 @@ function readOrigins(rawValue: string | undefined) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.setGlobalPrefix("api");
+  app.setGlobalPrefix("api", {
+    exclude: [{ path: "static/uploads/{*path}", method: RequestMethod.ALL }]
+  });
   app.enableCors({
     origin: readOrigins(process.env.CORS_ORIGINS),
     allowedHeaders: [

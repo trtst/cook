@@ -36,7 +36,7 @@ export class CurrentUserService {
     });
   }
 
-  async updateCurrent(userId: UUID, body: UpdateCurrentUserRequest): Promise<MeResponse> {
+  async updateCurrent(userId: UUID, body: UpdateCurrentUserRequest): Promise<void> {
     return this.prisma.$transaction(async tx => {
       const currentUser = await tx.user.findUnique({
         where: { id: userId },
@@ -60,9 +60,7 @@ export class CurrentUserService {
 
       this.assertCookNoCanChange(currentUser, body);
       const patch = this.buildPatch(body);
-      const user = await this.updateUser(tx, userId, patch);
-
-      return this.buildCurrent(tx, userId, user);
+      await this.updateUser(tx, userId, patch);
     });
   }
 

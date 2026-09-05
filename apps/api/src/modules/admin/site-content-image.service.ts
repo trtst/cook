@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { mkdir, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type { AdminSiteContentImageUploadResult, OperationId, UUID } from "../../contracts/types";
@@ -14,10 +12,6 @@ type RequestLike = {
 };
 
 const maxImageBytes = 8 * 1024 * 1024;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function detectImageKind(buffer: Buffer): ImageKind | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "jpeg";
@@ -58,7 +52,10 @@ function contentType(kind: ImageKind) {
 
 @Injectable()
 export class SiteContentImageService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AssetStorageService) private readonly assetStorage: AssetStorageService
+  ) {}
 
   async uploadImage(
     request: RequestLike,
@@ -92,9 +89,8 @@ export class SiteContentImageService {
       if (repeated) return repeated;
       await startAdminIdempotentOperation(tx, operationId, "admin-site-content-image:upload", adminId, requestHash);
 
-      await mkdir(this.imageDir(), { recursive: true });
       const fileName = `${randomUUID()}.${fileExtension(kind)}`;
-      await writeFile(join(this.imageDir(), fileName), buffer);
+      await this.assetStorage.writeObject(this.imageKey(fileName), buffer, contentType(kind));
 
       const result = {
         imageUrl: this.buildImageUrl(request, fileName)
@@ -108,29 +104,28 @@ export class SiteContentImageService {
     if (!/^[a-z0-9-]+\.(jpg|png|webp)$/i.test(fileName)) {
       throw new NotFoundException("图片不存在");
     }
-    const path = join(this.imageDir(), fileName);
-    const stats = await stat(path).catch(() => null);
-    if (!stats) throw new NotFoundException("图片不存在");
 
     const lower = fileName.toLowerCase();
     const kind: ImageKind = lower.endsWith(".png") ? "png" : lower.endsWith(".webp") ? "webp" : "jpeg";
+    const asset = await this.assetStorage.readObject(this.imageKey(fileName), contentType(kind)).catch(() => null);
+    if (!asset) throw new NotFoundException("图片不存在");
     return {
       contentType: contentType(kind),
-      stream: createReadStream(path),
-      stat: stats
+      stream: asset.stream,
+      stat: { size: asset.size }
     };
   }
 
   private imageDir() {
-    return join(getAssetRoot(), "site-content-images");
+    return assetKey("uploads", "site-content-images");
+  }
+
+  private imageKey(fileName: string) {
+    return assetKey(this.imageDir(), fileName);
   }
 
   private buildImageUrl(request: RequestLike, fileName: string) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/site-content-images/${fileName}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+    return this.assetStorage.publicUrl(request, this.imageKey(fileName));
   }
 
   private async requireSuperAdmin(adminId: UUID) {

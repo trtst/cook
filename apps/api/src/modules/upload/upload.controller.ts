@@ -42,7 +42,7 @@ export class UploadController {
 }
 
 @ApiExcludeController()
-@Controller("public-assets")
+@Controller("static/uploads")
 export class UploadPublicController {
   constructor(@Inject(UploadService) private readonly uploadService: UploadService) {}
 
@@ -55,13 +55,13 @@ export class UploadPublicController {
     asset.stream.pipe(response);
   }
 
-  @Get("profile-avatars/:userId/:fileName")
+  @Get("profile-avatars/:userUid/:fileName")
   async getProfileAvatar(
-    @Param("userId", ParseIntPipe) userId: number,
+    @Param("userUid", ParseIntPipe) userUid: number,
     @Param("fileName") fileName: string,
     @Res() response: ResponseLike
   ) {
-    const asset = await this.uploadService.getProfileAvatarAsset(userId, fileName);
+    const asset = await this.uploadService.getProfileAvatarAsset(userUid, fileName);
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");

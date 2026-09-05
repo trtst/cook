@@ -1,17 +1,15 @@
-import { createReadStream } from "node:fs";
-import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { join, resolve } from "node:path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import type { HomeFeatureBoardPlacement } from "@prisma/client";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 
 type ImageKind = "jpeg" | "png" | "webp";
+type RequestLike = {
+  protocol?: string;
+  get?: (name: string) => string | undefined;
+};
 
 const maxImageBytes = 5 * 1024 * 1024;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function detectImageKind(buffer: Buffer): ImageKind | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -64,8 +62,10 @@ function getKindFromPath(path: string): ImageKind {
 
 @Injectable()
 export class HomeImageService {
-  buildImagePath(placement: HomeFeatureBoardPlacement) {
-    return `/api/public-assets/home-entries/${placement}`;
+  constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
+
+  buildImagePath(request: RequestLike, placement: HomeFeatureBoardPlacement) {
+    return this.assetStorage.publicUrl(request, this.getPublicKey(placement));
   }
 
   async stageImageUpload(placement: HomeFeatureBoardPlacement, file: { buffer?: Buffer; size?: number } | undefined) {
@@ -81,9 +81,8 @@ export class HomeImageService {
       throw new BadRequestException("仅支持 JPG、PNG、WEBP 图片");
     }
 
-    await mkdir(this.getTempDir(), { recursive: true });
-    const tempPath = join(this.getTempDir(), `${placement}-${randomUUID()}.${getExtension(kind)}`);
-    await writeFile(tempPath, file.buffer);
+    const tempPath = this.getTempKey(placement, kind);
+    await this.assetStorage.writeObject(tempPath, file.buffer, getContentType(kind));
     return {
       tempPath,
       kind
@@ -92,18 +91,15 @@ export class HomeImageService {
 
   async replaceStagedImage(placement: HomeFeatureBoardPlacement, tempPath: string, kind: ImageKind) {
     const current = await this.findStoredImage(placement);
-    const nextPath = this.getImagePath(placement, kind);
+    const nextPath = this.getImageKey(placement, kind);
     const backupPath = current ? this.getBackupPath(placement, current.kind) : null;
-
-    await mkdir(this.getImageDir(), { recursive: true });
-    await mkdir(this.getTempDir(), { recursive: true });
     if (backupPath) {
-      await rm(backupPath, { force: true });
+      await this.assetStorage.deleteObject(backupPath);
     }
 
     if (current) {
       try {
-        await rename(current.path, backupPath as string);
+        await this.assetStorage.moveObject(current.path, backupPath as string);
       } catch {
         // Best effort backup.
       }
@@ -111,11 +107,11 @@ export class HomeImageService {
 
     try {
       await this.clearStoredImage(placement);
-      await rename(tempPath, nextPath);
+      await this.assetStorage.moveObject(tempPath, nextPath);
     } catch (error) {
       if (backupPath) {
         try {
-          await rename(backupPath, current?.path ?? this.getImagePath(placement, kind));
+          await this.assetStorage.moveObject(backupPath, current?.path ?? this.getImageKey(placement, kind));
         } catch {
           // Best effort rollback.
         }
@@ -130,7 +126,7 @@ export class HomeImageService {
     await this.clearStoredImage(placement);
     if (!backupPath) return;
     try {
-      await rename(backupPath, this.getImagePath(placement, getKindFromPath(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.getImageKey(placement, getKindFromPath(backupPath)));
     } catch {
       // Best effort rollback.
     }
@@ -138,17 +134,16 @@ export class HomeImageService {
 
   async finalizeReplacedImage(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async stageClearImage(placement: HomeFeatureBoardPlacement) {
     const current = await this.findStoredImage(placement);
     if (!current) return null;
     const backupPath = this.getBackupPath(placement, current.kind);
-    await mkdir(this.getTempDir(), { recursive: true });
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
     try {
-      await rename(current.path, backupPath);
+      await this.assetStorage.moveObject(current.path, backupPath);
       return backupPath;
     } catch {
       return null;
@@ -158,7 +153,7 @@ export class HomeImageService {
   async rollbackClearedImage(placement: HomeFeatureBoardPlacement, backupPath: string | null) {
     if (!backupPath) return;
     try {
-      await rename(backupPath, this.getImagePath(placement, getKindFromPath(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.getImageKey(placement, getKindFromPath(backupPath)));
     } catch {
       // Best effort rollback.
     }
@@ -166,12 +161,12 @@ export class HomeImageService {
 
   async finalizeClearedImage(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async discardStagedImage(tempPath: string | null) {
     if (!tempPath) return;
-    await rm(tempPath, { force: true });
+    await this.assetStorage.deleteObject(tempPath);
   }
 
   async getImageAsset(placement: HomeFeatureBoardPlacement) {
@@ -182,53 +177,43 @@ export class HomeImageService {
 
     return {
       contentType: getContentType(current.kind),
-      stream: createReadStream(current.path),
-      stat: await stat(current.path)
+      stream: current.asset.stream,
+      stat: { size: current.asset.size }
     };
   }
 
-  private getImageDir() {
-    return join(getAssetRoot(), "home-entries");
+  private getImagePrefix() {
+    return assetKey("uploads", "home-entries");
   }
 
-  private getTempDir() {
-    return join(this.getImageDir(), ".tmp");
+  private getPublicKey(placement: HomeFeatureBoardPlacement) {
+    return assetKey(this.getImagePrefix(), placement);
   }
 
-  private getImagePath(placement: HomeFeatureBoardPlacement, kind: ImageKind) {
-    return join(this.getImageDir(), `${placement}.${getExtension(kind)}`);
+  private getImageKey(placement: HomeFeatureBoardPlacement, kind: ImageKind) {
+    return assetKey(this.getImagePrefix(), `${placement}.${getExtension(kind)}`);
   }
 
   private getBackupPath(placement: HomeFeatureBoardPlacement, kind: ImageKind) {
-    return join(this.getTempDir(), `${placement}-backup.${getExtension(kind)}`);
+    return assetKey(this.getImagePrefix(), ".tmp", `${placement}-backup.${getExtension(kind)}`);
+  }
+
+  private getTempKey(placement: HomeFeatureBoardPlacement, kind: ImageKind) {
+    return assetKey(this.getImagePrefix(), ".tmp", `${placement}-${randomUUID()}.${getExtension(kind)}`);
   }
 
   private async clearStoredImage(placement: HomeFeatureBoardPlacement) {
-    try {
-      const files = await readdir(this.getImageDir());
-      await Promise.all(
-        files
-          .filter(name => name.startsWith(`${placement}.`))
-          .map(name => rm(join(this.getImageDir(), name), { force: true }))
-      );
-    } catch {
-      return;
-    }
+    const keys = await this.assetStorage.listObjects(this.getImagePrefix());
+    await Promise.all(keys.filter(name => new RegExp(`/${placement}\\.(jpg|png|webp)$`, "i").test(name)).map(key => this.assetStorage.deleteObject(key)));
   }
 
   private async findStoredImage(placement: HomeFeatureBoardPlacement) {
-    try {
-      const files = await readdir(this.getImageDir());
-      const match = files.find(name => new RegExp(`^${placement}\\.(jpg|png|webp)$`, "i").test(name));
-      if (!match) return null;
-      const lowerName = match.toLowerCase();
-      const kind: ImageKind = lowerName.endsWith(".png") ? "png" : lowerName.endsWith(".webp") ? "webp" : "jpeg";
-      return {
-        kind,
-        path: join(this.getImageDir(), match)
-      };
-    } catch {
-      return null;
-    }
+    const keys = await this.assetStorage.listObjects(this.getImagePrefix());
+    const match = keys.find(name => new RegExp(`/${placement}\\.(jpg|png|webp)$`, "i").test(name));
+    if (!match) return null;
+    const lowerName = match.toLowerCase();
+    const kind: ImageKind = lowerName.endsWith(".png") ? "png" : lowerName.endsWith(".webp") ? "webp" : "jpeg";
+    const asset = await this.assetStorage.readObject(match, getContentType(kind)).catch(() => null);
+    return asset ? { kind, path: match, asset } : null;
   }
 }

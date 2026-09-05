@@ -60,7 +60,7 @@ type RecipeRow = Prisma.RecipeGetPayload<{
 
 const topicTypes: HomeTopicTypeOption[] = topicTypeOptions;
 const activeOwnedRecipeStatus = "ACTIVE";
-const topicImagePath = /^\/api\/public-assets\/home-topics\/\d+$/i;
+const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-topics\/\d+$/i;
 const recipeWhere: Prisma.RecipeWhereInput = {
   ownerId: null,
   inspirationCategoryId: { not: null },

@@ -52,12 +52,13 @@
     "backfill:recipe-nutrition": "tsx scripts/import-recipe-nutrition.ts"
   },
   "dependencies": {
-    "adm-zip": "0.5.16",
     "@nestjs/common": "11.1.28",
     "@nestjs/core": "11.1.28",
     "@nestjs/platform-express": "11.1.28",
     "@nestjs/swagger": "11.4.6",
     "@prisma/client": "5.22.0",
+    "adm-zip": "0.5.16",
+    "ali-oss": "6.23.0",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
     "reflect-metadata": "0.2.2",

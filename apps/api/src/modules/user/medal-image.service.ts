@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import type { UUID } from "../../contracts/types";
 
 type ImageKind = "jpeg" | "png" | "webp" | "svg";
@@ -13,10 +11,6 @@ type RequestLike = {
 };
 
 const maxImageBytes = 5 * 1024 * 1024;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function detectImageKind(buffer: Buffer): ImageKind | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -76,8 +70,8 @@ function getExtension(kind: ImageKind) {
   return "webp";
 }
 
-function getKindFromPath(path: string): ImageKind {
-  const lowerPath = path.toLowerCase();
+function getKindFromPath(storageKey: string): ImageKind {
+  const lowerPath = storageKey.toLowerCase();
   if (lowerPath.endsWith(".png")) return "png";
   if (lowerPath.endsWith(".webp")) return "webp";
   if (lowerPath.endsWith(".svg")) return "svg";
@@ -86,13 +80,11 @@ function getKindFromPath(path: string): ImageKind {
 
 @Injectable()
 export class MedalImageService {
+  constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
+
   buildImageUrl(request: RequestLike, templateId: UUID, imageType: MedalImageType, updatedAt: Date | null) {
     if (!updatedAt) return null;
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/medals/${templateId}/${imageType}?v=${encodeURIComponent(updatedAt.toISOString())}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+    return this.assetStorage.publicUrl(request, this.getPublicKey(templateId, imageType), updatedAt);
   }
 
   async stageImageUpload(templateId: UUID, imageType: MedalImageType, file: { buffer?: Buffer; size?: number } | undefined) {
@@ -112,8 +104,7 @@ export class MedalImageService {
     }
 
     const tempPath = this.getTempPath(templateId, imageType, kind);
-    await mkdir(this.getTempDir(), { recursive: true });
-    await writeFile(tempPath, file.buffer);
+    await this.assetStorage.writeObject(tempPath, file.buffer, getContentType(kind));
     return {
       tempPath,
       kind
@@ -125,15 +116,13 @@ export class MedalImageService {
     const nextPath = this.getImagePath(templateId, imageType, kind);
     const backupPath = current ? this.getBackupPath(templateId, imageType, current.kind) : null;
 
-    await mkdir(this.getImageDir(), { recursive: true });
-    await mkdir(this.getTempDir(), { recursive: true });
     if (backupPath) {
-      await rm(backupPath, { force: true });
+      await this.assetStorage.deleteObject(backupPath);
     }
 
     if (current) {
       try {
-        await rename(current.path, backupPath as string);
+        await this.assetStorage.moveObject(current.path, backupPath as string);
       } catch {
         // Best effort backup. If the current file disappears unexpectedly, we still try to replace it.
       }
@@ -141,11 +130,11 @@ export class MedalImageService {
 
     try {
       await this.clearStoredImage(templateId, imageType);
-      await rename(tempPath, nextPath);
+      await this.assetStorage.moveObject(tempPath, nextPath);
     } catch (error) {
       if (backupPath) {
         try {
-          await rename(backupPath, current?.path ?? this.getImagePath(templateId, imageType, kind));
+          await this.assetStorage.moveObject(backupPath, current?.path ?? this.getImagePath(templateId, imageType, kind));
         } catch {
           // Best effort rollback. Upper layer still surfaces the error.
         }
@@ -160,7 +149,7 @@ export class MedalImageService {
     await this.clearStoredImage(templateId, imageType);
     if (!backupPath) return;
     try {
-      await rename(backupPath, this.getImagePath(templateId, imageType, getKindFromPath(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.getImagePath(templateId, imageType, getKindFromPath(backupPath)));
     } catch {
       // Best effort rollback.
     }
@@ -168,17 +157,16 @@ export class MedalImageService {
 
   async finalizeReplacedImage(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async stageClearImage(templateId: UUID, imageType: MedalImageType) {
     const current = await this.findStoredImage(templateId, imageType);
     if (!current) return null;
     const backupPath = this.getBackupPath(templateId, imageType, current.kind);
-    await mkdir(this.getTempDir(), { recursive: true });
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
     try {
-      await rename(current.path, backupPath);
+      await this.assetStorage.moveObject(current.path, backupPath);
       return backupPath;
     } catch {
       return null;
@@ -189,7 +177,7 @@ export class MedalImageService {
     if (!backupPath) return;
     const imageType = backupPath.includes("-locked-") ? "locked" : "earned";
     try {
-      await rename(backupPath, this.getImagePath(templateId, imageType, getKindFromPath(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.getImagePath(templateId, imageType, getKindFromPath(backupPath)));
     } catch {
       // Best effort rollback.
     }
@@ -197,12 +185,12 @@ export class MedalImageService {
 
   async finalizeClearedImage(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async discardStagedImage(tempPath: string | null) {
     if (!tempPath) return;
-    await rm(tempPath, { force: true });
+    await this.assetStorage.deleteObject(tempPath);
   }
 
   async getImageAsset(templateId: UUID, imageType: MedalImageType) {
@@ -211,36 +199,24 @@ export class MedalImageService {
       throw new NotFoundException("勋章图片不存在");
     }
 
-    try {
-      return {
-        contentType: getContentType(current.kind),
-        stream: createReadStream(current.path),
-        stat: await stat(current.path)
-      };
-    } catch {
-      throw new NotFoundException("勋章图片不存在");
-    }
+    return {
+      contentType: getContentType(current.kind),
+      stream: current.asset.stream,
+      stat: { size: current.asset.size }
+    };
   }
 
   private async findStoredImage(templateId: UUID, imageType: MedalImageType) {
     for (const kind of ["png", "jpeg", "webp", "svg"] as const) {
       const path = this.getImagePath(templateId, imageType, kind);
-      try {
-        await stat(path);
-        return { kind, path };
-      } catch {
-        continue;
-      }
+      const asset = await this.assetStorage.readObject(path, getContentType(kind)).catch(() => null);
+      if (asset) return { kind, path, asset };
     }
     if (imageType === "earned") {
       for (const kind of ["png", "jpeg", "webp", "svg"] as const) {
         const path = this.getLegacyImagePath(templateId, kind);
-        try {
-          await stat(path);
-          return { kind, path };
-        } catch {
-          continue;
-        }
+        const asset = await this.assetStorage.readObject(path, getContentType(kind)).catch(() => null);
+        if (asset) return { kind, path, asset };
       }
     }
     return null;
@@ -248,43 +224,47 @@ export class MedalImageService {
 
   private async clearStoredImage(templateId: UUID, imageType: MedalImageType) {
     const targets = [
-      rm(this.getImagePath(templateId, imageType, "png"), { force: true }),
-      rm(this.getImagePath(templateId, imageType, "jpeg"), { force: true }),
-      rm(this.getImagePath(templateId, imageType, "webp"), { force: true }),
-      rm(this.getImagePath(templateId, imageType, "svg"), { force: true })
+      this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "png")),
+      this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "jpeg")),
+      this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "webp")),
+      this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "svg"))
     ];
     if (imageType === "earned") {
       targets.push(
-        rm(this.getLegacyImagePath(templateId, "png"), { force: true }),
-        rm(this.getLegacyImagePath(templateId, "jpeg"), { force: true }),
-        rm(this.getLegacyImagePath(templateId, "webp"), { force: true }),
-        rm(this.getLegacyImagePath(templateId, "svg"), { force: true })
+        this.assetStorage.deleteObject(this.getLegacyImagePath(templateId, "png")),
+        this.assetStorage.deleteObject(this.getLegacyImagePath(templateId, "jpeg")),
+        this.assetStorage.deleteObject(this.getLegacyImagePath(templateId, "webp")),
+        this.assetStorage.deleteObject(this.getLegacyImagePath(templateId, "svg"))
       );
     }
     await Promise.all(targets);
   }
 
   private getImageDir() {
-    return join(getAssetRoot(), "medals");
+    return assetKey("uploads", "medals");
+  }
+
+  private getPublicKey(templateId: UUID, imageType: MedalImageType) {
+    return imageType === "earned" ? assetKey(this.getImageDir(), templateId) : assetKey(this.getImageDir(), templateId, imageType);
   }
 
   private getImagePath(templateId: UUID, imageType: MedalImageType, kind: ImageKind) {
-    return join(this.getImageDir(), `${templateId}-${imageType}.${getExtension(kind)}`);
+    return assetKey(this.getImageDir(), `${templateId}-${imageType}.${getExtension(kind)}`);
   }
 
   private getLegacyImagePath(templateId: UUID, kind: ImageKind) {
-    return join(this.getImageDir(), `${templateId}.${getExtension(kind)}`);
+    return assetKey(this.getImageDir(), `${templateId}.${getExtension(kind)}`);
   }
 
   private getTempDir() {
-    return join(getAssetRoot(), "medals-temp");
+    return assetKey(this.getImageDir(), ".tmp");
   }
 
   private getTempPath(templateId: UUID, imageType: MedalImageType, kind: ImageKind) {
-    return join(this.getTempDir(), `${templateId}-${imageType}-${randomUUID()}.${getExtension(kind)}`);
+    return assetKey(this.getTempDir(), `${templateId}-${imageType}-${randomUUID()}.${getExtension(kind)}`);
   }
 
   private getBackupPath(templateId: UUID, imageType: MedalImageType, kind: ImageKind) {
-    return join(this.getTempDir(), `${templateId}-${imageType}-${randomUUID()}.bak.${getExtension(kind)}`);
+    return assetKey(this.getTempDir(), `${templateId}-${imageType}-${randomUUID()}.bak.${getExtension(kind)}`);
   }
 }

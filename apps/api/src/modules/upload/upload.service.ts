@@ -1,9 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
 import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import type { Prisma, UploadAsset, UploadAssetScene, UploadAssetStatus } from "@prisma/client";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type { IsoDateTime, OperationId, UploadImageResponse, UploadImageSummary, UUID } from "../../contracts/types";
@@ -30,10 +28,6 @@ type ImageMeta = {
 
 const maxImageBytes = 10 * 1024 * 1024;
 const tempTtlMs = 24 * 60 * 60 * 1000;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function getContentTypeExtension(contentType: string) {
   if (contentType === "image/png") return "png";
@@ -178,30 +172,21 @@ function detectImageMeta(file: FileUpload): ImageMeta {
 
 @Injectable()
 export class UploadService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AssetStorageService) private readonly assetStorage: AssetStorageService
+  ) {}
 
   buildRecipeImageUrl(request: RequestLike, publicId: string, updatedAt: Date) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/recipe-images/${encodeURIComponent(publicId)}?v=${encodeURIComponent(updatedAt.toISOString())}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+    return this.assetStorage.publicUrl(request, assetKey("uploads", "recipe-images", publicId), updatedAt);
   }
 
   buildDiningEventCoverUrl(request: RequestLike, eventId: UUID, updatedAt: Date) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/dining-event-covers/${encodeURIComponent(String(eventId))}?v=${encodeURIComponent(updatedAt.toISOString())}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+    return this.assetStorage.publicUrl(request, assetKey("uploads", "dining-event-covers", eventId), updatedAt);
   }
 
-  buildProfileAvatarUrl(request: RequestLike, userId: UUID, fileName: string, updatedAt: Date) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/profile-avatars/${encodeURIComponent(String(userId))}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(updatedAt.toISOString())}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+  buildProfileAvatarUrl(request: RequestLike, userUid: UUID, fileName: string, updatedAt: Date) {
+    return this.assetStorage.publicUrl(request, this.buildAvatarStorageKey(userUid, fileName), updatedAt);
   }
 
   async uploadUserAvatar(
@@ -213,30 +198,27 @@ export class UploadService {
     if (!file) throw new BadRequestException("请上传图片");
     const imageMeta = detectImageMeta(file);
     const requestHash = `${userId}:${imageMeta.sourceHash}`;
-    const tempPath = await this.writeAvatarTempFile(file.buffer as Buffer, imageMeta.extension);
 
-    try {
-      return await this.prisma.$transaction(async tx => {
+    return await this.prisma.$transaction(async tx => {
         const repeated = await getIdempotentResult<{ avatarUrl: string }>(tx, operationId, "upload:user-avatar", userId, null, requestHash);
         if (repeated) {
-          await rm(tempPath, { force: true });
           return repeated;
         }
         await startIdempotentOperation(tx, operationId, "upload:user-avatar", userId, null, requestHash);
 
         const current = await tx.user.findUnique({
           where: { id: userId },
-          select: { id: true, status: true }
+          select: { id: true, uid: true, status: true }
         });
         if (!current || current.status !== "ACTIVE") {
           throw new UnauthorizedException("未登录或 token 失效");
         }
 
         const fileName = `${randomUUID()}.${imageMeta.extension}`;
-        const storageKey = this.buildAvatarStorageKey(userId, fileName);
-        await this.moveTempFile(tempPath, storageKey);
+        const storageKey = this.buildAvatarStorageKey(current.uid, fileName);
+        await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
         const now = new Date();
-        const avatarUrl = this.buildProfileAvatarUrl(request, userId, fileName, now);
+        const avatarUrl = this.buildProfileAvatarUrl(request, current.uid, fileName, now);
         await tx.user.update({
           where: { id: userId },
           data: { avatarUrl },
@@ -246,10 +228,6 @@ export class UploadService {
         await completeIdempotentOperation(tx, operationId, "upload:user-avatar", userId, null, requestHash, result);
         return result;
       });
-    } catch (error) {
-      await rm(tempPath, { force: true });
-      throw error;
-    }
   }
 
   async uploadRecipeImage(
@@ -263,13 +241,10 @@ export class UploadService {
   ): Promise<UploadImageResponse> {
     const imageMeta = detectImageMeta(file);
     const requestHash = `${draftId}:${scene}:${slotKey}:${imageMeta.sourceHash}`;
-    const tempPath = await this.writeTempFile(file.buffer as Buffer, imageMeta.extension);
 
-    try {
-      return await this.prisma.$transaction(async tx => {
+    return await this.prisma.$transaction(async tx => {
         const repeated = await getIdempotentResult<UploadImageResponse>(tx, operationId, "upload:recipe-image", userId, null, requestHash);
         if (repeated) {
-          await rm(tempPath, { force: true });
           return repeated;
         }
         await startIdempotentOperation(tx, operationId, "upload:recipe-image", userId, null, requestHash);
@@ -291,7 +266,6 @@ export class UploadService {
         });
 
         if (existing && existing.sourceHash === imageMeta.sourceHash && existing.status === "TEMP") {
-          await rm(tempPath, { force: true });
           const result = {
             upload: this.toUploadSummary(request, existing)
           } satisfies UploadImageResponse;
@@ -301,7 +275,7 @@ export class UploadService {
 
         const publicId = existing?.publicId ?? randomUUID();
         const storageKey = existing?.storageKey ?? this.buildDraftStorageKey(draftId, scene, publicId, imageMeta.contentType);
-        await this.moveTempFile(tempPath, storageKey);
+        await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
 
         const expiresAt = new Date(Date.now() + tempTtlMs);
         const persisted = existing
@@ -347,10 +321,6 @@ export class UploadService {
         await completeIdempotentOperation(tx, operationId, "upload:recipe-image", userId, null, requestHash, result);
         return result;
       });
-    } catch (error) {
-      await rm(tempPath, { force: true });
-      throw error;
-    }
   }
 
   async getRecipeImageAsset(publicId: string) {
@@ -365,50 +335,42 @@ export class UploadService {
       throw new NotFoundException("图片不存在");
     }
 
-    const filePath = this.getStoragePath(asset.storageKey);
-    try {
-      return {
-        contentType: asset.contentType,
-        stream: createReadStream(filePath),
-        stat: await stat(filePath)
-      };
-    } catch {
+    const stored = await this.assetStorage.readObject(asset.storageKey, asset.contentType).catch(() => null);
+    if (!stored) {
       throw new NotFoundException("图片不存在");
     }
+    return {
+      contentType: stored.contentType,
+      stream: stored.stream,
+      stat: { size: stored.size }
+    };
   }
 
-  async getProfileAvatarAsset(userId: UUID, fileName: string) {
+  async getProfileAvatarAsset(userUid: UUID, fileName: string) {
     if (!/^[0-9a-f-]+\.(jpg|png|webp)$/.test(fileName)) {
       throw new NotFoundException("图片不存在");
     }
-    const filePath = this.getStoragePath(this.buildAvatarStorageKey(userId, fileName));
-    try {
-      return {
-        contentType: contentTypeOfFileName(fileName),
-        stream: createReadStream(filePath),
-        stat: await stat(filePath)
-      };
-    } catch {
+    const stored = await this.assetStorage.readObject(this.buildAvatarStorageKey(userUid, fileName), contentTypeOfFileName(fileName)).catch(() => null);
+    if (!stored) {
       throw new NotFoundException("图片不存在");
     }
+    return {
+      contentType: stored.contentType,
+      stream: stored.stream,
+      stat: { size: stored.size }
+    };
   }
 
   async storeDiningEventCover(file: FileUpload, eventId: UUID) {
     const imageMeta = detectImageMeta(file);
-    const tempPath = await this.writeTempFile(file.buffer as Buffer, imageMeta.extension);
-    const storageKey = this.buildDiningEventCoverStorageKey(eventId);
+    const storageKey = this.buildDiningEventCoverStorageKey(eventId, imageMeta.extension);
 
-    try {
-      await this.moveTempFile(tempPath, storageKey);
-      return {
-        storageKey,
-        contentType: imageMeta.contentType,
-        sizeBytes: file.size as number
-      };
-    } catch (error) {
-      await rm(tempPath, { force: true });
-      throw error;
-    }
+    await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
+    return {
+      storageKey,
+      contentType: imageMeta.contentType,
+      sizeBytes: file.size as number
+    };
   }
 
   async getDiningEventCoverAsset(eventId: UUID) {
@@ -427,16 +389,15 @@ export class UploadService {
       throw new NotFoundException("图片不存在");
     }
 
-    const filePath = this.getStoragePath(event.coverStorageKey);
-    try {
-      return {
-        contentType: event.coverContentType,
-        stream: createReadStream(filePath),
-        stat: await stat(filePath)
-      };
-    } catch {
+    const stored = await this.assetStorage.readObject(event.coverStorageKey, event.coverContentType).catch(() => null);
+    if (!stored) {
       throw new NotFoundException("图片不存在");
     }
+    return {
+      contentType: stored.contentType,
+      stream: stored.stream,
+      stat: { size: stored.size }
+    };
   }
 
   async resolveDraftUploads(tx: RecipeDb, request: RequestLike, draftId: UUID) {
@@ -555,7 +516,7 @@ export class UploadService {
 
     // Database changes have already committed at this stage. Cleanup failures
     // must not turn a successful save/publish/delete into a user-visible error.
-    await Promise.allSettled(uniqueKeys.map(storageKey => this.removeStorageFile(storageKey)));
+    await Promise.allSettled(uniqueKeys.map(storageKey => this.assetStorage.deleteObject(storageKey)));
   }
 
   async loadVersionUploads(tx: RecipeDb, request: RequestLike, recipeVersionId: UUID) {
@@ -591,47 +552,17 @@ export class UploadService {
     };
   }
 
-  private async writeTempFile(buffer: Buffer, extension: string) {
-    const tempDir = join(getAssetRoot(), "recipe-temp");
-    await mkdir(tempDir, { recursive: true });
-    const tempPath = join(tempDir, `${randomUUID()}.${extension}`);
-    await writeFile(tempPath, buffer);
-    return tempPath;
-  }
-
-  private async writeAvatarTempFile(buffer: Buffer, extension: string) {
-    const tempDir = join(getAssetRoot(), "profile-avatar-temp");
-    await mkdir(tempDir, { recursive: true });
-    const tempPath = join(tempDir, `${randomUUID()}.${extension}`);
-    await writeFile(tempPath, buffer);
-    return tempPath;
-  }
-
-  private async moveTempFile(tempPath: string, storageKey: string) {
-    const filePath = this.getStoragePath(storageKey);
-    await mkdir(dirname(filePath), { recursive: true });
-    await rename(tempPath, filePath);
-  }
-
-  private async removeStorageFile(storageKey: string) {
-    await rm(this.getStoragePath(storageKey), { force: true });
-  }
-
-  private getStoragePath(storageKey: string) {
-    return join(getAssetRoot(), storageKey);
-  }
-
   private buildDraftStorageKey(draftId: UUID, scene: UploadAssetScene, publicId: string, contentType: string) {
     const extension = getContentTypeExtension(contentType);
-    return join("recipe-drafts", String(draftId), scene.toLowerCase(), `${publicId}.${extension}`);
+    return assetKey("uploads", "recipe-drafts", draftId, scene.toLowerCase(), `${publicId}.${extension}`);
   }
 
-  private buildDiningEventCoverStorageKey(eventId: UUID) {
-    return join("dining-event-covers", String(eventId), randomUUID());
+  private buildDiningEventCoverStorageKey(eventId: UUID, extension: string) {
+    return assetKey("uploads", "dining-event-covers", eventId, `${randomUUID()}.${extension}`);
   }
 
-  private buildAvatarStorageKey(userId: UUID, fileName: string) {
-    return join("profile-avatars", String(userId), fileName);
+  private buildAvatarStorageKey(userUid: UUID, fileName: string) {
+    return assetKey("uploads", "profile-avatars", userUid, fileName);
   }
 
 }

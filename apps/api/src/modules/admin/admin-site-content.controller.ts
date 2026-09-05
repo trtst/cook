@@ -249,7 +249,7 @@ export class SiteOfficialMessageController {
 }
 
 @ApiExcludeController()
-@Controller("public-assets/site-content-images")
+@Controller("static/uploads/site-content-images")
 export class SiteContentImagePublicController {
   constructor(@Inject(SiteContentImageService) private readonly siteContentImageService: SiteContentImageService) {}
 

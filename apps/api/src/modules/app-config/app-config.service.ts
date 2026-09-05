@@ -1,8 +1,6 @@
-import { createReadStream } from "node:fs";
-import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { Inject, BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type { AppConfigResponse, OperationId, UUID } from "../../contracts/types";
@@ -15,10 +13,6 @@ type RequestLike = {
 
 const loginImageBaseName = "login-image";
 const maxImageBytes = 5 * 1024 * 1024;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function detectImageKind(buffer: Buffer): ImageKind | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -64,12 +58,16 @@ function getExtension(kind: ImageKind) {
 
 @Injectable()
 export class AppConfigService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AssetStorageService) private readonly assetStorage: AssetStorageService
+  ) {}
 
   async getPublicConfig(request: RequestLike): Promise<AppConfigResponse> {
+    const loginImage = await this.findStoredLoginImage();
     return {
       login: {
-        imageUrl: (await this.hasLoginImage()) ? this.buildLoginImageUrl(request) : null
+        imageUrl: loginImage ? this.buildLoginImageUrl(request, loginImage.storageKey) : null
       }
     };
   }
@@ -113,9 +111,8 @@ export class AppConfigService {
       if (repeated) return repeated;
       await startAdminIdempotentOperation(tx, operationId, "admin-app-config:login-image:save", adminId, requestHash);
 
-      await mkdir(this.getLoginImageDir(), { recursive: true });
       await this.clearStoredLoginImage();
-      await writeFile(this.getLoginImagePath(kind), buffer);
+      await this.assetStorage.writeObject(this.getLoginImageKey(kind), buffer, getContentType(kind));
 
       const result = await this.getPublicConfig(request);
       await completeAdminIdempotentOperation(tx, operationId, "admin-app-config:login-image:save", adminId, requestHash, result);
@@ -144,66 +141,54 @@ export class AppConfigService {
     });
   }
 
-  async getLoginImageAsset() {
+  async getLoginImageAsset(fileName?: string) {
+    const file = await this.readStoredLoginImage(fileName);
+
+    return {
+      contentType: getContentType(file.kind),
+      stream: file.asset.stream,
+      stat: { size: file.asset.size }
+    };
+  }
+
+  private getLoginImagePrefix() {
+    return assetKey("uploads", "admin", "login-image");
+  }
+
+  private getLoginImageKey(kind: ImageKind) {
+    return assetKey(this.getLoginImagePrefix(), `${loginImageBaseName}.${getExtension(kind)}`);
+  }
+
+  private async clearStoredLoginImage() {
+    const keys = await this.assetStorage.listObjects(this.getLoginImagePrefix());
+    await Promise.all(keys.filter(key => /\/login-image\.(jpg|png|webp)$/i.test(key)).map(key => this.assetStorage.deleteObject(key)));
+  }
+
+  private async findStoredLoginImage() {
+    const keys = await this.assetStorage.listObjects(this.getLoginImagePrefix());
+    const match = keys.find(key => /\/login-image\.(jpg|png|webp)$/i.test(key));
+    if (!match) return null;
+    const lowerName = match.toLowerCase();
+    const kind: ImageKind = lowerName.endsWith(".png") ? "png" : lowerName.endsWith(".webp") ? "webp" : "jpeg";
+    return { kind, storageKey: match };
+  }
+
+  private async readStoredLoginImage(fileName?: string) {
     const file = await this.findStoredLoginImage();
     if (!file) {
       throw new NotFoundException("登录图片不存在");
     }
-
-    return {
-      contentType: getContentType(file.kind),
-      stream: createReadStream(file.path),
-      stat: await stat(file.path)
-    };
-  }
-
-  private getLoginImageDir() {
-    return join(getAssetRoot(), "login");
-  }
-
-  private getLoginImagePath(kind: ImageKind) {
-    return join(this.getLoginImageDir(), `${loginImageBaseName}.${getExtension(kind)}`);
-  }
-
-  private async hasLoginImage() {
-    return Boolean(await this.findStoredLoginImage());
-  }
-
-  private async clearStoredLoginImage() {
-    try {
-      const files = await readdir(this.getLoginImageDir());
-      await Promise.all(
-        files
-          .filter((name) => name.startsWith(`${loginImageBaseName}.`))
-          .map((name) => rm(join(this.getLoginImageDir(), name), { force: true }))
-      );
-    } catch {
-      return;
+    if (fileName && !file.storageKey.endsWith(`/${fileName}`)) {
+      throw new NotFoundException("登录图片不存在");
     }
-  }
-
-  private async findStoredLoginImage() {
-    try {
-      const files = await readdir(this.getLoginImageDir());
-      const match = files.find((name) => /^login-image\.(jpg|png|webp)$/i.test(name));
-      if (!match) return null;
-
-      const lowerName = match.toLowerCase();
-      const kind: ImageKind = lowerName.endsWith(".png") ? "png" : lowerName.endsWith(".webp") ? "webp" : "jpeg";
-
-      return {
-        kind,
-        path: join(this.getLoginImageDir(), match)
-      };
-    } catch {
-      return null;
+    const asset = await this.assetStorage.readObject(file.storageKey, getContentType(file.kind)).catch(() => null);
+    if (!asset) {
+      throw new NotFoundException("登录图片不存在");
     }
+    return { ...file, asset };
   }
 
-  private buildLoginImageUrl(request: RequestLike) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    if (!host) return "/api/public-assets/login-image";
-    return `${protocol}://${host}/api/public-assets/login-image`;
+  private buildLoginImageUrl(request: RequestLike, storageKey: string) {
+    return this.assetStorage.publicUrl(request, storageKey, null);
   }
 }

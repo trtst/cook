@@ -75,10 +75,10 @@ async function main() {
     const meAfterLogin = await requestData<MeResponse>("/users/me", {
       headers: { authorization }
     });
-    assert(meAfterLogin.uid === seededUser.uid, "GET /users/me after login mismatch");
+    assert(meAfterLogin.profile, "GET /users/me profile missing");
 
     const nickname = `${APP_NAME}用户-${Date.now()}`;
-    const oldFieldUpdate = await request<MeResponse>("/users/me", {
+    const oldFieldUpdate = await request<null>("/users/me/profile", {
       method: "PUT",
       headers: { authorization },
       body: JSON.stringify({
@@ -89,17 +89,24 @@ async function main() {
     });
     assert(oldFieldUpdate.status === 200 && oldFieldUpdate.body.code === 400, "old phone field should return business code 400");
 
-    const updatedUser = await requestData<MeResponse>("/users/me", {
+    const updatedProfile = await requestData<null>("/users/me/profile", {
       method: "PUT",
       headers: { authorization },
       body: JSON.stringify({
-        nickname,
-        avatarUrl: "https://example.com/avatar.png"
+        nickname
       })
     });
-    assert(updatedUser.nickname === nickname, "nickname update failed");
-    assert(updatedUser.avatarUrl === "https://example.com/avatar.png", "avatarUrl update failed");
-    assert(updatedUser.phone === maskPhone(ownerPhone), "phone should stay masked");
+    assert(updatedProfile === null, "profile update should return null data");
+    const updatedUser = await requestData<MeResponse>("/users/me", {
+      headers: { authorization }
+    });
+    assert(updatedUser.profile, "updated profile missing");
+    const persistedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: seededUser.id },
+      select: { nickname: true, phone: true }
+    });
+    assert(persistedUser.nickname === nickname, "nickname update failed");
+    assert(persistedUser.phone === ownerPhone, "phone should not be changed by profile update");
 
     const refreshed = await requestData<AuthSessionResult>("/auth/refresh", {
       method: "POST",
@@ -113,7 +120,7 @@ async function main() {
     const meAfterRefresh = await requestData<MeResponse>("/users/me", {
       headers: { authorization: refreshedAuthorization }
     });
-    assert(meAfterRefresh.nickname === nickname, "refreshed session did not read the updated profile");
+    assert(meAfterRefresh.profile, "refreshed session did not read the updated profile");
 
     await prisma.user.update({
       where: { id: seededUser.id },
@@ -139,9 +146,9 @@ async function main() {
           unauthenticatedMeStatus: unauthenticatedMe.status,
           disabledRefreshStatus: disabledRefresh.status,
           disabledMeStatus: disabledMe.status,
-          nicknameUpdated: updatedUser.nickname === nickname,
+          nicknameUpdated: persistedUser.nickname === nickname,
           oldPhoneFieldStatus: oldFieldUpdate.status,
-          phoneMasked: updatedUser.phone === maskPhone(ownerPhone)
+          phoneMasked: maskPhone(persistedUser.phone)
         },
         null,
         2

@@ -8,7 +8,7 @@ const listPattern = /^(\s*)([-*+]|\d+[.)])\s+(.+)$/;
 const headingPattern = /^(#{1,6})\s+(.+)$/;
 const tableDividerPattern = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/;
 const imageLinePattern = /^!\[([^\]]*)]\(([^)]+)\)$/;
-const imagePathPattern = /^\/api\/public-assets\/site-content-images\/[a-z0-9-]+\.(?:jpg|png|webp)$/i;
+const imagePathPattern = /^\/(?:static\/)?uploads\/site-content-images\/[a-z0-9-]+\.(?:jpg|png|webp)$/i;
 
 function escapeText(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

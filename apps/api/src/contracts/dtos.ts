@@ -4075,6 +4075,17 @@ export class ResolveSiteContentDto {
   path!: string;
 }
 
+export class AdminMaterialImageQueryDto extends PageQueryDto {}
+
+export class UploadAdminMaterialImageDto {
+  @ApiProperty({ example: "首页 header 备用图", maxLength: 120 })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  note!: string;
+}
+
 export class SiteContentArticleQueryDto extends PageQueryDto {
   @ApiProperty({ enum: siteContentArticleChannelCodeValues })
   @IsIn(siteContentArticleChannelCodeValues)

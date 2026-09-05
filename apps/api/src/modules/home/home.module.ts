@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AssetStorageService } from "../../common/asset-storage.service";
 import { PantryModule } from "../pantry/pantry.module";
 import { AdminHomeController } from "./admin-home.controller";
 import { AdminHomeTopicController } from "./admin-home-topic.controller";
@@ -26,7 +27,7 @@ import { TableTopicService } from "./table-topic.service";
     AdminHomeTopicController,
     AdminTableTopicController
   ],
-  providers: [HomeService, HomeImageService, HomeTopicService, HomeTopicImageService, TableTopicService, TableTopicImageService],
+  providers: [HomeService, AssetStorageService, HomeImageService, HomeTopicService, HomeTopicImageService, TableTopicService, TableTopicImageService],
   exports: [HomeService, HomeTopicService, TableTopicService]
 })
 export class HomeModule {}

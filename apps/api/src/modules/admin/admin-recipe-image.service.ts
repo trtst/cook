@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { basename } from "node:path";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import type { AdminRecipeImageScene, AdminRecipeImageUploadResponse } from "../../contracts/types";
 
 type RequestLike = {
@@ -26,11 +25,6 @@ const maxImageBytes = 10 * 1024 * 1024;
 const coverRatio = 4 / 3;
 const coverRatioTolerance = 0.02;
 const tempKeyPattern = /^[a-z0-9-]+\.(png|jpg|jpeg|webp)$/i;
-const tempTtlMs = 24 * 60 * 60 * 1000;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function readPngSize(buffer: Buffer) {
   if (
@@ -164,22 +158,17 @@ function assertSceneMeta(scene: AdminRecipeImageScene, meta: ImageMeta) {
 
 @Injectable()
 export class AdminRecipeImageService {
+  constructor(private readonly assetStorage: AssetStorageService) {}
+
   buildPublicImageUrl(request: RequestLike, fileName: string) {
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/admin-recipe-images/${encodeURIComponent(fileName)}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+    return this.assetStorage.publicUrl(request, this.finalKey(fileName));
   }
 
   async stageTempImage(request: RequestLike, scene: AdminRecipeImageScene, file: FileUpload): Promise<AdminRecipeImageUploadResponse> {
     const meta = detectImageMeta(file);
     assertSceneMeta(scene, meta);
-    await this.pruneTempImages();
     const tempKey = `${randomUUID()}.${meta.extension}`;
-    const tempPath = this.getTempPath(tempKey);
-    await mkdir(this.getTempDir(), { recursive: true });
-    await writeFile(tempPath, file.buffer as Buffer);
+    await this.assetStorage.writeObject(this.tempStorageKey(tempKey), file.buffer as Buffer, meta.contentType);
     return {
       image: {
         tempKey,
@@ -194,10 +183,9 @@ export class AdminRecipeImageService {
 
   async publishTempImage(request: RequestLike, scene: AdminRecipeImageScene, tempKey: string) {
     const normalizedTempKey = this.normalizeTempKey(tempKey);
-    const tempPath = this.getTempPath(normalizedTempKey);
     let buffer: Buffer;
     try {
-      buffer = await readFile(tempPath);
+      buffer = await this.assetStorage.readBuffer(this.tempStorageKey(normalizedTempKey));
     } catch {
       throw new BadRequestException("图片上传状态已失效，请重新上传");
     }
@@ -210,10 +198,8 @@ export class AdminRecipeImageService {
     assertSceneMeta(scene, meta);
 
     const fileName = `${randomUUID()}.${meta.extension}`;
-    const storageKey = join("admin-recipe-images", fileName);
-    const finalPath = this.getFinalPath(fileName);
-    await mkdir(this.getFinalDir(), { recursive: true });
-    await writeFile(finalPath, buffer);
+    const storageKey = this.finalKey(fileName);
+    await this.assetStorage.writeObject(storageKey, buffer, meta.contentType);
     return {
       fileName,
       storageKey,
@@ -224,27 +210,25 @@ export class AdminRecipeImageService {
   async discardTempImages(tempKeys: Iterable<string>) {
     const keys = Array.from(new Set(Array.from(tempKeys).filter(Boolean)));
     if (!keys.length) return;
-    await Promise.allSettled(keys.map(tempKey => rm(this.getTempPath(this.normalizeTempKey(tempKey)), { force: true })));
+    await Promise.allSettled(keys.map(tempKey => this.assetStorage.deleteObject(this.tempStorageKey(this.normalizeTempKey(tempKey)))));
   }
 
   async removePublishedImages(storageKeys: Iterable<string>) {
     const keys = Array.from(new Set(Array.from(storageKeys).filter(Boolean)));
     if (!keys.length) return;
-    await Promise.allSettled(keys.map(storageKey => rm(this.getStoragePath(storageKey), { force: true })));
+    await Promise.allSettled(keys.map(storageKey => this.assetStorage.deleteObject(this.safeStorageKey(storageKey))));
   }
 
   async getPublicImageAsset(fileName: string) {
     const normalizedName = this.normalizeTempKey(fileName);
-    const filePath = this.getFinalPath(normalizedName);
-    try {
-      return {
-        contentType: this.getContentType(filePath),
-        stream: createReadStream(filePath),
-        stat: await stat(filePath)
-      };
-    } catch {
-      throw new NotFoundException("图片不存在");
-    }
+    const contentType = this.getContentType(normalizedName);
+    const asset = await this.assetStorage.readObject(this.finalKey(normalizedName), contentType).catch(() => null);
+    if (!asset) throw new NotFoundException("图片不存在");
+    return {
+      contentType,
+      stream: asset.stream,
+      stat: { size: asset.size }
+    };
   }
 
   private normalizeTempKey(tempKey: string) {
@@ -255,49 +239,35 @@ export class AdminRecipeImageService {
     return name;
   }
 
-  private getTempDir() {
-    return join(getAssetRoot(), "admin-recipe-temp");
+  private imageDir() {
+    return assetKey("uploads", "admin-recipe-images");
   }
 
-  private getFinalDir() {
-    return join(getAssetRoot(), "admin-recipe-images");
+  private tempDir() {
+    return assetKey(this.imageDir(), ".tmp");
   }
 
-  private getTempPath(tempKey: string) {
-    return join(this.getTempDir(), tempKey);
+  private tempStorageKey(tempKey: string) {
+    return assetKey(this.tempDir(), tempKey);
   }
 
-  private getFinalPath(fileName: string) {
-    return join(this.getFinalDir(), fileName);
+  private finalKey(fileName: string) {
+    return assetKey(this.imageDir(), fileName);
   }
 
-  private getStoragePath(storageKey: string) {
-    return join(getAssetRoot(), storageKey);
+  private safeStorageKey(storageKey: string) {
+    const key = storageKey.trim().replace(/^\/+/u, "");
+    const publicPrefix = `${this.imageDir()}/`;
+    const legacyPrefix = "admin-recipe-images/";
+    if (key.startsWith(publicPrefix)) return key;
+    if (key.startsWith(legacyPrefix)) return assetKey("uploads", key);
+    throw new BadRequestException("图片参数错误");
   }
 
-  private async pruneTempImages() {
-    try {
-      const names = await readdir(this.getTempDir());
-      const now = Date.now();
-      await Promise.allSettled(
-        names
-          .filter(name => tempKeyPattern.test(name))
-          .map(async name => {
-            const filePath = this.getTempPath(name);
-            const fileStat = await stat(filePath);
-            if (now - fileStat.mtimeMs < tempTtlMs) return;
-            await rm(filePath, { force: true });
-          })
-      );
-    } catch {
-      return;
-    }
-  }
-
-  private getContentType(filePath: string) {
-    const extension = extname(filePath).toLowerCase();
-    if (extension === ".png") return "image/png";
-    if (extension === ".webp") return "image/webp";
+  private getContentType(fileName: string) {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith(".png")) return "image/png";
+    if (lower.endsWith(".webp")) return "image/webp";
     return "image/jpeg";
   }
 }

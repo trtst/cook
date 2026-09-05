@@ -15,7 +15,7 @@ const markdown = [
   "1. 有序项",
   "- 无序项",
   "",
-  "![厨房图](/api/public-assets/site-content-images/demo.webp)",
+  "![厨房图](/static/uploads/site-content-images/demo.webp)",
   "[站内链接](/guides/demo) [安全链接](https://example.com/path) [不安全链接](http://example.com)"
 ].join("\n");
 
@@ -32,7 +32,7 @@ assert.ok(!result.html.includes("<i>"), "Expected markdown output to exclude i")
 assert.ok(result.html.includes("<blockquote><p>引用内容</p></blockquote>"), "Expected blockquote output");
 assert.ok(result.html.includes("<ol>"), "Expected ordered list output");
 assert.ok(result.html.includes("<ul>"), "Expected unordered list output");
-assert.ok(result.html.includes('<img src="/api/public-assets/site-content-images/demo.webp" alt="厨房图">'), "Expected safe image output");
+assert.ok(result.html.includes('<img src="/static/uploads/site-content-images/demo.webp" alt="厨房图">'), "Expected safe image output");
 assert.ok(result.html.includes('<a href="/guides/demo"'), "Expected site link output");
 assert.ok(result.html.includes('<a href="https://example.com/path"'), "Expected https link output");
 assert.ok(!result.html.includes('href="http://example.com"'), "Expected unsafe link to degrade to text");

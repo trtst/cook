@@ -127,6 +127,14 @@ function toIsoDate(value: Date) {
   return value.toISOString();
 }
 
+function toDateText(value: Date | null) {
+  if (!value) return null;
+  const year = value.getUTCFullYear();
+  const month = String(value.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(value.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function hasIngredientTagFactGap(item: {
   name: string;
   category: { code: string };
@@ -214,6 +222,10 @@ function toUserProfile(user: {
   uid: number;
   nickname: string | null;
   avatarUrl: string | null;
+  cookNo: string | null;
+  bio: string | null;
+  gender: string | null;
+  birthDate: Date | null;
   phone: string | null;
   status: string;
   createdAt: Date;
@@ -224,6 +236,10 @@ function toUserProfile(user: {
     uid: user.uid,
     nickname: user.nickname,
     avatarUrl: user.avatarUrl,
+    cookNo: user.cookNo,
+    bio: user.bio,
+    gender: user.gender as UserProfile["gender"],
+    birthDate: toDateText(user.birthDate),
     phone: maskPhone(user.phone),
     status: user.status,
     createdAt: toIsoDate(user.createdAt),
@@ -704,6 +720,7 @@ export class AdminService {
           OR: [
             ...(uidKeyword ? [{ uid: uidKeyword }] : []),
             { nickname: { contains: normalizedKeyword, mode: "insensitive" as const } },
+            { cookNo: { contains: normalizedKeyword, mode: "insensitive" as const } },
             { phone: { contains: normalizedKeyword, mode: "insensitive" as const } }
           ]
         }
@@ -783,6 +800,10 @@ export class AdminService {
           uid: true,
           nickname: true,
           avatarUrl: true,
+          cookNo: true,
+          bio: true,
+          gender: true,
+          birthDate: true,
           phone: true,
           status: true,
           createdAt: true,
@@ -798,14 +819,25 @@ export class AdminService {
           : await this.updateUserRecord(tx, userId, patch);
 
       const result = toUserProfile(updated);
+      const phoneChanged = patch.phone !== undefined && patch.phone !== current.phone;
+      const auditPayload = phoneChanged
+        ? {
+            oldPhone: maskPhone(current.phone),
+            newPhone: maskPhone(patch.phone),
+            ...(patch.nickname !== undefined ? { nickname: patch.nickname } : {})
+          }
+        : {
+            ...(patch.nickname !== undefined ? { nickname: patch.nickname } : {}),
+            ...(patch.phone !== undefined ? { phone: maskPhone(patch.phone) } : {})
+          };
       await tx.auditEvent.create({
         data: {
           actorType: "ADMIN",
           actorAdminId: adminId,
-          action: "USER_UPDATED",
+          action: phoneChanged ? "USER_PHONE_CHANGED" : "USER_UPDATED",
           objectType: "USER",
           objectId: userId,
-          payload: patch
+          payload: auditPayload
         }
       });
       await completeAdminIdempotentOperation(tx, body.operationId, "admin-user:update", adminId, requestHash, result);
@@ -835,6 +867,10 @@ export class AdminService {
           uid: true,
           nickname: true,
           avatarUrl: true,
+          cookNo: true,
+          bio: true,
+          gender: true,
+          birthDate: true,
           phone: true,
           status: true,
           createdAt: true,
@@ -857,6 +893,10 @@ export class AdminService {
                 uid: true,
                 nickname: true,
                 avatarUrl: true,
+                cookNo: true,
+                bio: true,
+                gender: true,
+                birthDate: true,
                 phone: true,
                 status: true,
                 createdAt: true,
@@ -991,6 +1031,11 @@ export class AdminService {
           id: true,
           uid: true,
           nickname: true,
+          avatarUrl: true,
+          cookNo: true,
+          bio: true,
+          gender: true,
+          birthDate: true,
           phone: true,
           status: true
         }
@@ -1030,6 +1075,11 @@ export class AdminService {
           id: user.id,
           uid: user.uid,
           nickname: user.nickname,
+          avatarUrl: user.avatarUrl,
+          cookNo: user.cookNo,
+          bio: user.bio,
+          gender: user.gender as AdminUserEntitlementResponse["user"]["gender"],
+          birthDate: toDateText(user.birthDate),
           phone: maskPhone(user.phone),
           status: user.status
         },
@@ -5700,6 +5750,10 @@ export class AdminService {
             uid: true,
             nickname: true,
             avatarUrl: true,
+            cookNo: true,
+            bio: true,
+            gender: true,
+            birthDate: true,
             phone: true,
             status: true,
             createdAt: true,
@@ -5736,6 +5790,10 @@ export class AdminService {
           uid: true,
           nickname: true,
           avatarUrl: true,
+          cookNo: true,
+          bio: true,
+          gender: true,
+          birthDate: true,
           phone: true,
           status: true,
           createdAt: true,

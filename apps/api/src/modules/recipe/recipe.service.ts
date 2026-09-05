@@ -192,7 +192,7 @@ type VersionImageState = {
 };
 
 const activeRecipeStatuses: RecipeStatus[] = ["ACTIVE", "RECYCLED", "BLOCKED"];
-const recipeImageUrlPattern = /\/api\/public-assets\/recipe-images\/([^/?#]+)/i;
+const recipeImageUrlPattern = /\/(?:static\/)?uploads\/recipe-images\/([^/?#]+)/i;
 const recipeViewHistoryLimit = 100;
 const recipeViewHistoryPageSize = 20;
 

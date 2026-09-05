@@ -58,6 +58,10 @@ export interface MeResponse {
   membership: UserMembership;
 }
 
+export interface UploadCurrentAvatarResponse {
+  avatarUrl: string | null;
+}
+
 export interface NotificationMealTimes {
   breakfast: string;
   lunch: string;
@@ -109,6 +113,10 @@ export interface UserSummary {
 
 export interface UserProfile extends SessionUser {
   id: UUID;
+  cookNo: string | null;
+  bio: string | null;
+  gender: UserGender | null;
+  birthDate: string | null;
   phone: string | null;
   status: string;
   createdAt: IsoDateTime;
@@ -899,6 +907,27 @@ export interface AdminSiteContentImageUploadResult {
   imageUrl: string;
 }
 
+export interface AdminMaterialImageItem {
+  id: UUID;
+  imageUrl: string;
+  note: string;
+  contentType: string;
+  sizeBytes: number;
+  width: number;
+  height: number;
+  uploader: {
+    id: UUID;
+    displayName: string;
+  };
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminMaterialImageDeleteResult {
+  id: UUID;
+  deleted: boolean;
+}
+
 export interface CreateAdminSiteContentRequest {
   operationId: OperationId;
   type: "PAGE" | "ARTICLE";
@@ -1013,7 +1042,7 @@ export interface AdminLoginRequest {
 }
 
 export interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "phone" | "status">;
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "avatarUrl" | "phone" | "status" | "cookNo" | "bio" | "gender" | "birthDate">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
   storage: StorageUsageSummary;

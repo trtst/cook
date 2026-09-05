@@ -19,6 +19,7 @@ import {
 } from "../../contracts/dtos";
 import {
   ApiOkPage,
+  ApiOkNull,
   ApiOkModel,
   AuthSmsSendResultModel,
   ChangePasswordResultModel,
@@ -29,7 +30,8 @@ import {
   NotificationSettingsModel,
   StartPhoneChangeResultModel,
   StorageUsageModel,
-  TasteProfileModel
+  TasteProfileModel,
+  UploadCurrentAvatarResponseModel
 } from "../../contracts/openapi";
 import { AuthService } from "../auth/auth.service";
 import { CurrentUserService } from "./current-user.service";
@@ -62,24 +64,23 @@ export class UserController {
     return this.currentUserService.getCurrent(request.user.userId).then(result => ok(result));
   }
 
-  @Put("me")
-  @ApiOkModel(MeResponseModel, "更新当前用户")
+  @Put("me/profile")
+  @ApiOkNull("保存当前用户个人资料")
   updateCurrent(@Req() request: RequestWithUser, @Body() body: UpdateCurrentUserDto) {
-    return this.currentUserService.updateCurrent(request.user.userId, body).then(result => ok(result));
+    return this.currentUserService.updateCurrent(request.user.userId, body).then(() => ok(null));
   }
 
   @Post("me/avatar")
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 10 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
   @ApiIdempotencyKey()
-  @ApiOkModel(MeResponseModel, "上传并更新当前用户头像")
+  @ApiOkModel(UploadCurrentAvatarResponseModel, "上传并更新当前用户头像")
   async uploadCurrentAvatar(
     @Req() request: RequestWithUser & AssetRequest,
     @ReadIdempotencyKey() operationId: string,
     @UploadedFile() file?: { buffer?: Buffer; size?: number }
   ) {
-    await this.uploadService.uploadUserAvatar(request, request.user.userId, operationId, file);
-    return ok(await this.currentUserService.getCurrent(request.user.userId));
+    return ok(await this.uploadService.uploadUserAvatar(request, request.user.userId, operationId, file));
   }
 
   @Put("me/password")

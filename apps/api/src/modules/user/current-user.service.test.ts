@@ -54,14 +54,14 @@ test("current user birthday rejects future dates and ages 14 or younger", async 
 
   const result = await service.updateCurrent(1001, { birthDate: "2011-09-04" });
 
-  assert.equal(result.profile.birthDate, "2011-09-04");
+  assert.equal(result, undefined);
 });
 
 test("current user cook number can only change once after the default uid value", async () => {
   const defaultService = buildService(new Date("2026-09-04T12:00:00.000Z"), { cookNo: "52738164" });
   const firstResult = await defaultService.updateCurrent(1001, { cookNo: "cook_520" });
 
-  assert.equal(firstResult.profile.cookNo, "cook_520");
+  assert.equal(firstResult, undefined);
 
   const customService = buildService(new Date("2026-09-04T12:00:00.000Z"), { cookNo: "cook_520" });
 
@@ -72,5 +72,5 @@ test("current user cook number can only change once after the default uid value"
 
   const sameResult = await customService.updateCurrent(1001, { cookNo: "cook_520" });
 
-  assert.equal(sameResult.profile.cookNo, "cook_520");
+  assert.equal(sameResult, undefined);
 });

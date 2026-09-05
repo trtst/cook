@@ -52,7 +52,7 @@ export class TableTopicController {
 }
 
 @ApiExcludeController()
-@Controller("public-assets")
+@Controller("static/uploads")
 export class TableTopicPublicAssetsController {
   constructor(@Inject(TableTopicService) private readonly tableTopicService: TableTopicService) {}
 

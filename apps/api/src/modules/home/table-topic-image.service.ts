@@ -1,17 +1,11 @@
-import { createReadStream } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import type { UUID } from "../../contracts/types";
 
 type ImageKind = "jpeg" | "png" | "webp";
 
 const maxImageBytes = 5 * 1024 * 1024;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function detectKind(buffer: Buffer): ImageKind | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
@@ -64,8 +58,10 @@ function kindOf(path: string): ImageKind {
 
 @Injectable()
 export class TableTopicImageService {
+  constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
+
   buildImagePath(topicId: UUID) {
-    return `/api/public-assets/table-topics/${topicId}`;
+    return this.assetStorage.publicUrl({}, assetKey("uploads", "table-topics", topicId));
   }
 
   async stageUpload(file: { buffer?: Buffer; size?: number } | undefined) {
@@ -81,9 +77,8 @@ export class TableTopicImageService {
       throw new BadRequestException("仅支持 JPG、PNG、WEBP 图片");
     }
 
-    await mkdir(this.tempDir(), { recursive: true });
-    const tempPath = join(this.tempDir(), `${randomUUID()}.${getExt(kind)}`);
-    await writeFile(tempPath, file.buffer);
+    const tempPath = this.tempKey(kind);
+    await this.assetStorage.writeObject(tempPath, file.buffer, getType(kind));
     return { tempPath, kind };
   }
 
@@ -92,15 +87,13 @@ export class TableTopicImageService {
     const nextPath = this.imagePath(topicId, kind);
     const backupPath = current ? this.backupPath(topicId, current.kind) : null;
 
-    await mkdir(this.imageDir(), { recursive: true });
-    await mkdir(this.tempDir(), { recursive: true });
     if (backupPath) {
-      await rm(backupPath, { force: true });
+      await this.assetStorage.deleteObject(backupPath);
     }
 
     if (current) {
       try {
-        await rename(current.path, backupPath as string);
+        await this.assetStorage.moveObject(current.path, backupPath as string);
       } catch {
         // Best effort backup.
       }
@@ -108,11 +101,11 @@ export class TableTopicImageService {
 
     try {
       await this.clearImage(topicId);
-      await rename(tempPath, nextPath);
+      await this.assetStorage.moveObject(tempPath, nextPath);
     } catch (error) {
       if (backupPath) {
         try {
-          await rename(backupPath, current?.path ?? this.imagePath(topicId, kind));
+          await this.assetStorage.moveObject(backupPath, current?.path ?? this.imagePath(topicId, kind));
         } catch {
           // Best effort rollback.
         }
@@ -127,7 +120,7 @@ export class TableTopicImageService {
     await this.clearImage(topicId);
     if (!backupPath) return;
     try {
-      await rename(backupPath, this.imagePath(topicId, kindOf(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.imagePath(topicId, kindOf(backupPath)));
     } catch {
       // Best effort rollback.
     }
@@ -135,17 +128,16 @@ export class TableTopicImageService {
 
   async finishReplace(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async stageClear(topicId: UUID) {
     const current = await this.findImage(topicId);
     if (!current) return null;
     const backupPath = this.backupPath(topicId, current.kind);
-    await mkdir(this.tempDir(), { recursive: true });
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
     try {
-      await rename(current.path, backupPath);
+      await this.assetStorage.moveObject(current.path, backupPath);
       return backupPath;
     } catch {
       return null;
@@ -155,7 +147,7 @@ export class TableTopicImageService {
   async rollbackClear(topicId: UUID, backupPath: string | null) {
     if (!backupPath) return;
     try {
-      await rename(backupPath, this.imagePath(topicId, kindOf(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.imagePath(topicId, kindOf(backupPath)));
     } catch {
       // Best effort rollback.
     }
@@ -163,12 +155,12 @@ export class TableTopicImageService {
 
   async finishClear(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async discardTemp(tempPath: string | null) {
     if (!tempPath) return;
-    await rm(tempPath, { force: true });
+    await this.assetStorage.deleteObject(tempPath);
   }
 
   async getImage(topicId: UUID) {
@@ -179,53 +171,43 @@ export class TableTopicImageService {
 
     return {
       contentType: getType(current.kind),
-      stream: createReadStream(current.path),
-      stat: await stat(current.path)
+      stream: current.asset.stream,
+      stat: { size: current.asset.size }
     };
   }
 
   private imageDir() {
-    return join(getAssetRoot(), "table-topics");
+    return assetKey("uploads", "table-topics");
   }
 
   private tempDir() {
-    return join(this.imageDir(), ".tmp");
+    return assetKey(this.imageDir(), ".tmp");
   }
 
   private imagePath(topicId: UUID, kind: ImageKind) {
-    return join(this.imageDir(), `${topicId}.${getExt(kind)}`);
+    return assetKey(this.imageDir(), `${topicId}.${getExt(kind)}`);
   }
 
   private backupPath(topicId: UUID, kind: ImageKind) {
-    return join(this.tempDir(), `${topicId}-backup.${getExt(kind)}`);
+    return assetKey(this.tempDir(), `${topicId}-backup.${getExt(kind)}`);
+  }
+
+  private tempKey(kind: ImageKind) {
+    return assetKey(this.tempDir(), `${randomUUID()}.${getExt(kind)}`);
   }
 
   private async clearImage(topicId: UUID) {
-    try {
-      const files = await readdir(this.imageDir());
-      await Promise.all(
-        files
-          .filter(name => name.startsWith(`${topicId}.`))
-          .map(name => rm(join(this.imageDir(), name), { force: true }))
-      );
-    } catch {
-      return;
-    }
+    const keys = await this.assetStorage.listObjects(this.imageDir());
+    await Promise.all(keys.filter(name => new RegExp(`/${topicId}\\.(jpg|png|webp)$`, "i").test(name)).map(key => this.assetStorage.deleteObject(key)));
   }
 
   private async findImage(topicId: UUID) {
-    try {
-      const files = await readdir(this.imageDir());
-      const match = files.find(name => new RegExp(`^${topicId}\\.(jpg|png|webp)$`, "i").test(name));
-      if (!match) return null;
-      const lower = match.toLowerCase();
-      const kind: ImageKind = lower.endsWith(".png") ? "png" : lower.endsWith(".webp") ? "webp" : "jpeg";
-      return {
-        kind,
-        path: join(this.imageDir(), match)
-      };
-    } catch {
-      return null;
-    }
+    const keys = await this.assetStorage.listObjects(this.imageDir());
+    const match = keys.find(name => new RegExp(`/${topicId}\\.(jpg|png|webp)$`, "i").test(name));
+    if (!match) return null;
+    const lower = match.toLowerCase();
+    const kind: ImageKind = lower.endsWith(".png") ? "png" : lower.endsWith(".webp") ? "webp" : "jpeg";
+    const asset = await this.assetStorage.readObject(match, getType(kind)).catch(() => null);
+    return asset ? { kind, path: match, asset } : null;
   }
 }

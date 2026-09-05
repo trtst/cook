@@ -225,6 +225,7 @@ test("current phone change code is blocked within 30 days of the last phone chan
 test("phone change completion consumes the new phone code and records the change time", async () => {
   let consumedPhone = "";
   let updatedPhone = "";
+  let auditPayload: unknown = null;
   const prisma = {
     $transaction: async <T>(callback: (tx: any) => Promise<T>) => callback(prisma),
     user: {
@@ -271,7 +272,9 @@ test("phone change completion consumes the new phone code and records the change
     },
     $queryRaw: async () => undefined,
     auditEvent: {
-      create: async () => undefined
+      create: async ({ data }: { data: { action: string; payload: unknown } }) => {
+        if (data.action === "USER_PHONE_CHANGED") auditPayload = data.payload;
+      }
     }
   };
   const sms = {
@@ -288,4 +291,10 @@ test("phone change completion consumes the new phone code and records the change
   assert.equal(updatedPhone, "13900000009");
   assert.equal(result.phone, "139xxxxx009");
   assert.equal(result.hasPassword, true);
+  assert.deepEqual(auditPayload, {
+    oldPhone: "138xxxxx009",
+    newPhone: "139xxxxx009"
+  });
+  assert.equal(JSON.stringify(auditPayload).includes("13800000009"), false);
+  assert.equal(JSON.stringify(auditPayload).includes("13900000009"), false);
 });

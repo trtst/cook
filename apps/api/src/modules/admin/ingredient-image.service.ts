@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import type { UUID } from "../../contracts/types";
 
 type RequestLike = {
@@ -12,10 +10,6 @@ type RequestLike = {
 
 const ingredientImageSize = 50;
 const maxImageBytes = 5 * 1024 * 1024;
-
-function getAssetRoot() {
-  return resolve(process.env.APP_ASSET_DIR || join(process.cwd(), "var", "app-assets"));
-}
 
 function isPng(buffer: Buffer) {
   return (
@@ -44,13 +38,11 @@ function readPngSize(buffer: Buffer) {
 
 @Injectable()
 export class IngredientImageService {
+  constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
+
   buildImageUrl(request: RequestLike, ingredientId: UUID, updatedAt: Date | null) {
     if (!updatedAt) return null;
-    const protocol = request.protocol || "http";
-    const host = request.get?.("host");
-    const path = `/api/public-assets/ingredients/${ingredientId}?v=${encodeURIComponent(updatedAt.toISOString())}`;
-    if (!host) return path;
-    return `${protocol}://${host}${path}`;
+    return this.assetStorage.publicUrl(request, this.getPublicKey(ingredientId), updatedAt);
   }
 
   async stageImageUpload(ingredientId: UUID, file: { buffer?: Buffer; size?: number } | undefined) {
@@ -70,27 +62,24 @@ export class IngredientImageService {
     }
 
     const tempPath = this.getTempPath(ingredientId);
-    await mkdir(this.getTempDir(), { recursive: true });
-    await writeFile(tempPath, file.buffer);
+    await this.assetStorage.writeObject(tempPath, file.buffer, "image/png");
     return tempPath;
   }
 
   async replaceStagedImage(ingredientId: UUID, tempPath: string) {
     const imagePath = this.getImagePath(ingredientId);
     const backupPath = this.getBackupPath(ingredientId);
-    await mkdir(this.getImageDir(), { recursive: true });
-    await mkdir(this.getTempDir(), { recursive: true });
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
     try {
-      await rename(imagePath, backupPath);
+      await this.assetStorage.moveObject(imagePath, backupPath);
     } catch {
       // No existing image file to back up.
     }
     try {
-      await rename(tempPath, imagePath);
+      await this.assetStorage.moveObject(tempPath, imagePath);
     } catch (error) {
       try {
-        await rename(backupPath, imagePath);
+        await this.assetStorage.moveObject(backupPath, imagePath);
       } catch {
         // Best effort restore. Upper layer will still surface failure.
       }
@@ -101,10 +90,10 @@ export class IngredientImageService {
 
   async rollbackReplacedImage(ingredientId: UUID, backupPath: string | null) {
     const imagePath = this.getImagePath(ingredientId);
-    await rm(imagePath, { force: true });
+    await this.assetStorage.deleteObject(imagePath);
     if (!backupPath) return;
     try {
-      await rename(backupPath, imagePath);
+      await this.assetStorage.moveObject(backupPath, imagePath);
     } catch {
       // Best effort rollback. Public reads are still gated by database state.
     }
@@ -112,16 +101,15 @@ export class IngredientImageService {
 
   async finalizeReplacedImage(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async stageClearImage(ingredientId: UUID) {
     const imagePath = this.getImagePath(ingredientId);
     const backupPath = this.getBackupPath(ingredientId);
-    await mkdir(this.getTempDir(), { recursive: true });
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
     try {
-      await rename(imagePath, backupPath);
+      await this.assetStorage.moveObject(imagePath, backupPath);
       return backupPath;
     } catch {
       return null;
@@ -131,9 +119,9 @@ export class IngredientImageService {
   async rollbackClearedImage(ingredientId: UUID, backupPath: string | null) {
     if (!backupPath) return;
     const imagePath = this.getImagePath(ingredientId);
-    await rm(imagePath, { force: true });
+    await this.assetStorage.deleteObject(imagePath);
     try {
-      await rename(backupPath, imagePath);
+      await this.assetStorage.moveObject(backupPath, imagePath);
     } catch {
       // Best effort rollback. Public reads are still gated by database state.
     }
@@ -141,44 +129,47 @@ export class IngredientImageService {
 
   async finalizeClearedImage(backupPath: string | null) {
     if (!backupPath) return;
-    await rm(backupPath, { force: true });
+    await this.assetStorage.deleteObject(backupPath);
   }
 
   async discardStagedImage(tempPath: string | null) {
     if (!tempPath) return;
-    await rm(tempPath, { force: true });
+    await this.assetStorage.deleteObject(tempPath);
   }
 
   async getImageAsset(ingredientId: UUID) {
-    const filePath = this.getImagePath(ingredientId);
-    try {
-      return {
-        contentType: "image/png",
-        stream: createReadStream(filePath),
-        stat: await stat(filePath)
-      };
-    } catch {
+    const asset = await this.assetStorage.readObject(this.getImagePath(ingredientId), "image/png").catch(() => null);
+    if (!asset) {
       throw new NotFoundException("食材图片不存在");
     }
+    return {
+      contentType: asset.contentType,
+      stream: asset.stream,
+      stat: { size: asset.size }
+    };
   }
 
   private getImageDir() {
-    return join(getAssetRoot(), "ingredients");
+    return assetKey("uploads", "ingredients");
+  }
+
+  private getPublicKey(ingredientId: UUID) {
+    return assetKey(this.getImageDir(), ingredientId);
   }
 
   private getImagePath(ingredientId: UUID) {
-    return join(this.getImageDir(), `${ingredientId}.png`);
+    return assetKey(this.getImageDir(), `${ingredientId}.png`);
   }
 
   private getTempDir() {
-    return join(getAssetRoot(), "ingredients-temp");
+    return assetKey(this.getImageDir(), ".tmp");
   }
 
   private getTempPath(ingredientId: UUID) {
-    return join(this.getTempDir(), `${ingredientId}-${randomUUID()}.png`);
+    return assetKey(this.getTempDir(), `${ingredientId}-${randomUUID()}.png`);
   }
 
   private getBackupPath(ingredientId: UUID) {
-    return join(this.getTempDir(), `${ingredientId}-${randomUUID()}.bak`);
+    return assetKey(this.getTempDir(), `${ingredientId}-${randomUUID()}.bak`);
   }
 }

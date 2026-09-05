@@ -38,7 +38,7 @@ type TableTopicRow = Prisma.TableTopicGetPayload<{
   };
 }>;
 
-const topicImagePath = /^\/api\/public-assets\/table-topics\/\d+$/i;
+const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/table-topics\/\d+$/i;
 
 function cleanText(value: string | null | undefined) {
   const text = value?.trim() ?? "";
