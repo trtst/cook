@@ -71,6 +71,25 @@
 - 代理配置位置：落到具体仓库后写明具体文件
 - 数据源切换方式：写明通过环境变量、配置文件或工厂方法切换
 
+## 静态资源存储
+
+API 默认使用本地 `APP_ASSET_DIR` 保存上传资源。生产切到阿里云 OSS 时只改后端环境变量，不把 AccessKey 下发到小程序或后台前端：
+
+```text
+ASSET_STORAGE_DRIVER=oss
+ASSET_STORAGE_PREFIX=prod
+OSS_REGION=oss-cn-beijing
+OSS_BUCKET=trtst-prod-assets
+OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com
+OSS_ACCESS_KEY_ID=<server-only>
+OSS_ACCESS_KEY_SECRET=<server-only>
+ASSET_PUBLIC_BASE_URL=https://static.example.com
+```
+
+静态资源逻辑路径统一是 `uploads/...`。如果 OSS bucket 内按环境分目录，生产设置 `ASSET_STORAGE_PREFIX=prod`，开发设置 `ASSET_STORAGE_PREFIX=dev`，后端实际对象 key 会变成 `prod/uploads/...` 或 `dev/uploads/...`。
+
+对外 URL 仍保持稳定：配置 `ASSET_PUBLIC_BASE_URL` 时返回 `https://static.example.com/uploads/...`；未配置时返回当前 API host 下的 `/static/uploads/...`，由 API 代理读取私有 bucket。若静态域名直接回源 OSS 且对象放在 `prod/uploads/...`，需要在 CDN/OSS 回源层把域名 origin path 指到对应环境前缀，或使用独立 bucket，避免把 `prod/dev` 泄漏到前端 URL。
+
 ## 提交前最低检查
 
 每次提交前至少确认：

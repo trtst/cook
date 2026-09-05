@@ -251,12 +251,13 @@ GET  /users/me/medals
 GET  /users/me/notification-settings
 GET  /users/me/notification-badge
 GET  /users/me/notification-feed
-PUT  /users/me
+PUT  /users/me/profile
 PUT  /users/me/notification-settings
 PUT  /users/me/notification-feed-read
 POST /membership-codes/redeem
 PUT  /users/me/display
 PUT  /users/me/password
+POST /users/me/avatar
 POST /users/me/phone/bind
 POST /users/me/phone/change-current-code
 POST /users/me/phone/change-start
@@ -609,7 +610,7 @@ interface RedeemMembershipCodeResult {
 
 `POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；设置初始密码和修改新密码均执行 8-20 位、字母 / 数字 / 符号任意两类的统一强度规则，登录密码本身只做哈希比对和风控。密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
 
-`GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
+`GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；登录图公开 URL 使用真实静态对象路径，未配置静态域名时为 `/static/uploads/admin/login-image/login-image.{ext}`，配置 `ASSET_PUBLIC_BASE_URL` 时为静态域名下的 `/uploads/admin/login-image/login-image.{ext}`。接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 
 `GET /home-entries` 只返回小程序首页入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 既可服务 hero 运营大图，也可服务右侧运营卡或图标区；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN` 固定作为首页 hero 运营位，`SIDE_TOP / SIDE_BOTTOM` 固定作为 hero 下方右侧两张运营卡并始终返回，`QUICK_1 ... QUICK_4` 固定对应首页四个动作入口坑位，但公开接口只返回当前 `LISTED` 的四宫格入口；客户端仍按 `placement` 自己拆出 hero、右侧运营卡和下方快捷入口。
 
@@ -625,7 +626,7 @@ interface RedeemMembershipCodeResult {
 
 `GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回业务 `code=404`。
 
-`GET /users/me` 和 `PUT /users/me` 返回 `MeResponse`。该响应只承接账号设置、资料展示、展示能力和会员入口所需状态，不返回 `uid / nickname / phone`；登录身份摘要由 `AuthSessionResult.user` 承接。`MeResponse.profile` 返回当前用户可编辑资料：`cookNo / bio / gender / birthDate`。`cookNo` 是公开唯一炊火号，5-20 位，只允许字母、数字和下划线；新用户默认用公开 `uid` 字符串生成，存量用户由迁移回填。默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改。`PUT /users/me` 每次字段编辑页只提交一个字段，允许 `nickname / cookNo / bio / gender / birthDate`，其中 `nickname` 为 2-24 个字符且不能包含 `@<>/`，`nickname / cookNo` 不接受 `null`，`bio` 最多 80 个字符且允许 `null`，`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`，`birthDate` 使用 `YYYY-MM-DD`、不能晚于今天且年龄小于等于 14 岁时返回“未满14岁需实名认证”。`PUT /users/me` 不接收 `avatarUrl`，避免绕过裁剪上传链路。头像由 `POST /users/me/avatar` 承接，客户端必须先复用图片裁剪页按 1:1 裁剪，再以 `multipart/form-data` 的 `file` 字段上传并携带 `Idempotency-Key`；服务端只接受 JPG、PNG、WEBP，成功后写入当前用户 `avatarUrl` 并返回最新 `MeResponse`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回业务 `code=503`，不得通过 URL 绕过背景上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
+`GET /users/me` 返回 `MeResponse`。该响应只承接账号设置、资料展示、展示能力和会员入口所需状态，不返回 `uid / nickname / phone`；登录身份摘要由 `AuthSessionResult.user` 承接。`MeResponse.profile` 返回当前用户可编辑资料：`cookNo / bio / gender / birthDate`。`cookNo` 是公开唯一炊火号，5-20 位，只允许字母、数字和下划线；新用户默认用公开 `uid` 字符串生成，存量用户由迁移回填。默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改。`PUT /users/me/profile` 是轻量保存资料接口，每次字段编辑页只提交一个字段，允许 `nickname / cookNo / bio / gender / birthDate`，其中 `nickname` 为 2-24 个字符且不能包含 `@<>/`，`nickname / cookNo` 不接受 `null`，`bio` 最多 80 个字符且允许 `null`，`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`，`birthDate` 使用 `YYYY-MM-DD`、不能晚于今天且年龄小于等于 14 岁时返回“未满14岁需实名认证”。资料保存成功只返回 `data = null`，客户端直接合并本次成功提交字段，不再为了保存结果额外请求 `/users/me`。`PUT /users/me/profile` 不接收 `avatarUrl`，避免绕过裁剪上传链路。头像由 `POST /users/me/avatar` 承接，客户端必须先复用图片裁剪页按 1:1 裁剪，再以 `multipart/form-data` 的 `file` 字段上传并携带 `Idempotency-Key`；服务端只接受 JPG、PNG、WEBP，成功后按公开 `uid` 生成头像对象路径，不在公开 URL 中使用内部用户 id，并写入当前用户 `avatarUrl`、只返回最终可展示的 `{ avatarUrl }`。当前用户背景图能力未开放，`display` 中两个 URL 固定为 `null`，两个 `canUse` 字段固定为 `false`。`PUT /users/me/display` 保留路径，但当前统一返回业务 `code=503`，不得通过 URL 绕过背景上传能力。`GET /users/me/medals` 返回当前用户勋章墙摘要，包含 `earnedCount / totalCount / categories / items`。`items` 当前按模板返回 `code / awardRule / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / category / categoryName / name / description / condition / earnedUserCount / earned / isLimited / startAt / endAt / awardedAt`，不返回进度条、差几次或会员专属字段。客户端应优先按 `earned` 状态选择 `earnedImageUrl / lockedImageUrl`，`imageUrl` 仅作为已获得图兼容字段。
 
 `POST /membership-codes/redeem` 只接受登录用户调用，必须携带 `Idempotency-Key`。请求体只收 `code`；服务端会在事务内完成单码锁定、SKU/批次开放校验、体验累计天数校验、正式码 30 天冷却校验、当前会员冲突校验、有效会员到账、单码置已用和审计。DTO/鉴权/限流均返回 HTTP `200`，并分别使用业务 `code=400 / 401 / 429`；可预期的兑换业务拒绝同样返回 HTTP `200` + 业务 `code/message`，其中正式码 30 天冷却返回 `code = 4601, message = "30天内仅可兑换一次"`，无效/停用/未上架/会员状态冲突/超过体验上限等其余内部原因统一收口为 `code = 4602, message = "兑换码无效或不可用"`。成功返回更新后的 `membership` 摘要和 `redeemedAt`。
 
@@ -648,6 +649,9 @@ Auth: UserBearerAuth
 POST /admin/auth/login
 GET  /admin/dashboard/summary
 GET  /admin/dashboard/trends
+GET  /admin/material-images
+POST /admin/material-images
+DELETE /admin/material-images/{imageId}
 GET  /admin/users
 POST /admin/users
 PUT  /admin/users/{userId}
@@ -707,6 +711,7 @@ POST /admin/content
 PUT  /admin/content/{contentId}
 POST /admin/content/{contentId}/status
 POST /admin/content/images
+GET  /static/uploads/material-store/{fileName}
 GET  /site-contents/articles
 GET  /site-contents/articles/{articleId}
 POST /site-contents/articles/{articleId}/view
@@ -715,12 +720,14 @@ DELETE /site-contents/articles/{articleId}/like
 GET  /site-contents/official-messages
 GET  /site-contents/official-messages/{contentId}
 GET  /site-contents/resolve?path={path}
-GET  /public-assets/site-content-images/{fileName}
+GET  /static/uploads/site-content-images/{fileName}
 ```
 
 `GET /admin/dashboard/summary` 是后台首页只读摘要接口，只返回首页当前需要的计数，不混入分页列表、明细、趋势和策略对象。当前响应新增 `overview`，固定返回 `todayNewUsers / sevenDayNewUsers / totalUsers / openReportCount / pendingRecipeCount / pendingIngredientCount / todayRedeemedCount` 这组首页核心卡片数据；同时继续保留四组结构化统计：用户 `total / activeCount / disabledCount`，饭搭子 `total / activeCount / memberCount`，菜谱 `total / activeCount / blockedCount / recycledCount / openReportCount`，以及基础资料 `categoryCount / itemCount / unitCount`。其中 `memberCount` 继续沿用后台饭搭子列表的有效成员口径，只统计 `ACTIVE / RESTRICTED`。
 
 `GET /admin/dashboard/trends` 是后台首页趋势图接口，只允许 `SUPER_ADMIN` 调用，查询参数固定为 `range=7D | 30D`，默认 `7D`。响应返回按日补齐的趋势点数组，每个点固定包含 `date / label / newUsers / totalUsers / openReportCount / pendingRecipeCount / pendingIngredientCount / membershipGeneratedCount / membershipRedeemedCount`，用于后台首页直接绘制轻量趋势图，不返回分页和明细列表。
+
+`GET /admin/material-images`、`POST /admin/material-images` 和 `DELETE /admin/material-images/{imageId}` 共同维护后台图片素材库。该能力只允许 `SUPER_ADMIN` 使用，是运营素材库，不是用户头像、用户首页背景、菜谱草稿图、首页入口图或富文本图片的替代上传入口。图片对象固定写入独立静态资源目录 `uploads/material-store/`；生产环境使用 OSS driver 时，该目录对应 OSS 中的独立文件夹，用于存放杂乱运营素材，不在前台公开地址中暴露 `admin` 命名。上传请求必须带 `Idempotency-Key`，使用 multipart form-data 提交 `file + note`，`note` 为 1 到 120 字备注；单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`，服务端读取真实宽高并限制最大 `4096x4096`。列表固定分页返回 `PageResult<AdminMaterialImageItem>`，每项包含 `id / imageUrl / note / contentType / sizeBytes / width / height / uploader / createdAt / updatedAt`，后台页面可复制 `imageUrl` 供前台页面配置粘贴使用。删除请求必须带 `Idempotency-Key`，服务端删除素材记录后删除对应对象存储文件；当前不做跨首页配置、文章、专题等业务引用保护，后台只提示“删除后已使用该地址的前台页面图片会失效”。公开读取走 `GET /static/uploads/material-store/{fileName}`。
 
 ```ts
 interface CreateAdminUserRequest {
@@ -757,7 +764,7 @@ interface AdminUserPhoneRevealResponse {
 
 ```ts
 interface AdminUserEntitlementResponse {
-  user: Pick<UserProfile, "id" | "uid" | "nickname" | "phone" | "status">;
+  user: Pick<UserProfile, "id" | "uid" | "nickname" | "avatarUrl" | "phone" | "status" | "cookNo" | "bio" | "gender" | "birthDate">;
   membership: UserMembership;
   display: Pick<UserDisplay, "canUseProfileBackground" | "canUseHomeBackground">;
   storage: StorageUsageSummary;
@@ -767,7 +774,9 @@ interface AdminUserEntitlementResponse {
 }
 ```
 
-`AdminUserEntitlementResponse.user.phone` 只返回脱敏手机号，用于后台权益抽屉默认展示。`POST /admin/users/{userId}/phone/reveal` 是后台完整手机号敏感读取接口，仅 `SUPER_ADMIN` 可调用；服务端每次调用都重新校验管理员实时状态和角色、校验目标用户存在、写入 `USER_PHONE_REVEALED` 审计事件，并且响应只返回 `{ phone }`。审计 payload 不记录完整手机号。后台页面点击“查看手机号”前必须二次确认，关闭抽屉后不得继续保留完整手机号状态。
+后台 `GET /admin/users` 的用户摘要返回 `cookNo / bio / gender / birthDate`，列表页只展示炊火号，高频排查可按 `UID / 昵称 / 炊火号 / 手机号` 搜索。`AdminUserEntitlementResponse.user` 额外返回 `avatarUrl / cookNo / bio / gender / birthDate`，用于权益抽屉内的“个人资料”只读展示，不开放后台改个人资料入口。
+
+`AdminUserEntitlementResponse.user.phone` 只返回脱敏手机号，用于后台权益抽屉默认展示。`POST /admin/users/{userId}/phone/reveal` 是后台完整手机号敏感读取接口，仅 `SUPER_ADMIN` 可调用；服务端每次调用都重新校验管理员实时状态和角色、校验目标用户存在、写入 `USER_PHONE_REVEALED` 审计事件，并且响应只返回 `{ phone }`。审计 payload 不记录完整手机号。后台页面点击“查看手机号”前必须二次确认，关闭抽屉后不得继续保留完整手机号状态。前台用户完成手机号换绑、后台管理员编辑用户手机号时均写入 `USER_PHONE_CHANGED` 审计事件，payload 只记录脱敏 `oldPhone / newPhone`，不得写入明文手机号。
 
 ```ts
 type MembershipCodeKind = "FORMAL" | "TRIAL";
@@ -886,7 +895,7 @@ POST /admin/content/images
 GET  /site-contents/official-messages
 GET  /site-contents/official-messages/{contentId}
 GET  /site-contents/resolve?path={path}
-GET  /public-assets/site-content-images/{fileName}
+GET  /static/uploads/site-content-images/{fileName}
 ```
 
 这一组接口共同承接后台“内容治理”。栏目治理只服务站点内容栏目，不扩成通用分类中心。`GET /admin/content/channels` 固定返回分页 `PageResult<AdminSiteContentChannelSummary>`，支持按 `code` 模糊过滤；`POST /admin/content/channels` 要求 `Idempotency-Key`，创建时维护 `code / name / description / sortOrder`；`PUT /admin/content/channels/{channelId}` 也要求 `Idempotency-Key`，但只维护 `name / description / sortOrder`，并通过 `expectedVersion` 防并发覆盖，已创建栏目的 `code` 不支持修改。V1 后台“栏目配置”页面只展示和维护前台知识文章可用的 `KITCHEN / COOK / FOOD` 三个栏目，对应 `厨房百事 / 烹调技法 / 饮食文化`，不在运营入口继续开放新建栏目。
@@ -899,7 +908,7 @@ GET  /public-assets/site-content-images/{fileName}
 
 `POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
 
-`POST /admin/content/images` 是后台富文本图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`，单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`。服务端把文件落到站内资源目录，并返回 `imageUrl`；公开读取统一走 `GET /public-assets/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。
+`POST /admin/content/images` 是后台富文本图片上传入口，只允许 `SUPER_ADMIN` 调用，请求头必须带 `Idempotency-Key`，单图大小上限 `8 MB`，只接受 `JPG / PNG / WEBP`。服务端把文件写入统一静态资源存储，并返回 `imageUrl`；公开读取统一走 `GET /static/uploads/site-content-images/{fileName}`，当前只做静态资源读取，不建独立数据库表。后台图片素材库另走 `/admin/material-images`，用于可列表、可复制、可删除的运营素材，不复用这个富文本上传入口。
 
 `GET /site-contents/resolve` 是站点和官网的公开内容读取接口，只按 `path` 返回已发布内容。当前只返回 `PUBLISHED` 内容，固定响应 `id / type / slug / path / title / summary / label / heroNote / coverImageUrl / bodyHtml / bodyText / publishedAt / effectiveAt / updatedAt / channelCode / channelName`，不返回草稿和下架内容。
 
@@ -967,7 +976,7 @@ POST /admin/ingredient-feedbacks/{feedbackId}/review
 
 `GET /admin/units` 返回全部系统单位摘要，按 `type -> systemSortOrder -> name` 排序；系统单位摘要新增 `version` 和 `updatedAt`，用于后台编辑、删除和拖拽排序的并发控制。`POST /admin/units` 新建一个系统单位；`PUT /admin/units/{unitId}` 修改单位名称或类型；`DELETE /admin/units/{unitId}` 只在该单位未被任何食材引用时允许删除，否则返回冲突错误；`POST /admin/units/reorder` 只重排某一个 `type` 分组下的完整系统单位集合，成功后统一重写该分组顺序。`GET /admin/pending-units` 返回待审核单位建议分页，支持按单位名、提交人昵称或 UID 搜索；摘要固定返回 `name / type / version / createdAt / user`。`POST /admin/pending-units/{recommendationId}/review` 只支持 `APPROVE / REJECT` 两种结果；通过时可调整 `name + type`，若系统库已存在同名系统单位，则直接归并并把建议记为 `MERGED`，否则新建系统单位并记为 `ADOPTED`；拒绝时回写简短 `reason`，前台“推荐审核”直接展示。
 
-`GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 和 `factStatus` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`，`factStatus` 允许 `ALL / MISSING`，默认 `ALL`。当传 `categoryId` 时，列表按该分类内系统顺序返回；不传 `categoryId` 时，列表进入后台虚拟“全部食材”视图，按系统食材全局展示顺序返回，用于统一查看、编辑和拖拽控制前台“全部食材”口径。`factStatus = MISSING` 用于后台快速查看仍建议补录结构化属性的系统食材，当前按既有自动识别规则检查 `主蛋白 / 主食 / 辣味食材` 三类缺口。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。系统食材同时维护两套顺序：`分类内顺序` 只服务真实分类管理，`全局展示顺序` 只服务后台“全部食材”视图和前台“全部食材”展示。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`，下架不做物理删除；重新上架时服务端会把该食材同时放到当前分类排序末尾和全局展示顺序末尾，避免与现有启用中食材顺序冲突。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /public-assets/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态文件还在也不得继续外露。`POST /admin/ingredients/reorder` 支持两种模式：传 `categoryId` 时，只接收该分类下启用中系统食材的完整集合顺序并重写分类内顺序；不传 `categoryId` 时，只接收全部启用中系统食材的完整集合顺序并重写全局展示顺序。服务端统一校验集合完整性和 `expectedVersion`。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。拒绝时必须选择预设 `rejectReasonCode`：`NAME_NOT_CLEAR / NAME_HAS_BRAND / CATEGORY_NOT_FIT / UNIT_NOT_FIT / OUT_OF_SCOPE / OTHER`；只有 `OTHER` 仍要求补充详细 `reason`。服务端会把对应建议写入推荐记录，供前台“我的推荐”直接展示。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。`GET /admin/ingredient-feedbacks` 只返回待审核的系统食材纠错分页，支持按当前食材名、建议食材名、分类、备注、提交人昵称或 UID 搜索；列表摘要固定返回 `当前名字/分类 + 建议名字/分类 + 备注 + 提交人 + ingredientVersion`。`POST /admin/ingredient-feedbacks/{feedbackId}/review` 只支持 `APPROVE / REJECT` 两种结果；采纳时后台可在用户建议基础上再次调整最终 `name + categoryId`，服务端直接更新对应系统食材并递增其 `version`，再把该纠错记录标记为 `ADOPTED`；驳回时只回写 `reviewNote` 并标记为 `REJECTED`。
+`GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 和 `factStatus` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`，`factStatus` 允许 `ALL / MISSING`，默认 `ALL`。当传 `categoryId` 时，列表按该分类内系统顺序返回；不传 `categoryId` 时，列表进入后台虚拟“全部食材”视图，按系统食材全局展示顺序返回，用于统一查看、编辑和拖拽控制前台“全部食材”口径。`factStatus = MISSING` 用于后台快速查看仍建议补录结构化属性的系统食材，当前按既有自动识别规则检查 `主蛋白 / 主食 / 辣味食材` 三类缺口。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。系统食材同时维护两套顺序：`分类内顺序` 只服务真实分类管理，`全局展示顺序` 只服务后台“全部食材”视图和前台“全部食材”展示。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`，下架不做物理删除；重新上架时服务端会把该食材同时放到当前分类排序末尾和全局展示顺序末尾，避免与现有启用中食材顺序冲突。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /static/uploads/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态资源还在也不得继续外露。`POST /admin/ingredients/reorder` 支持两种模式：传 `categoryId` 时，只接收该分类下启用中系统食材的完整集合顺序并重写分类内顺序；不传 `categoryId` 时，只接收全部启用中系统食材的完整集合顺序并重写全局展示顺序。服务端统一校验集合完整性和 `expectedVersion`。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。拒绝时必须选择预设 `rejectReasonCode`：`NAME_NOT_CLEAR / NAME_HAS_BRAND / CATEGORY_NOT_FIT / UNIT_NOT_FIT / OUT_OF_SCOPE / OTHER`；只有 `OTHER` 仍要求补充详细 `reason`。服务端会把对应建议写入推荐记录，供前台“我的推荐”直接展示。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。`GET /admin/ingredient-feedbacks` 只返回待审核的系统食材纠错分页，支持按当前食材名、建议食材名、分类、备注、提交人昵称或 UID 搜索；列表摘要固定返回 `当前名字/分类 + 建议名字/分类 + 备注 + 提交人 + ingredientVersion`。`POST /admin/ingredient-feedbacks/{feedbackId}/review` 只支持 `APPROVE / REJECT` 两种结果；采纳时后台可在用户建议基础上再次调整最终 `name + categoryId`，服务端直接更新对应系统食材并递增其 `version`，再把该纠错记录标记为 `ADOPTED`；驳回时只回写 `reviewNote` 并标记为 `REJECTED`。
 
 后台菜谱治理当前补充为：
 

@@ -49,7 +49,8 @@ http://127.0.0.1:3100/api
 | POST | `/api/auth/logout` | `authApi.logout` | 吊销 refresh token |
 | GET | `/api/auth/me` | `authApi.getMe` | 读取最小认证资料 |
 | GET | `/api/users/me` | `userApi.getCurrent` | 账号状态、展示占位和会员事实 |
-| PUT | `/api/users/me` | `userApi.updateCurrent` | 更新昵称和头像 |
+| PUT | `/api/users/me/profile` | `userApi.updateCurrent` | 保存个人资料字段，成功只返回状态 |
+| POST | `/api/users/me/avatar` | `userApi.uploadCurrentAvatar` | 上传头像，成功返回最终头像 URL |
 | PUT | `/api/users/me/display` | `userApi.updateDisplay` | 预留背景设置，当前返回业务 `code=503` |
 | PUT | `/api/users/me/password` | `userApi.changeCurrentPassword` | 修改密码 |
 | GET | `/api/users/me/taste-profile` | `userApi.getTasteProfile` | 本人口味与安全资料 |
@@ -212,7 +213,7 @@ interface MeResponse {
 ### 1.3 更新资料
 
 ```text
-PUT /api/users/me
+PUT /api/users/me/profile
 Auth: UserBearerAuth
 ```
 
@@ -228,9 +229,9 @@ Auth: UserBearerAuth
 }
 ```
 
-`nickname` 为 2-24 个字符，不能包含 `@<>/`；`cookNo` 为 5-20 位，只允许字母、数字和下划线，服务端用唯一约束兜底；默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改；`bio` 最多 80 个字符；`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`；`birthDate` 使用 `YYYY-MM-DD`，不能晚于今天，年龄小于等于 14 岁时返回“未满14岁需实名认证”，客户端提示后要求重新选择。成功返回 `MeResponse`。背景图不得混入本接口。手机号绑定或换绑成功后，客户端需刷新 `/auth/me` 并同步 session 中的脱敏手机号展示。
+`nickname` 为 2-24 个字符，不能包含 `@<>/`；`cookNo` 为 5-20 位，只允许字母、数字和下划线，服务端用唯一约束兜底；默认 `cookNo` 等于公开 `uid` 时允许首次设置为自定义值，设置为自定义值后只能重复提交相同值，不允许再次修改；`bio` 最多 80 个字符；`gender` 只允许 `MALE / FEMALE / UNSPECIFIED` 或 `null`；`birthDate` 使用 `YYYY-MM-DD`，不能晚于今天，年龄小于等于 14 岁时返回“未满14岁需实名认证”，客户端提示后要求重新选择。成功只返回 `data = null` 状态，不返回完整 `MeResponse`；客户端直接把本次成功提交的字段合并到本地资料缓存和会话摘要。背景图不得混入本接口。手机号绑定或换绑成功后，客户端需刷新 `/auth/me` 并同步 session 中的脱敏手机号展示。
 
-`PUT /users/me` 不接受 `avatarUrl`。头像不通过当前资料写入口直接提交本地路径或外部 URL。客户端在编辑资料页点击头像后，先复用菜谱图片裁剪页，使用固定 1:1 的 `profileAvatar` 裁剪策略，再调用：
+`PUT /users/me/profile` 不接受 `avatarUrl`。头像不通过当前资料写入口直接提交本地路径或外部 URL。客户端在编辑资料页点击头像后，先复用菜谱图片裁剪页，使用固定 1:1 的 `profileAvatar` 裁剪策略，再调用：
 
 ```text
 POST /api/users/me/avatar
@@ -239,7 +240,7 @@ Header: Idempotency-Key
 Content-Type: multipart/form-data
 ```
 
-请求文件字段为 `file`，服务端只接受 JPG、PNG、WEBP 图片，上传成功后写入当前用户 `avatarUrl` 并返回最新 `MeResponse`。
+请求文件字段为 `file`，服务端只接受 JPG、PNG、WEBP 图片，上传成功后写入当前用户 `avatarUrl`，并只返回最终可展示的 `avatarUrl`。客户端直接用返回的 URL 更新本地头像状态，不再额外请求 `/api/users/me`。
 
 ### 1.4 背景设置预留接口
 

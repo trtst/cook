@@ -35,7 +35,8 @@
 | --- | --- | --- | --- |
 | `POST /auth/login` | 改造响应 DTO | 登录凭证和最小会话用户摘要 | 背景图、会员额度、饭搭子状态 |
 | `GET /users/me` | 改造 | 当前用户身份、个人资料、展示设置和会员事实 | 菜谱额度、空间用量、饭搭子计数、图片编码参数 |
-| `PUT /users/me` | 保留并收窄 | 修改昵称和头像引用 | 未修改字段的完整用户对象 |
+| `PUT /users/me/profile` | 新增轻量写入口 | 修改昵称、炊火号、简介、性别和生日，成功只返回状态 | 未修改字段、完整 `MeResponse` |
+| `POST /users/me/avatar` | 独立上传写入口 | 上传当前用户头像，成功返回最终 `avatarUrl` | 完整 `MeResponse` |
 | `PUT /users/me/display` | 保留预留 | 背景图能力未开放，当前统一返回 `503` | 任意外部 URL、客户端声明文件大小 |
 | `GET /entitlements/current` | 废弃 | 无替代的一比一大快照接口 | 全部旧字段 |
 | `GET /storage-usage` | 保留，迁移模块归属 | 个人逻辑空间总量、分模块用量和空间状态 | 饭搭子关系状态、图片编码策略 |
@@ -161,7 +162,8 @@ interface StorageUsageResponse {
 | --- | --- | --- |
 | 登录 | `SessionUser` | 只用于建立会话 |
 | 当前用户 | `MeResponse` | 身份、资料、展示和会员事实 |
-| 更新资料 | `UpdateMeResult` | 只返回被修改的资料版本或新的 `MeResponse`，二选一后冻结 |
+| 更新资料 | `ApiResponse<null>` | `PUT /users/me/profile` 成功只返回状态，客户端合并本次成功字段 |
+| 上传头像 | `UploadCurrentAvatarResponse` | `POST /users/me/avatar` 成功只返回最终 `avatarUrl` |
 | 饭搭子列表 | `DiningGroupListResponse` | 关系条目和关系域用量 |
 | 空间用量 | `StorageUsageResponse` | 只返回空间域信息 |
 | 后台用户详情 | `AdminUserDetailResponse` | 后台专用，不继承 Client DTO |
@@ -305,7 +307,7 @@ createdAt
 2. 会员使用单行当前事实，还是需要多周期历史和预生效记录。
 3. 图片上传返回的稳定资产引用格式。
 4. 菜谱图片采用独立关系表，还是在不可变正文中保存稳定 `assetId` 引用。
-5. 更新资料接口返回完整 `MeResponse`，还是只返回修改结果和新版本。
+5. 已确认：更新资料接口只返回成功状态；头像上传接口只返回最终 `avatarUrl`。
 
 ## 十二、验收门槛
 

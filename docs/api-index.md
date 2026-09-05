@@ -35,7 +35,8 @@
 | TableTopic | POST | `/table-topics/{topicId}/participate` | 当前用户参与一个餐桌话题，同一用户只记一次 |
 | User | GET | `/users/me` | 当前账号状态、展示设置和会员事实 |
 | User | GET | `/users/me/medals` | 当前用户勋章墙、分类与获得状态摘要 |
-| User | PUT | `/users/me` | 更新当前用户昵称和头像 |
+| User | PUT | `/users/me/profile` | 保存当前用户个人资料字段，成功只返回状态 |
+| User | POST | `/users/me/avatar` | 上传当前用户头像，成功返回最终头像 URL |
 | User | PUT | `/users/me/display` | 背景图能力预留，当前固定返回业务 `code=503` |
 | User | PUT | `/users/me/password` | 修改当前用户登录密码 |
 | User | GET | `/users/me/taste-profile` | 当前用户口味与安全资料 |
@@ -43,6 +44,9 @@
 | Storage | GET | `/storage-usage` | 个人逻辑空间模块明细 |
 | AdminAuth | POST | `/admin/auth/login` | 管理员登录 |
 | AdminDashboard | GET | `/admin/dashboard/summary` | 后台首页摘要统计 |
+| AdminMaterial | GET | `/admin/material-images` | 后台图片素材分页列表 |
+| AdminMaterial | POST | `/admin/material-images` | 后台上传图片素材并返回可复制地址 |
+| AdminMaterial | DELETE | `/admin/material-images/{imageId}` | 后台删除图片素材，并删除对应对象存储文件 |
 | AdminHome | GET | `/admin/home-entries` | 后台读取小程序首页 7 个快捷入口配置和站内页白名单 |
 | AdminHome | PUT | `/admin/home-entries` | 后台按提交的 `items` 保存小程序首页快捷入口配置，支持单卡或多卡一起保存 |
 | AdminHome | POST | `/admin/home-entries/{placement}/status` | 后台切换首页四宫格入口上架状态 |
