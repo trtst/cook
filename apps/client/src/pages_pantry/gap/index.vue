@@ -166,7 +166,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatDateTimeMinute } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
-import { buildDefaultShoppingListName } from "@/utils/shopping";
+import { buildDefaultShoppingListName } from "../utils/shopping";
 import { shoppingApi, type ShoppingGapItem, type ShoppingGapResponse, type ShoppingGapWindow, type ShoppingListSummary } from "../apis/shopping";
 import type { UUID } from "@/apis/http";
 

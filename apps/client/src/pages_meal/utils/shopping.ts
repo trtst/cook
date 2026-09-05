@@ -1,3 +1,9 @@
+/**
+ * 餐次分包采购清单展示工具。
+ *
+ * 餐次详情和计划页只在 `pages_meal` 内消费这些轻量展示规则，
+ * 分包内维护副本可以避免根 `utils` 生成主包未使用文件。
+ */
 import type { UUID } from "@/apis/http";
 
 export function buildDefaultShoppingListName(date = new Date()) {

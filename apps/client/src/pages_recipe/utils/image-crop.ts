@@ -1,3 +1,8 @@
+/**
+ * 菜谱分包图片裁剪会话工具。
+ *
+ * 菜谱封面与步骤图裁剪只服务 `pages_recipe`，副本留在当前分包，避免生成主包未使用 JS。
+ */
 import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
 import { createOperationId } from "@/utils/operation-id";
 
@@ -5,6 +10,7 @@ export type ImageCropMode = "fixed" | "free";
 
 export interface ImageCropPolicy {
   title: string;
+  tip?: string;
   mode: ImageCropMode;
   aspectRatio: number | null;
   outputWidth: number | null;
@@ -36,6 +42,7 @@ type ImageCropSession = {
 export const imageCropPresets = Object.freeze({
   recipeCover: {
     title: "裁剪封面图",
+    tip: "建议突出成品主体，画面尽量简洁完整。",
     mode: "fixed",
     aspectRatio: 4 / 3,
     outputWidth: 1200,
@@ -47,6 +54,7 @@ export const imageCropPresets = Object.freeze({
   } satisfies ImageCropPolicy,
   recipeStep: {
     title: "裁剪步骤图",
+    tip: "建议保留关键步骤主体，避免内容太贴边。",
     mode: "free",
     aspectRatio: null,
     outputWidth: null,
@@ -89,6 +97,7 @@ export function createImageCropRequest(
     token: options.token ?? buildImageCropToken(options.tokenPrefix),
     sourcePath,
     title: policy.title,
+    tip: policy.tip,
     mode: policy.mode,
     aspectRatio: policy.aspectRatio,
     outputWidth: policy.outputWidth,

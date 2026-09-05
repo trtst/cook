@@ -27,7 +27,13 @@
           />
 
           <text class="redeem-card__hint">兑换码由字母或数字组成，不区分大小写。</text>
-          <button class="redeem-button" :disabled="!canSubmit || submitting" :loading="submitting" @click="submitRedeem">
+          <button
+            class="redeem-button"
+            :class="{ 'redeem-button--disabled': !canSubmit || submitting }"
+            :disabled="!canSubmit || submitting"
+            :loading="submitting"
+            @click="submitRedeem"
+          >
             确认兑换
           </button>
         </template>
@@ -233,7 +239,7 @@ async function submitRedeem() {
   border: 0;
 }
 
-.redeem-button[disabled] {
+.redeem-button--disabled {
   opacity: 0.5;
   box-shadow: none;
 }

@@ -491,7 +491,7 @@ import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isMealSlotExpired } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
-import { buildDefaultShoppingListName } from "@/utils/shopping";
+import { buildDefaultShoppingListName } from "../utils/shopping";
 
 type DetailKind = "my" | "inspiration";
 type DetailMode = "published" | "preview";
@@ -2490,7 +2490,7 @@ defineExpose({
   justify-content: center;
   min-width: 132rpx;
   height: 76rpx;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-xs);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);

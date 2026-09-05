@@ -258,7 +258,7 @@ async function submit() {
   height: 84rpx;
   padding: 0 24rpx;
   border: 1rpx solid var(--material-input-border);
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--material-input-bg);
   box-shadow: var(--material-input-shadow);
   color: var(--color-text);
@@ -272,7 +272,7 @@ async function submit() {
   height: 84rpx;
   padding: 0 28rpx;
   border: 0;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-tag-primary-bg);
   color: var(--color-tag-primary-text);
   font-size: 24rpx;

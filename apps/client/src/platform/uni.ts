@@ -97,6 +97,7 @@ interface ClientPlatform {
 		saveFile(tempFilePath: string): Promise<SaveFileResult>;
 		removeSavedFile(filePath: string): Promise<void>;
 		createCanvasContext(canvasId: string, component?: unknown): UniApp.CanvasContext;
+		getCanvas2d(selector: string, component?: unknown): Promise<Canvas2dResult>;
 		canvasToTempFilePath(options: CanvasToTempFileOptions, component?: unknown): Promise<CanvasToTempFileResult>;
 	};
 }
@@ -195,8 +196,33 @@ interface PreviewImageOptions {
 	current?: string;
 }
 
+interface Canvas2dImage {
+	onload: (() => void) | null;
+	onerror: ((error: unknown) => void) | null;
+	src: string;
+}
+
+interface Canvas2dContext {
+	clearRect(x: number, y: number, width: number, height: number): void;
+	drawImage(image: Canvas2dImage, dx: number, dy: number, width: number, height: number): void;
+}
+
+interface Canvas2dNode {
+	width: number;
+	height: number;
+	getContext(type: "2d"): Canvas2dContext | null;
+	createImage(): Canvas2dImage;
+}
+
+interface Canvas2dResult {
+	canvas: Canvas2dNode;
+	width: number;
+	height: number;
+}
+
 interface CanvasToTempFileOptions {
-	canvasId: string;
+	canvasId?: string;
+	canvas?: Canvas2dNode;
 	x?: number;
 	y?: number;
 	width: number;
@@ -229,6 +255,18 @@ interface UniSystemApi {
 	getMenuButtonBoundingClientRect?: () => MenuButtonRect;
 	getAppBaseInfo?: () => AppBaseInfo;
 	onThemeChange?: (listener: (result: ThemeChangeResult) => void) => void;
+}
+
+interface UniFileSystemApi {
+	saveFile(options: {
+		tempFilePath: string;
+		success: (result: SaveFileResult) => void;
+		fail: (error: unknown) => void;
+	}): void;
+}
+
+interface UniFileSystemManagerApi {
+	getFileSystemManager?: () => UniFileSystemApi;
 }
 
 /**
@@ -520,7 +558,13 @@ function previewImage(options: PreviewImageOptions) {
 
 function saveFile(tempFilePath: string) {
 	return callUni<SaveFileResult>((resolve, reject) => {
-		uni.saveFile({
+		const manager = (uni as unknown as UniFileSystemManagerApi).getFileSystemManager?.();
+		if (!manager) {
+			reject(new Error("当前环境不支持保存文件"));
+			return;
+		}
+
+		manager.saveFile({
 			tempFilePath,
 			success: (result) => resolve({ savedFilePath: result.savedFilePath }),
 			fail: reject
@@ -542,11 +586,32 @@ function createCanvasContext(canvasId: string, component?: unknown) {
 	return uni.createCanvasContext(canvasId, component as never);
 }
 
+function getCanvas2d(selector: string, component?: unknown) {
+	return new Promise<Canvas2dResult>((resolve, reject) => {
+		uni.createSelectorQuery()
+			.in(component as never)
+			.select(selector)
+			.fields({ node: true, size: true } as never, (result: unknown) => {
+				const payload = result as { node?: Canvas2dNode; width?: number; height?: number } | null;
+				if (!payload?.node) {
+					reject(new Error("裁剪画布初始化失败"));
+					return;
+				}
+				resolve({
+					canvas: payload.node,
+					width: payload.width ?? 0,
+					height: payload.height ?? 0
+				});
+			})
+			.exec();
+	});
+}
+
 function canvasToTempFilePath(options: CanvasToTempFileOptions, component?: unknown) {
 	return callUni<CanvasToTempFileResult>((resolve, reject) => {
 		uni.canvasToTempFilePath(
-			{
-				canvasId: options.canvasId,
+			({
+				...(options.canvas ? { canvas: options.canvas } : { canvasId: options.canvasId }),
 				x: options.x ?? 0,
 				y: options.y ?? 0,
 				width: options.width,
@@ -555,9 +620,9 @@ function canvasToTempFilePath(options: CanvasToTempFileOptions, component?: unkn
 				destHeight: options.destHeight ?? options.height,
 				fileType: options.fileType ?? "jpg",
 				quality: options.quality ?? 0.9,
-				success: (result) => resolve({ tempFilePath: result.tempFilePath }),
+				success: (result: { tempFilePath: string }) => resolve({ tempFilePath: result.tempFilePath }),
 				fail: reject
-			},
+			} as unknown as UniApp.CanvasToTempFilePathOptions),
 			component as never
 		);
 	});
@@ -724,6 +789,7 @@ export const uniPlatform: ClientPlatform = {
 		saveFile,
 		removeSavedFile,
 		createCanvasContext,
+		getCanvas2d,
 		canvasToTempFilePath
 	}
 };

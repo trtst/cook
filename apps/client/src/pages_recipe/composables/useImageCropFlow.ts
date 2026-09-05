@@ -1,3 +1,9 @@
+/**
+ * 菜谱分包图片裁剪流程。
+ *
+ * 菜谱编辑的封面和步骤图裁剪只在 `pages_recipe` 内发起，
+ * 流程副本留在当前分包，避免根 `composables` 生成主包未使用文件。
+ */
 import { ref } from "vue";
 import { uniPlatform } from "@/platform/uni";
 import {

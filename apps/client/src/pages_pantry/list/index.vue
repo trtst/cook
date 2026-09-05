@@ -291,7 +291,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
-import { buildDefaultShoppingListName } from "@/utils/shopping";
+import { buildDefaultShoppingListName } from "../utils/shopping";
 import { formatMonthDay } from "../utils/date";
 import {
   shoppingApi,

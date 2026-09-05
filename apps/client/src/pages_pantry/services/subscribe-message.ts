@@ -1,3 +1,9 @@
+/**
+ * 食材分包订阅消息服务。
+ *
+ * 冰箱临期提醒订阅只由 `pages_pantry` 分包首页消费，
+ * 放在分包内避免根 `services` 生成主包未使用文件。
+ */
 import { uniPlatform, type SubscribeMessageResult } from "@/platform/uni";
 
 export const SUBSCRIBE_TEMPLATE_IDS = Object.freeze({

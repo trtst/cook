@@ -106,14 +106,6 @@
                   </view>
                 </view>
               </view>
-
-              <view class="recipe-note">
-                <text class="cookfont icon-notice recipe-note__icon" />
-                <view class="recipe-note__body">
-                  <text class="recipe-note__line">确认加入计划时，会同时保存到私房菜。</text>
-                  <text class="recipe-note__line recipe-note__line--soft">已有私房菜的菜谱不会重复保存。</text>
-                </view>
-              </view>
             </view>
 
             <view v-if="visibleHistory.length" class="topic-section">
@@ -788,40 +780,6 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 
 .recipe-card__action--queued {
   color: var(--color-support-action);
-}
-
-.recipe-note {
-  margin-top: 44rpx;
-  display: flex;
-  align-items: flex-start;
-  gap: 14rpx;
-  padding: 8rpx 0 0;
-}
-
-.recipe-note__icon {
-  flex: 0 0 auto;
-  margin-top: 8rpx;
-  color: var(--color-icon-accent);
-  opacity: 0.54;
-  font-size: 22rpx;
-  line-height: 1;
-}
-
-.recipe-note__body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.recipe-note__line {
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.7;
-}
-
-.recipe-note__line--soft {
-  color: var(--color-text-tertiary);
 }
 
 .history-scroll {

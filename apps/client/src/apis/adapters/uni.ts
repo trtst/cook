@@ -64,8 +64,8 @@ export function isUniRequestBlockedError(error: unknown): error is UniRequestBlo
 	return error instanceof UniRequestBlockedError;
 }
 
-type UniSystemInfoSyncApi = typeof uni & {
-	getSystemInfoSync?: () => {
+type UniDeviceInfoApi = typeof uni & {
+	getDeviceInfo?: () => {
 		platform?: string;
 	};
 };
@@ -100,14 +100,15 @@ function getCookFrom() {
 
 function readMiniProgramPlatform() {
 	try {
-		return ((uni as UniSystemInfoSyncApi).getSystemInfoSync?.().platform ?? "").toLowerCase();
+		return ((uni as UniDeviceInfoApi).getDeviceInfo?.().platform ?? "").toLowerCase();
 	} catch {
 		return "";
 	}
 }
 
 function isRealMiniProgramDevice() {
-	return getCookFrom() === "mini_program" && readMiniProgramPlatform() !== "devtools";
+	const platform = readMiniProgramPlatform();
+	return getCookFrom() === "mini_program" && platform !== "" && platform !== "devtools";
 }
 
 function isLocalhostHost(hostname: string) {

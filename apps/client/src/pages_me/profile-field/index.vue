@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
-import { userApi, type MeResponse, type UserGender } from "@/apis/user";
+import { userApi, type MeResponse, type UpdateCurrentUserRequest, type UserGender } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -172,8 +172,8 @@ async function saveField() {
   if (fieldType.value === "cookNo" && !(await confirmCookNoChange())) return;
   saving.value = true;
   try {
-    const nextProfile = await userApi.updateCurrent(body);
-    userStore.setProfile(nextProfile, sessionStore.uid);
+    await userApi.updateCurrent(body);
+    patchLocalProfile(body);
     if (fieldType.value === "nickname" && sessionStore.user) {
       await sessionStore.setSession({
         accessToken: sessionStore.accessToken,
@@ -191,6 +191,14 @@ async function saveField() {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
   } finally {
     saving.value = false;
+  }
+}
+
+function patchLocalProfile(body: UpdateCurrentUserRequest) {
+  const profilePatch = { ...body };
+  delete profilePatch.nickname;
+  if (Object.keys(profilePatch).length > 0) {
+    userStore.patchProfile({ profile: profilePatch }, sessionStore.uid);
   }
 }
 

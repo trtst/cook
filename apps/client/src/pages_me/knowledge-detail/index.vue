@@ -110,7 +110,7 @@ import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { UnauthorizedError } from "@/apis/http";
-import { knowledgeApi, type KnowledgeArticleDetail } from "@/apis/knowledge";
+import { knowledgeApi, type KnowledgeArticleDetail } from "../apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();

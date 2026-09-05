@@ -55,4 +55,7 @@ expectIncludes("const NAVBAR_TITLE_FADE_DISTANCE = 96");
 expectIncludes("const navbarTitleOpacity = computed(() =>");
 expectIncludes("scrollTop.value + navBarTotalHeight.value");
 expectSelectorIncludes(".knowledge-item", ["flex-direction: column;"]);
+expectExcludes('class="knowledge-hero__eyebrow"');
+expectExcludes(".knowledge-hero__eyebrow");
+expectSelectorIncludes(".knowledge-item:last-child", ["border-bottom: 0;"]);
 expectSelectorIncludes(".knowledge-item__thumb", ["width: 100%;", "aspect-ratio: 16 / 9;"]);

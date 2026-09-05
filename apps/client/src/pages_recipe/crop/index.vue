@@ -1,14 +1,13 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :class="themeClasses"
+  <Layout class="crop-layout"
+    :style="cropLayoutStyle"
     :title="cropTitle"
     full-screen
     :navbar-transparent="true"
     :navbar-opacity="1"
     :navbar-placeholder="false"
   >
-    <view class="crop-nav-backdrop" :style="navBackdropStyle" />
-
     <view v-if="loading" class="crop-state" :style="cropPageStyle">图片加载中...</view>
     <view v-else-if="errorText" class="crop-state crop-state--error" :style="cropPageStyle" @click="reloadSource">{{ errorText }}</view>
 
@@ -112,7 +111,7 @@
         </view>
       </view>
 
-      <view class="crop-tip">
+      <view v-if="cropTip" class="crop-tip">
         {{ cropTip }}
       </view>
 
@@ -125,7 +124,9 @@
 
       <canvas
         :key="currentCanvasId"
+        :id="currentCanvasId"
         :canvas-id="currentCanvasId"
+        type="2d"
         class="crop-canvas"
         :width="canvasSize.width"
         :height="canvasSize.height"
@@ -140,8 +141,6 @@ import { computed, getCurrentInstance, nextTick, reactive, ref } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { buildThemePageStyle } from "@/composables/theme-page-style";
-import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import {
@@ -149,7 +148,7 @@ import {
   writeImageCropResult,
   type ImageCropMode,
   type ImageCropRequest
-} from "@/utils/image-crop";
+} from "../utils/image-crop";
 
 type DragEdge =
   | ""
@@ -170,6 +169,8 @@ const ACTIONS_RPX = 136;
 const TIP_RPX = 92;
 const RATIO_TABS_RPX = 92;
 const CANVAS_DRAW_SETTLE_MS = 80;
+const CROP_PAGE_BG = "#101010";
+const CROP_NAV_COLOR = "#ffffff";
 
 const ratioOptions = [
   { key: "4:3", label: "4:3", ratio: 4 / 3 },
@@ -179,8 +180,13 @@ const ratioOptions = [
 ] as const;
 
 const pageStyle = usePageScrollStyle();
-const { themeVars, themeClasses } = useTheme();
-const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
+const cropLayoutStyle = computed(() => ({
+  "--crop-page-bg": CROP_PAGE_BG,
+  "--crop-nav-color": CROP_NAV_COLOR,
+  backgroundColor: CROP_PAGE_BG,
+  color: CROP_NAV_COLOR
+}));
+const themePageStyle = computed(() => `${pageStyle.value} background-color: ${CROP_PAGE_BG};`);
 const { navBarTotalHeight, safeAreaBottom, systemInfo } = useSystemInfo();
 const instance = getCurrentInstance();
 
@@ -231,24 +237,24 @@ const activeAspectRatio = computed(() => {
   return current?.ratio ?? null;
 });
 const canFreeResize = computed(() => cropMode.value === "free" && !activeAspectRatio.value);
-const navBackdropStyle = computed(() => ({
-  height: `${navBarTotalHeight.value}px`
-}));
 const windowHeight = computed(() => systemInfo.value.windowHeight || 667);
 const footerReserveHeight = computed(() => {
   const ratioHeight = showRatioPresets.value ? rpxToPx(RATIO_TABS_RPX) : 0;
-  return rpxToPx(ACTIONS_RPX + TIP_RPX) + ratioHeight + safeAreaBottom.value;
+  const tipHeight = cropTip.value ? rpxToPx(TIP_RPX) : 0;
+  return rpxToPx(ACTIONS_RPX) + ratioHeight + tipHeight + safeAreaBottom.value;
 });
 const cropPageStyle = computed(() => ({
   height: `${windowHeight.value}px`,
   paddingTop: `${navBarTotalHeight.value}px`,
-  boxSizing: "border-box" as const
+  boxSizing: "border-box" as const,
+  backgroundColor: CROP_PAGE_BG
 }));
 const cropStageHeight = computed(() => {
   return Math.max(320, windowHeight.value - navBarTotalHeight.value - footerReserveHeight.value);
 });
 const cropStageStyle = computed(() => ({
-  height: `${cropStageHeight.value}px`
+  height: `${cropStageHeight.value}px`,
+  backgroundColor: CROP_PAGE_BG
 }));
 const cropImageStyle = computed(() => ({
   width: `${image.displayWidth}px`,
@@ -262,13 +268,7 @@ const cropBoxStyle = computed(() => ({
   right: `${crop.right}px`,
   bottom: `${crop.bottom}px`
 }));
-const cropTip = computed(() => {
-  if (!cropRequest.value) return "";
-  if (cropMode.value === "fixed") {
-    return "建议突出成品主体，画面尽量简洁完整。";
-  }
-  return "建议保留关键步骤主体，避免内容太贴边。";
-});
+const cropTip = computed(() => cropRequest.value?.tip ?? "");
 const canvasStyle = computed(() => {
   return `position:absolute;left:-9999px;top:-9999px;width:${canvasSize.width}px;height:${canvasSize.height}px;`;
 });
@@ -614,20 +614,22 @@ async function exportCrop() {
   };
   await nextTick();
 
-  const context = uniPlatform.media.createCanvasContext(currentCanvasId.value, instance?.proxy);
+  const { canvas } = await uniPlatform.media.getCanvas2d(`#${currentCanvasId.value}`, instance?.proxy);
+  canvas.width = canvasSize.width;
+  canvas.height = canvasSize.height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("裁剪画布初始化失败");
+  }
   context.clearRect(0, 0, canvasSize.width, canvasSize.height);
-  // 先按原图等比缩放后的尺寸完整绘制，再由 `canvasToTempFilePath`
-  // 按同一坐标系直接截取，避免旧版 canvas 在源图裁剪或展示尺寸缩放时只导出一角。
-  context.drawImage(image.src, 0, 0, canvasSize.width, canvasSize.height);
-
-  await new Promise<void>((resolve) => {
-    context.draw(false, () => resolve());
-  });
+  const canvasImage = canvas.createImage();
+  await loadCanvasImage(canvasImage, image.src);
+  context.drawImage(canvasImage, 0, 0, canvasSize.width, canvasSize.height);
   await wait(CANVAS_DRAW_SETTLE_MS);
 
   const file = await uniPlatform.media.canvasToTempFilePath(
     {
-      canvasId: currentCanvasId.value,
+      canvas,
       x: canvasCrop.x,
       y: canvasCrop.y,
       width: canvasCrop.width,
@@ -646,6 +648,14 @@ async function exportCrop() {
     width: exportSize.width,
     height: exportSize.height
   };
+}
+
+function loadCanvasImage(canvasImage: { onload: (() => void) | null; onerror: ((error: unknown) => void) | null; src: string }, src: string) {
+  return new Promise<void>((resolve, reject) => {
+    canvasImage.onload = () => resolve();
+    canvasImage.onerror = reject;
+    canvasImage.src = src;
+  });
 }
 
 async function persistCropPath(tempFilePath: string) {
@@ -766,16 +776,7 @@ function resetCropState() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--color-overlay-strong);
-}
-
-.crop-nav-backdrop {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 799;
-  background: var(--color-overlay-strong);
+  background: var(--crop-page-bg);
 }
 
 .crop-state {
@@ -784,8 +785,8 @@ function resetCropState() {
   justify-content: center;
   box-sizing: border-box;
   padding: 0 48rpx;
-  color: var(--color-overlay-text);
-  background: var(--color-overlay-strong);
+  color: var(--crop-nav-color);
+  background: var(--crop-page-bg);
   font-size: 28rpx;
   text-align: center;
 }
@@ -798,9 +799,7 @@ function resetCropState() {
   position: relative;
   overflow: hidden;
   flex: 0 0 auto;
-  background:
-    linear-gradient(180deg, var(--color-overlay-sheen-top) 0%, var(--color-overlay-sheen-bottom) 100%),
-    var(--color-overlay-stage);
+  background: var(--crop-page-bg);
 }
 
 .crop-image {
@@ -815,9 +814,7 @@ function resetCropState() {
 
 .crop-box {
   position: absolute;
-  box-shadow:
-    0 0 0 9999px var(--color-overlay-scrim),
-    inset 0 0 0 2px var(--color-overlay-text);
+  border: 2rpx solid var(--crop-nav-color);
 }
 
 .crop-box__grid {
@@ -829,7 +826,7 @@ function resetCropState() {
   right: 0;
   left: 0;
   height: 1px;
-  background: var(--color-overlay-line);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .crop-box__grid--h.top {
@@ -849,7 +846,7 @@ function resetCropState() {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--color-overlay-line);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .crop-box__grid--v.left {
@@ -906,36 +903,37 @@ function resetCropState() {
 }
 
 .crop-box__handle--lt {
-  top: -22rpx;
-  left: -22rpx;
-  border-top: 6rpx solid var(--color-overlay-text);
-  border-left: 6rpx solid var(--color-overlay-text);
+  top: 0;
+  left: 0;
+  border-top: 6rpx solid var(--crop-nav-color);
+  border-left: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-box__handle--rt {
-  top: -22rpx;
-  right: -22rpx;
-  border-top: 6rpx solid var(--color-overlay-text);
-  border-right: 6rpx solid var(--color-overlay-text);
+  top: 0;
+  right: 0;
+  border-top: 6rpx solid var(--crop-nav-color);
+  border-right: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-box__handle--lb {
-  bottom: -22rpx;
-  left: -22rpx;
-  border-bottom: 6rpx solid var(--color-overlay-text);
-  border-left: 6rpx solid var(--color-overlay-text);
+  bottom: 0;
+  left: 0;
+  border-bottom: 6rpx solid var(--crop-nav-color);
+  border-left: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-box__handle--rb {
-  right: -22rpx;
-  bottom: -22rpx;
-  border-right: 6rpx solid var(--color-overlay-text);
-  border-bottom: 6rpx solid var(--color-overlay-text);
+  right: 0;
+  bottom: 0;
+  border-right: 6rpx solid var(--crop-nav-color);
+  border-bottom: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-tip {
   padding: 26rpx 36rpx 12rpx;
-  color: var(--color-overlay-text-muted);
+  color: rgba(255, 255, 255, 0.72);
+  background: var(--crop-page-bg);
   font-size: 24rpx;
   line-height: 1.6;
   text-align: center;
@@ -955,7 +953,7 @@ function resetCropState() {
   height: 64rpx;
   border: 1rpx solid var(--color-overlay-control);
   border-radius: var(--radius-pill);
-  color: var(--color-overlay-text-muted);
+  color: rgba(255, 255, 255, 0.72);
   background: transparent;
   font-size: 24rpx;
   line-height: 1;
@@ -963,13 +961,14 @@ function resetCropState() {
 
 .crop-ratio-tabs__item--active {
   border-color: var(--color-state-warning-soft);
-  color: var(--color-overlay-text);
+  color: var(--crop-nav-color);
   background: var(--color-state-warning-soft);
 }
 
 .crop-actions {
   display: flex;
   gap: 18rpx;
+  background: var(--crop-page-bg);
   padding: 16rpx 24rpx calc(36rpx + env(safe-area-inset-bottom));
   margin-top: auto;
 }
@@ -987,13 +986,35 @@ function resetCropState() {
 }
 
 .crop-actions__button--light {
-  background: var(--color-overlay-control);
-  color: var(--color-overlay-text);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
 }
 
 .crop-actions__button--primary {
-  background: var(--feedback-line-danger);
-  color: var(--color-overlay-text);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+:global(.crop-layout) {
+  background: var(--crop-page-bg);
+}
+
+:global(.crop-layout .layout__theme) {
+  background: var(--crop-page-bg);
+}
+
+:global(.crop-layout .layout__body) {
+  background: var(--crop-page-bg);
+}
+
+:global(.crop-layout .navbar__fixed),
+:global(.crop-layout .navbar__fixed--transparent) {
+  background: var(--crop-page-bg);
+}
+
+:global(.crop-layout .navbar__title),
+:global(.crop-layout .navbar__icon) {
+  color: var(--crop-nav-color);
 }
 
 .crop-canvas {

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { MeResponse } from "@/apis/user";
+import type { CurrentUserProfile, MeResponse } from "@/apis/user";
 import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
 import { THEME_SKIN_OPTIONS, type ThemeSkin } from "@/stores/settings";
 import { isMaybeString, isRecord } from "@/utils/utils";
@@ -68,6 +68,20 @@ export const useUserStore = defineStore("user", {
 			} else {
 				void uniPlatform.storage.remove(APP_STORAGE_KEYS.userProfile);
 			}
+		},
+		patchProfile(patch: { avatarUrl?: string | null; profile?: Partial<CurrentUserProfile> }, uid = 0) {
+			if (!this.profile) return;
+			this.setProfile(
+				{
+					...this.profile,
+					...(patch.avatarUrl !== undefined ? { avatarUrl: patch.avatarUrl } : {}),
+					profile: {
+						...this.profile.profile,
+						...(patch.profile ?? {})
+					}
+				},
+				uid
+			);
 		},
 		// Restores cached profile only when uid and max-age both match the current session.
 		// A stale or shape-invalid cache is removed immediately instead of tolerated.

@@ -271,8 +271,8 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatDateOnly, parseDateOnly } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
-import { buildDefaultShoppingListName } from "@/utils/shopping";
-import { requestFridgeExpirySubscribeMessage, resolveFridgeExpirySubscribeOutcome } from "@/services/subscribe-message";
+import { buildDefaultShoppingListName } from "../utils/shopping";
+import { requestFridgeExpirySubscribeMessage, resolveFridgeExpirySubscribeOutcome } from "../services/subscribe-message";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
 import {

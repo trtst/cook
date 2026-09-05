@@ -42,6 +42,10 @@ export interface MeResponse {
 	membership: UserMembership;
 }
 
+export interface UploadCurrentAvatarResponse {
+	avatarUrl: string | null;
+}
+
 export interface NotificationMealTimes {
 	breakfast: string;
 	lunch: string;
@@ -105,7 +109,7 @@ export interface UploadCurrentAvatarRequest {
 	operationId: OperationId;
 }
 
-function isUploadProfileResponse(value: unknown): value is { code: number; message?: string; data: MeResponse } {
+function isUploadAvatarResponse(value: unknown): value is { code: number; message?: string; data: { avatarUrl: string | null } } {
 	return Boolean(
 		value &&
 		typeof value === "object" &&
@@ -212,7 +216,7 @@ export const userApi = {
 	 * 更新当前用户基础资料，不承接背景图、会员或口味资料。
 	 */
 	updateCurrent(body: UpdateCurrentUserRequest) {
-		return put<MeResponse>(`${cfg.domain}/api/users/me`, body);
+		return put<null>(`${cfg.domain}/api/users/me/profile`, body);
 	},
 	async uploadCurrentAvatar(body: UploadCurrentAvatarRequest) {
 		const result = await uploadFile({
@@ -223,7 +227,7 @@ export const userApi = {
 				"Idempotency-Key": body.operationId
 			}
 		});
-		if (!isUploadProfileResponse(result.body)) {
+		if (!isUploadAvatarResponse(result.body)) {
 			throw new Error("头像上传响应格式不正确");
 		}
 		if (result.status < 200 || result.status >= 300 || result.body.code !== 0) {

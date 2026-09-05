@@ -395,11 +395,7 @@ expectIncludes(knowledgeListPageSource, "background: var(--button-secondary-bg);
 expectIncludes(knowledgeListPageSource, "backdrop-filter: var(--button-secondary-filter);");
 expectSelectorExcludes(knowledgeListPageSource, ".knowledge-status", ["border: 1rpx solid var(--material-card-border);"]);
 expectSelectorExcludes(knowledgeListPageSource, ".knowledge-status__button", ["border: 1rpx solid var(--button-secondary-border);"]);
-expectSelectorIncludes(knowledgeListPageSource, ".knowledge-hero__eyebrow", [
-  "background: var(--color-support-notice);",
-  "color: var(--color-text-secondary);"
-]);
-expectSelectorExcludes(knowledgeListPageSource, ".knowledge-hero__eyebrow", ["background: var(--color-primary-soft-fill-medium);"]);
+expectExcludes(knowledgeListPageSource, "knowledge-hero__eyebrow");
 
 expectIncludes(homePageSource, "background: var(--material-card-bg);");
 expectIncludes(homePageSource, "box-shadow: var(--material-card-shadow);");
@@ -445,8 +441,8 @@ expectSelectorIncludes(homePageSource, ".hero-banner__action-text", [
 expectSelectorExcludes(homePageSource, ".hero-banner__action-text", [
   "color: var(--color-text-inverse);"
 ]);
-expectIncludes(homePageSource, "class=\"hero-banner__copy\" :class=\"`hero-banner__copy--${item.key}`\"");
-expectSelectorIncludes(homePageSource, ".hero-banner__copy--banner-02", [
+expectExcludes(homePageSource, ["hero-banner__copy", "hero"].join("--") + "-");
+expectSelectorExcludes(homePageSource, ".hero-banner__copy", [
   "align-items: flex-end;",
   "text-align: right;"
 ]);

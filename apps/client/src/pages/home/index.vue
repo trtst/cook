@@ -35,7 +35,7 @@
               <view class="hero-banner" hover-class="hero-banner--hover" hover-stay-time="100" @click="openHomeEntry(item.entry)">
                 <image class="hero-banner__image" :src="item.imageUrl" mode="aspectFill" />
                 <view class="hero-banner__shade" />
-                <view class="hero-banner__copy" :class="`hero-banner__copy--${item.key}`">
+                <view class="hero-banner__copy">
                   <text class="hero-banner__eyebrow">{{ item.eyebrow }}</text>
                   <text class="hero-banner__title">{{ item.title }}</text>
                   <text class="hero-banner__description">{{ item.description }}</text>
@@ -309,6 +309,7 @@ import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
+import { cfg } from "@/config";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -332,8 +333,10 @@ import {
   buildPantrySummaryState,
   hasPantrySummaryData as resolveHasPantrySummaryData
 } from "./pantry-summary";
-import banner01 from "@/assets/home-actions/banner_01.png";
-import banner02 from "@/assets/home-actions/banner_02.png";
+
+const heroAssetBase = `${cfg.domain}/static/uploads/material-store`;
+const heroImagePrimary = `${heroAssetBase}/e499ecd9-4821-44ee-ab05-db2124e759e0.png?v=2026-09-05T11%3A50%3A52.021Z`;
+const heroImageSecondary = `${heroAssetBase}/bffc3b08-a6c0-4a4f-91a4-96fc9a242751.png?v=2026-09-05T11%3A51%3A08.293Z`;
 
 const pageStyle = usePageScrollStyle();
 const settingsStore = useSettingsStore();
@@ -399,18 +402,18 @@ const heroEntries = computed(() => {
 const heroSlides = computed(() => {
   const fallbackItems = [
     {
-      key: "banner-01",
+      key: "hero-primary",
       entry: heroEntries.value[0] ?? null,
-      imageUrl: banner01,
+      imageUrl: heroImagePrimary,
       eyebrow: "本周厨房主题",
       title: heroEntries.value[0]?.title ?? "今晚吃什么？",
       description: heroEntries.value[0]?.subtitle ?? "这一周吃什么，可以慢慢安排。",
       actionText: heroEntries.value[0]?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
     },
     {
-      key: "banner-02",
+      key: "hero-secondary",
       entry: heroEntries.value[1] ?? heroEntries.value[0] ?? null,
-      imageUrl: banner02,
+      imageUrl: heroImageSecondary,
       eyebrow: "今日餐桌灵感",
       title: heroEntries.value[1]?.title ?? "看看今天能做什么",
       description: heroEntries.value[1]?.subtitle ?? "从首页入口继续往下安排这一顿。",
@@ -1239,11 +1242,6 @@ defineExpose({
   justify-content: flex-end;
   height: 100%;
   padding: calc(36rpx + var(--status-bar-height, 0px) + 88rpx) var(--space-page) 164rpx;
-}
-
-.hero-banner__copy--banner-02 {
-  align-items: flex-end;
-  text-align: right;
 }
 
 .hero-banner__eyebrow,

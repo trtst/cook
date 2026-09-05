@@ -1,3 +1,8 @@
+/**
+ * 食材分包订阅消息服务测试。
+ *
+ * 跟随分包服务文件放置，锁定模板 id 与订阅结果映射口径。
+ */
 import assert from "node:assert/strict";
 import {
   buildFridgeExpirySubscribeRequest,

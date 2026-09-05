@@ -9,6 +9,10 @@ assert.ok(
   "Expected Layout to pass explicit navbar capsule guard to NavBar."
 );
 assert.ok(
+  !source.includes('@use "@/styles/colors.scss";') && !source.includes('@use "@/themes/skins.scss";'),
+  "Expected Layout scoped WXSS not to import global theme styles with page tag selectors."
+);
+assert.ok(
   source.includes(':custom-center="true"'),
   "Expected Layout to tell NavBar explicitly when navbar-center owns the title area."
 );

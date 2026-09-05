@@ -771,7 +771,7 @@ import {
   buildMealShoppingListName,
   buildShoppingListDetailPath,
   hasShoppingListLink
-} from "@/utils/shopping";
+} from "../utils/shopping";
 import { formatDateTimeMinute } from "../utils/date";
 
 type MealSlot = MealPlanSummary["mealSlot"];

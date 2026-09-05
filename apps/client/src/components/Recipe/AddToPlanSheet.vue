@@ -2,7 +2,7 @@
   <SheetShell
     :visible="visible"
     title="加入计划"
-    :subtitle="needAddToPrivate ? '加入计划会同步保存到私房菜；分类可现在选择，也可以之后再整理。' : '选择日期和餐次，这道私房菜会固定到计划中，之后可以按计划准备食材和做饭。'"
+    :subtitle="needAddToPrivate ? '加入计划会同步保存到私房菜；先选择或创建一个个人分类。' : '选择日期和餐次，这道私房菜会固定到计划中，之后可以按计划准备食材和做饭。'"
     @close="emit('close')"
   >
     <view v-if="loading" class="panel-note">加载中...</view>
@@ -12,7 +12,7 @@
         <view class="sheet-section__head">
           <view class="sheet-section__meta">
             <text class="sheet-section__title">私房菜分类</text>
-            <text class="sheet-section__tag">可选，之后也能整理</text>
+            <text class="sheet-section__tag">必选</text>
           </view>
           <view class="sheet-section__action" @click="toggleCategoryCreator">
             {{ showCategoryCreator ? "取消" : "创建" }}
@@ -47,16 +47,7 @@
             {{ item.name }}
           </view>
         </view>
-        <view class="chip-row">
-          <view
-            class="chip"
-            :class="{ 'chip--active': !selectedCategoryId }"
-            @click="selectedCategoryId = ''"
-          >
-            稍后分类
-          </view>
-        </view>
-        <text v-if="!categories.length" class="sheet-section__hint">还没有个人分类，也可以先加入计划，之后再整理。</text>
+        <text v-if="!categories.length" class="sheet-section__hint">还没有个人分类，请先创建一个。</text>
       </view>
 
       <view class="sheet-section">
@@ -167,6 +158,7 @@ const mealSlotItems = computed(() => {
   }));
 });
 const canSubmit = computed(() => {
+  if (props.needAddToPrivate && !selectedCategoryId.value) return false;
   return !mealSlotItems.value.find(item => item.value === mealSlot.value)?.expired;
 });
 const planDateText = computed(() => {
@@ -340,6 +332,9 @@ async function submit() {
     let recipeId = props.recipeId ?? null;
     let recipeVersionId: UUID | null = null;
     if (props.needAddToPrivate) {
+      if (!selectedCategoryId.value) {
+        throw new Error("请选择私房菜分类");
+      }
       if (!props.sourceRecipeId || !props.sourceVersionId) {
         throw new Error("当前灵感菜谱信息不完整");
       }
@@ -347,7 +342,7 @@ async function submit() {
         operationId: createOperationId(),
         sourceRecipeId: props.sourceRecipeId,
         sourceVersionId: props.sourceVersionId,
-        categoryId: selectedCategoryId.value || null
+        categoryId: selectedCategoryId.value
       });
       recipeId = result.recipe.id;
       recipeVersionId = result.recipe.contentVersionId;
@@ -537,7 +532,7 @@ onUnmounted(() => {
   height: 84rpx;
   padding: 0 24rpx;
   border: 1rpx solid var(--material-input-border);
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--material-input-bg);
   box-shadow: var(--material-input-shadow);
   color: var(--color-text);
@@ -551,7 +546,7 @@ onUnmounted(() => {
   height: 84rpx;
   padding: 0 28rpx;
   border: 0;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-tag-primary-bg);
   color: var(--color-tag-primary-text);
   font-size: 24rpx;

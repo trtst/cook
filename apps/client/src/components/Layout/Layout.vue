@@ -80,9 +80,6 @@ const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : sy
 </script>
 
 <style scoped lang="scss">
-@use "@/styles/colors.scss";
-@use "@/themes/skins.scss";
-
 .layout {
 	height: 100vh;
 	overflow: hidden;

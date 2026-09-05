@@ -43,8 +43,8 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
-import { useImageCropFlow } from "@/composables/useImageCropFlow";
-import { imageCropPresets, type ImageCropResult } from "@/utils/image-crop";
+import { useImageCropFlow } from "../composables/useImageCropFlow";
+import { imageCropPresets, type ImageCropResult } from "../utils/image-crop";
 
 type ProfileFieldType = "nickname" | "cookNo" | "bio" | "gender" | "birthDate";
 
@@ -87,7 +87,6 @@ const { queueCrop, consumeCropResult } = useImageCropFlow<"avatar">({
 
 onShow(() => {
   void consumeCropResult();
-  void refreshProfile();
 });
 
 function genderText(value: MeResponse["profile"]["gender"]) {
@@ -103,12 +102,6 @@ function openField(type: ProfileFieldType) {
     return;
   }
   void uniPlatform.navigation.navigateTo(`/pages_me/profile-field/index?type=${type}`);
-}
-
-async function refreshProfile() {
-  if (!sessionStore.isLoggedIn) return;
-  const nextProfile = await userApi.getCurrent().catch(() => null);
-  if (nextProfile) userStore.setProfile(nextProfile, sessionStore.uid);
 }
 
 async function selectAvatar() {
@@ -132,17 +125,17 @@ async function selectAvatar() {
 
 async function uploadAvatar(filePath: string) {
   try {
-    const nextProfile = await userApi.uploadCurrentAvatar({
+    const nextAvatar = await userApi.uploadCurrentAvatar({
       filePath,
       operationId: createOperationId()
     });
-    userStore.setProfile(nextProfile, sessionStore.uid);
+    userStore.patchProfile({ avatarUrl: nextAvatar.avatarUrl }, sessionStore.uid);
     if (sessionStore.user) {
       await sessionStore.setSession({
         accessToken: sessionStore.accessToken,
         refreshToken: sessionStore.refreshToken,
         uid: sessionStore.uid,
-        user: { ...sessionStore.user, avatarUrl: nextProfile.avatarUrl },
+        user: { ...sessionStore.user, avatarUrl: nextAvatar.avatarUrl },
         expiresAt: sessionStore.expiresAt,
         refreshExpiresAt: sessionStore.refreshExpiresAt,
         refreshCheckedAt: sessionStore.refreshCheckedAt

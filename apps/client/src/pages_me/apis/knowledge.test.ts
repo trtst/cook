@@ -1,9 +1,15 @@
+/**
+ * 厨房知识请求层认证口径测试。
+ *
+ * 测试文件跟随 `pages_me/apis/knowledge.ts` 放置，确保分包私有请求层
+ * 不再通过根 `apis/knowledge` 进入主包。
+ */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const knowledgeSource = readFileSync(resolve(__dirname, "./knowledge.ts"), "utf8");
-const httpSource = readFileSync(resolve(__dirname, "./http.ts"), "utf8");
+const httpSource = readFileSync(resolve(__dirname, "../../apis/http.ts"), "utf8");
 
 assert.match(
   httpSource,

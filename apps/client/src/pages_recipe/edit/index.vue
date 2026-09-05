@@ -507,6 +507,7 @@
                       </button>
                       <button
                         class="sheet-confirm"
+                        :class="{ 'sheet-confirm--disabled': ingredientConfirmDisabled }"
                         :disabled="ingredientConfirmDisabled"
                         @click="confirmIngredientSelection"
                       >
@@ -594,6 +595,7 @@
                       <button class="sheet-cancel" @click="cancelIngredientCreate">取消</button>
                       <button
                         class="sheet-confirm"
+                        :class="{ 'sheet-confirm--disabled': ingredientCreateSubmitting }"
                         :disabled="ingredientCreateSubmitting"
                         @click="confirmIngredientEditor"
                       >
@@ -645,6 +647,7 @@
                   />
                   <button
                     class="sheet-creator__button"
+                    :class="{ 'sheet-creator__button--disabled': categorySubmitting || !categoryDraftName.trim() }"
                     :disabled="categorySubmitting || !categoryDraftName.trim()"
                     @click="createCategoryTag"
                   >
@@ -804,7 +807,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { buildIngredientUnitHint, resolveRecommendedIngredientUnitName } from "@/pages_recipe/ingredient-unit-policy";
-import { useImageCropFlow } from "@/composables/useImageCropFlow";
+import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -815,7 +818,7 @@ import {
   imageCropPresets,
   releaseImageFile,
   type ImageCropResult
-} from "@/utils/image-crop";
+} from "../utils/image-crop";
 import {
   readRecipeEditCacheItem,
   removeRecipeEditCacheItem,
@@ -4489,11 +4492,9 @@ function nextSlotKey() {
   margin-top: 0;
 }
 
-.sheet-creator__button[disabled],
-.sheet-apply[disabled],
-.sheet-cancel[disabled],
-.sheet-confirm[disabled] {
-  // opacity: 0.8;
+.sheet-creator__button--disabled,
+.sheet-confirm--disabled {
+  opacity: 0.8;
 }
 
 .editor-grid {

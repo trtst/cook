@@ -107,7 +107,7 @@
           <view class="plan-sheet__section-head">
             <view>
               <text class="plan-sheet__section-title">灵感菜谱归入私房菜</text>
-              <text class="plan-sheet__section-note">每道菜可单独选择分类，也可以稍后再分。</text>
+              <text class="plan-sheet__section-note">每道菜都需要选择分类，没有分类时请先创建。</text>
             </view>
             <view class="plan-sheet__category-action" @click="toggleCategoryCreator">
               {{ showCategoryCreator ? "取消" : "创建分类" }}
@@ -120,17 +120,10 @@
             </button>
           </view>
           <text v-if="categoryLoading" class="plan-sheet__section-note">正在加载你的分类...</text>
-          <text v-else-if="!categories.length" class="plan-sheet__section-note">还没有个人分类，可先稍后分类。</text>
+          <text v-else-if="!categories.length" class="plan-sheet__section-note">还没有个人分类，请先创建一个。</text>
           <view v-for="item in inspirationSlots" :key="item.recipeVersionId" class="plan-sheet__category-row">
             <text class="plan-sheet__category-title">{{ item.title }}</text>
             <view class="plan-sheet__category-chips">
-              <view
-                class="plan-sheet__category-chip"
-                :class="{ 'plan-sheet__category-chip--active': !selectedCategoryIds[item.recipeVersionId] }"
-                @click="selectCategory(item.recipeVersionId, null)"
-              >
-                稍后分类
-              </view>
               <view
                 v-for="category in categories"
                 :key="category.id"
@@ -260,7 +253,10 @@ const conditionLoading = computed(() => pageMutating.value || state.value.gap.lo
 const slotActionLocked = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
 const canCreatePlan = computed(() => activeSlots.value.length > 0);
 const inspirationSlots = computed(() => activeSlots.value.filter(item => item.sourceType === "INSPIRATION"));
-const planReady = computed(() => canCreatePlan.value);
+const planReady = computed(() => {
+  if (!canCreatePlan.value) return false;
+  return inspirationSlots.value.every(item => selectedCategoryIds.value[item.recipeVersionId]);
+});
 
 const heroTitle = computed(() => {
   if (!state.value.conditions.mealSlot) return "想轻松定下这顿饭，先选个餐次吧";
@@ -784,7 +780,8 @@ async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
   );
   const imported = new Map<UUID, { recipeId: UUID; recipeVersionId: UUID }>();
   for (const item of inspirationSlots.value) {
-    const categoryId = selectedCategoryIds.value[item.recipeVersionId] ?? null;
+    const categoryId = selectedCategoryIds.value[item.recipeVersionId];
+    if (!categoryId) throw new Error("请选择私房菜分类");
     const result = await recipeApi.createMyRecipeFromInspiration({
       operationId: createOperationId(),
       sourceRecipeId: item.recipeId,

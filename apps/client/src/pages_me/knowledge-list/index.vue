@@ -32,7 +32,6 @@
       >
         <view class="knowledge-page">
           <view class="knowledge-hero">
-            <text class="knowledge-hero__eyebrow">厨房知识</text>
             <text class="knowledge-hero__title">{{ channelMeta?.title || "内容准备中" }}</text>
             <text class="knowledge-hero__description">{{ channelMeta?.description || "这里暂时还没有内容" }}</text>
           </view>
@@ -135,7 +134,7 @@ import {
   type KnowledgeChannelCode
 } from "@/config/knowledge-articles";
 import { uniPlatform } from "@/platform/uni";
-import { knowledgeApi, type KnowledgeArticleSummary } from "@/apis/knowledge";
+import { knowledgeApi, type KnowledgeArticleSummary } from "../apis/knowledge";
 
 const pageStyle = usePageScrollStyle();
 const { navBarTotalHeight } = useSystemInfo();
@@ -288,21 +287,8 @@ function splitKeywords(value: string | null) {
   padding: 20rpx 0 0;
 }
 
-.knowledge-hero__eyebrow {
-  display: inline-flex;
-  min-height: 40rpx;
-  padding: 0 18rpx;
-  border-radius: 999rpx;
-  background: var(--color-support-notice);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  align-items: center;
-}
-
 .knowledge-hero__title {
   display: block;
-  margin-top: 18rpx;
   color: var(--color-text);
   font-size: 42rpx;
   font-weight: var(--font-weight-heavy);
@@ -366,6 +352,10 @@ function splitKeywords(value: string | null) {
   gap: var(--space-md);
   padding: 30rpx 0;
   border-bottom: 1rpx solid var(--color-border-light);
+}
+
+.knowledge-item:last-child {
+  border-bottom: 0;
 }
 
 .knowledge-item--hover {
