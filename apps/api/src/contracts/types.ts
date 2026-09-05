@@ -452,6 +452,10 @@ export interface SetTableTopicStatusRequest {
   expectedVersion: number;
 }
 
+export interface DeleteTableTopicRequest {
+  expectedVersion: number;
+}
+
 export type HomeTopicType =
   | "WEEKEND_GATHERING"
   | "QUICK_AFTER_WORK"
@@ -564,6 +568,10 @@ export interface UpdateHomeTopicRequest extends CreateHomeTopicRequest {
 
 export interface SetHomeTopicStatusRequest {
   status: HomeTopicStatus;
+  expectedVersion: number;
+}
+
+export interface DeleteHomeTopicRequest {
   expectedVersion: number;
 }
 
@@ -905,6 +913,11 @@ export interface AdminSiteContentDetail extends AdminSiteContentSummary {
 
 export interface AdminSiteContentImageUploadResult {
   imageUrl: string;
+}
+
+export interface AdminSiteContentDeleteResult {
+  contentId: UUID;
+  deletedAt: IsoDateTime;
 }
 
 export interface AdminMaterialImageItem {
@@ -1987,6 +2000,17 @@ export interface AdminIngredientCategorySummary {
   updatedAt: IsoDateTime;
 }
 
+export interface SetAdminIngredientCategoryStatusRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  status: "ACTIVE" | "DISABLED";
+}
+
+export interface AdminDeleteIngredientCategoryResult {
+  categoryId: UUID;
+  deletedAt: IsoDateTime;
+}
+
 export interface AdminIngredientSummary {
   id: UUID;
   name: string;
@@ -2001,6 +2025,11 @@ export interface AdminIngredientSummary {
   aliases: string[];
   imageUrl: string | null;
   updatedAt: IsoDateTime;
+}
+
+export interface AdminDeleteIngredientResult {
+  ingredientId: UUID;
+  deletedAt: IsoDateTime;
 }
 
 export interface AdminIngredientSuggestionUser {
@@ -2028,6 +2057,11 @@ export interface AdminReviewPendingIngredientResult {
   status: "APPROVED" | "REJECTED";
   reviewedAt: IsoDateTime;
   targetIngredientId: UUID | null;
+}
+
+export interface AdminDeletePendingIngredientResult {
+  id: UUID;
+  deletedAt: IsoDateTime;
 }
 
 export interface AdminPendingIngredientFeedbackSummary {
@@ -2061,6 +2095,11 @@ export interface AdminReviewIngredientFeedbackResult {
   ingredientId: UUID;
   status: "APPROVED" | "REJECTED";
   reviewedAt: IsoDateTime;
+}
+
+export interface AdminDeletePendingItemResult {
+  id: UUID;
+  deletedAt: IsoDateTime;
 }
 
 export interface CreateMealPlanMenuItemRequest {

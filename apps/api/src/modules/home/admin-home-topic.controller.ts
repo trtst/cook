@@ -5,7 +5,7 @@ import { ok } from "../../common/api-response";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { CreateHomeTopicDto, HomeTopicRecipeQueryDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
+import { CreateHomeTopicDto, DeleteHomeTopicDto, HomeTopicRecipeQueryDto, SetHomeTopicStatusDto, UpdateHomeTopicDto, UpdateHomeTopicImageDto } from "../../contracts/dtos";
 import { AdminHomeTopicItemModel, AdminHomeTopicsResponseModel, ApiOkModel, HomeTopicRecipeSearchResponseModel } from "../../contracts/openapi";
 import { HomeTopicService } from "./home-topic.service";
 
@@ -57,6 +57,18 @@ export class AdminHomeTopicController {
     @Body() body: SetHomeTopicStatusDto
   ) {
     return this.homeTopicService.setTopicStatus(request.admin.adminId, topicId, operationId, body).then(result => ok(result));
+  }
+
+  @Delete(":topicId")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminHomeTopicsResponseModel, "删除未上架本周灵感专题")
+  deleteTopic(
+    @Req() request: RequestWithAdmin,
+    @Param("topicId", ParseIntPipe) topicId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteHomeTopicDto
+  ) {
+    return this.homeTopicService.deleteTopic(request.admin.adminId, topicId, operationId, body).then(result => ok(result));
   }
 
   @Post(":topicId/image")

@@ -28,6 +28,7 @@ import type {
   UUID,
   UpdateAdminSiteContentChannelRequest,
   UpdateAdminSiteContentRequest,
+  AdminSiteContentDeleteResult,
   UpdateAdminSiteContentStatusRequest
 } from "../../contracts/types";
 
@@ -430,6 +431,57 @@ export class AdminSiteContentService {
       });
       const result = this.toContentDetail(updated);
       await completeAdminIdempotentOperation(tx, body.operationId, "admin-site-content:status", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async deleteContent(contentId: UUID, operationId: string, expectedVersion: number, adminId: UUID): Promise<AdminSiteContentDeleteResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = toRequestHash({ contentId, expectedVersion });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminSiteContentDeleteResult>(
+        tx,
+        operationId,
+        "admin-site-content:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-site-content:delete", adminId, requestHash);
+
+      const current = await tx.siteContent.findUnique({
+        where: { id: contentId }
+      });
+      if (!current) throw new NotFoundException("内容不存在");
+      if (current.version !== expectedVersion) throw new ConflictException("内容已被更新，请刷新后重试");
+      if (current.type === "PAGE") throw new BadRequestException("官网固定页不能删除");
+      if (current.status === "PUBLISHED") throw new BadRequestException("已发布内容需先下架再删除");
+
+      await tx.siteContent.delete({
+        where: { id: contentId }
+      });
+      const result: AdminSiteContentDeleteResult = {
+        contentId,
+        deletedAt: new Date().toISOString()
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "SITE_CONTENT_DELETED",
+          objectType: "SITE_CONTENT",
+          objectId: contentId,
+          payload: {
+            type: current.type,
+            status: current.status,
+            title: current.title,
+            slug: current.slug,
+            path: current.path
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-site-content:delete", adminId, requestHash, result);
       return result;
     });
   }

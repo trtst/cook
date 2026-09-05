@@ -683,6 +683,11 @@ export class AdminSiteContentImageUploadResultModel {
   @ApiProperty({ type: String }) imageUrl!: string;
 }
 
+export class AdminSiteContentDeleteResultModel {
+  @ApiProperty(uuid) contentId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
 export class AdminMaterialImageUploaderModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) displayName!: string;
@@ -1646,6 +1651,21 @@ export class AdminUnitModel {
 
 export class AdminDeleteUnitResultModel {
   @ApiProperty(uuid) unitId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminDeleteIngredientCategoryResultModel {
+  @ApiProperty(uuid) categoryId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminDeleteIngredientResultModel {
+  @ApiProperty(uuid) ingredientId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminDeletePendingItemResultModel {
+  @ApiProperty(uuid) id!: string;
   @ApiProperty(dateTime) deletedAt!: string;
 }
 

@@ -14,6 +14,7 @@ import {
   AdminSiteContentChannelQueryDto,
   CreateAdminSiteContentChannelDto,
   CreateAdminSiteContentDto,
+  DeleteAdminSiteContentDto,
   ResolveSiteContentDto,
   SiteContentArticleQueryDto,
   SiteOfficialMessageQueryDto,
@@ -24,6 +25,7 @@ import {
 import {
   AdminSiteContentChannelModel,
   AdminSiteContentDetailModel,
+  AdminSiteContentDeleteResultModel,
   AdminSiteContentImageUploadResultModel,
   AdminSiteContentSummaryModel,
   AdminSitePageSummaryModel,
@@ -144,6 +146,18 @@ export class AdminSiteContentController {
     @Body() body: UpdateAdminSiteContentStatusDto
   ) {
     return this.adminSiteContentService.setStatus(contentId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Delete(":contentId")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminSiteContentDeleteResultModel, "后台删除内容")
+  deleteContent(
+    @Req() request: RequestWithAdmin,
+    @Param("contentId", ParseIntPipe) contentId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminSiteContentDto
+  ) {
+    return this.adminSiteContentService.deleteContent(contentId, operationId, body.expectedVersion, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("images")

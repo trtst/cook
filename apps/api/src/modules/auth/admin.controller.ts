@@ -30,6 +30,9 @@ import {
   CreateAdminMedalTemplateDto,
   CreateAdminUserDto,
   CreateRecipeImportMarkdownJobDto,
+  DeleteAdminIngredientCategoryDto,
+  DeleteAdminIngredientDto,
+  DeleteAdminPendingItemDto,
   DeleteAdminUnitDto,
   OperationDto,
   PageQueryDto,
@@ -47,6 +50,7 @@ import {
   ResetAdminUserPasswordDto,
   ResolveRecipeReportDto,
   SetAdminIngredientStatusDto,
+  SetAdminIngredientCategoryStatusDto,
   SetAdminMedalTemplateStatusDto,
   SetAdminUserStatusDto,
   UpdateAdminInspirationCategoryDto,
@@ -63,6 +67,9 @@ import {
 import {
   AdminDashboardSummaryModel,
   AdminMedalTemplateModel,
+  AdminDeleteIngredientCategoryResultModel,
+  AdminDeleteIngredientResultModel,
+  AdminDeletePendingItemResultModel,
   AdminDeleteUnitResultModel,
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
@@ -704,6 +711,38 @@ export class AdminController {
     return this.adminService.updateIngredientCategory(categoryId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
+  @Post("ingredient-categories/:categoryId/status")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminIngredientCategoryModel, "后台更新系统食材分类状态")
+  setIngredientCategoryStatus(
+    @Req() request: RequestWithAdmin,
+    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetAdminIngredientCategoryStatusDto
+  ) {
+    return this.adminService
+      .setIngredientCategoryStatus(categoryId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Delete("ingredient-categories/:categoryId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeleteIngredientCategoryResultModel, "后台删除系统食材分类")
+  deleteIngredientCategory(
+    @Req() request: RequestWithAdmin,
+    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminIngredientCategoryDto
+  ) {
+    return this.adminService
+      .deleteIngredientCategory(categoryId, operationId, body.expectedVersion, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
   @Post("ingredient-categories/reorder")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -826,6 +865,22 @@ export class AdminController {
       .then(result => ok(result));
   }
 
+  @Delete("pending-units/:recommendationId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除待审核单位建议")
+  deletePendingUnit(
+    @Req() request: RequestWithAdmin,
+    @Param("recommendationId", ParseIntPipe) recommendationId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminPendingItemDto
+  ) {
+    return this.adminService
+      .deletePendingUnitRecommendation(recommendationId, operationId, body.expectedVersion, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
   @Post("ingredients")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -865,6 +920,22 @@ export class AdminController {
     @Body() body: SetAdminIngredientStatusDto
   ) {
     return this.adminService.setIngredientStatus(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Delete("ingredients/:ingredientId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeleteIngredientResultModel, "后台删除系统食材")
+  deleteSystemIngredient(
+    @Req() request: RequestWithAdmin,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminIngredientDto
+  ) {
+    return this.adminService
+      .deleteSystemIngredient(ingredientId, operationId, body.expectedVersion, request.admin.adminId)
+      .then(result => ok(result));
   }
 
   @Post("ingredients/:ingredientId/image")
@@ -951,6 +1022,22 @@ export class AdminController {
     return this.adminService.reviewPendingIngredient(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
   }
 
+  @Delete("pending-ingredients/:ingredientId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除待审核个人食材")
+  deletePendingIngredient(
+    @Req() request: RequestWithAdmin,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminPendingItemDto
+  ) {
+    return this.adminService
+      .deletePendingIngredient(ingredientId, operationId, body.expectedVersion, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
   @Post("ingredient-feedbacks/:feedbackId/review")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
@@ -963,6 +1050,22 @@ export class AdminController {
     @Body() body: ReviewIngredientFeedbackDto
   ) {
     return this.adminService.reviewIngredientFeedback(feedbackId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Delete("ingredient-feedbacks/:feedbackId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除待审核食材纠错")
+  deleteIngredientFeedback(
+    @Req() request: RequestWithAdmin,
+    @Param("feedbackId", ParseIntPipe) feedbackId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminPendingItemDto
+  ) {
+    return this.adminService
+      .deleteIngredientFeedback(feedbackId, operationId, body.expectedVersion, request.admin.adminId)
+      .then(result => ok(result));
   }
 
   @Get("recipe-reports")

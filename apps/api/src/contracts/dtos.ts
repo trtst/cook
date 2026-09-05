@@ -720,6 +720,14 @@ export class SetTableTopicStatusDto extends OperationDto {
   expectedVersion!: number;
 }
 
+export class DeleteTableTopicDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
 export class UpdateTableTopicImageDto extends OperationDto {
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
@@ -808,6 +816,14 @@ export class SetHomeTopicStatusDto extends OperationDto {
   @IsIn(["LISTED", "UNLISTED"])
   status!: "LISTED" | "UNLISTED";
 
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+}
+
+export class DeleteHomeTopicDto extends OperationDto {
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
   @IsInt()
@@ -2961,6 +2977,10 @@ export class UpdateAdminUnitDto extends VersionedOperationDto {
 
 export class DeleteAdminUnitDto extends VersionedOperationDto {}
 
+export class DeleteAdminIngredientDto extends VersionedOperationDto {}
+
+export class DeleteAdminPendingItemDto extends VersionedOperationDto {}
+
 export class ReorderAdminUnitsDto extends OperationDto {
   @ApiProperty({ example: "WEIGHT" })
   @IsIn(["WEIGHT", "VOLUME", "COMMON", "PACKAGE"])
@@ -2992,6 +3012,14 @@ export class UpdateAdminIngredientCategoryDto extends VersionedOperationDto {
   @MaxLength(20)
   name!: string;
 }
+
+export class SetAdminIngredientCategoryStatusDto extends VersionedOperationDto {
+  @ApiProperty({ enum: ["ACTIVE", "DISABLED"] })
+  @IsIn(["ACTIVE", "DISABLED"])
+  status!: "ACTIVE" | "DISABLED";
+}
+
+export class DeleteAdminIngredientCategoryDto extends VersionedOperationDto {}
 
 export class AdminRecipeContentDto {
   @ApiProperty()
@@ -4065,6 +4093,8 @@ export class UpdateAdminSiteContentStatusDto extends OperationDto {
   @Min(1)
   expectedVersion!: number;
 }
+
+export class DeleteAdminSiteContentDto extends VersionedOperationDto {}
 
 export class ResolveSiteContentDto {
   @ApiProperty({ maxLength: 160 })

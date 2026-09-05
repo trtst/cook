@@ -8,6 +8,7 @@ import type {
   AdminTableTopicItem,
   AdminTableTopicsResponse,
   CreateTableTopicRequest,
+  DeleteTableTopicRequest,
   OperationId,
   SetTableTopicStatusRequest,
   TableTopicDetail,
@@ -260,6 +261,58 @@ export class TableTopicService {
       await completeAdminIdempotentOperation(tx, operationId, "admin-table-topics:status", adminId, requestHash, result);
       return result;
     });
+  }
+
+  async deleteTopic(
+    request: RequestLike,
+    adminId: UUID,
+    topicId: UUID,
+    operationId: OperationId,
+    body: DeleteTableTopicRequest
+  ): Promise<AdminTableTopicsResponse> {
+    const requestHash = hashText(JSON.stringify({ topicId, ...body }));
+    let backupPath: string | null = null;
+    let stagedClear = false;
+
+    let result: AdminTableTopicsResponse;
+    try {
+      result = await this.prisma.$transaction(async tx => {
+        const repeated = await getAdminIdempotentResult<AdminTableTopicsResponse>(tx, operationId, "admin-table-topics:delete", adminId, requestHash);
+        if (repeated) return repeated;
+        await startAdminIdempotentOperation(tx, operationId, "admin-table-topics:delete", adminId, requestHash);
+
+        const current = await this.findAdminTopic(tx, topicId);
+        if (current.version !== body.expectedVersion) {
+          throw new ConflictException("餐桌话题已被更新，请刷新后重试");
+        }
+        if (current.status === "LISTED") {
+          throw new BadRequestException("请先下架餐桌话题再删除");
+        }
+
+        backupPath =
+          current.coverImageUrl === this.imageService.buildImagePath(topicId) ? await this.imageService.stageClear(topicId) : null;
+        stagedClear = backupPath !== null;
+
+        await tx.tableTopic.delete({
+          where: { id: topicId }
+        });
+
+        const result = await this.buildAdminTopicsResponse(request, tx);
+        await completeAdminIdempotentOperation(tx, operationId, "admin-table-topics:delete", adminId, requestHash, result);
+        return result;
+      });
+
+    } catch (error) {
+      if (stagedClear) {
+        await this.imageService.rollbackClear(topicId, backupPath);
+      }
+      throw error;
+    }
+
+    if (stagedClear) {
+      await this.imageService.finishClear(backupPath).catch(() => {});
+    }
+    return result;
   }
 
   async uploadTopicImage(

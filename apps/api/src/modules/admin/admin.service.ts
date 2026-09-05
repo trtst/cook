@@ -19,6 +19,10 @@ import type {
     AdminPendingUnitRecommendationSummary,
     AdminPendingRecipeSummary,
     AdminRecipeDetail,
+    AdminDeleteIngredientCategoryResult,
+    AdminDeleteIngredientResult,
+    AdminDeletePendingIngredientResult,
+    AdminDeletePendingItemResult,
     AdminDeleteUnitResult,
   AdminIngredientCategoryPayloadRequest,
   AdminIngredientRejectReasonCode,
@@ -28,14 +32,15 @@ import type {
   AdminPendingIngredientSummary,
   AdminReviewIngredientFeedbackRequest,
   AdminReviewIngredientFeedbackResult,
-    AdminReviewPendingIngredientRequest,
-    AdminReviewPendingIngredientResult,
+  AdminReviewPendingIngredientRequest,
+  AdminReviewPendingIngredientResult,
     AdminReviewPendingUnitRecommendationRequest,
     AdminReviewPendingUnitRecommendationResult,
     AdminReviewPendingRecipeRequest,
     AdminReviewPendingRecipeResult,
   AdminIngredientSummary,
   SetAdminIngredientStatusRequest,
+  SetAdminIngredientCategoryStatusRequest,
   AdminUnitPayloadRequest,
   AdminUnitSummary,
   AdminResetUserPasswordResponse,
@@ -1755,6 +1760,121 @@ export class AdminService {
     });
   }
 
+  async setIngredientCategoryStatus(
+    categoryId: UUID,
+    body: SetAdminIngredientCategoryStatusRequest,
+    adminId: UUID
+  ): Promise<AdminIngredientCategorySummary> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${categoryId}:${body.expectedVersion}:${body.status}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminIngredientCategorySummary>(
+        tx,
+        body.operationId,
+        "admin-ingredient-category:set-status",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:set-status", adminId, requestHash);
+
+      const category = await this.requireIngredientCategory(tx, categoryId);
+      if (category.version !== body.expectedVersion) throw new ConflictException("食材分类已被更新，请刷新后重试");
+      if (category.code === "UNCLASSIFIED") throw new BadRequestException("待归类分类不能上架或下架");
+      const isSelectable = body.status === "ACTIVE";
+      const updated =
+        category.isSelectable === isSelectable
+          ? category
+          : await tx.ingredientCategory.update({
+              where: { id: categoryId },
+              data: {
+                isSelectable,
+                version: { increment: 1 }
+              }
+            });
+      const ingredientCount = await tx.ingredient.count({
+        where: {
+          ownerId: null,
+          status: {
+            in: ["ACTIVE", "DISABLED"]
+          },
+          categoryId
+        }
+      });
+      const result = toAdminIngredientCategorySummary(updated, ingredientCount);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_CATEGORY_STATUS_CHANGED",
+          objectType: "INGREDIENT_CATEGORY",
+          objectId: categoryId,
+          payload: {
+            status: body.status
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-ingredient-category:set-status", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async deleteIngredientCategory(
+    categoryId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeleteIngredientCategoryResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${categoryId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteIngredientCategoryResult>(
+        tx,
+        operationId,
+        "admin-ingredient-category:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-ingredient-category:delete", adminId, requestHash);
+
+      const category = await this.requireIngredientCategory(tx, categoryId);
+      if (category.version !== expectedVersion) throw new ConflictException("食材分类已被更新，请刷新后重试");
+      if (category.code === "UNCLASSIFIED") throw new BadRequestException("待归类分类不能删除");
+      const [ingredientCount, feedbackCount, suggestedFeedbackCount] = await Promise.all([
+        tx.ingredient.count({ where: { categoryId } }),
+        tx.ingredientFeedback.count({ where: { categoryId } }),
+        tx.ingredientFeedback.count({ where: { suggestedCategoryId: categoryId } })
+      ]);
+      if (ingredientCount > 0 || feedbackCount > 0 || suggestedFeedbackCount > 0) {
+        throw new ConflictException("该分类仍被食材或纠错记录使用，不能删除");
+      }
+
+      await tx.ingredientCategory.delete({
+        where: { id: categoryId }
+      });
+      const result: AdminDeleteIngredientCategoryResult = {
+        categoryId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_CATEGORY_DELETED",
+          objectType: "INGREDIENT_CATEGORY",
+          objectId: categoryId,
+          payload: {
+            name: category.name,
+            code: category.code
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient-category:delete", adminId, requestHash, result);
+      return result;
+    });
+  }
+
   async reorderIngredientCategories(
     operationId: OperationId,
     items: ReorderItem[],
@@ -2142,6 +2262,88 @@ export class AdminService {
     }
   }
 
+  async deleteSystemIngredient(
+    ingredientId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeleteIngredientResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${ingredientId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteIngredientResult>(
+        tx,
+        operationId,
+        "admin-ingredient:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-ingredient:delete", adminId, requestHash);
+
+      const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
+      if (ingredient.version !== expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
+
+      const [
+        mergedCount,
+        recommendationCount,
+        targetRecommendationCount,
+        feedbackCount,
+        fridgeCount,
+        shoppingCount,
+        nutrientMappingCount,
+        nutrientConversionCount
+      ] = await Promise.all([
+        tx.ingredient.count({ where: { mergedToId: ingredientId } }),
+        tx.ingredientRecommendation.count({ where: { ingredientId } }),
+        tx.ingredientRecommendation.count({ where: { targetIngredientId: ingredientId } }),
+        tx.ingredientFeedback.count({ where: { ingredientId } }),
+        tx.fridgeItem.count({ where: { ingredientId } }),
+        tx.shoppingItem.count({ where: { ingredientId } }),
+        tx.ingredientNutrientMapping.count({ where: { ingredientId } }),
+        tx.ingredientUnitNutrientConversion.count({ where: { ingredientId } })
+      ]);
+      if (
+        mergedCount > 0 ||
+        recommendationCount > 0 ||
+        targetRecommendationCount > 0 ||
+        feedbackCount > 0 ||
+        fridgeCount > 0 ||
+        shoppingCount > 0 ||
+        nutrientMappingCount > 0 ||
+        nutrientConversionCount > 0 ||
+        (await this.hasDraftIngredientReference(tx, ingredientId)) ||
+        (await this.hasRecipeVersionIngredientReference(tx, ingredientId))
+      ) {
+        throw new ConflictException("该食材仍被个人数据、菜谱或审核记录使用，不能删除");
+      }
+
+      await tx.ingredient.delete({
+        where: { id: ingredientId }
+      });
+      const result: AdminDeleteIngredientResult = {
+        ingredientId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_DELETED",
+          objectType: "INGREDIENT",
+          objectId: ingredientId,
+          payload: {
+            name: ingredient.name,
+            categoryId: ingredient.categoryId,
+            source: "SYSTEM"
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient:delete", adminId, requestHash, result);
+      return result;
+    });
+  }
+
   async uploadIngredientImage(
     request: { protocol?: string; get?: (name: string) => string | undefined },
     ingredientId: UUID,
@@ -2499,6 +2701,153 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async deletePendingIngredient(
+    ingredientId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeletePendingIngredientResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${ingredientId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeletePendingIngredientResult>(
+        tx,
+        operationId,
+        "admin-pending-ingredient:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-pending-ingredient:delete", adminId, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
+      const recommendation = await this.requirePendingIngredientRecommendation(tx, ingredientId);
+      if (recommendation.ingredient.version !== expectedVersion) {
+        throw new ConflictException("食材已被更新，请刷新后重试");
+      }
+      await tx.ingredientRecommendation.delete({
+        where: { id: recommendation.id }
+      });
+      const result: AdminDeletePendingIngredientResult = {
+        id: ingredientId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_RECOMMENDATION_DELETED",
+          objectType: "INGREDIENT",
+          objectId: ingredientId,
+          payload: {
+            recommendationId: recommendation.id,
+            name: recommendation.ingredientName
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-pending-ingredient:delete", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async deletePendingUnitRecommendation(
+    recommendationId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeletePendingItemResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${recommendationId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeletePendingItemResult>(
+        tx,
+        operationId,
+        "admin-pending-unit:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-pending-unit:delete", adminId, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "unit_recommendations" WHERE "id" = ${recommendationId} FOR UPDATE`;
+      const recommendation = await this.requirePendingUnitRecommendation(tx, recommendationId);
+      if (recommendation.version !== expectedVersion) {
+        throw new ConflictException("单位建议已更新，请刷新后重试");
+      }
+      await tx.unitRecommendation.delete({
+        where: { id: recommendation.id }
+      });
+      const result: AdminDeletePendingItemResult = {
+        id: recommendation.id,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "UNIT_RECOMMENDATION_DELETED",
+          objectType: "UNIT_RECOMMENDATION",
+          objectId: recommendation.id,
+          payload: {
+            name: recommendation.unitName,
+            type: recommendation.unitType
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-pending-unit:delete", adminId, requestHash, result);
+      return result;
+    });
+  }
+
+  async deleteIngredientFeedback(
+    feedbackId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeletePendingItemResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${feedbackId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeletePendingItemResult>(
+        tx,
+        operationId,
+        "admin-ingredient-feedback:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-ingredient-feedback:delete", adminId, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "ingredient_feedbacks" WHERE "id" = ${feedbackId} FOR UPDATE`;
+      const feedback = await this.requirePendingIngredientFeedback(tx, feedbackId);
+      if (feedback.ingredient.version !== expectedVersion) {
+        throw new ConflictException("食材已被更新，请刷新后重试");
+      }
+      await tx.ingredientFeedback.delete({
+        where: { id: feedback.id }
+      });
+      const result: AdminDeletePendingItemResult = {
+        id: feedback.id,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_FEEDBACK_DELETED",
+          objectType: "INGREDIENT",
+          objectId: feedback.ingredientId,
+          payload: {
+            feedbackId,
+            suggestedName: feedback.suggestedName
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-ingredient-feedback:delete", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async listPendingRecipes(page: number, pageSize: number, keyword: string | undefined, adminId: UUID): Promise<PageResult<AdminPendingRecipeSummary>> {
@@ -5679,6 +6028,18 @@ export class AdminService {
     return rows[0]?.exists === true;
   }
 
+  private async hasDraftIngredientReference(tx: Prisma.TransactionClient, ingredientId: UUID) {
+    const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM "recipe_drafts" AS draft
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(draft."content_json"->'ingredients', '[]'::jsonb)) AS item
+        WHERE item->>'ingredientId' = ${String(ingredientId)}
+      ) AS "exists"
+    `;
+    return rows[0]?.exists === true;
+  }
+
   private async hasRecipeVersionUnitReference(tx: Prisma.TransactionClient, unitId: UUID) {
     const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
       WITH "referenced_versions" AS (
@@ -5700,6 +6061,31 @@ export class AdminService {
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(version."ingredients_json", '[]'::jsonb)) AS item
         WHERE item->'amount'->>'kind' = 'EXACT'
           AND item->'amount'->>'unitId' = ${String(unitId)}
+      ) AS "exists"
+    `;
+    return rows[0]?.exists === true;
+  }
+
+  private async hasRecipeVersionIngredientReference(tx: Prisma.TransactionClient, ingredientId: UUID) {
+    const rows = await tx.$queryRaw<Array<{ exists: boolean }>>`
+      WITH "referenced_versions" AS (
+        SELECT "current_version_id" AS "version_id" FROM "recipes"
+        UNION
+        SELECT "source_version_id" AS "version_id" FROM "recipe_collections"
+        UNION
+        SELECT "recipe_version_id" AS "version_id" FROM "meal_plan_dishes"
+        UNION
+        SELECT "bring_version_id" AS "version_id"
+        FROM "dining_event_participants"
+        WHERE "bring_version_id" IS NOT NULL
+      )
+      SELECT EXISTS (
+        SELECT 1
+        FROM "recipe_content_versions" AS version
+        INNER JOIN "referenced_versions" AS refs
+          ON refs."version_id" = version."id"
+        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(version."ingredients_json", '[]'::jsonb)) AS item
+        WHERE item->>'ingredientId' = ${String(ingredientId)}
       ) AS "exists"
     `;
     return rows[0]?.exists === true;

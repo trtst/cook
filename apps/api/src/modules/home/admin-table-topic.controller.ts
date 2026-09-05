@@ -5,7 +5,7 @@ import { ok } from "../../common/api-response";
 import type { RequestWithAdmin } from "../../common/auth-context";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
-import { CreateTableTopicDto, SetTableTopicStatusDto, UpdateTableTopicDto, UpdateTableTopicImageDto } from "../../contracts/dtos";
+import { CreateTableTopicDto, DeleteTableTopicDto, SetTableTopicStatusDto, UpdateTableTopicDto, UpdateTableTopicImageDto } from "../../contracts/dtos";
 import { AdminTableTopicItemModel, AdminTableTopicsResponseModel, ApiOkModel } from "../../contracts/openapi";
 import { TableTopicService } from "./table-topic.service";
 
@@ -56,6 +56,18 @@ export class AdminTableTopicController {
     @Body() body: SetTableTopicStatusDto
   ) {
     return this.tableTopicService.setTopicStatus(request, request.admin.adminId, topicId, operationId, body).then(result => ok(result));
+  }
+
+  @Delete(":topicId")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminTableTopicsResponseModel, "删除未上架餐桌话题")
+  deleteTopic(
+    @Req() request: RequestWithAdmin & AssetRequest,
+    @Param("topicId", ParseIntPipe) topicId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteTableTopicDto
+  ) {
+    return this.tableTopicService.deleteTopic(request, request.admin.adminId, topicId, operationId, body).then(result => ok(result));
   }
 
   @Post(":topicId/image")
