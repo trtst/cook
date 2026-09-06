@@ -95,7 +95,6 @@ function handleClose() {
               <span>{{ detail.content.baseServings }} 人份</span>
               <span>{{ detail.difficultyText || "难度待补" }}</span>
               <span>{{ detail.durationText || "时长待补" }}</span>
-              <span>点赞 {{ detail.likeCount }}</span>
               <span>收藏 {{ detail.collectCount }}</span>
             </div>
           </div>

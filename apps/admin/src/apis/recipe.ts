@@ -136,7 +136,6 @@ export interface AdminRecipeDetail {
   version: number;
   reportCount: number;
   blockedReason: string | null;
-  likeCount: number;
   collectCount: number;
   canEdit: boolean;
   createdAt: IsoDateTime;

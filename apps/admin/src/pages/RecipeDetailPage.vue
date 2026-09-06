@@ -757,7 +757,6 @@ onBeforeUnmount(() => {
             <el-descriptions-item label="预估卡路里">{{ detail.content.estimatedCalories ?? "-" }}</el-descriptions-item>
             <el-descriptions-item label="举报数">{{ detail.reportCount }}</el-descriptions-item>
             <el-descriptions-item label="下架原因">{{ detail.blockedReason ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="点赞数">{{ detail.likeCount }}</el-descriptions-item>
             <el-descriptions-item label="收藏数">{{ detail.collectCount }}</el-descriptions-item>
             <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createdAt) }}</el-descriptions-item>
             <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updatedAt) }}</el-descriptions-item>
