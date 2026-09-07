@@ -67,19 +67,21 @@
    - 随机一桌 V1 最终规则，覆盖餐次、菜位、候选来源、筛选排序、交互、次数、计划保存、V1 范围和验收标准。
 28. `plans/display-format-owner-audit.md`
    - 当前展示映射、格式化函数和页面辅助判断的散点审计基线，用于后续治理与 owner 收口。
-29. `plans/recipe-data-completion-rules.md`
+29. `plans/recipe-wiki-execution.md`
+   - 菜谱结构化理解层的十章执行规则，覆盖消费场景、标签、归因、偏好、助理、可信度、数据、接口治理和分阶段落地。
+30. `plans/recipe-data-completion-rules.md`
    - 菜谱创建边界、导入缺失处理、后台补全、营养分析最小字段集、样例 JSON 和实施优先级确认稿。
-30. `plans/recipe-nutrition-mapping-rules.md`
+31. `plans/recipe-nutrition-mapping-rules.md`
    - 系统食材到营养基表项的映射优先级、自动映射边界、人工复核门禁和后续实施步骤确认稿。
-31. `plans/recipe-import-review-workbench-rules.md`
+32. `plans/recipe-import-review-workbench-rules.md`
    - 导入草稿发布前的人工作台边界、可编辑字段、可发布门禁和状态机确认稿。
-32. `plans/recipe-data-roadmap.md`
+33. `plans/recipe-data-roadmap.md`
    - 菜谱导入、后台补全、营养分析与健康规划的总执行顺序、阶段依赖和当前只做规则冻结的路线图。
-33. `plans/recipe-data-open-questions.md`
+34. `plans/recipe-data-open-questions.md`
    - 汇总菜谱导入、补全、营养分析与健康规划这条线的待确认项总表，供后续集中拍板。
-34. `plans/membership-code-execution.md`
+35. `plans/membership-code-execution.md`
    - 会员兑换码、体验码、广告减免与“我的”页权益入口执行单，冻结当前页面闭环与后续真实核销门禁。
-35. `plans/implementation-checklist.md`
+36. `plans/implementation-checklist.md`
    - 已落档功能执行清单，按“已落地 / 进行中 / 未开始 / 规则稿”汇总，供后续逐项实现和打勾。
 
 ## 文档地图
@@ -150,6 +152,8 @@
   - 首页“最近安排”条件卡的业务边界、时间窗口、饭局优先规则、最小字段和统一餐次详情跳转口径。
 - `plans/random-page-execution.md`
   - 随机一桌 V1 的最终产品规则和实现验收基线。
+- `plans/recipe-wiki-execution.md`
+  - 菜谱结构化理解层的十章执行规则，覆盖消费场景、标签、归因、偏好、助理、可信度、数据、接口治理和分阶段落地。
 - `plans/display-format-owner-audit.md`
   - 当前 `client/admin` 展示映射、格式化函数和页面辅助判断的散点清单与风险基线。
 - `plans/recipe-data-completion-rules.md`
