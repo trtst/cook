@@ -41,6 +41,14 @@ function contentTypeOfFileName(fileName: string) {
   return "image/jpeg";
 }
 
+function publicIdFromFileName(value: string) {
+  const match = /^([0-9a-f-]+)(?:\.(?:jpg|png|webp))?$/i.exec(value);
+  if (!match) {
+    throw new NotFoundException("图片不存在");
+  }
+  return match[1];
+}
+
 function toIsoDate(value: Date): IsoDateTime {
   return value.toISOString();
 }
@@ -177,12 +185,12 @@ export class UploadService {
     @Inject(AssetStorageService) private readonly assetStorage: AssetStorageService
   ) {}
 
-  buildRecipeImageUrl(request: RequestLike, publicId: string, updatedAt: Date) {
-    return this.assetStorage.publicUrl(request, assetKey("uploads", "recipe-images", publicId), updatedAt);
+  buildRecipeImageUrl(request: RequestLike, storageKey: string, updatedAt: Date) {
+    return this.assetStorage.publicUrl(request, storageKey, updatedAt);
   }
 
-  buildDiningEventCoverUrl(request: RequestLike, eventId: UUID, updatedAt: Date) {
-    return this.assetStorage.publicUrl(request, assetKey("uploads", "dining-event-covers", eventId), updatedAt);
+  buildDiningEventCoverUrl(request: RequestLike, storageKey: string, updatedAt: Date) {
+    return this.assetStorage.publicUrl(request, storageKey, updatedAt);
   }
 
   buildProfileAvatarUrl(request: RequestLike, userUid: UUID, fileName: string, updatedAt: Date) {
@@ -274,7 +282,7 @@ export class UploadService {
         }
 
         const publicId = existing?.publicId ?? randomUUID();
-        const storageKey = existing?.storageKey ?? this.buildDraftStorageKey(draftId, scene, publicId, imageMeta.contentType);
+        const storageKey = this.buildRecipeImageStorageKey(publicId, imageMeta.contentType);
         await this.assetStorage.writeObject(storageKey, file.buffer as Buffer, imageMeta.contentType);
 
         const expiresAt = new Date(Date.now() + tempTtlMs);
@@ -323,7 +331,8 @@ export class UploadService {
       });
   }
 
-  async getRecipeImageAsset(publicId: string) {
+  async getRecipeImageAsset(fileName: string) {
+    const publicId = publicIdFromFileName(fileName);
     const asset = await this.prisma.uploadAsset.findFirst({
       where: {
         publicId,
@@ -416,7 +425,7 @@ export class UploadService {
       byId,
       bySlot,
       bytes,
-      buildUrl: (item: UploadAsset) => this.buildRecipeImageUrl(request, item.publicId, item.updatedAt)
+      buildUrl: (item: UploadAsset) => this.buildRecipeImageUrl(request, item.storageKey, item.updatedAt)
     };
   }
 
@@ -531,7 +540,7 @@ export class UploadService {
       byId: new Map(items.map(item => [item.id, item])),
       bySlot: new Map(items.map(item => [`${item.scene}:${item.slotKey}`, item])),
       bytes: items.reduce((sum, item) => sum + item.sizeBytes, 0),
-      buildUrl: (item: UploadAsset) => this.buildRecipeImageUrl(request, item.publicId, item.updatedAt)
+      buildUrl: (item: UploadAsset) => this.buildRecipeImageUrl(request, item.storageKey, item.updatedAt)
     };
   }
 
@@ -542,7 +551,7 @@ export class UploadService {
       scene: asset.scene as UploadAssetScene,
       slotKey: asset.slotKey,
       status: asset.status as UploadAssetStatus,
-      imageUrl: this.buildRecipeImageUrl(request, asset.publicId, asset.updatedAt),
+      imageUrl: this.buildRecipeImageUrl(request, asset.storageKey, asset.updatedAt),
       contentType: asset.contentType,
       sizeBytes: asset.sizeBytes,
       width: asset.width,
@@ -552,9 +561,9 @@ export class UploadService {
     };
   }
 
-  private buildDraftStorageKey(draftId: UUID, scene: UploadAssetScene, publicId: string, contentType: string) {
+  private buildRecipeImageStorageKey(publicId: string, contentType: string) {
     const extension = getContentTypeExtension(contentType);
-    return assetKey("uploads", "recipe-drafts", draftId, scene.toLowerCase(), `${publicId}.${extension}`);
+    return assetKey("uploads", "recipe-images", `${publicId}.${extension}`);
   }
 
   private buildDiningEventCoverStorageKey(eventId: UUID, extension: string) {

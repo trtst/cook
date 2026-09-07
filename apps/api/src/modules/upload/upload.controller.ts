@@ -46,9 +46,9 @@ export class UploadController {
 export class UploadPublicController {
   constructor(@Inject(UploadService) private readonly uploadService: UploadService) {}
 
-  @Get("recipe-images/:publicId")
-  async getRecipeImage(@Param("publicId") publicId: string, @Res() response: ResponseLike) {
-    const asset = await this.uploadService.getRecipeImageAsset(publicId);
+  @Get("recipe-images/:fileName")
+  async getRecipeImage(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
+    const asset = await this.uploadService.getRecipeImageAsset(fileName);
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");
@@ -62,6 +62,19 @@ export class UploadPublicController {
     @Res() response: ResponseLike
   ) {
     const asset = await this.uploadService.getProfileAvatarAsset(userUid, fileName);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "public, max-age=300");
+    asset.stream.pipe(response);
+  }
+
+  @Get("dining-event-covers/:eventId/:fileName")
+  async getDiningEventCoverFile(
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("fileName") _fileName: string,
+    @Res() response: ResponseLike
+  ) {
+    const asset = await this.uploadService.getDiningEventCoverAsset(eventId);
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");

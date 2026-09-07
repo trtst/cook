@@ -60,8 +60,8 @@ function kindOf(path: string): ImageKind {
 export class TableTopicImageService {
   constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
 
-  buildImagePath(topicId: UUID) {
-    return this.assetStorage.publicUrl({}, assetKey("uploads", "table-topics", topicId));
+  buildImagePath(topicId: UUID, kind?: ImageKind) {
+    return this.assetStorage.publicUrl({}, kind ? this.imagePath(topicId, kind) : assetKey("uploads", "table-topics", topicId));
   }
 
   async stageUpload(file: { buffer?: Buffer; size?: number } | undefined) {

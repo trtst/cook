@@ -41,8 +41,13 @@ export class PublicAssetsController {
     asset.stream.pipe(response);
   }
 
-  @Get("ingredients/:ingredientId")
-  async getIngredientImage(@Param("ingredientId", ParseIntPipe) ingredientId: number, @Res() response: ResponseLike) {
+  @Get("ingredients/:fileName")
+  async getIngredientImage(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
+    const match = /^(\d+)(?:\.png)?$/i.exec(fileName);
+    if (!match) {
+      throw new NotFoundException("食材图片不存在");
+    }
+    const ingredientId = Number(match[1]);
     const ingredient = await this.prisma.ingredient.findFirst({
       where: {
         id: ingredientId,

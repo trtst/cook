@@ -78,6 +78,13 @@ function getKindFromPath(storageKey: string): ImageKind {
   return "jpeg";
 }
 
+function getKindFromContentType(contentType: string): ImageKind {
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  if (contentType === "image/svg+xml") return "svg";
+  return "jpeg";
+}
+
 @Injectable()
 export class MedalImageService {
   constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
@@ -113,7 +120,7 @@ export class MedalImageService {
 
   async replaceStagedImage(templateId: UUID, imageType: MedalImageType, tempPath: string, kind: ImageKind) {
     const current = await this.findStoredImage(templateId, imageType);
-    const nextPath = this.getImagePath(templateId, imageType, kind);
+    const nextPath = this.getPublicKey(templateId, imageType);
     const backupPath = current ? this.getBackupPath(templateId, imageType, current.kind) : null;
 
     if (backupPath) {
@@ -134,7 +141,7 @@ export class MedalImageService {
     } catch (error) {
       if (backupPath) {
         try {
-          await this.assetStorage.moveObject(backupPath, current?.path ?? this.getImagePath(templateId, imageType, kind));
+          await this.assetStorage.moveObject(backupPath, current?.path ?? this.getPublicKey(templateId, imageType));
         } catch {
           // Best effort rollback. Upper layer still surfaces the error.
         }
@@ -149,7 +156,7 @@ export class MedalImageService {
     await this.clearStoredImage(templateId, imageType);
     if (!backupPath) return;
     try {
-      await this.assetStorage.moveObject(backupPath, this.getImagePath(templateId, imageType, getKindFromPath(backupPath)));
+      await this.assetStorage.moveObject(backupPath, this.getPublicKey(templateId, imageType));
     } catch {
       // Best effort rollback.
     }
@@ -207,6 +214,8 @@ export class MedalImageService {
   }
 
   private async findStoredImage(templateId: UUID, imageType: MedalImageType) {
+    const current = await this.assetStorage.readObject(this.getPublicKey(templateId, imageType)).catch(() => null);
+    if (current) return { kind: getKindFromContentType(current.contentType), path: this.getPublicKey(templateId, imageType), asset: current };
     for (const kind of ["png", "jpeg", "webp", "svg"] as const) {
       const path = this.getImagePath(templateId, imageType, kind);
       const asset = await this.assetStorage.readObject(path, getContentType(kind)).catch(() => null);
@@ -224,6 +233,7 @@ export class MedalImageService {
 
   private async clearStoredImage(templateId: UUID, imageType: MedalImageType) {
     const targets = [
+      this.assetStorage.deleteObject(this.getPublicKey(templateId, imageType)),
       this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "png")),
       this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "jpeg")),
       this.assetStorage.deleteObject(this.getImagePath(templateId, imageType, "webp")),

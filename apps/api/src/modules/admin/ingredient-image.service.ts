@@ -42,7 +42,7 @@ export class IngredientImageService {
 
   buildImageUrl(request: RequestLike, ingredientId: UUID, updatedAt: Date | null) {
     if (!updatedAt) return null;
-    return this.assetStorage.publicUrl(request, this.getPublicKey(ingredientId), updatedAt);
+    return this.assetStorage.publicUrl(request, this.getImagePath(ingredientId), updatedAt);
   }
 
   async stageImageUpload(ingredientId: UUID, file: { buffer?: Buffer; size?: number } | undefined) {

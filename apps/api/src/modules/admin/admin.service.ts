@@ -4988,7 +4988,6 @@ export class AdminService {
       version: recipe.version,
       reportCount: recipe.reportCount,
       blockedReason: recipe.blockedReason,
-      likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       canEdit: isAdminEditableInspiration(recipe),
       createdAt: toIsoDate(recipe.createdAt),
