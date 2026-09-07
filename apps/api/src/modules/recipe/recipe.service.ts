@@ -269,9 +269,9 @@ function extractRecipeImagePublicId(imageUrl: string | null | undefined) {
   const match = imageUrl.match(recipeImageUrlPattern);
   if (!match?.[1]) return null;
   try {
-    return decodeURIComponent(match[1]);
+    return decodeURIComponent(match[1]).replace(/\.(?:jpg|png|webp)$/i, "");
   } catch {
-    return match[1];
+    return match[1].replace(/\.(?:jpg|png|webp)$/i, "");
   }
 }
 
@@ -2264,7 +2264,7 @@ export class RecipeService {
     const orderBy =
       sort === "LATEST"
         ? [{ updatedAt: "desc" as const }, { id: "desc" as const }]
-        : [{ collectCount: "desc" as const }, { likeCount: "desc" as const }, { updatedAt: "desc" as const }];
+        : [{ collectCount: "desc" as const }, { updatedAt: "desc" as const }, { id: "desc" as const }];
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.recipe.findMany({
@@ -2874,7 +2874,6 @@ export class RecipeService {
       durationText: recipeDurationText(content.duration),
       estimatedCalories: content.estimatedCalories,
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
-      likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       updatedAt: toIsoDate(recipe.updatedAt)
     };
@@ -2904,7 +2903,6 @@ export class RecipeService {
       nutrition,
       assistant,
       planLinks,
-      likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       ownedRecipeId,
       curatedByName: recipe.curatedByName,

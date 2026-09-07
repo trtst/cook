@@ -3091,7 +3091,7 @@ export class MealService {
       scheduledAt: toIsoDate(event.scheduledAt),
       coverImageUrl:
         event.coverStorageKey && event.coverContentType
-          ? this.uploadService.buildDiningEventCoverUrl({}, event.id, event.updatedAt)
+          ? this.uploadService.buildDiningEventCoverUrl({}, event.coverStorageKey, event.updatedAt)
           : null,
       organizerName,
       organizerAvatarUrl: event.user?.avatarUrl ?? null,
@@ -3468,7 +3468,7 @@ export class MealService {
       title: event.title?.trim() || event.mealPlanItem?.title?.trim() || "这顿饭",
       coverImageUrl:
         event.coverStorageKey && event.coverContentType
-          ? this.uploadService.buildDiningEventCoverUrl(request ?? {}, event.id, event.updatedAt)
+          ? this.uploadService.buildDiningEventCoverUrl(request ?? {}, event.coverStorageKey, event.updatedAt)
           : null,
       scheduledAt: toIsoDate(event.scheduledAt),
       status: event.status,
@@ -3522,7 +3522,7 @@ export class MealService {
       note: event.note,
       coverImageUrl:
         event.coverStorageKey && event.coverContentType
-          ? this.uploadService.buildDiningEventCoverUrl(request ?? {}, event.id, event.updatedAt)
+          ? this.uploadService.buildDiningEventCoverUrl(request ?? {}, event.coverStorageKey, event.updatedAt)
           : null,
       status: event.status,
       organizerUid: event.user?.uid ?? null,

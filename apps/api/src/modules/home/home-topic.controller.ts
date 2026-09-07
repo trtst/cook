@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, ParseIntPipe, Req, Res } from "@nestjs/common";
+import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Req, Res } from "@nestjs/common";
 import { ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
@@ -40,9 +40,13 @@ export class HomeTopicController {
 export class HomeTopicPublicAssetsController {
   constructor(@Inject(HomeTopicService) private readonly homeTopicService: HomeTopicService) {}
 
-  @Get("home-topics/:topicId")
-  async getTopicImage(@Param("topicId", ParseIntPipe) topicId: number, @Res() response: ResponseLike) {
-    const asset = await this.homeTopicService.getTopicImage(topicId);
+  @Get("home-topics/:fileName")
+  async getTopicFile(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
+    const match = /^(\d+)(?:\.(?:jpg|png|webp))?$/i.exec(fileName);
+    if (!match) {
+      throw new NotFoundException("本周灵感专题封面图不存在");
+    }
+    const asset = await this.homeTopicService.getTopicImage(Number(match[1]));
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");

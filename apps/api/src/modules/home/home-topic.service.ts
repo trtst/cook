@@ -61,7 +61,7 @@ type RecipeRow = Prisma.RecipeGetPayload<{
 
 const topicTypes: HomeTopicTypeOption[] = topicTypeOptions;
 const activeOwnedRecipeStatus = "ACTIVE";
-const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-topics\/\d+$/i;
+const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-topics\/\d+(?:\.(?:jpg|png|webp))?$/i;
 const recipeWhere: Prisma.RecipeWhereInput = {
   ownerId: null,
   inspirationCategoryId: { not: null },
@@ -140,7 +140,7 @@ export class HomeTopicService {
         inspirationCategory: true,
         currentVersion: true
       },
-      orderBy: [{ collectCount: "desc" }, { likeCount: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
+      orderBy: [{ collectCount: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
       take: 20
     });
     return {
@@ -254,8 +254,7 @@ export class HomeTopicService {
           throw new BadRequestException("请先下架本周灵感专题再删除");
         }
 
-        backupPath =
-          current.coverImageUrl === this.imageService.buildImagePath(topicId) ? await this.imageService.stageClear(topicId) : null;
+        backupPath = isTopicImagePath(current.coverImageUrl) ? await this.imageService.stageClear(topicId) : null;
         stagedClear = backupPath !== null;
 
         await tx.homeTopic.delete({
@@ -371,7 +370,7 @@ export class HomeTopicService {
           await tx.homeTopic.update({
             where: { id: topicId },
             data: {
-              coverImageUrl: this.imageService.buildImagePath(topicId),
+              coverImageUrl: this.imageService.buildImagePath(topicId, staged.kind),
               version: { increment: 1 }
             }
           });
@@ -402,8 +401,7 @@ export class HomeTopicService {
         throw new ConflictException("本周灵感专题已被更新，请刷新后重试");
       }
 
-      const backupPath =
-        current.coverImageUrl === this.imageService.buildImagePath(topicId) ? await this.imageService.stageClear(topicId) : null;
+      const backupPath = isTopicImagePath(current.coverImageUrl) ? await this.imageService.stageClear(topicId) : null;
 
       try {
         await tx.homeTopic.update({
@@ -426,7 +424,7 @@ export class HomeTopicService {
 
   async getTopicImage(topicId: UUID) {
     const topic = await this.requireTopic(this.prisma, topicId);
-    if (topic.coverImageUrl !== this.imageService.buildImagePath(topicId)) {
+    if (!isTopicImagePath(topic.coverImageUrl)) {
       throw new NotFoundException("本周灵感专题封面图不存在");
     }
     return this.imageService.getImage(topicId);
@@ -629,7 +627,6 @@ export class HomeTopicService {
         name: category!.name,
         iconKey: category!.iconKey ?? null
       },
-      likeCount: item.recipe.likeCount,
       collectCount: item.recipe.collectCount,
       updatedAt: toIso(sourceVersion.createdAt)
     };
@@ -654,7 +651,6 @@ export class HomeTopicService {
         name: category!.name,
         iconKey: category!.iconKey ?? null
       },
-      likeCount: recipe.likeCount,
       collectCount: recipe.collectCount,
       updatedAt: toIso(recipe.updatedAt)
     };

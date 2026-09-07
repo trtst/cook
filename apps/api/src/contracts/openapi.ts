@@ -821,7 +821,6 @@ export class HomeTopicRecipeItemModel {
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
-  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1271,7 +1270,6 @@ export class InspirationRecipeSummaryModel {
   @ApiProperty(nullableString) durationText!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
-  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1288,7 +1286,6 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
-  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
   @ApiProperty(nullableString) curatedByName!: string | null;
@@ -1380,7 +1377,6 @@ export class AdminRecipeDetailModel {
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
   @ApiProperty(nullableString) blockedReason!: string | null;
-  @ApiProperty({ type: Number, minimum: 0 }) likeCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty({ type: Boolean }) canEdit!: boolean;
   @ApiProperty(dateTime) createdAt!: string;

@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, ParseIntPipe, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Post, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiExcludeController, ApiTags } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
@@ -56,9 +56,13 @@ export class TableTopicController {
 export class TableTopicPublicAssetsController {
   constructor(@Inject(TableTopicService) private readonly tableTopicService: TableTopicService) {}
 
-  @Get("table-topics/:topicId")
-  async getTopicImage(@Param("topicId", ParseIntPipe) topicId: number, @Res() response: ResponseLike) {
-    const asset = await this.tableTopicService.getTopicImage(topicId);
+  @Get("table-topics/:fileName")
+  async getTopicFile(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
+    const match = /^(\d+)(?:\.(?:jpg|png|webp))?$/i.exec(fileName);
+    if (!match) {
+      throw new NotFoundException("餐桌话题封面图不存在");
+    }
+    const asset = await this.tableTopicService.getTopicImage(Number(match[1]));
     response.setHeader("Content-Type", asset.contentType);
     response.setHeader("Content-Length", asset.stat.size);
     response.setHeader("Cache-Control", "public, max-age=300");

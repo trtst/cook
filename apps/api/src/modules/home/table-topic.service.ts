@@ -39,7 +39,7 @@ type TableTopicRow = Prisma.TableTopicGetPayload<{
   };
 }>;
 
-const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/table-topics\/\d+$/i;
+const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/table-topics\/\d+(?:\.(?:jpg|png|webp))?$/i;
 
 function cleanText(value: string | null | undefined) {
   const text = value?.trim() ?? "";
@@ -289,8 +289,7 @@ export class TableTopicService {
           throw new BadRequestException("请先下架餐桌话题再删除");
         }
 
-        backupPath =
-          current.coverImageUrl === this.imageService.buildImagePath(topicId) ? await this.imageService.stageClear(topicId) : null;
+        backupPath = isTopicImagePath(current.coverImageUrl) ? await this.imageService.stageClear(topicId) : null;
         stagedClear = backupPath !== null;
 
         await tx.tableTopic.delete({
@@ -341,7 +340,7 @@ export class TableTopicService {
           const next = await tx.tableTopic.update({
             where: { id: topicId },
             data: {
-              coverImageUrl: this.imageService.buildImagePath(topicId),
+              coverImageUrl: this.imageService.buildImagePath(topicId, staged.kind),
               version: {
                 increment: 1
               }

@@ -1514,7 +1514,6 @@ model Recipe {
   recycledUntil         DateTime?    @map("recycled_until") @db.Timestamptz(3)
   deletedAt             DateTime?    @map("deleted_at") @db.Timestamptz(3)
   reportCount           Int          @default(0) @map("report_count")
-  likeCount             Int          @default(0) @map("like_count")
   collectCount          Int          @default(0) @map("collect_count")
   sortOrder             Int          @default(0) @map("sort_order")
   version               Int          @default(1)

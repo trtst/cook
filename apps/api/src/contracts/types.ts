@@ -483,7 +483,6 @@ export interface HomeTopicRecipeItem {
   difficultyText: string | null;
   durationText: string | null;
   category: InspirationCategorySummary;
-  likeCount: number;
   collectCount: number;
   updatedAt: IsoDateTime;
 }
@@ -1694,7 +1693,6 @@ export interface InspirationRecipeSummary {
   durationText: string | null;
   estimatedCalories: number | null;
   category: InspirationCategorySummary;
-  likeCount: number;
   collectCount: number;
   updatedAt: IsoDateTime;
 }
@@ -1711,7 +1709,6 @@ export interface InspirationRecipeDetail {
   nutrition: RecipeNutritionSummary;
   assistant: RecipeAssistantSnapshot | null;
   planLinks: RecipePlanLinkSummary[];
-  likeCount: number;
   collectCount: number;
   ownedRecipeId: UUID | null;
   curatedByName: string | null;
@@ -1776,7 +1773,6 @@ export interface AdminRecipeDetail {
   version: number;
   reportCount: number;
   blockedReason: string | null;
-  likeCount: number;
   collectCount: number;
   canEdit: boolean;
   createdAt: IsoDateTime;
