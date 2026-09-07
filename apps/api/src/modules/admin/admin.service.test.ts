@@ -91,6 +91,49 @@ test("admin user list returns profile fields with masked phone", async () => {
   assert.equal(result.items[0].birthDate, "1990-09-04");
 });
 
+test("admin user recipe list keeps a missing personal category as null", async () => {
+  const recipeRow = {
+    id: 254,
+    title: "海带排骨汤",
+    coverImageUrl: null,
+    currentVersionId: 1115,
+    version: 1,
+    updatedAt: new Date("2026-09-07T00:00:00.000Z"),
+    category: null,
+    currentVersion: {
+      name: "海带排骨汤",
+      story: null,
+      baseServings: 2,
+      difficulty: null,
+      duration: null,
+      estimatedCalories: null,
+      tips: null,
+      ingredientsJson: [],
+      stepsJson: []
+    }
+  };
+  const prisma = {
+    adminAccount: {
+      findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] })
+    },
+    user: {
+      findUnique: async () => ({ id: 1001 })
+    },
+    recipe: {
+      findMany: async () => [recipeRow],
+      count: async () => 1
+    },
+    $transaction: async (operations: Array<Promise<unknown>>) => Promise.all(operations)
+  };
+  const service = new AdminService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+
+  const result = await service.listUserRecipes(1001, 1, 1, 20);
+
+  assert.equal(result.total, 1);
+  assert.equal(result.items[0].id, 254);
+  assert.equal(result.items[0].category, null);
+});
+
 test("admin user entitlement summary includes profile fields", async () => {
   const userRow = {
     id: 9,

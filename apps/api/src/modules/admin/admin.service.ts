@@ -5535,7 +5535,7 @@ export class AdminService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       estimatedCalories: content.estimatedCalories,
-      category: toRecipeCategorySummary(recipe.category!),
+      category: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
       contentVersionId: recipe.currentVersionId,
       version: recipe.version,
       updatedAt: toIsoDate(recipe.updatedAt)
