@@ -179,7 +179,9 @@ R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。
 | `GET` | `/admin/pending-recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回待审核个人菜谱推荐分页 |
 | `POST` | `/admin/pending-recipes/{recommendationId}/review` | `AdminBearerAuth` + `SUPER_ADMIN` | 审核个人菜谱推荐，支持通过或拒绝 |
 
-后台系统菜谱分类独立于个人分类，由平台直接维护，分类管理请求统一走 `Idempotency-Key + expectedVersion`。后台系统菜谱列表只收 `ownerId = null` 且仍挂系统分类的菜谱，不再把个人菜谱混入运营列表；个人菜谱继续只从用户菜谱域进入。后台图片链路也独立于用户草稿上传：只有 `SUPER_ADMIN` 可以先调 `POST /admin/recipe-images` 上传临时图，接口只返回 `tempKey + 图片元信息`，不再下发临时公网图片 URL；后台页面预览统一使用浏览器本地 `blob`。封面固定 `4:3`，步骤图保持当前图片比例，再在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 中通过 `coverImageTempKey / steps[].imageTempKey` 提交本次新图；若继续沿用旧图，则只允许回传当前系统菜谱现有的 `coverImageUrl / steps[].imageUrl`。服务端对 24 小时前仍未消费的后台临时图做过期清理；一旦创建/编辑流程消费了某个 `tempKey`，无论事务成功还是失败，都要清掉对应临时文件。后台可直接新增系统菜谱，创建时服务端新建 `RecipeContentVersion`，并把本次图片固化成正式公开资源后写入系统菜谱。后台详情仍对所有菜谱开放，但正文编辑只允许 `ownerId = null` 且仍挂系统分类的系统菜谱。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。个人菜谱推荐审核走独立 `/admin/pending-recipes` 队列：本期审核弹窗只处理 `通过/拒绝 + 最终系统分类`，不在后台二次编辑正文；通过时服务端复制推荐记录中的 `sourceVersionId` 为新的系统菜谱，并把 `adoptedRecipeId` 回写到推荐记录。后台系统菜谱创建、推荐收录与正文编辑当前只允许系统食材和系统单位，图片写入仅走这条后台独立临时上传链路。
+后台系统菜谱分类独立于个人分类，由平台直接维护，分类管理请求统一走 `Idempotency-Key + expectedVersion`。后台系统菜谱列表只收归属系统用户 UID `10001` 且仍挂系统分类的菜谱，不再把个人菜谱混入运营列表；个人菜谱继续只从用户菜谱域进入。后台图片链路也独立于用户草稿上传：只有 `SUPER_ADMIN` 可以先调 `POST /admin/recipe-images` 上传临时图，接口只返回 `tempKey + 图片元信息`，不再下发临时公网图片 URL；后台页面预览统一使用浏览器本地 `blob`。封面固定 `4:3`，步骤图保持当前图片比例，再在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 中通过 `coverImageTempKey / steps[].imageTempKey` 提交本次新图；若继续沿用旧图，则只允许回传当前系统菜谱现有的 `coverImageUrl / steps[].imageUrl`。服务端对 24 小时前仍未消费的后台临时图做过期清理；一旦创建/编辑流程消费了某个 `tempKey`，无论事务成功还是失败，都要清掉对应临时文件。后台可直接新增系统菜谱，创建时服务端新建 `RecipeContentVersion`，并把本次图片固化成正式公开资源后写入系统菜谱。后台详情仍对所有菜谱开放，但正文编辑只允许系统用户归属且仍挂系统分类的系统菜谱。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。个人菜谱推荐审核走独立 `/admin/pending-recipes` 队列：本期审核弹窗只处理 `通过/拒绝 + 最终系统分类`，不在后台二次编辑正文；通过时服务端复制推荐记录中的 `sourceVersionId` 为新的系统菜谱，并把 `adoptedRecipeId` 回写到推荐记录。后台系统菜谱创建、推荐收录与正文编辑当前只允许系统食材和系统单位，图片写入仅走这条后台独立临时上传链路。
+
+本节早期的 `ownerId = null` 系统菜谱口径已由当前确认规则替换：正式实现使用 UID `10001` 的系统用户归属系统菜谱；本文件中历史 R1 描述以本条为准。
 
 ## 五、建议 DTO
 
@@ -209,17 +211,13 @@ interface RecipeSceneSummary {
 
 ### 食材用量
 
+当前确认的正式菜谱用量只保存精准数量和系统单位：
+
 ```ts
-type RecipeAmountInput =
-  | {
-      kind: "EXACT";
-      quantity: string;
-      unitId: ResourceId;
-    }
-  | {
-      kind: "FUZZY";
-      text: string;
-    };
+type RecipeAmountInput = {
+  quantity: string;
+  unitId: ResourceId;
+};
 
 interface RecipeIngredientInput {
   ingredientId: ResourceId;
@@ -440,7 +438,7 @@ R1 不增加推荐、点赞、收藏统计或全文检索专用索引。关键�
 
 1. 难度档位：建议首版固定 `新手友好 / 轻松上手 / 需要经验 / 进阶挑战` 四档，对应稳定枚举 `BEGINNER / EASY / SKILLED / CHALLENGING`；发布时必须显式选择。
 2. 个人分类删除：建议 R1 暂不提供删除；后续删除时必须先把分类下菜谱批量迁移到另一个分类，不允许产生“未分类”已发布菜谱。
-3. 模糊用量：建议首版固定 `适量 / 少许 / 按需` 三项，不允许自由输入；其他表达使用食材备注能力时再单独确认。
+3. 精准用量：正式菜谱只保存 `quantity + unitId`，不保留 `FUZZY`、`amount.kind`、`amount.text` 或 `fuzzyText`；导入遇到“适量 / 少许 / 按需”时进入待修正，不能发布。
 
 4. 工程安全上限：名称 120 字、故事 2000 字、小贴士 1000 字、分类/场景名 20 字、个人分类和个人场景各最多 50 个、食材名 64 字、单位名 16 字、食材和步骤各最多 100 项、精确数量最多 3 位小数。
 5. 单位类型固定为重量、体积、常用、包装，对应 `WEIGHT / VOLUME / COMMON / PACKAGE`。

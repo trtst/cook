@@ -646,9 +646,8 @@ Idempotency-Key: 172251000001
       {
         "ingredientId": 4001,
         "name": "番茄",
-        "quantity": "",
-        "unitId": null,
-        "fuzzyText": "适量",
+        "quantity": "300",
+        "unitId": 3,
         "categoryId": 301,
         "defaultUnitId": 21,
         "source": "SYSTEM"

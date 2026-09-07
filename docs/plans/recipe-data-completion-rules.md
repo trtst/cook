@@ -9,6 +9,9 @@
 1. 现有菜谱创建流程保持不变，不做大改。
 2. 后续能力优先通过后台补全、派生计算和待确认机制接入，不扩大首屏录入负担。
 3. 当前阶段只先落规则，不导入营养基础表；营养基础表的数据源、映射步骤和后续实施顺序先记入本文，等单独执行时再展开。
+4. 系统菜谱统一归属 UID `10001` 的系统用户，默认按后台精选高质量内容治理；本规则的用户补全流程主要服务用户菜谱。
+5. 正式菜谱只保存精准用量；`FUZZY`、`amount.kind`、`amount.text` 和 `fuzzyText` 不属于当前通用模型。
+6. 用户菜谱满足发布必填项即可发布，派生数据在发布后由服务端写入数据库并独立追踪状态；派生不完整不回写正文，也不阻塞用户发布。
 
 本文用于冻结规则边界，不自动代表 API、数据库或三端实现已完成。
 
@@ -54,7 +57,7 @@
 
 ### 3.3 选填字段
 
-以下字段允许用户按需填写，不作为发布前强制补齐项：
+以下字段允许用户按需填写，不作为发布前强制补齐项，也不计为用户菜谱发布缺失：
 
 1. `story`
 2. `sceneIds`
@@ -66,7 +69,7 @@
 
 以下字段不要求用户主动填写，由后台补全、推导或计算：
 
-1. `estimatedCalories`
+1. 营养分析结果（包括热量）
 2. 营养素明细
 3. `dishRoles`
 4. `mealTypes`
@@ -99,9 +102,10 @@
 正文事实规则：
 
 1. 正文字段进入固定版本后，供计划、购物、分享、推荐、饭局等链路引用。
-2. 食材事实以结构化 `ingredientId + amount` 为准。
-3. 用量事实只允许两类：`EXACT` 与 `FUZZY`。
+2. 食材事实以结构化 `ingredientId + quantity + unitId` 为准，单位必须来自当前可用系统单位。
+3. `quantity` 必须是可校验的正数；正式菜谱不保存“适量、少许、按需”等模糊文本。
 4. 后台不得用推断值静默覆盖正文事实。
+5. 用户编辑正文时创建新的 `RecipeContentVersion`；收藏、计划、分享等业务关系仍归属于原 `Recipe`，并保留当时引用的 `contentVersionId`。
 
 ### 4.2 派生字段
 
@@ -127,6 +131,9 @@
 2. 派生字段不得反向覆盖正文事实。
 3. 派生字段必须保留来源与生成时间。
 4. 派生字段允许随着规则升级重新计算。
+5. 派生数据必须绑定 `contentVersionId`，并至少维护 `status / coverageRate / sourceVersion / generatedAt / blockingReasons`。
+6. 用户发布成功后，当前版本的派生任务从 `PENDING` 开始；能完整计算的结果为 `READY`，覆盖不足为 `PARTIAL`，需要人工判断为 `NEEDS_REVIEW`，执行失败为 `FAILED`。
+7. 后台 Wiki 必须展示当前版本的正文、派生结果、来源、状态、覆盖率和阻塞原因；运营可以补充或修正当前用户菜谱版本的派生数据，但不得修改用户正文。运营补充必须记录来源为 `OPS`、操作者和时间；用户编辑后，新正文版本的派生数据重新进入 `PENDING`，旧版本结果保留。
 
 ### 4.3 待确认字段
 
@@ -170,10 +177,10 @@
 
 食材导入处理按以下优先级执行：
 
-1. 能映射到系统食材且单位可比较时，转为结构化 `EXACT`
-2. 能识别食材但数量或单位不稳定时，保留原始输入并标记 `NEEDS_FIX`
-3. 能识别模糊用量时，转为 `FUZZY`
-4. 无法稳定识别食材时，保留原始行并标记 `NEEDS_FIX`
+1. 能映射到系统食材且数量、单位可校验时，转为结构化精准用量。
+2. 能识别食材但数量或单位不稳定时，保留导入原文并标记 `NEEDS_FIX`，不得写入正式菜谱版本。
+3. 识别到“适量、少许、按需”等模糊用量时，标记 `NEEDS_FIX`，必须人工改成精准数量后才能发布。
+4. 无法稳定识别食材时，保留导入原文并标记 `NEEDS_FIX`。
 
 ### 5.4 步骤解析规则
 
@@ -210,10 +217,9 @@
 1. `recipeVersionId`
 2. `baseServings`
 3. `ingredients[].ingredientId`
-4. `ingredients[].amount.kind`
-5. 若为 `EXACT`，则必须具备 `quantity + unitId`
-6. 食材营养基表
-7. 单位换算基线
+4. `ingredients[].quantity + ingredients[].unitId`
+5. 食材营养基表
+6. 单位换算基线
 
 ### 6.2 最小输出
 
@@ -248,12 +254,14 @@
 
 ### 6.5 降级规则
 
-存在模糊用量时，营养分析执行以下降级策略：
+正式菜谱不允许存在模糊用量。营养分析不足只允许由以下原因产生：
 
-1. 允许输出估算值。
-2. 必须降低 `confidence`。
-3. 必须标明存在未精确覆盖的食材项。
-4. 不得把估算结果声明为精确营养事实。
+1. 食材尚未完成营养映射。
+2. 单位尚未完成换算基线。
+3. 食材属于当前营养基表覆盖范围之外。
+4. 计算任务失败或规则版本不再适用。
+
+此时必须保留 `coverageRate` 和 `blockingReasons`，不得用标题、描述或运营猜测补造营养事实。
 
 ### 6.6 前台文案口径
 
@@ -340,6 +348,44 @@
 1. 质量状态不进入正文事实层。
 2. 质量状态服务于导入校对、后台治理、营养分析、健康规划与推荐质量控制。
 3. 后续规则升级时，允许基于 `parseVersion` 做批量重算或重新标记。
+4. 用户编辑产生新正文版本后，派生数据必须按新版本重新生成；不得继续展示旧版本的分析结果。
+5. 收藏、加入计划、分享、完成、删除和替换等行为事实独立保存，归属于 `Recipe`，不写入派生数据表，也不因重算派生数据而改变。
+
+## 九、发布有效性与数据完整度
+
+发布有效性只检查用户必须填写的正文事实：
+
+```text
+name + categoryId + baseServings + difficulty + duration
++ 至少一条精准结构化食材
++ 至少一条有效步骤
+= 可以发布
+```
+
+数据完整度不等于发布有效性，至少拆成以下结果：
+
+1. `publishReadiness`：是否满足发布条件。
+2. `contentCompleteness`：当前正文必填事实是否完整。
+3. `structuredDataStatus`：食材、单位和步骤是否已结构化。
+4. `tagAnalysisStatus`：必要标签是否已经确认。
+5. `nutritionStatus`：营养映射和计算覆盖是否达到要求。
+6. `assistantStatus`：美食助理是否已针对当前正文版本生成。
+7. `frontendReadiness`：前端是否可以消费当前版本允许展示的结果。
+8. `randomMenuReadiness`：当前版本是否具备进入随机一桌的确认结构标签。
+
+描述、小贴士、封面和步骤图片不是用户发布门槛；未填写时显示为可选缺失，不降低 `publishReadiness`。是否达到 Wiki 的 `100%`，由正文结构、必要标签、营养分析和美食助理等配置好的质量门槛共同决定，不能靠一个简单字段数量平均得出。
+
+Wiki 完整度按质量维度分别判定，不把所有字段一视同仁：
+
+| 维度 | `100%` 的含义 | 缺失时的影响 |
+| --- | --- | --- |
+| 正文完整度 | 发布必填正文事实齐全，食材均为精准数量与系统单位，步骤有效 | 影响发布或正文质量，不自动补猜 |
+| 结构化完整度 | 当前版本所需的餐次、菜位、主蛋白、主要食材等结构结果均已确认 | 影响随机一桌和结构化筛选 |
+| 营养完整度 | 当前规则要求的营养映射和换算均完成，结果状态为完整 | 只影响营养展示和健康分析，不阻塞发布 |
+| 助理完整度 | 当前版本的单菜/本餐助理结果已生成且可读取 | 缺失时按原始步骤或保守规则降级 |
+| 前端消费完整度 | 允许的前端消费方所需门禁均满足 | 只阻止对应消费场景，不影响收藏、计划等客观事实 |
+
+因此，用户可以先发布一个正文有效但派生不完整的菜谱；后台 Wiki 负责展示每个维度的状态并补充派生数据。用户编辑正文后只重算受影响的新版本，不能用旧版本的 `100%` 结果覆盖新版本。
 
 ## 九、认真填写的用户收益
 
@@ -403,15 +449,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-tomato",
-      "amount": { "kind": "EXACT", "quantity": "2", "unitId": "unit-ge" }
+      "quantity": "2",
+      "unitId": "unit-ge"
     },
     {
       "ingredientId": "ing-egg",
-      "amount": { "kind": "EXACT", "quantity": "3", "unitId": "unit-ge" }
+      "quantity": "3",
+      "unitId": "unit-ge"
     },
     {
       "ingredientId": "ing-salt",
-      "amount": { "kind": "FUZZY", "text": "少许" }
+      "quantity": "2",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -436,15 +485,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-laver",
-      "amount": { "kind": "EXACT", "quantity": "1", "unitId": "unit-bao" }
+      "quantity": "1",
+      "unitId": "unit-bao"
     },
     {
       "ingredientId": "ing-egg",
-      "amount": { "kind": "EXACT", "quantity": "2", "unitId": "unit-ge" }
+      "quantity": "2",
+      "unitId": "unit-ge"
     },
     {
       "ingredientId": "ing-sesame-oil",
-      "amount": { "kind": "FUZZY", "text": "按需" }
+      "quantity": "5",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -469,15 +521,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-oats",
-      "amount": { "kind": "EXACT", "quantity": "40", "unitId": "unit-g" }
+      "quantity": "40",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-yogurt",
-      "amount": { "kind": "EXACT", "quantity": "200", "unitId": "unit-ml" }
+      "quantity": "200",
+      "unitId": "unit-ml"
     },
     {
       "ingredientId": "ing-blueberry",
-      "amount": { "kind": "EXACT", "quantity": "30", "unitId": "unit-g" }
+      "quantity": "30",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -501,15 +556,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-bokchoy",
-      "amount": { "kind": "EXACT", "quantity": "300", "unitId": "unit-g" }
+      "quantity": "300",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-garlic",
-      "amount": { "kind": "EXACT", "quantity": "2", "unitId": "unit-ban" }
+      "quantity": "2",
+      "unitId": "unit-ban"
     },
     {
       "ingredientId": "ing-salt",
-      "amount": { "kind": "FUZZY", "text": "少许" }
+      "quantity": "2",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -534,15 +592,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-tofu",
-      "amount": { "kind": "EXACT", "quantity": "1", "unitId": "unit-he" }
+      "quantity": "1",
+      "unitId": "unit-he"
     },
     {
       "ingredientId": "ing-minced-pork",
-      "amount": { "kind": "EXACT", "quantity": "100", "unitId": "unit-g" }
+      "quantity": "100",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-chili-bean-paste",
-      "amount": { "kind": "EXACT", "quantity": "1", "unitId": "unit-tablespoon" }
+      "quantity": "15",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -567,15 +628,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-beef-brisket",
-      "amount": { "kind": "EXACT", "quantity": "500", "unitId": "unit-g" }
+      "quantity": "500",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-potato",
-      "amount": { "kind": "EXACT", "quantity": "2", "unitId": "unit-ge" }
+      "quantity": "2",
+      "unitId": "unit-ge"
     },
     {
       "ingredientId": "ing-ginger",
-      "amount": { "kind": "EXACT", "quantity": "3", "unitId": "unit-ban" }
+      "quantity": "3",
+      "unitId": "unit-ban"
     }
   ],
   "steps": [
@@ -601,15 +665,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-chicken-wing",
-      "amount": { "kind": "EXACT", "quantity": "500", "unitId": "unit-g" }
+      "quantity": "500",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-cola",
-      "amount": { "kind": "EXACT", "quantity": "1", "unitId": "unit-ping" }
+      "quantity": "1",
+      "unitId": "unit-ping"
     },
     {
       "ingredientId": "ing-soy-sauce",
-      "amount": { "kind": "EXACT", "quantity": "1", "unitId": "unit-tablespoon" }
+      "quantity": "15",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -634,19 +701,23 @@
   "ingredients": [
     {
       "ingredientId": "ing-cucumber",
-      "amount": { "kind": "EXACT", "quantity": "2", "unitId": "unit-ge" }
+      "quantity": "2",
+      "unitId": "unit-ge"
     },
     {
       "ingredientId": "ing-garlic",
-      "amount": { "kind": "EXACT", "quantity": "3", "unitId": "unit-ban" }
+      "quantity": "3",
+      "unitId": "unit-ban"
     },
     {
       "ingredientId": "ing-vinegar",
-      "amount": { "kind": "FUZZY", "text": "适量" }
+      "quantity": "10",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-chili-oil",
-      "amount": { "kind": "FUZZY", "text": "按需" }
+      "quantity": "5",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -671,11 +742,13 @@
   "ingredients": [
     {
       "ingredientId": "ing-salmon",
-      "amount": { "kind": "EXACT", "quantity": "250", "unitId": "unit-g" }
+      "quantity": "250",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-black-pepper",
-      "amount": { "kind": "FUZZY", "text": "按需" }
+      "quantity": "1",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
@@ -710,15 +783,18 @@
   "ingredients": [
     {
       "ingredientId": "ing-chicken-wing",
-      "amount": { "kind": "EXACT", "quantity": "500", "unitId": "unit-g" }
+      "quantity": "500",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-soy-sauce",
-      "amount": { "kind": "FUZZY", "text": "适量" }
+      "quantity": "15",
+      "unitId": "unit-g"
     },
     {
       "ingredientId": "ing-rock-sugar",
-      "amount": { "kind": "FUZZY", "text": "少许" }
+      "quantity": "5",
+      "unitId": "unit-g"
     }
   ],
   "steps": [
