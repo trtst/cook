@@ -479,7 +479,6 @@ interface HomeTopicRecipeItem {
   difficultyText: string | null;
   durationText: string | null;
   category: InspirationCategorySummary;
-  likeCount: number;
   collectCount: number;
   updatedAt: IsoDateTime;
 }
@@ -606,9 +605,9 @@ interface RedeemMembershipCodeResult {
 
 `POST /auth/wechat/phone-login` 接收微信 `getPhoneNumber` 组件返回的一次性 `phoneCode`，消费短期 `wechatSessionId`，按授权手机号创建或复用唯一手机号账号，并在同一事务内绑定微信身份后签发完整会话。微信配置缺失或微信侧不可达时返回业务 `code=503`；微信 code 或手机号授权 code 无效时返回业务 `code=400`，不暴露外部凭据。
 
-`POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信兜底链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，也可在携带有效微信短会话时完成身份绑定。
+`POST /auth/sms/send` 和 `POST /auth/sms/login` 是手机号短信兜底链路。发码请求固定为 `phone + scene=LOGIN + deviceId`，由服务端调用真实短信认证 provider；当前个人资质阶段使用阿里云号码认证服务 PNVS 短信认证，验证码由平台生成并由平台核验。验证码有效期为 5 分钟、60 秒冷却、只能消费一次，并按手机号 / IP / 设备做频控；服务端不保存明文验证码，只保存发送挑战流水、过期时间、消费状态、IP 和设备事实。短信登录成功后按手机号创建或复用账号，也可在携带有效微信短会话时完成身份绑定。短信验证码登录错误和密码登录错误共同进入登录失败风控：同一手机号、IP 或设备在 10 分钟内连续 3 次登录失败时限制登录 1 分钟；1 分钟内累计失败超过 10 次时限制登录 10 分钟；成功登录后清除该手机号、IP 和设备的连续失败计数。风控限制返回业务 `code=429` 和 `retryAfterSeconds`。
 
-`POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；设置初始密码和修改新密码均执行 8-20 位、字母 / 数字 / 符号任意两类的统一强度规则，登录密码本身只做哈希比对和风控。密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
+`POST /auth/password/login` 使用 `phone + password + deviceId` 登录，不消耗短信或微信手机号授权额度，但仍受账号安全风控限制。`POST /auth/password/set` 为当前账号设置初始密码，`POST /auth/password/change` 修改当前密码；设置初始密码和修改新密码均执行 8-20 位、字母 / 数字 / 符号任意两类的统一强度规则，登录密码本身只做哈希比对和登录失败风控。密码只以哈希形式保存。上述登录方式最终都签发统一的 `accessToken + refreshToken` 会话。
 
 `GET /app-config` 只返回公开启动配置。本轮只开放 `login.imageUrl`，由后台维护登录弹窗背景图；登录图公开 URL 使用真实静态对象路径，未配置静态域名时为 `/static/uploads/admin/login-image/login-image.{ext}`，配置 `ASSET_PUBLIC_BASE_URL` 时为静态域名下的 `/uploads/admin/login-image/login-image.{ext}`。接口失败、字段为空、图片失效时，客户端回退本地图。它不得混入用户态、权限、会员、饭搭子或展示背景配置。
 
@@ -622,7 +621,7 @@ interface RedeemMembershipCodeResult {
 
 `GET /home/recent-arrangement` 只服务首页“最近安排”条件卡，和 `GET /home-entries` 的运营入口配置职责分离。它只返回当前登录用户最近一顿、且还有下一步动作的计划或饭局摘要；若当前没有符合窗口与权限条件的候选，则返回 `data = null`。候选窗口固定为：先看未来 `24` 小时，若没有再补看未来 `24~36` 小时；在同一窗口内若同时存在饭局和计划候选，统一优先饭局，再按状态优先级 `TIME_UP_SHARE > READY_TO_COOK > PENDING_SHOPPING > PENDING_CONFIRM > EMPTY_MENU` 和离当前时间更近排序。接口最小只返回当前首页卡真正需要的字段：`sourceType + planItemId + planDate + eventId + title + scheduledAt + participantCount + menuCount + gapCount + status`。其中 `planDate` 用于客户端继续复用现有统一餐次详情页路由；`participantCount` 对饭局返回当前参与人数，对纯计划固定返回 `1`；`gapCount` 只有在当前服务端已存在可靠缺口事实时才返回数字，否则返回 `null`。该接口不得返回菜单明细、投票明细、冰箱明细、购物清单明细、参与人 UID、内部备注，也不直接返回首页按钮文案或跳转 URL；客户端根据 `status` 本地映射“去加菜 / 确认菜单 / 去采购 / 开始做饭 / 分享回忆”等主动作。
 
-`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回业务 `code=404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / likeCount / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`likeCount / collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
+`GET /home-topics/current` 和 `GET /home-topics/{topicId}` 共同承接首页“本周灵感”专题页。公开读取只返回当前专题真正需要的最小数据：头图、标题、副标题、推荐类别、期数、寄语、本期推荐菜谱和往期专题摘要；不返回评论、打卡、主持人、收藏专题、互动人数或任何社区关系字段。只有 `LISTED` 状态的专题允许公开读取；`GET /home-topics/current` 返回最新一条已上架专题，不存在已上架专题时返回 `topic = null`；读取指定专题时若该专题不存在或未上架，统一返回业务 `code=404`。本期推荐菜谱固定只收平台灵感菜谱，摘要字段固定为 `id / sourceVersionId / sort / title / coverImageUrl / ownedRecipeId / difficulty / duration / category / collectCount / updatedAt`，其中 `sourceVersionId` 是当前专题卡片对应的固定正文版本 ID，供首页专题页直接走“添加到我的”写链路；`ownedRecipeId` 只在请求带有效用户 token 且当前用户已持有该灵感固定版本对应的有效“我的菜谱”时返回个人菜谱 ID，匿名或尚未持有时返回 `null`；`collectCount` 仅作为菜谱事实透传，不扩展为专题互动统计。往期专题当前按 `publishedAt desc` 排序，但只返回当前专题之后的更老已上架专题，避免查看较老专题时又回看到更新专题。
 
 `GET /table-topics`、`GET /table-topics/{topicId}` 和 `POST /table-topics/{topicId}/participate` 共同承接首页“餐桌话题”。列表接口只返回当前列表卡真正需要的最小字段：`id / title / coverImageUrl / activityAt / participantCount`，并按 `activityAt desc, id desc` 倒序返回全部已上架话题。详情接口在列表摘要基础上补 `summary / joined / targetType / targetValue`；`joined` 只在请求带有效用户 token 且当前用户已经参与时返回 `true`，匿名或未参与时返回 `false`。详情页内的“查看活动详情”继续由 `targetType + targetValue` 承接：`PAGE` 表示站内页，`WEB_VIEW` 表示以 `https://` 开头的 H5 地址，`targetValue = null` 表示该期话题只用原生详情页承接。`POST /table-topics/{topicId}/participate` 要求登录，并按 `(topicId, userId)` 唯一事实去重；同一用户重复参与不再新增第二条记录，也不支持取消参与。未上架或不存在的话题统一返回业务 `code=404`。
 
@@ -948,6 +947,8 @@ DELETE /admin/medal-templates/{templateId}/image/{imageType}
 
 这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 负责单独治理勋章图片，其中 `imageType` 仅允许 `earned / locked`。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
 
+勋章图片公开 URL 使用稳定对象 key：已获得图为 `/static/uploads/medals/{templateId}`，锁定图为 `/static/uploads/medals/{templateId}/locked`；读取端兼容历史带扩展名对象。
+
 后台系统食材治理本轮新增：
 
 ```text
@@ -987,6 +988,8 @@ DELETE /admin/ingredient-feedbacks/{feedbackId}
 
 `GET /admin/ingredients` 只返回系统食材分页，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 和 `factStatus` 过滤；`status` 允许 `ACTIVE / DISABLED / ALL`，默认 `ACTIVE`，`factStatus` 允许 `ALL / MISSING`，默认 `ALL`。当传 `categoryId` 时，列表按该分类内系统顺序返回；不传 `categoryId` 时，列表进入后台虚拟“全部食材”视图，按系统食材全局展示顺序返回，用于统一查看、编辑和拖拽控制前台“全部食材”口径。`factStatus = MISSING` 用于后台快速查看仍建议补录结构化属性的系统食材，当前按既有自动识别规则检查 `主蛋白 / 主食 / 辣味食材` 三类缺口。系统食材摘要新增 `version`、`status`、`categoryName`、`imageUrl` 和 `updatedAt`，用于后台编辑、图片治理和排序。系统食材同时维护两套顺序：`分类内顺序` 只服务真实分类管理，`全局展示顺序` 只服务后台“全部食材”视图和前台“全部食材”展示。`POST /admin/ingredients/{ingredientId}/status` 用于把系统食材切到 `ACTIVE / DISABLED`；重新上架时服务端会把该食材同时放到当前分类排序末尾和全局展示顺序末尾，避免与现有启用中食材顺序冲突。`DELETE /admin/ingredients/{ingredientId}` 要求 `Idempotency-Key + expectedVersion`，只在该系统食材未被个人数据、菜谱草稿、已引用固定版本、购物清单、冰箱、审核记录、归并关系和营养映射引用时允许物理删除；存在任一引用时返回冲突错误，管理员应改用下架。`POST /admin/ingredients/{ingredientId}/image` 只接受后台裁好的 `50x50 PNG`，成功后覆盖当前系统食材图片并递增 `version`；`DELETE /admin/ingredients/{ingredientId}/image` 清空当前系统食材图片并递增 `version`。公开图片读取仍走 `GET /static/uploads/ingredients/{ingredientId}`，但只有数据库中仍为启用中的系统食材且 `imageUpdatedAt` 非空时才返回资源，已下架食材即使静态资源还在也不得继续外露。`POST /admin/ingredients/reorder` 支持两种模式：传 `categoryId` 时，只接收该分类下启用中系统食材的完整集合顺序并重写分类内顺序；不传 `categoryId` 时，只接收全部启用中系统食材的完整集合顺序并重写全局展示顺序。服务端统一校验集合完整性和 `expectedVersion`。`GET /admin/pending-ingredients` 只返回待审核的个人食材推荐分页，同样固定使用 `page`、`pageSize`；`POST /admin/pending-ingredients/{ingredientId}/review` 允许后台按 `通过为系统食材 / 通过并归并到现有系统食材 / 拒绝` 三种结果处理，并可在通过前调整 `名称 + 分类 + 默认单位`。拒绝时必须选择预设 `rejectReasonCode`：`NAME_NOT_CLEAR / NAME_HAS_BRAND / CATEGORY_NOT_FIT / UNIT_NOT_FIT / OUT_OF_SCOPE / OTHER`；只有 `OTHER` 仍要求补充详细 `reason`。服务端会把对应建议写入推荐记录，供前台“我的推荐”直接展示。若审核通过时命中同名但已下架的系统食材，服务端直接复用该系统食材并恢复为启用中，不再额外创建重复系统食材。`DELETE /admin/pending-ingredients/{ingredientId}` 要求 `Idempotency-Key + expectedVersion`，只删除仍为 `PENDING` 的个人食材推荐记录，不删除用户自己的个人食材。`GET /admin/ingredient-feedbacks` 只返回待审核的系统食材纠错分页，支持按当前食材名、建议食材名、分类、备注、提交人昵称或 UID 搜索；列表摘要固定返回 `当前名字/分类 + 建议名字/分类 + 备注 + 提交人 + ingredientVersion`。`POST /admin/ingredient-feedbacks/{feedbackId}/review` 只支持 `APPROVE / REJECT` 两种结果；采纳时后台可在用户建议基础上再次调整最终 `name + categoryId`，服务端直接更新对应系统食材并递增其 `version`，再把该纠错记录标记为 `ADOPTED`；驳回时只回写 `reviewNote` 并标记为 `REJECTED`。`DELETE /admin/ingredient-feedbacks/{feedbackId}` 要求 `Idempotency-Key + expectedVersion`，只删除仍为 `PENDING` 的纠错记录，不修改系统食材。
 
+系统食材图片的新公开 URL 指向实际 PNG 对象 key：`/static/uploads/ingredients/{ingredientId}.png` 或静态域名下的 `/uploads/ingredients/{ingredientId}.png`；本地公开读取继续兼容无扩展名旧路径。
+
 后台菜谱治理当前补充为：
 
 ```text
@@ -1005,7 +1008,7 @@ POST /admin/recipes/{recipeId}/unblock
 POST /admin/recipe-reports/{reportId}/resolve
 ```
 
-`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排系统菜谱分类，请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `ownerId = null` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName`，排序统一按 `updatedAt desc`。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `ownerId = null` 的系统菜谱记录。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`likeCount`、`collectCount`、`canEdit`，以及单菜助理状态 `assistantState(status / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `ownerId = null`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台手动重试当前系统菜谱版本的单菜助理生成，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情。`GET /admin/pending-recipes` 返回待审核个人菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次创建新的系统固定版本时，服务端还要同步生成一份单菜助理快照并挂到该 `RecipeContentVersion`；当前覆盖后台新建、后台编辑、后台导入发布，以及个人推荐审核通过收录为系统菜谱这四条写路径。若生成失败，主菜谱版本写入不回滚，而是把失败状态、最近错误和尝试次数落到同一份助理记录里，供后台详情页查看并手动重试。该快照只作为固定版本附属数据保留，不回写正文主数据。
+`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排系统菜谱分类，请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `ownerId = null` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName`，排序统一按 `updatedAt desc`。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `ownerId = null` 的系统菜谱记录。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`collectCount`、`canEdit`，以及单菜助理状态 `assistantState(status / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `ownerId = null`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台手动重试当前系统菜谱版本的单菜助理生成，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情。`GET /admin/pending-recipes` 返回待审核个人菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次创建新的系统固定版本时，服务端还要同步生成一份单菜助理快照并挂到该 `RecipeContentVersion`；当前覆盖后台新建、后台编辑、后台导入发布，以及个人推荐审核通过收录为系统菜谱这四条写路径。若生成失败，主菜谱版本写入不回滚，而是把失败状态、最近错误和尝试次数落到同一份助理记录里，供后台详情页查看并手动重试。该快照只作为固定版本附属数据保留，不回写正文主数据。
 
 ## 其他领域接口摘要
 
@@ -2211,7 +2214,7 @@ interface UpdateDiningEventCoverRequest {
 }
 ```
 
-当前只允许饭局发起人调用；服务端按 `expectedVersion` 防并发覆盖，并把图片固化成饭局公开资源。读取 `GET /dining-events/{eventId}` 时，若当前饭局已有封面图，摘要里的 `coverImageUrl` 返回可直接展示的公开地址；若没有封面图则返回 `null`。
+当前只允许饭局发起人调用；服务端按 `expectedVersion` 防并发覆盖，并把图片固化成饭局公开资源。读取 `GET /dining-events/{eventId}` 时，若当前饭局已有封面图，摘要里的 `coverImageUrl` 返回可直接展示的公开地址，路径必须指向真实对象 key，例如 `/static/uploads/dining-event-covers/{eventId}/{fileName}.{ext}` 或静态域名下的 `/uploads/dining-event-covers/{eventId}/{fileName}.{ext}`；若没有封面图则返回 `null`。
 
 `POST /dining-events/{eventId}/wishes` 用于参与人把自己的一道私房菜放进当前饭局的我想吃池，请求体只接收：
 
@@ -2470,7 +2473,7 @@ interface RecipeDraftContentInput {
 1. 编辑阶段图片只保留在小程序本地缓存，不写服务端。
 2. 本地图片在进入上传链路前，先经过客户端裁剪页处理：封面固定 `4:3`，步骤图自由裁剪；两者都在客户端导出受控宽高、质量后的本地文件。
 3. 用户点击“存草稿”或“发布”时，若还没有 `draftId`，先创建草稿。
-4. 前端随后调用 `POST /uploads/images` 逐张上传本地图片，服务端在草稿临时区创建或替换同一 `slotKey` 的图片。
+4. 前端随后调用 `POST /uploads/images` 逐张上传本地图片，服务端创建或替换同一 `slotKey` 的临时图片，返回的 `imageUrl` 必须指向实际写入的公开对象 key，例如 `/static/uploads/recipe-images/{publicId}.{ext}` 或静态域名下的 `/uploads/recipe-images/{publicId}.{ext}`。
 5. 上传成功后，前端再把 `coverUploadId / coverImageUrl / steps[].uploadId / steps[].imageUrl` 写回草稿正文。
 6. 发布时服务端把当前草稿引用的临时图片正式绑定到发布版本；已发布旧版本继续保留自己已引用的图片，不因新版本替换而删掉。
 
@@ -2652,7 +2655,6 @@ interface InspirationRecipeSummary {
   durationText: string | null;
   estimatedCalories: number | null;
   category: InspirationCategorySummary;
-  likeCount: number;
   collectCount: number;
   updatedAt: IsoDateTime;
 }
@@ -2667,7 +2669,6 @@ interface InspirationRecipeDetail {
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   assistant: RecipeAssistantSnapshot | null;
-  likeCount: number;
   collectCount: number;
   curatedByName: string | null;
   updatedAt: IsoDateTime;
@@ -2833,7 +2834,7 @@ GET /inspiration-recipes
 GET /inspiration-recipes/{recipeId}
 ```
 
-`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；后者详情页额外返回 `curatedByName`，仅用于展示 `由某某整理` 的昵称快照，不跳用户主页。`GET /inspiration-recipes/{recipeId}` 在请求带有效用户 token 时，还会额外返回 `ownedRecipeId`：当前用户已持有该灵感固定版本对应的有效私房菜时返回个人菜谱 ID，否则返回 `null`，供详情页直接把主按钮切到“加入计划”。点赞和推荐排序接口后续独立冻结。
+`GET /inspiration-recipes` 支持 `page`、`pageSize`、`keyword`、`categoryId`、`sort`、`difficulty` 和 `duration`。`sort` 只允许 `RECOMMENDED` 或 `LATEST`，`duration` 只允许 `WITHIN_15 / BETWEEN_15_30 / BETWEEN_30_60 / OVER_60`。匿名只返回审核通过且允许曝光的固定版本，不返回个人持有、额度、分类、场景或可写状态。当前灵感口径同时覆盖平台直接创建的系统菜谱，以及后台审核通过后复制进系统库的用户推荐菜谱；后者详情页额外返回 `curatedByName`，仅用于展示 `由某某整理` 的昵称快照，不跳用户主页。`GET /inspiration-recipes/{recipeId}` 在请求带有效用户 token 时，还会额外返回 `ownedRecipeId`：当前用户已持有该灵感固定版本对应的有效私房菜时返回个人菜谱 ID，否则返回 `null`，供详情页直接把主按钮切到“加入计划”。菜谱不提供点赞能力，推荐排序不使用点赞指标。
 
 历史合集主事实仍按“同一用户 + 同一灵感固定版本最多一条收藏记录”读取，但不再提供新的前台写入口。新建或编辑私房菜只维护个人分类和可选系统分类；来源固定版本仍用于系统侧治理、计划和历史引用。
 
