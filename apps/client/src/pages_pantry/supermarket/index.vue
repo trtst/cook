@@ -24,7 +24,7 @@
             <text class="card__title">{{ item.name }}</text>
             <text class="card__meta">{{ item.quantityText || "未填数量" }}</text>
           </view>
-          <button class="primary" :disabled="submitting" @click="markBought(item.id)">买好了</button>
+          <button class="primary" @click="markBought(item.id)">买好了</button>
         </view>
       </view>
     </template>

@@ -5,7 +5,7 @@
       <text class="bottom-bar__desc">{{ description }}</text>
     </view>
     <view class="bottom-bar__actions bottom-bar__actions--single">
-      <button class="primary bottom-bar__button" :disabled="planDisabled || loading" @click="emit('createPlan')">
+      <button class="primary bottom-bar__button" @click="emit('createPlan')">
         加入计划
       </button>
     </view>

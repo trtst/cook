@@ -22,9 +22,7 @@
         <template v-else>
           <view class="topic-backdrop">
             <image v-if="topic.coverImageUrl" class="topic-backdrop__image" :src="topic.coverImageUrl" mode="aspectFill" />
-            <view v-else class="topic-backdrop__image topic-backdrop__image--empty">
-              <text class="topic-backdrop__empty-text">本周灵感</text>
-            </view>
+            <ImageEmpty v-else class="topic-backdrop__image topic-backdrop__image--empty" copy="封面图" ratio="fill" />
             <view class="topic-backdrop__blur" :style="heroStyle" />
             <view class="topic-backdrop__veil" />
           </view>
@@ -32,9 +30,7 @@
           <view class="topic-content" :style="contentStyle">
             <view class="topic-summary">
               <image v-if="topic.coverImageUrl" class="topic-summary__cover" :src="topic.coverImageUrl" mode="aspectFill" />
-              <view v-else class="topic-summary__cover topic-summary__cover--empty">
-                <text class="topic-summary__cover-text">灵感</text>
-              </view>
+              <ImageEmpty v-else class="topic-summary__cover topic-summary__cover--empty" copy="封面图" ratio="fill" />
 
               <view class="topic-summary__main">
                 <view class="topic-summary__meta">
@@ -81,9 +77,7 @@
 
                     <view class="recipe-card__content">
                       <image v-if="item.coverImageUrl" class="recipe-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-                      <view v-else class="recipe-card__cover recipe-card__cover--empty">
-                        <text class="recipe-card__cover-text">封面图</text>
-                      </view>
+                      <ImageEmpty v-else class="recipe-card__cover recipe-card__cover--empty" copy="封面图" ratio="fill" />
 
                       <view class="recipe-card__footer">
                         <view class="recipe-card__title-block">
@@ -125,9 +119,7 @@
                     @click="openHistory(item.id)"
                   >
                     <image v-if="item.coverImageUrl" class="history-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-                    <view v-else class="history-card__cover history-card__cover--empty">
-                      <text class="history-card__cover-text">往期</text>
-                    </view>
+                    <ImageEmpty v-else class="history-card__cover history-card__cover--empty" copy="封面图" ratio="fill" />
                     <view class="history-card__issue">
                       <text class="history-card__issue-text">第 {{ item.issueNo }} 期</text>
                     </view>
@@ -161,6 +153,7 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import { homeApi, type HomeTopicDetail } from "@/apis/home";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -427,13 +420,6 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   background: var(--page-primary-fade-bg);
 }
 
-.topic-backdrop__empty-text {
-  color: var(--color-text-secondary);
-  font-size: 40rpx;
-  font-weight: 700;
-  letter-spacing: 6rpx;
-}
-
 .topic-backdrop__blur {
   background-position: center;
   background-repeat: no-repeat;
@@ -481,12 +467,6 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.topic-summary__cover-text {
-  color: var(--color-text-secondary);
-  font-size: 26rpx;
-  font-weight: 700;
 }
 
 .topic-summary__main {
@@ -721,11 +701,6 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   justify-content: center;
 }
 
-.recipe-card__cover-text {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-}
-
 .recipe-card__title {
   color: var(--color-text);
   font-size: 34rpx;
@@ -819,11 +794,6 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.history-card__cover-text {
-  color: var(--color-text-secondary);
-  font-size: 26rpx;
 }
 
 .history-card__issue {

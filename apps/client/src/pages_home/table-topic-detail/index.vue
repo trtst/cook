@@ -14,9 +14,7 @@
         <template v-else-if="topic">
           <view class="topic-hero">
             <image v-if="topic.coverImageUrl" class="topic-hero__cover" :src="topic.coverImageUrl" mode="aspectFill" />
-            <view v-else class="topic-hero__cover topic-hero__cover--empty">
-              <text class="topic-hero__empty-text">餐桌话题</text>
-            </view>
+            <ImageEmpty v-else class="topic-hero__cover topic-hero__cover--empty" copy="封面图" ratio="fill" />
             <view class="topic-hero__mask" />
 
             <view class="topic-hero__content" :style="pagePaddingStyle">
@@ -68,6 +66,7 @@
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -232,12 +231,6 @@ function openTopicTarget() {
   align-items: center;
   justify-content: center;
   background: var(--color-cover-empty-warm-bg);
-}
-
-.topic-hero__empty-text {
-  color: var(--color-state-warning-text);
-  font-size: 40rpx;
-  font-weight: 700;
 }
 
 .topic-hero__mask {

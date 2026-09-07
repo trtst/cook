@@ -71,7 +71,7 @@
 
       <text v-if="helperText" class="phone-helper">{{ helperText }}</text>
       <text v-if="errorText" class="phone-error">{{ errorText }}</text>
-      <button class="phone-submit" :disabled="loading" @click="handleSubmit">{{ submitText }}</button>
+      <button class="phone-submit" @click="handleSubmit">{{ submitText }}</button>
       <text class="phone-footnote">{{ footnoteText }}</text>
     </view>
   </Layout>

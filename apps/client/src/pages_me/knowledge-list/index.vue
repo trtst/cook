@@ -79,9 +79,7 @@
                 :src="item.coverImageUrl"
                 mode="aspectFill"
               />
-              <view v-else class="knowledge-item__thumb knowledge-item__thumb--empty">
-                <text class="knowledge-item__thumb-text">{{ channelMeta?.title || "文章" }}</text>
-              </view>
+              <ImageEmpty v-else class="knowledge-item__thumb knowledge-item__thumb--empty" copy="封面图" ratio="16-9" />
 
               <view class="knowledge-item__body">
                 <text class="knowledge-item__title">{{ item.title }}</text>
@@ -120,6 +118,7 @@
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
@@ -455,11 +454,4 @@ function splitKeywords(value: string | null) {
   background: var(--color-surface-soft-panel);
 }
 
-.knowledge-item__thumb-text {
-  padding: 0 16rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  text-align: center;
-}
 </style>

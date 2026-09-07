@@ -42,13 +42,17 @@
 
     <template #footer>
       <view class="sheet-actions">
-        <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="emit('close')">
+        <button
+          class="sheet-actions__button sheet-actions__button--cancel"
+          :class="{ 'sheet-actions__button--disabled': submitting }"
+          @click="handleClose"
+        >
           {{ cancelText }}
         </button>
         <button
           class="sheet-actions__button sheet-actions__button--confirm"
-          :disabled="submitting || !selectedId"
-          @click="emit('confirm')"
+          :class="{ 'sheet-actions__button--disabled': submitting || !selectedId }"
+          @click="handleConfirm"
         >
           {{ submitting ? confirmLoadingText : confirmText }}
         </button>
@@ -119,6 +123,16 @@ const createNameModel = computed({
   get: () => props.createName,
   set: (value: string) => emit("update:createName", value)
 });
+
+function handleClose() {
+  if (props.submitting) return;
+  emit("close");
+}
+
+function handleConfirm() {
+  if (props.submitting || !props.selectedId) return;
+  emit("confirm");
+}
 </script>
 
 <style scoped lang="scss">
@@ -264,5 +278,9 @@ const createNameModel = computed({
   color: var(--button-primary-text);
   -webkit-backdrop-filter: var(--button-primary-filter);
   backdrop-filter: var(--button-primary-filter);
+}
+
+.sheet-actions__button--disabled {
+  opacity: 0.46;
 }
 </style>

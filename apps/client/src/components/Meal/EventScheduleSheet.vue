@@ -53,10 +53,18 @@
 
     <template #footer>
       <view class="event-schedule-sheet__actions">
-        <button class="event-schedule-sheet__button event-schedule-sheet__button--cancel" :disabled="submitting" @click="emit('close')">
+        <button
+          class="event-schedule-sheet__button event-schedule-sheet__button--cancel"
+          :class="{ 'event-schedule-sheet__button--disabled': submitting }"
+          @click="handleClose"
+        >
           {{ cancelText }}
         </button>
-        <button class="event-schedule-sheet__button event-schedule-sheet__button--confirm" :disabled="submitting" @click="emit('confirm')">
+        <button
+          class="event-schedule-sheet__button event-schedule-sheet__button--confirm"
+          :class="{ 'event-schedule-sheet__button--disabled': submitting }"
+          @click="handleConfirm"
+        >
           {{ submitting ? confirmLoadingText : confirmText }}
         </button>
       </view>
@@ -75,7 +83,7 @@ type EventScheduleMealSlot = {
   disabled?: boolean;
 };
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   visible: boolean;
   title: string;
   subtitle?: string;
@@ -131,6 +139,16 @@ function handleTimeChange(event: { detail?: { value?: string } }) {
 function handleMealSlotSelect(item: EventScheduleMealSlot) {
   if (item.disabled) return;
   emit("selectMealSlot", item.value);
+}
+
+function handleClose() {
+  if (props.submitting) return;
+  emit("close");
+}
+
+function handleConfirm() {
+  if (props.submitting) return;
+  emit("confirm");
 }
 </script>
 
@@ -256,5 +274,9 @@ function handleMealSlotSelect(item: EventScheduleMealSlot) {
   color: var(--button-primary-text);
   -webkit-backdrop-filter: var(--button-primary-filter);
   backdrop-filter: var(--button-primary-filter);
+}
+
+.event-schedule-sheet__button--disabled {
+  opacity: 0.46;
 }
 </style>

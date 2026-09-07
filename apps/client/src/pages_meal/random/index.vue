@@ -73,7 +73,6 @@
       <view class="random-generate-bar__buttons">
         <button
           class="random-generate-bar__button random-generate-bar__button--primary"
-          :disabled="generateDisabled || conditionLoading"
           @click="generateMenu"
         >
           {{ conditionLoading ? "处理中..." : hasMenu ? "再来一桌" : "生成一桌" }}
@@ -115,7 +114,7 @@
           </view>
           <view v-if="showCategoryCreator" class="plan-sheet__creator">
             <input v-model="categoryDraftName" class="plan-sheet__creator-input" maxlength="4" placeholder="输入分类名称" :disabled="categorySubmitting" />
-            <button class="plan-sheet__creator-button" :disabled="categorySubmitting || !categoryDraftName.trim()" @click="createCategory">
+            <button class="plan-sheet__creator-button" @click="createCategory">
               {{ categorySubmitting ? "创建中" : "确定" }}
             </button>
           </view>
@@ -141,7 +140,7 @@
       <template #footer>
         <view class="plan-sheet__footer">
           <button class="secondary plan-sheet__button" @click="closePlanSheet">取消</button>
-          <button class="primary plan-sheet__button" :disabled="planSubmitting || !planReady" @click="createPlan">
+          <button class="primary plan-sheet__button" @click="createPlan">
             {{ planSubmitting ? "保存中..." : "确认加入计划" }}
           </button>
         </view>

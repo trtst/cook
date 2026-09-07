@@ -32,9 +32,7 @@
             @click="openTopic(item.id)"
           >
             <image v-if="item.coverImageUrl" class="topic-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-            <view v-else class="topic-card__cover topic-card__cover--empty">
-              <text class="topic-card__empty-text">餐桌话题</text>
-            </view>
+            <ImageEmpty v-else class="topic-card__cover topic-card__cover--empty" copy="封面图" ratio="fill" />
 
             <view class="topic-card__body">
               <text class="topic-card__title">{{ item.title }}</text>
@@ -56,6 +54,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -221,12 +220,6 @@ function openTopic(topicId: number) {
   align-items: center;
   justify-content: center;
   background: var(--color-cover-empty-warm-bg);
-}
-
-.topic-card__empty-text {
-  color: var(--color-state-warning-text);
-  font-size: 34rpx;
-  font-weight: 700;
 }
 
 .topic-card__body {

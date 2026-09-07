@@ -135,7 +135,6 @@
               <button
                 class="invite-footer__button"
                 :class="{ 'invite-footer__button--secondary': primaryActionState.secondary }"
-                :disabled="primaryActionDisabled"
                 @click="handlePrimaryAction"
               >
                 {{ primaryActionLabel }}

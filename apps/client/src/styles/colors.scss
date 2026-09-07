@@ -323,7 +323,7 @@
   --page-glow-cluster-start-bg: radial-gradient(circle at 68% 14%, var(--color-primary-soft) 0%, transparent 34%), radial-gradient(circle at 22% 34%, var(--color-primary-soft) 0%, transparent 38%), radial-gradient(circle at 60% 58%, var(--color-primary-soft) 0%, transparent 36%), radial-gradient(circle at 28% 84%, var(--color-primary-soft) 0%, transparent 32%);
   --page-glow-cluster-end-bg: radial-gradient(circle at 34% 12%, var(--color-primary-soft) 0%, transparent 34%), radial-gradient(circle at 76% 36%, var(--color-primary-soft) 0%, transparent 38%), radial-gradient(circle at 36% 62%, var(--color-primary-soft) 0%, transparent 36%), radial-gradient(circle at 70% 86%, var(--color-primary-soft) 0%, transparent 34%);
   --page-cover-fresh-shell-bg: linear-gradient(180deg, #{rgba($surface, 0.16)} 0%, #{rgba($surface, 0.42)} 100%), linear-gradient(140deg, #{$surface-muted} 0%, #{$surface-raised} 48%, #{$surface} 100%);
-  --page-cover-fresh-bg: linear-gradient(140deg, #{$surface-muted} 0%, #{$surface-raised} 48%, #{$surface} 100%);
+  --page-cover-fresh-bg: linear-gradient(140deg, #{$surface} 0%, #{$surface-raised} 48%, #{$surface-muted} 100%);
 
   --color-illustration-ink: #1b1b1b;
   --color-illustration-plate: #{color.mix($bg, $surface, 40%)};
@@ -399,9 +399,9 @@
   --medal-icon-shadow: 0 8rpx 16rpx var(--color-warning-soft);
   --medal-icon-text: var(--color-tag-warning-text);
 
-  --shadow-card: 0 2rpx 8rpx #{rgba($primary, theme-value($dark, 0.1, 0.06))};
+  --shadow-card: 0 2rpx 8rpx #{rgba($primary, theme-value($dark, 0.1, 0.15))};
   --shadow-floating: 0 -2rpx 8rpx #{rgba($primary, theme-value($dark, 0.12, 0.08))};
-  --shadow-tabbar: 0 2rpx 8rpx #{rgba($primary, theme-value($dark, 0.1, 0.06))};
+  --shadow-tabbar: 0 2rpx 8rpx #{rgba($primary, theme-value($dark, 0.1, 0.15))};
 
 }
 
@@ -470,7 +470,7 @@
  */
 page {
   /* 全局默认浅色兜底：视觉上接近 `fresh-ingredient`，但它不是主题切换配置入口。 */
-  @include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);
+  @include theme-derived-colors(#ffffff, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);
   @include global-layout-tokens;
   color-scheme: light;
 }

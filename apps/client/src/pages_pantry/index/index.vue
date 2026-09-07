@@ -195,8 +195,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="restockSubmitting" @click="closeRestockSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="restockSubmitDisabled" @click="submitRestock">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeRestockSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitRestock">
             {{ restockSubmitting ? "补货中..." : "补进库存" }}
           </button>
         </view>
@@ -239,8 +239,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeShoppingSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="shoppingSubmitDisabled" @click="submitShopping">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeShoppingSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitShopping">
             {{ shoppingSubmitting ? "加入中..." : "加入清单" }}
           </button>
         </view>
@@ -252,7 +252,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref, type CSSProperties } from "vue";
-import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
+import emptyStateArt from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";

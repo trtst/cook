@@ -72,7 +72,7 @@
                       </text>
 
                       <view v-if="item.status === 'REJECTED'" class="recommend-card__actions">
-                        <button class="recommend-button" :disabled="editorSubmitting" @click="openEditor(item)">修改后重新推荐</button>
+                        <button class="recommend-button" @click="openEditor(item)">修改后重新推荐</button>
                       </view>
                     </view>
 
@@ -138,15 +138,15 @@
                     <text class="recommend-card__desc">{{ inviteDesc(item) }}</text>
 
                     <view v-if="showInviteActions(item)" class="recommend-card__actions">
-                      <button class="editor-button invite-card__button invite-card__button--cancel" :disabled="inviteSubmittingId === item.id" @click.stop="declineInvite(item)">
+                      <button class="editor-button invite-card__button invite-card__button--cancel" @click.stop="declineInvite(item)">
                         忽略邀请
                       </button>
-                      <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id || !item.canJoin" @click.stop="acceptInvite(item)">
+                      <button class="editor-button invite-card__button invite-card__button--confirm" @click.stop="acceptInvite(item)">
                         {{ item.canJoin ? "确认邀请" : "当前不可加入" }}
                       </button>
                     </view>
                     <view v-else-if="item.inviteStatus === 'ACCEPTED'" class="recommend-card__actions">
-                      <button class="editor-button invite-card__button invite-card__button--confirm" :disabled="inviteSubmittingId === item.id" @click.stop="openInviteList(item)">查看清单</button>
+                      <button class="editor-button invite-card__button invite-card__button--confirm" @click.stop="openInviteList(item)">查看清单</button>
                     </view>
                   </view>
                 </template>
@@ -214,8 +214,8 @@
           </view>
 
           <view class="editor-actions">
-            <button class="editor-button editor-button--ghost" :disabled="editorSubmitting" @click="closeEditor">取消</button>
-            <button class="editor-button" :loading="editorSubmitting" :disabled="editorSubmitting" @click="submitEditor">
+            <button class="editor-button editor-button--ghost" @click="closeEditor">取消</button>
+            <button class="editor-button" :loading="editorSubmitting" @click="submitEditor">
               保存并推荐
             </button>
           </view>
@@ -228,7 +228,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import emptyStateArt from "@/assets/me-page/notification-empty-state.svg";
+import emptyStateArt from "@/assets/empty.png";
 import {
   recipeApi,
   type IngredientCategorySummary,

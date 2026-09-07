@@ -17,9 +17,8 @@
         v-if="!singleShare && memberAction"
         class="invite-share__action-card"
         :class="{ 'invite-share__action-card--disabled': memberAction.disabled || memberAction.muted }"
-        :disabled="memberAction.disabled"
-        :open-type="memberAction.openType || ''"
-        @click="emit('member')"
+        :open-type="memberAction.disabled ? '' : memberAction.openType || ''"
+        @click="handleMemberAction"
       >
         <view class="invite-share__tag">
           <text class="cookfont invite-share__tag-icon">&#xe6c8;</text>
@@ -31,9 +30,8 @@
       <button
         class="invite-share__action-card"
         :class="{ 'invite-share__action-card--disabled': friendAction.disabled || friendAction.muted }"
-        :disabled="friendAction.disabled"
-        :open-type="friendAction.openType || ''"
-        @click="emit('friend')"
+        :open-type="friendAction.disabled ? '' : friendAction.openType || ''"
+        @click="handleFriendAction"
       >
         <view class="invite-share__tag">
           <text class="cookfont invite-share__tag-icon">&#xe6c8;</text>
@@ -46,7 +44,11 @@
     <view v-if="errorText" class="sheet-note sheet-note--error">{{ errorText }}</view>
     <text v-if="hintText" class="invite-share__hint">{{ hintText }}</text>
     <view v-if="showCloseAction" class="invite-share__close-action">
-      <button class="action-pill action-pill--danger" :disabled="closeActionDisabled" @click="emit('closeAction')">{{ closeActionText }}</button>
+      <button
+        class="action-pill action-pill--danger"
+        :class="{ 'action-pill--disabled': closeActionDisabled }"
+        @click="handleCloseAction"
+      >{{ closeActionText }}</button>
     </view>
 
     <template v-if="$slots.footer" #footer>
@@ -71,7 +73,7 @@ type InviteShareAction = {
   openType?: string;
 };
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   visible: boolean;
   title: string;
   subtitle?: string;
@@ -105,6 +107,21 @@ const emit = defineEmits<{
   (event: "friend"): void;
   (event: "closeAction"): void;
 }>();
+
+function handleMemberAction() {
+  if (!props.memberAction || props.memberAction.disabled) return;
+  emit("member");
+}
+
+function handleFriendAction() {
+  if (props.friendAction.disabled) return;
+  emit("friend");
+}
+
+function handleCloseAction() {
+  if (props.closeActionDisabled) return;
+  emit("closeAction");
+}
 </script>
 
 <style scoped>
@@ -140,6 +157,10 @@ const emit = defineEmits<{
 
 .invite-share__action-card--disabled {
   opacity: 0.58;
+}
+
+.action-pill--disabled {
+  opacity: 0.46;
 }
 
 .invite-share__tag {

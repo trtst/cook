@@ -146,7 +146,7 @@
 
         <view class="complete-footer">
           <view class="complete-footer__main">
-            <button class="complete-footer__button" :disabled="submitting" @click="submitComplete">
+            <button class="complete-footer__button" @click="submitComplete">
               {{ submitting ? "提交中..." : submitText }}
             </button>
           </view>
@@ -199,8 +199,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeQuantitySheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || quantityConfirmDisabled" @click="applyQuantitySheet">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeQuantitySheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="applyQuantitySheet">
             确认
           </button>
         </view>
@@ -231,8 +231,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeExpireSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || !expireDraftDate" @click="applyExpireSheet">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeExpireSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="applyExpireSheet">
             确认
           </button>
         </view>

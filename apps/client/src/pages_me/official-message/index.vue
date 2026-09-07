@@ -32,9 +32,7 @@
         <template v-else-if="detail">
           <view class="detail-hero">
             <image v-if="detail.coverImageUrl" class="detail-hero__cover" :src="detail.coverImageUrl" mode="aspectFill" />
-            <view v-else class="detail-hero__cover detail-hero__cover--empty">
-              <text class="detail-hero__empty-text">系统官方消息</text>
-            </view>
+            <ImageEmpty v-else class="detail-hero__cover detail-hero__cover--empty" copy="封面图" ratio="fill" />
             <view class="detail-hero__mask" />
 
             <view class="detail-hero__content" :style="pageBodyStyle">
@@ -69,6 +67,7 @@
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -290,13 +289,6 @@ defineExpose({
   align-items: center;
   justify-content: center;
   background: var(--page-cover-fresh-bg);
-}
-
-.detail-hero__empty-text {
-  color: var(--color-support-action);
-  font-size: 32rpx;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 4rpx;
 }
 
 .detail-hero__mask {

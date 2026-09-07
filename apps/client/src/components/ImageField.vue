@@ -17,7 +17,8 @@
 
     <template v-else>
       <view class="image-field__empty" @click.stop="emitSelect">
-        <text v-if="showPlus" class="cookfont icon-add image-field__plus" />
+        <ImageEmpty v-if="variant === 'cover'" class="image-field__empty-cover" copy="封面图" ratio="fill" />
+        <text v-else-if="showPlus" class="cookfont icon-add image-field__plus" />
         <text class="image-field__title">{{ title }}</text>
         <text v-if="description" class="image-field__desc">{{ description }}</text>
       </view>
@@ -28,6 +29,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 
 type ImageFieldVariant = "cover" | "card";
 
@@ -107,9 +109,9 @@ function handleFieldClick() {
 }
 
 .image-field--cover.image-field--empty {
+  height: 75vw;
   min-height: 0;
-  padding: 36rpx;
-  padding-top: calc(75% - 36rpx);
+  max-height: 660rpx;
   background: var(--page-cover-fresh-shell-bg);
 }
 
@@ -126,14 +128,18 @@ function handleFieldClick() {
 
 .image-field--cover .image-field__empty {
   position: absolute;
-  right: 36rpx;
-  left: 36rpx;
-  top: var(--hero-header-offset);
+  top: 0;
+  right: 0;
   bottom: 138rpx;
-  gap: 10rpx;
+  left: 0;
+}
+
+.image-field--cover .image-field__empty-cover {
+  height: 100%;
 }
 
 .image-field--cover .image-field__title {
+  display: none;
   color: var(--color-text);
   font-size: 34rpx;
   font-weight: var(--font-weight-heavy);
@@ -141,6 +147,7 @@ function handleFieldClick() {
 }
 
 .image-field--cover .image-field__desc {
+  display: none;
   color: var(--color-text-secondary);
   font-size: 24rpx;
   line-height: 1.6;

@@ -354,8 +354,9 @@ onUnload(() => {
 .theme-footer__button {
   width: 100%;
   height: 88rpx;
+  line-height: 88rpx;
   border: 0;
-  border-radius: 999rpx;
+  border-radius: var(--radius-pill);
   color: var(--button-primary-text);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);

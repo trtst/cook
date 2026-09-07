@@ -69,8 +69,8 @@
             </view>
             <button
               class="participant-sheet__action"
-              :disabled="submitting || actionParticipantId === item.participantId"
-              @click="emit('revoke', item)"
+              :class="{ 'participant-sheet__action--disabled': submitting || actionParticipantId === item.participantId }"
+              @click="handleRevoke(item)"
             >
               {{ actionParticipantId === item.participantId ? "处理中..." : "撤回" }}
             </button>
@@ -96,8 +96,8 @@
             </view>
             <button
               class="participant-sheet__action participant-sheet__action--primary"
-              :disabled="submitting || actionParticipantId === item.participantId"
-              @click="emit('reinvite', item)"
+              :class="{ 'participant-sheet__action--disabled': submitting || actionParticipantId === item.participantId }"
+              @click="handleReinvite(item)"
             >
               {{ actionParticipantId === item.participantId ? "处理中..." : "再邀" }}
             </button>
@@ -110,9 +110,8 @@
         <button
           class="participant-sheet__invite"
           :class="{ 'participant-sheet__invite--disabled': inviteSharing }"
-          :disabled="inviteSharing"
           :open-type="inviteReady && !inviteSharing ? 'share' : ''"
-          @click="emit('invite')"
+          @click="handleInvite"
         >
           <text class="cookfont icon-share participant-sheet__invite-icon" />
           <text class="participant-sheet__invite-text">{{ inviteSharing ? "准备分享中" : inviteReady ? "分享邀请" : "准备分享邀请" }}</text>
@@ -137,7 +136,7 @@ type ParticipantManageItem = {
   canReinvite: boolean;
 };
 
-defineProps<{
+const props = defineProps<{
   visible: boolean;
   currentItems: ParticipantManageItem[];
   pendingItems: ParticipantManageItem[];
@@ -165,6 +164,25 @@ const emit = defineEmits<{
 function buildAvatarFallback(name: string) {
   const text = name.trim();
   return (text[0] || "?").toUpperCase();
+}
+
+function isParticipantActionDisabled(item: ParticipantManageItem) {
+  return props.submitting || props.actionParticipantId === item.participantId;
+}
+
+function handleRevoke(item: ParticipantManageItem) {
+  if (isParticipantActionDisabled(item)) return;
+  emit("revoke", item);
+}
+
+function handleReinvite(item: ParticipantManageItem) {
+  if (isParticipantActionDisabled(item)) return;
+  emit("reinvite", item);
+}
+
+function handleInvite() {
+  if (props.inviteSharing) return;
+  emit("invite");
 }
 </script>
 
@@ -275,6 +293,10 @@ function buildAvatarFallback(name: string) {
   background: var(--color-tag-primary-bg);
   box-shadow: inset 0 0 0 1rpx var(--color-border-active);
   color: var(--color-tag-primary-text);
+}
+
+.participant-sheet__action--disabled {
+  opacity: 0.46;
 }
 
 .participant-sheet__invite {

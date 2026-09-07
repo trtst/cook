@@ -32,7 +32,7 @@
 
               <view v-else-if="loadErrorText" class="taste-status">
                 <text class="taste-status__text">{{ loadErrorText }}</text>
-                <button class="taste-status__button" :disabled="saving" @click="loadTaste">重新加载</button>
+                <button class="taste-status__button" @click="loadTaste">重新加载</button>
               </view>
 
               <view v-else class="taste-form">
@@ -67,7 +67,7 @@
 
                 <text class="taste-form__tip">这些内容只保存给你自己，不会自动共享给其他成员。</text>
                 <text v-if="saveErrorText" class="taste-form__error">{{ saveErrorText }}</text>
-                <button class="taste-form__button" :loading="saving" :disabled="saving" @click="saveTaste">保存</button>
+                <button class="taste-form__button" :loading="saving" @click="saveTaste">保存</button>
               </view>
             </view>
           </template>
@@ -80,7 +80,7 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
-import tasteEmptyArt from "@/assets/me-page/taste-empty-state.svg";
+import tasteEmptyArt from "@/assets/empty.png";
 import { ApiClientError, UnauthorizedError } from "@/apis/http";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Empty from "@/components/Empty/Empty.vue";

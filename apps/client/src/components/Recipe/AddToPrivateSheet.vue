@@ -29,7 +29,7 @@
           />
           <button
             class="sheet-creator__button"
-            :disabled="categorySubmitting || !categoryDraftName.trim()"
+            :class="{ 'sheet-creator__button--disabled': categorySubmitting || !categoryDraftName.trim() }"
             @click="createCategory"
           >
             {{ categorySubmitting ? "创建中" : "确定" }}
@@ -53,10 +53,14 @@
 
     <template #footer>
       <view class="sheet-actions">
-        <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="emit('close')">取消</button>
+        <button
+          class="sheet-actions__button sheet-actions__button--cancel"
+          :class="{ 'sheet-actions__button--disabled': submitting }"
+          @click="handleClose"
+        >取消</button>
         <button
           class="sheet-actions__button sheet-actions__button--confirm"
-          :disabled="submitting || loading || !selectedCategoryId"
+          :class="{ 'sheet-actions__button--disabled': submitting || loading || !selectedCategoryId }"
           @click="submit"
         >
           {{ submitting ? "保存中..." : "保存为私房菜" }}
@@ -147,6 +151,11 @@ async function createCategory() {
   } finally {
     categorySubmitting.value = false;
   }
+}
+
+function handleClose() {
+  if (submitting.value) return;
+  emit("close");
 }
 
 async function submit() {
@@ -278,6 +287,11 @@ async function submit() {
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 84rpx;
+}
+
+.sheet-creator__button--disabled,
+.sheet-actions__button--disabled {
+  opacity: 0.46;
 }
 
 .panel-note {

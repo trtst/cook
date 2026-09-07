@@ -36,7 +36,7 @@
               placeholder="可选：搜索并绑定系统食材"
               @confirm="searchIngredients"
             />
-            <button class="secondary search-box__button" :disabled="ingredientLoading" @click="searchIngredients">
+            <button class="secondary search-box__button" @click="searchIngredients">
               {{ ingredientLoading ? "搜索中" : "搜索食材" }}
             </button>
           </view>
@@ -97,7 +97,7 @@
           </view>
         </view>
 
-        <button class="primary" :disabled="submitting || submitDisabled" @click="saveItem">
+        <button class="primary" @click="saveItem">
           {{ submitting ? "保存中" : isEditMode ? "保存修改" : "保存食材" }}
         </button>
       </view>

@@ -55,7 +55,7 @@
         </view>
       </template>
 
-      <button class="profile-field__confirm" :loading="saving" :disabled="saving" @click="saveField">
+      <button class="profile-field__confirm" :loading="saving" @click="saveField">
         确定
       </button>
     </view>

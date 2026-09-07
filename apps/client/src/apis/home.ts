@@ -132,7 +132,6 @@ export interface HomeTopicRecipeItem {
     name: string;
     iconKey: string | null;
   };
-  likeCount: number;
   collectCount: number;
   updatedAt: string;
 }

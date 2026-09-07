@@ -62,7 +62,7 @@
 
       <text v-if="helperText" class="password-helper">{{ helperText }}</text>
 
-      <button class="password-submit" :disabled="loading" @click="handleSubmit">{{ loading ? "提交中" : "确定" }}</button>
+      <button class="password-submit" @click="handleSubmit">{{ loading ? "提交中" : "确定" }}</button>
     </view>
   </Layout>
 </template>

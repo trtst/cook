@@ -289,6 +289,7 @@ export const APP_STORAGE_KEYS = Object.freeze({
 	theme: buildStorageKey("theme"),
 	randomMenuConditions: buildStorageKey("random_menu_conditions"),
 	randomMenuCategory: buildStorageKey("random_menu_category"),
+	loginMethodHabit: buildStorageKey("login_method_habit"),
 	systemInfoSnapshot: buildStorageKey("system_info_snapshot"),
 	deviceId: buildStorageKey("device_id"),
 	userProfile: buildStorageKey("user_profile"),

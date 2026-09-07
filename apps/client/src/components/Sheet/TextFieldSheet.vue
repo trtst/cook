@@ -27,13 +27,17 @@
 
     <template #footer>
       <view class="text-field-sheet__actions">
-        <button class="text-field-sheet__button text-field-sheet__button--cancel" :disabled="submitting" @click="emit('close')">
+        <button
+          class="text-field-sheet__button text-field-sheet__button--cancel"
+          :class="{ 'text-field-sheet__button--disabled': submitting }"
+          @click="handleClose"
+        >
           {{ cancelText }}
         </button>
         <button
           class="text-field-sheet__button text-field-sheet__button--confirm"
-          :disabled="submitting || confirmDisabled"
-          @click="emit('confirm')"
+          :class="{ 'text-field-sheet__button--disabled': submitting || confirmDisabled }"
+          @click="handleConfirm"
         >
           {{ submitting ? confirmLoadingText : confirmText }}
         </button>
@@ -80,6 +84,16 @@ const model = computed({
   get: () => props.modelValue,
   set: (value: string) => emit("update:modelValue", value)
 });
+
+function handleClose() {
+  if (props.submitting) return;
+  emit("close");
+}
+
+function handleConfirm() {
+  if (props.submitting || props.confirmDisabled) return;
+  emit("confirm");
+}
 </script>
 
 <style scoped lang="scss">
@@ -152,5 +166,9 @@ const model = computed({
   color: var(--button-primary-text);
   -webkit-backdrop-filter: var(--button-primary-filter);
   backdrop-filter: var(--button-primary-filter);
+}
+
+.text-field-sheet__button--disabled {
+  opacity: 0.46;
 }
 </style>

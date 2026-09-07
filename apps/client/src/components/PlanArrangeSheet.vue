@@ -49,14 +49,14 @@
       <view v-if="showCancel" class="plan-arrange-sheet__actions">
         <button
           class="plan-arrange-sheet__button plan-arrange-sheet__button--cancel"
-          :disabled="submitting"
-          @click="emit('close')"
+          :class="{ 'plan-arrange-sheet__button--disabled': submitting }"
+          @click="closeSheet"
         >
           {{ cancelText }}
         </button>
         <button
           class="plan-arrange-sheet__button plan-arrange-sheet__button--confirm"
-          :disabled="submitting"
+          :class="{ 'plan-arrange-sheet__button--disabled': submitting }"
           @click="submit"
         >
           {{ submitting ? confirmLoadingText : confirmText }}
@@ -173,6 +173,11 @@ function handleMonthChange(nextMonthDate: string) {
 function submit() {
   if (props.submitting) return;
   emit("confirm", { planDate: localDate.value, mealSlot: localMealSlot.value });
+}
+
+function closeSheet() {
+  if (props.submitting) return;
+  emit("close");
 }
 </script>
 
@@ -301,6 +306,10 @@ function submit() {
   color: var(--button-secondary-text);
   -webkit-backdrop-filter: var(--button-secondary-filter);
   backdrop-filter: var(--button-secondary-filter);
+}
+
+.plan-arrange-sheet__button--disabled {
+  opacity: 0.46;
 }
 
 .plan-arrange-sheet__submit {

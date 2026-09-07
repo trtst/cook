@@ -30,10 +30,18 @@
 
     <template #footer>
       <view class="menu-confirm-sheet__actions">
-        <button class="menu-confirm-sheet__button menu-confirm-sheet__button--cancel" :disabled="submitting" @click="emit('close')">
+        <button
+          class="menu-confirm-sheet__button menu-confirm-sheet__button--cancel"
+          :class="{ 'menu-confirm-sheet__button--disabled': submitting }"
+          @click="handleClose"
+        >
           返回改菜单
         </button>
-        <button class="menu-confirm-sheet__button menu-confirm-sheet__button--confirm" :disabled="submitting || loading" @click="emit('confirm')">
+        <button
+          class="menu-confirm-sheet__button menu-confirm-sheet__button--confirm"
+          :class="{ 'menu-confirm-sheet__button--disabled': submitting || loading }"
+          @click="handleConfirm"
+        >
           {{ submitting ? "确认中..." : "确认菜单" }}
         </button>
       </view>
@@ -51,7 +59,7 @@ type MenuConfirmItem = {
   recipeTitles: string[];
 };
 
-defineProps<{
+const props = defineProps<{
   visible: boolean;
   subtitle: string;
   summaryTitle: string;
@@ -66,6 +74,16 @@ const emit = defineEmits<{
   close: [];
   confirm: [];
 }>();
+
+function handleClose() {
+  if (props.submitting) return;
+  emit("close");
+}
+
+function handleConfirm() {
+  if (props.submitting || props.loading) return;
+  emit("confirm");
+}
 </script>
 
 <style scoped lang="scss">
@@ -182,5 +200,9 @@ const emit = defineEmits<{
   color: var(--button-primary-text);
   -webkit-backdrop-filter: var(--button-primary-filter);
   backdrop-filter: var(--button-primary-filter);
+}
+
+.menu-confirm-sheet__button--disabled {
+  opacity: 0.46;
 }
 </style>

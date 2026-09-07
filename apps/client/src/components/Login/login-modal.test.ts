@@ -13,6 +13,13 @@ function styleBlock(selector: string) {
   return match[1];
 }
 
+function functionBody(name: string) {
+  const start = source.indexOf(`async function ${name}`);
+  assert.ok(start >= 0, `${name} should exist`);
+  const end = source.indexOf("\nasync function ", start + 1);
+  return source.slice(start, end === -1 ? source.length : end);
+}
+
 test("login modal keeps WeChat phone code hidden from the rendered entry", () => {
   assert.doesNotMatch(source, /open-type="getPhoneNumber"/);
   assert.doesNotMatch(source, /@getphonenumber="handleWeChatPhoneLogin"/);
@@ -28,12 +35,24 @@ test("login modal keeps WeChat phone code hidden from the rendered entry", () =>
   assert.doesNotMatch(source, /authApi\.loginWithWechat\(/);
 });
 
-test("login modal opens directly to SMS login in mini program", () => {
+test("login modal opens from the local preferred login mode", () => {
   assert.match(storeSource, /mode: "phone" as LoginModalMode/);
   assert.doesNotMatch(storeSource, /this\.mode = isMiniProgram \? "wechat" : "phone"/);
-  assert.match(storeSource, /this\.mode = "phone"/);
+  assert.match(storeSource, /this\.mode = preferredLoginMode\(\)/);
   assert.doesNotMatch(storeSource, /this\.mode = this\.openedInMiniProgram \? "wechat" : "phone"/);
   assert.doesNotMatch(source, /renderMode === 'wechat'|renderMode === "wechat"/);
+});
+
+test("login modal remembers the default method after three same successful logins", () => {
+  assert.match(storeSource, /type LoginMethodHabit = \{\s*method: Extract<LoginModalMode, "phone" \| "password">;\s*successCount: number;\s*preferredMode: Extract<LoginModalMode, "phone" \| "password"> \| null;\s*\}/);
+  assert.match(storeSource, /const LOGIN_METHOD_PREFERENCE_THRESHOLD = 3/);
+  assert.match(storeSource, /APP_STORAGE_KEYS\.loginMethodHabit/);
+  assert.match(storeSource, /function preferredLoginMode\(\)/);
+  assert.match(storeSource, /function recordLoginMethod\(method: Extract<LoginModalMode, "phone" \| "password">\)/);
+  assert.ok(storeSource.includes("successCount >= LOGIN_METHOD_PREFERENCE_THRESHOLD ? method : current?.preferredMode ?? null"));
+  assert.match(functionBody("handlePhoneLogin"), /loginModalStore\.recordLoginMethod\("phone"\)[\s\S]*await applySession\(result\.data\)/);
+  assert.match(functionBody("handlePasswordLogin"), /loginModalStore\.recordLoginMethod\("password"\)[\s\S]*await applySession\(result\.data\)/);
+  assert.doesNotMatch(functionBody("handleWeChatPhoneLogin"), /recordLoginMethod/);
 });
 
 test("SMS login uses one clear description without an extra hint row", () => {

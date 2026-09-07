@@ -61,7 +61,7 @@
               >
                 <view class="history-card__cover">
                   <image v-if="item.coverImageUrl" class="history-card__image" :src="item.coverImageUrl" mode="aspectFill" />
-                  <text v-else class="cookfont icon-recipe history-card__placeholder" aria-hidden="true" />
+                  <ImageEmpty v-else class="history-card__image history-card__image--empty" copy="封面图" ratio="fill" />
                 </view>
                 <view class="history-card__main">
                   <text class="history-card__title">{{ item.title }}</text>
@@ -92,6 +92,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { recipeApi, type RecipeViewHistoryItem, type RecipeViewHistoryQuery } from "@/apis/recipe";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
@@ -279,7 +280,7 @@ defineExpose({
 .notice,
 .history-empty,
 .history-card {
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xs);
   background: var(--material-card-bg);
   box-shadow: var(--material-card-shadow);
   -webkit-backdrop-filter: var(--material-card-filter);
@@ -358,18 +359,13 @@ defineExpose({
   height: 116rpx;
   flex-shrink: 0;
   overflow: hidden;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted);
 }
 
 .history-card__image {
   width: 100%;
   height: 100%;
-}
-
-.history-card__placeholder {
-  color: var(--color-text-tertiary);
-  font-size: 42rpx;
 }
 
 .history-card__main {

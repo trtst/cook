@@ -83,7 +83,7 @@
       </scroll-view>
 
       <view v-if="sessionStore.isLoggedIn" class="reminder-footer">
-        <button class="reminder-footer__button" :loading="saving" :disabled="saving" @click="saveSettings">保存设置</button>
+        <button class="reminder-footer__button" :loading="saving" @click="saveSettings">保存设置</button>
       </view>
     </view>
   </Layout>

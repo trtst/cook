@@ -402,15 +402,6 @@ const heroEntries = computed(() => {
 const heroSlides = computed(() => {
   const fallbackItems = [
     {
-      key: "hero-primary",
-      entry: heroEntries.value[0] ?? null,
-      imageUrl: heroImagePrimary,
-      eyebrow: "本周厨房主题",
-      title: heroEntries.value[0]?.title ?? "今晚吃什么？",
-      description: heroEntries.value[0]?.subtitle ?? "这一周吃什么，可以慢慢安排。",
-      actionText: heroEntries.value[0]?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
-    },
-    {
       key: "hero-secondary",
       entry: heroEntries.value[1] ?? heroEntries.value[0] ?? null,
       imageUrl: heroImageSecondary,
@@ -418,6 +409,15 @@ const heroSlides = computed(() => {
       title: heroEntries.value[1]?.title ?? "看看今天能做什么",
       description: heroEntries.value[1]?.subtitle ?? "从首页入口继续往下安排这一顿。",
       actionText: (heroEntries.value[1] ?? heroEntries.value[0])?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
+    },
+    {
+      key: "hero-primary",
+      entry: heroEntries.value[0] ?? null,
+      imageUrl: heroImagePrimary,
+      eyebrow: "本周厨房主题",
+      title: heroEntries.value[0]?.title ?? "今晚吃什么？",
+      description: heroEntries.value[0]?.subtitle ?? "这一周吃什么，可以慢慢安排。",
+      actionText: heroEntries.value[0]?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
     }
   ];
   return fallbackItems;
@@ -1276,10 +1276,10 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  max-width: 130rpx;
-  height: 60rpx;
+  max-width: 120rpx;
+  height: 50rpx;
   margin: 22rpx 0;
-  padding: 0 24rpx;
+  padding: 0 20rpx;
   border-radius: var(--radius-pill);
   background: var(--color-overlay-control);
   -webkit-backdrop-filter: var(--material-mask-filter);
@@ -1591,7 +1591,8 @@ defineExpose({
   align-items: center;
   justify-content: center;
   align-self: flex-start;
-  height: 56rpx;
+  min-width: 120rpx;
+  height: 50rpx;
   margin-top: 20rpx;
   padding: 0 20rpx;
   border-radius: var(--radius-pill);
@@ -2433,6 +2434,10 @@ defineExpose({
 
 .family-recipe--skeleton:not(:last-child) {
   margin-right: 44rpx;
+}
+
+.family-recipe--skeleton .family-recipe__skeleton-copy {
+  margin-top: 18rpx;
 }
 
 .family-recipe__visual {

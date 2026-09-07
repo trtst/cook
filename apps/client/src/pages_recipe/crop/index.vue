@@ -116,8 +116,8 @@
       </view>
 
       <view class="crop-actions">
-        <button class="crop-actions__button crop-actions__button--light" :disabled="exporting" @click="cancelCrop">取消</button>
-        <button class="crop-actions__button crop-actions__button--primary" :disabled="exporting" @click="finishCrop">
+        <button class="crop-actions__button crop-actions__button--light" @click="cancelCrop">取消</button>
+        <button class="crop-actions__button crop-actions__button--primary" @click="finishCrop">
           {{ exporting ? "处理中..." : "完成" }}
         </button>
       </view>

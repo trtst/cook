@@ -508,7 +508,6 @@
                       <button
                         class="sheet-confirm"
                         :class="{ 'sheet-confirm--disabled': ingredientConfirmDisabled }"
-                        :disabled="ingredientConfirmDisabled"
                         @click="confirmIngredientSelection"
                       >
                         确认
@@ -596,7 +595,6 @@
                       <button
                         class="sheet-confirm"
                         :class="{ 'sheet-confirm--disabled': ingredientCreateSubmitting }"
-                        :disabled="ingredientCreateSubmitting"
                         @click="confirmIngredientEditor"
                       >
                         {{ ingredientCreateDraft.id ? "保存" : "确定" }}
@@ -648,7 +646,6 @@
                   <button
                     class="sheet-creator__button"
                     :class="{ 'sheet-creator__button--disabled': categorySubmitting || !categoryDraftName.trim() }"
-                    :disabled="categorySubmitting || !categoryDraftName.trim()"
                     @click="createCategoryTag"
                   >
                     {{ categorySubmitting ? "添加中" : "确定" }}
@@ -774,7 +771,7 @@
         </SheetShell>
 
         <view class="bottom-bar" :class="{ 'bottom-bar--hidden': formFieldFocused || stepSortVisible || ingredientDragging }">
-          <button class="bar-button bar-button--primary bottom-bar__publish" :disabled="submitting" @click="publishDraft">发布这个菜谱</button>
+          <button class="bar-button bar-button--primary bottom-bar__publish" @click="publishDraft">发布这个菜谱</button>
         </view>
     </view>
   </Layout>
@@ -783,7 +780,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { onHide, onLoad, onShow, onUnload } from "@dcloudio/uni-app";
-import loadingIllustration from "@/assets/recipe-page/loading-state.svg";
+import loadingIllustration from "@/assets/empty.png";
 import {
   recipeApi,
   type IngredientCategorySummary,

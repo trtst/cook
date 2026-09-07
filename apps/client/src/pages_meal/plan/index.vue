@@ -149,8 +149,7 @@
                         <view class="meal-card__actions">
                           <button
                             class="action-pill action-pill--primary meal-card__action-button"
-                            :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id }"
-                            :disabled="shoppingSubmitting && shoppingPlan?.id === plan.id && !hasShoppingListLink(plan)"
+                            :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id && !hasShoppingListLink(plan) }"
                             @click.stop="handlePlanShoppingAction(plan)"
                           >
                             {{ planShoppingActionText(plan) }}
@@ -218,12 +217,16 @@
 
         <template #footer>
           <view class="sheet-actions">
-            <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="creatingPlan" @click="closeCreatePlanSheet">
+            <button
+              class="sheet-actions__button sheet-actions__button--cancel"
+              :class="{ 'sheet-actions__button--disabled': creatingPlan }"
+              @click="closeCreatePlanSheet"
+            >
               取消
             </button>
             <button
               class="sheet-actions__button sheet-actions__button--confirm"
-              :disabled="creatingPlan || isCreatePlanSlotExpired(createPlanSlot)"
+              :class="{ 'sheet-actions__button--disabled': creatingPlan || isCreatePlanSlotExpired(createPlanSlot) }"
               @click="confirmCreatePlan"
             >
               {{
@@ -333,7 +336,7 @@
 import { onHide, onLoad, onShow, onUnload } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
-import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
+import emptyStateArt from "@/assets/empty.png";
 import { shoppingListApi, type ShoppingListSummary } from "../apis/shopping-list";
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
@@ -840,6 +843,10 @@ function closeCreatePlanSheet() {
   createPlanSheetVisible.value = false;
 }
 
+function finishCreatePlanSheet() {
+  createPlanSheetVisible.value = false;
+}
+
 function handleCreatePlanSheetAfterClose() {
   createPlanSlot.value = "DINNER";
 }
@@ -908,7 +915,7 @@ async function confirmCreatePlan() {
       expectedVersion: null,
       menuItems: []
     });
-    closeCreatePlanSheet();
+    finishCreatePlanSheet();
     openPlanDetail(plan);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加计划失败", icon: "none" });
@@ -1786,13 +1793,38 @@ defineExpose({
   max-width: 220rpx;
   padding: 10rpx 18rpx;
   border-radius: 0 0 0 var(--radius-xs);
-  color: var(--color-tag-primary-text);
+  color: var(--meal-slot-dinner);
   font-size: 20rpx;
   line-height: 1;
-  background: var(--button-primary-bg);
+  background: var(--meal-slot-dinner-soft);
   box-shadow: var(--shadow-card);
-  -webkit-backdrop-filter: var(--button-primary-filter);
-  backdrop-filter: var(--button-primary-filter);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
+}
+
+.meal-card--breakfast .meal-card__event-badge {
+  background: var(--meal-slot-breakfast-soft);
+  color: var(--meal-slot-breakfast);
+}
+
+.meal-card--lunch .meal-card__event-badge {
+  background: var(--meal-slot-lunch-soft);
+  color: var(--meal-slot-lunch);
+}
+
+.meal-card--dinner .meal-card__event-badge {
+  background: var(--meal-slot-dinner-soft);
+  color: var(--meal-slot-dinner);
+}
+
+.meal-card--afternoon-tea .meal-card__event-badge {
+  background: var(--meal-slot-afternoon-tea-soft);
+  color: var(--meal-slot-afternoon-tea);
+}
+
+.meal-card--late-night .meal-card__event-badge {
+  background: var(--meal-slot-late-night-soft);
+  color: var(--meal-slot-late-night);
 }
 
 .meal-card__panel {
@@ -2049,6 +2081,10 @@ defineExpose({
   color: var(--button-secondary-text);
   -webkit-backdrop-filter: var(--button-secondary-filter);
   backdrop-filter: var(--button-secondary-filter);
+}
+
+.sheet-actions__button--disabled {
+  opacity: 0.46;
 }
 
 .floating-dock {

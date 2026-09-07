@@ -185,8 +185,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeShoppingSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="shoppingSubmitDisabled" @click="submitShopping">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeShoppingSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitShopping">
             {{ shoppingSubmitting ? "加入中..." : "加入清单" }}
           </button>
         </view>

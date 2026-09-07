@@ -56,3 +56,11 @@ test("global button styles do not depend on native disabled selectors", () => {
   assert.match(colorsSource, /button\s*\{[^}]*margin:\s*0;[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*color:\s*inherit;[^}]*font:\s*inherit;[^}]*line-height:\s*inherit;[^}]*\}/s);
   assert.match(colorsSource, /button::after\s*\{[^}]*border:\s*0;[^}]*display:\s*none;[^}]*\}/s);
 });
+
+test("native button elements do not set disabled attributes", () => {
+  const forbiddenButtonDisabled = /<button\b[^>]*(?:\s:disabled=|\sdisabled(?:=|\s|>))/;
+
+  for (const { file, source } of collectStyleSources(__dirname)) {
+    assert.doesNotMatch(source, forbiddenButtonDisabled, file);
+  }
+});

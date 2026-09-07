@@ -30,7 +30,6 @@
           <button
             class="redeem-button"
             :class="{ 'redeem-button--disabled': !canSubmit || submitting }"
-            :disabled="!canSubmit || submitting"
             :loading="submitting"
             @click="submitRedeem"
           >

@@ -75,9 +75,7 @@
                     :src="item.coverImageUrl"
                     mode="aspectFill"
                   />
-                  <view v-else class="card__cover-fallback">
-                    <text v-if="mode !== 'drafts'" class="card__cover-text font-black">封面</text>
-                  </view>
+                  <ImageEmpty v-else class="card__cover-fallback" />
                 </view>
                 <view class="card__body">
                   <text class="card__title">{{ item.title }}</text>
@@ -125,10 +123,11 @@
 <script setup lang="ts">
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref, watch } from "vue";
-import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
+import emptyStateIllustration from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
@@ -650,13 +649,6 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-}
-
-.card__cover-text {
-	color: var(--color-text-secondary);
-	opacity: 0.56;
-	font-size: 38rpx;
-	font-weight: var(--font-weight-heavy);
 }
 
 .card__body {

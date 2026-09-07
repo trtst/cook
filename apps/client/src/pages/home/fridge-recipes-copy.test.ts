@@ -32,5 +32,9 @@ assert.ok(
   source.includes(".family-recipe--skeleton:not(:last-child)") && source.includes("margin-right: 44rpx;"),
   "Expected fridge recipe skeleton items to have wider spacing than loaded cards."
 );
+assert.ok(
+  source.includes(".family-recipe--skeleton .family-recipe__skeleton-copy") && source.includes("margin-top: 18rpx;"),
+  "Expected fridge recipe skeleton copy to keep spacing from the image placeholder."
+);
 
 console.log("home fridge recipe copy tests passed");

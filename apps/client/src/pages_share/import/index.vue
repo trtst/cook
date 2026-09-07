@@ -12,7 +12,7 @@
       <view class="section">
         <text class="section__title">本次展示名称</text>
         <input v-model="guestName" class="input" placeholder="例如：周末来吃饭的我" />
-        <button class="primary" :disabled="submitting || !shareToken || !guestName.trim()" @click="acceptInvite">确认加入</button>
+        <button class="primary" @click="acceptInvite">确认加入</button>
       </view>
 
       <view v-if="errorText" class="notice">{{ errorText }}</view>

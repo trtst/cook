@@ -123,7 +123,6 @@
               <button
                 v-if="!cookAssistant?.hasSnapshot || cookAssistant?.isStale"
                 class="assistant-actions__button assistant-actions__button--primary"
-                :disabled="cookAssistantLoading || submitting"
                 @click="handleGenerateCookAssistant"
               >
                 {{ cookAssistant?.isStale ? "重新生成建议" : "生成做饭建议" }}

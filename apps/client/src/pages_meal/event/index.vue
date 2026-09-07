@@ -88,9 +88,7 @@
             >
               <view class="event-card__top">
                 <image v-if="item.coverImageUrl" class="event-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-                <view v-else class="event-card__cover event-card__cover--empty">
-                  <text class="event-card__cover-empty">{{ item.coverText }}</text>
-                </view>
+                <ImageEmpty v-else class="event-card__cover event-card__cover--empty" copy="封面图" ratio="fill" />
                 <text v-if="item.focusText" class="event-card__focus">{{ item.focusText }}</text>
               </view>
 
@@ -183,6 +181,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -193,7 +192,7 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
-import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
+import emptyStateArt from "@/assets/empty.png";
 import { formatDateTimeMinute } from "../utils/date";
 import { mealApi, type DiningEventListStage, type DiningEventListSummary, type MealPlanSummary, type DiningEventStageCounts, type DiningEventListRole } from "../apis/meal";
 
@@ -973,20 +972,6 @@ defineExpose({
 .event-card__cover {
   width: 100%;
   height: 100%;
-}
-
-.event-card__cover--empty {
-  display: flex;
-  align-items: flex-end;
-  padding: 22rpx;
-  box-sizing: border-box;
-}
-
-.event-card__cover-empty {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  font-weight: 600;
-  line-height: 1.4;
 }
 
 .event-card__rows {

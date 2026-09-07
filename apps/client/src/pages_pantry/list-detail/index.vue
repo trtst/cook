@@ -168,7 +168,6 @@
                                     'mini-pill--disabled': isInventoryDisabled(group) && !isInventoryApplied(group),
                                     'mini-pill--locked': isInventoryDisabled(group) && isInventoryApplied(group)
                                   }"
-                                  :disabled="submitting || isInventoryDisabled(group)"
                                   @click.stop="handleFridgeAction(group)"
                                 >
                                   用库存
@@ -181,7 +180,6 @@
                                   'mini-pill--pending': isItemPending(group.id, 'check'),
                                   'mini-pill--disabled': isBoughtDisabled(group)
                                 }"
-                                :disabled="submitting || isBoughtDisabled(group)"
                                 @click.stop="toggleItem(group)"
                               >
                                 已购
@@ -282,7 +280,7 @@
           placeholder="搜索食材"
           @confirm="searchIngredients"
         />
-        <button class="search-box__button" :disabled="ingredientLoading" @click="searchIngredients">
+        <button class="search-box__button" @click="searchIngredients">
           {{ ingredientLoading ? "搜索中" : "搜索" }}
         </button>
       </view>
@@ -315,8 +313,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeAddSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || !addItemName" @click="createItem">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeAddSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="createItem">
             {{ submitting ? "添加中..." : "加入清单" }}
           </button>
         </view>
@@ -354,8 +352,8 @@
 
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="submitting" @click="closeMealSourceSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="submitting || !selectedPlanId" @click="submitPlanSheet">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeMealSourceSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitPlanSheet">
             {{ submitting ? "加入中..." : "加入清单" }}
           </button>
         </view>
@@ -435,7 +433,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
-import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
+import emptyStateArt from "@/assets/empty.png";
 import { mealApi, type MealPlanSummary } from "@/apis/meal";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary } from "@/apis/recipe";

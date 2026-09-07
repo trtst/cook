@@ -47,12 +47,7 @@
             <view class="hero" :style="heroStyle">
               <view class="hero__cover">
                 <image v-if="coverImageUrl" class="hero__image" :src="coverImageUrl" mode="aspectFill" />
-                <view v-else class="hero__cover-fill">
-                  <view class="hero__cover-copy">
-                    <text class="hero__cover-title">菜谱封面图</text>
-                    <text class="hero__cover-sub">4:3 封面图位置，当前版本先保留展示位。</text>
-                  </view>
-                </view>
+                <ImageEmpty v-else class="hero__cover-fill" copy="封面图" ratio="fill" />
               </view>
             </view>
 
@@ -96,7 +91,6 @@
                   <button
                     v-if="showShoppingEntry"
                     class="section__action"
-                    :disabled="shoppingSubmitting"
                     @click="addToShoppingList"
                   >
                     <text class="cookfont icon-add-list section__action-icon" />
@@ -372,10 +366,9 @@
         </template>
           <template #footer>
             <view class="sheet-actions">
-              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="recommendSubmitting" @click="closeRecommendSheet">取消</button>
+              <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeRecommendSheet">取消</button>
               <button
                 class="sheet-actions__button sheet-actions__button--confirm"
-                :disabled="recommendSubmitting || !selectedRecommendCategoryId"
                 @click="handleRecommendRecipe"
               >
                 {{ recommendSubmitting ? "提交中..." : "确认" }}
@@ -449,7 +442,7 @@
             maxlength="255"
             placeholder="请填写具体说明"
           />
-          <button class="danger" :disabled="submitting || !canSubmitReport" @click="handleReport">提交举报</button>
+          <button class="danger" @click="handleReport">提交举报</button>
       </SheetShell>
     </template>
   </Layout>
@@ -473,6 +466,7 @@ import {
 import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
@@ -1660,43 +1654,7 @@ defineExpose({
 .hero__cover-fill {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 36rpx;
   background: var(--page-cover-fresh-shell-bg);
-}
-
-.hero__cover-copy {
-  position: absolute;
-  right: 36rpx;
-  left: 36rpx;
-  top: var(--hero-header-offset);
-  bottom: 84rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 10rpx;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.hero__cover-title,
-.hero__cover-sub {
-  display: block;
-}
-
-.hero__cover-title {
-  color: var(--color-text);
-  font-size: 34rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.2;
-}
-
-.hero__cover-sub {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.6;
 }
 
 .content {
@@ -1716,12 +1674,6 @@ defineExpose({
 
 .summary-card {
   margin: 0 var(--space-page);
-  padding: 28rpx 32rpx 24rpx;
-  border-radius: var(--radius-xs);
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
 }
 
 .summary-card__title,

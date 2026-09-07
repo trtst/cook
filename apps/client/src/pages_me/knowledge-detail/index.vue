@@ -34,10 +34,7 @@
         <template v-else-if="detail">
           <view class="detail-cover">
             <image v-if="detail.coverImageUrl" class="detail-cover__image" :src="detail.coverImageUrl" mode="aspectFill" />
-            <view v-else class="detail-cover__empty" :style="pageBodyStyle">
-              <text class="detail-cover__empty-title">{{ detail.channelName }}</text>
-              <text class="detail-cover__empty-text">文章封面图</text>
-            </view>
+            <ImageEmpty v-else class="detail-cover__empty" copy="封面图" ratio="fill" />
           </view>
 
           <view class="detail-content">
@@ -99,6 +96,7 @@
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import ArticleBody from "../components/ArticleBody.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -360,27 +358,6 @@ defineExpose({
 .detail-cover__empty {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  align-items: center;
-  justify-content: center;
-  padding-right: var(--space-page);
-  padding-left: var(--space-page);
-  text-align: center;
-}
-
-.detail-cover__empty-title {
-  color: var(--color-text);
-  font-size: 34rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.2;
-}
-
-.detail-cover__empty-text {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
 }
 
 .detail-content {

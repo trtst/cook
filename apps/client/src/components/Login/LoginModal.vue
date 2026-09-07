@@ -20,7 +20,7 @@
       <view class="login-popup__content">
         <view class="login-popup__brand">
           <image class="login-popup__logo" :src="logoUrl" mode="widthFix" />
-          <text class="login-popup__slogan">{{ APP_SLOGAN }}</text>
+          <text class="login-popup__slogan font-medium">{{ APP_SLOGAN }}</text>
         </view>
 
         <view class="login-popup__main">
@@ -59,7 +59,6 @@
                     <button
                       class="login-popup__code-button"
                       :class="{ 'login-popup__code-button--disabled': loading || countdown > 0 }"
-                      :disabled="loading || countdown > 0"
                       @click="sendCode"
                     >
                       {{ countdownText }}
@@ -77,7 +76,6 @@
                 <button
                   class="login-popup__main-button"
                   :class="{ 'login-popup__main-button--disabled': loading }"
-                  :disabled="loading"
                   @click="handlePhoneLogin"
                 >
                   {{ loading ? "登录中..." : "登录" }}
@@ -138,7 +136,6 @@
                 <button
                   class="login-popup__main-button"
                   :class="{ 'login-popup__main-button--disabled': loading }"
-                  :disabled="loading"
                   @click="handlePasswordLogin"
                 >
                   {{ loading ? "登录中..." : "登录" }}
@@ -446,6 +443,7 @@ async function handlePhoneLogin() {
       await showAuthResultError(result);
       return;
     }
+    loginModalStore.recordLoginMethod("phone");
     await applySession(result.data);
   } catch (error) {
     await showAuthError(error);
@@ -480,6 +478,7 @@ async function handlePasswordLogin() {
       await showAuthResultError(result);
       return;
     }
+    loginModalStore.recordLoginMethod("password");
     await applySession(result.data);
   } catch (error) {
     await showAuthError(error);

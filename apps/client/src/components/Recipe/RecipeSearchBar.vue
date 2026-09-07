@@ -1,7 +1,7 @@
 <template>
   <view class="recipe-search">
     <view class="recipe-search__field" :class="{ 'recipe-search__field--disabled': disabled }">
-      <image class="recipe-search__icon" :src="searchIcon" mode="aspectFit" />
+      <text class="cookfont icon-search recipe-search__icon" />
       <input
         :value="modelValue"
         class="recipe-search__input"
@@ -18,8 +18,6 @@
 </template>
 
 <script setup lang="ts">
-import searchIcon from "@/assets/recipe-page/search.svg";
-
 withDefaults(
   defineProps<{
     modelValue: string;
@@ -76,8 +74,10 @@ function handleClear() {
 
 .recipe-search__icon {
   flex: 0 0 48rpx;
-  width: 48rpx;
-  height: 48rpx;
+  color: var(--color-text-tertiary);
+  font-size: 40rpx;
+  line-height: 1;
+  text-align: center;
 }
 
 .recipe-search__input {

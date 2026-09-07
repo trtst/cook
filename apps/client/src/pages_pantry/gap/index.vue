@@ -83,7 +83,6 @@
                         <button
                           class="gap-card__action"
                           :class="{ 'gap-card__action--disabled': submittingGapKey === section.window + ':' + item.key }"
-                          :disabled="submittingGapKey === section.window + ':' + item.key"
                           @click.stop="addGapItem(section.window, item)"
                         >
                           {{ submittingGapKey === section.window + ':' + item.key ? "加入中..." : "加入清单" }}
@@ -139,8 +138,8 @@
     >
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="shoppingSubmitting" @click="closeTargetSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="sheetSubmitDisabled" @click="submitTargetSheet">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeTargetSheet">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitTargetSheet">
             {{ shoppingSubmitting ? "加入中..." : pendingGapItem ? "加入清单" : "完成" }}
           </button>
         </view>

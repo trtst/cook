@@ -60,10 +60,7 @@
               <view v-else-if="heroCoverUrl" class="meal-hero__cover-static">
                 <image class="meal-hero__cover-image" :src="heroCoverUrl" mode="aspectFill" />
               </view>
-              <view v-else class="meal-hero__cover-empty">
-                <text class="meal-hero__cover-empty-title">暂未上传聚会照片</text>
-                <text class="meal-hero__cover-empty-desc">发起人后续补上封面后，饭局列表会同步显示。</text>
-              </view>
+              <ImageEmpty v-else class="meal-hero__cover-empty" copy="封面图" ratio="fill" />
             </view>
 
             <view v-else class="meal-hero meal-hero--plan" :style="heroStyle">
@@ -132,7 +129,6 @@
                           v-if="canInviteParticipants"
                           class="summary-card__invite"
                           :class="{ 'summary-card__invite--disabled': inviteSharing }"
-                          :disabled="inviteSharing"
                           :open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
                           @click="handleInviteShare"
                         >
@@ -242,7 +238,6 @@
                       v-if="isEventOrganizer"
                       class="wish-list__action"
                       :class="{ 'wish-list__action--disabled': item.inCurrentMenu || wishMenuLoadingId === item.id }"
-                      :disabled="item.inCurrentMenu || wishMenuLoadingId === item.id"
                       @click="addWishItemToMenu(item)"
                     >
                       {{ item.inCurrentMenu ? "已在菜单" : wishMenuLoadingId === item.id ? "加入中..." : "加入本次菜单" }}
@@ -251,7 +246,6 @@
                       v-else-if="canChooseWish"
                       class="wish-list__action"
                       :class="{ 'wish-list__action--ghost': item.supportedByMe, 'wish-list__action--disabled': wishActionLoadingId === item.id }"
-                      :disabled="wishActionLoadingId === item.id"
                       @click="toggleWishSupport(item)"
                     >
                       {{
@@ -405,7 +399,6 @@
                   <template v-else-if="cookAssistant?.isStale">
                     <button
                       class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
-                      :disabled="cookAssistantLoading || submitting"
                       @click="handleCookAssistantAction"
                     >
                       重新生成建议
@@ -415,7 +408,6 @@
                   <template v-else>
                     <button
                       class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
-                      :disabled="cookAssistantLoading || submitting"
                       @click="handleCookAssistantAction"
                     >
                       生成做饭建议
@@ -504,7 +496,7 @@
           <view
             v-if="footerQuickAction && footerQuickAction.key !== 'share-invite'"
             class="meal-footer__quick"
-            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled }"
+            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled || submitting }"
             @click="handleFooterAction(footerQuickAction.key)"
           >
             <text class="cookfont meal-footer__quick-icon" :class="footerQuickAction.iconClass" />
@@ -513,8 +505,7 @@
           <button
             v-else-if="footerQuickAction"
             class="meal-footer__quick meal-footer__quick--button"
-            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled }"
-            :disabled="footerQuickAction.disabled || submitting"
+            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled || submitting }"
             :open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
             @click="handleFooterAction(footerQuickAction.key)"
           >
@@ -526,7 +517,7 @@
               <button
                 v-if="footerSecondaryAction"
                 class="meal-footer__button meal-footer__button--ghost"
-                :disabled="footerSecondaryAction.disabled || submitting"
+                :class="{ 'meal-footer__button--disabled': footerSecondaryAction.disabled || submitting }"
                 @click="handleFooterAction(footerSecondaryAction.key)"
               >
                 {{ footerSecondaryAction.label }}
@@ -534,7 +525,7 @@
               <button
                 v-if="footerPrimaryAction"
                 class="meal-footer__button meal-footer__button--primary"
-                :disabled="footerPrimaryAction.disabled || submitting"
+                :class="{ 'meal-footer__button--disabled': footerPrimaryAction.disabled || submitting }"
                 @click="handleFooterAction(footerPrimaryAction.key)"
               >
                 <text class="meal-footer__button-content">{{ footerPrimaryAction.label }}</text>
@@ -632,9 +623,7 @@
                 >
                   <view class="recipe-sheet__cover">
                     <image v-if="item.coverImageUrl" class="recipe-sheet__cover-image" :src="item.coverImageUrl" mode="aspectFill" />
-                    <view v-else class="recipe-sheet__cover-placeholder">
-                      <text class="cookfont icon-recipe recipe-sheet__cover-icon" />
-                    </view>
+                    <ImageEmpty v-else class="recipe-sheet__cover-placeholder" copy="封面图" ratio="fill" />
                   </view>
                   <view class="recipe-sheet__main">
                     <text class="recipe-sheet__name">{{ item.title }}</text>
@@ -651,7 +640,12 @@
                       'recipe-sheet__status--selected': (recipeSheetMode === 'bring' || recipeSheetMode === 'wish') && isRecipeSelected(item) && !isRecipeAdded(item)
                     }"
                   >
-                    <text class="recipe-sheet__status-text">{{ recipeSheetStatusText(item) }}</text>
+                    <text
+                      class="recipe-sheet__status-text"
+                      :class="{ 'recipe-sheet__status-text--primary': isRecipePendingAdd(item) || isRecipeSelected(item) }"
+                    >
+                      {{ recipeSheetStatusText(item) }}
+                    </text>
                   </view>
                 </view>
               </view>
@@ -664,10 +658,18 @@
 
           <template #footer>
             <view class="sheet-actions">
-              <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="recipeSubmitting" @click="closeRecipeSheet">
+              <button
+                class="sheet-actions__button sheet-actions__button--cancel"
+                :class="{ 'sheet-actions__button--disabled': recipeSubmitting }"
+                @click="closeRecipeSheet"
+              >
                 取消
               </button>
-              <button class="sheet-actions__button sheet-actions__button--confirm" :disabled="recipeConfirmDisabled" @click="submitRecipeSheet">
+              <button
+                class="sheet-actions__button sheet-actions__button--confirm"
+                :class="{ 'sheet-actions__button--disabled': recipeConfirmDisabled }"
+                @click="submitRecipeSheet"
+              >
                 {{ recipeConfirmButtonText }}
               </button>
             </view>
@@ -751,6 +753,7 @@ import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerShe
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import ImageField from "@/components/ImageField.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -1397,6 +1400,11 @@ const footerPrimaryGapText = computed(() => {
   return "";
 });
 const footerButtonCount = computed(() => Number(Boolean(footerSecondaryAction.value)) + Number(Boolean(footerPrimaryAction.value)));
+function isFooterActionDisabled(action: FooterActionKey) {
+  if (submitting.value) return true;
+  const currentActions = [footerQuickAction.value, footerSecondaryAction.value, footerPrimaryAction.value, endedMemoryAction.value];
+  return currentActions.some(item => item?.key === action && Boolean(item.disabled));
+}
 const menuConfirmItems = computed(() => currentMenuItems.value.map(item => ({
   key: item.key,
   name: item.title,
@@ -2764,6 +2772,7 @@ function handleScroll(event: { detail: { scrollTop?: number } }) {
 }
 
 function handleFooterAction(action: FooterActionKey) {
+  if (isFooterActionDisabled(action)) return;
   if (action === "share-invite") {
     handleInviteShare();
     return;
@@ -2984,7 +2993,7 @@ function clearFocusedSection() {
 }
 
 .meal-hero--plan {
-  background: var(--color-cover-empty-warm-bg);
+  background: var(--color-surface-primary-panel);
 }
 
 .meal-hero--event {
@@ -3024,32 +3033,8 @@ function clearFocusedSection() {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 10rpx;
-  padding: 36rpx;
-  padding-top: calc(var(--hero-header-offset) + 24rpx);
-  background: var(--page-cover-fresh-shell-bg);
+  padding-top: var(--hero-header-offset);
   box-sizing: border-box;
-}
-
-.meal-hero__cover-empty-title,
-.meal-hero__cover-empty-desc {
-  display: block;
-}
-
-.meal-hero__cover-empty-title {
-  color: var(--color-text);
-  font-size: 34rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.2;
-}
-
-.meal-hero__cover-empty-desc {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.6;
 }
 
 .meal-hero::before {
@@ -3060,7 +3045,7 @@ function clearFocusedSection() {
   width: 240rpx;
   height: 186rpx;
   border-radius: 50%;
-  background: var(--color-surface-raised);
+  background: var(--color-surface-primary-panel-strong);
   content: "";
   pointer-events: none;
   transform: rotate(-18deg);
@@ -3776,8 +3761,8 @@ function clearFocusedSection() {
   min-height: 72rpx;
   padding: 0 26rpx;
   border-radius: 999rpx;
-  background: var(--color-state-warning-soft);
-  color: var(--color-state-warning-text);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
 }
@@ -4243,9 +4228,13 @@ function clearFocusedSection() {
 }
 
 .recipe-sheet__status-text {
-  color: var(--color-tag-primary-text);
+  color: var(--color-text-secondary);
   font-size: 24rpx;
   font-weight: 700;
+}
+
+.recipe-sheet__status-text--primary {
+  color: var(--color-tag-primary-text);
 }
 
 .event-note {
@@ -4457,6 +4446,11 @@ function clearFocusedSection() {
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+}
+
+.sheet-actions__button--disabled {
+  opacity: 0.46;
+  box-shadow: var(--button-primary-shadow);
 }
 
 .menu-confirm__item {
@@ -4797,6 +4791,11 @@ function clearFocusedSection() {
 .meal-footer__button--primary {
   color: var(--button-primary-text);
   background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+}
+
+.meal-footer__button--disabled {
+  opacity: 0.46;
   box-shadow: var(--button-primary-shadow);
 }
 

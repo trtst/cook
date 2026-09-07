@@ -98,30 +98,28 @@
                       <button
                         v-if="showShoppingShareEntrances"
                         class="action-pill action-pill--muted action-pill--subtle"
-                        :disabled="isListBusy(item.id)"
                         @click.stop="openShareManager(item)"
                       >
                         协作
                       </button>
-                      <button class="action-pill action-pill--primary" :disabled="isListBusy(item.id)" @click.stop="markComplete(item)">
+                      <button class="action-pill action-pill--primary" @click.stop="markComplete(item)">
                         标记完成
                       </button>
-                      <button class="action-pill action-pill--muted" :disabled="isListBusy(item.id)" @click.stop="voidList(item)">作废</button>
+                      <button class="action-pill action-pill--muted" @click.stop="voidList(item)">作废</button>
                     </template>
 
                     <template v-else-if="item.status === 'ACTIVE'">
-                      <button class="action-pill" :disabled="isListBusy(item.id)" @click.stop="copyList(item)">复制</button>
-                      <button class="action-pill action-pill--primary" :disabled="isListBusy(item.id)" @click.stop="openList(item.id)">继续采购</button>
-                      <button class="action-pill action-pill--danger" :disabled="isListBusy(item.id)" @click.stop="leaveList(item)">退出</button>
+                      <button class="action-pill" @click.stop="copyList(item)">复制</button>
+                      <button class="action-pill action-pill--primary" @click.stop="openList(item.id)">继续采购</button>
+                      <button class="action-pill action-pill--danger" @click.stop="leaveList(item)">退出</button>
                     </template>
 
                     <template v-else-if="item.status === 'COMPLETED'">
-                      <button class="action-pill" :disabled="isListBusy(item.id)" @click.stop="copyList(item)">复制清单</button>
-                      <button class="action-pill action-pill--primary" :disabled="isListBusy(item.id)" @click.stop="openList(item.id)">查看清单</button>
+                      <button class="action-pill" @click.stop="copyList(item)">复制清单</button>
+                      <button class="action-pill action-pill--primary" @click.stop="openList(item.id)">查看清单</button>
                       <button
                         v-if="item.role === 'OWNER'"
                         class="action-pill action-pill--danger"
-                        :disabled="isListBusy(item.id)"
                         @click.stop="deleteList(item)"
                       >
                         删除
@@ -129,15 +127,14 @@
                     </template>
 
                     <template v-else>
-                      <button v-if="item.role === 'OWNER'" class="action-pill" :disabled="isListBusy(item.id)" @click.stop="restoreList(item)">
+                      <button v-if="item.role === 'OWNER'" class="action-pill" @click.stop="restoreList(item)">
                         恢复采购
                       </button>
-                      <button v-if="item.role === 'COLLABORATOR'" class="action-pill" :disabled="isListBusy(item.id)" @click.stop="openList(item.id)">查看清单</button>
-                      <button class="action-pill action-pill--primary" :disabled="isListBusy(item.id)" @click.stop="copyList(item)">复制清单</button>
+                      <button v-if="item.role === 'COLLABORATOR'" class="action-pill" @click.stop="openList(item.id)">查看清单</button>
+                      <button class="action-pill action-pill--primary" @click.stop="copyList(item)">复制清单</button>
                       <button
                         v-if="item.role === 'OWNER'"
                         class="action-pill action-pill--danger"
-                        :disabled="isListBusy(item.id)"
                         @click.stop="deleteList(item)"
                       >
                         删除
@@ -256,10 +253,9 @@
       </view>
       <template #footer>
         <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" :disabled="joiningShare" @click="closeShareSheet">稍后再说</button>
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeShareSheet">稍后再说</button>
           <button
             class="sheet-actions__button sheet-actions__button--confirm"
-            :disabled="shareJoinDisabled"
             @click="joinShare"
           >
             {{ shareJoinText }}
@@ -282,7 +278,7 @@ import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
-import emptyStateArt from "@/assets/recipe-page/empty-state.svg";
+import emptyStateArt from "@/assets/empty.png";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";

@@ -156,13 +156,17 @@
           </view>
 
           <view class="cook-bottom__actions">
-            <button class="cook-bottom__action cook-bottom__action--ghost" :disabled="currentIndex === 0" @click="goPrev">
+            <button class="cook-bottom__action cook-bottom__action--ghost" @click="goPrev">
               上一步
             </button>
             <button class="cook-bottom__action cook-bottom__action--primary" @click="completeCurrentStep">
               完成这步
             </button>
-            <button class="cook-bottom__action cook-bottom__action--ghost" :disabled="currentIndex >= steps.length - 1" @click="goNext">
+            <button
+              class="cook-bottom__action cook-bottom__action--ghost"
+              :class="{ 'cook-bottom__action--disabled': currentIndex >= steps.length - 1 }"
+              @click="goNext"
+            >
               下一步
             </button>
           </view>
@@ -1248,6 +1252,10 @@ defineExpose({
 .cook-bottom__action--ghost {
   color: var(--color-tag-primary-text);
   background: var(--color-tag-primary-bg);
+}
+
+.cook-bottom__action--disabled {
+  opacity: 0.46;
 }
 
 .cook-complete {

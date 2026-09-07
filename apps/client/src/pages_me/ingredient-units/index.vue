@@ -99,9 +99,7 @@
                       :src="item.imageUrl"
                       mode="aspectFill"
                     />
-                    <view v-else class="ingredient-card__fallback">
-                      <text class="ingredient-card__fallback-text">暂无缩略图</text>
-                    </view>
+                    <ImageEmpty v-else class="ingredient-card__fallback" copy="封面图" ratio="fill" />
                     <view
                       v-if="item.source === 'SYSTEM'"
                       class="ingredient-card__notice"
@@ -275,8 +273,8 @@
 
       <template #footer>
         <view class="sheet__footer">
-          <button class="sheet-button sheet-button--ghost" :disabled="sheetSubmitting" @click="closeSheet">取消</button>
-          <button class="sheet-button sheet-button--primary" :loading="sheetSubmitting" :disabled="sheetSubmitting" @click="submitSheet">
+          <button class="sheet-button sheet-button--ghost" @click="closeSheet">取消</button>
+          <button class="sheet-button sheet-button--primary" :loading="sheetSubmitting" @click="submitSheet">
             {{ sheetSubmitText }}
           </button>
         </view>
@@ -288,11 +286,12 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
+import emptyStateIllustration from "@/assets/empty.png";
 import { recipeApi, type IngredientCategorySummary, type IngredientSummary, type UnitSummary, type UnitType } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -1155,14 +1154,7 @@ defineExpose({
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: 0 16rpx;
   text-align: center;
-}
-
-.ingredient-card__fallback-text {
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-  line-height: 1.5;
 }
 
 .ingredient-card__name {
@@ -1184,8 +1176,8 @@ defineExpose({
   max-width: calc(100% - 112rpx);
   padding: 8rpx 14rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-mask-medium);
-  color: var(--color-text-inverse-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
   font-size: 24rpx;
   line-height: 1;
   white-space: nowrap;

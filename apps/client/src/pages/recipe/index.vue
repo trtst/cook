@@ -203,16 +203,13 @@
                 @click="openCard(item)"
               >
                 <view class="recipe-card__cover">
-                  <text v-if="item.coverTag" class="recipe-card__cover-tag">{{ item.coverTag }}</text>
                   <image
                     v-if="item.coverImageUrl"
                     class="recipe-card__cover-image"
                     :src="item.coverImageUrl"
                     mode="aspectFill"
                   />
-                  <view v-else class="recipe-card__cover-fallback">
-                    <text class="recipe-card__cover-text font-black">封面图</text>
-                  </view>
+                  <ImageEmpty v-else class="recipe-card__cover-fallback" />
                 </view>
 
                 <view class="recipe-card__body">
@@ -247,7 +244,7 @@
         hover-stay-time="100"
         @click="handleFab"
       >
-        <image class="manage-fab__icon" :src="manageIcon" mode="aspectFit" />
+        <text class="cookfont icon-manage manage-fab__icon" />
         <text class="manage-fab__text">{{ fabText }}</text>
       </view>
 
@@ -298,8 +295,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { onHide, onShow } from "@dcloudio/uni-app";
-import emptyStateIllustration from "@/assets/recipe-page/empty-state.svg";
-import manageIcon from "@/assets/recipe-page/manage.svg";
+import emptyStateIllustration from "@/assets/empty.png";
 import {
 	recipeApi,
 	type InspirationCategorySummary,
@@ -312,6 +308,7 @@ import {
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
@@ -344,7 +341,6 @@ interface CardItem {
 	id: UUID;
 	title: string;
 	coverImageUrl: string | null;
-	coverTag: string;
 	durationText: string;
 	estimatedCalories: number | null;
 	caloriesText: string;
@@ -981,7 +977,6 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		coverTag: item.category?.name || "未分类",
 		durationText: item.durationText || "",
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
@@ -995,7 +990,6 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		coverTag: item.category.name,
 		durationText: item.durationText || "",
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
@@ -1066,6 +1060,7 @@ defineExpose({
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  background: var(--color-page);
 }
 
 .nav-tabs {
@@ -1110,7 +1105,6 @@ defineExpose({
   z-index: 25;
   box-sizing: border-box;
   padding: 10rpx var(--space-page) 0;
-  background: var(--color-page);
 }
 
 .search-row {
@@ -1381,7 +1375,7 @@ defineExpose({
 .list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20rpx;
+  gap: 30rpx;
 }
 
 .recipe-card {
@@ -1405,23 +1399,6 @@ defineExpose({
   background: var(--page-cover-fresh-bg);
 }
 
-.recipe-card__cover-tag {
-  position: absolute;
-  top: 16rpx;
-  left: 16rpx;
-  z-index: 1;
-  max-width: calc(100% - 32rpx);
-  padding: 8rpx 14rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-mask-strong);
-  color: var(--color-text-secondary);
-  font-size: 20rpx;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .recipe-card__cover-image,
 .recipe-card__cover-fallback {
   width: 100%;
@@ -1436,13 +1413,6 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.recipe-card__cover-text {
-  color: var(--color-text-secondary);
-  opacity: 0.54;
-  font-size: 52rpx;
-  font-weight: var(--font-weight-heavy);
 }
 
 .recipe-card__body {
@@ -1538,8 +1508,9 @@ defineExpose({
 }
 
 .manage-fab__icon {
-  width: 32rpx;
-  height: 32rpx;
+  color: var(--button-primary-text);
+  font-size: 32rpx;
+  line-height: 1;
   flex: 0 0 auto;
 }
 

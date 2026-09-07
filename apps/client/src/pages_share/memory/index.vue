@@ -109,7 +109,7 @@
           </text>
 
           <view class="action-row">
-            <button class="primary" :disabled="!canGenerate" @click="createShare">
+            <button class="primary" @click="createShare">
               {{ submitting ? "生成中..." : shareSnapshot ? "重新生成快照" : "生成分享快照" }}
             </button>
             <button class="secondary" @click="openPlan">回到当前餐次</button>

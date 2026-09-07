@@ -108,7 +108,7 @@ const textFieldSheetSource = readFile("../components/Sheet/TextFieldSheet.vue");
 const tabbarSource = readFile("../components/TabBar/TabBar.vue");
 const toastSource = readFile("../components/Toast/Toast.vue");
 
-expectIncludes(fallbackColorsSource, "@include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);");
+expectIncludes(fallbackColorsSource, "@include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);");
 expectIncludes(fallbackColorsSource, "--color-raw-primary: var(--theme-primary);");
 expectIncludes(fallbackColorsSource, "--button-primary-gradient-start: var(--theme-primary);");
 expectIncludes(fallbackColorsSource, "--button-primary-bg: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);");
@@ -179,9 +179,9 @@ expectSelectorIncludes(mePageSource, ".knowledge-entry__title", [
   "font-weight: var(--font-weight-medium);"
 ]);
 expectSelectorExcludes(mePageSource, ".knowledge-entry__title", ["font-weight: var(--font-weight-bold);"]);
-expectSelectorIncludes(tabbarSource, ".tabbar__font-icon", ['color: var(--color-text-tertiary);']);
+expectSelectorIncludes(tabbarSource, ".tabbar__font-icon", ['color: var(--color-text);']);
 expectSelectorExcludes(tabbarSource, ".tabbar__font-icon", ["--color-icon-accent", "--color-primary"]);
-expectSelectorIncludes(tabbarSource, ".tabbar__item--active .tabbar__font-icon", ['color: var(--color-text);']);
+expectSelectorIncludes(tabbarSource, ".tabbar__item--active .tabbar__font-icon", ['color: var(--color-icon-active);']);
 expectSelectorExcludes(tabbarSource, ".tabbar__item--active .tabbar__font-icon", ["--color-icon-accent", "--color-primary"]);
 expectSelectorIncludes(tabbarSource, ".tabbar__badge", [
   "color: var(--notification-badge-text);"
@@ -522,27 +522,25 @@ expectSelectorIncludes(tableTopicPageSource, ".topic-page", [
 expectSelectorIncludes(tableTopicPageSource, ".topic-card__cover--empty", [
   "background: var(--color-cover-empty-warm-bg);"
 ]);
+expectIncludes(tableTopicPageSource, '<ImageEmpty v-else class="topic-card__cover topic-card__cover--empty" copy="封面图" ratio="fill" />');
 expectSelectorIncludes(tableTopicPageSource, ".topic-hero__eyebrow", [
   "color: var(--color-state-warning-text);"
 ]);
 expectSelectorIncludes(tableTopicPageSource, ".topic-state--error", [
   "color: var(--color-state-danger-text);"
 ]);
-expectSelectorIncludes(tableTopicPageSource, ".topic-card__empty-text", [
-  "color: var(--color-state-warning-text);"
-]);
+expectExcludes(tableTopicPageSource, ".topic-card__empty-text");
 expectSelectorIncludes(tableTopicDetailPageSource, ".topic-page", [
   "background: var(--page-secondary-soft-bg);"
 ]);
 expectSelectorIncludes(tableTopicDetailPageSource, ".topic-hero__cover--empty", [
   "background: var(--color-cover-empty-warm-bg);"
 ]);
+expectIncludes(tableTopicDetailPageSource, '<ImageEmpty v-else class="topic-hero__cover topic-hero__cover--empty" copy="封面图" ratio="fill" />');
 expectSelectorIncludes(tableTopicDetailPageSource, ".topic-state--error", [
   "color: var(--color-state-danger-text);"
 ]);
-expectSelectorIncludes(tableTopicDetailPageSource, ".topic-hero__empty-text", [
-  "color: var(--color-state-warning-text);"
-]);
+expectExcludes(tableTopicDetailPageSource, ".topic-hero__empty-text");
 expectSelectorIncludes(tableTopicDetailPageSource, ".topic-panel__label", [
   "color: var(--color-state-warning-text);"
 ]);
@@ -947,14 +945,14 @@ expectSelectorIncludes(mealDetailPageSource, ".meal-panel--warning", [
   "background: var(--color-state-warning-soft);"
 ]);
 expectSelectorIncludes(mealDetailPageSource, ".meal-menu-empty__action", [
-  "background: var(--color-state-warning-soft);",
-  "color: var(--color-state-warning-text);"
+  "background: var(--button-primary-bg);",
+  "color: var(--button-primary-text);"
 ]);
 expectSelectorIncludes(mealDetailPageSource, ".meal-hero__cover-empty", [
-  "background: var(--page-cover-fresh-shell-bg);"
+  "padding-top: var(--hero-header-offset);"
 ]);
 expectSelectorIncludes(mealDetailPageSource, ".meal-hero--plan", [
-  "background: var(--color-cover-empty-warm-bg);"
+  "background: var(--color-surface-primary-panel);"
 ]);
 expectSelectorExcludes(mealDetailPageSource, ".meal-hero--plan", [
   "radial-gradient(circle at 88% 18%, var(--color-primary-halo) 0, transparent 26%)"
