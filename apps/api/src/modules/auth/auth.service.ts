@@ -97,7 +97,7 @@ export class AuthService {
       throw new UnauthorizedException("手机号或密码错误");
     }
 
-    this.risk.clearPasswordFailures(body.phone);
+    this.risk.clearLoginFailures({ phone: body.phone, ip: context.ip, deviceId: body.deviceId });
     await this.risk.record({
       scene: "PASSWORD_LOGIN",
       phone: body.phone,
@@ -520,6 +520,14 @@ export class AuthService {
       throw error;
     }
     assertPhone(phoneResult.phone);
+    await this.risk.assertAllowed({
+      channel: "WECHAT_PHONE",
+      operation: "LOGIN",
+      phone: phoneResult.phone,
+      openid: wechatSession.openid,
+      ip: context.ip,
+      deviceId: body.deviceId
+    });
     const user = await this.prisma.$transaction(async tx => {
       const currentUser = await this.findOrCreateUserByPhone(tx, phoneResult.phone);
       if (currentUser.status !== "ACTIVE") throw new UnauthorizedException("账号不可用");
@@ -537,6 +545,7 @@ export class AuthService {
     });
 
     if (user.status !== "ACTIVE") throw new UnauthorizedException("账号不可用");
+    this.risk.clearLoginFailures({ phone: phoneResult.phone, ip: context.ip, deviceId: body.deviceId });
     await this.risk.record({
       scene: "WECHAT_PHONE_LOGIN",
       phone: phoneResult.phone,
@@ -566,7 +575,7 @@ export class AuthService {
     try {
       await this.smsAuth.consumeLoginCode(body.phone, body.code);
     } catch (error) {
-      await this.risk.recordFailure({
+      await this.risk.recordLoginFailure({
         channel: "SMS",
         scene: "SMS_LOGIN",
         phone: body.phone,
@@ -600,7 +609,7 @@ export class AuthService {
     });
 
     if (user.status !== "ACTIVE") throw new UnauthorizedException("账号不可用");
-    this.risk.clearPasswordFailures(body.phone);
+    this.risk.clearLoginFailures({ phone: body.phone, ip: context.ip, deviceId: body.deviceId });
     await this.risk.record({
       scene: "SMS_LOGIN",
       phone: body.phone,

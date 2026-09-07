@@ -15,12 +15,19 @@ export interface RiskInput {
 }
 
 interface FailureBucket {
-  count: number;
+  consecutiveCount: number;
+  lastFailedAt: number;
+  windowStartAt: number;
+  windowCount: number;
   lockedUntil: number;
 }
 
-const LOGIN_FAILURE_LIMIT = 5;
-const LOGIN_LOCK_MS = 15 * 60 * 1000;
+const CONSECUTIVE_FAILURE_LIMIT = 3;
+const CONSECUTIVE_FAILURE_WINDOW_MS = 10 * 60 * 1000;
+const CONSECUTIVE_LOGIN_LOCK_MS = 60 * 1000;
+const BURST_FAILURE_LIMIT = 10;
+const BURST_FAILURE_WINDOW_MS = 60 * 1000;
+const BURST_LOGIN_LOCK_MS = 10 * 60 * 1000;
 
 @Injectable()
 export class AuthRiskService {
@@ -53,7 +60,7 @@ export class AuthRiskService {
   }
 
   async recordPasswordFailure(input: { phone: string; ip: string; deviceId: string }) {
-    await this.recordFailure({
+    await this.recordLoginFailure({
       channel: "PASSWORD",
       scene: "PASSWORD_LOGIN",
       phone: input.phone,
@@ -61,6 +68,18 @@ export class AuthRiskService {
       deviceId: input.deviceId,
       reason: "PASSWORD_INVALID"
     });
+  }
+
+  async recordLoginFailure(input: {
+    channel: RiskChannel;
+    scene?: string;
+    phone?: string;
+    openid?: string;
+    ip: string;
+    deviceId: string;
+    reason?: string;
+  }) {
+    await this.recordFailure(input);
   }
 
   async recordFailure(input: {
@@ -84,11 +103,23 @@ export class AuthRiskService {
     ].filter(Boolean);
 
     for (const key of keys) {
+      const now = Date.now();
       const current = this.failures.get(key);
-      const count = (current?.count ?? 0) + 1;
+      const consecutiveCount =
+        current && now - current.lastFailedAt <= CONSECUTIVE_FAILURE_WINDOW_MS ? current.consecutiveCount + 1 : 1;
+      const inBurstWindow = current && now - current.windowStartAt <= BURST_FAILURE_WINDOW_MS;
+      const windowStartAt = inBurstWindow ? current.windowStartAt : now;
+      const windowCount = inBurstWindow ? current.windowCount + 1 : 1;
+      const currentLock = current?.lockedUntil ?? 0;
+      const consecutiveLock =
+        consecutiveCount >= CONSECUTIVE_FAILURE_LIMIT ? now + CONSECUTIVE_LOGIN_LOCK_MS : currentLock;
+      const burstLock = windowCount > BURST_FAILURE_LIMIT ? now + BURST_LOGIN_LOCK_MS : currentLock;
       this.failures.set(key, {
-        count,
-        lockedUntil: count >= LOGIN_FAILURE_LIMIT ? Date.now() + LOGIN_LOCK_MS : current?.lockedUntil ?? 0
+        consecutiveCount,
+        lastFailedAt: now,
+        windowStartAt,
+        windowCount,
+        lockedUntil: Math.max(currentLock, consecutiveLock, burstLock)
       });
     }
 
@@ -103,8 +134,21 @@ export class AuthRiskService {
     });
   }
 
+  clearLoginFailures(input: string | { phone?: string; ip?: string; deviceId?: string }) {
+    if (typeof input === "string") {
+      this.failures.delete(`phone:${input.trim()}`);
+      return;
+    }
+    const phone = input.phone?.trim();
+    const ip = input.ip?.trim();
+    const deviceId = input.deviceId?.trim();
+    if (phone) this.failures.delete(`phone:${phone}`);
+    if (ip) this.failures.delete(`ip:${ip || "unknown"}`);
+    if (deviceId) this.failures.delete(`device:${deviceId || "unknown"}`);
+  }
+
   clearPasswordFailures(phone: string) {
-    this.failures.delete(`phone:${phone.trim()}`);
+    this.clearLoginFailures(phone);
   }
 
   async assertPasswordAllowed(input: { phone: string; ip: string; deviceId: string }) {

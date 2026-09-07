@@ -35,6 +35,7 @@ test("password login creates the new access and refresh session shape", async ()
   };
   const risk = {
     assertAllowed: async () => undefined,
+    clearLoginFailures: () => undefined,
     clearPasswordFailures: () => undefined,
     record: async () => undefined,
     recordPasswordFailure: async () => undefined
@@ -194,6 +195,135 @@ test("sms login checks the shared risk gate before consuming a code", async () =
     deviceId: "device-a"
   });
   assert.equal(consumed, false);
+});
+
+test("wechat phone login checks phone failure bucket after decrypting the phone", async () => {
+  let transactionCount = 0;
+  let sessionCreated = false;
+  const checkedInputs: Array<Record<string, unknown>> = [];
+  const prisma = {
+    wechatLoginSession: {
+      findUnique: async () => ({
+        id: 7,
+        appid: "wx-app",
+        openid: "openid-a",
+        unionid: null,
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60_000)
+      })
+    },
+    $transaction: async <T>(callback: (tx: never) => Promise<T>) => {
+      transactionCount += 1;
+      return callback({} as never);
+    }
+  };
+  const session = {
+    create: async () => {
+      sessionCreated = true;
+      return {};
+    }
+  };
+  const wechat = {
+    getPhoneNumber: async () => ({ phone: "13800000009" })
+  };
+  const risk = {
+    assertAllowed: async (input: Record<string, unknown>) => {
+      checkedInputs.push(input);
+      if (input.phone === "13800000009") throw new Error("phone locked");
+    },
+    clearLoginFailures: () => undefined,
+    record: async () => undefined,
+    recordFailure: async () => undefined
+  };
+  const service = new AuthService(prisma as never, session as never, wechat as never, {} as never, risk as never);
+
+  await assert.rejects(
+    () =>
+      service.loginWithWechatPhone(
+        { wechatSessionId: "wechat-session", phoneCode: "phone-code", deviceId: "device-a" },
+        { ip: "127.0.0.1", userAgent: "test-agent" }
+      ),
+    { message: "phone locked" }
+  );
+
+  assert.deepEqual(checkedInputs, [
+    {
+      channel: "WECHAT_PHONE",
+      operation: "PHONE",
+      openid: "openid-a",
+      ip: "127.0.0.1",
+      deviceId: "device-a"
+    },
+    {
+      channel: "WECHAT_PHONE",
+      operation: "LOGIN",
+      phone: "13800000009",
+      openid: "openid-a",
+      ip: "127.0.0.1",
+      deviceId: "device-a"
+    }
+  ]);
+  assert.equal(transactionCount, 0);
+  assert.equal(sessionCreated, false);
+});
+
+test("wechat phone login clears shared login failures after a successful phone authorization", async () => {
+  let clearedInput: Record<string, unknown> | null = null;
+  const prisma = {
+    wechatLoginSession: {
+      findUnique: async () => ({
+        id: 7,
+        appid: "wx-app",
+        openid: "openid-a",
+        unionid: null,
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60_000)
+      }),
+      updateMany: async () => ({ count: 1 })
+    },
+    userWechatIdentity: {
+      findUnique: async () => null,
+      create: async () => undefined,
+      update: async () => undefined
+    },
+    user: {
+      findUnique: async ({ where }: { where: { phone?: string; id?: number } }) => {
+        if (where.id) return { ...user, openid: null };
+        return user;
+      },
+      update: async () => user
+    },
+    $transaction: async <T>(callback: (tx: never) => Promise<T>) => callback(prisma as never)
+  };
+  const session = {
+    create: async () => ({
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      accessExpiresAt: "2026-09-04T01:00:00.000Z",
+      refreshExpiresAt: "2026-10-04T01:00:00.000Z",
+      user: { uid: user.uid, nickname: user.nickname, avatarUrl: user.avatarUrl, phone: "138xxxxx009" }
+    })
+  };
+  const wechat = {
+    getPhoneNumber: async () => ({ phone: "13800000009" })
+  };
+  const risk = {
+    assertAllowed: async () => undefined,
+    clearLoginFailures: (input: Record<string, unknown>) => {
+      clearedInput = input;
+    },
+    record: async () => undefined,
+    recordFailure: async () => undefined
+  };
+  const service = new AuthService(prisma as never, session as never, wechat as never, {} as never, risk as never);
+
+  const result = await service.loginWithWechatPhone(
+    { wechatSessionId: "wechat-session", phoneCode: "phone-code", deviceId: "device-a" },
+    { ip: "127.0.0.1", userAgent: "test-agent" }
+  );
+
+  assert.equal(result.accessToken, "access-token");
+  assert.deepEqual(clearedInput, { phone: "13800000009", ip: "127.0.0.1", deviceId: "device-a" });
 });
 
 test("current phone change code is blocked within 30 days of the last phone change", async () => {
