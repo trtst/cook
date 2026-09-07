@@ -2,7 +2,8 @@ import type {
   IngredientProteinType as DbIngredientProteinType,
   Prisma,
   RecipeVersionTagCode,
-  RecipeVersionTagSource
+  RecipeVersionTagSource,
+  RecipeVersionTagStatus
 } from "@prisma/client";
 import type { RecipeContentSnapshot, RecipeProteinType, UUID } from "../../contracts/types";
 
@@ -10,6 +11,7 @@ type RecipeVersionTagRow = {
   tagCode: RecipeVersionTagCode;
   tagValue: string;
   source: RecipeVersionTagSource;
+  status: RecipeVersionTagStatus;
   confidence?: Prisma.Decimal | number | string | null;
   sortOrder?: number | null;
   isLocked?: boolean;
@@ -22,6 +24,11 @@ type RecipeVersionTagSnapshot = {
   primaryIngredientIds: UUID[];
   flavorProfile: string[];
   spiceLevel: "NONE" | "MILD" | "MEDIUM" | "HOT" | null;
+};
+
+type RecipeVersionTagInference = RecipeVersionTagSnapshot & {
+  confirmedDishRoles: Set<RecipeVersionTagSnapshot["dishRoles"][number]>;
+  hasMappedProteinFact: boolean;
 };
 
 type IngredientTagFact = {
@@ -76,13 +83,15 @@ function pushTag(
   tagCode: RecipeVersionTagRow["tagCode"],
   tagValue: string,
   sortOrder?: number | null,
-  confidence: number = 0.75
+  confidence: number = 0.75,
+  status: RecipeVersionTagStatus = "CANDIDATE"
 ) {
   if (!tagValue) return;
   rows.push({
     tagCode,
     tagValue,
     source: "AUTO",
+    status,
     confidence,
     sortOrder: sortOrder ?? null,
     isLocked: false
@@ -92,7 +101,7 @@ function pushTag(
 export function inferRecipeVersionTagSnapshot(
   content: RecipeContentSnapshot,
   ingredientFacts: Map<UUID, IngredientTagFact> = new Map()
-): RecipeVersionTagSnapshot {
+): RecipeVersionTagInference {
   const text = `${content.name} ${content.story ?? ""} ${content.ingredients.map(item => item.ingredientName).join(" ")} ${content.steps.map(item => item.text).join(" ")}`;
   const ingredientIds = content.ingredients
     .map(item => item.ingredientId ?? null)
@@ -105,10 +114,12 @@ export function inferRecipeVersionTagSnapshot(
       : ["LUNCH", "DINNER"];
 
   let mainProteinType: RecipeVersionTagSnapshot["mainProteinType"] = null;
+  let hasMappedProteinFact = false;
   for (const ingredientId of ingredientIds) {
     const mapped = mapIngredientProteinType(ingredientFacts.get(ingredientId)?.proteinType ?? null);
     if (mapped) {
       mainProteinType = mapped;
+      hasMappedProteinFact = true;
       break;
     }
   }
@@ -123,13 +134,18 @@ export function inferRecipeVersionTagSnapshot(
   }
 
   const dishRoles = new Set<RecipeVersionTagSnapshot["dishRoles"][number]>();
+  const confirmedDishRoles = new Set<RecipeVersionTagSnapshot["dishRoles"][number]>();
   if (/(汤|羹|汤面|汤粉|粥)/.test(text)) dishRoles.add("SOUP");
   const hasStapleIngredient = ingredientIds.some(id => ingredientFacts.get(id)?.isStaple);
   if (hasStapleIngredient || /(米饭|炒饭|盖饭|焖饭|饭团|面条|拌面|炒面|意面|馒头|包子|花卷|饼|粥|米线|粉丝|粉条)/.test(text)) {
     dishRoles.add("STAPLE");
+    if (hasStapleIngredient) confirmedDishRoles.add("STAPLE");
   }
   if (!dishRoles.size) {
-    if (mainProteinType && mainProteinType !== "NONE") dishRoles.add("MAIN");
+    if (mainProteinType && mainProteinType !== "NONE") {
+      dishRoles.add("MAIN");
+      if (hasMappedProteinFact) confirmedDishRoles.add("MAIN");
+    }
     else dishRoles.add("VEGETABLE");
   }
 
@@ -155,7 +171,7 @@ export function inferRecipeVersionTagSnapshot(
     // No-op fallback; keep structured matching authoritative.
   }
 
-  return {
+  const snapshot = {
     dishRoles: Array.from(dishRoles),
     mealTypes,
     mainProteinType,
@@ -163,6 +179,8 @@ export function inferRecipeVersionTagSnapshot(
     flavorProfile: dedupeStrings(Array.from(flavorProfile)),
     spiceLevel
   };
+
+  return Object.assign(snapshot, { confirmedDishRoles, hasMappedProteinFact });
 }
 
 export function buildAutoRecipeVersionTags(
@@ -172,13 +190,17 @@ export function buildAutoRecipeVersionTags(
   const snapshot = inferRecipeVersionTagSnapshot(content, ingredientFacts);
   const rows: RecipeVersionTagRow[] = [];
 
-  snapshot.dishRoles.forEach((value, index) => pushTag(rows, "DISH_ROLE", value, index, 0.82));
+  snapshot.dishRoles.forEach((value, index) =>
+    pushTag(rows, "DISH_ROLE", value, index, 0.82, snapshot.confirmedDishRoles.has(value) ? "CONFIRMED" : "CANDIDATE")
+  );
   snapshot.mealTypes.forEach((value, index) => pushTag(rows, "MEAL_TYPE", value, index, 0.78));
   snapshot.primaryIngredientIds.forEach((value, index) =>
-    pushTag(rows, "PRIMARY_INGREDIENT", String(value), index, 0.9)
+    pushTag(rows, "PRIMARY_INGREDIENT", String(value), index, 0.9, ingredientFacts.has(value) ? "CONFIRMED" : "CANDIDATE")
   );
   snapshot.flavorProfile.forEach((value, index) => pushTag(rows, "FLAVOR_PROFILE", value, index, 0.62));
-  if (snapshot.mainProteinType) pushTag(rows, "MAIN_PROTEIN_TYPE", snapshot.mainProteinType, null, 0.86);
+  if (snapshot.mainProteinType) {
+    pushTag(rows, "MAIN_PROTEIN_TYPE", snapshot.mainProteinType, null, 0.86, snapshot.hasMappedProteinFact ? "CONFIRMED" : "CANDIDATE");
+  }
   if (snapshot.spiceLevel) pushTag(rows, "SPICE_LEVEL", snapshot.spiceLevel, null, 0.7);
 
   return rows;
@@ -226,6 +248,7 @@ export async function replaceAutoRecipeVersionTags(
       tagCode: item.tagCode,
       tagValue: item.tagValue,
       source: item.source,
+      status: item.status,
       confidence: item.confidence ?? null,
       sortOrder: item.sortOrder ?? null,
       isLocked: item.isLocked ?? false

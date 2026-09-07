@@ -148,6 +148,13 @@ enum RecipeVersionTagSource {
   AI
 }
 
+enum RecipeVersionTagStatus {
+  CONFIRMED
+  CANDIDATE
+  UNMAPPED
+  NEEDS_REVIEW
+}
+
 enum RecipeReportStatus {
   OPEN
   RESOLVED
@@ -1437,6 +1444,7 @@ model RecipeVersionTag {
   tagCode         RecipeVersionTagCode @map("tag_code")
   tagValue        String               @map("tag_value") @db.VarChar(64)
   source          RecipeVersionTagSource @default(AUTO)
+  status          RecipeVersionTagStatus @default(CANDIDATE)
   confidence      Decimal?             @db.Decimal(4, 3)
   sortOrder       Int?                 @map("sort_order")
   isLocked        Boolean              @default(false) @map("is_locked")

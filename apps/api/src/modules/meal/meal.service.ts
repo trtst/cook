@@ -7,11 +7,13 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   NotFoundException
 } from "@nestjs/common";
 import { Prisma, type MealSlot } from "@prisma/client";
 import { recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
+import { rateLimitService } from "../../common/rate-limit.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
@@ -316,11 +318,12 @@ type RandomTagSnapshot = {
   primaryIngredientIds: UUID[];
 };
 
-const recipeVersionTagSourcePriority = ["USER", "OPS", "AI", "AUTO"] as const;
 const mealAssistantRealtimeFillMissingCountThreshold = 2;
 const mealAssistantRealtimeFillMissingRatioThreshold = 0.4;
 const randomMenuQuotaWindowDays = 7;
 const defaultRandomMenuWeeklyLimit = 21;
+const randomMenuEmptyResultLimit = 10;
+const randomMenuEmptyResultWindowMs = 60_000;
 
 function randomMenuWeeklyLimit() {
   const configured = Number(process.env.RANDOM_MENU_WEEKLY_LIMIT);
@@ -461,35 +464,40 @@ function normalizeNameKey(value: string) {
   return value.trim().toLowerCase();
 }
 
-function tagSourceRank(source: string) {
-  const index = recipeVersionTagSourcePriority.indexOf(source as (typeof recipeVersionTagSourcePriority)[number]);
-  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-}
-
-function pickPreferredTagValues(
-  tags: Array<{ source: string; tagValue: string; sortOrder: number | null; id: number }>,
+export function confirmedRandomTagValues(
+  tags: Array<{ source: string; status: string; tagValue: string; sortOrder: number | null; id: number }>,
   multi: boolean
 ) {
-  if (!tags.length) return [] as string[];
-  const ranked = [...tags].sort((left, right) => {
-    const sourceDiff = tagSourceRank(left.source) - tagSourceRank(right.source);
-    if (sourceDiff !== 0) return sourceDiff;
-    const sortDiff = (left.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.sortOrder ?? Number.MAX_SAFE_INTEGER);
-    if (sortDiff !== 0) return sortDiff;
-    return left.id - right.id;
-  });
-  const preferredSource = ranked[0]?.source;
-  const scoped = ranked.filter(item => item.source === preferredSource);
+  const confirmed = tags
+    .filter(item => item.status === "CONFIRMED")
+    .sort((left, right) => {
+      const sortDiff = (left.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.sortOrder ?? Number.MAX_SAFE_INTEGER);
+      if (sortDiff !== 0) return sortDiff;
+      return left.id - right.id;
+    });
+  if (!confirmed.length) return [] as string[];
+  const values = Array.from(new Set(confirmed.map(item => item.tagValue)));
   if (!multi) {
-    return scoped[0] ? [scoped[0].tagValue] : [];
+    return values.length === 1 ? values : [];
   }
-  return Array.from(new Set(scoped.map(item => item.tagValue)));
+  return values;
+}
+
+export function shouldConsumeRandomMenuQuota(items: Array<unknown>) {
+  return items.length > 0;
+}
+
+export function randomMenuEmptyLimitOptions(userId: UUID) {
+  return {
+    key: `random-menu:empty:${userId}`,
+    limit: randomMenuEmptyResultLimit,
+    windowMs: randomMenuEmptyResultWindowMs
+  };
 }
 
 function mapDishRolesToLegacySlotTypes(
   roles: string[],
   mealMoments: MealSlot[],
-  content: RecipeContentSnapshot,
   mainProteinType: RecipeProteinType | null
 ): RecipeSlotType[] {
   const dishRoles = new Set(roles);
@@ -504,9 +512,7 @@ function mapDishRolesToLegacySlotTypes(
   }
 
   if (dishRoles.has("STAPLE")) return ["BREAKFAST_STAPLE"];
-  if (mainProteinType && mainProteinType !== "NONE") return ["BREAKFAST_PROTEIN"];
-  const text = `${content.name} ${content.ingredients.map(item => item.ingredientName).join(" ")}`;
-  if (/(鸡蛋|牛奶|酸奶|豆浆|燕麦)/.test(text)) return ["BREAKFAST_PROTEIN"];
+  if (mainProteinType !== null) return ["BREAKFAST_PROTEIN"];
   return ["BREAKFAST_SIDE"];
 }
 
@@ -892,6 +898,8 @@ function isDiningEventTimeUp(event: Pick<DiningEventRow, "status" | "completedAt
 
 @Injectable()
 export class MealService {
+  private readonly logger = new Logger(MealService.name);
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
@@ -1077,7 +1085,9 @@ export class MealService {
         this.consumeRandomSourcePlan(sourcePlans, seed.slotType, candidate.sourceType);
         items.push(this.toRandomMenuItem(seed, candidate, inventoryFacts, picked.recommendationReason));
       }
-      const quota = await this.consumeRandomMenuQuota(tx, userId);
+      const quota = shouldConsumeRandomMenuQuota(items)
+        ? await this.consumeRandomMenuQuota(tx, userId)
+        : await this.assertRandomEmptyResultAllowed(tx, userId);
 
       const result = {
         mealSlot: normalizedMealSlot,
@@ -1094,10 +1104,10 @@ export class MealService {
     });
   }
 
-  async getRandomMenuQuota(userId: UUID): Promise<RandomMenuQuotaResponse> {
+  async getRandomMenuQuota(userId: UUID, db: MealDb = this.prisma): Promise<RandomMenuQuotaResponse> {
     const limitCount = randomMenuWeeklyLimit();
     const now = new Date();
-    const usage = await this.prisma.randomMenuUsage.findUnique({
+    const usage = await db.randomMenuUsage.findUnique({
       where: { userId }
     });
     if (!usage || usage.windowEndsAt <= now) {
@@ -1112,6 +1122,12 @@ export class MealService {
       };
     }
     return this.toRandomMenuQuota(usage, limitCount);
+  }
+
+  private async assertRandomEmptyResultAllowed(db: MealDb, userId: UUID): Promise<RandomMenuQuotaResponse> {
+    this.logger.warn(`random menu returned no confirmed candidates for user ${userId}`);
+    rateLimitService.assertAllowed(randomMenuEmptyLimitOptions(userId));
+    return this.getRandomMenuQuota(userId, db);
   }
 
   private async consumeRandomMenuQuota(db: MealDb, userId: UUID): Promise<RandomMenuQuotaResponse> {
@@ -3934,7 +3950,11 @@ export class MealService {
         include: {
           currentVersion: {
             include: {
-              versionTags: true
+              versionTags: {
+                where: {
+                  status: "CONFIRMED"
+                }
+              }
             }
           }
         }
@@ -3957,7 +3977,7 @@ export class MealService {
       .filter(recipe => this.isRandomRecipeAllowedByTaste(recipe, blockedNames))
       .map(recipe => {
         const content = this.getEffectiveRecipeContent(recipe);
-        const tags = this.resolveRandomTagSnapshot(recipe.currentVersion.versionTags, content);
+        const tags = this.resolveRandomTagSnapshot(recipe.currentVersion.versionTags);
         if (!tags) return null;
         return {
           recipeId: recipe.id,
@@ -4321,19 +4341,19 @@ export class MealService {
       tagCode: string;
       tagValue: string;
       source: string;
+      status: string;
       sortOrder: number | null;
-    }>,
-    content: RecipeContentSnapshot
+    }>
   ): RandomTagSnapshot | null {
     if (!tags.length) return null;
-    const byCode = new Map<string, Array<{ id: number; tagValue: string; source: string; sortOrder: number | null }>>();
+    const byCode = new Map<string, Array<{ id: number; tagValue: string; source: string; status: string; sortOrder: number | null }>>();
     for (const tag of tags) {
       const bucket = byCode.get(tag.tagCode) ?? [];
       bucket.push(tag);
       byCode.set(tag.tagCode, bucket);
     }
 
-    const mealMoments = pickPreferredTagValues(byCode.get("MEAL_TYPE") ?? [], true).filter(
+    const mealMoments = confirmedRandomTagValues(byCode.get("MEAL_TYPE") ?? [], true).filter(
       (item): item is MealSlot =>
         item === "BREAKFAST" ||
         item === "LUNCH" ||
@@ -4341,19 +4361,19 @@ export class MealService {
         item === "DINNER" ||
         item === "LATE_NIGHT"
     );
-    const dishRoles = pickPreferredTagValues(byCode.get("DISH_ROLE") ?? [], true);
-    const mainProteinTypeValue = pickPreferredTagValues(byCode.get("MAIN_PROTEIN_TYPE") ?? [], false)[0] ?? null;
+    const dishRoles = confirmedRandomTagValues(byCode.get("DISH_ROLE") ?? [], true);
+    const mainProteinTypeValue = confirmedRandomTagValues(byCode.get("MAIN_PROTEIN_TYPE") ?? [], false)[0] ?? null;
     const mainProteinType =
       mainProteinTypeValue &&
       ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"].includes(mainProteinTypeValue)
         ? (mainProteinTypeValue as RecipeProteinType)
         : null;
-    const flavorTags = pickPreferredTagValues(byCode.get("FLAVOR_PROFILE") ?? [], true);
-    const spiceLevel = pickPreferredTagValues(byCode.get("SPICE_LEVEL") ?? [], false)[0] ?? null;
+    const flavorTags = confirmedRandomTagValues(byCode.get("FLAVOR_PROFILE") ?? [], true);
+    const spiceLevel = confirmedRandomTagValues(byCode.get("SPICE_LEVEL") ?? [], false)[0] ?? null;
     if (spiceLevel === "NONE" && !flavorTags.includes("NOT_SPICY")) flavorTags.push("NOT_SPICY");
     if (spiceLevel === "MILD" && !flavorTags.includes("MILD")) flavorTags.push("MILD");
 
-    const primaryIngredientIds = pickPreferredTagValues(byCode.get("PRIMARY_INGREDIENT") ?? [], true)
+    const primaryIngredientIds = confirmedRandomTagValues(byCode.get("PRIMARY_INGREDIENT") ?? [], true)
       .map(item => Number(item))
       .filter((item): item is UUID => Number.isInteger(item) && item > 0);
 
@@ -4361,7 +4381,7 @@ export class MealService {
 
     return {
       mealMoments,
-      slotTypes: mapDishRolesToLegacySlotTypes(dishRoles, mealMoments, content, mainProteinType),
+      slotTypes: mapDishRolesToLegacySlotTypes(dishRoles, mealMoments, mainProteinType),
       flavorTags,
       mainProteinType,
       primaryIngredientIds
