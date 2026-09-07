@@ -11,6 +11,8 @@
 
 ## 记录项
 
+| 2026-09-07 | 补充菜谱结构化理解层执行规则：早餐主食、早餐蛋白和早餐小菜改为独立派生映射，不再将早餐蛋白等同荤菜、早餐小菜等同素菜；明确主要食材和主蛋白由固定版本结构化食材及已确认食材事实派生，不按用量排序；个人偏好负信号区分编辑态移除与菜单已确认后取消/移除；明确美食助理事实将逐步接入现有做饭助手和做饭模式，页面行为仍待阶段四独立确认。独立版本触发条件和 90 天后的具体衰减方式保持原规则，等待后续独立评审。 | `docs/plans/recipe-wiki-execution.md`、`docs/plans/minor_change_log.md` | 已执行：与现有早餐菜位映射、主要食材派生、固定版本规则及做饭助理执行单的只读核对；待执行：阶段三行为生命周期评审、阶段四页面行为确认，以及相应实现与验收。 |
+
 | 2026-09-07 | 冻结《菜谱结构化理解层执行文档》：确认资料层不是前台 Wiki，而是随机一桌、美食助理、计划归因等系统决策的事实与标签基础；冻结 P0/P1 场景、首批结构标签、安全硬过滤、公共热度/个人偏好双口径、90 天兴趣未转化、助理四类输出与保守降级、`AUTO / USER / OPS / AI` 来源和四种状态、原始事实到前台消费的分层、前后台/AI 治理边界，以及五阶段落地顺序。本文不改 API、数据库、页面或 AI 实现；现有标签状态门禁、候选审核、受控重算和负信号行为记录列为后续阶段差距。 | `docs/plans/recipe-wiki-execution.md`、`docs/index.md`、`docs/plans/minor_change_log.md` | 已执行：文档与现有随机一桌、版本标签、计划固定版本引用、后台菜谱链路的只读核对；待执行：后续每个阶段的业务流、页面行为、API/数据库评审、实现与运行时验收。 |
 
 | 2026-09-06 | 上线 review 回归修复：小程序首页 fallback banner 重新收口为 `cfg.domain + /static/uploads/material-store/...` 派生路径，移除误写的 `/static/0` 和硬编码 `https://static.trtst.com/O/...`，避免开发、生产静态域名切换失效；同步更新 banner 静态回归测试覆盖当前两张素材文件名和错误路径禁用。 | `apps/client/src/pages/home/index.vue`、`apps/client/src/pages/home/banner-assets.test.ts`、`docs/plans/minor_change_log.md` | 已执行：`pnpm --filter @next-meal/client exec tsx src/pages/home/banner-assets.test.ts`、`pnpm --filter @next-meal/client build:mp-weixin`。未执行：微信开发者工具 / 真机视觉验收、真实 CDN 图片访问验收。 |
