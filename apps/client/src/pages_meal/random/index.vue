@@ -27,7 +27,7 @@
             <text class="notice__action">知道了</text>
           </view>
 
-          <template v-if="hasMenu">
+          <template v-if="hasBoard">
             <view class="board-card">
               <view class="board-card__head">
                 <view>
@@ -44,19 +44,22 @@
               </view>
 
               <view class="slot-list">
-                <RandomSlotCard
-                  v-for="menuSlot in state.slots"
-                  :key="menuSlot.slotId"
-                  :item="menuSlot"
-                  :disabled="slotActionLocked"
-                  @toggle-lock="toggleSlotLock"
-                  @remove="removeSlot"
-                  @replace="replaceSlot"
-                />
+                <template v-for="boardSlot in boardSlots" :key="boardSlot.slotId">
+                  <RandomSlotCard
+                    v-if="boardSlot.kind === 'RECIPE'"
+                    :item="boardSlot.item"
+                    :disabled="slotActionLocked"
+                    @toggle-lock="toggleSlotLock"
+                    @remove="removeSlot"
+                    @replace="replaceSlot"
+                  />
+                  <RandomEmptySlotCard v-else :slot-type="boardSlot.slotType" />
+                </template>
               </view>
             </view>
 
             <RandomBottomBar
+              v-if="canCreatePlan"
               :title="bottomTitle"
               :description="bottomDescription"
               :loading="conditionLoading"
@@ -179,10 +182,12 @@ import {
 } from "../apis/random";
 import RandomBottomBar from "../components/RandomBottomBar.vue";
 import RandomConditionBar from "../components/RandomConditionBar.vue";
+import RandomEmptySlotCard from "../components/RandomEmptySlotCard.vue";
 import RandomSlotCard from "../components/RandomSlotCard.vue";
 import { todayText } from "../utils/date";
 import {
   buildGapState,
+  buildRandomBoardSlots,
   createEmptyGapState,
   createRandomSlotViewModel,
   type RandomPageState,
@@ -243,6 +248,7 @@ const rejectedRecipeVersionIds = ref<UUID[]>([]);
 const loginRedirecting = ref(false);
 
 const hasMenu = computed(() => state.value.slots.length > 0);
+const hasBoard = computed(() => state.value.pageStatus === "MENU_READY" && Boolean(state.value.slotPlan));
 const activeSlots = computed(() => state.value.slots.filter(item => item.status !== "REMOVED"));
 const removedCount = computed(() => state.value.slots.filter(item => item.status === "REMOVED").length);
 const quotaDepleted = computed(() => Boolean(quota.value && quota.value.remainingCount <= 0));
@@ -255,6 +261,12 @@ const inspirationSlots = computed(() => activeSlots.value.filter(item => item.so
 const planReady = computed(() => {
   if (!canCreatePlan.value) return false;
   return inspirationSlots.value.every(item => selectedCategoryIds.value[item.recipeVersionId]);
+});
+const boardSlots = computed(() => {
+  const mealSlot = state.value.conditions.mealSlot;
+  const slotPlan = state.value.slotPlan;
+  if (!mealSlot || !slotPlan) return [];
+  return buildRandomBoardSlots(mealSlot, slotPlan, state.value.slots);
 });
 
 const heroTitle = computed(() => {

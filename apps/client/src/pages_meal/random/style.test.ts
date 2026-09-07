@@ -38,6 +38,7 @@ const randomPageSource = readFile("./index.vue");
 const randomConditionBarSource = readFile("../components/RandomConditionBar.vue");
 const randomBottomBarSource = readFile("../components/RandomBottomBar.vue");
 const randomGapPanelSource = readFile("../components/RandomGapPanel.vue");
+const randomEmptySlotCardSource = readFile("../components/RandomEmptySlotCard.vue");
 const randomSlotCardSource = readFile("../components/RandomSlotCard.vue");
 const fontSource = readFile("../../assets/fonts/font.scss");
 
@@ -48,8 +49,10 @@ expectIncludes(randomPageSource, 'class="plan-sheet__category-row"');
 expectIncludes(randomPageSource, 'class="plan-sheet__category-chip"');
 expectIncludes(randomPageSource, '@click="createPlan"');
 expectIncludes(randomPageSource, "for (const item of inspirationSlots.value) selectCategory(item.recipeVersionId, created.id);");
-expectIncludes(randomPageSource, 'v-for="menuSlot in state.slots"');
-expectIncludes(randomPageSource, ':item="menuSlot"');
+expectIncludes(randomPageSource, 'v-for="boardSlot in boardSlots"');
+expectIncludes(randomPageSource, '<RandomEmptySlotCard v-else :slot-type="boardSlot.slotType" />');
+expectIncludes(randomPageSource, '<RandomBottomBar\n              v-if="canCreatePlan"');
+expectIncludes(randomPageSource, 'buildRandomBoardSlots');
 expectExcludes(randomPageSource, '@click="rerollMenu"');
 expectExcludes(randomPageSource, ':slot="slot"');
 expectExcludes(randomPageSource, 'class="warning-card"');
@@ -64,6 +67,8 @@ expectExcludes(randomPageSource, "和缺什么理清楚");
 expectIncludes(randomPageSource, "暂时没有更多可换的菜了");
 expectIncludes(randomPageSource, "if (isReroll) {");
 expectIncludes(randomPageSource, "if (result.items.length === 0) {");
+expectIncludes(randomEmptySlotCardSource, "暂无符合当前条件的可用菜谱");
+expectExcludes(randomEmptySlotCardSource, "换一道");
 
 expectSelectorIncludes(randomPageSource, ".random-generate-bar", [
   "position: fixed;",

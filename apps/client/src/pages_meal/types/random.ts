@@ -31,6 +31,20 @@ export interface RandomSlotViewModel extends RandomMenuItem {
   gapAction: RandomGapAction;
 }
 
+export type RandomBoardSlot =
+  | {
+      kind: "RECIPE";
+      slotId: string;
+      slotType: RecipeSlotType;
+      item: RandomSlotViewModel;
+    }
+  | {
+      kind: "EMPTY";
+      slotId: string;
+      slotType: RecipeSlotType;
+      item: null;
+    };
+
 export interface RandomGapDecisionViewModel {
   decisionKey: string;
   slotId: string;
@@ -103,6 +117,38 @@ export function createRandomSlotViewModel(item: RandomMenuItem): RandomSlotViewM
     replaceConstraints: [],
     gapAction: null
   };
+}
+
+export function buildRandomBoardSlots(
+  mealSlot: MealSlot,
+  slotPlan: RandomSlotPlan,
+  recipeSlots: RandomSlotViewModel[]
+): RandomBoardSlot[] {
+  const plannedSlots: Array<{ slotId: string; slotType: RecipeSlotType }> = [];
+  const append = (slotType: RecipeSlotType, count: number) => {
+    for (let index = 0; index < count; index += 1) {
+      plannedSlots.push({ slotId: `${slotType}-${index + 1}`, slotType });
+    }
+  };
+
+  if (mealSlot === "BREAKFAST") {
+    append("BREAKFAST_STAPLE", slotPlan.breakfastStapleCount);
+    append("BREAKFAST_PROTEIN", slotPlan.breakfastProteinCount);
+    append("BREAKFAST_SIDE", slotPlan.breakfastSideCount);
+  } else {
+    append("MEAT", slotPlan.meatCount);
+    append("VEGETABLE", slotPlan.vegetableCount);
+    append("SOUP", slotPlan.soupCount);
+    append("STAPLE", slotPlan.stapleCount);
+  }
+
+  const recipeSlotMap = new Map(recipeSlots.map(item => [item.slotId, item]));
+  return plannedSlots.map(slot => {
+    const item = recipeSlotMap.get(slot.slotId);
+    return item
+      ? { kind: "RECIPE", slotId: slot.slotId, slotType: slot.slotType, item }
+      : { kind: "EMPTY", slotId: slot.slotId, slotType: slot.slotType, item: null };
+  });
 }
 
 export function createGapItemViewModel(item: RandomGapItem): RandomGapItemViewModel {
