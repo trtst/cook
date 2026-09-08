@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { FolderAdd } from "@element-plus/icons-vue";
-import { recipeApi, type AdminInspirationCategorySummary, type RecipeImportJobSummary } from "@/apis/recipe";
+import { recipeApi, type RecipeImportJobSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
@@ -17,7 +17,6 @@ const dialogVisible = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const jobs = ref<RecipeImportJobSummary[]>([]);
 const total = ref(0);
-const categories = ref<AdminInspirationCategorySummary[]>([]);
 
 const query = reactive({
   page: 1,
@@ -26,7 +25,6 @@ const query = reactive({
 });
 
 const form = reactive({
-  inspirationCategoryId: "" as UUID | "",
   file: null as File | null
 });
 
@@ -34,10 +32,6 @@ const selectedFileName = computed(() => form.file?.name || "未选择文件");
 useAdminHeaderRefresh(() => {
   void loadPage();
 });
-
-async function loadCategories() {
-  categories.value = await recipeApi.listInspirationCategories();
-}
 
 async function loadJobs() {
   loading.value = true;
@@ -58,7 +52,7 @@ async function loadJobs() {
 
 async function loadPage() {
   try {
-    await Promise.all([loadCategories(), loadJobs()]);
+    await loadJobs();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载导入中心失败");
   }
@@ -70,7 +64,6 @@ function handleStatusChange() {
 }
 
 function openDialog() {
-  form.inspirationCategoryId = "";
   form.file = null;
   dialogVisible.value = true;
 }
@@ -87,7 +80,7 @@ function handleFileChange(event: Event) {
 
 async function submitImport() {
   if (!form.file) {
-    ElMessage.error("请选择 markdown 或 zip 文件");
+    ElMessage.error("请选择 JSON 或 zip 文件");
     return;
   }
   saving.value = true;
@@ -95,7 +88,6 @@ async function submitImport() {
     const job = await recipeApi.createImportJob({
       operationId: createOperationId(),
       file: form.file,
-      inspirationCategoryId: form.inspirationCategoryId || null
     });
     ElMessage.success("导入任务已创建");
     dialogVisible.value = false;
@@ -119,6 +111,7 @@ onMounted(() => {
 <template>
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
+      <span class="page-toolbar__hint">先进入待审核系统项，审核通过后才发布为系统菜谱</span>
       <el-select v-model="query.status" class="toolbar-select" placeholder="全部状态" @change="handleStatusChange">
         <el-option label="全部状态" value="" />
         <el-option label="处理中" value="RUNNING" />
@@ -126,7 +119,7 @@ onMounted(() => {
         <el-option label="已完成" value="COMPLETED" />
         <el-option label="失败" value="FAILED" />
       </el-select>
-      <el-button type="primary" :icon="FolderAdd" @click="openDialog">导入 markdown / zip</el-button>
+      <el-button type="primary" :icon="FolderAdd" @click="openDialog">导入 JSON / zip</el-button>
     </div>
 
     <div v-loading="loading" class="table-panel">
@@ -169,19 +162,12 @@ onMounted(() => {
 
     <el-dialog v-model="dialogVisible" title="创建导入任务" width="520px">
       <el-form label-position="top">
-        <el-form-item label="默认系统菜谱分类">
-          <el-select v-model="form.inspirationCategoryId" placeholder="可不选，留待条目页逐条补">
-            <el-option label="不预设分类" value="" />
-            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
-        </el-form-item>
-
         <el-form-item label="导入文件" required>
           <div class="upload-box">
             <div class="upload-box__name">{{ selectedFileName }}</div>
-            <div class="upload-box__hint">支持 `.md` 或 `.zip`。zip 内按 markdown 相对路径读取同目录图片。</div>
+            <div class="upload-box__hint">支持 `.json` 或 `.zip`。zip 内读取 JSON 文件。</div>
             <el-button @click="chooseFile">选择文件</el-button>
-            <input ref="fileInput" class="hidden-input" type="file" accept=".md,.zip" @change="handleFileChange" />
+            <input ref="fileInput" class="hidden-input" type="file" accept=".json,.zip" @change="handleFileChange" />
           </div>
         </el-form-item>
       </el-form>

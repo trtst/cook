@@ -6,9 +6,13 @@ import { ElMessage } from "element-plus";
 import {
   recipeApi,
   type AdminInspirationCategorySummary,
+  type RecipeImportAssistantAction,
+  type RecipeImportAssistantPhase,
+  type RecipeImportAssistantStepDraft,
   type RecipeImportImageSummary,
   type RecipeImportItemDetail,
-  type RecipeImportRecipeBody
+  type RecipeImportRecipeBody,
+  type RecipeImportTagCode
 } from "@/apis/recipe";
 import {
   ingredientApi,
@@ -47,10 +51,13 @@ interface EditIngredientRow {
 
 interface EditStepRow {
   text: string;
+  imageUrl: string | null;
   imageKey: string | "";
   imageTempKey: string | null;
   previewUrl: string | null;
 }
+
+interface EditAssistantRow extends RecipeImportAssistantStepDraft {}
 
 const coverFrameWidth = 320;
 const coverFrameHeight = 240;
@@ -59,6 +66,58 @@ const exportCoverHeight = 900;
 
 const servingOptions = Array.from({ length: 20 }, (_, index) => index + 1);
 const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
+const tagCodeOptions: Array<{ value: RecipeImportTagCode; label: string }> = [
+  { value: "MEAL_TYPE", label: "餐次" },
+  { value: "DISH_ROLE", label: "菜式角色" },
+  { value: "MAIN_PROTEIN_TYPE", label: "主蛋白" },
+  { value: "FLAVOR_PROFILE", label: "风味" },
+  { value: "SPICE_LEVEL", label: "辣度" }
+];
+const tagValueOptions: Record<RecipeImportTagCode, Array<{ value: string; label: string }>> = {
+  MEAL_TYPE: [
+    { value: "BREAKFAST", label: "早餐" }, { value: "LUNCH", label: "午餐" },
+    { value: "AFTERNOON_TEA", label: "下午茶" }, { value: "DINNER", label: "晚餐" }, { value: "LATE_NIGHT", label: "夜宵" }
+  ],
+  DISH_ROLE: [
+    { value: "MAIN", label: "荤菜/主菜" }, { value: "VEGETABLE", label: "素菜" },
+    { value: "COLD_DISH", label: "凉菜" }, { value: "SOUP", label: "汤" }, { value: "STAPLE", label: "主食" }
+  ],
+  MAIN_PROTEIN_TYPE: [
+    { value: "PORK", label: "猪肉" }, { value: "CHICKEN", label: "鸡肉" }, { value: "BEEF", label: "牛肉" },
+    { value: "LAMB", label: "羊肉" }, { value: "DUCK", label: "鸭肉" }, { value: "FISH", label: "鱼类" }, { value: "NONE", label: "无主蛋白" }
+  ],
+  FLAVOR_PROFILE: [
+    { value: "LIGHT", label: "清淡" }, { value: "MILD", label: "温和" }, { value: "SPICY", label: "辛辣" },
+    { value: "SOUR", label: "酸味" }, { value: "SWEET", label: "甜味" }
+  ],
+  SPICE_LEVEL: [
+    { value: "NONE", label: "不辣" }, { value: "MILD", label: "微辣" }, { value: "MEDIUM", label: "中辣" }, { value: "HOT", label: "重辣" }
+  ]
+};
+const assistantPhaseOptions: Array<{ value: RecipeImportAssistantPhase; label: string }> = [
+  { value: "PREP", label: "备菜" },
+  { value: "COOK", label: "烹饪" },
+  { value: "SERVE", label: "收尾" }
+];
+const assistantActionOptions: Record<RecipeImportAssistantPhase, Array<{ value: RecipeImportAssistantAction; label: string }>> = {
+  PREP: [
+    { value: "SHOP", label: "采购" }, { value: "WASH", label: "清洗" }, { value: "SOAK", label: "浸泡" },
+    { value: "THAW", label: "解冻" }, { value: "CUT", label: "切配" }, { value: "SLICE", label: "切片" },
+    { value: "DICE", label: "切丁" }, { value: "SHRED", label: "切丝" }, { value: "MINCE", label: "剁碎" },
+    { value: "MARINATE", label: "腌制" }, { value: "BLANCH", label: "焯水" }, { value: "MEASURE", label: "称量备料" },
+    { value: "MIX", label: "混合搅拌" }, { value: "OTHER", label: "其他备菜" }
+  ],
+  COOK: [
+    { value: "BOIL", label: "煮" }, { value: "SIMMER", label: "炖煮" }, { value: "STEAM", label: "蒸" },
+    { value: "STIR_FRY", label: "炒" }, { value: "PAN_FRY", label: "煎" }, { value: "DEEP_FRY", label: "炸" },
+    { value: "BRAISE", label: "焖卤红烧" }, { value: "ROAST", label: "烤" }, { value: "BAKE", label: "烘焙" },
+    { value: "PRESSURE_COOK", label: "高压烹饪" }, { value: "REDUCE", label: "收汁" }, { value: "OTHER", label: "其他烹饪" }
+  ],
+  SERVE: [
+    { value: "SEASON", label: "调味" }, { value: "PLATE", label: "装盘" }, { value: "GARNISH", label: "点缀" },
+    { value: "PORTION", label: "分装" }, { value: "REST", label: "静置" }, { value: "OTHER", label: "其他收尾" }
+  ]
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -110,13 +169,16 @@ const form = reactive({
   inspirationCategoryId: "" as UUID | "",
   title: "",
   story: "",
-  baseServings: 1 as number | null,
+  baseServings: null as number | null,
   difficulty: "" as Difficulty | "",
   duration: "" as Duration | "",
-  estimatedCalories: null as number | null,
   tips: "",
+  coverImageUrl: null as string | null,
   coverImageKey: "" as string | "",
   coverImageTempKey: null as string | null,
+  tools: [] as Array<{ name: string }>,
+  tags: [] as Array<{ tagCode: RecipeImportTagCode; tagValue: string }>,
+  assistantSteps: [] as EditAssistantRow[],
   ingredients: [] as EditIngredientRow[],
   steps: [] as EditStepRow[]
 });
@@ -139,6 +201,7 @@ const unitSelectOptions = computed(() =>
 const coverOptions = computed(() => (detail.value?.sourceImages ?? []).filter(item => item.canUseAsCover));
 const currentCoverPreview = computed(() => {
   if (coverPreviewUrl.value) return coverPreviewUrl.value;
+  if (form.coverImageUrl) return form.coverImageUrl;
   if (!form.coverImageKey) return null;
   return sourceImageMap.value.get(form.coverImageKey)?.dataUrl ?? null;
 });
@@ -245,6 +308,7 @@ function resolveUnitDraftText(item: EditIngredientRow) {
 
 function resolveStepPreviewUrl(item: EditStepRow) {
   if (item.previewUrl) return item.previewUrl;
+  if (item.imageUrl) return item.imageUrl;
   if (!item.imageKey) return null;
   return sourceImageMap.value.get(item.imageKey)?.dataUrl ?? null;
 }
@@ -353,13 +417,16 @@ function resetFormFromDetail() {
   form.inspirationCategoryId = body.inspirationCategoryId ?? "";
   form.title = body.title;
   form.story = body.story ?? "";
-  form.baseServings = body.baseServings ?? 1;
+  form.baseServings = body.baseServings;
   form.difficulty = body.difficulty ?? "";
   form.duration = body.duration ?? "";
-  form.estimatedCalories = body.estimatedCalories;
   form.tips = body.tips ?? "";
+  form.coverImageUrl = body.coverImageUrl ?? null;
   form.coverImageKey = body.coverImageKey ?? "";
   form.coverImageTempKey = body.coverImageTempKey ?? null;
+  form.tools = body.tools.map(item => ({ name: item.name }));
+  form.tags = body.tags.map(item => ({ tagCode: item.tagCode, tagValue: item.tagValue }));
+  form.assistantSteps = body.assistantSteps.map(item => ({ ...item }));
   form.ingredients = body.ingredients.map(item => ({
     line: item.line,
     ingredientName: item.ingredientName,
@@ -379,6 +446,7 @@ function resetFormFromDetail() {
   }));
   form.steps = body.steps.map(item => ({
     text: item.text,
+    imageUrl: item.imageUrl ?? null,
     imageKey: item.imageKey ?? "",
     imageTempKey: item.imageTempKey ?? null,
     previewUrl: item.imageTempKey ? previousStepPreviewMap.get(item.imageTempKey) ?? null : null
@@ -408,13 +476,16 @@ function clearForm() {
   form.inspirationCategoryId = "";
   form.title = "";
   form.story = "";
-  form.baseServings = 1;
+  form.baseServings = null;
   form.difficulty = "";
   form.duration = "";
-  form.estimatedCalories = null;
   form.tips = "";
+  form.coverImageUrl = null;
   form.coverImageKey = "";
   form.coverImageTempKey = null;
+  form.tools = [];
+  form.tags = [];
+  form.assistantSteps = [];
   form.ingredients = [];
   form.steps = [];
 }
@@ -487,6 +558,7 @@ function updateIngredientAmountKind(index: number, value: "EXACT" | "FUZZY") {
 function addStep() {
   form.steps.push({
     text: "",
+    imageUrl: null,
     imageKey: "",
     imageTempKey: null,
     previewUrl: null
@@ -499,6 +571,49 @@ function removeStep(index: number) {
     revokePreviewUrl(step.previewUrl);
   }
   form.steps.splice(index, 1);
+}
+
+function addTool() {
+  form.tools.push({ name: "" });
+}
+
+function removeTool(index: number) {
+  form.tools.splice(index, 1);
+}
+
+function addTag() {
+  form.tags.push({ tagCode: "MEAL_TYPE", tagValue: "" });
+}
+
+function removeTag(index: number) {
+  form.tags.splice(index, 1);
+}
+
+function addAssistantStep() {
+  form.assistantSteps.push({
+    order: form.assistantSteps.length + 1,
+    phase: "PREP",
+    action: "OTHER",
+    title: "",
+    detail: "",
+    imageUrl: null,
+    durationMinutes: null,
+    durationText: null
+  });
+}
+
+function removeAssistantStep(index: number) {
+  form.assistantSteps.splice(index, 1);
+  form.assistantSteps.forEach((item, itemIndex) => {
+    item.order = itemIndex + 1;
+  });
+}
+
+function updateAssistantPhase(item: EditAssistantRow, phase: RecipeImportAssistantPhase) {
+  item.phase = phase;
+  if (!assistantActionOptions[phase].some(option => option.value === item.action)) {
+    item.action = "OTHER";
+  }
 }
 
 function chooseCoverFile() {
@@ -615,12 +730,14 @@ async function submitRecipeImage() {
     const result = await recipeApi.uploadImage(scene, file, createOperationId());
     const previewUrl = URL.createObjectURL(file);
     if (scene === "COVER") {
+      form.coverImageUrl = null;
       form.coverImageKey = "";
       form.coverImageTempKey = result.image.tempKey;
       replaceCoverPreviewUrl(previewUrl);
     } else {
       const step = form.steps[cropTarget.stepIndex];
       if (!step) throw new Error("步骤不存在");
+      step.imageUrl = null;
       step.imageKey = "";
       step.imageTempKey = result.image.tempKey;
       replaceStepPreviewUrl(step, previewUrl);
@@ -636,12 +753,14 @@ async function submitRecipeImage() {
 }
 
 function setCoverSourceImage(value: string) {
+  form.coverImageUrl = null;
   form.coverImageKey = value;
   form.coverImageTempKey = null;
   replaceCoverPreviewUrl(null);
 }
 
 function clearCoverImage() {
+  form.coverImageUrl = null;
   form.coverImageKey = "";
   form.coverImageTempKey = null;
   replaceCoverPreviewUrl(null);
@@ -650,6 +769,7 @@ function clearCoverImage() {
 function setStepSourceImage(index: number, value: string) {
   const step = form.steps[index];
   if (!step) return;
+  step.imageUrl = null;
   step.imageKey = value;
   step.imageTempKey = null;
   replaceStepPreviewUrl(step, null);
@@ -658,6 +778,7 @@ function setStepSourceImage(index: number, value: string) {
 function clearStepImage(index: number) {
   const step = form.steps[index];
   if (!step) return;
+  step.imageUrl = null;
   step.imageKey = "";
   step.imageTempKey = null;
   replaceStepPreviewUrl(step, null);
@@ -668,11 +789,11 @@ function buildRecipeBody(): RecipeImportRecipeBody {
     inspirationCategoryId: form.inspirationCategoryId || null,
     title: form.title.trim(),
     story: form.story.trim() ? form.story.trim() : null,
-    baseServings: form.baseServings ?? 1,
+    baseServings: form.baseServings,
     difficulty: (form.difficulty || null) as RecipeImportRecipeBody["difficulty"],
     duration: (form.duration || null) as RecipeImportRecipeBody["duration"],
-    estimatedCalories: form.estimatedCalories,
     tips: form.tips.trim() ? form.tips.trim() : null,
+    coverImageUrl: form.coverImageUrl,
     coverImageKey: form.coverImageKey || null,
     coverImageTempKey: form.coverImageTempKey,
     ingredients: form.ingredients.map(item => ({
@@ -687,8 +808,21 @@ function buildRecipeBody(): RecipeImportRecipeBody {
     })),
     steps: form.steps.map(item => ({
       text: item.text.trim(),
+      imageUrl: item.imageUrl,
       imageKey: item.imageKey || null,
       imageTempKey: item.imageTempKey
+    })),
+    tools: form.tools.map(item => ({ name: item.name.trim() })).filter(item => item.name),
+    tags: form.tags.map(item => ({ tagCode: item.tagCode, tagValue: item.tagValue.trim() })),
+    assistantSteps: form.assistantSteps.map(item => ({
+      order: item.order,
+      phase: item.phase,
+      action: item.action,
+      title: item.title.trim(),
+      detail: item.detail.trim(),
+      imageUrl: item.imageUrl,
+      durationMinutes: item.durationMinutes,
+      durationText: item.durationText?.trim() || null
     }))
   };
 }
@@ -761,7 +895,7 @@ onBeforeUnmount(() => {
       <el-button
         type="success"
         :loading="publishing"
-        :disabled="detail?.status === 'PUBLISHED'"
+        :disabled="detail?.status !== 'READY' || detail.errorItems.length > 0"
         @click="publishItem"
       >
         发布到系统菜谱
@@ -777,8 +911,8 @@ onBeforeUnmount(() => {
     <div v-loading="loading || optionLoading" class="import-layout">
       <div class="table-panel source-panel">
         <div class="source-block">
-          <h3>原文 markdown</h3>
-          <pre class="markdown-raw">{{ detail?.rawBody.markdown }}</pre>
+          <h3>原始 JSON</h3>
+          <pre class="json-raw">{{ detail?.rawBody.jsonText }}</pre>
         </div>
 
         <div class="source-block">
@@ -793,7 +927,7 @@ onBeforeUnmount(() => {
               </figcaption>
             </figure>
           </div>
-          <div v-else class="empty-tip">当前 markdown 未带可读取图片。</div>
+          <div v-else class="empty-tip">当前 JSON 未带可读取图片。</div>
         </div>
 
         <div v-if="detail?.errorItems.length" class="source-block">
@@ -834,9 +968,6 @@ onBeforeUnmount(() => {
                 <el-option v-for="item in durationOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
-            <el-form-item label="预估卡路里">
-              <el-input-number v-model="form.estimatedCalories" :min="0" :max="20000" :step="10" />
-            </el-form-item>
           </div>
 
           <el-form-item label="头图">
@@ -870,13 +1001,40 @@ onBeforeUnmount(() => {
             <el-input v-model="form.title" maxlength="120" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="故事">
+          <el-form-item label="故事" required>
             <el-input v-model="form.story" type="textarea" :rows="4" maxlength="2000" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="小贴士">
+          <el-form-item label="小贴士" required>
             <el-input v-model="form.tips" type="textarea" :rows="4" maxlength="1000" show-word-limit />
           </el-form-item>
+
+          <div class="edit-section">
+            <div class="edit-section__header">
+              <strong>所需厨具</strong>
+              <el-button text :icon="Plus" @click="addTool">新增厨具</el-button>
+            </div>
+            <div v-for="(item, index) in form.tools" :key="`tool-${index}`" class="inline-edit-row">
+              <el-input v-model="item.name" placeholder="如：砂锅、蒸锅" maxlength="64" />
+              <el-button text type="danger" @click="removeTool(index)">删除</el-button>
+            </div>
+          </div>
+
+          <div class="edit-section">
+            <div class="edit-section__header">
+              <strong>业务标签</strong>
+              <el-button text :icon="Plus" @click="addTag">新增标签</el-button>
+            </div>
+            <div v-for="(item, index) in form.tags" :key="`tag-${index}`" class="inline-edit-row">
+              <el-select v-model="item.tagCode" class="tag-code-select">
+                <el-option v-for="option in tagCodeOptions" :key="option.value" :label="option.label" :value="option.value" />
+              </el-select>
+              <el-select v-model="item.tagValue" placeholder="选择标签值">
+                <el-option v-for="option in tagValueOptions[item.tagCode]" :key="option.value" :label="option.label" :value="option.value" />
+              </el-select>
+              <el-button text type="danger" @click="removeTag(index)">删除</el-button>
+            </div>
+          </div>
 
           <div class="edit-section">
             <div class="edit-section__header">
@@ -964,6 +1122,31 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
+
+          <div class="edit-section">
+            <div class="edit-section__header">
+              <strong>美食助理流程</strong>
+              <el-button text :icon="Plus" @click="addAssistantStep">新增助理步骤</el-button>
+            </div>
+            <div v-for="(item, index) in form.assistantSteps" :key="`assistant-${index}`" class="assistant-card">
+              <div class="assistant-card__grid">
+                <el-input-number v-model="item.order" :min="1" controls-position="right" />
+                <el-select :model-value="item.phase" @update:model-value="updateAssistantPhase(item, $event as RecipeImportAssistantPhase)">
+                  <el-option v-for="option in assistantPhaseOptions" :key="option.value" :label="option.label" :value="option.value" />
+                </el-select>
+                <el-select v-model="item.action">
+                  <el-option v-for="option in assistantActionOptions[item.phase]" :key="option.value" :label="option.label" :value="option.value" />
+                </el-select>
+                <el-input-number v-model="item.durationMinutes" :min="1" controls-position="right" placeholder="分钟" />
+                <el-input v-model="item.durationText" placeholder="时间，如：约 15 分钟" />
+              </div>
+              <el-input v-model="item.title" placeholder="步骤标题" maxlength="120" />
+              <el-input v-model="item.detail" type="textarea" :rows="2" placeholder="整理后的执行说明" maxlength="2000" />
+              <div class="assistant-card__footer">
+                <el-button text type="danger" @click="removeAssistantStep(index)">删除步骤</el-button>
+              </div>
+            </div>
+          </div>
         </el-form>
       </div>
     </div>
@@ -1037,7 +1220,7 @@ onBeforeUnmount(() => {
   font-size: 15px;
 }
 
-.markdown-raw {
+.json-raw {
   overflow: auto;
   max-height: 520px;
   padding: 14px;
