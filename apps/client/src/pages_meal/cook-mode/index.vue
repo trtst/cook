@@ -220,6 +220,7 @@ type CookStep = {
   note: string;
   imageUrl: string | null;
   displayMode: StepDisplayMode;
+  durationMinutes: number | null;
   durationText: string;
   durationSeconds: number | null;
 };
@@ -407,6 +408,7 @@ function buildRecipeSteps(targetRecipeId: UUID, targetRecipeKind: RecipeKind, di
       note: "",
       imageUrl: item.imageUrl || null,
       displayMode: resolveDisplayMode(bodyText, item.imageUrl || null),
+      durationMinutes: duration.seconds === null ? null : duration.seconds / 60,
       durationText: duration.text,
       durationSeconds: duration.seconds
     });
@@ -436,8 +438,9 @@ function buildRecipeAssistantSteps(
           : "",
     imageUrl: item.imageUrl || null,
     displayMode: resolveDisplayMode(item.detail, item.imageUrl || null),
+    durationMinutes: item.durationMinutes,
     durationText: item.durationText || "",
-    durationSeconds: resolveDurationSeconds(item.durationText)
+    durationSeconds: item.durationMinutes && item.durationMinutes > 0 ? item.durationMinutes * 60 : null
   }));
 }
 
@@ -495,6 +498,7 @@ function toAssistantStep(
     note: dishTitles.length > 1 ? "这一步同时服务多道菜，做完再往下走。" : "",
     imageUrl: null,
     displayMode: "text",
+    durationMinutes: duration.seconds === null ? null : duration.seconds / 60,
     durationText: duration.text,
     durationSeconds: duration.seconds
   };
@@ -512,6 +516,7 @@ function buildFallbackStep(id: string, dishTitle: string): CookStep {
     note: "",
     imageUrl: null,
     displayMode: "text",
+    durationMinutes: null,
     durationText: "",
     durationSeconds: null
   };
@@ -531,22 +536,11 @@ function ensureSteps(currentSteps: CookStep[], fallbackTitle: string, fallbackKi
       note: "",
       imageUrl: null,
       displayMode: "text",
+      durationMinutes: null,
       durationText: "",
       durationSeconds: null
     }
   ];
-}
-
-function resolveDurationSeconds(durationText: string | null | undefined) {
-  if (!durationText) return null;
-  let seconds = 0;
-  const matches = durationText.matchAll(/(\d+)\s*(小时|分钟)/g);
-  for (const match of matches) {
-    const value = Number(match[1] ?? 0);
-    if (!Number.isFinite(value) || value <= 0) continue;
-    seconds += match[2] === "小时" ? value * 3600 : value * 60;
-  }
-  return seconds > 0 ? seconds : null;
 }
 
 function resolveRecipeStepTitle(detail: string, index: number) {

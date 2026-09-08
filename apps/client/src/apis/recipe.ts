@@ -135,6 +135,7 @@ export interface RecipeAssistantStep {
 	title: string;
 	detail: string;
 	imageUrl: string | null;
+	durationMinutes: number | null;
 	durationText: string | null;
 }
 
