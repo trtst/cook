@@ -58,6 +58,7 @@ export class CurrentUserService {
         throw new UnauthorizedException("未登录或 token 失效");
       }
 
+      this.assertNicknameAllowed(body.nickname);
       this.assertCookNoCanChange(currentUser, body);
       const patch = this.buildPatch(body);
       await this.updateUser(tx, userId, patch);
@@ -172,6 +173,12 @@ export class CurrentUserService {
     const currentCookNo = user.cookNo?.trim() ?? "";
     if (!currentCookNo || currentCookNo === String(user.uid) || currentCookNo === nextCookNo) return;
     throw new BadRequestException("炊火号只能设置一次");
+  }
+
+  private assertNicknameAllowed(nickname?: string) {
+    if (nickname !== undefined && /炊火/.test(nickname.trim())) {
+      throw new BadRequestException("昵称不能包含炊火相关名称");
+    }
   }
 
   private parseBirthDate(value: string) {

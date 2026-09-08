@@ -1003,6 +1003,7 @@ export class RecipeAssistantStepModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) detail!: string;
   @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty({ type: Number, nullable: true, minimum: 1 }) durationMinutes!: number | null;
   @ApiProperty(nullableString) durationText!: string | null;
 }
 
@@ -1403,7 +1404,7 @@ export class RecipeImportPreviewImageModel extends RecipeImportImageModel {
 
 export class RecipeImportRawBodyModel {
   @ApiProperty({ type: String }) sourcePath!: string;
-  @ApiProperty({ type: String }) markdown!: string;
+  @ApiProperty({ type: String }) jsonText!: string;
   @ApiProperty({ type: String }) assetFolder!: string;
   @ApiProperty({ type: [RecipeImportImageModel] }) images!: RecipeImportImageModel[];
 }
@@ -1433,8 +1434,29 @@ export class RecipeImportIngredientModel {
 
 export class RecipeImportStepModel {
   @ApiProperty({ type: String }) text!: string;
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
   @ApiProperty({ type: String, nullable: true }) imageKey!: string | null;
   @ApiProperty({ type: String, nullable: true }) imageTempKey!: string | null;
+}
+
+export class RecipeImportToolModel {
+  @ApiProperty({ type: String }) name!: string;
+}
+
+export class RecipeImportTagModel {
+  @ApiProperty({ type: String, enum: ["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }) tagCode!: string;
+  @ApiProperty({ type: String }) tagValue!: string;
+}
+
+export class RecipeImportAssistantStepModel {
+  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
+  @ApiProperty({ type: String, enum: ["PREP", "COOK", "SERVE"] }) phase!: string;
+  @ApiProperty({ type: String }) action!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String }) detail!: string;
+  @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ type: Number, minimum: 1 }) durationMinutes!: number;
+  @ApiProperty({ type: String, nullable: true }) durationText!: string | null;
 }
 
 export class RecipeImportRecipeBodyModel {
@@ -1444,17 +1466,20 @@ export class RecipeImportRecipeBodyModel {
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 20 }) baseServings!: number | null;
   @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
-  @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: String, nullable: true }) tips!: string | null;
+  @ApiProperty({ type: String, nullable: true }) coverImageUrl!: string | null;
   @ApiProperty({ type: String, nullable: true }) coverImageKey!: string | null;
   @ApiProperty({ type: String, nullable: true }) coverImageTempKey!: string | null;
+  @ApiProperty({ type: [RecipeImportToolModel] }) tools!: RecipeImportToolModel[];
+  @ApiProperty({ type: [RecipeImportTagModel] }) tags!: RecipeImportTagModel[];
+  @ApiProperty({ type: [RecipeImportAssistantStepModel] }) assistantSteps!: RecipeImportAssistantStepModel[];
   @ApiProperty({ type: [RecipeImportIngredientModel] }) ingredients!: RecipeImportIngredientModel[];
   @ApiProperty({ type: [RecipeImportStepModel] }) steps!: RecipeImportStepModel[];
 }
 
 export class RecipeImportJobModel {
   @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: String, enum: ["MARKDOWN", "EXCEL"] }) sourceType!: string;
+  @ApiProperty({ type: String, enum: ["JSON"] }) sourceType!: string;
   @ApiProperty({ type: String }) sourceName!: string;
   @ApiProperty({ type: String, enum: ["PENDING", "RUNNING", "READY", "FAILED", "COMPLETED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;

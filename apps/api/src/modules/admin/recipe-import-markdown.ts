@@ -44,7 +44,7 @@ type ImportRefs = {
 };
 
 type ParseResult = {
-  rawBody: Omit<RecipeImportRawBody, "assetFolder" | "images">;
+  rawBody: { sourcePath: string; markdown: string };
   parsedBody: RecipeImportParsedBody;
   recipeBody: RecipeImportRecipeBody;
   errorItems: RecipeImportIssue[];
@@ -464,10 +464,6 @@ function buildItemIssues(recipeBody: RecipeImportRecipeBody, images: RecipeImpor
   if (!recipeBody.tips?.trim()) {
     warnItems.push({ field: "tips", message: "未识别到小贴士，可按原文补充" });
   }
-  if (recipeBody.estimatedCalories === null) {
-    warnItems.push({ field: "estimatedCalories", message: "未识别到预估卡路里" });
-  }
-
   return { errorItems, warnItems };
 }
 
@@ -559,7 +555,6 @@ export function parseMarkdownSource(source: SourceFile, defaultCategoryId: numbe
     baseServings: pickBaseServings(calcText) ?? 1,
     difficulty: pickDifficulty(difficultyText),
     duration: pickDuration(`${story ?? ""} ${introText}`),
-    estimatedCalories: pickCalories(caloriesText),
     tips: tipLines.join("\n") || null,
     coverImageKey: imageFiles.find(item => canUseAsCover(item.width, item.height))?.key ?? null,
     coverImageTempKey: null,

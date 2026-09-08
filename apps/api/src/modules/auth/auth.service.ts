@@ -703,7 +703,8 @@ export class AuthService {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const uid = this.createUid();
-        return (await db.user.create({ data: { phone, uid, cookNo: String(uid) } })) as AuthUser;
+        const nickname = `用户${randomInt(1_000_000_000, 10_000_000_000)}`;
+        return (await db.user.create({ data: { phone, uid, cookNo: String(uid), nickname } })) as AuthUser;
       } catch (error) {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
         const targets = Array.isArray(error.meta?.target) ? error.meta.target.map(String) : [];

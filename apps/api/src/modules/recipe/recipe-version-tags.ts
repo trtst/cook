@@ -5,7 +5,7 @@ import type {
   RecipeVersionTagSource,
   RecipeVersionTagStatus
 } from "@prisma/client";
-import type { RecipeContentSnapshot, RecipeProteinType, UUID } from "../../contracts/types";
+import type { RecipeContentSnapshot, RecipeImportTagDraft, RecipeProteinType, UUID } from "../../contracts/types";
 
 type RecipeVersionTagRow = {
   tagCode: RecipeVersionTagCode;
@@ -206,6 +206,47 @@ export function buildAutoRecipeVersionTags(
   return rows;
 }
 
+export function buildImportedRecipeVersionTags(tags: RecipeImportTagDraft[]) {
+  return tags.map((item, index) => ({
+    tagCode: item.tagCode,
+    tagValue: item.tagValue,
+    source: "OPS" as const,
+    status: "CONFIRMED" as const,
+    confidence: 1,
+    sortOrder: index,
+    isLocked: true
+  }));
+}
+
+export async function createImportedRecipeVersionTags(
+  tx: Prisma.TransactionClient,
+  recipeVersionId: UUID,
+  tags: RecipeImportTagDraft[]
+) {
+  const rows = buildImportedRecipeVersionTags(tags);
+  if (!rows.length) return;
+  await tx.recipeVersionTag.createMany({
+    data: rows.map(item => ({
+      recipeVersionId,
+      tagCode: item.tagCode,
+      tagValue: item.tagValue,
+      source: item.source,
+      status: item.status,
+      confidence: item.confidence,
+      sortOrder: item.sortOrder,
+      isLocked: item.isLocked
+    }))
+  });
+}
+
+export function filterAutoRecipeVersionTags(
+  rows: RecipeVersionTagRow[],
+  existingRows: Array<Pick<RecipeVersionTagRow, "tagCode" | "tagValue" | "source">>
+) {
+  const existingKeys = new Set(existingRows.map(item => `${item.tagCode}:${item.tagValue}`));
+  return rows.filter(item => !existingKeys.has(`${item.tagCode}:${item.tagValue}`));
+}
+
 export async function replaceAutoRecipeVersionTags(
   tx: Prisma.TransactionClient,
   recipeVersionId: UUID,
@@ -215,6 +256,18 @@ export async function replaceAutoRecipeVersionTags(
     where: {
       recipeVersionId,
       source: "AUTO"
+    }
+  });
+
+  const existingRows = await tx.recipeVersionTag.findMany({
+    where: {
+      recipeVersionId,
+      source: { not: "AUTO" }
+    },
+    select: {
+      tagCode: true,
+      tagValue: true,
+      source: true
     }
   });
 
@@ -239,7 +292,7 @@ export async function replaceAutoRecipeVersionTags(
           ).map(item => [item.id, item])
         );
 
-  const rows = buildAutoRecipeVersionTags(content, ingredientFacts);
+  const rows = filterAutoRecipeVersionTags(buildAutoRecipeVersionTags(content, ingredientFacts), existingRows);
   if (!rows.length) return;
 
   await tx.recipeVersionTag.createMany({

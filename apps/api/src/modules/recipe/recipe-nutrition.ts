@@ -222,6 +222,14 @@ export function buildRecipeNutritionPreview(
   return buildSummaryFromRows(content, sourceVersion, mappingRows, conversionRows);
 }
 
+export function recipeNutritionSnapshotWhere(recipeVersionId: UUID) {
+  return { recipeVersionId };
+}
+
+export function canReuseRecipeNutritionSnapshot(existingSourceVersion: string, activeSourceVersion: string) {
+  return existingSourceVersion === activeSourceVersion;
+}
+
 export async function loadRecipeNutritionSummary(tx: RecipeDb, recipeVersionId: UUID, content: RecipeContentSnapshot): Promise<RecipeNutritionSummary> {
   const sourceVersion = await loadActiveSourceVersion(tx);
   if (!sourceVersion) {
@@ -229,14 +237,9 @@ export async function loadRecipeNutritionSummary(tx: RecipeDb, recipeVersionId: 
   }
 
   const existing = await tx.recipeNutritionSnapshot.findUnique({
-    where: {
-      recipeVersionId_sourceVersion: {
-        recipeVersionId,
-        sourceVersion
-      }
-    }
+    where: recipeNutritionSnapshotWhere(recipeVersionId)
   });
-  if (existing) {
+  if (existing && canReuseRecipeNutritionSnapshot(existing.sourceVersion, sourceVersion)) {
     return snapshotToSummary(existing);
   }
 
@@ -279,18 +282,15 @@ export async function loadRecipeNutritionSummary(tx: RecipeDb, recipeVersionId: 
 
   const summary = buildSummaryFromRows(content, sourceVersion, mappingRows, conversionRows);
   const persisted = await tx.recipeNutritionSnapshot.upsert({
-    where: {
-      recipeVersionId_sourceVersion: {
-        recipeVersionId,
-        sourceVersion
-      }
-    },
+    where: recipeNutritionSnapshotWhere(recipeVersionId),
     update: {
       status: summary.status,
       qualityLabel: summary.qualityLabel,
       perServingJson: summary.perServing ? toJson(summary.perServing) : Prisma.DbNull,
       perRecipeJson: summary.perRecipe ? toJson(summary.perRecipe) : Prisma.DbNull,
-      coverageRate: summary.coverageRate
+      coverageRate: summary.coverageRate,
+      calculatedAt: new Date(),
+      sourceVersion
     },
     create: {
       recipeVersionId,

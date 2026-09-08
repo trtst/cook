@@ -422,6 +422,7 @@ enum UploadAssetStatus {
 }
 
 enum RecipeImportSourceType {
+  JSON
   MARKDOWN
   EXCEL
 }
@@ -673,6 +674,7 @@ model User {
   idempotencyRecords        IdempotencyRecord[]        @relation("IdempotencyRecordUser")
   auditEvents               AuditEvent[]               @relation("AuditEventActor")
   recipes                   Recipe[]                   @relation("RecipeOwner")
+  inspirationOwnerPool      RecipeInspirationOwner?
   recipeCategories          RecipeCategory[]
   recipeScenes              RecipeScene[]
   recipeDrafts              RecipeDraft[]
@@ -1288,6 +1290,7 @@ model RecipeContentVersion {
   duration          RecipeDuration?
   estimatedCalories Int?                @map("estimated_calories")
   tips              String?             @db.VarChar(1000)
+  toolsJson         Json                @default("[]") @map("tools_json")
   ingredientsJson   Json                @map("ingredients_json")
   stepsJson         Json                @map("steps_json")
   imagesJson        Json                @map("images_json")
@@ -1420,7 +1423,7 @@ model IngredientUnitNutrientConversion {
 
 model RecipeNutritionSnapshot {
   id            Int                   @id @default(autoincrement())
-  recipeVersionId Int                 @map("recipe_version_id")
+  recipeVersionId Int                 @unique @map("recipe_version_id")
   status        RecipeNutritionStatus
   qualityLabel  String?               @map("quality_label") @db.VarChar(32)
   perServingJson Json?                @map("per_serving_json")
@@ -1433,7 +1436,6 @@ model RecipeNutritionSnapshot {
 
   recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
 
-  @@unique([recipeVersionId, sourceVersion])
   @@index([sourceVersion, status])
   @@map("recipe_nutrition_snapshots")
 }
@@ -1507,6 +1509,7 @@ model RecipeImportItem {
 model Recipe {
   id                    Int          @id @default(autoincrement())
   ownerId               Int?         @map("owner_id")
+  isInspiration         Boolean      @default(false) @map("is_inspiration")
   categoryId            Int?         @map("category_id")
   inspirationCategoryId Int?         @map("inspiration_category_id")
   currentVersionId      Int          @map("current_version_id")
@@ -1552,6 +1555,15 @@ model Recipe {
   @@index([ownerId, status, updatedAt])
   @@index([ownerId, originVersionId])
   @@map("recipes")
+}
+
+model RecipeInspirationOwner {
+  userId    Int      @id @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_inspiration_owners")
 }
 
 model RandomMenuUsage {

@@ -50,6 +50,7 @@ import type {
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
+import { isPublicInspirationRecipe } from "../recipe/recipe-inspiration-owner";
 import { IngredientImageService } from "../admin/ingredient-image.service";
 import { WechatSubscribeService } from "../wechat/wechat-subscribe.service";
 
@@ -4524,6 +4525,7 @@ export class PantryService {
       select: {
         id: true,
         ownerId: true,
+        isInspiration: true,
         status: true,
         currentVersionId: true,
         inspirationCategoryId: true
@@ -4567,7 +4569,7 @@ export class PantryService {
     }
 
     const isOwnedCurrent = recipe.ownerId === userId && recipe.currentVersionId === sourceVersionId;
-    const isPublicCurrent = recipe.ownerId === null && recipe.inspirationCategoryId !== null && recipe.currentVersionId === sourceVersionId;
+    const isPublicCurrent = isPublicInspirationRecipe(recipe) && recipe.currentVersionId === sourceVersionId;
     const hasCollection = isOwnedCurrent || isPublicCurrent
       ? true
       : Boolean(

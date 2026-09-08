@@ -29,6 +29,7 @@ import type {
 } from "../../contracts/types";
 import { PantryService } from "../pantry/pantry.service";
 import { versionToContent } from "../recipe/recipe-content";
+import { inspirationRecipeWhere } from "../recipe/recipe-inspiration-owner";
 import { HomeImageService } from "./home-image.service";
 
 type BoardDb = Prisma.TransactionClient | PrismaService;
@@ -577,7 +578,7 @@ export class HomeService {
       this.prisma.recipe.findMany({
         where: {
           status: "ACTIVE",
-          OR: [{ ownerId: userId }, { ownerId: null, inspirationCategoryId: { not: null } }]
+          OR: [{ ownerId: userId }, inspirationRecipeWhere("ACTIVE")]
         },
         include: {
           currentVersion: true
@@ -603,7 +604,7 @@ export class HomeService {
     if (fridgeIngredientIds.size === 0) return { items: [] };
 
     const inspirationVersionIds = recipes
-      .filter(item => item.ownerId === null && item.inspirationCategoryId !== null)
+      .filter(item => item.isInspiration && item.inspirationCategoryId !== null)
       .map(item => item.currentVersionId);
     const ownedRecipeMap = await this.loadOwnedOriginRecipeMap(userId, inspirationVersionIds);
     const items = recipes
@@ -1182,7 +1183,7 @@ export class HomeService {
 
     const missingIngredientCount = totalIngredientCount - matchedIngredientCount;
     if (missingIngredientCount > maxHomeFridgeMissingCount) return null;
-    const kind = recipe.ownerId === null ? "INSPIRATION" : "MY";
+    const kind = recipe.isInspiration ? "INSPIRATION" : "MY";
 
     return {
       recipeId: recipe.id,

@@ -27,6 +27,7 @@ import type {
   UpdateHomeTopicRequest
 } from "../../contracts/types";
 import { HomeTopicImageService } from "./home-topic-image.service";
+import { inspirationRecipeWhere } from "../recipe/recipe-inspiration-owner";
 
 type TopicDb = Prisma.TransactionClient | PrismaService;
 type RequestLike = {
@@ -62,11 +63,7 @@ type RecipeRow = Prisma.RecipeGetPayload<{
 const topicTypes: HomeTopicTypeOption[] = topicTypeOptions;
 const activeOwnedRecipeStatus = "ACTIVE";
 const topicImagePath = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-topics\/\d+(?:\.(?:jpg|png|webp))?$/i;
-const recipeWhere: Prisma.RecipeWhereInput = {
-  ownerId: null,
-  inspirationCategoryId: { not: null },
-  status: "ACTIVE"
-};
+const recipeWhere: Prisma.RecipeWhereInput = inspirationRecipeWhere("ACTIVE");
 
 function cleanText(value: string | null | undefined) {
   const text = value?.trim() ?? "";

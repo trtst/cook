@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { lookup as lookupDns } from "node:dns/promises";
+import * as http from "node:http";
+import * as https from "node:https";
+import { isIP } from "node:net";
 import { basename } from "node:path";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
@@ -22,6 +26,8 @@ type ImageMeta = {
 };
 
 const maxImageBytes = 10 * 1024 * 1024;
+const remoteImageTimeoutMs = 15_000;
+const maxRemoteRedirects = 3;
 const coverRatio = 4 / 3;
 const coverRatioTolerance = 0.02;
 const tempKeyPattern = /^[a-z0-9-]+\.(png|jpg|jpeg|webp)$/i;
@@ -156,9 +162,186 @@ function assertSceneMeta(scene: AdminRecipeImageScene, meta: ImageMeta) {
   }
 }
 
+function normalizeRemoteHostname(hostname: string) {
+  return hostname.replace(/^\[|\]$/gu, "").toLowerCase();
+}
+
+function isPrivateIpv4(address: string) {
+  const parts = address.split(".").map(Number);
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+  const [a, b, c] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 100 && b >= 64 && b <= 127 ||
+    a === 127 ||
+    a === 169 && b === 254 ||
+    a === 172 && b >= 16 && b <= 31 ||
+    a === 192 && (b === 0 || b === 168) ||
+    a === 192 && b === 88 && c === 99 ||
+    a === 198 && (b === 18 || b === 19 || b === 51) ||
+    a === 203 && b === 0 && c === 113 ||
+    a >= 224
+  );
+}
+
+function isPrivateIpv6(address: string) {
+  const normalized = address.toLowerCase();
+  if (normalized === "::" || normalized === "::1" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe8") || normalized.startsWith("fe9") || normalized.startsWith("fea") || normalized.startsWith("feb") || normalized.startsWith("ff")) {
+    return true;
+  }
+  const mappedIpv4 = normalized.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/u)?.[1];
+  return mappedIpv4 ? isPrivateIpv4(mappedIpv4) : false;
+}
+
+function assertPublicAddress(address: string) {
+  const version = isIP(address);
+  if (version === 4 && isPrivateIpv4(address)) throw new BadRequestException("远程图片地址不安全");
+  if (version === 6 && isPrivateIpv6(address)) throw new BadRequestException("远程图片地址不安全");
+  if (version === 0) throw new BadRequestException("远程图片地址不安全");
+}
+
+async function assertSafeRemoteUrl(input: string) {
+  let url: URL;
+  try {
+    url = new URL(input.trim());
+  } catch {
+    throw new BadRequestException("远程图片地址无效");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new BadRequestException("远程图片只支持 HTTP 或 HTTPS");
+  }
+  if (url.username || url.password || (url.port && url.port !== "80" && url.port !== "443")) {
+    throw new BadRequestException("远程图片地址不安全");
+  }
+  const hostname = normalizeRemoteHostname(url.hostname);
+  if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname.endsWith(".internal")) {
+    throw new BadRequestException("远程图片地址不安全");
+  }
+  if (isIP(hostname)) {
+    assertPublicAddress(hostname);
+    return url;
+  }
+  let addresses: Array<{ address: string }>;
+  try {
+    addresses = await lookupDns(hostname, { all: true, verbatim: true });
+  } catch {
+    throw new BadRequestException("远程图片地址无法解析");
+  }
+  if (addresses.length === 0) throw new BadRequestException("远程图片地址无法解析");
+  addresses.forEach(item => assertPublicAddress(item.address));
+  return url;
+}
+
+function readRemoteResponse(url: URL) {
+  return new Promise<{ status: number; contentType: string; contentLength: number; location: string | null; buffer: Buffer | null }>((resolve, reject) => {
+    const client = url.protocol === "https:" ? https : http;
+    const request = client.get({
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port || undefined,
+      path: `${url.pathname}${url.search}`,
+      headers: {
+        accept: "image/jpeg,image/png,image/webp"
+      },
+      lookup(hostname, _options, callback) {
+        lookupDns(hostname, { all: true, verbatim: true })
+          .then(addresses => {
+            addresses.forEach(item => assertPublicAddress(item.address));
+            const address = addresses[0]?.address;
+            if (!address) throw new Error("remote address unavailable");
+            callback(null, address, isIP(address));
+          })
+          .catch(error => callback(error as Error, "", 0));
+      }
+    }, response => {
+      const status = response.statusCode ?? 0;
+      const contentType = Array.isArray(response.headers["content-type"])
+        ? response.headers["content-type"][0] ?? ""
+        : response.headers["content-type"] ?? "";
+      const contentLength = Number(response.headers["content-length"] ?? 0);
+      const location = Array.isArray(response.headers.location)
+        ? response.headers.location[0] ?? null
+        : response.headers.location ?? null;
+
+      if ((status >= 300 && status < 400) || status < 200 || status >= 300) {
+        response.resume();
+        response.once("end", () => resolve({ status, contentType, contentLength, location, buffer: null }));
+        return;
+      }
+      if (contentLength > maxImageBytes) {
+        response.destroy(new Error("remote image too large"));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on("data", chunk => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += buffer.length;
+        if (size > maxImageBytes) {
+          response.destroy(new Error("remote image too large"));
+          return;
+        }
+        chunks.push(buffer);
+      });
+      response.once("end", () => resolve({
+        status,
+        contentType,
+        contentLength,
+        location,
+        buffer: Buffer.concat(chunks)
+      }));
+      response.once("error", reject);
+    });
+    request.setTimeout(remoteImageTimeoutMs, () => request.destroy(new Error("remote image timeout")));
+    request.once("error", reject);
+  });
+}
+
+async function readRemoteImage(url: string) {
+  let nextUrl = url;
+  for (let redirectCount = 0; redirectCount <= maxRemoteRedirects; redirectCount += 1) {
+    const safeUrl = await assertSafeRemoteUrl(nextUrl);
+    let response: Awaited<ReturnType<typeof readRemoteResponse>>;
+    try {
+      response = await readRemoteResponse(safeUrl);
+    } catch (error) {
+      if (error instanceof Error && error.message === "remote image too large") {
+        throw new BadRequestException("远程图片大小不能超过 10 MB");
+      }
+      throw new BadRequestException("远程图片下载失败或超时");
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      if (!response.location || redirectCount === maxRemoteRedirects) throw new BadRequestException("远程图片重定向次数过多");
+      try {
+        nextUrl = new URL(response.location, safeUrl).toString();
+      } catch {
+        throw new BadRequestException("远程图片重定向地址无效");
+      }
+      continue;
+    }
+    if (response.status < 200 || response.status >= 300) throw new BadRequestException("远程图片下载失败");
+    const contentType = response.contentType.split(";", 1)[0]?.trim().toLowerCase() || "";
+    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+      throw new BadRequestException("远程地址返回的不是支持的图片");
+    }
+    if (response.contentLength > maxImageBytes) throw new BadRequestException("远程图片大小不能超过 10 MB");
+    if (!response.buffer?.length) throw new BadRequestException("远程图片内容为空");
+    return response.buffer;
+  }
+  throw new BadRequestException("远程图片下载失败");
+}
+
+type RemoteImageReader = (url: string) => Promise<Buffer>;
+
 @Injectable()
 export class AdminRecipeImageService {
-  constructor(private readonly assetStorage: AssetStorageService) {}
+  constructor(
+    private readonly assetStorage: AssetStorageService,
+    private readonly remoteImageReader: RemoteImageReader = readRemoteImage
+  ) {}
 
   buildPublicImageUrl(request: RequestLike, fileName: string) {
     return this.assetStorage.publicUrl(request, this.finalKey(fileName));
@@ -205,6 +388,12 @@ export class AdminRecipeImageService {
       storageKey,
       imageUrl: this.buildPublicImageUrl(request, fileName)
     };
+  }
+
+  async publishRemoteImage(request: RequestLike, scene: AdminRecipeImageScene, imageUrl: string) {
+    await assertSafeRemoteUrl(imageUrl);
+    const buffer = await this.remoteImageReader(imageUrl);
+    return this.publishImageBuffer(request, scene, buffer);
   }
 
   async discardTempImages(tempKeys: Iterable<string>) {

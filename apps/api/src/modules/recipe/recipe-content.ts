@@ -6,6 +6,7 @@ import type {
   RecipeAssistantStepPhase,
   RecipeContentSnapshot,
   RecipeDraftContentInput,
+  RecipeImportAssistantStepDraft,
   UUID
 } from "../../contracts/types";
 import { sizeOfJson } from "../../common/storage-ledger";
@@ -128,6 +129,7 @@ export function versionToContent(version: {
   duration: string | null;
   estimatedCalories?: number | null;
   tips: string | null;
+  toolsJson?: unknown;
   ingredientsJson: unknown;
   stepsJson: unknown;
 }): RecipeContentSnapshot {
@@ -140,6 +142,7 @@ export function versionToContent(version: {
     duration: version.duration as RecipeContentSnapshot["duration"],
     estimatedCalories: version.estimatedCalories ?? null,
     tips: version.tips,
+    tools: version.toolsJson ? fromJson<NonNullable<RecipeContentSnapshot["tools"]>>(version.toolsJson) : [],
     ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
     steps: steps.map(item => ({
       text: item.text,
@@ -159,6 +162,35 @@ function summarizeRecipeAssistantTitle(text: string, phase: RecipeAssistantStepP
   if (phase === "PREP") return `准备步骤 ${index + 1}`;
   if (phase === "SERVE") return `收尾步骤 ${index + 1}`;
   return `烹饪步骤 ${index + 1}`;
+}
+
+export function buildImportedRecipeAssistantSnapshot(steps: RecipeImportAssistantStepDraft[]): RecipeAssistantSnapshotBody {
+  const normalized = steps.map((item, index) => ({
+    order: index + 1,
+    phase: item.phase,
+    action: item.action,
+    title: item.title.trim(),
+    detail: item.detail.trim(),
+    imageUrl: item.imageUrl,
+    durationMinutes: item.durationMinutes,
+    durationText: item.durationText?.trim() || null
+  }));
+  const prepStepCount = normalized.filter(item => item.phase === "PREP").length;
+  const serveStepCount = normalized.filter(item => item.phase === "SERVE").length;
+  const durationValues = normalized
+    .map(item => item.durationMinutes)
+    .filter((value): value is number => value !== null && value > 0);
+  const totalMinutes = durationValues.reduce((sum, value) => sum + value, 0);
+  return {
+    summary: {
+      stepCount: normalized.length,
+      prepStepCount,
+      cookStepCount: normalized.length - prepStepCount - serveStepCount,
+      serveStepCount,
+      totalDurationText: durationValues.length ? formatRecipeAssistantDuration(totalMinutes) : null
+    },
+    steps: normalized
+  };
 }
 
 function resolveRecipeAssistantPhase(text: string, index: number, total: number): RecipeAssistantStepPhase {
@@ -191,9 +223,9 @@ function formatRecipeAssistantDuration(totalMinutes: number | null) {
   if (!totalMinutes || totalMinutes <= 0) return null;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours > 0 && minutes > 0) return `${hours}小时${minutes}分钟`;
-  if (hours > 0) return `${hours}小时`;
-  return `${minutes}分钟`;
+  if (hours > 0 && minutes > 0) return `约 ${hours} 小时${minutes} 分钟`;
+  if (hours > 0) return `约 ${hours} 小时`;
+  return `约 ${minutes} 分钟`;
 }
 
 type RecipeAssistantSnapshotBody = Omit<RecipeAssistantSnapshot, "generatedAt">;
@@ -215,9 +247,11 @@ export function buildRecipeAssistantSnapshot(content: RecipeContentSnapshot): Re
     steps.push({
       order: steps.length + 1,
       phase,
+      action: "OTHER",
       title: summarizeRecipeAssistantTitle(detail, phase, index),
       detail: detail || "按当前图片对应的步骤继续处理。",
       imageUrl: item.imageUrl ?? null,
+      durationMinutes,
       durationText: formatRecipeAssistantDuration(durationMinutes)
     });
   });

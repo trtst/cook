@@ -13,6 +13,7 @@ import {
 import { Prisma, type MealSlot } from "@prisma/client";
 import { recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
+import { inspirationRecipeWhere } from "../recipe/recipe-inspiration-owner";
 import { rateLimitService } from "../../common/rate-limit.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
@@ -1291,10 +1292,7 @@ export class MealService {
           status: "ACTIVE",
           OR: [
             { ownerId: userId },
-            {
-              ownerId: null,
-              inspirationCategoryId: { not: null }
-            }
+            inspirationRecipeWhere("ACTIVE")
           ]
         },
         include: {
@@ -3723,10 +3721,7 @@ export class MealService {
           status: "ACTIVE",
           OR: [
             { ownerId: userId },
-            {
-              ownerId: null,
-              inspirationCategoryId: { not: null }
-            }
+            inspirationRecipeWhere("ACTIVE")
           ]
         },
         include: {
@@ -3941,10 +3936,7 @@ export class MealService {
           status: "ACTIVE",
           OR: [
             { ownerId: userId },
-            {
-              ownerId: null,
-              inspirationCategoryId: { not: null }
-            }
+            inspirationRecipeWhere("ACTIVE")
           ]
         },
         include: {

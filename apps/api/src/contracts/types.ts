@@ -1410,6 +1410,10 @@ export interface RecipeStepSnapshot {
   imageUrl: string | null;
 }
 
+export interface RecipeToolSnapshot {
+  name: string;
+}
+
 export interface AdminRecipeStepInput {
   text: string;
   imageUrl: string | null;
@@ -1431,6 +1435,7 @@ export interface RecipeContentSnapshot {
   duration: RecipeDuration | null;
   estimatedCalories: number | null;
   tips: string | null;
+  tools?: RecipeToolSnapshot[];
   ingredients: RecipeIngredientSnapshot[];
   steps: RecipeStepSnapshot[];
 }
@@ -1440,9 +1445,11 @@ export type RecipeAssistantStepPhase = "PREP" | "COOK" | "SERVE";
 export interface RecipeAssistantStep {
   order: number;
   phase: RecipeAssistantStepPhase;
+  action?: RecipeImportAssistantAction;
   title: string;
   detail: string;
   imageUrl: string | null;
+  durationMinutes: number | null;
   durationText: string | null;
 }
 
@@ -1504,6 +1511,7 @@ export interface AdminRecipeContentInput {
   duration: RecipeDuration;
   estimatedCalories: number | null;
   tips: string | null;
+  tools?: RecipeToolSnapshot[];
   ingredients: RecipeIngredientInput[];
   steps: AdminRecipeStepInput[];
 }
@@ -1796,7 +1804,7 @@ export interface CreateAdminRecipeRequest {
   content: AdminRecipeContentInput;
 }
 
-export type RecipeImportSourceType = "MARKDOWN" | "EXCEL";
+export type RecipeImportSourceType = "JSON";
 export type RecipeImportJobStatus = "PENDING" | "RUNNING" | "READY" | "FAILED" | "COMPLETED";
 export type RecipeImportItemStatus = "PENDING_PARSE" | "NEEDS_FIX" | "READY" | "PUBLISHING" | "PUBLISHED" | "FAILED";
 
@@ -1815,9 +1823,70 @@ export interface RecipeImportImageSummary {
 
 export interface RecipeImportRawBody {
   sourcePath: string;
-  markdown: string;
+  jsonText: string;
   assetFolder: string;
   images: RecipeImportImageSummary[];
+}
+
+export interface RecipeImportToolDraft {
+  name: string;
+}
+
+export type RecipeImportTagCode =
+  | "MEAL_TYPE"
+  | "DISH_ROLE"
+  | "MAIN_PROTEIN_TYPE"
+  | "FLAVOR_PROFILE"
+  | "SPICE_LEVEL";
+
+export interface RecipeImportTagDraft {
+  tagCode: RecipeImportTagCode;
+  tagValue: string;
+}
+
+export type RecipeImportAssistantPhase = "PREP" | "COOK" | "SERVE";
+
+export type RecipeImportAssistantAction =
+  | "SHOP"
+  | "WASH"
+  | "SOAK"
+  | "THAW"
+  | "CUT"
+  | "SLICE"
+  | "DICE"
+  | "SHRED"
+  | "MINCE"
+  | "MARINATE"
+  | "BLANCH"
+  | "MEASURE"
+  | "MIX"
+  | "BOIL"
+  | "SIMMER"
+  | "STEAM"
+  | "STIR_FRY"
+  | "PAN_FRY"
+  | "DEEP_FRY"
+  | "BRAISE"
+  | "ROAST"
+  | "BAKE"
+  | "PRESSURE_COOK"
+  | "REDUCE"
+  | "SEASON"
+  | "PLATE"
+  | "GARNISH"
+  | "PORTION"
+  | "REST"
+  | "OTHER";
+
+export interface RecipeImportAssistantStepDraft {
+  order: number;
+  phase: RecipeImportAssistantPhase;
+  action: RecipeImportAssistantAction;
+  title: string;
+  detail: string;
+  imageUrl: string | null;
+  durationMinutes: number | null;
+  durationText: string | null;
 }
 
 export interface RecipeImportIngredientDraft {
@@ -1833,6 +1902,7 @@ export interface RecipeImportIngredientDraft {
 
 export interface RecipeImportStepDraft {
   text: string;
+  imageUrl?: string | null;
   imageKey: string | null;
   imageTempKey: string | null;
 }
@@ -1856,10 +1926,13 @@ export interface RecipeImportRecipeBody {
   baseServings: number | null;
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
-  estimatedCalories: number | null;
   tips: string | null;
+  coverImageUrl?: string | null;
   coverImageKey: string | null;
   coverImageTempKey: string | null;
+  tools?: RecipeImportToolDraft[];
+  tags?: RecipeImportTagDraft[];
+  assistantSteps?: RecipeImportAssistantStepDraft[];
   ingredients: RecipeImportIngredientDraft[];
   steps: RecipeImportStepDraft[];
 }
@@ -1917,12 +1990,6 @@ export interface RecipeImportItemDetail {
   version: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
-}
-
-export interface CreateRecipeImportJobRequest {
-  operationId: OperationId;
-  sourceType: "MARKDOWN";
-  inspirationCategoryId: UUID | null;
 }
 
 export interface UpdateRecipeImportItemRequest {

@@ -112,7 +112,7 @@ test("current user profile accepts only confirmed editable profile fields", asyn
   const validBirthDate = "1990-09-04";
 
   await assertValid(UpdateCurrentUserDto, {
-    nickname: "炊火记录员",
+    nickname: "晚餐记录员",
     cookNo: "cook520",
     bio: "喜欢记录家里的晚饭",
     gender: "FEMALE",
@@ -122,8 +122,10 @@ test("current user profile accepts only confirmed editable profile fields", asyn
   await assertInvalid(UpdateCurrentUserDto, { avatarUrl: "https://example.com/avatar.png" });
   await assertInvalid(UpdateCurrentUserDto, { nickname: null });
   await assertInvalid(UpdateCurrentUserDto, { nickname: "x" });
+  await assertInvalid(UpdateCurrentUserDto, { nickname: "炊火记用户" });
   await assertInvalid(UpdateCurrentUserDto, { cookNo: null });
   await assertInvalid(UpdateCurrentUserDto, { cookNo: "1234" });
+  await assertInvalid(UpdateCurrentUserDto, { cookNo: "abcde" });
   await assertInvalid(UpdateCurrentUserDto, { cookNo: "cook520_abcdefghijklmn" });
   await assertInvalid(UpdateCurrentUserDto, { cookNo: "cook no" });
   await assertInvalid(UpdateCurrentUserDto, { gender: "SECRET" });

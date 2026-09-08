@@ -29,7 +29,6 @@ import {
   CreateAdminRecipeDto,
   CreateAdminMedalTemplateDto,
   CreateAdminUserDto,
-  CreateRecipeImportMarkdownJobDto,
   DeleteAdminIngredientCategoryDto,
   DeleteAdminIngredientDto,
   DeleteAdminPendingItemDto,
@@ -104,7 +103,14 @@ import {
   RecipeDraftSummaryModel,
   UserProfileModel
 } from "../../contracts/openapi";
-import type { AdminRecipeContentInput, RecipeImportRecipeBody, UnitType } from "../../contracts/types";
+import type {
+  AdminRecipeContentInput,
+  RecipeImportAssistantAction,
+  RecipeImportAssistantPhase,
+  RecipeImportRecipeBody,
+  RecipeImportTagCode,
+  UnitType
+} from "../../contracts/types";
 import type { MedalImageType } from "../user/medal-image.service";
 import { MedalService } from "../user/medal.service";
 import { AdminService } from "../admin/admin.service";
@@ -150,10 +156,22 @@ function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody
     baseServings: content.baseServings ?? null,
     difficulty: content.difficulty as RecipeImportRecipeBody["difficulty"],
     duration: content.duration as RecipeImportRecipeBody["duration"],
-    estimatedCalories: content.estimatedCalories ?? null,
     tips: content.tips,
+    coverImageUrl: content.coverImageUrl ?? null,
     coverImageKey: content.coverImageKey,
     coverImageTempKey: content.coverImageTempKey,
+    tools: content.tools.map(item => ({ name: item.name })),
+    tags: content.tags.map(item => ({ tagCode: item.tagCode as RecipeImportTagCode, tagValue: item.tagValue })),
+    assistantSteps: content.assistantSteps.map(item => ({
+      order: item.order,
+      phase: item.phase as RecipeImportAssistantPhase,
+      action: item.action as RecipeImportAssistantAction,
+      title: item.title,
+      detail: item.detail,
+      imageUrl: item.imageUrl,
+      durationMinutes: item.durationMinutes,
+      durationText: item.durationText
+    })),
     ingredients: content.ingredients.map(item => ({
       line: item.line,
       ingredientName: item.ingredientName,
@@ -166,6 +184,7 @@ function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody
     })),
     steps: content.steps.map(item => ({
       text: item.text,
+      imageUrl: item.imageUrl ?? null,
       imageKey: item.imageKey ?? null,
       imageTempKey: item.imageTempKey ?? null
     }))
@@ -442,25 +461,20 @@ export class AdminController {
       .then(result => ok(result));
   }
 
-  @Post("recipe-import-jobs/markdown")
+  @Post("recipe-import-jobs/json")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiIdempotencyKey()
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
   @ApiConsumes("multipart/form-data")
-  @ApiOkModel(RecipeImportJobModel, "后台创建 markdown 导入任务")
-  createRecipeImportJob(
+  @ApiOkModel(RecipeImportJobModel, "后台创建 recipe.import.v1 JSON 导入任务")
+  createRecipeImportJsonJob(
     @Req() request: RequestWithAdmin,
     @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateRecipeImportMarkdownJobDto,
     @UploadedFile() file?: { originalname?: string; buffer?: Buffer; size?: number }
   ) {
     return this.adminService
-      .createRecipeImportJob(file ?? {}, request.admin.adminId, {
-        operationId,
-        sourceType: "MARKDOWN",
-        inspirationCategoryId: body.inspirationCategoryId ?? null
-      })
+      .createRecipeImportJob(file ?? {}, request.admin.adminId, operationId)
       .then(result => ok(result));
   }
 

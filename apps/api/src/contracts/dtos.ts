@@ -301,13 +301,14 @@ export class UpdateCurrentUserDto {
   @MinLength(2)
   @MaxLength(24)
   @Matches(/^[^@<>/]+$/)
+  @Matches(/^(?!.*炊火).*$/)
   nickname?: string;
 
-  @ApiPropertyOptional({ example: "cook520", minLength: 5, maxLength: 20 })
+  @ApiPropertyOptional({ example: "cook520", minLength: 6, maxLength: 20 })
   @ValidateIf((_, value) => value !== undefined)
   @Transform(({ value }) => trimString(value))
   @IsString()
-  @MinLength(5)
+  @MinLength(6)
   @MaxLength(20)
   @Matches(/^[A-Za-z0-9_]+$/)
   cookNo?: string;
@@ -3166,16 +3167,6 @@ export class RecipeImportItemQueryDto extends PageQueryDto {
   status?: "PENDING_PARSE" | "NEEDS_FIX" | "READY" | "PUBLISHING" | "PUBLISHED" | "FAILED";
 }
 
-export class CreateRecipeImportMarkdownJobDto {
-  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
-  @IsOptional()
-  @ValidateIf((_object, value) => value !== null && value !== undefined)
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  inspirationCategoryId?: number | null;
-}
-
 export class RecipeImportIssueDto {
   @ApiPropertyOptional({ nullable: true })
   @IsDefined()
@@ -3255,12 +3246,94 @@ export class RecipeImportIngredientDto {
   note!: string | null;
 }
 
+export class RecipeImportToolDto {
+  @ApiProperty({ maxLength: 64 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+}
+
+export class RecipeImportTagDto {
+  @ApiProperty({ enum: ["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] })
+  @IsIn(["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"])
+  tagCode!: string;
+
+  @ApiProperty({ maxLength: 64 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  tagValue!: string;
+}
+
+export class RecipeImportAssistantStepDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  order!: number;
+
+  @ApiProperty({ enum: ["PREP", "COOK", "SERVE"] })
+  @IsIn(["PREP", "COOK", "SERVE"])
+  phase!: string;
+
+  @ApiProperty({ enum: ["SHOP", "WASH", "SOAK", "THAW", "CUT", "SLICE", "DICE", "SHRED", "MINCE", "MARINATE", "BLANCH", "MEASURE", "MIX", "BOIL", "SIMMER", "STEAM", "STIR_FRY", "PAN_FRY", "DEEP_FRY", "BRAISE", "ROAST", "BAKE", "PRESSURE_COOK", "REDUCE", "SEASON", "PLATE", "GARNISH", "PORTION", "REST", "OTHER"] })
+  @IsIn(["SHOP", "WASH", "SOAK", "THAW", "CUT", "SLICE", "DICE", "SHRED", "MINCE", "MARINATE", "BLANCH", "MEASURE", "MIX", "BOIL", "SIMMER", "STEAM", "STIR_FRY", "PAN_FRY", "DEEP_FRY", "BRAISE", "ROAST", "BAKE", "PRESSURE_COOK", "REDUCE", "SEASON", "PLATE", "GARNISH", "PORTION", "REST", "OTHER"])
+  action!: string;
+
+  @ApiProperty({ maxLength: 120 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(120)
+  title!: string;
+
+  @ApiProperty({ maxLength: 2000 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  detail!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  imageUrl!: string | null;
+
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  durationMinutes!: number;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 64 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(64)
+  durationText!: string | null;
+}
+
 export class RecipeImportStepDto {
   @ApiProperty({ maxLength: 2000 })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MaxLength(2000)
   text!: string;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  imageUrl!: string | null;
 
   @ApiPropertyOptional({ nullable: true, maxLength: 128 })
   @IsDefined()
@@ -3323,15 +3396,6 @@ export class RecipeImportRecipeBodyDto {
   @IsIn(["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"])
   duration!: string | null;
 
-  @ApiPropertyOptional({ nullable: true, minimum: 0, maximum: 20000 })
-  @IsDefined()
-  @ValidateIf((_object, value) => value !== null)
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  @Max(20000)
-  estimatedCalories!: number | null;
-
   @ApiPropertyOptional({ nullable: true, maxLength: 1000 })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
@@ -3355,6 +3419,36 @@ export class RecipeImportRecipeBodyDto {
   @IsString()
   @MaxLength(128)
   coverImageTempKey!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  coverImageUrl!: string | null;
+
+  @ApiProperty({ type: [RecipeImportToolDto] })
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeImportToolDto)
+  tools!: RecipeImportToolDto[];
+
+  @ApiProperty({ type: [RecipeImportTagDto] })
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeImportTagDto)
+  tags!: RecipeImportTagDto[];
+
+  @ApiProperty({ type: [RecipeImportAssistantStepDto] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => RecipeImportAssistantStepDto)
+  assistantSteps!: RecipeImportAssistantStepDto[];
 
   @ApiProperty({ type: [RecipeImportIngredientDto] })
   @IsArray()

@@ -9,6 +9,7 @@ import {
 import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
+import { inspirationRecipeWhere } from "./recipe-inspiration-owner";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
@@ -163,6 +164,7 @@ type RecipeViewHistoryRow = Prisma.RecipeViewHistoryGetPayload<{
     recipe: {
       select: {
         ownerId: true;
+        isInspiration: true;
         inspirationCategoryId: true;
         status: true;
         title: true;
@@ -205,7 +207,7 @@ function toRecipeViewHistoryItem(row: RecipeViewHistoryRow, userId: UUID): Recip
   const isAvailable = Boolean(
     recipe &&
       ((row.sourceType === "MY" && recipe.ownerId === userId && activeRecipeStatuses.includes(recipe.status)) ||
-        (row.sourceType === "INSPIRATION" && recipe.ownerId === null && recipe.inspirationCategoryId !== null && recipe.status === "ACTIVE"))
+        (row.sourceType === "INSPIRATION" && recipe.isInspiration && recipe.inspirationCategoryId !== null && recipe.status === "ACTIVE"))
   );
 
   return {
@@ -1503,12 +1505,13 @@ export class RecipeService {
           id: recipeId,
           OR: [
             { ownerId: userId, status: { in: activeRecipeStatuses } },
-            { ownerId: null, inspirationCategoryId: { not: null }, status: "ACTIVE" }
+            inspirationRecipeWhere("ACTIVE")
           ]
         },
         select: {
           id: true,
           ownerId: true,
+          isInspiration: true,
           inspirationCategoryId: true,
           title: true,
           coverImageUrl: true,
@@ -1541,6 +1544,7 @@ export class RecipeService {
           recipe: {
             select: {
               ownerId: true,
+              isInspiration: true,
               inspirationCategoryId: true,
               status: true,
               title: true,
@@ -1586,6 +1590,7 @@ export class RecipeService {
           recipe: {
             select: {
               ownerId: true,
+              isInspiration: true,
               inspirationCategoryId: true,
               status: true,
               title: true,
@@ -1718,8 +1723,7 @@ export class RecipeService {
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
           id: sourceRecipeId,
-          ownerId: null,
-          status: "ACTIVE"
+          ...inspirationRecipeWhere("ACTIVE")
         },
         include: {
           owner: { select: { uid: true, nickname: true } },
@@ -2083,8 +2087,7 @@ export class RecipeService {
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
           id: sourceRecipeId,
-          ownerId: null,
-          status: "ACTIVE"
+          ...inspirationRecipeWhere("ACTIVE")
         },
         include: {
           inspirationCategory: true,
@@ -2247,9 +2250,7 @@ export class RecipeService {
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const where: Prisma.RecipeWhereInput = {
-      ownerId: null,
-      inspirationCategoryId: { not: null },
-      status: "ACTIVE",
+      ...inspirationRecipeWhere("ACTIVE"),
       ...(categoryId ? { inspirationCategoryId: categoryId } : {}),
       ...(keyword ? { searchText: { contains: buildSearchKey(keyword) } } : {}),
       ...(difficulty || duration
@@ -2296,9 +2297,7 @@ export class RecipeService {
     const recipe = await this.prisma.recipe.findFirst({
       where: {
         id: recipeId,
-        ownerId: null,
-        inspirationCategoryId: { not: null },
-        status: "ACTIVE"
+        ...inspirationRecipeWhere("ACTIVE")
       },
       include: {
         owner: { select: { uid: true, nickname: true } },
@@ -2323,7 +2322,7 @@ export class RecipeService {
         where: {
           id: recipeId,
           OR: [
-            { ownerId: null, inspirationCategoryId: { not: null }, status: "ACTIVE" },
+            inspirationRecipeWhere("ACTIVE"),
             { ownerId: userId, status: { in: activeRecipeStatuses } }
           ]
         }
@@ -3108,6 +3107,7 @@ export class RecipeService {
       duration: content.duration ?? undefined,
       estimatedCalories: content.estimatedCalories,
       tips: content.tips,
+      toolsJson: toJson(content.tools ?? []),
       ingredientsJson: toJson(content.ingredients),
       stepsJson: toJson(content.steps),
       imagesJson: toJson(images),
@@ -3233,9 +3233,7 @@ export class RecipeService {
 
     const candidates = await tx.recipe.findMany({
       where: {
-        ownerId: null,
-        inspirationCategoryId: { not: null },
-        status: "ACTIVE",
+        ...inspirationRecipeWhere("ACTIVE"),
         searchText: recipe.searchText,
         coverImageUrl: normalizeRecipeImageUrl(recipe.coverImageUrl)
       },
