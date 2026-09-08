@@ -113,7 +113,7 @@ const maxLength = computed(() => (fieldType.value === "bio" ? 80 : fieldType.val
 const inputPlaceholder = computed(() => (fieldType.value === "cookNo" ? "请输入炊火号" : "请输入名字"));
 const ruleText = computed(() => {
   if (fieldType.value === "nickname") return "请设置 2-24 个字符，不包括 @<>/ 等无效字符。";
-  if (fieldType.value === "cookNo") return "炊火号为 5-20 位，仅支持字母、数字和下划线。只能设置一次，请谨慎修改。";
+  if (fieldType.value === "cookNo") return "炊火号为 6-20 位，仅支持字母、数字和下划线。只能设置一次，请谨慎修改。";
   return "最多 80 个字符。";
 });
 
@@ -207,10 +207,11 @@ function fieldPayload() {
   if (fieldType.value === "nickname") {
     if (value.length < 2) return toastAndNull("名字至少 2 个字符");
     if (/[@<>/]/.test(value)) return toastAndNull("名字包含无效字符");
+    if (/炊火/.test(value)) return toastAndNull("名字不能包含炊火相关名称");
     return { nickname: value };
   }
   if (fieldType.value === "cookNo") {
-    if (!/^[A-Za-z0-9_]{5,20}$/.test(value)) return toastAndNull("炊火号格式不正确");
+    if (!/^[A-Za-z0-9_]{6,20}$/.test(value)) return toastAndNull("炊火号格式不正确");
     return { cookNo: value };
   }
   if (fieldType.value === "bio") return { bio: value || null };
