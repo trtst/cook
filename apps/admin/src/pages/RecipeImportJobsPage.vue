@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { FolderAdd } from "@element-plus/icons-vue";
 import { recipeApi, type RecipeImportJobSummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
@@ -25,10 +25,10 @@ const query = reactive({
 });
 
 const form = reactive({
-  file: null as File | null
+  files: [] as File[]
 });
 
-const selectedFileName = computed(() => form.file?.name || "未选择文件");
+const selectedFileName = computed(() => form.files.length ? form.files.map(file => file.name).join("、") : "未选择文件");
 useAdminHeaderRefresh(() => {
   void loadPage();
 });
@@ -64,7 +64,7 @@ function handleStatusChange() {
 }
 
 function openDialog() {
-  form.file = null;
+  form.files = [];
   dialogVisible.value = true;
 }
 
@@ -74,20 +74,20 @@ function chooseFile() {
 
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
-  form.file = input.files?.[0] ?? null;
+  form.files = Array.from(input.files ?? []);
   input.value = "";
 }
 
 async function submitImport() {
-  if (!form.file) {
-    ElMessage.error("请选择 JSON 或 zip 文件");
+  if (!form.files.length) {
+    ElMessage.error("请选择至少一个 JSON 文件");
     return;
   }
   saving.value = true;
   try {
     const job = await recipeApi.createImportJob({
       operationId: createOperationId(),
-      file: form.file,
+      files: form.files,
     });
     ElMessage.success("导入任务已创建");
     dialogVisible.value = false;
@@ -101,6 +101,27 @@ async function submitImport() {
 
 function openJob(jobId: UUID) {
   void router.push(`/recipes/imports/${jobId}`);
+}
+
+async function removeJob(job: RecipeImportJobSummary) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除导入任务“${job.sourceName}”？只删除导入记录，不删除已发布菜谱。`,
+      "删除导入任务",
+      {
+        type: "warning",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消"
+      }
+    );
+    await recipeApi.deleteImportJob(job.id, createOperationId());
+    ElMessage.success("导入任务已删除");
+    if (jobs.value.length === 1 && query.page > 1) query.page -= 1;
+    await loadJobs();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除导入任务失败");
+  }
 }
 
 onMounted(() => {
@@ -119,7 +140,7 @@ onMounted(() => {
         <el-option label="已完成" value="COMPLETED" />
         <el-option label="失败" value="FAILED" />
       </el-select>
-      <el-button type="primary" :icon="FolderAdd" @click="openDialog">导入 JSON / zip</el-button>
+      <el-button type="primary" :icon="FolderAdd" @click="openDialog">批量导入 JSON</el-button>
     </div>
 
     <div v-loading="loading" class="table-panel">
@@ -141,9 +162,10 @@ onMounted(() => {
             {{ formatDateTime(row.updatedAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" @click="openJob(row.id)">查看</el-button>
+            <el-button text type="danger" :disabled="row.status === 'RUNNING'" @click="removeJob(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -165,9 +187,9 @@ onMounted(() => {
         <el-form-item label="导入文件" required>
           <div class="upload-box">
             <div class="upload-box__name">{{ selectedFileName }}</div>
-            <div class="upload-box__hint">支持 `.json` 或 `.zip`。zip 内读取 JSON 文件。</div>
+            <div class="upload-box__hint">可同时选择多个 `.json` 文件，统一进入待审核系统项。</div>
             <el-button @click="chooseFile">选择文件</el-button>
-            <input ref="fileInput" class="hidden-input" type="file" accept=".json,.zip" @change="handleFileChange" />
+            <input ref="fileInput" class="hidden-input" type="file" accept=".json" multiple @change="handleFileChange" />
           </div>
         </el-form-item>
       </el-form>

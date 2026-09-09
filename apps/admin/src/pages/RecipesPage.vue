@@ -15,6 +15,8 @@ const loading = ref(false);
 const categories = ref<AdminInspirationCategorySummary[]>([]);
 const recipes = ref<AdminRecipeSummary[]>([]);
 const total = ref(0);
+const blockedRecipeCount = ref(0);
+const blockedView = ref(false);
 let requestId = 0;
 
 const query = reactive({
@@ -26,8 +28,10 @@ const query = reactive({
 });
 
 const allRecipeCount = computed(() => categories.value.reduce((sum, item) => sum + item.recipeCount, 0));
-const isAllView = computed(() => !query.categoryId);
+const isAllView = computed(() => !query.categoryId && !blockedView.value);
+const isBlockedView = computed(() => blockedView.value);
 const currentScopeName = computed(() => {
+  if (blockedView.value) return "下架菜谱";
   if (!query.categoryId) return "全部系统菜谱";
   return categories.value.find(item => item.id === query.categoryId)?.name || "当前分类";
 });
@@ -40,6 +44,7 @@ async function loadCategories() {
   categories.value = await recipeApi.listInspirationCategories();
   if (query.categoryId && !categories.value.some(item => item.id === query.categoryId)) {
     query.categoryId = "";
+    blockedView.value = false;
   }
 }
 
@@ -65,9 +70,14 @@ async function loadRecipes() {
   }
 }
 
+async function loadBlockedCount() {
+  const result = await recipeApi.list({ page: 1, pageSize: 1, status: "BLOCKED" });
+  blockedRecipeCount.value = result.total;
+}
+
 async function loadPage() {
   try {
-    await loadCategories();
+    await Promise.all([loadCategories(), loadBlockedCount()]);
     await loadRecipes();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "加载系统菜谱失败");
@@ -80,11 +90,28 @@ function search() {
 }
 
 async function selectCategory(categoryId: UUID | "") {
-  if (query.categoryId === categoryId) return;
+  if (query.categoryId === categoryId && !blockedView.value) return;
+  blockedView.value = false;
   query.categoryId = categoryId;
+  query.status = "";
   query.page = 1;
   query.keyword = "";
   await loadRecipes();
+}
+
+async function selectBlockedView() {
+  if (blockedView.value) return;
+  blockedView.value = true;
+  query.categoryId = "";
+  query.status = "BLOCKED";
+  query.page = 1;
+  query.keyword = "";
+  await loadRecipes();
+}
+
+function handleStatusChange() {
+  blockedView.value = false;
+  search();
 }
 
 async function blockRecipe(recipeId: UUID) {
@@ -114,6 +141,30 @@ async function unblockRecipe(recipeId: UUID) {
   }
 }
 
+async function deleteBlockedRecipe(row: AdminRecipeSummary) {
+  try {
+    await ElMessageBox.confirm(
+      `确认物理删除下架菜谱“${row.title}”？删除后不可恢复，也不会继续出现在下架分类。`,
+      "删除下架菜谱",
+      {
+        type: "warning",
+        confirmButtonText: "物理删除",
+        cancelButtonText: "取消"
+      }
+    );
+    await recipeApi.deleteBlocked(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    ElMessage.success("下架菜谱已物理删除");
+    if (recipes.value.length === 1 && query.page > 1) query.page -= 1;
+    await loadPage();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除下架菜谱失败");
+  }
+}
+
 function openDetail(recipeId: UUID) {
   void router.push(`/recipes/${recipeId}`);
 }
@@ -131,7 +182,7 @@ onMounted(() => {
   <section class="page-stack">
     <div class="toolbar-panel recipe-toolbar">
       <div class="recipe-toolbar__group">
-        <el-select v-model="query.status" class="toolbar-select" placeholder="状态" clearable @change="search">
+        <el-select v-model="query.status" class="toolbar-select" placeholder="状态" clearable :disabled="isBlockedView" @change="handleStatusChange">
           <el-option :label="formatStatusText('ACTIVE')" value="ACTIVE" />
           <el-option :label="formatStatusText('RECYCLED')" value="RECYCLED" />
           <el-option :label="formatStatusText('BLOCKED')" value="BLOCKED" />
@@ -174,6 +225,14 @@ onMounted(() => {
           <span class="category-item__name">{{ item.name }}</span>
           <span class="category-item__count">{{ item.recipeCount }}</span>
         </span>
+        <span
+          class="category-item"
+          :class="{ 'category-item--active': isBlockedView }"
+          @click="selectBlockedView"
+        >
+          <span class="category-item__name">下架</span>
+          <span class="category-item__count">{{ blockedRecipeCount }}</span>
+        </span>
       </div>
     </div>
 
@@ -196,7 +255,10 @@ onMounted(() => {
           <div class="recipe-card__actions">
             <el-button link type="primary" @click="openDetail(row.id)">详情</el-button>
             <el-button v-if="row.status === 'ACTIVE'" link type="danger" @click="blockRecipe(row.id)">下架</el-button>
-            <el-button v-else-if="row.status === 'BLOCKED'" link type="primary" @click="unblockRecipe(row.id)">恢复</el-button>
+            <template v-else-if="row.status === 'BLOCKED'">
+              <el-button link type="primary" @click="unblockRecipe(row.id)">恢复</el-button>
+              <el-button link type="danger" @click="deleteBlockedRecipe(row)">删除</el-button>
+            </template>
           </div>
         </article>
         <el-empty v-if="!loading && recipes.length === 0" description="当前条件下暂无系统菜谱" />

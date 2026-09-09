@@ -5,6 +5,7 @@ export interface AdminRecipeSummary {
   title: string;
   coverImageUrl: string | null;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  version: number;
   inspirationCategoryId: UUID;
   inspirationCategoryName: string;
   updatedAt: IsoDateTime;
@@ -49,6 +50,7 @@ export interface AdminRecipeContentInput {
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
   estimatedCalories: number | null;
   tips: string | null;
+  tools?: Array<{ name: string }>;
   ingredients: RecipeIngredientInput[];
   steps: Array<{
     text: string;
@@ -99,6 +101,7 @@ export interface AdminRecipeDetail {
     steps: Array<{
       order: number;
       phase: "PREP" | "COOK" | "SERVE";
+      action?: string;
       title: string;
       detail: string;
       imageUrl: string | null;
@@ -106,6 +109,34 @@ export interface AdminRecipeDetail {
       durationText: string | null;
     }>;
   } | null;
+  wiki: {
+    tags: Array<{
+      tagCode: string;
+      tagValue: string;
+      displayValue: string;
+      source: "AUTO" | "USER" | "OPS" | "AI";
+      status: "CONFIRMED" | "CANDIDATE" | "UNMAPPED" | "NEEDS_REVIEW";
+      confidence: number | null;
+      sortOrder: number | null;
+      isLocked: boolean;
+    }>;
+    nutrition: {
+      status: "COMPLETE" | "ESTIMATED" | "INSUFFICIENT" | "NONE";
+      qualityLabel: "估算较完整" | "结果为估算" | "当前数据不足" | null;
+      perServing: { calories: number | null; protein: number | null; fat: number | null; carbohydrate: number | null } | null;
+      perRecipe: { calories: number | null; protein: number | null; fat: number | null; carbohydrate: number | null } | null;
+      calculatedAt: IsoDateTime | null;
+      sourceVersion: string | null;
+      coverageRate: number | null;
+    };
+    qualityCards: Array<{
+      code: "CONTENT" | "STRUCTURED_DATA" | "BUSINESS_TAGS" | "NUTRITION" | "ASSISTANT" | "FRONTEND_CONSUMPTION" | "RANDOM_MENU";
+      title: string;
+      status: "COMPLETE" | "INCOMPLETE";
+      score: number;
+      blockingReasons: string[];
+    }>;
+  };
   content: {
     name: string;
     story: string | null;
@@ -114,6 +145,7 @@ export interface AdminRecipeDetail {
     duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
     estimatedCalories: number | null;
     tips: string | null;
+    tools: Array<{ name: string }>;
     ingredients: Array<{
       ingredientId: UUID;
       ingredientName: string;
@@ -176,6 +208,11 @@ export interface InspirationCategoryPayload {
 }
 
 export interface UpdateInspirationCategoryPayload extends InspirationCategoryPayload {
+  expectedVersion: number;
+}
+
+export interface DeleteInspirationCategoryPayload {
+  operationId: OperationId;
   expectedVersion: number;
 }
 
@@ -378,7 +415,7 @@ export interface RecipeImportItemQuery extends PageQuery {
 
 export interface CreateRecipeImportJobPayload {
   operationId: OperationId;
-  file: File;
+  files: File[];
 }
 
 export interface UpdateRecipeImportItemPayload {
@@ -446,7 +483,7 @@ export const recipeApi = {
   },
   createImportJob(body: CreateRecipeImportJobPayload) {
     const formData = new FormData();
-    formData.append("file", body.file);
+    body.files.forEach(file => formData.append("files", file));
     return uploadForm<RecipeImportJobSummary>("/admin/recipe-import-jobs/json", formData, {
       idempotencyKey: body.operationId
     });
@@ -459,6 +496,12 @@ export const recipeApi = {
   getImportJobDetail(jobId: UUID, query: RecipeImportItemQuery) {
     return requestData<RecipeImportJobDetail>(`/admin/recipe-import-jobs/${encodeURIComponent(String(jobId))}`, {
       query: { ...query }
+    });
+  },
+  deleteImportJob(jobId: UUID, operationId: OperationId) {
+    return requestData<{ jobId: UUID; deletedAt: IsoDateTime }>(`/admin/recipe-import-jobs/${encodeURIComponent(String(jobId))}`, {
+      method: "DELETE",
+      idempotencyKey: operationId
     });
   },
   getImportItemDetail(itemId: UUID) {
@@ -506,6 +549,13 @@ export const recipeApi = {
       idempotencyKey: operationId
     });
   },
+  deleteInspirationCategory(categoryId: UUID, body: DeleteInspirationCategoryPayload) {
+    return requestData<{ categoryId: UUID; deletedAt: IsoDateTime }>(`/admin/inspiration-categories/${encodeURIComponent(String(categoryId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
+    });
+  },
   reorderInspirationCategories(operationId: OperationId, items: ReorderItem[]) {
     return requestData<AdminInspirationCategorySummary[]>("/admin/inspiration-categories/reorder", {
       method: "POST",
@@ -524,6 +574,13 @@ export const recipeApi = {
     return requestData<AdminRecipeSummary>(`/admin/recipes/${encodeURIComponent(String(recipeId))}/unblock`, {
       method: "POST",
       idempotencyKey: operationId
+    });
+  },
+  deleteBlocked(recipeId: UUID, body: { operationId: OperationId; expectedVersion: number }) {
+    return requestData<{ recipeId: UUID; deletedAt: IsoDateTime }>(`/admin/recipes/${encodeURIComponent(String(recipeId))}`, {
+      method: "DELETE",
+      body: { expectedVersion: body.expectedVersion },
+      idempotencyKey: body.operationId
     });
   },
   resolveReport(reportId: UUID, operationId: OperationId, resolutionNote?: string | null) {

@@ -50,6 +50,10 @@ interface EditStepRow {
   previewUrl: string | null;
 }
 
+interface EditToolRow {
+  name: string;
+}
+
 interface EditFormState {
   inspirationCategoryId: UUID | "";
   coverImageUrl: string | null;
@@ -62,6 +66,7 @@ interface EditFormState {
     duration: Duration;
     estimatedCalories: number | null;
     tips: string;
+    tools: EditToolRow[];
     ingredients: EditIngredientRow[];
     steps: EditStepRow[];
   };
@@ -87,6 +92,52 @@ const optionLoading = ref(false);
 const saving = ref(false);
 const imageSaving = ref(false);
 const assistantSaving = ref(false);
+const wikiTagCodeText: Record<string, string> = {
+  MEAL_TYPE: "餐次",
+  DISH_ROLE: "菜品角色",
+  MAIN_PROTEIN_TYPE: "主蛋白",
+  PRIMARY_INGREDIENT: "主要食材",
+  FLAVOR_PROFILE: "风味",
+  SPICE_LEVEL: "辣度"
+};
+const wikiSourceText: Record<string, string> = { AUTO: "自动派生", USER: "用户", OPS: "后台确认", AI: "AI 候选" };
+const wikiTagStatusText: Record<string, string> = {
+  CONFIRMED: "已确认",
+  CANDIDATE: "候选",
+  UNMAPPED: "未映射",
+  NEEDS_REVIEW: "待复核"
+};
+const wikiQualityStatusText: Record<string, string> = { COMPLETE: "已完成", INCOMPLETE: "待补充" };
+const wikiNutritionStatusText: Record<string, string> = {
+  COMPLETE: "估算较完整",
+  ESTIMATED: "结果为估算",
+  INSUFFICIENT: "当前数据不足",
+  NONE: "暂无营养分析"
+};
+
+function wikiTagCodeTextOf(code: string) {
+  return wikiTagCodeText[code] ?? code;
+}
+
+function wikiSourceTextOf(source: string) {
+  return wikiSourceText[source] ?? source;
+}
+
+function wikiTagStatusTextOf(status: string) {
+  return wikiTagStatusText[status] ?? status;
+}
+
+function wikiQualityStatusTextOf(status: string) {
+  return wikiQualityStatusText[status] ?? status;
+}
+
+function wikiNutritionStatusTextOf(status: string) {
+  return wikiNutritionStatusText[status] ?? status;
+}
+
+function nutritionValue(value: number | null | undefined) {
+  return value === null ? "-" : String(value);
+}
 const editVisible = ref(false);
 const cropDialogVisible = ref(false);
 
@@ -140,6 +191,7 @@ const form = reactive<EditFormState>({
     duration: "WITHIN_15",
     estimatedCalories: null,
     tips: "",
+    tools: [],
     ingredients: [],
     steps: []
   }
@@ -322,6 +374,7 @@ function resetFormFromDetail() {
   form.content.duration = detail.value.content.duration;
   form.content.estimatedCalories = detail.value.content.estimatedCalories;
   form.content.tips = detail.value.content.tips ?? "";
+  form.content.tools = detail.value.content.tools.map(item => ({ name: item.name }));
   form.content.ingredients = detail.value.content.ingredients.map(item => ({
     ingredientId: item.ingredientId,
     amount:
@@ -361,6 +414,14 @@ function addIngredient() {
       unitId: unitOptionList.value[0]?.id ?? ""
     }
   });
+}
+
+function addTool() {
+  form.content.tools.push({ name: "" });
+}
+
+function removeTool(index: number) {
+  form.content.tools.splice(index, 1);
 }
 
 function addStep() {
@@ -464,6 +525,7 @@ function buildPayload(): UpdateAdminRecipePayload | null {
       duration: form.content.duration,
       estimatedCalories: form.content.estimatedCalories,
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
+      tools: form.content.tools.map(item => ({ name: item.name.trim() })).filter(item => item.name),
       ingredients,
       steps: form.content.steps.map(item => ({
         text: item.text,
@@ -739,49 +801,162 @@ onBeforeUnmount(() => {
 
     <div v-loading="loading" class="page-stack">
       <template v-if="detail">
-        <div class="table-panel">
+        <section class="table-panel detail-section detail-section--basic">
           <div class="panel-heading">
-            <h2>{{ detail.title }}</h2>
+            <h2>基本信息</h2>
           </div>
-          <div class="detail-cover">
-            <img v-if="detail.coverImageUrl" :src="detail.coverImageUrl" alt="系统菜谱封面图" class="detail-cover__image" />
-            <div v-else class="detail-cover__empty">当前未上传封面图</div>
-          </div>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="来源">{{ detail.ownerUid === null ? "系统" : "个人" }}</el-descriptions-item>
-            <el-descriptions-item label="状态">{{ formatStatusText(detail.status) }}</el-descriptions-item>
-            <el-descriptions-item label="持有人 UID">{{ detail.ownerUid ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="系统菜谱分类">{{ detail.inspirationCategory?.name ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="个人分类">{{ detail.personalCategory?.name ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="当前版本 ID">{{ detail.contentVersionId }}</el-descriptions-item>
-            <el-descriptions-item label="预估卡路里">{{ detail.content.estimatedCalories ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="举报数">{{ detail.reportCount }}</el-descriptions-item>
-            <el-descriptions-item label="下架原因">{{ detail.blockedReason ?? "-" }}</el-descriptions-item>
-            <el-descriptions-item label="收藏数">{{ detail.collectCount }}</el-descriptions-item>
-            <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createdAt) }}</el-descriptions-item>
-            <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updatedAt) }}</el-descriptions-item>
-          </el-descriptions>
-        </div>
 
-        <div class="table-panel">
+          <div class="detail-basic-grid">
+            <div class="detail-basic-media">
+              <div class="detail-cover">
+                <img v-if="detail.coverImageUrl" :src="detail.coverImageUrl" alt="系统菜谱封面图" class="detail-cover__image" />
+                <div v-else class="detail-cover__empty">当前未上传封面图</div>
+              </div>
+            </div>
+
+            <div class="detail-basic-content">
+              <div class="detail-basic-title">
+                <h3>{{ detail.title }}</h3>
+              </div>
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="来源">{{ detail.ownerUid === null ? "系统" : "个人" }}</el-descriptions-item>
+                <el-descriptions-item label="状态">{{ formatStatusText(detail.status) }}</el-descriptions-item>
+                <el-descriptions-item label="持有人 UID">{{ detail.ownerUid ?? "-" }}</el-descriptions-item>
+                <el-descriptions-item label="系统菜谱分类">{{ detail.inspirationCategory?.name ?? "-" }}</el-descriptions-item>
+                <el-descriptions-item label="个人分类">{{ detail.personalCategory?.name ?? "-" }}</el-descriptions-item>
+                <el-descriptions-item label="当前版本 ID">{{ detail.contentVersionId }}</el-descriptions-item>
+                <el-descriptions-item label="举报数">{{ detail.reportCount }}</el-descriptions-item>
+                <el-descriptions-item label="下架原因">{{ detail.blockedReason ?? "-" }}</el-descriptions-item>
+                <el-descriptions-item label="收藏数">{{ detail.collectCount }}</el-descriptions-item>
+                <el-descriptions-item label="创建时间">{{ formatDateTime(detail.createdAt) }}</el-descriptions-item>
+                <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updatedAt) }}</el-descriptions-item>
+              </el-descriptions>
+            </div>
+          </div>
+
+          <div class="detail-basic-body">
+            <h3>正文内容</h3>
+            <el-descriptions :column="2" border>
+              <el-descriptions-item label="菜谱名称">{{ detail.content.name }}</el-descriptions-item>
+              <el-descriptions-item label="基准人数">{{ detail.content.baseServings }} 人</el-descriptions-item>
+              <el-descriptions-item label="难度">{{ detail.difficultyText || difficultyText(detail.content.difficulty) }}</el-descriptions-item>
+              <el-descriptions-item label="时长">{{ detail.durationText || durationText(detail.content.duration) }}</el-descriptions-item>
+              <el-descriptions-item label="故事" :span="2">
+                <div class="multiline-text">{{ detail.content.story || "-" }}</div>
+              </el-descriptions-item>
+              <el-descriptions-item label="小贴士" :span="2">
+                <div class="multiline-text">{{ detail.content.tips || "-" }}</div>
+              </el-descriptions-item>
+              <el-descriptions-item label="所需厨具" :span="2">
+                <span v-if="detail.content.tools.length">{{ detail.content.tools.map(item => item.name).join("、") }}</span>
+                <span v-else>-</span>
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+
+          <div class="wiki-section">
+            <h3>质量卡</h3>
+            <div class="wiki-quality-grid">
+              <div v-for="card in detail.wiki.qualityCards" :key="card.code" class="wiki-quality-card">
+                <div class="wiki-quality-card__head">
+                  <strong>{{ card.title }}</strong>
+                  <el-tag :type="card.status === 'COMPLETE' ? 'success' : 'warning'" size="small">
+                    {{ wikiQualityStatusTextOf(card.status) }} {{ card.score }} 分
+                  </el-tag>
+                </div>
+                <div v-if="card.blockingReasons.length" class="wiki-quality-card__reasons">
+                  {{ card.blockingReasons.join("；") }}
+                </div>
+                <div v-else class="wiki-quality-card__reasons wiki-quality-card__reasons--clear">当前没有阻断原因</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="wiki-section">
+            <h3>业务标签</h3>
+            <el-table :data="detail.wiki.tags" size="small" empty-text="当前版本暂无 Wiki 标签">
+              <el-table-column label="标签" min-width="130">
+                <template #default="{ row }">{{ wikiTagCodeTextOf(row.tagCode) }}</template>
+              </el-table-column>
+              <el-table-column label="值" min-width="150">
+                <template #default="{ row }">
+                  {{ row.displayValue }}<span v-if="row.tagValue !== row.displayValue">（{{ row.tagValue }}）</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="来源" width="110">
+                <template #default="{ row }">{{ wikiSourceTextOf(row.source) }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="110">
+                <template #default="{ row }">{{ wikiTagStatusTextOf(row.status) }}</template>
+              </el-table-column>
+              <el-table-column label="置信度" width="100">
+                <template #default="{ row }">{{ row.confidence === null ? "-" : `${Math.round(row.confidence * 100)}%` }}</template>
+              </el-table-column>
+              <el-table-column label="锁定" width="80">
+                <template #default="{ row }">{{ row.isLocked ? "是" : "否" }}</template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+        </section>
+
+        <section class="table-panel detail-section detail-section--ingredients-steps">
           <div class="panel-heading">
-            <h2>正文内容</h2>
+            <h2>食材步骤信息</h2>
           </div>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="菜谱名称">{{ detail.content.name }}</el-descriptions-item>
-            <el-descriptions-item label="基准人数">{{ detail.content.baseServings }} 人</el-descriptions-item>
-            <el-descriptions-item label="难度">{{ detail.difficultyText || difficultyText(detail.content.difficulty) }}</el-descriptions-item>
-            <el-descriptions-item label="时长">{{ detail.durationText || durationText(detail.content.duration) }}</el-descriptions-item>
-            <el-descriptions-item label="故事" :span="2">
-              <div class="multiline-text">{{ detail.content.story || "-" }}</div>
-            </el-descriptions-item>
-            <el-descriptions-item label="小贴士" :span="2">
-              <div class="multiline-text">{{ detail.content.tips || "-" }}</div>
-            </el-descriptions-item>
-          </el-descriptions>
-        </div>
+          <div class="detail-ingredients-steps-grid">
+            <div class="detail-subsection">
+              <h3>食材与用量</h3>
+              <div class="content-list">
+                <div v-for="item in detail.content.ingredients" :key="`${item.ingredientId}-${item.ingredientName}`" class="content-list__item">
+                  <span>{{ item.ingredientName }}</span>
+                  <span v-if="item.amount.kind === 'EXACT'">{{ item.amount.quantity }} {{ item.amount.unitName }}</span>
+                  <span v-else>{{ item.amount.text }}</span>
+                </div>
+              </div>
+            </div>
 
-        <div class="table-panel">
+            <div class="detail-subsection">
+              <h3>制作步骤</h3>
+              <div class="detail-step-list">
+                <div v-for="(item, index) in detail.content.steps" :key="`${index}-${item.text}-${item.imageUrl ?? 'no-image'}`" class="detail-step-card">
+                  <div class="detail-step-card__index">步骤 {{ index + 1 }}</div>
+                  <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`步骤 ${index + 1} 图片`" class="detail-step-card__image" />
+                  <div class="multiline-text">{{ item.text || "仅步骤图" }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="table-panel detail-section detail-section--nutrition">
+          <div class="panel-heading">
+            <h2>营养分析</h2>
+          </div>
+          <el-descriptions :column="3" border>
+            <el-descriptions-item label="状态">{{ wikiNutritionStatusTextOf(detail.wiki.nutrition.status) }}</el-descriptions-item>
+            <el-descriptions-item label="质量说明">{{ detail.wiki.nutrition.qualityLabel ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="覆盖率">
+              {{ detail.wiki.nutrition.coverageRate === null ? "-" : `${Math.round(detail.wiki.nutrition.coverageRate * 100)}%` }}
+            </el-descriptions-item>
+            <el-descriptions-item label="营养基表版本">{{ detail.wiki.nutrition.sourceVersion ?? "-" }}</el-descriptions-item>
+            <el-descriptions-item label="每份" :span="3">
+              热量 {{ nutritionValue(detail.wiki.nutrition.perServing?.calories) }} kcal ·
+              蛋白质 {{ nutritionValue(detail.wiki.nutrition.perServing?.protein) }} g ·
+              脂肪 {{ nutritionValue(detail.wiki.nutrition.perServing?.fat) }} g ·
+              碳水 {{ nutritionValue(detail.wiki.nutrition.perServing?.carbohydrate) }} g
+            </el-descriptions-item>
+            <el-descriptions-item label="整份" :span="3">
+              热量 {{ nutritionValue(detail.wiki.nutrition.perRecipe?.calories) }} kcal ·
+              蛋白质 {{ nutritionValue(detail.wiki.nutrition.perRecipe?.protein) }} g ·
+              脂肪 {{ nutritionValue(detail.wiki.nutrition.perRecipe?.fat) }} g ·
+              碳水 {{ nutritionValue(detail.wiki.nutrition.perRecipe?.carbohydrate) }} g
+            </el-descriptions-item>
+            <el-descriptions-item label="计算时间" :span="3">{{ formatDateTime(detail.wiki.nutrition.calculatedAt) }}</el-descriptions-item>
+          </el-descriptions>
+        </section>
+
+        <section class="table-panel detail-section detail-section--assistant">
           <div class="panel-heading panel-heading--between">
             <h2>做饭建议</h2>
             <el-button
@@ -795,91 +970,75 @@ onBeforeUnmount(() => {
               重新生成
             </el-button>
           </div>
-          <el-alert :title="assistantStatusText" :type="assistantStatusType" :closable="false" show-icon />
-          <el-descriptions :column="2" border class="assistant-state">
-            <el-descriptions-item label="当前状态">
-              {{
-                detail.assistantState.status === "READY"
-                  ? "已生成"
-                  : detail.assistantState.status === "FAILED"
-                    ? "生成失败"
-                    : "尚未生成"
-              }}
-            </el-descriptions-item>
-            <el-descriptions-item label="可用快照">{{ detail.assistantState.hasSnapshot ? "有" : "无" }}</el-descriptions-item>
-            <el-descriptions-item label="最近成功时间">{{ formatDateTime(detail.assistantState.generatedAt) }}</el-descriptions-item>
-            <el-descriptions-item label="最近尝试时间">{{ formatDateTime(detail.assistantState.lastAttemptAt) }}</el-descriptions-item>
-            <el-descriptions-item label="累计尝试次数">{{ detail.assistantState.attemptCount }}</el-descriptions-item>
-            <el-descriptions-item label="最近错误">{{ detail.assistantState.lastError ?? "-" }}</el-descriptions-item>
-          </el-descriptions>
+          <div class="assistant-layout">
+            <div class="assistant-overview">
+              <el-alert :title="assistantStatusText" :type="assistantStatusType" :closable="false" show-icon />
+              <el-descriptions :column="2" border class="assistant-state">
+                <el-descriptions-item label="当前状态">
+                  {{
+                    detail.assistantState.status === "READY"
+                      ? "已生成"
+                      : detail.assistantState.status === "FAILED"
+                        ? "生成失败"
+                        : "尚未生成"
+                  }}
+                </el-descriptions-item>
+                <el-descriptions-item label="可用快照">{{ detail.assistantState.hasSnapshot ? "有" : "无" }}</el-descriptions-item>
+                <el-descriptions-item label="最近成功时间">{{ formatDateTime(detail.assistantState.generatedAt) }}</el-descriptions-item>
+                <el-descriptions-item label="最近尝试时间">{{ formatDateTime(detail.assistantState.lastAttemptAt) }}</el-descriptions-item>
+                <el-descriptions-item label="累计尝试次数">{{ detail.assistantState.attemptCount }}</el-descriptions-item>
+                <el-descriptions-item label="最近错误">{{ detail.assistantState.lastError ?? "-" }}</el-descriptions-item>
+              </el-descriptions>
 
-          <template v-if="detail.assistant">
-            <div class="content-list assistant-summary-list">
-              <div class="content-list__item">
-                <span>总步骤</span>
-                <span>{{ detail.assistant.summary.stepCount }}</span>
-              </div>
-              <div class="content-list__item">
-                <span>备菜步骤</span>
-                <span>{{ detail.assistant.summary.prepStepCount }}</span>
-              </div>
-              <div class="content-list__item">
-                <span>烹饪步骤</span>
-                <span>{{ detail.assistant.summary.cookStepCount }}</span>
-              </div>
-              <div class="content-list__item">
-                <span>收尾步骤</span>
-                <span>{{ detail.assistant.summary.serveStepCount }}</span>
-              </div>
-              <div class="content-list__item">
-                <span>总时长</span>
-                <span>{{ detail.assistant.summary.totalDurationText ?? "-" }}</span>
-              </div>
-            </div>
-
-            <div class="detail-step-list assistant-step-list">
-              <div
-                v-for="item in detail.assistant.steps"
-                :key="`${item.order}-${item.title}`"
-                class="detail-step-card"
-              >
-                <div class="detail-step-card__index">建议步骤 {{ item.order }} · {{ item.phase }}</div>
-                <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.title" class="detail-step-card__image" />
-                <div class="detail-step-card__title-row">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.durationText ?? "时长待定" }}</span>
+              <template v-if="detail.assistant">
+                <div class="content-list assistant-summary-list">
+                  <div class="content-list__item">
+                    <span>总步骤</span>
+                    <span>{{ detail.assistant.summary.stepCount }}</span>
+                  </div>
+                  <div class="content-list__item">
+                    <span>备菜步骤</span>
+                    <span>{{ detail.assistant.summary.prepStepCount }}</span>
+                  </div>
+                  <div class="content-list__item">
+                    <span>烹饪步骤</span>
+                    <span>{{ detail.assistant.summary.cookStepCount }}</span>
+                  </div>
+                  <div class="content-list__item">
+                    <span>收尾步骤</span>
+                    <span>{{ detail.assistant.summary.serveStepCount }}</span>
+                  </div>
+                  <div class="content-list__item">
+                    <span>总时长</span>
+                    <span>{{ detail.assistant.summary.totalDurationText ?? "-" }}</span>
+                  </div>
                 </div>
-                <div class="multiline-text">{{ item.detail }}</div>
-              </div>
+              </template>
             </div>
-          </template>
-        </div>
 
-        <div class="table-panel">
-          <div class="panel-heading">
-            <h2>食材与用量</h2>
-          </div>
-          <div class="content-list">
-            <div v-for="item in detail.content.ingredients" :key="`${item.ingredientId}-${item.ingredientName}`" class="content-list__item">
-              <span>{{ item.ingredientName }}</span>
-              <span v-if="item.amount.kind === 'EXACT'">{{ item.amount.quantity }} {{ item.amount.unitName }}</span>
-              <span v-else>{{ item.amount.text }}</span>
+            <div class="assistant-steps-panel">
+              <h3>建议步骤</h3>
+              <template v-if="detail.assistant">
+                <div class="detail-step-list assistant-step-list">
+                  <div
+                    v-for="item in detail.assistant.steps"
+                    :key="`${item.order}-${item.title}`"
+                    class="detail-step-card"
+                  >
+                    <div class="detail-step-card__index">建议步骤 {{ item.order }} · {{ item.phase }}</div>
+                    <img v-if="item.imageUrl" :src="item.imageUrl" :alt="item.title" class="detail-step-card__image" />
+                    <div class="detail-step-card__title-row">
+                      <strong>{{ item.title }}</strong>
+                      <span>{{ item.action ? `${item.action} · ` : "" }}{{ item.durationText ?? (item.durationMinutes ? `约 ${item.durationMinutes} 分钟` : "时长待定") }}</span>
+                    </div>
+                    <div class="multiline-text">{{ item.detail }}</div>
+                  </div>
+                </div>
+              </template>
+              <div v-else class="empty-tip">当前版本暂无做饭建议步骤。</div>
             </div>
           </div>
-        </div>
-
-        <div class="table-panel">
-          <div class="panel-heading">
-            <h2>制作步骤</h2>
-          </div>
-          <div class="detail-step-list">
-            <div v-for="(item, index) in detail.content.steps" :key="`${index}-${item.text}-${item.imageUrl ?? 'no-image'}`" class="detail-step-card">
-              <div class="detail-step-card__index">步骤 {{ index + 1 }}</div>
-              <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`步骤 ${index + 1} 图片`" class="detail-step-card__image" />
-              <div class="multiline-text">{{ item.text || "仅步骤图" }}</div>
-            </div>
-          </div>
-        </div>
+        </section>
       </template>
     </div>
 
@@ -937,6 +1096,17 @@ onBeforeUnmount(() => {
             <el-form-item label="预估卡路里">
               <el-input-number v-model="form.content.estimatedCalories" :min="0" :max="20000" :step="10" />
             </el-form-item>
+          </div>
+
+          <div class="edit-section">
+            <div class="edit-section__header">
+              <strong>厨具</strong>
+              <el-button text :icon="Plus" @click="addTool">新增厨具</el-button>
+            </div>
+            <div v-for="(item, index) in form.content.tools" :key="index" class="tool-row">
+              <el-input v-model="item.name" maxlength="64" placeholder="例如：炒锅" />
+              <el-button text type="danger" @click="removeTool(index)">删除</el-button>
+            </div>
           </div>
 
           <div class="edit-section">
@@ -1071,6 +1241,46 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.detail-section {
+  display: grid;
+  gap: 20px;
+}
+
+.detail-basic-grid,
+.detail-ingredients-steps-grid,
+.assistant-layout {
+  display: grid;
+  gap: 24px;
+}
+
+.detail-basic-grid {
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.detail-basic-content,
+.detail-basic-body,
+.detail-subsection,
+.assistant-overview,
+.assistant-steps-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.detail-basic-title h3,
+.detail-basic-body h3,
+.detail-subsection h3,
+.assistant-steps-panel h3 {
+  margin: 0;
+  color: #292524;
+  font-size: 15px;
+}
+
+.detail-basic-title h3 {
+  font-size: 22px;
+}
+
 .detail-cover {
   overflow: hidden;
   width: min(420px, 100%);
@@ -1079,6 +1289,11 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: #f7f5ef;
   aspect-ratio: 4 / 3;
+}
+
+.detail-basic-media .detail-cover {
+  width: 100%;
+  margin-bottom: 0;
 }
 
 .detail-cover__image {
@@ -1146,10 +1361,20 @@ onBeforeUnmount(() => {
   border-radius: 6px;
 }
 
+.detail-ingredients-steps-grid {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+}
+
+.assistant-layout {
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
+}
+
 .assistant-state,
 .assistant-summary-list,
 .assistant-step-list {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .panel-heading--between {
@@ -1162,6 +1387,50 @@ onBeforeUnmount(() => {
 .multiline-text {
   white-space: pre-wrap;
   line-height: 1.6;
+}
+
+.wiki-section {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.wiki-section h3 {
+  margin: 0;
+  color: #292524;
+  font-size: 15px;
+}
+
+.wiki-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wiki-quality-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #ece7df;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.wiki-quality-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wiki-quality-card__reasons {
+  color: #a16207;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wiki-quality-card__reasons--clear {
+  color: #78716c;
 }
 
 .edit-grid {
@@ -1302,10 +1571,14 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 960px) {
+  .detail-basic-grid,
+  .detail-ingredients-steps-grid,
+  .assistant-layout,
   .edit-grid,
   .ingredient-row,
   .image-editor,
-  .step-card__body {
+  .step-card__body,
+  .wiki-quality-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

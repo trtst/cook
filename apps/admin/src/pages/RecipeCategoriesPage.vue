@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { Plus } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { recipeApi, type AdminInspirationCategorySummary } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
@@ -99,6 +99,29 @@ async function submitCategory() {
   }
 }
 
+async function removeCategory(row: AdminInspirationCategorySummary) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除分类“${row.name}”？分类下没有菜谱和审核记录时才允许删除。`,
+      "删除系统菜谱分类",
+      {
+        type: "warning",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消"
+      }
+    );
+    await recipeApi.deleteInspirationCategory(row.id, {
+      operationId: createOperationId(),
+      expectedVersion: row.version
+    });
+    ElMessage.success("系统菜谱分类已删除");
+    await loadCategories();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除分类失败");
+  }
+}
+
 function reorderList<T>(items: T[], fromIndex: number, toIndex: number) {
   const cloned = items.slice();
   const [target] = cloned.splice(fromIndex, 1);
@@ -149,6 +172,7 @@ onMounted(() => {
 
     <div class="table-panel">
       <el-table v-loading="loading" :data="filteredCategories" row-key="id">
+        <el-table-column prop="id" label="分类 ID" width="100" />
         <el-table-column prop="name" label="分类" min-width="220" />
         <el-table-column prop="recipeCount" label="系统菜谱数" width="120" />
         <el-table-column label="更新时间" min-width="180">
@@ -156,9 +180,10 @@ onMounted(() => {
             {{ formatDateTime(row.updatedAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openEditCategory(row)">编辑</el-button>
+            <el-button link type="danger" @click="removeCategory(row)">删除</el-button>
             <el-button link @click="moveCategory(row, 'top')">置顶</el-button>
             <el-button link @click="moveCategory(row, 'up')">上移</el-button>
             <el-button link @click="moveCategory(row, 'down')">下移</el-button>

@@ -2,11 +2,12 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft } from "@element-plus/icons-vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { recipeApi, type RecipeImportItemSummary, type RecipeImportJobDetail } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
+import { createOperationId } from "@/utils/operation-id";
 import { formatStatusText } from "@/utils/status";
 
 const route = useRoute();
@@ -66,6 +67,27 @@ function goBack() {
   void router.push("/recipes/imports");
 }
 
+async function removeJob() {
+  if (!detail.value || !jobId.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `确认删除导入任务“${detail.value.sourceName}”？只删除导入记录，不删除已发布菜谱。`,
+      "删除导入任务",
+      {
+        type: "warning",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消"
+      }
+    );
+    await recipeApi.deleteImportJob(jobId.value, createOperationId());
+    ElMessage.success("导入任务已删除");
+    await router.push("/recipes/imports");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除导入任务失败");
+  }
+}
+
 function openItem(itemId: UUID) {
   void router.push(`/recipes/import-items/${itemId}`);
 }
@@ -92,6 +114,7 @@ onMounted(() => {
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
       <el-button text :icon="ArrowLeft" @click="goBack">返回导入中心</el-button>
+      <el-button v-if="detail && detail.status !== 'RUNNING'" text type="danger" @click="removeJob">删除任务</el-button>
       <div class="toolbar-spacer" />
       <el-select v-model="query.status" class="toolbar-select" placeholder="全部条目状态" @change="handleStatusChange">
         <el-option label="全部条目" value="" />

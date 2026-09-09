@@ -71,7 +71,7 @@ async function loadPendingItems() {
     total.value = result.total;
   } catch (error) {
     if (current !== requestId) return;
-    ElMessage.error(error instanceof Error ? error.message : "加载待审核个人菜谱失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载待审核菜谱失败");
   } finally {
     if (current === requestId) {
       loading.value = false;
@@ -83,7 +83,7 @@ async function loadPage() {
   try {
     await Promise.all([loadCategories(), loadPendingItems()]);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "加载待审核个人菜谱失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载待审核菜谱失败");
   }
 }
 
