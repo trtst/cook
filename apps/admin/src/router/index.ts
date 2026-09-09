@@ -155,7 +155,7 @@ const router = createRouter({
           path: "recipes/pending",
           name: "recipe-pending",
           component: () => import("@/pages/RecipePendingPage.vue"),
-          meta: { title: "待审核个人菜谱" }
+          meta: { title: "待审核菜谱" }
         },
         {
           path: "recipes/create",
@@ -195,13 +195,13 @@ const router = createRouter({
           path: "ingredients/pending",
           name: "ingredient-pending",
           component: () => import("@/pages/IngredientPendingPage.vue"),
-          meta: { title: "待审核个人食材" }
+          meta: { title: "待审核食材" }
         },
         {
           path: "ingredients/feedbacks",
           name: "ingredient-feedbacks",
           component: () => import("@/pages/IngredientFeedbackPage.vue"),
-          meta: { title: "待审核食材纠错" }
+          meta: { title: "食材纠错" }
         },
         {
           path: "ingredients/units",

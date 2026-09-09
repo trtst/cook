@@ -70,7 +70,8 @@ export interface AdminPendingIngredientSummary {
   status: AdminIngredientReviewStatus;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
-  user: AdminIngredientSuggestionUser;
+  source: "PERSONAL" | "JSON_IMPORT";
+  user: AdminIngredientSuggestionUser | null;
 }
 
 export interface AdminPendingIngredientFeedbackSummary {

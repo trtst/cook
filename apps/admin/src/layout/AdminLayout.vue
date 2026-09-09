@@ -132,7 +132,7 @@ function triggerHeaderRefresh() {
           <el-menu-item index="/recipes/categories">系统菜谱分类</el-menu-item>
           <el-menu-item index="/recipes/list">系统菜谱</el-menu-item>
           <el-menu-item index="/recipes/imports">菜谱导入中心</el-menu-item>
-          <el-menu-item index="/recipes/pending">待审核个人菜谱</el-menu-item>
+          <el-menu-item index="/recipes/pending">待审核菜谱</el-menu-item>
           <el-menu-item index="/recipes/reports">菜谱举报</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="/ingredients">
@@ -142,8 +142,8 @@ function triggerHeaderRefresh() {
           </template>
           <el-menu-item index="/ingredients/categories">系统食材分类</el-menu-item>
           <el-menu-item index="/ingredients/items">系统食材</el-menu-item>
-          <el-menu-item index="/ingredients/pending">待审核个人食材</el-menu-item>
-          <el-menu-item index="/ingredients/feedbacks">待审核食材纠错</el-menu-item>
+          <el-menu-item index="/ingredients/pending">待审核食材</el-menu-item>
+          <el-menu-item index="/ingredients/feedbacks">食材纠错</el-menu-item>
           <el-menu-item index="/ingredients/units">单位</el-menu-item>
         </el-sub-menu>
         <el-menu-item index="/config">

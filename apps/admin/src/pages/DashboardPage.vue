@@ -84,7 +84,7 @@ const overviewCards = computed(() => {
     { label: "累计用户", value: summary.value.overview.totalUsers, hint: "当前全部用户", path: "/users" },
     { label: "待处理举报", value: summary.value.overview.openReportCount, hint: "待处理菜谱举报", path: "/recipes/reports" },
     { label: "待审核菜谱", value: summary.value.overview.pendingRecipeCount, hint: "个人菜谱投稿待审核", path: "/recipes/pending" },
-    { label: "待审核食材", value: summary.value.overview.pendingIngredientCount, hint: "个人食材待审核", path: "/ingredients/pending" },
+    { label: "待审核食材", value: summary.value.overview.pendingIngredientCount, hint: "用户提交与 JSON 导入", path: "/ingredients/pending" },
     { label: "今日核销", value: summary.value.overview.todayRedeemedCount, hint: "今日成功核销兑换码", path: "/membership/redemptions" }
   ];
 });

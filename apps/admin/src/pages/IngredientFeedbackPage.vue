@@ -75,7 +75,7 @@ async function loadFeedbacks() {
     total.value = result.total;
   } catch (error) {
     if (current !== requestId) return;
-    ElMessage.error(error instanceof Error ? error.message : "加载待审核食材纠错失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载食材纠错失败");
   } finally {
     if (current === requestId) {
       loading.value = false;
@@ -87,7 +87,7 @@ async function loadPage() {
   try {
     await Promise.all([loadCategories(), loadFeedbacks()]);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "加载待审核食材纠错失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载食材纠错失败");
   }
 }
 

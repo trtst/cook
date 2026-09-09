@@ -149,7 +149,7 @@ async function loadPendingItems() {
     total.value = result.total;
   } catch (error) {
     if (requestId !== pendingRequest) return;
-    ElMessage.error(error instanceof Error ? error.message : "加载待审核个人食材失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载待审核食材失败");
   } finally {
     if (requestId === pendingRequest) {
       loading.value = false;
@@ -161,7 +161,7 @@ async function loadPage() {
   try {
     await Promise.all([loadBaseOptions(), loadPendingItems()]);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : "加载待审核个人食材失败");
+    ElMessage.error(error instanceof Error ? error.message : "加载待审核食材失败");
   }
 }
 
@@ -297,7 +297,7 @@ async function submitReview() {
 
 async function removePendingIngredient(row: AdminPendingIngredientSummary) {
   try {
-    await ElMessageBox.confirm(`确认删除待审核个人食材“${row.name}”？不会删除用户自己的食材。`, "删除待审核个人食材", {
+    await ElMessageBox.confirm(`确认删除待审核食材“${row.name}”？不会删除用户自己的食材。`, "删除待审核食材", {
       type: "warning",
       confirmButtonText: "删除",
       cancelButtonText: "取消"
@@ -310,10 +310,10 @@ async function removePendingIngredient(row: AdminPendingIngredientSummary) {
       query.page -= 1;
     }
     await loadPendingItems();
-    ElMessage.success("待审核个人食材已删除");
+    ElMessage.success("待审核食材已删除");
   } catch (error) {
     if (error === "cancel" || error === "close") return;
-    ElMessage.error(error instanceof Error ? error.message : "删除待审核个人食材失败");
+    ElMessage.error(error instanceof Error ? error.message : "删除待审核食材失败");
   }
 }
 
@@ -370,11 +370,17 @@ onUnmounted(() => {
 
     <div class="table-panel">
       <el-table v-loading="loading" :data="pendingItems" row-key="id">
-        <el-table-column prop="name" label="推荐食材" min-width="180" />
-        <el-table-column label="推荐用户" min-width="180">
+        <el-table-column prop="name" label="食材" min-width="180" />
+        <el-table-column label="来源" min-width="180">
           <template #default="{ row }">
-            <div>{{ row.user.nickname || "未填写昵称" }}</div>
-            <div class="table-subtext">UID {{ row.user.uid }}</div>
+            <template v-if="row.source === 'JSON_IMPORT'">
+              <div>JSON 导入</div>
+              <div class="table-subtext">系统食材</div>
+            </template>
+            <template v-else>
+              <div>{{ row.user?.nickname || "未填写昵称" }}</div>
+              <div class="table-subtext">UID {{ row.user?.uid }}</div>
+            </template>
           </template>
         </el-table-column>
         <el-table-column label="推荐分类" width="140">
@@ -396,7 +402,7 @@ onUnmounted(() => {
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openReview(row)">审核</el-button>
-            <el-button link type="danger" @click="removePendingIngredient(row)">删除</el-button>
+            <el-button v-if="row.source === 'PERSONAL'" link type="danger" @click="removePendingIngredient(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -418,7 +424,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="审核个人食材推荐" width="560px" @closed="resetForm">
+    <el-dialog v-model="dialogVisible" title="审核待审核食材" width="560px" @closed="resetForm">
       <el-form label-position="top">
         <el-form-item label="审核结果">
           <el-radio-group v-model="form.action">

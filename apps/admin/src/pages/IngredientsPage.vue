@@ -176,6 +176,7 @@ onMounted(() => {
 
     <div class="table-panel">
       <el-table v-loading="loading" :data="filteredCategories" row-key="id">
+        <el-table-column prop="id" label="分类 ID" width="100" />
         <el-table-column label="分类" min-width="220">
           <template #default="{ row }">
             <div>{{ row.name }}</div>
