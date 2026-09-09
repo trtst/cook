@@ -11,6 +11,7 @@ import type { RecipeContentSnapshot, RecipeIngredientSnapshot } from "../src/con
 import { loadLocalEnv } from "../src/common/load-env";
 import { assetKey, AssetStorageService } from "../src/common/asset-storage.service";
 import { buildRecipeSearchText, buildRecipeAssistantSnapshot, contentSizeBytes, toJson } from "../src/modules/recipe/recipe-content";
+import { seedResourceId } from "../src/modules/recipe/seed-resource-ids";
 
 loadLocalEnv();
 
@@ -18,7 +19,7 @@ const prisma = new PrismaClient();
 const apply = process.argv.includes("--apply");
 const systemUserId = 278;
 const personalUserId = 1001;
-const personalCategoryId = 1;
+const personalCategoryId = 10_000_000;
 const inspirationCategoryId = 6001;
 const fixtureSourceVersion = "recipe-fixture-2026-09-08";
 
@@ -150,7 +151,7 @@ async function main() {
     if (!inspirationCategory) throw new Error("灵感分类校验失败");
     const nutritionSourceVersion = nutritionSourceBatch?.sourceVersion ?? fixtureSourceVersion;
 
-    const ingredientIds = [4001, 4002, 4004, 4007, 4014, 4016, 4049, 4059, 4070];
+    const ingredientIds = [4001, 4002, 4004, 4007, 4014, 4016, 4049, 4059, 4070].map(seedResourceId);
     const ingredients = await tx.ingredient.findMany({
       where: { id: { in: ingredientIds }, ownerId: null },
       select: {
@@ -162,7 +163,8 @@ async function main() {
       }
     });
     const ingredientMap = new Map(ingredients.map(item => [item.id, item]));
-    const getIngredient = (id: number) => {
+    const getIngredient = (legacyId: number) => {
+      const id = seedResourceId(legacyId);
       const item = ingredientMap.get(id);
       if (!item) throw new Error(`系统食材不存在: ${id}`);
       return item;
@@ -290,8 +292,8 @@ async function main() {
         ["DISH_ROLE", "MAIN"],
         ["DISH_ROLE", "STAPLE"],
         ["MAIN_PROTEIN_TYPE", "BEEF"],
-        ["PRIMARY_INGREDIENT", "4004"],
-        ["PRIMARY_INGREDIENT", "4049"],
+        ["PRIMARY_INGREDIENT", String(seedResourceId(4004))],
+        ["PRIMARY_INGREDIENT", String(seedResourceId(4049))],
         ["FLAVOR_PROFILE", "LIGHT"],
         ["SPICE_LEVEL", "NONE"]
       ].map(([tagCode, tagValue], index) => ({

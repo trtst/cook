@@ -124,7 +124,7 @@ function buildDocument(categoryId: number, ingredients: Array<{ name: string }>)
 
 async function uploadJson(token: string, name: string, document: unknown) {
   const form = new FormData();
-  form.append("file", new Blob([JSON.stringify(document)], { type: "application/json" }), name);
+  form.append("files", new Blob([JSON.stringify(document)], { type: "application/json" }), name);
   return requestData<ImportJob>(
     "/admin/recipe-import-jobs/json",
     { method: "POST", body: form },

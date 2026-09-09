@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BadRequestException } from "@nestjs/common";
+import { OPTIONAL_DEPS_METADATA } from "@nestjs/common/constants";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
+
+test("keeps the remote image reader optional for Nest startup", () => {
+  assert.deepEqual(Reflect.getMetadata(OPTIONAL_DEPS_METADATA, AdminRecipeImageService), [1]);
+});
 
 function pngBuffer() {
   const buffer = Buffer.alloc(24);
@@ -63,4 +68,14 @@ test("rejects non-image and oversized remote responses", async () => {
     () => createService([], async () => Buffer.alloc(10 * 1024 * 1024 + 1)).publishRemoteImage({}, "STEP", "https://1.1.1.1/large.png"),
     /不能超过 10 MB/
   );
+});
+
+test("maps only published admin recipe image URLs back to storage keys", () => {
+  const service = createService([]);
+
+  assert.equal(
+    service.publishedStorageKeyFromUrl("https://cdn.example/static/uploads/admin-recipe-images/step.jpg?version=1"),
+    "uploads/admin-recipe-images/step.jpg"
+  );
+  assert.equal(service.publishedStorageKeyFromUrl("https://cdn.example/uploads/material-store/other.jpg"), null);
 });

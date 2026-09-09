@@ -1,4 +1,5 @@
 import type { IngredientNutrientMappingStatus } from "@prisma/client";
+import { seedResourceId } from "./seed-resource-ids";
 
 export const recipeNutritionSourceRepo = "Sanotsu/china-food-composition-data";
 export const recipeNutritionSourceVersion = "2026-08-22-primary-subset-v1";
@@ -32,7 +33,7 @@ export interface IngredientNutritionSeed {
 
 const jsonData = (fileName: string) => `json_data/${fileName}`;
 
-export const primaryIngredientNutritionSeeds: IngredientNutritionSeed[] = [
+const legacyPrimaryIngredientNutritionSeeds: IngredientNutritionSeed[] = [
   {
     ingredientId: 4001,
     ingredientName: "番茄",
@@ -394,3 +395,8 @@ export const primaryIngredientNutritionSeeds: IngredientNutritionSeed[] = [
     conversions: []
   }
 ];
+
+export const primaryIngredientNutritionSeeds = legacyPrimaryIngredientNutritionSeeds.map(seed => ({
+  ...seed,
+  ingredientId: seedResourceId(seed.ingredientId)
+}));

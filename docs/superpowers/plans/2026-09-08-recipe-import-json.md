@@ -4,7 +4,7 @@
 
 **Goal:** 让后台严格按 `recipe.import.v1` JSON 将菜谱导入待审核系统项，审核通过后再生成正式菜谱、派生营养、助理、标签和灵感用户归属。
 
-**Architecture:** 保留现有导入任务/条目工作台作为审核层，将来源解析替换为严格 JSON（单个 JSON 或 ZIP 内多个 JSON）。导入草稿保存原始 JSON 和后台匹配结果；正式发布时才创建 Recipe，并从灵感来源用户池随机选择 owner。工具、导入标签和助理动作分别落入正文版本、版本标签和助理快照，不写入导入 JSON 的内部 ID 或审核状态。
+**Architecture:** 保留现有导入任务/条目工作台作为审核层，将来源解析替换为严格 JSON（批量选择一个或多个 JSON 文件）。导入草稿保存原始 JSON 和后台匹配结果；正式发布时才创建 Recipe，并从灵感来源用户池随机选择 owner。工具、导入标签和助理动作分别落入正文版本、版本标签和助理快照，不写入导入 JSON 的内部 ID 或审核状态。
 
 **Tech Stack:** NestJS、Prisma/PostgreSQL、Vue 3、Element Plus、TypeScript、Vitest/Node test。
 
@@ -35,9 +35,9 @@
 - Produces internal `RecipeImportRecipeBody` with `tools`, `tags`, `assistantSteps`, source image URLs and matched ingredient/unit IDs.
 - The public import contract exposes only `JSON`; any legacy database enum values are not accepted by new routes and are not exposed as supported import options.
 
-- [x] **Step 1: Write failing parser tests** for valid `recipe.import.v1`, missing required fields, invalid enums, duplicate/unknown tags, invalid assistant phase/action, unmatched ingredients/units, fuzzy quantities, JSON arrays, and ZIP traversal.
+- [x] **Step 1: Write failing parser tests** for valid `recipe.import.v1`, missing required fields, invalid enums, duplicate/unknown tags, invalid assistant phase/action, unmatched ingredients/units, fuzzy quantities, and JSON arrays.
 - [x] **Step 2: Run the focused test** and confirm the new parser contract is not implemented.
-- [x] **Step 3: Implement strict source reading** for `.json` and ZIP-contained `.json`; reject Markdown as a new import source, reject arrays, and preserve exact source JSON text.
+- [x] **Step 3: Implement strict source reading** for one or more `.json` files; reject non-JSON files and arrays, and preserve exact source JSON text.
 - [x] **Step 4: Implement strict schema validation** without guessing defaults; validate required recipe fields, five required tag codes, tools array, assistant steps, image URL shape, and phase/action combinations.
 - [x] **Step 5: Implement exact ingredient/unit matching** against normalized names only, allowing only documented deterministic unit aliases (`g/kg/ml/L`); unmatched rows remain in the draft and create `NEEDS_FIX` errors.
 - [x] **Step 6: Add `JSON` source type, `toolsJson`, and import draft fields** to Prisma/types/DTO/OpenAPI; use an additive migration with an empty tools default for existing versions.
@@ -61,7 +61,7 @@
 
 - [x] **Step 1: Add failing service tests** proving JSON jobs enter `NEEDS_FIX` for unmatched data, do not accept imported nutrition, cannot publish fuzzy/unmatched ingredients, and do not create a Recipe before publish.
 - [x] **Step 2: Run the focused service tests** and confirm the old Markdown-only behavior fails the new cases.
-- [x] **Step 3: Switch controller/service upload handling** to JSON/ZIP JSON and save raw source text, parsed source view, and strict draft state.
+- [x] **Step 3: Switch controller/service upload handling** to batch JSON files and save raw source text, parsed source view, and strict draft state.
 - [x] **Step 4: Remove `estimatedCalories` from import DTO/UI payloads** and always write `null` into the formal content version for this path.
 - [x] **Step 5: Persist tools and imported assistant snapshot**; add action inference for generated assistant steps while preserving imported `action`, title, detail, images, and `durationText`.
 - [x] **Step 6: Persist imported tags** after formal version creation with `source = OPS`, `status = CONFIRMED`, and stable order; do not map `COLD_DISH` to `VEGETABLE`.
@@ -83,7 +83,7 @@
 - Test: `apps/api/src/modules/recipe/recipe-inspiration-owner.test.ts`
 
 **Interfaces:**
-- Produces a dedicated `RecipeInspirationOwner` membership table for the 100 approved source users, including UID `10001`.
+- Produces a dedicated `RecipeInspirationOwner` membership table for the 100 approved source users; no fixed UID is required by the import contract.
 - Produces a transaction-safe `pickRecipeInspirationOwner(tx)` function that selects only pool members and never falls back to a real user.
 - Produces one shared public-inspiration predicate so pool-owned imported recipes remain public inspiration and are not treated as the current user’s private recipe.
 
@@ -106,11 +106,11 @@
 
 **Interfaces:**
 - Consumes Task 1/2 API contracts.
-- Produces JSON/ZIP JSON upload, strict source messaging, tool editing, tag editing, assistant phase/action editing, and removal of imported nutrition editing.
+- Produces batch JSON upload, strict source messaging, tool editing, tag editing, assistant phase/action editing, and removal of imported nutrition editing.
 
-- [x] **Step 1: Add failing admin assertions** for `.json/.zip` acceptance, no calorie input, required tools/tags/assistant sections, and publish disabled while errors remain.
+- [x] **Step 1: Add failing admin assertions** for batch `.json` acceptance, no calorie input, required tools/tags/assistant sections, and publish disabled while errors remain.
 - [x] **Step 2: Update API types and upload endpoint** from Markdown-only to JSON import.
-- [x] **Step 3: Update the import center copy and file picker** to describe JSON/ZIP JSON and the待审核系统项 flow.
+- [x] **Step 3: Update the import center copy and file picker** to describe batch JSON and the待审核系统项 flow.
 - [x] **Step 4: Add workbench editors** for tools, tags, assistant phase/action/title/detail/durationText, while preserving source values and strict matching errors.
 - [x] **Step 5: Remove estimated-calorie controls and prevent client-side defaulting of story/tips/base servings/difficulty/duration.**
 - [x] **Step 6: Run admin focused tests and admin type-check.**

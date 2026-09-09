@@ -6,10 +6,15 @@ import { buildSearchKey, versionToContent } from "../src/modules/recipe/recipe-c
 import { inferIngredientTagFacts } from "../src/modules/recipe/ingredient-tag-facts";
 import { replaceAutoRecipeVersionTags } from "../src/modules/recipe/recipe-version-tags";
 import { allowedSystemUnitNames } from "../src/modules/recipe/system-unit-policy";
+import { seedResourceId } from "../src/modules/recipe/seed-resource-ids";
 
 loadLocalEnv();
 
 const prisma = new PrismaClient();
+
+const seedIngredientId = seedResourceId;
+const seedRecipeVersionId = seedResourceId;
+const seedRecipeId = seedResourceId;
 
 type SystemUnitSeed = {
   id: number;
@@ -66,8 +71,15 @@ const defaultSystemCategories: SystemCategorySeed[] = [
 ];
 
 const defaultInspirationCategories: InspirationCategorySeed[] = [
-  { id: 6001, name: "家常快手", iconKey: null, sortOrder: 0 },
-  { id: 6002, name: "炖煮硬菜", iconKey: null, sortOrder: 1 }
+  { id: 6001, name: "家常便饭", iconKey: null, sortOrder: 0 },
+  { id: 6002, name: "下饭好菜", iconKey: null, sortOrder: 1 },
+  { id: 6003, name: "快手小炒", iconKey: null, sortOrder: 2 },
+  { id: 6004, name: "减脂轻食", iconKey: null, sortOrder: 3 },
+  { id: 6005, name: "周末大餐", iconKey: null, sortOrder: 4 },
+  { id: 6006, name: "一人食光", iconKey: null, sortOrder: 5 },
+  { id: 6007, name: "地方风味", iconKey: null, sortOrder: 6 },
+  { id: 6008, name: "清淡养生", iconKey: null, sortOrder: 7 },
+  { id: 6009, name: "宴客硬菜", iconKey: null, sortOrder: 8 }
 ];
 
 const legacyCategoryNameMap = new Map<string, string>([
@@ -248,7 +260,10 @@ const defaultSystemIngredients: SystemIngredientSeed[] = [
   { id: 4165, name: "猪肝", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4166, name: "鸡胗", categoryName: "肉禽蛋", defaultUnitName: "克" },
   { id: 4167, name: "皮蛋", categoryName: "肉禽蛋", defaultUnitName: "个" }
-];
+].map(item => ({
+  ...item,
+  id: seedIngredientId(item.id)
+}));
 
 const unitTypes: UnitType[] = ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"];
 
@@ -889,8 +904,8 @@ async function seedSystemRecipes(
   const egg = requireSeedItem(ingredientMap.get("鸡蛋"), "系统食材缺失: 鸡蛋");
   const potato = requireSeedItem(ingredientMap.get("土豆"), "系统食材缺失: 土豆");
   const beef = requireSeedItem(ingredientMap.get("牛肉"), "系统食材缺失: 牛肉");
-  const quickCategory = requireSeedItem(inspirationCategoryMap.get("家常快手"), "灵感分类缺失: 家常快手");
-  const stewCategory = requireSeedItem(inspirationCategoryMap.get("炖煮硬菜"), "灵感分类缺失: 炖煮硬菜");
+  const quickCategory = requireSeedItem(inspirationCategoryMap.get("家常便饭"), "灵感分类缺失: 家常便饭");
+  const stewCategory = requireSeedItem(inspirationCategoryMap.get("下饭好菜"), "灵感分类缺失: 下饭好菜");
 
   const buildSystemIngredient = (name: string, quantity: string) => {
     const ingredient = requireSeedItem(ingredientMap.get(name), `系统食材缺失: ${name}`);
@@ -1123,14 +1138,14 @@ async function seedSystemRecipes(
 
   const generatedSystemRecipes = categoryRecipeSeeds.flatMap(({ category, items }, categoryIndex) =>
     items.map((recipe, itemIndex) => ({
-      recipeId: 2101 + categoryIndex * 10 + itemIndex,
-      versionId: 1101 + categoryIndex * 10 + itemIndex,
+      recipeId: seedRecipeId(2101 + categoryIndex * 10 + itemIndex),
+      versionId: seedRecipeVersionId(1101 + categoryIndex * 10 + itemIndex),
       categoryId: category.id,
       ...recipe
     }))
   );
 
-  if (generatedSystemRecipes.length !== defaultInspirationCategories.length * 5) {
+  if (generatedSystemRecipes.length !== categoryRecipeSeeds.length * 5) {
     throw new Error(`系统菜谱 seed 数量异常: ${generatedSystemRecipes.length}`);
   }
 
@@ -1177,7 +1192,7 @@ async function seedOwnerRecipe(
       }
     }));
 
-  const ownerVersion = await upsertRecipeVersion(1003, ownerUserId, {
+  const ownerVersion = await upsertRecipeVersion(seedRecipeVersionId(1003), ownerUserId, {
     name: "青椒肉丝",
     story: null,
     baseServings: 2,
@@ -1217,7 +1232,7 @@ async function seedOwnerRecipe(
   });
 
   await prisma.recipe.upsert({
-    where: { id: 2003 },
+    where: { id: seedRecipeId(2003) },
     update: {
       ownerId: ownerUserId,
       categoryId: ownerCategory.id,
@@ -1234,7 +1249,7 @@ async function seedOwnerRecipe(
       reportCount: 0
     },
     create: {
-      id: 2003,
+      id: seedRecipeId(2003),
       ownerId: ownerUserId,
       categoryId: ownerCategory.id,
       currentVersionId: ownerVersion.id,
@@ -1263,12 +1278,33 @@ async function seedRecipes(
   await seedOwnerRecipe(ownerUserId, ingredientMap);
 }
 
+async function syncSeedResourceSequences() {
+  const sequenceFloors = {
+    recipe_categories: 9_999_999,
+    recipe_scenes: 9_999_999,
+    inspiration_categories: 6_000,
+    ingredient_categories: 5_000,
+    units: 3_000,
+    ingredients: 9_999_999,
+    recipe_content_versions: 9_999_999,
+    recipes: 9_999_999
+  } as const;
+
+  for (const [table, floor] of Object.entries(sequenceFloors)) {
+    const sequenceName = `${table}_id_seq`;
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('public.${table}', 'id'), GREATEST(COALESCE((SELECT MAX("id") FROM "${table}"), 0), COALESCE((SELECT last_value FROM pg_sequences WHERE schemaname = 'public' AND sequencename = '${sequenceName}'), 0), ${floor}), true);`
+    );
+  }
+}
+
 export async function syncSystemRecipeCatalog() {
   const unitMap = await seedSystemUnits();
   const categoryMap = await seedSystemCategories();
   const inspirationCategoryMap = await seedInspirationCategories();
   const ingredientMap = await seedSystemIngredients(categoryMap, unitMap);
   await seedSystemRecipes(ingredientMap, inspirationCategoryMap);
+  await syncSeedResourceSequences();
 }
 
 export async function syncMembershipSkuCatalog() {
@@ -1369,6 +1405,7 @@ async function main() {
   const inspirationCategoryMap = await seedInspirationCategories();
   const ingredientMap = await seedSystemIngredients(categoryMap, unitMap);
   await seedRecipes(ownerUser.id, ingredientMap, inspirationCategoryMap);
+  await syncSeedResourceSequences();
 
   console.log(
     `Seeded admin ${admin.username}, users ${ownerUser.phone}, ${guestUser.phone}, ${memberUser.phone}, categories ${categoryMap.size}, ingredients ${ingredientMap.size}`

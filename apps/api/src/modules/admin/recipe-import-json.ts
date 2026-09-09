@@ -1,4 +1,3 @@
-import { posix } from "node:path";
 import type {
   RecipeDifficulty,
   RecipeDuration,
@@ -33,9 +32,9 @@ export interface RecipeImportJsonResult {
   warnItems: RecipeImportIssue[];
 }
 
-const maxJsonZipEntries = 100;
-const maxJsonEntryBytes = 10 * 1024 * 1024;
-const maxJsonUncompressedBytes = 20 * 1024 * 1024;
+const maxJsonFiles = 100;
+const maxJsonFileBytes = 10 * 1024 * 1024;
+const maxJsonBatchBytes = 20 * 1024 * 1024;
 
 const recipeKeys = new Set([
   "inspirationCategoryId",
@@ -420,42 +419,19 @@ export function normalizeRecipeImportBody(body: RecipeImportRecipeBody): RecipeI
 
 type RecipeImportBodyStep = RecipeImportRecipeBody["steps"][number];
 
-export function cleanZipPath(value: string) {
-  const normalizedInput = value.replace(/\\/g, "/");
-  if (normalizedInput.startsWith("/") || /^[A-Za-z]:\//.test(normalizedInput)) return "";
-  const rawParts = normalizedInput.split("/");
-  if (rawParts.some(part => part === "..")) return "";
-  const normalized = posix.normalize(normalizedInput).replace(/^\/+/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  if (parts.some(part => part === "..")) return "";
-  return parts.join("/");
-}
+export function readJsonSourcesFromFiles(files: Array<{ originalname?: string; buffer?: Buffer; size?: number }>) {
+  if (files.length === 0) throw new Error("请至少上传一个 JSON 文件");
+  if (files.length > maxJsonFiles) throw new Error("文件数量不能超过 100 个");
 
-export function readJsonSources(fileName: string, buffer: Buffer): RecipeImportJsonSource[] {
-  const lowerName = fileName.toLowerCase();
-  if (lowerName.endsWith(".json")) {
-    if (buffer.byteLength > maxJsonEntryBytes) throw new Error("JSON 文件大小不能超过 10 MB");
-    return [{ sourcePath: fileName, jsonText: buffer.toString("utf8") }];
-  }
-  if (!lowerName.endsWith(".zip")) throw new Error("目前只支持导入 .json 或包含 JSON 的 .zip 文件");
-
-  const AdmZip = require("adm-zip");
-  const zip = new AdmZip(buffer);
-  const entries = zip.getEntries() as Array<{ entryName: string; isDirectory: boolean; getData: () => Buffer }>;
   const sources: RecipeImportJsonSource[] = [];
-  let jsonEntryCount = 0;
-  let uncompressedBytes = 0;
-  for (const entry of entries) {
-    const safePath = cleanZipPath(entry.entryName);
-    if (!safePath) throw new Error("ZIP 包含不安全路径");
-    if (entry.isDirectory || safePath.startsWith("__MACOSX/") || !safePath.toLowerCase().endsWith(".json")) continue;
-    jsonEntryCount += 1;
-    if (jsonEntryCount > maxJsonZipEntries) throw new Error("JSON 文件数量不能超过 100 个");
-    const data = entry.getData();
-    if (data.byteLength > maxJsonEntryBytes) throw new Error("JSON 文件大小不能超过 10 MB");
-    uncompressedBytes += data.byteLength;
-    if (uncompressedBytes > maxJsonUncompressedBytes) throw new Error("ZIP 解压后的 JSON 总大小不能超过 20 MB");
-    sources.push({ sourcePath: safePath, jsonText: data.toString("utf8") });
+  let totalBytes = 0;
+  for (const file of files) {
+    if (!file.buffer || !file.originalname) throw new Error("请上传有效的 JSON 文件");
+    if (!file.originalname.toLowerCase().endsWith(".json")) throw new Error("目前只支持 JSON 文件");
+    if (file.buffer.byteLength > maxJsonFileBytes) throw new Error("单个 JSON 文件大小不能超过 10 MB");
+    totalBytes += file.buffer.byteLength;
+    if (totalBytes > maxJsonBatchBytes) throw new Error("批量 JSON 总大小不能超过 20 MB");
+    sources.push({ sourcePath: file.originalname, jsonText: file.buffer.toString("utf8") });
   }
   return sources;
 }

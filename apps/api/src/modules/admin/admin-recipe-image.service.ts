@@ -4,7 +4,7 @@ import * as http from "node:http";
 import * as https from "node:https";
 import { isIP } from "node:net";
 import { basename } from "node:path";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { assetKey, AssetStorageService } from "../../common/asset-storage.service";
 import type { AdminRecipeImageScene, AdminRecipeImageUploadResponse } from "../../contracts/types";
 
@@ -340,6 +340,7 @@ type RemoteImageReader = (url: string) => Promise<Buffer>;
 export class AdminRecipeImageService {
   constructor(
     private readonly assetStorage: AssetStorageService,
+    @Optional()
     private readonly remoteImageReader: RemoteImageReader = readRemoteImage
   ) {}
 
@@ -404,8 +405,34 @@ export class AdminRecipeImageService {
 
   async removePublishedImages(storageKeys: Iterable<string>) {
     const keys = Array.from(new Set(Array.from(storageKeys).filter(Boolean)));
-    if (!keys.length) return;
-    await Promise.allSettled(keys.map(storageKey => this.assetStorage.deleteObject(this.safeStorageKey(storageKey))));
+    if (!keys.length) return [] as string[];
+    const results = await Promise.allSettled(keys.map(storageKey => this.assetStorage.deleteObject(this.safeStorageKey(storageKey))));
+    return results.flatMap((result, index) => (result.status === "rejected" ? [keys[index] as string] : []));
+  }
+
+  publishedStorageKeyFromUrl(imageUrl: string) {
+    const normalized = imageUrl.trim();
+    if (!normalized) return null;
+    let pathname = normalized;
+    try {
+      pathname = new URL(normalized, "http://local.invalid").pathname;
+    } catch {
+      return null;
+    }
+    let candidate: string;
+    try {
+      candidate = decodeURIComponent(pathname).replace(/^\/+/, "").replace(/^static\//u, "");
+    } catch {
+      return null;
+    }
+    if (!candidate.startsWith("uploads/admin-recipe-images/") && !candidate.startsWith("admin-recipe-images/")) {
+      return null;
+    }
+    try {
+      return this.safeStorageKey(candidate);
+    } catch {
+      return null;
+    }
   }
 
   async getPublicImageAsset(fileName: string) {

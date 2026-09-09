@@ -1265,6 +1265,11 @@ export interface AdminInspirationCategorySummary {
   updatedAt: IsoDateTime;
 }
 
+export interface AdminDeleteInspirationCategoryResult {
+  categoryId: UUID;
+  deletedAt: IsoDateTime;
+}
+
 export interface IngredientCategorySummary {
   id: UUID;
   name: string;
@@ -1749,10 +1754,16 @@ export interface AdminRecipeSummary {
   title: string;
   coverImageUrl: string | null;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  version: number;
   inspirationCategoryId: UUID;
   inspirationCategoryName: string;
   updatedAt: IsoDateTime;
   ownerUid: number | null;
+}
+
+export interface AdminDeleteRecipeResult {
+  recipeId: UUID;
+  deletedAt: IsoDateTime;
 }
 
 export interface RecipeAssistantStateSummary {
@@ -1762,6 +1773,44 @@ export interface RecipeAssistantStateSummary {
   lastAttemptAt: IsoDateTime | null;
   attemptCount: number;
   lastError: string | null;
+}
+
+export type RecipeWikiQualityCode =
+  | "CONTENT"
+  | "STRUCTURED_DATA"
+  | "BUSINESS_TAGS"
+  | "NUTRITION"
+  | "ASSISTANT"
+  | "FRONTEND_CONSUMPTION"
+  | "RANDOM_MENU";
+
+export interface AdminRecipeWikiTag {
+  tagCode: string;
+  tagValue: string;
+  displayValue: string;
+  source: "AUTO" | "USER" | "OPS" | "AI";
+  status: "CONFIRMED" | "CANDIDATE" | "UNMAPPED" | "NEEDS_REVIEW";
+  confidence: number | null;
+  sortOrder: number | null;
+  isLocked: boolean;
+}
+
+export interface AdminRecipeWikiQualityCard {
+  code: RecipeWikiQualityCode;
+  title: string;
+  status: "COMPLETE" | "INCOMPLETE";
+  score: number;
+  blockingReasons: string[];
+}
+
+export interface AdminRecipeWikiNutrition extends RecipeNutritionSummary {
+  coverageRate: number | null;
+}
+
+export interface AdminRecipeWiki {
+  tags: AdminRecipeWikiTag[];
+  nutrition: AdminRecipeWikiNutrition;
+  qualityCards: AdminRecipeWikiQualityCard[];
 }
 
 export interface AdminRecipeDetail {
@@ -1778,6 +1827,7 @@ export interface AdminRecipeDetail {
   content: RecipeContentSnapshot;
   assistantState: RecipeAssistantStateSummary;
   assistant: RecipeAssistantSnapshot | null;
+  wiki: AdminRecipeWiki;
   version: number;
   reportCount: number;
   blockedReason: string | null;
@@ -1951,6 +2001,11 @@ export interface RecipeImportJobSummary {
   updatedAt: IsoDateTime;
 }
 
+export interface AdminDeleteRecipeImportJobResult {
+  jobId: UUID;
+  deletedAt: IsoDateTime;
+}
+
 export interface RecipeImportItemSummary {
   id: UUID;
   jobId: UUID;
@@ -2112,7 +2167,8 @@ export interface AdminPendingIngredientSummary {
   status: "PENDING";
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
-  user: AdminIngredientSuggestionUser;
+  source: "PERSONAL" | "JSON_IMPORT";
+  user: AdminIngredientSuggestionUser | null;
 }
 
 export interface AdminReviewPendingIngredientResult {

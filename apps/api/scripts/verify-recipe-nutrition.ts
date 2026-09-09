@@ -2,6 +2,7 @@ import { loadLocalEnv } from "../src/common/load-env";
 import type { RecipeContentSnapshot } from "../src/contracts/types";
 import { primaryIngredientNutritionSeeds, recipeNutritionSourceVersion } from "../src/modules/recipe/recipe-nutrition-catalog";
 import { buildRecipeNutritionPreview } from "../src/modules/recipe/recipe-nutrition";
+import { seedResourceId } from "../src/modules/recipe/seed-resource-ids";
 
 loadLocalEnv();
 
@@ -40,21 +41,21 @@ const completeRecipe: RecipeContentSnapshot = {
   tips: null,
   ingredients: [
     {
-      ingredientId: 4020,
+      ingredientId: seedResourceId(4020),
       ingredientName: "莲藕",
       source: "SYSTEM",
       categoryId: 5001,
       amount: { kind: "EXACT", quantity: "400", unitId: 3001, unitName: "克", unitType: "WEIGHT" }
     },
     {
-      ingredientId: 4025,
+      ingredientId: seedResourceId(4025),
       ingredientName: "排骨",
       source: "SYSTEM",
       categoryId: 5002,
       amount: { kind: "EXACT", quantity: "500", unitId: 3001, unitName: "克", unitType: "WEIGHT" }
     },
     {
-      ingredientId: 4016,
+      ingredientId: seedResourceId(4016),
       ingredientName: "生姜",
       source: "SYSTEM",
       categoryId: 5001,
@@ -74,21 +75,21 @@ const estimatedRecipe: RecipeContentSnapshot = {
   tips: null,
   ingredients: [
     {
-      ingredientId: 4001,
+      ingredientId: seedResourceId(4001),
       ingredientName: "番茄",
       source: "SYSTEM",
       categoryId: 5001,
       amount: { kind: "EXACT", quantity: "2", unitId: 3007, unitName: "个", unitType: "COMMON" }
     },
     {
-      ingredientId: 4002,
+      ingredientId: seedResourceId(4002),
       ingredientName: "鸡蛋",
       source: "SYSTEM",
       categoryId: 5002,
       amount: { kind: "EXACT", quantity: "3", unitId: 3007, unitName: "个", unitType: "COMMON" }
     },
     {
-      ingredientId: 4005,
+      ingredientId: seedResourceId(4005),
       ingredientName: "青椒",
       source: "SYSTEM",
       categoryId: 5001,

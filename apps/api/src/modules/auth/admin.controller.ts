@@ -1,5 +1,5 @@
-import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
-import { FileInterceptor } from "@nestjs/platform-express";
+import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { FilesInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
@@ -7,6 +7,7 @@ import type { RequestWithAdmin } from "../../common/auth-context";
 import { ApiIdempotencyKey, ReadIdempotencyKey } from "../../common/idempotency-key";
 import { LoginRateLimitGuard } from "../../common/login-rate-limit.guard";
 import { SuperAdminGuard } from "../../common/super-admin.guard";
+import { recipeJsonUploadLimits, recipeJsonUploadStorage } from "../admin/recipe-import-upload";
 import {
   AdminMedalTemplateQueryDto,
   AdminInspirationCategoryNameDto,
@@ -29,9 +30,11 @@ import {
   CreateAdminRecipeDto,
   CreateAdminMedalTemplateDto,
   CreateAdminUserDto,
+  DeleteAdminInspirationCategoryDto,
   DeleteAdminIngredientCategoryDto,
   DeleteAdminIngredientDto,
   DeleteAdminPendingItemDto,
+  DeleteAdminRecipeDto,
   DeleteAdminUnitDto,
   OperationDto,
   PageQueryDto,
@@ -68,7 +71,10 @@ import {
   AdminMedalTemplateModel,
   AdminDeleteIngredientCategoryResultModel,
   AdminDeleteIngredientResultModel,
+  AdminDeleteInspirationCategoryResultModel,
   AdminDeletePendingItemResultModel,
+  AdminDeleteRecipeImportJobResultModel,
+  AdminDeleteRecipeResultModel,
   AdminDeleteUnitResultModel,
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
@@ -126,6 +132,7 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
     duration: content.duration as AdminRecipeContentInput["duration"],
     estimatedCalories: content.estimatedCalories,
     tips: content.tips,
+    tools: content.tools?.map(item => ({ name: item.name })),
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
       amount:
@@ -465,16 +472,16 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiIdempotencyKey()
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 25 * 1024 * 1024 } }))
+  @UseInterceptors(FilesInterceptor("files", recipeJsonUploadLimits.files, { storage: recipeJsonUploadStorage, limits: recipeJsonUploadLimits }))
   @ApiConsumes("multipart/form-data")
   @ApiOkModel(RecipeImportJobModel, "后台创建 recipe.import.v1 JSON 导入任务")
   createRecipeImportJsonJob(
     @Req() request: RequestWithAdmin,
     @ReadIdempotencyKey() operationId: string,
-    @UploadedFile() file?: { originalname?: string; buffer?: Buffer; size?: number }
+    @UploadedFiles() files?: Array<{ originalname?: string; buffer?: Buffer; size?: number }>
   ) {
     return this.adminService
-      .createRecipeImportJob(file ?? {}, request.admin.adminId, operationId)
+      .createRecipeImportJob(files ?? [], request.admin.adminId, operationId)
       .then(result => ok(result));
   }
 
@@ -486,6 +493,19 @@ export class AdminController {
     return this.adminService
       .listRecipeImportJobs(query.page, query.pageSize, query.status, request.admin.adminId)
       .then(result => ok(result));
+  }
+
+  @Delete("recipe-import-jobs/:jobId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeleteRecipeImportJobResultModel, "后台删除菜谱导入任务")
+  deleteRecipeImportJob(
+    @Req() request: RequestWithAdmin,
+    @Param("jobId", ParseIntPipe) jobId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.adminService.deleteRecipeImportJob(jobId, operationId, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("recipe-import-jobs/:jobId")
@@ -552,7 +572,7 @@ export class AdminController {
   @Get("pending-recipes")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(AdminPendingRecipeModel, "后台待审核个人菜谱推荐列表")
+  @ApiOkPage(AdminPendingRecipeModel, "后台待审核菜谱推荐列表")
   listPendingRecipes(@Req() request: RequestWithAdmin, @Query() query: AdminPendingRecipeQueryDto) {
     return this.adminService.listPendingRecipes(query.page, query.pageSize, query.keyword, request.admin.adminId).then(result => ok(result));
   }
@@ -672,6 +692,22 @@ export class AdminController {
   ) {
     return this.adminService
       .updateInspirationCategory(categoryId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Delete("inspiration-categories/:categoryId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeleteInspirationCategoryResultModel, "后台删除系统菜谱分类")
+  deleteInspirationCategory(
+    @Req() request: RequestWithAdmin,
+    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminInspirationCategoryDto
+  ) {
+    return this.adminService
+      .deleteInspirationCategory(categoryId, operationId, body.expectedVersion, request.admin.adminId)
       .then(result => ok(result));
   }
 
@@ -1005,7 +1041,7 @@ export class AdminController {
   @Get("pending-ingredients")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(AdminPendingIngredientModel, "后台待审核个人食材列表")
+  @ApiOkPage(AdminPendingIngredientModel, "后台待审核食材列表")
   listPendingIngredients(@Req() request: RequestWithAdmin, @Query() query: AdminPendingIngredientQueryDto) {
     return this.adminService
       .listPendingIngredients(query.page, query.pageSize, query.keyword, request.admin.adminId)
@@ -1015,7 +1051,7 @@ export class AdminController {
   @Get("ingredient-feedbacks")
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
-  @ApiOkPage(AdminPendingIngredientFeedbackModel, "后台待审核食材纠错列表")
+  @ApiOkPage(AdminPendingIngredientFeedbackModel, "后台食材纠错列表")
   listPendingIngredientFeedbacks(@Req() request: RequestWithAdmin, @Query() query: AdminPendingIngredientFeedbackQueryDto) {
     return this.adminService
       .listPendingIngredientFeedbacks(query.page, query.pageSize, query.keyword, request.admin.adminId)
@@ -1026,7 +1062,7 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(AdminReviewPendingIngredientResultModel, "后台审核个人食材推荐")
+  @ApiOkModel(AdminReviewPendingIngredientResultModel, "后台审核待审核食材")
   reviewPendingIngredient(
     @Req() request: RequestWithAdmin & AssetRequest,
     @Param("ingredientId", ParseIntPipe) ingredientId: number,
@@ -1040,7 +1076,7 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除待审核个人食材")
+  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除待审核食材")
   deletePendingIngredient(
     @Req() request: RequestWithAdmin,
     @Param("ingredientId", ParseIntPipe) ingredientId: number,
@@ -1070,7 +1106,7 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @ApiBearerAuth("AdminBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除待审核食材纠错")
+  @ApiOkModel(AdminDeletePendingItemResultModel, "后台删除食材纠错")
   deleteIngredientFeedback(
     @Req() request: RequestWithAdmin,
     @Param("feedbackId", ParseIntPipe) feedbackId: number,
@@ -1116,6 +1152,22 @@ export class AdminController {
     @Body() _body: OperationDto
   ) {
     return this.adminService.unblockRecipe(recipeId, request.admin.adminId, operationId).then(result => ok(result));
+  }
+
+  @Delete("recipes/:recipeId")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminDeleteRecipeResultModel, "后台物理删除下架系统菜谱")
+  deleteBlockedRecipe(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: DeleteAdminRecipeDto
+  ) {
+    return this.adminService
+      .deleteBlockedRecipe(recipeId, operationId, body.expectedVersion, request.admin.adminId)
+      .then(result => ok(result));
   }
 
   @Post("recipe-reports/:reportId/resolve")

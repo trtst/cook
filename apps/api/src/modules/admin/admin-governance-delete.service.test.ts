@@ -258,3 +258,156 @@ test("admin deletes a pending ingredient feedback", async () => {
   assert.equal(deletedId, feedback.id);
   assert.equal(result.id, feedback.id);
 });
+
+test("admin deletes an empty inspiration category", async () => {
+  const category = {
+    id: 71,
+    name: "下饭好菜",
+    version: 3
+  };
+  let deletedId: number | null = null;
+  const tx = {
+    $queryRaw: async () => [{ ok: "1" }],
+    idempotencyRecord: idempotencyMock(),
+    inspirationCategory: {
+      findUnique: async () => category,
+      delete: async ({ where }: { where: { id: number } }) => {
+        deletedId = where.id;
+      }
+    },
+    recipe: { count: async () => 0 },
+    recipeRecommendation: { count: async () => 0 },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createAdminService(tx);
+
+  const result = await (service as unknown as {
+    deleteInspirationCategory(categoryId: number, operationId: string, expectedVersion: number, adminId: number): Promise<{ categoryId: number }>;
+  }).deleteInspirationCategory(category.id, "202609090101", category.version, 1);
+
+  assert.equal(deletedId, category.id);
+  assert.equal(result.categoryId, category.id);
+});
+
+test("admin physically deletes a blocked inspiration recipe", async () => {
+  const recipe = {
+    id: 81,
+    status: "BLOCKED",
+    isInspiration: true,
+    inspirationCategoryId: 7,
+    version: 4,
+    title: "待删除菜谱",
+    coverImageUrl: "/static/uploads/admin-recipe-images/cover.jpg",
+    originCoverImageUrl: null,
+    currentVersionId: 801,
+    currentVersion: {
+      id: 801,
+      imagesJson: {
+        coverImageUrl: "/static/uploads/admin-recipe-images/cover.jpg",
+        stepImages: [{ imageUrl: "https://cdn.example/uploads/admin-recipe-images/step.jpg" }]
+      },
+      cookAssistant: {
+        snapshotJson: { steps: [{ imageUrl: "https://cdn.example/uploads/admin-recipe-images/assistant.jpg" }] }
+      }
+    }
+  };
+  let deletedId: number | null = null;
+  const deletedStorageKeys: string[] = [];
+  const cleanupAudits: Array<{ action?: string; payload?: unknown }> = [];
+  const transactionAudits: Array<{ action?: string; payload?: unknown }> = [];
+  const tx = {
+    $queryRaw: async () => [{ ok: "1" }],
+    idempotencyRecord: idempotencyMock(),
+    recipe: {
+      findFirst: async () => recipe,
+      delete: async ({ where }: { where: { id: number } }) => {
+        deletedId = where.id;
+      }
+    },
+    recipeCollection: { count: async () => 0 },
+    homeTopicItem: { count: async () => 0 },
+    mealPlanDish: { count: async () => 0 },
+    diningEventParticipant: { count: async () => 0 },
+    diningEventWishItem: { count: async () => 0 },
+    diningEventMenuItem: { count: async () => 0 },
+    shoppingItem: { count: async () => 0 },
+    recipeContentVersion: { deleteMany: async () => ({ count: 1 }) },
+    auditEvent: {
+      create: async ({ data }: { data: { action?: string; payload?: unknown } }) => {
+        transactionAudits.push(data);
+      }
+    }
+  };
+  const service = new AdminService(
+    {
+      adminAccount: { findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] }) },
+      auditEvent: {
+        create: async ({ data }: { data: { action?: string; payload?: unknown } }) => {
+          cleanupAudits.push(data);
+        }
+      },
+      $transaction: async <T>(callback: (transaction: typeof tx) => Promise<T>) => callback(tx)
+    } as never,
+    {} as never,
+    {} as never,
+    {
+      removePublishedImages: async (keys: Iterable<string>) => {
+        deletedStorageKeys.push(...keys);
+        return ["uploads/admin-recipe-images/step.jpg"];
+      },
+      publishedStorageKeyFromUrl: (url: string) => new URL(url, "http://local").pathname.replace(/^\/static\//u, "").replace(/^\//u, "")
+    } as never,
+    {} as never,
+    {} as never
+  );
+
+  const result = await (service as unknown as {
+    deleteBlockedRecipe(recipeId: number, operationId: string, expectedVersion: number, adminId: number): Promise<{ recipeId: number }>;
+  }).deleteBlockedRecipe(recipe.id, "202609090102", recipe.version, 1);
+
+  assert.equal(deletedId, recipe.id);
+  assert.equal(result.recipeId, recipe.id);
+  assert.deepEqual(deletedStorageKeys.sort(), [
+    "uploads/admin-recipe-images/assistant.jpg",
+    "uploads/admin-recipe-images/cover.jpg",
+    "uploads/admin-recipe-images/step.jpg"
+  ].sort());
+  assert.deepEqual(cleanupAudits, [
+    {
+      actorType: "ADMIN",
+      actorAdminId: 1,
+      action: "RECIPE_IMAGE_CLEANUP_FAILED",
+      objectType: "RECIPE",
+      objectId: recipe.id,
+      payload: { storageKeys: ["uploads/admin-recipe-images/step.jpg"] }
+    }
+  ]);
+});
+
+test("admin deletes a recipe import job without deleting published recipes", async () => {
+  const job = {
+    id: 91,
+    status: "COMPLETED",
+    sourceType: "JSON"
+  };
+  let deletedId: number | null = null;
+  const tx = {
+    $queryRaw: async () => [{ ok: "1" }],
+    idempotencyRecord: idempotencyMock(),
+    recipeImportJob: {
+      findFirst: async () => job,
+      delete: async ({ where }: { where: { id: number } }) => {
+        deletedId = where.id;
+      }
+    },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createAdminService(tx);
+
+  const result = await (service as unknown as {
+    deleteRecipeImportJob(jobId: number, operationId: string, adminId: number): Promise<{ jobId: number }>;
+  }).deleteRecipeImportJob(job.id, "202609090103", 1);
+
+  assert.equal(deletedId, job.id);
+  assert.equal(result.jobId, job.id);
+});

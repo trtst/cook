@@ -32,7 +32,7 @@ function trimString(value: unknown) {
   return typeof value === "string" ? value.trim() : value;
 }
 
-const resourceIdExample = 1001;
+const resourceIdExample = 10_000_000;
 const medalRuleValues = [
   "MEAL_COMPLETION",
   "DINING_EVENT_COMPLETION",
@@ -3005,6 +3005,15 @@ export class AdminIngredientCategoryNameDto extends OperationDto {
   name!: string;
 }
 
+export class AdminRecipeToolDto {
+  @ApiProperty({ maxLength: 64 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+}
+
 export class UpdateAdminIngredientCategoryDto extends VersionedOperationDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -3069,6 +3078,14 @@ export class AdminRecipeContentDto {
   @IsString()
   @MaxLength(1000)
   tips!: string | null;
+
+  @ApiPropertyOptional({ type: [AdminRecipeToolDto] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => AdminRecipeToolDto)
+  tools?: AdminRecipeToolDto[];
 
   @ApiProperty({ type: [RecipeIngredientDto] })
   @IsArray()
@@ -3516,6 +3533,10 @@ export class UpdateAdminInspirationCategoryDto extends VersionedOperationDto {
   @MaxLength(20)
   name!: string;
 }
+
+export class DeleteAdminInspirationCategoryDto extends VersionedOperationDto {}
+
+export class DeleteAdminRecipeDto extends VersionedOperationDto {}
 
 export class ReorderAdminInspirationCategoriesDto extends OperationDto {
   @ApiProperty({ type: [ReorderItemDto] })

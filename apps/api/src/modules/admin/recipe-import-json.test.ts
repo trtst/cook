@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  cleanZipPath,
   normalizeRecipeImportBody,
   parseJsonSource,
-  readJsonSources,
+  readJsonSourcesFromFiles,
   type RecipeImportJsonRefs
 } from "./recipe-import-json";
 
@@ -271,46 +270,34 @@ test("keeps unmatched source rows for manual confirmation and rejects unknown to
   assert.equal(result.recipeBody.ingredients[0]?.ingredientId, null);
 });
 
-test("rejects JSON arrays and ZIP path traversal while retaining safe JSON entries", () => {
+test("rejects JSON arrays and non-JSON files", () => {
   const arrayResult = parseJsonSource(
     { sourcePath: "array.json", jsonText: "[]" },
     refs
   );
   assert.equal(arrayResult.errorItems.some(item => item.field === "recipe"), true);
-  assert.equal(cleanZipPath("../escape.json"), "");
-  assert.equal(cleanZipPath("nested/../../escape.json"), "");
-  assert.equal(cleanZipPath("/absolute/escape.json"), "");
-  assert.equal(cleanZipPath("C:/absolute/escape.json"), "");
-  assert.equal(cleanZipPath("C:\\absolute\\escape.json"), "");
-
-  const AdmZip = require("adm-zip");
-  const zip = new AdmZip();
-  zip.addFile("safe/recipe.json", Buffer.from(JSON.stringify(validDocument())));
-  const sources = readJsonSources("recipes.zip", zip.toBuffer());
-
-  assert.deepEqual(sources.map(item => item.sourcePath), ["safe/recipe.json"]);
-  assert.deepEqual(JSON.parse(sources[0]?.jsonText ?? "{}"), validDocument());
+  assert.throws(() => readJsonSourcesFromFiles([
+    { originalname: "recipes.zip", buffer: Buffer.from("not supported"), size: 1 }
+  ]), /只支持 JSON/);
 });
 
-test("rejects zip path traversal names before reading entries", () => {
-  const AdmZip = require("adm-zip");
-  const zip = new AdmZip();
-  zip.addFile("../escape.json", Buffer.from(JSON.stringify(validDocument())));
+test("combines multiple JSON files into one import source list", () => {
+  const sources = readJsonSourcesFromFiles([
+    { originalname: "first.json", buffer: Buffer.from(JSON.stringify(validDocument())), size: 1 },
+    { originalname: "second.json", buffer: Buffer.from(JSON.stringify(validDocument())), size: 1 }
+  ]);
 
-  // adm-zip normalizes names when creating an archive, so the parser-level
-  // guard is covered by the direct path checks above. Safe archive reading is
-  // covered by the preceding test.
-  assert.deepEqual(readJsonSources("unsafe.zip", zip.toBuffer()).map(item => item.sourcePath), ["escape.json"]);
+  assert.deepEqual(sources.map(item => item.sourcePath), ["first.json", "second.json"]);
 });
 
-test("rejects ZIP archives with too many JSON entries", () => {
-  const AdmZip = require("adm-zip");
-  const zip = new AdmZip();
-  for (let index = 0; index < 101; index += 1) {
-    zip.addFile(`recipe-${index}.json`, Buffer.from(JSON.stringify(validDocument())));
-  }
+test("rejects more than 100 selected JSON files", () => {
+  const files = Array.from({ length: 101 }, (_, index) => ({
+    originalname: `recipe-${index}.json`,
+    buffer: Buffer.from(JSON.stringify(validDocument())),
+    size: 1
+  }));
 
-  assert.throws(() => readJsonSources("too-many.zip", zip.toBuffer()), /JSON 文件数量不能超过/);
+  assert.throws(() => readJsonSourcesFromFiles(files), /文件数量不能超过 100 个/);
 });
 
 test("normalizes historical import bodies before returning them to the admin page", () => {

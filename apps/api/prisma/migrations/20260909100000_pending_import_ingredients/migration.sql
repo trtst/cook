@@ -1,0 +1,1 @@
+ALTER TYPE "IngredientStatus" ADD VALUE IF NOT EXISTS 'PENDING';

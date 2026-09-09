@@ -81,6 +81,8 @@ interface PageResult<T> {
 
 路径中的资源 ID 使用正整数，格式错误统一返回业务 `code=400`。`inviteToken`、`shareToken` 和 `Idempotency-Key` 等不透明凭证不是资源 ID，不使用资源 ID 校验。存在覆盖风险的写操作提交 `expectedVersion`；服务端锁定资源后比较当前版本，不一致返回业务 `code=409`，客户端刷新详情后再决定是否重试。
 
+当前 ID 规则：用户公开 `uid` 为服务端随机生成的唯一 8 位数字；菜谱、菜谱正文版本、食材以及个人分类/场景从 `10000000` 起递增；系统单位、系统食材分类、系统菜谱分类分别从 `3001`、`5001`、`6001` 起递增。菜谱、食材不按系统、个人或改编来源拆分 ID 段。`Recipe.id` 在菜谱修改后保持不变，正文修改时只新建不可变的 `RecipeContentVersion.id`；正文版本 ID 仅供接口和数据库关联使用，不在前台展示，也不拼接为组合编号。
+
 OpenAPI 的成功响应必须描述完整统一 envelope 和具体 `data` schema；对象、数组和分页响应不得退化为无字段的 `object`。本文、服务端 OpenAPI 和各应用本地类型共同变更，不直接复用 Prisma Model。
 
 请求 DTO 使用严格白名单：请求体或查询参数包含未声明字段时返回业务 `code=400`，不静默忽略旧字段。嵌套对象必须递归校验。当前菜谱正文的 `ingredients` 和 `steps` 分别最多 100 项，批量消耗冰箱条目最多 100 个且不允许空数组或重复 ID。
@@ -906,7 +908,7 @@ GET  /static/uploads/site-content-images/{fileName}
 
 `GET /admin/content/articles` 返回文章分页，查询参数固定为 `page / pageSize`，并支持 `channelId / status / keyword` 过滤；`keyword` 匹配标题、摘要、关键词和 slug；`status` 只允许 `DRAFT / PUBLISHED / UNLISTED`。`GET /admin/content/{contentId}` 返回后台详情。`POST /admin/content` 与 `PUT /admin/content/{contentId}` 都要求 `Idempotency-Key`，当前只治理两类内容：`PAGE` 与 `ARTICLE`。`PAGE` 必须命中受控固定页 slug；后台手工保存 `ARTICLE` 必须选择栏目，路径由服务端固定生成 `/guides/{slug}`，后台提交的自定义 `path` 不生效。导入脚本可以先写入无栏目草稿，但这类文章必须重新编辑选择栏目后才能发布；发布 `ARTICLE` 时服务端必须校验栏目存在且属于 `KITCHEN / COOK / FOOD / OFFICIAL_NOTICE`。文章关键词是后台运营字段，最多 200 字符，多个词用分号分隔；服务端会把中文分号规范为英文分号并去掉空项。正文固定使用 `bodyHtml + bodyText` 双写；服务端 HTML 白名单只保留 `p / br / h2 / h3 / strong / b / u / blockquote / ul / ol / li / a / img`，不开放 `h1 / em / i / s`、对齐、表格、视频、内嵌组件或任意 class/style；链接只允许 HTTPS 或站内路径，图片只允许本站内容图片路径；`bodyText` 为空时从 HTML 提取纯文本兜底。
 
-后台普通文章发布页只暴露 `标题 / 摘要 / 关键词 / 栏目 / 封面图 / 正文` 六类运营输入；`slug / path / label / heroNote / effectiveAt / sortOrder / type` 由页面和服务端自动处理或沿用既有值。普通文章正文编辑器只提供 `h2 / h3 / 加粗 / 下划线 / 引用 / 有序列表 / 无序列表 / 链接 / 图片 / 清除格式`，不提供 H1、斜体、对齐、表格、视频或更多通用编辑能力。普通文章正文支持从本地 Markdown 文件导入为富文本，转换结果仍走同一套 `bodyHtml + bodyText` 保存和服务端 HTML 清洗；Markdown 导入只转换标题、加粗、引用、列表、图片和链接，`#` 正文标题降级为 `h2`，`####` 及更深层级收敛为 `h3`，斜体语法按普通文本处理。该入口只负责文章富文本转换；菜谱导入另行固定为单个 JSON 或 ZIP 内多个 JSON，不提供 Markdown、Excel 等菜谱导入入口。
+后台普通文章发布页只暴露 `标题 / 摘要 / 关键词 / 栏目 / 封面图 / 正文` 六类运营输入；`slug / path / label / heroNote / effectiveAt / sortOrder / type` 由页面和服务端自动处理或沿用既有值。普通文章正文编辑器只提供 `h2 / h3 / 加粗 / 下划线 / 引用 / 有序列表 / 无序列表 / 链接 / 图片 / 清除格式`，不提供 H1、斜体、对齐、表格、视频或更多通用编辑能力。普通文章正文支持从本地 Markdown 文件导入为富文本，转换结果仍走同一套 `bodyHtml + bodyText` 保存和服务端 HTML 清洗；Markdown 导入只转换标题、加粗、引用、列表、图片和链接，`#` 正文标题降级为 `h2`，`####` 及更深层级收敛为 `h3`，斜体语法按普通文本处理。该入口只负责文章富文本转换；菜谱导入固定为 `files[]` 批量 JSON，不提供 ZIP、Markdown、Excel 等菜谱导入入口。
 
 `POST /admin/content/{contentId}/status` 只切换 `DRAFT / PUBLISHED / UNLISTED` 三种状态，且要求 `expectedVersion`。`DELETE /admin/content/{contentId}` 只允许删除 `ARTICLE`，要求 `Idempotency-Key + expectedVersion`；`PUBLISHED` 内容必须先切到 `UNLISTED` 或 `DRAFT` 后才能删除，官网固定页 `PAGE` 不支持删除。删除只移除内容记录及数据库级联的点赞关系，不删除富文本图片文件，因为正文图片当前没有独立引用表且可能被复用。内容摘要和详情固定返回 `type / status / channel / slug / path / title / summary / keywords / label / heroNote / coverImageUrl / publishedAt / effectiveAt / sortOrder / version / updatedBy / createdAt / updatedAt`；详情额外返回 `bodyHtml / bodyText`。
 
@@ -990,12 +992,15 @@ DELETE /admin/ingredient-feedbacks/{feedbackId}
 
 系统食材图片的新公开 URL 指向实际 PNG 对象 key：`/static/uploads/ingredients/{ingredientId}.png` 或静态域名下的 `/uploads/ingredients/{ingredientId}.png`；本地公开读取继续兼容无扩展名旧路径。
 
+当前 `/admin/pending-ingredients` 统一返回待审核食材，包含用户提交的个人食材推荐和 JSON 导入创建的 `PENDING` 系统食材，并返回 `source = PERSONAL / JSON_IMPORT`；JSON 导入项的 `user` 为 `null`。审核通过、归并或拒绝 JSON 导入项时，同步更新未发布导入草稿的食材引用和状态；删除接口仍只删除个人食材推荐记录。本文前段关于该接口“只返回个人食材推荐”的历史表述不再适用。
+
 后台菜谱治理当前补充为：
 
 ```text
 GET /admin/inspiration-categories
 POST /admin/inspiration-categories
 PUT /admin/inspiration-categories/{categoryId}
+DELETE /admin/inspiration-categories/{categoryId}
 POST /admin/inspiration-categories/reorder
 GET /admin/recipes
 POST /admin/recipes
@@ -1005,16 +1010,20 @@ POST /admin/recipe-images
 GET /admin/recipe-reports
 POST /admin/recipes/{recipeId}/block
 POST /admin/recipes/{recipeId}/unblock
+DELETE /admin/recipes/{recipeId}
 POST /admin/recipe-reports/{reportId}/resolve
 POST /admin/recipe-import-jobs/json
 GET  /admin/recipe-import-jobs
+DELETE /admin/recipe-import-jobs/{jobId}
 GET  /admin/recipe-import-jobs/{jobId}
 GET  /admin/recipe-import-items/{itemId}
 PUT  /admin/recipe-import-items/{itemId}
 POST /admin/recipe-import-items/{itemId}/publish
 ```
 
-`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排系统菜谱分类，请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName`，排序统一按 `updatedAt desc`。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `isInspiration = true` 的系统菜谱记录。`POST /admin/recipe-import-jobs/json` 接收单个 `recipe.import.v1` JSON 或 ZIP 内 JSON；每个条目先保存为待审核系统项，严格匹配食材和单位，未匹配或模糊用量不得发布；发布时菜谱 ID、营养快照和归属用户由后台生成，归属用户从 100 人灵感用户池随机选择。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`collectCount`、`canEdit`，以及单菜助理状态 `assistantState(status / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `isInspiration = true`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台手动重试当前系统菜谱版本的单菜助理生成，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情。`GET /admin/pending-recipes` 返回待审核个人菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次创建新的系统固定版本时，服务端还要同步生成一份单菜助理快照并挂到该 `RecipeContentVersion`；当前覆盖后台新建、后台编辑、后台导入发布，以及个人推荐审核通过收录为系统菜谱这四条写路径。若生成失败，主菜谱版本写入不回滚，而是把失败状态、最近错误和尝试次数落到同一份助理记录里，供后台详情页查看并手动重试。该快照只作为固定版本附属数据保留，不回写正文主数据。
+菜谱导入接口只接收批量选择的一个或多个 `recipe.import.v1` JSON 文件，字段为 `files[]`；不支持 ZIP、Markdown 或 Excel 菜谱导入。每个 JSON 先进入待审核系统项。`GET /admin/recipes/{recipeId}` 的后台详情返回当前正文版本、工具、业务标签、营养分析、美食助理和七个 Wiki 质量卡；质量卡按当前版本实时返回状态、分数和阻断原因。
+
+`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排，`DELETE /admin/inspiration-categories/{categoryId}` 仅允许删除没有菜谱和待审核推荐引用的分类。请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName / version`，排序统一按 `updatedAt desc`；后台页面将 `BLOCKED` 菜谱集中展示为“下架”视图。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `isInspiration = true` 的系统菜谱记录。`POST /admin/recipe-import-jobs/json` 接收 `files[]` 批量 JSON；每个条目先保存为待审核系统项，严格匹配食材和单位，未匹配或模糊用量不得发布；发布时菜谱 ID、营养快照和归属用户由后台生成，归属用户从 100 人灵感用户池随机选择。`DELETE /admin/recipe-import-jobs/{jobId}` 只删除导入任务及其待审核条目，不删除已经发布的正式菜谱，处理中任务不能删除。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`collectCount`、`canEdit`，以及单菜助理状态 `assistantState(status / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `isInspiration = true`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台手动重试当前系统菜谱版本的单菜助理生成，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情。`DELETE /admin/recipes/{recipeId}` 仅允许对 `BLOCKED` 的系统菜谱执行物理删除，若仍被专题、计划、收藏或饭局引用则拒绝删除；删除后不会继续出现在“下架”视图。`GET /admin/pending-recipes` 返回待审核菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次创建新的系统固定版本时，服务端还要同步生成一份单菜助理快照并挂到该 `RecipeContentVersion`；当前覆盖后台新建、后台编辑、后台导入发布，以及个人推荐审核通过收录为系统菜谱这四条写路径。若生成失败，主菜谱版本写入不回滚，而是把失败状态、最近错误和尝试次数落到同一份助理记录里，供后台详情页查看并手动重试。该快照只作为固定版本附属数据保留，不回写正文主数据。
 
 ## 其他领域接口摘要
 
@@ -2760,8 +2769,8 @@ POST /recipes/{recipeId}/recommendations
 
 ```json
 {
-  "sourceRecipeId": 2001,
-  "sourceVersionId": 1001,
+  "sourceRecipeId": 10002101,
+  "sourceVersionId": 10001101,
   "categoryId": null
 }
 ```
@@ -2779,9 +2788,9 @@ Idempotency-Key: 172251000001
   "content": {
     "name": "番茄炒蛋",
     "story": null,
-    "categoryId": 1,
-    "inspirationCategoryId": 2,
-    "sceneIds": [1],
+    "categoryId": 10000000,
+    "inspirationCategoryId": 6001,
+    "sceneIds": [10000000],
     "coverUploadId": null,
     "coverImageUrl": null,
     "baseServings": 2,
@@ -2790,9 +2799,9 @@ Idempotency-Key: 172251000001
     "tips": "番茄最后下锅",
     "ingredients": [
       {
-        "ingredientId": 4001,
+        "ingredientId": 10004001,
         "quantity": "300",
-        "unitId": 3
+        "unitId": 3001
       }
     ],
     "steps": [

@@ -18,11 +18,17 @@ import type {
     AdminInspirationCategorySummary,
     AdminPendingUnitRecommendationSummary,
     AdminPendingRecipeSummary,
-    AdminRecipeDetail,
-    AdminDeleteIngredientCategoryResult,
+  AdminRecipeDetail,
+  AdminRecipeWiki,
+  AdminRecipeWikiNutrition,
+  AdminRecipeWikiTag,
+  AdminDeleteIngredientCategoryResult,
     AdminDeleteIngredientResult,
     AdminDeletePendingIngredientResult,
     AdminDeletePendingItemResult,
+    AdminDeleteInspirationCategoryResult,
+    AdminDeleteRecipeImportJobResult,
+    AdminDeleteRecipeResult,
     AdminDeleteUnitResult,
   AdminIngredientCategoryPayloadRequest,
   AdminIngredientRejectReasonCode,
@@ -111,6 +117,8 @@ import {
   versionToContent
 } from "../recipe/recipe-content";
 import { inferIngredientTagFacts } from "../recipe/ingredient-tag-facts";
+import { loadRecipeNutritionSummary } from "../recipe/recipe-nutrition";
+import { buildRecipeWikiQualityCards } from "../recipe/recipe-wiki";
 import { createImportedRecipeVersionTags, replaceAutoRecipeVersionTags } from "../recipe/recipe-version-tags";
 import { inspirationRecipeWhere, pickRecipeInspirationOwner } from "../recipe/recipe-inspiration-owner";
 import { MedalService } from "../user/medal.service";
@@ -126,7 +134,7 @@ import {
 import {
   normalizeRecipeImportBody,
   parseJsonSource,
-  readJsonSources,
+  readJsonSourcesFromFiles,
   rebuildJsonItemState,
   type RecipeImportJsonSource
 } from "./recipe-import-json";
@@ -321,6 +329,41 @@ type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
     };
   };
 }>;
+type AdminPendingIngredientListRow = {
+  ingredient: {
+    id: UUID;
+    name: string;
+    version: number;
+    categoryId: UUID;
+    defaultUnitId: UUID;
+    owner: {
+      id: UUID;
+      uid: number;
+      nickname: string | null;
+    } | null;
+    defaultUnit: {
+      name: string;
+    } | null;
+  };
+  categoryName: string | null;
+  userId: UUID | null;
+  createdAt: Date;
+  updatedAt: Date;
+  source: "PERSONAL" | "JSON_IMPORT";
+};
+type AdminPendingImportedIngredientRow = Prisma.IngredientGetPayload<{
+  include: {
+    category: true;
+    defaultUnit: true;
+    owner: {
+      select: {
+        id: true;
+        uid: true;
+        nickname: true;
+      };
+    };
+  };
+}>;
 type AdminPendingIngredientFeedbackRow = Prisma.IngredientFeedbackGetPayload<{
   include: {
     ingredient: {
@@ -510,7 +553,7 @@ function resolveIngredientReviewNote(body: AdminReviewPendingIngredientRequest) 
   };
 }
 
-function toAdminPendingIngredientSummary(row: AdminPendingIngredientRow): AdminPendingIngredientSummary {
+function toAdminPendingIngredientSummary(row: AdminPendingIngredientListRow): AdminPendingIngredientSummary {
   return {
     id: row.ingredient.id,
     name: row.ingredient.name,
@@ -518,15 +561,18 @@ function toAdminPendingIngredientSummary(row: AdminPendingIngredientRow): AdminP
     categoryId: row.ingredient.categoryId,
     categoryName: row.categoryName,
     defaultUnitId: row.ingredient.defaultUnitId,
-    defaultUnitName: row.defaultUnitName,
+    defaultUnitName: row.ingredient.defaultUnit?.name ?? null,
     status: "PENDING",
     createdAt: toIsoDate(row.createdAt),
     updatedAt: toIsoDate(row.updatedAt),
-    user: {
-      id: row.ingredient.owner?.id ?? row.userId,
-      uid: row.ingredient.owner?.uid ?? 0,
-      nickname: row.ingredient.owner?.nickname ?? null
-    }
+    source: row.source,
+    user: row.ingredient.owner
+      ? {
+          id: row.ingredient.owner.id,
+          uid: row.ingredient.owner.uid,
+          nickname: row.ingredient.owner.nickname
+        }
+      : null
   };
 }
 
@@ -651,7 +697,8 @@ export class AdminService {
       recipeRecycledCount,
       recipeOpenReportCount,
       pendingRecipeCount,
-      pendingIngredientCount,
+      pendingPersonalIngredientCount,
+      pendingImportedIngredientCount,
       ingredientCategoryCount,
       ingredientItemCount,
       unitCount,
@@ -674,6 +721,7 @@ export class AdminService {
       this.prisma.recipeReport.count({ where: { status: "OPEN" } }),
       this.prisma.recipeRecommendation.count({ where: { status: "PENDING" } }),
       this.prisma.ingredientRecommendation.count({ where: { status: "PENDING" } }),
+      this.prisma.ingredient.count({ where: { ownerId: null, status: "PENDING" } }),
       this.prisma.ingredientCategory.count(),
       this.prisma.ingredient.count({ where: { ownerId: null, status: "ACTIVE" } }),
       this.prisma.unit.count({ where: { ownerId: null } }),
@@ -687,7 +735,7 @@ export class AdminService {
         totalUsers: userTotal,
         openReportCount: recipeOpenReportCount,
         pendingRecipeCount,
-        pendingIngredientCount,
+        pendingIngredientCount: pendingPersonalIngredientCount + pendingImportedIngredientCount,
         todayRedeemedCount
       },
       user: {
@@ -2582,9 +2630,10 @@ export class AdminService {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
+    const sourceTake = skip + normalizedPageSize;
     const normalizedKeyword = keyword?.trim();
     const uidKeyword = normalizedKeyword && /^\d+$/.test(normalizedKeyword) ? Number(normalizedKeyword) : null;
-    const where: Prisma.IngredientRecommendationWhereInput = {
+    const recommendationWhere: Prisma.IngredientRecommendationWhereInput = {
       status: "PENDING",
       ingredient: {
         is: {
@@ -2605,9 +2654,22 @@ export class AdminService {
           }
         : {})
     };
-    const [items, total] = await this.prisma.$transaction([
+    const systemWhere: Prisma.IngredientWhereInput = {
+      ownerId: null,
+      status: "PENDING",
+      ...(normalizedKeyword
+        ? {
+            OR: [
+              { name: { contains: normalizedKeyword, mode: "insensitive" } },
+              { category: { is: { name: { contains: normalizedKeyword, mode: "insensitive" } } } },
+              { defaultUnit: { is: { name: { contains: normalizedKeyword, mode: "insensitive" } } } }
+            ]
+          }
+        : {})
+    };
+    const [personalItems, personalTotal, systemItems, systemTotal] = await this.prisma.$transaction([
       this.prisma.ingredientRecommendation.findMany({
-        where,
+        where: recommendationWhere,
         include: {
           ingredient: {
             include: {
@@ -2623,18 +2685,56 @@ export class AdminService {
           }
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        skip,
-        take: normalizedPageSize
+        take: sourceTake
       }),
-      this.prisma.ingredientRecommendation.count({ where })
+      this.prisma.ingredientRecommendation.count({ where: recommendationWhere }),
+      this.prisma.ingredient.findMany({
+        where: systemWhere,
+        include: {
+          category: true,
+          defaultUnit: true,
+          owner: {
+            select: {
+              id: true,
+              uid: true,
+              nickname: true
+            }
+          }
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: sourceTake
+      }),
+      this.prisma.ingredient.count({ where: systemWhere })
     ]);
 
+    const personalRows: AdminPendingIngredientListRow[] = personalItems.map(item => ({
+      ingredient: item.ingredient,
+      categoryName: item.categoryName,
+      userId: item.userId,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      source: "PERSONAL"
+    }));
+    const systemRows: AdminPendingIngredientListRow[] = systemItems.map(item => ({
+      ingredient: item,
+      categoryName: item.category.name,
+      userId: null,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      source: "JSON_IMPORT"
+    }));
+    const mergedRows = [...personalRows, ...systemRows].sort((left, right) => {
+      const createdAtDelta = left.createdAt.getTime() - right.createdAt.getTime();
+      return createdAtDelta !== 0 ? createdAtDelta : left.ingredient.id - right.ingredient.id;
+    });
+    const pageItems = mergedRows.slice(skip, skip + normalizedPageSize);
+
     return {
-      items: items.map(toAdminPendingIngredientSummary),
+      items: pageItems.map(toAdminPendingIngredientSummary),
       page: normalizedPage,
       pageSize: normalizedPageSize,
-      total,
-      hasNext: skip + items.length < total
+      total: personalTotal + systemTotal,
+      hasNext: skip + pageItems.length < personalTotal + systemTotal
     };
   }
 
@@ -2935,6 +3035,10 @@ export class AdminService {
     try {
       return await this.prisma.$transaction(async tx => {
         await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
+        const importedIngredient = await this.findPendingImportedIngredient(tx, ingredientId);
+        if (importedIngredient) {
+          return this.reviewPendingImportedIngredient(tx, importedIngredient, body, adminId, requestHash, reviewContent);
+        }
         const recommendation = await this.requirePendingIngredientRecommendation(tx, ingredientId);
         const repeated = await getAdminIdempotentResult<AdminReviewPendingIngredientResult>(
           tx,
@@ -3188,6 +3292,176 @@ export class AdminService {
       }
       throw error;
     }
+  }
+
+  private async reviewPendingImportedIngredient(
+    tx: Prisma.TransactionClient,
+    importedIngredient: AdminPendingImportedIngredientRow,
+    body: AdminReviewPendingIngredientRequest,
+    adminId: UUID,
+    requestHash: string,
+    reviewContent: ReturnType<typeof resolveIngredientReviewNote>
+  ): Promise<AdminReviewPendingIngredientResult> {
+    const repeated = await getAdminIdempotentResult<AdminReviewPendingIngredientResult>(
+      tx,
+      body.operationId,
+      "admin-pending-ingredient:review",
+      adminId,
+      requestHash
+    );
+    if (repeated) return repeated;
+    if (importedIngredient.version !== body.expectedVersion) {
+      throw new ConflictException("食材已被更新，请刷新后重试");
+    }
+    await startAdminIdempotentOperation(tx, body.operationId, "admin-pending-ingredient:review", adminId, requestHash);
+
+    const now = new Date();
+    if (body.action === "REJECT") {
+      await tx.ingredient.update({
+        where: { id: importedIngredient.id },
+        data: {
+          status: "DISABLED",
+          version: { increment: 1 }
+        }
+      });
+      await this.refreshRecipeImportIngredientReferences(tx, importedIngredient.id, {
+        id: importedIngredient.id,
+        name: importedIngredient.name
+      });
+      const result = {
+        id: importedIngredient.id,
+        status: "REJECTED",
+        reviewedAt: toIsoDate(now),
+        targetIngredientId: null
+      } satisfies AdminReviewPendingIngredientResult;
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_IMPORT_INGREDIENT_REVIEWED",
+          objectType: "INGREDIENT",
+          objectId: importedIngredient.id,
+          payload: {
+            action: body.action,
+            rejectReasonCode: reviewContent.reviewReasonCode,
+            reason: reviewContent.auditReason,
+            advice: reviewContent.reviewAdvice
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-ingredient:review", adminId, requestHash, result);
+      return result;
+    }
+
+    const name = body.name?.trim() || "";
+    if (!name) throw new BadRequestException("食材名称不能为空");
+    if (!body.categoryId) throw new BadRequestException("请选择分类");
+    if (!body.defaultUnitId) throw new BadRequestException("请选择默认单位");
+    const category = await this.requireSelectableIngredientCategory(tx, body.categoryId);
+    const unit = await this.requireSystemUnit(tx, body.defaultUnitId);
+    const searchKey = buildSearchKey(name);
+    let targetIngredientId: UUID = importedIngredient.id;
+    if (body.action === "APPROVE_MERGE") {
+      if (!body.targetIngredientId) throw new BadRequestException("请选择归并目标");
+      const mergeTarget = await this.requireSystemIngredient(tx, body.targetIngredientId);
+      await this.assertSystemIngredientNameAvailable(tx, searchKey, mergeTarget.id);
+      const updatedTarget = await tx.ingredient.update({
+        where: { id: mergeTarget.id },
+        data: {
+          name,
+          searchKey,
+          categoryId: category.id,
+          defaultUnitId: unit.id,
+          systemSortOrder:
+            mergeTarget.categoryId === category.id
+              ? mergeTarget.systemSortOrder
+              : await this.nextSystemIngredientSortOrder(tx, category.id),
+          version: { increment: 1 }
+        }
+      });
+      await tx.ingredient.update({
+        where: { id: importedIngredient.id },
+        data: {
+          status: "MERGED",
+          mergedToId: updatedTarget.id,
+          version: { increment: 1 }
+        }
+      });
+      targetIngredientId = updatedTarget.id;
+    } else {
+      const duplicate = await tx.ingredient.findFirst({
+        where: {
+          ownerId: null,
+          status: {
+            in: ["ACTIVE", "DISABLED"]
+          },
+          searchKey
+        }
+      });
+      if (duplicate) {
+        const updatedTarget = await tx.ingredient.update({
+          where: { id: duplicate.id },
+          data: {
+            status: "ACTIVE",
+            name,
+            searchKey,
+            categoryId: category.id,
+            defaultUnitId: unit.id,
+            version: { increment: 1 }
+          }
+        });
+        await tx.ingredient.update({
+          where: { id: importedIngredient.id },
+          data: {
+            status: "MERGED",
+            mergedToId: updatedTarget.id,
+            version: { increment: 1 }
+          }
+        });
+        targetIngredientId = updatedTarget.id;
+      } else {
+        await tx.ingredient.update({
+          where: { id: importedIngredient.id },
+          data: {
+            status: "ACTIVE",
+            mergedToId: null,
+            name,
+            searchKey,
+            categoryId: category.id,
+            defaultUnitId: unit.id,
+            systemSortOrder: await this.nextSystemIngredientSortOrder(tx, category.id),
+            displaySortOrder: await this.nextSystemIngredientDisplaySortOrder(tx),
+            version: { increment: 1 }
+          }
+        });
+      }
+    }
+    await this.refreshRecipeImportIngredientReferences(tx, importedIngredient.id, {
+      id: targetIngredientId,
+      name
+    });
+    const result = {
+      id: importedIngredient.id,
+      status: "APPROVED",
+      reviewedAt: toIsoDate(now),
+      targetIngredientId
+    } satisfies AdminReviewPendingIngredientResult;
+    await tx.auditEvent.create({
+      data: {
+        actorType: "ADMIN",
+        actorAdminId: adminId,
+        action: "RECIPE_IMPORT_INGREDIENT_REVIEWED",
+        objectType: "INGREDIENT",
+        objectId: importedIngredient.id,
+        payload: {
+          action: body.action,
+          targetIngredientId,
+          reason: reviewContent.auditReason
+        }
+      }
+    });
+    await completeAdminIdempotentOperation(tx, body.operationId, "admin-pending-ingredient:review", adminId, requestHash, result);
+    return result;
   }
 
   async reviewPendingUnitRecommendation(
@@ -3613,22 +3887,26 @@ export class AdminService {
   }
 
   async createRecipeImportJob(
-    file: { originalname?: string; buffer?: Buffer; size?: number },
+    files: Array<{ originalname?: string; buffer?: Buffer; size?: number }>,
     adminId: UUID,
     operationId: OperationId
   ): Promise<RecipeImportJobSummary> {
     await this.requireSuperAdmin(adminId);
-    if (!file.buffer || !file.originalname || !file.size) {
-      throw new BadRequestException("请上传 JSON 或包含 JSON 的 zip 文件");
+    if (files.length === 0) {
+      throw new BadRequestException("请至少上传一个 JSON 文件");
     }
-    const sourceName = file.originalname;
+    const sourceName = files.map(file => file.originalname || "").filter(Boolean).join(", ");
 
-    const sources = readJsonSources(sourceName, file.buffer);
+    const sources = readJsonSourcesFromFiles(files);
     if (sources.length === 0) {
-      throw new BadRequestException("压缩包内未找到 JSON 文件");
+      throw new BadRequestException("未找到可导入的 JSON 文件");
     }
-    const fileHash = createHash("sha256").update(file.buffer).digest("hex");
-    const requestHash = `JSON:${sourceName}:${file.size}:${fileHash}`;
+    const fileHashBuilder = createHash("sha256");
+    for (const file of files) {
+      fileHashBuilder.update(file.originalname || "");
+      fileHashBuilder.update(file.buffer || Buffer.alloc(0));
+    }
+    const requestHash = `JSON:${sourceName}:${fileHashBuilder.digest("hex")}`;
     let jobId: UUID | null = null;
     let startedRecordId: UUID | null = null;
 
@@ -3715,22 +3993,27 @@ export class AdminService {
         const source = sources[index];
         try {
           const parsed = parseJsonSource(source as RecipeImportJsonSource, refs);
-          await this.prisma.recipeImportItem.create({
-            data: {
-              jobId,
-              sourcePath: source.sourcePath,
-              title: parsed.recipeBody.title.trim() || parsed.parsedBody.titleLine || null,
-              status: parsed.errorItems.length > 0 ? "NEEDS_FIX" : "READY",
-              rawBodyJson: toJson({
-                ...parsed.rawBody,
-                assetFolder: "",
-                images: []
-              }),
-              parsedBodyJson: toJson(parsed.parsedBody),
-              recipeBodyJson: toJson(parsed.recipeBody),
-              errorJson: toJson(parsed.errorItems),
-              warnJson: toJson(parsed.warnItems)
-            }
+          await this.prisma.$transaction(async tx => {
+            const rawBody = {
+              ...parsed.rawBody,
+              assetFolder: "",
+              images: []
+            };
+            const recipeBody = await this.prepareRecipeImportBody(tx, parsed.recipeBody);
+            const state = await this.buildRecipeImportItemState(tx, recipeBody, rawBody);
+            await tx.recipeImportItem.create({
+              data: {
+                jobId: jobId as UUID,
+                sourcePath: source.sourcePath,
+                title: recipeBody.title.trim() || parsed.parsedBody.titleLine || null,
+                status: state.errorItems.length > 0 ? "NEEDS_FIX" : "READY",
+                rawBodyJson: toJson(rawBody),
+                parsedBodyJson: toJson(parsed.parsedBody),
+                recipeBodyJson: toJson(recipeBody),
+                errorJson: toJson(state.errorItems),
+                warnJson: toJson(state.warnItems)
+              }
+            });
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "解析 JSON 失败";
@@ -3877,6 +4160,47 @@ export class AdminService {
       total,
       hasNext: skip + items.length < total
     };
+  }
+
+  async deleteRecipeImportJob(jobId: UUID, operationId: OperationId, adminId: UUID): Promise<AdminDeleteRecipeImportJobResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = String(jobId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteRecipeImportJobResult>(
+        tx,
+        operationId,
+        "admin-recipe-import:delete-job",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe-import:delete-job", adminId, requestHash);
+
+      const job = await tx.recipeImportJob.findFirst({
+        where: { id: jobId, sourceType: "JSON" },
+        select: { id: true, status: true, sourceName: true }
+      });
+      if (!job) throw new NotFoundException("导入任务不存在");
+      if (job.status === "RUNNING") throw new ConflictException("导入任务处理中，暂不能删除");
+
+      await tx.recipeImportJob.delete({ where: { id: jobId } });
+      const result: AdminDeleteRecipeImportJobResult = {
+        jobId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_IMPORT_JOB_DELETED",
+          objectType: "RECIPE_IMPORT_JOB",
+          objectId: jobId,
+          payload: { sourceName: job.sourceName }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe-import:delete-job", adminId, requestHash, result);
+      return result;
+    });
   }
 
   async getRecipeImportJobDetail(
@@ -4143,6 +4467,7 @@ export class AdminService {
         const nextVersion = await tx.recipeContentVersion.create({
           data: this.buildAdminRecipeVersionCreateInput(content, stagedImages.coverImageUrl)
         });
+        await loadRecipeNutritionSummary(tx, nextVersion.id, content);
         await createImportedRecipeVersionTags(tx, nextVersion.id, recipeBody.tags ?? []);
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
         await this.syncRecipeAssistant(tx, nextVersion.id, content, stagedImages.assistantSteps);
@@ -4611,6 +4936,55 @@ export class AdminService {
     }
   }
 
+  async deleteInspirationCategory(
+    categoryId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeleteInspirationCategoryResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${categoryId}:${expectedVersion}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteInspirationCategoryResult>(
+        tx,
+        operationId,
+        "admin-inspiration-category:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, operationId, "admin-inspiration-category:delete", adminId, requestHash);
+
+      const category = await this.requireInspirationCategory(tx, categoryId);
+      if (category.version !== expectedVersion) throw new ConflictException("系统菜谱分类已被更新，请刷新后重试");
+      const [recipeCount, recommendationCount] = await Promise.all([
+        tx.recipe.count({ where: { inspirationCategoryId: categoryId } }),
+        tx.recipeRecommendation.count({ where: { suggestedCategoryId: categoryId } })
+      ]);
+      if (recipeCount > 0 || recommendationCount > 0) {
+        throw new ConflictException("该分类仍被菜谱或审核记录使用，不能删除");
+      }
+
+      await tx.inspirationCategory.delete({ where: { id: categoryId } });
+      const result: AdminDeleteInspirationCategoryResult = {
+        categoryId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INSPIRATION_CATEGORY_DELETED",
+          objectType: "INSPIRATION_CATEGORY",
+          objectId: categoryId,
+          payload: { name: category.name }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-inspiration-category:delete", adminId, requestHash, result);
+      return result;
+    });
+  }
+
   async reorderInspirationCategories(
     operationId: OperationId,
     items: ReorderItem[],
@@ -4840,7 +5214,10 @@ export class AdminService {
           publishedStorageKeys,
           consumedTempKeys
         );
-        const content = await this.buildAdminRecipeContent(tx, body.content, imageState.stepImageUrls);
+        const contentInput = body.content.tools === undefined
+          ? { ...body.content, tools: versionToContent(recipe.currentVersion).tools ?? [] }
+          : body.content;
+        const content = await this.buildAdminRecipeContent(tx, contentInput, imageState.stepImageUrls);
         this.assertAdminRecipeContent(content);
 
         const nextVersion = await tx.recipeContentVersion.create({
@@ -4991,6 +5368,158 @@ export class AdminService {
     });
   }
 
+  async deleteBlockedRecipe(
+    recipeId: UUID,
+    operationId: OperationId,
+    expectedVersion: number,
+    adminId: UUID
+  ): Promise<AdminDeleteRecipeResult> {
+    await this.requireSuperAdmin(adminId);
+    const requestHash = `${recipeId}:${expectedVersion}`;
+    const deletion = await this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminDeleteRecipeResult>(
+        tx,
+        operationId,
+        "admin-recipe:delete",
+        adminId,
+        requestHash
+      );
+      if (repeated) return { result: repeated, storageKeys: [] as string[] };
+      await startAdminIdempotentOperation(tx, operationId, "admin-recipe:delete", adminId, requestHash);
+
+      const recipe = await tx.recipe.findFirst({
+        where: {
+          id: recipeId,
+          isInspiration: true,
+          status: "BLOCKED"
+        },
+        select: {
+          id: true,
+          title: true,
+          version: true,
+          coverImageUrl: true,
+          originCoverImageUrl: true,
+          currentVersionId: true,
+          currentVersion: {
+            select: {
+              id: true,
+              imagesJson: true,
+              cookAssistant: {
+                select: { snapshotJson: true }
+              }
+            }
+          }
+        }
+      });
+      if (!recipe) throw new NotFoundException("下架系统菜谱不存在");
+      if (recipe.version !== expectedVersion) throw new ConflictException("菜谱已被更新，请刷新后重试");
+
+      const [collectionCount, homeTopicCount, mealPlanCount, diningParticipantCount, versionCollectionCount, versionTopicCount, versionMealPlanCount, versionParticipantCount, versionWishCount, versionMenuCount, shoppingCount] = await Promise.all([
+        tx.recipeCollection.count({ where: { sourceRecipeId: recipeId } }),
+        tx.homeTopicItem.count({ where: { recipeId } }),
+        tx.mealPlanDish.count({ where: { recipeId } }),
+        tx.diningEventParticipant.count({ where: { bringRecipeId: recipeId } }),
+        tx.recipeCollection.count({ where: { sourceVersionId: recipe.currentVersionId } }),
+        tx.homeTopicItem.count({ where: { sourceVersionId: recipe.currentVersionId } }),
+        tx.mealPlanDish.count({ where: { recipeVersionId: recipe.currentVersionId } }),
+        tx.diningEventParticipant.count({ where: { bringVersionId: recipe.currentVersionId } }),
+        tx.diningEventWishItem.count({ where: { recipeVersionId: recipe.currentVersionId } }),
+        tx.diningEventMenuItem.count({ where: { recipeVersionId: recipe.currentVersionId } }),
+        tx.shoppingItem.count({ where: { sourceRecipeVersionId: recipe.currentVersionId } })
+      ]);
+      if (
+        collectionCount > 0 ||
+        homeTopicCount > 0 ||
+        mealPlanCount > 0 ||
+        diningParticipantCount > 0 ||
+        versionCollectionCount > 0 ||
+        versionTopicCount > 0 ||
+        versionMealPlanCount > 0 ||
+        versionParticipantCount > 0 ||
+        versionWishCount > 0 ||
+        versionMenuCount > 0 ||
+        shoppingCount > 0
+      ) {
+        throw new ConflictException("该下架菜谱仍被业务数据引用，不能物理删除");
+      }
+
+      const storageKeys = this.collectRecipeImageStorageKeys(recipe);
+      await tx.recipe.delete({ where: { id: recipeId } });
+      await tx.recipeContentVersion.deleteMany({
+        where: {
+          id: recipe.currentVersionId,
+          currentRecipes: { none: {} },
+          originRecipes: { none: {} },
+          collections: { none: {} },
+          homeTopicItems: { none: {} },
+          shoppingSourceItems: { none: {} },
+          mealPlanDishes: { none: {} },
+          mealPollCandidates: { none: {} },
+          diningEventParticipants: { none: {} },
+          diningEventMenuItems: { none: {} },
+          diningEventWishItems: { none: {} },
+          uploadAssets: { none: {} }
+        }
+      });
+      const result: AdminDeleteRecipeResult = {
+        recipeId,
+        deletedAt: toIsoDate(new Date())
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_DELETED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: { title: recipe.title, source: "BLOCKED_INSPIRATION" }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, operationId, "admin-recipe:delete", adminId, requestHash, result);
+      return { result, storageKeys };
+    });
+    const failedStorageKeys = await this.adminRecipeImageService.removePublishedImages(deletion.storageKeys);
+    if (failedStorageKeys.length > 0) {
+      await this.prisma.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "RECIPE_IMAGE_CLEANUP_FAILED",
+          objectType: "RECIPE",
+          objectId: recipeId,
+          payload: { storageKeys: failedStorageKeys }
+        }
+      });
+    }
+    return deletion.result;
+  }
+
+  private collectRecipeImageStorageKeys(recipe: {
+    coverImageUrl?: string | null;
+    originCoverImageUrl?: string | null;
+    currentVersion: { imagesJson: unknown; cookAssistant?: { snapshotJson: unknown } | null };
+  }) {
+    const urls: string[] = [];
+    const collect = (value: unknown) => {
+      if (typeof value === "string") {
+        urls.push(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) collect(item);
+        return;
+      }
+      if (value && typeof value === "object") {
+        for (const item of Object.values(value)) collect(item);
+      }
+    };
+    collect(recipe.coverImageUrl);
+    collect(recipe.originCoverImageUrl);
+    collect(recipe.currentVersion.imagesJson);
+    collect(recipe.currentVersion.cookAssistant?.snapshotJson);
+    return Array.from(new Set(urls.map(url => this.adminRecipeImageService.publishedStorageKeyFromUrl(url)).filter((key): key is string => Boolean(key))));
+  }
+
   async resolveRecipeReport(reportId: UUID, adminId: UUID, operationId: OperationId, resolutionNote?: string | null) {
     await this.requireSuperAdmin(adminId);
     const note = resolutionNote?.trim() || null;
@@ -5054,6 +5583,7 @@ export class AdminService {
     title: string;
     coverImageUrl: string | null;
     status: RecipeStatus;
+    version: number;
     inspirationCategoryId: UUID | null;
     inspirationCategory?: { id: UUID; name: string } | null;
     updatedAt: Date;
@@ -5067,6 +5597,7 @@ export class AdminService {
       title: recipe.title,
       coverImageUrl: recipe.coverImageUrl,
       status: recipe.status,
+      version: recipe.version,
       inspirationCategoryId: recipe.inspirationCategoryId,
       inspirationCategoryName: recipe.inspirationCategory.name,
       updatedAt: toIsoDate(recipe.updatedAt),
@@ -5078,6 +5609,23 @@ export class AdminService {
     const content = versionToContent(recipe.currentVersion);
     const assistantRecord = await this.loadRecipeAssistantRecord(tx, recipe.currentVersionId);
     const assistant = versionAssistantToSnapshot(assistantRecord);
+    const [tags, nutrition] = await Promise.all([
+      this.loadRecipeWikiTags(tx, recipe.currentVersionId, content),
+      loadRecipeNutritionSummary(tx, recipe.currentVersionId, content)
+    ]);
+    const nutritionSnapshot = await tx.recipeNutritionSnapshot.findUnique({
+      where: { recipeVersionId: recipe.currentVersionId },
+      select: { coverageRate: true }
+    });
+    const wikiNutrition: AdminRecipeWikiNutrition = {
+      ...nutrition,
+      coverageRate: nutritionSnapshot?.coverageRate ?? null
+    };
+    const wiki: AdminRecipeWiki = {
+      tags,
+      nutrition: wikiNutrition,
+      qualityCards: buildRecipeWikiQualityCards({ content, tags, nutrition, assistant })
+    };
     return {
       id: recipe.id,
       title: recipe.title,
@@ -5092,6 +5640,7 @@ export class AdminService {
       content,
       assistantState: this.toRecipeAssistantState(assistantRecord),
       assistant,
+      wiki,
       version: recipe.version,
       reportCount: recipe.reportCount,
       blockedReason: recipe.blockedReason,
@@ -5100,6 +5649,82 @@ export class AdminService {
       createdAt: toIsoDate(recipe.createdAt),
       updatedAt: toIsoDate(recipe.updatedAt)
     };
+  }
+
+  private async loadRecipeWikiTags(
+    tx: Prisma.TransactionClient | PrismaService,
+    recipeVersionId: UUID,
+    content: RecipeContentSnapshot
+  ): Promise<AdminRecipeWikiTag[]> {
+    const rows = await tx.recipeVersionTag.findMany({
+      where: { recipeVersionId },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      select: {
+        tagCode: true,
+        tagValue: true,
+        source: true,
+        status: true,
+        confidence: true,
+        sortOrder: true,
+        isLocked: true
+      }
+    });
+    return rows.map(row => ({
+      tagCode: row.tagCode,
+      tagValue: row.tagValue,
+      displayValue: this.recipeWikiTagDisplayValue(row.tagCode, row.tagValue, content),
+      source: row.source,
+      status: row.status,
+      confidence: row.confidence === null ? null : Number(row.confidence),
+      sortOrder: row.sortOrder,
+      isLocked: row.isLocked
+    }));
+  }
+
+  private recipeWikiTagDisplayValue(tagCode: string, tagValue: string, content: RecipeContentSnapshot) {
+    const display: Record<string, Record<string, string>> = {
+      MEAL_TYPE: {
+        BREAKFAST: "早餐",
+        LUNCH: "午餐",
+        AFTERNOON_TEA: "下午茶",
+        DINNER: "晚餐",
+        LATE_NIGHT: "夜宵"
+      },
+      DISH_ROLE: {
+        MAIN: "荤菜/主菜",
+        VEGETABLE: "素菜",
+        COLD_DISH: "凉菜",
+        SOUP: "汤",
+        STAPLE: "主食"
+      },
+      MAIN_PROTEIN_TYPE: {
+        PORK: "猪肉",
+        CHICKEN: "鸡肉",
+        BEEF: "牛肉",
+        LAMB: "羊肉",
+        DUCK: "鸭肉",
+        FISH: "鱼类",
+        NONE: "无主蛋白"
+      },
+      FLAVOR_PROFILE: {
+        LIGHT: "清淡",
+        MILD: "温和",
+        SPICY: "辛辣",
+        SOUR: "酸味",
+        SWEET: "甜味"
+      },
+      SPICE_LEVEL: {
+        NONE: "不辣",
+        MILD: "微辣",
+        MEDIUM: "中辣",
+        HOT: "重辣"
+      }
+    };
+    if (tagCode === "PRIMARY_INGREDIENT") {
+      const ingredient = content.ingredients.find(item => String(item.ingredientId) === tagValue);
+      return ingredient?.ingredientName ?? `食材 ID ${tagValue}`;
+    }
+    return display[tagCode]?.[tagValue] ?? tagValue;
   }
 
   private async loadRecipeAssistantRecord(tx: Prisma.TransactionClient | PrismaService, recipeVersionId: UUID) {
@@ -5238,6 +5863,68 @@ export class AdminService {
     return nextBody;
   }
 
+  private async refreshRecipeImportIngredientReferences(
+    tx: Prisma.TransactionClient,
+    sourceIngredientId: UUID,
+    targetIngredient: { id: UUID; name: string }
+  ) {
+    const items = await tx.recipeImportItem.findMany({
+      where: {
+        job: { sourceType: "JSON" },
+        status: { not: "PUBLISHED" }
+      },
+      select: {
+        id: true,
+        jobId: true,
+        version: true,
+        rawBodyJson: true,
+        recipeBodyJson: true
+      }
+    });
+    const jobIds = new Set<UUID>();
+    for (const item of items) {
+      const recipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(item.recipeBodyJson));
+      let changed = false;
+      const nextIngredients = recipeBody.ingredients.map(ingredient => {
+        if (ingredient.ingredientId !== sourceIngredientId) return ingredient;
+        changed = true;
+        return {
+          ...ingredient,
+          ingredientId: targetIngredient.id,
+          ingredientName: targetIngredient.name
+        };
+      });
+      if (!changed) continue;
+
+      const nextBody = {
+        ...recipeBody,
+        ingredients: nextIngredients
+      };
+      const rawBody = fromJson<RecipeImportRawBody>(item.rawBodyJson);
+      const nextState = await this.buildRecipeImportItemState(tx, nextBody, rawBody);
+      const updateResult = await tx.recipeImportItem.updateMany({
+        where: {
+          id: item.id,
+          version: item.version
+        },
+        data: {
+          recipeBodyJson: toJson(nextBody),
+          status: nextState.errorItems.length > 0 ? "NEEDS_FIX" : "READY",
+          errorJson: toJson(nextState.errorItems),
+          warnJson: toJson(nextState.warnItems),
+          version: { increment: 1 }
+        }
+      });
+      if (updateResult.count !== 1) {
+        throw new ConflictException("导入条目已被更新，请刷新后重试");
+      }
+      jobIds.add(item.jobId);
+    }
+    for (const jobId of jobIds) {
+      await this.writeRecipeImportJobStats(tx, jobId);
+    }
+  }
+
   private async buildRecipeImportItemState(
     tx: Prisma.TransactionClient,
     recipeBody: RecipeImportRecipeBody,
@@ -5306,7 +5993,7 @@ export class AdminService {
     const unclassifiedCategory = await this.requireImportIngredientCategory(tx);
     const nextRows: RecipeImportRecipeBody["ingredients"] = [];
     for (const item of ingredients) {
-      if (item.ingredientId || item.fuzzyText || !item.unitId || !item.ingredientName.trim()) {
+      if (item.ingredientId || !item.unitId || !item.ingredientName.trim()) {
         nextRows.push(item);
         continue;
       }
@@ -5315,7 +6002,7 @@ export class AdminService {
         where: {
           ownerId: null,
           status: {
-            in: ["ACTIVE", "DISABLED"]
+            in: ["ACTIVE", "DISABLED", "PENDING"]
           },
           searchKey
         },
@@ -5325,7 +6012,7 @@ export class AdminService {
       });
       if (existing) {
         const activeIngredient =
-          existing.status === "ACTIVE"
+          existing.status === "ACTIVE" || existing.status === "PENDING"
             ? existing
             : await tx.ingredient.update({
                 where: { id: existing.id },
@@ -5349,7 +6036,7 @@ export class AdminService {
       const created = await tx.ingredient.create({
         data: {
           ownerId: null,
-          status: "ACTIVE",
+          status: "PENDING",
           categoryId: unclassifiedCategory.id,
           defaultUnitId: unit.id,
           name: item.ingredientName,
@@ -5892,9 +6579,30 @@ export class AdminService {
       }
     });
     if (!recommendation || !recommendation.ingredient.ownerId || recommendation.ingredient.status !== "ACTIVE") {
-      throw new NotFoundException("待审核个人食材不存在");
+      throw new NotFoundException("待审核食材不存在");
     }
     return recommendation;
+  }
+
+  private async findPendingImportedIngredient(tx: Prisma.TransactionClient, ingredientId: UUID) {
+    return tx.ingredient.findFirst({
+      where: {
+        id: ingredientId,
+        ownerId: null,
+        status: "PENDING"
+      },
+      include: {
+        category: true,
+        defaultUnit: true,
+        owner: {
+          select: {
+            id: true,
+            uid: true,
+            nickname: true
+          }
+        }
+      }
+    });
   }
 
   private async requirePendingUnitRecommendation(tx: Prisma.TransactionClient, recommendationId: UUID) {
@@ -5942,7 +6650,7 @@ export class AdminService {
       }
     });
     if (!feedback || feedback.ingredient.ownerId !== null || !["ACTIVE", "DISABLED"].includes(feedback.ingredient.status)) {
-      throw new NotFoundException("待审核食材纠错不存在");
+      throw new NotFoundException("食材纠错不存在");
     }
     return feedback;
   }
@@ -5971,7 +6679,7 @@ export class AdminService {
       }
     });
     if (!recommendation || !recommendation.recipe.ownerId || recommendation.recipe.status !== "ACTIVE") {
-      throw new NotFoundException("待审核个人菜谱不存在");
+      throw new NotFoundException("待审核菜谱不存在");
     }
     return recommendation;
   }

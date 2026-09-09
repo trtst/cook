@@ -128,9 +128,9 @@
 | AdminIngredient | POST | `/admin/ingredients/{ingredientId}/image` | 后台上传或替换系统食材图片 |
 | AdminIngredient | DELETE | `/admin/ingredients/{ingredientId}/image` | 后台清空系统食材图片 |
 | AdminIngredient | POST | `/admin/ingredients/reorder` | 后台重排系统食材 |
-| AdminIngredient | GET | `/admin/pending-ingredients` | 后台待审核个人食材分页列表 |
-| AdminIngredient | POST | `/admin/pending-ingredients/{ingredientId}/review` | 后台审核个人食材推荐 |
-| AdminIngredient | DELETE | `/admin/pending-ingredients/{ingredientId}` | 后台删除待审核个人食材记录 |
+| AdminIngredient | GET | `/admin/pending-ingredients` | 后台待审核食材分页列表（用户提交与 JSON 导入） |
+| AdminIngredient | POST | `/admin/pending-ingredients/{ingredientId}/review` | 后台审核待审核食材 |
+| AdminIngredient | DELETE | `/admin/pending-ingredients/{ingredientId}` | 后台删除待审核食材记录 |
 | AdminIngredient | GET | `/admin/ingredient-feedbacks` | 后台待审核系统食材纠错分页列表 |
 | AdminIngredient | POST | `/admin/ingredient-feedbacks/{feedbackId}/review` | 后台审核系统食材纠错 |
 | AdminIngredient | DELETE | `/admin/ingredient-feedbacks/{feedbackId}` | 后台删除待审核系统食材纠错 |
@@ -180,14 +180,17 @@
 | Shopping | GET | `/shopping-gap` | 查询当前用户待处理饭局汇总缺口 |
 | Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局购物缺口 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |
+| AdminRecipe | DELETE | `/admin/inspiration-categories/{categoryId}` | 删除空的系统菜谱分类 |
 | AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
 | AdminRecipe | GET | `/admin/recipes/{recipeId}` | 后台菜谱详情 |
 | AdminRecipe | PUT | `/admin/recipes/{recipeId}` | 后台编辑系统菜谱正文 |
-| AdminRecipe | GET | `/admin/pending-recipes` | 后台待审核个人菜谱分页列表 |
+| AdminRecipe | GET | `/admin/pending-recipes` | 后台待审核菜谱分页列表 |
 | AdminRecipe | POST | `/admin/pending-recipes/{recommendationId}/review` | 后台审核个人菜谱推荐 |
 | AdminRecipe | GET | `/admin/recipe-reports` | 后台举报查询 |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/block` | 下架菜谱 |
 | AdminRecipe | POST | `/admin/recipes/{recipeId}/unblock` | 恢复菜谱 |
+| AdminRecipe | DELETE | `/admin/recipes/{recipeId}` | 物理删除下架系统菜谱 |
+| AdminRecipe | DELETE | `/admin/recipe-import-jobs/{jobId}` | 删除菜谱导入任务记录 |
 | AdminRecipe | POST | `/admin/recipe-reports/{reportId}/resolve` | 处理举报 |
 
 ## 待补契约

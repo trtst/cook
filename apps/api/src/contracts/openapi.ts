@@ -1,5 +1,5 @@
 import { applyDecorators, type Type } from "@nestjs/common";
-import { ApiExtraModels, ApiOkResponse, ApiProperty, getSchemaPath } from "@nestjs/swagger";
+import { ApiExtraModels, ApiOkResponse, ApiProperty, ApiPropertyOptional, getSchemaPath } from "@nestjs/swagger";
 
 function envelopeSchema(data: Record<string, unknown>) {
   return {
@@ -985,6 +985,10 @@ export class RecipeStepModel {
   @ApiProperty(nullableString) imageUrl!: string | null;
 }
 
+export class RecipeToolModel {
+  @ApiProperty({ type: String }) name!: string;
+}
+
 export class RecipeContentModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) story!: string | null;
@@ -993,6 +997,7 @@ export class RecipeContentModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty(nullableString) tips!: string | null;
+  @ApiProperty({ type: [RecipeToolModel] }) tools!: RecipeToolModel[];
   @ApiProperty({ type: [RecipeIngredientModel] }) ingredients!: RecipeIngredientModel[];
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
 }
@@ -1000,6 +1005,7 @@ export class RecipeContentModel {
 export class RecipeAssistantStepModel {
   @ApiProperty({ type: Number, minimum: 1 }) order!: number;
   @ApiProperty({ type: String, enum: ["PREP", "COOK", "SERVE"] }) phase!: string;
+  @ApiProperty({ type: String, nullable: true }) action!: string | null;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) detail!: string;
   @ApiProperty(nullableString) imageUrl!: string | null;
@@ -1035,6 +1041,35 @@ export class RecipeNutritionModel {
   @ApiProperty({ type: RecipeNutritionMetricsModel, nullable: true }) perRecipe!: RecipeNutritionMetricsModel | null;
   @ApiProperty({ ...dateTime, nullable: true }) calculatedAt!: string | null;
   @ApiProperty(nullableString) sourceVersion!: string | null;
+}
+
+export class AdminRecipeWikiTagModel {
+  @ApiProperty({ type: String }) tagCode!: string;
+  @ApiProperty({ type: String }) tagValue!: string;
+  @ApiProperty({ type: String }) displayValue!: string;
+  @ApiProperty({ type: String, enum: ["AUTO", "USER", "OPS", "AI"] }) source!: string;
+  @ApiProperty({ type: String, enum: ["CONFIRMED", "CANDIDATE", "UNMAPPED", "NEEDS_REVIEW"] }) status!: string;
+  @ApiProperty({ type: Number, nullable: true }) confidence!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) sortOrder!: number | null;
+  @ApiProperty({ type: Boolean }) isLocked!: boolean;
+}
+
+export class AdminRecipeWikiNutritionModel extends RecipeNutritionModel {
+  @ApiProperty({ type: Number, nullable: true, minimum: 0, maximum: 1 }) coverageRate!: number | null;
+}
+
+export class AdminRecipeWikiQualityCardModel {
+  @ApiProperty({ type: String, enum: ["CONTENT", "STRUCTURED_DATA", "BUSINESS_TAGS", "NUTRITION", "ASSISTANT", "FRONTEND_CONSUMPTION", "RANDOM_MENU"] }) code!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, enum: ["COMPLETE", "INCOMPLETE"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 0, maximum: 100 }) score!: number;
+  @ApiProperty({ type: [String] }) blockingReasons!: string[];
+}
+
+export class AdminRecipeWikiModel {
+  @ApiProperty({ type: [AdminRecipeWikiTagModel] }) tags!: AdminRecipeWikiTagModel[];
+  @ApiProperty({ type: AdminRecipeWikiNutritionModel }) nutrition!: AdminRecipeWikiNutritionModel;
+  @ApiProperty({ type: [AdminRecipeWikiQualityCardModel] }) qualityCards!: AdminRecipeWikiQualityCardModel[];
 }
 
 export class RecipeIngredientInputAmountModel {
@@ -1334,6 +1369,7 @@ export class AdminRecipeModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty(nullableString) coverImageUrl!: string | null;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(uuid) inspirationCategoryId!: string;
   @ApiProperty({ type: String }) inspirationCategoryName!: string;
   @ApiProperty(dateTime) updatedAt!: string;
@@ -1348,6 +1384,7 @@ export class AdminRecipeContentInputModel {
   @ApiProperty({ type: String, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty(nullableString) tips!: string | null;
+  @ApiPropertyOptional({ type: [RecipeToolModel] }) tools?: RecipeToolModel[];
   @ApiProperty({ type: [RecipeIngredientInputModel] }) ingredients!: RecipeIngredientInputModel[];
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
 }
@@ -1375,6 +1412,7 @@ export class AdminRecipeDetailModel {
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeAssistantStateSummaryModel }) assistantState!: RecipeAssistantStateSummaryModel;
   @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: AdminRecipeWikiModel }) wiki!: AdminRecipeWikiModel;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) reportCount!: number;
   @ApiProperty(nullableString) blockedReason!: string | null;
@@ -1609,7 +1647,8 @@ export class AdminPendingIngredientModel {
   @ApiProperty({ type: String, enum: ["PENDING"] }) status!: string;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
-  @ApiProperty({ type: () => AdminIngredientSuggestionUserModel }) user!: AdminIngredientSuggestionUserModel;
+  @ApiProperty({ type: String, enum: ["PERSONAL", "JSON_IMPORT"] }) source!: string;
+  @ApiProperty({ type: () => AdminIngredientSuggestionUserModel, nullable: true }) user!: AdminIngredientSuggestionUserModel | null;
 }
 
 export class AdminReviewPendingIngredientResultModel {
@@ -1680,6 +1719,11 @@ export class AdminDeleteIngredientCategoryResultModel {
   @ApiProperty(dateTime) deletedAt!: string;
 }
 
+export class AdminDeleteInspirationCategoryResultModel {
+  @ApiProperty(uuid) categoryId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
 export class AdminDeleteIngredientResultModel {
   @ApiProperty(uuid) ingredientId!: string;
   @ApiProperty(dateTime) deletedAt!: string;
@@ -1687,6 +1731,16 @@ export class AdminDeleteIngredientResultModel {
 
 export class AdminDeletePendingItemResultModel {
   @ApiProperty(uuid) id!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminDeleteRecipeResultModel {
+  @ApiProperty(uuid) recipeId!: string;
+  @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminDeleteRecipeImportJobResultModel {
+  @ApiProperty(uuid) jobId!: string;
   @ApiProperty(dateTime) deletedAt!: string;
 }
 

@@ -175,6 +175,7 @@ enum UnitType {
 }
 
 enum IngredientStatus {
+  PENDING
   ACTIVE
   DISABLED
   MERGED
@@ -449,6 +450,18 @@ enum RecipeAssistantStatus {
   FAILED
 }
 
+enum RecipeCompletenessStatus {
+  PENDING
+  PARTIAL
+  READY
+  FAILED
+}
+
+enum RecipeDerivedSource {
+  AUTO
+  OPS
+}
+
 model AdminAccount {
   id           Int                @id @default(autoincrement())
   username     String             @unique @db.VarChar(64)
@@ -464,6 +477,8 @@ model AdminAccount {
   recipeImportJobs   RecipeImportJob[]
   updatedSiteContents SiteContent[]
   materialImages     AdminMaterialImage[] @relation("AdminMaterialImageUploader")
+  recipeAssistantUpdates RecipeCookAssistant[] @relation("RecipeCookAssistantUpdater")
+  nutritionSnapshotUpdates RecipeNutritionSnapshot[] @relation("RecipeNutritionSnapshotUpdater")
 
   @@map("admin_accounts")
 }
@@ -1314,6 +1329,7 @@ model RecipeContentVersion {
   versionTags             RecipeVersionTag[]
   cookAssistant           RecipeCookAssistant?
   nutritionSnapshots      RecipeNutritionSnapshot[]
+  completenessSnapshots   RecipeCompletenessSnapshot[]
 
   @@index([name])
   @@index([createdByUserId, createdAt])
@@ -1329,10 +1345,15 @@ model RecipeCookAssistant {
   lastAttemptAt DateTime              @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
   attemptCount  Int                   @default(1) @map("attempt_count")
   lastError     String?               @map("last_error") @db.VarChar(500)
+  source        RecipeDerivedSource   @default(AUTO)
+  isLocked      Boolean               @default(false) @map("is_locked")
+  updatedByAdminId Int?               @map("updated_by_admin_id")
   updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+  updatedByAdmin AdminAccount?       @relation("RecipeCookAssistantUpdater", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
 
+  @@index([updatedByAdminId])
   @@map("recipe_cook_assistants")
 }
 
@@ -1431,13 +1452,55 @@ model RecipeNutritionSnapshot {
   coverageRate  Float?                @map("coverage_rate")
   calculatedAt  DateTime              @default(now()) @map("calculated_at") @db.Timestamptz(3)
   sourceVersion String                @map("source_version") @db.VarChar(64)
+  source        RecipeDerivedSource   @default(AUTO)
+  isLocked      Boolean               @default(false) @map("is_locked")
+  updatedByAdminId Int?               @map("updated_by_admin_id")
   createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+  updatedByAdmin AdminAccount?       @relation("RecipeNutritionSnapshotUpdater", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([sourceVersion, status])
+  @@index([updatedByAdminId])
   @@map("recipe_nutrition_snapshots")
+}
+
+model RecipeCompletenessSnapshot {
+  id                            Int                      @id @default(autoincrement())
+  recipeVersionId               Int                      @map("recipe_version_id")
+  sourceVersion                 String                   @map("source_version") @db.VarChar(64)
+  contentStatus                 RecipeCompletenessStatus @map("content_status")
+  contentScore                  Int                      @map("content_score")
+  contentBlockingReasons       Json                     @map("content_blocking_reasons")
+  structuredDataStatus          RecipeCompletenessStatus @map("structured_data_status")
+  structuredDataScore           Int                      @map("structured_data_score")
+  structuredDataBlockingReasons Json                     @map("structured_data_blocking_reasons")
+  tagStatus                     RecipeCompletenessStatus @map("tag_status")
+  tagScore                      Int                      @map("tag_score")
+  tagBlockingReasons            Json                     @map("tag_blocking_reasons")
+  nutritionStatus               RecipeCompletenessStatus @map("nutrition_status")
+  nutritionScore                Int                      @map("nutrition_score")
+  nutritionBlockingReasons     Json                     @map("nutrition_blocking_reasons")
+  assistantStatus               RecipeCompletenessStatus @map("assistant_status")
+  assistantScore                Int                      @map("assistant_score")
+  assistantBlockingReasons     Json                     @map("assistant_blocking_reasons")
+  frontendStatus                RecipeCompletenessStatus @map("frontend_status")
+  frontendScore                 Int                      @map("frontend_score")
+  frontendBlockingReasons      Json                     @map("frontend_blocking_reasons")
+  randomMenuStatus              RecipeCompletenessStatus @map("random_menu_status")
+  randomMenuScore               Int                      @map("random_menu_score")
+  randomMenuBlockingReasons    Json                     @map("random_menu_blocking_reasons")
+  calculatedAt                  DateTime                 @default(now()) @map("calculated_at") @db.Timestamptz(3)
+  createdAt                     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeVersionId, sourceVersion])
+  @@index([sourceVersion, contentStatus])
+  @@index([recipeVersionId, calculatedAt])
+  @@map("recipe_completeness_snapshots")
 }
 
 model RecipeVersionTag {

@@ -33,7 +33,7 @@ R1 包含：
 4. 个人食材显式推荐入系统库、我的推荐记录，以及后台待审、通过、归并和拒绝闭环。
 5. 新建草稿、已有菜谱编辑草稿、草稿箱、保存、删除和发布。
 6. “我的”菜谱列表、详情、分类内排序、推荐到灵感、撤回待审推荐和正常删除。
-7. 后台待审核个人菜谱列表，以及“通过后复制到系统菜谱 / 拒绝”最小闭环。
+7. 后台待审核菜谱列表，以及“通过后复制到系统菜谱 / 拒绝”最小闭环。
 8. 文本菜谱的完整字段、结构化食材用量和纯文本步骤。
 
 R1 不包含：
@@ -176,18 +176,20 @@ R1 不再提供直接 `POST /recipes` 或 `PUT /recipes/{recipeId}` 写正文。
 | `POST` | `/admin/recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 后台直接创建一条系统菜谱 |
 | `GET` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回后台菜谱详情，覆盖灵感与个人菜谱 |
 | `PUT` | `/admin/recipes/{recipeId}` | `AdminBearerAuth` + `SUPER_ADMIN` | 只编辑系统菜谱正文并切换到新固定版本 |
-| `GET` | `/admin/pending-recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回待审核个人菜谱推荐分页 |
+| `GET` | `/admin/pending-recipes` | `AdminBearerAuth` + `SUPER_ADMIN` | 返回待审核菜谱推荐分页 |
 | `POST` | `/admin/pending-recipes/{recommendationId}/review` | `AdminBearerAuth` + `SUPER_ADMIN` | 审核个人菜谱推荐，支持通过或拒绝 |
 
-后台系统菜谱分类独立于个人分类，由平台直接维护，分类管理请求统一走 `Idempotency-Key + expectedVersion`。后台系统菜谱列表只收归属系统用户 UID `10001` 且仍挂系统分类的菜谱，不再把个人菜谱混入运营列表；个人菜谱继续只从用户菜谱域进入。后台图片链路也独立于用户草稿上传：只有 `SUPER_ADMIN` 可以先调 `POST /admin/recipe-images` 上传临时图，接口只返回 `tempKey + 图片元信息`，不再下发临时公网图片 URL；后台页面预览统一使用浏览器本地 `blob`。封面固定 `4:3`，步骤图保持当前图片比例，再在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 中通过 `coverImageTempKey / steps[].imageTempKey` 提交本次新图；若继续沿用旧图，则只允许回传当前系统菜谱现有的 `coverImageUrl / steps[].imageUrl`。服务端对 24 小时前仍未消费的后台临时图做过期清理；一旦创建/编辑流程消费了某个 `tempKey`，无论事务成功还是失败，都要清掉对应临时文件。后台可直接新增系统菜谱，创建时服务端新建 `RecipeContentVersion`，并把本次图片固化成正式公开资源后写入系统菜谱。后台详情仍对所有菜谱开放，但正文编辑只允许系统用户归属且仍挂系统分类的系统菜谱。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。个人菜谱推荐审核走独立 `/admin/pending-recipes` 队列：本期审核弹窗只处理 `通过/拒绝 + 最终系统分类`，不在后台二次编辑正文；通过时服务端复制推荐记录中的 `sourceVersionId` 为新的系统菜谱，并把 `adoptedRecipeId` 回写到推荐记录。后台系统菜谱创建、推荐收录与正文编辑当前只允许系统食材和系统单位，图片写入仅走这条后台独立临时上传链路。
+后台系统菜谱分类独立于个人分类，由平台直接维护，分类管理请求统一走 `Idempotency-Key + expectedVersion`。后台系统菜谱列表只收 `isInspiration = true` 且仍挂系统分类的菜谱，不再把个人菜谱混入运营列表；个人菜谱继续只从用户菜谱域进入。JSON 导入发布的灵感菜谱从 100 个灵感用户池随机选择归属用户，后台直接创建的系统菜谱可按后台创建规则处理。后台图片链路也独立于用户草稿上传：只有 `SUPER_ADMIN` 可以先调 `POST /admin/recipe-images` 上传临时图，接口只返回 `tempKey + 图片元信息`，不再下发临时公网图片 URL；后台页面预览统一使用浏览器本地 `blob`。封面固定 `4:3`，步骤图保持当前图片比例，再在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 中通过 `coverImageTempKey / steps[].imageTempKey` 提交本次新图；若继续沿用旧图，则只允许回传当前系统菜谱现有的 `coverImageUrl / steps[].imageUrl`。服务端对 24 小时前仍未消费的后台临时图做过期清理；一旦创建/编辑流程消费了某个 `tempKey`，无论事务成功还是失败，都要清掉对应临时文件。后台可直接新增系统菜谱，创建时服务端新建 `RecipeContentVersion`，并把本次图片固化成正式公开资源后写入系统菜谱。后台详情仍对所有菜谱开放，但正文编辑允许编辑当前系统菜谱，不以固定归属用户作为编辑条件。编辑请求必须携带 `expectedVersion`，服务端保存时新建 `RecipeContentVersion` 再切 `currentVersionId`，不能直接改旧版本内容；否则会破坏收藏、饭局、计划等既有固定版本引用。个人菜谱推荐审核走独立 `/admin/pending-recipes` 队列：本期审核弹窗只处理 `通过/拒绝 + 最终系统分类`，不在后台二次编辑正文；通过时服务端复制推荐记录中的 `sourceVersionId` 为新的系统菜谱，并把 `adoptedRecipeId` 回写到推荐记录。后台系统菜谱创建、推荐收录与正文编辑当前只允许系统食材和系统单位，图片写入仅走这条后台独立临时上传链路。
 
-本节早期的 `ownerId = null` 系统菜谱口径已由当前确认规则替换：正式实现使用 UID `10001` 的系统用户归属系统菜谱；本文件中历史 R1 描述以本条为准。
+本节早期的固定归属和空 owner 口径已由当前确认规则替换：JSON 导入发布的灵感菜谱必须从 100 个灵感用户池中随机分配归属；本文件中历史 R1 描述以本条为准。
 
 ## 五、建议 DTO
 
 ### 分类与场景
 
 下文 `ResourceId` 表示资源 ID（当前为正整数）；幂等键统一通过请求头 `Idempotency-Key` 传递。
+
+ID 规则已收口：用户公开 `uid` 为随机且唯一的 8 位数字；菜谱、正文版本、食材及个人分类/场景从 `10000000` 起递增，系统单位、系统食材分类、系统菜谱分类分别从 `3001`、`5001`、`6001` 起递增。菜谱 ID 不因正文修改而变化；正文修改创建新的不可变 `RecipeContentVersion`，其 ID 独立于菜谱 ID，且不作为前台展示编号。
 
 ```ts
 type UUID = number;
