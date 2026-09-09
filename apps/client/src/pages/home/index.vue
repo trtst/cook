@@ -137,14 +137,6 @@
               <text class="dock-action__title">{{ resolveQuickEntryTitle(item) }}</text>
             </view>
           </view>
-          <view v-else-if="showQuickEntriesSkeleton" class="action-dock">
-            <view v-for="placement in quickEntryPlacementList" :key="placement" class="dock-action dock-action--skeleton">
-              <view class="dock-action__icon" :class="resolveQuickEntryClass(placement)">
-                <Skeleton width="64rpx" height="64rpx" radius="20rpx" />
-              </view>
-              <Skeleton width="72rpx" height="24rpx" radius="var(--radius-pill)" />
-            </view>
-          </view>
 
           <view
             v-if="showRecentArrangementCard && recentArrangement"
@@ -334,7 +326,7 @@ import {
   hasPantrySummaryData as resolveHasPantrySummaryData
 } from "./pantry-summary";
 
-const heroAssetBase = `${cfg.domain}/static/uploads/material-store`;
+const heroAssetBase = `${cfg.assetPublicBaseUrl}/uploads/material-store`;
 const heroImagePrimary = `${heroAssetBase}/3a0414c9-7f44-444c-93fe-873c226c8166.png?v=2026-09-05T15%3A51%3A22.009Z`;
 const heroImageSecondary = `${heroAssetBase}/5a7629a0-c9f7-4075-b36e-5716cee073ba.png?v=2026-09-05T15%3A51%3A32.022Z`;
 
@@ -422,11 +414,9 @@ const heroSlides = computed(() => {
   ];
   return fallbackItems;
 });
-const quickEntryPlacementList: HomeEntryPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
 const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideFeatureCards.value.length === 2);
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
 const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
-const showQuickEntriesSkeleton = computed(() => !hasQuickEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showWeekOverviewSkeleton = computed(() => sessionStore.isLoggedIn && weekOverviewLoading.value && !weekOverviewLoaded.value);
 const showFridgeRecipesSkeleton = computed(
   () =>
@@ -1165,6 +1155,8 @@ defineExpose({
   backdrop-filter: var(--material-mask-filter);
   content: "";
 }
+
+
 
 .table-nav__selector {
   width: 100%;

@@ -8,20 +8,15 @@
 
     <scroll-view scroll-y class="topic-scroll" :show-scrollbar="false" @scroll="handleScroll">
       <view class="topic-page" :style="pagePaddingStyle">
-        <view class="topic-hero">
-          <text class="topic-hero__eyebrow">历次话题</text>
-          <text class="topic-hero__title">从最近一顿饭开始看</text>
-          <text class="topic-hero__desc">每次一个新话题，按时间倒序收在这里。点进详情后可以直接参与。</text>
-        </view>
-
         <view v-if="loading && !items.length" class="topic-state">加载中...</view>
         <view v-else-if="errorText && !items.length" class="topic-state topic-state--error" @click="reload">{{ errorText }}</view>
-        <Empty
-          v-else-if="!items.length"
-          title="餐桌话题还在准备中"
-          description="等第一期上架后，这里会按时间倒序展示历次话题。"
-        />
-
+        <view v-else-if="!items.length" class="topic-empty">
+          <Empty
+            :art="emptyStateArt"
+            title="还没有餐桌话题"
+            description="新的话题发布后，会按时间顺序展示在这里。"
+          />
+        </view>
         <view v-else class="topic-list">
           <view
             v-for="item in items"
@@ -62,6 +57,7 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { tableTopicsApi, type TableTopicListItem } from "../apis/table-topics";
 import { formatDateTimeMinute } from "../utils/date";
+import emptyStateArt from "@/assets/empty.png";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -149,32 +145,6 @@ function openTopic(topicId: number) {
   background: var(--page-secondary-soft-bg);
 }
 
-.topic-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-  padding: 20rpx 4rpx 8rpx;
-}
-
-.topic-hero__eyebrow {
-  color: var(--color-state-warning-text);
-  font-size: 24rpx;
-  letter-spacing: 4rpx;
-}
-
-.topic-hero__title {
-  color: var(--color-text);
-  font-size: 56rpx;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.topic-hero__desc {
-  color: var(--color-text-secondary);
-  font-size: 28rpx;
-  line-height: 1.7;
-}
-
 .topic-state {
   display: flex;
   align-items: center;
@@ -183,6 +153,38 @@ function openTopic(topicId: number) {
   border-radius: 28rpx;
   background: var(--color-surface-soft-card);
   color: var(--color-text-secondary);
+}
+
+.topic-empty {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 520rpx;
+}
+
+.topic-empty::before {
+  position: absolute;
+  right: -160rpx;
+  bottom: 40rpx;
+  left: -160rpx;
+  height: 260rpx;
+  background: var(--page-hero-orb-bg);
+  opacity: 0.24;
+  transform: rotate(12deg);
+  -webkit-mask-image: var(--frosted-mask-image);
+  mask-image: var(--frosted-mask-image);
+  pointer-events: none;
+  content: "";
+}
+
+.topic-empty :deep(.empty-state) {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .topic-state--error {

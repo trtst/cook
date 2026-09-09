@@ -47,10 +47,21 @@ expectExcludes(topicPageSource, "topic-backdrop__empty-text");
 expectExcludes(topicPageSource, "topic-summary__cover-text");
 expectExcludes(topicPageSource, "recipe-card__cover-text");
 expectExcludes(topicPageSource, "history-card__cover-text");
+expectIncludes(topicPageSource, 'import emptyStateArt from "@/assets/empty.png";');
+expectIncludes(topicPageSource, '<Empty :art="emptyStateArt" title="本周灵感还在准备中" description="新的菜谱推荐准备好后，会第一时间出现在这里。" />');
+expectExcludes(topicPageSource, "topic-empty :deep(.empty-state) {\n  width: 100%;\n  border-radius");
+expectExcludes(topicPageSource, "topic-empty :deep(.empty-state) {\n  width: 100%;\n  background");
+expectIncludes(topicPageSource, "transform: translateY(-64rpx);");
 
 expectIncludes(tableTopicPageSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes(tableTopicPageSource, '<ImageEmpty v-else class="topic-card__cover topic-card__cover--empty" copy="封面图" ratio="fill" />');
 expectExcludes(tableTopicPageSource, "topic-card__empty-text");
+expectIncludes(tableTopicPageSource, 'import emptyStateArt from "@/assets/empty.png";');
+expectIncludes(tableTopicPageSource, '<Empty\n            :art="emptyStateArt"\n            title="还没有餐桌话题"\n            description="新的话题发布后，会按时间顺序展示在这里。"');
+expectExcludes(tableTopicPageSource, "class=\"topic-hero\"");
+expectExcludes(tableTopicPageSource, "topic-hero__eyebrow");
+expectExcludes(tableTopicPageSource, "topic-hero__title");
+expectExcludes(tableTopicPageSource, "topic-hero__desc");
 
 expectIncludes(tableTopicDetailSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes(tableTopicDetailSource, '<ImageEmpty v-else class="topic-hero__cover topic-hero__cover--empty" copy="封面图" ratio="fill" />');

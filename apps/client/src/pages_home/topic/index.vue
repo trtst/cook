@@ -16,7 +16,7 @@
         <view v-if="loading && !topic" class="topic-state">加载中...</view>
         <view v-else-if="errorText" class="topic-state topic-state--error" @click="reload">{{ errorText }}</view>
         <view v-else-if="!topic" class="topic-empty" :style="emptyStyle">
-          <Empty title="本周灵感还在准备中" description="运营整理好本期菜单后，这里会先放出本周推荐。" />
+          <Empty :art="emptyStateArt" title="本周灵感还在准备中" description="新的菜谱推荐准备好后，会第一时间出现在这里。" />
         </view>
 
         <template v-else>
@@ -163,7 +163,9 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
+import emptyStateArt from "@/assets/empty.png";
 import { formatMonthDay, formatSort } from "../utils/date";
+
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -380,22 +382,40 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 }
 
 .topic-empty {
+  position: relative;
+  overflow: hidden;
   box-sizing: border-box;
   min-height: 100vh;
   display: flex;
+  justify-content: center;
   align-items: center;
   padding-right: var(--space-page);
   padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
 }
 
+.topic-empty::before {
+  position: absolute;
+  right: -180rpx;
+  bottom: 80rpx;
+  left: -180rpx;
+  height: 300rpx;
+  background: var(--page-hero-orb-bg);
+  opacity: 0.34;
+  transform: rotate(-14deg);
+  -webkit-mask-image: var(--frosted-mask-image);
+  mask-image: var(--frosted-mask-image);
+  pointer-events: none;
+  content: "";
+}
+
 .topic-empty :deep(.empty-state) {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  border-radius: var(--radius-xs);
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
+  padding-top: 0;
+  padding-bottom: 0;
+  transform: translateY(-64rpx);
 }
 
 .topic-backdrop {

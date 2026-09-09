@@ -636,20 +636,20 @@ Idempotency-Key: 172251000001
   "content": {
     "name": "番茄炒蛋",
     "story": null,
-    "categoryId": 1,
-    "sceneIds": [1],
+    "categoryId": 10000000,
+    "sceneIds": [10000000],
     "baseServings": 2,
     "difficulty": "EASY",
     "duration": "WITHIN_15",
     "tips": "番茄最后下锅",
     "ingredients": [
       {
-        "ingredientId": 4001,
+        "ingredientId": 10004001,
         "name": "番茄",
         "quantity": "300",
-        "unitId": 3,
-        "categoryId": 301,
-        "defaultUnitId": 21,
+        "unitId": 3001,
+        "categoryId": 5001,
+        "defaultUnitId": 3001,
         "source": "SYSTEM"
       }
     ],
@@ -686,9 +686,9 @@ Idempotency-Key: 172251000003
 
 ```json
 {
-  "sourceRecipeId": 2001,
-  "sourceVersionId": 1001,
-  "sceneIds": [1]
+  "sourceRecipeId": 10002101,
+  "sourceVersionId": 10001101,
+  "sceneIds": [10000000]
 }
 ```
 
@@ -704,8 +704,8 @@ Idempotency-Key: 172251000004
 
 ```json
 {
-  "sourceRecipeId": 2001,
-  "sourceVersionId": 1001,
+  "sourceRecipeId": 10002101,
+  "sourceVersionId": 10001101,
   "categoryId": null
 }
 ```

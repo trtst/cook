@@ -15,6 +15,7 @@ function readAppMode(value: unknown): AppMode | null {
 const runtimeEnv = (import.meta as ImportMeta & {
 	env?: {
 		VITE_APP_MODE?: unknown;
+		VITE_ASSET_PUBLIC_BASE_URL?: string;
 		VITE_COOK_FROM?: string;
 		VITE_COOK_VERSION?: string;
 	};
@@ -27,6 +28,7 @@ export const cfg = {
 	mode,
 	apiUrl: profile.apiUrl,
 	domain: profile.domain,
+	assetPublicBaseUrl: (import.meta.env.VITE_ASSET_PUBLIC_BASE_URL ?? "").replace(/\/+$/u, ""),
 	siteUrl: profile.siteUrl,
 	/**
 	 * 默认所有业务都走 `domain`。

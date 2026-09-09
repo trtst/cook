@@ -18,7 +18,8 @@ declare module "*.gif" {
 }
 
 interface ImportMetaEnv {
-  readonly VITE_COOK_FROM?: "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
+	readonly VITE_ASSET_PUBLIC_BASE_URL?: string;
+	readonly VITE_COOK_FROM?: "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
   readonly VITE_COOK_VERSION?: string;
 }
 
