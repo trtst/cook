@@ -1174,8 +1174,8 @@ async function goBack() {
 
 .complete-footer__button {
   width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
+  height: 90rpx;
+  line-height: 90rpx;
   color: var(--button-primary-text);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
@@ -1293,8 +1293,8 @@ async function goBack() {
 
 .sheet-actions__button {
   flex: 1;
-  height: 84rpx;
-  line-height: 84rpx;
+  height: 90rpx;
+  line-height: 90rpx;
 }
 
 .sheet-actions__button--cancel {

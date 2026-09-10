@@ -216,7 +216,7 @@ function handleInvite() {
   align-items: center;
   gap: 18rpx;
   padding: 20rpx 22rpx;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted-frost);
 }
 
@@ -307,7 +307,7 @@ function handleInvite() {
   min-height: 92rpx;
   padding: 0 24rpx;
   border: 2rpx dashed var(--color-border-active);
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-primary-panel-soft);
   box-sizing: border-box;
 }
@@ -378,7 +378,7 @@ function handleInvite() {
 
 .participant-note__empty {
   padding: 28rpx 26rpx;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-support-notice);
 }
 

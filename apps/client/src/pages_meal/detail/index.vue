@@ -3758,7 +3758,7 @@ function clearFocusedSection() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 72rpx;
+  height: 60rpx;
   padding: 0 26rpx;
   border-radius: 999rpx;
   background: var(--button-primary-bg);
@@ -4199,7 +4199,7 @@ function clearFocusedSection() {
   align-items: center;
   justify-content: center;
   min-width: 116rpx;
-  min-height: 54rpx;
+  min-height: 50rpx;
   padding: 0 18rpx;
   border: 1rpx solid var(--color-border-light);
   border-radius: 999rpx;
@@ -4421,7 +4421,7 @@ function clearFocusedSection() {
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 86rpx;
+  height: 90rpx;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
@@ -4769,7 +4769,7 @@ function clearFocusedSection() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 84rpx;
+  height: 90rpx;
   margin: 0;
   padding: 0 28rpx;
   border-radius: 999rpx;
@@ -4781,6 +4781,7 @@ function clearFocusedSection() {
 
 .meal-footer__button::after {
   border: none;
+  display: none;
 }
 
 .meal-footer__button--ghost {

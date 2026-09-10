@@ -17,7 +17,7 @@ type EffectiveTheme = "light" | "dark";
 type ThemeVars = Record<string, string>;
 type ThemePageColors = {
   light: Partial<Record<ThemePalette, string>>;
-  dark?: string;
+  dark?: string | Partial<Record<ThemePalette, string>>;
 };
 
 const themePageColors: Record<ThemeSkin, ThemePageColors> = {
@@ -28,7 +28,12 @@ const themePageColors: Record<ThemeSkin, ThemePageColors> = {
       olive: "#f2f4ea",
       cool: "#f0f5f8"
     },
-    dark: "#111715"
+    dark: {
+      default: "#111715",
+      warm: "#1b1511",
+      olive: "#151a14",
+      cool: "#121923"
+    }
   },
   "fresh-ingredient": {
     light: {
@@ -54,7 +59,11 @@ let mediaQueryCleanup: (() => void) | undefined;
 
 function themePageColor(skin: ThemeSkin, palette: ThemePalette, theme: EffectiveTheme) {
   const colors = themePageColors[skin];
-  if (theme === "dark" && colors.dark) return colors.dark;
+  if (theme === "dark" && colors.dark) {
+    return typeof colors.dark === "string"
+      ? colors.dark
+      : colors.dark[palette] ?? colors.dark.default ?? colors.light[palette] ?? colors.light.default ?? "#fff";
+  }
   return colors.light[palette] ?? colors.light.default ?? "#fff";
 }
 
@@ -126,7 +135,6 @@ export function useTheme() {
   const themeClass = computed(() => `theme-${effectiveTheme.value}`);
   const skinClass = computed(() => `theme-skin-${effectiveSkin.value}`);
   const paletteClass = computed(() => {
-    if (effectiveTheme.value === "dark") return "";
     if (supportedPalettes.value.length === 0) return "";
     return `theme-palette-${effectivePalette.value}`;
   });

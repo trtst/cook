@@ -10,7 +10,7 @@
       <view class="topic-page" :style="pagePaddingStyle">
         <view v-if="loading && !items.length" class="topic-state">加载中...</view>
         <view v-else-if="errorText && !items.length" class="topic-state topic-state--error" @click="reload">{{ errorText }}</view>
-        <view v-else-if="!items.length" class="topic-empty">
+        <view v-else-if="!items.length" class="topic-empty" :style="emptyStyle">
           <Empty
             :art="emptyStateArt"
             title="还没有餐桌话题"
@@ -81,6 +81,9 @@ const navTitleStyle = computed(() => ({
 const pagePaddingStyle = computed(() => ({
   paddingTop: `calc(${navBarTotalHeight.value}px + 28rpx)`
 }));
+const emptyStyle = computed(() => ({
+  minHeight: `calc(100vh - ${navBarTotalHeight.value}px - 28rpx)`
+}));
 
 onLoad(() => {
   void loadTopics();
@@ -137,7 +140,7 @@ function openTopic(topicId: number) {
 .topic-page {
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 0;
   min-height: 100vh;
   padding-right: 28rpx;
   padding-left: 28rpx;
@@ -160,7 +163,7 @@ function openTopic(topicId: number) {
   overflow: hidden;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   min-height: 520rpx;
 }
 
@@ -183,6 +186,7 @@ function openTopic(topicId: number) {
   position: relative;
   z-index: 1;
   width: 100%;
+  margin-top: 48rpx;
   padding-top: 0;
   padding-bottom: 0;
 }

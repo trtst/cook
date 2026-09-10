@@ -251,7 +251,7 @@ function handleConfirm() {
   flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 88rpx;
+  height: 90rpx;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);

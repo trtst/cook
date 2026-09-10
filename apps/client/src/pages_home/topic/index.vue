@@ -388,7 +388,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding-right: var(--space-page);
   padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
   padding-left: var(--space-page);
@@ -413,9 +413,9 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   position: relative;
   z-index: 1;
   width: 100%;
+  margin-top: 48rpx;
   padding-top: 0;
   padding-bottom: 0;
-  transform: translateY(-64rpx);
 }
 
 .topic-backdrop {

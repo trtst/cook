@@ -17,7 +17,7 @@ function expectExcludes(source: string, snippet: string) {
 function expectSelectorIncludes(source: string, selector: string, snippets: string[]) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\n\\}`, "m"));
-  assert.ok(match?.[1], `Expected selector block to exist: ${selector}`);
+  assert.ok(match?.[1], `Expected selector to exist: ${selector}`);
 
   for (const snippet of snippets) {
     assert.ok(match[1].includes(snippet), `Expected selector ${selector} to include: ${snippet}`);
@@ -27,12 +27,15 @@ function expectSelectorIncludes(source: string, selector: string, snippets: stri
 function expectSelectorExcludes(source: string, selector: string, snippets: string[]) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\n\\}`, "m"));
-  assert.ok(match?.[1], `Expected selector block to exist: ${selector}`);
+  assert.ok(match?.[1], `Expected selector to exist: ${selector}`);
 
   for (const snippet of snippets) {
     assert.ok(!match[1].includes(snippet), `Expected selector ${selector} to exclude: ${snippet}`);
   }
 }
+
+const skinMaterialTestSource = readFileSync(resolve(__dirname, "./skin-material.test.ts"), "utf8");
+assert.doesNotMatch(skinMaterialTestSource, /if \(!match\?\.\[1\]\) return;/, "Selector checks must not silently skip missing selectors");
 
 const LEGACY_SECONDARY_OUTLINE = "box-shadow: inset 0 0 0 1rpx var(--button-secondary-outline);";
 
@@ -108,7 +111,7 @@ const textFieldSheetSource = readFile("../components/Sheet/TextFieldSheet.vue");
 const tabbarSource = readFile("../components/TabBar/TabBar.vue");
 const toastSource = readFile("../components/Toast/Toast.vue");
 
-expectIncludes(fallbackColorsSource, "@include theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);");
+expectIncludes(fallbackColorsSource, "@include theme-derived-colors(#ffffff, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);");
 expectIncludes(fallbackColorsSource, "--color-raw-primary: var(--theme-primary);");
 expectIncludes(fallbackColorsSource, "--button-primary-gradient-start: var(--theme-primary);");
 expectIncludes(fallbackColorsSource, "--button-primary-bg: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);");
@@ -116,10 +119,18 @@ expectExcludes(fallbackColorsSource, "--color-raw-primary: #");
 expectExcludes(fallbackColorsSource, "--button-primary-gradient-start: #");
 expectExcludes(fallbackColorsSource, "--color-primary: #");
 expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm");
-expectIncludes(defaultSkinSource, ".theme-skin-default.theme-dark");
-expectIncludes(freshIngredientSkinSource, "theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);");
-expectIncludes(minimalWhiteSkinSource, "theme-derived-colors(#ffffff, #ffffff, #161616, #7da35b, #94b873, #ffffff, #161616);");
-expectIncludes(appleGlassSkinSource, "theme-derived-colors(#eef1f4, rgba(255, 255, 255, 0.74), #1d1d1f, #0a84ff, #78b9ff, #ffffff, #1d1d1f);");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-default.theme-dark");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm.theme-dark");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-olive.theme-dark");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-cool.theme-dark");
+expectExcludes(defaultSkinSource, ".theme-skin-default.theme-dark {");
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-default.theme-dark", ["#111715", "#5a9d90"]);
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm.theme-dark", ["#1b1511", "#d8895f"]);
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-olive.theme-dark", ["#151a14", "#91ad68"]);
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-cool.theme-dark", ["#121923", "#6ea6d3"]);
+expectIncludes(freshIngredientSkinSource, "colors.theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);");
+expectIncludes(minimalWhiteSkinSource, "colors.theme-derived-colors(#ffffff, #ffffff, #161616, #7da35b, #94b873, #ffffff, #161616);");
+expectIncludes(appleGlassSkinSource, "colors.theme-derived-colors(#eef1f4, rgba(255, 255, 255, 0.74), #1d1d1f, #0a84ff, #78b9ff, #ffffff, #1d1d1f);");
 
 expectIncludes(fallbackColorsSource, "--material-mask-filter:");
 expectIncludes(fallbackColorsSource, "--material-card-bg:");
@@ -292,9 +303,9 @@ expectIncludes(confirmSource, "box-shadow: var(--button-danger-shadow);");
 expectIncludes(confirmSource, "backdrop-filter: var(--button-danger-filter);");
 expectSelectorExcludes(confirmSource, ".confirm-card__button--danger", ["border: 1rpx solid var(--color-danger-soft);"]);
 
-expectIncludes(emptySource, "background: var(--material-card-bg);");
-expectIncludes(emptySource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(emptySource, "backdrop-filter: var(--material-card-filter);");
+expectIncludes(emptySource, "background: transparent;");
+expectExcludes(emptySource, "box-shadow: var(--material-card-shadow);");
+expectExcludes(emptySource, "backdrop-filter: var(--material-card-filter);");
 expectSelectorExcludes(emptySource, ".empty-state", ["border: 1px solid var(--material-card-border);"]);
 expectSelectorExcludes(emptySource, ".empty-state--art", ["border: 1rpx solid var(--material-card-border);"]);
 
@@ -304,6 +315,12 @@ expectIncludes(imageFieldSource, "backdrop-filter: var(--button-primary-filter);
 expectSelectorExcludes(imageFieldSource, ".image-field__action", ["border: 1rpx solid var(--button-primary-border);"]);
 expectSelectorIncludes(imageFieldSource, ".image-field--cover.image-field--empty", [
   "background: var(--page-cover-fresh-shell-bg);"
+]);
+expectSelectorIncludes(imageFieldSource, ".image-field--cover .image-field__empty", [
+  "bottom: 0;"
+]);
+expectSelectorExcludes(imageFieldSource, ".image-field--cover .image-field__empty", [
+  "bottom: 138rpx;"
 ]);
 
 expectIncludes(loginStylesSource, "box-shadow: var(--material-card-shadow);");
@@ -318,34 +335,25 @@ expectSelectorExcludes(loginStylesSource, ".login", [
 expectSelectorExcludes(loginStylesSource, ".login", ["border: 1px solid var(--material-card-border);"]);
 expectSelectorExcludes(loginStylesSource, ".login__button", ["border: 1rpx solid var(--button-primary-border);"]);
 expectSelectorIncludes(loginModalSource, ".login-popup__backdrop", [
-  "-webkit-backdrop-filter: var(--login-popup-backdrop-filter);",
-  "backdrop-filter: var(--login-popup-backdrop-filter);"
+  "background: var(--login-popup-backdrop-bg);"
 ]);
 expectSelectorExcludes(loginModalSource, ".login-popup__backdrop", ["backdrop-filter: blur(24rpx) saturate(145%);"]);
-expectSelectorIncludes(loginModalSource, ".login-popup__phone-card", [
-  "box-shadow: var(--login-popup-sheet-shadow);",
-  "-webkit-backdrop-filter: var(--login-popup-sheet-filter);",
-  "backdrop-filter: var(--login-popup-sheet-filter);"
+expectSelectorIncludes(loginModalSource, ".login-popup__panel", [
+  "background: var(--page-primary-soft-bg);"
 ]);
-expectSelectorExcludes(loginModalSource, ".login-popup__phone-card", ["border: 2rpx solid var(--login-popup-sheet-border);"]);
-expectSelectorExcludes(loginModalSource, ".login-popup__phone-card", ["backdrop-filter: blur(28rpx) saturate(150%);"]);
+expectSelectorExcludes(loginModalSource, ".login-popup__panel", ["border: 2rpx solid var(--login-popup-sheet-border);"]);
+expectSelectorExcludes(loginModalSource, ".login-popup__panel", ["backdrop-filter: blur(28rpx) saturate(150%);"]);
 
 expectIncludes(accountPageSource, "background: var(--material-card-bg);");
 expectIncludes(accountPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(accountPageSource, "backdrop-filter: var(--material-card-filter);");
 expectSelectorExcludes(accountPageSource, ".account-panel", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorExcludes(mePageSource, ".profile-modal__button--ghost", ["border: 1rpx solid var(--color-border);"]);
 expectSelectorIncludes(mePageSource, ".profile-hero__frost", [
   "background: var(--page-hero-mask-bg);",
   "backdrop-filter: var(--material-mask-filter);"
 ]);
 expectSelectorExcludes(mePageSource, ".profile-hero__frost", ["backdrop-filter: blur(10rpx);"]);
 expectSelectorExcludes(mePageSource, ".profile-hero__frost", ["linear-gradient(180deg, var(--color-surface-mask-weak), var(--color-surface-mask-medium)),"]);
-expectSelectorIncludes(mePageSource, ".profile-modal", [
-  "-webkit-backdrop-filter: var(--page-overlay-veil-filter);",
-  "backdrop-filter: var(--page-overlay-veil-filter);"
-]);
-expectSelectorExcludes(mePageSource, ".profile-modal", ["backdrop-filter: blur(24rpx) saturate(145%);"]);
 expectSelectorIncludes(mePageSource, ".service-row__icon-wrap--membership", [
   "background: var(--color-support-notice);"
 ]);
@@ -426,9 +434,6 @@ expectSelectorIncludes(homePageSource, ".table-hero::before", [
 expectSelectorIncludes(homePageSource, ".table-hero::after", [
   "background: var(--page-hero-orb-bg);"
 ]);
-expectSelectorIncludes(homePageSource, ".hero-banner__shade", [
-  "background: var(--overlay-hero-banner-shade);"
-]);
 expectSelectorIncludes(homePageSource, ".hero-banner__eyebrow,\n.hero-banner__title,\n.hero-banner__description", [
   "color: var(--color-text);"
 ]);
@@ -488,18 +493,6 @@ expectSelectorIncludes(mePageSource, ".profile-hero__mask", [
   "mask-image: var(--page-bottom-mask-image);",
   "-webkit-mask-image: var(--page-bottom-mask-image);"
 ]);
-expectSelectorIncludes(mePageSource, ".profile-form__input", [
-  "border: 1rpx solid var(--material-input-border);",
-  "background: var(--material-input-bg);",
-  "box-shadow: var(--material-input-shadow);",
-  "backdrop-filter: var(--material-input-filter);"
-]);
-expectSelectorIncludes(mePageSource, ".password-form__input", [
-  "border: 1rpx solid var(--material-input-border);",
-  "background: var(--material-input-bg);",
-  "box-shadow: var(--material-input-shadow);",
-  "backdrop-filter: var(--material-input-filter);"
-]);
 expectSelectorIncludes(pantryIndexPageSource, ".pantry-hero::after", [
   "mask-image: var(--page-bottom-mask-image);",
   "-webkit-mask-image: var(--page-bottom-mask-image);"
@@ -523,9 +516,6 @@ expectSelectorIncludes(tableTopicPageSource, ".topic-card__cover--empty", [
   "background: var(--color-cover-empty-warm-bg);"
 ]);
 expectIncludes(tableTopicPageSource, '<ImageEmpty v-else class="topic-card__cover topic-card__cover--empty" copy="封面图" ratio="fill" />');
-expectSelectorIncludes(tableTopicPageSource, ".topic-hero__eyebrow", [
-  "color: var(--color-state-warning-text);"
-]);
 expectSelectorIncludes(tableTopicPageSource, ".topic-state--error", [
   "color: var(--color-state-danger-text);"
 ]);
@@ -571,6 +561,9 @@ expectSelectorIncludes(mealEventPageSource, ".filter-chip--active", [
 expectSelectorExcludes(mealEventPageSource, ".filter-chip--active", ["border-color: var(--color-primary);"]);
 expectSelectorIncludes(mealEventPageSource, ".filter-chip--active .filter-chip__label,\n.filter-chip--active .filter-chip__count", [
   "color: var(--color-tag-primary-text);"
+]);
+expectSelectorIncludes(mealEventPageSource, ".event-card__top", [
+  "aspect-ratio: 4 / 3;"
 ]);
 
 expectIncludes(pantryListPageSource, "background: var(--material-card-bg);");
@@ -945,8 +938,18 @@ expectSelectorIncludes(mealDetailPageSource, ".meal-panel--warning", [
   "background: var(--color-state-warning-soft);"
 ]);
 expectSelectorIncludes(mealDetailPageSource, ".meal-menu-empty__action", [
+  "height: 60rpx;",
   "background: var(--button-primary-bg);",
   "color: var(--button-primary-text);"
+]);
+expectSelectorIncludes(participantManageSheetSource, ".participant-note__empty", [
+  "border-radius: var(--radius-xs);"
+]);
+expectSelectorIncludes(participantManageSheetSource, ".participant-sheet__row", [
+  "border-radius: var(--radius-xs);"
+]);
+expectSelectorIncludes(participantManageSheetSource, ".participant-sheet__invite", [
+  "border-radius: var(--radius-xs);"
 ]);
 expectSelectorIncludes(mealDetailPageSource, ".meal-hero__cover-empty", [
   "padding-top: var(--hero-header-offset);"

@@ -805,7 +805,7 @@ async function submitShopping() {
 }
 
 .sheet-actions__button {
-  height: 88rpx;
+  height: 90rpx;
   border-radius: var(--radius-pill);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);

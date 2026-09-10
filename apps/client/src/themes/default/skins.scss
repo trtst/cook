@@ -17,7 +17,19 @@
   @include colors.theme-derived-colors(#f0f5f8, #ffffff, #17242d, #4e93bf, #83b6df, #ffffff, #17242d);
 }
 
-/* 深色模式不再分 palette，统一走一套暗色源头。 */
-.theme-skin-default.theme-dark {
+/* 深色模式仍保留当前色系，分别维护对应的暗色源头。 */
+.theme-skin-default.theme-palette-default.theme-dark {
   @include colors.theme-derived-colors(#111715, #18201d, #f6efe8, #5a9d90, #8fbf8c, #0f1713, #0f1713, #ffffff, dark);
+}
+
+.theme-skin-default.theme-palette-warm.theme-dark {
+  @include colors.theme-derived-colors(#1b1511, #241c17, #f7eee4, #d8895f, #e5ad72, #21140e, #21140e, #ffffff, dark);
+}
+
+.theme-skin-default.theme-palette-olive.theme-dark {
+  @include colors.theme-derived-colors(#151a14, #1e261b, #edf2e5, #91ad68, #b8c987, #17200f, #17200f, #ffffff, dark);
+}
+
+.theme-skin-default.theme-palette-cool.theme-dark {
+  @include colors.theme-derived-colors(#121923, #192330, #edf3fa, #6ea6d3, #8ebce0, #101b29, #101b29, #ffffff, dark);
 }

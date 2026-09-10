@@ -1409,7 +1409,7 @@ defineExpose({
 
 .sheet-actions__button {
   flex: 1;
-  min-height: 86rpx;
+  height: 90rpx;
   border-radius: var(--radius-pill);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
