@@ -5,6 +5,7 @@ import {
   recipeNutritionSourceRepo,
   recipeNutritionSourceVersion
 } from "../src/modules/recipe/recipe-nutrition-catalog";
+import { buildNutritionDerivedInvalidationWhere } from "../src/modules/admin/nutrition-admin";
 
 loadLocalEnv();
 
@@ -166,10 +167,9 @@ async function main() {
   }
 
   await prisma.recipeNutritionSnapshot.deleteMany({
-    where: {
-      sourceVersion: recipeNutritionSourceVersion
-    }
+    where: buildNutritionDerivedInvalidationWhere(recipeNutritionSourceVersion)
   });
+  await prisma.recipeCompletenessSnapshot.deleteMany({ where: { sourceVersion: recipeNutritionSourceVersion } });
 
   console.log(
     JSON.stringify(

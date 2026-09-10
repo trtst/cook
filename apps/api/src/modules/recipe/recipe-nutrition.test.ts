@@ -46,6 +46,7 @@ test("nutrition summary is calculated from ingredient mappings and persisted for
     duration: "BETWEEN_15_30",
     estimatedCalories: null,
     tips: "测试建议",
+    keywords: [],
     tools: [{ name: "炒锅" }],
     ingredients: [{
       ingredientId: 321,

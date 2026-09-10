@@ -133,6 +133,8 @@ enum IngredientProteinType {
 }
 
 enum RecipeVersionTagCode {
+  CUISINE
+  DISH_STYLE
   DISH_ROLE
   MEAL_TYPE
   MAIN_PROTEIN_TYPE
@@ -1305,6 +1307,7 @@ model RecipeContentVersion {
   duration          RecipeDuration?
   estimatedCalories Int?                @map("estimated_calories")
   tips              String?             @db.VarChar(1000)
+  keywordsJson      Json                @default("[]") @map("keywords_json")
   toolsJson         Json                @default("[]") @map("tools_json")
   ingredientsJson   Json                @map("ingredients_json")
   stepsJson         Json                @map("steps_json")
@@ -1390,6 +1393,7 @@ model NutrientFood {
   id             Int      @id @default(autoincrement())
   sourceFoodCode String   @map("source_food_code") @db.VarChar(32)
   name           String   @db.VarChar(128)
+  category       String?  @db.VarChar(128)
   edibleRate     Float?   @map("edible_rate")
   calories       Float?   @map("calories")
   protein        Float?   @map("protein")
@@ -1402,7 +1406,7 @@ model NutrientFood {
   ingredientMappings IngredientNutrientMapping[]
 
   @@unique([sourceVersion, sourceFoodCode])
-  @@index([sourceVersion, name])
+  @@index([sourceVersion, category, name, id])
   @@map("nutrient_foods")
 }
 
