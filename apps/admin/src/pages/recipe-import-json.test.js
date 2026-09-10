@@ -8,6 +8,8 @@ const apiFile = fs.readFileSync(new URL("../apis/recipe.ts", import.meta.url), "
 const controllerFile = fs.readFileSync(new URL("../../../api/src/modules/auth/admin.controller.ts", import.meta.url), "utf8");
 const openapiFile = fs.readFileSync(new URL("../../../api/src/contracts/openapi.ts", import.meta.url), "utf8");
 const typesFile = fs.readFileSync(new URL("../../../api/src/contracts/types.ts", import.meta.url), "utf8");
+const dtosFile = fs.readFileSync(new URL("../../../api/src/contracts/dtos.ts", import.meta.url), "utf8");
+const adminServiceFile = fs.readFileSync(new URL("../../../api/src/modules/admin/admin.service.ts", import.meta.url), "utf8");
 
 test("import center accepts batch JSON files only", () => {
   assert.match(jobsPage, /accept="\.json"/);
@@ -34,6 +36,26 @@ test("import workbench requires complete content and disables publish with error
   assert.doesNotMatch(itemPage, /estimatedCalories/);
 });
 
+test("import workbench edits keywords, shows an unselected category, and supports cuisine and dish style", () => {
+  assert.match(itemPage, /label="关键词"/);
+  assert.match(itemPage, /form\.keywords/);
+  assert.match(itemPage, /keywords: form\.keywords/);
+  assert.match(itemPage, /待选择分类/);
+  assert.match(itemPage, /\{ value: "CUISINE", label: "菜系" \}/);
+  assert.match(itemPage, /\{ value: "DISH_STYLE", label: "菜式" \}/);
+  assert.match(apiFile, /"CUISINE" \| "DISH_STYLE"/);
+  assert.match(dtosFile, /\["CUISINE", "DISH_STYLE", "MEAL_TYPE"/);
+  assert.match(openapiFile, /\["CUISINE", "DISH_STYLE", "MEAL_TYPE"/);
+});
+
+test("published recipe Wiki displays cuisine and dish style in Chinese", () => {
+  const detailPage = fs.readFileSync(new URL("./RecipeDetailPage.vue", import.meta.url), "utf8");
+  assert.match(detailPage, /CUISINE: "菜系"/);
+  assert.match(detailPage, /DISH_STYLE: "菜式"/);
+  assert.match(adminServiceFile, /SICHUAN_HUNAN: "川湘菜"/);
+  assert.match(adminServiceFile, /STAPLE_FOOD: "主食"/);
+});
+
 test("clearing an imported remote image removes the source URL", () => {
   assert.match(itemPage, /form\.coverImageUrl = null/);
   assert.match(itemPage, /step\.imageUrl = null/);
@@ -48,6 +70,23 @@ test("recipe detail exposes the complete current-version Wiki area", () => {
   assert.match(detailPage, /wiki\.tags/);
   assert.match(detailPage, /wiki\.nutrition/);
   assert.match(detailPage, /durationMinutes/);
+});
+
+test("system recipe detail exposes JSON export and keywords", () => {
+  const detailPage = fs.readFileSync(new URL("./RecipeDetailPage.vue", import.meta.url), "utf8");
+  const apiFile = fs.readFileSync(new URL("../apis/recipe.ts", import.meta.url), "utf8");
+  assert.match(detailPage, /导出 JSON/);
+  assert.match(detailPage, /JSON\.stringify/);
+  assert.match(apiFile, /keywords: string\[\]/);
+  assert.match(detailPage, /schemaVersion: "recipe\.import\.v1"/);
+  assert.match(detailPage, /recipe: \{/);
+  assert.match(detailPage, /wiki: \{/);
+  assert.match(detailPage, /recipeImportTagCodes/);
+  assert.doesNotMatch(detailPage, /JSON\.stringify\(detail\.value/);
+  const exportStart = detailPage.indexOf("function buildRecipeImportJson");
+  const exportEnd = detailPage.indexOf("function exportJson");
+  assert.ok(exportStart >= 0 && exportEnd > exportStart, "Expected an explicit import export mapper");
+  assert.doesNotMatch(detailPage.slice(exportStart, exportEnd), /nutrition/);
 });
 
 test("recipe detail follows the four-section two-column layout", () => {

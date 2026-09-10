@@ -50,6 +50,7 @@ export interface AdminRecipeContentInput {
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
   estimatedCalories: number | null;
   tips: string | null;
+  keywords: string[];
   tools?: Array<{ name: string }>;
   ingredients: RecipeIngredientInput[];
   steps: Array<{
@@ -145,6 +146,7 @@ export interface AdminRecipeDetail {
     duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
     estimatedCalories: number | null;
     tips: string | null;
+    keywords: string[];
     tools: Array<{ name: string }>;
     ingredients: Array<{
       ingredientId: UUID;
@@ -312,7 +314,7 @@ export interface RecipeImportToolDraft {
   name: string;
 }
 
-export type RecipeImportTagCode = "MEAL_TYPE" | "DISH_ROLE" | "MAIN_PROTEIN_TYPE" | "FLAVOR_PROFILE" | "SPICE_LEVEL";
+export type RecipeImportTagCode = "CUISINE" | "DISH_STYLE" | "MEAL_TYPE" | "DISH_ROLE" | "MAIN_PROTEIN_TYPE" | "FLAVOR_PROFILE" | "SPICE_LEVEL";
 
 export interface RecipeImportTagDraft {
   tagCode: RecipeImportTagCode;
@@ -345,6 +347,7 @@ export interface RecipeImportRecipeBody {
   difficulty: "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING" | null;
   duration: "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60" | null;
   tips: string | null;
+  keywords: string[];
   coverImageUrl?: string | null;
   coverImageKey: string | null;
   coverImageTempKey: string | null;

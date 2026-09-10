@@ -13,3 +13,9 @@ test("recipe categories keep the blocked tab after all regular categories", () =
   assert.ok(regularCategoriesIndex > allIndex, "Expected regular categories after the all recipes tab");
   assert.ok(blockedIndex > regularCategoriesIndex, "Expected the blocked tab after regular categories");
 });
+
+test("blocked recipe deletion confirmation uses normal delete wording", () => {
+  assert.match(recipesPage, /确认删除下架菜谱/);
+  assert.match(recipesPage, /confirmButtonText: "删除"/);
+  assert.doesNotMatch(recipesPage, /物理删除/);
+});

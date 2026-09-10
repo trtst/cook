@@ -66,6 +66,7 @@ interface EditFormState {
     duration: Duration;
     estimatedCalories: number | null;
     tips: string;
+    keywords: string[];
     tools: EditToolRow[];
     ingredients: EditIngredientRow[];
     steps: EditStepRow[];
@@ -93,6 +94,8 @@ const saving = ref(false);
 const imageSaving = ref(false);
 const assistantSaving = ref(false);
 const wikiTagCodeText: Record<string, string> = {
+  CUISINE: "菜系",
+  DISH_STYLE: "菜式",
   MEAL_TYPE: "餐次",
   DISH_ROLE: "菜品角色",
   MAIN_PROTEIN_TYPE: "主蛋白",
@@ -137,6 +140,73 @@ function wikiNutritionStatusTextOf(status: string) {
 
 function nutritionValue(value: number | null | undefined) {
   return value === null ? "-" : String(value);
+}
+
+const recipeImportTagCodes = new Set([
+  "CUISINE",
+  "DISH_STYLE",
+  "MEAL_TYPE",
+  "DISH_ROLE",
+  "MAIN_PROTEIN_TYPE",
+  "FLAVOR_PROFILE",
+  "SPICE_LEVEL"
+]);
+
+function buildRecipeImportJson(source: AdminRecipeDetail) {
+  const tags = source.wiki.tags
+    .filter(tag => recipeImportTagCodes.has(tag.tagCode))
+    .filter((tag, index, all) => all.findIndex(item => item.tagCode === tag.tagCode) === index)
+    .map(tag => ({ tagCode: tag.tagCode, tagValue: tag.tagValue }));
+  return {
+    schemaVersion: "recipe.import.v1",
+    recipe: {
+      inspirationCategoryId: source.inspirationCategory?.id ?? null,
+      coverImageUrl: source.coverImageUrl,
+      content: {
+        name: source.content.name,
+        story: source.content.story ?? "",
+        baseServings: source.content.baseServings,
+        difficulty: source.content.difficulty ?? "",
+        duration: source.content.duration ?? "",
+        tips: source.content.tips ?? "",
+        keywords: [...source.content.keywords],
+        ingredients: source.content.ingredients.map(item => ({
+          name: item.ingredientName,
+          quantity: item.amount.kind === "EXACT" ? item.amount.quantity : item.amount.text,
+          unit: item.amount.kind === "EXACT" ? item.amount.unitName : ""
+        })),
+        tools: source.content.tools.map(item => ({ name: item.name })),
+        steps: source.content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl }))
+      }
+    },
+    wiki: {
+      tags,
+      assistant: {
+        steps: (source.assistant?.steps ?? []).map((step, index) => ({
+          order: index + 1,
+          phase: step.phase,
+          action: step.action ?? "OTHER",
+          title: step.title,
+          detail: step.detail,
+          imageUrl: step.imageUrl,
+          durationMinutes: step.durationMinutes ?? 0,
+          durationText: step.durationText
+        }))
+      }
+    }
+  };
+}
+
+function exportJson() {
+  if (!detail.value) return;
+  const exportBody = buildRecipeImportJson(detail.value);
+  const blob = new Blob([JSON.stringify(exportBody, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${detail.value.title || "recipe"}-${detail.value.id}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 const editVisible = ref(false);
 const cropDialogVisible = ref(false);
@@ -191,6 +261,7 @@ const form = reactive<EditFormState>({
     duration: "WITHIN_15",
     estimatedCalories: null,
     tips: "",
+    keywords: [],
     tools: [],
     ingredients: [],
     steps: []
@@ -374,6 +445,7 @@ function resetFormFromDetail() {
   form.content.duration = detail.value.content.duration;
   form.content.estimatedCalories = detail.value.content.estimatedCalories;
   form.content.tips = detail.value.content.tips ?? "";
+  form.content.keywords = [...detail.value.content.keywords];
   form.content.tools = detail.value.content.tools.map(item => ({ name: item.name }));
   form.content.ingredients = detail.value.content.ingredients.map(item => ({
     ingredientId: item.ingredientId,
@@ -525,6 +597,7 @@ function buildPayload(): UpdateAdminRecipePayload | null {
       duration: form.content.duration,
       estimatedCalories: form.content.estimatedCalories,
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
+      keywords: form.content.keywords.map(item => item.trim()).filter(Boolean),
       tools: form.content.tools.map(item => ({ name: item.name.trim() })).filter(item => item.name),
       ingredients,
       steps: form.content.steps.map(item => ({
@@ -796,6 +869,7 @@ onBeforeUnmount(() => {
     <div class="toolbar-panel detail-toolbar">
       <el-button text :icon="ArrowLeft" @click="goBack">返回系统菜谱</el-button>
       <div class="toolbar-spacer" />
+      <el-button v-if="detail" class="detail-toolbar__action" @click="exportJson">导出 JSON</el-button>
       <el-button v-if="detail?.canEdit" class="detail-toolbar__action" type="primary" :icon="EditPen" @click="openEdit">编辑正文</el-button>
     </div>
 
@@ -846,6 +920,10 @@ onBeforeUnmount(() => {
               </el-descriptions-item>
               <el-descriptions-item label="小贴士" :span="2">
                 <div class="multiline-text">{{ detail.content.tips || "-" }}</div>
+              </el-descriptions-item>
+              <el-descriptions-item label="关键词" :span="2">
+                <span v-if="detail.content.keywords.length">{{ detail.content.keywords.join("、") }}</span>
+                <span v-else>-</span>
               </el-descriptions-item>
               <el-descriptions-item label="所需厨具" :span="2">
                 <span v-if="detail.content.tools.length">{{ detail.content.tools.map(item => item.name).join("、") }}</span>
@@ -1078,6 +1156,11 @@ onBeforeUnmount(() => {
           </el-form-item>
           <el-form-item label="故事">
             <el-input v-model="form.content.story" type="textarea" :rows="3" maxlength="2000" show-word-limit />
+          </el-form-item>
+          <el-form-item label="关键词">
+            <el-select v-model="form.content.keywords" multiple filterable allow-create default-first-option :multiple-limit="8" placeholder="输入后回车，最多 8 个">
+              <el-option v-for="item in form.content.keywords" :key="item" :label="item" :value="item" />
+            </el-select>
           </el-form-item>
           <div class="edit-grid">
             <el-form-item label="基准人数" required>

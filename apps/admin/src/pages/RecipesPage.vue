@@ -144,11 +144,11 @@ async function unblockRecipe(recipeId: UUID) {
 async function deleteBlockedRecipe(row: AdminRecipeSummary) {
   try {
     await ElMessageBox.confirm(
-      `确认物理删除下架菜谱“${row.title}”？删除后不可恢复，也不会继续出现在下架分类。`,
+      `确认删除下架菜谱“${row.title}”？删除后不可恢复，也不会继续出现在下架分类。`,
       "删除下架菜谱",
       {
         type: "warning",
-        confirmButtonText: "物理删除",
+        confirmButtonText: "删除",
         cancelButtonText: "取消"
       }
     );
@@ -156,7 +156,7 @@ async function deleteBlockedRecipe(row: AdminRecipeSummary) {
       operationId: createOperationId(),
       expectedVersion: row.version
     });
-    ElMessage.success("下架菜谱已物理删除");
+    ElMessage.success("下架菜谱已删除");
     if (recipes.value.length === 1 && query.page > 1) query.page -= 1;
     await loadPage();
   } catch (error) {

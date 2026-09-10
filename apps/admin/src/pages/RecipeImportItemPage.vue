@@ -67,6 +67,8 @@ const exportCoverHeight = 900;
 const servingOptions = Array.from({ length: 20 }, (_, index) => index + 1);
 const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
 const tagCodeOptions: Array<{ value: RecipeImportTagCode; label: string }> = [
+  { value: "CUISINE", label: "菜系" },
+  { value: "DISH_STYLE", label: "菜式" },
   { value: "MEAL_TYPE", label: "餐次" },
   { value: "DISH_ROLE", label: "菜式角色" },
   { value: "MAIN_PROTEIN_TYPE", label: "主蛋白" },
@@ -74,6 +76,17 @@ const tagCodeOptions: Array<{ value: RecipeImportTagCode; label: string }> = [
   { value: "SPICE_LEVEL", label: "辣度" }
 ];
 const tagValueOptions: Record<RecipeImportTagCode, Array<{ value: string; label: string }>> = {
+  CUISINE: [
+    { value: "SICHUAN_HUNAN", label: "川湘菜" }, { value: "JIANG_ZHE", label: "江浙菜" },
+    { value: "CANTONESE", label: "粤菜" }, { value: "FUJIAN", label: "闽菜" }, { value: "NORTHERN", label: "北方菜" },
+    { value: "YUN_GUI", label: "云贵菜" }, { value: "TAIWAN", label: "台湾菜" }, { value: "FUSION", label: "融合菜" }, { value: "OTHER", label: "其他菜系" }
+  ],
+  DISH_STYLE: [
+    { value: "STIR_FRY", label: "炒菜" }, { value: "COLD_DISH", label: "凉菜" }, { value: "SOUP", label: "汤羹" },
+    { value: "STAPLE_FOOD", label: "主食" }, { value: "STEW", label: "炖煮" }, { value: "STEAMED", label: "蒸菜" },
+    { value: "BRAISED", label: "卤味" }, { value: "FRIED", label: "煎炸" }, { value: "BBQ", label: "烧烤" },
+    { value: "HOT_POT", label: "火锅" }, { value: "SNACK", label: "小吃点心" }
+  ],
   MEAL_TYPE: [
     { value: "BREAKFAST", label: "早餐" }, { value: "LUNCH", label: "午餐" },
     { value: "AFTERNOON_TEA", label: "下午茶" }, { value: "DINNER", label: "晚餐" }, { value: "LATE_NIGHT", label: "夜宵" }
@@ -173,6 +186,7 @@ const form = reactive({
   difficulty: "" as Difficulty | "",
   duration: "" as Duration | "",
   tips: "",
+  keywords: [] as string[],
   coverImageUrl: null as string | null,
   coverImageKey: "" as string | "",
   coverImageTempKey: null as string | null,
@@ -421,6 +435,7 @@ function resetFormFromDetail() {
   form.difficulty = body.difficulty ?? "";
   form.duration = body.duration ?? "";
   form.tips = body.tips ?? "";
+  form.keywords = [...body.keywords];
   form.coverImageUrl = body.coverImageUrl ?? null;
   form.coverImageKey = body.coverImageKey ?? "";
   form.coverImageTempKey = body.coverImageTempKey ?? null;
@@ -480,6 +495,7 @@ function clearForm() {
   form.difficulty = "";
   form.duration = "";
   form.tips = "";
+  form.keywords = [];
   form.coverImageUrl = null;
   form.coverImageKey = "";
   form.coverImageTempKey = null;
@@ -793,6 +809,7 @@ function buildRecipeBody(): RecipeImportRecipeBody {
     difficulty: (form.difficulty || null) as RecipeImportRecipeBody["difficulty"],
     duration: (form.duration || null) as RecipeImportRecipeBody["duration"],
     tips: form.tips.trim() ? form.tips.trim() : null,
+    keywords: form.keywords.map(item => item.trim()).filter(Boolean),
     coverImageUrl: form.coverImageUrl,
     coverImageKey: form.coverImageKey || null,
     coverImageTempKey: form.coverImageTempKey,
@@ -952,6 +969,7 @@ onBeforeUnmount(() => {
               <el-select v-model="form.inspirationCategoryId" placeholder="请选择系统菜谱分类">
                 <el-option v-for="item in inspirationCategories" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
+              <el-alert v-if="!form.inspirationCategoryId" title="待选择分类" type="warning" :closable="false" show-icon />
             </el-form-item>
             <el-form-item label="基准人数" required>
               <el-select v-model="form.baseServings" placeholder="请选择基准人数">
@@ -1009,6 +1027,12 @@ onBeforeUnmount(() => {
             <el-input v-model="form.tips" type="textarea" :rows="4" maxlength="1000" show-word-limit />
           </el-form-item>
 
+          <el-form-item label="关键词">
+            <el-select v-model="form.keywords" multiple filterable allow-create default-first-option :multiple-limit="8" placeholder="输入后回车，最多 8 个">
+              <el-option v-for="item in form.keywords" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+
           <div class="edit-section">
             <div class="edit-section__header">
               <strong>所需厨具</strong>
@@ -1026,7 +1050,7 @@ onBeforeUnmount(() => {
               <el-button text :icon="Plus" @click="addTag">新增标签</el-button>
             </div>
             <div v-for="(item, index) in form.tags" :key="`tag-${index}`" class="inline-edit-row">
-              <el-select v-model="item.tagCode" class="tag-code-select">
+              <el-select v-model="item.tagCode" class="tag-code-select" @update:model-value="item.tagValue = ''">
                 <el-option v-for="option in tagCodeOptions" :key="option.value" :label="option.label" :value="option.value" />
               </el-select>
               <el-select v-model="item.tagValue" placeholder="选择标签值">

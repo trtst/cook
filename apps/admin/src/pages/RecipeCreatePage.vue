@@ -108,6 +108,7 @@ const form = reactive({
     duration: "WITHIN_15" as Duration,
     estimatedCalories: null as number | null,
     tips: "",
+    keywords: [] as string[],
     ingredients: [] as EditIngredientRow[],
     steps: [] as EditStepRow[]
   }
@@ -379,6 +380,7 @@ function buildPayload(): CreateAdminRecipePayload | null {
       duration: form.content.duration,
       estimatedCalories: form.content.estimatedCalories,
       tips: form.content.tips.trim() ? form.content.tips.trim() : null,
+      keywords: form.content.keywords.map(item => item.trim()).filter(Boolean),
       ingredients,
       steps: form.content.steps.map(item => ({
         text: item.text,
@@ -673,6 +675,11 @@ onBeforeUnmount(() => {
 
         <el-form-item label="小贴士">
           <el-input v-model="form.content.tips" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+        </el-form-item>
+        <el-form-item label="关键词">
+          <el-select v-model="form.content.keywords" multiple filterable allow-create default-first-option :multiple-limit="8" placeholder="输入后回车，最多 8 个">
+            <el-option v-for="item in form.content.keywords" :key="item" :label="item" :value="item" />
+          </el-select>
         </el-form-item>
       </el-form>
     </div>
