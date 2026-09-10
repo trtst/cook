@@ -300,7 +300,7 @@ function confirmCookNoChange() {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 92rpx;
+  height: 90rpx;
   margin-top: 36rpx;
   border-radius: var(--radius-pill);
   background: var(--button-primary-bg);

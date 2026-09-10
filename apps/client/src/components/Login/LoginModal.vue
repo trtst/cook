@@ -225,8 +225,7 @@ const MINI_MOTION_MS = 280;
 const logoUrl = computed(() => (effectiveTheme.value === "dark" ? darkLogo : lightLogo));
 const countdownText = computed(() => (countdown.value > 0 ? `${countdown.value}s` : "发送验证码"));
 const navIconClass = computed(() => {
-  if (renderMode.value === "password") return "icon-back";
-  return "icon-close";
+  return loginModalStore.modeHistory ? "icon-back" : "icon-close";
 });
 
 watch(
@@ -273,8 +272,8 @@ onBeforeUnmount(() => {
 });
 
 function handleNav() {
-  if (renderMode.value === "password") {
-    openPhoneMode();
+  if (loginModalStore.modeHistory) {
+    loginModalStore.back();
     return;
   }
 
@@ -718,8 +717,9 @@ function stopMotionTimer() {
 .login-popup__slogan {
   max-width: 520rpx;
   color: var(--color-text-secondary);
-  font-size: 28rpx;
+  font-size: 30rpx;
   line-height: 1.6;
+  margin-top: 20rpx;
 }
 
 .login-popup__main {
@@ -939,7 +939,7 @@ function stopMotionTimer() {
 
 .login-popup__copy-line {
   color: var(--color-text-tertiary);
-  font-size: 25rpx;
+  font-size: 26rpx;
   line-height: 1.45;
 }
 

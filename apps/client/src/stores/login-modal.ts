@@ -44,6 +44,8 @@ export const useLoginModalStore = defineStore("login-modal", {
 	state: () => ({
 		visible: false,
 		mode: "phone" as LoginModalMode,
+		entryMode: "phone" as LoginModalMode,
+		modeHistory: false,
 		sourceId: null as string | null,
 		actionId: null as string | null,
 		openSeed: 0,
@@ -59,30 +61,37 @@ export const useLoginModalStore = defineStore("login-modal", {
 				actionRegistry.set(sourceId, action);
 			}
 			this.openedInMiniProgram = isMiniProgram;
-			this.mode = preferredLoginMode();
+			this.entryMode = preferredLoginMode();
+			this.mode = this.entryMode;
+			this.modeHistory = false;
 			this.visible = true;
 			this.openSeed += 1;
 		},
 		openPhoneMode() {
 			this.mode = "phone";
+			this.modeHistory = true;
 		},
 		openPasswordMode() {
 			this.mode = "password";
+			this.modeHistory = true;
 		},
 		recordLoginMethod(method: LoginMethod) {
 			recordLoginMethod(method);
 		},
 		back() {
-			if (!this.openedInMiniProgram) {
+			if (!this.modeHistory) {
 				this.close();
 				return;
 			}
 
-			this.mode = "phone";
+			this.mode = this.entryMode;
+			this.modeHistory = false;
 		},
 		close() {
 			this.visible = false;
 			this.mode = "phone";
+			this.entryMode = "phone";
+			this.modeHistory = false;
 			this.sourceId = null;
 			this.actionId = null;
 			this.openedInMiniProgram = false;
@@ -99,6 +108,8 @@ export const useLoginModalStore = defineStore("login-modal", {
 
 			this.visible = false;
 			this.mode = "phone";
+			this.entryMode = "phone";
+			this.modeHistory = false;
 			this.sourceId = null;
 			this.actionId = null;
 			this.openedInMiniProgram = false;

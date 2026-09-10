@@ -38,7 +38,8 @@ test("login modal keeps WeChat phone code hidden from the rendered entry", () =>
 test("login modal opens from the local preferred login mode", () => {
   assert.match(storeSource, /mode: "phone" as LoginModalMode/);
   assert.doesNotMatch(storeSource, /this\.mode = isMiniProgram \? "wechat" : "phone"/);
-  assert.match(storeSource, /this\.mode = preferredLoginMode\(\)/);
+  assert.match(storeSource, /this\.entryMode = preferredLoginMode\(\)/);
+  assert.match(storeSource, /this\.mode = this\.entryMode/);
   assert.doesNotMatch(storeSource, /this\.mode = this\.openedInMiniProgram \? "wechat" : "phone"/);
   assert.doesNotMatch(source, /renderMode === 'wechat'|renderMode === "wechat"/);
 });
@@ -53,6 +54,16 @@ test("login modal remembers the default method after three same successful login
   assert.match(functionBody("handlePhoneLogin"), /loginModalStore\.recordLoginMethod\("phone"\)[\s\S]*await applySession\(result\.data\)/);
   assert.match(functionBody("handlePasswordLogin"), /loginModalStore\.recordLoginMethod\("password"\)[\s\S]*await applySession\(result\.data\)/);
   assert.doesNotMatch(functionBody("handleWeChatPhoneLogin"), /recordLoginMethod/);
+});
+
+test("login modal treats only a user-triggered method switch as a second page", () => {
+  assert.match(storeSource, /entryMode: "phone" as LoginModalMode/);
+  assert.match(storeSource, /modeHistory: false/);
+  assert.match(storeSource, /this\.entryMode = preferredLoginMode\(\)/);
+  assert.match(storeSource, /this\.modeHistory = true/);
+  assert.match(storeSource, /this\.modeHistory = false/);
+  assert.match(source, /const navIconClass = computed\(\(\) => \{[\s\S]*return loginModalStore\.modeHistory \? "icon-back" : "icon-close";/);
+  assert.match(source, /if \(loginModalStore\.modeHistory\) \{[\s\S]*loginModalStore\.back\(\);/);
 });
 
 test("SMS login uses one clear description without an extra hint row", () => {

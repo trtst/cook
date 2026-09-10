@@ -283,7 +283,7 @@ const profileAvatarText = computed(() => {
 	return profileName.value.trim().slice(0, 1) || "我";
 });
 const profileUidText = computed(() =>
-	sessionStore.isLoggedIn ? `UID: ${sessionStore.uid || "--"}` : "登录后同步你的数据"
+	sessionStore.isLoggedIn ? `UID: ${sessionStore.uid || "--"}` : "家的味道，都在这里了"
 );
 const membershipCardDescription = computed(() => (
 	sessionStore.isLoggedIn ? "你的容量、展示和减广告权益都收在这里" : "登录后查看会员状态"
@@ -910,7 +910,6 @@ function showComingSoon(name: string) {
 
 .profile-row__name {
 	overflow: hidden;
-	max-width: 300rpx;
 	color: var(--color-text);
 	font-size: 38rpx;
 	font-weight: var(--font-weight-bold);

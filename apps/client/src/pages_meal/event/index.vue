@@ -71,7 +71,6 @@
             :art="emptyStateArt"
             title="登录后查看你的饭局"
             description="上面的分组会先保留；登录后再看你发起的、你参加的和已经结束的饭局。"
-            @success="handleLoginSuccess"
           />
 
           <template v-else>
@@ -173,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { ApiClientError, type UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
@@ -190,6 +189,7 @@ import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { onLoginSuccess } from "@/utils/session-events";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
 import emptyStateArt from "@/assets/empty.png";
@@ -326,9 +326,13 @@ onShow(() => {
   void loadEvents({ reset: true, syncStage: true });
 });
 
-async function handleLoginSuccess() {
-  await loadEvents({ reset: true, syncStage: true });
-}
+const stopLoginSuccess = onLoginSuccess(() => {
+  if (sessionStore.isLoggedIn && !legacyRedirecting.value) {
+    void loadEvents({ reset: true, syncStage: true });
+  }
+});
+
+onBeforeUnmount(stopLoginSuccess);
 
 function stageCount(target: EventStage) {
   if (target === "TODO") return stageCounts.value.todoCount;
@@ -935,7 +939,7 @@ defineExpose({
 .event-card__top {
   position: relative;
   overflow: hidden;
-  height: 260rpx;
+  aspect-ratio: 4 / 3;
   background: var(--page-cover-fresh-bg);
 }
 
