@@ -49,6 +49,7 @@ const contentKeys = new Set([
   "difficulty",
   "duration",
   "tips",
+  "keywords",
   "ingredients",
   "tools",
   "steps"
@@ -61,6 +62,8 @@ const tagKeys = new Set(["tagCode", "tagValue"]);
 const assistantKeys = new Set(["steps"]);
 const assistantStepKeys = new Set(["order", "phase", "action", "title", "detail", "imageUrl", "durationMinutes", "durationText"]);
 const tagValues: Record<RecipeImportTagCode, Set<string>> = {
+  CUISINE: new Set(["SICHUAN_HUNAN", "JIANG_ZHE", "CANTONESE", "FUJIAN", "NORTHERN", "YUN_GUI", "TAIWAN", "FUSION", "OTHER"]),
+  DISH_STYLE: new Set(["STIR_FRY", "COLD_DISH", "SOUP", "STAPLE_FOOD", "STEW", "STEAMED", "BRAISED", "FRIED", "BBQ", "HOT_POT", "SNACK"]),
   MEAL_TYPE: new Set(["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"]),
   DISH_ROLE: new Set(["MAIN", "VEGETABLE", "COLD_DISH", "SOUP", "STAPLE"]),
   MAIN_PROTEIN_TYPE: new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"]),
@@ -86,6 +89,10 @@ const unitAliasMap = new Map([
   ["l", { name: "毫升", factor: 1000 }],
   ["升", { name: "毫升", factor: 1000 }]
 ]);
+
+export function isImportedIngredientPlaceholder(name: string) {
+  return /^导入食材-\d+$/.test(name.trim());
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -182,6 +189,30 @@ function parseTags(value: unknown, errors: RecipeImportIssue[]) {
   return tags;
 }
 
+function parseKeywords(value: unknown, field: string, errors: RecipeImportIssue[]) {
+  if (!Array.isArray(value)) {
+    addIssue(errors, field, "关键词必须是数组");
+    return [];
+  }
+  if (value.length > 8) addIssue(errors, field, "关键词不能超过 8 个");
+  const keywords: string[] = [];
+  const seen = new Set<string>();
+  value.forEach((item, index) => {
+    const keyword = typeof item === "string" ? item.trim() : "";
+    if (!keyword) {
+      addIssue(errors, `${field}.${index}`, "关键词不能为空");
+      return;
+    }
+    if (seen.has(keyword)) {
+      addIssue(errors, `${field}.${index}`, "关键词不能重复");
+      return;
+    }
+    seen.add(keyword);
+    keywords.push(keyword);
+  });
+  return keywords;
+}
+
 function parseAssistantSteps(value: unknown, errors: RecipeImportIssue[]) {
   const steps: RecipeImportAssistantStepDraft[] = [];
   if (!isRecord(value) || !Array.isArray(value.steps) || value.steps.length === 0) {
@@ -255,7 +286,8 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
   if (!isRecord(recipe.content)) addIssue(errors, "recipe.content", "必须填写 recipe.content 对象");
   addUnknownKeyIssues(content, contentKeys, "recipe.content", errors);
   const categoryId = recipe.inspirationCategoryId;
-  if (!Number.isInteger(categoryId) || Number(categoryId) <= 0) addIssue(errors, "recipe.inspirationCategoryId", "必须填写有效灵感分类 ID");
+  if (categoryId === null) addIssue(errors, "recipe.inspirationCategoryId", "系统菜谱分类待人工选择");
+  else if (!Number.isInteger(categoryId) || Number(categoryId) <= 0) addIssue(errors, "recipe.inspirationCategoryId", "必须填写有效灵感分类 ID");
   const coverImageUrl = hasOwn(recipe, "coverImageUrl") ? sourceImageUrl(recipe.coverImageUrl, "recipe.coverImageUrl", errors) : null;
 
   const title = typeof content.name === "string" ? content.name.trim() : "";
@@ -264,6 +296,7 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
   if (!title) addIssue(errors, "recipe.content.name", "菜谱名称不能为空");
   if (!story) addIssue(errors, "recipe.content.story", "菜谱故事不能为空");
   if (!tips) addIssue(errors, "recipe.content.tips", "做饭建议不能为空");
+  const keywords = parseKeywords(content.keywords, "recipe.content.keywords", errors);
   if (!Number.isInteger(content.baseServings) || Number(content.baseServings) < 1 || Number(content.baseServings) > 20) addIssue(errors, "recipe.content.baseServings", "基准人数必须为 1 到 20 的整数");
   if (!difficultySet.has(content.difficulty as RecipeDifficulty)) addIssue(errors, "recipe.content.difficulty", "难度枚举值不支持");
   if (!durationSet.has(content.duration as RecipeDuration)) addIssue(errors, "recipe.content.duration", "总时长枚举值不支持");
@@ -333,6 +366,7 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
     difficulty: difficultySet.has(content.difficulty as RecipeDifficulty) ? content.difficulty as RecipeDifficulty : null,
     duration: durationSet.has(content.duration as RecipeDuration) ? content.duration as RecipeDuration : null,
     tips: tips || null,
+    keywords,
     coverImageUrl,
     coverImageKey: null,
     coverImageTempKey: null,
@@ -365,10 +399,11 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
 export function rebuildJsonItemState(recipeBody: RecipeImportRecipeBody) {
   const errors: RecipeImportIssue[] = [];
   const warnings: RecipeImportIssue[] = [];
-  if (!recipeBody.inspirationCategoryId) addIssue(errors, "inspirationCategoryId", "请选择系统菜谱分类");
+  if (!recipeBody.inspirationCategoryId) addIssue(errors, "inspirationCategoryId", "系统菜谱分类待人工选择");
   if (!recipeBody.title.trim()) addIssue(errors, "title", "菜谱名称不能为空");
   if (!recipeBody.story?.trim()) addIssue(errors, "story", "菜谱故事不能为空");
   if (!recipeBody.tips?.trim()) addIssue(errors, "tips", "做饭建议不能为空");
+  parseKeywords(recipeBody.keywords, "keywords", errors);
   if (!Number.isInteger(recipeBody.baseServings) || Number(recipeBody.baseServings) < 1 || Number(recipeBody.baseServings) > 20) {
     addIssue(errors, "baseServings", "基准人数必须为 1 到 20 的整数");
   }
@@ -407,6 +442,7 @@ export function normalizeRecipeImportBody(body: RecipeImportRecipeBody): RecipeI
   return {
     ...body,
     coverImageUrl: body.coverImageUrl ?? null,
+    keywords: body.keywords ?? [],
     tools: body.tools ?? [],
     tags: body.tags ?? [],
     assistantSteps: body.assistantSteps ?? [],

@@ -2598,6 +2598,7 @@ export class RecipeService {
       duration: content.duration,
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
+      keywords: content.keywords,
       estimatedCalories: content.estimatedCalories,
       category: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
       contentVersionId: recipe.currentVersionId,
@@ -2871,6 +2872,7 @@ export class RecipeService {
       duration: content.duration,
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
+      keywords: content.keywords,
       estimatedCalories: content.estimatedCalories,
       category: toInspirationCategorySummary(recipe.inspirationCategory as NonNullable<RecipeRow["inspirationCategory"]>),
       collectCount: recipe.collectCount,
@@ -3049,6 +3051,7 @@ export class RecipeService {
       duration: content.duration ?? null,
       estimatedCalories: null,
       tips: content.tips?.trim() || null,
+      keywords: [],
       ingredients: content.ingredients.map(item => {
         if (!item.ingredientId) throw new BadRequestException("请重新选择食材");
         const sourceIngredient = ingredientMap.get(item.ingredientId);
@@ -3107,6 +3110,7 @@ export class RecipeService {
       duration: content.duration ?? undefined,
       estimatedCalories: content.estimatedCalories,
       tips: content.tips,
+      keywordsJson: toJson(content.keywords),
       toolsJson: toJson(content.tools ?? []),
       ingredientsJson: toJson(content.ingredients),
       stepsJson: toJson(content.steps),

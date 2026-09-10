@@ -11,6 +11,7 @@ const content: RecipeContentSnapshot = {
   duration: "OVER_60",
   estimatedCalories: null,
   tips: "排骨先焯水。",
+  keywords: [],
   tools: [{ name: "汤锅" }],
   ingredients: [{
     ingredientId: 101,
@@ -80,4 +81,17 @@ test("keeps nutrition and random-menu cards incomplete for missing facts", () =>
   assert.equal(cards.find(card => card.code === "NUTRITION")?.status, "INCOMPLETE");
   assert.equal(cards.find(card => card.code === "NUTRITION")?.blockingReasons.length, 1);
   assert.equal(cards.find(card => card.code === "RANDOM_MENU")?.status, "INCOMPLETE");
+});
+
+test("gives estimated nutrition a non-zero quality score when metrics exist", () => {
+  const cards = buildRecipeWikiQualityCards({
+    content,
+    tags,
+    nutrition: { ...nutrition, status: "ESTIMATED", qualityLabel: "结果为估算" },
+    assistant
+  });
+
+  const nutritionCard = cards.find(card => card.code === "NUTRITION");
+  assert.equal(nutritionCard?.score, 80);
+  assert.equal(nutritionCard?.status, "INCOMPLETE");
 });

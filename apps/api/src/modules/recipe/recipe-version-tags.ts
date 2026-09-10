@@ -34,10 +34,16 @@ type RecipeVersionTagInference = RecipeVersionTagSnapshot & {
 type IngredientTagFact = {
   id: UUID;
   proteinType: DbIngredientProteinType | null;
+  categoryCode?: string | null;
   isStaple: boolean;
   isSpicyIngredient: boolean;
   aliases: string[];
 };
+
+const singleValueTagCodes: ReadonlySet<RecipeVersionTagCode> = new Set([
+  "MAIN_PROTEIN_TYPE",
+  "SPICE_LEVEL"
+]);
 
 function normalizeNameKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
@@ -66,13 +72,18 @@ function mapIngredientProteinType(value: DbIngredientProteinType | null): Recipe
   }
 }
 
+function isMainProteinIngredient(fact: IngredientTagFact | undefined) {
+  return fact?.categoryCode === "MEAT_POULTRY_EGG" || fact?.categoryCode === "SEAFOOD";
+}
+
 function resolvePrimaryIngredientIds(
   ingredientIds: UUID[],
   ingredientFacts: Map<UUID, IngredientTagFact>
 ) {
   const proteinIds = ingredientIds.filter(id => {
-    const proteinType = mapIngredientProteinType(ingredientFacts.get(id)?.proteinType ?? null);
-    return Boolean(proteinType) && proteinType !== "NONE";
+    const fact = ingredientFacts.get(id);
+    const proteinType = mapIngredientProteinType(fact?.proteinType ?? null);
+    return isMainProteinIngredient(fact) && Boolean(proteinType) && proteinType !== "NONE";
   });
   if (proteinIds.length) return proteinIds.slice(0, 3);
   return ingredientIds.slice(0, 3);
@@ -102,7 +113,11 @@ export function inferRecipeVersionTagSnapshot(
   content: RecipeContentSnapshot,
   ingredientFacts: Map<UUID, IngredientTagFact> = new Map()
 ): RecipeVersionTagInference {
-  const text = `${content.name} ${content.story ?? ""} ${content.ingredients.map(item => item.ingredientName).join(" ")} ${content.steps.map(item => item.text).join(" ")}`;
+  const ingredientText = content.ingredients
+    .filter(item => !item.ingredientId || !ingredientFacts.has(item.ingredientId) || isMainProteinIngredient(ingredientFacts.get(item.ingredientId)))
+    .map(item => item.ingredientName)
+    .join(" ");
+  const text = `${content.name} ${content.story ?? ""} ${ingredientText} ${content.steps.map(item => item.text).join(" ")}`;
   const ingredientIds = content.ingredients
     .map(item => item.ingredientId ?? null)
     .filter((item): item is UUID => typeof item === "number" && item > 0);
@@ -116,7 +131,9 @@ export function inferRecipeVersionTagSnapshot(
   let mainProteinType: RecipeVersionTagSnapshot["mainProteinType"] = null;
   let hasMappedProteinFact = false;
   for (const ingredientId of ingredientIds) {
-    const mapped = mapIngredientProteinType(ingredientFacts.get(ingredientId)?.proteinType ?? null);
+    const fact = ingredientFacts.get(ingredientId);
+    if (!isMainProteinIngredient(fact)) continue;
+    const mapped = mapIngredientProteinType(fact?.proteinType ?? null);
     if (mapped) {
       mainProteinType = mapped;
       hasMappedProteinFact = true;
@@ -244,7 +261,13 @@ export function filterAutoRecipeVersionTags(
   existingRows: Array<Pick<RecipeVersionTagRow, "tagCode" | "tagValue" | "source">>
 ) {
   const existingKeys = new Set(existingRows.map(item => `${item.tagCode}:${item.tagValue}`));
-  return rows.filter(item => !existingKeys.has(`${item.tagCode}:${item.tagValue}`));
+  const ownedSingleValueTagCodes = new Set(
+    existingRows.filter(item => item.source !== "AUTO" && singleValueTagCodes.has(item.tagCode)).map(item => item.tagCode)
+  );
+  return rows.filter(item => {
+    if (existingKeys.has(`${item.tagCode}:${item.tagValue}`)) return false;
+    return !ownedSingleValueTagCodes.has(item.tagCode);
+  });
 }
 
 export async function replaceAutoRecipeVersionTags(
@@ -284,12 +307,13 @@ export async function replaceAutoRecipeVersionTags(
               select: {
                 id: true,
                 proteinType: true,
+                category: { select: { code: true } },
                 isStaple: true,
                 isSpicyIngredient: true,
                 aliases: true
               }
             })
-          ).map(item => [item.id, item])
+          ).map(item => [item.id, { ...item, categoryCode: item.category.code }])
         );
 
   const rows = filterAutoRecipeVersionTags(buildAutoRecipeVersionTags(content, ingredientFacts), existingRows);

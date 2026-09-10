@@ -186,6 +186,14 @@ async function main() {
       await tx.shoppingItemFridgeReservation.deleteMany({ where: { shoppingItemId: { in: recipeShoppingItemIds } } });
       await tx.shoppingItem.deleteMany({ where: { id: { in: recipeShoppingItemIds } } });
     }
+    const clearedMealPlanDishRefs = await tx.mealPlanDish.updateMany({
+      where: { recipeId: { not: null } },
+      data: { recipeId: null }
+    });
+    const clearedDiningEventParticipantRefs = await tx.diningEventParticipant.updateMany({
+      where: { bringRecipeId: { not: null } },
+      data: { bringRecipeId: null }
+    });
     await tx.recipe.deleteMany({});
 
     const completeIngredients = [
@@ -206,6 +214,7 @@ async function main() {
       duration: "BETWEEN_30_60",
       estimatedCalories: 620,
       tips: "牛腩先煸出香味，再与米饭一起焖煮；出锅后静置 5 分钟再翻拌。",
+      keywords: ["番茄", "牛腩", "焖饭"],
       ingredients: completeIngredients,
       steps: [
         { text: "牛腩切块，番茄、洋葱切丁，生姜切片。", imageUrl: completeStepImageUrls[0] },
@@ -227,6 +236,7 @@ async function main() {
       duration: null,
       estimatedCalories: null,
       tips: null,
+      keywords: [],
       ingredients: incompleteIngredients,
       steps: [{ text: "鸡蛋打散后与米饭一起翻炒。", imageUrl: null }]
     };
@@ -241,6 +251,7 @@ async function main() {
         duration: content.duration,
         estimatedCalories: content.estimatedCalories,
         tips: content.tips,
+        keywordsJson: toJson(content.keywords),
         ingredientsJson: toJson(content.ingredients),
         stepsJson: toJson(content.steps),
         imagesJson: toJson(images),
@@ -337,7 +348,14 @@ async function main() {
     });
 
     return {
-      deleted: { recipes: recipeCount, drafts: draftCount, collections: collectionCount, shoppingItems: recipeShoppingItemIds.length },
+      deleted: {
+        recipes: recipeCount,
+        drafts: draftCount,
+        collections: collectionCount,
+        shoppingItems: recipeShoppingItemIds.length,
+        clearedMealPlanDishRefs: clearedMealPlanDishRefs.count,
+        clearedDiningEventParticipantRefs: clearedDiningEventParticipantRefs.count
+      },
       created: {
         complete: { recipeId: completeRecipe.id, versionId: completeVersion.id, ownerId: completeRecipe.ownerId, title: completeRecipe.title },
         incomplete: { recipeId: incompleteRecipe.id, versionId: incompleteVersion.id, ownerId: incompleteRecipe.ownerId, title: incompleteRecipe.title }

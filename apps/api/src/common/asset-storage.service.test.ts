@@ -102,3 +102,26 @@ test("local storage writes under configured environment prefix", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("propagates OSS delete failures to the cleanup caller", async () => {
+  const storage = new AssetStorageService();
+  (storage as any).config = {
+    driver: "oss",
+    localRoot: "/tmp",
+    prefix: "",
+    oss: {
+      region: "oss-cn-beijing",
+      bucket: "cook",
+      endpoint: "oss-cn-beijing.aliyuncs.com",
+      accessKeyId: "key",
+      accessKeySecret: "secret"
+    }
+  };
+  (storage as any).ossClient = {
+    delete: async () => {
+      throw new Error("oss delete failed");
+    }
+  };
+
+  await assert.rejects(() => storage.deleteObject("uploads/recipes/1/cover.jpg"), /oss delete failed/);
+});

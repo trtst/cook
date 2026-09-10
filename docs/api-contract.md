@@ -2575,6 +2575,7 @@ interface MyRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  keywords: string[];
   estimatedCalories: number | null;
   category: { id: UUID; name: string; version: number };
   version: number;
@@ -2664,6 +2665,7 @@ interface InspirationRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  keywords: string[];
   estimatedCalories: number | null;
   category: InspirationCategorySummary;
   collectCount: number;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   normalizeRecipeImportBody,
+  isImportedIngredientPlaceholder,
   parseJsonSource,
   readJsonSourcesFromFiles,
   type RecipeImportJsonRefs
@@ -31,6 +32,7 @@ function validDocument() {
         difficulty: "EASY",
         duration: "OVER_60",
         tips: "排骨先焯水。",
+        keywords: [],
         ingredients: [
           { name: "排骨", quantity: "500", unit: "克" },
           { name: "海带", quantity: "200", unit: "克" }
@@ -41,6 +43,8 @@ function validDocument() {
     },
     wiki: {
       tags: [
+        { tagCode: "CUISINE", tagValue: "OTHER" },
+        { tagCode: "DISH_STYLE", tagValue: "SOUP" },
         { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
         { tagCode: "DISH_ROLE", tagValue: "SOUP" },
         { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "PORK" },
@@ -80,6 +84,11 @@ test("parses recipe.import.v1 and strictly matches ingredient and unit names", (
   assert.equal(result.recipeBody.assistantSteps?.[0]?.action, "BLANCH");
 });
 
+test("recognizes generated import ingredient placeholders before materialization", () => {
+  assert.equal(isImportedIngredientPlaceholder("导入食材-1788936333414"), true);
+  assert.equal(isImportedIngredientPlaceholder("排骨"), false);
+});
+
 test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
   const document = validDocument() as Record<string, any>;
   document.recipe.content = {
@@ -89,6 +98,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
     difficulty: "EASY",
     duration: "BETWEEN_15_30",
     tips: "牛肉切薄片，大火快炒才能嫩滑；酱油已含盐，后续调味可酌情减少。",
+    keywords: ["鲜香", "快炒"],
     ingredients: [
       { name: "牛里脊", quantity: "400", unit: "克" },
       { name: "芹菜", quantity: "200", unit: "克" },
@@ -109,6 +119,8 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
     ]
   };
   document.wiki.tags = [
+    { tagCode: "CUISINE", tagValue: "SICHUAN_HUNAN" },
+    { tagCode: "DISH_STYLE", tagValue: "STIR_FRY" },
     { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
     { tagCode: "DISH_ROLE", tagValue: "MAIN" },
     { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "BEEF" },
@@ -197,6 +209,49 @@ test("rejects nutrition input and invalid assistant actions without guessing", (
   assert.equal(result.errorItems.some(item => item.field === "wiki.assistant.steps.0.action"), true);
 });
 
+test("accepts content keywords and the documented cuisine and dish-style tags", () => {
+  const document = validDocument() as Record<string, any>;
+  document.recipe.content.keywords = ["鲜香", "炖汤"];
+
+  const result = parseJsonSource(
+    { sourcePath: "keywords-and-tags.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.deepEqual(result.recipeBody.keywords, ["鲜香", "炖汤"]);
+  assert.equal(result.errorItems.some(item => item.field?.startsWith("recipe.content.keywords")), false);
+  assert.equal(result.errorItems.some(item => item.field?.startsWith("wiki.tags.0")), false);
+  assert.equal(result.errorItems.some(item => item.field?.startsWith("wiki.tags.1")), false);
+});
+
+test("keeps a null inspiration category as an item awaiting manual selection", () => {
+  const document = validDocument() as Record<string, any>;
+  document.recipe.inspirationCategoryId = null;
+
+  const result = parseJsonSource(
+    { sourcePath: "category-awaiting-review.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.recipeBody.inspirationCategoryId, null);
+  assert.equal(
+    result.errorItems.some(item => item.field === "recipe.inspirationCategoryId" && item.message === "系统菜谱分类待人工选择"),
+    true
+  );
+});
+
+test("rejects more than eight content keywords", () => {
+  const document = validDocument() as Record<string, any>;
+  document.recipe.content.keywords = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
+
+  const result = parseJsonSource(
+    { sourcePath: "too-many-keywords.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => item.field === "recipe.content.keywords" && item.message === "关键词不能超过 8 个"), true);
+});
+
 test("requires a positive durationMinutes for every assistant step", () => {
   const document = validDocument() as Record<string, any>;
   delete document.wiki.assistant.steps[0].durationMinutes;
@@ -233,7 +288,7 @@ test("rejects duplicate required tag codes instead of silently choosing one", ()
     refs
   );
 
-  assert.equal(result.errorItems.some(item => item.field === "wiki.tags.5.tagCode"), true);
+  assert.equal(result.errorItems.some(item => item.field === "wiki.tags.7.tagCode"), true);
 });
 
 test("normalizes only explicit kg and L quantities to the fixed project units", () => {
@@ -309,6 +364,7 @@ test("normalizes historical import bodies before returning them to the admin pag
     difficulty: null,
     duration: null,
     tips: null,
+    keywords: [],
     coverImageKey: null,
     coverImageTempKey: null,
     ingredients: [],

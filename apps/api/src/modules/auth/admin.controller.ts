@@ -19,7 +19,9 @@ import {
   AdminPendingIngredientQueryDto,
   AdminPendingUnitRecommendationQueryDto,
     AdminPendingRecipeQueryDto,
-    AdminIngredientQueryDto,
+  AdminIngredientQueryDto,
+  AdminNutritionFoodQueryDto,
+  UpdateAdminIngredientNutritionDto,
   AdminUnitPayloadDto,
   AdminLoginDto,
   AdminRecipeContentDto,
@@ -79,6 +81,9 @@ import {
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
   AdminIngredientModel,
+  AdminNutritionFoodModel,
+  AdminNutritionCategoryModel,
+  AdminIngredientNutritionModel,
   AdminPendingIngredientFeedbackModel,
     AdminPendingIngredientModel,
     AdminPendingUnitRecommendationModel,
@@ -132,6 +137,7 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
     duration: content.duration as AdminRecipeContentInput["duration"],
     estimatedCalories: content.estimatedCalories,
     tips: content.tips,
+    keywords: content.keywords,
     tools: content.tools?.map(item => ({ name: item.name })),
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
@@ -164,6 +170,7 @@ function toRecipeImportRecipeBody(content: UpdateRecipeImportItemDto["recipeBody
     difficulty: content.difficulty as RecipeImportRecipeBody["difficulty"],
     duration: content.duration as RecipeImportRecipeBody["duration"],
     tips: content.tips,
+    keywords: content.keywords,
     coverImageUrl: content.coverImageUrl ?? null,
     coverImageKey: content.coverImageKey,
     coverImageTempKey: content.coverImageTempKey,
@@ -819,6 +826,44 @@ export class AdminController {
     return this.adminService
       .listIngredients(request, query.page, query.pageSize, query.categoryId, query.keyword, query.status, query.factStatus, request.admin.adminId)
       .then(result => ok(result));
+  }
+
+  @Get("nutrition-foods")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminNutritionFoodModel, "后台营养基础数据")
+  listNutritionFoods(@Req() request: RequestWithAdmin, @Query() query: AdminNutritionFoodQueryDto) {
+    return this.adminService.listNutritionFoods(query.page, query.pageSize, query.keyword, query.category, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Get("nutrition-categories")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkArray(AdminNutritionCategoryModel, "后台营养数据分类列表")
+  listNutritionCategories(@Req() request: RequestWithAdmin) {
+    return this.adminService.listNutritionCategories(request.admin.adminId).then(result => ok(result));
+  }
+
+  @Get("ingredients/:ingredientId/nutrition")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminIngredientNutritionModel, "后台系统食材营养关联详情")
+  getIngredientNutrition(@Req() request: RequestWithAdmin, @Param("ingredientId", ParseIntPipe) ingredientId: number) {
+    return this.adminService.getIngredientNutrition(ingredientId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Put("ingredients/:ingredientId/nutrition")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminIngredientNutritionModel, "保存系统食材营养关联和单位换算")
+  updateIngredientNutrition(
+    @Req() request: RequestWithAdmin,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateAdminIngredientNutritionDto
+  ) {
+    return this.adminService.updateIngredientNutrition(ingredientId, { ...body, operationId, confidence: body.confidence ?? null, nutrientFoodId: body.nutrientFoodId ?? null }, request.admin.adminId).then(result => ok(result));
   }
 
   @Get("units")

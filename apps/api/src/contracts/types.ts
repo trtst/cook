@@ -1440,6 +1440,7 @@ export interface RecipeContentSnapshot {
   duration: RecipeDuration | null;
   estimatedCalories: number | null;
   tips: string | null;
+  keywords: string[];
   tools?: RecipeToolSnapshot[];
   ingredients: RecipeIngredientSnapshot[];
   steps: RecipeStepSnapshot[];
@@ -1516,6 +1517,7 @@ export interface AdminRecipeContentInput {
   duration: RecipeDuration;
   estimatedCalories: number | null;
   tips: string | null;
+  keywords: string[];
   tools?: RecipeToolSnapshot[];
   ingredients: RecipeIngredientInput[];
   steps: AdminRecipeStepInput[];
@@ -1569,6 +1571,7 @@ export interface MyRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  keywords: string[];
   estimatedCalories: number | null;
   category: RecipeCategorySummary | null;
   contentVersionId: UUID;
@@ -1704,6 +1707,7 @@ export interface InspirationRecipeSummary {
   duration: RecipeDuration | null;
   difficultyText: string | null;
   durationText: string | null;
+  keywords: string[];
   estimatedCalories: number | null;
   category: InspirationCategorySummary;
   collectCount: number;
@@ -1883,6 +1887,8 @@ export interface RecipeImportToolDraft {
 }
 
 export type RecipeImportTagCode =
+  | "CUISINE"
+  | "DISH_STYLE"
   | "MEAL_TYPE"
   | "DISH_ROLE"
   | "MAIN_PROTEIN_TYPE"
@@ -1977,6 +1983,7 @@ export interface RecipeImportRecipeBody {
   difficulty: RecipeDifficulty | null;
   duration: RecipeDuration | null;
   tips: string | null;
+  keywords: string[];
   coverImageUrl?: string | null;
   coverImageKey: string | null;
   coverImageTempKey: string | null;
@@ -2143,6 +2150,43 @@ export interface AdminIngredientSummary {
   aliases: string[];
   imageUrl: string | null;
   updatedAt: IsoDateTime;
+}
+
+export interface AdminNutritionFoodSummary {
+  id: UUID;
+  foodCode: string;
+  foodName: string;
+  englishName: string | null;
+  category: string | null;
+  edibleRate: number | null;
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbohydrate: number | null;
+  sourceVersion: string;
+}
+
+export interface AdminNutritionCategorySummary { category: string; }
+
+export interface AdminIngredientNutritionDetail {
+  ingredientId: UUID;
+  mapping: {
+    id: UUID;
+    status: "CONFIRMED" | "CANDIDATE" | "UNMAPPED";
+    matchType: string;
+    confidence: number | null;
+    sourceVersion: string;
+    food: AdminNutritionFoodSummary | null;
+  } | null;
+  conversions: Array<{ unitId: UUID; unitName: string; gramsPerUnit: number; sourceVersion: string }>;
+}
+
+export interface UpdateAdminIngredientNutritionRequest {
+  operationId: OperationId;
+  nutrientFoodId: UUID | null;
+  matchType: string;
+  confidence: number | null;
+  conversions: Array<{ unitId: UUID; gramsPerUnit: number }>;
 }
 
 export interface AdminDeleteIngredientResult {

@@ -75,6 +75,14 @@ export function buildRecipeWikiQualityCards(input: {
   );
   const randomMealReady = values("MEAL_TYPE").some(value => supportedMealTypes.has(value));
   const randomRoleReady = values("DISH_ROLE").some(value => supportedDishRoles.has(value));
+  const nutritionScore = input.nutrition.status === "COMPLETE" ? 100 : input.nutrition.status === "ESTIMATED" ? 80 : 0;
+  const nutritionCard: AdminRecipeWikiQualityCard = {
+    code: "NUTRITION",
+    title: "营养分析",
+    status: nutritionScore === 100 ? "COMPLETE" : "INCOMPLETE",
+    score: nutritionScore,
+    blockingReasons: nutritionScore === 100 ? [] : [input.nutrition.qualityLabel ?? "营养数据不足"]
+  };
 
   return [
     card("CONTENT", "正文完整度", contentComplete),
@@ -84,9 +92,7 @@ export function buildRecipeWikiQualityCards(input: {
       { ok: input.content.tools !== undefined, reason: "厨具字段缺失" }
     ]),
     card("BUSINESS_TAGS", "业务标签", businessTagChecks),
-    card("NUTRITION", "营养分析", [
-      { ok: input.nutrition.status === "COMPLETE", reason: input.nutrition.qualityLabel ?? "营养数据不足" }
-    ]),
+    nutritionCard,
     card("ASSISTANT", "美食助理", [
       { ok: assistantReady, reason: "当前版本没有可用的完整助理步骤" }
     ]),

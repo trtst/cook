@@ -70,6 +70,16 @@ test("rejects non-image and oversized remote responses", async () => {
   );
 });
 
+test("reports temporary image cleanup failures", async () => {
+  const service = new AdminRecipeImageService({
+    deleteObject: async () => {
+      throw new Error("oss delete failed");
+    }
+  } as never);
+
+  assert.deepEqual(await service.discardTempImages(["temp-image.png"]), ["temp-image.png"]);
+});
+
 test("maps only published admin recipe image URLs back to storage keys", () => {
   const service = createService([]);
 

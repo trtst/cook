@@ -19,6 +19,7 @@ function recipeRow() {
       duration: "WITHIN_15",
       estimatedCalories: 220,
       tips: null,
+      keywordsJson: ["家常", "快手", "下饭", "四季"],
       ingredientsJson: [],
       stepsJson: []
     },
@@ -52,4 +53,5 @@ test("inspiration recipe list does not expose recipe likes or sort by likes", as
   assert.deepEqual(orderByCalls[0], [{ collectCount: "desc" }, { updatedAt: "desc" }, { id: "desc" }]);
   assert.equal("likeCount" in result.items[0], false);
   assert.equal(result.items[0].collectCount, 7);
+  assert.deepEqual(result.items[0].keywords, ["家常", "快手", "下饭", "四季"]);
 });

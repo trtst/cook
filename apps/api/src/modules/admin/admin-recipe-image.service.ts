@@ -387,7 +387,8 @@ export class AdminRecipeImageService {
     return {
       fileName,
       storageKey,
-      imageUrl: this.buildPublicImageUrl(request, fileName)
+      imageUrl: this.buildPublicImageUrl(request, fileName),
+      sizeBytes: buffer.length
     };
   }
 
@@ -399,8 +400,9 @@ export class AdminRecipeImageService {
 
   async discardTempImages(tempKeys: Iterable<string>) {
     const keys = Array.from(new Set(Array.from(tempKeys).filter(Boolean)));
-    if (!keys.length) return;
-    await Promise.allSettled(keys.map(tempKey => this.assetStorage.deleteObject(this.tempStorageKey(this.normalizeTempKey(tempKey)))));
+    if (!keys.length) return [] as string[];
+    const results = await Promise.allSettled(keys.map(tempKey => this.assetStorage.deleteObject(this.tempStorageKey(this.normalizeTempKey(tempKey)))));
+    return results.flatMap((result, index) => (result.status === "rejected" ? [keys[index] as string] : []));
   }
 
   async removePublishedImages(storageKeys: Iterable<string>) {

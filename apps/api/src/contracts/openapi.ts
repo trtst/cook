@@ -997,6 +997,7 @@ export class RecipeContentModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty(nullableString) tips!: string | null;
+  @ApiProperty({ type: [String], maxItems: 8 }) keywords!: string[];
   @ApiProperty({ type: [RecipeToolModel] }) tools!: RecipeToolModel[];
   @ApiProperty({ type: [RecipeIngredientModel] }) ingredients!: RecipeIngredientModel[];
   @ApiProperty({ type: [RecipeStepModel] }) steps!: RecipeStepModel[];
@@ -1190,6 +1191,7 @@ export class MyRecipeSummaryModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: [String] }) keywords!: string[];
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
   @ApiProperty(uuid) contentVersionId!: string;
@@ -1304,6 +1306,7 @@ export class InspirationRecipeSummaryModel {
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty(nullableString) difficultyText!: string | null;
   @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: [String] }) keywords!: string[];
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) estimatedCalories!: number | null;
   @ApiProperty({ type: InspirationCategoryModel }) category!: InspirationCategoryModel;
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
@@ -1482,7 +1485,7 @@ export class RecipeImportToolModel {
 }
 
 export class RecipeImportTagModel {
-  @ApiProperty({ type: String, enum: ["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }) tagCode!: string;
+  @ApiProperty({ type: String, enum: ["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] }) tagCode!: string;
   @ApiProperty({ type: String }) tagValue!: string;
 }
 
@@ -1505,6 +1508,7 @@ export class RecipeImportRecipeBodyModel {
   @ApiProperty({ type: String, nullable: true, enum: ["BEGINNER", "EASY", "SKILLED", "CHALLENGING"] }) difficulty!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"] }) duration!: string | null;
   @ApiProperty({ type: String, nullable: true }) tips!: string | null;
+  @ApiProperty({ type: [String], maxItems: 8 }) keywords!: string[];
   @ApiProperty({ type: String, nullable: true }) coverImageUrl!: string | null;
   @ApiProperty({ type: String, nullable: true }) coverImageKey!: string | null;
   @ApiProperty({ type: String, nullable: true }) coverImageTempKey!: string | null;
@@ -1634,6 +1638,30 @@ export class AdminIngredientModel {
   @ApiProperty({ type: [String] }) aliases!: string[];
   @ApiProperty(nullableString) imageUrl!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class AdminNutritionFoodModel {
+  @ApiProperty({ ...uuid, type: Number }) id!: number;
+  @ApiProperty({ type: String }) foodCode!: string;
+  @ApiProperty({ type: String }) foodName!: string;
+  @ApiProperty({ ...nullableString, type: String }) englishName!: string | null;
+  @ApiProperty({ ...nullableString, type: String }) category!: string | null;
+  @ApiProperty({ type: Number, nullable: true }) edibleRate!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) calories!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) protein!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) fat!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) carbohydrate!: number | null;
+  @ApiProperty({ type: String }) sourceVersion!: string;
+}
+
+export class AdminNutritionCategoryModel {
+  @ApiProperty({ type: String }) category!: string;
+}
+
+export class AdminIngredientNutritionModel {
+  @ApiProperty(uuid) ingredientId!: number;
+  @ApiProperty({ type: Object, nullable: true }) mapping!: unknown;
+  @ApiProperty({ type: [Object] }) conversions!: unknown[];
 }
 
 export class AdminPendingIngredientModel {

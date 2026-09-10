@@ -20,7 +20,8 @@ import {
   Min,
   MinLength,
   ValidateIf,
-  ValidateNested
+  ValidateNested,
+  registerDecorator
 } from "class-validator";
 
 function trimItems(value: unknown) {
@@ -63,6 +64,16 @@ const authCodeSceneValues = ["LOGIN", "PHONE_CHANGE"] as const;
 const notificationReminderDayValues = [1, 2, 3, 5, 7] as const;
 const notificationTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 const userGenderValues = ["MALE", "FEMALE", "UNSPECIFIED"] as const;
+const ingredientNutritionMatchTypeValues = ["MANUAL", "EXACT_NAME", "REPRESENTATIVE", "ALIAS", "LEAN_REPRESENTATIVE", "REVIEW_NEEDED"] as const;
+
+function IsDefinedOrNull() {
+  return (target: object, propertyKey: string) => registerDecorator({
+    name: "isDefinedOrNull",
+    target: target.constructor,
+    propertyName: propertyKey,
+    validator: { validate: value => value === null || value !== undefined }
+  });
+}
 
 function toOptionalBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
@@ -2950,6 +2961,65 @@ export class AdminIngredientQueryDto extends PageQueryDto {
   factStatus?: "ALL" | "MISSING";
 }
 
+export class AdminNutritionFoodQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ example: "羊肉" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(80)
+  declare keyword?: string;
+
+  @ApiPropertyOptional({ example: "畜肉类及其制品-羊" })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  category?: string;
+}
+
+export class AdminIngredientNutritionConversionDto {
+  @ApiProperty({ example: 3007 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  unitId!: number;
+
+  @ApiProperty({ example: 18 })
+  @Type(() => Number)
+  @Min(0.01)
+  @Max(100000)
+  gramsPerUnit!: number;
+}
+
+export class UpdateAdminIngredientNutritionDto extends OperationDto {
+  @ApiProperty({ example: 12, nullable: true })
+  @IsDefinedOrNull()
+  @ValidateIf((_, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  nutrientFoodId?: number | null;
+
+  @ApiProperty({ example: "REPRESENTATIVE", enum: ingredientNutritionMatchTypeValues })
+  @IsString()
+  @IsIn(ingredientNutritionMatchTypeValues)
+  @MaxLength(32)
+  matchType!: string;
+
+  @ApiProperty({ example: 0.85 })
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0)
+  @Max(1)
+  confidence?: number | null;
+
+  @ApiProperty({ type: "array", items: { type: "object" } })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AdminIngredientNutritionConversionDto)
+  conversions!: AdminIngredientNutritionConversionDto[];
+}
+
 export class AdminUnitPayloadDto extends OperationDto {
   @ApiProperty()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
@@ -3078,6 +3148,15 @@ export class AdminRecipeContentDto {
   @IsString()
   @MaxLength(1000)
   tips!: string | null;
+
+  @ApiProperty({ type: [String], maxItems: 8 })
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ArrayUnique()
+  @Transform(({ value }) => trimItems(value))
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  keywords!: string[];
 
   @ApiPropertyOptional({ type: [AdminRecipeToolDto] })
   @IsOptional()
@@ -3273,8 +3352,8 @@ export class RecipeImportToolDto {
 }
 
 export class RecipeImportTagDto {
-  @ApiProperty({ enum: ["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] })
-  @IsIn(["MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"])
+  @ApiProperty({ enum: ["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"] })
+  @IsIn(["CUISINE", "DISH_STYLE", "MEAL_TYPE", "DISH_ROLE", "MAIN_PROTEIN_TYPE", "FLAVOR_PROFILE", "SPICE_LEVEL"])
   tagCode!: string;
 
   @ApiProperty({ maxLength: 64 })
@@ -3420,6 +3499,15 @@ export class RecipeImportRecipeBodyDto {
   @IsString()
   @MaxLength(1000)
   tips!: string | null;
+
+  @ApiProperty({ type: [String], maxItems: 8 })
+  @IsArray()
+  @ArrayMaxSize(8)
+  @ArrayUnique()
+  @Transform(({ value }) => trimItems(value))
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  keywords!: string[];
 
   @ApiPropertyOptional({ nullable: true, maxLength: 128 })
   @IsDefined()

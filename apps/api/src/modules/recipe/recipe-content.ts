@@ -96,7 +96,7 @@ export function buildRecipeSearchText(content: RecipeContentSnapshot, aliasMap: 
   content.ingredients.forEach(item => {
     collectIngredientSearchTerms(item.ingredientId, item.ingredientName, aliasMap, ingredientTerms, ingredientSeen);
   });
-  return joinSearchTerms([content.name, content.story ?? "", ...ingredientTerms]);
+  return joinSearchTerms([content.name, content.story ?? "", ...content.keywords, ...ingredientTerms]);
 }
 
 export function draftCoverImageUrl(value: unknown) {
@@ -129,6 +129,7 @@ export function versionToContent(version: {
   duration: string | null;
   estimatedCalories?: number | null;
   tips: string | null;
+  keywordsJson?: unknown;
   toolsJson?: unknown;
   ingredientsJson: unknown;
   stepsJson: unknown;
@@ -142,6 +143,7 @@ export function versionToContent(version: {
     duration: version.duration as RecipeContentSnapshot["duration"],
     estimatedCalories: version.estimatedCalories ?? null,
     tips: version.tips,
+    keywords: version.keywordsJson ? fromJson<string[]>(version.keywordsJson) : [],
     tools: version.toolsJson ? fromJson<NonNullable<RecipeContentSnapshot["tools"]>>(version.toolsJson) : [],
     ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
     steps: steps.map(item => ({

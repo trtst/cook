@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildImportedRecipeAssistantSnapshot } from "./recipe-content";
+import { buildImportedRecipeAssistantSnapshot, versionToContent } from "./recipe-content";
+
+test("reads body keywords from the immutable recipe content version", () => {
+  const content = versionToContent({
+    name: "小炒黄牛肉",
+    story: "湘味家常菜。",
+    baseServings: 1,
+    difficulty: "EASY",
+    duration: "BETWEEN_15_30",
+    tips: "大火快炒。",
+    keywordsJson: ["鲜辣", "下饭"],
+    toolsJson: [],
+    ingredientsJson: [],
+    stepsJson: []
+  });
+
+  assert.deepEqual(content.keywords, ["鲜辣", "下饭"]);
+});
 
 test("builds an imported assistant snapshot without changing source facts", () => {
   const snapshot = buildImportedRecipeAssistantSnapshot([

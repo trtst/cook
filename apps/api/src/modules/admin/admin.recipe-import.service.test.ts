@@ -13,6 +13,7 @@ function buildBody(overrides: Partial<RecipeImportRecipeBody> = {}): RecipeImpor
     difficulty: "EASY",
     duration: "BETWEEN_15_30",
     tips: "按步骤完成。",
+    keywords: [],
     coverImageUrl: null,
     coverImageKey: null,
     coverImageTempKey: null,
@@ -62,10 +63,17 @@ function createPublishService(
   currentItem: Record<string, unknown>,
   recipeCreateCalls: { count: number },
   imageService: {
-    publishRemoteImage?: (...args: any[]) => Promise<{ storageKey: string; imageUrl: string }>;
+    publishRemoteImage?: (...args: any[]) => Promise<{ storageKey: string; imageUrl: string; sizeBytes?: number }>;
+    publishTempImage?: (...args: any[]) => Promise<{ storageKey: string; imageUrl: string; sizeBytes?: number }>;
+    discardTempImages?: (keys: Iterable<string>) => Promise<string[] | void>;
     removePublishedImages?: (keys: Iterable<string>) => Promise<void>;
     postCommitReadError?: boolean;
-  } = {}
+    cleanupAudits?: Array<Record<string, unknown>>;
+  } = {},
+  publishTrace?: {
+    versionInputs: Array<Record<string, unknown>>;
+    recipeInputs: Array<Record<string, unknown>>;
+  }
 ) {
   let externalReadCount = 0;
   const tx = {
@@ -81,7 +89,10 @@ function createPublishService(
       updateMany: async () => ({ count: 1 })
     },
     recipeContentVersion: {
-      create: async () => ({ id: 903 })
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        publishTrace?.versionInputs.push(data);
+        return { id: 903 };
+      }
     },
     recipeVersionTag: {
       createMany: async () => undefined,
@@ -92,7 +103,7 @@ function createPublishService(
       findFirst: async () => null
     },
     ingredient: {
-      findMany: async () => [{ id: 1, name: "排骨", categoryId: 1, proteinType: "PORK", isStaple: false, isSpicyIngredient: false, aliases: [] }]
+      findMany: async () => [{ id: 1, name: "排骨", categoryId: 1, proteinType: "PORK", category: { code: "MEAT_POULTRY_EGG" }, isStaple: false, isSpicyIngredient: false, aliases: [] }]
     },
     recipeInspirationOwner: {
       findMany: async () => Array.from({ length: 100 }, (_, index) => ({ userId: index + 1 }))
@@ -101,8 +112,9 @@ function createPublishService(
       create: async () => undefined
     },
     recipe: {
-      create: async () => {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
         recipeCreateCalls.count += 1;
+        publishTrace?.recipeInputs.push(data);
         return { id: 1 };
       }
     }
@@ -110,6 +122,11 @@ function createPublishService(
   const prisma = {
     adminAccount: {
       findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] })
+    },
+    auditEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        imageService.cleanupAudits?.push(data);
+      }
     },
     recipeImportItem: {
       findUnique: async () => currentItem,
@@ -126,7 +143,8 @@ function createPublishService(
     {} as never,
     {} as never,
     {
-      discardTempImages: async () => undefined,
+      discardTempImages: imageService.discardTempImages ?? (async () => undefined),
+      publishTempImage: imageService.publishTempImage ?? (async () => ({ storageKey: "unused", imageUrl: "/unused" })),
       publishRemoteImage: imageService.publishRemoteImage ?? (async () => ({ storageKey: "unused", imageUrl: "/unused" })),
       removePublishedImages: imageService.removePublishedImages ?? (async () => undefined)
     } as never,
@@ -154,6 +172,80 @@ test("publishing a JSON item with fuzzy or unmatched ingredients is blocked befo
     (error: unknown) => error instanceof BadRequestException && error.message.includes("未补全")
   );
   assert.equal(recipeCreateCalls.count, 0);
+});
+
+test("limits the number of remotely downloaded images in one publish", async () => {
+  let publishCount = 0;
+  const service = createPublishService(
+    {
+      id: 901,
+      jobId: 902,
+      sourcePath: "many-images.json",
+      status: "READY",
+      rawBodyJson: buildRawBody(),
+      recipeBodyJson: buildBody(),
+      version: 1,
+      recipeId: null
+    },
+    { count: 0 },
+    {
+      publishRemoteImage: async () => {
+        publishCount += 1;
+        return { storageKey: `uploads/image-${publishCount}.png`, imageUrl: `/image-${publishCount}.png`, sizeBytes: 1 };
+      }
+    }
+  );
+  const recipeBody = buildBody({
+    steps: Array.from({ length: 51 }, (_, index) => ({
+      text: `步骤 ${index + 1}`,
+      imageUrl: `https://images.example/${index + 1}.png`,
+      imageKey: null,
+      imageTempKey: null
+    }))
+  });
+
+  await assert.rejects(
+    () => (service as any).stageRecipeImportImages({}, buildRawBody(), recipeBody, [], []),
+    /远程图片数量不能超过 50 张/
+  );
+  assert.equal(publishCount, 50);
+});
+
+test("limits the total size of remotely downloaded images in one publish", async () => {
+  let publishCount = 0;
+  const service = createPublishService(
+    {
+      id: 901,
+      jobId: 902,
+      sourcePath: "large-images.json",
+      status: "READY",
+      rawBodyJson: buildRawBody(),
+      recipeBodyJson: buildBody(),
+      version: 1,
+      recipeId: null
+    },
+    { count: 0 },
+    {
+      publishRemoteImage: async () => {
+        publishCount += 1;
+        return { storageKey: `uploads/image-${publishCount}.png`, imageUrl: `/image-${publishCount}.png`, sizeBytes: 60 * 1024 * 1024 };
+      }
+    }
+  );
+  const recipeBody = buildBody({
+    steps: [1, 2].map(index => ({
+      text: `步骤 ${index}`,
+      imageUrl: `https://images.example/${index}.png`,
+      imageKey: null,
+      imageTempKey: null
+    }))
+  });
+
+  await assert.rejects(
+    () => (service as any).stageRecipeImportImages({}, buildRawBody(), recipeBody, [], []),
+    /远程图片总大小不能超过 100 MB/
+  );
+  assert.equal(publishCount, 2);
 });
 
 test("a pending system ingredient keeps an import item blocked before publish", async () => {
@@ -185,7 +277,7 @@ test("a pending system ingredient keeps an import item blocked before publish", 
         id: 321,
         name: "新食材",
         status: "PENDING",
-        category: { isSelectable: true }
+        category: { code: "MEAT_POULTRY_EGG", isSelectable: true }
       }]
     },
     unit: {
@@ -231,6 +323,7 @@ test("does not delete published images when the committed publish response read 
     duration: "BETWEEN_15_30",
     estimatedCalories: null,
     tips: null,
+    keywords: [],
     tools: [],
     ingredients: [{ ingredientId: 1, ingredientName: "排骨", source: "SYSTEM", categoryId: 1, amount: { kind: "FUZZY", text: "适量" } }],
     steps: [{ text: "完成烹饪。", imageUrl: null }]
@@ -246,6 +339,91 @@ test("does not delete published images when the committed publish response read 
   );
   assert.equal(recipeCreateCalls.count, 1);
   assert.deepEqual(removedStorageKeys, []);
+});
+
+test("audits temporary image cleanup failures after import staging aborts", async () => {
+  const cleanupAudits: Array<Record<string, unknown>> = [];
+  const item = {
+    id: 901,
+    jobId: 902,
+    sourcePath: "cleanup.json",
+    status: "READY",
+    rawBodyJson: buildRawBody(),
+    recipeBodyJson: buildBody({
+      coverImageUrl: null,
+      coverImageTempKey: "temp-cover.png",
+      steps: [{ text: "步骤", imageUrl: "https://images.example/step.png", imageKey: null, imageTempKey: null }]
+    }),
+    version: 1,
+    recipeId: null
+  };
+  const service = createPublishService(item, { count: 0 }, {
+    publishTempImage: async () => ({ storageKey: "uploads/admin-recipe-images/temp-cover.png", imageUrl: "/temp-cover.png", sizeBytes: 10 }),
+    publishRemoteImage: async () => {
+      throw new Error("remote staging failed");
+    },
+    discardTempImages: async () => ["temp-cover.png"],
+    cleanupAudits
+  });
+  (service as any).buildRecipeImportItemState = async () => ({ errorItems: [], warnItems: [] });
+  (service as any).requireInspirationCategory = async () => ({ id: 1 });
+
+  await assert.rejects(
+    () => service.publishRecipeImportItem({}, 901, 1, { operationId: "202609080003", expectedVersion: 1 }),
+    /remote staging failed/
+  );
+  assert.deepEqual(cleanupAudits, [{
+    actorType: "ADMIN",
+    actorAdminId: 1,
+    action: "RECIPE_IMAGE_CLEANUP_FAILED",
+    objectType: "RECIPE_IMPORT_ITEM",
+    objectId: 901,
+    payload: { tempKeys: ["temp-cover.png"] }
+  }]);
+});
+
+test("publishing a JSON item stores body keywords in the version and recipe search text", async () => {
+  const recipeCreateCalls = { count: 0 };
+  const publishTrace = { versionInputs: [] as Array<Record<string, unknown>>, recipeInputs: [] as Array<Record<string, unknown>> };
+  const item = {
+    id: 901,
+    jobId: 902,
+    sourcePath: "keywords.json",
+    status: "READY",
+    rawBodyJson: buildRawBody(),
+    recipeBodyJson: buildBody({ keywords: ["鲜香", "快手"] }),
+    version: 1,
+    recipeId: null,
+    createdAt: new Date("2026-09-09T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-09T00:00:00.000Z")
+  };
+  const service = createPublishService(item, recipeCreateCalls, {}, publishTrace);
+
+  (service as any).buildRecipeImportItemState = async () => ({ errorItems: [], warnItems: [] });
+  (service as any).requireInspirationCategory = async () => ({ id: 1 });
+  (service as any).buildAdminRecipeContent = async () => ({
+    name: "测试导入菜谱",
+    story: "用于验证导入服务。",
+    baseServings: 2,
+    difficulty: "EASY",
+    duration: "BETWEEN_15_30",
+    estimatedCalories: null,
+    tips: "按步骤完成。",
+    keywords: ["鲜香", "快手"],
+    tools: [],
+    ingredients: [{ ingredientId: 1, ingredientName: "排骨", source: "SYSTEM", categoryId: 1, amount: { kind: "FUZZY", text: "适量" } }],
+    steps: [{ text: "完成烹饪。", imageUrl: null }]
+  });
+  (service as any).assertAdminRecipeContent = () => undefined;
+  (service as any).syncRecipeAssistant = async () => undefined;
+  (service as any).writeRecipeImportJobStats = async () => undefined;
+  (service as any).toRecipeImportItemSummary = () => ({ id: 901 });
+
+  await service.publishRecipeImportItem({}, 901, 1, { operationId: "202609090002", expectedVersion: 1 });
+
+  assert.deepEqual(publishTrace.versionInputs[0]?.keywordsJson, ["鲜香", "快手"]);
+  assert.match(String(publishTrace.recipeInputs[0]?.searchText), /鲜香/);
+  assert.match(String(publishTrace.recipeInputs[0]?.searchText), /快手/);
 });
 
 test("materializing an unknown import ingredient creates a pending system ingredient", async () => {
@@ -368,6 +546,46 @@ test("materializing an already pending import ingredient reuses the existing sys
   assert.equal(result.ingredientId, existing.id);
   assert.equal(result.ingredientName, existing.name);
   assert.equal(createCount, 0);
+});
+
+test("materializing an import ingredient never revives a disabled system ingredient", async () => {
+  const updates: Array<Record<string, unknown>> = [];
+  const service = createPublishService({
+    id: 901,
+    jobId: 902,
+    sourcePath: "disabled-existing.json",
+    status: "NEEDS_FIX",
+    rawBodyJson: buildRawBody(),
+    recipeBodyJson: buildBody(),
+    version: 1,
+    recipeId: null
+  }, { count: 0 });
+  (service as any).requireImportIngredientCategory = async () => ({ id: 777 });
+
+  const [result] = await (service as any).materializeImportIngredients({
+    ingredient: {
+      findFirst: async () => ({ id: 325, name: "已下架食材", status: "DISABLED", categoryId: 1 }),
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updates.push(data);
+        return { id: 325, name: "已下架食材", status: "ACTIVE", categoryId: 1 };
+      },
+      create: async () => {
+        throw new Error("不应为已下架食材创建重复记录");
+      }
+    }
+  }, [{
+    line: "已下架食材 100 克",
+    ingredientName: "已下架食材",
+    ingredientId: null,
+    quantity: "100",
+    unitText: "克",
+    unitId: 3,
+    fuzzyText: null,
+    note: null
+  }]);
+
+  assert.equal(result.ingredientId, null);
+  assert.equal(updates.length, 0);
 });
 
 test("JSON import creates an unknown ingredient as a pending system ingredient", async () => {

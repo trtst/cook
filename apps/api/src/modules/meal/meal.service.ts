@@ -544,6 +544,7 @@ function buildEmptyMenuSnapshot(mealSlot: MealSlot): RecipeContentSnapshot {
     duration: null,
     estimatedCalories: null,
     tips: null,
+    keywords: [],
     ingredients: [],
     steps: []
   };
@@ -581,6 +582,7 @@ function buildMenuSnapshot(menuItems: ResolvedMenuVersion[]): RecipeContentSnaps
     duration: first.content.duration,
     estimatedCalories: estimatedCalories > 0 ? estimatedCalories : null,
     tips: null,
+    keywords: [],
     ingredients: menuItems.flatMap(item => item.content.ingredients),
     steps: []
   };

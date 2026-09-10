@@ -228,12 +228,8 @@ export class AssetStorageService {
     const key = cleanStorageKey(storageKey);
     const objectKey = this.objectKey(key);
     if (this.config.driver === "oss") {
-      try {
-        const client = this.oss();
-        await client.delete(objectKey);
-      } catch {
-        return;
-      }
+      const client = this.oss();
+      await client.delete(objectKey);
       return;
     }
     await rm(this.localPath(key), { force: true });

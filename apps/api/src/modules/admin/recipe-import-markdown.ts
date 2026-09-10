@@ -556,6 +556,7 @@ export function parseMarkdownSource(source: SourceFile, defaultCategoryId: numbe
     difficulty: pickDifficulty(difficultyText),
     duration: pickDuration(`${story ?? ""} ${introText}`),
     tips: tipLines.join("\n") || null,
+    keywords: [],
     coverImageKey: imageFiles.find(item => canUseAsCover(item.width, item.height))?.key ?? null,
     coverImageTempKey: null,
     ingredients: ingredientLines.map(line => parseIngredientLine(line, refs)),
