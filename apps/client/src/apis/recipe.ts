@@ -123,6 +123,7 @@ export interface RecipeContentSnapshot {
 	difficulty: RecipeDifficulty | null;
 	duration: RecipeDuration | null;
 	tips: string | null;
+	keywords: string[];
 	ingredients: RecipeIngredientSnapshot[];
 	steps: RecipeStepSnapshot[];
 }
@@ -246,6 +247,7 @@ export interface MyRecipeSummary {
 	duration: RecipeDuration | null;
 	difficultyText: string | null;
 	durationText: string | null;
+	keywords: string[];
 	estimatedCalories: number | null;
 	category: RecipeCategorySummary | null;
 	contentVersionId: UUID;
@@ -359,6 +361,7 @@ export interface InspirationRecipeSummary {
 	duration: RecipeDuration | null;
 	difficultyText: string | null;
 	durationText: string | null;
+	keywords: string[];
 	estimatedCalories: number | null;
 	category: InspirationCategorySummary;
 	collectCount: number;

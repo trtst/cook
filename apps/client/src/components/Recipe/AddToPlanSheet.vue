@@ -596,8 +596,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 88rpx;
-  height: 88rpx;
+  height: 90rpx;
   border: 0;
   border-radius: var(--radius-pill);
   font-size: 26rpx;

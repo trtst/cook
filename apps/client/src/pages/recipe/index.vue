@@ -181,7 +181,20 @@
           @refresherabort="onRefresherRestore"
         >
           <view v-if="errorText" class="notice" @click="retryLoadActiveTab">{{ errorText }}</view>
-          <view v-else-if="loading && !cards.length" class="notice">加载中...</view>
+          <view v-else-if="loading && !cards.length" class="recipe-list-skeleton">
+            <view v-for="index in 4" :key="index" class="recipe-card recipe-card--skeleton">
+              <view class="recipe-card__cover recipe-card__cover--skeleton">
+                <Skeleton width="100%" height="100%" radius="0" />
+              </view>
+              <view class="recipe-card__body">
+                <Skeleton width="72%" height="30rpx" radius="8rpx" />
+                <view class="recipe-card__skeleton-meta">
+                  <Skeleton width="72rpx" height="26rpx" radius="var(--radius-xs)" />
+                  <Skeleton width="96rpx" height="26rpx" radius="var(--radius-xs)" />
+                </view>
+              </view>
+            </view>
+          </view>
 
           <Empty
             v-else-if="showRecipeEmpty"
@@ -214,10 +227,13 @@
 
                 <view class="recipe-card__body">
                   <text class="recipe-card__title">{{ item.title }}</text>
-                  <view v-if="item.durationText || item.caloriesText" class="recipe-card__info">
-                    <view v-if="item.durationText" class="recipe-card__meta">
-                      <text class="cookfont icon-time recipe-card__meta-icon" />
-                      <text class="recipe-card__meta-text">{{ item.durationText }}</text>
+                  <view v-if="item.keywords.length || item.caloriesText" class="recipe-card__info">
+                    <view v-if="item.keywords.length" class="recipe-card__meta">
+                      <text
+                        v-for="keyword in item.keywords.slice(0, 3)"
+                        :key="keyword"
+                        class="recipe-card__meta-tag"
+                      >{{ keyword }}</text>
                     </view>
                     <text v-if="item.caloriesText" class="recipe-card__calories">{{ item.caloriesText }}</text>
                   </view>
@@ -313,6 +329,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -341,7 +358,7 @@ interface CardItem {
 	id: UUID;
 	title: string;
 	coverImageUrl: string | null;
-	durationText: string;
+	keywords: string[];
 	estimatedCalories: number | null;
 	caloriesText: string;
 	subline: string;
@@ -977,7 +994,7 @@ function toMyCard(item: MyRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		durationText: item.durationText || "",
+		keywords: item.keywords,
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
@@ -990,7 +1007,7 @@ function toInspirationCard(item: InspirationRecipeSummary): CardItem {
 		id: item.id,
 		title: item.title,
 		coverImageUrl: resolveCoverImageUrl(item.coverImageUrl),
-		durationText: item.durationText || "",
+		keywords: item.keywords,
 		estimatedCalories: item.estimatedCalories,
 		caloriesText: formatCardCalories(item.estimatedCalories),
 		subline: "",
@@ -1372,6 +1389,13 @@ defineExpose({
   padding-bottom: calc(24rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
 }
 
+.recipe-list-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30rpx;
+  padding-bottom: calc(24rpx + var(--tabbar-shell-height) + env(safe-area-inset-bottom));
+}
+
 .list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1390,6 +1414,10 @@ defineExpose({
 .recipe-card--hover,
 .manage-fab--hover {
   opacity: 0.86;
+}
+
+.recipe-card--skeleton {
+  pointer-events: none;
 }
 
 .recipe-card__cover {
@@ -1413,6 +1441,12 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.recipe-card__cover--skeleton {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
 }
 
 .recipe-card__body {
@@ -1464,18 +1498,23 @@ defineExpose({
   min-width: 0;
 }
 
-.recipe-card__meta-icon {
-  flex: 0 0 auto;
-  color: var(--color-text-tertiary);
-  font-size: 22rpx;
-  line-height: 1;
+.recipe-card__skeleton-meta {
+  display: flex;
+  gap: 8rpx;
 }
 
-.recipe-card__meta-text {
-  min-width: 0;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.6;
+.recipe-card__meta-tag {
+  flex: 0 0 auto;
+  max-width: 180rpx;
+  overflow: hidden;
+  padding: 6rpx 12rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+  font-size: 20rpx;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .recipe-card__calories {

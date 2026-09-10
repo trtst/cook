@@ -1878,6 +1878,7 @@ function openPreviewSheet() {
       difficulty: form.difficulty,
       duration: form.duration,
       tips: form.tips.trim() || null,
+      keywords: [],
       ingredients: buildFilledIngredientRows().map(row => {
         if (row.fuzzyText) {
           return {

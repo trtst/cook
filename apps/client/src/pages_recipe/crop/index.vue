@@ -1,6 +1,7 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout class="crop-layout"
+    :class="themeClasses"
     :style="cropLayoutStyle"
     :title="cropTitle"
     full-screen
@@ -141,6 +142,7 @@ import { computed, getCurrentInstance, nextTick, reactive, ref } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import {
@@ -180,6 +182,7 @@ const ratioOptions = [
 ] as const;
 
 const pageStyle = usePageScrollStyle();
+const { themeClasses } = useTheme();
 const cropLayoutStyle = computed(() => ({
   "--crop-page-bg": CROP_PAGE_BG,
   "--crop-nav-color": CROP_NAV_COLOR,

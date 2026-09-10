@@ -318,8 +318,7 @@ async function submit() {
   flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: 88rpx;
-  height: 88rpx;
+  height: 90rpx;
   border: 0;
   border-radius: var(--radius-pill);
   font-size: 26rpx;

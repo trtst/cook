@@ -55,6 +55,9 @@
 	            <view class="summary-card">
 	              <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
 	              <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
+                <view v-if="detailContent.keywords.length" class="summary-card__keywords">
+                  <text v-for="item in detailContent.keywords" :key="item" class="summary-card__keyword">{{ item }}</text>
+                </view>
               <view v-if="detailFactText || showReportEntry" class="summary-card__facts">
                 <view class="summary-card__fact-row">
                   <view v-if="detailFactText" class="summary-card__fact-block">
@@ -628,6 +631,7 @@ const detailContent = computed<DetailContent>(() => {
       difficulty: null,
       duration: null,
       tips: null,
+      keywords: [],
       ingredients: [],
       steps: []
     };
@@ -1695,6 +1699,22 @@ defineExpose({
   line-height: 1.8;
 }
 
+.summary-card__keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.summary-card__keyword {
+  padding: 6rpx 14rpx;
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.4;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+}
+
 .summary-card__facts {
   margin-top: 24rpx;
 }
@@ -2462,8 +2482,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 88rpx;
-  height: 88rpx;
+  height: 90rpx;
   border: 0;
   border-radius: var(--radius-pill);
   font-size: 26rpx;

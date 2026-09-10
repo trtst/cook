@@ -37,6 +37,7 @@ export interface RecipePreviewDetail {
     difficulty: RecipeDifficulty | null;
     duration: RecipeDuration | null;
     tips: string | null;
+    keywords: string[];
     ingredients: RecipePreviewIngredient[];
     steps: RecipeStepSnapshot[];
   };
