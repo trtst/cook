@@ -142,6 +142,7 @@ function triggerHeaderRefresh() {
           </template>
           <el-menu-item index="/ingredients/categories">系统食材分类</el-menu-item>
           <el-menu-item index="/ingredients/items">系统食材</el-menu-item>
+          <el-menu-item index="/ingredients/nutrition">食材营养表</el-menu-item>
           <el-menu-item index="/ingredients/pending">待审核食材</el-menu-item>
           <el-menu-item index="/ingredients/feedbacks">食材纠错</el-menu-item>
           <el-menu-item index="/ingredients/units">单位</el-menu-item>

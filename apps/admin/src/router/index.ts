@@ -192,6 +192,12 @@ const router = createRouter({
           meta: { title: "系统食材" }
         },
         {
+          path: "ingredients/nutrition",
+          name: "ingredient-nutrition",
+          component: () => import("@/pages/NutritionFoodsPage.vue"),
+          meta: { title: "食材营养表" }
+        },
+        {
           path: "ingredients/pending",
           name: "ingredient-pending",
           component: () => import("@/pages/IngredientPendingPage.vue"),

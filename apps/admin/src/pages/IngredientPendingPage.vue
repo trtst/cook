@@ -178,6 +178,66 @@ function openReview(row: AdminPendingIngredientSummary) {
   dialogVisible.value = true;
 }
 
+function canQuickApprove(row: AdminPendingIngredientSummary) {
+  return !isImportedPlaceholder(row) && selectableCategories.value.some(item => item.id === row.categoryId) && row.defaultUnitId !== null;
+}
+
+function isImportedPlaceholder(row: AdminPendingIngredientSummary) {
+  return row.source === "JSON_IMPORT" && /^导入食材-\d+$/.test(row.name.trim());
+}
+
+async function quickApprove(row: AdminPendingIngredientSummary) {
+  if (!canQuickApprove(row)) {
+    ElMessage.warning("该食材还没有可直接通过的系统分类，请打开审核补充分类");
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(`确认将“${row.name}”快捷通过为系统食材？`, "快捷审核通过", {
+      type: "warning",
+      confirmButtonText: "通过",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.reviewPendingIngredient(row.id, {
+      operationId: createOperationId(),
+      action: "APPROVE_CREATE",
+      expectedVersion: row.version,
+      name: row.name,
+      categoryId: row.categoryId as UUID,
+      defaultUnitId: row.defaultUnitId as UUID
+    });
+    if (pendingItems.value.length === 1 && query.page > 1) query.page -= 1;
+    await loadPendingItems();
+    ElMessage.success("食材已快捷审核通过");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "快捷审核失败");
+  }
+}
+
+async function removeImportedPlaceholder(row: AdminPendingIngredientSummary) {
+  if (!isImportedPlaceholder(row)) return;
+  try {
+    await ElMessageBox.confirm(`确认移除占位食材“${row.name}”？`, "移除导入占位", {
+      type: "warning",
+      confirmButtonText: "移除",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.reviewPendingIngredient(row.id, {
+      operationId: createOperationId(),
+      action: "REJECT",
+      expectedVersion: row.version,
+      rejectReasonCode: "OUT_OF_SCOPE",
+      reason: "导入数据中的占位食材，不属于真实系统食材"
+    });
+    if (pendingItems.value.length === 1 && query.page > 1) query.page -= 1;
+    await loadPendingItems();
+    ElMessage.success("导入占位已移除");
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "移除导入占位失败");
+  }
+}
+
 function resetMergeOptions() {
   mergeRequest += 1;
   lastMergeKeyword = "";
@@ -401,6 +461,8 @@ onUnmounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="isImportedPlaceholder(row)" link type="danger" @click="removeImportedPlaceholder(row)">移除占位</el-button>
+            <el-button v-if="canQuickApprove(row)" link type="success" @click="quickApprove(row)">快捷通过</el-button>
             <el-button link type="primary" @click="openReview(row)">审核</el-button>
             <el-button v-if="row.source === 'PERSONAL'" link type="danger" @click="removePendingIngredient(row)">删除</el-button>
           </template>

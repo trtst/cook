@@ -6,7 +6,9 @@ import {
   ingredientApi,
   type AdminIngredientCategorySummary,
   type AdminIngredientSummary,
-  type AdminUnitSummary
+  type AdminUnitSummary,
+  type AdminIngredientNutritionDetail,
+  type AdminNutritionFoodSummary
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
@@ -64,7 +66,14 @@ const ingredients = ref<AdminIngredientSummary[]>([]);
 const units = ref<AdminUnitSummary[]>([]);
 const total = ref(0);
 const draggingIngredientId = ref<UUID | "">("");
+const nutritionDetail = ref<AdminIngredientNutritionDetail | null>(null);
+const nutritionFoods = ref<AdminNutritionFoodSummary[]>([]);
+const nutritionKeyword = ref("");
+const nutritionSaving = ref(false);
+const nutritionLoading = ref(false);
+const nutritionConversions = ref<Array<{ unitId: UUID; gramsPerUnit: number }>>([]);
 let ingredientsRequest = 0;
+let nutritionRequest = 0;
 
 const query = reactive({
   page: 1,
@@ -288,12 +297,14 @@ async function changeFactStatus() {
 
 function openCreateIngredient() {
   dialogMode.value = "create";
+  resetNutritionState();
   resetForm();
   dialogVisible.value = true;
 }
 
 function openEditIngredient(row: AdminIngredientSummary) {
   dialogMode.value = "edit";
+  resetNutritionState();
   editingIngredientId.value = row.id;
   form.name = row.name;
   form.categoryId = row.categoryId;
@@ -303,6 +314,68 @@ function openEditIngredient(row: AdminIngredientSummary) {
   form.isSpicyIngredient = row.isSpicyIngredient;
   form.aliasesText = row.aliases.join("，");
   dialogVisible.value = true;
+  void loadNutrition(row.id);
+}
+
+function resetNutritionState() {
+  nutritionRequest += 1;
+  nutritionDetail.value = null;
+  nutritionConversions.value = [];
+  nutritionFoods.value = [];
+}
+
+async function loadNutrition(ingredientId: UUID) {
+  const requestId = ++nutritionRequest;
+  nutritionLoading.value = true;
+  try {
+    const detail = await ingredientApi.getIngredientNutrition(ingredientId);
+    if (requestId !== nutritionRequest || editingIngredientId.value !== ingredientId) return;
+    nutritionDetail.value = detail;
+    nutritionConversions.value = detail.conversions.map(item => ({ unitId: item.unitId, gramsPerUnit: item.gramsPerUnit }));
+  } catch (error) {
+    if (requestId !== nutritionRequest || editingIngredientId.value !== ingredientId) return;
+    ElMessage.error(error instanceof Error ? error.message : "加载营养关联失败");
+  } finally {
+    if (requestId === nutritionRequest) {
+      nutritionLoading.value = false;
+    }
+  }
+}
+
+async function searchNutritionFoods() {
+  const result = await ingredientApi.listNutritionFoods({ page: 1, pageSize: 20, keyword: nutritionKeyword.value });
+  nutritionFoods.value = result.items;
+}
+
+function addNutritionConversion() {
+  const unit = units.value.find(item => !nutritionConversions.value.some(row => row.unitId === item.id) && item.type !== "WEIGHT");
+  if (unit) nutritionConversions.value.push({ unitId: unit.id, gramsPerUnit: 1 });
+}
+
+async function saveNutrition() {
+  if (!editingIngredientId.value || !nutritionDetail.value || nutritionLoading.value) return;
+  nutritionSaving.value = true;
+  try {
+    const food = nutritionDetail.value?.mapping?.food;
+    const result = await ingredientApi.updateIngredientNutrition(editingIngredientId.value, {
+      operationId: createOperationId(),
+      nutrientFoodId: food?.id ?? null,
+      matchType: nutritionDetail.value?.mapping?.matchType ?? "MANUAL",
+      confidence: nutritionDetail.value?.mapping?.confidence ?? (food ? 1 : null),
+      conversions: nutritionConversions.value
+    });
+    nutritionDetail.value = result;
+    ElMessage.success("营养关联已保存，相关菜谱将重新计算");
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "营养关联保存失败");
+  } finally {
+    nutritionSaving.value = false;
+  }
+}
+
+function chooseNutritionFood(food: AdminNutritionFoodSummary) {
+  if (!nutritionDetail.value) return;
+  nutritionDetail.value.mapping = { id: 0, status: "CONFIRMED", matchType: "MANUAL", confidence: 1, sourceVersion: food.sourceVersion, food };
 }
 
 function openBatchDialog() {
@@ -947,6 +1020,40 @@ watch(
         <el-form-item v-else label="食材图片">
           <div class="table-hint">先创建系统食材，后续再上传 `50x50` 小图。</div>
         </el-form-item>
+        <el-divider v-if="dialogMode === 'edit'">营养关联与单位换算</el-divider>
+        <template v-if="dialogMode === 'edit'">
+          <el-form-item label="已关联营养数据">
+            <div v-if="nutritionDetail?.mapping?.food" class="nutrition-current">
+              {{ nutritionDetail.mapping.food.foodCode }} · {{ nutritionDetail.mapping.food.foodName }}
+              <el-button link type="danger" @click="nutritionDetail && (nutritionDetail.mapping = null)">清除</el-button>
+            </div>
+            <div v-else class="table-hint">未关联。没有可靠数据时请保持未关联。</div>
+            <div class="nutrition-search-row">
+              <el-input v-model="nutritionKeyword" placeholder="搜索 foodCode / 食物名称" @keyup.enter="searchNutritionFoods" />
+              <el-button @click="searchNutritionFoods">搜索</el-button>
+            </div>
+            <el-table v-if="nutritionFoods.length" :data="nutritionFoods" size="small" max-height="180">
+              <el-table-column prop="foodCode" label="编码" width="110" />
+              <el-table-column prop="foodName" label="名称" />
+              <el-table-column label="营养" width="220">
+                <template #default="{ row }">{{ row.calories ?? "-" }} kcal / P {{ row.protein ?? "-" }}g</template>
+              </el-table-column>
+              <el-table-column label="操作" width="70"><template #default="{ row }"><el-button link type="primary" @click="chooseNutritionFood(row)">选择</el-button></template></el-table-column>
+            </el-table>
+          </el-form-item>
+          <el-form-item label="单位换算（食材专属）">
+            <div v-for="(conversion, index) in nutritionConversions" :key="`${conversion.unitId}-${index}`" class="nutrition-conversion-row">
+              <el-select v-model="conversion.unitId" placeholder="单位" style="width: 150px">
+                <el-option v-for="unit in units.filter(item => item.type !== 'WEIGHT')" :key="unit.id" :label="unit.name" :value="unit.id" />
+              </el-select>
+              <el-input-number v-model="conversion.gramsPerUnit" :min="0.01" :max="100000" :precision="2" />
+              <span>克</span>
+              <el-button link type="danger" @click="nutritionConversions.splice(index, 1)">删除</el-button>
+            </div>
+            <el-button link type="primary" @click="addNutritionConversion">+ 添加“汤匙/个/瓣”等换算</el-button>
+          </el-form-item>
+          <el-button type="primary" plain :loading="nutritionSaving" :disabled="!nutritionDetail || nutritionLoading" @click="saveNutrition">保存营养关联</el-button>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>

@@ -42,6 +42,34 @@ export interface AdminIngredientSummary {
   updatedAt: IsoDateTime;
 }
 
+export interface AdminNutritionFoodSummary {
+  id: UUID;
+  foodCode: string;
+  foodName: string;
+  englishName: string | null;
+  category: string | null;
+  edibleRate: number | null;
+  calories: number | null;
+  protein: number | null;
+  fat: number | null;
+  carbohydrate: number | null;
+  sourceVersion: string;
+}
+
+export interface AdminIngredientNutritionDetail {
+  ingredientId: UUID;
+  mapping: { id: UUID; status: "CONFIRMED" | "CANDIDATE" | "UNMAPPED"; matchType: string; confidence: number | null; sourceVersion: string; food: AdminNutritionFoodSummary | null } | null;
+  conversions: Array<{ unitId: UUID; unitName: string; gramsPerUnit: number; sourceVersion: string }>;
+}
+
+export interface UpdateIngredientNutritionPayload {
+  operationId: OperationId;
+  nutrientFoodId: UUID | null;
+  matchType: string;
+  confidence: number | null;
+  conversions: Array<{ unitId: UUID; gramsPerUnit: number }>;
+}
+
 export type AdminIngredientReviewStatus = "PENDING";
 
 export type AdminIngredientReviewAction = "APPROVE_CREATE" | "APPROVE_MERGE" | "REJECT";
@@ -235,6 +263,19 @@ export interface AdminPendingUnitRecommendationListQuery {
 }
 
 export const ingredientApi = {
+  listNutritionFoods(query: { page: number; pageSize: number; keyword?: string; category?: string }) {
+    return requestData<PageResult<AdminNutritionFoodSummary>>("/admin/nutrition-foods", { query });
+  },
+  listNutritionCategories() {
+    return requestData<Array<{ category: string }>>("/admin/nutrition-categories");
+  },
+  getIngredientNutrition(ingredientId: UUID) {
+    return requestData<AdminIngredientNutritionDetail>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}/nutrition`);
+  },
+  updateIngredientNutrition(ingredientId: UUID, body: UpdateIngredientNutritionPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminIngredientNutritionDetail>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}/nutrition`, { method: "PUT", body: payload, idempotencyKey: operationId });
+  },
   listCategories(keyword?: string) {
     return requestData<AdminIngredientCategorySummary[]>("/admin/ingredient-categories", {
       query: { keyword }
