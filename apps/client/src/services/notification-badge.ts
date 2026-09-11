@@ -1,5 +1,6 @@
 import { userApi, type NotificationBadgeResponse } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
+import { createOperationId } from "@/utils/operation-id";
 import { ref } from "vue";
 
 export type NotificationBadgeSnapshot = NotificationBadgeResponse;
@@ -37,8 +38,18 @@ export async function refreshNotificationBadgeSnapshot() {
   return snapshot;
 }
 
-export async function markNotificationFeedRead() {
-  const snapshot = await userApi.markNotificationFeedRead();
+export async function markNotificationBadgeSeen() {
+  const snapshot = await userApi.markNotificationBadgeSeen(createOperationId());
   writeNotificationBadgeSnapshot(snapshot);
   return snapshot;
+}
+
+export async function markNotificationFeedRead(beforeTime: string) {
+  const snapshot = await userApi.markNotificationFeedRead({ beforeTime }, createOperationId());
+  writeNotificationBadgeSnapshot(snapshot);
+  return snapshot;
+}
+
+export async function markNotificationItemRead(notificationId: string, notificationTime: string) {
+  await userApi.markNotificationRead({ notificationId, notificationTime }, createOperationId());
 }

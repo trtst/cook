@@ -76,17 +76,27 @@ export interface NotificationBadgeResponse {
 	latestTime: IsoDateTime | "";
 }
 
-export type NotificationFeedTypeLabel = "系统审核消息" | "系统清单协作消息" | "系统提醒消息" | "系统官方消息";
+export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "系统提醒" | "炊火记";
 export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official";
 
 export interface NotificationFeedItem {
 	id: string;
+	isUnread: boolean;
 	typeLabel: NotificationFeedTypeLabel;
 	tone: NotificationFeedTone;
 	title: string;
 	desc: string;
 	timeValue: IsoDateTime;
 	targetPath: string | null;
+}
+
+export interface MarkNotificationItemReadRequest {
+	notificationId: string;
+	notificationTime: IsoDateTime;
+}
+
+export interface MarkNotificationFeedReadRequest {
+	beforeTime: IsoDateTime;
 }
 
 export interface NotificationFeedQuery {
@@ -209,8 +219,14 @@ export const userApi = {
 			query as Record<string, string | number | boolean | null | undefined>
 		);
 	},
-	markNotificationFeedRead() {
-		return put<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-feed-read`);
+	markNotificationBadgeSeen(operationId: OperationId) {
+		return put<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-badge-seen`, undefined, { idempotencyKey: operationId });
+	},
+	markNotificationFeedRead(body: MarkNotificationFeedReadRequest, operationId: OperationId) {
+		return put<NotificationBadgeResponse>(`${cfg.domain}/api/users/me/notification-feed-read`, body, { idempotencyKey: operationId });
+	},
+	markNotificationRead(body: MarkNotificationItemReadRequest, operationId: OperationId) {
+		return put<null>(`${cfg.domain}/api/users/me/notification-read`, body, { idempotencyKey: operationId });
 	},
 	/**
 	 * 更新当前用户基础资料，不承接背景图、会员或口味资料。
