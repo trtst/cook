@@ -10,6 +10,8 @@ import {
   AuthPhoneChangeNewCodeDto,
   AuthPhoneCodeSendDto,
   ChangeCurrentPasswordDto,
+  MarkNotificationFeedReadDto,
+  MarkNotificationItemReadDto,
   NotificationFeedQueryDto,
   StartPhoneChangeDto,
   UpdateCurrentUserDto,
@@ -178,9 +180,33 @@ export class UserController {
   }
 
   @Put("me/notification-feed-read")
-  @ApiOkModel(NotificationBadgeModel, "标记当前用户通知中心为已读")
-  markNotificationFeedRead(@Req() request: RequestWithUser) {
-    return this.notificationService.markFeedRead(request.user.userId).then(result => ok(result));
+  @ApiIdempotencyKey()
+  @ApiOkModel(NotificationBadgeModel, "离开通知中心时标记进入时已存在的消息为已读")
+  markNotificationFeedRead(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() _operationId: string,
+    @Body() body: MarkNotificationFeedReadDto
+  ) {
+    return this.notificationService.markFeedRead(request.user.userId, body.beforeTime).then(result => ok(result));
+  }
+
+  @Put("me/notification-badge-seen")
+  @ApiIdempotencyKey()
+  @ApiOkModel(NotificationBadgeModel, "进入通知中心时确认入口未读徽标")
+  markNotificationBadgeSeen(@Req() request: RequestWithUser, @ReadIdempotencyKey() _operationId: string) {
+    return this.notificationService.markBadgeSeen(request.user.userId).then(result => ok(result));
+  }
+
+  @Put("me/notification-read")
+  @ApiIdempotencyKey()
+  @ApiOkNull("标记当前用户的一条通知为已读")
+  async markNotificationRead(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() _operationId: string,
+    @Body() body: MarkNotificationItemReadDto
+  ) {
+    await this.notificationService.markItemRead(request.user.userId, body.notificationId, body.notificationTime);
+    return ok(null);
   }
 
   @Put("me/taste-profile")

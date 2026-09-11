@@ -357,7 +357,8 @@ export class NotificationBadgeModel {
 
 export class NotificationFeedItemModel {
   @ApiProperty({ type: String, example: "unit:12" }) id!: string;
-  @ApiProperty({ type: String, enum: ["系统审核消息", "系统清单协作消息", "系统提醒消息", "系统官方消息"] }) typeLabel!: string;
+  @ApiProperty({ type: Boolean }) isUnread!: boolean;
+  @ApiProperty({ type: String, enum: ["系统审核", "购物清单协作", "系统提醒", "炊火记"] }) typeLabel!: string;
   @ApiProperty({ type: String, enum: ["review", "shopping", "reminder", "official"] }) tone!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) desc!: string;

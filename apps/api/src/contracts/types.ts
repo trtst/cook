@@ -92,17 +92,27 @@ export interface NotificationBadgeResponse {
   latestTime: string;
 }
 
-export type NotificationFeedTypeLabel = "系统审核消息" | "系统清单协作消息" | "系统提醒消息" | "系统官方消息";
+export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "系统提醒" | "炊火记";
 export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official";
 
 export interface NotificationFeedItem {
   id: string;
+  isUnread: boolean;
   typeLabel: NotificationFeedTypeLabel;
   tone: NotificationFeedTone;
   title: string;
   desc: string;
   timeValue: IsoDateTime;
   targetPath: string | null;
+}
+
+export interface MarkNotificationItemReadRequest {
+  notificationId: string;
+  notificationTime: IsoDateTime;
+}
+
+export interface MarkNotificationFeedReadRequest {
+  beforeTime: IsoDateTime;
 }
 
 export interface UserSummary {

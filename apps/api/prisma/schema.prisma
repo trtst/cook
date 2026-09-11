@@ -739,6 +739,7 @@ model User {
   userMedals                UserMedal[]
   notificationSettings      UserNotificationSettings?
   notificationState         UserNotificationState?
+  notificationReads         UserNotificationRead[]
   wechatIdentities          UserWechatIdentity[]
   authSessions              AuthSession[]
   phoneChangeSessions       PhoneChangeSession[]
@@ -872,14 +873,28 @@ model UserNotificationSettings {
 }
 
 model UserNotificationState {
-  userId     Int       @id @map("user_id")
-  feedReadAt DateTime? @map("feed_read_at") @db.Timestamptz(3)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  userId      Int       @id @map("user_id")
+  badgeReadAt DateTime? @map("badge_read_at") @db.Timestamptz(3)
+  feedReadAt  DateTime? @map("feed_read_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_notification_states")
+}
+
+model UserNotificationRead {
+  userId         Int      @map("user_id")
+  notificationId String   @map("notification_id") @db.VarChar(96)
+  notificationAt DateTime @map("notification_at") @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, notificationId])
+  @@map("user_notification_reads")
 }
 
 model UserTasteProfile {

@@ -536,6 +536,24 @@ export class NotificationFeedQueryDto {
   pageSize = 20;
 }
 
+export class MarkNotificationItemReadDto {
+  @ApiProperty({ example: "unit:12" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @MaxLength(96)
+  notificationId!: string;
+
+  @ApiProperty({ example: "2026-08-30T12:00:00.000Z" })
+  @IsISO8601()
+  notificationTime!: string;
+}
+
+export class MarkNotificationFeedReadDto {
+  @ApiProperty({ example: "2026-08-30T12:00:00.000Z" })
+  @IsISO8601()
+  beforeTime!: string;
+}
+
 export class OperationDto {
 }
 

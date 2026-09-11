@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { Prisma, type User } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
@@ -35,6 +35,14 @@ function maxDate(...values: Array<Date | null | undefined>) {
     if (!value) return current;
     if (!current) return value;
     return value.getTime() > current.getTime() ? value : current;
+  }, null);
+}
+
+function minDate(...values: Array<Date | null | undefined>) {
+  return values.reduce<Date | null>((current, value) => {
+    if (!value) return current;
+    if (!current) return value;
+    return value.getTime() < current.getTime() ? value : current;
   }, null);
 }
 
@@ -111,7 +119,7 @@ export class NotificationService {
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
 
-      return this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
+      return this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
     });
   }
 
@@ -126,11 +134,12 @@ export class NotificationService {
       const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
       const sourceLimit = nextPage * nextPageSize;
       const now = new Date();
-      const [ingredientSource, unitSource, inviteSource, officialSource, fridgeSource] = await Promise.all([
+      const [stateRow, ingredientSource, unitSource, inviteSource, officialSource, fridgeSource] = await Promise.all([
+        tx.userNotificationState.findUnique({ where: { userId } }),
         this.loadIngredientFeed(tx, userId, sourceLimit),
         this.loadUnitFeed(tx, userId, sourceLimit),
         this.loadInviteFeed(tx, userId, sourceLimit),
-        this.loadOfficialFeed(tx, sourceLimit),
+        this.loadOfficialFeed(tx, user.createdAt, sourceLimit),
         this.loadFridgeReminderFeed(tx, userId, now, settings, sourceLimit)
       ]);
       const mergedItems = [
@@ -143,8 +152,26 @@ export class NotificationService {
       const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + fridgeSource.total;
       const start = (nextPage - 1) * nextPageSize;
       const end = start + nextPageSize;
+      const pageItems = mergedItems.slice(start, end);
+      const reads = pageItems.length
+        ? await tx.userNotificationRead.findMany({
+            where: {
+              userId,
+              notificationId: { in: pageItems.map(item => item.id) }
+            },
+            select: {
+              notificationId: true,
+              notificationAt: true
+            }
+          })
+        : [];
+      const readTimes = new Map(reads.map(item => [item.notificationId, item.notificationAt]));
+      const feedReadAt = stateRow?.feedReadAt ?? null;
       return {
-        items: mergedItems.slice(start, end),
+        items: pageItems.map(item => ({
+          ...item,
+          isUnread: this.isFeedItemUnread(item.timeValue, feedReadAt, readTimes.get(item.id) ?? null)
+        })),
         page: nextPage,
         pageSize: nextPageSize,
         total,
@@ -153,7 +180,7 @@ export class NotificationService {
     });
   }
 
-  async markFeedRead(userId: UUID): Promise<NotificationBadgeResponse> {
+  async markBadgeSeen(userId: UUID): Promise<NotificationBadgeResponse> {
     return this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
       const [settingsRow, stateRow] = await Promise.all([
@@ -161,25 +188,88 @@ export class NotificationService {
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
       const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
-      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settings);
+      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settings);
 
       if (!currentBadge.latestTime) {
         return currentBadge;
       }
 
-      const nextReadAt = new Date(currentBadge.latestTime);
+      const nextReadAt = maxDate(stateRow?.badgeReadAt ?? null, new Date(currentBadge.latestTime));
+      if (!nextReadAt) return currentBadge;
       await tx.userNotificationState.upsert({
         where: { userId },
         create: {
           userId,
-          feedReadAt: nextReadAt
+          badgeReadAt: nextReadAt
         },
         update: {
-          feedReadAt: nextReadAt
+          badgeReadAt: nextReadAt
         }
       });
 
       return this.buildBadge(tx, userId, user.createdAt, nextReadAt, settings);
+    });
+  }
+
+  async markFeedRead(userId: UUID, beforeTime: string): Promise<NotificationBadgeResponse> {
+    const requestedAt = new Date(beforeTime);
+    if (Number.isNaN(requestedAt.getTime())) throw new BadRequestException("通知时间格式不正确");
+
+    return this.prisma.$transaction(async tx => {
+      const user = await this.loadActiveUser(tx, userId);
+      const [settingsRow, stateRow] = await Promise.all([
+        tx.userNotificationSettings.findUnique({ where: { userId } }),
+        tx.userNotificationState.findUnique({ where: { userId } })
+      ]);
+      const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
+      const badge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settings);
+      const latestAt = badge.latestTime ? new Date(badge.latestTime) : null;
+      if (!latestAt) {
+        return badge;
+      }
+      const nextReadAt = maxDate(stateRow?.feedReadAt ?? null, minDate(requestedAt, latestAt));
+
+      if (nextReadAt) {
+        await tx.userNotificationState.upsert({
+          where: { userId },
+          create: { userId, feedReadAt: nextReadAt },
+          update: { feedReadAt: nextReadAt }
+        });
+      }
+
+      return this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settings);
+    });
+  }
+
+  async markItemRead(userId: UUID, notificationId: string, notificationTime: string): Promise<void> {
+    const requestedAt = new Date(notificationTime);
+    if (Number.isNaN(requestedAt.getTime())) throw new BadRequestException("通知时间格式不正确");
+
+    await this.prisma.$transaction(async tx => {
+      const user = await this.loadActiveUser(tx, userId);
+      const settingsRow = await tx.userNotificationSettings.findUnique({ where: { userId } });
+      const notificationAt = await this.findNotificationTime(tx, userId, user.createdAt, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings(), notificationId);
+
+      if (!notificationAt || notificationAt.getTime() !== requestedAt.getTime()) {
+        throw new NotFoundException("通知已更新或不存在");
+      }
+
+      await tx.userNotificationRead.upsert({
+        where: {
+          userId_notificationId: {
+            userId,
+            notificationId
+          }
+        },
+        create: {
+          userId,
+          notificationId,
+          notificationAt
+        },
+        update: {
+          notificationAt
+        }
+      });
     });
   }
 
@@ -206,7 +296,7 @@ export class NotificationService {
     return {
       total,
       items: items.map(item => {
-        const timeValue = item.reviewedAt ?? item.updatedAt ?? item.createdAt;
+        const timeValue = item.updatedAt;
         const desc =
           item.status === "PENDING"
             ? `“${item.ingredientName}”正在审核中`
@@ -218,7 +308,8 @@ export class NotificationService {
 
         return {
           id: `ingredient:${item.id}`,
-          typeLabel: "系统审核消息",
+          isUnread: false,
+          typeLabel: "系统审核",
           tone: "review",
           title: `食材审核：${item.ingredientName}`,
           desc,
@@ -252,7 +343,7 @@ export class NotificationService {
     return {
       total,
       items: items.map(item => {
-        const timeValue = item.reviewedAt ?? item.updatedAt ?? item.createdAt;
+        const timeValue = item.updatedAt;
         const desc =
           item.status === "PENDING"
             ? `“${item.unitName}”正在审核中`
@@ -264,7 +355,8 @@ export class NotificationService {
 
         return {
           id: `unit:${item.id}`,
-          typeLabel: "系统审核消息",
+          isUnread: false,
+          typeLabel: "系统审核",
           tone: "review",
           title: `单位审核：${item.unitName}`,
           desc,
@@ -287,6 +379,7 @@ export class NotificationService {
           id: true,
           status: true,
           createdAt: true,
+          updatedAt: true,
           acceptedAt: true,
           declinedAt: true,
           revokedAt: true,
@@ -342,11 +435,12 @@ export class NotificationService {
                 : canJoin
                   ? `${ownerName} 邀请你一起维护“${item.list.name}”`
                   : `“${item.list.name}”当前协作者已满，暂时不能加入`;
-        const timeValue = item.acceptedAt ?? item.declinedAt ?? item.revokedAt ?? item.createdAt;
+        const timeValue = item.updatedAt;
 
         return {
           id: `invite:${item.id}`,
-          typeLabel: "系统清单协作消息",
+          isUnread: false,
+          typeLabel: "购物清单协作",
           tone: "shopping",
           title: `清单协作：${item.list.name}`,
           desc,
@@ -362,7 +456,7 @@ export class NotificationService {
     };
   }
 
-  private async loadOfficialFeed(db: NotificationDb, take: number): Promise<FeedSourceResult> {
+  private async loadOfficialFeed(db: NotificationDb, userCreatedAt: Date, take: number): Promise<FeedSourceResult> {
     const where = {
       type: "ARTICLE" as const,
       status: "PUBLISHED" as const,
@@ -370,13 +464,14 @@ export class NotificationService {
         is: {
           code: officialChannelCode
         }
-      }
+      },
+      publishedAt: { gt: userCreatedAt }
     };
     const [total, items] = await Promise.all([
       db.siteContent.count({ where }),
       db.siteContent.findMany({
         where,
-        orderBy: [{ publishedAt: "desc" }, { updatedAt: "desc" }, { id: "desc" }],
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         take,
         select: {
           id: true,
@@ -393,13 +488,14 @@ export class NotificationService {
       total,
       items: items.map(item => {
         const directUrl = resolveDirectUrl(item.bodyHtml);
-        const timeValue = item.publishedAt ?? item.updatedAt;
+        const timeValue = item.updatedAt;
 
         return {
           id: `official:${item.id}`,
-          typeLabel: "系统官方消息",
+          isUnread: false,
+          typeLabel: "炊火记",
           tone: "official",
-          title: item.title,
+          title: `炊火记发布了《${item.title}》`,
           desc: item.summary,
           timeValue: toIsoDate(timeValue),
           targetPath: directUrl
@@ -447,7 +543,8 @@ export class NotificationService {
       total: expiringCount,
       items: expiringItems.map(item => ({
         id: `reminder:fridge-expiring:${item.id}`,
-        typeLabel: "系统提醒消息",
+        isUnread: false,
+        typeLabel: "系统提醒",
         tone: "reminder",
         title: `食材临期提醒：${item.name}`,
         desc: `${settings.fridge.days} 天内将到期，建议优先安排`,
@@ -455,6 +552,82 @@ export class NotificationService {
         targetPath: "/pages_pantry/index/index"
       }))
     };
+  }
+
+  private isFeedItemUnread(timeValue: string, feedReadAt: Date | null, itemReadAt: Date | null) {
+    const notificationAt = new Date(timeValue);
+    if (feedReadAt && notificationAt.getTime() <= feedReadAt.getTime()) return false;
+    if (itemReadAt && notificationAt.getTime() <= itemReadAt.getTime()) return false;
+    return true;
+  }
+
+  private async findNotificationTime(
+    db: NotificationDb,
+    userId: UUID,
+    userCreatedAt: Date,
+    settings: NotificationSettings,
+    notificationId: string
+  ): Promise<Date | null> {
+    const ingredientId = notificationId.match(/^ingredient:(\d+)$/)?.[1];
+    if (ingredientId) {
+      const item = await db.ingredientRecommendation.findFirst({
+        where: { id: Number(ingredientId), userId },
+        select: { createdAt: true, updatedAt: true, reviewedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    const unitId = notificationId.match(/^unit:(\d+)$/)?.[1];
+    if (unitId) {
+      const item = await db.unitRecommendation.findFirst({
+        where: { id: Number(unitId), userId },
+        select: { createdAt: true, updatedAt: true, reviewedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    const inviteId = notificationId.match(/^invite:(\d+)$/)?.[1];
+    if (inviteId) {
+      const item = await db.shoppingListInvite.findFirst({
+        where: { id: Number(inviteId), targetUserId: userId },
+        select: { updatedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    const officialId = notificationId.match(/^official:(\d+)$/)?.[1];
+    if (officialId) {
+      const item = await db.siteContent.findFirst({
+        where: {
+          id: Number(officialId),
+          type: "ARTICLE",
+          status: "PUBLISHED",
+          channel: { is: { code: officialChannelCode } },
+          publishedAt: { gt: userCreatedAt }
+        },
+        select: { updatedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    const fridgeId = notificationId.match(/^reminder:fridge-expiring:(\d+)$/)?.[1];
+    if (fridgeId && settings.fridge.enabled) {
+      const item = await db.fridgeItem.findFirst({
+        where: {
+          id: Number(fridgeId),
+          userId,
+          available: true,
+          expireAt: {
+            not: null,
+            lte: addDays(new Date(), settings.fridge.days)
+          }
+        },
+        select: { updatedAt: true }
+      });
+      return item?.updatedAt ?? null;
+    }
+
+    return null;
   }
 
   private async buildBadge(
@@ -571,7 +744,7 @@ export class NotificationService {
 
   private async loadOfficialSummary(db: NotificationDb, userCreatedAt: Date, readAt: Date | null): Promise<TimedUnreadSummary> {
     const unreadAfter = maxDate(userCreatedAt, readAt) ?? userCreatedAt;
-    const where = {
+    const sourceWhere = {
       type: "ARTICLE" as const,
       status: "PUBLISHED" as const,
       channel: {
@@ -579,15 +752,19 @@ export class NotificationService {
           code: officialChannelCode
         }
       },
-      publishedAt: { gt: unreadAfter }
+      publishedAt: { gt: userCreatedAt }
+    };
+    const unreadWhere = {
+      ...sourceWhere,
+      updatedAt: { gt: unreadAfter }
     };
     const [latest, unreadCount] = await Promise.all([
       db.siteContent.findFirst({
-        where,
+        where: sourceWhere,
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         select: { updatedAt: true }
       }),
-      db.siteContent.count({ where })
+      db.siteContent.count({ where: unreadWhere })
     ]);
 
     return {
