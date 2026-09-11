@@ -255,6 +255,8 @@ GET  /users/me/notification-badge
 GET  /users/me/notification-feed
 PUT  /users/me/profile
 PUT  /users/me/notification-settings
+PUT  /users/me/notification-badge-seen
+PUT  /users/me/notification-read
 PUT  /users/me/notification-feed-read
 POST /membership-codes/redeem
 PUT  /users/me/display
@@ -593,11 +595,11 @@ interface RedeemMembershipCodeResult {
 
 `PUT /users/me/notification-settings` 完整替换当前用户的提醒偏好，请求体固定提交完整 `NotificationSettings`。服务端继续校验布尔值、餐次时间格式和 `fridge.days` 只允许 `1 | 2 | 3 | 5 | 7`；但当前前台页面只提交现有开关和提前天数对应的完整快照，不承诺开放餐次时间编辑。前端不再以本地 `storage` 作为权威来源。
 
-`GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / reminderUnreadCount / showReminderDot / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。
+`GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / reminderUnreadCount / showReminderDot / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。入口徽标以用户的 `badgeReadAt` 为准；进入通知中心后由服务端写入当前最新时间，入口数字和本地徽标快照随即清零，但不改变卡片已读状态。
 
-`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核消息 / 系统清单协作消息 / 系统提醒消息 / 系统官方消息` 四类消息，其中站内 `系统提醒消息` 只保留食材临期这类明确时效风险，首页周计划状态摘要不得合成通知中心消息。每条消息统一返回 `id / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
+`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核 / 购物清单协作 / 系统提醒 / 炊火记` 四类消息，其中站内 `系统提醒` 只保留食材临期这类明确时效风险，首页周计划状态摘要不得合成通知中心消息。每条消息统一返回 `id / isUnread / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`isUnread` 只服务通知中心内的弱标识，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
 
-`PUT /users/me/notification-feed-read` 只负责把“当前通知中心时间流的最新消息时间”写入当前用户自己的已读游标，并返回最新 `NotificationBadgeResponse`。进入通知中心后客户端调用这一写入口，后续未读清除逻辑以服务端游标为准，不再以本地时间戳作为 owner。
+`PUT /users/me/notification-badge-seen` 在进入通知中心时确认入口徽标，写入当前真实来源的最新时间并返回 `NotificationBadgeResponse`。`PUT /users/me/notification-read` 接收 `notificationId + notificationTime`，服务端校验该消息当前仍属于调用用户且版本时间一致后，写入该用户对这一消息版本的单条已读事实。`PUT /users/me/notification-feed-read` 接收进入页面时取得的 `beforeTime`；离开通知中心时，服务端仅把不晚于该边界的卡片写入总已读游标，不会清掉用户停留期间新到达的通知。三个写接口均要求 `Idempotency-Key`；它们只执行单调推进或同键 upsert，因此重复请求不会重复改变通知状态。入口徽标、单条卡片和离页批量已读均以服务端状态为准，客户端本地 storage 只保存最新入口徽标快照。
 
 `PUT /users/me/password` 修改当前登录用户的手机号账号密码，必须携带 `Idempotency-Key`。若当前账号尚未设置密码，请求只提交 `newPassword`；若当前账号已设置密码，请求必须同时提交 `currentPassword` 和 `newPassword`。前端可以先做一致性和强度提示，但服务端仍必须校验新密码长度和强度。新密码统一要求 8-20 位字符，且至少包含字母、数字、符号中的任意两类；`currentPassword` 只用于校验已有密码哈希，不按新强度规则重新判断，避免存量密码阻断改密。
 
