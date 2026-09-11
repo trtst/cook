@@ -1,5 +1,6 @@
 import { cfg } from "@/config";
 import { get, post, put, uploadFile, type IsoDateTime, type PageResult, type OperationId, type UUID } from "./http";
+import { normalizeRecipeKeywords } from "./recipe-keywords";
 
 export type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
 export type RecipeDuration = "WITHIN_15" | "BETWEEN_15_30" | "BETWEEN_30_60" | "OVER_60";
@@ -791,7 +792,10 @@ export const recipeApi = {
 		);
 	},
 	listMyRecipes(query: MyRecipeQuery) {
-		return get<PageResult<MyRecipeSummary>>(`${cfg.domain}/api/recipes`, { ...query });
+		return get<PageResult<MyRecipeSummary>>(`${cfg.domain}/api/recipes`, { ...query }).then(result => ({
+			...result,
+			items: result.items.map(item => ({ ...item, keywords: normalizeRecipeKeywords(item.keywords) }))
+		}));
 	},
 	getMyRecipe(recipeId: UUID) {
 		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
@@ -859,7 +863,10 @@ export const recipeApi = {
 		});
 	},
 	listInspirationRecipes(query: InspirationRecipeQuery) {
-		return get<PageResult<InspirationRecipeSummary>>(`${cfg.domain}/api/inspiration-recipes`, { ...query }, { auth: false });
+		return get<PageResult<InspirationRecipeSummary>>(`${cfg.domain}/api/inspiration-recipes`, { ...query }, { auth: false }).then(result => ({
+			...result,
+			items: result.items.map(item => ({ ...item, keywords: normalizeRecipeKeywords(item.keywords) }))
+		}));
 	},
 	getInspirationRecipe(recipeId: UUID) {
 		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(String(recipeId))}`);
