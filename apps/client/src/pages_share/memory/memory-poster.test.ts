@@ -29,7 +29,7 @@ test("poster view uses the activity cover and includes optional memory sections"
   assert.equal(view.coverImageUrl, "https://example.com/event-cover.jpg");
   assert.equal(view.showParticipants, true);
   assert.equal(view.showCaption, true);
-  assert.equal(view.height, 1908);
+  assert.equal(view.height, 1790);
   assert.deepEqual(view.menuRows, [["番茄炒蛋", "玉米排骨汤"]]);
 });
 
@@ -44,19 +44,21 @@ test("poster view collapses cover, participant and caption space when content is
   assert.equal(view.showCover, false);
   assert.equal(view.showParticipants, false);
   assert.equal(view.showCaption, false);
-  assert.equal(view.height, 1030);
+  assert.equal(view.footerY, 625);
+  assert.equal(view.height, 875);
 });
 
 test("the first poster template keeps future visual choices in one configuration", () => {
-  assert.equal(MEMORY_POSTER_TEMPLATE.id, "warm-memory-v1");
+  assert.equal(MEMORY_POSTER_TEMPLATE.id, "memory-white-v2");
   assert.equal(MEMORY_POSTER_TEMPLATE.brandLogoUrl, "https://static.trtst.com/O/logo.png");
   assert.deepEqual(MEMORY_POSTER_TEMPLATE.colors, {
-    background: "#fbf4e5",
-    surface: "#fffaf0",
-    text: "#2d2418",
-    muted: "#8c7c68",
+    background: "#ffffff",
+    surface: "#ffffff",
+    text: "#1d1d1d",
+    muted: "#747474",
     accent: "#d67a54",
-    line: "#dfd2bd"
+    line: "#e8e8e8",
+    orb: "rgba(214, 122, 84, 0.14)"
   });
   assert.equal(MEMORY_POSTER_TEMPLATE.fonts.title, "serif");
 });
@@ -86,5 +88,6 @@ test("poster height grows for additional menu, participant and caption rows", ()
   assert.equal(view.menuRows.length, 2);
   assert.equal(view.participantRows.length, 2);
   assert.ok(view.captionLines.length >= 2);
-  assert.ok(view.height > 2040);
+  assert.equal(view.height, view.footerY + 250);
+  assert.ok(view.height > 1900);
 });

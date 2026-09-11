@@ -1,7 +1,7 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" title="活动回忆卡">
-    <template>
+    <scroll-view class="memory-page" scroll-y>
       <view v-if="errorText" class="notice" @click="loadPage">
         <text>{{ errorText }}</text><text>重新加载</text>
       </view>
@@ -11,33 +11,33 @@
       </view>
       <template v-else-if="posterView">
         <view class="preview-head">
-          <view><text class="preview-head__title">实时预览</text><text class="preview-head__hint">这里看到的内容会按同一模板生成分享图片</text></view>
-          <button v-if="canPreparePoster || posterFilePath" class="preview-head__action" @click="previewPoster">查看大图</button>
+          <view><text class="preview-head__title">分享这次相聚</text><text class="preview-head__hint">把餐桌的热闹，也送给没能到场的人。</text></view>
+          <button v-if="canPreparePoster || posterFilePath" class="preview-head__action" hover-class="none" @click="previewPoster">预览</button>
         </view>
-        <view class="poster-shell"><MemoryPoster :view="posterView" :mini-code-url="cardData.miniCodeUrl" /></view>
-        <LoginEmptyState v-if="mode === 'event' && !sessionStore.isLoggedIn" class="action-panel" title="登录后分享活动回忆" description="登录后可设置公开内容，并生成带小程序码的分享图片。" @success="handleLoginSuccess" />
-        <view v-else-if="mode === 'event' && canManageEventShare" class="action-panel">
-          <text class="action-panel__title">分享设置</text>
-          <view class="setting-row">
-            <view><text class="setting-row__title">展示参与成员</text><text class="setting-row__desc">只公开已确认成员的昵称和角色</text></view>
-            <switch :checked="showParticipants" color="var(--color-support-action)" @change="handleParticipantsChange" />
-          </view>
-          <view class="field-block">
-            <view class="field-block__head"><text>留一句话</text><text class="field-block__count">{{ caption.length }}/120</text></view>
-            <textarea v-model="caption" class="textarea" maxlength="120" placeholder="例如：今天这一顿，终于把大家都约齐了。（可选）" />
-          </view>
-          <text class="action-panel__hint">{{ generateHintText }}</text>
+        <view class="poster-shell">
+          <MemoryPoster
+            :view="posterView"
+            :mini-code-url="cardData.miniCodeUrl"
+            :editable="mode === 'event' && canManageEventShare"
+            :show-participants="showParticipants"
+            :caption-value="caption"
+            @toggle-participants="toggleParticipants"
+            @update:caption="caption = $event"
+          />
         </view>
-        <view v-else-if="mode === 'event'" class="public-hint"><text class="public-hint__title">仅主理人可生成回忆卡</text><text class="public-hint__text">你可以查看当前预览；分享图片需要由饭局主理人生成。</text></view>
-        <view v-else class="public-hint"><text class="public-hint__title">这是一张公开回忆卡</text><text class="public-hint__text">图片中的内容已固定，不会随原饭局后续修改而变化。</text></view>
-        <view class="share-actions">
-          <button class="share-actions__primary" :class="{ 'share-actions__primary--disabled': !canPreparePoster }" @click="sharePoster">{{ posterBusy ? "正在生成..." : "分享给朋友" }}</button>
-          <button class="share-actions__secondary" :class="{ 'share-actions__secondary--disabled': !canPreparePoster }" @click="savePoster">保存图片发朋友圈</button>
-          <button v-if="mode === 'event'" class="share-actions__text" @click="openPlan">回到当前餐次</button>
+        <LoginEmptyState v-if="mode === 'event' && !sessionStore.isLoggedIn" class="login-state" title="登录后分享活动回忆" description="登录后可设置公开内容，并生成带小程序码的分享图片。" @success="handleLoginSuccess" />
+        <view v-if="shareTips.length" class="share-tips">
+          <text class="share-tips__title">分享前的小提醒</text>
+          <view v-for="tip in shareTips" :key="tip" class="share-tips__item"><view class="share-tips__dot" /><text>{{ tip }}</text></view>
         </view>
-        <canvas id="memory-poster-canvas" canvas-id="memory-poster-canvas" type="2d" class="poster-canvas" :width="1080" :height="posterView.height" :style="posterCanvasStyle" />
       </template>
-    </template>
+    </scroll-view>
+    <view v-if="posterView" class="share-actions">
+      <button class="share-actions__primary" :class="{ 'share-actions__primary--disabled': !canPreparePoster }" hover-class="none" @click="sharePoster">{{ posterBusy ? "正在生成..." : "分享给朋友" }}</button>
+      <button class="share-actions__secondary" :class="{ 'share-actions__secondary--disabled': !canPreparePoster }" hover-class="none" @click="savePoster">保存图片发朋友圈</button>
+    </view>
+    <view v-if="posterView" class="poster-theme-probe" aria-hidden="true" />
+    <canvas v-if="exportPosterView" id="memory-poster-canvas" canvas-id="memory-poster-canvas" type="2d" class="poster-canvas" :width="1080" :height="exportPosterView.height" :style="posterCanvasStyle" />
   </Layout>
 </template>
 
@@ -98,17 +98,25 @@ const metaText = computed(() => {
   if (cardData.value?.planDate || cardData.value?.mealSlot) return [cardData.value.planDate, cardData.value.mealSlot ? formatMealSlot(cardData.value.mealSlot) : null].filter(Boolean).join(" · ");
   return eventDetail.value ? [formatDateTimeMinute(eventDetail.value.scheduledAt), eventDetail.value.location].filter(Boolean).join(" · ") : "一次相聚 · 一份回忆";
 });
-const posterView = computed(() => cardData.value ? buildMemoryPosterView({ ...cardData.value, metaText: metaText.value }) : null);
+const exportPosterView = computed(() => cardData.value ? buildMemoryPosterView({ ...cardData.value, metaText: metaText.value }) : null);
+const posterView = computed(() => {
+  if (!cardData.value) return null;
+  const participants = mode.value === "event" && canManageEventShare.value && eventDetail.value
+    ? buildDraftParticipants(eventDetail.value, true)
+    : cardData.value.participants;
+  return buildMemoryPosterView({ ...cardData.value, metaText: metaText.value, participants });
+});
 const generateReady = computed(() => isEventTimeUp(eventDetail.value, nowMs.value));
 const canManageEventShare = computed(() => Boolean(eventDetail.value && eventDetail.value.organizerUid === sessionStore.uid));
-const generateHintText = computed(() => {
-  if (eventDetail.value?.status === "CANCELLED") return "已取消的饭局不能生成分享图片。";
-  if (!canManageEventShare.value) return "只有饭局主理人可以生成这次活动回忆。";
-  if (shareSnapshot.value) return "当前图片内容已生成；修改设置后会重新生成一个分享版本。";
-  return generateReady.value ? "点击分享或保存时，会固定当前内容并生成可识别的小程序码。" : "到开饭时间后，主理人即可分享这次活动回忆。";
+const shareTips = computed(() => {
+  if (mode.value !== "event" || !canManageEventShare.value) return [];
+  const tips: string[] = [];
+  if (!cardData.value?.coverImageUrl) tips.push("可在饭局详情上传封面图，让这次相聚更有画面。");
+  if (showParticipants.value) tips.push("会展示参与成员，分享前再确认一下。");
+  return tips;
 });
-const canPreparePoster = computed(() => !posterBusy.value && !submitting.value && Boolean(posterView.value) && (mode.value === "token" ? Boolean(cardData.value?.miniCodeUrl) : Boolean(eventId.value && generateReady.value && canManageEventShare.value)));
-const posterCanvasStyle = computed(() => ({ width: "1080px", height: `${posterView.value?.height ?? 1030}px` }));
+const canPreparePoster = computed(() => !posterBusy.value && !submitting.value && Boolean(exportPosterView.value) && (mode.value === "token" ? Boolean(cardData.value?.miniCodeUrl) : Boolean(eventId.value && generateReady.value && canManageEventShare.value)));
+const posterCanvasStyle = computed(() => ({ width: "1080px", height: `${exportPosterView.value?.height ?? 1030}px` }));
 
 onLoad(query => {
   const rawScene = Array.isArray(query?.scene) ? query.scene[0] : query?.scene;
@@ -156,7 +164,7 @@ async function preparePoster() {
   posterBusy.value = true;
   try {
     if (mode.value === "event" && !shareSnapshot.value) { if (!await createShareSnapshot()) return ""; await nextTick(); }
-    const view = posterView.value;
+    const view = exportPosterView.value;
     const miniCodeUrl = cardData.value?.miniCodeUrl;
     if (!view || !miniCodeUrl) throw new Error("分享内容还未准备好");
     const result = await uniPlatform.media.getCanvas2d("#memory-poster-canvas", instance?.proxy);
@@ -164,7 +172,7 @@ async function preparePoster() {
     const canvas = nativeCanvas as unknown as PosterCanvas;
     canvas.width = 1080; canvas.height = view.height;
     const [logo, cover, miniCode] = await Promise.all([loadCanvasImage(canvas, MEMORY_POSTER_TEMPLATE.brandLogoUrl), view.coverImageUrl ? loadCanvasImage(canvas, view.coverImageUrl) : Promise.resolve(null), loadCanvasImage(canvas, miniCodeUrl)]);
-    drawMemoryPoster(canvas.getContext("2d") as never, view, { logo, cover, miniCode });
+    drawMemoryPoster(canvas.getContext("2d") as never, view, { logo, cover, miniCode }, await readPosterColors());
     const file = await uniPlatform.media.canvasToTempFilePath({ canvas: nativeCanvas, width: 1080, height: view.height, destWidth: 1080, destHeight: view.height, fileType: "jpg", quality: 0.94 }, instance?.proxy);
     posterFilePath.value = file.tempFilePath;
     return file.tempFilePath;
@@ -177,15 +185,20 @@ async function loadCanvasImage(canvas: PosterCanvas, src: string) {
   await new Promise<void>((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = info.path || src; });
   return image;
 }
+async function readPosterColors() {
+  const styles = await uniPlatform.system.readStyles(".poster-theme-probe", ["color", "backgroundColor"], instance?.proxy);
+  return {
+    accent: styles.color || MEMORY_POSTER_TEMPLATE.colors.accent,
+    orb: styles.backgroundColor || MEMORY_POSTER_TEMPLATE.colors.orb
+  };
+}
 async function previewPoster() { if (!canPreparePoster.value && !posterFilePath.value) return; const path = posterFilePath.value || await preparePoster(); if (path) await uniPlatform.media.previewImage({ urls: [path], current: path }); }
 async function sharePoster() { if (!canPreparePoster.value) return; const path = posterFilePath.value || await preparePoster(); if (!path) return; try { await uniPlatform.media.showShareImageMenu(path); } catch (error) { await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分享失败", icon: "none" }); } }
 async function savePoster() { if (!canPreparePoster.value) return; const path = posterFilePath.value || await preparePoster(); if (!path) return; try { await uniPlatform.media.saveImageToPhotosAlbum(path); await uniPlatform.feedback.toast({ title: "已保存，可前往朋友圈发布", icon: "success" }); } catch { await uniPlatform.feedback.toast({ title: "保存失败，请检查相册权限", icon: "none" }); } }
-function handleParticipantsChange(event: Event) {
-  const rawValue = (event as Event & { detail?: { value?: boolean | string } }).detail?.value;
-  showParticipants.value = rawValue === true || rawValue === "true";
+function toggleParticipants() {
+  showParticipants.value = !showParticipants.value;
   invalidateGeneratedPoster();
 }
-function openPlan() { void uniPlatform.navigation.navigateTo("/pages_meal/plan/index"); }
 function toCardView(source: MemorySharePreviewResponse): MemoryCardView { return { title: source.title, planDate: source.planDate, mealSlot: source.mealSlot, coverImageUrl: source.coverImageUrl, menuItems: source.menuItems, participants: source.participants, caption: source.caption, sharedAt: source.sharedAt, snapshotVersion: source.snapshotVersion, miniCodeUrl: source.miniCodeUrl }; }
 function buildDraftParticipants(event: DiningEventSummary, visible: boolean): MemoryShareParticipant[] {
   if (!visible) return [];
@@ -200,11 +213,26 @@ function stopClock() { if (clockTimer) clearInterval(clockTimer); clockTimer = n
 </script>
 
 <style scoped lang="scss">
-.notice,.action-panel,.public-hint{margin:var(--space-md) var(--space-page) 0;padding:var(--space-md);background:var(--material-card-bg)}
-.notice{display:flex;justify-content:space-between;color:var(--color-state-warning-text);background:var(--color-state-warning-soft)}
-.empty-wrap{margin:var(--space-md) var(--space-page) 0}.preview-head{display:flex;justify-content:space-between;align-items:center;margin:var(--space-md) var(--space-page) var(--space-sm)}
-.preview-head__title,.action-panel__title,.setting-row__title,.public-hint__title{display:block;font-weight:var(--font-weight-heavy)}.preview-head__hint,.setting-row__desc,.field-block__count,.action-panel__hint,.public-hint__text{display:block;margin-top:var(--space-xs);color:var(--color-text-secondary);font-size:var(--font-size-sm)}
-.preview-head__action,.share-actions__text{width:auto;margin:0;padding:0;color:var(--color-support-action);font-size:var(--font-size-sm);background:transparent}.poster-shell{margin:0 var(--space-page);overflow:hidden;box-shadow:0 18rpx 54rpx rgb(74 50 31 / 12%)}
-.setting-row{display:flex;align-items:center;justify-content:space-between;margin-top:var(--space-md);padding-bottom:var(--space-md);border-bottom:1rpx solid var(--color-border-subtle)}.field-block{margin-top:var(--space-md)}.field-block__head{display:flex;justify-content:space-between}.textarea{box-sizing:border-box;width:100%;min-height:164rpx;margin-top:var(--space-sm);padding:var(--space-sm);color:var(--color-text);background:var(--color-surface-muted)}.action-panel__hint{line-height:1.6}
-.share-actions{display:grid;gap:var(--space-sm);margin:var(--space-md) var(--space-page) calc(var(--space-xl) + env(safe-area-inset-bottom))}.share-actions__primary,.share-actions__secondary{width:100%;margin:0}.share-actions__primary{color:var(--button-primary-text);background:var(--button-primary-bg)}.share-actions__secondary{color:var(--button-secondary-text);background:var(--button-secondary-bg)}.share-actions__primary--disabled,.share-actions__secondary--disabled{opacity:.48}.share-actions__text{justify-self:center;padding:var(--space-xs) var(--space-sm)}.poster-canvas{position:fixed;top:0;left:-12000px;pointer-events:none}
+.memory-page { height: 100%; padding-bottom: calc(120rpx + env(safe-area-inset-bottom)); box-sizing: border-box; }
+.notice, .login-state { margin: var(--space-md) var(--space-page) 0; padding: var(--space-md); background: var(--material-card-bg); }
+.notice { display: flex; justify-content: space-between; color: var(--color-state-warning-text); background: var(--color-state-warning-soft); }
+.empty-wrap { margin: var(--space-md) var(--space-page) 0; }
+.preview-head { display: flex; align-items: center; justify-content: space-between; margin: var(--space-md) var(--space-page) var(--space-sm); }
+.preview-head__title, .share-tips__title { display: block; font-weight: var(--font-weight-heavy); }
+.preview-head__title { font-size: 42rpx; line-height: 1.2; }
+.preview-head__hint { display: block; margin-top: var(--space-xs); color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.preview-head__action { width: 120rpx; min-height: 64rpx; line-height: 64rpx; margin: 0; padding: 0 20rpx; border-radius: var(--radius-pill); color: var(--button-primary-text); font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); background: var(--button-primary-bg); -webkit-backdrop-filter: var(--button-secondary-filter); backdrop-filter: var(--button-secondary-filter); }
+.preview-head__action::after { border: 0; }
+.poster-shell { margin: 0 var(--space-page); overflow: hidden; box-shadow: 0 18rpx 54rpx rgb(74 50 31 / 12%); }
+.share-tips { margin: var(--space-md) var(--space-page) 0; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.share-tips__item { display: flex; align-items: flex-start; margin-top: var(--space-xs); line-height: 1.65; }
+.share-tips__dot { width: 8rpx; height: 8rpx; flex: none; margin: 13rpx 14rpx 0 4rpx; border-radius: 50%; background: var(--color-support-action); }
+.poster-theme-probe { position: fixed; top: 0; left: -12000px; width: 1px; height: 1px; color: var(--color-primary); background: var(--color-primary-soft); pointer-events: none; }
+.share-actions { position: fixed; right: 0; bottom: 0; left: 0; z-index: 40; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-sm); padding: 18rpx var(--space-page) calc(18rpx + env(safe-area-inset-bottom)); background: var(--material-tabbar-bg); box-shadow: var(--material-tabbar-shadow); -webkit-backdrop-filter: var(--material-tabbar-filter); backdrop-filter: var(--material-tabbar-filter); }
+.share-actions__primary, .share-actions__secondary { display: flex; width: 100%; min-height: 84rpx; align-items: center; justify-content: center; margin: 0; border-radius: var(--radius-pill); font-size: 28rpx; font-weight: var(--font-weight-semibold); box-sizing: border-box; }
+.share-actions__primary::after, .share-actions__secondary::after { border: 0; }
+.share-actions__primary { color: var(--button-primary-text); background: var(--button-primary-bg); box-shadow: var(--button-primary-shadow); -webkit-backdrop-filter: var(--button-primary-filter); backdrop-filter: var(--button-primary-filter); }
+.share-actions__secondary { color: var(--button-secondary-text); background: var(--button-secondary-bg); -webkit-backdrop-filter: var(--button-secondary-filter); backdrop-filter: var(--button-secondary-filter); }
+.share-actions__primary--disabled, .share-actions__secondary--disabled { opacity: .48; }
+.poster-canvas { position: fixed; top: 0; left: -12000px; pointer-events: none; }
 </style>

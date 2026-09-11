@@ -1,5 +1,6 @@
 <template>
   <view class="poster" :style="posterStyle">
+    <view class="poster__content">
     <view class="poster__brand-row">
       <image class="poster__logo" :src="MEMORY_POSTER_TEMPLATE.brandLogoUrl" mode="widthFix" />
       <text class="poster__eyebrow">活动回忆卡</text>
@@ -26,25 +27,34 @@
       </view>
     </view>
 
-    <view v-if="view.showParticipants" class="poster__section">
-      <text class="poster__section-title">一起吃饭的人</text>
-      <view class="poster__people">
-        <view v-for="participant in view.participants" :key="`${participant.role}-${participant.displayName}`" class="poster__person">
-          <text class="poster__person-name">{{ participant.displayName }}</text>
-          <text class="poster__person-role">{{ roleLabel(participant.role) }}</text>
+    <view v-if="view.showParticipants || editable" class="poster__section">
+      <view class="poster__section-head">
+        <text class="poster__section-title">一起吃饭的人</text>
+        <view v-if="editable" class="poster__member-toggle" :class="{ 'poster__member-toggle--checked': showParticipants }" role="checkbox" :aria-checked="showParticipants" @click="emit('toggleParticipants')">
+          <text>展示成员</text><text class="cookfont" :class="showParticipants ? 'icon-select-on' : 'icon-select-off'" />
         </view>
+      </view>
+      <view class="poster__people-wrap">
+        <view v-if="view.showParticipants" class="poster__people" :class="{ 'poster__people--masked': editable && !showParticipants }">
+          <view v-for="participant in view.participants" :key="`${participant.role}-${participant.displayName}`" class="poster__person">
+            <text class="poster__person-name">{{ participant.displayName }}</text>
+            <text class="poster__person-role">{{ roleLabel(participant.role) }}</text>
+          </view>
+        </view>
+        <view v-if="editable && !showParticipants" class="poster__people-mask" aria-hidden="true"><text>不会出现在分享图片中</text></view>
       </view>
     </view>
 
-    <view v-if="view.showCaption" class="poster__quote">
+    <view v-if="view.showCaption || editable" class="poster__quote">
       <text class="poster__quote-label">这次回忆</text>
       <view class="poster__quote-content">
         <view class="poster__quote-line" />
-        <text class="poster__quote-text">“{{ view.caption }}”</text>
+        <textarea v-if="editable" v-model="editorCaption" class="poster__quote-input" auto-height maxlength="120" placeholder="把这一餐最想记住的事写下来（可选）" placeholder-class="poster__quote-placeholder" />
+        <text v-else class="poster__quote-text">“{{ view.caption }}”</text>
       </view>
     </view>
 
-    <view class="poster__footer">
+      <view class="poster__footer" :class="{ 'poster__footer--separated': view.showParticipants || view.showCaption || editable, 'poster__footer--unseparated': !view.showParticipants && !view.showCaption && !editable }">
       <view class="poster__footer-copy">
         <text class="poster__footer-title">家的味道，都在这里了</text>
         <text class="poster__footer-hint">长按识别小程序码 · 看看这次相聚</text>
@@ -56,26 +66,50 @@
         </view>
         <text class="poster__code-label">{{ miniCodeUrl ? "长按识别" : "分享时生成" }}</text>
       </view>
+      </view>
     </view>
+    <view class="poster__footer-tint" aria-hidden="true" />
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, toRefs } from "vue";
 import { MEMORY_POSTER_TEMPLATE, type MemoryPosterView } from "./memory-poster";
 
-defineProps<{
+const props = withDefaults(defineProps<{
   view: MemoryPosterView;
   miniCodeUrl?: string | null;
+  editable?: boolean;
+  showParticipants?: boolean;
+  captionValue?: string;
+}>(), {
+  miniCodeUrl: null,
+  editable: false,
+  showParticipants: true,
+  captionValue: ""
+});
+
+const emit = defineEmits<{
+  toggleParticipants: [];
+  "update:caption": [value: string];
 }>();
 
+const { view, miniCodeUrl } = toRefs(props);
+const editable = computed(() => props.editable);
+const showParticipants = computed(() => props.showParticipants);
+const editorCaption = computed({
+  get: () => props.captionValue,
+  set: value => emit("update:caption", value)
+});
+
 const posterStyle = computed(() => ({
-  "--poster-bg": MEMORY_POSTER_TEMPLATE.colors.background,
-  "--poster-surface": MEMORY_POSTER_TEMPLATE.colors.surface,
-  "--poster-text": MEMORY_POSTER_TEMPLATE.colors.text,
-  "--poster-accent": MEMORY_POSTER_TEMPLATE.colors.accent,
-  "--poster-muted": MEMORY_POSTER_TEMPLATE.colors.muted,
-  "--poster-line": MEMORY_POSTER_TEMPLATE.colors.line,
+  "--poster-bg": "#ffffff",
+  "--poster-surface": "#ffffff",
+  "--poster-text": "#1d1d1d",
+  "--poster-accent": "var(--color-primary)",
+  "--poster-muted": "#747474",
+  "--poster-line": "#e8e8e8",
+  "--poster-orb": "var(--color-primary-soft)",
   "--poster-font-title": MEMORY_POSTER_TEMPLATE.fonts.title,
   "--poster-font-body": MEMORY_POSTER_TEMPLATE.fonts.body
 }));
@@ -89,6 +123,7 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
 
 <style scoped lang="scss">
 .poster {
+  position: relative;
   box-sizing: border-box;
   width: 100%;
   padding: 38rpx 42rpx 34rpx;
@@ -96,6 +131,41 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   color: var(--poster-text);
   background: var(--poster-bg);
   font-family: var(--poster-font-body);
+  isolation: isolate;
+}
+
+.poster::before {
+  position: absolute;
+  top: -100rpx;
+  right: -120rpx;
+  z-index: 0;
+  width: 380rpx;
+  height: 380rpx;
+  border-radius: 50%;
+  background: var(--page-hero-halo-bg);
+  content: "";
+  opacity: .72;
+  pointer-events: none;
+}
+
+.poster__content {
+  position: relative;
+  z-index: 1;
+}
+
+.poster__footer-tint {
+  position: absolute;
+  bottom: -10rpx;
+  left: 0;
+  z-index: 0;
+  width: 100%;
+  height: 320rpx;
+  background: var(--poster-orb);
+  -webkit-mask-image: var(--frosted-mask-image);
+  mask-image: var(--frosted-mask-image);
+  -webkit-backdrop-filter: var(--material-mask-filter);
+  backdrop-filter: var(--material-mask-filter);
+  pointer-events: none;
 }
 
 .poster__brand-row,
@@ -113,6 +183,24 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
 .poster__eyebrow,
 .poster__section-title {
   color: var(--poster-accent);
+}
+
+.poster__member-toggle {
+  display: inline-flex;
+  min-height: 48rpx;
+  align-items: center;
+  gap: 10rpx;
+  color: var(--poster-muted);
+  font-size: 20rpx;
+}
+
+.poster__member-toggle--checked {
+  color: var(--poster-accent);
+}
+
+.poster__member-toggle .cookfont {
+  font-size: 28rpx;
+  line-height: 1;
 }
 
 .poster__eyebrow,
@@ -226,6 +314,26 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   margin-top: 24rpx;
 }
 
+.poster__people-wrap {
+  position: relative;
+}
+
+.poster__people--masked {
+  filter: blur(8rpx);
+}
+
+.poster__people-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--poster-muted);
+  font-size: 20rpx;
+  background: rgba(255, 255, 255, .62);
+  pointer-events: none;
+}
+
 .poster__person-name {
   overflow: hidden;
   font-size: 23rpx;
@@ -267,10 +375,34 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   line-height: 1.75;
 }
 
+.poster__quote-input {
+  width: 100%;
+  min-height: 44rpx;
+  padding: 0;
+  color: var(--poster-text);
+  background: transparent;
+  font-family: var(--poster-font-title);
+  font-size: 25rpx;
+  font-weight: 700;
+  line-height: 1.75;
+}
+
+:deep(.poster__quote-placeholder) {
+  line-height: 1.75;
+  color: var(--poster-muted);
+}
+
 .poster__footer {
   margin-top: 40rpx;
   padding-top: 30rpx;
+}
+
+.poster__footer--separated {
   border-top: 1rpx solid var(--poster-line);
+}
+
+.poster__footer--unseparated {
+  padding-top: 0;
 }
 
 .poster__footer-copy {

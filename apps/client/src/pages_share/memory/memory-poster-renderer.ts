@@ -1,7 +1,11 @@
 import { MEMORY_POSTER_TEMPLATE, type MemoryPosterView } from "./memory-poster";
 
+interface PosterGradient {
+  addColorStop(offset: number, color: string): void;
+}
+
 interface PosterContext {
-  fillStyle: string;
+  fillStyle: string | PosterGradient;
   strokeStyle: string;
   lineWidth: number;
   font: string;
@@ -17,6 +21,7 @@ interface PosterContext {
   stroke(): void;
   fillRect(x: number, y: number, width: number, height: number): void;
   drawImage(image: unknown, x: number, y: number, width: number, height: number): void;
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): PosterGradient;
   fillText(value: string, x: number, y: number): void;
   measureText(value: string): { width: number };
 }
@@ -27,22 +32,23 @@ export interface MemoryPosterAssets {
   miniCode: unknown;
 }
 
-const { colors, fonts } = MEMORY_POSTER_TEMPLATE;
+const { fonts } = MEMORY_POSTER_TEMPLATE;
+type PosterColors = Record<keyof typeof MEMORY_POSTER_TEMPLATE.colors, string>;
 
 function font(size: number, family: "title" | "body" = "body", weight = 400) {
   return `${weight} ${size}px ${fonts[family]}`;
 }
 
-function rule(ctx: PosterContext, y: number) {
+function rule(ctx: PosterContext, y: number, color: string = MEMORY_POSTER_TEMPLATE.colors.line) {
   ctx.beginPath();
   ctx.moveTo(72, y);
   ctx.lineTo(1008, y);
-  ctx.strokeStyle = colors.line;
+  ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.stroke();
 }
 
-function label(ctx: PosterContext, value: string, x: number, y: number, size: number, color: string = colors.text, family: "title" | "body" = "body", weight = 400) {
+function label(ctx: PosterContext, value: string, x: number, y: number, size: number, color: string = MEMORY_POSTER_TEMPLATE.colors.text, family: "title" | "body" = "body", weight = 400) {
   ctx.fillStyle = color;
   ctx.font = font(size, family, weight);
   ctx.fillText(value, x, y);
@@ -54,13 +60,14 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   return "来客";
 }
 
-export function drawMemoryPoster(ctx: PosterContext, view: MemoryPosterView, assets: MemoryPosterAssets) {
+export function drawMemoryPoster(ctx: PosterContext, view: MemoryPosterView, assets: MemoryPosterAssets, palette: Partial<PosterColors> = {}) {
+  const colors = { ...MEMORY_POSTER_TEMPLATE.colors, ...palette };
   ctx.textBaseline = "top";
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, 1080, view.height);
   ctx.drawImage(assets.logo, 72, 54, 190, 80);
   label(ctx, "活动回忆卡", 832, 78, 25, colors.accent);
-  rule(ctx, 165);
+  rule(ctx, 165, colors.line);
 
   label(ctx, view.title, 72, 205, 66, colors.text, "title", 600);
   label(ctx, view.metaText, 72, 300, 25, colors.muted);
@@ -73,7 +80,7 @@ export function drawMemoryPoster(ctx: PosterContext, view: MemoryPosterView, ass
     y += 76;
   }
 
-  rule(ctx, y);
+  rule(ctx, y, colors.line);
   y += 37;
   label(ctx, "这顿吃了什么", 72, y, 29, colors.accent);
   label(ctx, `${view.menuItems.length}道菜`, 900, y + 4, 22, colors.muted);
@@ -119,9 +126,16 @@ export function drawMemoryPoster(ctx: PosterContext, view: MemoryPosterView, ass
     });
   }
 
-  const footerY = view.height - 250;
-  rule(ctx, footerY);
-  label(ctx, "家的味道，都在这里了", 72, footerY + 52, 31);
+  const footerY = view.footerY;
+  const footerTint = ctx.createLinearGradient(0, footerY - 82, 0, view.height);
+  footerTint.addColorStop(0, "rgba(255, 255, 255, 0)");
+  footerTint.addColorStop(1, colors.orb);
+  ctx.fillStyle = footerTint;
+  ctx.fillRect(0, footerY - 82, 1080, view.height - footerY + 82);
+  if (view.showParticipants || view.showCaption) {
+    rule(ctx, footerY, colors.line);
+  }
+  label(ctx, "家的味道，都在这里了", 72, footerY + 52, 31, colors.text);
   label(ctx, "长按识别小程序码 · 看看这次相聚", 72, footerY + 108, 22, colors.muted);
   ctx.fillStyle = colors.surface;
   ctx.beginPath();

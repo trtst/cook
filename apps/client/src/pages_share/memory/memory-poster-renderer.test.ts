@@ -38,6 +38,7 @@ test("poster renderer draws configured logo, activity content, cover and mini co
     stroke() {},
     fillRect() {},
     drawImage(image: unknown) { images.push(image); },
+    createLinearGradient() { return { addColorStop() {} }; },
     fillText(value: string) { labels.push(value); },
     measureText(value: string) { return { width: value.length * 30 }; }
   };
@@ -74,6 +75,7 @@ test("poster renderer omits the cover image when the activity has no cover", () 
     stroke() {},
     fillRect() {},
     drawImage(image: unknown) { images.push(image); },
+    createLinearGradient() { return { addColorStop() {} }; },
     fillText() {},
     measureText(value: string) { return { width: value.length * 30 }; }
   };

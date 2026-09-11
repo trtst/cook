@@ -1,15 +1,16 @@
 import type { MealSlot } from "@/utils/meal-slot";
 
 export const MEMORY_POSTER_TEMPLATE = {
-  id: "warm-memory-v1",
+  id: "memory-white-v2",
   brandLogoUrl: "https://static.trtst.com/O/logo.png",
   colors: {
-    background: "#fbf4e5",
-    surface: "#fffaf0",
-    text: "#2d2418",
+    background: "#ffffff",
+    surface: "#ffffff",
+    text: "#1d1d1d",
     accent: "#d67a54",
-    muted: "#8c7c68",
-    line: "#dfd2bd"
+    muted: "#747474",
+    line: "#e8e8e8",
+    orb: "rgba(214, 122, 84, 0.14)"
   },
   fonts: {
     title: "serif",
@@ -41,6 +42,7 @@ export interface MemoryPosterView extends MemoryPosterSource {
   menuRows: string[][];
   participantRows: MemoryPosterSource["participants"][];
   captionLines: string[];
+  footerY: number;
   height: number;
 }
 
@@ -66,13 +68,13 @@ export function buildMemoryPosterView(source: MemoryPosterSource): MemoryPosterV
   const showCover = Boolean(source.coverImageUrl);
   const showParticipants = source.participants.length > 0;
   const showCaption = Boolean(source.caption?.trim());
-  const extraMenuRows = Math.max(0, menuRows.length - 1);
-  const height =
-    1030 +
-    extraMenuRows * 96 +
-    (showCover ? 600 : 0) +
-    (showParticipants ? 130 + Math.max(0, participantRows.length - 1) * 90 : 0) +
-    (showCaption ? 148 + Math.max(0, captionLines.length - 1) * 48 : 0);
+  let contentY = 360;
+  if (showCover) contentY += 611;
+  contentY += 37 + 68 + menuRows.length * 96;
+  if (showParticipants) contentY += 20 + 62 + participantRows.length * 90;
+  if (showCaption) contentY += 14 + 48 + Math.max(70, captionLines.length * 46);
+  const footerY = contentY + 64;
+  const height = footerY + 250;
 
   return {
     ...source,
@@ -83,6 +85,7 @@ export function buildMemoryPosterView(source: MemoryPosterSource): MemoryPosterV
     menuRows,
     participantRows,
     captionLines,
+    footerY,
     height
   };
 }

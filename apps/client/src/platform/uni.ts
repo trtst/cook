@@ -37,6 +37,7 @@ interface ClientPlatform {
 		getRuntimeChannel(): RuntimeChannel;
 		onThemeChange(listener: (result: ThemeChangeResult) => void): void;
 		measure(selector: string): Promise<ElementRect | null>;
+		readStyles(selector: string, styleNames: string[], component?: unknown): Promise<Record<string, string>>;
 		setKeepScreenOn(enabled: boolean): Promise<void>;
 	};
 	/**
@@ -683,6 +684,19 @@ function measure(selector: string) {
 	});
 }
 
+function readStyles(selector: string, styleNames: string[], component?: unknown) {
+	return new Promise<Record<string, string>>((resolve) => {
+		uni
+			.createSelectorQuery()
+			.in(component as never)
+			.select(selector)
+			.fields({ computedStyle: styleNames } as never, (result) => {
+				resolve((result as Record<string, string> | null) ?? {});
+			})
+			.exec();
+	});
+}
+
 function setKeepScreenOn(enabled: boolean) {
 	return callUni<void>((resolve, reject) => {
 		uni.setKeepScreenOn({
@@ -732,6 +746,9 @@ export const uniPlatform: ClientPlatform = {
 		},
 		measure(selector) {
 			return measure(selector);
+		},
+		readStyles(selector, styleNames, component) {
+			return readStyles(selector, styleNames, component);
 		},
 		setKeepScreenOn(enabled) {
 			return setKeepScreenOn(enabled);
