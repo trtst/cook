@@ -6,6 +6,14 @@ const WECHAT_REQUEST_TIMEOUT_MS = 5000;
 const ACCESS_TOKEN_BUFFER_MS = 60_000;
 const MAX_MINI_CODE_BYTES = 2 * 1024 * 1024;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const JPEG_SIGNATURE = Buffer.from([255, 216, 255]);
+
+export type MiniCodeContentType = "image/png" | "image/jpeg";
+
+export interface MiniCodeImage {
+  buffer: Buffer;
+  contentType: MiniCodeContentType;
+}
 
 interface AccessTokenResponse {
   access_token?: unknown;
@@ -32,10 +40,11 @@ export class WechatMiniCodeService {
         page: "pages_share/memory/index",
         check_path: false,
         env_version: environment,
-        width: 430
+        width: 430,
+        is_hyaline: true
       })
     });
-    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    const contentType = (response.headers.get("content-type") || "").split(";", 1)[0]?.trim().toLowerCase() || "";
     if (!response.ok || contentType.includes("application/json")) {
       throw new ServiceUnavailableException("小程序码生成失败，请稍后重试");
     }
@@ -49,10 +58,11 @@ export class WechatMiniCodeService {
     } catch {
       throw new ServiceUnavailableException("小程序码生成失败，请稍后重试");
     }
-    if (buffer.length < PNG_SIGNATURE.length || buffer.length > MAX_MINI_CODE_BYTES || !buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    const actualContentType = getMiniCodeContentType(buffer);
+    if (buffer.length > MAX_MINI_CODE_BYTES || !actualContentType) {
       throw new ServiceUnavailableException("小程序码生成失败，请稍后重试");
     }
-    return buffer;
+    return { buffer, contentType: actualContentType };
   }
 
   private miniCodeEnvironment(): "release" | "trial" | "develop" {
@@ -99,4 +109,10 @@ export class WechatMiniCodeService {
       clearTimeout(timeout);
     }
   }
+}
+
+function getMiniCodeContentType(buffer: Buffer): MiniCodeContentType | null {
+  if (buffer.length >= PNG_SIGNATURE.length && buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return "image/png";
+  if (buffer.length >= JPEG_SIGNATURE.length && buffer.subarray(0, JPEG_SIGNATURE.length).equals(JPEG_SIGNATURE)) return "image/jpeg";
+  return null;
 }

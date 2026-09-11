@@ -32,26 +32,21 @@ test("memory share mini code opens the existing memory page with the share token
     });
   }) as typeof fetch;
 
-  const buffer = await new WechatMiniCodeService().createMemoryShareCode("12345678901234567890123456789012");
+  const miniCode = await new WechatMiniCodeService().createMemoryShareCode("12345678901234567890123456789012");
 
-  assert.deepEqual([...buffer], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(miniCode.contentType, "image/png");
+  assert.deepEqual([...miniCode.buffer], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.deepEqual(JSON.parse(requests[1]?.body || "{}"), {
     scene: "12345678901234567890123456789012",
     page: "pages_share/memory/index",
     check_path: false,
     env_version: "release",
-    width: 430
+    width: 430,
+    is_hyaline: true
   });
 });
 
-test("memory share mini code rejects a scene longer than WeChat allows", async () => {
-  await assert.rejects(
-    () => new WechatMiniCodeService().createMemoryShareCode("123456789012345678901234567890123"),
-    /分享标识无效/
-  );
-});
-
-test("memory share mini code rejects a non-PNG success response", async () => {
+test("memory share mini code uses the PNG signature when WeChat labels a transparent code as JPEG", async () => {
   process.env.WECHAT_APP_ID = "wx-app-id";
   process.env.WECHAT_APP_SECRET = "wx-app-secret";
   let requestCount = 0;
@@ -63,9 +58,63 @@ test("memory share mini code rejects a non-PNG success response", async () => {
         headers: { "content-type": "application/json" }
       });
     }
-    return new Response(Buffer.from("not-a-png"), {
+    return new Response(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), {
       status: 200,
-      headers: { "content-type": "image/png" }
+      headers: { "content-type": "image/jpeg" }
+    });
+  }) as typeof fetch;
+
+  const miniCode = await new WechatMiniCodeService().createMemoryShareCode("12345678901234567890123456789012");
+
+  assert.equal(miniCode.contentType, "image/png");
+});
+
+test("memory share mini code rejects a scene longer than WeChat allows", async () => {
+  await assert.rejects(
+    () => new WechatMiniCodeService().createMemoryShareCode("123456789012345678901234567890123"),
+    /分享标识无效/
+  );
+});
+
+test("memory share mini code accepts a valid JPEG response from WeChat", async () => {
+  process.env.WECHAT_APP_ID = "wx-app-id";
+  process.env.WECHAT_APP_SECRET = "wx-app-secret";
+  let requestCount = 0;
+  global.fetch = (async () => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      return new Response(JSON.stringify({ access_token: "access-token", expires_in: 7200 }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    return new Response(new Uint8Array([255, 216, 255, 217]), {
+      status: 200,
+      headers: { "content-type": "image/jpeg" }
+    });
+  }) as typeof fetch;
+
+  const miniCode = await new WechatMiniCodeService().createMemoryShareCode("12345678901234567890123456789012");
+
+  assert.equal(miniCode.contentType, "image/jpeg");
+  assert.deepEqual([...miniCode.buffer], [255, 216, 255, 217]);
+});
+
+test("memory share mini code rejects an invalid JPEG response", async () => {
+  process.env.WECHAT_APP_ID = "wx-app-id";
+  process.env.WECHAT_APP_SECRET = "wx-app-secret";
+  let requestCount = 0;
+  global.fetch = (async () => {
+    requestCount += 1;
+    if (requestCount === 1) {
+      return new Response(JSON.stringify({ access_token: "access-token", expires_in: 7200 }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+    return new Response(Buffer.from("not-a-jpeg"), {
+      status: 200,
+      headers: { "content-type": "image/jpeg" }
     });
   }) as typeof fetch;
 

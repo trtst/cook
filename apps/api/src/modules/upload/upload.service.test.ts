@@ -164,7 +164,7 @@ test("memory share cover is copied to a snapshot-owned immutable key", async () 
   assert.equal(service.buildDiningMemoryAssetUrl({}, result.storageKey), "/static/uploads/dining-event-memory-covers/82/3.webp");
 });
 
-test("memory share mini code is stored at a deterministic token-hash key", async () => {
+test("memory share mini code is stored with the image type returned by WeChat", async () => {
   const written: Array<{ key: string; contentType: string }> = [];
   const assetStorage = {
     writeObject: async (key: string, _buffer: Buffer, contentType: string) => written.push({ key, contentType }),
@@ -172,10 +172,10 @@ test("memory share mini code is stored at a deterministic token-hash key", async
   };
   const service = new UploadService({} as never, assetStorage as never);
 
-  const key = await service.storeDiningMemoryMiniCode("abc123", Buffer.from("png"));
+  const key = await service.storeDiningMemoryMiniCode("abc123", Buffer.from("jpeg"), "image/jpeg");
 
-  assert.equal(key, "uploads/dining-event-memory-codes/abc123.png");
-  assert.deepEqual(written, [{ key, contentType: "image/png" }]);
+  assert.equal(key, "uploads/dining-event-memory-codes/abc123.jpg");
+  assert.deepEqual(written, [{ key, contentType: "image/jpeg" }]);
 });
 
 test("memory share storage keys can be reserved before external writes", () => {
@@ -186,8 +186,12 @@ test("memory share storage keys can be reserved before external writes", () => {
     "uploads/dining-event-memory-covers/82/3.webp"
   );
   assert.equal(
-    service.buildDiningMemoryMiniCodeStorageKey("a".repeat(64)),
+    service.buildDiningMemoryMiniCodeStorageKey("a".repeat(64), "image/png"),
     `uploads/dining-event-memory-codes/${"a".repeat(64)}.png`
+  );
+  assert.equal(
+    service.buildDiningMemoryMiniCodeStorageKey("b".repeat(64), "image/jpeg"),
+    `uploads/dining-event-memory-codes/${"b".repeat(64)}.jpg`
   );
 });
 
@@ -241,6 +245,32 @@ test("memory share mini code public read only accepts a token hash file name", a
 
   assert.equal(asset.contentType, "image/png");
   assert.equal(asset.stat.size, png1x1.length);
+});
+
+test("memory share mini code public read retains the JPEG content type", async () => {
+  const hash = "c".repeat(64);
+  const storedKey = `uploads/dining-event-memory-codes/${hash}.jpg`;
+  const prisma = {
+    diningEventMemoryShare: {
+      findFirst: async ({ where }: { where: { miniCodeStorageKey: string } }) => {
+        assert.equal(where.miniCodeStorageKey, storedKey);
+        return { miniCodeStorageKey: storedKey };
+      }
+    }
+  };
+  const assetStorage = {
+    readObject: async (storageKey: string, contentType: string) => {
+      assert.equal(storageKey, storedKey);
+      assert.equal(contentType, "image/jpeg");
+      return { contentType, size: 4321, stream: {} };
+    }
+  };
+  const service = new UploadService(prisma as never, assetStorage as never);
+
+  const asset = await service.getDiningMemoryMiniCodeAsset(`${hash}.jpg`);
+
+  assert.equal(asset.contentType, "image/jpeg");
+  assert.equal(asset.stat.size, 4321);
 });
 
 test("memory share mini code public read rejects unreferenced storage objects", async () => {

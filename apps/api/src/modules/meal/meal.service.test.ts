@@ -210,10 +210,10 @@ test("dining memory share prepares external assets outside database transactions
       externalCalls.push({ name: "copyCover", inTransaction });
       return { storageKey: "uploads/dining-event-memory-covers/82/1.webp", contentType: "image/webp", sizeBytes: 2048 };
     },
-    buildDiningMemoryMiniCodeStorageKey: () => "uploads/dining-event-memory-codes/hash.png",
+    buildDiningMemoryMiniCodeStorageKey: () => "uploads/dining-event-memory-codes/hash.jpg",
     storeDiningMemoryMiniCode: async () => {
       externalCalls.push({ name: "storeMiniCode", inTransaction });
-      return "uploads/dining-event-memory-codes/hash.png";
+      return "uploads/dining-event-memory-codes/hash.jpg";
     },
     buildDiningMemoryAssetUrl: (_request: unknown, storageKey: string) => `/static/${storageKey}`,
     removeStorageFiles: async () => []
@@ -221,7 +221,7 @@ test("dining memory share prepares external assets outside database transactions
   const wechatMiniCodeService = {
     createMemoryShareCode: async () => {
       externalCalls.push({ name: "createMiniCode", inTransaction });
-      return Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      return { buffer: Buffer.from([255, 216, 255, 217]), contentType: "image/jpeg" };
     }
   };
   const service = new MealService(

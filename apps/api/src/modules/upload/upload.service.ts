@@ -399,9 +399,9 @@ export class UploadService {
     return { storageKey, contentType, sizeBytes: source.size };
   }
 
-  async storeDiningMemoryMiniCode(shareTokenHash: string, buffer: Buffer) {
-    const storageKey = this.buildDiningMemoryMiniCodeStorageKey(shareTokenHash);
-    await this.assetStorage.writeObject(storageKey, buffer, "image/png");
+  async storeDiningMemoryMiniCode(shareTokenHash: string, buffer: Buffer, contentType: "image/png" | "image/jpeg") {
+    const storageKey = this.buildDiningMemoryMiniCodeStorageKey(shareTokenHash, contentType);
+    await this.assetStorage.writeObject(storageKey, buffer, contentType);
     return storageKey;
   }
 
@@ -439,10 +439,11 @@ export class UploadService {
   }
 
   async getDiningMemoryMiniCodeAsset(fileName: string) {
-    if (!/^[0-9a-f]{64}\.png$/iu.test(fileName)) {
+    if (!/^[0-9a-f]{64}\.(jpg|png)$/iu.test(fileName)) {
       throw new NotFoundException("图片不存在");
     }
-    const storageKey = this.buildDiningMemoryMiniCodeStorageKey(fileName.slice(0, -4));
+    const contentType = fileName.endsWith(".png") ? "image/png" : "image/jpeg";
+    const storageKey = this.buildDiningMemoryMiniCodeStorageKey(fileName.slice(0, fileName.lastIndexOf(".")), contentType);
     const snapshot = await this.prisma.diningEventMemoryShare.findFirst({
       where: { miniCodeStorageKey: storageKey },
       select: { miniCodeStorageKey: true }
@@ -450,7 +451,7 @@ export class UploadService {
     if (!snapshot?.miniCodeStorageKey) {
       throw new NotFoundException("图片不存在");
     }
-    const stored = await this.assetStorage.readObject(storageKey, "image/png").catch(() => null);
+    const stored = await this.assetStorage.readObject(storageKey, contentType).catch(() => null);
     if (!stored) throw new NotFoundException("图片不存在");
     return {
       contentType: stored.contentType,
@@ -459,8 +460,8 @@ export class UploadService {
     };
   }
 
-  buildDiningMemoryMiniCodeStorageKey(shareTokenHash: string) {
-    return assetKey("uploads", "dining-event-memory-codes", `${shareTokenHash}.png`);
+  buildDiningMemoryMiniCodeStorageKey(shareTokenHash: string, contentType: "image/png" | "image/jpeg") {
+    return assetKey("uploads", "dining-event-memory-codes", `${shareTokenHash}.${getContentTypeExtension(contentType)}`);
   }
 
   async getDiningEventCoverAsset(eventId: UUID) {

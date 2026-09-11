@@ -3034,10 +3034,10 @@ export class MealService {
                 prepared.snapshotVersion
               )
             : null;
-        const miniCodeBuffer = await this.wechatMiniCodeService.createMemoryShareCode(prepared.shareToken);
-        const miniCodeStorageKey = this.uploadService.buildDiningMemoryMiniCodeStorageKey(prepared.shareTokenHash);
+        const miniCode = await this.wechatMiniCodeService.createMemoryShareCode(prepared.shareToken);
+        const miniCodeStorageKey = this.uploadService.buildDiningMemoryMiniCodeStorageKey(prepared.shareTokenHash, miniCode.contentType);
         createdStorageKeys.push(miniCodeStorageKey);
-        await this.uploadService.storeDiningMemoryMiniCode(prepared.shareTokenHash, miniCodeBuffer);
+        await this.uploadService.storeDiningMemoryMiniCode(prepared.shareTokenHash, miniCode.buffer, miniCode.contentType);
 
         return await this.prisma.$transaction(async tx => {
           const snapshotPayload = {
@@ -3051,7 +3051,7 @@ export class MealService {
             sharedAt: new Date().toISOString(),
             snapshotVersion: prepared.snapshotVersion
           };
-          const snapshotBytes = sizeOfJson(snapshotPayload) + (coverSnapshot?.sizeBytes ?? 0) + miniCodeBuffer.length;
+          const snapshotBytes = sizeOfJson(snapshotPayload) + (coverSnapshot?.sizeBytes ?? 0) + miniCode.buffer.length;
           await this.assertStorageWritable(tx, userId, snapshotBytes);
 
           const snapshot = await tx.diningEventMemoryShare.create({
