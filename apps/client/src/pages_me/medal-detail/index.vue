@@ -224,6 +224,7 @@ defineExpose({
   height: 100%;
   min-height: 0;
   overflow: hidden;
+   background: var(--page-ambient-primary-bg);
 }
 
 .detail-scroll {

@@ -54,8 +54,6 @@
             :show-success="showSuccess"
             :refresher-text="refresherText"
             :threshold="refresherThreshold"
-            :loading="inlineLoading"
-            :loading-text="inlineLoadingText"
           />
 
           <scroll-view
@@ -71,8 +69,56 @@
             @refresherrestore="onRefresherRestore"
             @refresherabort="onRefresherRestore"
           >
-            <view v-if="activeErrorText" class="notice notice--error" @click="retryLoadActiveTab">{{ activeErrorText }}</view>
-            <view v-else-if="activeLoading && !hasActiveItems" class="notice">加载中...</view>
+            <view v-if="activeTab === 'unit'" class="list list--unit unit-section-list sheet-unit-list">
+              <view class="unit-guide">
+                <text class="unit-guide__title">用量选择及填写建议</text>
+                <text class="unit-guide__text">优先使用:克、千克（重量），毫升、升（容量）。</text>
+                <text class="unit-guide__text">日常单位:个、瓣、包、盒等，仅在表述自然时使用。</text>
+                <text class="unit-guide__text">少用模糊词:尽量用具体数字替代“适量、少许、按需”。</text>
+              </view>
+              <view v-if="unitErrorText" class="notice notice--error" @click="retryLoadActiveTab">{{ unitErrorText }}</view>
+              <template v-else-if="unitLoading && !unitGroups.length">
+                <view v-for="index in 2" :key="index" class="unit-section sheet-unit-group">
+                  <view class="unit-section__head">
+                    <Skeleton width="120rpx" height="30rpx" radius="8rpx" />
+                    <Skeleton width="260rpx" height="24rpx" radius="8rpx" />
+                  </view>
+                  <view class="unit-grid sheet-unit-grid">
+                    <Skeleton v-for="chip in 5" :key="chip" width="100%" height="68rpx" radius="var(--radius-xs)" />
+                  </view>
+                </view>
+              </template>
+              <view v-else-if="!unitGroups.length" class="empty-state">
+                <text class="empty-state__title">还没有单位</text>
+                <text class="empty-state__desc">当前没有可展示的系统单位，稍后再看。</text>
+              </view>
+              <template v-else>
+                <view v-for="group in unitGroups" :key="group.value" class="unit-section sheet-unit-group">
+                  <view class="unit-section__head">
+                    <text class="unit-section__title sheet-unit-group__title">{{ group.label }}</text>
+                    <text class="unit-section__example">{{ group.example }}</text>
+                  </view>
+                  <view class="unit-grid sheet-unit-grid">
+                    <view v-for="item in group.items" :key="item.id" class="unit-card sheet-chip sheet-chip--unit">
+                      <text class="unit-card__name">{{ item.name }}</text>
+                    </view>
+                  </view>
+                </view>
+              </template>
+            </view>
+            <view v-else-if="activeErrorText" class="notice notice--error" @click="retryLoadActiveTab">{{ activeErrorText }}</view>
+            <view v-else-if="activeTab === 'ingredient' && activeLoading && !hasActiveItems" class="list">
+              <view class="ingredient-grid">
+                <view v-for="index in 4" :key="index" class="ingredient-card">
+                  <view class="ingredient-card__thumb ingredient-card__thumb--skeleton">
+                    <Skeleton width="100%" height="100%" radius="0" />
+                  </view>
+                  <view class="ingredient-card__skeleton-name">
+                    <Skeleton width="100%" height="36rpx" radius="8rpx" />
+                  </view>
+                </view>
+              </view>
+            </view>
             <view v-else-if="activeTab === 'ingredient' && !ingredients.length" class="empty-panel">
               <Empty
                 :art="emptyStateIllustration"
@@ -83,13 +129,9 @@
               />
               <button class="empty-panel__button" @click="openRecommendSheet">{{ recommendButtonText }}</button>
             </view>
-            <view v-else-if="activeTab === 'unit' && !unitGroups.length" class="empty-state">
-              <text class="empty-state__title">还没有单位</text>
-              <text class="empty-state__desc">当前没有可展示的系统单位，稍后再看。</text>
-            </view>
 
-            <view v-else class="list" :class="{ 'list--unit': activeTab === 'unit' }">
-              <view v-if="activeTab === 'ingredient'" class="ingredient-grid">
+            <view v-else class="list">
+              <view class="ingredient-grid">
                 <view v-for="item in ingredients" :key="item.id" class="ingredient-card">
                   <view class="ingredient-card__thumb">
                     <text class="ingredient-card__unit">{{ item.defaultUnit.name }}</text>
@@ -110,26 +152,6 @@
                     </view>
                   </view>
                   <text class="ingredient-card__name">{{ item.name }}</text>
-                </view>
-              </view>
-
-              <view v-else class="unit-section-list sheet-unit-list">
-                <view class="unit-guide">
-                  <text class="unit-guide__title">用量选择及填写建议</text>
-                  <text class="unit-guide__text">优先使用:克、千克（重量），毫升、升（容量）。</text>
-                  <text class="unit-guide__text">日常单位:个、瓣、包、盒等，仅在表述自然时使用。</text>
-                  <text class="unit-guide__text">少用模糊词:尽量用具体数字替代“适量、少许、按需”。</text>
-                </view>
-                <view v-for="group in unitGroups" :key="group.value" class="unit-section sheet-unit-group">
-                  <view class="unit-section__head">
-                    <text class="unit-section__title sheet-unit-group__title">{{ group.label }}</text>
-                    <text class="unit-section__example">{{ group.example }}</text>
-                  </view>
-                  <view class="unit-grid sheet-unit-grid">
-                    <view v-for="item in group.items" :key="item.id" class="unit-card sheet-chip sheet-chip--unit">
-                      <text class="unit-card__name">{{ item.name }}</text>
-                    </view>
-                  </view>
                 </view>
               </view>
             </view>
@@ -295,6 +317,7 @@ import ImageEmpty from "@/components/ImageEmpty.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -338,7 +361,7 @@ const unitTypeLabelMap: Record<UnitType, string> = {
 const unitTypeExampleMap: Record<UnitType, string> = {
   WEIGHT: "例：牛肉 300克，大米 2千克",
   VOLUME: "例：生抽 15毫升，牛奶 1升",
-  COMMON: "例：番茄 2个，大蒜 3瓣，生抽 1汤匙",
+  COMMON: "例：大蒜 3瓣，生抽 1汤匙",
   PACKAGE: "例：粉丝 1包，酸奶 1盒"
 };
 
@@ -355,7 +378,7 @@ const ingredientKeyword = ref("");
 const ingredientSearchKeyword = ref("");
 const ingredientCategoryId = ref<UUID | "">("");
 const categoryLoading = ref(false);
-const ingredientLoading = ref(false);
+const ingredientLoading = ref(true);
 const unitLoading = ref(false);
 const categoryErrorText = ref("");
 const ingredientErrorText = ref("");
@@ -413,13 +436,6 @@ const recommendButtonText = computed(() => (sessionStore.isLoggedIn ? "添加食
 const hasActiveItems = computed(() =>
   activeTab.value === "ingredient" ? ingredients.value.length > 0 : unitGroups.value.length > 0
 );
-const inlineLoading = computed(() => activeLoading.value && hasActiveItems.value && loadSource.value !== "refresh");
-const inlineLoadingText = computed(() => {
-  if (loadSource.value === "search") {
-    return ["搜一搜这味食材", "帮你翻找食材和单位", "厨房抽屉里找一找"];
-  }
-  return loadingTips;
-});
 const showRecommendFab = computed(() => activeTab.value === "unit" || !isIngredientSearchMode.value);
 const sheetTitle = computed(() => {
   if (sheetMode.value === "ingredient") return "推荐食材";
@@ -1128,8 +1144,8 @@ defineExpose({
 
 .ingredient-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16rpx;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30rpx;
 }
 
 .ingredient-card__thumb {
@@ -1146,6 +1162,16 @@ defineExpose({
 .ingredient-card__image {
   width: 100%;
   height: 100%;
+}
+
+.ingredient-card__thumb--skeleton {
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.ingredient-card__skeleton-name {
+  width: 72%;
+  margin: 20rpx auto;
 }
 
 .ingredient-card__fallback {

@@ -20,4 +20,21 @@ assert.ok(source.includes(".notification-scroll-wrap {\n  position: relative;\n 
 assert.ok(source.includes(".notification-scroll {\n  flex: 1;"), "Expected notification scroll view to consume remaining height.");
 assert.ok(source.includes("min-height: 0;"), "Expected notification scroll chain to explicitly allow shrinking for scrolling.");
 
+function expectIncludes(snippet: string) {
+  assert.ok(source.includes(snippet), `Expected notification page to include: ${snippet}`);
+}
+
+function expectExcludes(snippet: string) {
+  assert.ok(!source.includes(snippet), `Expected notification page to exclude: ${snippet}`);
+}
+
+expectIncludes('import emptyStateArt from "@/assets/empty.png";');
+expectIncludes('<Empty v-else-if="!messageItems.length" :art="emptyStateArt" title="暂无通知" description="重要消息，将在这里呈现。" />');
+expectIncludes("const pageSize = ref(10);");
+expectIncludes('<LoadMore v-if="loadingMore || hasNext" :loading="loadingMore" :has-next="hasNext" />');
+expectExcludes('已经翻到底啦');
+expectExcludes('.message-list {\n  overflow: hidden;\n  border-radius:');
+expectIncludes('.message-card {\n  display: flex;\n  flex-direction: column;\n  gap: 12rpx;\n  padding: var(--space-md);\n  border-radius: var(--radius-xs);\n  background: var(--material-card-bg);');
+expectIncludes('.message-card + .message-card {\n  margin-top: 16rpx;');
+
 console.log("recommend page style passed");

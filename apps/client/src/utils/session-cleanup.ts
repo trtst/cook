@@ -4,6 +4,15 @@ import { emitSessionCleared } from "@/utils/session-events";
 import { clearAllRecipeEditCacheStores, clearRecipeEditCacheStore } from "@/utils/recipe-edit-cache";
 import { APP_STORAGE_KEYS, uniPlatform } from "@/platform/uni";
 
+// 当天手动排序已移除，启动时清理旧版本为各账号保存的展示顺序。
+export function clearLegacyPlanOrder() {
+	for (const key of uniPlatform.storage.keysSync()) {
+		if (key === "meal-plan-order/v1" || /^meal-plan-order\/v1\/\d+$/.test(key)) {
+			uniPlatform.storage.removeSync(key);
+		}
+	}
+}
+
 export async function clearUserSessionState(options: { explicitLogout?: boolean } = {}) {
 	const sessionStore = useSessionStore();
 	const userStore = useUserStore();

@@ -381,7 +381,7 @@ describe("pages_me/recommend/index", () => {
     expect(feed.items.some((item) => item.title === "计划提醒")).toBe(false);
   });
 
-  it("通知中心列表底部会显示已经翻到底啦", async () => {
+  it("通知中心加载完历史消息后不显示到底提示", async () => {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const state = await page.callMethod("automatorReadState");
       if (!state.hasNext) break;
@@ -389,7 +389,7 @@ describe("pages_me/recommend/index", () => {
     }
 
     const texts = await collectTexts(page);
-    expect(texts).toContain("已经翻到底啦");
+    expect(texts).not.toContain("已经翻到底啦");
   });
 
   it("进入通知中心后会把服务端未读徽标清零", async () => {

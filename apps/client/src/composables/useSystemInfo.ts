@@ -87,7 +87,7 @@ function readSnapshot(value: unknown): SystemInfoSnapshot | null {
 
   const windowWidth = toNumber(value.windowWidth);
   const windowHeight = toNumber(value.windowHeight);
-  if (!windowWidth && !windowHeight) return null;
+  if (windowWidth <= 0 || windowHeight <= 0) return null;
 
   return {
     statusBarHeight: toNumber(value.statusBarHeight, 20),
@@ -134,6 +134,7 @@ export function initSystemInfo() {
   const cachedInfo = readCachedSystemInfo();
   if (cachedInfo) {
     systemInfo.value = cachedInfo;
+    return;
   }
 
   try {
@@ -146,15 +147,15 @@ export function initSystemInfo() {
       menuButtonRect: getMenuButtonRect()
     };
     systemInfo.value = nextInfo;
-    writeCachedSystemInfo(nextInfo);
-  } catch {
-    if (!cachedInfo) {
-      systemInfo.value = {
-        statusBarHeight: 20,
-        windowWidth: 0,
-        windowHeight: 0
-      };
+    if (nextInfo.windowWidth > 0 && nextInfo.windowHeight > 0) {
+      writeCachedSystemInfo(nextInfo);
     }
+  } catch {
+    systemInfo.value = {
+      statusBarHeight: 20,
+      windowWidth: 0,
+      windowHeight: 0
+    };
   }
 }
 

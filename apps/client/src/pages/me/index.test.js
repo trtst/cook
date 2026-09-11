@@ -110,6 +110,19 @@ describe("pages/me/index", () => {
     expect(await page.callMethod("automatorResolveEntryAuth", "食材")).toEqual({ found: true, requiresLogin: false });
   });
 
+  it("已登录点击提醒设置进入设置页，不再呼起登录弹窗", async () => {
+    await page.callMethod("automatorApplySession", {
+      token: "automator-reminder-token",
+      uid: 1001,
+      expiresAt: "2099-01-01T00:00:00.000Z"
+    });
+
+    expect(await page.callMethod("automatorOpenReminder")).toEqual({
+      path: "/pages_me/reminder/index",
+      loginVisible: false
+    });
+  });
+
   it("我的页的主题摘要和页面底色会跟随主题切换同步更新", async () => {
     const defaultState = await page.callMethod("automatorReadThemeState");
     expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");

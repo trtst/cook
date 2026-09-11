@@ -33,10 +33,7 @@
             <view v-else-if="errorText && !messageItems.length" class="notice notice--error" @click="loadPage()">
               {{ errorText }}
             </view>
-            <view v-else-if="!messageItems.length" class="empty-block">
-              <text class="empty-block__title">还没有消息</text>
-              <text class="empty-block__desc">审核结果、协作动态、官方消息和系统提醒会按时间倒序显示在这里。</text>
-            </view>
+            <Empty v-else-if="!messageItems.length" :art="emptyStateArt" title="暂无通知" description="重要消息，将在这里呈现。" />
             <view v-else class="message-list">
               <view
                 v-for="item in displayItems"
@@ -56,10 +53,7 @@
               <view v-if="errorText" class="notice notice--error notice--inline" @click="loadPage()">
                 {{ errorText }}
               </view>
-              <LoadMore v-if="showFooter && (loadingMore || hasNext)" :loading="loadingMore" :has-next="hasNext" />
-              <view v-else-if="showFooter" class="notification-done">
-                <text class="notification-done__text">已经翻到底啦</text>
-              </view>
+              <LoadMore v-if="loadingMore || hasNext" :loading="loadingMore" :has-next="hasNext" />
             </view>
           </view>
         </scroll-view>
@@ -73,6 +67,8 @@ import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { UnauthorizedError } from "@/apis/http";
 import { userApi, type NotificationFeedItem } from "@/apis/user";
+import emptyStateArt from "@/assets/empty.png";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
@@ -85,6 +81,7 @@ import { uniPlatform } from "@/platform/uni";
 import { markNotificationFeedRead } from "@/services/notification-badge";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
+import { restoreAppSession } from "@/utils/session";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -117,10 +114,9 @@ const errorText = ref("");
 const loadCount = ref(0);
 const needLogin = ref(false);
 const page = ref(1);
-const pageSize = ref(20);
+const pageSize = ref(10);
 const hasNext = ref(false);
 const messageItems = ref<NotificationFeedItem[]>([]);
-const showFooter = computed(() => messageItems.value.length > 0);
 const displayItems = computed(() =>
   messageItems.value.map(item => ({
     ...item,
@@ -172,6 +168,8 @@ async function handleScrollToLower() {
 }
 
 async function doLoadPage() {
+  await restoreAppSession();
+
   if (!sessionStore.isLoggedIn) {
     showLoginState();
     loginModalStore.open(null, () => {
@@ -377,23 +375,24 @@ defineExpose({
 }
 
 .message-list {
-  overflow: hidden;
-  border-radius: var(--radius-lg);
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
+  display: flex;
+  flex-direction: column;
 }
 
 .message-card {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
-  padding: var(--space-md) 0;
+  padding: var(--space-md);
+  border-radius: var(--radius-xs);
+  background: var(--material-card-bg);
+  box-shadow: var(--material-card-shadow);
+  -webkit-backdrop-filter: var(--material-card-filter);
+  backdrop-filter: var(--material-card-filter);
 }
 
 .message-card + .message-card {
-  border-top: 1rpx solid var(--color-divider);
+  margin-top: 16rpx;
 }
 
 .message-card--hover {
@@ -453,20 +452,6 @@ defineExpose({
   line-height: 1.6;
 }
 
-.empty-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  margin-top: 20rpx;
-  padding: 28rpx;
-}
-
-.empty-block__title {
-  color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-
 .notice {
   margin-top: 20rpx;
   padding-top: 40rpx;
@@ -483,15 +468,4 @@ defineExpose({
   padding-bottom: 24rpx;
 }
 
-.notification-done {
-  display: flex;
-  justify-content: center;
-  padding: 28rpx 0 36rpx;
-}
-
-.notification-done__text {
-  color: var(--color-text-tertiary);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
 </style>

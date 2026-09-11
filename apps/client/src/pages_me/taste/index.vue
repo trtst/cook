@@ -22,7 +22,7 @@
             <view class="taste-shell">
               <view class="taste-head">
                 <view class="taste-head__copy">
-                  <text class="taste-head__description">这些信息只归本人所有。可用逗号、顿号、分号或换行分隔多个条目。</text>
+                  <text class="taste-head__description">这些信息只归本人所有。请用中文分号（{{ tasteSeparator }}）分隔多个条目。</text>
                 </view>
               </view>
 
@@ -100,6 +100,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const tasteItemMaxLength = 64;
 const tasteItemMaxCount = 50;
+const tasteSeparator = "；";
 
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
@@ -119,22 +120,22 @@ const tasteFields: TasteField[] = [
   {
     key: "allergies",
     label: "过敏",
-    placeholder: "花生、虾"
+    placeholder: `花生${tasteSeparator}虾`
   },
   {
     key: "strictDislikes",
     label: "严格忌口",
-    placeholder: "酒精、动物内脏"
+    placeholder: `酒精${tasteSeparator}动物内脏`
   },
   {
     key: "dislikedIngredients",
     label: "不喜欢",
-    placeholder: "香菜、苦瓜"
+    placeholder: `香菜${tasteSeparator}苦瓜`
   },
   {
     key: "flavorPreferences",
     label: "偏好",
-    placeholder: "微辣、少油"
+    placeholder: `微辣${tasteSeparator}少油`
   }
 ];
 
@@ -166,10 +167,10 @@ async function loadTaste() {
 
   try {
     const profile = await userApi.getTasteProfile();
-    tasteText.allergies = profile.allergies.join("、");
-    tasteText.strictDislikes = profile.strictDislikes.join("、");
-    tasteText.dislikedIngredients = profile.dislikedIngredients.join("、");
-    tasteText.flavorPreferences = profile.flavorPreferences.join("、");
+    tasteText.allergies = profile.allergies.join(tasteSeparator);
+    tasteText.strictDislikes = profile.strictDislikes.join(tasteSeparator);
+    tasteText.dislikedIngredients = profile.dislikedIngredients.join(tasteSeparator);
+    tasteText.flavorPreferences = profile.flavorPreferences.join(tasteSeparator);
     noteText.value = profile.note ?? "";
     loaded.value = true;
   } catch (error) {
@@ -191,10 +192,10 @@ async function saveTaste() {
 
   try {
     const profile = await userApi.updateTasteProfile(payload);
-    tasteText.allergies = profile.allergies.join("、");
-    tasteText.strictDislikes = profile.strictDislikes.join("、");
-    tasteText.dislikedIngredients = profile.dislikedIngredients.join("、");
-    tasteText.flavorPreferences = profile.flavorPreferences.join("、");
+    tasteText.allergies = profile.allergies.join(tasteSeparator);
+    tasteText.strictDislikes = profile.strictDislikes.join(tasteSeparator);
+    tasteText.dislikedIngredients = profile.dislikedIngredients.join(tasteSeparator);
+    tasteText.flavorPreferences = profile.flavorPreferences.join(tasteSeparator);
     noteText.value = profile.note ?? "";
     loaded.value = true;
   } catch (error) {
@@ -209,7 +210,7 @@ async function saveTaste() {
 
 function readItems(text: string) {
   return text
-    .split(/[\n,，、;；]+/)
+    .split(tasteSeparator)
     .map((item) => item.trim())
     .filter(Boolean);
 }

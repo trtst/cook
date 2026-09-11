@@ -36,7 +36,20 @@
           @scrolltolower="handleScrollToLower"
         >
           <view class="history-body">
-            <view v-if="loading && !items.length" class="notice">加载中...</view>
+            <view v-if="(loading || !loaded) && !items.length" class="history-list">
+              <view v-for="index in 4" :key="index" class="history-card">
+                <view class="history-card__cover">
+                  <Skeleton width="280rpx" height="210rpx" radius="var(--radius-xs)" />
+                </view>
+                <view class="history-card__main history-card__main--skeleton">
+                  <view class="history-card__title">
+                    <Skeleton width="72%" height="32rpx" radius="8rpx" />
+                  </view>
+                  <Skeleton width="120rpx" height="24rpx" radius="8rpx" />
+                  <Skeleton width="80%" height="24rpx" radius="8rpx" />
+                </view>
+              </view>
+            </view>
             <view v-else-if="errorText && !items.length" class="notice notice--error" @click="loadPage(true)">
               {{ errorText }}
             </view>
@@ -54,7 +67,6 @@
                 v-for="item in items"
                 :key="item.id"
                 class="history-card"
-                :class="{ 'history-card--unavailable': !item.isAvailable }"
                 hover-class="history-card--pressed"
                 hover-stay-time="100"
                 @click="openItem(item)"
@@ -66,9 +78,8 @@
                 <view class="history-card__main">
                   <text class="history-card__title">{{ item.title }}</text>
                   <text class="history-card__source">{{ sourceText(item.sourceType) }}</text>
-                  <text class="history-card__time">最近查看 {{ formatViewTime(item.lastViewedAt) }}</text>
+                  <text class="history-card__time">{{ formatViewTime(item.lastViewedAt) }}</text>
                 </view>
-                <text v-if="item.isAvailable" class="cookfont icon-back history-card__arrow" />
               </view>
 
               <LoadMore
@@ -95,6 +106,7 @@ import LoadMore from "@/components/LoadMore.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -128,6 +140,7 @@ const {
 
 const items = ref<RecipeViewHistoryItem[]>([]);
 const loading = ref(false);
+const loaded = ref(false);
 const loadingMore = ref(false);
 const errorText = ref("");
 const page = ref(1);
@@ -145,7 +158,7 @@ async function handleLoginSuccess() {
 
 async function loadPage(reset = true) {
   if (!sessionStore.isLoggedIn) return false;
-  if (reset ? loading.value : loadingMore.value) return false;
+  if (loading.value || loadingMore.value) return false;
 
   if (reset) loading.value = true;
   else loadingMore.value = true;
@@ -156,9 +169,17 @@ async function loadPage(reset = true) {
       page: reset ? 1 : page.value + 1,
       pageSize: pageSize.value
     };
-    const result = await recipeApi.listRecipeViewHistory(query);
+    let result = await recipeApi.listRecipeViewHistory(query);
     if (!sessionStore.isLoggedIn) return false;
-    items.value = reset ? result.items : [...items.value, ...result.items];
+    // 失效记录仍占接口分页，跳过没有可展示菜谱的页。
+    while (result.hasNext && !result.items.some(item => item.isAvailable)) {
+      query.page = result.page + 1;
+      result = await recipeApi.listRecipeViewHistory(query);
+      if (!sessionStore.isLoggedIn) return false;
+    }
+    if (!sessionStore.isLoggedIn) return false;
+    const availableItems = result.items.filter(item => item.isAvailable);
+    items.value = reset ? availableItems : [...items.value, ...availableItems];
     page.value = result.page;
     pageSize.value = result.pageSize;
     hasNext.value = result.hasNext;
@@ -168,6 +189,7 @@ async function loadPage(reset = true) {
     errorText.value = error instanceof Error ? error.message : "最近看过加载失败";
     return false;
   } finally {
+    loaded.value = true;
     if (reset) loading.value = false;
     else loadingMore.value = false;
   }
@@ -325,7 +347,7 @@ defineExpose({
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
+  gap: var(--space-page);
 }
 
 .inline-notice {
@@ -340,23 +362,18 @@ defineExpose({
   display: flex;
   align-items: center;
   min-height: 156rpx;
-  padding: 18rpx;
 }
 
 .history-card--pressed {
   opacity: 0.82;
 }
 
-.history-card--unavailable {
-  opacity: 0.66;
-}
-
 .history-card__cover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 148rpx;
-  height: 116rpx;
+  width: 280rpx;
+  height: 210rpx;
   flex-shrink: 0;
   overflow: hidden;
   border-radius: var(--radius-xs);
@@ -369,35 +386,37 @@ defineExpose({
 }
 
 .history-card__main {
+  box-sizing: border-box;
   display: flex;
   flex: 1;
   flex-direction: column;
+  height: 210rpx;
   min-width: 0;
-  margin-left: var(--space-md);
+  padding: var(--space-md);
 }
 
 .history-card__title {
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   color: var(--color-text);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.history-card__main--skeleton {
+  gap: 10rpx;
+}
+
 .history-card__source,
 .history-card__time {
+  flex-shrink: 0;
   margin-top: 10rpx;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
 }
 
-.history-card__arrow {
-  margin-left: 12rpx;
-  color: var(--color-text-tertiary);
-  font-size: 26rpx;
-  line-height: 1;
-  transform: rotate(180deg);
-}
 </style>

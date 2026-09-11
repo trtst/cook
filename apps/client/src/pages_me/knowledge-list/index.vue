@@ -59,9 +59,9 @@
           <Empty
             v-else-if="!articles.length"
             class="knowledge-empty"
-            plain
-            title="还没有文章"
-            description="这里暂时还没有内容，晚点再来看看。"
+            :art="emptyStateArt"
+            title="内容尚未发布"
+            description="关于一日三餐的做法、搭配与灵感，会在这里持续更新。"
           />
 
           <view v-else class="knowledge-list">
@@ -117,6 +117,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
 import Layout from "@/components/Layout/Layout.vue";

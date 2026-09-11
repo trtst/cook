@@ -582,7 +582,7 @@ function handleEntryClick(entry: PageEntry) {
 		return;
 	}
 
-	if (entry.loginOnlyWhenGuest) {
+	if (entry.loginOnlyWhenGuest && !sessionStore.isLoggedIn) {
 		openLogin();
 		return;
 	}
@@ -634,6 +634,24 @@ async function automatorOpenNotificationLogin() {
 	await nextTick();
 	return {
 		path: sessionStore.isLoggedIn ? notificationEntry.url || null : null
+	};
+}
+
+async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
+	await sessionStore.setSession(snapshot);
+	await nextTick();
+}
+
+async function automatorOpenReminder() {
+	const entry = settingEntries.value.find(item => item.title === "提醒设置");
+	if (!entry) return null;
+
+	loginModalStore.close();
+	handleEntryClick(entry);
+	await nextTick();
+	return {
+		path: loginModalStore.visible ? null : entry.url || null,
+		loginVisible: loginModalStore.visible
 	};
 }
 
@@ -741,6 +759,8 @@ function automatorApplyNotificationBadgeSnapshot(snapshot: {
 defineExpose({
 	automatorOpenMedalLogin,
 	automatorOpenNotificationLogin,
+	automatorApplySession,
+	automatorOpenReminder,
 	automatorClearSession,
 	automatorSwitchLoginModalPhoneMode,
 	automatorReadLoginModalState,
