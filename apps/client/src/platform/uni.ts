@@ -94,6 +94,8 @@ interface ClientPlatform {
 		chooseMedia(options?: ChooseMediaOptions): Promise<ChooseMediaResult[]>;
 		getImageInfo(src: string): Promise<ImageInfoResult>;
 		previewImage(options: PreviewImageOptions): Promise<void>;
+		showShareImageMenu(path: string): Promise<void>;
+		saveImageToPhotosAlbum(filePath: string): Promise<void>;
 		saveFile(tempFilePath: string): Promise<SaveFileResult>;
 		removeSavedFile(filePath: string): Promise<void>;
 		createCanvasContext(canvasId: string, component?: unknown): UniApp.CanvasContext;
@@ -557,6 +559,29 @@ function previewImage(options: PreviewImageOptions) {
 	});
 }
 
+function showShareImageMenu(path: string) {
+	return callUni<void>((resolve, reject) => {
+		const api = uni as unknown as {
+			showShareImageMenu?: (options: { path: string; success: () => void; fail: (error: unknown) => void }) => void;
+		};
+		if (!api.showShareImageMenu) {
+			reject(new Error("当前微信版本不支持分享图片"));
+			return;
+		}
+		api.showShareImageMenu({ path, success: resolve, fail: reject });
+	});
+}
+
+function saveImageToPhotosAlbum(filePath: string) {
+	return callUni<void>((resolve, reject) => {
+		uni.saveImageToPhotosAlbum({
+			filePath,
+			success: () => resolve(),
+			fail: reject
+		});
+	});
+}
+
 function saveFile(tempFilePath: string) {
 	return callUni<SaveFileResult>((resolve, reject) => {
 		const manager = (uni as unknown as UniFileSystemManagerApi).getFileSystemManager?.();
@@ -787,6 +812,8 @@ export const uniPlatform: ClientPlatform = {
 		chooseMedia,
 		getImageInfo,
 		previewImage,
+		showShareImageMenu,
+		saveImageToPhotosAlbum,
 		saveFile,
 		removeSavedFile,
 		createCanvasContext,

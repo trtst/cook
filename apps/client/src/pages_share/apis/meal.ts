@@ -19,6 +19,7 @@ export interface DiningEventSummary {
   title: string;
   scheduledAt: IsoDateTime;
   location: string | null;
+  coverImageUrl: string | null;
   status: "PLANNED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   organizerUid: number | null;
   organizerName: string | null;

@@ -47,6 +47,8 @@ export interface MemorySharePreviewResponse {
   title: string;
   planDate: string | null;
   mealSlot: MealSlot | null;
+  coverImageUrl: string | null;
+  miniCodeUrl: string | null;
   menuItems: MemoryShareMenuItem[];
   participants: MemoryShareParticipant[];
   caption: string | null;
