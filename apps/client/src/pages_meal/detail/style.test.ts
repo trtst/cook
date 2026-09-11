@@ -26,6 +26,8 @@ expectIncludes("'meal-footer__button--disabled': footerPrimaryAction.disabled ||
 expectIncludes('import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes('<ImageEmpty v-else class="meal-hero__cover-empty" copy="封面图" ratio="fill" />');
 expectIncludes('<ImageEmpty v-else class="recipe-sheet__cover-placeholder" copy="封面图" ratio="fill" />');
+expectIncludes('v-if="canInviteParticipants && inviteShareReady"');
+expectIncludes('const canQuickShareInvite = computed(() => Boolean(eventDetail.value && !eventClosed.value && inviteShareReady.value));');
 expectIncludes("'sheet-actions__button--disabled': recipeConfirmDisabled");
 expectIncludes("'recipe-sheet__status-text--primary': isRecipePendingAdd(item) || isRecipeSelected(item)");
 expectSelectorIncludes(".meal-footer__button--disabled", [
@@ -49,5 +51,6 @@ expectSelectorIncludes(".meal-hero::before", [
 expectExcludes("wx-button[disabled]");
 expectExcludes("button[disabled]");
 expectExcludes(":disabled=");
+expectExcludes("邀请链接暂时不可用");
 
 console.log("meal detail style tests passed");

@@ -126,7 +126,7 @@
                           <text class="summary-card__avatar-more">+{{ participantAvatarOverflow }}</text>
                         </view>
                         <button
-                          v-if="canInviteParticipants"
+                          v-if="canInviteParticipants && inviteShareReady"
                           class="summary-card__invite"
                           :class="{ 'summary-card__invite--disabled': inviteSharing }"
                           :open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
@@ -562,7 +562,7 @@
           :note-text="eventNoteText"
           :note-empty-title="eventNoteEmptyTitle"
           :note-empty-text="eventNoteEmptyText"
-          :can-invite="canInviteParticipants"
+          :can-invite="canInviteParticipants && inviteShareReady"
           :invite-ready="inviteShareReady"
           :invite-sharing="inviteSharing"
           :submitting="submitting"
@@ -954,21 +954,24 @@ const hasDiningEvent = computed(() => Boolean(eventDetail.value || planDetail.va
 const planDeadlineMs = computed(() => resolvePlanDeadlineMs(planDetail.value?.planDate, planDetail.value?.mealSlot));
 const planAutoEnded = computed(() => Boolean(!eventDetail.value && planDeadlineMs.value > 0 && planDeadlineMs.value <= nowMs.value));
 const planClosed = computed(() => Boolean(planDetail.value && (planDetail.value.status === "COMPLETED" || planAutoEnded.value)));
-const planHeroTitle = computed(() => "先安排这顿饭");
+const planHeroTitle = computed(() => {
+  const label = planDetail.value ? slotLabel(planDetail.value.mealSlot) : "";
+  return label ? `${label}吃什么？` : "这顿饭吃什么？";
+});
 const planHeroEyebrow = computed(() => {
   if (!planDetail.value) return planDateText.value;
   return `${planDateText.value} · ${slotLabel(planDetail.value.mealSlot)}`;
 });
 const planHeroMeta = computed(() => {
-  if (planClosed.value) return "这顿饭已经过了时间，当前菜单和记录先保留给你回看。";
-  if (hasDiningEvent.value) return "这顿饭已经约上饭局，菜单、参与反馈和后续分享都从这里继续。";
+  if (planClosed.value) return "这一餐已结束，菜单与记录仍在。";
+  if (hasDiningEvent.value) return "饭局已约好，在这里看菜单和参与情况。";
   if (planDetail.value?.menuLocked) {
-    return "菜单已经固定下来了，后面可以直接开始做饭，也可以再补发起饭局。";
+    return "菜单已定，准备开做吧。";
   }
   if (currentMenuItems.value.length) {
-    return "菜单、做饭顺序、后续发起饭局，都从这里继续。";
+    return "菜单已添好，继续补齐这顿饭。";
   }
-  return "先把这顿饭定下来，后面的菜单和饭局都从这里展开。";
+  return "从选菜开始，把这一餐安排好。";
 });
 const eventCoverTitle = computed(() => "上传聚会封面");
 const eventCoverDesc = computed(() => "上传一张聚会照片，饭局列表里也会同步显示缩略图。");
@@ -1227,9 +1230,7 @@ const canCreateEvent = computed(() =>
 );
 const canManageParticipants = computed(() => Boolean(eventDetail.value && eventDetail.value.organizerUid === sessionStore.uid && !eventClosed.value));
 const canUpdateCover = computed(() => Boolean(eventDetail.value && eventDetail.value.organizerUid === sessionStore.uid));
-const canQuickShareInvite = computed(() =>
-  Boolean(eventDetail.value && !eventClosed.value && (canInviteParticipants.value || activeSharePath.value || eventDetail.value.shareTokenPath))
-);
+const canQuickShareInvite = computed(() => Boolean(eventDetail.value && !eventClosed.value && inviteShareReady.value));
 const inviteShareReady = computed(() => Boolean(activeSharePath.value));
 const currentEventGapItems = computed<MealGapPreviewItem[]>(() => {
   if (!eventDetail.value || !gapData.value) return [];
@@ -2555,33 +2556,8 @@ function stopFooterTimer() {
   footerTimer = null;
 }
 
-async function prepareInviteShareLink(silent = false) {
-  if (!eventDetail.value || inviteSharing.value) return;
-  inviteSharing.value = true;
-  try {
-    const result = await mealApi.createDiningEventShareLink(eventDetail.value.id, createOperationId());
-    activeSharePath.value = result.shareTokenPath;
-    eventDetail.value = {
-      ...eventDetail.value,
-      hasActiveShareLink: true,
-      shareTokenPath: result.shareTokenPath
-    };
-    if (!silent) {
-      await uniPlatform.feedback.toast({ title: "邀请已准备好，再点一次分享", icon: "none" });
-    }
-  } catch (error) {
-    if (!silent) {
-      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "好友邀请生成失败", icon: "none" });
-    }
-  } finally {
-    inviteSharing.value = false;
-  }
-}
-
 function handleInviteShare() {
-  if (!eventDetail.value || inviteSharing.value || inviteShareReady.value) return;
-  if (!canInviteParticipants.value) return;
-  void prepareInviteShareLink();
+  // The native share button opens directly once the current invitation path is present.
 }
 
 function handleMenuDeadlineAction() {

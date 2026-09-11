@@ -258,77 +258,6 @@
         @update:create-name="shoppingCreateName = $event"
       />
 
-      <SheetShell
-        v-if="sortSheetMounted"
-        :visible="sortSheetVisible"
-        title="调整当天顺序"
-        subtitle="长按卡片拖动，只调整计划页展示顺序。"
-        @close="closeSortSheet"
-        @after-close="handleSortSheetAfterClose"
-      >
-        <view
-          class="plan-sort"
-          @touchmove.stop="handlePlanSortTouchMove"
-          @touchend.stop="finishPlanSortDrag"
-          @touchcancel.stop="finishPlanSortDrag"
-        >
-          <view class="plan-sort__summary">
-            <text class="plan-sort__summary-date">{{ selectedDateTitle }}</text>
-            <text class="plan-sort__summary-count">{{ planSortRows.length }} 条安排</text>
-          </view>
-
-          <scroll-view
-            id="plan-sort-scroll"
-            class="plan-sort__scroll"
-            :scroll-y="!planSortDragging"
-            :show-scrollbar="false"
-            @scroll="handlePlanSortScroll"
-          >
-            <view class="plan-sort__list">
-              <view
-                v-for="(plan, index) in planSortRows"
-                :id="`plan-sort-card-${plan.id}`"
-                :key="plan.id"
-                class="plan-sort-card"
-                :class="{ 'plan-sort-card--placeholder': planSortDraggingId === plan.id }"
-                @touchstart.stop="handlePlanSortTouchStart(plan.id, $event)"
-              >
-                <view class="plan-sort-card__order">{{ String(index + 1).padStart(2, "0") }}</view>
-                <view class="plan-sort-card__main">
-                  <view class="plan-sort-card__title-row">
-                    <text class="plan-sort-card__title">{{ plan.title }}</text>
-                    <text class="plan-sort-card__slot">{{ slotLabel(plan.mealSlot) }}</text>
-                  </view>
-                  <text class="plan-sort-card__meta">{{ summarizeMenu(plan) }}</text>
-                </view>
-                <text class="cookfont icon-drag plan-sort-card__drag" />
-              </view>
-            </view>
-          </scroll-view>
-        </view>
-
-        <template #footer>
-          <view class="plan-sort__footer">
-            <view class="plan-sort__button plan-sort__button--ghost" @click="closeSortSheet">先不改</view>
-            <view class="plan-sort__button plan-sort__button--primary" @click="confirmSortSheet">保存顺序</view>
-          </view>
-        </template>
-      </SheetShell>
-
-      <view v-if="planSortGhostPlan" class="plan-sort__ghost" :style="planSortGhostStyle">
-        <view class="plan-sort-card plan-sort-card--ghost">
-          <view class="plan-sort-card__order">{{ String(planSortGhostIndex + 1).padStart(2, "0") }}</view>
-          <view class="plan-sort-card__main">
-            <view class="plan-sort-card__title-row">
-              <text class="plan-sort-card__title">{{ planSortGhostPlan.title }}</text>
-              <text class="plan-sort-card__slot">{{ slotLabel(planSortGhostPlan.mealSlot) }}</text>
-            </view>
-            <text class="plan-sort-card__meta">{{ summarizeMenu(planSortGhostPlan) }}</text>
-          </view>
-          <text class="cookfont icon-drag plan-sort-card__drag plan-sort-card__drag--ghost" />
-        </view>
-      </view>
-
   </Layout>
 </template>
 
@@ -383,9 +312,7 @@ import {
   startOfWeek,
   todayText
 } from "../utils/date";
-import { clampNumber, readTouchY } from "../utils/gesture";
-import { dedupeIds, isUuid } from "../utils/id";
-import { getPlanSortRowSpan as resolvePlanSortRowSpan, movePlanRow } from "../utils/plan";
+import { isUuid } from "../utils/id";
 
 interface WeekPanelDay {
   date: string;
@@ -401,7 +328,6 @@ interface WeekPanel {
   days: WeekPanelDay[];
 }
 
-type PlanOrderState = Record<string, UUID[]>;
 type PlanDockActionKey = "copy" | "add" | "recipe" | "shopping";
 
 const pageStyle = usePageScrollStyle();
@@ -411,10 +337,6 @@ const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 
 const today = todayText();
-const PLAN_ORDER_STORAGE_KEY = "meal-plan-order/v1";
-const PLAN_SORT_PRESS_DELAY_MS = 260;
-const PLAN_SORT_PRESS_MOVE_PX = 8;
-const PLAN_SORT_GAP_RPX = 20;
 const WEEK_PANEL_COUNT = 5;
 const WEEK_PANEL_MID = Math.floor(WEEK_PANEL_COUNT / 2);
 const WEEK_PANEL_EDGE_BUFFER = 1;
@@ -438,19 +360,6 @@ const monthTransition = ref<{
   targetIndex: number;
   targetWeekStart: string;
 } | null>(null);
-const planOrderMap = ref<PlanOrderState>({});
-const sortSheetMounted = ref(false);
-const sortSheetVisible = ref(false);
-const planSortRows = ref<MealPlanSummary[]>([]);
-const planSortDraggingId = ref<UUID | "">("");
-const planSortListTop = ref(0);
-const planSortCardLeft = ref(0);
-const planSortCardWidth = ref(0);
-const planSortCardHeight = ref(0);
-const planSortGhostTop = ref(0);
-const planSortStartTouchY = ref(0);
-const planSortStartCardTop = ref(0);
-const planSortScrollTop = ref(0);
 const shoppingSheetVisible = ref(false);
 const shoppingListLoading = ref(false);
 const shoppingListError = ref("");
@@ -464,10 +373,7 @@ const createPlanSheetVisible = ref(false);
 const creatingPlan = ref(false);
 const createPlanSlot = ref<MealSlot>("DINNER");
 const nowMs = ref(Date.now());
-let planSortPressTimer: ReturnType<typeof setTimeout> | null = null;
 let planNowTimer: ReturnType<typeof setInterval> | null = null;
-let planSortPressId: UUID | "" = "";
-let planSortPressTouchY = 0;
 const {
   threshold: refresherThreshold,
   pullDistance,
@@ -518,7 +424,7 @@ const planMap = computed(() => {
 });
 
 const selectedDatePlanMap = computed(() => planMap.value.get(selectedDate.value) ?? new Map<MealSlot, MealPlanSummary>());
-const selectedPlans = computed(() => sortPlans(Array.from(selectedDatePlanMap.value.values()), selectedDate.value));
+const selectedPlans = computed(() => sortPlans(Array.from(selectedDatePlanMap.value.values())));
 const selectedPlanCount = computed(() => selectedPlans.value.length);
 const hasPlans = computed(() => selectedPlanCount.value > 0);
 const selectedDateHint = computed(() => {
@@ -540,23 +446,10 @@ const planDockActions = computed(() => {
     { key: "shopping" as const, label: "去清单", iconClass: "icon-shopping" }
   ];
 });
-const canSortPlans = computed(() => selectedPlanCount.value > 1);
 const hasContentCards = computed(() => Boolean(selectedPlanCount.value || loading.value));
 const inlineLoading = computed(() => loading.value && hasContentCards.value && !refreshing.value);
 const inlineLoadingText = computed(() => PLAN_LOADING_TIPS);
 const weekPanels = computed<WeekPanel[]>(() => weekPanelStarts.value.map(weekStart => buildWeekPanel(weekStart)));
-const planSortDragging = computed(() => Boolean(planSortDraggingId.value));
-const planSortGhostPlan = computed(() => planSortRows.value.find(item => item.id === planSortDraggingId.value) ?? null);
-const planSortGhostIndex = computed(() => {
-  const index = planSortRows.value.findIndex(item => item.id === planSortDraggingId.value);
-  return index >= 0 ? index : 0;
-});
-const planSortGhostStyle = computed(() => ({
-  top: `${planSortGhostTop.value}px`,
-  left: `${planSortCardLeft.value}px`,
-  width: `${planSortCardWidth.value}px`
-}));
-
 onLoad(query => {
   const nextDate = Array.isArray(query?.date) ? query.date[0] : query?.date;
   if (typeof nextDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(decodeURIComponent(nextDate))) {
@@ -599,7 +492,6 @@ watch(
 );
 
 async function loadPage() {
-  planOrderMap.value = readPlanOrderState();
   await loadWeekPlans();
   loadedOnce.value = true;
 }
@@ -705,33 +597,6 @@ function goMonth(offset: -1 | 1) {
   });
 }
 
-async function openSortSheet() {
-  if (selectedPlans.value.length <= 1) return;
-  planSortRows.value = [...selectedPlans.value];
-  planSortDraggingId.value = "";
-  planSortScrollTop.value = 0;
-  sortSheetMounted.value = true;
-  await nextTick();
-  sortSheetVisible.value = true;
-}
-
-function closeSortSheet() {
-  sortSheetVisible.value = false;
-  resetPlanSortDrag();
-}
-
-function handleSortSheetAfterClose() {
-  sortSheetMounted.value = false;
-  planSortRows.value = [];
-  planSortScrollTop.value = 0;
-}
-
-function confirmSortSheet() {
-  const ids = planSortRows.value.map(item => item.id).filter(isUuid);
-  writePlanOrder(selectedDate.value, ids);
-  closeSortSheet();
-}
-
 async function copyPreviousWeek() {
   if (copyBusy.value) return;
   closeEmptyDock();
@@ -745,7 +610,7 @@ async function copyPreviousWeek() {
       page: 1,
       pageSize: 10
     });
-    const previousPlans = sortPlans(result.items, previousDate);
+    const previousPlans = sortPlans(result.items);
     if (!previousPlans.length) {
       await uniPlatform.feedback.toast({ title: "上周当天没有计划", icon: "none" });
       return;
@@ -969,15 +834,6 @@ function hasMoreMenuItems(plan: MealPlanSummary) {
   return plan.menuItems.length > 5;
 }
 
-function summarizeMenu(plan: MealPlanSummary) {
-  return plan.menuItems
-    .map(item => {
-      const servingsText = item.servings ? `${item.servings}人份` : "";
-      return servingsText ? `${item.title} - ${servingsText}` : item.title;
-    })
-    .join(" · ");
-}
-
 function planDishCountText(plan: MealPlanSummary) {
   return `${plan.menuItems.length}道菜`;
 }
@@ -1162,26 +1018,8 @@ async function confirmAddToShoppingList() {
   }
 }
 
-function sortPlans(items: MealPlanSummary[], date: string) {
-  const order = planOrderMap.value[date] ?? [];
-  const orderMap = new Map(order.map((id, index) => [id, index]));
-  return [...items].sort((left, right) => {
-    const leftIndex = orderMap.get(left.id);
-    const rightIndex = orderMap.get(right.id);
-    if (leftIndex !== undefined && rightIndex !== undefined) return leftIndex - rightIndex;
-    if (leftIndex !== undefined) return -1;
-    if (rightIndex !== undefined) return 1;
-    return slotOrder(left.mealSlot) - slotOrder(right.mealSlot);
-  });
-}
-
-function readPlanOrderState() {
-  if (!sessionStore.uid) return {};
-  return uniPlatform.storage.getSync<PlanOrderState>(buildPlanOrderStorageKey(sessionStore.uid)) ?? {};
-}
-
-function buildPlanOrderStorageKey(uid: number) {
-  return `${PLAN_ORDER_STORAGE_KEY}/${uid}`;
+function sortPlans(items: MealPlanSummary[]) {
+  return [...items].sort((left, right) => slotOrder(left.mealSlot) - slotOrder(right.mealSlot));
 }
 
 function buildShoppingDraftName(plan?: Pick<MealPlanSummary, "planDate" | "mealSlot"> | null) {
@@ -1189,26 +1027,6 @@ function buildShoppingDraftName(plan?: Pick<MealPlanSummary, "planDate" | "mealS
     return buildDefaultShoppingListName();
   }
   return buildMealShoppingListName(formatMealSlot(plan.mealSlot), new Date(`${plan.planDate}T00:00:00`));
-}
-
-function writePlanOrder(date: string, ids: UUID[]) {
-  if (!sessionStore.uid) return;
-  const nextState: PlanOrderState = {
-    ...planOrderMap.value
-  };
-  if (ids.length > 1) {
-    nextState[date] = dedupeIds(ids);
-  } else {
-    delete nextState[date];
-  }
-  planOrderMap.value = nextState;
-  uniPlatform.storage.setSync(buildPlanOrderStorageKey(sessionStore.uid), nextState);
-}
-
-function clearPlanSortPressTimer() {
-  if (!planSortPressTimer) return;
-  clearTimeout(planSortPressTimer);
-  planSortPressTimer = null;
 }
 
 function startPlanNowTimer() {
@@ -1223,104 +1041,6 @@ function stopPlanNowTimer() {
   if (!planNowTimer) return;
   clearInterval(planNowTimer);
   planNowTimer = null;
-}
-
-function resetPlanSortDrag() {
-  clearPlanSortPressTimer();
-  planSortPressId = "";
-  planSortPressTouchY = 0;
-  planSortDraggingId.value = "";
-  planSortGhostTop.value = 0;
-  planSortStartTouchY.value = 0;
-  planSortStartCardTop.value = 0;
-}
-
-function handlePlanSortScroll(event: Event) {
-  const detail = (event as Event & { detail?: { scrollTop?: number } }).detail;
-  planSortScrollTop.value = Number(detail?.scrollTop || 0);
-}
-
-function handlePlanSortTouchStart(planId: UUID, event: Event) {
-  if (planSortDragging.value) return;
-  const touchY = readTouchY(event);
-  if (touchY === null) return;
-  clearPlanSortPressTimer();
-  planSortPressId = planId;
-  planSortPressTouchY = touchY;
-  planSortPressTimer = setTimeout(() => {
-    planSortPressTimer = null;
-    void activatePlanSortDrag(planSortPressId, planSortPressTouchY);
-  }, PLAN_SORT_PRESS_DELAY_MS);
-}
-
-async function activatePlanSortDrag(planId: UUID | "", touchY: number) {
-  if (!sortSheetVisible.value || !planId) return;
-  const index = planSortRows.value.findIndex(item => item.id === planId);
-  if (index < 0) return;
-
-  const [scrollRect, rowRect] = await Promise.all([
-    uniPlatform.system.measure("#plan-sort-scroll"),
-    uniPlatform.system.measure(`#plan-sort-card-${planId}`)
-  ]);
-  if (scrollRect) {
-    planSortListTop.value = scrollRect.top;
-  }
-  planSortDraggingId.value = planId;
-  planSortCardLeft.value = rowRect?.left ?? planSortCardLeft.value;
-  planSortCardWidth.value = rowRect?.width ?? planSortCardWidth.value;
-  planSortCardHeight.value = rowRect?.height ?? planSortCardHeight.value;
-  const rowSpan = resolvePlanSortRowSpan(
-    planSortCardHeight.value,
-    PLAN_SORT_GAP_RPX,
-    uniPlatform.system.getWindowInfo()?.windowWidth
-  );
-  if (!rowSpan) {
-    resetPlanSortDrag();
-    return;
-  }
-  const fallbackTop = planSortListTop.value - planSortScrollTop.value + index * rowSpan;
-  planSortStartTouchY.value = touchY;
-  planSortStartCardTop.value = rowRect?.top ?? fallbackTop;
-  planSortGhostTop.value = rowRect?.top ?? fallbackTop;
-}
-
-function handlePlanSortTouchMove(event: Event) {
-  const touchY = readTouchY(event);
-  if (!planSortDragging.value) {
-    if (touchY !== null && planSortPressId && Math.abs(touchY - planSortPressTouchY) > PLAN_SORT_PRESS_MOVE_PX) {
-      clearPlanSortPressTimer();
-      planSortPressId = "";
-    }
-    return;
-  }
-
-  const rowSpan = resolvePlanSortRowSpan(
-    planSortCardHeight.value,
-    PLAN_SORT_GAP_RPX,
-    uniPlatform.system.getWindowInfo()?.windowWidth
-  );
-  if (touchY === null || !rowSpan) return;
-
-  const minTop = planSortListTop.value - planSortScrollTop.value;
-  const maxTop = minTop + Math.max(0, (planSortRows.value.length - 1) * rowSpan);
-  const nextTop = clampNumber(planSortStartCardTop.value + (touchY - planSortStartTouchY.value), minTop, maxTop);
-  planSortGhostTop.value = nextTop;
-
-  const currentIndex = planSortRows.value.findIndex(item => item.id === planSortDraggingId.value);
-  if (currentIndex < 0) return;
-
-  const centerY = nextTop - planSortListTop.value + planSortScrollTop.value + planSortCardHeight.value / 2;
-  const targetIndex = clampNumber(Math.floor(centerY / rowSpan), 0, planSortRows.value.length - 1);
-  if (targetIndex === currentIndex) return;
-
-  planSortRows.value = movePlanRow(planSortRows.value, currentIndex, targetIndex);
-}
-
-function finishPlanSortDrag() {
-  clearPlanSortPressTimer();
-  planSortPressId = "";
-  if (!planSortDragging.value) return;
-  resetPlanSortDrag();
 }
 
 function maybeRecenterWeekRange(targetWeekStart: Date) {
@@ -1361,11 +1081,6 @@ function clearPageState() {
   monthTransition.value = null;
   weekSwiperCurrent.value = WEEK_PANEL_MID;
   weekSwiperDuration.value = WEEK_SWIPER_DURATION_MS;
-  planOrderMap.value = {};
-  sortSheetMounted.value = false;
-  sortSheetVisible.value = false;
-  planSortRows.value = [];
-  planSortScrollTop.value = 0;
   shoppingSheetVisible.value = false;
   shoppingListLoading.value = false;
   shoppingListError.value = "";
@@ -1378,7 +1093,6 @@ function clearPageState() {
   createPlanSheetVisible.value = false;
   creatingPlan.value = false;
   createPlanSlot.value = "DINNER";
-  resetPlanSortDrag();
 }
 
 function automatorReadGuestState() {
@@ -2205,144 +1919,4 @@ defineExpose({
   display: none;
 }
 
-.plan-sort {
-  min-height: 240rpx;
-}
-
-.plan-sort__summary {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  padding: 8rpx 0 18rpx;
-}
-
-.plan-sort__summary-date {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-sort__summary-count {
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-}
-
-.plan-sort__scroll {
-  max-height: 760rpx;
-}
-
-.plan-sort__list {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
-  padding-bottom: 8rpx;
-}
-
-.plan-sort-card {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 24rpx;
-  border-radius: 24rpx;
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
-}
-
-.plan-sort-card--placeholder {
-  opacity: 0.18;
-}
-
-.plan-sort-card--ghost {
-  box-shadow: var(--shadow-card);
-}
-
-.plan-sort-card__order {
-  flex: 0 0 auto;
-  width: 68rpx;
-  color: var(--color-text-tertiary);
-  font-size: 24rpx;
-  font-weight: var(--font-weight-semibold);
-  text-align: center;
-}
-
-.plan-sort-card__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.plan-sort-card__title-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-}
-
-.plan-sort-card__title {
-  flex: 1;
-  min-width: 0;
-  color: var(--color-text);
-  font-size: 28rpx;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.5;
-}
-
-.plan-sort-card__slot {
-  flex: 0 0 auto;
-  padding: 8rpx 16rpx;
-  border-radius: 999rpx;
-  background: var(--color-tag-primary-bg);
-  color: var(--color-tag-primary-text);
-  font-size: 20rpx;
-}
-
-.plan-sort-card__meta {
-  display: block;
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.6;
-}
-
-.plan-sort-card__drag {
-  flex: 0 0 auto;
-  color: var(--color-text-tertiary);
-  font-size: 24rpx;
-}
-
-.plan-sort-card__drag--ghost {
-  color: var(--color-support-action);
-}
-
-.plan-sort__footer {
-  display: flex;
-  gap: 16rpx;
-  margin: 8rpx 0 24rpx;
-}
-
-.plan-sort__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
-  min-height: 96rpx;
-  border-radius: 24rpx;
-  font-size: 28rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-sort__button--ghost {
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
-}
-
-.plan-sort__button--primary {
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-}
-
-.plan-sort__ghost {
-  position: fixed;
-  z-index: 1300;
-}
 </style>

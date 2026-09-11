@@ -370,6 +370,23 @@ describe("pages_meal/detail/index", () => {
     expect(texts).toContain("做饭助手");
   });
 
+  it("计划详情 Hero 用餐次提问并提示菜单下一步", async () => {
+    await clearSession();
+    const planPage = await program.reLaunch(
+      `/pages_meal/detail/index?planItemId=${planOnlyFixture.planItemId}&planDate=${planOnlyFixture.planDate}`
+    );
+    await planPage.callMethod("automatorApplySession", {
+      token: planOnlyFixture.session.token,
+      uid: planOnlyFixture.session.user.uid,
+      expiresAt: planOnlyFixture.session.expiresAt
+    });
+    await waitForTitle(planPage, planOnlyFixture.title);
+
+    const texts = await collectTexts(planPage);
+    expect(texts).toContain("晚餐吃什么？");
+    expect(texts).toContain("菜单已添好，继续补齐这顿饭。");
+  });
+
   it("饭局到点后 footer 会自动切到分享回忆态", async () => {
     await clearSession();
     const timeUpPage = await program.reLaunch(
