@@ -90,6 +90,54 @@ ASSET_PUBLIC_BASE_URL=https://static.example.com
 
 对外 URL 仍保持稳定：配置 `ASSET_PUBLIC_BASE_URL` 时返回 `https://static.example.com/uploads/...`；未配置时返回当前 API host 下的 `/static/uploads/...`，由 API 代理读取私有 bucket。若静态域名直接回源 OSS 且对象放在 `prod/uploads/...`，需要在 CDN/OSS 回源层把域名 origin path 指到对应环境前缀，或使用独立 bucket，避免把 `prod/dev` 泄漏到前端 URL。
 
+### Outbox 资产清理人工处理
+
+V1 只建 Outbox 表，不启动 Worker。出现 `ASSET_CLEANUP` 事件时，不能声称系统会自动清理，生产上线前必须由运维或开发按以下步骤人工处理。
+
+查询待处理事件：
+
+```sql
+SELECT id, aggregate_type, aggregate_id, payload, last_error, retry_count, created_at
+FROM outbox_events
+WHERE event_type = 'ASSET_CLEANUP'
+  AND status = 'PENDING'
+  AND next_run_at <= CURRENT_TIMESTAMP
+ORDER BY created_at ASC
+LIMIT 50;
+```
+
+处理要求：
+
+1. 逐条解析 `payload.storageKeys`，只允许删除明确属于本功能的对象 key，例如 `uploads/dining-event-memory-...`；不满足安全前缀或 payload 结构异常时不得删除对象。
+2. 在当前生产存储后端删除对应对象。本地存储按对象 key 映射到 `APP_ASSET_DIR`，OSS 存储按 `ASSET_STORAGE_PREFIX + storageKey` 定位对象。
+3. 全部对象删除成功后标记事件完成：
+
+```sql
+UPDATE outbox_events
+SET status = 'SUCCEEDED',
+    done_at = CURRENT_TIMESTAMP,
+    last_error = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = <id>
+  AND event_type = 'ASSET_CLEANUP'
+  AND status = 'PENDING';
+```
+
+4. 任一对象删除失败时保留 `PENDING`，记录错误并延后重试：
+
+```sql
+UPDATE outbox_events
+SET retry_count = retry_count + 1,
+    last_error = <error_message>,
+    next_run_at = CURRENT_TIMESTAMP + INTERVAL '10 minutes',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = <id>
+  AND event_type = 'ASSET_CLEANUP'
+  AND status = 'PENDING';
+```
+
+启用 Worker 前，清理完成状态只能来自上述人工处理或一次性运维脚本，并需要保留执行记录。
+
 ## 提交前最低检查
 
 每次提交前至少确认：

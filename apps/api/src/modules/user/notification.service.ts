@@ -131,7 +131,7 @@ export class NotificationService {
         this.loadUnitFeed(tx, userId, sourceLimit),
         this.loadInviteFeed(tx, userId, sourceLimit),
         this.loadOfficialFeed(tx, sourceLimit),
-        this.loadFridgeReminderFeed(tx, userId, now, settings)
+        this.loadFridgeReminderFeed(tx, userId, now, settings, sourceLimit)
       ]);
       const mergedItems = [
         ...ingredientSource.items,
@@ -414,7 +414,8 @@ export class NotificationService {
     db: NotificationDb,
     userId: UUID,
     now: Date,
-    settings: NotificationSettings
+    settings: NotificationSettings,
+    take: number
   ): Promise<FeedSourceResult> {
     if (!settings.fridge.enabled) {
       return { items: [], total: 0 };
@@ -428,35 +429,31 @@ export class NotificationService {
         lte: addDays(now, settings.fridge.days)
       }
     };
-    const [expiringCount, latest] = await Promise.all([
+    const [expiringCount, expiringItems] = await Promise.all([
       db.fridgeItem.count({ where }),
-      db.fridgeItem.findFirst({
+      db.fridgeItem.findMany({
         where,
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
+        take,
+        select: { id: true, name: true, updatedAt: true }
       })
     ]);
 
-    if (!expiringCount || !latest?.updatedAt) {
+    if (!expiringCount || !expiringItems.length) {
       return { items: [], total: 0 };
     }
 
     return {
-      total: 1,
-      items: [
-        {
-          id: "reminder:fridge-expiring",
-          typeLabel: "系统提醒消息",
-          tone: "reminder",
-          title: "食材临期提醒",
-          desc:
-            expiringCount === 1
-              ? `${settings.fridge.days} 天内有 1 样食材将到期，建议优先安排`
-              : `${settings.fridge.days} 天内有 ${expiringCount} 样食材将到期，建议优先安排`,
-          timeValue: toIsoDate(latest.updatedAt),
-          targetPath: "/pages_pantry/index/index"
-        }
-      ]
+      total: expiringCount,
+      items: expiringItems.map(item => ({
+        id: `reminder:fridge-expiring:${item.id}`,
+        typeLabel: "系统提醒消息",
+        tone: "reminder",
+        title: `食材临期提醒：${item.name}`,
+        desc: `${settings.fridge.days} 天内将到期，建议优先安排`,
+        timeValue: toIsoDate(item.updatedAt),
+        targetPath: "/pages_pantry/index/index"
+      }))
     };
   }
 

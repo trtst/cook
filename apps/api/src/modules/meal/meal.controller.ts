@@ -337,7 +337,7 @@ export class MealController {
     @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
     @Param("eventId", ParseIntPipe) eventId: number
   ) {
-    return this.mealService.getDiningEvent(request.user.userId, eventId, undefined, undefined, request).then(result => ok(result));
+    return this.mealService.getDiningEvent(request.user.userId, eventId, undefined, request).then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/share-link")
@@ -555,13 +555,14 @@ export class MealController {
   @ApiIdempotencyKey()
   @ApiOkModel(DiningMemoryShareSnapshotModel, "生成一张饭搭子卡不可变分享快照")
   createDiningMemoryShare(
-    @Req() request: RequestWithUser,
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
     @Param("eventId", ParseIntPipe) eventId: number,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: CreateDiningMemoryShareDto
   ) {
     return this.mealService
       .createDiningMemoryShare(
+        request,
         request.user.userId,
         eventId,
         operationId,
@@ -587,8 +588,11 @@ export class MealController {
 
   @Get("memory-shares/:shareToken/preview")
   @ApiOkModel(DiningMemorySharePreviewModel, "饭搭子卡分享预览，只返回不可变白名单快照")
-  getDiningMemorySharePreview(@Param("shareToken") shareToken: string) {
-    return this.mealService.getDiningMemorySharePreview(shareToken).then(result => ok(result));
+  getDiningMemorySharePreview(
+    @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
+    @Param("shareToken") shareToken: string
+  ) {
+    return this.mealService.getDiningMemorySharePreview(request, shareToken).then(result => ok(result));
   }
 
   @Post("share/:shareToken/accept")

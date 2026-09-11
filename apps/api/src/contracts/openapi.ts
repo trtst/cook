@@ -2086,6 +2086,8 @@ export class DiningMemorySharePreviewModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String, nullable: true }) planDate!: string | null;
   @ApiProperty({ type: String, enum: mealSlotValues, nullable: true }) mealSlot!: string | null;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty(nullableString) miniCodeUrl!: string | null;
   @ApiProperty({ type: [DiningMemoryShareMenuItemModel] }) menuItems!: DiningMemoryShareMenuItemModel[];
   @ApiProperty({ type: [DiningMemoryShareParticipantModel] }) participants!: DiningMemoryShareParticipantModel[];
   @ApiProperty(nullableString) caption!: string | null;

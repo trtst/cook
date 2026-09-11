@@ -1,7 +1,6 @@
 import { loadLocalEnv } from "../src/common/load-env";
 import { loginWithPassword } from "./auth-fixture";
 import type {
-  DiningEventShareLinkResponse,
   DiningEventSummary,
   HomeRecentArrangement,
   IngredientSummary,
@@ -387,25 +386,15 @@ async function main() {
   });
   assert(event.planItemId === plan.id, "event should be linked to plan");
   assert(event.menuItems.length === 1, "event should carry one menu item");
+  assert(event.hasActiveShareLink, "event should create an active share invite");
+  assert(event.shareTokenPath, "event owner should receive a share path at creation");
 
   const recentArrangement = await requestData<HomeRecentArrangement | null>("/home/recent-arrangement", {
     headers: ownerAuth
   });
   assert(recentArrangement, "recent arrangement should exist after creating the dining event");
 
-  const shareOperationId = nextIdempotencyKey();
-  const [shareA, shareB] = await Promise.all([
-    requestData<DiningEventShareLinkResponse>(`/dining-events/${event.id}/share-link`, {
-      method: "POST",
-      headers: withIdempotencyKey(ownerAuth, shareOperationId)
-    }),
-    requestData<DiningEventShareLinkResponse>(`/dining-events/${event.id}/share-link`, {
-      method: "POST",
-      headers: withIdempotencyKey(ownerAuth, shareOperationId)
-    })
-  ]);
-  assert(shareA.shareTokenPath === shareB.shareTokenPath, "share-link replay should return the same token path");
-  const shareToken = parseShareToken(shareA.shareTokenPath);
+  const shareToken = parseShareToken(event.shareTokenPath);
 
   const preview = await requestData<SharePreviewResponse>(`/share/${shareToken}/preview`);
   assert(preview.eventId === event.id, "share preview should expose the same event id");
@@ -424,6 +413,11 @@ async function main() {
     headers: withIdempotencyKey(memberAuth),
     body: JSON.stringify({ guestName: "饭局验收成员" })
   });
+  const ownerAfterJoin = await requestData<DiningEventSummary>(`/dining-events/${event.id}`, { headers: ownerAuth });
+  assert(ownerAfterJoin.shareTokenPath, "event owner should receive the next share path after an invite is accepted");
+  assert(ownerAfterJoin.shareTokenPath !== event.shareTokenPath, "accepted invite should be replaced by a fresh share path");
+  const memberAfterJoin = await requestData<DiningEventSummary>(`/dining-events/${event.id}`, { headers: memberAuth });
+  assert(memberAfterJoin.shareTokenPath === null, "participant must not receive the owner share path");
   const joinedParticipant = joined.participants.find(item => item.userUid === member.user.uid);
   assert(joinedParticipant?.status === "ACCEPTED", "member should join the event as ACCEPTED");
 
@@ -505,7 +499,7 @@ async function main() {
         planItemId: plan.id,
         eventId: event.id,
         recentArrangementStatus: recentArrangement.status,
-        shareTokenPath: shareA.shareTokenPath,
+        shareTokenPath: event.shareTokenPath,
         previewPlanItemId: preview.planItemId,
         previewAcceptedParticipantCount: previewAfterJoin.participants.length,
         memberViewerAction: memberViewerAfterJoin.action,

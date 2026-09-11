@@ -160,7 +160,7 @@
 | DiningEvent | POST | `/dining-events/{eventId}/wishes` | 参与人把一道菜加入当前饭局的我想吃池 |
 | DiningEvent | POST | `/dining-events/{eventId}/wishes/{wishItemId}/support` | 参与人附议或取消附议一道我想吃 |
 | DiningEvent | POST | `/dining-events/{eventId}/wishes/{wishItemId}/menu` | 主家把一道我想吃加入本次菜单 |
-| DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张不可变餐桌回忆卡快照 |
+| DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张带冻结封面和小程序码的不可变餐桌回忆卡快照 |
 | DiningEvent | POST | `/dining-events/{eventId}/respond` | 回应饭局 |
 | DiningEvent | POST | `/dining-events/{eventId}/bring` | 选择带菜 |
 | DiningEvent | POST | `/dining-events/{eventId}/complete` | 完成一场饭局 |

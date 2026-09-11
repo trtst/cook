@@ -337,7 +337,7 @@ interface UpdateDiningEventWishSupportRequest {
 
 #### 餐桌回忆卡快照
 
-`POST /api/dining-events/{eventId}/memory-shares` 用于在已完成饭局上生成一张不可变餐桌回忆卡。请求体：
+`POST /api/dining-events/{eventId}/memory-shares` 用于在已到开饭时间或已完成饭局上生成一张不可变餐桌回忆卡和对应小程序码。请求体：
 
 ```ts
 interface CreateDiningMemoryShareRequest {
@@ -349,7 +349,7 @@ interface CreateDiningMemoryShareRequest {
 当前客户端接入约束：
 
 1. 只有饭局主理人可生成，其他成员只读公开快照。
-2. 饭局未完成时，页面只能展示生成前预览，不能真正生成公开卡片。
+2. 未到开饭时间时，页面只能展示生成前预览，不能真正生成公开卡片。
 3. `showParticipants` 只控制是否公开成员摘要，不影响饭局真实参与数据。
 4. `caption` 最长 `120` 个字符，传空字符串时应先裁剪为 `null`。
 
@@ -360,6 +360,8 @@ interface DiningMemorySharePreview {
   title: string;
   planDate: string | null;
   mealSlot: "BREAKFAST" | "LUNCH" | "DINNER" | null;
+  coverImageUrl: string | null;
+  miniCodeUrl: string | null;
   menuItems: Array<{
     title: string;
     coverUrl: string | null;

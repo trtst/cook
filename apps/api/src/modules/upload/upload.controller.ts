@@ -81,6 +81,28 @@ export class UploadPublicController {
     asset.stream.pipe(response);
   }
 
+  @Get("dining-event-memory-covers/:eventId/:fileName")
+  async getDiningMemoryCover(
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @Param("fileName") fileName: string,
+    @Res() response: ResponseLike
+  ) {
+    const asset = await this.uploadService.getDiningMemoryCoverAsset(eventId, fileName);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    asset.stream.pipe(response);
+  }
+
+  @Get("dining-event-memory-codes/:fileName")
+  async getDiningMemoryMiniCode(@Param("fileName") fileName: string, @Res() response: ResponseLike) {
+    const asset = await this.uploadService.getDiningMemoryMiniCodeAsset(fileName);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    asset.stream.pipe(response);
+  }
+
   @Get("dining-event-covers/:eventId")
   async getDiningEventCover(@Param("eventId", ParseIntPipe) eventId: number, @Res() response: ResponseLike) {
     const asset = await this.uploadService.getDiningEventCoverAsset(eventId);

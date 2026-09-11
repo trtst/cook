@@ -193,6 +193,10 @@ export class UploadService {
     return this.assetStorage.publicUrl(request, storageKey, updatedAt);
   }
 
+  buildDiningMemoryAssetUrl(request: RequestLike, storageKey: string) {
+    return this.assetStorage.publicUrl(request, storageKey);
+  }
+
   buildProfileAvatarUrl(request: RequestLike, userUid: UUID, fileName: string, updatedAt: Date) {
     return this.assetStorage.publicUrl(request, this.buildAvatarStorageKey(userUid, fileName), updatedAt);
   }
@@ -382,6 +386,83 @@ export class UploadService {
     };
   }
 
+  async copyDiningEventCoverToMemory(
+    sourceStorageKey: string,
+    contentType: string,
+    eventId: UUID,
+    snapshotVersion: number
+  ) {
+    const storageKey = this.buildDiningMemoryCoverStorageKey(eventId, snapshotVersion, contentType);
+    const source = await this.assetStorage.readObject(sourceStorageKey, contentType);
+    source.stream.destroy();
+    await this.assetStorage.copyObject(sourceStorageKey, storageKey);
+    return { storageKey, contentType, sizeBytes: source.size };
+  }
+
+  async storeDiningMemoryMiniCode(shareTokenHash: string, buffer: Buffer) {
+    const storageKey = this.buildDiningMemoryMiniCodeStorageKey(shareTokenHash);
+    await this.assetStorage.writeObject(storageKey, buffer, "image/png");
+    return storageKey;
+  }
+
+  buildDiningMemoryCoverStorageKey(eventId: UUID, snapshotVersion: number, contentType: string) {
+    const extension = getContentTypeExtension(contentType);
+    return assetKey("uploads", "dining-event-memory-covers", eventId, `${snapshotVersion}.${extension}`);
+  }
+
+  async getDiningMemoryCoverAsset(eventId: UUID, fileName: string) {
+    if (!/^\d+\.(jpg|png|webp)$/iu.test(fileName)) {
+      throw new NotFoundException("图片不存在");
+    }
+    const snapshot = await this.prisma.diningEventMemoryShare.findFirst({
+      where: {
+        diningEventId: eventId,
+        coverStorageKey: { endsWith: `/${fileName}` },
+        coverContentType: { not: null }
+      },
+      orderBy: { snapshotVersion: "desc" },
+      select: {
+        coverStorageKey: true,
+        coverContentType: true
+      }
+    });
+    if (!snapshot?.coverStorageKey || !snapshot.coverContentType) {
+      throw new NotFoundException("图片不存在");
+    }
+    const stored = await this.assetStorage.readObject(snapshot.coverStorageKey, snapshot.coverContentType).catch(() => null);
+    if (!stored) throw new NotFoundException("图片不存在");
+    return {
+      contentType: stored.contentType,
+      stream: stored.stream,
+      stat: { size: stored.size }
+    };
+  }
+
+  async getDiningMemoryMiniCodeAsset(fileName: string) {
+    if (!/^[0-9a-f]{64}\.png$/iu.test(fileName)) {
+      throw new NotFoundException("图片不存在");
+    }
+    const storageKey = this.buildDiningMemoryMiniCodeStorageKey(fileName.slice(0, -4));
+    const snapshot = await this.prisma.diningEventMemoryShare.findFirst({
+      where: { miniCodeStorageKey: storageKey },
+      select: { miniCodeStorageKey: true }
+    });
+    if (!snapshot?.miniCodeStorageKey) {
+      throw new NotFoundException("图片不存在");
+    }
+    const stored = await this.assetStorage.readObject(storageKey, "image/png").catch(() => null);
+    if (!stored) throw new NotFoundException("图片不存在");
+    return {
+      contentType: stored.contentType,
+      stream: stored.stream,
+      stat: { size: stored.size }
+    };
+  }
+
+  buildDiningMemoryMiniCodeStorageKey(shareTokenHash: string) {
+    return assetKey("uploads", "dining-event-memory-codes", `${shareTokenHash}.png`);
+  }
+
   async getDiningEventCoverAsset(eventId: UUID) {
     const event = await this.prisma.diningEvent.findFirst({
       where: {
@@ -521,11 +602,19 @@ export class UploadService {
 
   async removeStorageFiles(storageKeys: Iterable<string>) {
     const uniqueKeys = Array.from(new Set(Array.from(storageKeys).filter(Boolean)));
-    if (!uniqueKeys.length) return;
+    if (!uniqueKeys.length) return [];
 
-    // Database changes have already committed at this stage. Cleanup failures
-    // must not turn a successful save/publish/delete into a user-visible error.
-    await Promise.allSettled(uniqueKeys.map(storageKey => this.assetStorage.deleteObject(storageKey)));
+    const results = await Promise.all(
+      uniqueKeys.map(async storageKey => {
+        try {
+          await this.assetStorage.deleteObject(storageKey);
+          return null;
+        } catch {
+          return storageKey;
+        }
+      })
+    );
+    return results.filter((storageKey): storageKey is string => Boolean(storageKey));
   }
 
   async loadVersionUploads(tx: RecipeDb, request: RequestLike, recipeVersionId: UUID) {

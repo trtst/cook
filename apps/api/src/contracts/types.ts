@@ -2679,6 +2679,8 @@ export interface DiningMemorySharePreview {
   title: string;
   planDate: string | null;
   mealSlot: MealSlot | null;
+  coverImageUrl: string | null;
+  miniCodeUrl: string | null;
   menuItems: DiningMemoryShareMenuItem[];
   participants: DiningMemoryShareParticipant[];
   caption: string | null;

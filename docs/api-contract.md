@@ -2138,7 +2138,13 @@ interface ShoppingSharePreview {
 
 共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回业务 `code=409`，提示客户端刷新后重试。
 
-`POST /dining-events/{eventId}/share-link` 用于生成或重置当前饭局的邀请分享链接，请求头继续使用 `Idempotency-Key`，请求体为空。当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功。响应最小固定为：
+饭局创建时会同时生成一条当前有效的好友邀请。创建响应和后续 `GET /dining-events/{eventId}` 仅向饭局发起人返回该条 `shareTokenPath`；参与人只能看到 `shareTokenPath = null`。小程序据此在首次点击“分享邀请”时直接进入微信原生分享，不再先请求生成链接。
+
+邀请路径由邀请记录 ID 加服务端签名构成，服务端不保存可复原的明文 token。饭局完成、取消或发起人主动关闭前，当前未使用链接保持不变；一条链接被某个账号接受后，服务端自动补一条新的待分享链接给发起人，原链接仍只对已接受账号保留只读查看语义。
+
+本合同从旧哈希 token 切换到签名邀请 ID 时，服务端无法从旧哈希还原此前已发出的明文链接；部署后，未结束饭局会获得新的当前链接，发起人需要重新分享一次。
+
+`POST /dining-events/{eventId}/share-link` 仅用于发起人明确“更换邀请链接”时生成或重置当前饭局的邀请分享链接，请求头继续使用 `Idempotency-Key`，请求体为空。饭局未取消、未完成时可成功。响应最小固定为：
 
 ```ts
 interface DiningEventShareLinkResponse {
@@ -2147,7 +2153,7 @@ interface DiningEventShareLinkResponse {
 }
 ```
 
-分享页仍复用现有 `/pages_share/preview/index?token=...` 预览页，不单独新开页面；邀请链接在饭局完成或取消前都可继续重生成和使用，完成后主分享动作切到饭局卡快照。由于服务端当前只持久化分享 token 的哈希，不保留历史明文 token，客户端后续若要继续分享，必须再次调用该写接口现生成链接；`GET /dining-events/{eventId}` 里的 `shareTokenPath` 不应被当作可长期复用的稳定链接来源。
+分享页继续复用现有 `/pages_share/preview/index?token=...` 预览页，不单独新开页面；饭局完成后主分享动作切到饭局卡快照。
 
 同时，这条写口会让同一饭局之前仍处于 `ACTIVE / OPENED` 的旧好友邀请失效，当前只保留最新一条未使用外链，避免旧链接继续裸露在外。服务端会单独记录这条外链邀请事实及其打开、校验、接受、撤销/失效时间，供后续审计与回看使用。
 
@@ -2266,7 +2272,7 @@ interface CreateDiningMemoryShareRequest {
 2. 只允许当前饭局发起人生成，不给其他参与成员开放代生成路径。
 3. `showParticipants=false` 时公开快照不得返回任何成员摘要。
 4. 每次生成都会固化为新的 `snapshotVersion`，后续饭局改动不会回写到历史快照。
-5. 快照只允许包含 `title / planDate / mealSlot / menuItems(title, coverUrl) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。
+5. 快照只允许包含 `title / planDate / mealSlot / coverImageUrl / miniCodeUrl / menuItems(title, coverUrl) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。`coverImageUrl` 是生成时复制出的封面资产，不读取后续活动封面；`miniCodeUrl` 指向同一份分享标识的微信小程序码，只打开既有 `pages_share/memory/index` 公开回忆卡页。
 
 `GET /memory-shares/{shareToken}/preview` 是餐桌回忆卡的公开读取路径，无需登录，只返回上述不可变白名单快照；不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
 
