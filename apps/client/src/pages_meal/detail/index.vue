@@ -3234,7 +3234,7 @@ function clearFocusedSection() {
   gap: 0;
   margin-top: 24rpx;
   padding: 4rpx 0;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted-frost);
 }
 
@@ -3759,7 +3759,7 @@ function clearFocusedSection() {
   align-items: center;
   gap: 18rpx;
   padding: 20rpx 22rpx;
-  border-radius: 24rpx;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-primary-panel-soft);
 }
 
@@ -3814,7 +3814,7 @@ function clearFocusedSection() {
 .wish-list__action {
   flex: 0 0 auto;
   min-width: 164rpx;
-  min-height: 72rpx;
+  min-height: 60rpx;
   padding: 0 22rpx;
   border: none;
   border-radius: 999rpx;
@@ -3823,7 +3823,7 @@ function clearFocusedSection() {
   box-shadow: var(--button-primary-shadow);
   font-size: 22rpx;
   font-weight: 700;
-  line-height: 72rpx;
+  line-height: 60rpx;
 }
 
 .wish-list__action::after {

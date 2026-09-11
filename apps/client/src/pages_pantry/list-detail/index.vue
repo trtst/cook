@@ -26,9 +26,15 @@
       <template v-else-if="loading">
         <view class="notice">加载中...</view>
       </template>
-      <template v-else-if="errorText">
-        <view class="notice" @click="loadDetail">{{ errorText }}</view>
-      </template>
+      <view v-else-if="errorText" class="detail-empty">
+        <Empty
+          :art="emptyStateArt"
+          clickable
+          title="清单详情加载遇到问题"
+          description="请检查网络后重新加载。"
+          @click="loadDetail"
+        />
+      </view>
       <template v-else-if="!detail">
         <view class="detail-empty">
           <Empty

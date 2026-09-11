@@ -1224,6 +1224,7 @@ defineExpose({
 .hero-banner__image {
   width: 100%;
   height: 100%;
+  mask-image: radial-gradient(ellipse 90% 90% at 50% 0%, #000 60%, transparent 100%);
 }
 
 .hero-banner__copy {

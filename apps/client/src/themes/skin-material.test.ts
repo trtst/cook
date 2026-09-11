@@ -98,6 +98,7 @@ const pantryItemEditPageSource = readFile("../pages_pantry/item-edit/index.vue")
 const shareImportPageSource = readFile("../pages_share/import/index.vue");
 const sharePreviewPageSource = readFile("../pages_share/preview/index.vue");
 const shareMemoryPageSource = readFile("../pages_share/memory/index.vue");
+const shareMemoryPosterSource = readFile("../pages_share/memory/MemoryPoster.vue");
 const menuConfirmSheetSource = readFile("../components/Meal/MenuConfirmSheet.vue");
 const shoppingListPickerSheetSource = readFile("../components/Shopping/ShoppingListPickerSheet.vue");
 const planArrangeSheetSource = readFile("../components/PlanArrangeSheet.vue");
@@ -396,13 +397,7 @@ expectIncludes(reminderPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(reminderPageSource, "backdrop-filter: var(--material-card-filter);");
 expectSelectorExcludes(reminderPageSource, ".reminder-card", ["border: 1rpx solid var(--material-card-border);"]);
 
-expectIncludes(knowledgeListPageSource, "background: var(--material-card-bg);");
-expectIncludes(knowledgeListPageSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(knowledgeListPageSource, "backdrop-filter: var(--material-card-filter);");
-expectIncludes(knowledgeListPageSource, "background: var(--button-secondary-bg);");
-expectIncludes(knowledgeListPageSource, "backdrop-filter: var(--button-secondary-filter);");
-expectSelectorExcludes(knowledgeListPageSource, ".knowledge-status", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorExcludes(knowledgeListPageSource, ".knowledge-status__button", ["border: 1rpx solid var(--button-secondary-border);"]);
+expectExcludes(knowledgeListPageSource, "knowledge-status");
 expectExcludes(knowledgeListPageSource, "knowledge-hero__eyebrow");
 
 expectIncludes(homePageSource, "background: var(--material-card-bg);");
@@ -1232,11 +1227,9 @@ expectSelectorIncludes(sharePreviewPageSource, ".invite-footer__error", [
 ]);
 
 expectIncludes(shareMemoryPageSource, "background: var(--material-card-bg);");
-expectIncludes(shareMemoryPageSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(shareMemoryPageSource, "backdrop-filter: var(--material-card-filter);");
-expectSelectorIncludes(shareMemoryPageSource, ".memory-card", [
-  "background: var(--material-card-accent-bg);"
-]);
+expectIncludes(shareMemoryPageSource, "box-shadow: var(--material-tabbar-shadow);");
+expectIncludes(shareMemoryPageSource, "backdrop-filter: var(--material-tabbar-filter);");
+expectIncludes(shareMemoryPageSource, ".poster-shell { margin: 0 var(--space-page); overflow: hidden; box-shadow: 0 18rpx 54rpx rgb(74 50 31 / 12%); }");
 expectExcludes(shareMemoryPageSource, "border: 1rpx solid var(--material-card-border);");
 expectIncludes(shareMemoryPageSource, "background: var(--button-primary-bg);");
 expectIncludes(shareMemoryPageSource, "backdrop-filter: var(--button-primary-filter);");
@@ -1244,10 +1237,7 @@ expectIncludes(shareMemoryPageSource, "background: var(--button-secondary-bg);")
 expectIncludes(shareMemoryPageSource, "backdrop-filter: var(--button-secondary-filter);");
 expectExcludes(shareMemoryPageSource, "border: 1rpx solid var(--button-primary-border);");
 expectExcludes(shareMemoryPageSource, "border: 1rpx solid var(--button-secondary-border);");
-expectSelectorIncludes(shareMemoryPageSource, ".notice", [
-  "background: var(--color-state-warning-soft);",
-  "color: var(--color-state-warning-text);"
-]);
+expectIncludes(shareMemoryPageSource, ".notice { display: flex; justify-content: space-between; color: var(--color-state-warning-text); background: var(--color-state-warning-soft); }");
 
 expectIncludes(eventScheduleSheetSource, "border: 1rpx solid var(--material-input-border);");
 expectIncludes(eventScheduleSheetSource, "background: var(--material-input-bg);");
@@ -1553,11 +1543,9 @@ expectSelectorIncludes(tastePageSource, ".taste-field__textarea", [
   "box-shadow: var(--material-input-shadow);",
   "backdrop-filter: var(--material-input-filter);"
 ]);
-expectSelectorIncludes(shareMemoryPageSource, ".textarea", [
-  "border: 1rpx solid var(--material-input-border);",
-  "background: var(--material-input-bg);",
-  "box-shadow: var(--material-input-shadow);",
-  "backdrop-filter: var(--material-input-filter);"
+expectSelectorIncludes(shareMemoryPosterSource, ".poster__quote-input", [
+  "background: transparent;",
+  "color: var(--poster-text);"
 ]);
 expectSelectorIncludes(mealDetailPageSource, ".share-member--active", [
   "background: var(--color-tag-primary-bg);",

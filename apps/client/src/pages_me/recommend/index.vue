@@ -44,8 +44,12 @@
                 @click="openMessage(item)"
               >
                 <view class="message-card__head">
-                  <text class="message-card__type" :class="`message-card__type--${item.tone}`">{{ item.typeLabel }}</text>
+                  <view class="message-card__type" :class="`message-card__type--${item.tone}`">
+                    <text v-if="item.tone === 'official'" class="cookfont icon-self-recommend message-card__type-icon" />
+                    <text>{{ item.typeLabel }}</text>
+                  </view>
                   <text class="message-card__time">{{ item.timeText }}</text>
+                  <view v-if="item.isUnread" class="message-card__unread" />
                 </view>
                 <text class="message-card__title">{{ item.title }}</text>
                 <text class="message-card__desc">{{ item.desc }}</text>
@@ -64,7 +68,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { onShow } from "@dcloudio/uni-app";
+import { onHide, onShow } from "@dcloudio/uni-app";
 import { UnauthorizedError } from "@/apis/http";
 import { userApi, type NotificationFeedItem } from "@/apis/user";
 import emptyStateArt from "@/assets/empty.png";
@@ -78,7 +82,7 @@ import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
-import { markNotificationFeedRead } from "@/services/notification-badge";
+import { markNotificationBadgeSeen, markNotificationFeedRead, markNotificationItemRead } from "@/services/notification-badge";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { restoreAppSession } from "@/utils/session";
@@ -129,9 +133,18 @@ const pageBodyStyle = computed(() => ({
 }));
 
 let loadPromise: Promise<void> | null = null;
+let feedEntryTime = "";
+let feedEntryCaptured = false;
 
 onShow(() => {
   void loadPage();
+});
+
+onHide(() => {
+  const beforeTime = feedEntryTime;
+  feedEntryTime = "";
+  feedEntryCaptured = false;
+  void markUnreadFeedOnLeave(beforeTime);
 });
 
 async function loadPage() {
@@ -191,7 +204,11 @@ async function doLoadPage() {
     page.value = result.page;
     hasNext.value = result.hasNext;
     messageItems.value = result.items;
-    await markNotificationFeedRead().catch(() => null);
+    if (!feedEntryCaptured) {
+      feedEntryTime = result.items[0]?.timeValue ?? "";
+      feedEntryCaptured = true;
+    }
+    await markNotificationBadgeSeen();
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       showLoginState();
@@ -245,13 +262,41 @@ function formatListTime(value: string) {
   return `${month}-${day} ${hour}:${minute}`;
 }
 
-function openMessage(item: NotificationFeedItem) {
-  if (!item.targetPath) return;
+async function openMessage(item: NotificationFeedItem) {
+  await markNotificationRead(item);
+  if (!item.targetPath || item.tone === "official" || item.tone === "review") return;
   if (item.targetPath.includes("/pages/home/index")) {
     void uniPlatform.navigation.switchTab("/pages/home/index");
     return;
   }
   void uniPlatform.navigation.navigateTo(item.targetPath);
+}
+
+async function markNotificationRead(item: NotificationFeedItem) {
+  if (!item.isUnread) return;
+
+  try {
+    await markNotificationItemRead(item.id, item.timeValue);
+    messageItems.value = messageItems.value.map(current => current.id === item.id ? { ...current, isUnread: false } : current);
+  } catch (error) {
+    await uniPlatform.feedback.toast({
+      title: error instanceof Error ? error.message : "未读状态同步失败",
+      icon: "none"
+    });
+  }
+}
+
+async function markUnreadFeedOnLeave(beforeTime: string) {
+  if (!beforeTime || !sessionStore.isLoggedIn) return;
+
+  try {
+    await markNotificationFeedRead(beforeTime);
+    messageItems.value = messageItems.value.map(item =>
+      new Date(item.timeValue).getTime() <= new Date(beforeTime).getTime() ? { ...item, isUnread: false } : item
+    );
+  } catch {
+    // 下次进入时会重新读取服务端卡片状态，避免把未同步的已读结果伪装成本地成功。
+  }
 }
 
 function handleBack() {
@@ -377,6 +422,7 @@ defineExpose({
 .message-list {
   display: flex;
   flex-direction: column;
+  gap: var(--space-page);
 }
 
 .message-card {
@@ -389,10 +435,6 @@ defineExpose({
   box-shadow: var(--material-card-shadow);
   -webkit-backdrop-filter: var(--material-card-filter);
   backdrop-filter: var(--material-card-filter);
-}
-
-.message-card + .message-card {
-  margin-top: 16rpx;
 }
 
 .message-card--hover {
@@ -414,6 +456,19 @@ defineExpose({
   border-radius: var(--radius-xs);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
+}
+
+.message-card__type-icon {
+  margin-right: 6rpx;
+  font-size: 24rpx;
+}
+
+.message-card__unread {
+  flex: 0 0 auto;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: var(--color-state-danger-text);
 }
 
 .message-card__type--review {
@@ -441,6 +496,10 @@ defineExpose({
   font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.35;
+}
+
+.message-card__time {
+  margin-left: auto;
 }
 
 .message-card__time,

@@ -35,6 +35,21 @@ expectIncludes('<LoadMore v-if="loadingMore || hasNext" :loading="loadingMore" :
 expectExcludes('已经翻到底啦');
 expectExcludes('.message-list {\n  overflow: hidden;\n  border-radius:');
 expectIncludes('.message-card {\n  display: flex;\n  flex-direction: column;\n  gap: 12rpx;\n  padding: var(--space-md);\n  border-radius: var(--radius-xs);\n  background: var(--material-card-bg);');
-expectIncludes('.message-card + .message-card {\n  margin-top: 16rpx;');
+expectIncludes('.message-list {\n  display: flex;\n  flex-direction: column;\n  gap: var(--space-page);');
+expectExcludes('.message-card + .message-card {\n  margin-top: 16rpx;');
+expectIncludes('<text v-if="item.tone === \'official\'" class="cookfont icon-self-recommend message-card__type-icon" />');
+expectIncludes('{{ item.typeLabel }}');
+expectExcludes('function formatTypeLabel(item: NotificationFeedItem) {');
+expectIncludes('if (!item.targetPath || item.tone === "official" || item.tone === "review") return;');
+expectIncludes('.message-card__type-icon {');
+expectIncludes('<text class="message-card__time">{{ item.timeText }}</text>\n                  <view v-if="item.isUnread" class="message-card__unread" />');
+expectIncludes('.message-card__unread {\n  flex: 0 0 auto;\n  width: 12rpx;\n  height: 12rpx;\n  border-radius: 50%;');
+expectIncludes('import { onHide, onShow } from "@dcloudio/uni-app";');
+expectIncludes('void markUnreadFeedOnLeave(beforeTime);');
+expectIncludes('await markNotificationBadgeSeen();');
+expectIncludes('await markNotificationRead(item);');
+expectIncludes('let feedEntryCaptured = false;');
+expectIncludes('if (!feedEntryCaptured) {\n      feedEntryTime = result.items[0]?.timeValue ?? "";\n      feedEntryCaptured = true;\n    }');
+expectIncludes('feedEntryCaptured = false;');
 
 console.log("recommend page style passed");

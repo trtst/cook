@@ -47,7 +47,14 @@
             />
 
             <template v-else>
-              <view v-if="errorText" class="notice" @click="loadPage">{{ errorText }}</view>
+              <Empty
+                v-if="errorText"
+                :art="emptyStateArt"
+                clickable
+                title="采购清单加载遇到问题"
+                description="请检查网络后重新加载。"
+                @click="loadPage"
+              />
               <view v-else-if="loading && !lists.length" class="notice">加载中...</view>
               <template v-else>
                 <Empty

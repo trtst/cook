@@ -51,10 +51,15 @@
             </view>
           </view>
 
-          <view v-else-if="errorText" class="knowledge-status">
-            <text class="knowledge-status__text">{{ errorText }}</text>
-            <button class="knowledge-status__button" @click="reload">重新加载</button>
-          </view>
+          <Empty
+            v-else-if="errorText"
+            class="knowledge-empty"
+            :art="emptyStateArt"
+            clickable
+            title="内容加载遇到问题"
+            description="请检查网络后重新加载。"
+            @click="reload"
+          />
 
           <Empty
             v-else-if="!articles.length"
@@ -311,38 +316,6 @@ function splitKeywords(value: string | null) {
 
 .knowledge-empty {
   margin-top: var(--space-lg);
-}
-
-.knowledge-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 120rpx;
-  margin-top: var(--space-lg);
-  padding: 0 var(--space-md);
-  border-radius: var(--radius-md);
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
-}
-
-.knowledge-status__text {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.knowledge-status__button {
-  flex: 0 0 auto;
-  min-height: 60rpx;
-  padding: 0 20rpx;
-  border-radius: var(--radius-md);
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  -webkit-backdrop-filter: var(--button-secondary-filter);
-  backdrop-filter: var(--button-secondary-filter);
 }
 
 .knowledge-item {

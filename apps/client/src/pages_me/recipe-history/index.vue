@@ -53,9 +53,12 @@
             <view v-else-if="errorText && !items.length" class="notice notice--error" @click="loadPage(true)">
               {{ errorText }}
             </view>
-            <view v-else-if="!items.length" class="history-empty">
-              <text class="history-empty__title">还没有看过菜谱</text>
-              <text class="history-empty__desc">去菜谱里看看，最近浏览过的内容会在这里留下。</text>
+            <view v-else-if="!items.length" class="history-empty-state">
+              <Empty
+                :art="emptyStateArt"
+                title="还没有浏览记录"
+                description="去菜谱里逛逛，看过的菜谱会在这里留下足迹。"
+              />
             </view>
             <view v-else class="history-list">
               <view v-if="errorText" class="inline-notice" @click="loadPage(true)">
@@ -101,6 +104,8 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { recipeApi, type RecipeViewHistoryItem, type RecipeViewHistoryQuery } from "@/apis/recipe";
+import emptyStateArt from "@/assets/empty.png";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
@@ -300,7 +305,6 @@ defineExpose({
 }
 
 .notice,
-.history-empty,
 .history-card {
   border-radius: var(--radius-xs);
   background: var(--material-card-bg);
@@ -309,8 +313,7 @@ defineExpose({
   backdrop-filter: var(--material-card-filter);
 }
 
-.notice,
-.history-empty {
+.notice {
   padding: var(--space-lg);
   text-align: center;
 }
@@ -325,23 +328,18 @@ defineExpose({
   color: var(--color-support-action);
 }
 
-.history-empty {
+.history-empty-state {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: var(--space-sm);
+  min-height: 520rpx;
+  align-items: flex-start;
+  justify-content: center;
 }
 
-.history-empty__title {
-  color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-
-.history-empty__desc {
-  margin-top: 12rpx;
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-sm);
+.history-empty-state :deep(.empty-state) {
+  width: 100%;
+  margin-top: 48rpx;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .history-list {

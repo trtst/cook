@@ -96,10 +96,15 @@
             />
 
             <template v-else>
-              <view v-if="errorText" class="notice" @click="loadPage">
-                <text class="notice__text">{{ errorText }}</text>
-                <text class="notice__action">重新加载</text>
-              </view>
+              <Empty
+                v-if="errorText"
+                class="pantry-empty"
+                :art="emptyStateArt"
+                clickable
+                title="食材加载遇到问题"
+                description="请检查网络后重新加载。"
+                @click="loadPage"
+              />
               <view v-else-if="loading && !cards.length" class="notice">
                 <text class="notice__text">正在整理现有库存...</text>
               </view>

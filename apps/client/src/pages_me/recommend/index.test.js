@@ -321,8 +321,8 @@ describe("pages_me/recommend/index", () => {
     await waitForState(page, (state) =>
       state &&
       state.itemCount >= 2 &&
-      state.items.some((item) => item.typeLabel === "系统审核消息" && item.title.includes(fixture.unitName)) &&
-      state.items.some((item) => item.typeLabel === "系统官方消息" && item.title === officialFixture.title)
+      state.items.some((item) => item.typeLabel === "系统审核" && item.title.includes(fixture.unitName)) &&
+      state.items.some((item) => item.typeLabel === "炊火记" && item.title === `炊火记发布了《${officialFixture.title}》`)
     );
   });
 
@@ -334,23 +334,23 @@ describe("pages_me/recommend/index", () => {
     expect(state.errorText).toBe("");
     expect(state.itemCount).toBeGreaterThanOrEqual(1);
 
-    const reviewItem = state.items.find((item) => item.typeLabel === "系统审核消息");
+    const reviewItem = state.items.find((item) => item.typeLabel === "系统审核");
     expect(reviewItem).toBeTruthy();
     expect(reviewItem.title).toContain(fixture.unitName);
     expect(reviewItem.desc).toBe(fixture.previewText);
     expect(reviewItem.timeText.length).toBeGreaterThan(0);
 
-    const officialItem = state.items.find((item) => item.typeLabel === "系统官方消息");
+    const officialItem = state.items.find((item) => item.typeLabel === "炊火记");
     expect(officialItem).toBeTruthy();
-    expect(officialItem.title).toBe(officialFixture.title);
+    expect(officialItem.title).toBe(`炊火记发布了《${officialFixture.title}》`);
     expect(officialItem.desc).toBe(officialFixture.summary);
     expect(officialItem.targetPath).toContain(`/pages_me/official-message/index?messageId=${officialFixture.messageId}`);
 
     const texts = await collectTexts(page);
     expect(texts).toContain("通知中心");
-    expect(texts).toContain("系统审核消息");
-    expect(texts).toContain("系统官方消息");
-    expect(texts).toContain(officialFixture.title);
+    expect(texts).toContain("系统审核");
+    expect(texts).toContain("炊火记");
+    expect(texts).toContain(`炊火记发布了《${officialFixture.title}》`);
     expect(texts).toContain(fixture.previewText);
     expect(texts).not.toContain("待处理提醒");
     expect(texts).not.toContain("消息历史");
@@ -366,7 +366,7 @@ describe("pages_me/recommend/index", () => {
     expect(feed.total).toBeGreaterThanOrEqual(2);
     expect(feed.hasNext).toBe(true);
     expect(feed.items).toHaveLength(1);
-    expect(["系统审核消息", "系统清单协作消息", "系统提醒消息", "系统官方消息"]).toContain(feed.items[0].typeLabel);
+    expect(["系统审核", "购物清单协作", "系统提醒", "炊火记"]).toContain(feed.items[0].typeLabel);
     expect(feed.items[0].timeValue).toBeTruthy();
   });
 
@@ -406,7 +406,7 @@ describe("pages_me/recommend/index", () => {
     });
     await waitForState(
       page,
-      (state) => state && state.items.some((item) => item.typeLabel === "系统审核消息" && item.title.includes(unreadFixture.unitName))
+      (state) => state && state.items.some((item) => item.typeLabel === "系统审核" && item.title.includes(unreadFixture.unitName))
     );
 
     const afterBadge = await requestData("/users/me/notification-badge", {
@@ -415,6 +415,11 @@ describe("pages_me/recommend/index", () => {
     expect(afterBadge.unreadCount).toBe(0);
     expect(afterBadge.reminderUnreadCount).toBe(0);
     expect(afterBadge.showReminderDot).toBe(false);
+
+    const feedAfterBadgeSeen = await requestData("/users/me/notification-feed?page=1&pageSize=20", {
+      headers: buildAuthHeaders(session)
+    });
+    expect(feedAfterBadgeSeen.items.find((item) => item.title.includes(unreadFixture.unitName))?.isUnread).toBe(true);
   });
 
   it("通知中心支持滚动容器与下拉刷新重新加载消息", async () => {
