@@ -3,12 +3,19 @@
     <view class="poster__content">
     <view class="poster__brand-row">
       <image class="poster__logo" :src="MEMORY_POSTER_TEMPLATE.brandLogoUrl" mode="widthFix" />
-      <text class="poster__eyebrow">活动回忆卡</text>
+      <view class="poster__date" aria-label="活动日期">
+        <view class="poster__date-year"><text>{{ view.date.yearTop }}</text><text>{{ view.date.yearBottom }}</text></view>
+        <text class="poster__date-main">{{ view.date.text }}</text>
+        <text class="poster__date-weekday">{{ view.date.weekday }}</text>
+      </view>
     </view>
     <view class="poster__rule" />
 
-    <text class="poster__title">{{ view.title }}</text>
-    <text class="poster__meta">{{ view.metaText }}</text>
+    <view v-if="editable" class="poster__title-row">
+      <input v-model="editorTitle" class="poster__title-input" :focus="titleFocused" maxlength="10" placeholder="写下这次相聚的标题" placeholder-class="poster__title-placeholder" @blur="titleFocused = false" />
+      <text class="cookfont icon-edit poster__title-edit" @click="focusTitleInput" />
+    </view>
+    <text v-else class="poster__title">{{ view.title }}</text>
 
     <template v-if="view.showCover && view.coverImageUrl">
       <image class="poster__cover" :src="view.coverImageUrl" mode="aspectFill" />
@@ -73,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, toRefs } from "vue";
+import { computed, nextTick, ref, toRefs } from "vue";
 import { MEMORY_POSTER_TEMPLATE, type MemoryPosterView } from "./memory-poster";
 
 const props = withDefaults(defineProps<{
@@ -81,22 +88,30 @@ const props = withDefaults(defineProps<{
   miniCodeUrl?: string | null;
   editable?: boolean;
   showParticipants?: boolean;
+  titleValue?: string;
   captionValue?: string;
 }>(), {
   miniCodeUrl: null,
   editable: false,
   showParticipants: true,
+  titleValue: "",
   captionValue: ""
 });
 
 const emit = defineEmits<{
   toggleParticipants: [];
+  "update:title": [value: string];
   "update:caption": [value: string];
 }>();
 
 const { view, miniCodeUrl } = toRefs(props);
 const editable = computed(() => props.editable);
 const showParticipants = computed(() => props.showParticipants);
+const titleFocused = ref(false);
+const editorTitle = computed({
+  get: () => props.titleValue,
+  set: value => emit("update:title", value)
+});
 const editorCaption = computed({
   get: () => props.captionValue,
   set: value => emit("update:caption", value)
@@ -113,6 +128,13 @@ const posterStyle = computed(() => ({
   "--poster-font-title": MEMORY_POSTER_TEMPLATE.fonts.title,
   "--poster-font-body": MEMORY_POSTER_TEMPLATE.fonts.body
 }));
+
+function focusTitleInput() {
+  titleFocused.value = false;
+  void nextTick(() => {
+    titleFocused.value = true;
+  });
+}
 
 function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   if (role === "ORGANIZER") return "主理人";
@@ -180,9 +202,49 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   width: 142rpx;
 }
 
-.poster__eyebrow,
 .poster__section-title {
   color: var(--poster-accent);
+}
+
+.poster__date {
+  display: flex;
+  align-items: center;
+  color: var(--poster-text);
+}
+
+.poster__date-year {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+  color: var(--poster-text);
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: .88;
+}
+
+.poster__date-main {
+  margin-left: 12rpx;
+  font-family: var(--poster-font-title);
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: .86;
+}
+
+.poster__date-weekday {
+  display: flex;
+  width: 36rpx;
+  height: 36rpx;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  margin: -10rpx 0 0 8rpx;
+  border-radius: 50%;
+  color: #fff;
+  background: #111;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .poster__member-toggle {
@@ -203,8 +265,6 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   line-height: 1;
 }
 
-.poster__eyebrow,
-.poster__meta,
 .poster__photo-caption,
 .poster__count,
 .poster__number,
@@ -221,7 +281,6 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
 }
 
 .poster__title,
-.poster__meta,
 .poster__photo-caption,
 .poster__section-title,
 .poster__count,
@@ -244,8 +303,40 @@ function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   line-height: 1.2;
 }
 
-.poster__meta {
-  margin-top: 14rpx;
+.poster__title-row {
+  display: flex;
+  align-items: center;
+}
+
+.poster__title-input {
+  display: block;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  min-height: 58rpx;
+  padding: 0;
+  border: 0;
+  color: var(--poster-text);
+  background: transparent;
+  font-family: var(--poster-font-title);
+  font-size: 48rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.poster__title-edit {
+  display: flex;
+  flex: 0 0 auto;
+  width: 48rpx;
+  height: 58rpx;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: 12rpx;
+  color: var(--poster-muted);
+  font-size: 30rpx;
+}
+
+.poster__title-placeholder {
   color: var(--poster-muted);
 }
 

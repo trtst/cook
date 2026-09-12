@@ -48,6 +48,7 @@ const appleGlassSkinSource = readFile("./apple-glass/skins.scss");
 const confirmSource = readFile("../components/Confirm/Confirm.vue");
 const emptySource = readFile("../components/Empty/Empty.vue");
 const imageFieldSource = readFile("../components/ImageField.vue");
+const imageLoaderSource = readFile("../components/ImageLoader.vue");
 const loginModalSource = readFile("../components/Login/LoginModal.vue");
 const loginStylesSource = readFile("../components/Login/login.scss");
 const eventScheduleSheetSource = readFile("../components/Meal/EventScheduleSheet.vue");
@@ -462,15 +463,6 @@ expectSelectorIncludes(homePageSource, ".feature-card--green", [
 expectSelectorIncludes(homePageSource, ".pantry-panel", [
   "background: var(--color-illustration-panel-accent);"
 ]);
-expectSelectorIncludes(homePageSource, ".family-recipe__visual--warm", [
-  "background: var(--color-illustration-panel-warm);"
-]);
-expectSelectorIncludes(homePageSource, ".family-recipe__visual--fresh", [
-  "background: var(--color-illustration-panel-fresh);"
-]);
-expectSelectorIncludes(homePageSource, ".family-recipe__visual--cool", [
-  "background: var(--color-illustration-panel-accent);"
-]);
 expectSelectorIncludes(homePageSource, ".feature-card__mini-dot", [
   "box-shadow: var(--shadow-illustration-dot);"
 ]);
@@ -589,7 +581,7 @@ expectSelectorExcludes(pantryIndexPageSource, ".home-nav-backdrop", ["border-bot
 expectSelectorIncludes(pantryIndexPageSource, ".pantry-hero", [
   "background: var(--page-hero-halo-bg);"
 ]);
-expectSelectorIncludes(pantryIndexPageSource, ".item-card__placeholder", [
+expectSelectorIncludes(imageLoaderSource, ".image-loader", [
   "background: var(--page-cover-fresh-bg);"
 ]);
 expectSelectorExcludes(pantryIndexPageSource, ".summary-strip,\n.quick-card,\n.notice,\n.item-card,\n.sheet-card", ["border: 1rpx solid var(--material-card-border);"]);
@@ -1070,8 +1062,14 @@ expectSelectorIncludes(recipeDetailPageSource, ".report-picker", [
   "box-shadow: var(--material-input-shadow);",
   "backdrop-filter: var(--material-input-filter);"
 ]);
-expectSelectorIncludes(recipeDetailPageSource, ".hero__cover-fill", [
-  "background: var(--page-cover-fresh-shell-bg);"
+expectSelectorIncludes(imageLoaderSource, ".loader::before", [
+  "bottom: 20px;",
+  "left: 5px;",
+  "background: var(--color-primary-selected);",
+  "box-shadow: 50rpx -30rpx 0 4rpx var(--color-primary-active);"
+]);
+expectSelectorIncludes(imageLoaderSource, ".loader::after", [
+  "background: var(--theme-secondary);"
 ]);
 expectSelectorIncludes(recipeDetailPageSource, ".chip--active", [
   "background: var(--color-tag-primary-bg);",

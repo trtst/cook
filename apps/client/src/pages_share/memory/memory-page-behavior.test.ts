@@ -12,15 +12,23 @@ test("participant visibility sits beside the poster people section title", () =>
   assert.match(posterSource, /icon-select-off/);
   assert.match(source, /:editable="mode === 'event' && canManageEventShare"/);
   assert.match(source, /@toggle-participants="toggleParticipants"/);
-  assert.match(source, /function toggleParticipants\(\) \{\s*showParticipants\.value = !showParticipants\.value;\s*invalidateGeneratedPoster\(\);\s*\}/);
+  assert.match(source, /function toggleParticipants\(\) \{\s*showParticipants\.value = !showParticipants\.value;\s*invalidateShareSnapshot\(\);\s*\}/);
   assert.doesNotMatch(source, /memory-settings-entry/);
   assert.doesNotMatch(source, /SheetShell/);
   assert.doesNotMatch(source, /<switch/);
   assert.match(posterSource, /<view v-if="view\.showParticipants \|\| editable" class="poster__section">\s*<view class="poster__section-head">\s*<text class="poster__section-title">一起吃饭的人<\/text>\s*<view v-if="editable" class="poster__member-toggle"/);
 });
 
+test("opening an eligible event memory page prepares its first stable code, while a title edit only redraws the poster", () => {
+  assert.match(source, /watch\(normalizedCaption, invalidateShareSnapshot\);/);
+  assert.match(source, /watch\(title, invalidatePosterImage\);/);
+  assert.match(source, /function invalidatePosterImage\(\) \{ posterFilePath\.value = ""; \}/);
+  assert.match(source, /function invalidateShareSnapshot\(\) \{[\s\S]*shareSnapshot\.value = null;[\s\S]*posterFilePath\.value = "";/);
+  assert.match(source, /eventDetail\.value = await mealApi\.getDiningEvent\(eventId\.value\);[\s\S]*title\.value = eventDetail\.value\.title;[\s\S]*if \(generateReady\.value && canManageEventShare\.value\) await createShareSnapshot\(\);/);
+});
+
 test("hidden participants stay masked in the editable poster but are omitted from the exported poster", () => {
-  assert.match(source, /const exportPosterView = computed\(\(\) => cardData\.value \? buildMemoryPosterView\(\{ \.\.\.cardData\.value, metaText: metaText\.value \}\) : null\);/);
+  assert.match(source, /const exportPosterView = computed\(\(\) => cardData\.value \? buildMemoryPosterView\(\{ \.\.\.cardData\.value, title: posterTitle\.value \}\) : null\);/);
   assert.match(source, /const participants = mode\.value === "event" && canManageEventShare\.value && eventDetail\.value\s*\? buildDraftParticipants\(eventDetail\.value, true\)/);
   assert.match(source, /const view = exportPosterView\.value;/);
   assert.match(posterSource, /class="poster__people-wrap">\s*<view v-if="view\.showParticipants" class="poster__people" :class="\{ 'poster__people--masked': editable && !showParticipants \}"/);
@@ -35,6 +43,26 @@ test("the sharing page keeps a focused header with an optional poster preview", 
   assert.match(source, />把餐桌的热闹，也送给没能到场的人。<\/text>/);
   assert.match(source, /class="preview-head__action"[^>]*@click="previewPoster">预览/);
   assert.match(source, /function previewPoster\(\)/);
+});
+
+test("the event owner can edit the local poster title while exported previews render it as text", () => {
+  assert.match(source, /:title-value="title"/);
+  assert.match(source, /@update:title="title = \$event"/);
+  assert.match(posterSource, /<view v-if="editable" class="poster__title-row">\s*<input v-model="editorTitle" class="poster__title-input"/);
+  assert.match(posterSource, /class="poster__title-input"[^>]*maxlength="10"/);
+  assert.match(posterSource, /<text v-else class="poster__title">\{\{ view\.title \}\}<\/text>/);
+  assert.match(posterSource, /:focus="titleFocused"/);
+  assert.match(posterSource, /class="cookfont icon-edit poster__title-edit" @click="focusTitleInput"/);
+  assert.match(posterSource, /function focusTitleInput\(\) \{[\s\S]*titleFocused\.value = false;[\s\S]*titleFocused\.value = true;/);
+});
+
+test("the split year uses the same color as the main date", () => {
+  const yearStyle = posterSource.match(/\.poster__date-year\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(yearStyle, /color: var\(--poster-text\);/);
+});
+
+test("weekday is a dark circular badge in the poster preview", () => {
+  assert.match(posterSource, /\.poster__date-weekday \{[\s\S]*display: flex;[\s\S]*width: 36rpx;[\s\S]*height: 36rpx;[\s\S]*border-radius: 50%;[\s\S]*color: #fff;[\s\S]*background: #111;/);
 });
 
 test("sharing tips stay short while the empty memory is edited in its poster position", () => {

@@ -54,6 +54,14 @@ function label(ctx: PosterContext, value: string, x: number, y: number, size: nu
   ctx.fillText(value, x, y);
 }
 
+function weekdayBadge(ctx: PosterContext, value: string) {
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(990, 64, 22, 0, Math.PI * 2);
+  ctx.fill();
+  label(ctx, value, 980, 55, 20, "#fff", "body", 700);
+}
+
 function roleLabel(role: MemoryPosterView["participants"][number]["role"]) {
   if (role === "ORGANIZER") return "主理人";
   if (role === "PARTICIPANT") return "参与人";
@@ -66,12 +74,14 @@ export function drawMemoryPoster(ctx: PosterContext, view: MemoryPosterView, ass
   ctx.fillStyle = colors.background;
   ctx.fillRect(0, 0, 1080, view.height);
   ctx.drawImage(assets.logo, 72, 54, 190, 80);
-  label(ctx, "活动回忆卡", 832, 78, 25, colors.accent);
+  label(ctx, view.date.yearTop, 770, 50, 28, colors.text);
+  label(ctx, view.date.yearBottom, 770, 84, 28, colors.text);
+  label(ctx, view.date.text, 822, 47, 66, colors.text, "title", 600);
+  weekdayBadge(ctx, view.date.weekday);
   rule(ctx, 165, colors.line);
 
   label(ctx, view.title, 72, 205, 66, colors.text, "title", 600);
-  label(ctx, view.metaText, 72, 300, 25, colors.muted);
-  let y = 360;
+  let y = 300;
 
   if (view.showCover && assets.cover) {
     ctx.drawImage(assets.cover, 72, y, 936, 505);

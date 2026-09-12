@@ -20,8 +20,10 @@
             :mini-code-url="cardData.miniCodeUrl"
             :editable="mode === 'event' && canManageEventShare"
             :show-participants="showParticipants"
+            :title-value="title"
             :caption-value="caption"
             @toggle-participants="toggleParticipants"
+            @update:title="title = $event"
             @update:caption="caption = $event"
           />
         </view>
@@ -53,17 +55,15 @@ import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
-import { formatMealSlot } from "@/utils/meal-slot";
 import { createOperationId } from "@/utils/operation-id";
 import { mealApi, type DiningEventSummary } from "../apis/meal";
 import { shareApi, type MemoryShareParticipant, type MemorySharePreviewResponse, type MemoryShareSnapshotResponse } from "../apis/share";
-import { formatDateTimeMinute } from "../utils/date";
 import MemoryPoster from "./MemoryPoster.vue";
 import { buildMemoryPosterView, MEMORY_POSTER_TEMPLATE, type MemoryPosterSource } from "./memory-poster";
 import { drawMemoryPoster } from "./memory-poster-renderer";
 
 type PageMode = "empty" | "event" | "token";
-interface MemoryCardView extends Omit<MemoryPosterSource, "metaText"> { miniCodeUrl: string | null; }
+interface MemoryCardView extends MemoryPosterSource { miniCodeUrl: string | null; }
 interface PosterImage { src: string; onload: (() => void) | null; onerror: ((error: unknown) => void) | null; }
 interface PosterCanvas { width: number; height: number; createImage(): PosterImage; getContext(type: "2d"): unknown; }
 
@@ -80,6 +80,7 @@ const errorText = ref("");
 const eventId = ref<UUID | "">("");
 const shareToken = ref("");
 const showParticipants = ref(true);
+const title = ref("");
 const caption = ref("");
 const eventDetail = ref<DiningEventSummary | null>(null);
 const sharePreview = ref<MemoryCardView | null>(null);
@@ -94,17 +95,14 @@ const cardData = computed<MemoryCardView | null>(() => {
   if (sharePreview.value) return sharePreview.value;
   return eventDetail.value ? buildDraftCard(eventDetail.value, normalizedCaption.value, showParticipants.value) : null;
 });
-const metaText = computed(() => {
-  if (cardData.value?.planDate || cardData.value?.mealSlot) return [cardData.value.planDate, cardData.value.mealSlot ? formatMealSlot(cardData.value.mealSlot) : null].filter(Boolean).join(" · ");
-  return eventDetail.value ? [formatDateTimeMinute(eventDetail.value.scheduledAt), eventDetail.value.location].filter(Boolean).join(" · ") : "一次相聚 · 一份回忆";
-});
-const exportPosterView = computed(() => cardData.value ? buildMemoryPosterView({ ...cardData.value, metaText: metaText.value }) : null);
+const posterTitle = computed(() => title.value.trim() || cardData.value?.title || "这次相聚");
+const exportPosterView = computed(() => cardData.value ? buildMemoryPosterView({ ...cardData.value, title: posterTitle.value }) : null);
 const posterView = computed(() => {
   if (!cardData.value) return null;
   const participants = mode.value === "event" && canManageEventShare.value && eventDetail.value
     ? buildDraftParticipants(eventDetail.value, true)
     : cardData.value.participants;
-  return buildMemoryPosterView({ ...cardData.value, metaText: metaText.value, participants });
+  return buildMemoryPosterView({ ...cardData.value, title: posterTitle.value, participants });
 });
 const generateReady = computed(() => isEventTimeUp(eventDetail.value, nowMs.value));
 const canManageEventShare = computed(() => Boolean(eventDetail.value && eventDetail.value.organizerUid === sessionStore.uid));
@@ -130,14 +128,16 @@ onLoad(query => {
 onShow(() => { startClock(); void loadPage(); });
 onUnload(stopClock);
 onShareAppMessage(() => ({
-  title: `${cardData.value?.title || "这次相聚"} · 活动回忆卡`,
+  title: `${posterTitle.value} · 活动回忆卡`,
   path: shareSnapshot.value?.sharePath || (mode.value === "token" && shareToken.value ? `/pages_share/memory/index?token=${encodeURIComponent(shareToken.value)}` : "/pages/home/index"),
   imageUrl: posterFilePath.value || cardData.value?.coverImageUrl || undefined
 }));
-watch(normalizedCaption, invalidateGeneratedPoster);
+watch(normalizedCaption, invalidateShareSnapshot);
+watch(title, invalidatePosterImage);
 
 async function handleLoginSuccess() { await loadPage(); }
-function invalidateGeneratedPoster() { if (mode.value === "event") { shareSnapshot.value = null; posterFilePath.value = ""; } }
+function invalidatePosterImage() { posterFilePath.value = ""; }
+function invalidateShareSnapshot() { if (mode.value === "event") { shareSnapshot.value = null; posterFilePath.value = ""; } }
 async function loadPage() {
   if (mode.value === "token") {
     loading.value = true; errorText.value = "";
@@ -148,7 +148,13 @@ async function loadPage() {
   }
   if (mode.value !== "event" || !sessionStore.isLoggedIn || !eventId.value) { eventDetail.value = null; return; }
   loading.value = true; errorText.value = "";
-  try { eventDetail.value = await mealApi.getDiningEvent(eventId.value); shareSnapshot.value = null; posterFilePath.value = ""; }
+  try {
+    eventDetail.value = await mealApi.getDiningEvent(eventId.value);
+    title.value = eventDetail.value.title;
+    shareSnapshot.value = null;
+    posterFilePath.value = "";
+    if (generateReady.value && canManageEventShare.value) await createShareSnapshot();
+  }
   catch (error) { errorText.value = error instanceof Error ? error.message : "活动回忆卡加载失败"; eventDetail.value = null; }
   finally { loading.value = false; }
 }
@@ -197,7 +203,7 @@ async function sharePoster() { if (!canPreparePoster.value) return; const path =
 async function savePoster() { if (!canPreparePoster.value) return; const path = posterFilePath.value || await preparePoster(); if (!path) return; try { await uniPlatform.media.saveImageToPhotosAlbum(path); await uniPlatform.feedback.toast({ title: "已保存，可前往朋友圈发布", icon: "success" }); } catch { await uniPlatform.feedback.toast({ title: "保存失败，请检查相册权限", icon: "none" }); } }
 function toggleParticipants() {
   showParticipants.value = !showParticipants.value;
-  invalidateGeneratedPoster();
+  invalidateShareSnapshot();
 }
 function toCardView(source: MemorySharePreviewResponse): MemoryCardView { return { title: source.title, planDate: source.planDate, mealSlot: source.mealSlot, coverImageUrl: source.coverImageUrl, menuItems: source.menuItems, participants: source.participants, caption: source.caption, sharedAt: source.sharedAt, snapshotVersion: source.snapshotVersion, miniCodeUrl: source.miniCodeUrl }; }
 function buildDraftParticipants(event: DiningEventSummary, visible: boolean): MemoryShareParticipant[] {
@@ -206,7 +212,7 @@ function buildDraftParticipants(event: DiningEventSummary, visible: boolean): Me
   event.participants.forEach(item => { if (item.status === "ACCEPTED") people.push({ displayName: item.sourceType === "SHARE" ? item.guestName?.trim() || "来客" : item.displayName?.trim() || "参与人", avatarUrl: item.avatarUrl, role: item.sourceType === "SHARE" ? "GUEST" : "PARTICIPANT" }); });
   return people;
 }
-function buildDraftCard(event: DiningEventSummary, nextCaption: string | null, visible: boolean): MemoryCardView { return { title: event.title, planDate: null, mealSlot: null, coverImageUrl: event.coverImageUrl, menuItems: event.menuItems.map(item => ({ title: item.title, coverUrl: null })), participants: buildDraftParticipants(event, visible), caption: nextCaption, sharedAt: null, snapshotVersion: null, miniCodeUrl: null }; }
+function buildDraftCard(event: DiningEventSummary, nextCaption: string | null, visible: boolean): MemoryCardView { return { title: event.title, planDate: event.scheduledAt, mealSlot: null, coverImageUrl: event.coverImageUrl, menuItems: event.menuItems.map(item => ({ title: item.title, coverUrl: null })), participants: buildDraftParticipants(event, visible), caption: nextCaption, sharedAt: null, snapshotVersion: null, miniCodeUrl: null }; }
 function isEventTimeUp(event: DiningEventSummary | null, currentMs: number) { if (!event || event.status === "CANCELLED") return false; if (event.status === "COMPLETED" || event.completedAt) return true; const scheduledMs = new Date(event.scheduledAt).getTime(); return Number.isFinite(scheduledMs) && scheduledMs <= currentMs; }
 function startClock() { nowMs.value = Date.now(); if (!clockTimer) clockTimer = setInterval(() => { nowMs.value = Date.now(); }, 30_000); }
 function stopClock() { if (clockTimer) clearInterval(clockTimer); clockTimer = null; }

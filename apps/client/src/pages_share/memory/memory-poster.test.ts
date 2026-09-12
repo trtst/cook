@@ -8,7 +8,6 @@ const baseCard = {
   title: "今晚，来家里吃饭",
   planDate: "2026-09-10",
   mealSlot: "DINNER" as const,
-  metaText: "9月10日 18:30 · 家里",
   coverImageUrl: "https://example.com/event-cover.jpg",
   menuItems: [
     { title: "番茄炒蛋", coverUrl: null },
@@ -29,8 +28,22 @@ test("poster view uses the activity cover and includes optional memory sections"
   assert.equal(view.coverImageUrl, "https://example.com/event-cover.jpg");
   assert.equal(view.showParticipants, true);
   assert.equal(view.showCaption, true);
-  assert.equal(view.height, 1790);
+  assert.equal(view.height, 1730);
   assert.deepEqual(view.menuRows, [["番茄炒蛋", "玉米排骨汤"]]);
+});
+
+test("poster view turns the plan date into the split year, date and weekday header", () => {
+  const view = buildMemoryPosterView({
+    ...baseCard,
+    planDate: "2026-09-12"
+  });
+
+  assert.deepEqual(view.date, {
+    yearTop: "20",
+    yearBottom: "26",
+    text: "09.12",
+    weekday: "六"
+  });
 });
 
 test("poster view collapses cover, participant and caption space when content is absent", () => {
@@ -44,8 +57,8 @@ test("poster view collapses cover, participant and caption space when content is
   assert.equal(view.showCover, false);
   assert.equal(view.showParticipants, false);
   assert.equal(view.showCaption, false);
-  assert.equal(view.footerY, 625);
-  assert.equal(view.height, 875);
+  assert.equal(view.footerY, 565);
+  assert.equal(view.height, 815);
 });
 
 test("the first poster template keeps future visual choices in one configuration", () => {

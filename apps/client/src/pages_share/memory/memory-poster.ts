@@ -22,7 +22,6 @@ export interface MemoryPosterSource {
   title: string;
   planDate: string | null;
   mealSlot: MealSlot | null;
-  metaText: string;
   coverImageUrl: string | null;
   menuItems: Array<{ title: string; coverUrl: string | null }>;
   participants: Array<{
@@ -35,7 +34,15 @@ export interface MemoryPosterSource {
   snapshotVersion: number | null;
 }
 
+export interface MemoryPosterDate {
+  yearTop: string;
+  yearBottom: string;
+  text: string;
+  weekday: string;
+}
+
 export interface MemoryPosterView extends MemoryPosterSource {
+  date: MemoryPosterDate;
   showCover: boolean;
   showParticipants: boolean;
   showCaption: boolean;
@@ -54,6 +61,22 @@ function textLines(value: string, maxCharacters: number) {
   return lines.length ? lines : [""];
 }
 
+function posterDate(value: string | null): MemoryPosterDate {
+  const match = value?.match(/^(\d{4})-(\d{2})-(\d{2})/) ?? null;
+  if (!match) return { yearTop: "", yearBottom: "", text: "", weekday: "" };
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) {
+    return { yearTop: "", yearBottom: "", text: "", weekday: "" };
+  }
+  return {
+    yearTop: year.slice(0, 2),
+    yearBottom: year.slice(2),
+    text: `${month}.${day}`,
+    weekday: ["日", "一", "二", "三", "四", "五", "六"][date.getDay()]
+  };
+}
+
 export function buildMemoryPosterView(source: MemoryPosterSource): MemoryPosterView {
   const menuRows: string[][] = [];
   for (let index = 0; index < source.menuItems.length; index += 2) {
@@ -68,7 +91,7 @@ export function buildMemoryPosterView(source: MemoryPosterSource): MemoryPosterV
   const showCover = Boolean(source.coverImageUrl);
   const showParticipants = source.participants.length > 0;
   const showCaption = Boolean(source.caption?.trim());
-  let contentY = 360;
+  let contentY = 300;
   if (showCover) contentY += 611;
   contentY += 37 + 68 + menuRows.length * 96;
   if (showParticipants) contentY += 20 + 62 + participantRows.length * 90;
@@ -78,6 +101,7 @@ export function buildMemoryPosterView(source: MemoryPosterSource): MemoryPosterV
 
   return {
     ...source,
+    date: posterDate(source.planDate),
     caption,
     showCover,
     showParticipants,
