@@ -192,7 +192,7 @@
                 </view>
 
                 <view v-else class="meal-menu-empty">
-                  <text class="meal-menu-empty__title">菜单待补</text>
+                  <text class="meal-menu-empty__title">{{ menuPanelEmptyTitle }}</text>
                   <text class="meal-menu-empty__text">
                     {{ menuPanelEmptyText }}
                   </text>
@@ -210,14 +210,14 @@
 
               <view v-if="eventDetail" id="meal-wish-panel" class="meal-panel">
                 <view class="meal-panel__head meal-panel__head--row">
-                  <text class="meal-panel__title">我想吃池</text>
+                  <text class="meal-panel__title">{{ wishPanelTitle }}</text>
                   <view
                     v-if="canChooseWish"
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                     @click="openWishSheet"
                   >
                     <text class="cookfont icon-add meal-menu__add-icon" />
-                    <text>我想吃</text>
+                    <text>提一道菜</text>
                   </view>
                 </view>
 
@@ -227,11 +227,11 @@
                       <view class="wish-list__title-row">
                         <text class="wish-list__title">{{ item.title }}</text>
                         <text v-if="item.suggestedByMe" class="wish-list__tag">我提的</text>
-                        <text v-else-if="item.supportedByMe" class="wish-list__tag">已附议</text>
-                        <text v-if="item.supportCount > 0" class="wish-list__count">{{ item.supportCount }}人想吃</text>
+                        <text v-else-if="item.supportedByMe" class="wish-list__tag">我也想吃</text>
+                        <text v-if="item.supportCount > 0" class="wish-list__count">{{ item.supportCount }}个人也想吃</text>
                       </view>
                       <text class="wish-list__meta">
-                        {{ item.inCurrentMenu ? "主家已经把这道菜放进本次菜单。" : "先留在池子里，等主家确认要不要加入本次菜单。" }}
+                        {{ wishItemMetaText(item) }}
                       </text>
                     </view>
                     <button
@@ -253,9 +253,9 @@
                           ? "处理中..."
                           : item.supportedByMe
                             ? item.suggestedByMe
-                              ? "撤下"
-                              : "取消附议"
-                            : "附议"
+                              ? "撤回建议"
+                              : "取消支持"
+                            : "我也想吃"
                       }}
                     </button>
                   </view>
@@ -269,14 +269,14 @@
 
               <view v-if="eventDetail" id="meal-bring-panel" class="meal-panel">
                 <view class="meal-panel__head meal-panel__head--row">
-                  <text class="meal-panel__title">带菜</text>
+                  <text class="meal-panel__title">带菜安排</text>
                   <view
                     v-if="canChooseBring"
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                     @click="openBringSheet"
                   >
                     <text class="cookfont icon-add meal-menu__add-icon" />
-                    <text>我带菜</text>
+                    <text>我带一道菜</text>
                   </view>
                 </view>
 
@@ -295,14 +295,14 @@
                 </view>
 
                 <view v-else class="meal-menu-empty">
-                  <text class="meal-menu-empty__title">还没人登记带菜</text>
+                  <text class="meal-menu-empty__title">{{ bringPanelEmptyTitle }}</text>
                   <text class="meal-menu-empty__text">{{ bringPanelEmptyText }}</text>
                 </view>
               </view>
 
               <view v-if="eventDetail && !eventClosed" id="meal-shopping-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'shopping' }">
                 <view class="meal-panel__head meal-panel__head--row">
-                  <text class="meal-panel__title">采购准备</text>
+                  <text class="meal-panel__title">{{ shoppingPanelTitle }}</text>
                   <view
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                     :class="{ 'meal-inline-action--disabled': shoppingActionDisabled }"
@@ -332,7 +332,7 @@
                 :class="{ 'meal-panel--focus': focusedSection === 'shopping' }"
               >
                 <view class="meal-panel__head meal-panel__head--row">
-                  <text class="meal-panel__title">采购准备</text>
+                  <text class="meal-panel__title">{{ shoppingPanelTitle }}</text>
                   <view
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                     :class="{ 'meal-inline-action--disabled': shoppingActionDisabled }"
@@ -347,22 +347,13 @@
                 </view>
               </view>
 
-              <view v-if="planDetail" id="meal-assistant-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'assistant' }">
+              <view v-if="planDetail?.menuLocked" id="meal-assistant-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'assistant' }">
                 <view class="meal-panel__head">
-                  <text class="meal-panel__title">做饭助手</text>
+                  <text class="meal-panel__title">{{ cookAssistantPanelTitle }}</text>
                   <text class="meal-panel__meta">{{ cookAssistantMeta }}</text>
                 </view>
 
-                <view v-if="cookAssistant?.isStale" class="meal-helper-banner">
-                  <text class="meal-helper-banner__title">当前建议已过期</text>
-                  <text class="meal-helper-banner__text">菜单或菜谱有变化，原来的做饭安排可能已经不准，建议重新生成后再开始做饭。</text>
-                </view>
-
-                <view v-if="!currentMenuItems.length" class="meal-helper-state">
-                  先把这顿饭的菜单定下来，后面生成做饭建议和开始做饭都会基于这里继续。
-                </view>
-
-                <view v-else-if="cookAssistantLoading && !cookAssistant?.hasSnapshot" class="meal-helper-state">
+                <view v-if="cookAssistantLoading && !cookAssistant?.hasSnapshot" class="meal-helper-state">
                   正在准备这顿饭的流程安排...
                 </view>
 
@@ -388,21 +379,12 @@
                 </view>
 
                 <view v-else class="meal-helper-state">
-                  先整理这桌菜，再开始做饭。做饭助手会按菜单生成一份可执行步骤，后面再打开也能直接接着用。
+                  {{ cookAssistantEmptyText }}
                 </view>
 
-                <view v-if="currentMenuItems.length && !eventClosed && !planClosed" class="meal-helper__actions">
-                  <template v-if="cookAssistant?.hasSnapshot && !cookAssistant?.isStale">
+                <view v-if="canManageCookAssistant && currentMenuItems.length && !eventClosed && !planClosed" class="meal-helper__actions">
+                  <template v-if="cookAssistant?.hasSnapshot">
                     <button class="meal-helper__button meal-helper__button--primary meal-helper__button--main" @click="openCookAssistantPage">查看做饭助手</button>
-                    <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
-                  </template>
-                  <template v-else-if="cookAssistant?.isStale">
-                    <button
-                      class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
-                      @click="handleCookAssistantAction"
-                    >
-                      重新生成建议
-                    </button>
                     <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
                   </template>
                   <template v-else>
@@ -410,7 +392,7 @@
                       class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
                       @click="handleCookAssistantAction"
                     >
-                      生成做饭建议
+                      生成做饭安排
                     </button>
                     <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
                   </template>
@@ -419,7 +401,7 @@
 
               <view v-if="eventDetail" class="meal-panel">
                 <view class="meal-panel__head meal-panel__head--row">
-                  <text class="meal-panel__title">备注</text>
+                  <text class="meal-panel__title">饭局提醒</text>
                   <view
                     v-if="canEditEventNote"
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
@@ -607,12 +589,22 @@
             <view v-else-if="recipeSheetError" class="recipe-sheet__state recipe-sheet__state--error" @click="retryRecipeSheet">
               {{ recipeSheetError }}
             </view>
-            <scroll-view v-else-if="recipeSheetItems.length" scroll-y class="recipe-sheet__scroll" :show-scrollbar="false">
+            <scroll-view
+              v-else-if="recipeSheetItems.length"
+              scroll-y
+              class="recipe-sheet__scroll"
+              :show-scrollbar="false"
+              :lower-threshold="120"
+              @scrolltolower="loadMoreRecipeSheet"
+            >
               <view class="recipe-sheet__list">
-                <view
+                <RecipeListRow
                   v-for="item in recipeSheetItems"
                   :key="item.id"
                   class="recipe-sheet__row"
+                  :title="item.title"
+                  :cover-image-url="item.coverImageUrl"
+                  :meta="recipeSheetMetaText(item)"
                   :class="{
                     'recipe-sheet__row--pending-add': isRecipePendingAdd(item),
                     'recipe-sheet__row--pending-remove': isRecipePendingRemove(item),
@@ -621,34 +613,34 @@
                   }"
                   @click="toggleRecipeSelection(item)"
                 >
-                  <view class="recipe-sheet__cover">
-                    <image v-if="item.coverImageUrl" class="recipe-sheet__cover-image" :src="item.coverImageUrl" mode="aspectFill" />
-                    <ImageEmpty v-else class="recipe-sheet__cover-placeholder" copy="封面图" ratio="fill" />
-                  </view>
-                  <view class="recipe-sheet__main">
-                    <text class="recipe-sheet__name">{{ item.title }}</text>
-                    <text class="recipe-sheet__meta">
-                      {{ item.category?.name || "未分类" }}<text v-if="item.durationText"> · {{ item.durationText }}</text>
-                    </text>
-                  </view>
-                  <view
-                    class="recipe-sheet__status"
-                    :class="{
-                      'recipe-sheet__status--pending-add': isRecipePendingAdd(item),
-                      'recipe-sheet__status--added': isRecipeAdded(item) && !isRecipePendingRemove(item),
-                      'recipe-sheet__status--pending-remove': isRecipePendingRemove(item),
-                      'recipe-sheet__status--selected': (recipeSheetMode === 'bring' || recipeSheetMode === 'wish') && isRecipeSelected(item) && !isRecipeAdded(item)
-                    }"
-                  >
-                    <text
-                      class="recipe-sheet__status-text"
-                      :class="{ 'recipe-sheet__status-text--primary': isRecipePendingAdd(item) || isRecipeSelected(item) }"
+                  <template #tail>
+                    <view
+                      class="recipe-sheet__status"
+                      :class="{
+                        'recipe-sheet__status--pending-add': isRecipePendingAdd(item),
+                        'recipe-sheet__status--added': isRecipeAdded(item) && !isRecipePendingRemove(item),
+                        'recipe-sheet__status--pending-remove': isRecipePendingRemove(item),
+                        'recipe-sheet__status--selected': (recipeSheetMode === 'bring' || recipeSheetMode === 'wish') && isRecipeSelected(item) && !isRecipeAdded(item)
+                      }"
                     >
-                      {{ recipeSheetStatusText(item) }}
-                    </text>
-                  </view>
-                </view>
+                      <text
+                        class="recipe-sheet__status-text"
+                        :class="{ 'recipe-sheet__status-text--primary': isRecipePendingAdd(item) || isRecipeSelected(item) }"
+                      >
+                        {{ recipeSheetStatusText(item) }}
+                      </text>
+                    </view>
+                  </template>
+                </RecipeListRow>
               </view>
+              <LoadMore
+                :loading="recipeSheetLoadingMore"
+                :has-next="recipeSheetHasNext"
+                :show-done="recipeSheetPage > 1 && !recipeSheetHasNext"
+              />
+              <text v-if="recipeSheetMoreError" class="recipe-sheet__more-error" @click="loadMoreRecipeSheet">
+                {{ recipeSheetMoreError }}
+              </text>
             </scroll-view>
             <view v-else class="recipe-sheet__empty">
               <text class="recipe-sheet__empty-title">{{ recipeSheetEmptyTitle }}</text>
@@ -670,7 +662,10 @@
                 :class="{ 'sheet-actions__button--disabled': recipeConfirmDisabled }"
                 @click="submitRecipeSheet"
               >
-                {{ recipeConfirmButtonText }}
+                <text>{{ recipeConfirmButtonText }}</text>
+                <text v-if="recipeSheetMode === 'menu' && recipePendingAddCount > 0" class="sheet-actions__count">
+                  ({{ recipePendingAddCount }})
+                </text>
               </button>
             </view>
           </template>
@@ -694,15 +689,15 @@
 
         <TextFieldSheet
           :visible="noteSheetVisible"
-          title="饭局备注"
-          subtitle="写给参与人的公开说明，比如到场提醒、饮食禁忌或临时安排。"
+          title="给客人的提醒"
+          subtitle="参与人都能看到，请只写这场饭局相关的信息。"
           :model-value="noteDraft"
-          placeholder="例如：有人花生过敏，今晚不要带含花生的凉菜"
+          placeholder="例如：18:30 到，门禁按 1203；有人花生过敏，请不要带含花生的菜"
           :maxlength="255"
           multiline
           :submitting="submitting"
-          confirm-text="保存备注"
-          confirm-loading-text="保存中..."
+          confirm-text="发布提醒"
+          confirm-loading-text="发布中..."
           @close="closeNoteSheet"
           @after-close="handleNoteSheetAfterClose"
           @confirm="submitEventNote"
@@ -746,6 +741,7 @@ import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import LoadMore from "@/components/LoadMore.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import MenuConfirmSheet from "@/components/Meal/MenuConfirmSheet.vue";
 import ParticipantManageSheet from "@/components/Meal/ParticipantManageSheet.vue";
@@ -754,6 +750,7 @@ import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import ImageField from "@/components/ImageField.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
+import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -860,6 +857,7 @@ type MealGapPreviewItem = {
 type RecipeSheetItem = MyRecipeSummary;
 type RecipeSheetMode = "menu" | "bring" | "wish";
 const RECIPE_HOME_INTENT_STORAGE_KEY = "recipe-home-intent-tab";
+const RECIPE_SHEET_PAGE_SIZE = 20;
 
 const NAV_FADE_DISTANCE = 132;
 const pageStyle = usePageScrollStyle();
@@ -911,6 +909,10 @@ const recipeSheetMode = ref<RecipeSheetMode>("menu");
 const recipeSheetLoading = ref(false);
 const recipeSheetError = ref("");
 const recipeSheetItems = ref<RecipeSheetItem[]>([]);
+const recipeSheetPage = ref(0);
+const recipeSheetHasNext = ref(false);
+const recipeSheetLoadingMore = ref(false);
+const recipeSheetMoreError = ref("");
 const recipeSelectedIds = ref<UUID[]>([]);
 const recipeSubmitting = ref(false);
 const wishActionLoadingId = ref<UUID | null>(null);
@@ -1033,7 +1035,22 @@ const visibleEventParticipants = computed(() => {
 const acceptedCount = computed(() => visibleEventParticipants.value.filter(item => item.status === "ACCEPTED").length);
 const pendingCount = computed(() => visibleEventParticipants.value.filter(item => item.status === "INVITED").length);
 const displayParticipants = computed(() => visibleEventParticipants.value.filter(item => item.status !== "REMOVED"));
-const menuPanelTitle = computed(() => "菜单");
+const menuPanelTitle = computed(() => {
+  if (!eventDetail.value) return "菜单";
+  return isEventOrganizer.value ? "本次菜单" : "主家菜单";
+});
+const menuPanelEmptyTitle = computed(() => (
+  eventDetail.value && !isEventOrganizer.value ? "主家正在安排菜单" : "这顿吃什么？"
+));
+const wishPanelTitle = computed(() => (
+  isEventOrganizer.value ? "大家想吃的菜" : "这顿想吃什么"
+));
+const shoppingPanelTitle = computed(() => (
+  eventDetail.value && !isEventOrganizer.value ? "食材准备" : "采购准备"
+));
+const cookAssistantPanelTitle = computed(() => (
+  eventDetail.value && !isEventOrganizer.value ? "主家做饭安排" : "做饭助手"
+));
 const detailTitle = computed(() => {
   const title = eventDetail.value?.title?.trim() || planDetail.value?.title?.trim();
   return title || defaultDetailTitle.value;
@@ -1074,12 +1091,12 @@ const detailFacts = computed<FactItem[]>(() => {
 const canEditTitle = computed(() => Boolean(planDetail.value && (!eventDetail.value || isEventOrganizer.value)));
 const canEditEventNote = computed(() => Boolean(eventDetail.value && isEventOrganizer.value && !eventClosed.value));
 const eventNoteText = computed(() => eventDetail.value?.note?.trim() || "");
-const eventNoteActionText = computed(() => (eventNoteText.value ? "修改" : "添加"));
-const eventNoteEmptyTitle = computed(() => (canEditEventNote.value ? "还没补充备注" : "主家还没补充备注"));
+const eventNoteActionText = computed(() => (eventNoteText.value ? "编辑提醒" : "添加提醒"));
+const eventNoteEmptyTitle = computed(() => (canEditEventNote.value ? "还没写给客人的提醒" : "主家暂未补充提醒"));
 const eventNoteEmptyText = computed(() => (
   canEditEventNote.value
-    ? "可以补一句到场说明、饮食提醒或其他安排。"
-    : "如果主家后面补了到场说明或饮食提醒，会显示在这里。"
+    ? "可补充到场时间、忌口或临时安排。"
+    : "有新的到场或饮食安排，会显示在这里。"
 ));
 const organizerAvatarItem = computed<ParticipantAvatarItem | null>(() => {
   if (!eventDetail.value) return null;
@@ -1142,7 +1159,7 @@ const progressSteps = computed<ProgressStep[]>(() => {
     { label: "餐次已创建", done: Boolean(planDetail.value) },
     { label: "菜单已定", done: Boolean(planDetail.value?.menuLocked) },
     { label: "饭局已发起", done: hasDiningEvent.value },
-    { label: "做饭建议已生成", done: Boolean(cookAssistant.value?.hasSnapshot && !cookAssistant.value.isStale) },
+    { label: "做饭安排已生成", done: Boolean(cookAssistant.value?.hasSnapshot) },
     { label: "计划已结束", done: planClosed.value }
   ];
   const firstUndoneIndex = planSteps.findIndex(item => !item.done);
@@ -1158,15 +1175,16 @@ const progressDesc = computed(() => {
   if (eventAutoEnded.value) return "已经到开饭时间，这场饭局当前按结束态收口，后续只保留回看和分享。";
   if (eventDetail.value?.status === "CANCELLED") return "这场饭局已取消，当前不再继续推进。";
   if (eventDetail.value) return "时间、菜单和参与反馈会沿着这里继续往下推进。";
-  if (planClosed.value) return "这顿饭已经过时，当前不再继续补菜单、发起饭局或生成新的做饭建议。";
+  if (planClosed.value) return "这顿饭已经过时，当前不再继续补菜单、发起饭局或生成做饭安排。";
   if (planDetail.value?.menuLocked) return "菜单已固定，这顿饭现在可以直接开始做饭，或继续补发起饭局与分享。";
-  if (hasDiningEvent.value) return "这顿饭已经挂上饭局，后续菜单和做饭安排继续往下补。";
-  return "先把这顿饭安排起来，菜单、饭局和做饭建议会按顺序补齐。";
+  if (hasDiningEvent.value) return "这顿饭已经挂上饭局，菜单定好后就能继续准备食材和做饭安排。";
+  return "先把这顿饭安排起来，菜单、饭局和做饭安排会按顺序补齐。";
 });
 const canEditPlan = computed(() => Boolean(planDetail.value && !eventClosed.value && !planClosed.value));
 const canManageMenu = computed(() =>
   Boolean(canEditPlan.value && !planDetail.value?.menuLocked && (!eventDetail.value || isEventOrganizer.value))
 );
+const canManageCookAssistant = computed(() => Boolean(planDetail.value && (!eventDetail.value || isEventOrganizer.value)));
 const currentParticipant = computed(() => visibleEventParticipants.value.find(item => item.userUid === sessionStore.uid) ?? null);
 const currentBringRecipeId = computed(() => currentParticipant.value?.bringRecipeId ?? null);
 const canChooseWish = computed(() =>
@@ -1445,65 +1463,68 @@ const recipeConfirmDisabled = computed(() => {
   return !recipePendingAddCount.value && !recipePendingRemoveCount.value;
 });
 const recipeSheetTitle = computed(() => {
-  if (recipeSheetMode.value === "bring") return "我带菜";
-  if (recipeSheetMode.value === "wish") return "我想吃";
+  if (recipeSheetMode.value === "bring") return "我带一道菜";
+  if (recipeSheetMode.value === "wish") return "提一道想吃的菜";
   return "添加菜单";
 });
 const recipeSheetSubtitle = computed(() => (
   recipeSheetMode.value === "bring"
-    ? "从我的菜谱里选一道准备带去的菜，单独记在带菜区里。"
+    ? "从我的菜谱里选一道，带去和大家一起吃。"
     : recipeSheetMode.value === "wish"
-      ? "从我的菜谱里选一道这顿想吃的菜，先留给主家参考。"
+      ? "从我的菜谱里选一道，告诉主家这顿你想吃什么。"
       : "先从我的菜谱里勾选要加进来的菜单。"
 ));
 const recipeSheetTipText = computed(() => (
   recipeSheetMode.value === "bring"
-    ? "这里只显示我的菜谱；带去的菜不会并进主家的菜单和采购清单。"
+    ? "带来的菜只用于这次饭局，不会算进主家菜单和采购清单。"
     : recipeSheetMode.value === "wish"
-      ? "这里只显示我的菜谱；提进去的是一道想吃的建议，不会直接并进主家菜单。"
+      ? "这只是给主家的建议，不会直接加进本次菜单。"
       : ""
 ));
 const recipeSheetEmptyTitle = computed(() => (
   recipeSheetMode.value === "bring"
-    ? "还没有可带的菜谱"
+    ? "还没有适合带去的菜"
     : recipeSheetMode.value === "wish"
-      ? "还没有可提的菜谱"
+      ? "还没有想分享的菜"
       : "还没有我的菜谱"
 ));
 const recipeSheetEmptyText = computed(() => (
   recipeSheetMode.value === "bring"
-    ? "先准备一道自己的拿手菜，再回来登记这场饭局的带菜安排。"
+    ? "先去我的菜谱挑一道，下次聚餐就能带上了。"
     : recipeSheetMode.value === "wish"
-      ? "先把想吃的菜存进自己的菜谱，再回来提给主家参考。"
-    : "先去灵感广场看看，看到满意的再回来安排这顿饭。"
+      ? "先把喜欢的菜存进我的菜谱，再回来分享给主家。"
+      : "先去灵感广场看看，看到满意的再回来安排这顿饭。"
 ));
 const recipeConfirmButtonText = computed(() => {
   if (recipeSubmitting.value) return "保存中...";
   if (recipeSheetMode.value === "bring") {
-    return currentBringRecipeId.value ? "更新我带菜" : "确认我带菜";
+    return currentBringRecipeId.value ? "换这道菜" : "就带这道菜";
   }
   if (recipeSheetMode.value === "wish") {
-    return "放进我想吃池";
+    return "告诉主家";
   }
   return recipePendingRemoveCount.value > 0 ? "确认调整" : "确认添加";
 });
 const menuPanelEmptyText = computed(() => {
   if (eventDetail.value) {
     return isEventOrganizer.value
-      ? "这顿饭吃什么先由主家安排，后续还可以继续补菜单。"
-      : "这顿饭吃什么先由主家安排，等主家定好后你再看是否要带菜。";
+      ? "从菜谱里挑几道，定好后就能安排食材和做饭。"
+      : "定好后会显示在这里。";
   }
   return "先把这顿饭的菜单定下来，后面生成做饭安排和发起饭局都会基于这里继续。";
 });
+const bringPanelEmptyTitle = computed(() => (
+  isEventOrganizer.value ? "大家还没说要带什么菜" : "还没有人准备带菜"
+));
 const bringPanelEmptyText = computed(() => (
-  canChooseBring.value
-    ? "你可以从自己的菜谱里先登记一道要带的菜，避免和主家准备重复。"
-    : "后面谁准备带什么，会继续单独记在这里，不和主家菜单混在一起。"
+  isEventOrganizer.value
+    ? "谁想带一道菜来，都会显示在这里。"
+    : "想带一道拿手菜来，就在这里选一下。"
 ));
 const wishPanelEmptyText = computed(() => (
-  canChooseWish.value
-    ? "你可以先提一道自己想吃的菜，主家后面会从这里决定要不要加入本次菜单。"
-    : "后面大家想吃什么，会先匿名留在这里给主家参考。"
+  isEventOrganizer.value
+    ? "客人可以把想吃的菜留在这里，由你决定是否加入菜单。"
+    : "提一道想吃的菜，给主家参考。"
 ));
 const scheduleMinDate = computed(() => {
   if (eventDetail.value?.scheduledAt) return todayText();
@@ -1575,16 +1596,23 @@ const participantDeclinedItems = computed<ParticipantSheetItem[]>(() => {
     }));
 });
 const cookAssistantMeta = computed(() => {
-  if (eventClosed.value || planClosed.value) return "这顿饭已经结束，当前不再生成新的做饭建议。";
-  if (!currentMenuItems.value.length) return "这桌菜还没定下来，先补菜单后再生成做饭建议。";
-  if (cookAssistantLoading.value && !cookAssistant.value?.hasSnapshot) return "正在生成这顿饭的流程安排";
-  if (!cookAssistant.value?.hasSnapshot) return "先整理这桌菜，再开始做饭。";
-  if (cookAssistant.value.isStale) return "菜单或菜谱有变化，建议重新生成。";
-  return cookAssistant.value.generatedAt ? `最近生成于 ${formatDateTimeMinute(cookAssistant.value.generatedAt)}` : "已生成";
+  if (eventClosed.value || planClosed.value) return "这顿饭已经结束，做饭安排留在这里供回看。";
+  if (cookAssistantLoading.value && !cookAssistant.value?.hasSnapshot) return "正在整理这顿饭的开做顺序";
+  if (!cookAssistant.value?.hasSnapshot) {
+    return eventDetail.value && !isEventOrganizer.value ? "主家还在准备做饭安排。" : "菜单已经定好，等你来生成安排。";
+  }
+  return "这顿饭的安排已备好";
 });
+const cookAssistantEmptyText = computed(() => (
+  eventDetail.value && !isEventOrganizer.value
+    ? "主家还在准备做饭安排。"
+    : "菜单已经定好，现在生成这顿饭的做饭安排。"
+));
 const shoppingPanelText = computed(() => {
   if (eventClosed.value) return "这顿饭已经结束，当前不再补采购。";
-  if (!currentMenuItems.value.length) return "先把菜单补齐，后面再看缺什么。";
+  if (!currentMenuItems.value.length) {
+    return isEventOrganizer.value ? "菜单定好后，再看需要准备什么。" : "主家定好菜单后，食材准备的进度会显示在这里。";
+  }
   if (!eventDetail.value) {
     if (hasLinkedShoppingList.value && linkedShoppingListName.value) {
       return `这顿饭已挂到「${linkedShoppingListName.value}」，后面要补采购时先回这张清单继续。`;
@@ -1596,12 +1624,20 @@ const shoppingPanelText = computed(() => {
   }
   if (gapLoading.value) return "正在按当前菜单刷新这顿饭的缺口。";
   if (hasLinkedShoppingList.value && linkedShoppingListName.value && currentEventGapCount.value > 0) {
-    return `当前这顿已挂到「${linkedShoppingListName.value}」，缺的食材继续补到这张清单。`;
+    return isEventOrganizer.value
+      ? `已同步到「${linkedShoppingListName.value}」，缺的食材继续补到这张清单。`
+      : `主家正在通过「${linkedShoppingListName.value}」准备食材。`;
   }
-  if (currentEventGapCount.value > 0) return `当前这顿还差 ${currentEventGapCount.value} 样食材，确认菜单后就去采购。`;
-  if (eventDetail.value?.status === "CONFIRMED") return "菜单已经定下来了，当前没有明显缺口，可以直接开始做饭。";
+  if (currentEventGapCount.value > 0) {
+    return isEventOrganizer.value
+      ? `还差 ${currentEventGapCount.value} 样食材，一起补齐再开饭。`
+      : `主家正在准备 ${currentEventGapCount.value} 样食材。`;
+  }
+  if (eventDetail.value?.status === "CONFIRMED") {
+    return isEventOrganizer.value ? "食材都备齐了，可以开始做饭。" : "食材已经准备好，等开饭啦。";
+  }
   if (gapErrorText.value) return "缺口暂时没同步出来，先确认菜单，后面再去缺口页看。";
-  return "先确认菜单；确认后这里会继续显示当前饭局还差什么。";
+  return isEventOrganizer.value ? "菜单定好后，这里会告诉你还差什么。" : "主家定好菜单后，食材准备的进度会显示在这里。";
 });
 const memoryPanelTitle = computed(() => (eventClosed.value ? "这顿饭可以留个回忆了" : "饭局回忆"));
 const memoryPanelText = computed(() => {
@@ -1942,6 +1978,12 @@ function recipeSheetStatusText(item: RecipeSheetItem) {
   return "添加";
 }
 
+function recipeSheetMetaText(item: RecipeSheetItem) {
+  return item.durationText
+    ? `${item.category?.name || "未分类"} · ${item.durationText}`
+    : item.category?.name || "未分类";
+}
+
 async function openRecipeSheet(mode: RecipeSheetMode = recipeSheetMode.value) {
   if (planClosed.value || eventClosed.value) return;
   if (!sessionStore.isLoggedIn) return;
@@ -1952,12 +1994,35 @@ async function openRecipeSheet(mode: RecipeSheetMode = recipeSheetMode.value) {
   recipeSheetLoading.value = true;
   recipeSheetError.value = "";
   try {
-    const result = await recipeApi.listMyRecipes({ page: 1, pageSize: 100 });
+    const result = await recipeApi.listMyRecipes({ page: 1, pageSize: RECIPE_SHEET_PAGE_SIZE });
     recipeSheetItems.value = result.items;
+    recipeSheetPage.value = result.page;
+    recipeSheetHasNext.value = result.hasNext;
+    recipeSheetMoreError.value = "";
   } catch (error) {
     recipeSheetError.value = error instanceof Error ? error.message : "我的菜谱加载失败，点此重试";
   } finally {
     recipeSheetLoading.value = false;
+  }
+}
+
+async function loadMoreRecipeSheet() {
+  if (recipeSheetLoading.value || recipeSheetLoadingMore.value || !recipeSheetHasNext.value) return;
+
+  recipeSheetLoadingMore.value = true;
+  recipeSheetMoreError.value = "";
+  try {
+    const result = await recipeApi.listMyRecipes({
+      page: recipeSheetPage.value + 1,
+      pageSize: RECIPE_SHEET_PAGE_SIZE
+    });
+    recipeSheetItems.value = [...recipeSheetItems.value, ...result.items];
+    recipeSheetPage.value = result.page;
+    recipeSheetHasNext.value = result.hasNext;
+  } catch (error) {
+    recipeSheetMoreError.value = error instanceof Error ? error.message : "加载更多失败，点此重试";
+  } finally {
+    recipeSheetLoadingMore.value = false;
   }
 }
 
@@ -2280,9 +2345,9 @@ async function confirmBringSelection() {
     });
     recipeSheetVisible.value = false;
     recipeSelectedIds.value = [];
-    await uniPlatform.feedback.toast({ title: hadBring ? "我带菜已更新" : "已登记我带菜", icon: "success" });
+    await uniPlatform.feedback.toast({ title: hadBring ? "这次就换成这道菜" : "好，这道菜就交给你啦", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "登记带菜失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "带菜没成功，再试一次", icon: "none" });
   } finally {
     recipeSubmitting.value = false;
   }
@@ -2301,9 +2366,9 @@ async function confirmWishSelection() {
     });
     recipeSheetVisible.value = false;
     recipeSelectedIds.value = [];
-    await uniPlatform.feedback.toast({ title: "已放进我想吃池", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已经告诉主家啦", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交我想吃失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "这道菜没告诉主家，再试一次", icon: "none" });
   } finally {
     recipeSubmitting.value = false;
   }
@@ -2318,7 +2383,7 @@ async function toggleWishSupport(item: WishEntry) {
       action: item.supportedByMe ? "UNSUPPORT" : "SUPPORT"
     });
     await uniPlatform.feedback.toast({
-      title: item.supportedByMe ? (item.suggestedByMe ? "已撤下这道想吃" : "已取消附议") : "已附议",
+      title: item.supportedByMe ? (item.suggestedByMe ? "已经撤回建议" : "已取消支持") : "我也想吃这道菜",
       icon: "success"
     });
   } catch (error) {
@@ -2334,7 +2399,7 @@ async function addWishItemToMenu(item: WishEntry) {
   try {
     eventDetail.value = await mealApi.addDiningEventWishToMenu(eventDetail.value.id, item.id, createOperationId());
     await loadDetail();
-    await uniPlatform.feedback.toast({ title: "已加入本次菜单", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已经加进这顿饭啦", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入菜单失败", icon: "none" });
   } finally {
@@ -2412,14 +2477,23 @@ async function loadCookAssistant(currentPlanItemId: UUID) {
 }
 
 async function handleCookAssistantAction() {
-  if (!planDetail.value || cookAssistantLoading.value || submitting.value || eventClosed.value || planClosed.value) return;
+  if (
+    !planDetail.value ||
+    !planDetail.value.menuLocked ||
+    !canManageCookAssistant.value ||
+    cookAssistant.value?.hasSnapshot ||
+    cookAssistantLoading.value ||
+    submitting.value ||
+    eventClosed.value ||
+    planClosed.value
+  ) return;
   cookAssistantLoading.value = true;
   try {
     cookAssistant.value = await mealApi.generateCookAssistant(planDetail.value.id, {
       operationId: createOperationId()
     });
     await loadDetail();
-    await uniPlatform.feedback.toast({ title: cookAssistant.value.isStale ? "已重新生成" : "已生成做饭安排", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "这顿饭的做饭安排已经备好啦", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "生成失败", icon: "none" });
   } finally {
@@ -2456,9 +2530,9 @@ async function submitEventNote() {
       note: noteDraft.value.trim() || null
     });
     noteSheetVisible.value = false;
-    await uniPlatform.feedback.toast({ title: eventDetail.value.note ? "备注已保存" : "备注已清空", icon: "success" });
+    await uniPlatform.feedback.toast({ title: eventDetail.value.note ? "提醒已经发给大家啦" : "提醒已清除", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "备注保存失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提醒没发出去，再试一次", icon: "none" });
   } finally {
     submitting.value = false;
   }
@@ -2471,6 +2545,11 @@ function resolveMenuMeta(item: MenuEntry) {
 function resolveMenuStatusText(item: MenuEntry) {
   if (eventDetail.value) return "主家菜单";
   return resolveMenuMeta(item) || "待安排";
+}
+
+function wishItemMetaText(item: WishEntry) {
+  if (item.inCurrentMenu) return "这道菜已经加进本次菜单。";
+  return isEventOrganizer.value ? "看看要不要把它加进这顿饭。" : "先留在这里，等主家看看。";
 }
 
 function formatEventStatus(event: DiningEventSummary, currentMs = Date.now()) {
@@ -2494,10 +2573,7 @@ function resolvePlanDeadlineMs(dateText: string | null | undefined, mealSlot: Me
 }
 
 function shouldIgnorePlanLinkedEvent(plan: MealPlanSummary, event: DiningEventSummary) {
-  if (event.planItemId !== plan.id) return true;
-  const deadlineMs = resolvePlanDeadlineMs(plan.planDate, plan.mealSlot);
-  if (deadlineMs > nowMs.value && isEventClosed(event, nowMs.value)) return true;
-  return false;
+  return event.planItemId !== plan.id;
 }
 
 function isEventExpired(event: DiningEventSummary, currentMs = Date.now()) {
@@ -2782,7 +2858,7 @@ function handleFooterAction(action: FooterActionKey) {
     return;
   }
   if (action === "cook-assistant") {
-    if (cookAssistant.value?.hasSnapshot && !cookAssistant.value.isStale) {
+    if (cookAssistant.value?.hasSnapshot) {
       openCookAssistantPage();
       return;
     }
@@ -4043,8 +4119,6 @@ function clearFocusedSection() {
 .recipe-sheet__state,
 .recipe-sheet__empty-title,
 .recipe-sheet__empty-text,
-.recipe-sheet__name,
-.recipe-sheet__meta,
 .recipe-sheet__status-text {
   display: block;
 }
@@ -4087,18 +4161,13 @@ function clearFocusedSection() {
 .recipe-sheet__list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
-  padding-right: 2rpx;
+  gap: var(--space-page);
 }
 
 .recipe-sheet__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
-  padding: 22rpx 24rpx;
-  border: 1rpx solid transparent;
-  border-radius: 24rpx;
+	overflow: hidden;
+	border: 1rpx solid transparent;
+  border-radius: var(--radius-xs);
   background: var(--color-surface-muted-frost);
 }
 
@@ -4120,53 +4189,19 @@ function clearFocusedSection() {
   opacity: 0.52;
 }
 
-.recipe-sheet__cover {
-  flex: 0 0 112rpx;
-  width: 112rpx;
-  height: 112rpx;
-  overflow: hidden;
-  border-radius: 24rpx;
-  background: var(--color-support-info);
+:deep(.recipe-sheet__row .recipe-list-row__main) {
+	padding: 22rpx 0;
 }
 
-.recipe-sheet__cover-image,
-.recipe-sheet__cover-placeholder {
-  display: flex;
-  width: 100%;
-  height: 100%;
+:deep(.recipe-sheet__row .recipe-list-row__tail) {
+	padding: 22rpx 24rpx 22rpx 0;
 }
 
-.recipe-sheet__cover-image {
-  display: block;
-}
-
-.recipe-sheet__cover-placeholder {
-  align-items: center;
-  justify-content: center;
-}
-
-.recipe-sheet__cover-icon {
-  color: var(--color-icon-active);
-  font-size: 34rpx;
-}
-
-.recipe-sheet__main {
-  min-width: 0;
-  flex: 1;
-}
-
-.recipe-sheet__name {
-  color: var(--color-text);
-  font-size: 28rpx;
-  font-weight: 600;
-}
-
-.recipe-sheet__meta,
 .recipe-sheet__empty-text {
-  margin-top: 8rpx;
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.6;
+	margin-top: 8rpx;
+	color: var(--color-text-secondary);
+	font-size: 22rpx;
+	line-height: 1.6;
 }
 
 .recipe-sheet__status {
@@ -4210,7 +4245,16 @@ function clearFocusedSection() {
 }
 
 .recipe-sheet__status-text--primary {
-  color: var(--color-tag-primary-text);
+	color: var(--color-tag-primary-text);
+}
+
+.recipe-sheet__more-error {
+	display: block;
+	padding: 0 0 24rpx;
+	color: var(--color-state-danger-text);
+	font-size: 24rpx;
+	line-height: 1.6;
+	text-align: center;
 }
 
 .event-note {
@@ -4422,6 +4466,11 @@ function clearFocusedSection() {
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
+}
+
+.sheet-actions__count {
+  margin-left: 8rpx;
+  opacity: 0.82;
 }
 
 .sheet-actions__button--disabled {

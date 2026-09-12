@@ -129,6 +129,7 @@ export interface UserProfile extends SessionUser {
   birthDate: string | null;
   phone: string | null;
   status: string;
+  isPublicContentPoolMember: boolean;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -1607,6 +1608,7 @@ export interface MyRecipeDetail {
   unitRefs: UnitSummary[];
   canRecommend: boolean;
   recommendation: RecipeRecommendationSummary | null;
+  owner: RecipeOwnerSummary;
   status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
   version: number;
   createdAt: IsoDateTime;
@@ -1629,7 +1631,6 @@ export interface RecipeRecommendationSummary {
   recipeId: UUID;
   sourceVersionId: UUID;
   recipeTitle: string;
-  curatedByName: string;
   suggestedCategory: InspirationCategorySummary;
   status: RecipeRecommendationStatus;
   reviewNote: string | null;
@@ -1639,6 +1640,11 @@ export interface RecipeRecommendationSummary {
   updatedAt: IsoDateTime;
   reviewedAt: IsoDateTime | null;
   withdrawnAt: IsoDateTime | null;
+}
+
+export interface RecipeOwnerSummary {
+  uid: number;
+  nickname: string | null;
 }
 
 export interface CollectionSceneSummary {
@@ -1738,7 +1744,7 @@ export interface InspirationRecipeDetail {
   planLinks: RecipePlanLinkSummary[];
   collectCount: number;
   ownedRecipeId: UUID | null;
-  curatedByName: string | null;
+  owner: RecipeOwnerSummary;
   updatedAt: IsoDateTime;
 }
 

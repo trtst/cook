@@ -374,6 +374,7 @@ export class UserProfileModel extends SessionUserModel {
   @ApiProperty({ type: String, nullable: true, example: "1990-09-04" }) birthDate!: string | null;
   @ApiProperty({ ...nullableString, description: "脱敏后的手机号，格式如 138xxxxx000" }) phone!: string | null;
   @ApiProperty({ type: String }) status!: string;
+  @ApiProperty({ type: Boolean, description: "仅后台用户查询返回：是否属于公共内容用户池" }) isPublicContentPoolMember!: boolean;
   @ApiProperty(dateTime) createdAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1209,6 +1210,11 @@ export class RecipePlanLinkModel {
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
 }
 
+export class RecipeOwnerModel {
+  @ApiProperty({ type: Number }) uid!: number;
+  @ApiProperty(nullableString) nickname!: string | null;
+}
+
 export class MyRecipeDetailModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) title!: string;
@@ -1227,6 +1233,7 @@ export class MyRecipeDetailModel {
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
   @ApiProperty({ type: Boolean }) canRecommend!: boolean;
   @ApiProperty({ type: () => RecipeRecommendationModel, nullable: true }) recommendation!: RecipeRecommendationModel | null;
+  @ApiProperty({ type: () => RecipeOwnerModel }) owner!: RecipeOwnerModel;
   @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
@@ -1328,7 +1335,7 @@ export class InspirationRecipeDetailModel {
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
-  @ApiProperty(nullableString) curatedByName!: string | null;
+  @ApiProperty({ type: RecipeOwnerModel }) owner!: RecipeOwnerModel;
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
@@ -1347,7 +1354,6 @@ export class RecipeRecommendationModel {
   @ApiProperty(uuid) recipeId!: string;
   @ApiProperty(uuid) sourceVersionId!: string;
   @ApiProperty({ type: String }) recipeTitle!: string;
-  @ApiProperty({ type: String }) curatedByName!: string;
   @ApiProperty({ type: InspirationCategoryModel }) suggestedCategory!: InspirationCategoryModel;
   @ApiProperty({ type: String, enum: ["PENDING", "REJECTED", "ADOPTED", "WITHDRAWN"] }) status!: string;
   @ApiProperty(nullableString) reviewNote!: string | null;

@@ -50,7 +50,7 @@ import type {
 } from "../../contracts/types";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
-import { isPublicInspirationRecipe } from "../recipe/recipe-inspiration-owner";
+import { isPublicInspirationRecipe } from "../recipe/public-content-user-pool";
 import { IngredientImageService } from "../admin/ingredient-image.service";
 import { WechatSubscribeService } from "../wechat/wechat-subscribe.service";
 
@@ -3738,7 +3738,7 @@ export class PantryService {
             },
             select: {
               id: true,
-              ownerId: true
+              isInspiration: true
             }
           })
         : Promise.resolve([])
@@ -3767,7 +3767,7 @@ export class PantryService {
       recipeMap: new Map(
         recipes.map(item => [
           item.id,
-          item.ownerId ? "my" as const : "inspiration" as const
+          item.isInspiration ? "inspiration" as const : "my" as const
         ])
       )
     };

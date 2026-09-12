@@ -273,14 +273,14 @@ async function main() {
 
     const completeRecipe = await tx.recipe.create({
       data: {
-        ownerId: null,
+        ownerId: systemUserId,
+        ownerNicknameSnapshot: "炊火记内容组",
         isInspiration: true,
         inspirationCategoryId,
         currentVersionId: completeVersion.id,
         title: completeContent.name,
         searchText: buildRecipeSearchText(completeContent),
         coverImageUrl: completeCoverImageUrl,
-        curatedByName: "炊火记内容组",
         status: "ACTIVE",
         sortOrder: 1
       }
@@ -288,6 +288,7 @@ async function main() {
     const incompleteRecipe = await tx.recipe.create({
       data: {
         ownerId: personalUserId,
+        ownerNicknameSnapshot: "菜谱测试用户",
         categoryId: personalCategoryId,
         currentVersionId: incompleteVersion.id,
         title: incompleteContent.name,

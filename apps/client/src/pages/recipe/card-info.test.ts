@@ -36,6 +36,7 @@ function expectSelectorExcludes(source: string, selector: string, snippets: stri
 
 const recipePageSource = readFile("./index.vue");
 const recipeManageListSource = readFile("../../pages_recipe/list/index.vue");
+const recipeListRowSource = readFile("../../components/Recipe/RecipeListRow.vue");
 const recipeSearchBarSource = readFile("../../components/Recipe/RecipeSearchBar.vue");
 const imageEmptySource = readFile("../../components/ImageEmpty.vue");
 
@@ -60,11 +61,18 @@ expectExcludes(recipePageSource, "item.coverTag");
 expectExcludes(recipePageSource, "coverTag:");
 expectExcludes(recipePageSource, ".recipe-card__cover-tag");
 
-expectIncludes(recipeManageListSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
-expectIncludes(recipeManageListSource, '<ImageLoader class="card__cover-image" :src="item.coverImageUrl" />');
+expectIncludes(recipeManageListSource, 'import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";');
+expectIncludes(recipeManageListSource, '<RecipeListRow');
+expectIncludes(recipeManageListSource, 'class="card__delete"');
 expectExcludes(recipeManageListSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectExcludes(recipeManageListSource, 'class="card__cover-text font-black">封面');
 expectExcludes(recipeManageListSource, 'mode !== "drafts"');
+
+expectExcludes(recipeListRowSource, "recipe-list-row--small");
+expectExcludes(recipeListRowSource, "min-height:");
+expectSelectorIncludes(recipeListRowSource, ".recipe-list-row__cover", [
+  "aspect-ratio: 4 / 3;"
+]);
 
 expectIncludes(recipeSearchBarSource, 'class="cookfont icon-search recipe-search__icon"');
 expectExcludes(recipeSearchBarSource, 'import searchIcon from "@/assets/recipe-page/search.svg";');

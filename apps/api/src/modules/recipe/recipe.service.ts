@@ -9,7 +9,8 @@ import {
 import { Prisma, RecipeStatus, type UploadAsset } from "@prisma/client";
 import { recipeDifficultyText, recipeDurationText } from "../../common/display-text";
 import { PrismaService } from "../../common/prisma.service";
-import { inspirationRecipeWhere } from "./recipe-inspiration-owner";
+import { publicInspirationRecipeWhere } from "./public-content-user-pool";
+import { toOwnerNicknameSnapshot } from "./recipe-owner-snapshot";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
@@ -310,11 +311,6 @@ function toCollectionSceneSummary(scene: RecipeSceneRow, recipeCount: number, up
   };
 }
 
-function resolveCuratedByName(nickname: string | null | undefined) {
-  const name = nickname?.trim();
-  return name || "一位炊友";
-}
-
 function normalizeRecipeImageUrl(imageUrl: string | null | undefined) {
   const value = imageUrl?.trim();
   return value || null;
@@ -326,7 +322,6 @@ function toRecipeRecommendationSummary(record: RecipeRecommendationRow): RecipeR
     recipeId: record.recipeId,
     sourceVersionId: record.sourceVersionId,
     recipeTitle: record.recipeTitle,
-    curatedByName: record.curatedByName,
     suggestedCategory: {
       id: record.suggestedCategory.id,
       name: record.suggestedCategory.name,
@@ -1390,9 +1385,11 @@ export class RecipeService {
         const origin = this.readOriginContent(content);
         await this.uploadService.bindDraftUploads(tx, draftId, version.id, Array.from(uploadIds));
         const sortOrder = await this.nextRecipeSortOrder(tx, userId, category.id);
+        const ownerNicknameSnapshot = await this.getOwnerNicknameSnapshot(tx, userId);
         const created = await tx.recipe.create({
           data: {
             ownerId: userId,
+            ownerNicknameSnapshot,
             categoryId: category.id,
             inspirationCategoryId: inspirationCategory?.id ?? null,
             currentVersionId: version.id,
@@ -1505,7 +1502,7 @@ export class RecipeService {
           id: recipeId,
           OR: [
             { ownerId: userId, status: { in: activeRecipeStatuses } },
-            inspirationRecipeWhere("ACTIVE")
+            publicInspirationRecipeWhere("ACTIVE")
           ]
         },
         select: {
@@ -1723,7 +1720,7 @@ export class RecipeService {
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
           id: sourceRecipeId,
-          ...inspirationRecipeWhere("ACTIVE")
+          ...publicInspirationRecipeWhere("ACTIVE")
         },
         include: {
           owner: { select: { uid: true, nickname: true } },
@@ -1783,9 +1780,11 @@ export class RecipeService {
       await this.assertRecipeQuota(tx, userId, 1);
       await this.assertStorageDelta(tx, userId, recipeBytes);
       const sortOrder = category ? await this.nextRecipeSortOrder(tx, userId, category.id) : 0;
+      const ownerNicknameSnapshot = await this.getOwnerNicknameSnapshot(tx, userId);
       const created = await tx.recipe.create({
         data: {
           ownerId: userId,
+          ownerNicknameSnapshot,
           categoryId: category?.id ?? null,
           inspirationCategoryId: sourceRecipe.inspirationCategoryId,
           currentVersionId: sourceRecipe.currentVersionId,
@@ -1824,7 +1823,6 @@ export class RecipeService {
           sourceVersionId: recipe.currentVersionId,
           suggestedCategoryId: suggestedCategory.id,
           recipeTitle: recipe.title,
-          curatedByName: resolveCuratedByName(recipe.owner?.nickname),
           suggestedCategoryName: suggestedCategory.name
         },
         include: {
@@ -2087,7 +2085,7 @@ export class RecipeService {
       const sourceRecipe = await tx.recipe.findFirst({
         where: {
           id: sourceRecipeId,
-          ...inspirationRecipeWhere("ACTIVE")
+          ...publicInspirationRecipeWhere("ACTIVE")
         },
         include: {
           inspirationCategory: true,
@@ -2250,7 +2248,7 @@ export class RecipeService {
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const where: Prisma.RecipeWhereInput = {
-      ...inspirationRecipeWhere("ACTIVE"),
+      ...publicInspirationRecipeWhere("ACTIVE"),
       ...(categoryId ? { inspirationCategoryId: categoryId } : {}),
       ...(keyword ? { searchText: { contains: buildSearchKey(keyword) } } : {}),
       ...(difficulty || duration
@@ -2297,7 +2295,7 @@ export class RecipeService {
     const recipe = await this.prisma.recipe.findFirst({
       where: {
         id: recipeId,
-        ...inspirationRecipeWhere("ACTIVE")
+        ...publicInspirationRecipeWhere("ACTIVE")
       },
       include: {
         owner: { select: { uid: true, nickname: true } },
@@ -2322,7 +2320,7 @@ export class RecipeService {
         where: {
           id: recipeId,
           OR: [
-            inspirationRecipeWhere("ACTIVE"),
+            publicInspirationRecipeWhere("ACTIVE"),
             { ownerId: userId, status: { in: activeRecipeStatuses } }
           ]
         }
@@ -2470,6 +2468,15 @@ export class RecipeService {
     });
     if (!recipe) throw new NotFoundException("菜谱不存在");
     return recipe;
+  }
+
+  private async getOwnerNicknameSnapshot(tx: RecipeDb, userId: UUID) {
+    const owner = await tx.user.findUnique({
+      where: { id: userId },
+      select: { nickname: true }
+    });
+    if (!owner) throw new NotFoundException("菜谱持有人不存在");
+    return toOwnerNicknameSnapshot(owner.nickname);
   }
 
   private async loadLatestRecipeRecommendation(tx: RecipeDb, recipeId: UUID): Promise<RecipeRecommendationSummary | null> {
@@ -2637,6 +2644,10 @@ export class RecipeService {
       unitRefs: refs.unitRefs,
       canRecommend: !recommendBlockMessage,
       recommendation,
+      owner: {
+        uid: recipe.owner.uid,
+        nickname: recipe.ownerNicknameSnapshot
+      },
       status: recipe.status,
       version: recipe.version,
       createdAt: toIsoDate(recipe.createdAt),
@@ -2906,7 +2917,10 @@ export class RecipeService {
       planLinks,
       collectCount: recipe.collectCount,
       ownedRecipeId,
-      curatedByName: recipe.curatedByName,
+      owner: {
+        uid: recipe.owner.uid,
+        nickname: recipe.ownerNicknameSnapshot
+      },
       updatedAt: toIsoDate(recipe.updatedAt)
     };
   }
@@ -3237,7 +3251,7 @@ export class RecipeService {
 
     const candidates = await tx.recipe.findMany({
       where: {
-        ...inspirationRecipeWhere("ACTIVE"),
+        ...publicInspirationRecipeWhere("ACTIVE"),
         searchText: recipe.searchText,
         coverImageUrl: normalizeRecipeImageUrl(recipe.coverImageUrl)
       },

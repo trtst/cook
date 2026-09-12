@@ -25,7 +25,14 @@ function expectSelectorIncludes(selector: string, snippets: string[]) {
 expectIncludes("'meal-footer__button--disabled': footerPrimaryAction.disabled || submitting");
 expectIncludes('import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes('<ImageEmpty v-else class="meal-hero__cover-empty" copy="封面图" ratio="fill" />');
-expectIncludes('<ImageEmpty v-else class="recipe-sheet__cover-placeholder" copy="封面图" ratio="fill" />');
+expectIncludes('import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";');
+expectIncludes('<RecipeListRow');
+expectExcludes('size="small"');
+expectIncludes('@scrolltolower="loadMoreRecipeSheet"');
+expectIncludes('const RECIPE_SHEET_PAGE_SIZE = 20;');
+expectIncludes('const recipeSheetHasNext = ref(false);');
+expectIncludes('const recipeSheetLoadingMore = ref(false);');
+expectIncludes('function loadMoreRecipeSheet()');
 expectIncludes('v-if="canInviteParticipants && inviteShareReady"');
 expectIncludes('const canQuickShareInvite = computed(() => Boolean(eventDetail.value && !eventClosed.value && inviteShareReady.value));');
 expectIncludes("'sheet-actions__button--disabled': recipeConfirmDisabled");

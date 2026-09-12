@@ -125,7 +125,8 @@ import { loadRecipeNutritionSummary } from "../recipe/recipe-nutrition";
 import { buildNutritionFoodWhere, buildNutritionSnapshotDeleteWhere, normalizeNutritionCategory, normalizeNutritionSearch, nutritionSourceVersion, toAdminNutritionFood } from "./nutrition-admin";
 import { buildRecipeWikiQualityCards } from "../recipe/recipe-wiki";
 import { createImportedRecipeVersionTags, replaceAutoRecipeVersionTags } from "../recipe/recipe-version-tags";
-import { inspirationRecipeWhere, pickRecipeInspirationOwner } from "../recipe/recipe-inspiration-owner";
+import { pickPublicContentOwner } from "../recipe/public-content-user-pool";
+import { toOwnerNicknameSnapshot } from "../recipe/recipe-owner-snapshot";
 import { MedalService } from "../user/medal.service";
 import { AdminRecipeImageService } from "./admin-recipe-image.service";
 import { IngredientImageService } from "./ingredient-image.service";
@@ -262,6 +263,7 @@ function toUserProfile(user: {
   birthDate: Date | null;
   phone: string | null;
   status: string;
+  publicContentPoolMember?: { userId: UUID } | null;
   createdAt: Date;
   updatedAt: Date;
 }): UserProfile {
@@ -276,6 +278,7 @@ function toUserProfile(user: {
     birthDate: toDateText(user.birthDate),
     phone: maskPhone(user.phone),
     status: user.status,
+    isPublicContentPoolMember: Boolean(user.publicContentPoolMember),
     createdAt: toIsoDate(user.createdAt),
     updatedAt: toIsoDate(user.updatedAt)
   };
@@ -805,7 +808,8 @@ export class AdminService {
         where,
         orderBy: { createdAt: "desc" },
         skip,
-        take: normalizedPageSize
+        take: normalizedPageSize,
+        include: { publicContentPoolMember: { select: { userId: true } } }
       }),
       this.prisma.user.count({ where })
     ]);
@@ -880,6 +884,7 @@ export class AdminService {
           birthDate: true,
           phone: true,
           status: true,
+          publicContentPoolMember: { select: { userId: true } },
           createdAt: true,
           updatedAt: true
         }
@@ -947,11 +952,15 @@ export class AdminService {
           birthDate: true,
           phone: true,
           status: true,
+          publicContentPoolMember: { select: { userId: true } },
           createdAt: true,
           updatedAt: true
         }
       });
       if (!current) throw new NotFoundException("用户不存在");
+      if (body.status === "DISABLED" && current.publicContentPoolMember) {
+        throw new ConflictException("公共内容用户池成员不能禁用");
+      }
 
       const updated =
         current.status === body.status
@@ -973,6 +982,7 @@ export class AdminService {
                 birthDate: true,
                 phone: true,
                 status: true,
+                publicContentPoolMember: { select: { userId: true } },
                 createdAt: true,
                 updatedAt: true
               }
@@ -3093,9 +3103,6 @@ export class AdminService {
       status: "PENDING",
       recipe: {
         is: {
-          ownerId: {
-            not: null
-          },
           status: "ACTIVE"
         }
       },
@@ -3957,15 +3964,15 @@ export class AdminService {
 
         const created = await tx.recipe.create({
           data: {
-            ownerId: null,
+            ownerId: recommendation.recipe.ownerId,
+            ownerNicknameSnapshot: recommendation.recipe.ownerNicknameSnapshot,
             isInspiration: true,
             categoryId: null,
             inspirationCategoryId: inspirationCategory.id,
             currentVersionId: nextVersion.id,
             title: sourceContent.name,
             searchText: buildRecipeSearchText(sourceContent),
-            coverImageUrl: recommendation.recipe.coverImageUrl,
-            curatedByName: recommendation.curatedByName
+            coverImageUrl: recommendation.recipe.coverImageUrl
           }
         });
 
@@ -4647,16 +4654,22 @@ export class AdminService {
         await this.syncRecipeAssistant(tx, nextVersion.id, content, stagedImages.assistantSteps);
         let inspirationOwnerId: UUID;
         try {
-          inspirationOwnerId = await pickRecipeInspirationOwner(tx);
+          inspirationOwnerId = await pickPublicContentOwner(tx);
         } catch (error) {
-          if (error instanceof Error && error.message.includes("灵感菜谱归属用户池")) {
-            throw new ConflictException("灵感菜谱归属用户池未完成配置，请先准备 100 个有效用户");
+          if (error instanceof Error && error.message.includes("公共内容用户池")) {
+            throw new ConflictException("公共内容用户池未完成配置，请先准备 100 个有效用户");
           }
           throw error;
         }
+        const inspirationOwner = await tx.user.findUnique({
+          where: { id: inspirationOwnerId },
+          select: { nickname: true }
+        });
+        if (!inspirationOwner) throw new ConflictException("公共内容用户不存在");
         const recipe = await tx.recipe.create({
           data: {
             ownerId: inspirationOwnerId,
+            ownerNicknameSnapshot: toOwnerNicknameSnapshot(inspirationOwner.nickname),
             isInspiration: true,
             categoryId: null,
             inspirationCategoryId: inspirationCategory.id,
@@ -4945,9 +4958,24 @@ export class AdminService {
         await replaceAutoRecipeVersionTags(tx, nextVersion.id, content);
         await this.syncRecipeAssistant(tx, nextVersion.id, content);
 
+        let inspirationOwnerId: UUID;
+        try {
+          inspirationOwnerId = await pickPublicContentOwner(tx);
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("公共内容用户池")) {
+            throw new ConflictException("公共内容用户池未完成配置，请先准备 100 个有效用户");
+          }
+          throw error;
+        }
+        const inspirationOwner = await tx.user.findUnique({
+          where: { id: inspirationOwnerId },
+          select: { nickname: true }
+        });
+        if (!inspirationOwner) throw new ConflictException("公共内容用户不存在");
         const created = await tx.recipe.create({
           data: {
-            ownerId: null,
+            ownerId: inspirationOwnerId,
+            ownerNicknameSnapshot: toOwnerNicknameSnapshot(inspirationOwner.nickname),
             isInspiration: true,
             categoryId: null,
             inspirationCategoryId: inspirationCategory.id,
@@ -7270,6 +7298,7 @@ export class AdminService {
           birthDate: true,
           phone: true,
           status: true,
+          publicContentPoolMember: { select: { userId: true } },
           createdAt: true,
           updatedAt: true
         }

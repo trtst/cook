@@ -34,6 +34,7 @@ interface ImportJobDetail extends ImportJob {
 }
 
 interface ImportItemDetail extends ImportItem {
+  errorItems: Array<{ field: string; message: string }>;
   recipeBody: {
     ingredients: Array<{ ingredientId: number | null; unitId: number | null }>;
   };
@@ -100,6 +101,8 @@ function buildDocument(categoryId: number, ingredients: Array<{ name: string }>)
     },
     wiki: {
       tags: [
+        { tagCode: "CUISINE", tagValue: "OTHER" },
+        { tagCode: "DISH_STYLE", tagValue: "STIR_FRY" },
         { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
         { tagCode: "DISH_ROLE", tagValue: "MAIN" },
         { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "NONE" },
@@ -170,7 +173,7 @@ async function main() {
     const validJob = await uploadJson(login.token, "import-flow-valid.json", buildDocument(category.id, ingredients));
     jobIds.push(validJob.id);
     const validItem = await getItem(login.token, validJob.id);
-    assert(validItem.status === "READY", `合法 JSON 未进入 READY: ${validItem.status}`);
+    assert(validItem.status === "READY", `合法 JSON 未进入 READY: ${validItem.status}; ${JSON.stringify(validItem.errorItems)}`);
     assert(validItem.recipeId === null, "发布前不应创建正式菜谱");
     assert(validItem.recipeBody.ingredients.every(item => item.ingredientId !== null && item.unitId !== null), "合法 JSON 未完成严格匹配");
 
@@ -203,13 +206,13 @@ async function main() {
     assert(recipe, "发布后正式菜谱不存在");
     versionId = recipe.currentVersionId;
     assert(recipe.isInspiration && recipe.inspirationCategoryId !== null && recipe.status === "ACTIVE", "发布后的菜谱不是公开灵感菜谱");
-    assert(recipe.ownerId !== null && await prisma.recipeInspirationOwner.findUnique({ where: { userId: recipe.ownerId } }), "发布后未从 100 人用户池分配归属");
+    assert(recipe.ownerId !== null && await prisma.publicContentUserPoolMember.findUnique({ where: { userId: recipe.ownerId } }), "发布后未从 100 人公共内容用户池分配归属");
 
     const version = await prisma.recipeContentVersion.findUnique({ where: { id: versionId }, select: { estimatedCalories: true, toolsJson: true } });
     assert(version?.estimatedCalories === null, "营养结果不应从 JSON 写入正文版本");
     assert(Array.isArray(version?.toolsJson) && version.toolsJson.length > 0, "工具未写入正文版本");
     const tags = await prisma.recipeVersionTag.findMany({ where: { recipeVersionId: versionId, source: "OPS", status: "CONFIRMED" } });
-    assert(tags.length === 5, `导入 OPS 标签数量错误: ${tags.length}`);
+    assert(tags.length === 7, `导入 OPS 标签数量错误: ${tags.length}`);
     const assistant = await prisma.recipeCookAssistant.findUnique({ where: { recipeVersionId: versionId } });
     assert(assistant?.status === "READY", "助理快照未写入");
 

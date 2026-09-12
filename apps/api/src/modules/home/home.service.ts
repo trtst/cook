@@ -29,7 +29,7 @@ import type {
 } from "../../contracts/types";
 import { PantryService } from "../pantry/pantry.service";
 import { versionToContent } from "../recipe/recipe-content";
-import { inspirationRecipeWhere } from "../recipe/recipe-inspiration-owner";
+import { publicInspirationRecipeWhere } from "../recipe/public-content-user-pool";
 import { HomeImageService } from "./home-image.service";
 
 type BoardDb = Prisma.TransactionClient | PrismaService;
@@ -578,7 +578,7 @@ export class HomeService {
       this.prisma.recipe.findMany({
         where: {
           status: "ACTIVE",
-          OR: [{ ownerId: userId }, inspirationRecipeWhere("ACTIVE")]
+          OR: [{ ownerId: userId }, publicInspirationRecipeWhere("ACTIVE")]
         },
         include: {
           currentVersion: true

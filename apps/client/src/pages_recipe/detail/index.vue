@@ -202,6 +202,8 @@
 	              <text class="tips-text">{{ detailContent.tips }}</text>
 	            </view>
 
+              <text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>
+
               <view v-if="primaryPlanLink" class="section section--plan-links">
                 <view class="section__head">
                   <text class="section__label">做饭安排</text>
@@ -224,8 +226,6 @@
                   <text class="plan-link-entry__count">{{ planLinkCountText }}</text>
                 </view>
               </view>
-
-              <text v-if="curatedText" class="detail-curated">{{ curatedText }}</text>
 
 	              <view v-if="showStickyActions" class="detail-inline-actions">
                 <template v-if="isExternalDetail">
@@ -660,11 +660,13 @@ const externalRecipeRef = computed(() => {
   }
   return null;
 });
-const curatedText = computed(() => {
-  const name = inspirationDetail.value?.curatedByName?.trim();
+const attributionName = computed(() => {
+  return (kind.value === "my" ? myDetail.value?.owner : inspirationDetail.value?.owner)?.nickname?.trim() || "";
+});
+const attributionText = computed(() => {
+  const name = attributionName.value;
   if (!name) return "";
-  const dateText = inspirationDetail.value?.updatedAt?.slice(0, 10) || "";
-  return dateText ? `由${name}整理 · ${dateText}` : `由${name}整理`;
+  return `由${name}整理`;
 });
 const canOpenRecommendSheet = computed(() => {
 	const status = currentRecommendation.value?.status;

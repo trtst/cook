@@ -26,6 +26,8 @@ expectExcludes('<el-table-column label="头像"');
 expectExcludes("row.avatarUrl");
 expectIncludes("ElImage", mainSource);
 expectIncludes('prop="cookNo" label="炊火号"');
+expectIncludes("公共内容池");
+expectIncludes("isPublicContentPoolMember", userApiSource);
 expectIncludes("个人资料");
 expectIncludes("entitlement.user.avatarUrl");
 expectIncludes("formatGenderText(entitlement.user.gender)");

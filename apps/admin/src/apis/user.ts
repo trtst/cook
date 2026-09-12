@@ -11,6 +11,7 @@ export interface UserProfile {
   birthDate: string | null;
   phone: string | null;
   status: string;
+  isPublicContentPoolMember: boolean;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }

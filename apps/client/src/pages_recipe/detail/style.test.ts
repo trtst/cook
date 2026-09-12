@@ -26,6 +26,15 @@ assert.ok(source.includes('import ImageLoader from "@/components/ImageLoader.vue
 assert.ok(source.includes('<ImageLoader class="hero__image" :src="coverImageUrl" />'), "Expected the recipe detail cover to keep loading until its image succeeds.");
 assert.ok(!source.includes('import ImageEmpty from "@/components/ImageEmpty.vue";'), "Expected recipe detail cover empty state to be owned by ImageLoader.");
 
+const tipsIndex = source.indexOf('<text class="tips-text">{{ detailContent.tips }}</text>');
+const curatedIndex = source.indexOf('<text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>');
+const planLinksIndex = source.indexOf('<view v-if="primaryPlanLink" class="section section--plan-links">');
+assert.ok(tipsIndex >= 0 && tipsIndex < curatedIndex && curatedIndex < planLinksIndex, "Expected curated attribution to follow tips and precede later detail sections.");
+assert.ok(source.includes("const attributionName = computed(() => {"), "Expected recipe detail attribution to have one name source.");
+assert.ok(source.includes('myDetail.value?.owner : inspirationDetail.value?.owner'), "Expected all recipe details to read their frozen owner summary.");
+assert.ok(source.includes('?.nickname?.trim() || "";'), "Expected an empty owner nickname to hide attribution.");
+assert.ok(!source.includes("curatedByName"), "Expected legacy curatedByName attribution to be removed.");
+
 assert.ok(
   source.includes('<text class="cookfont summary-card__report-entry-icon">&#xe710;</text>'),
   "Expected the recipe report entry to render the report icon before its label."

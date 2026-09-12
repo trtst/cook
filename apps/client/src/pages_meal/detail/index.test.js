@@ -270,6 +270,7 @@ describe("pages_meal/detail/index", () => {
     const session = await loginWithCode(phone);
     const authHeaders = { authorization: `Bearer ${session.token}` };
     const recipe = await createRecipeFixture(authHeaders);
+    const extraRecipe = await createRecipeFixture(authHeaders);
     const plan = await createMealPlanFixture(authHeaders, recipe, {
       titlePrefix: "饭局详情验收饭局餐次",
       daysFromNow: 7
@@ -287,14 +288,16 @@ describe("pages_meal/detail/index", () => {
       planDate: plan.planDate,
       planItemId: plan.id,
       eventId: event.id,
-      scheduledAt: event.scheduledAt
+      scheduledAt: event.scheduledAt,
+      extraRecipeTitle: extraRecipe.title
     };
 
     planOnlyFixture = {
       session,
       title: planOnly.title,
       planDate: planOnly.planDate,
-      planItemId: planOnly.id
+      planItemId: planOnly.id,
+      version: planOnly.version
     };
 
     await clearSession();
@@ -309,7 +312,7 @@ describe("pages_meal/detail/index", () => {
     await waitForTitle(page, fixture.title);
   });
 
-  it("饭局详情页可以展示真实饭局正文主状态", async () => {
+  it("主家在菜单未确定时看到亲近的饭局协作文案，且不显示做饭安排", async () => {
     expect(await page.path).toBe("pages_meal/detail/index");
 
     const title = await page.$(".summary-card__title");
@@ -317,12 +320,62 @@ describe("pages_meal/detail/index", () => {
 
     const texts = await collectTexts(page);
     expect(texts).toContain("参与人");
-    expect(texts).toContain("菜单");
-    expect(texts).toContain("我想吃池");
+    expect(texts).toContain("本次菜单");
+    expect(texts).toContain("大家想吃的菜");
+    expect(texts).toContain("带菜安排");
     expect(texts).toContain("采购准备");
-    expect(texts).toContain("做饭助手");
+    expect(texts).not.toContain("做饭助手");
     expect(texts).toContain("主家菜单");
     expect(texts).toContain(fixture.recipeTitle);
+  });
+
+  it("仅从计划进入时，已到开饭时间的关联饭局仍展示协作模块", async () => {
+    await clearSession();
+    const linkedPlanPage = await program.reLaunch(
+      `/pages_meal/detail/index?planItemId=${fixture.planItemId}&planDate=${fixture.planDate}`
+    );
+    await linkedPlanPage.callMethod("automatorSetNowMs", new Date(fixture.scheduledAt).getTime() + 60 * 1000);
+    await linkedPlanPage.callMethod("automatorApplySession", {
+      token: fixture.session.token,
+      uid: fixture.session.user.uid,
+      expiresAt: fixture.session.expiresAt
+    });
+
+    const focusState = await linkedPlanPage.callMethod("automatorReadFocusState");
+    expect(focusState.hasEventDetail).toBe(true);
+
+    const texts = await collectTexts(linkedPlanPage);
+    expect(texts).toContain("大家想吃的菜");
+    expect(texts).toContain("带菜安排");
+    expect(texts).toContain("饭局提醒");
+  });
+
+  it("添加菜单时显示本次新选菜数", async () => {
+    await clearSession();
+    const menuPage = await program.reLaunch(
+      `/pages_meal/detail/index?planItemId=${planOnlyFixture.planItemId}&planDate=${planOnlyFixture.planDate}`
+    );
+    await menuPage.callMethod("automatorApplySession", {
+      token: planOnlyFixture.session.token,
+      uid: planOnlyFixture.session.user.uid,
+      expiresAt: planOnlyFixture.session.expiresAt
+    });
+    await waitForTitle(menuPage, planOnlyFixture.title);
+
+    const addAction = await menuPage.$(".meal-menu__add-action");
+    expect(addAction).toBeTruthy();
+    await addAction.tap();
+    await menuPage.waitFor(".recipe-sheet__row", 8000);
+
+    const rows = await menuPage.$$(".recipe-sheet__row");
+    const extraRecipeRow = await Promise.all(rows.map(async (row) => ((await row.text()).includes(fixture.extraRecipeTitle) ? row : null)))
+      .then(items => items.find(Boolean));
+    expect(extraRecipeRow).toBeTruthy();
+    await extraRecipeRow.tap();
+
+    const texts = await collectTexts(menuPage);
+    expect(texts).toContain("确认添加");
+    expect(texts).toContain("(1)");
   });
 
   it("最近安排 focus=shopping 可以命中详情采购区块", async () => {
@@ -367,7 +420,7 @@ describe("pages_meal/detail/index", () => {
 
     const texts = await collectTexts(focusPage);
     expect(texts).toContain("菜单");
-    expect(texts).toContain("做饭助手");
+    expect(texts).not.toContain("做饭助手");
   });
 
   it("计划详情 Hero 用餐次提问并提示菜单下一步", async () => {
@@ -385,6 +438,31 @@ describe("pages_meal/detail/index", () => {
     const texts = await collectTexts(planPage);
     expect(texts).toContain("晚餐吃什么？");
     expect(texts).toContain("菜单已添好，继续补齐这顿饭。");
+    expect(texts).not.toContain("做饭助手");
+  });
+
+  it("菜单确定后才显示固定的一份做饭安排", async () => {
+    await requestData(`/meal-plans/${planOnlyFixture.planItemId}/confirm-menu`, {
+      method: "POST",
+      headers: withIdempotencyKey({ authorization: `Bearer ${planOnlyFixture.session.token}` }),
+      body: JSON.stringify({ expectedVersion: planOnlyFixture.version })
+    });
+
+    await clearSession();
+    const confirmedPage = await program.reLaunch(
+      `/pages_meal/detail/index?planItemId=${planOnlyFixture.planItemId}&planDate=${planOnlyFixture.planDate}`
+    );
+    await confirmedPage.callMethod("automatorApplySession", {
+      token: planOnlyFixture.session.token,
+      uid: planOnlyFixture.session.user.uid,
+      expiresAt: planOnlyFixture.session.expiresAt
+    });
+    await waitForTitle(confirmedPage, planOnlyFixture.title);
+
+    const texts = await collectTexts(confirmedPage);
+    expect(texts).toContain("做饭助手");
+    expect(texts).toContain("菜单已经定好，现在生成这顿饭的做饭安排。");
+    expect(texts).not.toContain("重新生成建议");
   });
 
   it("饭局到点后 footer 会自动切到分享回忆态", async () => {

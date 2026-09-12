@@ -7,6 +7,7 @@ import { inferIngredientTagFacts } from "../src/modules/recipe/ingredient-tag-fa
 import { replaceAutoRecipeVersionTags } from "../src/modules/recipe/recipe-version-tags";
 import { allowedSystemUnitNames } from "../src/modules/recipe/system-unit-policy";
 import { seedResourceId } from "../src/modules/recipe/seed-resource-ids";
+import { pickPublicContentOwnerId } from "../src/modules/recipe/public-content-user-pool";
 
 loadLocalEnv();
 
@@ -888,6 +889,7 @@ async function upsertRecipeVersion(
 }
 
 async function seedSystemRecipes(
+  ownerUserId: number,
   ingredientMap: Map<
     string,
     {
@@ -900,6 +902,8 @@ async function seedSystemRecipes(
   >,
   inspirationCategoryMap: Map<string, { id: number; sortOrder: number }>
 ) {
+  const owner = await prisma.user.findUniqueOrThrow({ where: { id: ownerUserId }, select: { nickname: true } });
+  const ownerNicknameSnapshot = owner.nickname?.trim() || null;
   const tomato = requireSeedItem(ingredientMap.get("番茄"), "系统食材缺失: 番茄");
   const egg = requireSeedItem(ingredientMap.get("鸡蛋"), "系统食材缺失: 鸡蛋");
   const potato = requireSeedItem(ingredientMap.get("土豆"), "系统食材缺失: 土豆");
@@ -952,7 +956,8 @@ async function seedSystemRecipes(
     await prisma.recipe.upsert({
       where: { id: recipe.recipeId },
       update: {
-        ownerId: null,
+        ownerId: ownerUserId,
+        ownerNicknameSnapshot,
         categoryId: null,
         inspirationCategoryId: recipe.categoryId,
         currentVersionId: version.id,
@@ -968,7 +973,8 @@ async function seedSystemRecipes(
       },
       create: {
         id: recipe.recipeId,
-        ownerId: null,
+        ownerId: ownerUserId,
+        ownerNicknameSnapshot,
         inspirationCategoryId: recipe.categoryId,
         currentVersionId: version.id,
         title: version.name,
@@ -1274,7 +1280,7 @@ async function seedRecipes(
   >,
   inspirationCategoryMap: Map<string, { id: number; sortOrder: number }>
 ) {
-  await seedSystemRecipes(ingredientMap, inspirationCategoryMap);
+  await seedSystemRecipes(ownerUserId, ingredientMap, inspirationCategoryMap);
   await seedOwnerRecipe(ownerUserId, ingredientMap);
 }
 
@@ -1299,11 +1305,17 @@ async function syncSeedResourceSequences() {
 }
 
 export async function syncSystemRecipeCatalog() {
+  const poolMembers = await prisma.publicContentUserPoolMember.findMany({
+    where: { user: { status: "ACTIVE" } },
+    select: { userId: true },
+    orderBy: { userId: "asc" }
+  });
+  const ownerId = pickPublicContentOwnerId(poolMembers.map(item => item.userId));
   const unitMap = await seedSystemUnits();
   const categoryMap = await seedSystemCategories();
   const inspirationCategoryMap = await seedInspirationCategories();
   const ingredientMap = await seedSystemIngredients(categoryMap, unitMap);
-  await seedSystemRecipes(ingredientMap, inspirationCategoryMap);
+  await seedSystemRecipes(ownerId, ingredientMap, inspirationCategoryMap);
   await syncSeedResourceSequences();
 }
 

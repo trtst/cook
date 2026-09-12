@@ -691,7 +691,7 @@ model User {
   idempotencyRecords        IdempotencyRecord[]        @relation("IdempotencyRecordUser")
   auditEvents               AuditEvent[]               @relation("AuditEventActor")
   recipes                   Recipe[]                   @relation("RecipeOwner")
-  inspirationOwnerPool      RecipeInspirationOwner?
+  publicContentPoolMember   PublicContentUserPoolMember?
   recipeCategories          RecipeCategory[]
   recipeScenes              RecipeScene[]
   recipeDrafts              RecipeDraft[]
@@ -1590,7 +1590,7 @@ model RecipeImportItem {
 
 model Recipe {
   id                    Int          @id @default(autoincrement())
-  ownerId               Int?         @map("owner_id")
+  ownerId               Int          @map("owner_id")
   isInspiration         Boolean      @default(false) @map("is_inspiration")
   categoryId            Int?         @map("category_id")
   inspirationCategoryId Int?         @map("inspiration_category_id")
@@ -1600,7 +1600,7 @@ model Recipe {
   title                 String       @db.VarChar(120)
   searchText            String       @map("search_text") @db.Text
   coverImageUrl         String?      @map("cover_image_url") @db.VarChar(512)
-  curatedByName         String?      @map("curated_by_name") @db.VarChar(64)
+  ownerNicknameSnapshot String?      @map("owner_nickname_snapshot") @db.VarChar(64)
   status                RecipeStatus @default(ACTIVE)
   blockedReason         String?      @map("blocked_reason") @db.VarChar(255)
   blockedAt             DateTime?    @map("blocked_at") @db.Timestamptz(3)
@@ -1613,7 +1613,7 @@ model Recipe {
   createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  owner                   User?                    @relation("RecipeOwner", fields: [ownerId], references: [id])
+  owner                   User                     @relation("RecipeOwner", fields: [ownerId], references: [id])
   category                RecipeCategory?          @relation(fields: [categoryId], references: [id])
   inspirationCategory     InspirationCategory?     @relation("RecipeInspirationCategory", fields: [inspirationCategoryId], references: [id])
   currentVersion          RecipeContentVersion     @relation("RecipeCurrentVersion", fields: [currentVersionId], references: [id])
@@ -1639,13 +1639,13 @@ model Recipe {
   @@map("recipes")
 }
 
-model RecipeInspirationOwner {
+model PublicContentUserPoolMember {
   userId    Int      @id @map("user_id")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("recipe_inspiration_owners")
+  @@map("public_content_user_pool_members")
 }
 
 model RandomMenuUsage {
@@ -1820,7 +1820,6 @@ model RecipeRecommendation {
   suggestedCategoryId Int                       @map("suggested_category_id")
   status              RecipeRecommendationStatus @default(PENDING)
   recipeTitle         String                    @map("recipe_title") @db.VarChar(120)
-  curatedByName       String                    @map("curated_by_name") @db.VarChar(64)
   suggestedCategoryName String                  @map("suggested_category_name") @db.VarChar(20)
   reviewNote          String?                   @map("review_note") @db.VarChar(255)
   adoptedRecipeId     Int?                      @unique @map("adopted_recipe_id")

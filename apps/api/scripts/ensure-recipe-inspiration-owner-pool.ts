@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
-import { recipeInspirationOwnerCount } from "../src/modules/recipe/recipe-inspiration-owner";
+import { publicContentUserPoolSize } from "../src/modules/recipe/public-content-user-pool";
 
 const prisma = new PrismaClient();
 
@@ -20,23 +20,29 @@ function randomNickname(used: Set<string>) {
 
 async function main() {
   const result = await prisma.$transaction(async tx => {
-    const systemUser = await tx.user.findUnique({ where: { uid: 10001 }, select: { id: true, nickname: true, phone: true } });
-    if (!systemUser) throw new Error("UID 10001 系统用户不存在");
+    const systemUser = await tx.user.findFirst({
+      where: { uid: 10001, status: "ACTIVE" },
+      select: { id: true, nickname: true, phone: true }
+    });
+    if (!systemUser) throw new Error("UID 10001 系统用户不存在或未启用");
     if ((systemUser.nickname ?? "").includes("炊火") || (systemUser.nickname ?? "").includes("炊火记")) {
       throw new Error("UID 10001 系统用户昵称包含禁用关键词");
     }
 
-    const existing = await tx.recipeInspirationOwner.findMany({ select: { userId: true } });
-    if (existing.length > recipeInspirationOwnerCount) throw new Error("灵感菜谱归属用户池超过 100 个用户");
+    await tx.publicContentUserPoolMember.deleteMany({
+      where: { user: { status: { not: "ACTIVE" } } }
+    });
+    const existing = await tx.publicContentUserPoolMember.findMany({ select: { userId: true } });
+    if (existing.length > publicContentUserPoolSize) throw new Error("公共内容用户池超过 100 个用户");
     const members = new Set(existing.map(item => item.userId));
     if (!members.has(systemUser.id)) {
-      await tx.recipeInspirationOwner.create({ data: { userId: systemUser.id } });
+      await tx.publicContentUserPoolMember.create({ data: { userId: systemUser.id } });
       members.add(systemUser.id);
     }
     const users = await tx.user.findMany({ select: { uid: true, nickname: true } });
     const usedUids = new Set(users.map(item => item.uid));
     const usedNicknames = new Set(users.map(item => item.nickname).filter((item): item is string => Boolean(item)));
-    while (members.size < recipeInspirationOwnerCount) {
+    while (members.size < publicContentUserPoolSize) {
       const user = await tx.user.create({
         data: {
           uid: randomUid(usedUids),
@@ -46,15 +52,15 @@ async function main() {
         },
         select: { id: true }
       });
-      await tx.recipeInspirationOwner.create({ data: { userId: user.id } });
+      await tx.publicContentUserPoolMember.create({ data: { userId: user.id } });
       members.add(user.id);
     }
     const poolUsers = await tx.user.findMany({
-      where: { inspirationOwnerPool: { isNot: null }, status: "ACTIVE" },
+      where: { publicContentPoolMember: { isNot: null }, status: "ACTIVE" },
       select: { id: true, uid: true, nickname: true, phone: true, status: true }
     });
-    if (poolUsers.length !== recipeInspirationOwnerCount) {
-      throw new Error(`灵感菜谱归属用户池必须正好包含 ${recipeInspirationOwnerCount} 个用户`);
+    if (poolUsers.length !== publicContentUserPoolSize) {
+      throw new Error(`公共内容用户池必须正好包含 ${publicContentUserPoolSize} 个用户`);
     }
     for (const user of poolUsers) {
       if (user.status !== "ACTIVE") throw new Error(`灵感用户状态不符合约束: ${user.uid}`);

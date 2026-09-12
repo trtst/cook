@@ -404,6 +404,12 @@ onMounted(loadUsers);
             <el-tag :type="statusTagType(row.status)">{{ formatStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="公共内容池" width="130">
+          <template #default="{ row }">
+            <el-tag v-if="row.isPublicContentPoolMember" type="success" effect="plain">公共内容池</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="190">
           <template #default="{ row }">
             {{ formatDateTime(row.createdAt) }}

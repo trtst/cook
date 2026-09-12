@@ -67,20 +67,22 @@
 
           <view v-else class="list-shell">
             <view class="list">
-              <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
-                <view class="card__cover">
-                  <ImageLoader class="card__cover-image" :src="item.coverImageUrl" />
-                </view>
-                <view class="card__body">
-                  <text class="card__title">{{ item.title }}</text>
-                  <view class="card__foot">
-                    <text class="card__meta">{{ item.meta }}</text>
+              <RecipeListRow
+                v-for="item in items"
+                :key="item.id"
+                class="card"
+                :title="item.title"
+                :cover-image-url="item.coverImageUrl"
+                :meta="item.meta"
+                @click="openItem(item)"
+              >
+                <template #footer>
                     <view class="card__action-row">
                       <text class="card__tail">{{ item.updatedAtText }}</text>
                       <text
-                        class="card__danger"
+                        class="card__delete"
                         :class="{
-                          'card__danger--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
+                          'card__delete--disabled': mode === 'drafts' ? deletingDraftId === item.id : deletingRecipeId === item.id
                         }"
                         @click.stop="mode === 'drafts' ? removeDraft(item) : removeRecipe(item)"
                       >
@@ -95,9 +97,8 @@
                         }}
                       </text>
                     </view>
-                  </view>
-                </view>
-              </view>
+                </template>
+              </RecipeListRow>
             </view>
 
             <LoadMore
@@ -121,10 +122,10 @@ import emptyStateIllustration from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
-import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
@@ -495,9 +496,7 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 
 <style scoped lang="scss">
 .list-nav,
-.tabs,
-.card,
-.card__foot {
+.tabs {
 	display: flex;
 }
 
@@ -605,10 +604,14 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	padding: 20rpx var(--space-page) calc(40rpx + env(safe-area-inset-bottom));
 }
 
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-page);
+}
+
 .card {
-	gap: 20rpx;
-	align-items: stretch;
-	padding: 20rpx;
+	overflow: hidden;
 	border-radius: var(--radius-xs);
 	background: var(--material-card-bg);
 	box-shadow: var(--material-card-shadow);
@@ -616,60 +619,15 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	backdrop-filter: var(--material-card-filter);
 }
 
-.card + .card {
-	margin-top: 20rpx;
+:deep(.card .recipe-list-row__main) {
+	padding: 20rpx 20rpx 20rpx 0;
 }
 
-.card__cover {
-	overflow: hidden;
-	flex: 0 0 208rpx;
-	width: 208rpx;
-	height: 156rpx;
-	border-radius: var(--radius-xs);
-	background: var(--page-cover-fresh-bg);
-}
-
-.card__cover-image {
-	width: 100%;
-	height: 100%;
-}
-
-.card__cover-image {
-	display: block;
-}
-
-.card__body {
+:deep(.card .recipe-list-row__footer) {
 	display: flex;
 	flex-direction: column;
-	flex: 1;
-	justify-content: space-between;
-	min-width: 0;
-}
-
-.card__title,
-.card__meta,
-.card__tail,
-.card__danger {
-	display: block;
-}
-
-.card__title {
-	color: var(--color-text);
-	font-size: 30rpx;
-	font-weight: var(--font-weight-semibold);
-	line-height: 1.45;
-	display: -webkit-box;
-	overflow: hidden;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-}
-
-.card__foot {
-	flex-direction: column;
 	align-items: flex-start;
-	justify-content: flex-start;
 	gap: 8rpx;
-	margin-top: 12rpx;
 }
 
 .card__action-row {
@@ -680,26 +638,20 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	gap: 16rpx;
 }
 
-.card__meta,
 .card__tail,
-.card__danger {
+.card__delete {
 	color: var(--color-text-secondary);
 	font-size: 22rpx;
 	line-height: 1.5;
 }
 
-.card__meta {
-	width: 100%;
-	min-width: 0;
-}
-
-.card__danger {
+.card__delete {
 	color: var(--color-state-danger-text);
 	flex: 0 0 auto;
 	white-space: nowrap;
 }
 
-.card__danger--disabled {
+.card__delete--disabled {
 	opacity: 0.56;
 }
 

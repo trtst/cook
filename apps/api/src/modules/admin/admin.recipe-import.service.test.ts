@@ -105,8 +105,11 @@ function createPublishService(
     ingredient: {
       findMany: async () => [{ id: 1, name: "排骨", categoryId: 1, proteinType: "PORK", category: { code: "MEAT_POULTRY_EGG" }, isStaple: false, isSpicyIngredient: false, aliases: [] }]
     },
-    recipeInspirationOwner: {
+    publicContentUserPoolMember: {
       findMany: async () => Array.from({ length: 100 }, (_, index) => ({ userId: index + 1 }))
+    },
+    user: {
+      findUnique: async () => ({ nickname: "公共内容用户" })
     },
     auditEvent: {
       create: async () => undefined
@@ -424,6 +427,7 @@ test("publishing a JSON item stores body keywords in the version and recipe sear
   assert.deepEqual(publishTrace.versionInputs[0]?.keywordsJson, ["鲜香", "快手"]);
   assert.match(String(publishTrace.recipeInputs[0]?.searchText), /鲜香/);
   assert.match(String(publishTrace.recipeInputs[0]?.searchText), /快手/);
+  assert.equal(publishTrace.recipeInputs[0]?.ownerNicknameSnapshot, "公共内容用户");
 });
 
 test("materializing an unknown import ingredient creates a pending system ingredient", async () => {
