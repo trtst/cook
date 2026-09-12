@@ -1923,6 +1923,7 @@ model DiningEvent {
   menuSnapshot        Json              @map("menu_snapshot")
   shareTokenHash      String?           @unique @map("share_token_hash") @db.VarChar(128)
   shareTokenExpiresAt DateTime?         @map("share_token_expires_at") @db.Timestamptz(3)
+  memoryMiniCodeStorageKey String?      @map("memory_mini_code_storage_key") @db.VarChar(512)
   completedAt         DateTime?         @map("completed_at") @db.Timestamptz(3)
   version             Int               @default(1)
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)

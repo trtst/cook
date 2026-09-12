@@ -2273,10 +2273,11 @@ interface CreateDiningMemoryShareRequest {
 1. 饭局必须已经到开饭时间或已经 `COMPLETED`，且已经冻结最终菜单；已取消饭局不得生成。
 2. 只允许当前饭局发起人生成，不给其他参与成员开放代生成路径。
 3. `showParticipants=false` 时公开快照不得返回任何成员摘要。
-4. 每次生成都会固化为新的 `snapshotVersion`，后续饭局改动不会回写到历史快照。
-5. 快照只允许包含 `title / planDate / mealSlot / coverImageUrl / miniCodeUrl / menuItems(title, coverUrl) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。`coverImageUrl` 是生成时复制出的封面资产，不读取后续活动封面；`miniCodeUrl` 指向同一份分享标识的微信小程序码，只打开既有 `pages_share/memory/index` 公开回忆卡页。
+4. 饭局发起人第一次从饭局详情打开活动回忆卡时，客户端会调用本接口创建首份快照，并生成该饭局唯一的微信小程序码；之后创建新快照、重新导出海报或修改本地标题都复用这张码，不再向微信重复申请。
+5. 每次生成仍会固化为新的 `snapshotVersion`，后续饭局改动不会回写历史快照；二维码的稳定公开入口则始终读取该饭局最新一份回忆快照。
+6. 快照只允许包含 `title / planDate / mealSlot / coverImageUrl / miniCodeUrl / menuItems(title, coverUrl) / participants(displayName, avatarUrl, role) / caption / sharedAt / snapshotVersion` 这些白名单字段。`coverImageUrl` 是生成时复制出的封面资产，不读取后续活动封面；`miniCodeUrl` 归饭局所有，使用饭局 ID 的服务端签名作为 `scene`，只打开既有 `pages_share/memory/index` 公开回忆卡页，不暴露饭局或计划 ID。
 
-`GET /memory-shares/{shareToken}/preview` 是餐桌回忆卡的公开读取路径，无需登录，只返回上述不可变白名单快照；不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
+`GET /memory-shares/{shareToken}/preview` 是餐桌回忆卡的公开读取路径，无需登录；它校验饭局稳定签名后，只返回该饭局最新回忆快照的白名单字段。不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
 
 `GET /users/me/medals` 当前按模板返回可见勋章，不再写死在接口层。服务端当前只根据真实完成事实和真实审核收录事实自动点亮，包括：
 

@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   confirmedRandomTagValues,
+  createDiningMemoryShareToken,
   createDiningEventShareToken,
   MealService,
+  parseDiningMemoryShareEventId,
   parseDiningEventShareInviteId,
   randomMenuEmptyLimitOptions,
   shouldConsumeRandomMenuQuota
@@ -53,6 +55,48 @@ test("dining-event share token is stable per invite and rejects tampering", () =
   assert.equal(createDiningEventShareToken(42), token);
   assert.equal(parseDiningEventShareInviteId(token), 42);
   assert.equal(parseDiningEventShareInviteId(`${token}x`), null);
+});
+
+test("dining memory code token is stable per event and rejects tampering", () => {
+  const token = createDiningMemoryShareToken(82);
+
+  assert.equal(createDiningMemoryShareToken(82), token);
+  assert.match(token, /^[A-Za-z0-9_-]{1,32}$/);
+  assert.equal(parseDiningMemoryShareEventId(token), 82);
+  assert.equal(parseDiningMemoryShareEventId(`${token}x`), null);
+});
+
+test("public dining memory code reads the newest snapshot for its event", async () => {
+  const service = new MealService({
+    diningEventMemoryShare: {
+      findFirst: async ({ where, orderBy }: { where: { diningEventId: number }; orderBy: { snapshotVersion: string } }) => {
+        assert.deepEqual(where, { diningEventId: 82 });
+        assert.deepEqual(orderBy, { snapshotVersion: "desc" });
+        return {
+          title: "更新后的回忆",
+          planDate: null,
+          mealSlot: null,
+          coverStorageKey: null,
+          coverContentType: null,
+          miniCodeStorageKey: "uploads/dining-event-memory-codes/stable.png",
+          menuItemsSnapshot: [],
+          participantsSnapshot: [],
+          caption: null,
+          createdAt: new Date("2026-09-12T12:00:00.000Z"),
+          snapshotVersion: 2,
+          shareTokenHash: "b".repeat(64)
+        };
+      }
+    }
+  } as never, {} as never, {
+    buildDiningMemoryAssetUrl: (_request: unknown, storageKey: string) => `/static/${storageKey}`
+  } as never, {} as never, {} as never);
+
+  const preview = await service.getDiningMemorySharePreview({}, createDiningMemoryShareToken(82));
+
+  assert.equal(preview.title, "更新后的回忆");
+  assert.equal(preview.snapshotVersion, 2);
+  assert.equal(preview.miniCodeUrl, "/static/uploads/dining-event-memory-codes/stable.png");
 });
 
 test("legacy memory snapshots without a generated code do not expose a broken URL", () => {
@@ -136,8 +180,9 @@ test("failed dining memory asset cleanup is recorded in the outbox", async () =>
   });
 });
 
-test("dining memory share prepares external assets outside database transactions", async () => {
+test("dining memory share creates the event code once and reuses it for later snapshots", async () => {
   let inTransaction = false;
+  let snapshotVersion = 0;
   const externalCalls: Array<{ name: string; inTransaction: boolean }> = [];
   const event = {
     id: 82,
@@ -147,6 +192,7 @@ test("dining memory share prepares external assets outside database transactions
     completedAt: new Date("2026-09-11T12:00:00.000Z"),
     scheduledAt: new Date("2026-09-11T11:30:00.000Z"),
     diningGroupId: null,
+    memoryMiniCodeStorageKey: null as string | null,
     coverStorageKey: "uploads/dining-event-covers/82/source.webp",
     coverContentType: "image/webp",
     mealPlanItem: {
@@ -179,14 +225,19 @@ test("dining memory share prepares external assets outside database transactions
       updateMany: async () => ({ count: 1 })
     },
     diningEvent: {
-      findUnique: async () => event
+      findUnique: async () => event,
+      update: async ({ data }: { data: { memoryMiniCodeStorageKey: string } }) => {
+        event.memoryMiniCodeStorageKey = data.memoryMiniCodeStorageKey;
+        return event;
+      }
     },
     diningEventMemoryShare: {
-      findFirst: async () => null,
+      findFirst: async () => snapshotVersion ? { snapshotVersion } : null,
       create: async ({ data }: { data: Record<string, unknown> }) => ({
         id: 501,
         createdAt: new Date("2026-09-11T12:10:00.000Z"),
-        ...data
+        ...data,
+        snapshotVersion: snapshotVersion = Number(data.snapshotVersion)
       })
     },
     storageLedger: {
@@ -233,10 +284,13 @@ test("dining memory share prepares external assets outside database transactions
   );
 
   await service.createDiningMemoryShare({}, 9, 82, "10086", true, "吃得开心");
+  await service.createDiningMemoryShare({}, 9, 82, "10087", false, "下次再聚");
 
   assert.deepEqual(externalCalls, [
     { name: "copyCover", inTransaction: false },
     { name: "createMiniCode", inTransaction: false },
-    { name: "storeMiniCode", inTransaction: false }
+    { name: "storeMiniCode", inTransaction: false },
+    { name: "copyCover", inTransaction: false }
   ]);
+  assert.equal(event.memoryMiniCodeStorageKey, "uploads/dining-event-memory-codes/hash.jpg");
 });

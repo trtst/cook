@@ -387,8 +387,34 @@ export function parseDiningEventShareInviteId(token: string) {
   return inviteId;
 }
 
-function buildMemorySharePath(shareToken: string) {
-  return `/pages_share/memory/index?token=${encodeURIComponent(shareToken)}`;
+export function createDiningMemoryShareToken(eventId: number) {
+  if (!Number.isInteger(eventId) || eventId <= 0) throw new Error("invalid dining memory event id");
+  const encodedId = Buffer.allocUnsafe(4);
+  encodedId.writeUInt32BE((eventId ^ diningMemoryShareMask()) >>> 0);
+  const signature = createHmac("sha256", diningEventShareSecret()).update(`dining-memory-share:${eventId}`).digest("base64url").slice(0, 16);
+  return `${encodedId.toString("base64url")}${signature}`;
+}
+
+export function parseDiningMemoryShareEventId(token: string) {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(token)) return null;
+  const encodedId = Buffer.from(token.slice(0, 6), "base64url");
+  if (encodedId.length !== 4) return null;
+  const eventId = (encodedId.readUInt32BE(0) ^ diningMemoryShareMask()) >>> 0;
+  if (!Number.isSafeInteger(eventId) || eventId <= 0) return null;
+  const expected = createDiningMemoryShareToken(eventId).slice(6);
+  const signature = token.slice(6);
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) return null;
+  return eventId;
+}
+
+function diningMemoryShareMask() {
+  return createHmac("sha256", diningEventShareSecret()).update("dining-memory-share:id-mask").digest().readUInt32BE(0);
+}
+
+function buildMemorySharePath(eventId: number) {
+  return `/pages_share/memory/index?token=${encodeURIComponent(createDiningMemoryShareToken(eventId))}`;
 }
 
 function buildDiningEventSharePath(inviteId: number) {
@@ -3034,10 +3060,16 @@ export class MealService {
                 prepared.snapshotVersion
               )
             : null;
-        const miniCode = await this.wechatMiniCodeService.createMemoryShareCode(prepared.shareToken);
-        const miniCodeStorageKey = this.uploadService.buildDiningMemoryMiniCodeStorageKey(prepared.shareTokenHash, miniCode.contentType);
-        createdStorageKeys.push(miniCodeStorageKey);
-        await this.uploadService.storeDiningMemoryMiniCode(prepared.shareTokenHash, miniCode.buffer, miniCode.contentType);
+        let miniCodeStorageKey = prepared.event.memoryMiniCodeStorageKey;
+        let miniCodeBytes = 0;
+        if (!miniCodeStorageKey) {
+          const stableMemoryToken = createDiningMemoryShareToken(prepared.event.id);
+          const miniCode = await this.wechatMiniCodeService.createMemoryShareCode(stableMemoryToken);
+          miniCodeStorageKey = this.uploadService.buildDiningMemoryMiniCodeStorageKey(hashText(stableMemoryToken), miniCode.contentType);
+          createdStorageKeys.push(miniCodeStorageKey);
+          await this.uploadService.storeDiningMemoryMiniCode(hashText(stableMemoryToken), miniCode.buffer, miniCode.contentType);
+          miniCodeBytes = miniCode.buffer.length;
+        }
 
         return await this.prisma.$transaction(async tx => {
           const snapshotPayload = {
@@ -3051,8 +3083,15 @@ export class MealService {
             sharedAt: new Date().toISOString(),
             snapshotVersion: prepared.snapshotVersion
           };
-          const snapshotBytes = sizeOfJson(snapshotPayload) + (coverSnapshot?.sizeBytes ?? 0) + miniCode.buffer.length;
+          const snapshotBytes = sizeOfJson(snapshotPayload) + (coverSnapshot?.sizeBytes ?? 0) + miniCodeBytes;
           await this.assertStorageWritable(tx, userId, snapshotBytes);
+
+          if (!prepared.event.memoryMiniCodeStorageKey) {
+            await tx.diningEvent.update({
+              where: { id: prepared.event.id },
+              data: { memoryMiniCodeStorageKey: miniCodeStorageKey }
+            });
+          }
 
           const snapshot = await tx.diningEventMemoryShare.create({
             data: {
@@ -3165,7 +3204,7 @@ export class MealService {
       const snapshotVersion = (latest?.snapshotVersion ?? 0) + 1;
       const shareToken = createShareToken();
       const shareTokenHash = hashText(shareToken);
-      const sharePath = buildMemorySharePath(shareToken);
+      const sharePath = buildMemorySharePath(eventId);
       const menuItemsSnapshot = this.buildDiningMemoryMenuSnapshot(event);
       if (!menuItemsSnapshot.length) {
         throw new ConflictException("只有已确认最终菜单的饭局才能生成饭搭子卡");
@@ -3235,9 +3274,11 @@ export class MealService {
   }
 
   async getDiningMemorySharePreview(request: RequestLike, shareToken: string): Promise<DiningMemorySharePreview> {
-    const shareTokenHash = hashText(shareToken);
-    const snapshot = await this.prisma.diningEventMemoryShare.findUnique({
-      where: { shareTokenHash }
+    const eventId = parseDiningMemoryShareEventId(shareToken);
+    if (!eventId) throw new NotFoundException("饭搭子卡分享已失效");
+    const snapshot = await this.prisma.diningEventMemoryShare.findFirst({
+      where: { diningEventId: eventId },
+      orderBy: { snapshotVersion: "desc" }
     });
     if (!snapshot) throw new NotFoundException("饭搭子卡分享已失效");
     return this.toDiningMemorySharePreview(snapshot, request);

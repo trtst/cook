@@ -553,7 +553,7 @@ export class MealController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(DiningMemoryShareSnapshotModel, "生成一张饭搭子卡不可变分享快照")
+  @ApiOkModel(DiningMemoryShareSnapshotModel, "生成饭局回忆快照，并首次创建后复用该饭局固定小程序码")
   createDiningMemoryShare(
     @Req() request: RequestWithUser & { protocol?: string; get?: (name: string) => string | undefined },
     @Param("eventId", ParseIntPipe) eventId: number,
