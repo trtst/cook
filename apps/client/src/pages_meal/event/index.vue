@@ -74,7 +74,28 @@
           />
 
           <template v-else>
-          <view v-if="loading && !eventCards.length" class="notice">正在同步饭局...</view>
+          <view v-if="loading && !eventCards.length" class="event-list event-list--skeleton">
+            <view v-for="index in 2" :key="index" class="event-card event-card--skeleton">
+              <view class="event-card__top">
+                <Skeleton width="100%" height="100%" radius="0" />
+              </view>
+              <view class="event-card__body">
+                <Skeleton width="62%" height="34rpx" radius="10rpx" />
+                <view class="event-card__rows">
+                  <Skeleton width="54%" height="24rpx" radius="8rpx" />
+                  <Skeleton width="44%" height="24rpx" radius="8rpx" />
+                </view>
+                <view class="event-card__menu event-card__menu--skeleton">
+                  <Skeleton width="132rpx" height="42rpx" radius="var(--radius-pill)" />
+                  <Skeleton width="108rpx" height="42rpx" radius="var(--radius-pill)" />
+                </view>
+                <view class="event-card__footer">
+                  <Skeleton width="132rpx" height="22rpx" radius="8rpx" />
+                  <Skeleton width="72rpx" height="22rpx" radius="8rpx" />
+                </view>
+              </view>
+            </view>
+          </view>
 
           <view v-if="visibleCards.length" class="event-list">
             <view
@@ -86,8 +107,7 @@
               @click="openEvent(item)"
             >
               <view class="event-card__top">
-                <image v-if="item.coverImageUrl" class="event-card__cover" :src="item.coverImageUrl" mode="aspectFill" />
-                <ImageEmpty v-else class="event-card__cover event-card__cover--empty" copy="封面图" ratio="fill" />
+                <ImageLoader class="event-card__cover" :src="item.coverImageUrl" />
                 <text v-if="item.focusText" class="event-card__focus">{{ item.focusText }}</text>
               </view>
 
@@ -180,8 +200,9 @@ import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
-import ImageEmpty from "@/components/ImageEmpty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
+import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -191,7 +212,14 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { onLoginSuccess } from "@/utils/session-events";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMealSlot, isMealSlotExpired, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
+import {
+  formatMealSlot,
+  isMealSlotExpired,
+  isPastLocalDateTime,
+  MEAL_SLOT_OPTIONS,
+  resolveMealSlotByTime,
+  resolveMealSlotSuggestedTime
+} from "@/utils/meal-slot";
 import emptyStateArt from "@/assets/empty.png";
 import { formatDateTimeMinute } from "../utils/date";
 import { mealApi, type DiningEventListStage, type DiningEventListSummary, type MealPlanSummary, type DiningEventStageCounts, type DiningEventListRole } from "../apis/meal";
@@ -280,15 +308,8 @@ const stageTabs = [
   { value: "DONE" as const, label: "已结束" }
 ];
 
-const createSlotBaseOptions = [
-  { value: "BREAKFAST" as const, label: "早餐" },
-  { value: "LUNCH" as const, label: "午餐" },
-  { value: "AFTERNOON_TEA" as const, label: "下午茶" },
-  { value: "DINNER" as const, label: "晚餐" },
-  { value: "LATE_NIGHT" as const, label: "夜宵" }
-];
 const createSlotOptions = computed(() =>
-  createSlotBaseOptions.map(item => ({
+  MEAL_SLOT_OPTIONS.map(item => ({
     ...item,
     disabled: isMealSlotExpired(createPlanDate.value, item.value, new Date())
   }))
@@ -626,7 +647,7 @@ function resolveDefaultTime(slot: MealPlanSummary["mealSlot"], dateText = todayT
 
 function resolveFirstAvailableCreateSlot(dateText: string) {
   const now = new Date();
-  return createSlotBaseOptions.find(item => !isMealSlotExpired(dateText, item.value, now))?.value ?? null;
+  return MEAL_SLOT_OPTIONS.find(item => !isMealSlotExpired(dateText, item.value, now))?.value ?? null;
 }
 
 function resolveCreateStartDate() {
@@ -1008,6 +1029,11 @@ defineExpose({
 .event-card__menu {
   margin-top: 18rpx;
   white-space: nowrap;
+}
+
+.event-card__menu--skeleton {
+  display: flex;
+  gap: 12rpx;
 }
 
 .event-card__menu-track {

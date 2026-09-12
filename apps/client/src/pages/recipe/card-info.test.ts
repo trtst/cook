@@ -46,9 +46,9 @@ expectIncludes(recipePageSource, 'import Skeleton from "@/components/Skeleton/Sk
 expectIncludes(recipePageSource, 'v-else-if="loading && !cards.length" class="recipe-list-skeleton"');
 expectIncludes(recipePageSource, 'v-for="index in 4"');
 expectExcludes(recipePageSource, 'class="notice">加载中...</view>');
-expectIncludes(recipePageSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectIncludes(recipePageSource, '<ImageEmpty v-else class="recipe-card__cover-fallback" />');
-expectIncludes(recipePageSource, 'v-if="item.coverImageUrl"');
+expectIncludes(recipePageSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(recipePageSource, '<ImageLoader class="recipe-card__cover-image" :src="item.coverImageUrl" />');
+expectExcludes(recipePageSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes(recipePageSource, 'v-if="item.keywords.length || item.caloriesText" class="recipe-card__info"');
 expectIncludes(recipePageSource, 'v-for="keyword in item.keywords.slice(0, 3)"');
 expectIncludes(recipePageSource, 'class="recipe-card__meta-tag"');
@@ -60,8 +60,9 @@ expectExcludes(recipePageSource, "item.coverTag");
 expectExcludes(recipePageSource, "coverTag:");
 expectExcludes(recipePageSource, ".recipe-card__cover-tag");
 
-expectIncludes(recipeManageListSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectIncludes(recipeManageListSource, '<ImageEmpty v-else class="card__cover-fallback" />');
+expectIncludes(recipeManageListSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(recipeManageListSource, '<ImageLoader class="card__cover-image" :src="item.coverImageUrl" />');
+expectExcludes(recipeManageListSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectExcludes(recipeManageListSource, 'class="card__cover-text font-black">封面');
 expectExcludes(recipeManageListSource, 'mode !== "drafts"');
 

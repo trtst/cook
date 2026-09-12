@@ -22,5 +22,22 @@ assert.ok(recipeApiSource.includes("keywords: string[];"), "Expected the public 
 assert.ok(source.includes('v-if="detailContent.keywords.length"'), "Expected the recipe detail to show keywords only when present.");
 assert.ok(source.includes('v-for="item in detailContent.keywords"'), "Expected the recipe detail to render each body keyword.");
 assert.ok(!source.includes(".wiki"), "Expected the recipe detail not to consume Wiki data.");
+assert.ok(source.includes('import ImageLoader from "@/components/ImageLoader.vue";'), "Expected recipe detail to use the shared image loader.");
+assert.ok(source.includes('<ImageLoader class="hero__image" :src="coverImageUrl" />'), "Expected the recipe detail cover to keep loading until its image succeeds.");
+assert.ok(!source.includes('import ImageEmpty from "@/components/ImageEmpty.vue";'), "Expected recipe detail cover empty state to be owned by ImageLoader.");
+
+assert.ok(
+  source.includes('<text class="cookfont summary-card__report-entry-icon">&#xe710;</text>'),
+  "Expected the recipe report entry to render the report icon before its label."
+);
+assert.ok(
+  source.includes(".summary-card__report-entry-icon"),
+  "Expected the recipe report icon to keep an explicit alignment style."
+);
+assert.match(
+  source,
+  /\.danger\s*\{[\s\S]*?height:\s*90rpx;/,
+  "Expected the recipe report submit button to use the standard sheet action height."
+);
 
 console.log("recipe detail style passed");

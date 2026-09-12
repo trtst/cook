@@ -39,6 +39,11 @@ function expectOccurrence(source: string, snippet: string, count: number) {
   assert.equal(matches.length, count, `Expected ${snippet} to appear ${count} time(s), got ${matches.length}`);
 }
 
+function expectComputedIncludes(source: string, name: string, snippet: string) {
+  const match = source.match(new RegExp(`const ${name} = computed\\(\\(\\) => \\(\\{([\\s\\S]*?)\\}\\)\\);`));
+  assert.ok(match?.[1]?.includes(snippet), `Expected ${name} to include: ${snippet}`);
+}
+
 expectExcludes(pageSource, "crop-nav-backdrop");
 expectExcludes(pageSource, "navBackdropStyle");
 expectIncludes(pageSource, 'type="2d"');
@@ -57,29 +62,26 @@ expectIncludes(pageSource, "const CROP_NAV_COLOR = \"#ffffff\";");
 expectOccurrence(pageSource, "#101010", 1);
 expectOccurrence(pageSource, "#ffffff", 1);
 expectExcludes(pageSource, ':navbar-background-color="CROP_PAGE_BG"');
-expectExcludes(pageSource, ':navbar-foreground-color="CROP_NAV_COLOR"');
+expectIncludes(pageSource, ':navbar-foreground-color="CROP_NAV_COLOR"');
 expectIncludes(pageSource, "background-color: ${CROP_PAGE_BG};");
 expectIncludes(pageSource, "backgroundColor: CROP_PAGE_BG");
+expectComputedIncludes(pageSource, "cropPageStyle", '"--crop-nav-color": CROP_NAV_COLOR');
 expectSelectorIncludes(pageSource, ".crop-page", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ".crop-stage", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ".crop-state", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ".crop-box", ["border: 2rpx solid var(--crop-nav-color);"]);
 expectSelectorExcludes(pageSource, ".crop-box", ["box-shadow"]);
-expectSelectorIncludes(pageSource, ".crop-box__handle--lt", ["top: 0;", "left: 0;"]);
-expectSelectorIncludes(pageSource, ".crop-box__handle--rt", ["top: 0;", "right: 0;"]);
-expectSelectorIncludes(pageSource, ".crop-box__handle--lb", ["bottom: 0;", "left: 0;"]);
-expectSelectorIncludes(pageSource, ".crop-box__handle--rb", ["right: 0;", "bottom: 0;"]);
-expectSelectorExcludes(pageSource, ".crop-box__handle--lt", ["-22rpx"]);
-expectSelectorExcludes(pageSource, ".crop-box__handle--rt", ["-22rpx"]);
-expectSelectorExcludes(pageSource, ".crop-box__handle--lb", ["-22rpx"]);
-expectSelectorExcludes(pageSource, ".crop-box__handle--rb", ["-22rpx"]);
+expectSelectorIncludes(pageSource, ".crop-box__handle--lt", ["top: -22rpx;", "left: -22rpx;"]);
+expectSelectorIncludes(pageSource, ".crop-box__handle--rt", ["top: -22rpx;", "right: -22rpx;"]);
+expectSelectorIncludes(pageSource, ".crop-box__handle--lb", ["bottom: -22rpx;", "left: -22rpx;"]);
+expectSelectorIncludes(pageSource, ".crop-box__handle--rb", ["right: -22rpx;", "bottom: -22rpx;"]);
 expectSelectorIncludes(pageSource, ".crop-tip", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ".crop-actions", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ":global(.crop-layout)", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ":global(.crop-layout .layout__theme)", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ":global(.crop-layout .layout__body)", ["background: var(--crop-page-bg);"]);
 expectSelectorIncludes(pageSource, ":global(.crop-layout .navbar__fixed),\n:global(.crop-layout .navbar__fixed--transparent)", ["background: var(--crop-page-bg);"]);
-expectSelectorIncludes(pageSource, ":global(.crop-layout .navbar__title),\n:global(.crop-layout .navbar__icon)", ["color: var(--crop-nav-color);"]);
+expectExcludes(pageSource, ":global(.crop-layout .navbar__title)");
 expectSelectorIncludes(pageSource, ".crop-actions__button--light", ["background: var(--button-secondary-bg);", "color: var(--button-secondary-text);"]);
 expectSelectorIncludes(pageSource, ".crop-actions__button--primary", ["background: var(--button-primary-bg);", "color: var(--button-primary-text);"]);
 expectSelectorExcludes(pageSource, ".crop-actions__button--primary", ["feedback-line-danger"]);

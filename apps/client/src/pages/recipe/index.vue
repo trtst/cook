@@ -124,7 +124,7 @@
             </view>
 
             <view v-if="activeTab === 'my'" class="filter-group">
-              <text class="filter-group__title">系统分类</text>
+              <text class="filter-group__title">分类</text>
               <view class="filter-group__chips">
                 <view
                   class="filter-chip"
@@ -216,13 +216,7 @@
                 @click="openCard(item)"
               >
                 <view class="recipe-card__cover">
-                  <image
-                    v-if="item.coverImageUrl"
-                    class="recipe-card__cover-image"
-                    :src="item.coverImageUrl"
-                    mode="aspectFill"
-                  />
-                  <ImageEmpty v-else class="recipe-card__cover-fallback" />
+                  <ImageLoader class="recipe-card__cover-image" :src="item.coverImageUrl" />
                 </view>
 
                 <view class="recipe-card__body">
@@ -324,7 +318,7 @@ import {
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
-import ImageEmpty from "@/components/ImageEmpty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
@@ -1119,7 +1113,7 @@ defineExpose({
 
 .recipe-head {
   position: relative;
-  z-index: 25;
+  z-index: 901;
   box-sizing: border-box;
   padding: 10rpx var(--space-page) 0;
 }
@@ -1427,20 +1421,13 @@ defineExpose({
   background: var(--page-cover-fresh-bg);
 }
 
-.recipe-card__cover-image,
-.recipe-card__cover-fallback {
+.recipe-card__cover-image {
   width: 100%;
   height: 100%;
 }
 
 .recipe-card__cover-image {
   display: block;
-}
-
-.recipe-card__cover-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .recipe-card__cover--skeleton {

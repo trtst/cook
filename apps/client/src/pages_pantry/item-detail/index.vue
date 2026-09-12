@@ -12,8 +12,7 @@
         <view class="detail-page">
           <view class="detail-hero" :style="heroStyle">
             <view class="detail-hero__avatar">
-              <image v-if="itemImageUrl" class="detail-hero__image" :src="itemImageUrl" mode="aspectFill" />
-              <text v-else class="detail-hero__avatar-text">{{ currentItem ? buildIngredientAvatarText(currentItem.name) : "食" }}</text>
+              <ImageLoader class="detail-hero__image" :src="itemImageUrl" />
             </view>
             <text class="detail-hero__eyebrow">厨房小管家</text>
             <text class="detail-hero__title">{{ currentItem?.name || "食材详情" }}</text>
@@ -200,6 +199,7 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
@@ -212,7 +212,7 @@ import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
-import { buildIngredientAvatarText, formatExpireLabel, isExpiringSoon, resolveFridgeImageMap } from "../utils/fridge";
+import { formatExpireLabel, isExpiringSoon, resolveFridgeImageMap } from "../utils/fridge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -501,12 +501,6 @@ async function submitShopping() {
 .detail-hero__image {
   width: 100%;
   height: 100%;
-}
-
-.detail-hero__avatar-text {
-  color: var(--color-support-action);
-  font-size: 56rpx;
-  font-weight: var(--font-weight-heavy);
 }
 
 .detail-hero__eyebrow {

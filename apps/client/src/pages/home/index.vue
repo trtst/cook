@@ -203,15 +203,7 @@
               >
                 <view class="family-recipe__visual">
                   <image v-if="item.coverImageUrl" class="family-recipe__image" :src="item.coverImageUrl" mode="aspectFill" />
-                  <view v-else class="family-recipe__visual family-recipe__visual--warm">
-                    <view class="family-recipe__plate">
-                      <view class="family-recipe__food" />
-                    </view>
-                  </view>
-                  <view class="family-recipe__badges">
-                    <text class="family-recipe__badge">{{ fridgeFitText(item.fridgeFit) }}</text>
-                    <text class="family-recipe__badge family-recipe__badge--soft">{{ item.kind === "MY" ? "私房菜" : "灵感" }}</text>
-                  </view>
+                  <ImageEmpty v-else class="family-recipe__image-empty" ratio="fill" />
                 </view>
                 <text class="family-recipe__name">{{ item.title }}</text>
                 <text class="family-recipe__meta">{{ fridgeRecipeMeta(item) }}</text>
@@ -299,6 +291,7 @@ import {
 import { fridgeApi } from "@/apis/fridge";
 import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageEmpty from "@/components/ImageEmpty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { cfg } from "@/config";
@@ -912,14 +905,8 @@ function openFridgeRecipe(item: HomeFridgeRecipeItem) {
   navigateTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(item.recipeId))}&kind=${kind}`);
 }
 
-function fridgeFitText(value: HomeFridgeRecipeItem["fridgeFit"]) {
-  if (value === "HIGH") return "现在就能做";
-  if (value === "MEDIUM") return "差一点就能做";
-  return "再补两样";
-}
-
 function fridgeRecipeMeta(item: HomeFridgeRecipeItem) {
-  const segments = [item.durationText || "时长待补"];
+  const segments = [];
   if (item.missingIngredientCount > 0) {
     segments.push(`还差${item.missingIngredientCount}样`);
   } else {
@@ -2441,42 +2428,11 @@ defineExpose({
   background: var(--color-surface-raised);
 }
 
-.family-recipe__visual--warm {
-  background: var(--color-illustration-panel-warm);
-}
-
-.family-recipe__visual--fresh {
-  background: var(--color-illustration-panel-fresh);
-}
-
-.family-recipe__visual--cool {
-  background: var(--color-illustration-panel-accent);
-}
-
-.family-recipe__plate {
-  position: absolute;
-  right: 24rpx;
-  bottom: 50rpx;
-  width: 148rpx;
-  height: 104rpx;
-  border: 6rpx solid var(--color-illustration-ink);
-  border-radius: 50%;
-  background: var(--color-illustration-plate);
-  transform: rotate(-8deg);
-}
-
-.family-recipe__food {
-  position: absolute;
-  top: 28rpx;
-  left: 50rpx;
-  width: 48rpx;
-  height: 38rpx;
-  border-radius: 50%;
-  background: var(--color-illustration-rice);
-  box-shadow:
-    -28rpx 8rpx 0 var(--color-illustration-warm),
-    30rpx 8rpx 0 var(--color-illustration-fresh),
-    2rpx 30rpx 0 var(--color-illustration-sunny);
+.family-recipe__image,
+.family-recipe__image-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .family-recipe__name,

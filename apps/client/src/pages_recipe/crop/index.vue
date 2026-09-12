@@ -7,6 +7,7 @@
     full-screen
     :navbar-transparent="true"
     :navbar-opacity="1"
+    :navbar-foreground-color="CROP_NAV_COLOR"
     :navbar-placeholder="false"
   >
     <view v-if="loading" class="crop-state" :style="cropPageStyle">图片加载中...</view>
@@ -247,6 +248,8 @@ const footerReserveHeight = computed(() => {
   return rpxToPx(ACTIONS_RPX) + ratioHeight + tipHeight + safeAreaBottom.value;
 });
 const cropPageStyle = computed(() => ({
+  "--crop-page-bg": CROP_PAGE_BG,
+  "--crop-nav-color": CROP_NAV_COLOR,
   height: `${windowHeight.value}px`,
   paddingTop: `${navBarTotalHeight.value}px`,
   boxSizing: "border-box" as const,
@@ -906,29 +909,29 @@ function resetCropState() {
 }
 
 .crop-box__handle--lt {
-  top: 0;
-  left: 0;
+  top: -22rpx;
+  left: -22rpx;
   border-top: 6rpx solid var(--crop-nav-color);
   border-left: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-box__handle--rt {
-  top: 0;
-  right: 0;
+  top: -22rpx;
+  right: -22rpx;
   border-top: 6rpx solid var(--crop-nav-color);
   border-right: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-box__handle--lb {
-  bottom: 0;
-  left: 0;
+  bottom: -22rpx;
+  left: -22rpx;
   border-bottom: 6rpx solid var(--crop-nav-color);
   border-left: 6rpx solid var(--crop-nav-color);
 }
 
 .crop-box__handle--rb {
-  right: 0;
-  bottom: 0;
+  right: -22rpx;
+  bottom: -22rpx;
   border-right: 6rpx solid var(--crop-nav-color);
   border-bottom: 6rpx solid var(--crop-nav-color);
 }
@@ -1013,11 +1016,6 @@ function resetCropState() {
 :global(.crop-layout .navbar__fixed),
 :global(.crop-layout .navbar__fixed--transparent) {
   background: var(--crop-page-bg);
-}
-
-:global(.crop-layout .navbar__title),
-:global(.crop-layout .navbar__icon) {
-  color: var(--crop-nav-color);
 }
 
 .crop-canvas {

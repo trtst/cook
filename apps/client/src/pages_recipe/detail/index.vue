@@ -46,8 +46,7 @@
           <view class="detail-scroll-body">
             <view class="hero" :style="heroStyle">
               <view class="hero__cover">
-                <image v-if="coverImageUrl" class="hero__image" :src="coverImageUrl" mode="aspectFill" />
-                <ImageEmpty v-else class="hero__cover-fill" copy="封面图" ratio="fill" />
+                <ImageLoader class="hero__image" :src="coverImageUrl" />
               </view>
             </view>
 
@@ -71,6 +70,7 @@
                     hover-stay-time="100"
                     @click="openReportSheet"
                   >
+                    <text class="cookfont summary-card__report-entry-icon">&#xe710;</text>
                     举报
                   </text>
                 </view>
@@ -469,7 +469,7 @@ import {
 import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import ImageEmpty from "@/components/ImageEmpty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
@@ -1655,12 +1655,6 @@ defineExpose({
   background: var(--color-surface);
 }
 
-.hero__cover-fill {
-  position: absolute;
-  inset: 0;
-  background: var(--page-cover-fresh-shell-bg);
-}
-
 .content {
   position: relative;
   flex: 1 1 auto;
@@ -1753,17 +1747,15 @@ defineExpose({
 
 .summary-card__report-entry,
 .summary-card__recommend-entry {
+  display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
+  gap: 8rpx;
   color: var(--color-text-tertiary);
   opacity: 0.78;
 }
 
-.summary-card__recommend-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
+.summary-card__report-entry-icon,
 .summary-card__recommend-entry-icon {
   color: inherit;
   font-size: 24rpx;
@@ -2721,6 +2713,10 @@ defineExpose({
 }
 
 .danger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 90rpx;
   margin-top: var(--space-md);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);

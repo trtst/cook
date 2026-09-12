@@ -18,8 +18,8 @@ function expectSelectorIncludes(selector: string, snippets: string[]) {
   }
 }
 
-expectIncludes('import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectIncludes('<ImageEmpty v-else class="ingredient-card__fallback" copy="封面图" ratio="fill" />');
+expectIncludes('import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes('<ImageLoader class="ingredient-card__image" :src="item.imageUrl" />');
 expectSelectorIncludes(".ingredient-card__unit", [
   "background: var(--color-surface-raised);",
   "color: var(--color-text);"

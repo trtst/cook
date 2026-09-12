@@ -69,13 +69,7 @@
             <view class="list">
               <view v-for="item in items" :key="item.id" class="card" @click="openItem(item)">
                 <view class="card__cover">
-                  <image
-                    v-if="item.coverImageUrl"
-                    class="card__cover-image"
-                    :src="item.coverImageUrl"
-                    mode="aspectFill"
-                  />
-                  <ImageEmpty v-else class="card__cover-fallback" />
+                  <ImageLoader class="card__cover-image" :src="item.coverImageUrl" />
                 </view>
                 <view class="card__body">
                   <text class="card__title">{{ item.title }}</text>
@@ -127,7 +121,7 @@ import emptyStateIllustration from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
-import ImageEmpty from "@/components/ImageEmpty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
@@ -635,20 +629,13 @@ function toDraftItem(item: RecipeDraftSummary): DisplayItem {
 	background: var(--page-cover-fresh-bg);
 }
 
-.card__cover-image,
-.card__cover-fallback {
+.card__cover-image {
 	width: 100%;
 	height: 100%;
 }
 
 .card__cover-image {
 	display: block;
-}
-
-.card__cover-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
 }
 
 .card__body {

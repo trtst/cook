@@ -119,8 +119,7 @@
               <view v-else class="item-list">
               <view v-for="card in filteredCards" :key="card.id" class="item-card" hover-class="item-card--hover" hover-stay-time="100" @click="handleCardClick(card)">
                 <view class="item-card__media">
-                  <image v-if="card.imageUrl" class="item-card__image" :src="card.imageUrl" mode="aspectFill" />
-                  <view v-else class="item-card__placeholder">{{ card.avatarText }}</view>
+                  <ImageLoader class="item-card__image" :src="card.imageUrl" />
                 </view>
                 <view class="item-card__main">
                   <view class="item-card__top">
@@ -260,6 +259,7 @@ import { computed, ref, type CSSProperties } from "vue";
 import emptyStateArt from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
@@ -281,7 +281,6 @@ import { requestFridgeExpirySubscribeMessage, resolveFridgeExpirySubscribeOutcom
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
 import {
-  buildIngredientAvatarText,
   formatExpireLabel,
   getExpireDiffDays,
   isExpiringSoon,
@@ -304,7 +303,6 @@ interface PantryCard {
   hasReservation: boolean;
   needExact: boolean;
   imageUrl: string;
-  avatarText: string;
 }
 
 const pageStyle = usePageScrollStyle();
@@ -378,8 +376,7 @@ const cards = computed<PantryCard[]>(() =>
       expireSoon: isExpiringSoon(item.expireAt),
       hasReservation: item.reservations.length > 0,
       needExact: !item.exactQuantity || !item.exactUnitId,
-      imageUrl: imageMap.value[String(item.id)] || "",
-      avatarText: buildIngredientAvatarText(item.name)
+      imageUrl: imageMap.value[String(item.id)] || ""
     }))
     .sort((left, right) => {
       const rankDiff = resolveCardRank(left) - resolveCardRank(right);
@@ -937,7 +934,6 @@ defineExpose({
 .filter-chip__count,
 .notice__text,
 .notice__action,
-.item-card__placeholder,
 .item-card__name,
 .item-card__meta,
 .expiry-badge,
@@ -1182,19 +1178,6 @@ defineExpose({
 .item-card__image {
   display: block;
   background: var(--color-surface-muted);
-}
-
-.item-card__placeholder {
-  width: 128rpx;
-  height: 128rpx;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--page-cover-fresh-bg);
-  color: var(--color-icon-accent);
-  font-size: 44rpx;
-  font-weight: var(--font-weight-heavy);
 }
 
 .item-card__main {

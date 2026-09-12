@@ -135,13 +135,7 @@
                 <view v-for="item in ingredients" :key="item.id" class="ingredient-card">
                   <view class="ingredient-card__thumb">
                     <text class="ingredient-card__unit">{{ item.defaultUnit.name }}</text>
-                    <image
-                      v-if="item.imageUrl"
-                      class="ingredient-card__image"
-                      :src="item.imageUrl"
-                      mode="aspectFill"
-                    />
-                    <ImageEmpty v-else class="ingredient-card__fallback" copy="封面图" ratio="fill" />
+                    <ImageLoader class="ingredient-card__image" :src="item.imageUrl" />
                     <view
                       v-if="item.source === 'SYSTEM'"
                       class="ingredient-card__notice"
@@ -313,7 +307,7 @@ import { recipeApi, type IngredientCategorySummary, type IngredientSummary, type
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import ImageEmpty from "@/components/ImageEmpty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -1172,15 +1166,6 @@ defineExpose({
 .ingredient-card__skeleton-name {
   width: 72%;
   margin: 20rpx auto;
-}
-
-.ingredient-card__fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  text-align: center;
 }
 
 .ingredient-card__name {

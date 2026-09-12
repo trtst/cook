@@ -36,5 +36,15 @@ assert.ok(
   source.includes(".family-recipe--skeleton .family-recipe__skeleton-copy") && source.includes("margin-top: 18rpx;"),
   "Expected fridge recipe skeleton copy to keep spacing from the image placeholder."
 );
+assert.ok(
+  source.includes('<ImageEmpty v-else class="family-recipe__image-empty" ratio="fill" />'),
+  "Expected fridge recipe cards without a cover to use the shared recipe image empty state."
+);
+assert.ok(!source.includes("family-recipe__badges"), "Expected fridge recipe cards not to render clipped image badges.");
+assert.ok(
+  source.includes('const segments = [];') && !source.includes('item.durationText || "时长待补"'),
+  "Expected fridge recipe metadata not to include a duration fallback."
+);
+assert.ok(source.includes("已配上${item.matchedIngredientCount}样"), "Expected complete matches to remain visible in recipe metadata.");
 
 console.log("home fridge recipe copy tests passed");
