@@ -24,11 +24,14 @@ const knowledgeDetailSource = readFile("./pages_me/knowledge-detail/index.vue");
 const officialMessageSource = readFile("./pages_me/official-message/index.vue");
 const ingredientUnitsSource = readFile("./pages_me/ingredient-units/index.vue");
 const recipeDetailSource = readFile("./pages_recipe/detail/index.vue");
+const pantryIndexSource = readFile("./pages_pantry/index/index.vue");
+const pantryItemDetailSource = readFile("./pages_pantry/item-detail/index.vue");
 const imageFieldSource = readFile("./components/ImageField.vue");
 const loginModalSource = readFile("./components/Login/LoginModal.vue");
 
-expectIncludes(eventPageSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectIncludes(eventPageSource, '<ImageEmpty v-else class="event-card__cover event-card__cover--empty" copy="封面图" ratio="fill" />');
+expectIncludes(eventPageSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(eventPageSource, '<ImageLoader class="event-card__cover" :src="item.coverImageUrl" />');
+expectExcludes(eventPageSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectExcludes(eventPageSource, "event-card__cover-empty");
 
 expectIncludes(mealDetailSource, '<ImageEmpty v-else class="meal-hero__cover-empty" copy="封面图" ratio="fill" />');
@@ -79,13 +82,23 @@ expectIncludes(officialMessageSource, 'import ImageEmpty from "@/components/Imag
 expectIncludes(officialMessageSource, '<ImageEmpty v-else class="detail-hero__cover detail-hero__cover--empty" copy="封面图" ratio="fill" />');
 expectExcludes(officialMessageSource, "detail-hero__empty-text");
 
-expectIncludes(ingredientUnitsSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectIncludes(ingredientUnitsSource, '<ImageEmpty v-else class="ingredient-card__fallback" copy="封面图" ratio="fill" />');
-expectExcludes(ingredientUnitsSource, "ingredient-card__fallback-text");
+expectIncludes(ingredientUnitsSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(ingredientUnitsSource, '<ImageLoader class="ingredient-card__image" :src="item.imageUrl" />');
+expectExcludes(ingredientUnitsSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 
-expectIncludes(recipeDetailSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
-expectIncludes(recipeDetailSource, '<ImageEmpty v-else class="hero__cover-fill" copy="封面图" ratio="fill" />');
-expectExcludes(recipeDetailSource, "hero__cover-title");
+expectIncludes(recipeDetailSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(recipeDetailSource, '<ImageLoader class="hero__image" :src="coverImageUrl" />');
+expectExcludes(recipeDetailSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
+
+expectIncludes(pantryIndexSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(pantryIndexSource, '<ImageLoader class="item-card__image" :src="card.imageUrl" />');
+expectExcludes(pantryIndexSource, "avatarText:");
+expectExcludes(pantryIndexSource, "buildIngredientAvatarText");
+
+expectIncludes(pantryItemDetailSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
+expectIncludes(pantryItemDetailSource, '<ImageLoader class="detail-hero__image" :src="itemImageUrl" />');
+expectExcludes(pantryItemDetailSource, "detail-hero__avatar-text");
+expectExcludes(pantryItemDetailSource, "buildIngredientAvatarText");
 
 expectIncludes(imageFieldSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes(imageFieldSource, '<ImageEmpty v-if="variant === \'cover\'" class="image-field__empty-cover" copy="封面图" ratio="fill" />');

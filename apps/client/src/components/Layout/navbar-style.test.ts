@@ -34,6 +34,9 @@ assert.ok(!source.includes("#center"), "Expected Layout not to forward navbar-ce
 assert.ok(!source.includes("#default"), "Expected Layout not to create a default-slot forwarding wrapper.");
 assert.ok(source.includes("navbarCapsuleGuard?: boolean;"), "Expected Layout to expose an explicit navbar capsule guard prop.");
 assert.ok(source.includes("navbarCapsuleGuard: false"), "Expected Layout navbar capsule guard to default to false.");
+assert.ok(source.includes("navbarForegroundColor?: string;"), "Expected Layout to expose an optional navbar foreground color.");
+assert.ok(source.includes("navbarForegroundColor: undefined"), "Expected Layout navbar foreground color to default to the NavBar theme color.");
+assert.ok(source.includes(':foreground-color="navbarForegroundColor"'), "Expected Layout to forward the navbar foreground color to NavBar.");
 assert.ok(!source.includes("navbarLayout?:"), "Expected Layout not to expose unused navbar layout prop.");
 assert.ok(!source.includes("navbarLayout:"), "Expected Layout not to default unused navbar layout prop.");
 assert.ok(!source.includes("navbarSideGuard?: boolean;"), "Expected Layout not to expose separate navbar side guard prop.");

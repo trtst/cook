@@ -8,7 +8,7 @@
     ]"
     @click="handleFieldClick"
   >
-    <image v-if="imageSrc" :key="imageSrc" class="image-field__preview" :src="imageSrc" mode="aspectFill" />
+    <ImageLoader v-if="imageSrc" class="image-field__preview" :src="imageSrc" />
 
     <template v-if="imageSrc">
       <button class="image-field__action" @click.stop="emitSelect">{{ buttonText }}</button>
@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 
 type ImageFieldVariant = "cover" | "card";
 

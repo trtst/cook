@@ -56,6 +56,10 @@ const props = withDefaults(
     transparent?: boolean;
     // 导航栏背景透明度。当前预留给滚动渐变类页面使用，实际背景色仍由样式层控制。
     backgroundOpacity?: number;
+    // 仅在需要固定导航背景的页面覆盖默认主题背景。
+    backgroundColor?: string;
+    // 仅在需要固定导航文字和返回图标颜色的页面覆盖默认主题前景。
+    foregroundColor?: string;
     // 是否显式避让微信右上角胶囊。只在小程序端生效，会把右侧 side 宽度改为胶囊宽度。
     capsuleGuard?: boolean;
     // 是否由默认 slot 接管中间区域。小程序端不能可靠依赖 $slots 判断 fallback。
@@ -68,6 +72,8 @@ const props = withDefaults(
     placeholder: true,
     transparent: false,
     backgroundOpacity: 1,
+    backgroundColor: undefined,
+    foregroundColor: undefined,
     capsuleGuard: false,
     customCenter: false
   }
@@ -81,7 +87,8 @@ const isMiniProgram = computed(() => uniPlatform.system.getRuntimeChannel() === 
 const useCapsuleRight = computed(() => isMiniProgram.value && props.capsuleGuard);
 
 const fixedStyle = computed(() => ({
-  height: `${navBarTotalHeight.value}px`
+  height: `${navBarTotalHeight.value}px`,
+  ...(props.backgroundColor ? { backgroundColor: props.backgroundColor } : {})
 }));
 
 const statusStyle = computed(() => ({
@@ -90,7 +97,8 @@ const statusStyle = computed(() => ({
 
 const innerStyle = computed(() => ({
   "--navbar-capsule-width": `${navCapsuleWidth.value}px`,
-  height: `${navBarHeight.value}px`
+  height: `${navBarHeight.value}px`,
+  ...(props.foregroundColor ? { "--navbar-foreground-color": props.foregroundColor } : {})
 }));
 
 const placeholderStyle = computed(() => ({
@@ -175,7 +183,7 @@ function handleLeftClick() {
 .navbar__title {
   overflow: hidden;
   max-width: 420rpx;
-  color: var(--color-text);
+  color: var(--navbar-foreground-color, var(--color-text));
   font-size: var(--font-size-lg);
   font-weight: 700;
   line-height: var(--line-height-tight);
@@ -188,7 +196,7 @@ function handleLeftClick() {
   align-items: center;
   width: 64rpx;
   height: 64rpx;
-  color: var(--color-text);
+  color: var(--navbar-foreground-color, var(--color-text));
   line-height: 1;
 }
 

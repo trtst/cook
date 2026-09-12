@@ -3,6 +3,7 @@
 		<view class="layout__theme"
 			:class="[themeClasses, { 'layout__theme--with-tabbar': showTabbar, 'layout__theme--full-screen': fullScreen }]">
 			<NavBar v-if="showNavbar && navbarCenterVisible && $slots['navbar-center']" :title="title" :show-left="showLeft" :capsule-guard="navbarCapsuleGuard"
+				:background-color="navbarBackgroundColor" :foreground-color="navbarForegroundColor"
 				:custom-center="true"
 				:placeholder="navbarPlaceholder" :transparent="navbarTransparent" :background-opacity="navbarOpacity">
 				<slot name="navbar-center" />
@@ -11,6 +12,7 @@
 				</template>
 			</NavBar>
 			<NavBar v-else-if="showNavbar" :title="title" :show-left="showLeft" :capsule-guard="navbarCapsuleGuard"
+				:background-color="navbarBackgroundColor" :foreground-color="navbarForegroundColor"
 				:placeholder="navbarPlaceholder" :transparent="navbarTransparent" :background-opacity="navbarOpacity">
 				<template v-if="$slots['navbar-right']" #right>
 					<slot name="navbar-right" />
@@ -57,6 +59,8 @@ const props = withDefaults(
 		navbarTransparent?: boolean;
 		navbarOpacity?: number;
 		navbarCapsuleGuard?: boolean;
+		navbarBackgroundColor?: string;
+		navbarForegroundColor?: string;
 		navbarCenterVisible?: boolean;
 	}>(),
 	{
@@ -69,6 +73,8 @@ const props = withDefaults(
 		navbarTransparent: false,
 		navbarOpacity: 1,
 		navbarCapsuleGuard: false,
+		navbarBackgroundColor: undefined,
+		navbarForegroundColor: undefined,
 		navbarCenterVisible: true
 	}
 );
