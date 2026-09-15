@@ -241,9 +241,17 @@
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
 	                    <view class="detail-inline-actions__text">保存为私房菜</view>
 	                  </button>
+	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openCookMode">
+                    <view class="cookfont detail-inline-actions__icon icon-cook" />
+                    <view class="detail-inline-actions__text">按菜谱做饭</view>
+                  </button>
 	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
                     <view class="detail-inline-actions__text">加入计划</view>
+                  </button>
+                  <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
+                    <view class="cookfont detail-inline-actions__icon icon-cook" />
+                    <view class="detail-inline-actions__text">做饭助手</view>
                   </button>
                 </template>
 	              <template v-else-if="isOwnedDetail">
@@ -264,10 +272,18 @@
 	                  <view class="cookfont detail-inline-actions__icon icon-share" />
 	                  <view class="detail-inline-actions__text">分享</view>
 	                </button>
+	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openCookMode">
+                    <view class="cookfont detail-inline-actions__icon icon-cook" />
+                    <view class="detail-inline-actions__text">按菜谱做饭</view>
+                  </button>
 	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleAddPlan">
 	                      <view class="cookfont detail-inline-actions__icon icon-add-plan" />
 	                      <view class="detail-inline-actions__text">添加计划</view>
                 </button>
+                  <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
+                    <view class="cookfont detail-inline-actions__icon icon-cook" />
+                    <view class="detail-inline-actions__text">做饭助手</view>
+                  </button>
               </template>
 	            </view>
             </view>
@@ -294,11 +310,27 @@
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">加入计划</view>
             </button>
+            <button class="detail-actions__item" @click="openCookMode">
+              <view class="cookfont icon-cook detail-actions__icon" />
+              <view class="detail-actions__text">做饭</view>
+            </button>
+            <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
+              <view class="cookfont icon-cook detail-actions__icon" />
+              <view class="detail-actions__text">助手</view>
+            </button>
           </template>
           <template v-else-if="isOwnedDetail">
             <button class="detail-actions__item" @click="handleAddPlan">
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">添加</view>
+            </button>
+            <button class="detail-actions__item" @click="openCookMode">
+              <view class="cookfont icon-cook detail-actions__icon" />
+              <view class="detail-actions__text">做饭</view>
+            </button>
+            <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
+              <view class="cookfont icon-cook detail-actions__icon" />
+              <view class="detail-actions__text">助手</view>
             </button>
           </template>
         </view>
@@ -482,7 +514,6 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils/recipe-view-sync";
 import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
-import { useUserStore } from "@/stores/user";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -548,7 +579,6 @@ const reportReasonOptions: ReportReasonOption[] = [
 
 const sessionStore = useSessionStore();
 const loginModalStore = useLoginModalStore();
-const userStore = useUserStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight } = useSystemInfo();
 const NAV_FADE_RANGE = 132;
@@ -675,8 +705,7 @@ const canOpenRecommendSheet = computed(() => {
 const detailSteps = computed(() => detailContent.value.steps.filter(item => Boolean(item.imageUrl || hasStepText(item.text))));
 const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(detail.value));
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
-const hasOwnedRecipeAssistant = computed(() => Boolean(myDetail.value?.assistant?.steps.length));
-const canGenerateRecipeAssistant = computed(() => Boolean(userStore.profile && userStore.profile.membership.tier !== "FREE"));
+const canOpenRecipeAssistant = computed(() => Boolean(publishedDetail.value?.assistantAvailable && publishedDetail.value.contentVersionId));
 const canRecommendRecipe = computed(() => Boolean(myDetail.value?.canRecommend));
 const planRecipeId = computed<UUID | "">(() => {
   if (isOwnedDetail.value) return recipeId.value;
@@ -1257,39 +1286,18 @@ function handleExternalEditAction() {
   void handleAdaptRecipe();
 }
 
-async function openCookMode() {
+function openCookMode() {
   if (!showStickyActions.value || !recipeId.value || mode.value !== "published") return;
-  if (kind.value === "my" && !hasOwnedRecipeAssistant.value) {
-    if (!canGenerateRecipeAssistant.value) {
-      await uniPlatform.feedback.toast({ title: "当前先按原步骤做饭，做饭建议需会员生成", icon: "none" });
-    } else {
-      const shouldGenerate = await uniPlatform.feedback.confirm({
-        title: "生成做饭建议",
-        content: "这道菜还没有整理过做饭建议。要先生成建议流程，再进入做饭模式吗？",
-        confirmText: "先生成",
-        cancelText: "直接开始",
-        maskClosable: false
-      });
-      if (shouldGenerate) {
-        try {
-          const assistant = await recipeApi.generateMyRecipeAssistant(recipeId.value, {
-            operationId: createOperationId()
-          });
-          if (myDetail.value) {
-            detail.value = {
-              ...myDetail.value,
-              assistant
-            };
-          }
-          await uniPlatform.feedback.toast({ title: "做饭建议已生成", icon: "success" });
-        } catch (error) {
-          await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "生成失败，先按原步骤继续", icon: "none" });
-        }
-      }
-    }
-  }
   void uniPlatform.navigation.navigateTo(
     `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}`
+  );
+}
+
+function openRecipeAssistant() {
+  const recipeVersionId = publishedDetail.value?.contentVersionId;
+  if (!showStickyActions.value || !recipeVersionId || !canOpenRecipeAssistant.value) return;
+  void uniPlatform.navigation.navigateTo(
+    `/pages_recipe/assistant/index?recipeVersionId=${encodeURIComponent(String(recipeVersionId))}&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}`
   );
 }
 
@@ -1319,7 +1327,10 @@ async function createShoppingList() {
       operationId: createOperationId(),
       name: shoppingCreateName.value.trim() || buildDefaultShoppingListName()
     });
-    await loadShoppingLists(true);
+    shoppingLists.value = [
+      created,
+      ...shoppingLists.value.filter(item => item.id !== created.id)
+    ];
     selectedShoppingListId.value = created.id;
     shoppingCreateName.value = buildDefaultShoppingListName();
     await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
@@ -1534,6 +1545,7 @@ function automatorReadState() {
     title: detailTitle.value,
     planLinkCount: recipePlanLinks.value.length,
     primaryPlanText: primaryPlanText.value,
+    canOpenRecipeAssistant: canOpenRecipeAssistant.value,
     canRecommend: myDetail.value?.canRecommend ?? false,
     showRecommendEntry: showRecommendEntry.value,
     recommendationStatus: currentRecommendation.value?.status ?? null,

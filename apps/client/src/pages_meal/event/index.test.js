@@ -1,10 +1,26 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { readFileSync } = require("fs");
+const { resolve } = require("path");
+const nodeAssert = require("assert").strict;
 const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
-jest.setTimeout(30000);
+const hasJestRuntime =
+  (typeof process !== "undefined" && Boolean(process.env.JEST_WORKER_ID)) ||
+  (typeof globalThis.describe === "function" && typeof globalThis.it === "function");
+const hasAutomatorRuntime = hasJestRuntime && typeof globalThis.program !== "undefined";
+const nodeTest = hasJestRuntime ? null : require("node:test");
+
+if (!hasAutomatorRuntime && !hasJestRuntime) {
+  globalThis.jest = { setTimeout() {} };
+  globalThis.describe = () => {};
+  globalThis.it = () => {};
+  globalThis.beforeAll = () => {};
+}
+
+globalThis.jest?.setTimeout?.(30000);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -113,7 +129,7 @@ describe("pages_meal/event/index", () => {
       loggedIn: false,
       createSheetVisible: false,
       loginVisible: true,
-      loginMode: "wechat"
+      loginMode: "phone"
     });
   });
 
@@ -147,3 +163,13 @@ describe("pages_meal/event/index", () => {
     expect(lateNightState.createTime).toBe("23:10");
   });
 });
+
+if (!hasAutomatorRuntime && nodeTest) {
+  const eventPageSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
+
+  nodeTest("dining event detail routing preserves planItemId for the meal assistant target", () => {
+    nodeAssert.match(eventPageSource, /buildEventDetailPath\(result\.id, createPlanDate\.value, result\.planItemId\)/);
+    nodeAssert.match(eventPageSource, /buildEventDetailPath\(existingEvent\.id, createPlanDate\.value, existingEvent\.planItemId \?\? undefined\)/);
+    nodeAssert.match(eventPageSource, /planItemId \? `planItemId=\$\{encodeURIComponent\(String\(planItemId\)\)\}` : ""/);
+  });
+}

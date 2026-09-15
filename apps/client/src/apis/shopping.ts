@@ -47,6 +47,7 @@ export interface ShoppingListSummary {
   memberCount: number;
   progressDoneCount: number;
   progressTotalCount: number;
+  updatedAt: IsoDateTime;
 }
 
 export interface ShoppingListPageResponse {

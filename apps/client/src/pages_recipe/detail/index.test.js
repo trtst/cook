@@ -1,11 +1,26 @@
 const http = require("http");
 const https = require("https");
+const { readFileSync } = require("fs");
+const { resolve } = require("path");
 const { URL } = require("url");
+const nodeAssert = require("assert").strict;
 const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
+const hasJestRuntime =
+  (typeof process !== "undefined" && Boolean(process.env.JEST_WORKER_ID)) ||
+  (typeof globalThis.describe === "function" && typeof globalThis.it === "function");
+const hasAutomatorRuntime = hasJestRuntime && typeof globalThis.program !== "undefined";
+const nodeTest = hasJestRuntime ? null : require("node:test");
 
-jest.setTimeout(30000);
+if (!hasAutomatorRuntime && !hasJestRuntime) {
+  globalThis.jest = { setTimeout() {} };
+  globalThis.describe = () => {};
+  globalThis.it = () => {};
+  globalThis.beforeAll = () => {};
+}
+
+globalThis.jest?.setTimeout?.(30000);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -228,6 +243,27 @@ async function createImportedRecipeFixture(authHeaders, sourceRecipeId, sourceVe
   const currentDetail = await requestData(`/recipes/${imported.recipe.id}`, {
     headers: authHeaders
   });
+  const draftIngredients = currentDetail.content.ingredients.map((item) => {
+    const amount = item.amount || {};
+    assert(amount.kind === "EXACT", "imported recipe fixture should use exact ingredient amounts");
+    assert(Number.isInteger(amount.unitId), "imported recipe fixture should expose a numeric unitId");
+    return {
+      ingredientId: item.ingredientId,
+      name: item.ingredientName,
+      quantity: String(amount.quantity || ""),
+      unitId: amount.unitId,
+      fuzzyText: null,
+      categoryId: item.categoryId,
+      defaultUnitId: amount.unitId,
+      source: item.source
+    };
+  });
+  const draftSteps = currentDetail.content.steps.map((item, index) => ({
+    slotKey: `step-${index + 1}`,
+    text: item.text || "",
+    uploadId: null,
+    imageUrl: item.imageUrl || null
+  }));
 
   const draft = await requestData("/recipe-drafts", {
     method: "POST",
@@ -235,15 +271,18 @@ async function createImportedRecipeFixture(authHeaders, sourceRecipeId, sourceVe
     body: JSON.stringify({
       recipeId: currentDetail.id,
       content: {
-        ...currentDetail.content,
+        name: currentDetail.content.name,
         categoryId: currentDetail.category.id,
-        inspirationCategoryId: currentDetail.inspirationCategory?.id ?? null,
         sceneIds: currentDetail.scenes.map((item) => item.id),
         coverUploadId: null,
         coverImageUrl: currentDetail.coverImageUrl,
-        originVersionId: currentDetail.content.originVersionId ?? sourceVersionId,
-        originCoverImageUrl: currentDetail.content.originCoverImageUrl ?? currentDetail.coverImageUrl,
-        story: `${currentDetail.content.story || "灵感改编"} ${storySuffix}`
+        story: `${currentDetail.content.story || "灵感改编"} ${storySuffix}`,
+        baseServings: currentDetail.content.baseServings,
+        difficulty: currentDetail.content.difficulty,
+        duration: currentDetail.content.duration,
+        tips: currentDetail.content.tips,
+        ingredients: draftIngredients,
+        steps: draftSteps
       }
     })
   });
@@ -312,7 +351,8 @@ function expectedNutritionTexts(nutrition, mode = "perServing") {
   const texts = [];
   const metrics = mode === "perRecipe" ? nutrition.perRecipe : nutrition.perServing;
   if (!metrics) return texts;
-  texts.push(formatNutritionValue(metrics.calories, "kcal"));
+  texts.push(formatNutritionValue(metrics.calories, ""));
+  texts.push("kcal");
   texts.push(formatNutritionValue(metrics.protein, "g"));
   texts.push(formatNutritionValue(metrics.fat, "g"));
   texts.push(formatNutritionValue(metrics.carbohydrate, "g"));
@@ -615,3 +655,25 @@ describe("pages_recipe/detail/index", () => {
     expect(texts).toContain("自荐菜谱会进入人工审核，内容完整、步骤清晰、成品质量高的菜谱才会被推荐。");
   });
 });
+
+if (!hasAutomatorRuntime && nodeTest) {
+  const detailSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
+
+  nodeTest("recipe detail keeps raw cook mode free and separate from assistant unlock", () => {
+    nodeAssert.match(detailSource, /function openCookMode\(\)/);
+    nodeAssert.match(detailSource, /\/pages_meal\/cook-mode\/index\?source=recipe/);
+    nodeAssert.doesNotMatch(detailSource, /generateMyRecipeAssistant/);
+    nodeAssert.doesNotMatch(detailSource, /做饭建议需会员生成/);
+    nodeAssert.doesNotMatch(detailSource, /canGenerateRecipeAssistant/);
+  });
+
+  nodeTest("recipe detail shows single recipe assistant entry only from assistantAvailable", () => {
+    nodeAssert.match(detailSource, /assistantAvailable/);
+    nodeAssert.match(detailSource, /canOpenRecipeAssistant/);
+    nodeAssert.match(detailSource, /openRecipeAssistant/);
+    nodeAssert.match(detailSource, /\/pages_recipe\/assistant\/index\?recipeVersionId=/);
+    nodeAssert.match(detailSource, /做饭助手/);
+    nodeAssert.doesNotMatch(detailSource, /getRecipeVersionCookAssistant/);
+    nodeAssert.doesNotMatch(detailSource, /unlockRecipeVersionCookAssistant/);
+  });
+}

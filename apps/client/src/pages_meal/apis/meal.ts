@@ -74,35 +74,69 @@ export interface DiningEventListResponse {
   stageCounts: DiningEventStageCounts;
 }
 
-export interface MealPlanCookAssistantTask {
+export type CookAssistantContentStatus = "NOT_GENERATED" | "GENERATING" | "READY" | "FAILED";
+export type CookAssistantStepSource = "WIKI" | "ORIGINAL";
+
+export interface MealCookContextDish {
+  dishId: UUID;
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
   title: string;
-  detail: string;
-  dishTitles: string[];
+  coverImageUrl: string | null;
+  sortOrder: number;
+  content: RecipeContentSnapshot;
 }
 
-export interface MealPlanCookAssistantTimelineStep extends MealPlanCookAssistantTask {
+export interface MealCookContextResponse {
+  planItemId: UUID;
+  diningEventId: UUID | null;
+  title: string;
+  planDate: string;
+  mealSlot: MealSlot;
+  dishes: MealCookContextDish[];
+}
+
+export interface MealCookAssistantDishSource {
+  dishId: UUID;
+  recipeVersionId: UUID;
+  title: string;
+  source: CookAssistantStepSource;
+}
+
+export interface MealCookAssistantStep {
   order: number;
+  phase: "PREP" | "COOK" | "SERVE";
+  title: string;
+  detail: string;
+  dishIds: UUID[];
+  imageUrl: string | null;
+  durationText: string | null;
+  source: CookAssistantStepSource;
   parallelKey: string | null;
 }
 
-export interface MealPlanCookAssistantSummary {
-  dishCount: number;
-  prepTaskCount: number;
-  timelineStepCount: number;
-  totalDurationText: string | null;
-  suggestedStartTime: string | null;
+export interface MealCookAssistantSnapshot {
+  contractVersion: number;
+  generatedAt: IsoDateTime;
+  title: string;
+  summary: string | null;
+  dishes: MealCookAssistantDishSource[];
+  steps: MealCookAssistantStep[];
   notes: string[];
 }
 
 export interface MealPlanCookAssistant {
   planItemId: UUID;
-  hasSnapshot: boolean;
-  isStale: boolean;
+  diningEventId: UUID | null;
+  status: CookAssistantContentStatus;
+  unlocked: boolean;
+  unlockedAt: IsoDateTime | null;
   generatedAt: IsoDateTime | null;
-  summary: MealPlanCookAssistantSummary;
-  prepTasks: MealPlanCookAssistantTask[];
-  cookTimeline: MealPlanCookAssistantTimelineStep[];
-  serveTasks: MealPlanCookAssistantTask[];
+  assistant: MealCookAssistantSnapshot | null;
+}
+
+export interface UnlockMealPlanCookAssistantResponse extends MealPlanCookAssistant {
+  newlyUnlocked: boolean;
 }
 
 export interface DiningEventParticipantSummary {
@@ -151,6 +185,7 @@ export interface DiningEventSummary {
     recipeId: UUID | null;
     recipeVersionId: UUID;
     title: string;
+    keywords: string[];
     version: number;
   }>;
   wishItems: DiningEventWishItemSummary[];
@@ -257,7 +292,7 @@ export interface ManageDiningEventParticipantRequest {
   operationId: OperationId;
 }
 
-export interface GenerateMealPlanCookAssistantRequest {
+export interface UnlockMealPlanCookAssistantRequest {
   operationId: OperationId;
 }
 
@@ -313,10 +348,13 @@ export const mealApi = {
   getCookAssistant(planItemId: UUID) {
     return get<MealPlanCookAssistant>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-assistant`);
   },
-  generateCookAssistant(planItemId: UUID, body: GenerateMealPlanCookAssistantRequest) {
+  getCookContext(planItemId: UUID) {
+    return get<MealCookContextResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-context`);
+  },
+  unlockCookAssistant(planItemId: UUID, body: UnlockMealPlanCookAssistantRequest) {
     const { operationId, ...payload } = body;
-    return post<MealPlanCookAssistant>(
-      `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-assistant`,
+    return post<UnlockMealPlanCookAssistantResponse>(
+      `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-assistant/unlock`,
       payload,
       { idempotencyKey: operationId }
     );

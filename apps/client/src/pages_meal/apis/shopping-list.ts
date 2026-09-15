@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type OperationId, type UUID } from "@/apis/http";
+import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
 
 export interface ShoppingListSummary {
   id: UUID;
@@ -7,6 +7,7 @@ export interface ShoppingListSummary {
   memberCount: number;
   progressDoneCount: number;
   progressTotalCount: number;
+  updatedAt: IsoDateTime;
 }
 
 export interface ShoppingItemSourceSummary {

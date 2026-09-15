@@ -3,40 +3,46 @@
     :visible="visible"
     :title="title"
     :subtitle="subtitle"
+    :body-scroll="!pinCreate"
     @close="emit('close')"
     @after-close="emit('afterClose')"
   >
-    <view class="sheet-section">
-      <text class="sheet-section__title">{{ listTitle }}</text>
-      <view v-if="loading" class="shopping-sheet__state">加载中...</view>
-      <view v-else-if="errorText" class="shopping-sheet__state shopping-sheet__state--error" @click="emit('retry')">
-        {{ errorText }}
-      </view>
-      <view v-else-if="items.length" class="shopping-list-grid">
-        <view
-          v-for="item in items"
-          :key="item.id"
-          class="shopping-list-option"
-          :class="{ 'shopping-list-option--active': selectedId === item.id }"
-          @click="selectedIdModel = item.id"
-        >
-          <text class="shopping-list-option__title">{{ item.name }}</text>
-          <text class="shopping-list-option__meta">{{ item.progressDoneCount }}/{{ item.progressTotalCount }} · {{ item.memberCount }} 人</text>
+    <view
+      class="shopping-sheet"
+      :class="{ 'shopping-sheet--pinned': pinCreate }"
+    >
+      <view class="sheet-section shopping-list-section">
+        <text class="sheet-section__title">{{ listTitle }}</text>
+        <view v-if="loading" class="shopping-sheet__state">加载中...</view>
+        <view v-else-if="errorText" class="shopping-sheet__state shopping-sheet__state--error" @click="emit('retry')">
+          {{ errorText }}
         </view>
+        <view v-else-if="items.length" class="shopping-list-grid">
+          <view
+            v-for="row in listRows"
+            :key="row.key"
+            class="shopping-list-option"
+            :class="{ 'shopping-list-option--active': row.selected }"
+            @click="selectedIdModel = row.item.id"
+          >
+            <text class="shopping-list-option__title">{{ row.item.name }}</text>
+            <text class="shopping-list-option__meta">{{ shoppingListMetaText(row.item) }}</text>
+          </view>
+        </view>
+        <text v-else class="sheet-section__hint">{{ emptyText }}</text>
       </view>
-      <text v-else class="sheet-section__hint">{{ emptyText }}</text>
-    </view>
 
-    <view class="sheet-section">
-      <text class="sheet-section__title">{{ createTitle }}</text>
-      <view class="shopping-create">
-        <input
-          v-model="createNameModel"
-          class="shopping-create__input"
-          maxlength="30"
-          :placeholder="createPlaceholder"
-        />
-        <view class="shopping-create__button" @click="emit('create')">新建</view>
+      <view class="sheet-section shopping-create-section">
+        <text class="sheet-section__title">{{ createTitle }}</text>
+        <view class="shopping-create">
+          <input
+            v-model="createNameModel"
+            class="shopping-create__input"
+            maxlength="30"
+            :placeholder="createPlaceholder"
+          />
+          <view class="shopping-create__button" @click="emit('create')">新建</view>
+        </view>
       </view>
     </view>
 
@@ -65,13 +71,14 @@
 import { computed } from "vue";
 import type { UUID } from "@/apis/http";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { shoppingListMetaText, shoppingListRows } from "./shopping-list-meta";
 
 type ShoppingListOption = {
   id: UUID;
   name: string;
-  memberCount: number;
   progressDoneCount: number;
   progressTotalCount: number;
+  updatedAt: string;
 };
 
 const props = withDefaults(defineProps<{
@@ -82,6 +89,7 @@ const props = withDefaults(defineProps<{
   selectedId: UUID | "";
   createName: string;
   submitting: boolean;
+  pinCreate?: boolean;
   title?: string;
   subtitle?: string;
   listTitle?: string;
@@ -93,6 +101,7 @@ const props = withDefaults(defineProps<{
   confirmLoadingText?: string;
 }>(), {
   errorText: "",
+  pinCreate: false,
   title: "加入采购清单",
   subtitle: "先选一张采购中的清单，也可以现场新建空白清单。",
   listTitle: "采购中清单",
@@ -123,6 +132,7 @@ const createNameModel = computed({
   get: () => props.createName,
   set: (value: string) => emit("update:createName", value)
 });
+const listRows = computed(() => shoppingListRows(props.items, props.selectedId));
 
 function handleClose() {
   if (props.submitting) return;
@@ -136,6 +146,30 @@ function handleConfirm() {
 </script>
 
 <style scoped lang="scss">
+.shopping-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+.shopping-sheet--pinned {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shopping-sheet--pinned .shopping-create-section {
+  order: 1;
+  flex: 0 0 auto;
+  padding: 24rpx 0;
+}
+
+.shopping-sheet--pinned .shopping-list-section {
+  order: 2;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .sheet-section {
   display: flex;
   flex-direction: column;

@@ -31,7 +31,8 @@
         class="sheet-shell__body"
         :class="{
           'sheet-shell__body--flush': bodyPadding === 'none',
-          'sheet-shell__body--safe': !hasFooter
+          'sheet-shell__body--safe': !hasFooter,
+          'sheet-shell__body--fixed': !bodyScroll
         }"
       >
         <slot :close="requestClose" />
@@ -54,6 +55,7 @@ const props = withDefaults(
     showHeader?: boolean;
     showClose?: boolean;
     bodyPadding?: "default" | "none";
+    bodyScroll?: boolean;
     zIndex?: number;
     panelStyle?: StyleValue;
     maskClosable?: boolean;
@@ -64,6 +66,7 @@ const props = withDefaults(
     showHeader: true,
     showClose: true,
     bodyPadding: "default",
+    bodyScroll: true,
     zIndex: 1300,
     panelStyle: undefined,
     maskClosable: true
@@ -217,6 +220,12 @@ function handlePanelTransitionEnd(event: Event) {
   min-height: 0;
   overflow-y: auto;
   padding-top: 24rpx;
+}
+
+.sheet-shell__body--fixed {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .sheet-shell__body--safe {

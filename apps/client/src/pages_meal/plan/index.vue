@@ -982,7 +982,10 @@ async function createShoppingList() {
       operationId: createOperationId(),
       name: shoppingCreateName.value.trim() || buildShoppingDraftName(shoppingPlan.value)
     });
-    await loadShoppingLists(true);
+    shoppingLists.value = [
+      created,
+      ...shoppingLists.value.filter(item => item.id !== created.id)
+    ];
     selectedShoppingListId.value = created.id;
     shoppingCreateName.value = buildShoppingDraftName(shoppingPlan.value);
     await uniPlatform.feedback.toast({ title: "清单已创建", icon: "success" });

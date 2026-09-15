@@ -1,11 +1,26 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
+const { readFileSync } = require("fs");
+const { resolve } = require("path");
+const nodeAssert = require("assert").strict;
 const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
+const hasJestRuntime =
+  (typeof process !== "undefined" && Boolean(process.env.JEST_WORKER_ID)) ||
+  (typeof globalThis.describe === "function" && typeof globalThis.it === "function");
+const hasAutomatorRuntime = hasJestRuntime && typeof globalThis.program !== "undefined";
+const nodeTest = hasJestRuntime ? null : require("node:test");
 
-jest.setTimeout(30000);
+if (!hasAutomatorRuntime && !hasJestRuntime) {
+  globalThis.jest = { setTimeout() {} };
+  globalThis.describe = () => {};
+  globalThis.it = () => {};
+  globalThis.beforeAll = () => {};
+}
+
+globalThis.jest?.setTimeout?.(30000);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -350,7 +365,7 @@ describe("pages_meal/detail/index", () => {
     expect(texts).toContain("饭局提醒");
   });
 
-  it("添加菜单时显示本次新选菜数", async () => {
+  it("添加菜单时显示本次选中状态", async () => {
     await clearSession();
     const menuPage = await program.reLaunch(
       `/pages_meal/detail/index?planItemId=${planOnlyFixture.planItemId}&planDate=${planOnlyFixture.planDate}`
@@ -375,7 +390,7 @@ describe("pages_meal/detail/index", () => {
 
     const texts = await collectTexts(menuPage);
     expect(texts).toContain("确认添加");
-    expect(texts).toContain("(1)");
+    expect(texts).toContain("已添加");
   });
 
   it("最近安排 focus=shopping 可以命中详情采购区块", async () => {
@@ -461,7 +476,7 @@ describe("pages_meal/detail/index", () => {
 
     const texts = await collectTexts(confirmedPage);
     expect(texts).toContain("做饭助手");
-    expect(texts).toContain("菜单已经定好，现在生成这顿饭的做饭安排。");
+    expect(texts).toContain("菜单已经定好，打开后会按你的次数权益生成或解锁。");
     expect(texts).not.toContain("重新生成建议");
   });
 
@@ -487,3 +502,25 @@ describe("pages_meal/detail/index", () => {
     expect(texts).toContain("分享回忆");
   });
 });
+
+if (!hasAutomatorRuntime && nodeTest) {
+  const detailPageSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
+
+  nodeTest("schedule editor derives the visible meal slot from the edited time", () => {
+    nodeAssert.match(detailPageSource, /:meal-slot="scheduledMealSlot"/);
+    nodeAssert.match(detailPageSource, /scheduledMealSlot\.value = nextSlot;/);
+    nodeAssert.match(detailPageSource, /resolveMealSlotByTime\(nextValue\)/);
+  });
+
+  nodeTest("saving an edited dining-event schedule reloads the authoritative plan slot", () => {
+    nodeAssert.match(detailPageSource, /planDate\.value = nextDate;/);
+    nodeAssert.match(detailPageSource, /if \(updatingSchedule\) \{\s+await loadDetail\(\);\s+\}/);
+  });
+
+  nodeTest("declined and removed dining-event participants cannot open the meal assistant", () => {
+    nodeAssert.match(
+      detailPageSource,
+      /isEventOrganizer\.value\s*\|\|\s*\["INVITED", "ACCEPTED"\]\.includes\(currentParticipant\.value\?\.status \?\? ""\)/
+    );
+  });
+}

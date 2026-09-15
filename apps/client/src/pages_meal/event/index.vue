@@ -275,6 +275,7 @@ const createPlanDate = ref(todayText());
 const createMonthDate = ref(todayText());
 const createMealSlot = ref<MealPlanSummary["mealSlot"]>("DINNER");
 const createTime = ref(resolveDefaultTime("DINNER"));
+const createTimeEdited = ref(false);
 const createMinDate = computed(() => todayText());
 
 const {
@@ -540,6 +541,7 @@ function openCreateSheet() {
   createMonthDate.value = createPlanDate.value;
   createMealSlot.value = initialSlot;
   createTime.value = resolveDefaultTime(initialSlot, createPlanDate.value);
+  createTimeEdited.value = false;
   createSheetVisible.value = true;
 }
 
@@ -561,6 +563,7 @@ function handleCreateDateSelect(nextValue: string) {
     createMonthDate.value = fallbackDate;
     createMealSlot.value = fallbackSlot;
     createTime.value = resolveDefaultTime(fallbackSlot, fallbackDate);
+    createTimeEdited.value = false;
     return;
   }
 
@@ -568,9 +571,11 @@ function handleCreateDateSelect(nextValue: string) {
   createMonthDate.value = nextValue;
   if (isMealSlotExpired(nextValue, createMealSlot.value, new Date())) {
     createMealSlot.value = nextSlot;
+    createTimeEdited.value = false;
   }
-  if (isPastLocalDateTime(nextValue, createTime.value)) {
+  if (!createTimeEdited.value || isPastLocalDateTime(nextValue, createTime.value)) {
     createTime.value = resolveDefaultTime(createMealSlot.value, nextValue);
+    createTimeEdited.value = false;
   }
 }
 
@@ -580,6 +585,7 @@ function handleCreateMonthChange(nextValue: string) {
 
 function handleCreateTimeSelect(nextValue: string) {
   createTime.value = nextValue;
+  createTimeEdited.value = true;
   const nextSlot = resolveMealSlotByTime(nextValue);
   if (!nextSlot) return;
   createMealSlot.value = nextSlot;
@@ -588,9 +594,10 @@ function handleCreateTimeSelect(nextValue: string) {
 function selectCreateMealSlot(nextSlot: MealPlanSummary["mealSlot"]) {
   const target = createSlotOptions.value.find(item => item.value === nextSlot);
   if (target?.disabled) return;
-  if (createMealSlot.value === nextSlot) return;
+  if (createMealSlot.value === nextSlot && createTimeEdited.value) return;
   createMealSlot.value = nextSlot;
   createTime.value = resolveDefaultTime(nextSlot, createPlanDate.value);
+  createTimeEdited.value = false;
 }
 
 async function submitCreateEvent() {
