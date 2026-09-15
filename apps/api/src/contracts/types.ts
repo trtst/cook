@@ -1157,6 +1157,12 @@ export interface SetAdminIngredientStatusRequest {
   status: "ACTIVE" | "DISABLED";
 }
 
+export interface MergeAdminIngredientRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  targetIngredientId: UUID;
+}
+
 export type AdminIngredientReviewAction = "APPROVE_CREATE" | "APPROVE_MERGE" | "REJECT";
 export type AdminIngredientRejectReasonCode =
   | "NAME_NOT_CLEAR"
@@ -1443,12 +1449,14 @@ export interface RecipeIngredientSnapshot {
   ingredientName: string;
   source: IngredientSource;
   categoryId: UUID;
+  categoryCode?: string | null;
   amount: RecipeAmountSnapshot;
 }
 
 export interface RecipeStepSnapshot {
   text: string;
   imageUrl: string | null;
+  imagePrompt?: string | null;
 }
 
 export interface RecipeToolSnapshot {
@@ -1459,6 +1467,7 @@ export interface AdminRecipeStepInput {
   text: string;
   imageUrl: string | null;
   imageTempKey: string | null;
+  imagePrompt?: string | null;
 }
 
 export interface RecipeDraftStepInput {
@@ -1997,6 +2006,8 @@ export interface RecipeImportAssistantStepDraft {
   title: string;
   detail: string;
   imageUrl: string | null;
+  imageTempKey?: string | null;
+  imagePrompt?: string | null;
   durationMinutes: number | null;
   durationText: string | null;
 }
@@ -2010,6 +2021,7 @@ export interface RecipeImportIngredientDraft {
   unitId: UUID | null;
   fuzzyText: "适量" | "少许" | "按需" | null;
   note: string | null;
+  categoryCode?: string | null;
 }
 
 export interface RecipeImportStepDraft {
@@ -2017,6 +2029,7 @@ export interface RecipeImportStepDraft {
   imageUrl?: string | null;
   imageKey: string | null;
   imageTempKey: string | null;
+  imagePrompt?: string | null;
 }
 
 export interface RecipeImportParsedBody {
@@ -2103,6 +2116,7 @@ export interface RecipeImportItemDetail {
   recipeBody: RecipeImportRecipeBody;
   errorItems: RecipeImportIssue[];
   warnItems: RecipeImportIssue[];
+  ingredientRefs: AdminIngredientSummary[];
   sourceImages: RecipeImportItemPreviewImage[];
   recipeId: UUID | null;
   version: number;
@@ -2196,10 +2210,11 @@ export interface AdminIngredientSummary {
   id: UUID;
   name: string;
   version: number;
-  status: "ACTIVE" | "DISABLED";
+  status: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED";
   categoryId: UUID;
   categoryName: string;
-  defaultUnit: UnitSummary;
+  defaultUnit: UnitSummary | null;
+  mergedTo: Pick<AdminIngredientSummary, "id" | "name"> | null;
   proteinType: IngredientProteinType | null;
   isStaple: boolean;
   isSpicyIngredient: boolean;
@@ -2248,6 +2263,12 @@ export interface UpdateAdminIngredientNutritionRequest {
 export interface AdminDeleteIngredientResult {
   ingredientId: UUID;
   deletedAt: IsoDateTime;
+}
+
+export interface AdminIngredientMergeResult {
+  sourceIngredientId: UUID;
+  targetIngredientId: UUID;
+  mergedAt: IsoDateTime;
 }
 
 export interface AdminIngredientSuggestionUser {

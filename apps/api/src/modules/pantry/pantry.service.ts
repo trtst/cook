@@ -4513,6 +4513,39 @@ export class PantryService {
     return this.buildShoppingBoard(items.map(this.toShoppingRow));
   }
 
+  private async currentShoppingIngredients(
+    tx: Prisma.TransactionClient,
+    ingredients: RecipeContentSnapshot["ingredients"]
+  ): Promise<RecipeContentSnapshot["ingredients"]> {
+    const ingredientIds = Array.from(new Set(ingredients.map(item => item.ingredientId)));
+    const rows = ingredientIds.length === 0
+      ? []
+      : await tx.ingredient.findMany({
+          where: { id: { in: ingredientIds } },
+          include: { mergedTo: true }
+        });
+    const rowMap = new Map(rows.map(item => [item.id, item]));
+    return ingredients.map(item => {
+      const row = rowMap.get(item.ingredientId);
+      if (!row) throw new BadRequestException(`菜谱食材“${item.ingredientName}”已不存在，暂不能加入采购清单`);
+      if (row.status === "ACTIVE") return item;
+      if (row.status !== "MERGED") {
+        throw new BadRequestException(`菜谱食材“${item.ingredientName}”当前不可用，暂不能加入采购清单`);
+      }
+      const target = row.mergedTo;
+      if (!target || target.ownerId !== null || target.status !== "ACTIVE") {
+        throw new ConflictException(`菜谱食材“${item.ingredientName}”的归并目标无效`);
+      }
+      return {
+        ...item,
+        ingredientId: target.id,
+        ingredientName: target.name,
+        source: "SYSTEM",
+        categoryId: target.categoryId
+      };
+    });
+  }
+
   private async loadRecipeShoppingSource(
     tx: Prisma.TransactionClient,
     userId: UUID,
@@ -4560,7 +4593,7 @@ export class PantryService {
         sourceVersionId,
         title: content.name,
         baseServings: content.baseServings,
-        ingredients: content.ingredients
+        ingredients: await this.currentShoppingIngredients(tx, content.ingredients)
       };
     }
 
@@ -4612,7 +4645,7 @@ export class PantryService {
       sourceVersionId,
       title: content.name,
       baseServings: content.baseServings,
-      ingredients: content.ingredients
+      ingredients: await this.currentShoppingIngredients(tx, content.ingredients)
     };
   }
 

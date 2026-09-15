@@ -24,6 +24,7 @@ import type {
   AdminRecipeWikiTag,
   AdminDeleteIngredientCategoryResult,
     AdminDeleteIngredientResult,
+    AdminIngredientMergeResult,
     AdminDeletePendingIngredientResult,
     AdminDeletePendingItemResult,
     AdminDeleteInspirationCategoryResult,
@@ -49,6 +50,7 @@ import type {
   AdminNutritionCategorySummary,
   AdminIngredientNutritionDetail,
   SetAdminIngredientStatusRequest,
+  MergeAdminIngredientRequest,
   SetAdminIngredientCategoryStatusRequest,
   AdminUnitPayloadRequest,
   AdminUnitSummary,
@@ -332,7 +334,9 @@ type AdminIngredientRow = Prisma.IngredientGetPayload<{
     category: true;
     defaultUnit: true;
   };
-}>;
+}> & {
+  mergedTo?: { id: UUID; name: string } | null;
+};
 type AdminIngredientWithImageRow = AdminIngredientRow & { imageUpdatedAt: Date | null };
 type AdminPendingIngredientRow = Prisma.IngredientRecommendationGetPayload<{
   include: {
@@ -356,7 +360,7 @@ type AdminPendingIngredientListRow = {
     name: string;
     version: number;
     categoryId: UUID;
-    defaultUnitId: UUID;
+    defaultUnitId: UUID | null;
     owner: {
       id: UUID;
       uid: number;
@@ -512,10 +516,11 @@ function toAdminIngredientSummary(ingredient: AdminIngredientRow): AdminIngredie
     id: ingredient.id,
     name: ingredient.name,
     version: ingredient.version,
-    status: ingredient.status === "DISABLED" ? "DISABLED" : "ACTIVE",
+    status: ingredient.status,
     categoryId: ingredient.categoryId,
     categoryName: ingredient.category.name,
-    defaultUnit: toUnitSummary(ingredient.defaultUnit),
+    defaultUnit: ingredient.defaultUnit ? toUnitSummary(ingredient.defaultUnit) : null,
+    mergedTo: ingredient.mergedTo ? { id: ingredient.mergedTo.id, name: ingredient.mergedTo.name } : null,
     proteinType: ingredient.proteinType as IngredientProteinType | null,
     isStaple: ingredient.isStaple,
     isSpicyIngredient: ingredient.isSpicyIngredient,
@@ -1480,12 +1485,12 @@ export class AdminService {
     });
     if (!categories.length) return [];
 
-    const counts = await this.prisma.ingredient.groupBy({
+    const governedCounts = await this.prisma.ingredient.groupBy({
       by: ["categoryId"],
       where: {
         ownerId: null,
         status: {
-          in: ["ACTIVE", "DISABLED"]
+          in: ["ACTIVE", "DISABLED", "MERGED"]
         },
         categoryId: {
           in: categories.map(item => item.id)
@@ -1495,7 +1500,24 @@ export class AdminService {
         _all: true
       }
     });
-    const countMap = new Map(counts.map(item => [item.categoryId, item._count._all]));
+    const unclassifiedCategoryIds = categories.filter(item => item.code === "UNCLASSIFIED").map(item => item.id);
+    const pendingCounts = unclassifiedCategoryIds.length
+      ? await this.prisma.ingredient.groupBy({
+          by: ["categoryId"],
+          where: {
+            ownerId: null,
+            status: "PENDING",
+            categoryId: { in: unclassifiedCategoryIds }
+          },
+          _count: {
+            _all: true
+          }
+        })
+      : [];
+    const countMap = new Map(governedCounts.map(item => [item.categoryId, item._count._all]));
+    for (const item of pendingCounts) {
+      countMap.set(item.categoryId, (countMap.get(item.categoryId) ?? 0) + item._count._all);
+    }
     return categories.map(category => toAdminIngredientCategorySummary(category, countMap.get(category.id) ?? 0));
   }
 
@@ -2020,14 +2042,14 @@ export class AdminService {
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
     const normalizedKeyword = keyword?.trim();
-    const normalizedStatus = status === "DISABLED" || status === "ALL" ? status : "ACTIVE";
+    const normalizedStatus = status === "PENDING" || status === "DISABLED" || status === "MERGED" || status === "ALL" ? status : "ACTIVE";
     const normalizedFactStatus = factStatus === "MISSING" ? "MISSING" : "ALL";
     const where: Prisma.IngredientWhereInput = {
       ownerId: null,
       status:
         normalizedStatus === "ALL"
           ? {
-              in: ["ACTIVE", "DISABLED"]
+              in: ["PENDING", "ACTIVE", "DISABLED", "MERGED"]
             }
           : normalizedStatus,
       ...(categoryId ? { categoryId } : {}),
@@ -2047,7 +2069,8 @@ export class AdminService {
         where,
         include: {
           category: true,
-          defaultUnit: true
+          defaultUnit: true,
+          mergedTo: { select: { id: true, name: true } }
         },
         orderBy
       });
@@ -2069,7 +2092,8 @@ export class AdminService {
         where,
         include: {
           category: true,
-          defaultUnit: true
+          defaultUnit: true,
+          mergedTo: { select: { id: true, name: true } }
         },
         orderBy,
         skip,
@@ -2399,8 +2423,24 @@ export class AdminService {
         if (repeated) return repeated;
         await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:set-status", adminId, requestHash);
 
+        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
         const ingredient = await this.requireSystemIngredient(tx, ingredientId, true);
         if (ingredient.version !== body.expectedVersion) throw new ConflictException("食材已被更新，请刷新后重试");
+        if (body.status === "ACTIVE" && !ingredient.defaultUnitId) {
+          throw new BadRequestException("食材缺少默认单位，请先补充后再上架");
+        }
+        if (body.status === "DISABLED" && ingredient.status !== "DISABLED") {
+          const mergedFromCount = await tx.ingredient.count({
+            where: {
+              ownerId: null,
+              status: "MERGED",
+              mergedToId: ingredientId
+            }
+          });
+          if (mergedFromCount > 0) {
+            throw new ConflictException("该食材仍是归并主食材，请先将它合并到其他启用中的主食材");
+          }
+        }
 
         const updated =
           ingredient.status === body.status
@@ -2450,6 +2490,144 @@ export class AdminService {
       }
       throw error;
     }
+  }
+
+  async mergeIngredient(
+    sourceIngredientId: UUID,
+    body: MergeAdminIngredientRequest,
+    adminId: UUID
+  ): Promise<AdminIngredientMergeResult> {
+    await this.requireSuperAdmin(adminId);
+    if (sourceIngredientId === body.targetIngredientId) {
+      throw new BadRequestException("来源食材和主食材不能相同");
+    }
+    const requestHash = JSON.stringify({
+      sourceIngredientId,
+      expectedVersion: body.expectedVersion,
+      targetIngredientId: body.targetIngredientId
+    });
+
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminIngredientMergeResult>(
+        tx,
+        body.operationId,
+        "admin-ingredient:merge",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-ingredient:merge", adminId, requestHash);
+
+      const lockedIngredientIds = [sourceIngredientId, body.targetIngredientId].sort((left, right) => left - right);
+      for (const ingredientId of lockedIngredientIds) {
+        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
+      }
+
+      const [source, target] = await Promise.all([
+        tx.ingredient.findFirst({
+          where: { id: sourceIngredientId, ownerId: null },
+          include: { category: true, defaultUnit: true }
+        }),
+        tx.ingredient.findFirst({
+          where: { id: body.targetIngredientId, ownerId: null, status: "ACTIVE" },
+          include: { category: true, defaultUnit: true }
+        })
+      ]);
+      if (!source) throw new NotFoundException("来源系统食材不存在");
+      if (!target) throw new NotFoundException("目标系统食材不存在或未启用");
+      if (source.version !== body.expectedVersion) {
+        throw new ConflictException("食材已被更新，请刷新后重试");
+      }
+      if (source.status !== "ACTIVE" && source.status !== "DISABLED") {
+        throw new BadRequestException("只有启用中或已下架的系统食材可以合并");
+      }
+
+      const mergedChildren = await tx.ingredient.findMany({
+        where: {
+          ownerId: null,
+          status: "MERGED",
+          mergedToId: sourceIngredientId
+        },
+        select: { id: true }
+      });
+      let repointedCount = 0;
+      for (const child of mergedChildren) {
+        const updated = await tx.ingredient.updateMany({
+          where: { id: child.id, status: "MERGED", mergedToId: sourceIngredientId },
+          data: { mergedToId: target.id, version: { increment: 1 } }
+        });
+        if (updated.count !== 1) {
+          throw new ConflictException("归并项已被更新，请刷新后重试");
+        }
+        repointedCount += 1;
+      }
+
+      const sourceUpdate = await tx.ingredient.updateMany({
+        where: {
+          id: sourceIngredientId,
+          ownerId: null,
+          version: body.expectedVersion,
+          status: source.status
+        },
+        data: {
+          status: "MERGED",
+          mergedToId: target.id,
+          version: { increment: 1 }
+        }
+      });
+      if (sourceUpdate.count !== 1) {
+        throw new ConflictException("食材已被更新，请刷新后重试");
+      }
+
+      const sourceIds = [sourceIngredientId, ...mergedChildren.map(item => item.id)];
+      const [fridgeResult, shoppingResult] = await Promise.all([
+        tx.fridgeItem.updateMany({
+          where: { ingredientId: { in: sourceIds } },
+          data: { ingredientId: target.id }
+        }),
+        tx.shoppingItem.updateMany({
+          where: { ingredientId: { in: sourceIds } },
+          data: { ingredientId: target.id }
+        })
+      ]);
+      const importItemCount = await this.refreshRecipeImportIngredientReferences(tx, sourceIds, {
+        id: target.id,
+        name: target.name,
+        categoryCode: target.category.code
+      });
+      const now = new Date();
+      const result: AdminIngredientMergeResult = {
+        sourceIngredientId,
+        targetIngredientId: target.id,
+        mergedAt: toIsoDate(now)
+      };
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "INGREDIENT_MERGED",
+          objectType: "INGREDIENT",
+          objectId: sourceIngredientId,
+          payload: {
+            sourceStatus: source.status,
+            targetIngredientId: target.id,
+            repointedCount,
+            fridgeCount: fridgeResult.count,
+            shoppingCount: shoppingResult.count,
+            importItemCount
+          }
+        }
+      });
+      await completeAdminIdempotentOperation(
+        tx,
+        body.operationId,
+        "admin-ingredient:merge",
+        adminId,
+        requestHash,
+        result
+      );
+      return result;
+    });
   }
 
   async deleteSystemIngredient(
@@ -3170,10 +3348,36 @@ export class AdminService {
     });
     try {
       return await this.prisma.$transaction(async tx => {
-        await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
+        const automaticTarget = body.action === "APPROVE_CREATE" && body.name?.trim()
+          ? await tx.ingredient.findFirst({
+              where: {
+                ownerId: null,
+                status: { in: ["ACTIVE", "DISABLED"] },
+                searchKey: buildSearchKey(body.name.trim())
+              },
+              select: { id: true }
+            })
+          : null;
+        const lockTargetIngredientId = body.action === "APPROVE_MERGE"
+          ? body.targetIngredientId
+          : automaticTarget?.id;
+        const ingredientIds = lockTargetIngredientId
+          ? [ingredientId, lockTargetIngredientId].sort((left, right) => left - right)
+          : [ingredientId];
+        for (const lockedIngredientId of ingredientIds) {
+          await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${lockedIngredientId} FOR UPDATE`;
+        }
         const importedIngredient = await this.findPendingImportedIngredient(tx, ingredientId);
         if (importedIngredient) {
-          return this.reviewPendingImportedIngredient(tx, importedIngredient, body, adminId, requestHash, reviewContent);
+          return this.reviewPendingImportedIngredient(
+            tx,
+            importedIngredient,
+            body,
+            adminId,
+            requestHash,
+            reviewContent,
+            automaticTarget?.id ?? null
+          );
         }
         const recommendation = await this.requirePendingIngredientRecommendation(tx, ingredientId);
         const repeated = await getAdminIdempotentResult<AdminReviewPendingIngredientResult>(
@@ -3275,8 +3479,8 @@ export class AdminService {
               ingredientName: updatedTarget.name,
               categoryId: updatedTarget.categoryId,
               categoryName: category.name,
-              defaultUnitId: updatedTarget.defaultUnitId,
-              defaultUnitName: updatedTarget.defaultUnit.name,
+              defaultUnitId: unit.id,
+              defaultUnitName: unit.name,
               reviewNote: reviewContent.reviewNote,
               reviewReasonCode: null,
               reviewAdvice: null,
@@ -3286,29 +3490,19 @@ export class AdminService {
           });
           targetIngredientId = updatedTarget.id;
         } else {
-          const duplicate = await tx.ingredient.findFirst({
-            where: {
-              ownerId: null,
-              status: {
-                in: ["ACTIVE", "DISABLED"]
-              },
-              searchKey,
-            },
-            include: {
-              category: true,
-              defaultUnit: true
+          if (automaticTarget) {
+            const lockedDuplicate = await this.requireSystemIngredient(tx, automaticTarget.id, true);
+            if (lockedDuplicate.searchKey !== searchKey) {
+              throw new ConflictException("系统食材已更新，请刷新后重试");
             }
-          });
-
-          if (duplicate) {
             const nextSortOrder =
-              duplicate.categoryId === body.categoryId
-                ? duplicate.systemSortOrder
+              lockedDuplicate.categoryId === body.categoryId
+                ? lockedDuplicate.systemSortOrder
                 : await this.nextSystemIngredientSortOrder(tx, body.categoryId);
             const displaySortOrder =
-              duplicate.status === "ACTIVE" ? duplicate.displaySortOrder : await this.nextSystemIngredientDisplaySortOrder(tx);
+              lockedDuplicate.status === "ACTIVE" ? lockedDuplicate.displaySortOrder : await this.nextSystemIngredientDisplaySortOrder(tx);
             const updatedTarget = await tx.ingredient.update({
-              where: { id: duplicate.id },
+              where: { id: lockedDuplicate.id },
               data: {
                 status: "ACTIVE",
                 name,
@@ -3339,8 +3533,8 @@ export class AdminService {
               ingredientName: updatedTarget.name,
               categoryId: updatedTarget.categoryId,
               categoryName: category.name,
-              defaultUnitId: updatedTarget.defaultUnitId,
-              defaultUnitName: updatedTarget.defaultUnit.name,
+              defaultUnitId: unit.id,
+              defaultUnitName: unit.name,
               reviewNote: reviewContent.reviewNote,
               reviewReasonCode: null,
               reviewAdvice: null,
@@ -3385,8 +3579,8 @@ export class AdminService {
               ingredientName: updatedIngredient.name,
               categoryId: updatedIngredient.categoryId,
               categoryName: category.name,
-              defaultUnitId: updatedIngredient.defaultUnitId,
-              defaultUnitName: updatedIngredient.defaultUnit.name,
+              defaultUnitId: unit.id,
+              defaultUnitName: unit.name,
               reviewNote: reviewContent.reviewNote,
               reviewReasonCode: null,
               reviewAdvice: null,
@@ -3436,7 +3630,8 @@ export class AdminService {
     body: AdminReviewPendingIngredientRequest,
     adminId: UUID,
     requestHash: string,
-    reviewContent: ReturnType<typeof resolveIngredientReviewNote>
+    reviewContent: ReturnType<typeof resolveIngredientReviewNote>,
+    automaticTargetId: UUID | null
   ): Promise<AdminReviewPendingIngredientResult> {
     const repeated = await getAdminIdempotentResult<AdminReviewPendingIngredientResult>(
       tx,
@@ -3462,7 +3657,8 @@ export class AdminService {
       });
       await this.refreshRecipeImportIngredientReferences(tx, importedIngredient.id, {
         id: importedIngredient.id,
-        name: importedIngredient.name
+        name: importedIngredient.name,
+        categoryCode: importedIngredient.category.code
       });
       const result = {
         id: importedIngredient.id,
@@ -3528,18 +3724,13 @@ export class AdminService {
       });
       targetIngredientId = updatedTarget.id;
     } else {
-      const duplicate = await tx.ingredient.findFirst({
-        where: {
-          ownerId: null,
-          status: {
-            in: ["ACTIVE", "DISABLED"]
-          },
-          searchKey
+      if (automaticTargetId) {
+        const lockedDuplicate = await this.requireSystemIngredient(tx, automaticTargetId, true);
+        if (lockedDuplicate.searchKey !== searchKey) {
+          throw new ConflictException("系统食材已更新，请刷新后重试");
         }
-      });
-      if (duplicate) {
         const updatedTarget = await tx.ingredient.update({
-          where: { id: duplicate.id },
+          where: { id: lockedDuplicate.id },
           data: {
             status: "ACTIVE",
             name,
@@ -3577,7 +3768,8 @@ export class AdminService {
     }
     await this.refreshRecipeImportIngredientReferences(tx, importedIngredient.id, {
       id: targetIngredientId,
-      name
+      name,
+      categoryCode: category.code
     });
     const result = {
       id: importedIngredient.id,
@@ -4458,6 +4650,19 @@ export class AdminService {
       const previousRecipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(currentItem.recipeBodyJson));
       const previousTempKeys = recipeImportTempKeys(previousRecipeBody);
       const nextRecipeBody = await this.prepareRecipeImportBody(tx, body.recipeBody, true);
+      const submittedAssistantSteps = body.recipeBody.assistantSteps ?? [];
+      const previousAssistantSteps = previousRecipeBody.assistantSteps ?? [];
+      nextRecipeBody.assistantSteps = (nextRecipeBody.assistantSteps ?? []).map((step, index) => {
+        const submittedStep = submittedAssistantSteps[index];
+        const previousStep = previousAssistantSteps[index];
+        if (
+          !Object.prototype.hasOwnProperty.call(submittedStep ?? {}, "imagePrompt") &&
+          previousStep?.imagePrompt?.trim()
+        ) {
+          return { ...step, imagePrompt: previousStep.imagePrompt.trim() };
+        }
+        return step;
+      });
       const nextTempKeys = recipeImportTempKeys(nextRecipeBody);
       const staleTempKeys = Array.from(previousTempKeys).filter(key => !nextTempKeys.has(key));
       const nextState = await this.buildRecipeImportItemState(tx, nextRecipeBody, rawBody);
@@ -4637,7 +4842,8 @@ export class AdminService {
           steps: recipeBody.steps.map((step, index) => ({
             text: step.text,
             imageUrl: stagedImages.stepImageUrls[index] ?? null,
-            imageTempKey: null
+            imageTempKey: null,
+            imagePrompt: step.imagePrompt ?? null
           }))
         };
 
@@ -4847,6 +5053,13 @@ export class AdminService {
 
     const assistantSteps: NonNullable<RecipeImportRecipeBody["assistantSteps"]> = [];
     for (const assistantStep of recipeBody.assistantSteps ?? []) {
+      if (assistantStep.imageTempKey) {
+        const published = await this.adminRecipeImageService.publishTempImage(request, "STEP", assistantStep.imageTempKey);
+        tempImageKeys.push(assistantStep.imageTempKey);
+        publishedStorageKeys.push(published.storageKey);
+        assistantSteps.push({ ...assistantStep, imageTempKey: null, imageUrl: published.imageUrl });
+        continue;
+      }
       if (!assistantStep.imageUrl) {
         assistantSteps.push(assistantStep);
         continue;
@@ -5846,10 +6059,17 @@ export class AdminService {
     const content = versionToContent(recipe.currentVersion);
     const assistantRecord = await this.loadRecipeAssistantRecord(tx, recipe.currentVersionId);
     const assistant = versionAssistantToSnapshot(assistantRecord);
-    const [tags, nutrition] = await Promise.all([
+    const categoryIds = Array.from(new Set(content.ingredients.map(item => item.categoryId)));
+    const [tags, nutrition, ingredientCategories] = await Promise.all([
       this.loadRecipeWikiTags(tx, recipe.currentVersionId, content),
-      loadRecipeNutritionSummary(tx, recipe.currentVersionId, content)
+      loadRecipeNutritionSummary(tx, recipe.currentVersionId, content),
+      categoryIds.length ? tx.ingredientCategory.findMany({ where: { id: { in: categoryIds } }, select: { id: true, code: true } }) : []
     ]);
+    const categoryCodeById = new Map(ingredientCategories.map(item => [item.id, item.code]));
+    const detailContent: RecipeContentSnapshot = {
+      ...content,
+      ingredients: content.ingredients.map(item => ({ ...item, categoryCode: categoryCodeById.get(item.categoryId) ?? null }))
+    };
     const nutritionSnapshot = await tx.recipeNutritionSnapshot.findUnique({
       where: { recipeVersionId: recipe.currentVersionId },
       select: { coverageRate: true }
@@ -5874,7 +6094,7 @@ export class AdminService {
       difficultyText: recipeDifficultyText(content.difficulty),
       durationText: recipeDurationText(content.duration),
       contentVersionId: recipe.currentVersionId,
-      content,
+      content: detailContent,
       assistantState: this.toRecipeAssistantState(assistantRecord),
       assistant,
       wiki,
@@ -5998,6 +6218,7 @@ export class AdminService {
     if (!record) {
       return {
         status: "MISSING",
+        hasCandidate: false,
         hasSnapshot: false,
         generatedAt: null,
         lastAttemptAt: null,
@@ -6008,7 +6229,8 @@ export class AdminService {
 
     return {
       status: record.status,
-      hasSnapshot: Boolean(record.generatedAt && record.snapshotJson != null),
+      hasCandidate: record.candidateJson != null,
+      hasSnapshot: record.status === "READY" && Boolean(record.generatedAt && record.snapshotJson != null),
       generatedAt: record.generatedAt ? toIsoDate(record.generatedAt) : null,
       lastAttemptAt: toIsoDate(record.lastAttemptAt),
       attemptCount: record.attemptCount,
@@ -6056,6 +6278,29 @@ export class AdminService {
     const recipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(item.recipeBodyJson));
     const errorItems = fromJson<RecipeImportIssue[]>(item.errorJson);
     const warnItems = fromJson<RecipeImportIssue[]>(item.warnJson);
+    const ingredientIds = Array.from(new Set(
+      recipeBody.ingredients
+        .map(ingredient => ingredient.ingredientId)
+        .filter((value): value is UUID => value !== null)
+    ));
+    const ingredientRows = ingredientIds.length === 0
+      ? []
+      : await this.prisma.ingredient.findMany({
+          where: {
+            id: { in: ingredientIds },
+            ownerId: null,
+            status: { in: ["PENDING", "ACTIVE", "DISABLED"] }
+          },
+          include: {
+            category: true,
+            defaultUnit: true
+          }
+        });
+    const ingredientMap = new Map(ingredientRows.map(ingredient => [ingredient.id, ingredient]));
+    const ingredientRefs = ingredientIds.flatMap(id => {
+      const ingredient = ingredientMap.get(id);
+      return ingredient ? [toAdminIngredientSummary(ingredient)] : [];
+    });
     const sourceImages = await Promise.all(
       readSourceImages(rawBody).map(async image => ({
         ...image,
@@ -6074,6 +6319,7 @@ export class AdminService {
       recipeBody,
       errorItems,
       warnItems,
+      ingredientRefs,
       sourceImages,
       recipeId: item.recipeId,
       version: item.version,
@@ -6110,26 +6356,102 @@ export class AdminService {
         unitText: item.unitText?.trim() || null,
         unitId: item.unitId ?? null,
         fuzzyText: item.fuzzyText ?? null,
-        note: item.note?.trim() || null
+        note: item.note?.trim() || null,
+        categoryCode: item.categoryCode?.trim() || null
       })),
       steps: body.steps.map(item => ({
         text: item.text.trim(),
         imageUrl: item.imageUrl?.trim() || null,
         imageKey: item.imageKey?.trim() || null,
-        imageTempKey: item.imageTempKey?.trim() || null
+        imageTempKey: item.imageTempKey?.trim() || null,
+        imagePrompt: item.imagePrompt?.trim() || null
       }))
     };
     if (!strictMatch) {
       nextBody.ingredients = await this.materializeImportIngredients(tx, nextBody.ingredients);
+    } else {
+      const ingredientIds = Array.from(new Set(
+        nextBody.ingredients
+          .map(item => item.ingredientId)
+          .filter((id): id is UUID => id !== null)
+      ));
+      const ingredientSelect = {
+        id: true,
+        ownerId: true,
+        name: true,
+        status: true,
+        category: {
+          select: { code: true }
+        },
+        mergedTo: {
+          select: {
+            id: true,
+            ownerId: true,
+            name: true,
+            status: true,
+            category: {
+              select: { code: true }
+            }
+          }
+        }
+      } satisfies Prisma.IngredientSelect;
+      const readReferencedIngredients = async () => ingredientIds.length > 0
+        ? await tx.ingredient.findMany({
+            where: {
+              id: { in: ingredientIds },
+              ownerId: null
+            },
+            select: ingredientSelect
+          })
+        : [];
+      let referencedIngredients = await readReferencedIngredients();
+      const lockedIds = new Set<UUID>();
+      const lockIngredients = async (ids: UUID[]) => {
+        for (const ingredientId of Array.from(new Set(ids)).sort((left, right) => left - right)) {
+          if (lockedIds.has(ingredientId)) continue;
+          await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${ingredientId} FOR UPDATE`;
+          lockedIds.add(ingredientId);
+        }
+      };
+      await lockIngredients([
+        ...ingredientIds,
+        ...referencedIngredients.flatMap(item => item.mergedTo ? [item.mergedTo.id] : [])
+      ]);
+      referencedIngredients = await readReferencedIngredients();
+      const lateTargetIds = referencedIngredients.flatMap(item => item.mergedTo ? [item.mergedTo.id] : []);
+      if (lateTargetIds.some(id => !lockedIds.has(id))) {
+        await lockIngredients(lateTargetIds);
+        referencedIngredients = await readReferencedIngredients();
+      }
+      const referencedById = new Map(referencedIngredients.map(item => [item.id, item]));
+      nextBody.ingredients = nextBody.ingredients.map(item => {
+        const referenced = item.ingredientId ? referencedById.get(item.ingredientId) : null;
+        if (!referenced) return item;
+        const selected = referenced.status === "MERGED" ? referenced.mergedTo : referenced;
+        if (
+          referenced.status === "MERGED"
+          && (!selected || selected.ownerId !== null || selected.status !== "ACTIVE")
+        ) {
+          throw new ConflictException("归并食材目标无效，请先修复食材治理数据");
+        }
+        if (!selected) throw new ConflictException("归并食材目标无效，请先修复食材治理数据");
+        return {
+          ...item,
+          ingredientId: selected.id,
+          ingredientName: selected.name,
+          categoryCode: selected.category.code
+        };
+      });
     }
     return nextBody;
   }
 
   private async refreshRecipeImportIngredientReferences(
     tx: Prisma.TransactionClient,
-    sourceIngredientId: UUID,
-    targetIngredient: { id: UUID; name: string }
+    sourceIngredientId: UUID | UUID[],
+    targetIngredient: { id: UUID; name: string; categoryCode: string }
   ) {
+    const sourceIngredientIds = new Set(Array.isArray(sourceIngredientId) ? sourceIngredientId : [sourceIngredientId]);
     const items = await tx.recipeImportItem.findMany({
       where: {
         job: { sourceType: "JSON" },
@@ -6144,16 +6466,18 @@ export class AdminService {
       }
     });
     const jobIds = new Set<UUID>();
+    let updatedCount = 0;
     for (const item of items) {
       const recipeBody = normalizeRecipeImportBody(fromJson<RecipeImportRecipeBody>(item.recipeBodyJson));
       let changed = false;
       const nextIngredients = recipeBody.ingredients.map(ingredient => {
-        if (ingredient.ingredientId !== sourceIngredientId) return ingredient;
+        if (!ingredient.ingredientId || !sourceIngredientIds.has(ingredient.ingredientId)) return ingredient;
         changed = true;
         return {
           ...ingredient,
           ingredientId: targetIngredient.id,
-          ingredientName: targetIngredient.name
+          ingredientName: targetIngredient.name,
+          categoryCode: targetIngredient.categoryCode
         };
       });
       if (!changed) continue;
@@ -6180,11 +6504,13 @@ export class AdminService {
       if (updateResult.count !== 1) {
         throw new ConflictException("导入条目已被更新，请刷新后重试");
       }
+      updatedCount += 1;
       jobIds.add(item.jobId);
     }
     for (const jobId of jobIds) {
       await this.writeRecipeImportJobStats(tx, jobId);
     }
+    return updatedCount;
   }
 
   private async buildRecipeImportItemState(
@@ -6203,7 +6529,7 @@ export class AdminService {
               id: { in: ingredientIds },
               ownerId: null,
               status: {
-                in: ["ACTIVE", "DISABLED"]
+                in: ["ACTIVE", "PENDING", "DISABLED"]
               }
             },
             include: {
@@ -6225,8 +6551,12 @@ export class AdminService {
       if (item.ingredientId) {
         const ingredient = ingredientMap.get(item.ingredientId);
         const rowLabel = `ingredients.${index}.ingredientId`;
-        if (!ingredient || ingredient.status !== "ACTIVE") {
-          nextState.errorItems.push({ field: rowLabel, message: `第 ${index + 1} 行食材不存在或已下架` });
+        if (!ingredient) {
+          nextState.errorItems.push({ field: rowLabel, message: `第 ${index + 1} 行食材不存在` });
+        } else if (ingredient.status === "DISABLED") {
+          nextState.errorItems.push({ field: rowLabel, message: `第 ${index + 1} 行食材已下架，请重新匹配` });
+        } else if (ingredient.status === "PENDING") {
+          nextState.errorItems.push({ field: rowLabel, message: `第 ${index + 1} 行食材仍在待归类，请先到食材管理完成归类` });
         } else {
           if (buildSearchKey(item.ingredientName) !== buildSearchKey(ingredient.name)) {
             nextState.errorItems.push({ field: `ingredients.${index}.ingredientName`, message: `第 ${index + 1} 行食材名称未严格匹配系统食材` });
@@ -6259,46 +6589,99 @@ export class AdminService {
         nextRows.push({ ...item, ingredientId: null });
         continue;
       }
-      if (item.ingredientId || !item.unitId || !item.ingredientName.trim()) {
-        nextRows.push(item);
+      if (item.ingredientId) {
+        const matched = await tx.ingredient.findFirst({
+          where: {
+            id: item.ingredientId,
+            ownerId: null,
+            status: { in: ["ACTIVE", "MERGED", "PENDING", "DISABLED"] }
+          },
+          include: {
+            category: true,
+            mergedTo: {
+              include: { category: true }
+            }
+          }
+        });
+        if (matched) {
+          const selected = matched.status === "MERGED" ? matched.mergedTo : matched;
+          if (
+            matched.status === "MERGED"
+            && (!selected || selected.ownerId !== null || selected.status !== "ACTIVE")
+          ) {
+            throw new ConflictException("归并食材目标无效，请先修复食材治理数据");
+          }
+          if (!selected) throw new ConflictException("归并食材目标无效，请先修复食材治理数据");
+          nextRows.push({
+            ...item,
+            ingredientId: selected.id,
+            ingredientName: selected.name,
+            categoryCode: selected.category.code
+          });
+          continue;
+        }
+      }
+      if (!item.ingredientName.trim()) {
+        nextRows.push({ ...item, ingredientId: null });
         continue;
       }
       const searchKey = buildSearchKey(item.ingredientName);
-      const existing = await tx.ingredient.findFirst({
+      const existingRows = await tx.ingredient.findMany({
         where: {
           ownerId: null,
           status: {
-            in: ["ACTIVE", "DISABLED", "PENDING"]
+            in: ["ACTIVE", "MERGED", "DISABLED", "PENDING"]
           },
           searchKey
         },
         include: {
-          category: true
+          category: true,
+          mergedTo: {
+            include: { category: true }
+          }
         }
       });
+      const active = existingRows.find(row => row.status === "ACTIVE") ?? null;
+      const merged = existingRows.find(row => row.status === "MERGED") ?? null;
+      const mergedTarget = merged?.mergedTo?.ownerId === null && merged.mergedTo.status === "ACTIVE"
+        ? merged.mergedTo
+        : null;
+      if (!active && merged && !mergedTarget) {
+        throw new ConflictException("归并食材目标无效，请先修复食材治理数据");
+      }
+      const existing = active
+        ?? mergedTarget
+        ?? existingRows.find(row => row.status === "PENDING")
+        ?? existingRows.find(row => row.status === "DISABLED")
+        ?? null;
       if (existing) {
-        if (existing.status === "DISABLED") {
-          nextRows.push({ ...item, ingredientId: null });
-          continue;
-        }
-        const activeIngredient = existing;
         nextRows.push({
           ...item,
-          ingredientId: activeIngredient.id,
-          ingredientName: activeIngredient.name
+          ingredientId: existing.id,
+          ingredientName: existing.name,
+          categoryCode: existing.category.code
         });
         continue;
       }
-      const unit = await this.requireSystemUnit(tx, item.unitId);
+      const category = item.categoryCode
+        ? await tx.ingredientCategory.findFirst({
+            where: { code: item.categoryCode, isSelectable: true }
+          })
+        : unclassifiedCategory;
+      const targetCategory = category ?? unclassifiedCategory;
+      if (!targetCategory.id) {
+        throw new NotFoundException("食材分类不存在");
+      }
+      const unit = item.unitId ? await this.requireSystemUnit(tx, item.unitId) : null;
       const created = await tx.ingredient.create({
         data: {
           ownerId: null,
           status: "PENDING",
-          categoryId: unclassifiedCategory.id,
-          defaultUnitId: unit.id,
+          categoryId: targetCategory.id,
+          defaultUnitId: unit?.id ?? null,
           name: item.ingredientName,
           searchKey,
-          systemSortOrder: await this.nextSystemIngredientSortOrder(tx, unclassifiedCategory.id),
+          systemSortOrder: await this.nextSystemIngredientSortOrder(tx, targetCategory.id),
           displaySortOrder: await this.nextSystemIngredientDisplaySortOrder(tx)
         }
       });
@@ -6306,7 +6689,8 @@ export class AdminService {
         ...item,
         ingredientId: created.id,
         ingredientName: created.name,
-        unitText: unit.name
+        unitText: unit?.name ?? item.unitText,
+        categoryCode: targetCategory.code
       });
     }
     return nextRows;
@@ -6446,7 +6830,8 @@ export class AdminService {
       steps: content.steps
         .map((item, index) => ({
           text: item.text.trim(),
-          imageUrl: stepImageUrls[index] ?? null
+          imageUrl: stepImageUrls[index] ?? null,
+          imagePrompt: item.imagePrompt?.trim() || null
         }))
         .filter(item => item.text || item.imageUrl)
     };
@@ -6490,29 +6875,38 @@ export class AdminService {
     importedSteps: RecipeImportRecipeBody["assistantSteps"] = []
   ) {
     const attemptedAt = new Date();
+    const current = await tx.recipeCookAssistant.findUnique({ where: { recipeVersionId } });
+    const keepsPublishedSnapshot = Boolean(
+      current?.status === "READY" && current.snapshotJson && current.generatedAt
+    );
 
     try {
-      const snapshot = importedSteps.length > 0
+      const candidate = importedSteps.length > 0
         ? buildImportedRecipeAssistantSnapshot(importedSteps)
         : buildRecipeAssistantSnapshot(content);
+      const canPublish = importedSteps.length > 0 && this.isRecipeAssistantCandidateReady(candidate);
       await tx.recipeCookAssistant.upsert({
         where: { recipeVersionId },
         update: {
-          status: "READY",
-          snapshotJson: toJson(snapshot),
-          generatedAt: attemptedAt,
+          status: canPublish ? "READY" : keepsPublishedSnapshot ? "READY" : "NEEDS_REVIEW",
+          candidateJson: toJson(candidate),
+          snapshotJson: canPublish ? toJson(candidate) : keepsPublishedSnapshot ? toJson(current!.snapshotJson) : Prisma.DbNull,
+          generatedAt: canPublish ? attemptedAt : keepsPublishedSnapshot ? current!.generatedAt : null,
           lastAttemptAt: attemptedAt,
           attemptCount: { increment: 1 },
-          lastError: null
+          lastError: null,
+          source: importedSteps.length > 0 ? "OPS" : "AUTO"
         },
         create: {
           recipeVersionId,
-          status: "READY",
-          snapshotJson: toJson(snapshot),
-          generatedAt: attemptedAt,
+          status: canPublish ? "READY" : "NEEDS_REVIEW",
+          candidateJson: toJson(candidate),
+          snapshotJson: canPublish ? toJson(candidate) : Prisma.DbNull,
+          generatedAt: canPublish ? attemptedAt : null,
           lastAttemptAt: attemptedAt,
           attemptCount: 1,
-          lastError: null
+          lastError: null,
+          source: importedSteps.length > 0 ? "OPS" : "AUTO"
         }
       });
     } catch (error) {
@@ -6520,7 +6914,10 @@ export class AdminService {
       await tx.recipeCookAssistant.upsert({
         where: { recipeVersionId },
         update: {
-          status: "FAILED",
+          status: keepsPublishedSnapshot ? "READY" : "FAILED",
+          candidateJson: keepsPublishedSnapshot ? toJson(current!.candidateJson) : Prisma.DbNull,
+          snapshotJson: keepsPublishedSnapshot ? toJson(current!.snapshotJson) : Prisma.DbNull,
+          generatedAt: keepsPublishedSnapshot ? current!.generatedAt : null,
           lastAttemptAt: attemptedAt,
           attemptCount: { increment: 1 },
           lastError
@@ -6528,6 +6925,7 @@ export class AdminService {
         create: {
           recipeVersionId,
           status: "FAILED",
+          candidateJson: Prisma.DbNull,
           snapshotJson: Prisma.DbNull,
           generatedAt: null,
           lastAttemptAt: attemptedAt,
@@ -6539,6 +6937,19 @@ export class AdminService {
 
     const record = await this.loadRecipeAssistantRecord(tx, recipeVersionId);
     return this.toRecipeAssistantState(record);
+  }
+
+  private isRecipeAssistantCandidateReady(candidate: ReturnType<typeof buildImportedRecipeAssistantSnapshot>) {
+    return candidate.steps.length > 0 && candidate.steps.every(step => {
+      return (
+        ["PREP", "COOK", "SERVE"].includes(step.phase) &&
+        Boolean(step.title.trim()) &&
+        Boolean(step.detail.trim()) &&
+        step.durationMinutes !== null &&
+        Number.isInteger(step.durationMinutes) &&
+        step.durationMinutes > 0
+      );
+    });
   }
 
   private async buildAdminRecipeImageState(

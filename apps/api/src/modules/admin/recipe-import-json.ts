@@ -14,6 +14,8 @@ import type {
 } from "../../contracts/types";
 import { buildSearchKey } from "../recipe/recipe-content";
 
+const AdmZip = require("adm-zip");
+
 export interface RecipeImportJsonSource {
   sourcePath: string;
   jsonText: string;
@@ -35,6 +37,8 @@ export interface RecipeImportJsonResult {
 const maxJsonFiles = 100;
 const maxJsonFileBytes = 10 * 1024 * 1024;
 const maxJsonBatchBytes = 20 * 1024 * 1024;
+const maxZipFileBytes = 20 * 1024 * 1024;
+const maxZipDepth = 8;
 
 const recipeKeys = new Set([
   "inspirationCategoryId",
@@ -55,12 +59,22 @@ const contentKeys = new Set([
   "steps"
 ]);
 const wikiKeys = new Set(["tags", "assistant"]);
-const ingredientKeys = new Set(["name", "quantity", "unit"]);
+const ingredientKeys = new Set(["name", "quantity", "unit", "categoryCode"]);
 const toolKeys = new Set(["name"]);
-const stepKeys = new Set(["text", "imageUrl"]);
+const stepKeys = new Set(["text", "imageUrl", "imagePrompt"]);
 const tagKeys = new Set(["tagCode", "tagValue"]);
 const assistantKeys = new Set(["steps"]);
-const assistantStepKeys = new Set(["order", "phase", "action", "title", "detail", "imageUrl", "durationMinutes", "durationText"]);
+const assistantStepKeys = new Set(["order", "phase", "action", "title", "detail", "imageUrl", "imageTempKey", "imagePrompt", "durationMinutes", "durationText"]);
+const ingredientCategoryCodes = new Set([
+  "PRODUCE",
+  "MEAT_POULTRY_EGG",
+  "SEAFOOD",
+  "SOY_DAIRY",
+  "GRAINS_STAPLES",
+  "SEASONING",
+  "DRIED_PRESERVED",
+  "BEVERAGE_ALCOHOL"
+]);
 const tagValues: Record<RecipeImportTagCode, Set<string>> = {
   CUISINE: new Set(["SICHUAN_HUNAN", "JIANG_ZHE", "CANTONESE", "FUJIAN", "NORTHERN", "YUN_GUI", "TAIWAN", "FUSION", "OTHER"]),
   DISH_STYLE: new Set(["STIR_FRY", "COLD_DISH", "SOUP", "STAPLE_FOOD", "STEW", "STEAMED", "BRAISED", "FRIED", "BBQ", "HOT_POT", "SNACK"]),
@@ -127,6 +141,21 @@ function sourceImageUrl(value: unknown, field: string, errors: RecipeImportIssue
   return value.trim();
 }
 
+function imagePrompt(value: unknown, field: string, errors: RecipeImportIssue[]) {
+  const prompt = typeof value === "string" ? value.trim() : "";
+  if (!prompt) {
+    addIssue(errors, field, "图片提示词不能为空");
+    return null;
+  }
+  if (prompt.length > 1000) {
+    addIssue(errors, field, "图片提示词不能超过 1000 个字符");
+  }
+  if (!/\p{Script=Han}/u.test(prompt)) {
+    addIssue(errors, field, "图片提示词必须使用中文");
+  }
+  return prompt;
+}
+
 function exactQuantity(value: unknown, field: string, errors: RecipeImportIssue[]) {
   if (typeof value !== "string" || !value.trim()) {
     addIssue(errors, field, "数量必须填写");
@@ -154,7 +183,8 @@ function scaleQuantity(value: string, factor: number) {
 
 function parseTags(value: unknown, errors: RecipeImportIssue[]) {
   const tags: RecipeImportTagDraft[] = [];
-  const seenCodes = new Set<string>();
+  const seenValues = new Set<string>();
+  const seenSingleCodes = new Set<string>();
   if (!Array.isArray(value) || value.length === 0) {
     addIssue(errors, "wiki.tags", "必须填写业务标签");
     return tags;
@@ -176,11 +206,17 @@ function parseTags(value: unknown, errors: RecipeImportIssue[]) {
       addIssue(errors, `${field}.tagValue`, "标签枚举值不支持");
       return;
     }
-    if (seenCodes.has(code)) {
-      addIssue(errors, `${field}.tagCode`, "同一标签代码不能重复");
+    const tagKey = `${code}:${item.tagValue}`;
+    if (seenValues.has(tagKey)) {
+      addIssue(errors, `${field}.tagValue`, "同一标签值不能重复");
       return;
     }
-    seenCodes.add(code);
+    if (code !== "MEAL_TYPE" && seenSingleCodes.has(code)) {
+      addIssue(errors, `${field}.tagCode`, "除餐次外，同一标签代码不能重复");
+      return;
+    }
+    seenValues.add(tagKey);
+    seenSingleCodes.add(code);
     tags.push({ tagCode: code, tagValue: item.tagValue });
   });
   for (const code of tagCodes) {
@@ -215,6 +251,7 @@ function parseKeywords(value: unknown, field: string, errors: RecipeImportIssue[
 
 function parseAssistantSteps(value: unknown, errors: RecipeImportIssue[]) {
   const steps: RecipeImportAssistantStepDraft[] = [];
+  const prompts = new Set<string>();
   if (!isRecord(value) || !Array.isArray(value.steps) || value.steps.length === 0) {
     addIssue(errors, "wiki.assistant.steps", "必须填写美食助理步骤");
     return steps;
@@ -238,6 +275,9 @@ function parseAssistantSteps(value: unknown, errors: RecipeImportIssue[]) {
     }
     if (item.durationText !== null && typeof item.durationText !== "string") addIssue(errors, `${field}.durationText`, "时间必须是文本或 null");
     if (!hasOwn(item, "imageUrl")) addIssue(errors, `${field}.imageUrl`, "imageUrl 字段必须出现");
+    const prompt = imagePrompt(item.imagePrompt, `${field}.imagePrompt`, errors);
+    if (prompt && prompts.has(prompt)) addIssue(errors, `${field}.imagePrompt`, "同类步骤图片提示词不能重复");
+    if (prompt) prompts.add(prompt);
     if (!hasOwn(item, "durationMinutes")) addIssue(errors, `${field}.durationMinutes`, "durationMinutes 字段必须出现");
     else if (!Number.isInteger(item.durationMinutes) || Number(item.durationMinutes) < 1) addIssue(errors, `${field}.durationMinutes`, "durationMinutes 必须是大于 0 的整数");
     if (!hasOwn(item, "durationText")) addIssue(errors, `${field}.durationText`, "durationText 字段必须出现");
@@ -249,6 +289,7 @@ function parseAssistantSteps(value: unknown, errors: RecipeImportIssue[]) {
       title: typeof item.title === "string" ? item.title.trim() : "",
       detail: typeof item.detail === "string" ? item.detail.trim() : "",
       imageUrl,
+      imagePrompt: prompt,
       durationMinutes: Number.isInteger(item.durationMinutes) && Number(item.durationMinutes) >= 1 ? Number(item.durationMinutes) : null,
       durationText: typeof item.durationText === "string" ? item.durationText.trim() : null
     });
@@ -322,8 +363,10 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
     const name = typeof row.name === "string" ? row.name.trim() : "";
     const quantity = exactQuantity(row.quantity, `${field}.quantity`, errors);
     const sourceUnit = typeof row.unit === "string" ? row.unit.trim() : "";
+    const categoryCode = typeof row.categoryCode === "string" ? row.categoryCode.trim() : "";
     if (!name) addIssue(errors, `${field}.name`, "食材名称不能为空");
     if (!sourceUnit) addIssue(errors, `${field}.unit`, "单位不能为空，无法确认时待人工确认");
+    if (!ingredientCategoryCodes.has(categoryCode)) addIssue(errors, `${field}.categoryCode`, "食材分类代码不支持");
     const unitAlias = unitAliasMap.get(sourceUnit.toLowerCase());
     const unitName = unitAlias?.name ?? sourceUnit;
     const normalizedQuantity = quantity && unitAlias ? scaleQuantity(quantity, unitAlias.factor) : quantity;
@@ -339,11 +382,13 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
       unitText: unitName || null,
       unitId: unit?.id ?? null,
       fuzzyText: null,
-      note: null
+      note: null,
+      categoryCode: ingredientCategoryCodes.has(categoryCode) ? categoryCode : null
     });
   });
 
   const steps: RecipeImportBodyStep[] = [];
+  const stepPrompts = new Set<string>();
   if (!Array.isArray(content.steps) || content.steps.length === 0) addIssue(errors, "recipe.content.steps", "至少需要一条制作步骤");
   else content.steps.forEach((item, index) => {
     const field = `recipe.content.steps.${index}`;
@@ -353,7 +398,10 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
     if (!text) addIssue(errors, `${field}.text`, "制作步骤正文不能为空");
     if (!hasOwn(row, "imageUrl")) addIssue(errors, `${field}.imageUrl`, "imageUrl 字段必须出现");
     const imageUrl = sourceImageUrl(row.imageUrl, `${field}.imageUrl`, errors);
-    steps.push({ text, imageUrl, imageKey: null, imageTempKey: null });
+    const prompt = imagePrompt(row.imagePrompt, `${field}.imagePrompt`, errors);
+    if (prompt && stepPrompts.has(prompt)) addIssue(errors, `${field}.imagePrompt`, "同类步骤图片提示词不能重复");
+    if (prompt) stepPrompts.add(prompt);
+    steps.push({ text, imageUrl, imageKey: null, imageTempKey: null, imagePrompt: prompt });
   });
 
   const tags = parseTags(wiki.tags, errors);
@@ -448,12 +496,81 @@ export function normalizeRecipeImportBody(body: RecipeImportRecipeBody): RecipeI
     assistantSteps: body.assistantSteps ?? [],
     steps: (body.steps ?? []).map(step => ({
       ...step,
-      imageUrl: step.imageUrl ?? null
+      imageUrl: step.imageUrl ?? null,
+      imagePrompt: step.imagePrompt ?? null
     }))
   };
 }
 
 type RecipeImportBodyStep = RecipeImportRecipeBody["steps"][number];
+
+function addJsonDocumentSources(
+  sources: RecipeImportJsonSource[],
+  sourcePath: string,
+  jsonText: string
+) {
+  let document: unknown;
+  try {
+    document = JSON.parse(jsonText);
+  } catch {
+    sources.push({ sourcePath, jsonText });
+    return;
+  }
+  if (isRecord(document) && document.schemaVersion === "recipe.import.batch.v1" && Array.isArray(document.recipes)) {
+    document.recipes.forEach((recipe, index) => {
+      sources.push({
+        sourcePath: `${sourcePath}#${index + 1}`,
+        jsonText: JSON.stringify({
+          schemaVersion: "recipe.import.v1",
+          recipe: isRecord(recipe) ? recipe.recipe : undefined,
+          wiki: isRecord(recipe) ? recipe.wiki : undefined
+        })
+      });
+    });
+    return;
+  }
+  sources.push({ sourcePath, jsonText });
+}
+
+function assertZipEntryPath(entryName: string) {
+  if (!entryName || entryName.startsWith("/") || entryName.includes("\\") || entryName.split("/").some(part => part === ".." || part === "")) {
+    throw new Error("ZIP 内包含不安全路径");
+  }
+  if (entryName.split("/").length > maxZipDepth) throw new Error("ZIP 目录层级不能超过 8 层");
+}
+
+function readZipJsonSources(
+  file: { originalname?: string; buffer?: Buffer },
+  sources: RecipeImportJsonSource[],
+  addBytes: (bytes: number) => void
+) {
+  if (!file.buffer || !file.originalname) throw new Error("请上传有效的 ZIP 文件");
+  if (file.buffer.byteLength > maxZipFileBytes) throw new Error("ZIP 文件大小不能超过 20 MB");
+  let zip: any;
+  try {
+    zip = new AdmZip(file.buffer);
+  } catch {
+    throw new Error("ZIP 文件无法读取");
+  }
+  const entries = zip.getEntries();
+  if (!entries.length || entries.length > maxJsonFiles) throw new Error("ZIP 内 JSON 文件数量必须为 1 到 100 个");
+  for (const entry of entries) {
+    const entryName = entry.entryName;
+    if (entry.isDirectory) {
+      assertZipEntryPath(entryName.replace(/\/+$/, ""));
+      continue;
+    }
+    assertZipEntryPath(entryName);
+    const unixFileType = ((entry.header.attr >>> 16) & 0o170000);
+    if (unixFileType === 0o120000) throw new Error("ZIP 不允许符号链接");
+    if (!entryName.toLowerCase().endsWith(".json")) throw new Error("ZIP 只允许包含 JSON 文件");
+    const content = entry.getData();
+    if (content.byteLength > maxJsonFileBytes) throw new Error("ZIP 内单个 JSON 文件大小不能超过 10 MB");
+    addBytes(content.byteLength);
+    addJsonDocumentSources(sources, `${file.originalname}/${entryName}`, content.toString("utf8"));
+    if (sources.length > maxJsonFiles) throw new Error("展开后的菜谱数量不能超过 100 个");
+  }
+}
 
 export function readJsonSourcesFromFiles(files: Array<{ originalname?: string; buffer?: Buffer; size?: number }>) {
   if (files.length === 0) throw new Error("请至少上传一个 JSON 文件");
@@ -461,13 +578,21 @@ export function readJsonSourcesFromFiles(files: Array<{ originalname?: string; b
 
   const sources: RecipeImportJsonSource[] = [];
   let totalBytes = 0;
+  const addBytes = (bytes: number) => {
+    totalBytes += bytes;
+    if (totalBytes > maxJsonBatchBytes) throw new Error("批量 JSON 总大小不能超过 20 MB");
+  };
   for (const file of files) {
     if (!file.buffer || !file.originalname) throw new Error("请上传有效的 JSON 文件");
-    if (!file.originalname.toLowerCase().endsWith(".json")) throw new Error("目前只支持 JSON 文件");
+    if (file.originalname.toLowerCase().endsWith(".zip")) {
+      readZipJsonSources(file, sources, addBytes);
+      continue;
+    }
+    if (!file.originalname.toLowerCase().endsWith(".json")) throw new Error("目前只支持 JSON 或 ZIP 文件");
     if (file.buffer.byteLength > maxJsonFileBytes) throw new Error("单个 JSON 文件大小不能超过 10 MB");
-    totalBytes += file.buffer.byteLength;
-    if (totalBytes > maxJsonBatchBytes) throw new Error("批量 JSON 总大小不能超过 20 MB");
-    sources.push({ sourcePath: file.originalname, jsonText: file.buffer.toString("utf8") });
+    addBytes(file.buffer.byteLength);
+    addJsonDocumentSources(sources, file.originalname, file.buffer.toString("utf8"));
+    if (sources.length > maxJsonFiles) throw new Error("展开后的菜谱数量不能超过 100 个");
   }
   return sources;
 }

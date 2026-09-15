@@ -1229,7 +1229,7 @@ model Ingredient {
   id              Int              @id @default(autoincrement())
   ownerId         Int?             @map("owner_id")
   categoryId      Int              @map("category_id")
-  defaultUnitId   Int              @map("default_unit_id")
+  defaultUnitId   Int?             @map("default_unit_id")
   mergedToId      Int?             @map("merged_to_id")
   name            String           @db.VarChar(64)
   searchKey       String           @map("search_key") @db.VarChar(80)
@@ -1247,7 +1247,7 @@ model Ingredient {
 
   owner                 User?                      @relation("IngredientOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   category              IngredientCategory         @relation(fields: [categoryId], references: [id])
-  defaultUnit           Unit                       @relation("IngredientDefaultUnit", fields: [defaultUnitId], references: [id])
+  defaultUnit           Unit?                      @relation("IngredientDefaultUnit", fields: [defaultUnitId], references: [id], onDelete: Restrict)
   mergedTo              Ingredient?                @relation("IngredientMergedTo", fields: [mergedToId], references: [id], onDelete: SetNull)
   mergedFrom            Ingredient[]               @relation("IngredientMergedTo")
   recommendations       IngredientRecommendation[] @relation("IngredientRecommendationSource")

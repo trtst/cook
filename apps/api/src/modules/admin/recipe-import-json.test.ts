@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+const AdmZip = require("adm-zip");
 import {
   normalizeRecipeImportBody,
   isImportedIngredientPlaceholder,
@@ -34,11 +35,11 @@ function validDocument() {
         tips: "排骨先焯水。",
         keywords: [],
         ingredients: [
-          { name: "排骨", quantity: "500", unit: "克" },
-          { name: "海带", quantity: "200", unit: "克" }
+          { name: "排骨", quantity: "500", unit: "克", categoryCode: "MEAT_POULTRY_EGG" },
+          { name: "海带", quantity: "200", unit: "克", categoryCode: "PRODUCE" }
         ],
         tools: [{ name: "汤锅" }],
-        steps: [{ text: "排骨焯水后洗净。", imageUrl: null }]
+        steps: [{ text: "排骨焯水后洗净。", imageUrl: null, imagePrompt: "锅中焯水后的排骨盛在白瓷碗中，真实中式家常烹饪场景，不出现文字" }]
       }
     },
     wiki: {
@@ -60,6 +61,7 @@ function validDocument() {
             title: "排骨焯水",
             detail: "排骨焯水后洗净。",
             imageUrl: null,
+            imagePrompt: "灶台前将焯水后的排骨用清水洗净，真实中式家常烹饪场景，不出现文字",
             durationMinutes: 8,
             durationText: "约 8 分钟"
           }
@@ -107,7 +109,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
       { name: "香菜", quantity: "30", unit: "克" },
       { name: "食用油", quantity: "15", unit: "毫升" },
       { name: "酱油", quantity: "6", unit: "毫升" }
-    ],
+    ].map(item => ({ ...item, categoryCode: item.name === "牛里脊" ? "MEAT_POULTRY_EGG" : "PRODUCE" })),
     tools: [{ name: "炒锅" }, { name: "锅铲" }],
     steps: [
       { text: "牛里脊切成不超过3cm宽、3mm厚的薄片，倒入6ml酱油抓匀备用。", imageUrl: null },
@@ -116,7 +118,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
       { text: "放入小米椒和野山椒爆香。", imageUrl: null },
       { text: "放入牛里脊和芹菜，大火翻炒1分钟。", imageUrl: null },
       { text: "关火，撒上香菜，盛盘即可。", imageUrl: null }
-    ]
+    ].map((item, index) => ({ ...item, imagePrompt: `小炒黄牛肉第${index + 1}步的真实中式烹饪画面，不出现文字` }))
   };
   document.wiki.tags = [
     { tagCode: "CUISINE", tagValue: "SICHUAN_HUNAN" },
@@ -132,7 +134,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
     { order: 2, phase: "PREP", action: "CUT", title: "切配配菜", detail: "芹菜切段，小米椒切丝，野山椒切粒，香菜切段。", imageUrl: null, durationMinutes: 10, durationText: "约 10 分钟" },
     { order: 3, phase: "COOK", action: "STIR_FRY", title: "爆香快炒", detail: "热锅热油，先放入小米椒和野山椒爆香，再下牛肉和芹菜，大火翻炒1分钟。", imageUrl: null, durationMinutes: 5, durationText: "约 5 分钟" },
     { order: 4, phase: "SERVE", action: "PLATE", title: "装盘", detail: "关火撒香菜，盛出即可。", imageUrl: null, durationMinutes: 2, durationText: "约 2 分钟" }
-  ];
+  ].map((item, index) => ({ ...item, imagePrompt: `小炒黄牛肉助理第${index + 1}步的真实中式烹饪画面，不出现文字` }));
 
   const result = parseJsonSource(
     { sourcePath: "beef-stir-fry.json", jsonText: JSON.stringify(document) },
@@ -169,7 +171,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
 test("requires complete source content and blocks fuzzy quantities", () => {
   const document = validDocument();
   document.recipe.content.story = "";
-  document.recipe.content.ingredients[0] = { name: "排骨", quantity: "适量", unit: "克" };
+  document.recipe.content.ingredients[0] = { name: "排骨", quantity: "适量", unit: "克", categoryCode: "MEAT_POULTRY_EGG" };
 
   const result = parseJsonSource(
     { sourcePath: "incomplete.json", jsonText: JSON.stringify(document) },
@@ -276,7 +278,7 @@ test("rejects zero or fractional assistant durationMinutes", () => {
   assert.equal(result.errorItems.some(item => item.field === "wiki.assistant.steps.0.durationMinutes"), true);
 });
 
-test("rejects duplicate required tag codes instead of silently choosing one", () => {
+test("allows multiple distinct meal-type candidates", () => {
   const document = validDocument();
   document.wiki.tags = [
     ...document.wiki.tags,
@@ -288,14 +290,15 @@ test("rejects duplicate required tag codes instead of silently choosing one", ()
     refs
   );
 
-  assert.equal(result.errorItems.some(item => item.field === "wiki.tags.7.tagCode"), true);
+  assert.equal(result.errorItems.some(item => item.field?.startsWith("wiki.tags.7")), false);
+  assert.deepEqual((result.recipeBody.tags ?? []).filter(item => item.tagCode === "MEAL_TYPE").map(item => item.tagValue), ["DINNER", "LUNCH"]);
 });
 
 test("normalizes only explicit kg and L quantities to the fixed project units", () => {
   const document = validDocument();
   document.recipe.content.ingredients = [
-    { name: "排骨", quantity: "1.5", unit: "kg" },
-    { name: "海带", quantity: "0.5", unit: "L" }
+    { name: "排骨", quantity: "1.5", unit: "kg", categoryCode: "MEAT_POULTRY_EGG" },
+    { name: "海带", quantity: "0.5", unit: "L", categoryCode: "PRODUCE" }
   ];
 
   const result = parseJsonSource(
@@ -312,7 +315,7 @@ test("normalizes only explicit kg and L quantities to the fixed project units", 
 
 test("keeps unmatched source rows for manual confirmation and rejects unknown tool fields", () => {
   const document = validDocument();
-  document.recipe.content.ingredients[0] = { name: "未知食材", quantity: "100", unit: "克" };
+  document.recipe.content.ingredients[0] = { name: "未知食材", quantity: "100", unit: "克", categoryCode: "PRODUCE" };
   document.recipe.content.tools = [{ name: "汤锅", material: "不应导入" } as { name: string }];
 
   const result = parseJsonSource(
@@ -333,7 +336,7 @@ test("rejects JSON arrays and non-JSON files", () => {
   assert.equal(arrayResult.errorItems.some(item => item.field === "recipe"), true);
   assert.throws(() => readJsonSourcesFromFiles([
     { originalname: "recipes.zip", buffer: Buffer.from("not supported"), size: 1 }
-  ]), /只支持 JSON/);
+  ]), /ZIP/);
 });
 
 test("combines multiple JSON files into one import source list", () => {
@@ -343,6 +346,43 @@ test("combines multiple JSON files into one import source list", () => {
   ]);
 
   assert.deepEqual(sources.map(item => item.sourcePath), ["first.json", "second.json"]);
+});
+
+test("expands a recipe.import.batch.v1 document into independent sources", () => {
+  const second = validDocument();
+  second.recipe.content.name = "第二道菜";
+  const sources = readJsonSourcesFromFiles([
+    {
+      originalname: "week.json",
+      buffer: Buffer.from(JSON.stringify({
+        schemaVersion: "recipe.import.batch.v1",
+        recipes: [validDocument(), second]
+      })),
+      size: 1
+    }
+  ]);
+
+  assert.deepEqual(sources.map(item => item.sourcePath), ["week.json#1", "week.json#2"]);
+  assert.equal(JSON.parse(sources[0]?.jsonText ?? "{}").schemaVersion, "recipe.import.v1");
+});
+
+test("expands JSON documents from a ZIP and rejects non-JSON entries", () => {
+  const validZip = new AdmZip();
+  validZip.addFile("recipes/week.json", Buffer.from(JSON.stringify({
+    schemaVersion: "recipe.import.batch.v1",
+    recipes: [validDocument(), validDocument()]
+  })));
+  const sources = readJsonSourcesFromFiles([
+    { originalname: "recipes.zip", buffer: validZip.toBuffer(), size: validZip.toBuffer().byteLength }
+  ]);
+  assert.deepEqual(sources.map(item => item.sourcePath), ["recipes.zip/recipes/week.json#1", "recipes.zip/recipes/week.json#2"]);
+
+  const invalidZip = new AdmZip();
+  invalidZip.addFile("readme.txt", Buffer.from("not-json"));
+  assert.throws(
+    () => readJsonSourcesFromFiles([{ originalname: "invalid.zip", buffer: invalidZip.toBuffer(), size: invalidZip.toBuffer().byteLength }]),
+    /ZIP/
+  );
 });
 
 test("rejects more than 100 selected JSON files", () => {

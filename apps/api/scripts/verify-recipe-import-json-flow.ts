@@ -214,7 +214,9 @@ async function main() {
     const tags = await prisma.recipeVersionTag.findMany({ where: { recipeVersionId: versionId, source: "OPS", status: "CONFIRMED" } });
     assert(tags.length === 7, `导入 OPS 标签数量错误: ${tags.length}`);
     const assistant = await prisma.recipeCookAssistant.findUnique({ where: { recipeVersionId: versionId } });
-    assert(assistant?.status === "READY", "助理快照未写入");
+    assert(assistant?.status === "READY", "助理 Wiki 未进入 READY");
+    assert(assistant.candidateJson !== null, "助理候选未写入");
+    assert(assistant.snapshotJson !== null && assistant.generatedAt !== null, "助理可用快照未写入");
 
     console.log(JSON.stringify({ validJobId: validJob.id, invalidJobId: invalidJob.id, recipeId, versionId }));
   } finally {

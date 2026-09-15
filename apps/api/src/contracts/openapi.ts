@@ -1511,6 +1511,22 @@ export class RecipeImportIngredientModel {
   @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) fuzzyText!: string | null;
   @ApiProperty({ type: String, nullable: true }) note!: string | null;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: [
+      "PRODUCE",
+      "MEAT_POULTRY_EGG",
+      "SEAFOOD",
+      "SOY_DAIRY",
+      "GRAINS_STAPLES",
+      "SEASONING",
+      "DRIED_PRESERVED",
+      "BEVERAGE_ALCOHOL",
+      "UNCLASSIFIED"
+    ]
+  })
+  categoryCode!: string | null;
 }
 
 export class RecipeImportStepModel {
@@ -1536,6 +1552,8 @@ export class RecipeImportAssistantStepModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) detail!: string;
   @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
+  @ApiProperty({ type: String, nullable: true }) imageTempKey!: string | null;
+  @ApiProperty({ type: String, nullable: true }) imagePrompt!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) durationMinutes!: number;
   @ApiProperty({ type: String, nullable: true }) durationText!: string | null;
 }
@@ -1608,6 +1626,29 @@ export class RecipeImportJobDetailModel extends RecipeImportJobModel {
   };
 }
 
+export class AdminIngredientMergeTargetModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+}
+
+export class AdminIngredientModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) name!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty({ type: String, enum: ["PENDING", "ACTIVE", "DISABLED", "MERGED"] }) status!: string;
+  @ApiProperty(uuid) categoryId!: string;
+  @ApiProperty({ type: String }) categoryName!: string;
+  @ApiProperty({ type: UnitModel, nullable: true }) defaultUnit!: UnitModel | null;
+  @ApiProperty({ type: AdminIngredientMergeTargetModel, nullable: true }) mergedTo!: AdminIngredientMergeTargetModel | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] })
+  proteinType!: string | null;
+  @ApiProperty({ type: Boolean }) isStaple!: boolean;
+  @ApiProperty({ type: Boolean }) isSpicyIngredient!: boolean;
+  @ApiProperty({ type: [String] }) aliases!: string[];
+  @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
 export class RecipeImportItemDetailModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty(uuid) jobId!: string;
@@ -1619,6 +1660,7 @@ export class RecipeImportItemDetailModel {
   @ApiProperty({ type: RecipeImportRecipeBodyModel }) recipeBody!: RecipeImportRecipeBodyModel;
   @ApiProperty({ type: [RecipeImportIssueModel] }) errorItems!: RecipeImportIssueModel[];
   @ApiProperty({ type: [RecipeImportIssueModel] }) warnItems!: RecipeImportIssueModel[];
+  @ApiProperty({ type: [AdminIngredientModel] }) ingredientRefs!: AdminIngredientModel[];
   @ApiProperty({ type: [RecipeImportPreviewImageModel] }) sourceImages!: RecipeImportPreviewImageModel[];
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
@@ -1660,23 +1702,6 @@ export class AdminIngredientCategoryModel {
   @ApiProperty({ type: Boolean }) isSelectable!: boolean;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ type: Number, minimum: 0 }) ingredientCount!: number;
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class AdminIngredientModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
-  @ApiProperty({ type: String, enum: ["ACTIVE", "DISABLED"] }) status!: string;
-  @ApiProperty(uuid) categoryId!: string;
-  @ApiProperty({ type: String }) categoryName!: string;
-  @ApiProperty({ type: UnitModel }) defaultUnit!: UnitModel;
-  @ApiProperty({ type: String, nullable: true, enum: ["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "SEAFOOD", "EGG", "TOFU", "NONE"] })
-  proteinType!: string | null;
-  @ApiProperty({ type: Boolean }) isStaple!: boolean;
-  @ApiProperty({ type: Boolean }) isSpicyIngredient!: boolean;
-  @ApiProperty({ type: [String] }) aliases!: string[];
-  @ApiProperty(nullableString) imageUrl!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
@@ -1795,6 +1820,12 @@ export class AdminDeleteInspirationCategoryResultModel {
 export class AdminDeleteIngredientResultModel {
   @ApiProperty(uuid) ingredientId!: string;
   @ApiProperty(dateTime) deletedAt!: string;
+}
+
+export class AdminIngredientMergeResultModel {
+  @ApiProperty(uuid) sourceIngredientId!: string;
+  @ApiProperty(uuid) targetIngredientId!: string;
+  @ApiProperty(dateTime) mergedAt!: string;
 }
 
 export class AdminDeletePendingItemResultModel {

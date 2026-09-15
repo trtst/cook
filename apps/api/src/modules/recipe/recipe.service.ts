@@ -74,7 +74,7 @@ import {
   versionAssistantToSnapshot,
   versionToContent
 } from "./recipe-content";
-import { replaceDraftIngredient, replaceRecipeIngredient } from "./ingredient-reference";
+import { replaceDraftIngredient } from "./ingredient-reference";
 import { loadRecipeNutritionSummary } from "./recipe-nutrition";
 import { replaceAutoRecipeVersionTags } from "./recipe-version-tags";
 
@@ -130,6 +130,14 @@ type IngredientRow = Prisma.IngredientGetPayload<{
     defaultUnit: true;
   };
 }>;
+
+function requireIngredientDefaultUnit(ingredient: IngredientRow): UnitRow {
+  if (!ingredient.defaultUnit) {
+    throw new ConflictException("食材默认单位缺失");
+  }
+  return ingredient.defaultUnit;
+}
+
 type IngredientRecommendationRow = Prisma.IngredientRecommendationGetPayload<{
   include: {
     ingredient: {
@@ -378,7 +386,7 @@ function toIngredientSummary(
     name: ingredient.name,
     source: ingredient.ownerId ? "PERSONAL" : "SYSTEM",
     categoryId: ingredient.categoryId,
-    defaultUnit: toUnitSummary(ingredient.defaultUnit),
+    defaultUnit: toUnitSummary(requireIngredientDefaultUnit(ingredient)),
     imageUrl,
     recommendationStatus,
     version: ingredient.version
@@ -396,7 +404,7 @@ function toIngredientRecommendationSummary(
         ? (record.targetIngredient ?? record.ingredient)
         : record.ingredient;
   const categoryId = resolvedIngredient?.categoryId ?? record.categoryId;
-  const defaultUnit = resolvedIngredient ? toUnitSummary(resolvedIngredient.defaultUnit) : toUnitSummary(record.ingredient.defaultUnit);
+  const defaultUnit = toUnitSummary(requireIngredientDefaultUnit(resolvedIngredient ?? record.ingredient));
   const adoptedIngredient =
     record.status === "ADOPTED"
       ? toIngredientSummary(
@@ -841,7 +849,8 @@ export class RecipeService {
         );
       } else {
         const category = await this.requireIngredientCategory(tx, ingredient.categoryId);
-        const unit = await this.requireAccessibleUnit(tx, userId, ingredient.defaultUnitId);
+        const sourceUnit = requireIngredientDefaultUnit(ingredient);
+        const unit = await this.requireAccessibleUnit(tx, userId, sourceUnit.id);
         recommendation = await tx.ingredientRecommendation.create({
           data: {
             ingredientId: ingredient.id,
@@ -850,7 +859,7 @@ export class RecipeService {
             ingredientName: ingredient.name,
             categoryId: ingredient.categoryId,
             categoryName: category.name,
-            defaultUnitId: ingredient.defaultUnitId,
+            defaultUnitId: sourceUnit.id,
             defaultUnitName: unit.name
           },
           include: {
@@ -2667,7 +2676,7 @@ export class RecipeService {
         name: resolved.name,
         source: resolved.ownerId ? "PERSONAL" : "SYSTEM",
         categoryId: resolved.categoryId,
-        defaultUnit: toUnitSummary(resolved.defaultUnit),
+        defaultUnit: toUnitSummary(requireIngredientDefaultUnit(resolved)),
         imageUrl: null,
         recommendationStatus: null,
         version: resolved.version
@@ -3495,33 +3504,42 @@ export class RecipeService {
     target: IngredientRow,
     reviewNote: string
   ) {
-    await this.syncDraftIngredientReferences(tx, userId, source.id, target.id);
-    await this.syncRecipeIngredientReferences(tx, userId, source.id, {
-      id: target.id,
-      name: target.name,
-      categoryId: target.categoryId
+    await tx.$queryRaw`SELECT "id" FROM "ingredients" WHERE "id" = ${target.id} FOR UPDATE`;
+    const activeTarget = await tx.ingredient.findFirst({
+      where: {
+        id: target.id,
+        ownerId: null,
+        status: "ACTIVE"
+      },
+      include: {
+        defaultUnit: true
+      }
     });
+    if (!activeTarget) throw new ConflictException("主食材已更新，请重试");
+
+    await this.syncDraftIngredientReferences(tx, userId, source.id, activeTarget.id);
     await tx.ingredient.update({
       where: { id: source.id },
       data: {
         status: "MERGED",
-        mergedToId: target.id,
+        mergedToId: activeTarget.id,
         version: { increment: 1 }
       }
     });
-    const category = await this.requireIngredientCategory(tx, target.categoryId);
+    const category = await this.requireIngredientCategory(tx, activeTarget.categoryId);
+    const targetUnit = requireIngredientDefaultUnit(activeTarget);
     const recommendation = await tx.ingredientRecommendation.create({
       data: {
         ingredientId: source.id,
         userId,
         status: "MERGED",
-        ingredientName: target.name,
-        categoryId: target.categoryId,
+        ingredientName: activeTarget.name,
+        categoryId: activeTarget.categoryId,
         categoryName: category.name,
-        defaultUnitId: target.defaultUnitId,
-        defaultUnitName: target.defaultUnit.name,
+        defaultUnitId: targetUnit.id,
+        defaultUnitName: targetUnit.name,
         reviewNote,
-        targetIngredientId: target.id,
+        targetIngredientId: activeTarget.id,
         reviewedAt: new Date()
       },
       include: {
@@ -3541,11 +3559,14 @@ export class RecipeService {
   }
 
   private async syncDraftIngredientReferences(tx: Prisma.TransactionClient, userId: UUID, fromId: UUID, toId: UUID) {
+    await tx.$queryRaw`SELECT "id" FROM "recipe_drafts" WHERE "user_id" = ${userId} ORDER BY "id" FOR UPDATE`;
     const drafts = await tx.recipeDraft.findMany({
       where: { userId },
       select: {
         id: true,
-        contentJson: true
+        recipeId: true,
+        contentJson: true,
+        contentSizeBytes: true
       }
     });
     for (const draft of drafts) {
@@ -3556,61 +3577,23 @@ export class RecipeService {
         tx,
         next.content.ingredients.map(item => item.ingredientId)
       );
+      const nextBytes = draft.recipeId
+        ? await this.calculateEditDraftBytes(
+            tx,
+            await this.requireOwnedPublishedRecipe(tx, userId, draft.recipeId),
+            next.content
+          )
+        : draftSizeBytes(next.content) + (await this.getUploadBytes(tx, this.collectDraftUploadIds(next.content)));
       await tx.recipeDraft.update({
         where: { id: draft.id },
         data: {
           contentJson: toJson(next.content),
           searchText: buildDraftSearchText(next.content, ingredientAliasMap),
-          contentSizeBytes: draftSizeBytes(next.content),
+          contentSizeBytes: nextBytes,
           version: { increment: 1 }
         }
       });
-    }
-  }
-
-  private async syncRecipeIngredientReferences(
-    tx: Prisma.TransactionClient,
-    userId: UUID,
-    fromId: UUID,
-    target: { id: UUID; name: string; categoryId: UUID }
-  ) {
-    const versions = await tx.recipeContentVersion.findMany({
-      where: {
-        createdByUserId: userId
-      },
-      select: {
-        id: true,
-        name: true,
-        story: true,
-        baseServings: true,
-        difficulty: true,
-        tips: true,
-        ingredientsJson: true,
-        stepsJson: true,
-        duration: true
-      }
-    });
-    for (const version of versions) {
-      const current = versionToContent(version);
-      const next = replaceRecipeIngredient(current, fromId, target);
-      if (!next.changed) continue;
-      const ingredientAliasMap = await this.loadIngredientAliasMap(
-        tx,
-        next.content.ingredients.map(item => item.ingredientId)
-      );
-      const searchText = buildRecipeSearchText(next.content, ingredientAliasMap);
-      await tx.recipeContentVersion.update({
-        where: { id: version.id },
-        data: {
-          ingredientsJson: toJson(next.content.ingredients),
-          searchText,
-          contentSizeBytes: contentSizeBytes(next.content)
-        }
-      });
-      await tx.recipe.updateMany({
-        where: { currentVersionId: version.id },
-        data: { searchText }
-      });
+      await upsertStorageLedger(tx, userId, "RECIPE", draftRecordKey(draft.id), nextBytes);
     }
   }
 

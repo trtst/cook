@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildImportedRecipeAssistantSnapshot, versionToContent } from "./recipe-content";
+import { buildImportedRecipeAssistantSnapshot, versionAssistantToSnapshot, versionToContent } from "./recipe-content";
 
 test("reads body keywords from the immutable recipe content version", () => {
   const content = versionToContent({
@@ -50,4 +50,25 @@ test("builds an imported assistant snapshot without changing source facts", () =
   assert.equal(snapshot.steps[1]?.action, "PLATE");
   assert.equal(snapshot.steps[0]?.durationMinutes, 8);
   assert.equal(snapshot.summary.totalDurationText, "约 13 分钟");
+});
+
+test("does not expose candidate assistant snapshots before READY", () => {
+  const snapshot = versionAssistantToSnapshot({
+    status: "NEEDS_REVIEW",
+    generatedAt: new Date("2026-09-13T00:00:00.000Z"),
+    snapshotJson: buildImportedRecipeAssistantSnapshot([
+      {
+        order: 1,
+        phase: "PREP",
+        action: "CUT",
+        title: "备菜",
+        detail: "洗净切配。",
+        imageUrl: null,
+        durationMinutes: 5,
+        durationText: "约 5 分钟"
+      }
+    ])
+  });
+
+  assert.equal(snapshot, null);
 });

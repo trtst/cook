@@ -1612,6 +1612,14 @@ export class AdminRecipeStepDto extends RecipeStepDto {
   @IsString()
   @MaxLength(128)
   imageTempKey!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(1000)
+  imagePrompt!: string | null;
 }
 
 export class RecipeDraftStepDto {
@@ -2968,10 +2976,10 @@ export class AdminIngredientQueryDto extends PageQueryDto {
   @Min(1)
   categoryId?: number;
 
-  @ApiPropertyOptional({ example: "ACTIVE", enum: ["ACTIVE", "DISABLED", "ALL"] })
+  @ApiPropertyOptional({ example: "ACTIVE", enum: ["PENDING", "ACTIVE", "DISABLED", "MERGED", "ALL"] })
   @IsOptional()
-  @IsIn(["ACTIVE", "DISABLED", "ALL"])
-  status?: "ACTIVE" | "DISABLED" | "ALL";
+  @IsIn(["PENDING", "ACTIVE", "DISABLED", "MERGED", "ALL"])
+  status?: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | "ALL";
 
   @ApiPropertyOptional({ example: "MISSING", enum: ["ALL", "MISSING"] })
   @IsOptional()
@@ -3358,6 +3366,12 @@ export class RecipeImportIngredientDto {
   @IsString()
   @MaxLength(255)
   note!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, enum: ["PRODUCE", "MEAT_POULTRY_EGG", "SEAFOOD", "SOY_DAIRY", "GRAINS_STAPLES", "SEASONING", "DRIED_PRESERVED", "BEVERAGE_ALCOHOL"] })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(["PRODUCE", "MEAT_POULTRY_EGG", "SEAFOOD", "SOY_DAIRY", "GRAINS_STAPLES", "SEASONING", "DRIED_PRESERVED", "BEVERAGE_ALCOHOL"])
+  categoryCode!: string | null;
 }
 
 export class RecipeImportToolDto {
@@ -3419,6 +3433,22 @@ export class RecipeImportAssistantStepDto {
   @MaxLength(512)
   imageUrl!: string | null;
 
+  @ApiPropertyOptional({ nullable: true, maxLength: 128 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(128)
+  imageTempKey!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(1000)
+  imagePrompt!: string | null;
+
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
   @IsInt()
@@ -3464,6 +3494,14 @@ export class RecipeImportStepDto {
   @IsString()
   @MaxLength(128)
   imageTempKey!: string | null;
+
+  @ApiPropertyOptional({ nullable: true, maxLength: 1000 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(1000)
+  imagePrompt!: string | null;
 }
 
 export class RecipeImportRecipeBodyDto {
@@ -3762,6 +3800,14 @@ export class SetAdminIngredientStatusDto extends VersionedOperationDto {
   @ApiProperty({ example: "DISABLED", enum: ["ACTIVE", "DISABLED"] })
   @IsIn(["ACTIVE", "DISABLED"])
   status!: "ACTIVE" | "DISABLED";
+}
+
+export class MergeAdminIngredientDto extends VersionedOperationDto {
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  targetIngredientId!: number;
 }
 
 export class ReorderAdminIngredientsDto extends OperationDto {

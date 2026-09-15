@@ -134,7 +134,7 @@ export function versionToContent(version: {
   ingredientsJson: unknown;
   stepsJson: unknown;
 }): RecipeContentSnapshot {
-  const steps = fromJson<Array<{ text: string; imageUrl?: string | null }>>(version.stepsJson);
+  const steps = fromJson<Array<{ text: string; imageUrl?: string | null; imagePrompt?: string | null }>>(version.stepsJson);
   return {
     name: version.name,
     story: version.story,
@@ -148,7 +148,8 @@ export function versionToContent(version: {
     ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
     steps: steps.map(item => ({
       text: item.text,
-      imageUrl: item.imageUrl ?? null
+      imageUrl: item.imageUrl ?? null,
+      imagePrompt: item.imagePrompt ?? null
     }))
   };
 }
@@ -174,6 +175,7 @@ export function buildImportedRecipeAssistantSnapshot(steps: RecipeImportAssistan
     title: item.title.trim(),
     detail: item.detail.trim(),
     imageUrl: item.imageUrl,
+    imagePrompt: item.imagePrompt ?? null,
     durationMinutes: item.durationMinutes,
     durationText: item.durationText?.trim() || null
   }));
@@ -253,6 +255,7 @@ export function buildRecipeAssistantSnapshot(content: RecipeContentSnapshot): Re
       title: summarizeRecipeAssistantTitle(detail, phase, index),
       detail: detail || "按当前图片对应的步骤继续处理。",
       imageUrl: item.imageUrl ?? null,
+      imagePrompt: item.imagePrompt ?? null,
       durationMinutes,
       durationText: formatRecipeAssistantDuration(durationMinutes)
     });
@@ -275,8 +278,9 @@ export function buildRecipeAssistantSnapshot(content: RecipeContentSnapshot): Re
 }
 
 export function versionAssistantToSnapshot(
-  record: { generatedAt: Date | null; snapshotJson: unknown } | null | undefined
+  record: { status?: string; generatedAt: Date | null; snapshotJson: unknown } | null | undefined
 ): RecipeAssistantSnapshot | null {
+  if (record?.status && record.status !== "READY") return null;
   if (!record?.generatedAt || record.snapshotJson == null) return null;
   const snapshot = fromJson<RecipeAssistantSnapshotBody>(record.snapshotJson);
   return {
