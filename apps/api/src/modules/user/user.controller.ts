@@ -31,11 +31,13 @@ import {
   NotificationFeedItemModel,
   NotificationSettingsModel,
   StartPhoneChangeResultModel,
+  CookAssistantUsageResponseModel,
   StorageUsageModel,
   TasteProfileModel,
   UploadCurrentAvatarResponseModel
 } from "../../contracts/openapi";
 import { AuthService } from "../auth/auth.service";
+import { CookAssistantAccessService } from "../cook-assistant/cook-assistant-access.service";
 import { CurrentUserService } from "./current-user.service";
 import { DisplayService } from "./display.service";
 import { MedalService } from "./medal.service";
@@ -53,6 +55,7 @@ export class UserController {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(CurrentUserService) private readonly currentUserService: CurrentUserService,
+    @Inject(CookAssistantAccessService) private readonly cookAssistantAccessService: CookAssistantAccessService,
     @Inject(DisplayService) private readonly displayService: DisplayService,
     @Inject(MedalService) private readonly medalService: MedalService,
     @Inject(NotificationService) private readonly notificationService: NotificationService,
@@ -64,6 +67,12 @@ export class UserController {
   @ApiOkModel(MeResponseModel, "当前用户")
   getCurrent(@Req() request: RequestWithUser) {
     return this.currentUserService.getCurrent(request.user.userId).then(result => ok(result));
+  }
+
+  @Get("me/cook-assistant-usage")
+  @ApiOkModel(CookAssistantUsageResponseModel, "当前用户做饭助手活动用量")
+  getCookAssistantUsage(@Req() request: RequestWithUser) {
+    return this.cookAssistantAccessService.getUsage(request.user.userId).then(result => ok(result));
   }
 
   @Put("me/profile")

@@ -140,8 +140,27 @@ export class LoginImageConfigModel {
   @ApiProperty({ type: String, nullable: true }) imageUrl!: string | null;
 }
 
+export class CookAssistantActivityConfigModel {
+  @ApiProperty({ type: Boolean }) activityEnabled!: boolean;
+  @ApiProperty({ type: String, nullable: true }) startsAt!: string | null;
+  @ApiProperty({ type: String, nullable: true }) endsAt!: string | null;
+  @ApiProperty({ type: String }) timeZone!: string;
+  @ApiProperty({ type: Number }) dailyUnlockLimit!: number;
+  @ApiProperty({ type: String }) tipText!: string;
+}
+
 export class AppConfigResponseModel {
   @ApiProperty({ type: LoginImageConfigModel }) login!: LoginImageConfigModel;
+  @ApiProperty({ type: CookAssistantActivityConfigModel }) cookAssistant!: CookAssistantActivityConfigModel;
+}
+
+export class CookAssistantUsageResponseModel {
+  @ApiProperty({ type: Boolean }) activityEnabled!: boolean;
+  @ApiProperty({ type: String }) businessDate!: string;
+  @ApiProperty({ type: Number }) dailyUnlockLimit!: number;
+  @ApiProperty({ type: Number }) usedCount!: number;
+  @ApiProperty({ type: Number }) remainingCount!: number;
+  @ApiProperty({ type: String, nullable: true }) resetsAt!: string | null;
 }
 
 export class HomeEntryItemModel {
@@ -1030,6 +1049,19 @@ export class RecipeAssistantModel {
   @ApiProperty({ type: [RecipeAssistantStepModel] }) steps!: RecipeAssistantStepModel[];
 }
 
+export class RecipeCookAssistantResponseModel {
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String, enum: ["READY"] }) status!: string;
+  @ApiProperty({ type: Boolean }) unlocked!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) unlockedAt!: string | null;
+  @ApiProperty(dateTime) generatedAt!: string;
+  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+}
+
+export class UnlockRecipeCookAssistantResponseModel extends RecipeCookAssistantResponseModel {
+  @ApiProperty({ type: Boolean }) newlyUnlocked!: boolean;
+}
+
 export class RecipeNutritionMetricsModel {
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) calories!: number | null;
   @ApiProperty({ type: Number, nullable: true, minimum: 0 }) protein!: number | null;
@@ -1227,7 +1259,7 @@ export class MyRecipeDetailModel {
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
-  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: Boolean }) assistantAvailable!: boolean;
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
   @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
@@ -1281,7 +1313,7 @@ export class CollectedRecipeDetailModel {
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
-  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: Boolean }) assistantAvailable!: boolean;
   @ApiProperty(dateTime) collectedAt!: string;
   @ApiProperty(dateTime) updatedAt!: string;
 }
@@ -1331,7 +1363,7 @@ export class InspirationRecipeDetailModel {
   @ApiProperty(uuid) contentVersionId!: string;
   @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
   @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
-  @ApiProperty({ type: RecipeAssistantModel, nullable: true }) assistant!: RecipeAssistantModel | null;
+  @ApiProperty({ type: Boolean }) assistantAvailable!: boolean;
   @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
   @ApiProperty({ type: Number, minimum: 0 }) collectCount!: number;
   @ApiProperty({ ...uuid, nullable: true }) ownedRecipeId!: string | null;
@@ -1400,7 +1432,8 @@ export class AdminRecipeContentInputModel {
 }
 
 export class RecipeAssistantStateSummaryModel {
-  @ApiProperty({ type: String, enum: ["MISSING", "READY", "FAILED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["MISSING", "PENDING", "GENERATING", "NEEDS_REVIEW", "READY", "FAILED"] }) status!: string;
+  @ApiProperty({ type: Boolean }) hasCandidate!: boolean;
   @ApiProperty({ type: Boolean }) hasSnapshot!: boolean;
   @ApiProperty({ ...dateTime, nullable: true }) generatedAt!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) lastAttemptAt!: string | null;
@@ -1867,35 +1900,66 @@ export class DiningEventListPageModel {
   @ApiProperty({ type: DiningEventStageCountsModel }) stageCounts!: DiningEventStageCountsModel;
 }
 
-export class MealPlanCookAssistantTaskModel {
+export class MealCookContextDishModel {
+  @ApiProperty(uuid) dishId!: string;
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty({ type: Number }) sortOrder!: number;
+  @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+}
+
+export class MealCookContextResponseModel {
+  @ApiProperty(uuid) planItemId!: string;
+  @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, example: "2026-09-13" }) planDate!: string;
+  @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] }) mealSlot!: string;
+  @ApiProperty({ type: [MealCookContextDishModel] }) dishes!: MealCookContextDishModel[];
+}
+
+export class MealCookAssistantDishSourceModel {
+  @ApiProperty(uuid) dishId!: string;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: String, enum: ["WIKI", "ORIGINAL"] }) source!: string;
+}
+
+export class MealCookAssistantStepModel {
+  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
+  @ApiProperty({ type: String, enum: ["PREP", "COOK", "SERVE"] }) phase!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) detail!: string;
-  @ApiProperty({ type: [String] }) dishTitles!: string[];
+  @ApiProperty({ type: [Number] }) dishIds!: number[];
+  @ApiProperty(nullableString) imageUrl!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: String, enum: ["WIKI", "ORIGINAL"] }) source!: string;
+  @ApiProperty(nullableString) parallelKey!: string | null;
 }
 
-export class MealPlanCookAssistantTimelineStepModel extends MealPlanCookAssistantTaskModel {
-  @ApiProperty({ type: Number, minimum: 1 }) order!: number;
-  @ApiProperty({ type: String, nullable: true }) parallelKey!: string | null;
-}
-
-export class MealPlanCookAssistantSummaryModel {
-  @ApiProperty({ type: Number, minimum: 0 }) dishCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) prepTaskCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) timelineStepCount!: number;
-  @ApiProperty(nullableString) totalDurationText!: string | null;
-  @ApiProperty(nullableString) suggestedStartTime!: string | null;
+export class MealCookAssistantSnapshotModel {
+  @ApiProperty({ type: Number, example: 1 }) contractVersion!: number;
+  @ApiProperty(dateTime) generatedAt!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) summary!: string | null;
+  @ApiProperty({ type: [MealCookAssistantDishSourceModel] }) dishes!: MealCookAssistantDishSourceModel[];
+  @ApiProperty({ type: [MealCookAssistantStepModel] }) steps!: MealCookAssistantStepModel[];
   @ApiProperty({ type: [String] }) notes!: string[];
 }
 
 export class MealPlanCookAssistantModel {
   @ApiProperty(uuid) planItemId!: string;
-  @ApiProperty({ type: Boolean }) hasSnapshot!: boolean;
-  @ApiProperty({ type: Boolean }) isStale!: boolean;
+  @ApiProperty({ ...uuid, nullable: true }) diningEventId!: string | null;
+  @ApiProperty({ type: String, enum: ["NOT_GENERATED", "GENERATING", "READY", "FAILED"] }) status!: string;
+  @ApiProperty({ type: Boolean }) unlocked!: boolean;
+  @ApiProperty({ ...dateTime, nullable: true }) unlockedAt!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) generatedAt!: string | null;
-  @ApiProperty({ type: MealPlanCookAssistantSummaryModel }) summary!: MealPlanCookAssistantSummaryModel;
-  @ApiProperty({ type: [MealPlanCookAssistantTaskModel] }) prepTasks!: MealPlanCookAssistantTaskModel[];
-  @ApiProperty({ type: [MealPlanCookAssistantTimelineStepModel] }) cookTimeline!: MealPlanCookAssistantTimelineStepModel[];
-  @ApiProperty({ type: [MealPlanCookAssistantTaskModel] }) serveTasks!: MealPlanCookAssistantTaskModel[];
+  @ApiProperty({ type: MealCookAssistantSnapshotModel, nullable: true }) assistant!: MealCookAssistantSnapshotModel | null;
+}
+
+export class UnlockMealCookAssistantResponseModel extends MealPlanCookAssistantModel {
+  @ApiProperty({ type: Boolean }) newlyUnlocked!: boolean;
 }
 
 export class RandomSlotPlanModel {
@@ -2043,6 +2107,7 @@ export class DiningEventMenuItemModel {
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty(uuid) recipeVersionId!: string;
   @ApiProperty({ type: String }) title!: string;
+  @ApiProperty({ type: [String], maxItems: 8 }) keywords!: string[];
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
 }
 

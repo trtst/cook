@@ -1,4 +1,6 @@
+import { Prisma, PrismaClient } from "@prisma/client";
 import { loadLocalEnv } from "../src/common/load-env";
+import { candidateReadiness } from "./backfill-recipe-wiki-readiness";
 import { loginWithPassword } from "./auth-fixture";
 import type {
   AdminInspirationCategorySummary,
@@ -9,7 +11,6 @@ import type {
   MealPlanSummary,
   MyRecipeDetail,
   PageResult,
-  RecipeAssistantSnapshot,
   RecipeCategorySummary,
   RecipeDraftDetail,
   SaveRecipeDraftResponse
@@ -17,8 +18,8 @@ import type {
 
 loadLocalEnv();
 
+const prisma = new PrismaClient();
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
-const memberPhone = process.env.TEST_MEMBER_PHONE ?? "13700000000";
 const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 const adminUsername = process.env.ADMIN_SEED_USERNAME ?? "admin";
 const adminPassword = process.env.ADMIN_SEED_PASSWORD ?? "change-me";
@@ -245,7 +246,8 @@ async function createAdminSystemRecipe(adminAuth: Record<string, string>, inspir
           difficulty: "EASY",
           duration: "WITHIN_15",
           estimatedCalories: null,
-          tips: "后台创建后应直接得到单菜做饭建议快照。",
+          tips: "后台创建后只登记做饭助手候选，完成验证后才可前台使用。",
+          keywords: [],
           ingredients: [
             {
               ingredientId: ingredient.id,
@@ -258,12 +260,12 @@ async function createAdminSystemRecipe(adminAuth: Record<string, string>, inspir
           ],
           steps: [
             {
-              text: "先把系统菜谱的食材准备好。",
+              text: "先把系统菜谱的食材准备好，约 5 分钟。",
               imageUrl: null,
               imageTempKey: null
             },
             {
-              text: "下锅翻炒后装盘。",
+              text: "下锅翻炒 6 分钟后装盘。",
               imageUrl: null,
               imageTempKey: null
             }
@@ -275,9 +277,31 @@ async function createAdminSystemRecipe(adminAuth: Record<string, string>, inspir
   );
 }
 
+async function publishReadyWikiFromCandidate(recipeVersionId: number) {
+  const assistant = await prisma.recipeCookAssistant.findUnique({
+    where: { recipeVersionId }
+  });
+  assert(assistant?.status === "NEEDS_REVIEW", "admin created system recipe should create a Wiki candidate awaiting review");
+  assert(assistant.candidateJson !== null, "admin created system recipe should store a Wiki candidate");
+
+  const readiness = candidateReadiness(assistant.candidateJson);
+  assert(readiness.status === "READY" && readiness.snapshotJson, `Wiki candidate should pass deterministic readiness: ${JSON.stringify(readiness.blockingReasons)}`);
+  const now = new Date();
+  await prisma.recipeCookAssistant.update({
+    where: { recipeVersionId },
+    data: {
+      status: "READY",
+      snapshotJson: readiness.snapshotJson as Prisma.InputJsonValue,
+      generatedAt: now,
+      lastAttemptAt: now,
+      lastError: null
+    }
+  });
+}
+
 async function createMealPlan(
   authHeaders: Record<string, string>,
-  recipes: MyRecipeDetail[],
+  recipes: Array<{ id: number; contentVersionId: number }>,
   titlePrefix: string,
   daysFromNow: number
 ) {
@@ -312,71 +336,71 @@ async function createDiningEvent(authHeaders: Record<string, string>, plan: Meal
 }
 
 async function main() {
-  const paidSession = await loginWithCode(memberPhone);
+  const paidSession = await loginWithCode(createFreshPhone());
   const adminSession = await loginAdmin();
   const freeSession = await loginWithCode(createFreshPhone());
   const paidAuth = { authorization: `Bearer ${paidSession.token}` };
   const adminAuth = { authorization: `Bearer ${adminSession.token}` };
   const freeAuth = { authorization: `Bearer ${freeSession.token}` };
 
-  const paidProfile = await requestData<{
-    membership: {
-      tier: string;
-    };
-  }>("/users/me", {
-    headers: paidAuth
-  });
-  assert(paidProfile.membership.tier !== "FREE", `paid fixture user should not be FREE, got ${paidProfile.membership.tier}`);
-
   const adminCategory = await resolveAdminInspirationCategory(adminAuth);
   const systemIngredient = await loadSystemIngredient(paidAuth);
   const adminRecipe = await createAdminSystemRecipe(adminAuth, adminCategory.id, systemIngredient);
-  assert(adminRecipe.ownerUid === null, "admin created recipe should be a system recipe");
-  assert(adminRecipe.assistantState.status === "READY", "admin created system recipe should finish assistant pre-generation");
-  assert(adminRecipe.assistant?.steps.length, "admin created system recipe should return assistant steps");
+  assert(adminRecipe.inspirationCategory?.id === adminCategory.id, "admin created recipe should be a system inspiration recipe");
+  assert(adminRecipe.assistantState.status === "NEEDS_REVIEW", "admin created system recipe should not publish a frontend Wiki before readiness");
+  await publishReadyWikiFromCandidate(adminRecipe.contentVersionId);
 
-  const paidGeneratedRecipe = await createPublishedRecipe(paidAuth, "做饭助手会员菜谱");
-  const paidRecipeAssistant = await requestData<RecipeAssistantSnapshot>(`/recipes/${paidGeneratedRecipe.id}/assistant`, {
+  const recipeAssistantLocked = await requestData<MealPlanCookAssistant>(`/recipe-versions/${adminRecipe.contentVersionId}/cook-assistant`, {
+    headers: paidAuth
+  });
+  assert(recipeAssistantLocked.status === "READY", "READY system recipe Wiki should expose single assistant status");
+  assert(!recipeAssistantLocked.unlocked && recipeAssistantLocked.assistant === null, "single assistant should hide body before personal unlock");
+
+  const recipeAssistantUnlocked = await requestData<MealPlanCookAssistant>(`/recipe-versions/${adminRecipe.contentVersionId}/cook-assistant/unlock`, {
     method: "POST",
     headers: withIdempotencyKey(paidAuth)
   });
-  assert(paidRecipeAssistant.steps.length > 0, "paid user recipe should generate assistant steps");
+  assert(recipeAssistantUnlocked.unlocked, "single assistant unlock should mark current user unlocked");
+  assert(recipeAssistantUnlocked.assistant?.steps.length, "single assistant unlock should return Wiki steps");
 
+  const paidGeneratedRecipe = await createPublishedRecipe(paidAuth, "做饭助手用户菜谱");
   const paidGeneratedDetail = await requestData<MyRecipeDetail>(`/recipes/${paidGeneratedRecipe.id}`, {
     headers: paidAuth
   });
-  assert(paidGeneratedDetail.assistant?.steps.length, "paid generated recipe detail should keep assistant snapshot");
+  assert(paidGeneratedDetail.assistantAvailable === false, "newly published user recipe should not expose an assistant before Wiki is READY");
+  assert(!("assistant" in paidGeneratedDetail), "ordinary recipe detail should not include Wiki assistant JSON");
 
   const freeRecipe = await createPublishedRecipe(freeAuth, "做饭助手免费菜谱");
-  const freeRecipeAssistant = await request<unknown>(`/recipes/${freeRecipe.id}/assistant`, {
-    method: "POST",
-    headers: withIdempotencyKey(freeAuth)
+  const freeGeneratedDetail = await requestData<MyRecipeDetail>(`/recipes/${freeRecipe.id}`, {
+    headers: freeAuth
   });
-  assert(
-    freeRecipeAssistant.status === 200 && freeRecipeAssistant.body.code === 403,
-    `free user recipe assistant should return business code 403, got HTTP ${freeRecipeAssistant.status} code ${freeRecipeAssistant.body.code}`
-  );
-  assert(freeRecipeAssistant.body.message.includes("开通会员"), "free recipe assistant should explain membership gating");
+  assert(freeGeneratedDetail.assistantAvailable === false, "free user recipe without READY Wiki should not expose an assistant");
 
   const paidMissingRecipe = await createPublishedRecipe(paidAuth, "做饭助手待补洞菜谱");
   const paidPlan = await createMealPlan(
     paidAuth,
-    [paidGeneratedRecipe, paidMissingRecipe],
+    [adminRecipe, paidMissingRecipe],
     "做饭助手会员本餐",
     12
   );
   const paidEvent = await createDiningEvent(paidAuth, paidPlan, 6);
-  const paidPlanAssistant = await requestData<MealPlanCookAssistant>(`/meal-plans/${paidPlan.id}/cook-assistant`, {
+  const rawContext = await requestData<{ dishes: Array<{ content: { steps: unknown[] } }> }>(`/meal-plans/${paidPlan.id}/cook-context`, {
+    headers: paidAuth
+  });
+  assert(rawContext.dishes.length === 2 && rawContext.dishes.every(item => item.content.steps.length > 0), "meal cook context should return raw steps for each dish");
+
+  const paidPlanBeforeUnlock = await requestData<MealPlanCookAssistant>(`/meal-plans/${paidPlan.id}/cook-assistant`, {
+    headers: paidAuth
+  });
+  assert(paidPlanBeforeUnlock.status === "NOT_GENERATED" && paidPlanBeforeUnlock.assistant === null, "meal assistant should start as not generated");
+
+  const paidPlanAssistant = await requestData<MealPlanCookAssistant & { newlyUnlocked: boolean }>(`/meal-plans/${paidPlan.id}/cook-assistant/unlock`, {
     method: "POST",
     headers: withIdempotencyKey(paidAuth)
   });
-  assert(paidPlanAssistant.hasSnapshot, "paid meal assistant should generate a snapshot");
-  assert(paidPlanAssistant.prepTasks.length > 0, "paid meal assistant should include prep tasks");
-  assert(paidPlanAssistant.cookTimeline.length > 0, "paid meal assistant should include cook timeline");
-  assert(
-    paidPlanAssistant.summary.notes.some(item => item.includes("已为1道缺少建议的菜实时补齐单菜做饭建议")),
-    "paid meal assistant should report realtime fill for the missing single-dish assistant"
-  );
+  assert(paidPlanAssistant.status === "READY" && paidPlanAssistant.newlyUnlocked, "meal assistant unlock should generate and unlock once");
+  assert(paidPlanAssistant.assistant?.steps.length, "meal assistant unlock should return planned steps");
+  assert(paidPlanAssistant.assistant.dishes.some(item => item.source === "ORIGINAL"), "partial missing Wiki should be frozen as ORIGINAL source");
 
   const paidPlans = await requestData<PageResult<MealPlanSummary>>(
     `/meal-plans?from=${encodeURIComponent(paidPlan.planDate)}&to=${encodeURIComponent(paidPlan.planDate)}&page=1&pageSize=20`,
@@ -385,28 +409,22 @@ async function main() {
     }
   );
   const paidPlanAfterGenerate = paidPlans.items.find(item => item.id === paidPlan.id) ?? null;
-  assert(paidPlanAfterGenerate?.menuLocked, "paid meal assistant generation should lock the menu");
+  assert(paidPlanAfterGenerate, "meal assistant plan should remain readable after unlock");
 
   const paidEventAfterGenerate = await requestData<DiningEventSummary>(`/dining-events/${paidEvent.id}`, {
     headers: paidAuth
   });
-  assert(paidEventAfterGenerate.status === "CONFIRMED", "paid meal assistant generation should confirm the linked dining event");
-
-  const paidMissingDetail = await requestData<MyRecipeDetail>(`/recipes/${paidMissingRecipe.id}`, {
-    headers: paidAuth
-  });
-  assert(paidMissingDetail.assistant?.steps.length, "realtime fill should persist the missing recipe assistant snapshot");
+  assert(paidEventAfterGenerate.id === paidEvent.id, "linked dining event should remain readable after assistant unlock");
 
   const freePlan = await createMealPlan(freeAuth, [freeRecipe], "做饭助手免费本餐", 13);
-  const freePlanAssistant = await request<unknown>(`/meal-plans/${freePlan.id}/cook-assistant`, {
+  const freePlanAssistant = await request<unknown>(`/meal-plans/${freePlan.id}/cook-assistant/unlock`, {
     method: "POST",
     headers: withIdempotencyKey(freeAuth)
   });
   assert(
-    freePlanAssistant.status === 200 && freePlanAssistant.body.code === 403,
-    `free meal assistant should return business code 403, got HTTP ${freePlanAssistant.status} code ${freePlanAssistant.body.code}`
+    freePlanAssistant.status === 200 && freePlanAssistant.body.code === 409,
+    `meal assistant with no READY Wiki should return business code 409, got HTTP ${freePlanAssistant.status} code ${freePlanAssistant.body.code}`
   );
-  assert(freePlanAssistant.body.message.includes("开通会员"), "free meal assistant should explain membership gating");
 
   const freePlans = await requestData<PageResult<MealPlanSummary>>(
     `/meal-plans?from=${encodeURIComponent(freePlan.planDate)}&to=${encodeURIComponent(freePlan.planDate)}&page=1&pageSize=20`,
@@ -415,13 +433,12 @@ async function main() {
     }
   );
   const freePlanAfterAttempt = freePlans.items.find(item => item.id === freePlan.id) ?? null;
-  assert(freePlanAfterAttempt && !freePlanAfterAttempt.menuLocked, "free meal assistant rejection should not lock the menu");
+  assert(freePlanAfterAttempt && !freePlanAfterAttempt.menuLocked, "all-missing-Wiki meal assistant rejection should not lock the menu");
 
   console.log(
     JSON.stringify(
       {
         ok: true,
-        paidTier: paidProfile.membership.tier,
         systemRecipeId: adminRecipe.id,
         paidRecipeId: paidGeneratedRecipe.id,
         paidPlanId: paidPlan.id,
@@ -436,4 +453,6 @@ async function main() {
 void main().catch(error => {
   console.error(error);
   process.exitCode = 1;
+}).finally(async () => {
+  await prisma.$disconnect();
 });

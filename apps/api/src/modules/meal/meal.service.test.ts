@@ -90,7 +90,7 @@ test("public dining memory code reads the newest snapshot for its event", async 
     }
   } as never, {} as never, {
     buildDiningMemoryAssetUrl: (_request: unknown, storageKey: string) => `/static/${storageKey}`
-  } as never, {} as never, {} as never);
+  } as never, {} as never, {} as never, {} as never);
 
   const preview = await service.getDiningMemorySharePreview({}, createDiningMemoryShareToken(82));
 
@@ -107,6 +107,7 @@ test("legacy memory snapshots without a generated code do not expose a broken UR
       buildDiningMemoryAssetUrl: () => "/static/missing",
       buildDiningMemoryMiniCodeStorageKey: () => "uploads/dining-event-memory-codes/missing.png"
     } as never,
+    {} as never,
     {} as never,
     {} as never
   );
@@ -130,7 +131,7 @@ test("legacy memory snapshots without a generated code do not expose a broken UR
 
 test("next dining invite locks the event before checking active invites", async () => {
   const calls: string[] = [];
-  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   const tx = {
     $queryRaw: async () => {
       calls.push("lock");
@@ -161,6 +162,7 @@ test("failed dining memory asset cleanup is recorded in the outbox", async () =>
         }
       }
     } as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,
@@ -280,7 +282,8 @@ test("dining memory share creates the event code once and reuses it for later sn
     { resolveForUser: async () => ({ storageLimitBytes: 10 * 1024 * 1024 }) } as never,
     uploadService as never,
     {} as never,
-    wechatMiniCodeService as never
+    wechatMiniCodeService as never,
+    {} as never
   );
 
   await service.createDiningMemoryShare({}, 9, 82, "10086", true, "吃得开心");
@@ -293,4 +296,563 @@ test("dining memory share creates the event code once and reuses it for later sn
     { name: "copyCover", inTransaction: false }
   ]);
   assert.equal(event.memoryMiniCodeStorageKey, "uploads/dining-event-memory-codes/hash.jpg");
+});
+
+const mealAssistantGeneratedAt = new Date("2026-09-13T03:00:00.000Z");
+
+const mealAssistantWikiBody = {
+  summary: {
+    stepCount: 2,
+    prepStepCount: 1,
+    cookStepCount: 1,
+    serveStepCount: 0,
+    totalDurationText: "约15分钟"
+  },
+  steps: [
+    {
+      order: 1,
+      phase: "PREP" as const,
+      action: "CUT" as const,
+      title: "切番茄",
+      detail: "番茄切块。",
+      imageUrl: null,
+      durationMinutes: 5,
+      durationText: "约5分钟"
+    },
+    {
+      order: 2,
+      phase: "COOK" as const,
+      action: "STIR_FRY" as const,
+      title: "快炒",
+      detail: "鸡蛋和番茄快速翻炒。",
+      imageUrl: null,
+      durationMinutes: 10,
+      durationText: "约10分钟"
+    }
+  ]
+};
+
+function mealAssistantVersion(id: number, name: string, assistant: unknown = null) {
+  return {
+    id,
+    name,
+    story: null,
+    baseServings: 2,
+    difficulty: "EASY",
+    duration: "WITHIN_15",
+    estimatedCalories: null,
+    tips: null,
+    keywordsJson: [],
+    toolsJson: [],
+    ingredientsJson: [],
+    stepsJson: [{ text: `${name}原始步骤`, imageUrl: null }],
+    cookAssistant: assistant,
+    currentRecipes: [{ id: id + 1000, coverImageUrl: null }]
+  };
+}
+
+function mealAssistantPlan(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 501,
+    userId: 9,
+    planDate: new Date("2026-09-13T00:00:00.000Z"),
+    mealSlot: "DINNER",
+    title: "周日晚餐",
+    note: null,
+    status: "PLANNED",
+    version: 1,
+    completedAt: null,
+    createdAt: new Date("2026-09-13T01:00:00.000Z"),
+    updatedAt: new Date("2026-09-13T01:00:00.000Z"),
+    menuLockedAt: new Date("2026-09-13T01:10:00.000Z"),
+    shoppingList: null,
+    diningEvent: null,
+    cookAssistant: null,
+    dishes: [
+      {
+        id: 701,
+        planItemId: 501,
+        recipeId: 1201,
+        recipeVersionId: 201,
+        slotType: "MEAT",
+        purchaseState: "READY",
+        sortOrder: 0,
+        createdAt: new Date("2026-09-13T01:00:00.000Z"),
+        updatedAt: new Date("2026-09-13T01:00:00.000Z"),
+        recipeVersion: { name: "番茄炒蛋", baseServings: 2, duration: "WITHIN_15" }
+      },
+      {
+        id: 702,
+        planItemId: 501,
+        recipeId: 1202,
+        recipeVersionId: 202,
+        slotType: "VEGETABLE",
+        purchaseState: "READY",
+        sortOrder: 1,
+        createdAt: new Date("2026-09-13T01:00:00.000Z"),
+        updatedAt: new Date("2026-09-13T01:00:00.000Z"),
+        recipeVersion: { name: "清炒青菜", baseServings: 2, duration: "WITHIN_15" }
+      }
+    ],
+    ...overrides
+  };
+}
+
+class FakeMealAssistantPrisma {
+  plan = mealAssistantPlan();
+  versions = new Map<number, unknown>([
+    [
+      201,
+      mealAssistantVersion(201, "番茄炒蛋", {
+        status: "READY",
+        generatedAt: mealAssistantGeneratedAt,
+        snapshotJson: mealAssistantWikiBody
+      })
+    ],
+    [202, mealAssistantVersion(202, "清炒青菜")]
+  ]);
+  participantStatusByUser = new Map<number, string>();
+  versionQueries: unknown[] = [];
+  createdAssistantCount = 0;
+
+  mealPlanItem = {
+    findUnique: async ({ where }: { where: { id: number } }) => (where.id === this.plan.id ? this.plan : null),
+    update: async () => this.plan
+  };
+
+  diningEventParticipant = {
+    findFirst: async ({ where }: { where: { diningEventId: number; userId: number } }) => {
+      const status = this.participantStatusByUser.get(where.userId);
+      return status ? { status } : null;
+    }
+  };
+
+  recipeContentVersion = {
+    findMany: async (args: { where: { id: { in: number[] } } }) => {
+      this.versionQueries.push(args);
+      return args.where.id.in.map(id => this.versions.get(id)).filter(Boolean);
+    }
+  };
+
+  mealPlanCookAssistant = {
+    findUnique: async ({ where }: { where: { planItemId: number } }) => (where.planItemId === this.plan.id ? this.plan.cookAssistant : null),
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      this.createdAssistantCount += 1;
+      this.plan.cookAssistant = {
+        id: 801,
+        createdAt: new Date("2026-09-13T03:00:00.000Z"),
+        updatedAt: new Date("2026-09-13T03:00:00.000Z"),
+        menuDigest: null,
+        snapshot: null,
+        generatedAt: null,
+        ...data
+      } as never;
+      return this.plan.cookAssistant;
+    },
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      this.plan.cookAssistant = {
+        ...((this.plan.cookAssistant as unknown as Record<string, unknown>) ?? {}),
+        ...data
+      } as never;
+      return this.plan.cookAssistant;
+    }
+  };
+
+  async $queryRaw() {
+    return [];
+  }
+
+  async $transaction<T>(callback: (tx: this) => Promise<T>) {
+    return callback(this);
+  }
+}
+
+class FakeMealAssistantAccess {
+  unlocks = new Map<string, { unlockedAt: Date }>();
+  calls: Array<{ userId: number; planItemId: number; operationId: string }> = [];
+
+  async getMealPlanUnlock(userId: number, planItemId: number) {
+    return this.unlocks.get(`${userId}:${planItemId}`) ?? null;
+  }
+
+  async unlockMealPlan(userId: number, planItemId: number, operationId: string) {
+    this.calls.push({ userId, planItemId, operationId });
+    const key = `${userId}:${planItemId}`;
+    const existing = this.unlocks.get(key);
+    if (existing) {
+      return {
+        newlyUnlocked: false,
+        unlockedAt: existing.unlockedAt.toISOString(),
+        usage: {
+          activityEnabled: true,
+          businessDate: "2026-09-13",
+          dailyUnlockLimit: 2,
+          usedCount: 1,
+          remainingCount: 1,
+          resetsAt: "2026-09-13T16:00:00.000Z"
+        }
+      };
+    }
+    const unlockedAt = new Date("2026-09-13T03:10:00.000Z");
+    this.unlocks.set(key, { unlockedAt });
+    return {
+      newlyUnlocked: true,
+      unlockedAt: unlockedAt.toISOString(),
+      usage: {
+        activityEnabled: true,
+        businessDate: "2026-09-13",
+        dailyUnlockLimit: 2,
+        usedCount: 1,
+        remainingCount: 1,
+        resetsAt: "2026-09-13T16:00:00.000Z"
+      }
+    };
+  }
+}
+
+function createMealAssistantService(prisma = new FakeMealAssistantPrisma(), access = new FakeMealAssistantAccess()) {
+  return {
+    prisma,
+    access,
+    service: new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, access as never)
+  };
+}
+
+function diningSchedulePlan(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 501,
+    userId: 9,
+    planDate: new Date("2026-10-01T00:00:00.000Z"),
+    mealSlot: "DINNER",
+    title: "晚餐饮食计划",
+    note: null,
+    status: "PLANNED",
+    version: 1,
+    completedAt: null,
+    createdAt: new Date("2026-09-13T01:00:00.000Z"),
+    updatedAt: new Date("2026-09-13T01:00:00.000Z"),
+    menuLockedAt: null,
+    shoppingList: null,
+    diningEvent: null,
+    cookAssistant: null,
+    dishes: [],
+    ...overrides
+  };
+}
+
+class FakeDiningSchedulePrisma {
+  plan = diningSchedulePlan();
+  conflictPlan: ReturnType<typeof diningSchedulePlan> | null = null;
+  event = this.eventRow();
+  planUpdates: unknown[] = [];
+
+  idempotencyRecord = {
+    findFirst: async () => null,
+    create: async () => ({}),
+    updateMany: async () => ({ count: 1 })
+  };
+
+  mealPlanItem = {
+    findUnique: async ({ where }: { where: Record<string, unknown> }) => {
+      if ((where.id as number | undefined) === this.plan.id) return this.plan;
+      const unique = where.userId_planDate_mealSlot as
+        | { userId: number; planDate: Date; mealSlot: string }
+        | undefined;
+      if (!unique) return null;
+      if (
+        this.conflictPlan &&
+        unique.userId === this.conflictPlan.userId &&
+        unique.mealSlot === this.conflictPlan.mealSlot &&
+        unique.planDate.toISOString() === this.conflictPlan.planDate.toISOString()
+      ) {
+        return this.conflictPlan;
+      }
+      if (
+        unique.userId === this.plan.userId &&
+        unique.mealSlot === this.plan.mealSlot &&
+        unique.planDate.toISOString() === this.plan.planDate.toISOString()
+      ) {
+        return this.plan;
+      }
+      return null;
+    },
+    update: async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
+      assert.equal(where.id, this.plan.id);
+      this.planUpdates.push(data);
+      this.plan = {
+        ...this.plan,
+        ...(data.planDate ? { planDate: data.planDate as Date } : {}),
+        ...(data.mealSlot ? { mealSlot: data.mealSlot as string } : {}),
+        ...(data.title ? { title: data.title as string } : {}),
+        version: data.version && typeof data.version === "object" ? this.plan.version + 1 : this.plan.version,
+        updatedAt: new Date("2026-09-13T02:00:00.000Z")
+      };
+      this.event = this.eventRow();
+      return this.plan;
+    }
+  };
+
+  diningEvent = {
+    findUnique: async () => this.event,
+    update: async ({ data }: { data: Record<string, unknown> }) => {
+      this.event = this.eventRow({
+        scheduledAt: data.scheduledAt as Date,
+        location: (data.location as string | null | undefined) ?? this.event.location,
+        version: this.event.version + 1
+      });
+      return this.event;
+    }
+  };
+
+  async $queryRaw() {
+    return [];
+  }
+
+  async $transaction<T>(callback: (tx: this) => Promise<T>) {
+    return callback(this);
+  }
+
+  eventRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 901,
+      userId: 9,
+      mealPlanItemId: this.plan.id,
+      diningGroupId: null,
+      title: "晚餐饮食计划",
+      scheduledAt: new Date("2026-10-01T10:30:00.000Z"),
+      location: null,
+      note: null,
+      coverStorageKey: null,
+      coverContentType: null,
+      status: "PLANNED",
+      menuSnapshot: {
+        name: "本餐菜单",
+        story: null,
+        baseServings: 1,
+        difficulty: null,
+        duration: null,
+        estimatedCalories: null,
+        tips: null,
+        keywords: [],
+        ingredients: [],
+        steps: []
+      },
+      shareTokenHash: null,
+      shareTokenExpiresAt: null,
+      completedAt: null,
+      version: 1,
+      createdAt: new Date("2026-09-13T01:30:00.000Z"),
+      updatedAt: new Date("2026-09-13T01:30:00.000Z"),
+      user: { uid: 52738164, nickname: "主理人", avatarUrl: null },
+      mealPlanItem: {
+        planDate: this.plan.planDate,
+        mealSlot: this.plan.mealSlot,
+        shoppingList: null
+      },
+      shareInvites: [],
+      participants: [],
+      wishItems: [],
+      menuItems: [],
+      ...overrides
+    };
+  }
+}
+
+test("dining event menu summaries expose keywords from the fixed recipe version", () => {
+  const prisma = new FakeDiningSchedulePrisma();
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const event = prisma.eventRow({
+    menuItems: [
+      {
+        id: 801,
+        recipeVersionId: 201,
+        title: "番茄炒蛋",
+        version: 1,
+        recipeVersion: {
+          keywordsJson: ["家常", "快手"],
+          currentRecipes: [{ id: 1201, ownerId: 9, coverImageUrl: null }]
+        }
+      }
+    ]
+  });
+
+  const summary = (service as any).toDiningEventSummary(event, 9);
+
+  assert.deepEqual(summary.menuItems[0].keywords, ["家常", "快手"]);
+});
+
+test("dining event schedule update moves the linked plan to the scheduled time range", async () => {
+  const prisma = new FakeDiningSchedulePrisma();
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+
+  await service.updateDiningEventSchedule({}, 9, 901, "2001", 1, "2026-10-01T15:10:00.000Z", null);
+
+  assert.equal(prisma.plan.mealSlot, "LATE_NIGHT");
+  assert.equal(planDateText(prisma.plan.planDate), "2026-10-01");
+  assert.equal(prisma.plan.title, "夜宵饮食计划");
+  assert.equal(prisma.planUpdates.length, 1);
+});
+
+test("dining event schedule update rejects a slot that already has another plan", async () => {
+  const prisma = new FakeDiningSchedulePrisma();
+  prisma.conflictPlan = diningSchedulePlan({
+    id: 777,
+    mealSlot: "LATE_NIGHT",
+    title: "已有夜宵"
+  });
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+
+  await assert.rejects(
+    () => service.updateDiningEventSchedule({}, 9, 901, "2002", 1, "2026-10-01T15:10:00.000Z", null),
+    error => error instanceof Error && error.message === "该时间对应的餐次已有安排"
+  );
+
+  assert.equal(prisma.plan.mealSlot, "DINNER");
+});
+
+function planDateText(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+test("meal cook context returns current raw recipe steps without reading Wiki assistants", async () => {
+  const { prisma, service } = createMealAssistantService();
+
+  const context = await service.getMealPlanCookContext(9, 501);
+
+  assert.equal(context.planItemId, 501);
+  assert.equal(context.dishes.length, 2);
+  assert.equal(context.dishes[0]?.content.steps[0]?.text, "番茄炒蛋原始步骤");
+  assert.equal(JSON.stringify(prisma.versionQueries[0]).includes("cookAssistant"), false);
+});
+
+test("invited and accepted dining-event participants can access the same meal cook context", async () => {
+  const prisma = new FakeMealAssistantPrisma();
+  prisma.plan = mealAssistantPlan({ userId: 1, diningEvent: { id: 901 } });
+  prisma.participantStatusByUser.set(9, "INVITED");
+  prisma.participantStatusByUser.set(10, "ACCEPTED");
+  const { service } = createMealAssistantService(prisma);
+
+  assert.equal((await service.getMealPlanCookContext(9, 501)).diningEventId, 901);
+  assert.equal((await service.getMealPlanCookContext(10, 501)).diningEventId, 901);
+  await assert.rejects(() => service.getMealPlanCookContext(11, 501));
+
+  prisma.participantStatusByUser.set(12, "REMOVED");
+  await assert.rejects(() => service.getMealPlanCookContext(12, 501));
+});
+
+test("legacy meal assistant snapshots are not exposed as the new contract", async () => {
+  const prisma = new FakeMealAssistantPrisma();
+  prisma.plan = mealAssistantPlan({
+    cookAssistant: {
+      id: 801,
+      planItemId: 501,
+      menuDigest: "legacy",
+      snapshot: { summary: { dishCount: 1 }, prepTasks: [], cookTimeline: [], serveTasks: [] },
+      generatedAt: mealAssistantGeneratedAt,
+      contractVersion: "legacy.v1",
+      status: "READY",
+      assistantJson: null,
+      assistantGeneratedAt: null
+    }
+  });
+  const { service } = createMealAssistantService(prisma);
+
+  const result = await service.getMealPlanCookAssistant(9, 501);
+
+  assert.equal(result.status, "NOT_GENERATED");
+  assert.equal(result.assistant, null);
+  assert.equal("isStale" in result, false);
+});
+
+test("meal assistant unlock creates one shared snapshot, marks ORIGINAL fallback dishes, and unlocks per user", async () => {
+  const prisma = new FakeMealAssistantPrisma();
+  prisma.plan = mealAssistantPlan({ diningEvent: { id: 901 } });
+  prisma.participantStatusByUser.set(10, "ACCEPTED");
+  const { access, service } = createMealAssistantService(prisma);
+
+  const first = await service.unlockMealPlanCookAssistant(9, 501, "1001");
+  const storedAfterFirst = prisma.plan.cookAssistant as unknown as { assistantJson: { dishes: Array<{ source: string }> } };
+  const second = await service.unlockMealPlanCookAssistant(10, 501, "1002");
+
+  assert.equal(first.newlyUnlocked, true);
+  assert.equal(second.newlyUnlocked, true);
+  assert.equal(prisma.createdAssistantCount, 1);
+  assert.deepEqual(storedAfterFirst.assistantJson.dishes.map(item => item.source), ["WIKI", "ORIGINAL"]);
+  assert.deepEqual(first.assistant?.dishes.map(item => item.source), ["WIKI", "ORIGINAL"]);
+  assert.deepEqual(second.assistant, first.assistant);
+  assert.deepEqual(access.calls.map(item => item.userId), [9, 10]);
+});
+
+test("meal assistant unlock fails without consuming a count when every dish lacks a READY Wiki", async () => {
+  const prisma = new FakeMealAssistantPrisma();
+  prisma.versions.set(201, mealAssistantVersion(201, "番茄炒蛋"));
+  prisma.versions.set(202, mealAssistantVersion(202, "清炒青菜"));
+  const { access, service } = createMealAssistantService(prisma);
+
+  await assert.rejects(() => service.unlockMealPlanCookAssistant(9, 501, "1001"));
+
+  assert.equal(access.calls.length, 0);
+  assert.equal(prisma.createdAssistantCount, 0);
+});
+
+test("ready meal assistant snapshots are immutable and do not expose stale state after menu changes", async () => {
+  const prisma = new FakeMealAssistantPrisma();
+  const existingSnapshot = {
+    contractVersion: 1,
+    generatedAt: mealAssistantGeneratedAt.toISOString(),
+    title: "旧晚餐",
+    summary: "旧菜单助手",
+    dishes: [{ dishId: 701, recipeVersionId: 201, title: "番茄炒蛋", source: "WIKI" }],
+    steps: [
+      {
+        order: 1,
+        phase: "COOK",
+        title: "旧步骤",
+        detail: "按旧菜单执行。",
+        dishIds: [701],
+        imageUrl: null,
+        durationText: null,
+        source: "WIKI",
+        parallelKey: null
+      }
+    ],
+    notes: []
+  };
+  prisma.plan = mealAssistantPlan({
+    dishes: [
+      ...mealAssistantPlan().dishes,
+      {
+        id: 703,
+        planItemId: 501,
+        recipeId: 1203,
+        recipeVersionId: 203,
+        slotType: "SOUP",
+        purchaseState: "READY",
+        sortOrder: 2,
+        createdAt: new Date("2026-09-13T01:00:00.000Z"),
+        updatedAt: new Date("2026-09-13T01:00:00.000Z"),
+        recipeVersion: { name: "紫菜汤", baseServings: 2, duration: "WITHIN_15" }
+      }
+    ],
+    cookAssistant: {
+      id: 801,
+      planItemId: 501,
+      contractVersion: "meal-assistant.v1",
+      status: "READY",
+      assistantJson: existingSnapshot,
+      assistantGeneratedAt: mealAssistantGeneratedAt,
+      menuDigest: null,
+      snapshot: null,
+      generatedAt: null
+    }
+  });
+  const access = new FakeMealAssistantAccess();
+  access.unlocks.set("9:501", { unlockedAt: new Date("2026-09-13T03:10:00.000Z") });
+  const { service } = createMealAssistantService(prisma, access);
+
+  const result = await service.getMealPlanCookAssistant(9, 501);
+
+  assert.equal("isStale" in result, false);
+  assert.equal(result.assistant?.title, "旧晚餐");
+  assert.deepEqual(result.assistant?.dishes.map(item => item.dishId), [701]);
 });

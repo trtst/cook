@@ -252,8 +252,33 @@ export interface LoginImageConfig {
   imageUrl: string | null;
 }
 
+export interface CookAssistantActivityConfig {
+  activityEnabled: boolean;
+  startsAt: IsoDateTime | null;
+  endsAt: IsoDateTime | null;
+  timeZone: string;
+  dailyUnlockLimit: number;
+  tipText: string;
+}
+
 export interface AppConfigResponse {
   login: LoginImageConfig;
+  cookAssistant: CookAssistantActivityConfig;
+}
+
+export interface CookAssistantUsageResponse {
+  activityEnabled: boolean;
+  businessDate: string;
+  dailyUnlockLimit: number;
+  usedCount: number;
+  remainingCount: number;
+  resetsAt: IsoDateTime | null;
+}
+
+export interface UnlockCookAssistantAccessResult {
+  newlyUnlocked: boolean;
+  unlockedAt: IsoDateTime;
+  usage: CookAssistantUsageResponse;
 }
 
 export type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
@@ -1466,6 +1491,7 @@ export interface RecipeAssistantStep {
   title: string;
   detail: string;
   imageUrl: string | null;
+  imagePrompt?: string | null;
   durationMinutes: number | null;
   durationText: string | null;
 }
@@ -1482,6 +1508,19 @@ export interface RecipeAssistantSnapshot {
   generatedAt: IsoDateTime;
   summary: RecipeAssistantSummary;
   steps: RecipeAssistantStep[];
+}
+
+export interface RecipeCookAssistantResponse {
+  recipeVersionId: UUID;
+  status: "READY";
+  unlocked: boolean;
+  unlockedAt: IsoDateTime | null;
+  generatedAt: IsoDateTime;
+  assistant: RecipeAssistantSnapshot | null;
+}
+
+export interface UnlockRecipeCookAssistantResponse extends RecipeCookAssistantResponse {
+  newlyUnlocked: boolean;
 }
 
 export type RecipeNutritionStatus = "COMPLETE" | "ESTIMATED" | "INSUFFICIENT" | "NONE";
@@ -1602,7 +1641,7 @@ export interface MyRecipeDetail {
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
-  assistant: RecipeAssistantSnapshot | null;
+  assistantAvailable: boolean;
   planLinks: RecipePlanLinkSummary[];
   ingredientRefs: IngredientSummary[];
   unitRefs: UnitSummary[];
@@ -1688,7 +1727,7 @@ export interface CollectedRecipeDetail {
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
-  assistant: RecipeAssistantSnapshot | null;
+  assistantAvailable: boolean;
   collectedAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }
@@ -1740,7 +1779,7 @@ export interface InspirationRecipeDetail {
   contentVersionId: UUID;
   content: RecipeContentSnapshot;
   nutrition: RecipeNutritionSummary;
-  assistant: RecipeAssistantSnapshot | null;
+  assistantAvailable: boolean;
   planLinks: RecipePlanLinkSummary[];
   collectCount: number;
   ownedRecipeId: UUID | null;
@@ -1787,7 +1826,8 @@ export interface AdminDeleteRecipeResult {
 }
 
 export interface RecipeAssistantStateSummary {
-  status: "MISSING" | "READY" | "FAILED";
+  status: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "READY" | "FAILED";
+  hasCandidate: boolean;
   hasSnapshot: boolean;
   generatedAt: IsoDateTime | null;
   lastAttemptAt: IsoDateTime | null;
@@ -2524,39 +2564,72 @@ export interface AddMealPlanItemRequest {
   purchaseState?: MealPlanDishPurchaseState;
 }
 
-export interface MealPlanCookAssistantTask {
+export type CookAssistantContentStatus = "NOT_GENERATED" | "GENERATING" | "READY" | "FAILED";
+export type CookAssistantStepSource = "WIKI" | "ORIGINAL";
+
+export interface MealCookContextDish {
+  dishId: UUID;
+  recipeId: UUID | null;
+  recipeVersionId: UUID;
   title: string;
-  detail: string;
-  dishTitles: string[];
+  coverImageUrl: string | null;
+  sortOrder: number;
+  content: RecipeContentSnapshot;
 }
 
-export interface MealPlanCookAssistantTimelineStep {
+export interface MealCookContextResponse {
+  planItemId: UUID;
+  diningEventId: UUID | null;
+  title: string;
+  planDate: string;
+  mealSlot: MealSlot;
+  dishes: MealCookContextDish[];
+}
+
+export interface MealCookAssistantDishSource {
+  dishId: UUID;
+  recipeVersionId: UUID;
+  title: string;
+  source: CookAssistantStepSource;
+}
+
+export interface MealCookAssistantStep {
   order: number;
+  phase: RecipeAssistantStepPhase;
   title: string;
   detail: string;
-  dishTitles: string[];
+  dishIds: UUID[];
+  imageUrl: string | null;
+  durationText: string | null;
+  source: CookAssistantStepSource;
   parallelKey: string | null;
 }
 
-export interface MealPlanCookAssistantSummary {
-  dishCount: number;
-  prepTaskCount: number;
-  timelineStepCount: number;
-  totalDurationText: string | null;
-  suggestedStartTime: string | null;
+export interface MealCookAssistantSnapshot {
+  contractVersion: number;
+  generatedAt: IsoDateTime;
+  title: string;
+  summary: string | null;
+  dishes: MealCookAssistantDishSource[];
+  steps: MealCookAssistantStep[];
   notes: string[];
 }
 
-export interface MealPlanCookAssistant {
+export interface MealCookAssistantResponse {
   planItemId: UUID;
-  hasSnapshot: boolean;
-  isStale: boolean;
+  diningEventId: UUID | null;
+  status: CookAssistantContentStatus;
+  unlocked: boolean;
+  unlockedAt: IsoDateTime | null;
   generatedAt: IsoDateTime | null;
-  summary: MealPlanCookAssistantSummary;
-  prepTasks: MealPlanCookAssistantTask[];
-  cookTimeline: MealPlanCookAssistantTimelineStep[];
-  serveTasks: MealPlanCookAssistantTask[];
+  assistant: MealCookAssistantSnapshot | null;
 }
+
+export interface UnlockMealCookAssistantResponse extends MealCookAssistantResponse {
+  newlyUnlocked: boolean;
+}
+
+export type MealPlanCookAssistant = MealCookAssistantResponse;
 
 export interface MealPlanMenuItemSummary {
   recipeId: UUID | null;
@@ -2603,6 +2676,7 @@ export interface DiningEventMenuItemSummary {
   recipeId: UUID | null;
   recipeVersionId: UUID;
   title: string;
+  keywords: string[];
   version: number;
 }
 

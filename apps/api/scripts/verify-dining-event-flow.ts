@@ -16,8 +16,6 @@ import type {
 loadLocalEnv();
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
-const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
-const memberPhone = process.env.TEST_MEMBER_PHONE ?? "13700000000";
 const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 
 interface ApiEnvelope<T> {
@@ -366,8 +364,8 @@ async function verifyRecentArrangementBoundaries() {
 
 async function main() {
   const recentArrangementEvidence = await verifyRecentArrangementBoundaries();
-  const owner = await login(ownerPhone);
-  const member = await login(memberPhone);
+  const owner = await login(createFreshPhone());
+  const member = await login(createFreshPhone());
   const ownerAuth = { authorization: `Bearer ${owner.token}` };
   const memberAuth = { authorization: `Bearer ${member.token}` };
 

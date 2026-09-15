@@ -53,6 +53,7 @@ import {
     ReviewPendingRecipeDto,
   ResetAdminUserPasswordDto,
   ResolveRecipeReportDto,
+  MergeAdminIngredientDto,
   SetAdminIngredientStatusDto,
   SetAdminIngredientCategoryStatusDto,
   SetAdminMedalTemplateStatusDto,
@@ -81,6 +82,7 @@ import {
   AdminInspirationCategoryModel,
   AdminIngredientCategoryModel,
   AdminIngredientModel,
+  AdminIngredientMergeResultModel,
   AdminNutritionFoodModel,
   AdminNutritionCategoryModel,
   AdminIngredientNutritionModel,
@@ -1015,6 +1017,22 @@ export class AdminController {
     @Body() body: SetAdminIngredientStatusDto
   ) {
     return this.adminService.setIngredientStatus(request, ingredientId, { ...body, operationId }, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("ingredients/:ingredientId/merge")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminIngredientMergeResultModel, "后台归并系统食材")
+  mergeIngredient(
+    @Req() request: RequestWithAdmin,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: MergeAdminIngredientDto
+  ) {
+    return this.adminService
+      .mergeIngredient(ingredientId, { ...body, operationId }, request.admin.adminId)
+      .then(result => ok(result));
   }
 
   @Delete("ingredients/:ingredientId")

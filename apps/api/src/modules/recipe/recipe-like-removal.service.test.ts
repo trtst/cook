@@ -46,7 +46,7 @@ test("inspiration recipe list does not expose recipe likes or sort by likes", as
       count: async () => 1
     }
   };
-  const service = new RecipeService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new RecipeService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 
   const result = await service.listInspirationRecipes(1, 20, undefined, undefined, "RECOMMENDED");
 

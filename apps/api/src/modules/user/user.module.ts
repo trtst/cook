@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AssetStorageService } from "../../common/asset-storage.service";
 import { AuthModule } from "../auth/auth.module";
+import { CookAssistantModule } from "../cook-assistant/cook-assistant.module";
 import { EntitlementModule } from "../entitlement/entitlement.module";
 import { UploadModule } from "../upload/upload.module";
 import { CurrentUserService } from "./current-user.service";
@@ -14,7 +15,7 @@ import { MedalService } from "./medal.service";
 import { TasteProfileService } from "./taste-profile.service";
 
 @Module({
-  imports: [AuthModule, EntitlementModule, UploadModule],
+  imports: [AuthModule, CookAssistantModule, EntitlementModule, UploadModule],
   controllers: [UserController, StorageUsageController, MembershipCodeController],
   providers: [CurrentUserService, TasteProfileService, DisplayService, MedalService, AssetStorageService, MedalImageService, MembershipCodeService, NotificationService],
   exports: [MedalService, MedalImageService]

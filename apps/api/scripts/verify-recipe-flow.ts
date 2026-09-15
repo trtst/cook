@@ -23,8 +23,6 @@ import type {
 loadLocalEnv();
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
-const ownerPhone = process.env.TEST_OWNER_PHONE ?? "13800000000";
-const memberPhone = process.env.TEST_MEMBER_PHONE ?? "13700000000";
 const password = process.env.TEST_USER_PASSWORD ?? "change-me";
 
 interface ApiEnvelope<T> {
@@ -55,6 +53,11 @@ function withIdempotencyKey(headers: Record<string, string>, key = nextIdempoten
   };
 }
 
+function createFreshPhone() {
+  const suffix = nextIdempotencyKey().slice(-8).padStart(8, "0");
+  return `139${suffix}`;
+}
+
 async function request<T>(path: string, options: RequestInit = {}) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
@@ -80,11 +83,32 @@ async function login(phone: string) {
   return loginWithPassword(requestData, phone, password);
 }
 
+async function grantPro(prisma: PrismaClient, phone: string) {
+  const user = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+  assert(user, "fresh owner user should exist before granting PRO entitlement");
+  await prisma.entitlementGrant.upsert({
+    where: { userId: user.id },
+    create: {
+      userId: user.id,
+      tier: "PRO",
+      startsAt: new Date(),
+      endsAt: null
+    },
+    update: {
+      tier: "PRO",
+      startsAt: new Date(),
+      endsAt: null
+    }
+  });
+}
+
 async function main() {
   const prisma = new PrismaClient();
   try {
+    const ownerPhone = createFreshPhone();
     const owner = await login(ownerPhone);
-    const member = await login(memberPhone);
+    await grantPro(prisma, ownerPhone);
+    const member = await login(createFreshPhone());
     const ownerAuth = { authorization: `Bearer ${owner.token}` };
     const memberAuth = { authorization: `Bearer ${member.token}` };
 

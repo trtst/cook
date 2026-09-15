@@ -448,6 +448,15 @@ enum RecipeImportItemStatus {
 }
 
 enum RecipeAssistantStatus {
+  PENDING
+  GENERATING
+  NEEDS_REVIEW
+  READY
+  FAILED
+}
+
+enum MealAssistantStatus {
+  GENERATING
   READY
   FAILED
 }
@@ -700,6 +709,7 @@ model User {
   recipeRecommendations    RecipeRecommendation[]
   recipeCollections         RecipeCollection[]
   recipeViewHistories       RecipeViewHistory[]
+  cookAssistantUnlocks      CookAssistantUnlock[]
   randomMenuUsage           RandomMenuUsage?
   ingredients               Ingredient[]               @relation("IngredientOwner")
   ingredientRecommendations IngredientRecommendation[]
@@ -1346,6 +1356,7 @@ model RecipeContentVersion {
   uploadAssets            UploadAsset[]
   versionTags             RecipeVersionTag[]
   cookAssistant           RecipeCookAssistant?
+  cookAssistantUnlocks    CookAssistantUnlock[]
   nutritionSnapshots      RecipeNutritionSnapshot[]
   completenessSnapshots   RecipeCompletenessSnapshot[]
 
@@ -1357,9 +1368,10 @@ model RecipeContentVersion {
 model RecipeCookAssistant {
   id            Int                   @id @default(autoincrement())
   recipeVersionId Int                 @unique @map("recipe_version_id")
-  status        RecipeAssistantStatus @default(READY)
+  status        RecipeAssistantStatus @default(PENDING)
+  candidateJson Json?                 @map("candidate_json")
   snapshotJson  Json?                 @map("snapshot_json")
-  generatedAt   DateTime?             @default(now()) @map("generated_at") @db.Timestamptz(3)
+  generatedAt   DateTime?             @map("generated_at") @db.Timestamptz(3)
   lastAttemptAt DateTime              @default(now()) @map("last_attempt_at") @db.Timestamptz(3)
   attemptCount  Int                   @default(1) @map("attempt_count")
   lastError     String?               @map("last_error") @db.VarChar(500)
@@ -1861,6 +1873,7 @@ model MealPlanItem {
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   dishes        MealPlanDish[]
   cookAssistant MealPlanCookAssistant?
+  cookAssistantUnlocks CookAssistantUnlock[]
   diningEvent   DiningEvent?
   shoppingList  ShoppingList?         @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)
   confirmedPolls MealPoll[]           @relation("MealPollConfirmedPlanItem")
@@ -1894,17 +1907,41 @@ model MealPlanDish {
 }
 
 model MealPlanCookAssistant {
-  id          Int      @id @default(autoincrement())
-  planItemId  Int      @unique @map("plan_item_id")
-  menuDigest  String   @map("menu_digest") @db.VarChar(128)
-  snapshot    Json     @map("snapshot")
-  generatedAt DateTime @map("generated_at") @db.Timestamptz(3)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id          Int                 @id @default(autoincrement())
+  planItemId  Int                 @unique @map("plan_item_id")
+  menuDigest  String?             @map("menu_digest") @db.VarChar(128)
+  snapshot    Json?               @map("snapshot")
+  generatedAt DateTime?           @map("generated_at") @db.Timestamptz(3)
+  contractVersion String          @default("legacy.v1") @map("contract_version") @db.VarChar(32)
+  status      MealAssistantStatus @default(READY)
+  assistantJson Json?             @map("assistant_json")
+  assistantGeneratedAt DateTime?  @map("assistant_generated_at") @db.Timestamptz(3)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   planItem MealPlanItem @relation(fields: [planItemId], references: [id], onDelete: Cascade)
 
   @@map("meal_plan_cook_assistants")
+}
+
+model CookAssistantUnlock {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("user_id")
+  recipeVersionId Int?     @map("recipe_version_id")
+  planItemId      Int?     @map("plan_item_id")
+  unlockedOn      DateTime @map("unlocked_on") @db.Date
+  unlockedAt      DateTime @default(now()) @map("unlocked_at") @db.Timestamptz(3)
+
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeVersion RecipeContentVersion? @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+  planItem      MealPlanItem?         @relation(fields: [planItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recipeVersionId])
+  @@unique([userId, planItemId])
+  @@index([userId, unlockedOn])
+  @@index([recipeVersionId])
+  @@index([planItemId])
+  @@map("cook_assistant_unlocks")
 }
 
 model DiningEvent {

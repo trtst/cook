@@ -4,6 +4,7 @@ import { assetKey, AssetStorageService } from "../../common/asset-storage.servic
 import { completeAdminIdempotentOperation, getAdminIdempotentResult, startAdminIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
 import type { AppConfigResponse, OperationId, UUID } from "../../contracts/types";
+import { cookAssistantActivityConfig } from "../cook-assistant/cook-assistant.config";
 
 type ImageKind = "jpeg" | "png" | "webp";
 type RequestLike = {
@@ -68,7 +69,8 @@ export class AppConfigService {
     return {
       login: {
         imageUrl: loginImage ? this.buildLoginImageUrl(request, loginImage.storageKey) : null
-      }
+      },
+      cookAssistant: cookAssistantActivityConfig
     };
   }
 

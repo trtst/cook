@@ -18,7 +18,6 @@ import {
   CreateDiningEventDto,
   CreateMealPlanDto,
   DiningEventListQueryDto,
-  GenerateMealPlanCookAssistantDto,
   GenerateRandomMenuDto,
   MealPlanQueryDto,
   CheckRandomMenuGapDto,
@@ -39,6 +38,7 @@ import {
   DiningEventModel,
   DiningEventListPageModel,
   DiningEventShareLinkModel,
+  MealCookContextResponseModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
   RandomGapPreviewModel,
@@ -46,7 +46,8 @@ import {
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
   SharePreviewModel,
-  SharePreviewViewerModel
+  SharePreviewViewerModel,
+  UnlockMealCookAssistantResponseModel
 } from "../../contracts/openapi";
 import { MealService } from "./meal.service";
 
@@ -90,9 +91,17 @@ export class MealController {
   @Get("meal-plans/:planItemId/cook-assistant")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(MealPlanCookAssistantModel, "读取当前计划餐次的做饭助手快照")
+  @ApiOkModel(MealPlanCookAssistantModel, "读取当前计划餐次的做饭助手状态")
   getMealPlanCookAssistant(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number) {
     return this.mealService.getMealPlanCookAssistant(request.user.userId, planItemId).then(result => ok(result));
+  }
+
+  @Get("meal-plans/:planItemId/cook-context")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(MealCookContextResponseModel, "读取当前计划餐次的原始做饭上下文")
+  getMealPlanCookContext(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number) {
+    return this.mealService.getMealPlanCookContext(request.user.userId, planItemId).then(result => ok(result));
   }
 
   @Post("meal-plans")
@@ -284,18 +293,17 @@ export class MealController {
     return this.mealService.completeMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
   }
 
-  @Post("meal-plans/:planItemId/cook-assistant")
+  @Post("meal-plans/:planItemId/cook-assistant/unlock")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(MealPlanCookAssistantModel, "生成或重生成当前计划餐次的做饭助手快照")
-  generateMealPlanCookAssistant(
+  @ApiOkModel(UnlockMealCookAssistantResponseModel, "解锁当前计划餐次的做饭助手")
+  unlockMealPlanCookAssistant(
     @Req() request: RequestWithUser,
     @Param("planItemId", ParseIntPipe) planItemId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() _body: GenerateMealPlanCookAssistantDto
+    @ReadIdempotencyKey() operationId: string
   ) {
-    return this.mealService.generateMealPlanCookAssistant(request.user.userId, planItemId, operationId).then(result => ok(result));
+    return this.mealService.unlockMealPlanCookAssistant(request.user.userId, planItemId, operationId).then(result => ok(result));
   }
 
   @Post("meal-plans/:planItemId/dining-event")

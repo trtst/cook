@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { CookAssistantModule } from "../cook-assistant/cook-assistant.module";
 import { EntitlementModule } from "../entitlement/entitlement.module";
 import { UploadModule } from "../upload/upload.module";
 import { UserModule } from "../user/user.module";
@@ -7,7 +8,7 @@ import { MealController } from "./meal.controller";
 import { MealService } from "./meal.service";
 
 @Module({
-  imports: [EntitlementModule, UploadModule, UserModule, WechatModule],
+  imports: [CookAssistantModule, EntitlementModule, UploadModule, UserModule, WechatModule],
   controllers: [MealController],
   providers: [MealService],
   exports: [MealService]

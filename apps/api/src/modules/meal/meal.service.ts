@@ -31,10 +31,10 @@ import type {
   DiningEventShareLinkResponse,
   DiningEventSummary,
   DiningEventWishItemSummary,
+  MealCookAssistantSnapshot,
+  MealCookAssistantStep,
+  MealCookContextResponse,
   MealPlanCookAssistant,
-  MealPlanCookAssistantSummary,
-  MealPlanCookAssistantTask,
-  MealPlanCookAssistantTimelineStep,
   MealPlanDishPurchaseState,
   MealPlanSummary,
   OperationId,
@@ -59,10 +59,12 @@ import type {
   RecipeContentSnapshot,
   SharePreviewResponse,
   SharePreviewViewerResponse,
+  UnlockMealCookAssistantResponse,
   UUID
 } from "../../contracts/types";
+import { CookAssistantAccessService } from "../cook-assistant/cook-assistant-access.service";
 import { EntitlementService } from "../entitlement/entitlement.service";
-import { buildRecipeAssistantSnapshot, fromJson, toJson, versionAssistantToSnapshot, versionToContent } from "../recipe/recipe-content";
+import { fromJson, toJson, versionAssistantToSnapshot, versionToContent } from "../recipe/recipe-content";
 import { UploadService } from "../upload/upload.service";
 import { MedalService } from "../user/medal.service";
 import { WechatMiniCodeService } from "../wechat/wechat-mini-code.service";
@@ -248,17 +250,11 @@ type ResolvedMenuVersion = {
 };
 
 type PlanMenuItemInput = {
+  dishId: UUID | null;
   slotType: RecipeSlotType | null;
   sortOrder: number;
   purchaseState: MealPlanDishPurchaseState;
   menu: ResolvedMenuVersion;
-};
-
-type MealPlanCookAssistantSnapshot = {
-  summary: MealPlanCookAssistantSummary;
-  prepTasks: MealPlanCookAssistantTask[];
-  cookTimeline: MealPlanCookAssistantTimelineStep[];
-  serveTasks: MealPlanCookAssistantTask[];
 };
 
 type DiningMemoryShareMenuItemSnapshot = {
@@ -334,8 +330,8 @@ type RandomTagSnapshot = {
   primaryIngredientIds: UUID[];
 };
 
-const mealAssistantRealtimeFillMissingCountThreshold = 2;
-const mealAssistantRealtimeFillMissingRatioThreshold = 0.4;
+const mealAssistantContractVersion = "meal-assistant.v1";
+const mealAssistantSnapshotVersion = 1;
 const randomMenuQuotaWindowDays = 7;
 const defaultRandomMenuWeeklyLimit = 21;
 const randomMenuEmptyResultLimit = 10;
@@ -637,6 +633,45 @@ function buildFallbackScheduledAt(planDate: string, mealSlot: MealSlot) {
   return new Date(`${planDate}T${time}+08:00`);
 }
 
+function shanghaiClockParts(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(value);
+  const partMap = new Map(parts.map(part => [part.type, part.value]));
+  return {
+    dateText: `${partMap.get("year")}-${partMap.get("month")}-${partMap.get("day")}`,
+    hours: Number(partMap.get("hour")),
+    minutes: Number(partMap.get("minute"))
+  };
+}
+
+function mealSlotFromScheduledAt(value: Date): MealSlot {
+  const parts = shanghaiClockParts(value);
+  const totalMinutes = parts.hours * 60 + parts.minutes;
+
+  if (totalMinutes >= 5 * 60 && totalMinutes < 10 * 60 + 30) return "BREAKFAST";
+  if (totalMinutes >= 10 * 60 + 30 && totalMinutes < 14 * 60 + 30) return "LUNCH";
+  if (totalMinutes >= 14 * 60 + 30 && totalMinutes < 17 * 60 + 30) return "AFTERNOON_TEA";
+  if (totalMinutes >= 17 * 60 + 30 && totalMinutes < 21 * 60) return "DINNER";
+  return "LATE_NIGHT";
+}
+
+function mealPlanDateFromScheduledAt(value: Date) {
+  return parseDateOnly(shanghaiClockParts(value).dateText);
+}
+
+function mealPlanTitleAfterSlotChange(currentTitle: string | null | undefined, currentSlot: MealSlot, nextSlot: MealSlot) {
+  const title = currentTitle?.trim();
+  if (!title || title === buildMealPlanTitle(currentSlot)) return buildMealPlanTitle(nextSlot);
+  return title;
+}
+
 function buildMenuSnapshot(menuItems: ResolvedMenuVersion[]): RecipeContentSnapshot {
   const first = menuItems[0];
   if (!first) throw new BadRequestException("最终菜单不能为空");
@@ -661,296 +696,71 @@ function cookAssistantRecordKey(planItemId: UUID) {
   return `meal-plan-cook-assistant:${planItemId}`;
 }
 
-function buildMealPlanMenuDigest(plan: MealPlanRow) {
-  const value = plan.dishes
-    .map(item => [item.recipeVersionId, item.slotType ?? "", item.purchaseState, item.sortOrder].join(":"))
-    .join("|");
-  return hashText(value);
-}
-
-function recipeDurationMinutes(value: RecipeDuration | null) {
-  if (value === "WITHIN_15") return 15;
-  if (value === "BETWEEN_15_30") return 30;
-  if (value === "BETWEEN_30_60") return 50;
-  if (value === "OVER_60") return 75;
-  return null;
-}
-
-function formatDurationText(minutes: number | null) {
-  if (!minutes || minutes <= 0) return null;
-  if (minutes < 60) return `约${minutes}分钟`;
-  const hours = Math.floor(minutes / 60);
-  const remaining = minutes % 60;
-  return remaining > 0 ? `约${hours}小时${remaining}分钟` : `约${hours}小时`;
-}
-
-function formatClockText(value: Date) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Shanghai"
-  }).format(value);
-}
-
-function containsCookKeyword(text: string, pattern: RegExp) {
-  return pattern.test(text);
-}
-
-function parseAssistantDurationText(value: string | null | undefined) {
-  const text = value?.trim();
-  if (!text) return null;
-  let totalMinutes = 0;
-  const matches = text.matchAll(/(\d+)\s*(小时|分钟)/g);
-  for (const match of matches) {
-    const amount = Number(match[1] ?? 0);
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-    totalMinutes += match[2] === "小时" ? amount * 60 : amount;
+function buildMealCookAssistantSnapshot(plan: MealPlanRow, menuItems: PlanMenuItemInput[]): MealCookAssistantSnapshot {
+  const generatedAt = new Date();
+  const dishes = menuItems.map(item => ({
+    dishId: item.dishId ?? 0,
+    recipeVersionId: item.menu.recipeVersionId,
+    title: item.menu.title,
+    source: item.menu.assistant?.steps.length ? "WIKI" as const : "ORIGINAL" as const
+  }));
+  const wikiCount = dishes.filter(item => item.source === "WIKI").length;
+  if (wikiCount === 0) {
+    throw new ConflictException("本餐暂无可用做饭助手");
   }
-  if (totalMinutes === 0 && text.includes("半小时")) {
-    totalMinutes = 30;
-  }
-  return totalMinutes > 0 ? totalMinutes : null;
-}
 
-function summarizeAssistantTaskDetail(steps: RecipeAssistantSnapshot["steps"]) {
-  return steps
-    .map(item => item.detail?.trim() || item.title?.trim() || "")
-    .filter(Boolean)
-    .join("；");
-}
-
-function summarizeAssistantTaskTitle(menuTitle: string, phase: "PREP" | "COOK" | "SERVE", steps: RecipeAssistantSnapshot["steps"]) {
-  if (steps.length === 1) {
-    const stepTitle = steps[0]?.title?.trim();
-    return stepTitle ? `${menuTitle}：${stepTitle}` : menuTitle;
-  }
-  if (phase === "PREP") return `${menuTitle}：备菜处理`;
-  if (phase === "SERVE") return `${menuTitle}：出锅收尾`;
-  return `${menuTitle}：主烹调`;
-}
-
-function buildDishAssistantTask(
-  menuTitle: string,
-  phase: "PREP" | "COOK" | "SERVE",
-  steps: RecipeAssistantSnapshot["steps"]
-): MealPlanCookAssistantTask | null {
-  if (!steps.length) return null;
-  return {
-    title: summarizeAssistantTaskTitle(menuTitle, phase, steps),
-    detail: summarizeAssistantTaskDetail(steps) || `按${menuTitle}的当前步骤继续处理。`,
-    dishTitles: [menuTitle]
-  };
-}
-
-function buildDishCookText(menu: ResolvedMenuVersion) {
-  if (menu.assistant?.steps.length) {
-    return menu.assistant.steps
-      .map(item => `${item.title?.trim() || ""} ${item.detail?.trim() || ""}`.trim())
-      .filter(Boolean)
-      .join(" ");
-  }
-  return menu.content.steps
-    .map(item => item.text?.trim() ?? "")
-    .filter(Boolean)
-    .join(" ");
-}
-
-function resolveCookStage(menu: ResolvedMenuVersion, slotType: RecipeSlotType | null) {
-  const text = `${menu.title} ${buildDishCookText(menu)}`;
-  const minutes = recipeDurationMinutes(menu.content.duration);
-  if (slotType === "SOUP" || containsCookKeyword(text, /(炖|焖|煮|卤|蒸|烤|熬)/) || (minutes != null && minutes >= 45)) {
-    return "EARLY" as const;
-  }
-  if (
-    slotType === "VEGETABLE" ||
-    containsCookKeyword(text, /(凉拌|快炒|小炒|焯|装盘|生拌|快手)/) ||
-    (minutes != null && minutes <= 15)
-  ) {
-    return "LATE" as const;
-  }
-  return "MID" as const;
-}
-
-function buildCookAssistantSnapshot(plan: MealPlanRow, menuItems: PlanMenuItemInput[]): MealPlanCookAssistantSnapshot {
-  const dishTitles = menuItems.map(item => item.menu.title);
-  const prepTasks: MealPlanCookAssistantTask[] = [];
-  const cookTimeline: MealPlanCookAssistantTimelineStep[] = [];
-  const serveTasks: MealPlanCookAssistantTask[] = [];
   const notes: string[] = [];
-  const totalDurations = menuItems
-    .map(item => parseAssistantDurationText(item.menu.assistant?.summary.totalDurationText) ?? recipeDurationMinutes(item.menu.content.duration))
-    .filter((item): item is NonNullable<ReturnType<typeof recipeDurationMinutes>> => item != null);
-  const missingAssistantCount = menuItems.filter(item => !item.menu.assistant?.steps.length).length;
-  const unresolvedInfoCount = menuItems.filter(
-    item => !item.menu.assistant?.steps.length && (!item.menu.content.steps.length || item.menu.content.duration == null)
-  ).length;
-  const pendingCount = menuItems.filter(item => item.purchaseState === "PENDING").length;
-  const prepAssistantTasks = menuItems
-    .map(item =>
-      buildDishAssistantTask(
-        item.menu.title,
-        "PREP",
-        item.menu.assistant?.steps.filter(step => step.phase === "PREP") ?? []
-      )
-    )
-    .filter((item): item is MealPlanCookAssistantTask => Boolean(item));
-  const serveAssistantTasks = menuItems
-    .map(item =>
-      buildDishAssistantTask(
-        item.menu.title,
-        "SERVE",
-        item.menu.assistant?.steps.filter(step => step.phase === "SERVE") ?? []
-      )
-    )
-    .filter((item): item is MealPlanCookAssistantTask => Boolean(item));
-
-  if (dishTitles.length) {
-    prepTasks.push({
-      title: "统一备菜",
-      detail: `先把${dishTitles.join("、")}涉及的主要食材洗净、切配，调料、小碗和装盘器具提前摆好。`,
-      dishTitles
-    });
+  const originalCount = dishes.length - wikiCount;
+  if (originalCount > 0) {
+    notes.push(`有${originalCount}道菜使用原始步骤，未经过助手优化。`);
   }
-
-  if (prepAssistantTasks.length) {
-    prepTasks.push(...prepAssistantTasks);
+  if (originalCount > wikiCount) {
+    notes.push("部分菜品未优化，助手效果可能受限。");
   }
-
-  const marinadeTitles = menuItems
-    .filter(item => !item.menu.assistant?.steps.length && containsCookKeyword(buildDishCookText(item.menu), /(腌|腌制|入味)/))
-    .map(item => item.menu.title);
-  if (marinadeTitles.length) {
-    prepTasks.push({
-      title: "提前腌制",
-      detail: `把${marinadeTitles.join("、")}需要提前入味的步骤先做掉，后续开火时会顺很多。`,
-      dishTitles: marinadeTitles
-    });
-  }
-
-  const soakTitles = menuItems
-    .filter(item => {
-      if (item.menu.assistant?.steps.length) return false;
-      const ingredientText = item.menu.content.ingredients.map(ingredient => ingredient.ingredientName).join(" ");
-      const text = `${ingredientText} ${buildDishCookText(item.menu)}`;
-      return containsCookKeyword(text, /(泡发|浸泡|木耳|银耳|香菇|腐竹|粉丝|海带)/);
-    })
-    .map(item => item.menu.title);
-  if (soakTitles.length) {
-    prepTasks.push({
-      title: "提前泡发或浸泡",
-      detail: `如果${soakTitles.join("、")}用到干货或需要浸泡的原料，先把这一步做掉，避免开火后卡住。`,
-      dishTitles: soakTitles
-    });
-  }
-
-  const grouped = {
-    EARLY: menuItems.filter(item => resolveCookStage(item.menu, item.slotType) === "EARLY"),
-    MID: menuItems.filter(item => resolveCookStage(item.menu, item.slotType) === "MID"),
-    LATE: menuItems.filter(item => resolveCookStage(item.menu, item.slotType) === "LATE")
-  };
 
   let order = 1;
-  const pushCookStage = (
-    stageItems: PlanMenuItemInput[],
-    fallbackTitle: string,
-    fallbackDetail: (titles: string[]) => string,
-    parallelKey: string | null
-  ) => {
-    if (!stageItems.length) return;
-    stageItems.forEach(item => {
-      const assistantTask = buildDishAssistantTask(
-        item.menu.title,
-        "COOK",
-        item.menu.assistant?.steps.filter(step => step.phase === "COOK") ?? []
-      );
-      if (assistantTask) {
-        cookTimeline.push({
-          order: order++,
-          title: assistantTask.title,
-          detail: assistantTask.detail,
-          dishTitles: assistantTask.dishTitles,
-          parallelKey
+  const steps: MealCookAssistantStep[] = [];
+  menuItems.forEach(item => {
+    const dishId = item.dishId ?? 0;
+    if (item.menu.assistant?.steps.length) {
+      item.menu.assistant.steps.forEach(step => {
+        steps.push({
+        order: order++,
+        phase: step.phase,
+        title: step.title,
+        detail: step.detail,
+        dishIds: [dishId],
+        imageUrl: step.imageUrl,
+        durationText: step.durationText,
+        source: "WIKI" as const,
+        parallelKey: null
         });
-      }
-    });
-    const fallbackItems = stageItems.filter(item => !item.menu.assistant?.steps.some(step => step.phase === "COOK"));
-    if (!fallbackItems.length) return;
-    const titles = fallbackItems.map(item => item.menu.title);
-    cookTimeline.push({
+      });
+      return;
+    }
+    item.menu.content.steps.forEach((step, index) => {
+      steps.push({
       order: order++,
-      title: fallbackTitle,
-      detail: fallbackDetail(titles),
-      dishTitles: titles,
-      parallelKey
+      phase: "COOK" as const,
+      title: `${item.menu.title}：原始步骤 ${index + 1}`,
+      detail: step.text,
+      dishIds: [dishId],
+      imageUrl: step.imageUrl ?? null,
+      durationText: null,
+      source: "ORIGINAL" as const,
+      parallelKey: null
+      });
     });
-  };
-
-  pushCookStage(
-    grouped.EARLY,
-    "先开长耗时菜",
-    titles => `优先处理${titles.join("、")}，让它们先进入炖、煮、蒸或焖的阶段，后面可以并行做其他菜。`,
-    "LONG_COOK"
-  );
-  pushCookStage(
-    grouped.MID,
-    grouped.EARLY.length ? "利用空档处理中段主菜" : "先处理中段主菜",
-    titles => `按${titles.join("、")}的顺序完成主烹调，尽量把占灶时间长的步骤集中完成。`,
-    grouped.EARLY.length ? "LONG_COOK" : null
-  );
-  pushCookStage(
-    grouped.LATE,
-    "最后做快手菜和临出锅菜",
-    titles => `把${titles.join("、")}放到后段处理，尽量让蔬菜和快炒菜接近上桌时再完成。`,
-    null
-  );
-
-  if (serveAssistantTasks.length) {
-    serveTasks.push(...serveAssistantTasks);
-  }
-  serveTasks.push({
-    title: "出锅前统一收尾",
-    detail: "上桌前把咸淡、汤汁、熟度和装盘顺序再过一遍，避免最后一刻手忙脚乱。",
-    dishTitles
   });
-  serveTasks.push({
-    title: "按先热后快的顺序上桌",
-    detail: "先端汤或炖菜，再上主菜和快炒菜，快手菜尽量最后离火，口感会更稳。",
-    dishTitles
-  });
-
-  if (pendingCount > 0) {
-    notes.push(`当前还有${pendingCount}道菜标记为待采购，开始前先确认缺的食材已经补齐。`);
-  }
-  if (missingAssistantCount > 0) {
-    notes.push(`当前有${missingAssistantCount}道菜还没有单菜做饭建议，本次先按原步骤做了保守编排。`);
-  }
-  if (unresolvedInfoCount > 0) {
-    notes.push(`有${unresolvedInfoCount}道菜的步骤或时长信息不完整，本次流程按已有字段做了保守估算。`);
-  }
-  if (menuItems.length >= 4) {
-    notes.push("这顿菜比较多，建议先清出一块专用备菜区，再按长耗时菜 -> 主菜 -> 快手菜推进。");
-  }
-
-  const longestDuration = totalDurations.length ? Math.max(...totalDurations) : null;
-  const estimatedMinutes =
-    longestDuration == null ? null : longestDuration + Math.max(0, menuItems.length - 1) * 12 + prepTasks.length * 6;
-  const planDate = plan.planDate.toISOString().slice(0, 10);
-  const suggestedStartTime =
-    estimatedMinutes == null ? null : formatClockText(new Date(buildFallbackScheduledAt(planDate, plan.mealSlot).getTime() - estimatedMinutes * 60 * 1000));
 
   return {
-    summary: {
-      dishCount: menuItems.length,
-      prepTaskCount: prepTasks.length,
-      timelineStepCount: cookTimeline.length,
-      totalDurationText: formatDurationText(estimatedMinutes),
-      suggestedStartTime,
-      notes
-    },
-    prepTasks,
-    cookTimeline,
-    serveTasks
+    contractVersion: mealAssistantSnapshotVersion,
+    generatedAt: generatedAt.toISOString(),
+    title: plan.title?.trim() || buildMealPlanTitle(plan.mealSlot),
+    summary: `${dishes.length}道菜，${wikiCount}道使用助手步骤，${originalCount}道使用原始步骤。`,
+    dishes,
+    steps,
+    notes
   };
 }
 
@@ -977,7 +787,8 @@ export class MealService {
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
     @Inject(UploadService) private readonly uploadService: UploadService,
     @Inject(MedalService) private readonly medalService: MedalService,
-    @Inject(WechatMiniCodeService) private readonly wechatMiniCodeService: WechatMiniCodeService
+    @Inject(WechatMiniCodeService) private readonly wechatMiniCodeService: WechatMiniCodeService,
+    @Inject(CookAssistantAccessService) private readonly cookAssistantAccessService: CookAssistantAccessService
   ) {}
 
   async listMealPlans(userId: UUID, page: number, pageSize: number, from?: string, to?: string): Promise<PageResult<MealPlanSummary>> {
@@ -1681,6 +1492,7 @@ export class MealService {
 
         let item = await this.getMealPlanOrThrow(tx, planItem.id);
         const syncedMenuItems = menus.map((menu, index) => ({
+          dishId: index === menus.length - 1 ? null : existing?.dishes[index]?.id ?? null,
           slotType: index === menus.length - 1 ? normalizedSlotType : existing?.dishes[index]?.slotType ?? null,
           sortOrder: index,
           purchaseState: index === menus.length - 1 ? normalizedPurchaseState : existing?.dishes[index]?.purchaseState ?? "READY",
@@ -1701,9 +1513,31 @@ export class MealService {
     }
   }
 
+  async getMealPlanCookContext(userId: UUID, planItemId: UUID): Promise<MealCookContextResponse> {
+    const plan = await this.getAccessibleMealPlanOrThrow(this.prisma, userId, planItemId);
+    const menuItems = await this.loadRawPlanMenuItems(this.prisma, plan);
+    return {
+      planItemId: plan.id,
+      diningEventId: plan.diningEvent?.id ?? null,
+      title: plan.title?.trim() || buildMealPlanTitle(plan.mealSlot),
+      planDate: plan.planDate.toISOString().slice(0, 10),
+      mealSlot: plan.mealSlot,
+      dishes: menuItems.map(item => ({
+        dishId: item.dishId,
+        recipeId: item.menu.recipeId,
+        recipeVersionId: item.menu.recipeVersionId,
+        title: item.menu.title,
+        coverImageUrl: item.menu.coverUrl,
+        sortOrder: item.sortOrder,
+        content: item.menu.content
+      }))
+    };
+  }
+
   async getMealPlanCookAssistant(userId: UUID, planItemId: UUID): Promise<MealPlanCookAssistant> {
-    const plan = await this.getOwnedMealPlanOrThrow(this.prisma, userId, planItemId);
-    return this.toMealPlanCookAssistant(plan);
+    const plan = await this.getAccessibleMealPlanOrThrow(this.prisma, userId, planItemId);
+    const unlock = await this.cookAssistantAccessService.getMealPlanUnlock(userId, planItemId);
+    return this.toMealPlanCookAssistant(plan, unlock);
   }
 
   async confirmMealPlanMenu(
@@ -1830,240 +1664,19 @@ export class MealService {
     });
   }
 
-  async generateMealPlanCookAssistant(userId: UUID, planItemId: UUID, operationId: OperationId): Promise<MealPlanCookAssistant> {
-    const requestHash = String(planItemId);
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<MealPlanCookAssistant>(
-        tx,
-        operationId,
-        "meal-plan:cook-assistant",
-        userId,
-        null,
-        requestHash
-      );
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash);
-
-      const plan = await this.getOwnedMealPlanOrThrow(tx, userId, planItemId);
-      if (plan.status === "COMPLETED") {
-        throw new ConflictException("已完成餐次不能再生成做饭建议");
-      }
-      if (!plan.dishes.length) {
-        throw new ConflictException("请先添加菜单后再生成做饭建议");
-      }
-      if (plan.cookAssistant && plan.cookAssistant.menuDigest === buildMealPlanMenuDigest(plan)) {
-        const result = this.toMealPlanCookAssistant(plan);
-        await completeIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash, result);
-        return result;
-      }
-
-      const tier = await this.entitlementService.getTier(tx, userId);
-      if (tier === "FREE") {
-        throw new ForbiddenException("开通会员后可生成做饭建议");
-      }
-
-      const shouldLockMenu = !plan.menuLockedAt;
-      if (!plan.menuLockedAt) {
-        await tx.mealPlanItem.update({
-          where: { id: plan.id },
-          data: {
-            menuLockedAt: new Date(),
-            version: { increment: 1 }
-          }
-        });
-      }
-      const shouldConfirmEvent = Boolean(
-        plan.diningEvent &&
-          plan.diningEvent.status !== "COMPLETED" &&
-          plan.diningEvent.status !== "CANCELLED" &&
-          plan.diningEvent.status !== "CONFIRMED"
-      );
-      if (shouldConfirmEvent && plan.diningEvent) {
-        await tx.diningEvent.update({
-          where: { id: plan.diningEvent.id },
-          data: {
-            status: "CONFIRMED",
-            version: { increment: 1 }
-          }
-        });
-      }
-
-      const lockedPlan = await this.getMealPlanOrThrow(tx, plan.id);
-      if (shouldLockMenu) {
-        await upsertStorageLedger(tx, userId, "MEAL", lockedPlan.id, sizeOfJson(lockedPlan));
-      }
-      if (shouldConfirmEvent && lockedPlan.diningEvent) {
-        await upsertStorageLedger(tx, userId, "MEAL", lockedPlan.diningEvent.id, sizeOfJson(lockedPlan.diningEvent));
-      }
-      if (lockedPlan.cookAssistant && lockedPlan.cookAssistant.menuDigest === buildMealPlanMenuDigest(lockedPlan)) {
-        const result = this.toMealPlanCookAssistant(lockedPlan);
-        await completeIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash, result);
-        return result;
-      }
-
-      const currentValue = {
-        ...lockedPlan,
-        cookAssistant: lockedPlan.cookAssistant
-      };
-      const menuItems = await this.resolveStoredPlanMenuItems(tx, lockedPlan);
-      const fillResult = await this.fillMissingRecipeAssistantsForMealPlan(tx, userId, menuItems);
-      const snapshot = buildCookAssistantSnapshot(lockedPlan, fillResult.menuItems);
-      if (fillResult.autoGeneratedCount > 0) {
-        snapshot.summary.notes.unshift(`已为${fillResult.autoGeneratedCount}道缺少建议的菜实时补齐单菜做饭建议。`);
-      } else if (fillResult.blockedByTier && fillResult.missingCount > 0) {
-        snapshot.summary.notes.unshift(
-          `当前有${fillResult.missingCount}道菜缺少单菜做饭建议；开通会员后可在生成本餐建议时自动补齐，当前先按原步骤保守编排。`
-        );
-      }
-      const nextValue = {
-        ...lockedPlan,
-        cookAssistant: {
-          menuDigest: buildMealPlanMenuDigest(lockedPlan),
-          generatedAt: new Date(),
-          snapshot
-        }
-      };
-      await this.assertStorageWritable(tx, userId, Math.max(0, sizeOfJson(nextValue) - sizeOfJson(currentValue)));
-
-      await tx.mealPlanCookAssistant.upsert({
-        where: { planItemId: lockedPlan.id },
-        update: {
-          menuDigest: buildMealPlanMenuDigest(lockedPlan),
-          snapshot: toJson(snapshot),
-          generatedAt: new Date()
-        },
-        create: {
-          planItemId: lockedPlan.id,
-          menuDigest: buildMealPlanMenuDigest(lockedPlan),
-          snapshot: toJson(snapshot),
-          generatedAt: new Date()
-        }
-      });
-
-      const nextPlan = await this.getMealPlanOrThrow(tx, lockedPlan.id);
-      await upsertStorageLedger(tx, userId, "MEAL", nextPlan.id, sizeOfJson(nextPlan));
-      const result = this.toMealPlanCookAssistant(nextPlan);
-      await completeIdempotentOperation(tx, operationId, "meal-plan:cook-assistant", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  private async fillMissingRecipeAssistantsForMealPlan(
-    tx: Prisma.TransactionClient,
+  async unlockMealPlanCookAssistant(
     userId: UUID,
-    menuItems: PlanMenuItemInput[]
-  ): Promise<{
-    menuItems: PlanMenuItemInput[];
-    missingCount: number;
-    autoGeneratedCount: number;
-    blockedByTier: boolean;
-  }> {
-    const missingItems = menuItems.filter(item => !item.menu.assistant?.steps.length);
-    const missingCount = missingItems.length;
-    if (!missingCount) {
-      return {
-        menuItems,
-        missingCount: 0,
-        autoGeneratedCount: 0,
-        blockedByTier: false
-      };
-    }
-
-    const missingRatio = menuItems.length > 0 ? missingCount / menuItems.length : 0;
-    const shouldFill =
-      missingCount >= mealAssistantRealtimeFillMissingCountThreshold ||
-      missingRatio > mealAssistantRealtimeFillMissingRatioThreshold;
-    if (!shouldFill) {
-      return {
-        menuItems,
-        missingCount,
-        autoGeneratedCount: 0,
-        blockedByTier: false
-      };
-    }
-
-    const tier = await this.entitlementService.getTier(tx, userId);
-    if (tier === "FREE") {
-      return {
-        menuItems,
-        missingCount,
-        autoGeneratedCount: 0,
-        blockedByTier: true
-      };
-    }
-
-    const versionIds = Array.from(new Set(missingItems.map(item => item.menu.recipeVersionId)));
-    const generatedByVersionId = new Map<UUID, RecipeAssistantSnapshot>();
-    for (const recipeVersionId of versionIds) {
-      const menu = missingItems.find(item => item.menu.recipeVersionId === recipeVersionId)?.menu;
-      if (!menu) continue;
-      const generated = await this.upsertRecipeAssistantSnapshot(tx, recipeVersionId, menu.content);
-      generatedByVersionId.set(recipeVersionId, generated);
-    }
-
+    planItemId: UUID,
+    operationId: OperationId
+  ): Promise<UnlockMealCookAssistantResponse> {
+    const plan = await this.ensureMealCookAssistantSnapshot(userId, planItemId);
+    const unlock = await this.cookAssistantAccessService.unlockMealPlan(userId, planItemId, operationId);
     return {
-      menuItems: menuItems.map(item => ({
-        ...item,
-        menu: {
-          ...item.menu,
-          assistant: generatedByVersionId.get(item.menu.recipeVersionId) ?? item.menu.assistant
-        }
-      })),
-      missingCount,
-      autoGeneratedCount: generatedByVersionId.size,
-      blockedByTier: false
+      ...this.toMealPlanCookAssistant(plan, {
+        unlockedAt: new Date(unlock.unlockedAt)
+      }),
+      newlyUnlocked: unlock.newlyUnlocked
     };
-  }
-
-  private async upsertRecipeAssistantSnapshot(
-    tx: Prisma.TransactionClient,
-    recipeVersionId: UUID,
-    content: RecipeContentSnapshot
-  ): Promise<RecipeAssistantSnapshot> {
-    const existing = await tx.recipeCookAssistant.findUnique({
-      where: { recipeVersionId },
-      select: {
-        generatedAt: true,
-        snapshotJson: true
-      }
-    });
-    if (existing) {
-      const snapshot = versionAssistantToSnapshot(existing);
-      if (snapshot) return snapshot;
-    }
-
-    const nextSnapshot = buildRecipeAssistantSnapshot(content);
-    const generatedAt = new Date();
-    const saved = await tx.recipeCookAssistant.upsert({
-      where: { recipeVersionId },
-      update: {
-        status: "READY",
-        snapshotJson: toJson(nextSnapshot),
-        generatedAt,
-        lastAttemptAt: generatedAt,
-        attemptCount: { increment: 1 },
-        lastError: null
-      },
-      create: {
-        recipeVersionId,
-        status: "READY",
-        snapshotJson: toJson(nextSnapshot),
-        generatedAt,
-        lastAttemptAt: generatedAt,
-        attemptCount: 1,
-        lastError: null
-      },
-      select: {
-        generatedAt: true,
-        snapshotJson: true
-      }
-    });
-
-    const result = versionAssistantToSnapshot(saved);
-    if (!result) {
-      throw new ConflictException("单菜做饭建议生成失败，请稍后重试");
-    }
-    return result;
   }
 
   async completeMealPlan(userId: UUID, planItemId: UUID, operationId: OperationId) {
@@ -2111,7 +1724,7 @@ export class MealService {
     request?: RequestLike
   ) {
     return this.prisma.$transaction(async tx => {
-      const plan = await tx.mealPlanItem.findUnique({
+      let plan = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
         include: mealPlanInclude
       });
@@ -2125,9 +1738,10 @@ export class MealService {
       if (repeated) return repeated;
 
       await startIdempotentOperation(tx, operationId, "dining-event:create", userId, null, eventRequestHash);
-      await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
       assertFutureDiningEventTime(resolvedScheduledAt);
+      plan = (await this.alignPlanToDiningTime(tx, { userId, mealPlanItemId: plan.id }, resolvedScheduledAt)) ?? plan;
+      await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
       const event = await tx.diningEvent.create({
         data: {
           userId,
@@ -2169,13 +1783,17 @@ export class MealService {
     location?: string | null
   ) {
     return this.prisma.$transaction(async tx => {
-      const slot = normalizeMealSlot(mealSlot);
-      const normalizedPlanDate = parseDateOnly(planDate);
+      normalizeMealSlot(mealSlot);
+      parseDateOnly(planDate);
       const normalizedLocation = normalizeOptionalText(location);
-      const requestHash = `${planDate}:${slot}:${scheduledAt}:${normalizedLocation ?? ""}`;
+      const requestHash = `${planDate}:${mealSlot}:${scheduledAt}:${normalizedLocation ?? ""}`;
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:create-direct", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:create-direct", userId, null, requestHash);
+      const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
+      assertFutureDiningEventTime(resolvedScheduledAt);
+      const normalizedPlanDate = mealPlanDateFromScheduledAt(resolvedScheduledAt);
+      const slot = mealSlotFromScheduledAt(resolvedScheduledAt);
 
       let plan = await tx.mealPlanItem.findUnique({
         where: {
@@ -2222,8 +1840,6 @@ export class MealService {
       }
 
       await this.assertStorageWritable(tx, userId, sizeOfJson({ scheduledAt, location: normalizedLocation, title: plan.title, menu: plan.menuSnapshot }));
-      const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
-      assertFutureDiningEventTime(resolvedScheduledAt);
       const event = await tx.diningEvent.create({
         data: {
           userId,
@@ -2354,6 +1970,7 @@ export class MealService {
 
       const resolvedScheduledAt = parseDateTime(scheduledAt, "饭局时间格式错误");
       assertFutureDiningEventTime(resolvedScheduledAt);
+      await this.alignPlanToDiningTime(tx, event, resolvedScheduledAt);
       await tx.diningEvent.update({
         where: { id: eventId },
         data: {
@@ -2880,6 +2497,7 @@ export class MealService {
       const nextMenus = [
         ...currentMenus,
         {
+          dishId: null,
           slotType: null,
           sortOrder: currentMenus.length,
           purchaseState: "READY" as const,
@@ -3561,6 +3179,50 @@ export class MealService {
     });
   }
 
+  private async alignPlanToDiningTime(
+    tx: Prisma.TransactionClient,
+    event: { userId: UUID; mealPlanItemId: UUID | null },
+    scheduledAt: Date
+  ): Promise<MealPlanRow | null> {
+    if (!event.mealPlanItemId) return null;
+
+    const current = await tx.mealPlanItem.findUnique({
+      where: { id: event.mealPlanItemId },
+      include: mealPlanInclude
+    });
+    if (!current) throw new NotFoundException("计划不存在");
+
+    const nextPlanDate = mealPlanDateFromScheduledAt(scheduledAt);
+    const nextMealSlot = mealSlotFromScheduledAt(scheduledAt);
+    const samePlanDate = current.planDate.toISOString().slice(0, 10) === nextPlanDate.toISOString().slice(0, 10);
+    if (samePlanDate && current.mealSlot === nextMealSlot) return current;
+
+    const occupied = await tx.mealPlanItem.findUnique({
+      where: {
+        userId_planDate_mealSlot: {
+          userId: event.userId,
+          planDate: nextPlanDate,
+          mealSlot: nextMealSlot
+        }
+      }
+    });
+    if (occupied && occupied.id !== current.id) {
+      throw new ConflictException("该时间对应的餐次已有安排");
+    }
+
+    await tx.mealPlanItem.update({
+      where: { id: current.id },
+      data: {
+        planDate: nextPlanDate,
+        mealSlot: nextMealSlot,
+        title: mealPlanTitleAfterSlotChange(current.title, current.mealSlot, nextMealSlot),
+        version: { increment: 1 }
+      }
+    });
+
+    return this.getMealPlanOrThrow(tx, current.id);
+  }
+
   private toMealPlanSummary(item: MealPlanRow): MealPlanSummary {
     return {
       id: item.id,
@@ -3742,25 +3404,32 @@ export class MealService {
     };
   }
 
-  private toMealPlanCookAssistant(item: MealPlanRow): MealPlanCookAssistant {
-    const snapshot = item.cookAssistant ? fromJson<MealPlanCookAssistantSnapshot>(item.cookAssistant.snapshot) : null;
+  private toMealPlanCookAssistant(item: MealPlanRow, unlock: { unlockedAt: Date } | null): MealPlanCookAssistant {
+    const snapshot = this.currentMealAssistantSnapshot(item.cookAssistant);
+    const status = this.mealAssistantStatus(item.cookAssistant, snapshot);
     return {
       planItemId: item.id,
-      hasSnapshot: Boolean(snapshot),
-      isStale: Boolean(item.cookAssistant && item.cookAssistant.menuDigest !== buildMealPlanMenuDigest(item)),
-      generatedAt: item.cookAssistant ? toIsoDate(item.cookAssistant.generatedAt) : null,
-      summary: snapshot?.summary ?? {
-        dishCount: item.dishes.length,
-        prepTaskCount: 0,
-        timelineStepCount: 0,
-        totalDurationText: null,
-        suggestedStartTime: null,
-        notes: []
-      },
-      prepTasks: snapshot?.prepTasks ?? [],
-      cookTimeline: snapshot?.cookTimeline ?? [],
-      serveTasks: snapshot?.serveTasks ?? []
+      diningEventId: item.diningEvent?.id ?? null,
+      status,
+      unlocked: Boolean(unlock),
+      unlockedAt: unlock ? toIsoDate(unlock.unlockedAt) : null,
+      generatedAt: snapshot?.generatedAt ?? null,
+      assistant: unlock && status === "READY" ? snapshot : null
     };
+  }
+
+  private currentMealAssistantSnapshot(record: MealPlanRow["cookAssistant"]): MealCookAssistantSnapshot | null {
+    if (!record || record.contractVersion !== mealAssistantContractVersion || record.status !== "READY") return null;
+    if (!record.assistantJson || !record.assistantGeneratedAt) return null;
+    return fromJson<MealCookAssistantSnapshot>(record.assistantJson);
+  }
+
+  private mealAssistantStatus(record: MealPlanRow["cookAssistant"], snapshot: MealCookAssistantSnapshot | null): MealPlanCookAssistant["status"] {
+    if (!record || record.contractVersion !== mealAssistantContractVersion) return "NOT_GENERATED";
+    if (record.status === "GENERATING") return "GENERATING";
+    if (record.status === "FAILED") return "FAILED";
+    if (snapshot) return "READY";
+    return "NOT_GENERATED";
   }
 
   private toDiningEventSummary(event: DiningEventRow, viewerUserId: UUID, request?: RequestLike): DiningEventSummary {
@@ -3791,6 +3460,7 @@ export class MealService {
         recipeId: item.recipeVersion.currentRecipes.find(recipe => recipe.ownerId === event.userId)?.id ?? null,
         recipeVersionId: item.recipeVersionId,
         title: item.title,
+        keywords: item.recipeVersion.keywordsJson ? fromJson<string[]>(item.recipeVersion.keywordsJson) : [],
         version: item.version
       })),
       wishItems: event.wishItems
@@ -3920,6 +3590,46 @@ export class MealService {
     return recipe.currentVersion;
   }
 
+  private async ensureMealCookAssistantSnapshot(userId: UUID, planItemId: UUID): Promise<MealPlanRow> {
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
+      const plan = await this.getAccessibleMealPlanOrThrow(tx, userId, planItemId);
+      if (!plan.dishes.length) {
+        throw new ConflictException("请先添加菜单后再使用做饭助手");
+      }
+
+      if (this.currentMealAssistantSnapshot(plan.cookAssistant)) {
+        return plan;
+      }
+
+      const menuItems = await this.resolveStoredPlanMenuItems(tx, plan);
+      const snapshot = buildMealCookAssistantSnapshot(plan, menuItems);
+      const assistantGeneratedAt = new Date(snapshot.generatedAt);
+      const data = {
+        contractVersion: mealAssistantContractVersion,
+        status: "READY" as const,
+        assistantJson: toJson(snapshot),
+        assistantGeneratedAt
+      };
+
+      if (plan.cookAssistant) {
+        await tx.mealPlanCookAssistant.update({
+          where: { planItemId },
+          data
+        });
+      } else {
+        await tx.mealPlanCookAssistant.create({
+          data: {
+            planItemId,
+            ...data
+          }
+        });
+      }
+
+      return this.getMealPlanOrThrow(tx, planItemId);
+    });
+  }
+
   private async resolveMenuVersions(tx: Prisma.TransactionClient, recipeVersionIds: UUID[]): Promise<ResolvedMenuVersion[]> {
     const versions = await tx.recipeContentVersion.findMany({
       where: { id: { in: recipeVersionIds } },
@@ -3947,6 +3657,45 @@ export class MealService {
         title: version.name,
         content: versionToContent(version),
         assistant: versionAssistantToSnapshot(version.cookAssistant)
+      };
+    });
+  }
+
+  private async loadRawPlanMenuItems(tx: MealDb, plan: MealPlanRow): Promise<Array<PlanMenuItemInput & { dishId: UUID }>> {
+    const versions = await tx.recipeContentVersion.findMany({
+      where: {
+        id: {
+          in: plan.dishes.map(item => item.recipeVersionId)
+        }
+      },
+      include: {
+        currentRecipes: {
+          where: { status: "ACTIVE" },
+          select: {
+            id: true,
+            coverImageUrl: true
+          },
+          take: 1
+        }
+      }
+    });
+    const versionMap = new Map(versions.map(item => [item.id, item]));
+    return plan.dishes.map(dish => {
+      const version = versionMap.get(dish.recipeVersionId);
+      if (!version) throw new BadRequestException("存在无效菜谱版本");
+      return {
+        dishId: dish.id,
+        slotType: normalizeNullableRecipeSlotType(dish.slotType),
+        sortOrder: dish.sortOrder,
+        purchaseState: normalizePurchaseState(dish.purchaseState),
+        menu: {
+          recipeId: dish.recipeId ?? version.currentRecipes[0]?.id ?? null,
+          recipeVersionId: version.id,
+          coverUrl: version.currentRecipes[0]?.coverImageUrl ?? null,
+          title: version.name,
+          content: versionToContent(version),
+          assistant: null
+        }
       };
     });
   }
@@ -3984,6 +3733,7 @@ export class MealService {
         throw new ConflictException("菜谱版本已变化，请重新选择");
       }
       resolved.push({
+        dishId: null,
         slotType: normalizeNullableRecipeSlotType(item.slotType),
         sortOrder: item.sortOrder,
         purchaseState: normalizePurchaseState(item.purchaseState),
@@ -4006,10 +3756,11 @@ export class MealService {
       plan.dishes.map(item => item.recipeVersionId)
     );
     return plan.dishes
-      .map((dish, index) => {
+      .map((dish, index): PlanMenuItemInput | null => {
         const menu = menus[index];
         if (!menu) return null;
         return {
+          dishId: dish.id,
           slotType: normalizeNullableRecipeSlotType(dish.slotType),
           sortOrder: dish.sortOrder,
           purchaseState: normalizePurchaseState(dish.purchaseState),
@@ -4685,6 +4436,7 @@ export class MealService {
       "menu" in item
         ? item
         : {
+            dishId: null,
             slotType: null,
             sortOrder: index,
             purchaseState: "READY" as const,
@@ -4752,6 +4504,29 @@ export class MealService {
     });
     if (!plan || plan.userId !== userId) throw new NotFoundException("计划不存在");
     return plan;
+  }
+
+  private async getAccessibleMealPlanOrThrow(db: MealDb, userId: UUID, planItemId: UUID) {
+    const plan = await db.mealPlanItem.findUnique({
+      where: { id: planItemId },
+      include: mealPlanInclude
+    });
+    if (!plan) throw new NotFoundException("计划不存在");
+    if (plan.userId === userId) return plan;
+    if (!plan.diningEvent) throw new NotFoundException("计划不存在");
+
+    const participant = await db.diningEventParticipant.findFirst({
+      where: {
+        diningEventId: plan.diningEvent.id,
+        userId
+      },
+      select: {
+        status: true
+      }
+    });
+    if (!participant) throw new NotFoundException("计划不存在");
+    if (participant.status === "INVITED" || participant.status === "ACCEPTED") return plan;
+    throw new ForbiddenException("当前饭局状态不可查看做饭助手");
   }
 
   private async writeActivity(

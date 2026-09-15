@@ -56,7 +56,7 @@ import {
   InspirationCategoryModel,
     InspirationRecipeDetailModel,
     InspirationRecipeSummaryModel,
-    RecipeAssistantModel,
+    RecipeCookAssistantResponseModel,
     MyRecipeDetailModel,
     MyRecipeSummaryModel,
     PublishRecipeDraftResultModel,
@@ -69,6 +69,7 @@ import {
     RecipeViewHistoryItemModel,
   SaveRecipeDraftResultModel,
   SaveCollectionRecipeResultModel,
+  UnlockRecipeCookAssistantResponseModel,
   UnitModel,
   UnitRecommendationModel
 } from "../../contracts/openapi";
@@ -527,17 +528,25 @@ export class RecipeController {
     return this.recipeService.getMyRecipe(request.user.userId, recipeId).then(result => ok(result));
   }
 
-  @Post("recipes/:recipeId/assistant")
+  @Get("recipe-versions/:recipeVersionId/cook-assistant")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiOkModel(RecipeCookAssistantResponseModel, "读取固定菜谱版本的做饭助手状态")
+  getRecipeVersionCookAssistant(@Req() request: RequestWithUser, @Param("recipeVersionId", ParseIntPipe) recipeVersionId: number) {
+    return this.recipeService.getRecipeVersionCookAssistant(request.user.userId, recipeVersionId).then(result => ok(result));
+  }
+
+  @Post("recipe-versions/:recipeVersionId/cook-assistant/unlock")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(RecipeAssistantModel, "按需生成或返回我的菜谱固定做饭建议")
-  generateMyRecipeAssistant(
+  @ApiOkModel(UnlockRecipeCookAssistantResponseModel, "解锁固定菜谱版本的做饭助手")
+  unlockRecipeVersionCookAssistant(
     @Req() request: RequestWithUser,
-    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @Param("recipeVersionId", ParseIntPipe) recipeVersionId: number,
     @ReadIdempotencyKey() operationId: string
   ) {
-    return this.recipeService.generateMyRecipeAssistant(request.user.userId, recipeId, operationId).then(result => ok(result));
+    return this.recipeService.unlockRecipeVersionCookAssistant(request.user.userId, recipeVersionId, operationId).then(result => ok(result));
   }
 
   @Post("recipes/from-inspiration")
