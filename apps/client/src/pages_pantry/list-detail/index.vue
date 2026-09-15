@@ -83,26 +83,19 @@
                   </view>
                 </view>
                 <view v-if="showEndedCard" class="store-card" :class="endedCardClass">
-                  <view class="store-card__main">
+                  <view class="store-card__head">
                     <text class="store-card__title">{{ endedCardTitle }}</text>
-                    <text class="store-card__desc">{{ endedCardDesc }}</text>
-                  </view>
-                  <view v-if="canOpenPantryHome" class="store-card__aside">
-                    <view class="store-card__button store-card__button--plain" @click="openPantryHome">
-                      去食材库
+                    <view v-if="canOpenPantryHome" class="store-card__button store-card__button--plain" @click="openPantryHome">
+                      看看食材库
                     </view>
+                  </view>
+                  <view class="store-card__detail">
+                    <text class="store-card__desc">{{ endedCardDesc }}</text>
                   </view>
                 </view>
                 <view v-if="canShowPrimaryAction" class="store-card" :class="{ 'store-card--finish': canShowFinishButton }">
-                  <view class="store-card__main">
+                  <view class="store-card__head">
                     <text class="store-card__title">{{ primaryCardTitle }}</text>
-                    <text class="store-card__desc">{{ primaryCardDesc }}</text>
-                  </view>
-                  <view class="store-card__aside">
-                    <view class="store-card__stat">
-                      <text class="store-card__stat-number">{{ primaryCardStatNumber }}</text>
-                      <text class="store-card__stat-label">{{ primaryCardStatLabel }}</text>
-                    </view>
                     <view
                       class="store-card__button"
                       :class="{
@@ -112,6 +105,13 @@
                       @click="submitting ? undefined : handlePrimaryAction()"
                     >
                       {{ primaryCardButtonText }}
+                    </view>
+                  </view>
+                  <view class="store-card__detail">
+                    <text class="store-card__desc">{{ primaryCardDesc }}</text>
+                    <view class="store-card__stat">
+                      <text class="store-card__stat-number">{{ primaryCardStatNumber }}</text>
+                      <text class="store-card__stat-label">{{ primaryCardStatLabel }}</text>
                     </view>
                   </view>
                 </view>
@@ -134,8 +134,7 @@
                     >
                       <view class="item-card">
                         <view class="item-row__cover">
-                          <image v-if="group.imageUrl" class="item-row__image" :src="group.imageUrl" mode="aspectFill" />
-                          <view v-else class="item-row__placeholder">食材</view>
+                          <ImageLoader class="item-row__image" :src="group.imageUrl" />
                         </view>
                         <view class="item-row__main">
                           <view class="item-row__top">
@@ -444,6 +443,7 @@ import { mealApi, type MealPlanSummary } from "@/apis/meal";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
+import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
@@ -624,9 +624,9 @@ const collaborationText = computed(() => {
 });
 const showCollaborationMeta = computed(() => (detail.value?.memberCount ?? 0) > 1);
 const heroMeta = computed(() => {
-  if (detail.value?.status === "COMPLETED") return "这张清单已经结束，本轮采购和入库都已收尾。";
-  if (detail.value?.status === "VOIDED") return "这张清单已经作废，后续也可以恢复继续采购。";
-  return "先把要买的食材归到这里，买的时候就不会漏。";
+  if (detail.value?.status === "COMPLETED") return "这一趟采购已经收好尾，买回来的食材也都安顿好了。";
+  if (detail.value?.status === "VOIDED") return "这张清单先放一放，需要时随时可以回来继续采购。";
+  return "把想买的食材记在这里，逛一圈就能安心带齐。";
 });
 const detailStatusTagText = computed(() => {
   if (detail.value?.status === "COMPLETED") return "已完成";
@@ -646,19 +646,19 @@ const endedCardClass = computed(() => {
   return "";
 });
 const endedCardTitle = computed(() => {
-  if (detail.value?.status === "COMPLETED") return "这张清单已完成";
-  if (detail.value?.status === "VOIDED") return "这张清单已作废";
+  if (detail.value?.status === "COMPLETED") return "这一趟采购完成啦";
+  if (detail.value?.status === "VOIDED") return "这张清单先放一放";
   return "";
 });
 const endedCardDesc = computed(() => {
   if (!detail.value) return "";
   if (detail.value.status === "COMPLETED") {
     const dayText = detail.value.completedAt ? formatMonthDay(detail.value.completedAt) : "刚刚";
-    return `${dayText} 已结束本轮采购；需要继续补货时，可以直接去食材库看看当前库存。`;
+    return `${dayText} 完成了这次采购，买回来的食材都可以在食材库里找到。`;
   }
   if (detail.value.status === "VOIDED") {
     const dayText = detail.value.voidedAt ? formatMonthDay(detail.value.voidedAt) : "刚刚";
-    return `${dayText} 已结束当前采购；如果后面还要继续买，也可以随时恢复这张清单。`;
+    return `${dayText} 暂停了这次采购，需要时随时可以恢复继续买。`;
   }
   return "";
 });
@@ -683,18 +683,18 @@ const primaryActionText = computed(() => {
   return "";
 });
 const primaryCardTitle = computed(() => {
-  if (canShowStoreButton.value) return "入库还差一步";
-  return "这张清单可以收尾了";
+  if (canShowStoreButton.value) return "把食材安顿好";
+  return "这一趟都处理好啦";
 });
 const primaryCardDesc = computed(() => {
   if (canShowStoreButton.value) {
-    return "确认好数量和保鲜时间，这批食材就能收进库存，后续补买更顺手。";
+    return "再确认一下数量和保鲜时间，就能把它们好好收进食材库啦。";
   }
-  return "都处理完了，确认后这张清单就归到已完成。";
+  return "确认一下，就把这张清单安心收进已完成吧。";
 });
 const primaryCardStatNumber = computed(() => String(canShowStoreButton.value ? storeReadyCount.value : progressDoneCount.value));
-const primaryCardStatLabel = computed(() => (canShowStoreButton.value ? "项待入库" : "项已处理"));
-const primaryCardButtonText = computed(() => (canShowStoreButton.value ? "继续入库" : "完成清单"));
+const primaryCardStatLabel = computed(() => (canShowStoreButton.value ? "项等入库" : "项已妥当"));
+const primaryCardButtonText = computed(() => (canShowStoreButton.value ? "去入库" : "完成清单"));
 const manageActions = computed(() => {
   const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
   if (canAddItem.value) actions.push({ key: "add-meal", label: "加餐次", iconClass: "icon-plan", tone: "default" });
@@ -2308,9 +2308,6 @@ defineExpose({
 }
 
 .store-card {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20rpx;
   margin-top: 18rpx;
   padding: 28rpx 30rpx;
   background: var(--color-state-warning-card-bg);
@@ -2339,18 +2336,26 @@ defineExpose({
 }
 
 .summary-card__main,
-.store-card__main,
 .item-row__main {
   flex: 1;
   min-width: 0;
 }
 
-.store-card__main {
+.store-card__head,
+.store-card__detail {
   display: flex;
-  flex-direction: column;
-  align-self: stretch;
   justify-content: space-between;
-  padding: 4rpx 0;
+  gap: 20rpx;
+  min-width: 0;
+}
+
+.store-card__head {
+  align-items: center;
+}
+
+.store-card__detail {
+  align-items: flex-start;
+  margin-top: 18rpx;
 }
 
 .complete-card__title {
@@ -2442,6 +2447,8 @@ defineExpose({
 
 .store-card__title {
   display: block;
+  flex: 1;
+  min-width: 0;
   color: var(--color-text);
   font-size: 40rpx;
   font-weight: var(--font-weight-heavy);
@@ -2450,24 +2457,17 @@ defineExpose({
 
 .store-card__desc {
   display: block;
+  flex: 1;
+  min-width: 0;
   margin-top: 0;
   color: var(--color-text-secondary);
   font-size: 26rpx;
   line-height: 1.7;
 }
 
-.store-card__aside {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 18rpx;
-  align-items: flex-end;
-  margin-left: auto;
-}
-
 .store-card__stat {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
@@ -2490,6 +2490,7 @@ defineExpose({
 
 .store-card__button {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   min-width: 196rpx;
@@ -2693,8 +2694,8 @@ defineExpose({
   flex-direction: column;
 }
 
-.item-row__image,
-.item-row__placeholder {
+.item-row__image {
+  --image-empty-icon-size: 80rpx;
   width: 140rpx;
   height: 140rpx;
   border-radius: var(--radius-xs);
@@ -2703,15 +2704,6 @@ defineExpose({
 .item-row__image {
   display: block;
   background: var(--color-surface-muted);
-}
-
-.item-row__placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-support-notice);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
 }
 
 .item-row__top,

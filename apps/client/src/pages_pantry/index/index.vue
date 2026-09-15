@@ -123,11 +123,14 @@
                 </view>
                 <view class="item-card__main">
                   <view class="item-card__top">
-                    <text class="item-card__name">{{ card.name }}</text>
+                    <view class="item-card__identity">
+                      <text class="item-card__name">{{ card.name }}</text>
+                      <text class="item-card__category">{{ card.categoryText }}</text>
+                    </view>
                     <text class="expiry-badge" :class="{ 'expiry-badge--warning': card.expireSoon }">{{ card.expireLabel }}</text>
                   </view>
                   <view class="item-card__bottom">
-                    <text class="item-card__meta">{{ card.stockText }} · {{ card.categoryText }}</text>
+                    <text class="item-card__meta">{{ card.stockText }}</text>
                     <view class="item-card__actions">
                       <view
                         v-if="card.expireSoon"
@@ -1166,12 +1169,13 @@ defineExpose({
 }
 
 .item-card__media {
-  flex: 0 0 128rpx;
+  flex: 0 0 140rpx;
 }
 
 .item-card__image {
-  width: 128rpx;
-  height: 128rpx;
+  --image-empty-icon-size: 80rpx;
+  width: 140rpx;
+  height: 140rpx;
   border-radius: var(--radius-sm);
 }
 
@@ -1186,7 +1190,7 @@ defineExpose({
   flex-direction: column;
   justify-content: space-between;
   min-width: 0;
-  min-height: 128rpx;
+  min-height: 140rpx;
 }
 
 .item-card__top,
@@ -1198,8 +1202,16 @@ defineExpose({
   min-width: 0;
 }
 
-.item-card__name {
+.item-card__identity {
+  display: flex;
   flex: 1;
+  align-items: baseline;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.item-card__name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--color-text);
@@ -1207,6 +1219,16 @@ defineExpose({
   font-weight: var(--font-weight-bold);
   line-height: 1.28;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-card__category {
+  display: block;
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.3;
   white-space: nowrap;
 }
 

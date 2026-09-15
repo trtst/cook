@@ -54,7 +54,7 @@ withDefaults(
 
 .image-empty__icon {
   color: var(--color-icon-tertiary);
-  font-size: 100rpx;
+  font-size: var(--image-empty-icon-size, 100rpx);
   line-height: 1;
 }
 
