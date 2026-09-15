@@ -101,7 +101,7 @@ async function loginWithPassword(phone) {
     true
   );
 
-  return requestData("/auth/password/login", {
+  const session = await requestData("/auth/password/login", {
     method: "POST",
     body: JSON.stringify({
       phone,
@@ -109,6 +109,11 @@ async function loginWithPassword(phone) {
       deviceId: `hbuilderx-${phone}-${nextIdempotencyKey()}`
     })
   });
+  return {
+    ...session,
+    token: session.token || session.accessToken,
+    expiresAt: session.expiresAt || session.accessExpiresAt
+  };
 }
 
 module.exports = { loginWithPassword };

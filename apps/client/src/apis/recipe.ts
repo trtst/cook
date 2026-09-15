@@ -268,7 +268,7 @@ export interface MyRecipeDetail {
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
-	assistant: RecipeAssistantSnapshot | null;
+	assistantAvailable: boolean;
 	planLinks: RecipePlanLinkSummary[];
 	ingredientRefs: IngredientSummary[];
 	unitRefs: UnitSummary[];
@@ -354,7 +354,7 @@ export interface CollectedRecipeDetail {
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
-	assistant: RecipeAssistantSnapshot | null;
+	assistantAvailable: boolean;
 	collectedAt: IsoDateTime;
 	updatedAt: IsoDateTime;
 }
@@ -384,7 +384,7 @@ export interface InspirationRecipeDetail {
 	contentVersionId: UUID;
 	content: RecipeContentSnapshot;
 	nutrition: RecipeNutritionSummary;
-	assistant: RecipeAssistantSnapshot | null;
+	assistantAvailable: boolean;
 	planLinks: RecipePlanLinkSummary[];
 	collectCount: number;
 	ownedRecipeId: UUID | null;
@@ -626,8 +626,21 @@ export interface CreateMyRecipeFromInspirationRequest {
 	categoryId?: UUID | null;
 }
 
-export interface GenerateRecipeAssistantRequest {
+export interface UnlockRecipeCookAssistantRequest {
 	operationId: OperationId;
+}
+
+export interface RecipeCookAssistantResponse {
+	recipeVersionId: UUID;
+	status: "READY";
+	unlocked: boolean;
+	unlockedAt: IsoDateTime | null;
+	generatedAt: IsoDateTime;
+	assistant: RecipeAssistantSnapshot | null;
+}
+
+export interface UnlockRecipeCookAssistantResponse extends RecipeCookAssistantResponse {
+	newlyUnlocked: boolean;
 }
 
 export interface SaveCollectionRecipeResponse {
@@ -815,10 +828,19 @@ export const recipeApi = {
 	listRecipeViewHistory(query: RecipeViewHistoryQuery) {
 		return get<PageResult<RecipeViewHistoryItem>>(`${cfg.domain}/api/users/me/recipe-history`, { ...query });
 	},
-	generateMyRecipeAssistant(recipeId: UUID, body: GenerateRecipeAssistantRequest) {
-		return post<RecipeAssistantSnapshot>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}/assistant`, undefined, {
-			idempotencyKey: body.operationId
-		});
+	getRecipeVersionCookAssistant(recipeVersionId: UUID) {
+		return get<RecipeCookAssistantResponse>(
+			`${cfg.domain}/api/recipe-versions/${encodeURIComponent(String(recipeVersionId))}/cook-assistant`
+		);
+	},
+	unlockRecipeVersionCookAssistant(recipeVersionId: UUID, body: UnlockRecipeCookAssistantRequest) {
+		return post<UnlockRecipeCookAssistantResponse>(
+			`${cfg.domain}/api/recipe-versions/${encodeURIComponent(String(recipeVersionId))}/cook-assistant/unlock`,
+			undefined,
+			{
+				idempotencyKey: body.operationId
+			}
+		);
 	},
 	createMyRecipeFromInspiration(body: CreateMyRecipeFromInspirationRequest) {
 		const { operationId, ...payload } = body;

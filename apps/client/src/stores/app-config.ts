@@ -1,11 +1,21 @@
 import { defineStore } from "pinia";
-import { appConfigApi } from "@/apis/app-config";
+import { appConfigApi, type CookAssistantActivityConfig } from "@/apis/app-config";
 
 let loadPromise: Promise<void> | null = null;
+
+const defaultCookAssistantConfig: CookAssistantActivityConfig = {
+	activityEnabled: false,
+	startsAt: null,
+	endsAt: null,
+	timeZone: "Asia/Shanghai",
+	dailyUnlockLimit: 0,
+	tipText: ""
+};
 
 export const useAppConfigStore = defineStore("app-config", {
 	state: () => ({
 		loginImageUrl: "" as string,
+		cookAssistant: { ...defaultCookAssistantConfig },
 		loaded: false,
 		homeRefreshPending: false,
 		foregroundStarted: false
@@ -38,6 +48,7 @@ export const useAppConfigStore = defineStore("app-config", {
 				.getPublic()
 				.then((config) => {
 					this.loginImageUrl = config.login.imageUrl || "";
+					this.cookAssistant = { ...config.cookAssistant };
 					this.loaded = true;
 				})
 				.catch(() => {

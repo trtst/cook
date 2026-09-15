@@ -826,7 +826,6 @@ import { markRecipeHomeDirty, markRecipeManageDirty } from "@/pages/recipe/utils
 import ImageField from "@/components/ImageField.vue";
 import { useRecipePreviewStore } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
-import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 import {
   difficultyOptions,
@@ -919,7 +918,6 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
-const userStore = useUserStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const TITLE_LIMIT = 30;
@@ -1241,8 +1239,6 @@ const ingredientGhostStyle = computed(() => ({
   left: `${ingredientGhostLeft.value}px`,
   width: `${ingredientGhostWidth.value}px`
 }));
-const canGenerateRecipeAssistant = computed(() => Boolean(userStore.profile && userStore.profile.membership.tier !== "FREE"));
-
 const showStepSortEntry = computed(() => stepRows.value.length > 1);
 const stepSortDragging = computed(() => Boolean(stepSortDraggingId.value));
 const stepSortCountText = computed(() => `${stepSortRows.value.length} 步`);
@@ -2599,32 +2595,11 @@ async function publishDraft() {
     markRecipeHomeDirty(["my"]);
     markRecipeManageDirty(["recipes", "drafts"]);
     await uniPlatform.feedback.toast({ title: "已发布", icon: "success" });
-    await maybeGenerateRecipeAssistantAfterPublish(result.recipe.id, Boolean(result.recipe.assistant?.steps.length));
     void uniPlatform.navigation.redirectTo(`/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(result.recipe.id))}&kind=my`);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "发布失败", icon: "none" });
   } finally {
     submitting.value = false;
-  }
-}
-
-async function maybeGenerateRecipeAssistantAfterPublish(targetRecipeId: ResourceId, hasAssistant: boolean) {
-  if (hasAssistant || !canGenerateRecipeAssistant.value) return;
-  const shouldGenerate = await uniPlatform.feedback.confirm({
-    title: "生成做饭建议",
-    content: "菜谱已发布，是否现在整理一份做饭建议？你也可以稍后再生成。",
-    confirmText: "立即生成",
-    cancelText: "稍后再说",
-    maskClosable: false
-  });
-  if (!shouldGenerate) return;
-  try {
-    await recipeApi.generateMyRecipeAssistant(targetRecipeId, {
-      operationId: createOperationId()
-    });
-    await uniPlatform.feedback.toast({ title: "做饭建议已生成", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "生成失败，稍后可再试", icon: "none" });
   }
 }
 

@@ -4,7 +4,8 @@ const { URL } = require("url");
 const { loginWithPassword } = require("./auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
-const MEMBER_PHONE = process.env.TEST_MEMBER_PHONE || "13700000000";
+const ADMIN_USERNAME = process.env.ADMIN_SEED_USERNAME || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_SEED_PASSWORD || "change-me";
 
 let idempotencySeed = Date.now();
 
@@ -45,7 +46,24 @@ function buildFutureIso(hoursFromNow) {
   return new Date(Date.now() + hoursFromNow * 60 * 60 * 1000).toISOString();
 }
 
-async function request(path, options = {}) {
+function buildHeaders(options = {}, admin = false) {
+  return {
+    "content-type": "application/json",
+    ...(admin
+      ? {
+          "x-cook-from": "admin_web",
+          "x-admin-version": "0.1.0",
+          "x-admin-build": "1"
+        }
+      : {
+          "x-cook-from": "mini_program",
+          "x-cook-version": "0.1.0"
+        }),
+    ...(options.headers || {})
+  };
+}
+
+async function request(path, options = {}, admin = false) {
   const target = new URL(`${API_BASE_URL}${path}`);
   const transport = target.protocol === "https:" ? https : http;
 
@@ -54,12 +72,7 @@ async function request(path, options = {}) {
       target,
       {
         method: options.method || "GET",
-        headers: {
-          "content-type": "application/json",
-          "x-cook-from": "mini_program",
-          "x-cook-version": "0.1.0",
-          ...(options.headers || {})
-        }
+        headers: buildHeaders(options, admin)
       },
       (response) => {
         let rawBody = "";
@@ -90,11 +103,18 @@ async function request(path, options = {}) {
   });
 }
 
-async function requestData(path, options = {}) {
-  const result = await request(path, options);
+async function requestData(path, options = {}, admin = false) {
+  const result = await request(path, options, admin);
   assert(result.status >= 200 && result.status < 300, `${path} HTTP ${result.status}: ${result.body.message}`);
   assert(result.body.code === 0, `${path} code ${result.body.code}: ${result.body.message}`);
   return result.body.data;
+}
+
+function adminHeaders(token, operationId) {
+  return {
+    authorization: `Bearer ${token}`,
+    ...(operationId ? { "Idempotency-Key": operationId } : {})
+  };
 }
 
 async function resolveRecipeCategory(authHeaders) {
@@ -110,6 +130,37 @@ async function resolveRecipeCategory(authHeaders) {
       name: `做饭助手页面分类${nextIdempotencyKey().slice(-6)}`
     })
   });
+}
+
+async function loginAdmin() {
+  return requestData(
+    "/admin/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        username: ADMIN_USERNAME,
+        password: ADMIN_PASSWORD
+      })
+    },
+    true
+  );
+}
+
+async function resolveAdminInspirationCategory(adminAuth) {
+  const categories = await requestData("/admin/inspiration-categories", { headers: adminAuth }, true);
+  if (categories.length) return categories[0];
+
+  return requestData(
+    "/admin/inspiration-categories",
+    {
+      method: "POST",
+      headers: withIdempotencyKey(adminAuth),
+      body: JSON.stringify({
+        name: `做饭助手系统分类${nextIdempotencyKey().slice(-6)}`
+      })
+    },
+    true
+  );
 }
 
 async function loadSystemIngredient(authHeaders) {
@@ -183,11 +234,133 @@ async function createPublishedRecipe(authHeaders, titlePrefix) {
   return published.recipe;
 }
 
-async function generateRecipeAssistant(authHeaders, recipeId) {
-  return requestData(`/recipes/${recipeId}/assistant`, {
-    method: "POST",
-    headers: withIdempotencyKey(authHeaders)
-  });
+function buildReadyImportDocument(categoryId, ingredient) {
+  return {
+    schemaVersion: "recipe.import.v1",
+    recipe: {
+      inspirationCategoryId: categoryId,
+      coverImageUrl: null,
+      content: {
+        name: `做饭助手系统菜谱${nextIdempotencyKey().slice(-6)}`,
+        story: "用于做饭助手页面自动化。",
+        baseServings: 2,
+        difficulty: "EASY",
+        duration: "BETWEEN_15_30",
+        tips: "按做饭助手步骤完成即可。",
+        ingredients: [{ name: ingredient.name, quantity: "100", unit: "克" }],
+        tools: [{ name: "炒锅" }],
+        steps: [
+          {
+            text: "准备食材并检查调味料。",
+            imageUrl: null
+          },
+          {
+            text: "下锅翻炒 6 分钟后装盘。",
+            imageUrl: null
+          }
+        ]
+      }
+    },
+    wiki: {
+      tags: [
+        { tagCode: "CUISINE", tagValue: "OTHER" },
+        { tagCode: "DISH_STYLE", tagValue: "STIR_FRY" },
+        { tagCode: "MEAL_TYPE", tagValue: "DINNER" },
+        { tagCode: "DISH_ROLE", tagValue: "MAIN" },
+        { tagCode: "MAIN_PROTEIN_TYPE", tagValue: "NONE" },
+        { tagCode: "FLAVOR_PROFILE", tagValue: "LIGHT" },
+        { tagCode: "SPICE_LEVEL", tagValue: "NONE" }
+      ],
+      assistant: {
+        steps: [
+          {
+            order: 1,
+            phase: "PREP",
+            action: "OTHER",
+            title: "备菜",
+            detail: "准备食材并检查调味料。",
+            imageUrl: null,
+            durationMinutes: 5,
+            durationText: "约 5 分钟"
+          },
+          {
+            order: 2,
+            phase: "COOK",
+            action: "STIR_FRY",
+            title: "翻炒",
+            detail: "下锅翻炒 6 分钟。",
+            imageUrl: null,
+            durationMinutes: 6,
+            durationText: "约 6 分钟"
+          },
+          {
+            order: 3,
+            phase: "SERVE",
+            action: "PLATE",
+            title: "装盘",
+            detail: "关火装盘上桌。",
+            imageUrl: null,
+            durationMinutes: 2,
+            durationText: "约 2 分钟"
+          }
+        ]
+      }
+    }
+  };
+}
+
+function multipartJson(filename, document) {
+  const boundary = `----cook-assistant-${nextIdempotencyKey()}`;
+  const head = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${filename}"\r\nContent-Type: application/json\r\n\r\n`
+  );
+  const body = Buffer.from(JSON.stringify(document));
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return {
+    body: Buffer.concat([head, body, tail]),
+    contentType: `multipart/form-data; boundary=${boundary}`
+  };
+}
+
+async function uploadJson(adminAuth, filename, document) {
+  const multipart = multipartJson(filename, document);
+  return requestData(
+    "/admin/recipe-import-jobs/json",
+    {
+      method: "POST",
+      headers: {
+        ...withIdempotencyKey(adminAuth),
+        "content-type": multipart.contentType
+      },
+      body: multipart.body
+    },
+    true
+  );
+}
+
+async function loadImportItem(adminAuth, jobId) {
+  const job = await requestData(`/admin/recipe-import-jobs/${jobId}?page=1&pageSize=20`, { headers: adminAuth }, true);
+  const item = job.items.items[0];
+  assert(item, `导入任务 ${jobId} 没有条目`);
+  return requestData(`/admin/recipe-import-items/${item.id}`, { headers: adminAuth }, true);
+}
+
+async function createReadySystemRecipe(adminAuth, categoryId, ingredient) {
+  const document = buildReadyImportDocument(categoryId, ingredient);
+  const job = await uploadJson(adminAuth, `meal-assistant-${nextIdempotencyKey()}.json`, document);
+  const item = await loadImportItem(adminAuth, job.id);
+  assert(item.status === "READY", `导入系统菜谱未进入 READY: ${item.status}`);
+  const published = await requestData(
+    `/admin/recipe-import-items/${item.id}/publish`,
+    {
+      method: "POST",
+      headers: withIdempotencyKey(adminAuth),
+      body: JSON.stringify({ expectedVersion: item.version })
+    },
+    true
+  );
+  assert(published.status === "PUBLISHED" && published.recipeId, "导入系统菜谱发布失败");
+  return requestData(`/inspiration-recipes/${published.recipeId}`);
 }
 
 async function createMealPlan(authHeaders, recipes, titlePrefix, daysFromNow) {
@@ -232,23 +405,26 @@ async function createDiningEvent(authHeaders, plan, hoursFromNow) {
 }
 
 async function createMealAssistantFixture() {
-  const paidSession = await loginWithPassword(MEMBER_PHONE);
+  const paidSession = await loginWithPassword(createFreshPhone());
   const freeSession = await loginWithPassword(createFreshPhone());
+  const adminSession = await loginAdmin();
   const paidAuth = { authorization: `Bearer ${paidSession.token}` };
   const freeAuth = { authorization: `Bearer ${freeSession.token}` };
+  const adminAuth = adminHeaders(adminSession.token);
 
   const paidProfile = await requestData("/users/me", {
     headers: paidAuth
   });
-  assert(paidProfile.membership && paidProfile.membership.tier !== "FREE", "paid fixture user should expose paid membership tier");
+  assert(paidProfile.profile && paidProfile.membership, "owner fixture user profile should be readable");
 
   const freeProfile = await requestData("/users/me", {
     headers: freeAuth
   });
-  assert(freeProfile.membership && freeProfile.membership.tier === "FREE", "fresh fixture user should stay FREE");
+  assert(freeProfile.profile && freeProfile.membership, "participant fixture user profile should be readable");
 
-  const paidGeneratedRecipe = await createPublishedRecipe(paidAuth, "做饭助手会员菜谱");
-  await generateRecipeAssistant(paidAuth, paidGeneratedRecipe.id);
+  const systemIngredient = await loadSystemIngredient(paidAuth);
+  const adminCategory = await resolveAdminInspirationCategory(adminAuth);
+  const paidGeneratedRecipe = await createReadySystemRecipe(adminAuth, adminCategory.id, systemIngredient);
   const paidMissingRecipe = await createPublishedRecipe(paidAuth, "做饭助手待补洞菜谱");
   const freeRecipe = await createPublishedRecipe(freeAuth, "做饭助手免费菜谱");
 

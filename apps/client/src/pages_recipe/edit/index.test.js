@@ -1,9 +1,21 @@
 const http = require("http");
 const https = require("https");
+const { readFileSync } = require("fs");
+const { resolve } = require("path");
 const { URL } = require("url");
+const nodeAssert = require("node:assert/strict");
+const nodeTest = require("node:test");
 const { loginWithPassword } = require("../../test-utils/auth-fixture");
 
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3100/api";
+const hasAutomatorRuntime = typeof globalThis.jest !== "undefined" && typeof globalThis.program !== "undefined";
+
+if (!hasAutomatorRuntime) {
+  globalThis.jest = { setTimeout() {} };
+  globalThis.describe = () => {};
+  globalThis.it = () => {};
+  globalThis.beforeAll = () => {};
+}
 
 jest.setTimeout(30000);
 
@@ -224,3 +236,15 @@ describe("pages_recipe/edit/index", () => {
     expect(state.advancedSummary).toContain("15分钟内");
   });
 });
+
+if (!hasAutomatorRuntime) {
+  const editSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
+
+  nodeTest("publishing a recipe does not trigger cook assistant generation", () => {
+    nodeAssert.match(editSource, /recipeApi\.publishDraft/);
+    nodeAssert.match(editSource, /redirectTo\(`\/pages_recipe\/detail\/index\?recipeId=/);
+    nodeAssert.doesNotMatch(editSource, /maybeGenerateRecipeAssistantAfterPublish/);
+    nodeAssert.doesNotMatch(editSource, /generateMyRecipeAssistant/);
+    nodeAssert.doesNotMatch(editSource, /生成做饭建议/);
+  });
+}

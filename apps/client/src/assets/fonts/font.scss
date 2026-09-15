@@ -1,9 +1,9 @@
 /* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
 @font-face {
   font-family: 'cookfont';  /* Project id 5215640 */
-  src: url('//at.alicdn.com/t/c/font_5215640_u3ikxmdisln.woff2?t=1789201316037') format('woff2'),
-       url('//at.alicdn.com/t/c/font_5215640_u3ikxmdisln.woff?t=1789201316037') format('woff'),
-       url('//at.alicdn.com/t/c/font_5215640_u3ikxmdisln.ttf?t=1789201316037') format('truetype');
+  src: url('//at.alicdn.com/t/c/font_5215640_894jlxltcis.woff2?t=1789394998246') format('woff2'),
+       url('//at.alicdn.com/t/c/font_5215640_894jlxltcis.woff?t=1789394998246') format('woff'),
+       url('//at.alicdn.com/t/c/font_5215640_894jlxltcis.ttf?t=1789394998246') format('truetype');
 }
 
 .cookfont {
@@ -93,6 +93,54 @@
 
 .icon-like::before {
     content: "\e6f9";
+}
+
+.icon-quote-left::before {
+    content: "\ebca";
+}
+
+.icon-quote-right::before {
+    content: "\ebb9";
+}
+
+.icon-number-0::before {
+    content: "\e62a";
+}
+
+.icon-number-1::before {
+    content: "\e61a";
+}
+
+.icon-number-2::before {
+    content: "\e620";
+}
+
+.icon-number-3::before {
+    content: "\e621";
+}
+
+.icon-number-4::before {
+    content: "\e622";
+}
+
+.icon-number-5::before {
+    content: "\e623";
+}
+
+.icon-number-6::before {
+    content: "\e624";
+}
+
+.icon-number-7::before {
+    content: "\e627";
+}
+
+.icon-number-8::before {
+    content: "\e628";
+}
+
+.icon-number-9::before {
+    content: "\e629";
 }
 
 .icon-difficulty::before {

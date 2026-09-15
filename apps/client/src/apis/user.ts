@@ -76,6 +76,15 @@ export interface NotificationBadgeResponse {
 	latestTime: IsoDateTime | "";
 }
 
+export interface CookAssistantUsageResponse {
+	activityEnabled: boolean;
+	businessDate: string;
+	dailyUnlockLimit: number;
+	usedCount: number;
+	remainingCount: number;
+	resetsAt: IsoDateTime | null;
+}
+
 export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "系统提醒" | "炊火记";
 export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official";
 
@@ -203,6 +212,9 @@ export const userApi = {
 	 */
 	getCurrent() {
 		return get<MeResponse>(`${cfg.domain}/api/users/me`);
+	},
+	getCookAssistantUsage() {
+		return get<CookAssistantUsageResponse>(`${cfg.domain}/api/users/me/cook-assistant-usage`);
 	},
 	getNotificationSettings() {
 		return get<NotificationSettingsResponse>(`${cfg.domain}/api/users/me/notification-settings`);

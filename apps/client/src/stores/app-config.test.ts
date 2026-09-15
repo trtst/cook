@@ -6,6 +6,7 @@ import test from "node:test";
 const appSource = readFileSync(resolve(import.meta.dirname, "../App.vue"), "utf8");
 const homeSource = readFileSync(resolve(import.meta.dirname, "../pages/home/index.vue"), "utf8");
 const appConfigSource = readFileSync(resolve(import.meta.dirname, "./app-config.ts"), "utf8");
+const appConfigApiSource = readFileSync(resolve(import.meta.dirname, "../apis/app-config.ts"), "utf8");
 const loginModalSource = readFileSync(resolve(import.meta.dirname, "./login-modal.ts"), "utf8");
 
 test("app config loads on cold launch and refreshes once when home is shown after foreground", () => {
@@ -26,4 +27,16 @@ test("opening the login modal does not request app config", () => {
   assert.doesNotMatch(loginModalSource, /openImageUrl/);
   assert.doesNotMatch(loginModalSource, /appConfigStore\.load\(/);
   assert.doesNotMatch(loginModalSource, /void appConfigStore\.load/);
+});
+
+test("app config keeps cook assistant activity config from the public endpoint", () => {
+  assert.match(appConfigApiSource, /interface CookAssistantActivityConfig/);
+  assert.match(appConfigApiSource, /activityEnabled: boolean/);
+  assert.match(appConfigApiSource, /dailyUnlockLimit: number/);
+  assert.match(appConfigApiSource, /tipText: string/);
+  assert.match(appConfigApiSource, /cookAssistant: CookAssistantActivityConfig/);
+
+  assert.match(appConfigSource, /cookAssistant:/);
+  assert.match(appConfigSource, /config\.cookAssistant/);
+  assert.match(appConfigSource, /dailyUnlockLimit/);
 });

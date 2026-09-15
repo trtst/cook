@@ -161,6 +161,7 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { shareApi, type SharePreviewResponse, type SharePreviewViewerResponse } from "../apis/share";
 import { resolveShareGuestName } from "../display-name";
 import { resolveSharePreviewActionState } from "./action-state";
+import { mealInvitePath } from "./routing";
 import { uniPlatform } from "@/platform/uni";
 import { createOperationId } from "@/utils/operation-id";
 import { useSessionStore } from "@/stores/session";
@@ -388,12 +389,7 @@ function openInvite() {
 }
 
 function resolveEventPath(eventId: UUID | "" | number | string, planItemId: UUID | null) {
-  if (!eventId) return "/pages_meal/event/index";
-  const eventQuery = `eventId=${encodeURIComponent(String(eventId))}`;
-  if (planItemId && preview.value?.planDate) {
-    return `/pages_meal/detail/index?planItemId=${encodeURIComponent(String(planItemId))}&planDate=${encodeURIComponent(preview.value.planDate)}&${eventQuery}`;
-  }
-  return `/pages_meal/detail/index?${eventQuery}`;
+  return mealInvitePath(eventId, planItemId, preview.value?.planDate);
 }
 
 function openRecipeDetail(recipeId: UUID | null, recipeKind: "my" | "inspiration") {

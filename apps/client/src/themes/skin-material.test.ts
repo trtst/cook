@@ -976,14 +976,6 @@ expectExcludes(cookModePageSource, `.cook-slide__index,
   backdrop-filter: blur(18rpx);
   background: var(--color-overlay-control);
 }`);
-expectSelectorIncludes(cookModePageSource, ".cook-complete", [
-  "box-shadow: var(--shadow-floating);",
-  "-webkit-backdrop-filter: var(--page-overlay-veil-filter);",
-  "backdrop-filter: var(--page-overlay-veil-filter);"
-]);
-expectSelectorExcludes(cookModePageSource, ".cook-complete", ["border: 1rpx solid var(--color-overlay-control);"]);
-expectSelectorExcludes(cookModePageSource, ".cook-complete", ["backdrop-filter: blur(22rpx);"]);
-
 expectIncludes(mealPlanPageSource, "background: var(--material-card-bg);");
 expectIncludes(mealPlanPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(mealPlanPageSource, "backdrop-filter: var(--material-card-filter);");
