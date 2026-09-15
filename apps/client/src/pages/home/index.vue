@@ -1558,7 +1558,7 @@ defineExpose({
 }
 
 .feature-card__copy--status .feature-card__title {
-  font-size: 36rpx;
+  font-size: 34rpx;
   line-height: 1.18;
 }
 
