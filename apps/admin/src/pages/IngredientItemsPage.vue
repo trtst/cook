@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { Plus, Upload } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { useRouter } from "vue-router";
 import {
   ingredientApi,
   type AdminIngredientCategorySummary,
@@ -15,12 +16,13 @@ import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 
 type IngredientDialogMode = "create" | "edit";
-type IngredientStatusFilter = "ACTIVE" | "DISABLED" | "ALL";
+type IngredientStatusFilter = "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | "ALL";
 type IngredientFactFilter = "ALL" | "MISSING";
 type IngredientProteinType = NonNullable<AdminIngredientSummary["proteinType"]>;
 
 const cropFrameSize = 240;
 const exportImageSize = 50;
+const router = useRouter();
 const unitTypeLabelMap: Record<AdminUnitSummary["type"], string> = {
   WEIGHT: "重量",
   VOLUME: "体积",
@@ -58,6 +60,7 @@ const imageSaving = ref(false);
 const dialogVisible = ref(false);
 const batchDialogVisible = ref(false);
 const cropDialogVisible = ref(false);
+const mergeDialogVisible = ref(false);
 const dialogMode = ref<IngredientDialogMode>("create");
 const editingIngredientId = ref<UUID | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -72,8 +75,14 @@ const nutritionKeyword = ref("");
 const nutritionSaving = ref(false);
 const nutritionLoading = ref(false);
 const nutritionConversions = ref<Array<{ unitId: UUID; gramsPerUnit: number }>>([]);
+const mergeSource = ref<AdminIngredientSummary | null>(null);
+const mergeTargetId = ref<UUID | "">("");
+const mergeTargetOptions = ref<AdminIngredientSummary[]>([]);
+const mergeTargetLoading = ref(false);
+const mergeSaving = ref(false);
 let ingredientsRequest = 0;
 let nutritionRequest = 0;
+let mergeTargetRequest = 0;
 
 const query = reactive({
   page: 1,
@@ -157,6 +166,10 @@ const currentScopeName = computed(() => {
   if (!query.categoryId) return "全部食材";
   return categories.value.find(item => item.id === query.categoryId)?.name || "当前分类";
 });
+
+function isUnclassifiedCategory(categoryId: UUID | "") {
+  return categories.value.some(item => item.id === categoryId && item.code === "UNCLASSIFIED");
+}
 
 const categoryFormOptions = computed(() => {
   const options = selectableCategories.value.slice();
@@ -282,17 +295,103 @@ async function selectCategory(categoryId: UUID | "") {
   query.categoryId = categoryId;
   query.page = 1;
   query.keyword = "";
+  query.factStatus = "ALL";
+  query.status = isUnclassifiedCategory(categoryId) ? "ALL" : "ACTIVE";
   await loadIngredients();
 }
 
 async function changeStatus(status: IngredientStatusFilter) {
   query.page = 1;
+  if (status === "MERGED") query.factStatus = "ALL";
   await loadIngredients();
 }
 
 async function changeFactStatus() {
   query.page = 1;
   await loadIngredients();
+}
+
+function openPendingReview() {
+  void router.push("/ingredients/pending");
+}
+
+async function loadMergeTargets(keyword = "") {
+  const requestId = ++mergeTargetRequest;
+  mergeTargetLoading.value = true;
+  try {
+    const result = await ingredientApi.listIngredients({
+      page: 1,
+      pageSize: 20,
+      keyword: keyword.trim() || undefined,
+      status: "ACTIVE",
+      factStatus: "ALL"
+    });
+    if (requestId !== mergeTargetRequest) return;
+    mergeTargetOptions.value = result.items.filter(item => item.id !== mergeSource.value?.id);
+  } catch (error) {
+    if (requestId !== mergeTargetRequest) return;
+    ElMessage.error(error instanceof Error ? error.message : "加载主食材失败");
+  } finally {
+    if (requestId === mergeTargetRequest) mergeTargetLoading.value = false;
+  }
+}
+
+function openMergeIngredient(row: AdminIngredientSummary) {
+  mergeSource.value = row;
+  mergeTargetId.value = "";
+  mergeTargetOptions.value = [];
+  mergeDialogVisible.value = true;
+  void loadMergeTargets();
+}
+
+function resetMergeDialog() {
+  mergeTargetRequest += 1;
+  mergeSource.value = null;
+  mergeTargetId.value = "";
+  mergeTargetOptions.value = [];
+  mergeTargetLoading.value = false;
+}
+
+async function submitMergeIngredient() {
+  const source = mergeSource.value;
+  if (!source || !mergeTargetId.value || mergeSaving.value) {
+    if (!mergeTargetId.value) ElMessage.warning("请选择主食材");
+    return;
+  }
+  const target = mergeTargetOptions.value.find(item => item.id === mergeTargetId.value);
+  if (!target) {
+    ElMessage.warning("请选择有效的启用中主食材");
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认将“${source.name}”归并到“${target.name}”？来源会保留为归并项，不会覆盖主食材资料；已发布菜谱不会改写。`,
+      "合并为主食材",
+      {
+        type: "warning",
+        confirmButtonText: "确认合并",
+        cancelButtonText: "取消"
+      }
+    );
+  } catch {
+    return;
+  }
+
+  mergeSaving.value = true;
+  try {
+    await ingredientApi.mergeIngredient(source.id, {
+      operationId: createOperationId(),
+      expectedVersion: source.version,
+      targetIngredientId: target.id
+    });
+    mergeDialogVisible.value = false;
+    await Promise.all([loadCategories(), loadIngredients()]);
+    ElMessage.success(`“${source.name}”已归并到“${target.name}”`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "合并系统食材失败");
+  } finally {
+    mergeSaving.value = false;
+  }
 }
 
 function openCreateIngredient() {
@@ -308,7 +407,7 @@ function openEditIngredient(row: AdminIngredientSummary) {
   editingIngredientId.value = row.id;
   form.name = row.name;
   form.categoryId = row.categoryId;
-  form.defaultUnitId = row.defaultUnit.id;
+  form.defaultUnitId = row.defaultUnit?.id || "";
   form.proteinType = row.proteinType || "";
   form.isStaple = row.isStaple;
   form.isSpicyIngredient = row.isSpicyIngredient;
@@ -825,8 +924,10 @@ watch(
   <section class="page-stack">
     <div class="toolbar-panel page-toolbar">
       <el-select v-model="query.status" class="toolbar-select" placeholder="状态" @change="changeStatus">
+        <el-option label="待归类" value="PENDING" />
         <el-option label="启用中" value="ACTIVE" />
         <el-option label="已下架" value="DISABLED" />
+        <el-option label="已归并" value="MERGED" />
         <el-option label="全部" value="ALL" />
       </el-select>
       <el-select v-model="query.factStatus" class="toolbar-select" placeholder="标签补录" @change="changeFactStatus">
@@ -904,14 +1005,19 @@ watch(
               >
                 拖拽排序
               </button>
-              <span v-if="row.status === 'DISABLED'" class="ingredient-card__status">已下架</span>
+              <span v-if="row.status === 'PENDING'" class="ingredient-card__status">待归类</span>
+              <span v-else-if="row.status === 'DISABLED'" class="ingredient-card__status">已下架</span>
+              <span v-else-if="row.status === 'MERGED'" class="ingredient-card__status">已归并</span>
             </div>
             <div class="ingredient-card__body">
               <div class="ingredient-card__main">
                 <div class="ingredient-card__name">{{ row.name }}</div>
                 <div class="ingredient-card__meta">
                   <span class="ingredient-card__category">{{ row.categoryName }}</span>
-                  <span class="ingredient-card__unit">{{ row.defaultUnit.name }}</span>
+                  <span class="ingredient-card__unit">{{ row.defaultUnit?.name || "默认单位待补充" }}</span>
+                </div>
+                <div v-if="row.status === 'MERGED'" class="ingredient-card__merged">
+                  归并至：{{ row.mergedTo?.name }}<template v-if="row.mergedTo">（{{ row.mergedTo.id }}）</template>
                 </div>
                 <div v-if="formatIngredientFacts(row).length" class="ingredient-card__facts">
                   {{ formatIngredientFacts(row).join(" · ") }}
@@ -923,8 +1029,20 @@ watch(
             </div>
             <div class="ingredient-card__actions">
               <div class="ingredient-card__actions-left">
+              <template v-if="row.status === 'PENDING'">
+                <div class="ingredient-card__action-item">
+                  <el-button link type="primary" @click="openPendingReview">处理</el-button>
+                </div>
+              </template>
+              <template v-else-if="row.status === 'MERGED'">
+                <span class="table-hint">归并项只用于识别和追溯</span>
+              </template>
+              <template v-else>
                 <div class="ingredient-card__action-item">
                   <el-button link type="primary" @click="openEditIngredient(row)">编辑</el-button>
+                </div>
+                <div class="ingredient-card__action-item">
+                  <el-button link type="primary" @click="openMergeIngredient(row)">合并</el-button>
                 </div>
                 <div class="ingredient-card__action-item">
                   <el-button v-if="row.status === 'ACTIVE'" link type="danger" @click="toggleIngredientStatus(row, 'DISABLED')">下架</el-button>
@@ -933,6 +1051,7 @@ watch(
                 <div class="ingredient-card__action-item">
                   <el-button link type="danger" @click="removeIngredient(row)">删除</el-button>
                 </div>
+              </template>
               </div>
             </div>
           </div>
@@ -940,6 +1059,7 @@ watch(
         <div class="ingredient-table-panel__footer">
           <div class="table-hint">
             {{ currentScopeName }}共 {{ total }} 条
+            <template v-if="isUnclassifiedCategory(query.categoryId)">；待归类项可按状态处理；“待归类”点击“处理”进入审核工作台完成归类、通过、归并或拒绝。</template>
             <template v-if="query.factStatus === 'MISSING'">；当前只显示建议优先补录标签的系统食材</template>
             <template v-else>；仅“启用中 + 无关键词 + 当前分类总数不超过单页上限”支持拖拽排序。</template>
           </div>
@@ -1058,6 +1178,38 @@ watch(
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="submitIngredient">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="mergeDialogVisible" title="合并为主食材" width="520px" @closed="resetMergeDialog">
+      <el-form label-position="top">
+        <el-form-item label="归并项">
+          <el-input :model-value="mergeSource ? `${mergeSource.name}（${mergeSource.id}）` : ''" disabled />
+        </el-form-item>
+        <el-form-item label="主食材">
+          <el-select
+            v-model="mergeTargetId"
+            filterable
+            remote
+            reserve-keyword
+            :remote-method="loadMergeTargets"
+            :loading="mergeTargetLoading"
+            placeholder="搜索并选择启用中的系统食材"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in mergeTargetOptions"
+              :key="item.id"
+              :label="`${item.name}（${item.id}）`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <div class="table-hint">来源会保留为归并项；不会覆盖主食材资料；已发布菜谱不会改写。首版不支持解除归并。</div>
+      </el-form>
+      <template #footer>
+        <el-button @click="mergeDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="mergeSaving" :disabled="!mergeTargetId" @click="submitMergeIngredient">确认合并</el-button>
       </template>
     </el-dialog>
 

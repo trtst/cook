@@ -8,7 +8,8 @@ import {
   type AdminIngredientRejectReasonCode,
   type AdminIngredientSummary,
   type AdminPendingIngredientSummary,
-  type AdminUnitSummary
+  type AdminUnitSummary,
+  type UnitSummary
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
@@ -94,7 +95,11 @@ useAdminHeaderRefresh(() => {
   void loadPage();
 });
 
-const targetOptions = computed(() => mergeOptions.value);
+const targetOptions = computed(() =>
+  mergeOptions.value.filter(
+    (item): item is AdminIngredientSummary & { defaultUnit: UnitSummary } => item.defaultUnit !== null
+  )
+);
 const selectableCategories = computed(() => categories.value.filter(item => item.isSelectable));
 
 const needApproveFields = computed(() => form.action !== "REJECT");
@@ -169,8 +174,8 @@ function openReview(row: AdminPendingIngredientSummary) {
   currentRow.value = row;
   form.action = "APPROVE_CREATE";
   form.name = row.name;
-  form.categoryId = selectableCategories.value.find(item => item.id === row.categoryId)?.id || selectableCategories.value[0]?.id || "";
-  form.defaultUnitId = row.defaultUnitId || units.value[0]?.id || "";
+  form.categoryId = selectableCategories.value.find(item => item.id === row.categoryId)?.id || "";
+  form.defaultUnitId = row.defaultUnitId || "";
   form.targetIngredientId = "";
   form.rejectReasonCode = "";
   form.reason = "";
@@ -444,10 +449,10 @@ onUnmounted(() => {
           </template>
         </el-table-column>
         <el-table-column label="推荐分类" width="140">
-          <template #default="{ row }">{{ row.categoryName || "-" }}</template>
+          <template #default="{ row }">{{ row.categoryName || "待补充" }}</template>
         </el-table-column>
         <el-table-column label="推荐默认单位" width="140">
-          <template #default="{ row }">{{ row.defaultUnitName || "-" }}</template>
+          <template #default="{ row }">{{ row.defaultUnitName || "待补充" }}</template>
         </el-table-column>
         <el-table-column label="推荐时间" min-width="180">
           <template #default="{ row }">

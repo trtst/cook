@@ -30,10 +30,11 @@ export interface AdminIngredientSummary {
   id: UUID;
   name: string;
   version: number;
-  status: "ACTIVE" | "DISABLED";
+  status: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED";
   categoryId: UUID;
   categoryName: string;
-  defaultUnit: UnitSummary;
+  defaultUnit: UnitSummary | null;
+  mergedTo: Pick<AdminIngredientSummary, "id" | "name"> | null;
   proteinType: "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "SEAFOOD" | "EGG" | "TOFU" | "NONE" | null;
   isStaple: boolean;
   isSpicyIngredient: boolean;
@@ -228,6 +229,18 @@ export interface UpdateIngredientStatusPayload {
   status: "ACTIVE" | "DISABLED";
 }
 
+export interface MergeIngredientPayload {
+  operationId: OperationId;
+  expectedVersion: number;
+  targetIngredientId: UUID;
+}
+
+export interface AdminIngredientMergeResult {
+  sourceIngredientId: UUID;
+  targetIngredientId: UUID;
+  mergedAt: IsoDateTime;
+}
+
 export type UpdateIngredientCategoryStatusPayload = UpdateIngredientStatusPayload;
 
 export interface ReorderItem {
@@ -240,7 +253,7 @@ export interface AdminIngredientListQuery {
   pageSize: number;
   categoryId?: UUID;
   keyword?: string;
-  status?: "ACTIVE" | "DISABLED" | "ALL";
+  status?: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | "ALL";
   factStatus?: "ALL" | "MISSING";
 }
 
@@ -413,6 +426,14 @@ export const ingredientApi = {
   setIngredientStatus(ingredientId: UUID, body: UpdateIngredientStatusPayload) {
     const { operationId, ...payload } = body;
     return requestData<AdminIngredientSummary>(`/admin/ingredients/${encodeURIComponent(String(ingredientId))}/status`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  mergeIngredient(sourceIngredientId: UUID, body: MergeIngredientPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<AdminIngredientMergeResult>(`/admin/ingredients/${encodeURIComponent(String(sourceIngredientId))}/merge`, {
       method: "POST",
       body: payload,
       idempotencyKey: operationId
