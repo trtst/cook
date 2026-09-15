@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { ApiBearerAuth, ApiConsumes, ApiExcludeController, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiConsumes, ApiExcludeController, ApiOkResponse, ApiProduces, ApiTags } from "@nestjs/swagger";
 import type { Writable } from "node:stream";
 import { ok } from "../../common/api-response";
 import { AdminAuthGuard } from "../../common/admin-auth.guard";
@@ -38,6 +38,26 @@ export class AdminRecipeImageController {
       throw new BadRequestException("请上传图片");
     }
     return this.adminRecipeImageService.stageTempImage(request, body.scene, file).then(result => ok(result));
+  }
+
+  @Get("recipe-images/temp/:tempKey")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiProduces("image/jpeg", "image/png", "image/webp")
+  @ApiOkResponse({
+    description: "后台临时菜谱图片",
+    content: {
+      "image/jpeg": { schema: { type: "string", format: "binary" } },
+      "image/png": { schema: { type: "string", format: "binary" } },
+      "image/webp": { schema: { type: "string", format: "binary" } }
+    }
+  })
+  async getTempRecipeImage(@Param("tempKey") tempKey: string, @Res() response: ResponseLike) {
+    const asset = await this.adminRecipeImageService.getTempImageAsset(tempKey);
+    response.setHeader("Content-Type", asset.contentType);
+    response.setHeader("Content-Length", asset.stat.size);
+    response.setHeader("Cache-Control", "private, no-store");
+    asset.stream.pipe(response);
   }
 }
 

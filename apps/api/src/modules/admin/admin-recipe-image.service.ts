@@ -449,6 +449,18 @@ export class AdminRecipeImageService {
     };
   }
 
+  async getTempImageAsset(tempKey: string) {
+    const normalizedTempKey = this.normalizeTempKey(tempKey);
+    const contentType = this.getContentType(normalizedTempKey);
+    const asset = await this.assetStorage.readObject(this.tempStorageKey(normalizedTempKey), contentType).catch(() => null);
+    if (!asset) throw new NotFoundException("图片已失效，请重新上传");
+    return {
+      contentType,
+      stream: asset.stream,
+      stat: { size: asset.size }
+    };
+  }
+
   private normalizeTempKey(tempKey: string) {
     const name = basename(tempKey.trim());
     if (!tempKeyPattern.test(name)) {

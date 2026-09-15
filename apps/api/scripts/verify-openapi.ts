@@ -30,7 +30,44 @@ function validateDataSchema(path: string, method: string, data: Record<string, a
   assert(Object.keys(data.properties ?? {}).length > 0, `${method.toUpperCase()} ${path} data object has no properties`);
 }
 
-async function main() {
+function isExplicitBinaryImageResponse(response: Record<string, any>) {
+  const content = Object.entries(response.content ?? {});
+  return content.length > 0 && content.every(([contentType, media]) =>
+    contentType.startsWith("image/") &&
+    (media as Record<string, any>).schema?.type === "string" &&
+    (media as Record<string, any>).schema?.format === "binary"
+  );
+}
+
+export function validateOpenApiDocument(document: { paths?: Record<string, any>; components?: { schemas?: Record<string, unknown> } }) {
+  const schemas = document.components?.schemas ?? {};
+  let operationCount = 0;
+
+  for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
+    for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+      const operation = pathItem?.[method];
+      if (!operation) continue;
+      operationCount += 1;
+      const response = operation.responses?.["200"] as Record<string, any> | undefined;
+      assert(response && "$ref" in response === false, `${method.toUpperCase()} ${path} has no inline 200 response`);
+      if (isExplicitBinaryImageResponse(response)) continue;
+      const content = response.content as Record<string, any> | undefined;
+      assert(
+        !Object.keys(content ?? {}).some(contentType => contentType.startsWith("image/")),
+        `${method.toUpperCase()} ${path} binary response must declare an image content type and binary schema`
+      );
+      const schema = content?.["application/json"]?.schema as Record<string, any> | undefined;
+      assert(schema?.type === "object", `${method.toUpperCase()} ${path} has no response envelope schema`);
+      assert(schema.required?.includes("data"), `${method.toUpperCase()} ${path} envelope does not require data`);
+      validateDataSchema(path, method, schema.properties?.data, schemas);
+    }
+  }
+
+  assert(operationCount > 0, "OpenAPI document contains no operations");
+  return { operationCount, responseSchemaCount: Object.keys(schemas).length };
+}
+
+export async function main() {
   let app: INestApplication | undefined;
   try {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -40,29 +77,12 @@ async function main() {
 
     const config = new DocumentBuilder().setTitle(API_DOC_TITLE).setVersion("0.1.0").build();
     const document = SwaggerModule.createDocument(app, config);
-    const schemas = document.components?.schemas ?? {};
-    let operationCount = 0;
-
-    for (const [path, pathItem] of Object.entries(document.paths)) {
-      for (const method of ["get", "post", "put", "patch", "delete"] as const) {
-        const operation = pathItem?.[method];
-        if (!operation) continue;
-        operationCount += 1;
-        const response = operation.responses?.["200"];
-        assert(response && "$ref" in response === false, `${method.toUpperCase()} ${path} has no inline 200 response`);
-        const content = response.content?.["application/json"];
-        const schema = content?.schema as Record<string, any> | undefined;
-        assert(schema?.type === "object", `${method.toUpperCase()} ${path} has no response envelope schema`);
-        assert(schema.required?.includes("data"), `${method.toUpperCase()} ${path} envelope does not require data`);
-        validateDataSchema(path, method, schema.properties?.data, schemas);
-      }
-    }
-
-    assert(operationCount > 0, "OpenAPI document contains no operations");
-    console.log(JSON.stringify({ operationCount, responseSchemaCount: Object.keys(schemas).length }, null, 2));
+    console.log(JSON.stringify(validateOpenApiDocument(document), null, 2));
   } finally {
     await app?.close();
   }
 }
 
-void main();
+if (require.main === module) {
+  void main();
+}
