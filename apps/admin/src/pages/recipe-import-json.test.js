@@ -11,8 +11,8 @@ const typesFile = fs.readFileSync(new URL("../../../api/src/contracts/types.ts",
 const dtosFile = fs.readFileSync(new URL("../../../api/src/contracts/dtos.ts", import.meta.url), "utf8");
 const adminServiceFile = fs.readFileSync(new URL("../../../api/src/modules/admin/admin.service.ts", import.meta.url), "utf8");
 
-test("import center accepts batch JSON files only", () => {
-  assert.match(jobsPage, /accept="\.json"/);
+test("import center accepts batch JSON and ZIP files", () => {
+  assert.match(jobsPage, /accept="\.json,\.zip"/);
   assert.match(jobsPage, /multiple/);
   assert.match(apiFile, /recipe-import-jobs\/json/);
   assert.match(apiFile, /formData\.append\("files"/);
@@ -24,8 +24,7 @@ test("import center accepts batch JSON files only", () => {
   assert.doesNotMatch(typesFile, /RecipeImportSourceType = "JSON" \|/);
   assert.doesNotMatch(itemPage, /rawBody\.markdown/);
   assert.match(controllerFile, /FilesInterceptor\("files"/);
-  assert.doesNotMatch(jobsPage, /zip/i);
-  assert.doesNotMatch(apiFile, /zip/i);
+  assert.match(jobsPage, /zip/i);
 });
 
 test("import workbench requires complete content and disables publish with errors", () => {
@@ -36,11 +35,11 @@ test("import workbench requires complete content and disables publish with error
   assert.doesNotMatch(itemPage, /estimatedCalories/);
 });
 
-test("import workbench edits keywords, shows an unselected category, and supports cuisine and dish style", () => {
+test("import workbench edits keywords, shows category errors on the form, and supports cuisine and dish style", () => {
   assert.match(itemPage, /label="关键词"/);
   assert.match(itemPage, /form\.keywords/);
   assert.match(itemPage, /keywords: form\.keywords/);
-  assert.match(itemPage, /待选择分类/);
+  assert.match(itemPage, /:error="formError\('inspirationCategoryId'\)"/);
   assert.match(itemPage, /\{ value: "CUISINE", label: "菜系" \}/);
   assert.match(itemPage, /\{ value: "DISH_STYLE", label: "菜式" \}/);
   assert.match(apiFile, /"CUISINE" \| "DISH_STYLE"/);
@@ -126,4 +125,28 @@ test("recipe editing preserves and submits the current tools", () => {
   assert.match(detailPage, /tools: form\.content\.tools/);
   assert.match(apiFile, /tools\??: Array<\{ name: string \}>/);
   assert.match(openapiFile, /tools\??: RecipeToolModel\[\]/);
+});
+
+test("import ingredients distinguish a persisted pending reference from an unmatched draft", () => {
+  assert.match(itemPage, /if \(current\?\.status === "PENDING"\)/);
+  assert.match(itemPage, /label: `\$\{current\.name\} · 待归类`/);
+  assert.match(itemPage, /label: `\$\{fallbackName\} · 未匹配`/);
+  assert.doesNotMatch(itemPage, /label: `\$\{fallbackName\} · 待归类`/);
+});
+
+test("pending and disabled import references come from detail and stay display-only", () => {
+  assert.match(itemPage, /status: "ACTIVE"/);
+  assert.match(apiFile, /ingredientRefs: AdminIngredientSummary\[\]/);
+  assert.match(itemPage, /detail\.value\?\.ingredientRefs/);
+  assert.match(itemPage, /ingredientReferenceMap/);
+  assert.match(itemPage, /current\?\.status === "DISABLED"/);
+  assert.match(itemPage, /label: `\$\{current\.name\} · 已下架`/);
+  assert.match(itemPage, /disabled: true/);
+  assert.match(itemPage, /:disabled="option\.disabled"/);
+  assert.doesNotMatch(itemPage, /loadPendingIngredientReferences/);
+  assert.doesNotMatch(itemPage, /status: "PENDING"/);
+});
+
+test("a matched import ingredient keeps its system-owned category display-only", () => {
+  assert.match(itemPage, /<el-select v-model="item\.categoryCode" placeholder="食材分类" :disabled="Boolean\(item\.ingredientId\)">/);
 });

@@ -217,3 +217,24 @@ export async function uploadForm<T>(path: string, formData: FormData, options: P
 
   return body.data;
 }
+
+export async function requestBlob(path: string) {
+  const token = useSessionStore().token;
+  const response = await fetch(buildUrl(path), {
+    headers: {
+      "X-Admin-Version": adminAppConfig.appVersion,
+      "X-Admin-Build": String(adminAppConfig.appBuild),
+      "X-Platform": "admin-web",
+      "X-Request-Id": getRequestId(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    cache: "no-store",
+    credentials: "omit"
+  });
+  if (response.status === 401) {
+    clearUnauthorized();
+    throw new UnauthorizedError();
+  }
+  if (!response.ok) throw new HttpError(response.status, "图片读取失败");
+  return response.blob();
+}

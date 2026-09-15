@@ -80,7 +80,7 @@ function handleFileChange(event: Event) {
 
 async function submitImport() {
   if (!form.files.length) {
-    ElMessage.error("请选择至少一个 JSON 文件");
+    ElMessage.error("请选择至少一个 JSON 或 ZIP 文件");
     return;
   }
   saving.value = true;
@@ -187,9 +187,9 @@ onMounted(() => {
         <el-form-item label="导入文件" required>
           <div class="upload-box">
             <div class="upload-box__name">{{ selectedFileName }}</div>
-            <div class="upload-box__hint">可同时选择多个 `.json` 文件，统一进入待审核系统项。</div>
+            <div class="upload-box__hint">可混选多个 `.json` / `.zip`；批次 JSON 会展开为独立待审核项。</div>
             <el-button @click="chooseFile">选择文件</el-button>
-            <input ref="fileInput" class="hidden-input" type="file" accept=".json" multiple @change="handleFileChange" />
+            <input ref="fileInput" class="hidden-input" type="file" accept=".json,.zip" multiple @change="handleFileChange" />
           </div>
         </el-form-item>
       </el-form>

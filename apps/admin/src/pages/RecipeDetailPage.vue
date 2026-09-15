@@ -48,6 +48,7 @@ interface EditStepRow {
   imageUrl: string | null;
   imageTempKey: string | null;
   previewUrl: string | null;
+  imagePrompt: string | null;
 }
 
 interface EditToolRow {
@@ -109,6 +110,14 @@ const wikiTagStatusText: Record<string, string> = {
   CANDIDATE: "候选",
   UNMAPPED: "未映射",
   NEEDS_REVIEW: "待复核"
+};
+const assistantStatusLabel: Record<AdminRecipeDetail["assistantState"]["status"], string> = {
+  MISSING: "未创建",
+  PENDING: "待生成",
+  GENERATING: "生成中",
+  NEEDS_REVIEW: "待人工处理",
+  READY: "前台可用",
+  FAILED: "生成失败"
 };
 const wikiQualityStatusText: Record<string, string> = { COMPLETE: "已完成", INCOMPLETE: "待补充" };
 const wikiNutritionStatusText: Record<string, string> = {
@@ -173,10 +182,11 @@ function buildRecipeImportJson(source: AdminRecipeDetail) {
         ingredients: source.content.ingredients.map(item => ({
           name: item.ingredientName,
           quantity: item.amount.kind === "EXACT" ? item.amount.quantity : item.amount.text,
-          unit: item.amount.kind === "EXACT" ? item.amount.unitName : ""
+          unit: item.amount.kind === "EXACT" ? item.amount.unitName : "",
+          categoryCode: item.categoryCode ?? null
         })),
         tools: source.content.tools.map(item => ({ name: item.name })),
-        steps: source.content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl }))
+        steps: source.content.steps.map(item => ({ text: item.text, imageUrl: item.imageUrl, imagePrompt: item.imagePrompt ?? null }))
       }
     },
     wiki: {
@@ -189,6 +199,7 @@ function buildRecipeImportJson(source: AdminRecipeDetail) {
           title: step.title,
           detail: step.detail,
           imageUrl: step.imageUrl,
+          imagePrompt: step.imagePrompt ?? null,
           durationMinutes: step.durationMinutes ?? 0,
           durationText: step.durationText
         }))
@@ -283,17 +294,22 @@ const currentIngredientLabelMap = computed(
 const assistantStatusType = computed(() => {
   if (detail.value?.assistantState.status === "FAILED") return "error" as const;
   if (detail.value?.assistantState.status === "READY") return "success" as const;
+  if (detail.value?.assistantState.status === "GENERATING") return "info" as const;
   return "warning" as const;
 });
 const assistantStatusText = computed(() => {
   if (!detail.value) return "";
-  if (detail.value.assistantState.status === "FAILED") {
-    return detail.value.assistantState.hasSnapshot
-      ? "最近一次做饭建议生成失败，当前仍保留上一版可用快照。"
-      : "做饭建议尚未生成成功，请在修正后手动重试。";
+  const state = detail.value.assistantState;
+  if (state.status === "READY") return "当前版本已有前台可用 Wiki，单菜助手和本餐助手可读取。";
+  if (state.status === "NEEDS_REVIEW") {
+    return state.hasCandidate
+      ? "当前版本已有候选内容，需人工处理后才可作为前台可用 Wiki。"
+      : "当前版本待人工处理，但尚未形成候选内容。";
   }
-  if (detail.value.assistantState.status === "READY") return "做饭建议已生成，可直接供前台单菜助理和本餐助理复用。";
-  return "当前版本还没有做饭建议快照，可手动补生成。";
+  if (state.status === "GENERATING") return "当前版本正在生成候选内容，完成前不会开放前台助手。";
+  if (state.status === "PENDING") return "当前版本已进入候选生成队列，尚未开放前台助手。";
+  if (state.status === "FAILED") return "当前版本候选生成失败，修正后可重试；失败状态不会声明存在前台可用快照。";
+  return "当前版本还没有候选内容或前台可用 Wiki。";
 });
 
 const ingredientOptionList = computed<IngredientOptionItem[]>(() => {
@@ -465,7 +481,8 @@ function resetFormFromDetail() {
     text: item.text,
     imageUrl: item.imageUrl,
     imageTempKey: null,
-    previewUrl: item.imageUrl
+    previewUrl: item.imageUrl,
+    imagePrompt: item.imagePrompt ?? null
   }));
 }
 
@@ -501,7 +518,8 @@ function addStep() {
     text: "",
     imageUrl: null,
     imageTempKey: null,
-    previewUrl: null
+    previewUrl: null,
+    imagePrompt: null
   });
 }
 
@@ -603,7 +621,8 @@ function buildPayload(): UpdateAdminRecipePayload | null {
       steps: form.content.steps.map(item => ({
         text: item.text,
         imageUrl: item.imageUrl,
-        imageTempKey: item.imageTempKey
+        imageTempKey: item.imageTempKey,
+        imagePrompt: item.imagePrompt?.trim() || null
       }))
     } satisfies AdminRecipeContentInput
   };
@@ -990,6 +1009,7 @@ onBeforeUnmount(() => {
                   <span>{{ item.ingredientName }}</span>
                   <span v-if="item.amount.kind === 'EXACT'">{{ item.amount.quantity }} {{ item.amount.unitName }}</span>
                   <span v-else>{{ item.amount.text }}</span>
+                  <span v-if="item.categoryCode">{{ item.categoryCode }}</span>
                 </div>
               </div>
             </div>
@@ -1001,6 +1021,7 @@ onBeforeUnmount(() => {
                   <div class="detail-step-card__index">步骤 {{ index + 1 }}</div>
                   <img v-if="item.imageUrl" :src="item.imageUrl" :alt="`步骤 ${index + 1} 图片`" class="detail-step-card__image" />
                   <div class="multiline-text">{{ item.text || "仅步骤图" }}</div>
+                  <div v-if="item.imagePrompt" class="multiline-text">图片提示词：{{ item.imagePrompt }}</div>
                 </div>
               </div>
             </div>
@@ -1054,14 +1075,11 @@ onBeforeUnmount(() => {
               <el-descriptions :column="2" border class="assistant-state">
                 <el-descriptions-item label="当前状态">
                   {{
-                    detail.assistantState.status === "READY"
-                      ? "已生成"
-                      : detail.assistantState.status === "FAILED"
-                        ? "生成失败"
-                        : "尚未生成"
+                    assistantStatusLabel[detail.assistantState.status]
                   }}
                 </el-descriptions-item>
-                <el-descriptions-item label="可用快照">{{ detail.assistantState.hasSnapshot ? "有" : "无" }}</el-descriptions-item>
+                <el-descriptions-item label="候选内容">{{ detail.assistantState.hasCandidate ? "有" : "无" }}</el-descriptions-item>
+                <el-descriptions-item label="前台可用 Wiki">{{ detail.assistantState.hasSnapshot ? "有" : "无" }}</el-descriptions-item>
                 <el-descriptions-item label="最近成功时间">{{ formatDateTime(detail.assistantState.generatedAt) }}</el-descriptions-item>
                 <el-descriptions-item label="最近尝试时间">{{ formatDateTime(detail.assistantState.lastAttemptAt) }}</el-descriptions-item>
                 <el-descriptions-item label="累计尝试次数">{{ detail.assistantState.attemptCount }}</el-descriptions-item>
@@ -1110,6 +1128,7 @@ onBeforeUnmount(() => {
                       <span>{{ item.action ? `${item.action} · ` : "" }}{{ item.durationText ?? (item.durationMinutes ? `约 ${item.durationMinutes} 分钟` : "时长待定") }}</span>
                     </div>
                     <div class="multiline-text">{{ item.detail }}</div>
+                    <div v-if="item.imagePrompt" class="multiline-text">图片提示词：{{ item.imagePrompt }}</div>
                   </div>
                 </div>
               </template>
@@ -1242,6 +1261,7 @@ onBeforeUnmount(() => {
             <div v-for="(item, index) in form.content.steps" :key="index" class="step-card">
               <div class="step-card__body">
                 <el-input v-model="item.text" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+                <el-input v-model="item.imagePrompt" type="textarea" :rows="2" maxlength="1000" placeholder="菜谱步骤图片提示词（中文）" />
                 <div class="step-card__image">
                   <div class="step-card__preview">
                     <img v-if="item.previewUrl" :src="item.previewUrl" :alt="`步骤 ${index + 1} 图片`" class="step-card__preview-image" />

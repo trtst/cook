@@ -1,4 +1,5 @@
 import { requestData, uploadForm, type IsoDateTime, type PageQuery, type PageResult, type OperationId, type UUID } from "./http";
+import type { AdminIngredientSummary } from "./ingredient";
 
 export interface AdminRecipeSummary {
   id: UUID;
@@ -57,6 +58,7 @@ export interface AdminRecipeContentInput {
     text: string;
     imageUrl: string | null;
     imageTempKey: string | null;
+    imagePrompt?: string | null;
   }>;
 }
 
@@ -83,7 +85,8 @@ export interface AdminRecipeDetail {
   durationText: string | null;
   contentVersionId: UUID;
   assistantState: {
-    status: "MISSING" | "READY" | "FAILED";
+    status: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "READY" | "FAILED";
+    hasCandidate: boolean;
     hasSnapshot: boolean;
     generatedAt: IsoDateTime | null;
     lastAttemptAt: IsoDateTime | null;
@@ -106,6 +109,7 @@ export interface AdminRecipeDetail {
       title: string;
       detail: string;
       imageUrl: string | null;
+      imagePrompt?: string | null;
       durationMinutes: number | null;
       durationText: string | null;
     }>;
@@ -153,6 +157,7 @@ export interface AdminRecipeDetail {
       ingredientName: string;
       source: "SYSTEM" | "PERSONAL";
       categoryId: UUID;
+      categoryCode?: string | null;
       amount:
         | {
             kind: "EXACT";
@@ -166,7 +171,7 @@ export interface AdminRecipeDetail {
             text: "适量" | "少许" | "按需";
           };
     }>;
-    steps: Array<{ text: string; imageUrl: string | null }>;
+    steps: Array<{ text: string; imageUrl: string | null; imagePrompt?: string | null }>;
   };
   version: number;
   reportCount: number;
@@ -301,6 +306,7 @@ export interface RecipeImportIngredientDraft {
   unitId: UUID | null;
   fuzzyText: "适量" | "少许" | "按需" | null;
   note: string | null;
+  categoryCode?: string | null;
 }
 
 export interface RecipeImportStepDraft {
@@ -308,6 +314,7 @@ export interface RecipeImportStepDraft {
   imageUrl?: string | null;
   imageKey: string | null;
   imageTempKey: string | null;
+  imagePrompt?: string | null;
 }
 
 export interface RecipeImportToolDraft {
@@ -335,6 +342,8 @@ export interface RecipeImportAssistantStepDraft {
   title: string;
   detail: string;
   imageUrl: string | null;
+  imageTempKey?: string | null;
+  imagePrompt?: string | null;
   durationMinutes: number | null;
   durationText: string | null;
 }
@@ -401,6 +410,7 @@ export interface RecipeImportItemDetail {
   recipeBody: RecipeImportRecipeBody;
   errorItems: RecipeImportIssue[];
   warnItems: RecipeImportIssue[];
+  ingredientRefs: AdminIngredientSummary[];
   sourceImages: Array<RecipeImportImageSummary & { dataUrl: string; canUseAsCover: boolean }>;
   recipeId: UUID | null;
   version: number;

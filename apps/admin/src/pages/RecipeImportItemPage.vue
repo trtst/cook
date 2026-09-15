@@ -21,10 +21,10 @@ import {
   type AdminUnitSummary
 } from "@/apis/ingredient";
 import type { UUID } from "@/apis/http";
+import { requestBlob } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
-import { formatStatusText } from "@/utils/status";
 
 type Difficulty = RecipeImportRecipeBody["difficulty"];
 type Duration = RecipeImportRecipeBody["duration"];
@@ -47,6 +47,7 @@ interface EditIngredientRow {
       };
   unitText: string;
   note: string;
+  categoryCode: string | null;
 }
 
 interface EditStepRow {
@@ -55,9 +56,18 @@ interface EditStepRow {
   imageKey: string | "";
   imageTempKey: string | null;
   previewUrl: string | null;
+  imagePrompt: string | null;
 }
 
-interface EditAssistantRow extends RecipeImportAssistantStepDraft {}
+interface EditAssistantRow extends RecipeImportAssistantStepDraft {
+  previewUrl: string | null;
+}
+
+interface IngredientSelectOption {
+  id: UUID | "";
+  label: string;
+  disabled?: boolean;
+}
 
 const coverFrameWidth = 320;
 const coverFrameHeight = 240;
@@ -153,7 +163,8 @@ let detailRequestId = 0;
 
 const cropTarget = reactive({
   scene: "COVER" as CropScene,
-  stepIndex: -1
+  stepIndex: -1,
+  assistantIndex: -1
 });
 
 const cropState = reactive({
@@ -205,6 +216,9 @@ function parseRouteId(value: unknown) {
 const itemId = computed<UUID | null>(() => parseRouteId(route.params.itemId));
 const sourceImageMap = computed(() => new Map((detail.value?.sourceImages ?? []).map(item => [item.key, item])));
 const ingredientOptionMap = computed(() => new Map(ingredientOptions.value.map(item => [item.id, item])));
+const ingredientReferenceMap = computed(() =>
+  new Map([...(detail.value?.ingredientRefs ?? []), ...ingredientOptions.value].map(item => [item.id, item]))
+);
 const unitOptionMap = computed(() => new Map(unitOptions.value.map(item => [item.id, item])));
 const unitSelectOptions = computed(() =>
   unitOptions.value.map(item => ({
@@ -219,6 +233,41 @@ const currentCoverPreview = computed(() => {
   if (!form.coverImageKey) return null;
   return sourceImageMap.value.get(form.coverImageKey)?.dataUrl ?? null;
 });
+
+function formField(field: string) {
+  const aliases: Record<string, string> = {
+    "recipe.inspirationCategoryId": "inspirationCategoryId",
+    "recipe.coverImageUrl": "coverImageUrl",
+    "recipe.content.name": "title",
+    "recipe.content.story": "story",
+    "recipe.content.tips": "tips",
+    "recipe.content.baseServings": "baseServings",
+    "recipe.content.difficulty": "difficulty",
+    "recipe.content.duration": "duration"
+  };
+  if (aliases[field]) return aliases[field];
+
+  return field
+    .replace(/^recipe\.content\./, "")
+    .replace(/^wiki\.tags/, "tags")
+    .replace(/^wiki\.assistant\.steps/, "assistantSteps")
+    .replace(/^(ingredients\.\d+)\.name$/, "$1.ingredientId")
+    .replace(/^(ingredients\.\d+)\.unit$/, "$1.unitId");
+}
+
+const issueMessages = computed(() => {
+  const messages = new Map<string, string[]>();
+  for (const issue of detail.value?.errorItems ?? []) {
+    if (!issue.field) continue;
+    const field = formField(issue.field);
+    messages.set(field, [...(messages.get(field) ?? []), issue.message]);
+  }
+  return messages;
+});
+
+function formError(...fields: string[]) {
+  return fields.flatMap(field => issueMessages.value.get(field) ?? []).join("；");
+}
 
 useAdminHeaderRefresh(() => {
   void loadDetail();
@@ -281,7 +330,7 @@ function matchesIngredientOption(option: AdminIngredientSummary) {
   return buildSearchText(`${option.name}${option.categoryName}`).includes(normalizedKeyword);
 }
 
-function formatIngredientOption(option: AdminIngredientSummary) {
+function formatIngredientOption(option: AdminIngredientSummary): IngredientSelectOption {
   return {
     id: option.id,
     label: `${option.name} · ${option.categoryName}`
@@ -289,10 +338,30 @@ function formatIngredientOption(option: AdminIngredientSummary) {
 }
 
 function getIngredientSelectOptions(currentId: UUID | "", draftName: string) {
-  const nextOptions: Array<{ id: UUID | ""; label: string }> = [];
+  const nextOptions: IngredientSelectOption[] = [];
   const items = ingredientOptions.value.filter(matchesIngredientOption);
   if (currentId) {
-    const current = ingredientOptionMap.value.get(currentId);
+    const current = ingredientReferenceMap.value.get(currentId);
+    if (current?.status === "PENDING") {
+      return [
+        {
+          id: current.id,
+          label: `${current.name} · 待归类`,
+          disabled: true
+        },
+        ...items.map(formatIngredientOption)
+      ];
+    }
+    if (current?.status === "DISABLED") {
+      return [
+        {
+          id: current.id,
+          label: `${current.name} · 已下架`,
+          disabled: true
+        },
+        ...items.map(formatIngredientOption)
+      ];
+    }
     if (current && !items.some(option => option.id === currentId)) {
       items.unshift(current);
     }
@@ -303,15 +372,23 @@ function getIngredientSelectOptions(currentId: UUID | "", draftName: string) {
   if (fallbackName) {
     nextOptions.unshift({
       id: "",
-      label: `${fallbackName} · 待归类`
+      label: `${fallbackName} · 未匹配`
     });
   }
   return nextOptions;
 }
 
 function resolveIngredientDraftName(item: EditIngredientRow) {
-  const matched = item.ingredientId ? ingredientOptionMap.value.get(item.ingredientId)?.name : null;
+  const matched = item.ingredientId ? ingredientReferenceMap.value.get(item.ingredientId)?.name : null;
   return matched ?? item.ingredientName.trim();
+}
+
+function updateIngredientSelection(item: EditIngredientRow, ingredientId: UUID | "") {
+  item.ingredientId = ingredientId;
+  const ingredient = ingredientId ? ingredientOptionMap.value.get(ingredientId) : null;
+  if (!ingredient) return;
+  const category = ingredientCategories.value.find(item => item.id === ingredient.categoryId);
+  item.categoryCode = category?.code ?? null;
 }
 
 function resolveUnitDraftText(item: EditIngredientRow) {
@@ -325,6 +402,31 @@ function resolveStepPreviewUrl(item: EditStepRow) {
   if (item.imageUrl) return item.imageUrl;
   if (!item.imageKey) return null;
   return sourceImageMap.value.get(item.imageKey)?.dataUrl ?? null;
+}
+
+function resolveAssistantPreviewUrl(item: EditAssistantRow) {
+  return item.previewUrl || item.imageUrl || null;
+}
+
+async function readTempPreview(tempKey: string) {
+  const image = await requestBlob(`/admin/recipe-images/temp/${encodeURIComponent(tempKey)}`);
+  return URL.createObjectURL(image);
+}
+
+async function refreshTempImagePreviews() {
+  try {
+    if (form.coverImageTempKey && !coverPreviewUrl.value) {
+      replaceCoverPreviewUrl(await readTempPreview(form.coverImageTempKey));
+    }
+    for (const step of form.steps) {
+      if (step.imageTempKey && !step.previewUrl) replaceStepPreviewUrl(step, await readTempPreview(step.imageTempKey));
+    }
+    for (const step of form.assistantSteps) {
+      if (step.imageTempKey && !step.previewUrl) step.previewUrl = await readTempPreview(step.imageTempKey);
+    }
+  } catch {
+    // 保存前的临时图片可能已经过期；服务端字段错误会定位到对应图片表单项。
+  }
 }
 
 function revokeCropSource() {
@@ -369,6 +471,7 @@ function resetCropState() {
   cropState.y = 0;
   cropTarget.scene = "COVER";
   cropTarget.stepIndex = -1;
+  cropTarget.assistantIndex = -1;
   dragState.active = false;
 }
 
@@ -441,7 +544,7 @@ function resetFormFromDetail() {
   form.coverImageTempKey = body.coverImageTempKey ?? null;
   form.tools = body.tools.map(item => ({ name: item.name }));
   form.tags = body.tags.map(item => ({ tagCode: item.tagCode, tagValue: item.tagValue }));
-  form.assistantSteps = body.assistantSteps.map(item => ({ ...item }));
+  form.assistantSteps = body.assistantSteps.map(item => ({ ...item, previewUrl: null }));
   form.ingredients = body.ingredients.map(item => ({
     line: item.line,
     ingredientName: item.ingredientName,
@@ -457,14 +560,16 @@ function resetFormFromDetail() {
           unitId: item.unitId ?? ""
         },
     unitText: item.unitText ?? "",
-    note: item.note ?? ""
+    note: item.note ?? "",
+    categoryCode: item.categoryCode ?? null
   }));
   form.steps = body.steps.map(item => ({
     text: item.text,
     imageUrl: item.imageUrl ?? null,
     imageKey: item.imageKey ?? "",
     imageTempKey: item.imageTempKey ?? null,
-    previewUrl: item.imageTempKey ? previousStepPreviewMap.get(item.imageTempKey) ?? null : null
+    previewUrl: item.imageTempKey ? previousStepPreviewMap.get(item.imageTempKey) ?? null : null,
+    imagePrompt: item.imagePrompt ?? null
   }));
 
   if (previousCoverTempKey !== form.coverImageTempKey) {
@@ -521,6 +626,7 @@ async function loadDetail() {
     if (currentRequestId !== detailRequestId) return;
     detail.value = nextDetail;
     resetFormFromDetail();
+    void refreshTempImagePreviews();
   } catch (error) {
     if (currentRequestId !== detailRequestId) return;
     detail.value = null;
@@ -556,7 +662,8 @@ function addIngredient() {
       unitId: unitSelectOptions.value[0]?.id ?? ""
     },
     unitText: "",
-    note: ""
+    note: "",
+    categoryCode: null
   });
 }
 
@@ -577,7 +684,8 @@ function addStep() {
     imageUrl: null,
     imageKey: "",
     imageTempKey: null,
-    previewUrl: null
+    previewUrl: null,
+    imagePrompt: null
   });
 }
 
@@ -613,16 +721,29 @@ function addAssistantStep() {
     title: "",
     detail: "",
     imageUrl: null,
+    imageTempKey: null,
+    imagePrompt: null,
+    previewUrl: null,
     durationMinutes: null,
     durationText: null
   });
 }
 
 function removeAssistantStep(index: number) {
+  revokePreviewUrl(form.assistantSteps[index]?.previewUrl);
   form.assistantSteps.splice(index, 1);
   form.assistantSteps.forEach((item, itemIndex) => {
     item.order = itemIndex + 1;
   });
+}
+
+function clearAssistantImage(index: number) {
+  const step = form.assistantSteps[index];
+  if (!step) return;
+  step.imageUrl = null;
+  step.imageTempKey = null;
+  revokePreviewUrl(step.previewUrl);
+  step.previewUrl = null;
 }
 
 function updateAssistantPhase(item: EditAssistantRow, phase: RecipeImportAssistantPhase) {
@@ -643,6 +764,15 @@ function chooseStepFile(index: number) {
   if (imageSaving.value) return;
   cropTarget.scene = "STEP";
   cropTarget.stepIndex = index;
+  cropTarget.assistantIndex = -1;
+  fileInput.value?.click();
+}
+
+function chooseAssistantFile(index: number) {
+  if (imageSaving.value) return;
+  cropTarget.scene = "STEP";
+  cropTarget.stepIndex = -1;
+  cropTarget.assistantIndex = index;
   fileInput.value?.click();
 }
 
@@ -659,11 +789,13 @@ async function handleImageFileChange(event: Event) {
   const sourceUrl = URL.createObjectURL(file);
   const nextScene = cropTarget.scene;
   const nextStepIndex = cropTarget.stepIndex;
+  const nextAssistantIndex = cropTarget.assistantIndex;
   try {
     const image = await loadImage(sourceUrl);
     resetCropState();
     cropTarget.scene = nextScene;
     cropTarget.stepIndex = nextStepIndex;
+    cropTarget.assistantIndex = nextAssistantIndex;
     cropState.sourceUrl = sourceUrl;
     cropState.sourceWidth = image.naturalWidth || image.width;
     cropState.sourceHeight = image.naturalHeight || image.height;
@@ -750,6 +882,13 @@ async function submitRecipeImage() {
       form.coverImageKey = "";
       form.coverImageTempKey = result.image.tempKey;
       replaceCoverPreviewUrl(previewUrl);
+    } else if (cropTarget.assistantIndex >= 0) {
+      const step = form.assistantSteps[cropTarget.assistantIndex];
+      if (!step) throw new Error("助理步骤不存在");
+      step.imageUrl = null;
+      step.imageTempKey = result.image.tempKey;
+      revokePreviewUrl(step.previewUrl);
+      step.previewUrl = previewUrl;
     } else {
       const step = form.steps[cropTarget.stepIndex];
       if (!step) throw new Error("步骤不存在");
@@ -821,13 +960,15 @@ function buildRecipeBody(): RecipeImportRecipeBody {
       unitText: item.amount.kind === "EXACT" ? resolveUnitDraftText(item) : null,
       unitId: item.amount.kind === "EXACT" ? item.amount.unitId || null : null,
       fuzzyText: item.amount.kind === "FUZZY" ? item.amount.text : null,
-      note: item.note.trim() ? item.note.trim() : null
+      note: item.note.trim() ? item.note.trim() : null,
+      categoryCode: item.categoryCode
     })),
     steps: form.steps.map(item => ({
       text: item.text.trim(),
       imageUrl: item.imageUrl,
       imageKey: item.imageKey || null,
-      imageTempKey: item.imageTempKey
+      imageTempKey: item.imageTempKey,
+      imagePrompt: item.imagePrompt?.trim() || null
     })),
     tools: form.tools.map(item => ({ name: item.name.trim() })).filter(item => item.name),
     tags: form.tags.map(item => ({ tagCode: item.tagCode, tagValue: item.tagValue.trim() })),
@@ -838,6 +979,8 @@ function buildRecipeBody(): RecipeImportRecipeBody {
       title: item.title.trim(),
       detail: item.detail.trim(),
       imageUrl: item.imageUrl,
+      imageTempKey: item.imageTempKey ?? null,
+      imagePrompt: item.imagePrompt?.trim() || null,
       durationMinutes: item.durationMinutes,
       durationText: item.durationText?.trim() || null
     }))
@@ -919,76 +1062,33 @@ onBeforeUnmount(() => {
       </el-button>
     </div>
 
-    <div v-if="detail" class="toolbar-panel item-meta">
-      <div>当前状态：<strong>{{ formatStatusText(detail.status) }}</strong></div>
-      <div>来源文件：{{ detail.sourcePath }}</div>
-      <div v-if="detail.recipeId">正式菜谱 ID：{{ detail.recipeId }}</div>
-    </div>
-
     <div v-loading="loading || optionLoading" class="import-layout">
-      <div class="table-panel source-panel">
-        <div class="source-block">
-          <h3>原始 JSON</h3>
-          <pre class="json-raw">{{ detail?.rawBody.jsonText }}</pre>
-        </div>
-
-        <div class="source-block">
-          <h3>原图</h3>
-          <div v-if="detail?.sourceImages.length" class="image-grid">
-            <figure v-for="image in detail?.sourceImages" :key="image.key" class="image-card">
-              <img :src="image.dataUrl" :alt="sourceImageLabel(image)" />
-              <figcaption>
-                <strong>{{ sourceImageLabel(image) }}</strong>
-                <span>{{ image.width ?? "-" }} × {{ image.height ?? "-" }}</span>
-                <span v-if="image.canUseAsCover">可作封面</span>
-              </figcaption>
-            </figure>
-          </div>
-          <div v-else class="empty-tip">当前 JSON 未带可读取图片。</div>
-        </div>
-
-        <div v-if="detail?.errorItems.length" class="source-block">
-          <h3>待补全字段</h3>
-          <ul class="issue-list issue-list--error">
-            <li v-for="(item, index) in detail.errorItems" :key="`error-${index}`">{{ item.message }}</li>
-          </ul>
-        </div>
-
-        <div v-if="detail?.warnItems.length" class="source-block">
-          <h3>提醒</h3>
-          <ul class="issue-list">
-            <li v-for="(item, index) in detail.warnItems" :key="`warn-${index}`">{{ item.message }}</li>
-          </ul>
-        </div>
-      </div>
-
       <div class="table-panel form-panel">
-        <el-form label-position="top">
+        <el-form :model="form" label-position="top">
           <div class="edit-grid">
-            <el-form-item label="系统菜谱分类" required>
+            <el-form-item label="系统菜谱分类" required :error="formError('inspirationCategoryId')">
               <el-select v-model="form.inspirationCategoryId" placeholder="请选择系统菜谱分类">
                 <el-option v-for="item in inspirationCategories" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
-              <el-alert v-if="!form.inspirationCategoryId" title="待选择分类" type="warning" :closable="false" show-icon />
             </el-form-item>
-            <el-form-item label="基准人数" required>
+            <el-form-item label="基准人数" required :error="formError('baseServings')">
               <el-select v-model="form.baseServings" placeholder="请选择基准人数">
                 <el-option v-for="value in servingOptions" :key="value" :label="`${value} 人`" :value="value" />
               </el-select>
             </el-form-item>
-            <el-form-item label="难度" required>
+            <el-form-item label="难度" required :error="formError('difficulty')">
               <el-select v-model="form.difficulty" placeholder="请选择难度">
                 <el-option v-for="item in difficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
-            <el-form-item label="时长" required>
+            <el-form-item label="时长" required :error="formError('duration')">
               <el-select v-model="form.duration" placeholder="请选择时长">
                 <el-option v-for="item in durationOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
           </div>
 
-          <el-form-item label="头图">
+          <el-form-item label="头图" :error="formError('coverImageKey', 'coverImageUrl')">
             <div class="image-editor">
               <div class="image-editor__preview image-editor__preview--cover image-editor__preview--clickable" @click="chooseCoverFile">
                 <img v-if="currentCoverPreview" :src="currentCoverPreview" alt="导入条目头图" class="image-editor__image" />
@@ -1015,19 +1115,19 @@ onBeforeUnmount(() => {
             </div>
           </el-form-item>
 
-          <el-form-item label="菜谱标题" required>
+          <el-form-item label="菜谱标题" required :error="formError('title')">
             <el-input v-model="form.title" maxlength="120" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="故事" required>
+          <el-form-item label="故事" required :error="formError('story')">
             <el-input v-model="form.story" type="textarea" :rows="4" maxlength="2000" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="小贴士" required>
+          <el-form-item label="小贴士" required :error="formError('tips')">
             <el-input v-model="form.tips" type="textarea" :rows="4" maxlength="1000" show-word-limit />
           </el-form-item>
 
-          <el-form-item label="关键词">
+          <el-form-item label="关键词" :error="formError('keywords')">
             <el-select v-model="form.keywords" multiple filterable allow-create default-first-option :multiple-limit="8" placeholder="输入后回车，最多 8 个">
               <el-option v-for="item in form.keywords" :key="item" :label="item" :value="item" />
             </el-select>
@@ -1038,10 +1138,11 @@ onBeforeUnmount(() => {
               <strong>所需厨具</strong>
               <el-button text :icon="Plus" @click="addTool">新增厨具</el-button>
             </div>
-            <div v-for="(item, index) in form.tools" :key="`tool-${index}`" class="inline-edit-row">
+            <el-form-item v-for="(item, index) in form.tools" :key="`tool-${index}`" class="inline-edit-row" :error="formError(`tools.${index}.name`)">
               <el-input v-model="item.name" placeholder="如：砂锅、蒸锅" maxlength="64" />
               <el-button text type="danger" @click="removeTool(index)">删除</el-button>
-            </div>
+            </el-form-item>
+            <p v-if="formError('tools')" class="section-error">{{ formError('tools') }}</p>
           </div>
 
           <div class="edit-section">
@@ -1049,15 +1150,20 @@ onBeforeUnmount(() => {
               <strong>业务标签</strong>
               <el-button text :icon="Plus" @click="addTag">新增标签</el-button>
             </div>
-            <div v-for="(item, index) in form.tags" :key="`tag-${index}`" class="inline-edit-row">
-              <el-select v-model="item.tagCode" class="tag-code-select" @update:model-value="item.tagValue = ''">
-                <el-option v-for="option in tagCodeOptions" :key="option.value" :label="option.label" :value="option.value" />
-              </el-select>
-              <el-select v-model="item.tagValue" placeholder="选择标签值">
-                <el-option v-for="option in tagValueOptions[item.tagCode]" :key="option.value" :label="option.label" :value="option.value" />
-              </el-select>
+            <div v-for="(item, index) in form.tags" :key="`tag-${index}`" class="inline-edit-row tag-edit-row">
+              <el-form-item class="tag-edit-row__field" :error="formError(`tags.${index}.tagCode`, `wiki.tags.${index}.tagCode`)">
+                <el-select v-model="item.tagCode" class="tag-code-select" @update:model-value="item.tagValue = ''">
+                  <el-option v-for="option in tagCodeOptions" :key="option.value" :label="option.label" :value="option.value" />
+                </el-select>
+              </el-form-item>
+              <el-form-item class="tag-edit-row__field" :error="formError(`tags.${index}.tagValue`, `wiki.tags.${index}.tagValue`)">
+                <el-select v-model="item.tagValue" placeholder="选择标签值">
+                  <el-option v-for="option in tagValueOptions[item.tagCode]" :key="option.value" :label="option.label" :value="option.value" />
+                </el-select>
+              </el-form-item>
               <el-button text type="danger" @click="removeTag(index)">删除</el-button>
             </div>
+            <p v-if="formError('tags', 'wiki.tags')" class="section-error">{{ formError('tags', 'wiki.tags') }}</p>
           </div>
 
           <div class="edit-section">
@@ -1073,34 +1179,50 @@ onBeforeUnmount(() => {
               <el-input v-model="ingredientKeyword" clearable placeholder="搜索系统食材名称或分类" />
             </div>
             <div v-for="(item, index) in form.ingredients" :key="index" class="ingredient-row">
-              <el-select v-model="item.ingredientId" filterable class="ingredient-row__ingredient" placeholder="匹配系统食材">
-                <el-option
-                  v-for="option in getIngredientSelectOptions(item.ingredientId, item.ingredientName)"
-                  :key="`${option.id}-${option.label}`"
-                  :label="option.label"
-                  :value="option.id"
-                />
-              </el-select>
-              <el-select
-                :model-value="item.amount.kind"
-                class="ingredient-row__kind"
-                @update:model-value="updateIngredientAmountKind(index, $event as 'EXACT' | 'FUZZY')"
-              >
-                <el-option label="精确用量" value="EXACT" />
-                <el-option label="模糊用量" value="FUZZY" />
-              </el-select>
-              <template v-if="item.amount.kind === 'EXACT'">
-                <el-input v-model="item.amount.quantity" class="ingredient-row__quantity" placeholder="数量" />
-                <el-select v-model="item.amount.unitId" class="ingredient-row__unit" placeholder="单位">
-                  <el-option label="请选择单位" value="" />
-                  <el-option v-for="option in unitSelectOptions" :key="option.id" :label="option.label" :value="option.id" />
+              <el-form-item class="ingredient-row__ingredient" :error="formError(`ingredients.${index}.ingredientId`, `ingredients.${index}.ingredientName`)">
+                <el-select :model-value="item.ingredientId" filterable placeholder="匹配系统食材" @update:model-value="updateIngredientSelection(item, $event as UUID | '')">
+                  <el-option
+                    v-for="option in getIngredientSelectOptions(item.ingredientId, item.ingredientName)"
+                    :key="`${option.id}-${option.label}`"
+                    :label="option.label"
+                    :value="option.id"
+                    :disabled="option.disabled"
+                  />
                 </el-select>
+              </el-form-item>
+              <el-form-item class="ingredient-row__kind" :error="formError(`ingredients.${index}.categoryCode`)">
+                <el-select v-model="item.categoryCode" placeholder="食材分类" :disabled="Boolean(item.ingredientId)">
+                  <el-option v-for="category in ingredientCategories.filter(category => category.isSelectable)" :key="category.code" :label="category.name" :value="category.code" />
+                </el-select>
+              </el-form-item>
+              <el-form-item class="ingredient-row__kind">
+                <el-select
+                  :model-value="item.amount.kind"
+                  @update:model-value="updateIngredientAmountKind(index, $event as 'EXACT' | 'FUZZY')"
+                >
+                  <el-option label="精确用量" value="EXACT" />
+                  <el-option label="模糊用量" value="FUZZY" />
+                </el-select>
+              </el-form-item>
+              <template v-if="item.amount.kind === 'EXACT'">
+                <el-form-item class="ingredient-row__quantity" :error="formError(`ingredients.${index}.quantity`)">
+                  <el-input v-model="item.amount.quantity" placeholder="数量" />
+                </el-form-item>
+                <el-form-item class="ingredient-row__unit" :error="formError(`ingredients.${index}.unitId`, `ingredients.${index}.unitText`)">
+                  <el-select v-model="item.amount.unitId" placeholder="单位">
+                    <el-option label="请选择单位" value="" />
+                    <el-option v-for="option in unitSelectOptions" :key="option.id" :label="option.label" :value="option.id" />
+                  </el-select>
+                </el-form-item>
               </template>
-              <el-select v-else v-model="item.amount.text" class="ingredient-row__fuzzy" placeholder="模糊用量">
-                <el-option v-for="option in fuzzyOptions" :key="option" :label="option" :value="option" />
-              </el-select>
+              <el-form-item v-else class="ingredient-row__fuzzy" :error="formError(`ingredients.${index}.fuzzyText`)">
+                <el-select v-model="item.amount.text" placeholder="模糊用量">
+                  <el-option v-for="option in fuzzyOptions" :key="option" :label="option" :value="option" />
+                </el-select>
+              </el-form-item>
               <el-button text type="danger" @click="removeIngredient(index)">删除</el-button>
             </div>
+            <p v-if="formError('ingredients')" class="section-error">{{ formError('ingredients') }}</p>
           </div>
 
           <div class="edit-section">
@@ -1110,41 +1232,49 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="(item, index) in form.steps" :key="index" class="step-card">
               <div class="step-card__body">
-                <el-input v-model="item.text" type="textarea" :rows="3" maxlength="1000" show-word-limit />
-                <div class="step-card__image">
-                  <div class="step-card__preview step-card__preview--clickable" @click="chooseStepFile(index)">
-                    <img
-                      v-if="resolveStepPreviewUrl(item)"
-                      :src="resolveStepPreviewUrl(item) ?? undefined"
-                      :alt="`步骤 ${index + 1} 图片`"
-                      class="step-card__preview-image"
-                    />
-                    <div v-else class="step-card__empty">点击上传步骤图</div>
-                  </div>
-                  <div class="step-card__actions">
-                    <el-button type="primary" link :icon="Upload" :loading="imageSaving" @click="chooseStepFile(index)">点击上传</el-button>
-                    <el-select
-                      :model-value="item.imageKey"
-                      clearable
-                      placeholder="或直接选原图"
-                      @update:model-value="setStepSourceImage(index, $event ?? '')"
-                    >
-                      <el-option label="不关联图片" value="" />
-                      <el-option
-                        v-for="image in detail?.sourceImages ?? []"
-                        :key="image.key"
-                        :label="sourceImageLabel(image)"
-                        :value="image.key"
+                <el-form-item class="step-card__field" :error="formError(`steps.${index}.text`)">
+                  <el-input v-model="item.text" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+                </el-form-item>
+                <el-form-item class="step-card__field" label="菜谱步骤图片提示词" :error="formError(`steps.${index}.imagePrompt`, `recipe.content.steps.${index}.imagePrompt`)">
+                  <el-input v-model="item.imagePrompt" type="textarea" :rows="2" maxlength="1000" placeholder="描述本步骤的中文图片画面" />
+                </el-form-item>
+                <el-form-item class="step-card__image" :error="formError(`steps.${index}.imageKey`, `steps.${index}.imageUrl`)">
+                  <div>
+                    <div class="step-card__preview step-card__preview--clickable" @click="chooseStepFile(index)">
+                      <img
+                        v-if="resolveStepPreviewUrl(item)"
+                        :src="resolveStepPreviewUrl(item) ?? undefined"
+                        :alt="`步骤 ${index + 1} 图片`"
+                        class="step-card__preview-image"
                       />
-                    </el-select>
-                    <el-button v-if="resolveStepPreviewUrl(item)" link @click="clearStepImage(index)">删除步骤图</el-button>
+                      <div v-else class="step-card__empty">点击上传步骤图</div>
+                    </div>
+                    <div class="step-card__actions">
+                      <el-button type="primary" link :icon="Upload" :loading="imageSaving" @click="chooseStepFile(index)">点击上传</el-button>
+                      <el-select
+                        :model-value="item.imageKey"
+                        clearable
+                        placeholder="或直接选原图"
+                        @update:model-value="setStepSourceImage(index, $event ?? '')"
+                      >
+                        <el-option label="不关联图片" value="" />
+                        <el-option
+                          v-for="image in detail?.sourceImages ?? []"
+                          :key="image.key"
+                          :label="sourceImageLabel(image)"
+                          :value="image.key"
+                        />
+                      </el-select>
+                      <el-button v-if="resolveStepPreviewUrl(item)" link @click="clearStepImage(index)">删除步骤图</el-button>
+                    </div>
                   </div>
-                </div>
+                </el-form-item>
               </div>
               <div class="step-card__footer">
                 <el-button text type="danger" @click="removeStep(index)">删除步骤</el-button>
               </div>
             </div>
+            <p v-if="formError('steps')" class="section-error">{{ formError('steps') }}</p>
           </div>
 
           <div class="edit-section">
@@ -1154,22 +1284,47 @@ onBeforeUnmount(() => {
             </div>
             <div v-for="(item, index) in form.assistantSteps" :key="`assistant-${index}`" class="assistant-card">
               <div class="assistant-card__grid">
-                <el-input-number v-model="item.order" :min="1" controls-position="right" />
-                <el-select :model-value="item.phase" @update:model-value="updateAssistantPhase(item, $event as RecipeImportAssistantPhase)">
-                  <el-option v-for="option in assistantPhaseOptions" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-                <el-select v-model="item.action">
-                  <el-option v-for="option in assistantActionOptions[item.phase]" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-                <el-input-number v-model="item.durationMinutes" :min="1" controls-position="right" placeholder="分钟" />
-                <el-input v-model="item.durationText" placeholder="时间，如：约 15 分钟" />
+                <el-form-item :error="formError(`assistantSteps.${index}.order`, `wiki.assistant.steps.${index}.order`)">
+                  <el-input-number v-model="item.order" :min="1" controls-position="right" />
+                </el-form-item>
+                <el-form-item :error="formError(`assistantSteps.${index}.phase`, `wiki.assistant.steps.${index}.phase`)">
+                  <el-select :model-value="item.phase" @update:model-value="updateAssistantPhase(item, $event as RecipeImportAssistantPhase)">
+                    <el-option v-for="option in assistantPhaseOptions" :key="option.value" :label="option.label" :value="option.value" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item :error="formError(`assistantSteps.${index}.action`, `wiki.assistant.steps.${index}.action`)">
+                  <el-select v-model="item.action">
+                    <el-option v-for="option in assistantActionOptions[item.phase]" :key="option.value" :label="option.label" :value="option.value" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item :error="formError(`assistantSteps.${index}.durationMinutes`, `wiki.assistant.steps.${index}.durationMinutes`)">
+                  <el-input-number v-model="item.durationMinutes" :min="1" controls-position="right" placeholder="分钟" />
+                </el-form-item>
+                <el-form-item :error="formError(`assistantSteps.${index}.durationText`, `wiki.assistant.steps.${index}.durationText`)">
+                  <el-input v-model="item.durationText" placeholder="时间，如：约 15 分钟" />
+                </el-form-item>
               </div>
-              <el-input v-model="item.title" placeholder="步骤标题" maxlength="120" />
-              <el-input v-model="item.detail" type="textarea" :rows="2" placeholder="整理后的执行说明" maxlength="2000" />
+              <el-form-item class="assistant-card__field" :error="formError(`assistantSteps.${index}.title`, `wiki.assistant.steps.${index}.title`)">
+                <el-input v-model="item.title" placeholder="步骤标题" maxlength="120" />
+              </el-form-item>
+              <el-form-item class="assistant-card__field" :error="formError(`assistantSteps.${index}.detail`, `wiki.assistant.steps.${index}.detail`, `wiki.assistant.steps.${index}.imageUrl`)">
+                <el-input v-model="item.detail" type="textarea" :rows="2" placeholder="整理后的执行说明" maxlength="2000" />
+              </el-form-item>
+              <el-form-item class="assistant-card__field" label="助理步骤图片提示词" :error="formError(`assistantSteps.${index}.imagePrompt`, `wiki.assistant.steps.${index}.imagePrompt`)">
+                <el-input v-model="item.imagePrompt" type="textarea" :rows="2" maxlength="1000" placeholder="描述本助理步骤的中文图片画面" />
+              </el-form-item>
+              <el-form-item class="assistant-card__field" label="助理步骤图" :error="formError(`assistantSteps.${index}.imageTempKey`, `wiki.assistant.steps.${index}.imageTempKey`, `wiki.assistant.steps.${index}.imageUrl`)">
+                <div class="step-card__actions">
+                  <img v-if="resolveAssistantPreviewUrl(item)" :src="resolveAssistantPreviewUrl(item) ?? undefined" :alt="`助理步骤 ${index + 1} 图片`" class="step-card__preview-image" />
+                  <el-button type="primary" link :icon="Upload" :loading="imageSaving" @click="chooseAssistantFile(index)">上传步骤图</el-button>
+                  <el-button v-if="resolveAssistantPreviewUrl(item)" link @click="clearAssistantImage(index)">删除步骤图</el-button>
+                </div>
+              </el-form-item>
               <div class="assistant-card__footer">
                 <el-button text type="danger" @click="removeAssistantStep(index)">删除步骤</el-button>
               </div>
             </div>
+            <p v-if="formError('assistantSteps', 'wiki.assistant.steps')" class="section-error">{{ formError('assistantSteps', 'wiki.assistant.steps') }}</p>
           </div>
         </el-form>
       </div>
@@ -1219,87 +1374,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
-.item-meta {
-  flex-wrap: wrap;
-  align-items: center;
-}
-
 .import-layout {
-  display: grid;
-  grid-template-columns: minmax(420px, 1fr) minmax(600px, 1.1fr);
-  gap: 16px;
+  min-width: 0;
 }
 
-.source-panel,
 .form-panel {
   padding: 20px;
-}
-
-.source-block + .source-block {
-  margin-top: 24px;
-}
-
-.source-block h3 {
-  margin: 0 0 12px;
-  font-size: 15px;
-}
-
-.json-raw {
-  overflow: auto;
-  max-height: 520px;
-  padding: 14px;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.65;
-  white-space: pre-wrap;
-  background: #0f172a;
-  border-radius: 10px;
-  color: #e2e8f0;
-}
-
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.image-card {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  margin: 0;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-}
-
-.image-card img {
-  width: 100%;
-  border-radius: 8px;
-}
-
-.image-card figcaption {
-  display: grid;
-  gap: 4px;
-  font-size: 12px;
-  color: #475569;
-}
-
-.issue-list {
-  display: grid;
-  gap: 8px;
-  padding-left: 18px;
-  margin: 0;
-  color: #475569;
-}
-
-.issue-list--error {
-  color: #b91c1c;
-}
-
-.empty-tip {
-  font-size: 13px;
-  color: #6b7280;
 }
 
 .edit-grid {
@@ -1320,6 +1400,42 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
+.inline-edit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 0;
+}
+
+.tag-edit-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.tag-edit-row__field,
+.ingredient-row :deep(.el-form-item),
+.assistant-card :deep(.el-form-item),
+.step-card__field,
+.step-card__image {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.tag-edit-row__field :deep(.el-form-item__content),
+.ingredient-row :deep(.el-form-item__content),
+.assistant-card :deep(.el-form-item__content),
+.step-card__field :deep(.el-form-item__content),
+.step-card__image :deep(.el-form-item__content) {
+  min-width: 0;
+}
+
+.section-error {
+  margin: 0;
+  color: var(--el-color-danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .ingredient-tools {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
@@ -1328,7 +1444,7 @@ onBeforeUnmount(() => {
 
 .ingredient-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) 140px minmax(0, 120px) minmax(0, 140px) auto;
+  grid-template-columns: minmax(300px, 600px) 140px minmax(0, 120px) minmax(0, 140px) auto;
   gap: 12px;
   align-items: center;
   padding: 14px;
@@ -1343,6 +1459,32 @@ onBeforeUnmount(() => {
 .ingredient-row__unit,
 .ingredient-row__fuzzy {
   width: 100%;
+}
+
+.assistant-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.assistant-card__grid {
+  display: grid;
+  grid-template-columns: 92px 120px minmax(0, 1fr) 120px minmax(0, 1.4fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.assistant-card__grid :deep(.el-input-number),
+.assistant-card__grid :deep(.el-select) {
+  width: 100%;
+}
+
+.assistant-card__footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .image-editor {
