@@ -152,7 +152,7 @@ function toAdminRecipeContentInput(content: AdminRecipeContentDto): AdminRecipeC
             }
           : {
               kind: "FUZZY",
-              text: (item.amount.text ?? "适量") as "适量" | "少许" | "按需"
+              text: "适量"
             }
     })),
     steps: content.steps.map(item => ({

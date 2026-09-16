@@ -6,6 +6,7 @@ import {
   isImportedIngredientPlaceholder,
   parseJsonSource,
   readJsonSourcesFromFiles,
+  rebuildJsonItemState,
   type RecipeImportJsonRefs
 } from "./recipe-import-json";
 
@@ -35,8 +36,8 @@ function validDocument() {
         tips: "排骨先焯水。",
         keywords: [],
         ingredients: [
-          { name: "排骨", quantity: "500", unit: "克", categoryCode: "MEAT_POULTRY_EGG" },
-          { name: "海带", quantity: "200", unit: "克", categoryCode: "PRODUCE" }
+          { name: "排骨", quantity: "500", unit: "克", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG" },
+          { name: "海带", quantity: "200", unit: "克", fuzzyText: null, categoryCode: "PRODUCE" }
         ],
         tools: [{ name: "汤锅" }],
         steps: [{ text: "排骨焯水后洗净。", imageUrl: null, imagePrompt: "锅中焯水后的排骨盛在白瓷碗中，真实中式家常烹饪场景，不出现文字" }]
@@ -109,7 +110,7 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
       { name: "香菜", quantity: "30", unit: "克" },
       { name: "食用油", quantity: "15", unit: "毫升" },
       { name: "酱油", quantity: "6", unit: "毫升" }
-    ].map(item => ({ ...item, categoryCode: item.name === "牛里脊" ? "MEAT_POULTRY_EGG" : "PRODUCE" })),
+    ].map(item => ({ ...item, fuzzyText: null, categoryCode: item.name === "牛里脊" ? "MEAT_POULTRY_EGG" : "PRODUCE" })),
     tools: [{ name: "炒锅" }, { name: "锅铲" }],
     steps: [
       { text: "牛里脊切成不超过3cm宽、3mm厚的薄片，倒入6ml酱油抓匀备用。", imageUrl: null },
@@ -168,10 +169,10 @@ test("accepts the converted beef stir-fry example as recipe.import.v1", () => {
   ]);
 });
 
-test("requires complete source content and blocks fuzzy quantities", () => {
+test("requires complete source content and rejects fuzzy text in quantity", () => {
   const document = validDocument();
   document.recipe.content.story = "";
-  document.recipe.content.ingredients[0] = { name: "排骨", quantity: "适量", unit: "克", categoryCode: "MEAT_POULTRY_EGG" };
+  document.recipe.content.ingredients[0] = { name: "排骨", quantity: "适量", unit: "克", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG" };
 
   const result = parseJsonSource(
     { sourcePath: "incomplete.json", jsonText: JSON.stringify(document) },
@@ -180,6 +181,99 @@ test("requires complete source content and blocks fuzzy quantities", () => {
 
   assert.equal(result.errorItems.some(item => item.field === "recipe.content.story"), true);
   assert.equal(result.errorItems.some(item => item.field === "recipe.content.ingredients.0.quantity"), true);
+});
+
+test("accepts 适量 only for SEASONING JSON ingredients", () => {
+  const document = validDocument();
+  document.recipe.content.ingredients[1] = {
+    name: "海带",
+    quantity: null,
+    unit: null,
+    fuzzyText: "适量",
+    categoryCode: "SEASONING"
+  } as never;
+
+  const result = parseJsonSource(
+    { sourcePath: "fuzzy.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.deepEqual(result.errorItems, []);
+  assert.deepEqual(result.recipeBody.ingredients[1], {
+    line: "海带 适量",
+    ingredientName: "海带",
+    ingredientId: 102,
+    quantity: null,
+    unitText: null,
+    unitId: null,
+    fuzzyText: "适量",
+    note: null,
+    categoryCode: "SEASONING"
+  });
+  assert.deepEqual(rebuildJsonItemState(result.recipeBody).errorItems, []);
+});
+
+test("rejects 适量 for non-seasoning JSON ingredients", () => {
+  const document = validDocument();
+  document.recipe.content.ingredients[1] = {
+    name: "海带",
+    quantity: null,
+    unit: null,
+    fuzzyText: "适量",
+    categoryCode: "PRODUCE"
+  } as never;
+
+  const result = parseJsonSource(
+    { sourcePath: "non-seasoning-fuzzy.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(
+    result.errorItems.some(item => item.field === "recipe.content.ingredients.1.fuzzyText" && item.message === "仅调味料可使用“适量”"),
+    true
+  );
+});
+
+test("requires fuzzyText to be explicit for every JSON ingredient", () => {
+  const document = validDocument() as Record<string, any>;
+  delete document.recipe.content.ingredients[0].fuzzyText;
+
+  const result = parseJsonSource(
+    { sourcePath: "missing-fuzzy-field.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => item.field === "recipe.content.ingredients.0.fuzzyText"), true);
+});
+
+test("rejects mixed exact and fuzzy JSON amounts", () => {
+  const document = validDocument();
+  document.recipe.content.ingredients[0].fuzzyText = "适量" as never;
+
+  const result = parseJsonSource(
+    { sourcePath: "mixed-amount.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => item.field === "recipe.content.ingredients.0.fuzzyText"), true);
+});
+
+test("rejects fuzzy JSON text other than 适量", () => {
+  const document = validDocument();
+  document.recipe.content.ingredients[0] = {
+    name: "排骨",
+    quantity: null,
+    unit: null,
+    fuzzyText: "少许",
+    categoryCode: "MEAT_POULTRY_EGG"
+  } as never;
+
+  const result = parseJsonSource(
+    { sourcePath: "legacy-fuzzy.json", jsonText: JSON.stringify(document) },
+    refs
+  );
+
+  assert.equal(result.errorItems.some(item => item.field === "recipe.content.ingredients.0.fuzzyText"), true);
 });
 
 test("rejects nutrition input and invalid assistant actions without guessing", () => {
@@ -297,8 +391,8 @@ test("allows multiple distinct meal-type candidates", () => {
 test("normalizes only explicit kg and L quantities to the fixed project units", () => {
   const document = validDocument();
   document.recipe.content.ingredients = [
-    { name: "排骨", quantity: "1.5", unit: "kg", categoryCode: "MEAT_POULTRY_EGG" },
-    { name: "海带", quantity: "0.5", unit: "L", categoryCode: "PRODUCE" }
+    { name: "排骨", quantity: "1.5", unit: "kg", fuzzyText: null, categoryCode: "MEAT_POULTRY_EGG" },
+    { name: "海带", quantity: "0.5", unit: "L", fuzzyText: null, categoryCode: "PRODUCE" }
   ];
 
   const result = parseJsonSource(
@@ -315,7 +409,7 @@ test("normalizes only explicit kg and L quantities to the fixed project units", 
 
 test("keeps unmatched source rows for manual confirmation and rejects unknown tool fields", () => {
   const document = validDocument();
-  document.recipe.content.ingredients[0] = { name: "未知食材", quantity: "100", unit: "克", categoryCode: "PRODUCE" };
+  document.recipe.content.ingredients[0] = { name: "未知食材", quantity: "100", unit: "克", fuzzyText: null, categoryCode: "PRODUCE" };
   document.recipe.content.tools = [{ name: "汤锅", material: "不应导入" } as { name: string }];
 
   const result = parseJsonSource(
@@ -407,12 +501,31 @@ test("normalizes historical import bodies before returning them to the admin pag
     keywords: [],
     coverImageKey: null,
     coverImageTempKey: null,
-    ingredients: [],
+    ingredients: [{
+      line: "盐 少许",
+      ingredientName: "盐",
+      ingredientId: 1,
+      quantity: "1",
+      unitText: "克",
+      unitId: 2,
+      fuzzyText: "少许",
+      note: null
+    }],
     steps: [{ text: "完成", imageKey: null, imageTempKey: null }]
-  });
+  } as never);
 
   assert.deepEqual(normalized.tools, []);
   assert.deepEqual(normalized.tags, []);
   assert.deepEqual(normalized.assistantSteps, []);
+  assert.deepEqual(normalized.ingredients[0], {
+    line: "盐 少许",
+    ingredientName: "盐",
+    ingredientId: 1,
+    quantity: null,
+    unitText: null,
+    unitId: null,
+    fuzzyText: "适量",
+    note: null
+  });
   assert.equal(normalized.steps[0]?.imageUrl, null);
 });

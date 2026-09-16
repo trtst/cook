@@ -354,7 +354,7 @@ function parseIngredientLine(line: string, refs: ImportRefs) {
       quantity: null,
       unitText: null,
       unitId: null,
-      fuzzyText: fuzzyMatch[2] as "适量" | "少许" | "按需",
+      fuzzyText: "适量" as const,
       note
     };
   }

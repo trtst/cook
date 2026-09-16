@@ -81,7 +81,7 @@ async function requestData<T>(path: string, options: RequestInit = {}, headers: 
   return result.body.data;
 }
 
-function buildDocument(categoryId: number, ingredients: Array<{ name: string }>) {
+function buildDocument(categoryId: number, ingredients: Array<{ name: string; categoryCode: string }>) {
   return {
     schemaVersion: "recipe.import.v1",
     recipe: {
@@ -94,9 +94,20 @@ function buildDocument(categoryId: number, ingredients: Array<{ name: string }>)
         difficulty: "EASY",
         duration: "BETWEEN_15_30",
         tips: "按步骤完成即可。",
-        ingredients: ingredients.map(item => ({ name: item.name, quantity: "100", unit: "克" })),
+        keywords: [],
+        ingredients: ingredients.map(item => ({
+          name: item.name,
+          quantity: "100",
+          unit: "克",
+          fuzzyText: null,
+          categoryCode: item.categoryCode
+        })),
         tools: [{ name: "炒锅" }],
-        steps: [{ text: "准备食材并完成烹饪。", imageUrl: null }]
+        steps: [{
+          text: "准备食材并完成烹饪。",
+          imageUrl: null,
+          imagePrompt: "案板上摆放食材并完成烹饪准备，真实中式家常场景，不出现文字"
+        }]
       }
     },
     wiki: {
@@ -117,6 +128,7 @@ function buildDocument(categoryId: number, ingredients: Array<{ name: string }>)
           title: "准备食材",
           detail: "准备并检查食材。",
           imageUrl: null,
+          imagePrompt: "案板上检查食材并完成备菜，真实中式家常场景，不出现文字",
           durationMinutes: 5,
           durationText: "约 5 分钟"
         }]
@@ -158,27 +170,34 @@ async function main() {
         status: "ACTIVE",
         category: { is: { isSelectable: true } }
       },
-      select: { name: true },
+      select: { name: true, category: { select: { code: true } } },
       take: 2,
       orderBy: { id: "asc" }
     });
     assert(category, "没有可用灵感分类");
     assert(ingredients.length === 2, "没有两条可匹配的系统食材");
+    const ingredientInputs = ingredients.map(item => ({ name: item.name, categoryCode: item.category.code }));
 
     const login = await requestData<{ token: string }>(
       "/admin/auth/login",
       { method: "POST", body: JSON.stringify({ username: adminUsername, password: adminPassword }) },
       { "content-type": "application/json" }
     );
-    const validJob = await uploadJson(login.token, "import-flow-valid.json", buildDocument(category.id, ingredients));
+    const validJob = await uploadJson(login.token, "import-flow-valid.json", buildDocument(category.id, ingredientInputs));
     jobIds.push(validJob.id);
     const validItem = await getItem(login.token, validJob.id);
     assert(validItem.status === "READY", `合法 JSON 未进入 READY: ${validItem.status}; ${JSON.stringify(validItem.errorItems)}`);
     assert(validItem.recipeId === null, "发布前不应创建正式菜谱");
     assert(validItem.recipeBody.ingredients.every(item => item.ingredientId !== null && item.unitId !== null), "合法 JSON 未完成严格匹配");
 
-    const invalidDocument = buildDocument(category.id, ingredients);
-    invalidDocument.recipe.content.ingredients[0] = { name: `不存在的导入食材-${operationSeed}`, quantity: "100", unit: "克" };
+    const invalidDocument = buildDocument(category.id, ingredientInputs);
+    invalidDocument.recipe.content.ingredients[0] = {
+      name: `不存在的导入食材-${operationSeed}`,
+      quantity: "100",
+      unit: "克",
+      fuzzyText: null,
+      categoryCode: "PRODUCE"
+    };
     const invalidJob = await uploadJson(login.token, "import-flow-invalid.json", invalidDocument);
     jobIds.push(invalidJob.id);
     const invalidItem = await getItem(login.token, invalidJob.id);

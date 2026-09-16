@@ -160,7 +160,7 @@ function createPublishService(
   );
 }
 
-test("publishing a JSON item with fuzzy or unmatched ingredients is blocked before Recipe creation", async () => {
+test("publishing a JSON item with an unmatched ingredient is blocked before Recipe creation", async () => {
   const recipeCreateCalls = { count: 0 };
   const recipeBody = buildBody();
   const service = createPublishService({
@@ -1535,6 +1535,14 @@ test("JSON import creates an unknown ingredient as a pending system ingredient",
   assert.equal(createdIngredients[0]?.status, "PENDING");
   assert.equal(createdItems[0]?.data.recipeBodyJson.ingredients[0]?.ingredientId, 321);
   assert.equal(createdItems[0]?.data.status, "NEEDS_FIX");
+  assert.equal(
+    createdItems[0]?.data.errorJson.some((item: { field?: string }) => item.field === "recipe.content.ingredients.0.fuzzyText"),
+    true
+  );
+  assert.equal(
+    createdItems[0]?.data.errorJson.some((item: { field?: string }) => item.field === "recipe.content.steps.0.imagePrompt"),
+    true
+  );
 });
 
 test("pending ingredient list includes system ingredients created by JSON import", async () => {

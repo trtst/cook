@@ -5,7 +5,15 @@ import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { plainToInstance } from "class-transformer";
 import { validateSync } from "class-validator";
-import { AdminIngredientModel, IngredientModel, RecipeImportIngredientModel, UnitModel } from "./openapi";
+import {
+  AdminIngredientModel,
+  IngredientModel,
+  RecipeAmountModel,
+  RecipeDraftIngredientModel,
+  RecipeImportIngredientModel,
+  RecipeIngredientInputAmountModel,
+  UnitModel
+} from "./openapi";
 
 @Module({})
 class IngredientOpenApiTestModule {}
@@ -91,4 +99,61 @@ test("merge ingredient input requires a positive target ingredient id and source
 
   assert.equal(validateSync(valid).length, 0);
   assert.equal(validateSync(invalid).length, 2);
+});
+
+test("recipe fuzzy amounts only accept and expose 适量", async () => {
+  const contracts = await import("./dtos.js") as unknown as Record<string, new () => object>;
+  const RecipeAmountDto = contracts.RecipeAmountDto;
+  const valid = plainToInstance(RecipeAmountDto, { kind: "FUZZY", text: "适量" });
+  const legacyFew = plainToInstance(RecipeAmountDto, { kind: "FUZZY", text: "少许" });
+  const legacyNeeded = plainToInstance(RecipeAmountDto, { kind: "FUZZY", text: "按需" });
+
+  assert.equal(validateSync(valid).length, 0);
+  assert.equal(validateSync(legacyFew).length, 1);
+  assert.equal(validateSync(legacyNeeded).length, 1);
+
+  const app = await NestFactory.create(IngredientOpenApiTestModule, { logger: false });
+  try {
+    await app.init();
+    const document = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().setTitle("recipe fuzzy amount contract test").setVersion("1").build(),
+      {
+        extraModels: [
+          RecipeAmountModel,
+          RecipeIngredientInputAmountModel,
+          RecipeDraftIngredientModel,
+          RecipeImportIngredientModel
+        ]
+      }
+    );
+    const schemas = document.components?.schemas as Record<string, {
+      properties?: Record<string, { enum?: string[] }>;
+    }>;
+
+    assert.deepEqual(schemas.RecipeAmountModel?.properties?.text?.enum, ["适量"]);
+    assert.deepEqual(schemas.RecipeIngredientInputAmountModel?.properties?.text?.enum, ["适量"]);
+    assert.deepEqual(schemas.RecipeDraftIngredientModel?.properties?.fuzzyText?.enum, ["适量"]);
+    assert.deepEqual(schemas.RecipeImportIngredientModel?.properties?.fuzzyText?.enum, ["适量"]);
+  } finally {
+    await app.close();
+  }
+});
+
+test("client ingredient categories expose their stable code", async () => {
+  const { IngredientCategoryModel } = await import("./openapi.js");
+  const app = await NestFactory.create(IngredientOpenApiTestModule, { logger: false });
+  try {
+    await app.init();
+    const document = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().setTitle("ingredient category contract test").setVersion("1").build(),
+      { extraModels: [IngredientCategoryModel] }
+    );
+    const schemas = document.components?.schemas as Record<string, { properties?: Record<string, unknown> }>;
+
+    assert.equal(Boolean(schemas.IngredientCategoryModel?.properties?.code), true);
+  } finally {
+    await app.close();
+  }
 });

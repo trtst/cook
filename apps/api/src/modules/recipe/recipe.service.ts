@@ -14,6 +14,7 @@ import { toOwnerNicknameSnapshot } from "./recipe-owner-snapshot";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
+import { canUseFuzzyAmount, fuzzyAmountCategoryMessage } from "../../common/recipe-amount-policy";
 import type {
   CollectionListResponse,
   CollectionSceneSummary,
@@ -143,11 +144,13 @@ type IngredientRecommendationRow = Prisma.IngredientRecommendationGetPayload<{
     ingredient: {
       include: {
         defaultUnit: true;
+        category: true;
       };
     };
     targetIngredient: {
       include: {
         defaultUnit: true;
+        category: true;
       };
     };
   };
@@ -355,6 +358,7 @@ function toSaveRecipeDraftResponse(draft: Pick<DraftRow, "id" | "recipeId" | "ve
 function toIngredientCategorySummary(category: IngredientCategoryRow): IngredientCategorySummary {
   return {
     id: category.id,
+    code: category.code,
     name: category.name
   };
 }
@@ -425,6 +429,7 @@ function toIngredientRecommendationSummary(
     status: record.status,
     category: {
       id: categoryId,
+      code: (resolvedIngredient ?? record.ingredient).category.code,
       name: record.categoryName
     },
     defaultUnit,
@@ -865,12 +870,14 @@ export class RecipeService {
           include: {
             ingredient: {
               include: {
-                defaultUnit: true
+                defaultUnit: true,
+                category: true
               }
             },
             targetIngredient: {
               include: {
-                defaultUnit: true
+                defaultUnit: true,
+                category: true
               }
             }
           }
@@ -975,12 +982,14 @@ export class RecipeService {
         include: {
           ingredient: {
             include: {
-              defaultUnit: true
+              defaultUnit: true,
+              category: true
             }
           },
           targetIngredient: {
             include: {
-              defaultUnit: true
+              defaultUnit: true,
+              category: true
             }
           }
         },
@@ -1332,7 +1341,7 @@ export class RecipeService {
       const draft = await this.loadDraft(tx, userId, draftId);
       if (draft.version !== expectedVersion) throw new ConflictException("草稿已被更新，请刷新后重试");
 
-      const content = fromJson<RecipeDraftContentInput>(draft.contentJson);
+      const content = cleanDraftContent(fromJson<RecipeDraftContentInput>(draft.contentJson));
       this.assertPublishContent(content);
       const uploadIds = this.collectDraftUploadIds(content);
       await this.uploadService.assertDraftUploadOwnership(tx, userId, draftId, Array.from(uploadIds));
@@ -2693,7 +2702,7 @@ export class RecipeService {
   }
 
   private normalizeDraftEditContent(content: RecipeDraftContentInput, ingredientMap: Map<UUID, IngredientSummary>): RecipeDraftContentInput {
-    const ingredients = content.ingredients.map(item => {
+    const ingredients = cleanDraftContent(content).ingredients.map(item => {
       if (!item.ingredientId) return item;
       const resolved = ingredientMap.get(item.ingredientId);
       if (!resolved || resolved.id === item.ingredientId) return item;
@@ -3063,9 +3072,11 @@ export class RecipeService {
         },
         include: {
           defaultUnit: true,
+          category: true,
           mergedTo: {
             include: {
-              defaultUnit: true
+              defaultUnit: true,
+              category: true
             }
           }
         }
@@ -3097,6 +3108,9 @@ export class RecipeService {
         if (!sourceIngredient) throw new NotFoundException("食材不存在");
         const ingredient = sourceIngredient.status === "MERGED" && sourceIngredient.mergedTo ? sourceIngredient.mergedTo : sourceIngredient;
         if (item.fuzzyText) {
+          if (!canUseFuzzyAmount(ingredient.category.code)) {
+            throw new BadRequestException(fuzzyAmountCategoryMessage);
+          }
           return {
             ingredientId: ingredient.id,
             ingredientName: ingredient.name,
@@ -3545,12 +3559,14 @@ export class RecipeService {
       include: {
         ingredient: {
           include: {
-            defaultUnit: true
+            defaultUnit: true,
+            category: true
           }
         },
         targetIngredient: {
           include: {
-            defaultUnit: true
+            defaultUnit: true,
+            category: true
           }
         }
       }

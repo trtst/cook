@@ -1322,7 +1322,7 @@ export class RecipeCategoryNameDto extends OperationDto {
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(20)
+  @MaxLength(8)
   name!: string;
 }
 
@@ -1331,7 +1331,7 @@ export class UpdateRecipeCategoryDto extends VersionedOperationDto {
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
-  @MaxLength(20)
+  @MaxLength(8)
   name!: string;
 }
 
@@ -1510,9 +1510,9 @@ export class RecipeAmountDto {
   @Min(1)
   unitId?: number;
 
-  @ApiPropertyOptional({ example: "适量" })
+  @ApiPropertyOptional({ example: "适量", enum: ["适量"] })
   @ValidateIf(object => object.kind === "FUZZY")
-  @IsIn(["适量", "少许", "按需"])
+  @IsIn(["适量"])
   text?: string;
 }
 
@@ -1559,11 +1559,11 @@ export class RecipeDraftIngredientDto {
   @Min(1)
   unitId!: number | null;
 
-  @ApiProperty({ nullable: true, example: "适量" })
+  @ApiProperty({ nullable: true, example: "适量", enum: ["适量"] })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
-  @IsIn(["适量", "少许", "按需"])
-  fuzzyText!: "适量" | "少许" | "按需" | null;
+  @IsIn(["适量"])
+  fuzzyText!: "适量" | null;
 
   @ApiProperty({ nullable: true, example: resourceIdExample })
   @IsDefined()
@@ -3353,11 +3353,11 @@ export class RecipeImportIngredientDto {
   @Min(1)
   unitId!: number | null;
 
-  @ApiPropertyOptional({ nullable: true, enum: ["适量", "少许", "按需"] })
+  @ApiPropertyOptional({ nullable: true, enum: ["适量"] })
   @IsDefined()
   @ValidateIf((_object, value) => value !== null)
-  @IsIn(["适量", "少许", "按需"])
-  fuzzyText!: "适量" | "少许" | "按需" | null;
+  @IsIn(["适量"])
+  fuzzyText!: "适量" | null;
 
   @ApiPropertyOptional({ nullable: true, maxLength: 255 })
   @IsDefined()

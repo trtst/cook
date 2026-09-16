@@ -102,6 +102,7 @@ import type {
   PublishRecipeImportItemRequest
 } from "../../contracts/types";
 import { PrismaService } from "../../common/prisma.service";
+import { canUseFuzzyAmount, fuzzyAmountCategoryMessage } from "../../common/recipe-amount-policy";
 import {
   completeAdminIdempotentOperation,
   getAdminIdempotentResult,
@@ -4332,17 +4333,19 @@ export class AdminService {
             };
             const recipeBody = await this.prepareRecipeImportBody(tx, parsed.recipeBody);
             const state = await this.buildRecipeImportItemState(tx, recipeBody, rawBody);
+            const errorItems = [...parsed.errorItems, ...state.errorItems];
+            const warnItems = [...parsed.warnItems, ...state.warnItems];
             await tx.recipeImportItem.create({
               data: {
                 jobId: jobId as UUID,
                 sourcePath: source.sourcePath,
                 title: recipeBody.title.trim() || parsed.parsedBody.titleLine || null,
-                status: state.errorItems.length > 0 ? "NEEDS_FIX" : "READY",
+                status: errorItems.length > 0 ? "NEEDS_FIX" : "READY",
                 rawBodyJson: toJson(rawBody),
                 parsedBodyJson: toJson(parsed.parsedBody),
                 recipeBodyJson: toJson(recipeBody),
-                errorJson: toJson(state.errorItems),
-                warnJson: toJson(state.warnItems)
+                errorJson: toJson(errorItems),
+                warnJson: toJson(warnItems)
               }
             });
           });
@@ -6352,10 +6355,10 @@ export class AdminService {
         line: item.line.trim(),
         ingredientName: item.ingredientName.trim(),
         ingredientId: item.ingredientId ?? null,
-        quantity: item.quantity?.trim() || null,
-        unitText: item.unitText?.trim() || null,
-        unitId: item.unitId ?? null,
-        fuzzyText: item.fuzzyText ?? null,
+        quantity: item.fuzzyText ? null : item.quantity?.trim() || null,
+        unitText: item.fuzzyText ? null : item.unitText?.trim() || null,
+        unitId: item.fuzzyText ? null : item.unitId ?? null,
+        fuzzyText: item.fuzzyText ? "适量" : null,
         note: item.note?.trim() || null,
         categoryCode: item.categoryCode?.trim() || null
       })),
@@ -6769,6 +6772,9 @@ export class AdminService {
               isSelectable: true
             }
           }
+        },
+        include: {
+          category: true
         }
       }),
       unitIds.length === 0
@@ -6800,6 +6806,9 @@ export class AdminService {
         const ingredient = ingredientMap.get(item.ingredientId);
         if (!ingredient) throw new NotFoundException("系统食材不存在或已下架");
         if (item.amount.kind === "FUZZY") {
+          if (!canUseFuzzyAmount(ingredient.category.code)) {
+            throw new BadRequestException(fuzzyAmountCategoryMessage);
+          }
           return {
             ingredientId: ingredient.id,
             ingredientName: ingredient.name,

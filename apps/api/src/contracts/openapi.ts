@@ -925,6 +925,7 @@ export class AdminInspirationCategoryModel {
 
 export class IngredientCategoryModel {
   @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) code!: string;
   @ApiProperty({ type: String }) name!: string;
 }
 
@@ -990,7 +991,7 @@ export class RecipeAmountModel {
   @ApiProperty(nullableString) unitName!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["WEIGHT", "VOLUME", "COMMON", "PACKAGE"] })
   unitType!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) text!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) text!: string | null;
 }
 
 export class RecipeIngredientModel {
@@ -1111,7 +1112,7 @@ export class RecipeIngredientInputAmountModel {
   @ApiProperty({ type: String, enum: ["EXACT", "FUZZY"] }) kind!: string;
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) text!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) text!: string | null;
 }
 
 export class RecipeIngredientInputModel {
@@ -1124,7 +1125,7 @@ export class RecipeDraftIngredientModel {
   @ApiProperty({ type: String }) name!: string;
   @ApiProperty({ type: String }) quantity!: string;
   @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) fuzzyText!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) fuzzyText!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) categoryId!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) defaultUnitId!: string | null;
   @ApiProperty({ type: String, nullable: true, enum: ["SYSTEM", "PERSONAL"] }) source!: string | null;
@@ -1509,7 +1510,7 @@ export class RecipeImportIngredientModel {
   @ApiProperty({ type: String, nullable: true }) quantity!: string | null;
   @ApiProperty({ type: String, nullable: true }) unitText!: string | null;
   @ApiProperty({ ...uuid, nullable: true }) unitId!: string | null;
-  @ApiProperty({ type: String, nullable: true, enum: ["适量", "少许", "按需"] }) fuzzyText!: string | null;
+  @ApiProperty({ type: String, nullable: true, enum: ["适量"] }) fuzzyText!: string | null;
   @ApiProperty({ type: String, nullable: true }) note!: string | null;
   @ApiProperty({
     type: String,

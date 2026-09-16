@@ -35,9 +35,9 @@ export function cleanDraftContent(content: RecipeDraftContentInput): RecipeDraft
     ingredients: content.ingredients.map(item => ({
       ingredientId: item.ingredientId,
       name: item.name.trim(),
-      quantity: item.quantity.trim(),
-      unitId: item.unitId ?? null,
-      fuzzyText: item.fuzzyText ?? null,
+      quantity: item.fuzzyText ? "" : item.quantity.trim(),
+      unitId: item.fuzzyText ? null : item.unitId ?? null,
+      fuzzyText: item.fuzzyText ? "适量" : null,
       categoryId: item.categoryId ?? null,
       defaultUnitId: item.defaultUnitId ?? null,
       source: item.source ?? null
@@ -145,7 +145,11 @@ export function versionToContent(version: {
     tips: version.tips,
     keywords: version.keywordsJson ? fromJson<string[]>(version.keywordsJson) : [],
     tools: version.toolsJson ? fromJson<NonNullable<RecipeContentSnapshot["tools"]>>(version.toolsJson) : [],
-    ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson),
+    ingredients: fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson).map(item =>
+      item.amount.kind === "FUZZY"
+        ? { ...item, amount: { kind: "FUZZY", text: "适量" } }
+        : item
+    ),
     steps: steps.map(item => ({
       text: item.text,
       imageUrl: item.imageUrl ?? null,

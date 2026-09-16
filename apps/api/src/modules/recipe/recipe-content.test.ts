@@ -19,6 +19,29 @@ test("reads body keywords from the immutable recipe content version", () => {
   assert.deepEqual(content.keywords, ["鲜辣", "下饭"]);
 });
 
+test("normalizes historical fuzzy recipe amounts to 适量 when reading a version", () => {
+  const content = versionToContent({
+    name: "历史菜谱",
+    story: null,
+    baseServings: 1,
+    difficulty: "EASY",
+    duration: "WITHIN_15",
+    tips: null,
+    keywordsJson: [],
+    toolsJson: [],
+    ingredientsJson: [{
+      ingredientId: 1,
+      ingredientName: "盐",
+      source: "SYSTEM",
+      categoryId: 1,
+      amount: { kind: "FUZZY", text: "少许" }
+    }],
+    stepsJson: []
+  });
+
+  assert.deepEqual(content.ingredients[0]?.amount, { kind: "FUZZY", text: "适量" });
+});
+
 test("builds an imported assistant snapshot without changing source facts", () => {
   const snapshot = buildImportedRecipeAssistantSnapshot([
     {

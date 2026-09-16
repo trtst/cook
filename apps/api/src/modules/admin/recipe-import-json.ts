@@ -12,6 +12,7 @@ import type {
   RecipeImportTagDraft,
   RecipeImportToolDraft
 } from "../../contracts/types";
+import { canUseFuzzyAmount, fuzzyAmountCategoryMessage } from "../../common/recipe-amount-policy";
 import { buildSearchKey } from "../recipe/recipe-content";
 
 const AdmZip = require("adm-zip");
@@ -59,7 +60,7 @@ const contentKeys = new Set([
   "steps"
 ]);
 const wikiKeys = new Set(["tags", "assistant"]);
-const ingredientKeys = new Set(["name", "quantity", "unit", "categoryCode"]);
+const ingredientKeys = new Set(["name", "quantity", "unit", "fuzzyText", "categoryCode"]);
 const toolKeys = new Set(["name"]);
 const stepKeys = new Set(["text", "imageUrl", "imagePrompt"]);
 const tagKeys = new Set(["tagCode", "tagValue"]);
@@ -361,27 +362,39 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
     const row = isRecord(item) ? item : {};
     addUnknownKeyIssues(row, ingredientKeys, field, errors);
     const name = typeof row.name === "string" ? row.name.trim() : "";
-    const quantity = exactQuantity(row.quantity, `${field}.quantity`, errors);
-    const sourceUnit = typeof row.unit === "string" ? row.unit.trim() : "";
+    const hasFuzzyText = hasOwn(row, "fuzzyText");
+    if (!hasFuzzyText) addIssue(errors, `${field}.fuzzyText`, "fuzzyText 字段必须出现");
+    const isFuzzy = row.fuzzyText === "适量";
+    if (hasFuzzyText && row.fuzzyText !== null && !isFuzzy) {
+      addIssue(errors, `${field}.fuzzyText`, "模糊用量只支持“适量”或 null");
+    }
+    if (isFuzzy && (row.quantity !== null || row.unit !== null)) {
+      addIssue(errors, `${field}.fuzzyText`, "精确用量与模糊用量不能同时填写");
+    }
+    const quantity = isFuzzy ? null : exactQuantity(row.quantity, `${field}.quantity`, errors);
+    const sourceUnit = isFuzzy ? "" : typeof row.unit === "string" ? row.unit.trim() : "";
     const categoryCode = typeof row.categoryCode === "string" ? row.categoryCode.trim() : "";
     if (!name) addIssue(errors, `${field}.name`, "食材名称不能为空");
-    if (!sourceUnit) addIssue(errors, `${field}.unit`, "单位不能为空，无法确认时待人工确认");
+    if (!isFuzzy && !sourceUnit) addIssue(errors, `${field}.unit`, "单位不能为空，无法确认时待人工确认");
     if (!ingredientCategoryCodes.has(categoryCode)) addIssue(errors, `${field}.categoryCode`, "食材分类代码不支持");
+    if (isFuzzy && !canUseFuzzyAmount(categoryCode)) {
+      addIssue(errors, `${field}.fuzzyText`, fuzzyAmountCategoryMessage);
+    }
     const unitAlias = unitAliasMap.get(sourceUnit.toLowerCase());
     const unitName = unitAlias?.name ?? sourceUnit;
     const normalizedQuantity = quantity && unitAlias ? scaleQuantity(quantity, unitAlias.factor) : quantity;
     const ingredient = refs.ingredientByName.get(buildSearchKey(name));
-    const unit = refs.unitByName.get(buildSearchKey(unitName));
+    const unit = isFuzzy ? undefined : refs.unitByName.get(buildSearchKey(unitName));
     if (!ingredient && name) addIssue(errors, `${field}.name`, "未严格匹配到系统食材");
-    if (!unit && sourceUnit) addIssue(errors, `${field}.unit`, "未严格匹配到系统单位");
+    if (!isFuzzy && !unit && sourceUnit) addIssue(errors, `${field}.unit`, "未严格匹配到系统单位");
     ingredients.push({
-      line: [name, row.quantity, sourceUnit].filter(value => typeof value === "string" && value.trim()).join(" "),
+      line: [name, isFuzzy ? "适量" : row.quantity, sourceUnit].filter(value => typeof value === "string" && value.trim()).join(" "),
       ingredientName: name,
       ingredientId: ingredient?.id ?? null,
       quantity: normalizedQuantity,
-      unitText: unitName || null,
+      unitText: isFuzzy ? null : unitName || null,
       unitId: unit?.id ?? null,
-      fuzzyText: null,
+      fuzzyText: isFuzzy ? "适量" : null,
       note: null,
       categoryCode: ingredientCategoryCodes.has(categoryCode) ? categoryCode : null
     });
@@ -470,10 +483,20 @@ export function rebuildJsonItemState(recipeBody: RecipeImportRecipeBody) {
   recipeBody.ingredients.forEach((item, index) => {
     if (!item.ingredientId) addIssue(errors, `ingredients.${index}.ingredientId`, "食材还未匹配系统食材");
     if (!item.ingredientName?.trim()) addIssue(errors, `ingredients.${index}.ingredientName`, "食材名称不能为空");
-    if (!item.unitId) addIssue(errors, `ingredients.${index}.unitId`, "单位还未匹配系统单位");
-    if (!item.unitText?.trim()) addIssue(errors, `ingredients.${index}.unitText`, "单位还未确认");
-    if (!item.quantity || !/^\d+(?:\.\d+)?$/.test(item.quantity) || Number(item.quantity) <= 0) {
-      addIssue(errors, `ingredients.${index}.quantity`, "数量必须是大于 0 的单值");
+    if (item.fuzzyText) {
+      if (item.fuzzyText !== "适量") addIssue(errors, `ingredients.${index}.fuzzyText`, "模糊用量只支持“适量”");
+      if (!canUseFuzzyAmount(item.categoryCode)) {
+        addIssue(errors, `ingredients.${index}.fuzzyText`, fuzzyAmountCategoryMessage);
+      }
+      if (item.quantity !== null || item.unitId !== null || item.unitText !== null) {
+        addIssue(errors, `ingredients.${index}.fuzzyText`, "精确用量与模糊用量不能同时填写");
+      }
+    } else {
+      if (!item.unitId) addIssue(errors, `ingredients.${index}.unitId`, "单位还未匹配系统单位");
+      if (!item.unitText?.trim()) addIssue(errors, `ingredients.${index}.unitText`, "单位还未确认");
+      if (!item.quantity || !/^\d+(?:\.\d+)?$/.test(item.quantity) || Number(item.quantity) <= 0) {
+        addIssue(errors, `ingredients.${index}.quantity`, "数量必须是大于 0 的单值");
+      }
     }
   });
   if (!recipeBody.steps.length) addIssue(errors, "steps", "至少需要一条制作步骤");
@@ -494,6 +517,16 @@ export function normalizeRecipeImportBody(body: RecipeImportRecipeBody): RecipeI
     tools: body.tools ?? [],
     tags: body.tags ?? [],
     assistantSteps: body.assistantSteps ?? [],
+    ingredients: (body.ingredients ?? []).map(item => {
+      const isFuzzy = Boolean(item.fuzzyText);
+      return {
+        ...item,
+        quantity: isFuzzy ? null : item.quantity ?? null,
+        unitText: isFuzzy ? null : item.unitText ?? null,
+        unitId: isFuzzy ? null : item.unitId ?? null,
+        fuzzyText: isFuzzy ? "适量" : null
+      };
+    }),
     steps: (body.steps ?? []).map(step => ({
       ...step,
       imageUrl: step.imageUrl ?? null,
