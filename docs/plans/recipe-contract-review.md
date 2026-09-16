@@ -213,13 +213,12 @@ interface RecipeSceneSummary {
 
 ### 食材用量
 
-当前确认的正式菜谱用量只保存精准数量和系统单位：
+当前确认的正式菜谱用量保存互斥的精确或模糊结构：
 
 ```ts
-type RecipeAmountInput = {
-  quantity: string;
-  unitId: ResourceId;
-};
+type RecipeAmountInput =
+  | { kind: "EXACT"; quantity: string; unitId: ResourceId }
+  | { kind: "FUZZY"; text: "适量" };
 
 interface RecipeIngredientInput {
   ingredientId: ResourceId;
@@ -227,7 +226,7 @@ interface RecipeIngredientInput {
 }
 ```
 
-精确数量使用十进制字符串，避免 JSON 浮点误差。客户端不提交食材名、单位名、分类或换算结果；服务端按可访问的食材和单位主事实生成不可变名称快照。
+精确数量使用十进制字符串，避免 JSON 浮点误差。“适量”是菜谱食材关系的模糊用量，不进入系统单位表，不参与人数换算或购物数量合并。客户端不提交食材名、单位名、分类或换算结果；服务端按可访问的食材和单位主事实生成不可变名称快照。
 
 ### R1 草稿正文
 
@@ -440,7 +439,7 @@ R1 不增加推荐、点赞、收藏统计或全文检索专用索引。关键�
 
 1. 难度档位：建议首版固定 `新手友好 / 轻松上手 / 需要经验 / 进阶挑战` 四档，对应稳定枚举 `BEGINNER / EASY / SKILLED / CHALLENGING`；发布时必须显式选择。
 2. 个人分类删除：建议 R1 暂不提供删除；后续删除时必须先把分类下菜谱批量迁移到另一个分类，不允许产生“未分类”已发布菜谱。
-3. 精准用量：正式菜谱只保存 `quantity + unitId`，不保留 `FUZZY`、`amount.kind`、`amount.text` 或 `fuzzyText`；导入遇到“适量 / 少许 / 按需”时进入待修正，不能发布。
+3. 食材用量：正式菜谱允许 `EXACT(quantity + unitId)` 或 `FUZZY(text = "适量")`；只保留“适量”，历史“少许 / 按需”读取或转换时归一为“适量”。
 
 4. 工程安全上限：名称 120 字、故事 2000 字、小贴士 1000 字、分类/场景名 20 字、个人分类和个人场景各最多 50 个、食材名 64 字、单位名 16 字、食材和步骤各最多 100 项、精确数量最多 3 位小数。
 5. 单位类型固定为重量、体积、常用、包装，对应 `WEIGHT / VOLUME / COMMON / PACKAGE`。

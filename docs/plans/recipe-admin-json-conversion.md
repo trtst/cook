@@ -24,8 +24,9 @@
       "tips": "排骨先焯水。",
       "keywords": ["鲜香", "炖汤"],
       "ingredients": [
-        { "name": "排骨", "quantity": "500", "unit": "克", "categoryCode": "MEAT_POULTRY_EGG" },
-        { "name": "海带", "quantity": "200", "unit": "克", "categoryCode": "PRODUCE" }
+        { "name": "排骨", "quantity": "500", "unit": "克", "fuzzyText": null, "categoryCode": "MEAT_POULTRY_EGG" },
+        { "name": "海带", "quantity": "200", "unit": "克", "fuzzyText": null, "categoryCode": "PRODUCE" },
+        { "name": "盐", "quantity": null, "unit": null, "fuzzyText": "适量", "categoryCode": "SEASONING" }
       ],
       "tools": [
         { "name": "汤锅" }
@@ -111,17 +112,48 @@
 
 | 字段 | 要求 |
 | --- | --- |
-| `content.keywords` | 中文数组，通常 3～6 项，最多 8 项；无依据填 `[]`；不写分类或结构化标签（如“川湘菜”“重辣”） |
-| `ingredients[].name / quantity / unit` | 来源名称、字符串数量、项目单位名称 |
+| `content.keywords` | 中文数组，通常 3～6 项，最多 8 项；具体提取规则见下方；不写分类或结构化标签（如“川湘菜”“重辣”） |
+| `ingredients[].name` | 来源食材名称 |
+| `ingredients[].quantity / unit / fuzzyText` | 三个字段都必须出现；精确用量为“字符串数量 / 项目单位名称 / null”，模糊用量为“null / null / 适量” |
 | `ingredients[].categoryCode` | 必填稳定分类代码；不写分类 ID 或 `UNCLASSIFIED` |
 | `tools[].name` | 明确厨具；无依据填 `[]` |
 | `steps[].text` | 按顺序拆分核心操作；不补造事实 |
 | `steps[].imageUrl` | 必须出现；无图为 `null` |
 | `steps[].imagePrompt` | 必填中文；只基于本步骤正文生成菜谱步骤图片 |
 
-食材分类代码固定为：`PRODUCE`（蔬果菌菇）、`MEAT_POULTRY_EGG`（肉禽蛋）、`SEAFOOD`（水产海鲜）、`SOY_DAIRY`（豆乳制品）、`GRAINS_STAPLES`（米面杂粮）、`SEASONING`（调味料）、`DRIED_PRESERVED`（干货腌制）、`BEVERAGE_ALCOHOL`（酒水饮料）。严格匹配到系统食材时，实际分类必须与该代码一致；未匹配食材按声明分类创建待审核食材。
+关键词提取规则：
 
-单位优先使用 `克`、`毫升`；可确定地将 `kg / 千克` 转为克、`L / 升` 转为毫升。模糊用量不换算；`汤匙`保留原单位。
+- 关键词主体只从 `content.story`、`content.ingredients`、`content.steps` 提取。
+- 不从 `content.name` 拆分关键词；菜名中的词只有同时在故事、食材或步骤中独立出现时，才可作为正文关键词。
+- 完整菜名默认不纳入关键词；如确需保留，最多 1 项，且必须放在 `keywords` 数组最后。
+- 顺序固定为：描述性关键词在前，完整菜名在最后。
+- 不得写分类或结构化标签，如“川湘菜”“重辣”“下饭好菜”。
+- 无可靠依据时填 `[]`。
+
+食材分类代码固定为：`PRODUCE`（蔬果菌菇）、`MEAT_POULTRY_EGG`（肉禽蛋）、`SEAFOOD`（水产海鲜）、`SOY_DAIRY`（豆乳制品）、`GRAINS_STAPLES`（米面杂粮）、`SEASONING`（调味料）、`DRIED_PRESERVED`（干货腌制）、`BEVERAGE_ALCOHOL`（酒水饮料）。
+
+分类判定：
+
+`categoryCode` 是系统食材的稳定分类属性，不随单道菜谱中的用途、用量或角色变化。命中系统食材时，必须以系统食材当前分类为准。
+
+未命中系统食材、需要给出分类建议时，按食材的稳定身份判断：
+
+- `SEASONING`（调味料）：主要、稳定用途是赋味或增香，如盐、糖、酱油、醋、料酒、蚝油、豆瓣酱、番茄酱、八角、香叶、花椒、胡椒粉、十三香等。
+- `DRIED_PRESERVED`（干货腌制）：食材身份主要由干燥、腌制、风干等加工形态形成，通常作为可食用材料使用，如干香菇、木耳、海米、虾皮、干辣椒、榨菜、酸菜、梅干菜、萝卜干等。
+- 菜谱中的“主体/调味”属于菜谱食材关系，不通过 `categoryCode` 表达。
+- 无法确定分类时，标记为需要人工确认；确认有效 `categoryCode` 后再生成或提交导入 JSON，不得填写 `UNCLASSIFIED` 或猜测。
+
+辅助理解：用量较小、主要提供风味的食材通常接近 `SEASONING`；用量较大、作为可食用材料的干制或腌制食材通常接近 `DRIED_PRESERVED`，但该理解不作为最终判定规则。
+
+用量规则：
+
+- 精确用量：`quantity` 为大于 `0` 的数字字符串，`unit` 为项目单位名称，`fuzzyText` 必须为 `null`。
+- 模糊用量：`quantity` 和 `unit` 必须为 `null`，`fuzzyText` 固定为 `"适量"`。
+- 来源出现“少许”“几滴”“按需”等模糊表述时，统一归一化为 `fuzzyText: "适量"`，不得保留原词。
+- `fuzzyText = "适量"` 仅允许 `categoryCode = "SEASONING"`；命中系统食材后以该食材当前分类为准，自填分类不能绕过限制。
+- 非 `SEASONING` 食材出现“适量”“少许”等模糊表述时，不得写入 `fuzzyText`；只有来源明确给出大于 `0` 的数量和单位时才填写精确用量，否则进入人工确认，不得估算或擅自填写。
+- 两种结构互斥；`fuzzyText` 只允许 `null` 或 `"适量"`，缺失、混填、“少许”或“按需”均不通过导入校验。
+- 单位优先使用 `克`、`毫升`；可确定地将 `kg / 千克` 转为克、`L / 升` 转为毫升。“适量”不换算；`汤匙`保留原单位。
 
 ### 2.3 步骤图片提示词
 

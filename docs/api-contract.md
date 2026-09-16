@@ -1035,7 +1035,7 @@ POST /admin/recipe-import-items/{itemId}/publish
 
 菜谱导入接口接收批量选择的 `.json` / `.zip`，字段为 `files[]`；单菜使用 `recipe.import.v1`，批次使用 `recipe.import.batch.v1.recipes[]`，每道菜独立创建待审核项。ZIP 只允许 JSON；单 JSON 不超过 10 MB，展开后最多 100 道菜、总 JSON 不超过 20 MB；不支持 Markdown 或 Excel。`GET /admin/recipes/{recipeId}` 的后台详情返回当前正文版本、工具、业务标签、营养分析、做饭助手 Wiki 和七个 Wiki 质量卡；质量卡按当前版本实时返回状态、分数和阻断原因。
 
-`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排，`DELETE /admin/inspiration-categories/{categoryId}` 仅允许删除没有菜谱和待审核推荐引用的分类。请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName / version`，排序统一按 `updatedAt desc`；后台页面将 `BLOCKED` 菜谱集中展示为“下架”视图。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `isInspiration = true` 的系统菜谱记录。`POST /admin/recipe-import-jobs/json` 接收 `files[]` 批量 JSON；每个条目先保存为待审核系统项，严格匹配食材和单位，未匹配或模糊用量不得发布；发布时菜谱 ID、营养快照和归属用户由后台生成，归属用户从 100 人灵感用户池随机选择。`DELETE /admin/recipe-import-jobs/{jobId}` 只删除导入任务及其待审核条目，不删除已经发布的正式菜谱，处理中任务不能删除。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`collectCount`、`canEdit`，以及单菜 Wiki 状态 `assistantState(status / hasCandidate / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。后台状态允许 `MISSING / PENDING / GENERATING / NEEDS_REVIEW / READY / FAILED`；只有 `READY + hasSnapshot=true` 表示前台可用，候选内容与当前可用快照必须分离。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `isInspiration = true`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台重试当前固定版本的 Wiki 候选生成或验证，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情；它不能覆盖已经供前台消费的成功快照。`DELETE /admin/recipes/{recipeId}` 仅允许对 `BLOCKED` 的系统菜谱执行物理删除，若仍被专题、计划、收藏或饭局引用则拒绝删除；删除后不会继续出现在“下架”视图。`GET /admin/pending-recipes` 返回待审核菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次发布新的固定版本时只登记 `PENDING` Wiki 生产事实，不在发布事务内调用 AI；生成失败不得回滚主菜谱版本。正式 AI 服务和批量任务载体尚未确认，第一阶段只消费已经验证的 `READY` Wiki，不实现同步生成或假 Worker。
+`GET /admin/inspiration-categories` 返回后台系统菜谱分类列表，摘要包含 `id / name / iconKey / version / recipeCount / updatedAt`；`POST /admin/inspiration-categories`、`PUT /admin/inspiration-categories/{categoryId}` 和 `POST /admin/inspiration-categories/reorder` 分别用于新增、编辑和重排，`DELETE /admin/inspiration-categories/{categoryId}` 仅允许删除没有菜谱和待审核推荐引用的分类。请求头统一使用 `Idempotency-Key`，重排请求提交完整的 `id + expectedVersion` 集合。`GET /admin/recipes` 只返回后台系统菜谱列表最小摘要，查询参数固定为 `page`、`pageSize`，并支持 `categoryId`、`keyword`、`status` 过滤；系统菜谱口径固定为 `isInspiration = true` 且 `inspirationCategoryId != null`，列表摘要补充 `inspirationCategoryId / inspirationCategoryName / version`，排序统一按 `updatedAt desc`；后台页面将 `BLOCKED` 菜谱集中展示为“下架”视图。`POST /admin/recipe-images` 是后台系统菜谱独立的临时图片上传入口，只允许 `SUPER_ADMIN` 使用，只接受后台裁好的单张图片，并返回 `tempKey + 图片元信息`；封面图场景固定要求 `4:3`，步骤图不锁定固定比例。后台上传成功后不再暴露临时公网图片地址，页面预览使用浏览器本地 `blob`；服务端只在 `POST /admin/recipes` / `PUT /admin/recipes/{recipeId}` 真正消费 `*TempKey` 时把临时图固化成正式公开资源，并对 24 小时前未消费的后台临时图做过期清理。`POST /admin/recipes` 允许后台直接新建一条系统菜谱，请求头必须携带 `Idempotency-Key`，请求体除 `inspirationCategoryId` 和完整正文输入外，还可携带 `coverImageUrl / coverImageTempKey / steps[].imageUrl / steps[].imageTempKey`；服务端会把本次引用的临时图固化为正式公开资源，写入当前系统菜谱封面和新版本正文，再创建 `isInspiration = true` 的系统菜谱记录。`POST /admin/recipe-import-jobs/json` 接收 `files[]` 批量 JSON；每个条目先保存为待审核系统项，严格匹配食材，精确用量同时严格匹配单位，`fuzzyText = "适量"` 时不要求数量或单位；未匹配食材仍不得发布。发布时菜谱 ID、营养快照和归属用户由后台生成，归属用户从 100 人灵感用户池随机选择。`DELETE /admin/recipe-import-jobs/{jobId}` 只删除导入任务及其待审核条目，不删除已经发布的正式菜谱，处理中任务不能删除。`GET /admin/recipes/{recipeId}` 返回后台详情视图，覆盖系统菜谱和个人菜谱，但只读字段与正文内容分开：详情固定返回 `personalCategory / inspirationCategory`、`contentVersionId`、当前正文快照、`reportCount`、`blockedReason`、`collectCount`、`canEdit`，以及单菜 Wiki 状态 `assistantState(status / hasCandidate / hasSnapshot / generatedAt / lastAttemptAt / attemptCount / lastError)`。后台状态允许 `MISSING / PENDING / GENERATING / NEEDS_REVIEW / READY / FAILED`；只有 `READY + hasSnapshot=true` 表示前台可用，候选内容与当前可用快照必须分离。`PUT /admin/recipes/{recipeId}` 只允许 `SUPER_ADMIN` 编辑当前系统菜谱正文，且仅限 `isInspiration = true`、当前仍挂系统分类的菜谱；保存时服务端不得原地覆盖旧正文版本，而是新建一条 `RecipeContentVersion`，再把菜谱 `currentVersionId`、`title`、`searchText`、`inspirationCategoryId` 和当前封面图切到新版本，保证已收藏、已引用和历史固定版本不漂移。若本次仍沿用旧图，则请求中的 `coverImageUrl` 与 `steps[].imageUrl` 只能引用当前系统菜谱现有图片；若替换图片，则必须提交新的 `*TempKey`。`POST /admin/recipes/{recipeId}/assistant/regenerate` 用于后台重试当前固定版本的 Wiki 候选生成或验证，请求头必须携带 `Idempotency-Key`，响应仍返回完整后台详情；它不能覆盖已经供前台消费的成功快照。`DELETE /admin/recipes/{recipeId}` 仅允许对 `BLOCKED` 的系统菜谱执行物理删除，若仍被专题、计划、收藏或饭局引用则拒绝删除；删除后不会继续出现在“下架”视图。`GET /admin/pending-recipes` 返回待审核菜谱推荐分页，只收 `status = PENDING` 且来源个人菜谱仍为有效发布态的推荐记录，支持按菜谱名、建议系统分类、个人分类、推荐人昵称或 UID 搜索。`POST /admin/pending-recipes/{recommendationId}/review` 只支持两种结果：`APPROVE` 或 `REJECT`；通过时必须选择最终归入的系统菜谱分类，可与用户建议分类不同，且本期不在审核弹窗内编辑正文。审核通过后，服务端按推荐记录中的 `sourceVersionId` 复制固定版本正文，创建新的系统菜谱并写回 `adoptedRecipeId`；拒绝时只回写 `reviewNote`。后台系统菜谱创建、审核收录与正文编辑时，食材和单位只允许引用当前可选的系统食材与系统单位；图片链路独立于用户草稿上传，不复用 `draftId`。每次发布新的固定版本时只登记 `PENDING` Wiki 生产事实，不在发布事务内调用 AI；生成失败不得回滚主菜谱版本。正式 AI 服务和批量任务载体尚未确认，第一阶段只消费已经验证的 `READY` Wiki，不实现同步生成或假 Worker。
 
 ## 其他领域接口摘要
 
@@ -2360,7 +2360,7 @@ interface CreateDiningMemoryShareRequest {
 
 菜谱当前链路冻结为：`草稿 -> 发布到私房菜`、`灵感系统菜谱 -> 改编为私房菜`，以及“灵感/周刊直接加入计划时，必要时先保存到私房菜”。灵感系统菜谱只读；用户创建、编辑和保存不会自动进入系统库，只有推荐审核通过后才生成系统菜谱。合集不再是前台菜谱入口，历史合集接口暂不删除，以保留已有固定引用。
 
-当前规则补充：系统菜谱统一使用 `isInspiration = true` 且挂系统分类作为业务口径，不能仅以 owner 判断灵感菜谱。每条菜谱都必须有 owner；后台直接创建和导入发布从 100 人公共内容用户池随机选择 active owner，用户推荐审核收录则保留推荐者为 owner。池成员必须保持 `ACTIVE`，后台不得将其禁用；初始化脚本会先移除已禁用成员，再补足至 100 人。菜谱创建时冻结 owner 昵称快照，后续改名不回写。用户菜谱满足发布必填项即可发布，标签、营养、Wiki 和完整度等派生事实由服务端按当前 `RecipeContentVersion` 持久化；Wiki 发布时只登记 `PENDING`，不在发布事务内同步生成。正式菜谱用量只接受 `quantity + unitId`，不接受 `FUZZY`、`amount.kind`、`amount.text` 或 `fuzzyText`。
+当前规则补充：系统菜谱统一使用 `isInspiration = true` 且挂系统分类作为业务口径，不能仅以 owner 判断灵感菜谱。每条菜谱都必须有 owner；后台直接创建和导入发布从 100 人公共内容用户池随机选择 active owner，用户推荐审核收录则保留推荐者为 owner。池成员必须保持 `ACTIVE`，后台不得将其禁用；初始化脚本会先移除已禁用成员，再补足至 100 人。菜谱创建时冻结 owner 昵称快照，后续改名不回写。用户菜谱满足发布必填项即可发布，标签、营养、Wiki 和完整度等派生事实由服务端按当前 `RecipeContentVersion` 持久化；Wiki 发布时只登记 `PENDING`，不在发布事务内同步生成。正式菜谱用量接受互斥的精确结构 `EXACT(quantity + unitId)` 与唯一模糊结构 `FUZZY(text = "适量")`；“适量”不是系统单位，仅允许当前系统分类代码为 `SEASONING` 的食材使用，服务端按 `ingredientId` 查询当前分类并校验。
 
 ```ts
 type RecipeDifficulty = "BEGINNER" | "EASY" | "SKILLED" | "CHALLENGING";
@@ -2369,17 +2369,13 @@ type UnitType = "WEIGHT" | "VOLUME" | "COMMON" | "PACKAGE";
 type IngredientSource = "SYSTEM" | "PERSONAL";
 type InspirationSort = "RECOMMENDED" | "LATEST";
 
-type RecipeAmountInput = {
-  quantity: string;
-  unitId: UUID;
-};
+type RecipeAmountInput =
+  | { kind: "EXACT"; quantity: string; unitId: UUID }
+  | { kind: "FUZZY"; text: "适量" };
 
-type RecipeAmountSnapshot = {
-  quantity: string;
-  unitId: UUID;
-  unitName: string;
-  unitType: UnitType;
-};
+type RecipeAmountSnapshot =
+  | { kind: "EXACT"; quantity: string; unitId: UUID; unitName: string; unitType: UnitType }
+  | { kind: "FUZZY"; text: "适量" };
 
 interface RecipeCategorySummary {
   id: UUID;
@@ -2401,6 +2397,7 @@ interface InspirationCategorySummary {
 
 interface IngredientCategorySummary {
   id: UUID;
+  code: string;
   name: string;
 }
 
@@ -2554,6 +2551,7 @@ interface RecipeDraftContentInput {
     name: string;
     quantity: string;
     unitId: ResourceId | null;
+    fuzzyText: "适量" | null;
     categoryId: ResourceId | null;
     defaultUnitId: ResourceId | null;
     source: "SYSTEM" | "PERSONAL" | null;
@@ -2567,7 +2565,7 @@ interface RecipeDraftContentInput {
 }
 ```
 
-保存草稿时仅强制校验 `content.name` 非空；其余发布必填项允许暂时为空。草稿里的分类、场景、食材和单位引用即使当前已失效，也不阻塞保存，原始输入继续保留在 `content` 里；详情里的 `category / scenes / ingredientRefs / unitRefs` 只回填当前仍能解析到的真实引用。发布时再统一校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材、精确用量必须同时具备正数数量和单位，以及至少一个“文本或图片至少其一非空”的步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。
+保存草稿时仅强制校验 `content.name` 非空；其余发布必填项允许暂时为空。草稿里的分类、场景、食材和单位引用即使当前已失效，也不阻塞保存，原始输入继续保留在 `content` 里；详情里的 `category / scenes / ingredientRefs / unitRefs` 只回填当前仍能解析到的真实引用。发布时再统一校验名称、有效个人分类、`1～20` 人份、已选择难度、已选择时长、至少一个有效食材、精确用量必须同时具备正数数量和单位、模糊用量必须固定为“适量”且真实食材当前分类为 `SEASONING`，以及至少一个“文本或图片至少其一非空”的步骤。食材和步骤各最多 100 项；精确数量使用最多三位小数的十进制字符串。切换到“适量”时清空数量与单位，切回精确单位时数量保持空且不恢复旧值。菜谱编辑页中已绑定 `ingredientId` 的食材名称只读；更换食材通过选择器完成，选择不同 `ingredientId` 时清空原精确数量并使用新食材默认单位，重新选择同一食材时保留当前数量和单位；提交与正式版本名称快照均以 `ingredientId` 对应的服务端食材为准。
 
 菜谱图片的当前链路固定为：
 
@@ -2963,7 +2961,7 @@ GET /admin/users/{userId}/collections/{sceneId}/recipes
 3. 发布成功后删除草稿账本，写入已发布菜谱账本。
 4. 首次收藏一个灵感固定版本：按该固定版本正文大小计入 `RECIPE` 模块；后续只补场景关系时不重复计量空间。
 
-个人分类和场景各最多 50 个，名称最多 20 字；菜谱名最多 120 字，故事最多 2000 字，小贴士最多 1000 字，食材名最多 64 字，单位名最多 16 字。分类 R1 不提供删除，后续删除前必须先迁移其下菜谱。
+个人分类和场景各最多 50 个；个人分类名称最多 8 字，个人场景名称最多 20 字；菜谱名最多 120 字，故事最多 2000 字，小贴士最多 1000 字，食材名最多 64 字，单位名最多 16 字。分类 R1 不提供删除，后续删除前必须先迁移其下菜谱。
 
 完整 owner、主事实、事务、索引和数据库约束见 `plans/recipe-contract-review.md`。菜谱归用户本人，饭搭子关系不改变所有权。
 
