@@ -33,7 +33,7 @@
       </view>
 
       <template v-else>
-        <view class="cook-toolbar" :class="{ 'cook-toolbar--immersive': isImmersive }">
+        <view class="cook-toolbar" :class="{ 'cook-toolbar--immersive': isImmersive }" :style="immersiveToolbarStyle">
           <view class="cook-toolbar__top">
             <view class="cook-toolbar__main">
               <text class="cook-toolbar__title">{{ sourceTitle }}</text>
@@ -230,7 +230,14 @@ const mixedReadingStepId = ref("");
 
 const requiresLogin = computed(() => sourceType.value === "plan");
 const isImmersive = computed(() => viewMode.value === "swiper");
-const immersiveSlideTopStyle = computed(() => ({ top: `${navBarTotalHeight.value + 12}px` }));
+const immersiveToolbarStyle = computed<Record<string, string> | undefined>(() => {
+  if (!isImmersive.value) return undefined;
+  return {
+    height: `${navBarTotalHeight.value}px`,
+    padding: "0",
+    boxSizing: "border-box"
+  };
+});
 const floatingModesStyle = computed(() => ({ top: `${navBarTotalHeight.value + 12}px` }));
 const currentDishSteps = computed(() => {
   const tab = menuTabs.value[selectedDishIndex.value];
@@ -865,6 +872,8 @@ defineExpose({
 }
 
 .cook-toolbar--immersive {
+  min-height: 0;
+  overflow: hidden;
   opacity: 0;
   z-index: 0;
   pointer-events: none;
@@ -1062,7 +1071,7 @@ defineExpose({
 }
 
 .cook-step-card {
-  padding: 6rpx 0 0;
+  padding: 30rpx 0 0;
 }
 
 .cook-step-card__index,

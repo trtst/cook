@@ -103,7 +103,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(pageSource, /<template #navbar-right>/);
     nodeAssert.match(pageSource, /<SheetShell\s+:visible="settingsVisible"\s+title="做饭设置"/);
     nodeAssert.match(pageSource, /class="cook-settings__screen-on"/);
-    nodeAssert.match(pageSource, /<view class="cook-toolbar" :class="\{ 'cook-toolbar--immersive': isImmersive \}">/);
+    nodeAssert.match(pageSource, /<view class="cook-toolbar" :class="\{ 'cook-toolbar--immersive': isImmersive \}" :style="immersiveToolbarStyle">/);
     nodeAssert.match(pageSource, /class="cook-toolbar__modes cook-toolbar__modes--floating"/);
     nodeAssert.match(pageSource, /:style="floatingModesStyle"/);
     nodeAssert.doesNotMatch(pageSource, /cook-toolbar__modes--immersive/);
@@ -164,7 +164,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /\.cook-list-scroll\s*\{[\s\S]*?height: 100%;[\s\S]*?min-height: 0;/);
   });
 
-  nodeTest("meal cook mode flattens immersive steps across dishes and synchronizes the selected recipe", () => {
+  nodeTest("meal cook mode aligns the immersive toolbar spacer with the navbar", () => {
     nodeAssert.match(pageSource, /const immersiveSteps = computed/);
     nodeAssert.match(pageSource, /:current="immersiveIndex"/);
     nodeAssert.match(pageSource, /v-for="\(item, index\) in immersiveSteps"/);
@@ -177,7 +177,14 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /const isImmersive = computed\(\(\) => viewMode\.value === "swiper"\);/);
     nodeAssert.match(pageSource, /class="cook-mode-page" :class="\{ 'cook-mode-page--immersive': isImmersive \}"/);
     nodeAssert.match(pageSource, /\.cook-layout--immersive :deep\(\.navbar__fixed\)\s*\{[\s\S]*?background: var\(--overlay-image-mask\);/);
+    nodeAssert.match(pageSource, /<view class="cook-toolbar" :class="\{ 'cook-toolbar--immersive': isImmersive \}" :style="immersiveToolbarStyle">/);
+    nodeAssert.match(pageSource, /const immersiveToolbarStyle = computed/);
+    nodeAssert.match(pageSource, /navBarTotalHeight\.value/);
+    nodeAssert.match(pageSource, /height: \`[^,]*px\`,/);
+    nodeAssert.match(pageSource, /padding: "0",/);
+    nodeAssert.match(pageSource, /boxSizing: "border-box"/);
     nodeAssert.match(pageSource, /\.cook-toolbar--immersive\s*\{[\s\S]*?opacity: 0;[\s\S]*?z-index: 0;[\s\S]*?pointer-events: none;/);
+    nodeAssert.match(pageSource, /\.cook-toolbar--immersive\s*\{[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden;/);
     nodeAssert.doesNotMatch(pageSource, /\.cook-toolbar--immersive\s*\{[^}]*?(?:max-height|transform):/);
     nodeAssert.match(pageSource, /\.cook-slide__copy\s*\{[\s\S]*?padding: 24rpx 24rpx calc\(24rpx \+ env\(safe-area-inset-bottom\)\);/);
     nodeAssert.doesNotMatch(pageSource, /cook-slide__dish/);
