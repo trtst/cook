@@ -19,23 +19,51 @@ const mealDetailSource = readFile("../../pages_meal/detail/index.vue");
 const mealPlanSource = readFile("../../pages_meal/plan/index.vue");
 const recipeDetailSource = readFile("../../pages_recipe/detail/index.vue");
 
-assert.match(pickerSource, /pinCreate\?: boolean;/, "picker should expose the pinned-create layout explicitly");
-assert.match(pickerSource, /pinCreate: false/, "shared picker should preserve the existing layout by default");
+assert.doesNotMatch(pickerSource, /\bpinCreate\b/, "picker layout must not vary by caller");
+assert.match(pickerSource, /:body-scroll="false"/, "picker should always keep its controls fixed above the list");
+assert.match(pickerSource, /:panel-style="\{ maxHeight: ['\"]62vh['\"] \}"/, "picker should own its compact panel height");
 assert.match(
   pickerSource,
-  /'shopping-sheet--pinned': pinCreate/,
-  "pinned layout should only activate when requested"
+  /{{\s*showCreateForm\s*\?\s*"取消"\s*:\s*createTitle\s*}}/,
+  "the create action should switch to cancel while the form is open"
 );
 assert.match(
   pickerSource,
-  /:body-scroll="!pinCreate"/,
-  "pinned picker should disable the outer sheet-body scroller"
+  /v-if="showCreateForm"\s+class="shopping-create"/,
+  "the empty-list form should remain hidden until the create action is used"
+);
+assert.match(
+  pickerSource,
+  /function toggleCreateForm\(\)\s*\{[\s\S]*?showCreateForm\.value\s*=\s*!showCreateForm\.value;/,
+  "the create action should toggle the form"
+);
+assert.match(
+  pickerSource,
+  /:class="\{\s*'shopping-create__button--disabled':\s*!canCreate\s*\}"/,
+  "an empty create name should render a disabled confirmation button"
+);
+assert.match(
+  pickerSource,
+  /:disabled="!canCreate"/,
+  "the native confirmation button should not be clickable with an empty name"
+);
+assert.match(
+  pickerSource,
+  /const canCreate = computed\(\(\) => !props\.submitting\);/,
+  "the server should be allowed to generate a name for an empty create request"
+);
+assert.match(
+  pickerSource,
+  /function handleCreate\(\)\s*\{[\s\S]*?if \(!canCreate\.value\) return;[\s\S]*?emit\("create"\);/,
+  "the create event should also be guarded in code"
 );
 assert.match(pickerSource, /shoppingListMetaText\(row\.item\)/, "list cards should show progress and update time");
 assert.doesNotMatch(pickerSource, /memberCount\s*}}\s*人/, "list cards should not show low-value member counts");
 
 assert.match(sheetShellSource, /bodyScroll\?: boolean;/, "sheet shell should expose its body scroll boundary");
 assert.match(sheetShellSource, /bodyScroll: true/, "sheet bodies should remain scrollable by default");
+assert.match(sheetShellSource, /max-height: 82vh;/, "shared sheets should retain the default height");
+assert.doesNotMatch(sheetShellSource, /max-height: 62vh;/, "shared sheets must not inherit the picker height");
 assert.match(sheetShellSource, /'sheet-shell__body--fixed': !bodyScroll/);
 
 const fixedBody = selectorBody(sheetShellSource, ".sheet-shell__body--fixed");
@@ -43,27 +71,26 @@ assert.match(fixedBody, /display: flex;/);
 assert.match(fixedBody, /flex-direction: column;/);
 assert.match(fixedBody, /overflow: hidden;/);
 
-const pinnedLayout = selectorBody(pickerSource, ".shopping-sheet--pinned");
-assert.match(pinnedLayout, /flex: 1 1 auto;/);
-assert.match(pinnedLayout, /min-height: 0;/);
-assert.match(pinnedLayout, /overflow: hidden;/);
+const pickerLayout = selectorBody(pickerSource, ".shopping-sheet");
+assert.match(pickerLayout, /flex: 1 1 auto;/);
+assert.match(pickerLayout, /min-height: 0;/);
+assert.match(pickerLayout, /overflow: hidden;/);
 
-const pinnedCreate = selectorBody(pickerSource, ".shopping-sheet--pinned .shopping-create-section");
-assert.match(pinnedCreate, /order: 1;/);
-assert.match(pinnedCreate, /flex: 0 0 auto;/);
+const createSection = selectorBody(pickerSource, ".shopping-create-section");
+assert.match(createSection, /flex: 0 0 auto;/);
 
-const pinnedList = selectorBody(pickerSource, ".shopping-sheet--pinned .shopping-list-section");
-assert.match(pinnedList, /order: 2;/);
-assert.match(pinnedList, /flex: 1 1 auto;/);
-assert.match(pinnedList, /min-height: 0;/);
-assert.match(pinnedList, /overflow-y: auto;/);
+const listSection = selectorBody(pickerSource, ".shopping-list-section");
+assert.match(listSection, /flex: 1 1 auto;/);
+assert.match(listSection, /min-height: 0;/);
+assert.match(listSection, /overflow-y: auto;/);
 
 assert.match(
   mealDetailSource,
-  /<ShoppingListPickerSheet[\s\S]*?:pin-create="Boolean\(eventDetail\)"[\s\S]*?\/>/,
-  "dining-event detail should opt into the pinned-create layout"
+  /<ShoppingListPickerSheet[\s\S]*?\/>/,
+  "dining-event detail should use the shared picker"
 );
-assert.doesNotMatch(mealPlanSource, /\bpin-create\b/, "meal-plan picker should keep the existing layout");
-assert.doesNotMatch(recipeDetailSource, /\bpin-create\b/, "recipe-detail picker should keep the existing layout");
+assert.doesNotMatch(mealDetailSource, /\bpin-create\b/, "dining-event detail should not control picker layout");
+assert.doesNotMatch(mealPlanSource, /\bpin-create\b/, "meal-plan picker should not control picker layout");
+assert.doesNotMatch(recipeDetailSource, /\bpin-create\b/, "recipe-detail picker should not control picker layout");
 
 console.log("shopping list picker layout tests passed");

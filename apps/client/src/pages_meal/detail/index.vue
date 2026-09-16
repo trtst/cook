@@ -561,7 +561,6 @@
           :selected-id="selectedShoppingListId"
           :create-name="shoppingCreateName"
           :submitting="shoppingWriting"
-          :pin-create="Boolean(eventDetail)"
           @close="closeShoppingSheet"
           @after-close="handleShoppingSheetAfterClose"
           @retry="loadShoppingLists(true)"
@@ -2844,7 +2843,7 @@ async function createShoppingList() {
   try {
     const created = await shoppingApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || buildShoppingDraftName()
+      name: shoppingCreateName.value.trim() || null
     });
     shoppingLists.value = [
       created,

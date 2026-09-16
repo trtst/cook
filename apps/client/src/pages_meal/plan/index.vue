@@ -980,7 +980,7 @@ async function createShoppingList() {
   try {
     const created = await shoppingListApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || buildShoppingDraftName(shoppingPlan.value)
+      name: shoppingCreateName.value.trim() || null
     });
     shoppingLists.value = [
       created,

@@ -21,6 +21,7 @@ for (const flow of createFlows) {
   assert.match(flow, /shoppingLists\.value = \[/, "create success should update the local picker list");
   assert.match(flow, /\.\.\.shoppingLists\.value\.filter\(item => item\.id !== created\.id\)/);
   assert.match(flow, /selectedShoppingListId\.value = created\.id/);
+  assert.match(flow, /name: shoppingCreateName\.value\.trim\(\) \|\| null/);
 }
 
 console.log("shopping list create flow tests passed");

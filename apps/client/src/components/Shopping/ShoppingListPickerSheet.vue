@@ -3,16 +3,36 @@
     :visible="visible"
     :title="title"
     :subtitle="subtitle"
-    :body-scroll="!pinCreate"
+    :body-scroll="false"
+    :panel-style="{ maxHeight: '62vh' }"
     @close="emit('close')"
     @after-close="emit('afterClose')"
   >
-    <view
-      class="shopping-sheet"
-      :class="{ 'shopping-sheet--pinned': pinCreate }"
-    >
+    <view class="shopping-sheet">
+      <view class="shopping-create-section">
+        <view class="shopping-create-section__head">
+          <text class="sheet-section__title">{{ listTitle }}</text>
+          <view class="sheet-section__action" @click="toggleCreateForm">
+            {{ showCreateForm ? "取消" : createTitle }}
+          </view>
+        </view>
+        <view v-if="showCreateForm" class="shopping-create">
+          <input
+            v-model="createNameModel"
+            class="shopping-create__input"
+            maxlength="30"
+            :placeholder="createPlaceholder"
+          />
+          <button
+            class="shopping-create__button"
+            :class="{ 'shopping-create__button--disabled': !canCreate }"
+            :disabled="!canCreate"
+            @click="handleCreate"
+          >新建</button>
+        </view>
+      </view>
+
       <view class="sheet-section shopping-list-section">
-        <text class="sheet-section__title">{{ listTitle }}</text>
         <view v-if="loading" class="shopping-sheet__state">加载中...</view>
         <view v-else-if="errorText" class="shopping-sheet__state shopping-sheet__state--error" @click="emit('retry')">
           {{ errorText }}
@@ -30,19 +50,6 @@
           </view>
         </view>
         <text v-else class="sheet-section__hint">{{ emptyText }}</text>
-      </view>
-
-      <view class="sheet-section shopping-create-section">
-        <text class="sheet-section__title">{{ createTitle }}</text>
-        <view class="shopping-create">
-          <input
-            v-model="createNameModel"
-            class="shopping-create__input"
-            maxlength="30"
-            :placeholder="createPlaceholder"
-          />
-          <view class="shopping-create__button" @click="emit('create')">新建</view>
-        </view>
       </view>
     </view>
 
@@ -68,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { shoppingListMetaText, shoppingListRows } from "./shopping-list-meta";
@@ -89,7 +96,6 @@ const props = withDefaults(defineProps<{
   selectedId: UUID | "";
   createName: string;
   submitting: boolean;
-  pinCreate?: boolean;
   title?: string;
   subtitle?: string;
   listTitle?: string;
@@ -101,7 +107,6 @@ const props = withDefaults(defineProps<{
   confirmLoadingText?: string;
 }>(), {
   errorText: "",
-  pinCreate: false,
   title: "加入采购清单",
   subtitle: "先选一张采购中的清单，也可以现场新建空白清单。",
   listTitle: "采购中清单",
@@ -133,6 +138,26 @@ const createNameModel = computed({
   set: (value: string) => emit("update:createName", value)
 });
 const listRows = computed(() => shoppingListRows(props.items, props.selectedId));
+const canCreate = computed(() => !props.submitting);
+const showCreateForm = ref(false);
+
+watch(
+  () => props.visible,
+  visible => {
+    if (!visible) return;
+    showCreateForm.value = false;
+  }
+);
+
+function toggleCreateForm() {
+  showCreateForm.value = !showCreateForm.value;
+  if (!showCreateForm.value) createNameModel.value = "";
+}
+
+function handleCreate() {
+  if (!canCreate.value) return;
+  emit("create");
+}
 
 function handleClose() {
   if (props.submitting) return;
@@ -149,22 +174,24 @@ function handleConfirm() {
 .shopping-sheet {
   display: flex;
   flex-direction: column;
-}
-
-.shopping-sheet--pinned {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
 
-.shopping-sheet--pinned .shopping-create-section {
-  order: 1;
+.shopping-create-section {
   flex: 0 0 auto;
   padding: 24rpx 0;
 }
 
-.shopping-sheet--pinned .shopping-list-section {
-  order: 2;
+.shopping-create-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.shopping-list-section {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -179,6 +206,13 @@ function handleConfirm() {
 .sheet-section__title {
   color: var(--color-text);
   font-size: 28rpx;
+  font-weight: var(--font-weight-semibold);
+}
+
+.sheet-section__action {
+  flex: 0 0 auto;
+  color: var(--color-tag-primary-text);
+  font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -249,7 +283,8 @@ function handleConfirm() {
 
 .shopping-create__input {
   flex: 1;
-  min-height: 88rpx;
+  height: 80rpx;
+  line-height: 1;
   padding: 0 28rpx;
   border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
@@ -266,13 +301,24 @@ function handleConfirm() {
   align-items: center;
   justify-content: center;
   min-width: 124rpx;
-  min-height: 88rpx;
+  height: 80rpx;
+  border: 0;
+  line-height: 1;
   padding: 0 28rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-tag-primary-bg);
-  color: var(--color-tag-primary-text);
+  border-radius: var(--radius-pill);
+  background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
+  color: var(--button-primary-text);
   font-size: 26rpx;
   font-weight: var(--font-weight-semibold);
+}
+
+.shopping-create__button::after {
+  border: 0;
+}
+
+.shopping-create__button--disabled {
+  opacity: 0.8;
 }
 
 .sheet-actions {
