@@ -23,7 +23,7 @@
           <input
             v-model="categoryDraftName"
             class="sheet-creator__input"
-            maxlength="4"
+            maxlength="8"
             placeholder="输入分类名称"
             :disabled="categorySubmitting"
           />
@@ -135,8 +135,8 @@ function toggleCategoryCreator() {
 async function createCategory() {
   const name = categoryDraftName.value.trim();
   if (!name || categorySubmitting.value) return;
-  if (name.length > 4) {
-    await uniPlatform.feedback.toast({ title: "分类最多4个字", icon: "none" });
+  if (name.length > 8) {
+    await uniPlatform.feedback.toast({ title: "分类最多8个字", icon: "none" });
     return;
   }
   categorySubmitting.value = true;
@@ -264,7 +264,8 @@ async function submit() {
 .sheet-creator__input {
   flex: 1;
   min-width: 0;
-  height: 84rpx;
+  height: 80rpx;
+  line-height: 1;
   padding: 0 24rpx;
   border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
@@ -278,7 +279,7 @@ async function submit() {
 
 .sheet-creator__button {
   flex: 0 0 auto;
-  height: 84rpx;
+  height: 80rpx;
   padding: 0 28rpx;
   border: 0;
   border-radius: var(--radius-xs);
@@ -286,7 +287,7 @@ async function submit() {
   color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 84rpx;
+  line-height: 1;
 }
 
 .sheet-creator__button--disabled,

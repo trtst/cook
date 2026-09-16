@@ -116,7 +116,7 @@
             </view>
           </view>
           <view v-if="showCategoryCreator" class="plan-sheet__creator">
-            <input v-model="categoryDraftName" class="plan-sheet__creator-input" maxlength="4" placeholder="输入分类名称" :disabled="categorySubmitting" />
+            <input v-model="categoryDraftName" class="plan-sheet__creator-input" maxlength="8" placeholder="输入分类名称" :disabled="categorySubmitting" />
             <button class="plan-sheet__creator-button" @click="createCategory">
               {{ categorySubmitting ? "创建中" : "确定" }}
             </button>

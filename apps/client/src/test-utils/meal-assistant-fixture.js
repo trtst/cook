@@ -247,16 +247,25 @@ function buildReadyImportDocument(categoryId, ingredient) {
         difficulty: "EASY",
         duration: "BETWEEN_15_30",
         tips: "按做饭助手步骤完成即可。",
-        ingredients: [{ name: ingredient.name, quantity: "100", unit: "克" }],
+        keywords: [],
+        ingredients: [{
+          name: ingredient.name,
+          quantity: "100",
+          unit: "克",
+          fuzzyText: null,
+          categoryCode: "PRODUCE"
+        }],
         tools: [{ name: "炒锅" }],
         steps: [
           {
             text: "准备食材并检查调味料。",
-            imageUrl: null
+            imageUrl: null,
+            imagePrompt: "案板上检查食材并完成备菜，真实中式家常场景，不出现文字"
           },
           {
             text: "下锅翻炒 6 分钟后装盘。",
-            imageUrl: null
+            imageUrl: null,
+            imagePrompt: "锅中翻炒食材并准备装盘，真实中式家常场景，不出现文字"
           }
         ]
       }
@@ -280,6 +289,7 @@ function buildReadyImportDocument(categoryId, ingredient) {
             title: "备菜",
             detail: "准备食材并检查调味料。",
             imageUrl: null,
+            imagePrompt: "做饭助理视角检查食材并完成备菜，真实中式家常场景，不出现文字",
             durationMinutes: 5,
             durationText: "约 5 分钟"
           },
@@ -290,6 +300,7 @@ function buildReadyImportDocument(categoryId, ingredient) {
             title: "翻炒",
             detail: "下锅翻炒 6 分钟。",
             imageUrl: null,
+            imagePrompt: "锅中翻炒食材并控制火候，真实中式家常场景，不出现文字",
             durationMinutes: 6,
             durationText: "约 6 分钟"
           },
@@ -300,6 +311,7 @@ function buildReadyImportDocument(categoryId, ingredient) {
             title: "装盘",
             detail: "关火装盘上桌。",
             imageUrl: null,
+            imagePrompt: "将炒好的菜肴盛入盘中准备上桌，真实中式家常场景，不出现文字",
             durationMinutes: 2,
             durationText: "约 2 分钟"
           }

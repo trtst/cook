@@ -15,7 +15,7 @@ export interface RecipePreviewAmount {
   unitId?: UUID | "";
   unitName?: string;
   unitType?: UnitType;
-  text?: "适量" | "少许" | "按需";
+  text?: "适量";
 }
 
 export interface RecipePreviewIngredient {

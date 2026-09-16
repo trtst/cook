@@ -74,7 +74,7 @@
                 <text class="unit-guide__title">用量选择及填写建议</text>
                 <text class="unit-guide__text">优先使用:克、千克（重量），毫升、升（容量）。</text>
                 <text class="unit-guide__text">日常单位:个、瓣、包、盒等，仅在表述自然时使用。</text>
-                <text class="unit-guide__text">少用模糊词:尽量用具体数字替代“适量、少许、按需”。</text>
+                <text class="unit-guide__text">如方便，优先填写准确用量；“适量”仅用于难以准确计量的辅助食材或佐料。</text>
               </view>
               <view v-if="unitErrorText" class="notice notice--error" @click="retryLoadActiveTab">{{ unitErrorText }}</view>
               <template v-else-if="unitLoading && !unitGroups.length">

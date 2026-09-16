@@ -126,16 +126,14 @@
                   @touchend.stop="finishIngredientDrag"
                   @touchcancel.stop="finishIngredientDrag"
                 />
-                <input
-                  v-model="row.name"
+                <view
                   class="ingredient-line__field ingredient-line__field--name"
-                  maxlength="30"
-                  placeholder="食材"
-                  placeholder-class="ingredient-line__input-placeholder"
-                  @focus="handleFormFieldFocus"
-                  @blur="handleFormFieldBlur"
-                />
+                  @click="openIngredientReplacementSheet(row.localId)"
+                >
+                  <text :class="{ 'ingredient-line__placeholder': !row.name }">{{ row.name || "选择食材" }}</text>
+                </view>
                 <input
+                  v-if="!row.fuzzyText"
                   v-model="row.quantity"
                   class="ingredient-line__field ingredient-line__field--quantity"
                   maxlength="20"
@@ -168,7 +166,7 @@
               <view class="ingredient-line__field ingredient-line__field--name">
                 {{ ingredientGhostRow.name || "食材" }}
               </view>
-              <view class="ingredient-line__field ingredient-line__field--quantity">
+              <view v-if="!ingredientGhostRow.fuzzyText" class="ingredient-line__field ingredient-line__field--quantity">
                 {{ ingredientGhostRow.quantity || "数量" }}
               </view>
               <view class="ingredient-line__field ingredient-line__field--unit">
@@ -605,6 +603,18 @@
             </template>
 
             <template v-else-if="sheetMode === 'unit'">
+              <view v-if="activeUnitRow?.categoryCode === 'SEASONING'" class="sheet-section">
+                <text class="sheet-section__title">模糊用量</text>
+                <view class="chip-row">
+                  <view
+                    class="chip"
+                    :class="{ 'chip--active': activeUnitRow?.fuzzyText === '适量' }"
+                    @click="selectFuzzyAmount"
+                  >
+                    适量
+                  </view>
+                </view>
+              </view>
               <view
                 v-for="group in unitGroups"
                 :key="group.type"
@@ -629,7 +639,7 @@
                 <view class="sheet-section__head">
                   <view class="sheet-section__meta">
                     <text class="sheet-section__title">个人分类</text>
-                    <text class="sheet-section__tag">最多4字</text>
+                    <text class="sheet-section__tag">最多8字</text>
                   </view>
                   <view class="sheet-section__action" @click="toggleCategoryCreator">
                     {{ showCategoryCreator ? "取消" : "添加分类" }}
@@ -639,7 +649,7 @@
                   <input
                     v-model="categoryDraftName"
                     class="sheet-creator__input"
-                    maxlength="4"
+                    maxlength="8"
                     placeholder="输入分类名称"
                     :disabled="categorySubmitting"
                   />
@@ -651,16 +661,31 @@
                     {{ categorySubmitting ? "添加中" : "确定" }}
                   </button>
                 </view>
-                <view v-if="categories.length" class="chip-row">
+                <view v-if="categories.length" class="chip-row category-chip-row">
                   <view
-                    v-for="item in categories"
-                    :key="item.id"
+                    v-for="row in categoryDisplay.rows"
+                    :key="row.item.id"
                     class="chip"
-                    :class="{ 'chip--active': advancedForm.categoryId === item.id }"
-                    @click="advancedForm.categoryId = item.id"
+                    :class="{
+                      'chip--active': advancedForm.categoryId === row.item.id,
+                      'chip--extra': row.extra,
+                      'chip--extra-expanded': categoryDisplay.expanded && row.extra
+                    }"
+                    @click="advancedForm.categoryId = row.item.id"
                   >
-                    {{ item.name }}
+                    {{ row.item.name }}
                   </view>
+                </view>
+                <view
+                  v-if="categoryDisplay.showToggle"
+                  class="category-chip-row__toggle"
+                  hover-class="category-chip-row__toggle--hover"
+                  hover-stay-time="100"
+                  @click="toggleCategoryList"
+                >
+                  <view class="category-chip-row__toggle-line" />
+                  <text class="category-chip-row__toggle-text">{{ categoryDisplay.toggleText }}</text>
+                  <view class="category-chip-row__toggle-line" />
                 </view>
                 <text v-else class="sheet-section__hint">当前还没有个人分类。</text>
               </view>
@@ -804,6 +829,12 @@ import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { buildIngredientUnitHint, resolveRecommendedIngredientUnitName } from "@/pages_recipe/ingredient-unit-policy";
+import {
+  applyIngredientSelection,
+  canUseFuzzyAmount,
+  chooseFuzzyAmount
+} from "./ingredient-row-policy";
+import { buildCategoryDisplay } from "./category-display";
 import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -834,7 +865,7 @@ import {
   durationText as recipeDurationText
 } from "@/utils/recipe-meta";
 
-type FuzzyAmount = "适量" | "少许" | "按需";
+type FuzzyAmount = "适量";
 type SheetMode = "" | "ingredient" | "unit" | "advanced";
 type ResourceId = UUID;
 type OptionalResourceId = UUID | "";
@@ -848,6 +879,7 @@ interface IngredientRow {
   unitId: OptionalResourceId;
   fuzzyText: FuzzyAmount | "";
   categoryId: OptionalResourceId;
+  categoryCode: string;
   defaultUnitId: OptionalResourceId;
   source: IngredientSource | "";
 }
@@ -883,6 +915,7 @@ interface RecipeEditCacheIngredientSnapshot {
   unitId: OptionalResourceId;
   fuzzyText: FuzzyAmount | "";
   categoryId: OptionalResourceId;
+  categoryCode?: string;
   defaultUnitId: OptionalResourceId;
   source: IngredientSource | "";
 }
@@ -1016,6 +1049,7 @@ const ingredientCreateVisible = ref(false);
 const ingredientCreateSubmitting = ref(false);
 const ingredientCreateSection = ref<"" | "category" | "unit">("");
 const formFieldFocused = ref(false);
+const activeIngredientRowId = ref("");
 const activeUnitRowId = ref("");
 const categoriesLoaded = ref(false);
 const inspirationCategoriesLoaded = ref(false);
@@ -1067,6 +1101,7 @@ const showCategoryCreator = ref(false);
 const showCustomBaseServings = ref(false);
 const categoryDraftName = ref("");
 const categorySubmitting = ref(false);
+const categoryExpanded = ref(false);
 
 const baseServingsOptions = ["1", "2", "3", "4", "6", "8", "10"];
 const unitTypeLabelMap: Record<UnitSummary["type"], string> = {
@@ -1109,6 +1144,7 @@ const pendingIngredients = computed(() => {
 });
 const pendingSelectedIngredients = computed(() => [...pendingIngredients.value].reverse());
 const pendingIngredientAddCount = computed(() => {
+  if (activeIngredientRowId.value) return 0;
   const existingIds = new Set(ingredientRows.value.map(item => item.ingredientId).filter(Boolean));
   return pendingIngredients.value.filter(item => !existingIds.has(item.id)).length;
 });
@@ -1123,6 +1159,7 @@ const ingredientHintText = computed(() => {
 const sheetTitle = computed(() => {
   if (sheetMode.value === "ingredient") {
     if (ingredientCreateVisible.value) return ingredientCreateDraft.id ? "编辑食材" : "创建食材";
+    if (activeIngredientRowId.value) return "更换食材";
     return "选择食材";
   }
   if (sheetMode.value === "unit") return "选择单位";
@@ -1165,6 +1202,7 @@ const ingredientEmptyText = computed(() => {
   }
   return "没有符合条件的食材";
 });
+const categoryDisplay = computed(() => buildCategoryDisplay(categories.value, categoryExpanded.value));
 const showIngredientEmptyCreate = computed(() => ingredientSourceFilter.value === "PERSONAL");
 const ingredientFooterText = computed(() => {
   if (ingredientLoadingMore.value) return "加载中...";
@@ -1770,6 +1808,7 @@ function fillForm(content: RecipeDraftContentInput) {
           unitId: item.unitId || "",
           fuzzyText: item.fuzzyText || "",
           categoryId: item.categoryId || "",
+          categoryCode: ingredientCategoryCode(item.categoryId),
           defaultUnitId: item.defaultUnitId || (item.ingredientId ? ingredientMap.get(item.ingredientId)?.defaultUnit.id || "" : ""),
           source: item.source || (item.ingredientId ? ingredientMap.get(item.ingredientId)?.source || "" : "")
         })
@@ -1827,10 +1866,23 @@ function openSheet(mode: SheetMode) {
 
 function handleSheetAfterClose() {
   sheetMode.value = "";
+  activeIngredientRowId.value = "";
   activeUnitRowId.value = "";
 }
 
 async function openIngredientSheet() {
+  activeIngredientRowId.value = "";
+  await openIngredientPicker([]);
+}
+
+async function openIngredientReplacementSheet(localId: string) {
+  const row = ingredientRows.value.find(item => item.localId === localId);
+  if (!row) return;
+  activeIngredientRowId.value = localId;
+  await openIngredientPicker(row.ingredientId ? [row.ingredientId] : []);
+}
+
+async function openIngredientPicker(selectedIds: ResourceId[]) {
   ingredientKeyword.value = "";
   ingredientLoadedKeyword.value = "";
   ingredientSourceFilter.value = "ALL";
@@ -1840,7 +1892,7 @@ async function openIngredientSheet() {
   ingredientOptions.value = [];
   ingredientVisibleCount.value = 0;
   ingredientSearchPending.value = false;
-  pendingIngredientIds.value = [];
+  pendingIngredientIds.value = selectedIds;
   resetIngredientCreate();
   try {
     await ensureIngredientCategoriesLoaded();
@@ -1916,6 +1968,10 @@ function openPreviewSheet() {
 
 function togglePendingIngredient(ingredientId: ResourceId) {
   dismissSheetKeyboard();
+  if (activeIngredientRowId.value) {
+    pendingIngredientIds.value = [ingredientId];
+    return;
+  }
   if (pendingIngredientIds.value.includes(ingredientId)) {
     pendingIngredientIds.value = pendingIngredientIds.value.filter(item => item !== ingredientId);
     return;
@@ -2039,6 +2095,24 @@ async function confirmIngredientSelection() {
     exitIngredientSearch();
     return;
   }
+  if (activeIngredientRowId.value) {
+    const row = ingredientRows.value.find(item => item.localId === activeIngredientRowId.value);
+    const selected = pendingIngredients.value[0];
+    if (!row || !selected) {
+      await uniPlatform.feedback.toast({ title: "请选择食材", icon: "none" });
+      return;
+    }
+    applyIngredientSelection(row, {
+      id: selected.id,
+      name: selected.name,
+      categoryId: selected.categoryId,
+      categoryCode: ingredientCategoryCode(selected.categoryId),
+      defaultUnitId: selected.defaultUnit.id,
+      source: selected.source
+    });
+    closeSheet();
+    return;
+  }
   const additions = buildIngredientAdditions(pendingIngredients.value);
   if (!additions.length) {
     await uniPlatform.feedback.toast({ title: "所选食材已在列表中", icon: "none" });
@@ -2091,7 +2165,9 @@ async function confirmIngredientEditor() {
     });
     applyIngredientUpdate(created);
     ingredientCategoryId.value = created.categoryId;
-    pendingIngredientIds.value = Array.from(new Set([...pendingIngredientIds.value, created.id]));
+    pendingIngredientIds.value = activeIngredientRowId.value
+      ? [created.id]
+      : Array.from(new Set([...pendingIngredientIds.value, created.id]));
     ingredientKeyword.value = "";
     resetIngredientCreate();
     await reloadIngredientOptions();
@@ -2155,6 +2231,7 @@ function resetAdvancedAuxState() {
 	showCustomBaseServings.value = shouldShowCustomBaseServings(advancedForm.baseServingsText);
 	categoryDraftName.value = "";
 	categorySubmitting.value = false;
+  categoryExpanded.value = false;
 }
 
 function normalizeBaseServingsText(value: string) {
@@ -2181,8 +2258,8 @@ function toggleCategoryCreator() {
 async function createCategoryTag() {
   const name = categoryDraftName.value.trim();
   if (!name || categorySubmitting.value) return;
-  if (name.length > 4) {
-    await uniPlatform.feedback.toast({ title: "分类最多4个字", icon: "none" });
+  if (name.length > 8) {
+    await uniPlatform.feedback.toast({ title: "分类最多8个字", icon: "none" });
     return;
   }
   categorySubmitting.value = true;
@@ -2202,6 +2279,11 @@ async function createCategoryTag() {
   } finally {
     categorySubmitting.value = false;
   }
+}
+
+function toggleCategoryList() {
+  if (!categoryDisplay.value.showToggle) return;
+  categoryExpanded.value = !categoryExpanded.value;
 }
 
 function openCustomBaseServings() {
@@ -2366,11 +2448,21 @@ function selectUnitOption(unitId: ResourceId) {
   const unit = units.value.find(item => item.id === unitId);
   const row = activeUnitRow.value;
   if (!unit || !row) return;
+  if (row.fuzzyText) {
+    row.quantity = "";
+  }
   row.unitId = unit.id;
   row.fuzzyText = "";
   if (!row.defaultUnitId) {
     row.defaultUnitId = unit.id;
   }
+  closeSheet();
+}
+
+function selectFuzzyAmount() {
+  const row = activeUnitRow.value;
+  if (!row) return;
+  if (!chooseFuzzyAmount(row)) return;
   closeSheet();
 }
 
@@ -2423,6 +2515,7 @@ function buildRecipeEditCachePayload(): Omit<RecipeEditCacheEntry, "savedAt"> {
       unitId: row.unitId,
       fuzzyText: row.fuzzyText,
       categoryId: row.categoryId,
+      categoryCode: row.categoryCode,
       defaultUnitId: row.defaultUnitId,
       source: row.source
     })),
@@ -3105,14 +3198,19 @@ async function buildSaveIngredients(): Promise<RecipeDraftIngredientInput[]> {
 }
 
 async function buildIngredients(): Promise<RecipeIngredientInput[]> {
-  const createdMap = new Map<string, IngredientSummary>();
   const rows = buildFilledIngredientRows();
   const result: RecipeIngredientInput[] = [];
 
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const ingredientId = await ensureIngredientRow(row, index, createdMap);
+    if (!row.ingredientId) {
+      throw new Error(`请重新选择第 ${index + 1} 个食材`);
+    }
+    const ingredientId = row.ingredientId;
     if (row.fuzzyText) {
+      if (!canUseFuzzyAmount(row.categoryCode)) {
+        throw new Error(`第 ${index + 1} 个食材不是调味料，不能使用“适量”`);
+      }
       result.push({
         ingredientId,
         amount: {
@@ -3143,53 +3241,6 @@ async function buildIngredients(): Promise<RecipeIngredientInput[]> {
   return result;
 }
 
-async function ensureIngredientRow(
-  row: IngredientRow,
-  index: number,
-  createdMap: Map<string, IngredientSummary>
-): Promise<ResourceId> {
-  const name = row.name.trim();
-  if (!name) {
-    throw new Error(`请填写第 ${index + 1} 个食材名称`);
-  }
-
-  const matched = await findIngredientByName(name, row.ingredientId);
-  if (matched) {
-    row.ingredientId = matched.id;
-    row.categoryId = matched.categoryId;
-    row.defaultUnitId = matched.defaultUnit.id;
-    row.source = matched.source;
-    return matched.id;
-  }
-
-  if (!row.categoryId) {
-    throw new Error(`请重新选择第 ${index + 1} 个食材`);
-  }
-  const defaultUnitId = row.unitId || row.defaultUnitId;
-  if (!defaultUnitId) {
-    throw new Error(`请选择第 ${index + 1} 个食材的单位`);
-  }
-
-  const cacheKey = `${normalizeText(name)}:${row.categoryId}:${defaultUnitId}`;
-  let created = createdMap.get(cacheKey);
-  if (!created) {
-    created = await recipeApi.createIngredient({
-      operationId: createOperationId(),
-      name,
-      categoryId: row.categoryId,
-      defaultUnitId
-    });
-    createdMap.set(cacheKey, created);
-  }
-  applyIngredientUpdate(created);
-
-  row.ingredientId = created.id;
-  row.categoryId = created.categoryId;
-  row.defaultUnitId = created.defaultUnit.id;
-  row.source = created.source;
-  return created.id;
-}
-
 function buildFilledIngredientRows() {
   return ingredientRows.value.filter(item => {
     return Boolean(item.name.trim() || item.quantity.trim() || item.unitId || item.fuzzyText);
@@ -3208,6 +3259,7 @@ function buildIngredientAdditions(list: IngredientSummary[]) {
         unitId: item.defaultUnit.id,
         fuzzyText: "",
         categoryId: item.categoryId,
+        categoryCode: ingredientCategoryCode(item.categoryId),
         defaultUnitId: item.defaultUnit.id,
         source: item.source
       })
@@ -3225,8 +3277,14 @@ function applyIngredientUpdate(updated: IngredientSummary, previousDefaultUnitId
     if (row.ingredientId !== updated.id) return;
     row.name = updated.name;
     row.categoryId = updated.categoryId;
+    row.categoryCode = ingredientCategoryCode(updated.categoryId);
     row.source = updated.source;
     row.defaultUnitId = updated.defaultUnit.id;
+    if (row.fuzzyText && !canUseFuzzyAmount(row.categoryCode)) {
+      row.quantity = "";
+      row.unitId = updated.defaultUnit.id;
+      row.fuzzyText = "";
+    }
     if (previousDefaultUnitId && row.unitId === previousDefaultUnitId) {
       row.unitId = updated.defaultUnit.id;
     }
@@ -3234,17 +3292,25 @@ function applyIngredientUpdate(updated: IngredientSummary, previousDefaultUnitId
 }
 
 function createIngredientRow(partial: Partial<Omit<IngredientRow, "localId">> = {}): IngredientRow {
+  const categoryCode = partial.categoryCode || ingredientCategoryCode(partial.categoryId);
+  const fuzzyText = partial.fuzzyText && canUseFuzzyAmount(categoryCode) ? "适量" : "";
   return {
     localId: nextLocalId("ingredient"),
     ingredientId: partial.ingredientId || "",
     name: partial.name || "",
     quantity: partial.quantity || "",
-    unitId: partial.unitId || "",
-    fuzzyText: partial.fuzzyText || "",
+    unitId: partial.unitId || (partial.fuzzyText && !fuzzyText ? partial.defaultUnitId || "" : ""),
+    fuzzyText,
     categoryId: partial.categoryId || "",
+    categoryCode,
     defaultUnitId: partial.defaultUnitId || "",
     source: partial.source || ""
   };
+}
+
+function ingredientCategoryCode(categoryId: OptionalResourceId | null | undefined) {
+  if (!categoryId) return "";
+  return ingredientCategories.value.find(item => item.id === categoryId)?.code || "";
 }
 
 function matchesCurrentIngredientFilter(item: IngredientSummary) {
@@ -3255,26 +3321,6 @@ function matchesCurrentIngredientFilter(item: IngredientSummary) {
   const keyword = normalizeText(ingredientSearchText.value);
   if (keyword && !normalizeText(item.name).includes(keyword)) return false;
   return true;
-}
-
-async function findIngredientByName(name: string, currentId: OptionalResourceId) {
-  const searchKey = normalizeText(name);
-  if (!searchKey) return null;
-  const current = ingredients.value.find(item => item.id === currentId && normalizeText(item.name) === searchKey);
-  if (current) return current;
-  const personal = ingredients.value.find(item => item.source === "PERSONAL" && normalizeText(item.name) === searchKey);
-  if (personal) return personal;
-  const local = ingredients.value.find(item => normalizeText(item.name) === searchKey);
-  if (local) return local;
-
-  const result = await recipeApi.listIngredients({
-    page: 1,
-    pageSize: 50,
-    keyword: name,
-    source: "ALL"
-  });
-  mergeIngredients(result.items);
-  return result.items.find(item => normalizeText(item.name) === searchKey) || null;
 }
 
 function resetIngredientCreate() {
@@ -3894,6 +3940,71 @@ function nextSlotKey() {
   color: var(--color-tag-primary-text);
 }
 
+.category-chip-row {
+  gap: 0;
+}
+
+.category-chip-row .chip {
+  overflow: hidden;
+  margin-right: 14rpx;
+  margin-bottom: 14rpx;
+  transition:
+    max-width 260ms ease,
+    max-height 260ms ease,
+    margin 260ms ease,
+    padding 260ms ease,
+    opacity 180ms ease,
+    transform 260ms ease;
+}
+
+.category-chip-row .chip--extra {
+  max-width: 0;
+  max-height: 0;
+  margin-right: 0;
+  margin-bottom: 0;
+  padding-right: 0;
+  padding-left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8rpx);
+}
+
+.category-chip-row .chip--extra-expanded {
+  max-width: 320rpx;
+  max-height: 64rpx;
+  margin-right: 14rpx;
+  margin-bottom: 14rpx;
+  padding-right: 20rpx;
+  padding-left: 20rpx;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.category-chip-row__toggle {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 2rpx;
+  padding: 12rpx 0;
+}
+
+.category-chip-row__toggle-line {
+  height: 1rpx;
+  flex: 1;
+  background: var(--color-divider);
+}
+
+.category-chip-row__toggle-text {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.category-chip-row__toggle--hover {
+  opacity: 0.58;
+}
+
 .sheet-section__head {
   display: flex;
   align-items: center;
@@ -3932,7 +4043,8 @@ function nextSlotKey() {
 .sheet-creator__input {
   flex: 1;
   min-width: 0;
-  height: 82rpx;
+  height: 80rpx;
+  line-height: 1;
   padding: 0 24rpx;
   border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
@@ -4449,7 +4561,8 @@ function nextSlotKey() {
   align-items: center;
   justify-content: center;
   min-width: 156rpx;
-  height: 76rpx;
+  height: 80rpx;
+  line-height: 1;
   margin-top: 20rpx;
   border-radius: var(--radius-pill);
   background: var(--button-primary-bg);

@@ -235,6 +235,11 @@ describe("pages_recipe/edit/index", () => {
     expect(state.advancedSummary).toContain("轻松上手");
     expect(state.advancedSummary).toContain("15分钟内");
   });
+
+  it("已选择食材的名称使用重新选择控件而不是文本输入框", async () => {
+    expect(await page.$("input.ingredient-line__field--name")).toBeNull();
+    expect(await page.$(".ingredient-line__field--name")).not.toBeNull();
+  });
 });
 
 if (!hasAutomatorRuntime) {
@@ -247,4 +252,5 @@ if (!hasAutomatorRuntime) {
     nodeAssert.doesNotMatch(editSource, /generateMyRecipeAssistant/);
     nodeAssert.doesNotMatch(editSource, /生成做饭建议/);
   });
+
 }

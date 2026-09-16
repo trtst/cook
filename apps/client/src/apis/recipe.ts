@@ -17,7 +17,7 @@ export type RecipeAmountInput =
 	  }
 	| {
 			kind: "FUZZY";
-			text: "适量" | "少许" | "按需";
+			text: "适量";
 	  };
 
 export type RecipeAmountSnapshot =
@@ -30,7 +30,7 @@ export type RecipeAmountSnapshot =
 	  }
 	| {
 			kind: "FUZZY";
-			text: "适量" | "少许" | "按需";
+			text: "适量";
 	  };
 
 export interface RecipeCategorySummary {
@@ -53,6 +53,7 @@ export interface InspirationCategorySummary {
 
 export interface IngredientCategorySummary {
 	id: UUID;
+	code: string;
 	name: string;
 }
 
@@ -91,7 +92,7 @@ export interface RecipeDraftIngredientInput {
 	name: string;
 	quantity: string;
 	unitId: UUID | null;
-	fuzzyText: "适量" | "少许" | "按需" | null;
+	fuzzyText: "适量" | null;
 	categoryId: UUID | null;
 	defaultUnitId: UUID | null;
 	source: IngredientSource | null;
