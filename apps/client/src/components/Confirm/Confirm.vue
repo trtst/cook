@@ -180,7 +180,7 @@ function acceptConfirm() {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 70rpx;
+  height: 80rpx;
   border: 0;
   border-radius: var(--radius-pill);
   font-size: 26rpx;

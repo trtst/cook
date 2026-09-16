@@ -984,7 +984,8 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 .sheet-creator__input {
   flex: 1;
   min-width: 0;
-  height: 84rpx;
+  height: 80rpx;
+  line-height: 1;
   padding: 0 24rpx;
   border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
@@ -999,7 +1000,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 
 .sheet-creator__button {
   flex: 0 0 auto;
-  height: 84rpx;
+  height: 80rpx;
   padding: 0 28rpx;
   border: none;
   border-radius: var(--radius-xs);
@@ -1007,7 +1008,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
-  line-height: 84rpx;
+  line-height: 1;
 }
 
 .chip-row {
