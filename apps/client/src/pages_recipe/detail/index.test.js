@@ -672,8 +672,15 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailSource, /canOpenRecipeAssistant/);
     nodeAssert.match(detailSource, /openRecipeAssistant/);
     nodeAssert.match(detailSource, /\/pages_recipe\/assistant\/index\?recipeVersionId=/);
-    nodeAssert.match(detailSource, /做饭助手/);
+    nodeAssert.match(detailSource, /炊火智厨/);
     nodeAssert.doesNotMatch(detailSource, /getRecipeVersionCookAssistant/);
     nodeAssert.doesNotMatch(detailSource, /unlockRecipeVersionCookAssistant/);
+  });
+
+  nodeTest("recipe detail names the plan and assistant actions explicitly", () => {
+    nodeAssert.match(detailSource, /detail-actions__text">添加计划<\/view>/);
+    nodeAssert.match(detailSource, /detail-actions__text">炊火智厨<\/view>/);
+    nodeAssert.doesNotMatch(detailSource, /detail-actions__text">添加<\/view>/);
+    nodeAssert.doesNotMatch(detailSource, /detail-actions__text">助手<\/view>/);
   });
 }

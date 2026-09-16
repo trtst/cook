@@ -36,12 +36,52 @@ assert.ok(source.includes('?.nickname?.trim() || "";'), "Expected an empty owner
 assert.ok(!source.includes("curatedByName"), "Expected legacy curatedByName attribution to be removed.");
 
 assert.ok(
-  source.includes('<text class="cookfont summary-card__report-entry-icon">&#xe710;</text>'),
-  "Expected the recipe report entry to render the report icon before its label."
+  source.includes('<view class="summary-card__title-row">'),
+  "Expected the recipe title and share action to share one aligned row."
 );
 assert.ok(
-  source.includes(".summary-card__report-entry-icon"),
-  "Expected the recipe report icon to keep an explicit alignment style."
+  source.includes('class="summary-card__share" open-type="share"'),
+  "Expected sharing to remain available beside the recipe title."
+);
+assert.ok(
+  source.includes('v-if="showReportEntry" class="detail-inline-actions__item"'),
+  "Expected the report action to be the external recipe inline action."
+);
+assert.ok(
+  !source.includes('class="summary-card__report-entry"'),
+  "Expected the report action to leave the summary card."
+);
+assert.ok(
+  !source.includes('<view class="detail-actions__text">分享</view>'),
+  "Expected the bottom action bar not to duplicate sharing."
+);
+assert.ok(
+  source.includes('<view id="detail-steps" class="section">\n                <view class="section__head">\n                  <view class="section__head-main">'),
+  "Expected the step caption to share the left-aligned section heading group."
+);
+assert.ok(
+  source.includes('v-if="showStickyActions"\n                    class="section__action"\n                    @click="openCookMode"'),
+  "Expected cook mode to use the right-aligned section action treatment."
+);
+assert.ok(
+  !source.includes('class="summary-card__cook-entry"'),
+  "Expected cook mode to leave the recipe summary card."
+);
+assert.ok(
+  source.includes('<view class="detail-inline-actions__text">炊火智厨</view>'),
+  "Expected inline recipe detail actions to use the named cooking assistant."
+);
+assert.ok(
+  source.includes('<view class="detail-actions__text">添加计划</view>'),
+  "Expected the sticky recipe detail action to say 添加计划."
+);
+assert.ok(
+  source.includes('<view class="detail-actions__text">炊火智厨</view>'),
+  "Expected the sticky recipe detail action to use the named cooking assistant."
+);
+assert.ok(
+  !source.includes('<view class="detail-actions__text">助手</view>'),
+  "Expected the sticky recipe detail action not to use the generic assistant label."
 );
 assert.match(
   source,

@@ -52,27 +52,22 @@
 
             <view class="content" :class="{ 'content--with-actions': showStickyActions }">
 	            <view class="summary-card">
-	              <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
+                <view class="summary-card__title-row">
+	                <text id="detail-title" class="summary-card__title">{{ detailTitle }}</text>
+                  <button v-if="showStickyActions" class="summary-card__share" open-type="share">
+                    <view class="cookfont icon-share summary-card__share-icon" />
+                  </button>
+                </view>
 	              <text v-if="detailStory" class="summary-card__story">{{ detailStory }}</text>
                 <view v-if="detailContent.keywords.length" class="summary-card__keywords">
                   <text v-for="item in detailContent.keywords" :key="item" class="summary-card__keyword">{{ item }}</text>
                 </view>
-              <view v-if="detailFactText || showReportEntry" class="summary-card__facts">
+              <view v-if="detailFactText" class="summary-card__facts">
                 <view class="summary-card__fact-row">
                   <view v-if="detailFactText" class="summary-card__fact-block">
                     <text class="summary-card__fact-title">分类</text>
                     <text class="summary-card__fact-text">{{ detailFactText }}</text>
                   </view>
-                  <text
-                    v-if="showReportEntry"
-                    class="summary-card__report-entry"
-                    hover-class="summary-card__report-entry--hover"
-                    hover-stay-time="100"
-                    @click="openReportSheet"
-                  >
-                    <text class="cookfont summary-card__report-entry-icon">&#xe710;</text>
-                    举报
-                  </text>
                 </view>
               </view>
 
@@ -102,12 +97,27 @@
                 </view>
                 <view v-if="detailContent.ingredients.length" class="ingredient-list">
                   <view
-                    v-for="item in detailContent.ingredients"
-                    :key="`${item.ingredientId}-${item.ingredientName}`"
+                    v-for="row in ingredientDisplay.rows"
+                    :key="`${row.item.ingredientId}-${row.item.ingredientName}`"
                     class="ingredient-row"
+                    :class="{
+                      'ingredient-row--extra': row.extra,
+                      'ingredient-row--extra-expanded': ingredientDisplay.expanded && row.extra
+                    }"
                   >
-                    <text class="ingredient-row__name">{{ item.ingredientName }}</text>
-                    <text class="ingredient-row__amount">{{ formatAmount(item.amount) }}</text>
+                    <text class="ingredient-row__name">{{ row.item.ingredientName }}</text>
+                    <text class="ingredient-row__amount">{{ formatAmount(row.item.amount) }}</text>
+                  </view>
+                  <view
+                    v-if="ingredientDisplay.showToggle"
+                    class="ingredient-list__toggle"
+                    hover-class="ingredient-list__toggle--hover"
+                    hover-stay-time="100"
+                    @click="toggleIngredientList"
+                  >
+                    <view class="ingredient-list__toggle-line" />
+                    <text class="ingredient-list__toggle-text">{{ ingredientDisplay.toggleText }}</text>
+                    <view class="ingredient-list__toggle-line" />
                   </view>
                 </view>
                 <text v-else class="section__empty">暂未添加食材</text>
@@ -179,8 +189,18 @@
 
               <view id="detail-steps" class="section">
                 <view class="section__head">
-                  <text class="section__label">步骤</text>
-                  <text class="section__caption">{{ stepCountText }}</text>
+                  <view class="section__head-main">
+                    <text class="section__label">步骤</text>
+                    <text class="section__caption">{{ stepCountText }}</text>
+                  </view>
+                  <button
+                    v-if="showStickyActions"
+                    class="section__action"
+                    @click="openCookMode"
+                  >
+                    <text class="cookfont icon-cook section__action-icon" />
+                    <text>按菜谱做饭</text>
+                  </button>
                 </view>
                 <view v-if="detailSteps.length" class="step-list">
                   <view v-for="(item, index) in detailSteps" :key="index" class="step-card">
@@ -233,25 +253,21 @@
 	                    <view class="cookfont detail-inline-actions__icon icon-edit" />
 	                    <view class="detail-inline-actions__text">{{ externalEditActionLabel }}</view>
 	                  </button>
-	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" open-type="share">
-	                  <view class="cookfont detail-inline-actions__icon icon-share" />
-	                  <view class="detail-inline-actions__text">分享</view>
-	                </button>
 	                  <button v-if="canAddToPrivate && !detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
 	                    <view class="detail-inline-actions__text">保存为私房菜</view>
 	                  </button>
-	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openCookMode">
-                    <view class="cookfont detail-inline-actions__icon icon-cook" />
-                    <view class="detail-inline-actions__text">按菜谱做饭</view>
-                  </button>
 	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
                     <view class="detail-inline-actions__text">加入计划</view>
                   </button>
                   <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
                     <view class="cookfont detail-inline-actions__icon icon-cook" />
-                    <view class="detail-inline-actions__text">做饭助手</view>
+                    <view class="detail-inline-actions__text">炊火智厨</view>
+                  </button>
+                  <button v-if="showReportEntry" class="detail-inline-actions__item" @click="openReportSheet">
+                    <view class="cookfont detail-inline-actions__icon">&#xe710;</view>
+                    <view class="detail-inline-actions__text">举报</view>
                   </button>
                 </template>
 	              <template v-else-if="isOwnedDetail">
@@ -268,21 +284,13 @@
                     <view class="cookfont detail-inline-actions__icon icon-self-recommend" />
                     <view class="detail-inline-actions__text">{{ recommendActionLabel }}</view>
                   </button>
-	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" open-type="share">
-	                  <view class="cookfont detail-inline-actions__icon icon-share" />
-	                  <view class="detail-inline-actions__text">分享</view>
-	                </button>
-	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="openCookMode">
-                    <view class="cookfont detail-inline-actions__icon icon-cook" />
-                    <view class="detail-inline-actions__text">按菜谱做饭</view>
-                  </button>
 	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleAddPlan">
 	                      <view class="cookfont detail-inline-actions__icon icon-add-plan" />
 	                      <view class="detail-inline-actions__text">添加计划</view>
                 </button>
                   <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
                     <view class="cookfont detail-inline-actions__icon icon-cook" />
-                    <view class="detail-inline-actions__text">做饭助手</view>
+                    <view class="detail-inline-actions__text">炊火智厨</view>
                   </button>
               </template>
 	            </view>
@@ -297,10 +305,6 @@
         :class="{ 'detail-actions-shell--visible': detailActionsVisible }"
       >
         <view class="detail-actions" :class="{ 'detail-actions--visible': detailActionsVisible }">
-          <button class="detail-actions__item" open-type="share">
-            <view class="cookfont icon-share detail-actions__icon" />
-            <view class="detail-actions__text">分享</view>
-          </button>
           <template v-if="isExternalDetail">
             <button v-if="canAddToPrivate" class="detail-actions__item" @click="openPrivateSheet">
               <view class="cookfont icon-collect detail-actions__icon" />
@@ -310,27 +314,19 @@
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">加入计划</view>
             </button>
-            <button class="detail-actions__item" @click="openCookMode">
-              <view class="cookfont icon-cook detail-actions__icon" />
-              <view class="detail-actions__text">做饭</view>
-            </button>
             <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
               <view class="cookfont icon-cook detail-actions__icon" />
-              <view class="detail-actions__text">助手</view>
+              <view class="detail-actions__text">炊火智厨</view>
             </button>
           </template>
           <template v-else-if="isOwnedDetail">
             <button class="detail-actions__item" @click="handleAddPlan">
               <view class="cookfont icon-add-plan detail-actions__icon" />
-              <view class="detail-actions__text">添加</view>
-            </button>
-            <button class="detail-actions__item" @click="openCookMode">
-              <view class="cookfont icon-cook detail-actions__icon" />
-              <view class="detail-actions__text">做饭</view>
+              <view class="detail-actions__text">添加计划</view>
             </button>
             <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
               <view class="cookfont icon-cook detail-actions__icon" />
-              <view class="detail-actions__text">助手</view>
+              <view class="detail-actions__text">炊火智厨</view>
             </button>
           </template>
         </view>
@@ -520,12 +516,14 @@ import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isMealSlotExpired } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
 import { buildDefaultShoppingListName } from "../utils/shopping";
+import { buildIngredientDisplay } from "./ingredient-display";
 
 type DetailKind = "my" | "inspiration";
 type DetailMode = "published" | "preview";
 type AnchorKey = "ingredients" | "nutrition" | "steps";
 type PublishedDetail = MyRecipeDetail | InspirationRecipeDetail;
 type DetailContent = RecipeContentSnapshot | RecipePreviewDetail["content"];
+type DetailIngredient = DetailContent["ingredients"][number];
 
 interface InfoItem {
   key: "time" | "difficulty" | "ingredients";
@@ -582,6 +580,7 @@ const loginModalStore = useLoginModalStore();
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight } = useSystemInfo();
 const NAV_FADE_RANGE = 132;
+const INGREDIENT_TOGGLE_MEASURE_DELAY = 300;
 const recipeId = ref<UUID | "">("");
 const kind = ref<DetailKind>("my");
 const mode = ref<DetailMode>("published");
@@ -607,6 +606,7 @@ const shoppingLists = ref<import("@/apis/shopping").ShoppingListSummary[]>([]);
 const selectedShoppingListId = ref<UUID | "">("");
 const shoppingCreateName = ref("");
 const nutritionView = ref<"perServing" | "perRecipe">("perServing");
+const ingredientExpanded = ref(false);
 const recommendCategories = ref<InspirationCategorySummary[]>([]);
 const selectedRecommendCategoryId = ref<UUID | "">("");
 const navOpacity = ref(0);
@@ -758,6 +758,9 @@ const detailFactText = computed(() => {
 });
 
 const ingredientCountText = computed(() => `${detailContent.value.ingredients.length}项食材`);
+const ingredientDisplay = computed(() =>
+  buildIngredientDisplay<DetailIngredient>(detailContent.value.ingredients, ingredientExpanded.value)
+);
 const stepCountText = computed(() => `${detailSteps.value.length}个步骤`);
 const detailDifficultyText = computed(() => {
   const serverText =
@@ -821,7 +824,7 @@ const infoItems = computed<InfoItem[]>(() => [
   {
     key: "time",
     label: detailDurationText.value || "未设时长",
-    iconClass: "cookfont icon-time",
+    iconClass: "cookfont icon-clock",
     muted: !detailDurationText.value
   },
   {
@@ -870,6 +873,13 @@ watch(
     nutritionView.value = nutrition.perServing ? "perServing" : "perRecipe";
   },
   { immediate: true }
+);
+
+watch(
+  () => detailContent.value.ingredients,
+  () => {
+    ingredientExpanded.value = false;
+  }
 );
 
 onLoad((query) => {
@@ -936,17 +946,22 @@ async function loadDetail() {
   }
 }
 
-function scheduleMeasure() {
+function scheduleMeasure(delay = 80) {
   clearMeasureTimer();
   measureTimer = setTimeout(() => {
     void updateAnchorMetrics();
-  }, 80);
+  }, delay);
 }
 
 function clearMeasureTimer() {
   if (!measureTimer) return;
   clearTimeout(measureTimer);
   measureTimer = null;
+}
+
+function toggleIngredientList() {
+  ingredientExpanded.value = !ingredientExpanded.value;
+  scheduleMeasure(INGREDIENT_TOGGLE_MEASURE_DELAY);
 }
 
 function setDetailScrollTop(nextScrollTop: number) {
@@ -1325,7 +1340,7 @@ async function createShoppingList() {
   try {
     const created = await shoppingApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || buildDefaultShoppingListName()
+      name: shoppingCreateName.value.trim() || null
     });
     shoppingLists.value = [
       created,
@@ -1693,11 +1708,41 @@ defineExpose({
   display: block;
 }
 
+.summary-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
 .summary-card__title {
+  flex: 1;
+  min-width: 0;
   color: var(--color-text);
   font-size: 50rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.3;
+}
+
+.summary-card__share {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+}
+
+.summary-card__share::after {
+  border: 0;
+}
+
+.summary-card__share {
+  padding: 0;
+  color: var(--color-text-secondary);
+}
+
+.summary-card__share-icon {
+  line-height: 1;
 }
 
 .summary-card__story {
@@ -1744,7 +1789,6 @@ defineExpose({
 
 .summary-card__fact-title,
 .summary-card__fact-text,
-.summary-card__report-entry,
 .summary-card__recommend-entry {
   color: var(--color-text-secondary);
   font-size: 24rpx;
@@ -1759,7 +1803,6 @@ defineExpose({
   color: var(--color-text-secondary);
 }
 
-.summary-card__report-entry,
 .summary-card__recommend-entry {
   display: inline-flex;
   align-items: center;
@@ -1769,7 +1812,6 @@ defineExpose({
   opacity: 0.78;
 }
 
-.summary-card__report-entry-icon,
 .summary-card__recommend-entry-icon {
   color: inherit;
   font-size: 24rpx;
@@ -1796,7 +1838,6 @@ defineExpose({
   opacity: 0.72;
 }
 
-.summary-card__report-entry--hover,
 .summary-card__recommend-entry--hover {
   opacity: 0.56;
 }
@@ -2106,9 +2147,9 @@ defineExpose({
   border: 0;
   background: transparent;
   color: var(--color-support-action);
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 1.2;
+  line-height: 1;
 }
 
 .section__action::after {
@@ -2117,7 +2158,7 @@ defineExpose({
 
 .section__action-icon {
   color: inherit;
-  font-size: 26rpx;
+  font-size: 28rpx;
   line-height: 1;
 }
 
@@ -2190,11 +2231,67 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+  min-height: 86rpx;
   padding: 22rpx 0;
+  box-sizing: border-box;
 }
 
 .ingredient-row + .ingredient-row {
   border-top: 1rpx solid var(--color-border-light);
+}
+
+.ingredient-row--extra {
+  overflow: hidden;
+  min-height: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-color: transparent !important;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-16rpx);
+  transition:
+    min-height 260ms ease,
+    max-height 260ms ease,
+    padding 260ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease,
+    transform 260ms ease;
+}
+
+.ingredient-row--extra-expanded {
+  min-height: 86rpx;
+  max-height: 160rpx;
+  padding-top: 22rpx;
+  padding-bottom: 22rpx;
+  border-top-color: var(--color-border-light) !important;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.ingredient-list__toggle {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  min-height: 60rpx;
+}
+
+.ingredient-list__toggle--hover {
+  opacity: 0.72;
+}
+
+.ingredient-list__toggle-line {
+  flex: 1;
+  min-width: 0;
+  border-top: 2rpx dashed var(--color-divider);
+}
+
+.ingredient-list__toggle-text {
+  flex: 0 0 auto;
+  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .ingredient-row__name,
@@ -2449,7 +2546,8 @@ defineExpose({
 
 .sheet-creator__input {
   flex: 1;
-  height: 76rpx;
+  height: 80rpx;
+  line-height: 1;
   padding: 0 22rpx;
   border: 1rpx solid var(--material-input-border);
   border-radius: var(--radius-xs);
@@ -2467,8 +2565,9 @@ defineExpose({
   align-items: center;
   justify-content: center;
   min-width: 132rpx;
-  height: 76rpx;
-  border-radius: var(--radius-xs);
+  height: 80rpx;
+  line-height: 1;
+   border-radius: var(--radius-xs);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
@@ -2594,11 +2693,8 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34rpx;
-  height: 34rpx;
-  flex: 0 0 34rpx;
   color: inherit;
-  font-size: 34rpx;
+  font-size: 32rpx;
   line-height: 1;
 }
 
@@ -2607,6 +2703,7 @@ defineExpose({
   align-items: center;
   color: inherit;
   line-height: 1;
+  font-size: 28rpx;
   white-space: nowrap;
 }
 
