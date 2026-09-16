@@ -353,7 +353,7 @@ onMounted(() => {
       <div class="unit-guide__title">使用说明</div>
       <div class="unit-guide__tips">
         <span>优先选择准确单位，能用克、毫升等可换算单位时，不用模糊写法。</span>
-        <span>`适量 / 少许 / 按需` 只用于菜谱用量，不作为系统单位。</span>
+        <span>“适量”只用于菜谱用量，不作为系统单位。</span>
         <span>用户提交的单位建议会在这里审核，通过后进入系统单位。</span>
       </div>
     </div>

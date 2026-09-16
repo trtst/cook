@@ -20,10 +20,11 @@ import type { UUID } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
+import { applyRecipeIngredientCategory, canUseFuzzyAmount } from "./recipe-amount-policy";
 
 type Difficulty = AdminRecipeContentInput["difficulty"];
 type Duration = AdminRecipeContentInput["duration"];
-type FuzzyText = "适量" | "少许" | "按需";
+type FuzzyText = "适量";
 type CropScene = "COVER" | "STEP";
 
 interface EditIngredientRow {
@@ -52,7 +53,7 @@ const coverFrameHeight = 240;
 const exportCoverWidth = 1200;
 const exportCoverHeight = 900;
 
-const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
+const fuzzyOptions: FuzzyText[] = ["适量"];
 
 const loading = ref(false);
 const saving = ref(false);
@@ -283,6 +284,32 @@ function addIngredient() {
       unitId: unitOptionList.value[0]?.id ?? ""
     }
   });
+}
+
+function ingredientCategoryCode(ingredientId: UUID | "") {
+  const ingredient = ingredientOptions.value.find(item => item.id === ingredientId);
+  if (!ingredient) return null;
+  return ingredientCategories.value.find(item => item.id === ingredient.categoryId)?.code ?? null;
+}
+
+function canUseIngredientFuzzyAmount(ingredientId: UUID | "") {
+  return canUseFuzzyAmount(ingredientCategoryCode(ingredientId));
+}
+
+function updateIngredientSelection(index: number) {
+  const row = form.content.ingredients[index];
+  if (!row) return;
+  const ingredient = ingredientOptions.value.find(item => item.id === row.ingredientId);
+  applyRecipeIngredientCategory(row, ingredientCategoryCode(row.ingredientId), ingredient?.defaultUnit?.id ?? unitOptionList.value[0]?.id ?? "");
+}
+
+function updateIngredientAmountKind(index: number, value: "EXACT" | "FUZZY") {
+  const row = form.content.ingredients[index];
+  if (!row) return;
+  if (value === "FUZZY" && !canUseIngredientFuzzyAmount(row.ingredientId)) return;
+  row.amount = value === "FUZZY"
+    ? { kind: "FUZZY", text: "适量" }
+    : { kind: "EXACT", quantity: "", unitId: unitOptionList.value[0]?.id ?? "" };
 }
 
 function addStep() {
@@ -612,7 +639,7 @@ onBeforeUnmount(() => {
             <el-button text :icon="Plus" @click="addIngredient">新增食材</el-button>
           </div>
           <div v-for="(item, index) in form.content.ingredients" :key="index" class="ingredient-row">
-            <el-select v-model="item.ingredientId" class="ingredient-row__ingredient" filterable placeholder="选择系统食材">
+            <el-select v-model="item.ingredientId" class="ingredient-row__ingredient" filterable placeholder="选择系统食材" @change="updateIngredientSelection(index)">
               <el-option
                 v-for="option in ingredientOptionList"
                 :key="option.id"
@@ -623,16 +650,10 @@ onBeforeUnmount(() => {
             <el-select
               :model-value="item.amount.kind"
               class="ingredient-row__kind"
-              @update:model-value="
-                (value: 'EXACT' | 'FUZZY') =>
-                  (form.content.ingredients[index].amount =
-                    value === 'FUZZY'
-                      ? { kind: 'FUZZY', text: '适量' }
-                      : { kind: 'EXACT', quantity: '', unitId: unitOptionList[0]?.id ?? '' })
-              "
+              @update:model-value="updateIngredientAmountKind(index, $event as 'EXACT' | 'FUZZY')"
             >
               <el-option label="精确用量" value="EXACT" />
-              <el-option label="模糊用量" value="FUZZY" />
+              <el-option label="模糊用量" value="FUZZY" :disabled="!canUseIngredientFuzzyAmount(item.ingredientId)" />
             </el-select>
             <template v-if="item.amount.kind === 'EXACT'">
               <el-input v-model="item.amount.quantity" class="ingredient-row__quantity" placeholder="数量" />

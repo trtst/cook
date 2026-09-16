@@ -23,10 +23,11 @@ import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { difficultyOptions, difficultyText, durationOptions, durationText } from "@/utils/recipe-meta";
 import { formatStatusText } from "@/utils/status";
+import { applyRecipeIngredientCategory, canUseFuzzyAmount } from "./recipe-amount-policy";
 
 type Difficulty = AdminRecipeContentInput["difficulty"];
 type Duration = AdminRecipeContentInput["duration"];
-type FuzzyText = "适量" | "少许" | "按需";
+type FuzzyText = "适量";
 type CropScene = "COVER" | "STEP";
 
 interface EditIngredientRow {
@@ -85,7 +86,7 @@ const coverFrameHeight = 240;
 const exportCoverWidth = 1200;
 const exportCoverHeight = 900;
 
-const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
+const fuzzyOptions: FuzzyText[] = ["适量"];
 
 const route = useRoute();
 const router = useRouter();
@@ -164,7 +165,9 @@ const recipeImportTagCodes = new Set([
 function buildRecipeImportJson(source: AdminRecipeDetail) {
   const tags = source.wiki.tags
     .filter(tag => recipeImportTagCodes.has(tag.tagCode))
-    .filter((tag, index, all) => all.findIndex(item => item.tagCode === tag.tagCode) === index)
+    .filter((tag, index, all) => tag.tagCode === "MEAL_TYPE"
+      ? all.findIndex(item => item.tagCode === tag.tagCode && item.tagValue === tag.tagValue) === index
+      : all.findIndex(item => item.tagCode === tag.tagCode) === index)
     .map(tag => ({ tagCode: tag.tagCode, tagValue: tag.tagValue }));
   return {
     schemaVersion: "recipe.import.v1",
@@ -181,8 +184,9 @@ function buildRecipeImportJson(source: AdminRecipeDetail) {
         keywords: [...source.content.keywords],
         ingredients: source.content.ingredients.map(item => ({
           name: item.ingredientName,
-          quantity: item.amount.kind === "EXACT" ? item.amount.quantity : item.amount.text,
-          unit: item.amount.kind === "EXACT" ? item.amount.unitName : "",
+          quantity: item.amount.kind === "EXACT" ? item.amount.quantity : null,
+          unit: item.amount.kind === "EXACT" ? item.amount.unitName : null,
+          fuzzyText: item.amount.kind === "FUZZY" ? "适量" : null,
           categoryCode: item.categoryCode ?? null
         })),
         tools: source.content.tools.map(item => ({ name: item.name })),
@@ -193,14 +197,14 @@ function buildRecipeImportJson(source: AdminRecipeDetail) {
       tags,
       assistant: {
         steps: (source.assistant?.steps ?? []).map((step, index) => ({
-          order: index + 1,
+          order: step.order,
           phase: step.phase,
-          action: step.action ?? "OTHER",
+          action: step.action,
           title: step.title,
           detail: step.detail,
           imageUrl: step.imageUrl,
           imagePrompt: step.imagePrompt ?? null,
-          durationMinutes: step.durationMinutes ?? 0,
+          durationMinutes: step.durationMinutes,
           durationText: step.durationText
         }))
       }
@@ -208,9 +212,145 @@ function buildRecipeImportJson(source: AdminRecipeDetail) {
   };
 }
 
+const recipeImportCategoryCodes = new Set([
+  "PRODUCE",
+  "MEAT_POULTRY_EGG",
+  "SEAFOOD",
+  "SOY_DAIRY",
+  "GRAINS_STAPLES",
+  "SEASONING",
+  "DRIED_PRESERVED",
+  "BEVERAGE_ALCOHOL"
+]);
+const recipeImportTagValues: Record<string, Set<string>> = {
+  CUISINE: new Set(["SICHUAN_HUNAN", "JIANG_ZHE", "CANTONESE", "FUJIAN", "NORTHERN", "YUN_GUI", "TAIWAN", "FUSION", "OTHER"]),
+  DISH_STYLE: new Set(["STIR_FRY", "COLD_DISH", "SOUP", "STAPLE_FOOD", "STEW", "STEAMED", "BRAISED", "FRIED", "BBQ", "HOT_POT", "SNACK"]),
+  MEAL_TYPE: new Set(["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"]),
+  DISH_ROLE: new Set(["MAIN", "VEGETABLE", "COLD_DISH", "SOUP", "STAPLE"]),
+  MAIN_PROTEIN_TYPE: new Set(["PORK", "CHICKEN", "BEEF", "LAMB", "DUCK", "FISH", "NONE"]),
+  FLAVOR_PROFILE: new Set(["LIGHT", "MILD", "SPICY", "SOUR", "SWEET"]),
+  SPICE_LEVEL: new Set(["NONE", "MILD", "MEDIUM", "HOT"])
+};
+const recipeImportAssistantActions: Record<string, Set<string>> = {
+  PREP: new Set(["SHOP", "WASH", "SOAK", "THAW", "CUT", "SLICE", "DICE", "SHRED", "MINCE", "MARINATE", "BLANCH", "MEASURE", "MIX", "OTHER"]),
+  COOK: new Set(["BOIL", "SIMMER", "STEAM", "STIR_FRY", "PAN_FRY", "DEEP_FRY", "BRAISE", "ROAST", "BAKE", "PRESSURE_COOK", "REDUCE", "OTHER"]),
+  SERVE: new Set(["SEASON", "PLATE", "GARNISH", "PORTION", "REST", "OTHER"])
+};
+const recipeImportRequiredTagCodes = Object.keys(recipeImportTagValues);
+
+function validImportImageUrl(value: string | null) {
+  if (value === null) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validImportImagePrompt(value: string | null | undefined) {
+  const prompt = typeof value === "string" ? value.trim() : "";
+  return Boolean(prompt) && prompt.length <= 1000 && /\p{Script=Han}/u.test(prompt);
+}
+
+function validateRecipeImportJson(body: ReturnType<typeof buildRecipeImportJson>) {
+  if (!Number.isInteger(body.recipe.inspirationCategoryId) || Number(body.recipe.inspirationCategoryId) <= 0) {
+    return "导出 JSON 前请先选择系统菜谱分类";
+  }
+  if (!validImportImageUrl(body.recipe.coverImageUrl)) return "导出 JSON 前请修正封面图片地址";
+  const content = body.recipe.content;
+  if (!content.name.trim()) return "导出 JSON 前请先补全菜谱名称";
+  if (!content.story.trim()) return "导出 JSON 前请先补全菜谱故事";
+  if (!content.tips.trim()) return "导出 JSON 前请先补全做饭建议";
+  if (!Number.isInteger(content.baseServings) || content.baseServings < 1 || content.baseServings > 20) {
+    return "导出 JSON 前请先修正基准人数";
+  }
+  if (!["BEGINNER", "EASY", "SKILLED", "CHALLENGING"].includes(content.difficulty)) {
+    return "导出 JSON 前请先补全难度";
+  }
+  if (!["WITHIN_15", "BETWEEN_15_30", "BETWEEN_30_60", "OVER_60"].includes(content.duration)) {
+    return "导出 JSON 前请先补全总时长";
+  }
+  if (!Array.isArray(content.keywords) || content.keywords.length > 8 || content.keywords.some(item => !item.trim()) || new Set(content.keywords).size !== content.keywords.length) {
+    return "导出 JSON 前请先修正关键词";
+  }
+  if (!Array.isArray(content.ingredients) || content.ingredients.length === 0) {
+    return "导出 JSON 前请先补全食材";
+  }
+  for (const [index, ingredient] of content.ingredients.entries()) {
+    const rowLabel = `第 ${index + 1} 行食材`;
+    if (!ingredient.name.trim()) return `导出 JSON 前请补全${rowLabel}名称`;
+    if (!ingredient.categoryCode || !recipeImportCategoryCodes.has(ingredient.categoryCode)) {
+      return `导出 JSON 前请补全${rowLabel}分类`;
+    }
+    if (ingredient.fuzzyText === "适量") {
+      if (ingredient.categoryCode !== "SEASONING") return `导出 JSON 前请修正${rowLabel}的模糊用量`;
+      if (ingredient.quantity !== null || ingredient.unit !== null) return `导出 JSON 前请修正${rowLabel}的用量`;
+    } else {
+      if (!ingredient.quantity || !/^\d+(?:\.\d+)?$/.test(ingredient.quantity) || Number(ingredient.quantity) <= 0) {
+        return `导出 JSON 前请补全${rowLabel}数量`;
+      }
+      if (!ingredient.unit?.trim()) return `导出 JSON 前请补全${rowLabel}单位`;
+    }
+  }
+  const stepPrompts = new Set<string>();
+  if (!Array.isArray(content.steps) || content.steps.length === 0) return "导出 JSON 前请先补全制作步骤";
+  for (const [index, step] of content.steps.entries()) {
+    if (!step.text.trim()) return `导出 JSON 前请补全第 ${index + 1} 个制作步骤`;
+    if (!validImportImageUrl(step.imageUrl)) return `导出 JSON 前请修正第 ${index + 1} 个制作步骤图片地址`;
+    if (!validImportImagePrompt(step.imagePrompt)) return `导出 JSON 前请补全第 ${index + 1} 个制作步骤图片提示词`;
+    const prompt = step.imagePrompt?.trim() ?? "";
+    if (stepPrompts.has(prompt)) return "导出 JSON 前请修正重复的制作步骤图片提示词";
+    stepPrompts.add(prompt);
+  }
+
+  const tags = body.wiki.tags;
+  if (tags.length === 0) return "导出 JSON 前请先补全业务标签";
+  const seenTagValues = new Set<string>();
+  const seenSingleTagCodes = new Set<string>();
+  for (const tag of tags) {
+    const values = recipeImportTagValues[tag.tagCode];
+    if (!values || !values.has(tag.tagValue)) return `导出 JSON 前请修正${wikiTagCodeTextOf(tag.tagCode)}标签`;
+    const tagKey = `${tag.tagCode}:${tag.tagValue}`;
+    if (seenTagValues.has(tagKey)) return "导出 JSON 前请删除重复业务标签";
+    if (tag.tagCode !== "MEAL_TYPE" && seenSingleTagCodes.has(tag.tagCode)) return "导出 JSON 前请删除重复业务标签代码";
+    seenTagValues.add(tagKey);
+    seenSingleTagCodes.add(tag.tagCode);
+  }
+  if (recipeImportRequiredTagCodes.some(code => !tags.some(tag => tag.tagCode === code))) {
+    return "导出 JSON 前请补全业务标签";
+  }
+
+  const assistantSteps = body.wiki.assistant.steps;
+  if (assistantSteps.length === 0) return "导出 JSON 前请先补全美食助理步骤";
+  const assistantPrompts = new Set<string>();
+  for (const [index, step] of assistantSteps.entries()) {
+    const rowLabel = `第 ${index + 1} 个美食助理步骤`;
+    if (step.order !== index + 1 || !recipeImportAssistantActions[step.phase]?.has(step.action ?? "")) {
+      return `导出 JSON 前请修正${rowLabel}阶段或动作`;
+    }
+    if (!step.title.trim() || !step.detail.trim()) return `导出 JSON 前请补全${rowLabel}文本`;
+    if (!validImportImageUrl(step.imageUrl)) return `导出 JSON 前请修正${rowLabel}图片地址`;
+    if (!validImportImagePrompt(step.imagePrompt)) return `导出 JSON 前请补全${rowLabel}图片提示词`;
+    const prompt = step.imagePrompt?.trim() ?? "";
+    if (assistantPrompts.has(prompt)) return "导出 JSON 前请修正重复的美食助理步骤图片提示词";
+    assistantPrompts.add(prompt);
+    if (!Number.isInteger(step.durationMinutes) || Number(step.durationMinutes) < 1) {
+      return `导出 JSON 前请补全${rowLabel}时长`;
+    }
+    if (step.durationText !== null && typeof step.durationText !== "string") return `导出 JSON 前请修正${rowLabel}时间文本`;
+  }
+  return null;
+}
+
 function exportJson() {
   if (!detail.value) return;
   const exportBody = buildRecipeImportJson(detail.value);
+  const exportIssue = validateRecipeImportJson(exportBody);
+  if (exportIssue) {
+    ElMessage.error(exportIssue);
+    return;
+  }
   const blob = new Blob([JSON.stringify(exportBody, null, 2)], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -463,20 +603,25 @@ function resetFormFromDetail() {
   form.content.tips = detail.value.content.tips ?? "";
   form.content.keywords = [...detail.value.content.keywords];
   form.content.tools = detail.value.content.tools.map(item => ({ name: item.name }));
-  form.content.ingredients = detail.value.content.ingredients.map(item => ({
-    ingredientId: item.ingredientId,
-    amount:
-      item.amount.kind === "EXACT"
-        ? {
-            kind: "EXACT",
-            quantity: item.amount.quantity,
-            unitId: item.amount.unitId
-          }
-        : {
-            kind: "FUZZY",
-            text: item.amount.text
-          }
-  }));
+  form.content.ingredients = detail.value.content.ingredients.map(item => {
+    const row: EditIngredientRow = {
+      ingredientId: item.ingredientId,
+      amount:
+        item.amount.kind === "EXACT"
+          ? {
+              kind: "EXACT",
+              quantity: item.amount.quantity,
+              unitId: item.amount.unitId
+            }
+          : {
+              kind: "FUZZY",
+              text: item.amount.text
+            }
+    };
+    const ingredient = ingredientOptions.value.find(option => option.id === item.ingredientId);
+    applyRecipeIngredientCategory(row, item.categoryCode, ingredient?.defaultUnit?.id ?? unitOptionList.value[0]?.id ?? "");
+    return row;
+  });
   form.content.steps = detail.value.content.steps.map(item => ({
     text: item.text,
     imageUrl: item.imageUrl,
@@ -503,6 +648,32 @@ function addIngredient() {
       unitId: unitOptionList.value[0]?.id ?? ""
     }
   });
+}
+
+function ingredientCategoryCode(ingredientId: UUID | "") {
+  const ingredient = ingredientOptions.value.find(item => item.id === ingredientId);
+  if (!ingredient) return null;
+  return ingredientCategories.value.find(item => item.id === ingredient.categoryId)?.code ?? null;
+}
+
+function canUseIngredientFuzzyAmount(ingredientId: UUID | "") {
+  return canUseFuzzyAmount(ingredientCategoryCode(ingredientId));
+}
+
+function updateIngredientSelection(index: number) {
+  const row = form.content.ingredients[index];
+  if (!row) return;
+  const ingredient = ingredientOptions.value.find(item => item.id === row.ingredientId);
+  applyRecipeIngredientCategory(row, ingredientCategoryCode(row.ingredientId), ingredient?.defaultUnit?.id ?? unitOptionList.value[0]?.id ?? "");
+}
+
+function updateIngredientAmountKind(index: number, value: "EXACT" | "FUZZY") {
+  const row = form.content.ingredients[index];
+  if (!row) return;
+  if (value === "FUZZY" && !canUseIngredientFuzzyAmount(row.ingredientId)) return;
+  row.amount = value === "FUZZY"
+    ? { kind: "FUZZY", text: "适量" }
+    : { kind: "EXACT", quantity: "", unitId: unitOptionList.value[0]?.id ?? "" };
 }
 
 function addTool() {
@@ -1217,7 +1388,7 @@ onBeforeUnmount(() => {
               <el-button text :icon="Plus" @click="addIngredient">新增食材</el-button>
             </div>
             <div v-for="(item, index) in form.content.ingredients" :key="index" class="ingredient-row">
-              <el-select v-model="item.ingredientId" class="ingredient-row__ingredient" filterable placeholder="选择系统食材">
+              <el-select v-model="item.ingredientId" class="ingredient-row__ingredient" filterable placeholder="选择系统食材" @change="updateIngredientSelection(index)">
                 <el-option
                   v-for="option in ingredientOptionList"
                   :key="option.id"
@@ -1229,16 +1400,10 @@ onBeforeUnmount(() => {
               <el-select
                 :model-value="item.amount.kind"
                 class="ingredient-row__kind"
-                @update:model-value="
-                  (value: 'EXACT' | 'FUZZY') =>
-                    (form.content.ingredients[index].amount =
-                      value === 'FUZZY'
-                        ? { kind: 'FUZZY', text: '适量' }
-                        : { kind: 'EXACT', quantity: '', unitId: unitOptionList[0]?.id ?? '' })
-                "
+                @update:model-value="updateIngredientAmountKind(index, $event as 'EXACT' | 'FUZZY')"
               >
                 <el-option label="精确用量" value="EXACT" />
-                <el-option label="模糊用量" value="FUZZY" />
+                <el-option label="模糊用量" value="FUZZY" :disabled="!canUseIngredientFuzzyAmount(item.ingredientId)" />
               </el-select>
               <template v-if="item.amount.kind === 'EXACT'">
                 <el-input v-model="item.amount.quantity" class="ingredient-row__quantity" placeholder="数量" />

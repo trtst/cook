@@ -4,6 +4,8 @@ import test from "node:test";
 
 const jobsPage = fs.readFileSync(new URL("./RecipeImportJobsPage.vue", import.meta.url), "utf8");
 const itemPage = fs.readFileSync(new URL("./RecipeImportItemPage.vue", import.meta.url), "utf8");
+const createPage = fs.readFileSync(new URL("./RecipeCreatePage.vue", import.meta.url), "utf8");
+const detailPage = fs.readFileSync(new URL("./RecipeDetailPage.vue", import.meta.url), "utf8");
 const apiFile = fs.readFileSync(new URL("../apis/recipe.ts", import.meta.url), "utf8");
 const controllerFile = fs.readFileSync(new URL("../../../api/src/modules/auth/admin.controller.ts", import.meta.url), "utf8");
 const openapiFile = fs.readFileSync(new URL("../../../api/src/contracts/openapi.ts", import.meta.url), "utf8");
@@ -72,7 +74,6 @@ test("recipe detail exposes the complete current-version Wiki area", () => {
 });
 
 test("system recipe detail exposes JSON export and keywords", () => {
-  const detailPage = fs.readFileSync(new URL("./RecipeDetailPage.vue", import.meta.url), "utf8");
   const apiFile = fs.readFileSync(new URL("../apis/recipe.ts", import.meta.url), "utf8");
   assert.match(detailPage, /导出 JSON/);
   assert.match(detailPage, /JSON\.stringify/);
@@ -86,6 +87,22 @@ test("system recipe detail exposes JSON export and keywords", () => {
   const exportEnd = detailPage.indexOf("function exportJson");
   assert.ok(exportStart >= 0 && exportEnd > exportStart, "Expected an explicit import export mapper");
   assert.doesNotMatch(detailPage.slice(exportStart, exportEnd), /nutrition/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /fuzzyText:/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /quantity: item\.amount\.kind === "EXACT" \? item\.amount\.quantity : null/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /unit: item\.amount\.kind === "EXACT" \? item\.amount\.unitName : null/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /categoryCode: item\.categoryCode/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /imagePrompt: item\.imagePrompt/);
+  assert.match(detailPage.slice(exportStart, exportEnd), /durationMinutes: step\.durationMinutes/);
+  assert.match(detailPage, /导出 JSON 前/);
+  assert.doesNotMatch(detailPage.slice(exportStart, exportEnd), /durationMinutes: step\.durationMinutes \?\? 0/);
+});
+
+test("admin recipe amount editors only offer 适量", () => {
+  for (const source of [createPage, detailPage, itemPage]) {
+    assert.match(source, /type FuzzyText = "适量";/);
+    assert.match(source, /const fuzzyOptions: FuzzyText\[\] = \["适量"\];/);
+    assert.doesNotMatch(source, /"少许"|"按需"/);
+  }
 });
 
 test("recipe detail follows the four-section two-column layout", () => {
@@ -148,5 +165,8 @@ test("pending and disabled import references come from detail and stay display-o
 });
 
 test("a matched import ingredient keeps its system-owned category display-only", () => {
-  assert.match(itemPage, /<el-select v-model="item\.categoryCode" placeholder="食材分类" :disabled="Boolean\(item\.ingredientId\)">/);
+  assert.match(
+    itemPage,
+    /<el-select[^>]*v-model="item\.categoryCode"[^>]*:disabled="Boolean\(item\.ingredientId\)"[^>]*>/
+  );
 });

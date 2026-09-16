@@ -24,11 +24,12 @@ import type { UUID } from "@/apis/http";
 import { requestBlob } from "@/apis/http";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { createOperationId } from "@/utils/operation-id";
+import { applyRecipeIngredientCategory, canUseFuzzyAmount } from "./recipe-amount-policy";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
 
 type Difficulty = RecipeImportRecipeBody["difficulty"];
 type Duration = RecipeImportRecipeBody["duration"];
-type FuzzyText = "适量" | "少许" | "按需";
+type FuzzyText = "适量";
 type CropScene = "COVER" | "STEP";
 
 interface EditIngredientRow {
@@ -75,7 +76,7 @@ const exportCoverWidth = 1200;
 const exportCoverHeight = 900;
 
 const servingOptions = Array.from({ length: 20 }, (_, index) => index + 1);
-const fuzzyOptions: FuzzyText[] = ["适量", "少许", "按需"];
+const fuzzyOptions: FuzzyText[] = ["适量"];
 const tagCodeOptions: Array<{ value: RecipeImportTagCode; label: string }> = [
   { value: "CUISINE", label: "菜系" },
   { value: "DISH_STYLE", label: "菜式" },
@@ -389,6 +390,7 @@ function updateIngredientSelection(item: EditIngredientRow, ingredientId: UUID |
   if (!ingredient) return;
   const category = ingredientCategories.value.find(item => item.id === ingredient.categoryId);
   item.categoryCode = category?.code ?? null;
+  applyRecipeIngredientCategory(item, item.categoryCode, ingredient.defaultUnit?.id ?? unitSelectOptions.value[0]?.id ?? "");
 }
 
 function resolveUnitDraftText(item: EditIngredientRow) {
@@ -563,6 +565,10 @@ function resetFormFromDetail() {
     note: item.note ?? "",
     categoryCode: item.categoryCode ?? null
   }));
+  form.ingredients.forEach(item => {
+    const ingredient = item.ingredientId ? ingredientReferenceMap.value.get(item.ingredientId) : null;
+    applyRecipeIngredientCategory(item, item.categoryCode, ingredient?.defaultUnit?.id ?? unitSelectOptions.value[0]?.id ?? "");
+  });
   form.steps = body.steps.map(item => ({
     text: item.text,
     imageUrl: item.imageUrl ?? null,
@@ -672,10 +678,19 @@ function removeIngredient(index: number) {
 }
 
 function updateIngredientAmountKind(index: number, value: "EXACT" | "FUZZY") {
-  form.ingredients[index].amount =
+  const row = form.ingredients[index];
+  if (!row) return;
+  if (value === "FUZZY" && !canUseFuzzyAmount(row.categoryCode)) return;
+  row.amount =
     value === "FUZZY"
       ? { kind: "FUZZY", text: "适量" }
       : { kind: "EXACT", quantity: "", unitId: unitSelectOptions.value[0]?.id ?? "" };
+}
+
+function updateIngredientCategory(index: number) {
+  const row = form.ingredients[index];
+  if (!row) return;
+  applyRecipeIngredientCategory(row, row.categoryCode, unitSelectOptions.value[0]?.id ?? "");
 }
 
 function addStep() {
@@ -1191,7 +1206,7 @@ onBeforeUnmount(() => {
                 </el-select>
               </el-form-item>
               <el-form-item class="ingredient-row__kind" :error="formError(`ingredients.${index}.categoryCode`)">
-                <el-select v-model="item.categoryCode" placeholder="食材分类" :disabled="Boolean(item.ingredientId)">
+                <el-select v-model="item.categoryCode" placeholder="食材分类" :disabled="Boolean(item.ingredientId)" @change="updateIngredientCategory(index)">
                   <el-option v-for="category in ingredientCategories.filter(category => category.isSelectable)" :key="category.code" :label="category.name" :value="category.code" />
                 </el-select>
               </el-form-item>
@@ -1201,7 +1216,7 @@ onBeforeUnmount(() => {
                   @update:model-value="updateIngredientAmountKind(index, $event as 'EXACT' | 'FUZZY')"
                 >
                   <el-option label="精确用量" value="EXACT" />
-                  <el-option label="模糊用量" value="FUZZY" />
+                  <el-option label="模糊用量" value="FUZZY" :disabled="!canUseFuzzyAmount(item.categoryCode)" />
                 </el-select>
               </el-form-item>
               <template v-if="item.amount.kind === 'EXACT'">
