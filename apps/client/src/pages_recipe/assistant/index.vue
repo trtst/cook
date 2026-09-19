@@ -1,7 +1,16 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" title="做饭助手" full-screen>
-    <view class="assistant-page">
+    <Empty
+      v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
+      title="登录后查看做饭助手"
+      description="登录后才能读取这道菜的做饭建议和解锁次数。"
+      clickable
+      @click="openLogin"
+    />
+
+    <view v-else class="assistant-page">
       <view class="assistant-tip">{{ tipsText }}</view>
 
       <view v-if="loading" class="assistant-state">加载中...</view>
@@ -32,8 +41,7 @@
             <text class="assistant-card__text">{{ unlockHint }}</text>
             <button
               class="assistant-button"
-              :class="{ 'assistant-button--disabled': !canUnlock }"
-              :disabled="!canUnlock || submitting"
+              :class="{ 'assistant-button--disabled': !canUnlock || submitting }"
               @click="unlockAssistant"
             >
               {{ submitting ? "解锁中..." : "解锁查看" }}
@@ -41,7 +49,7 @@
             <text class="assistant-card__link" @click="openCookMode">不解锁，按菜谱做饭</text>
           </view>
 
-          <template v-else>
+          <template v-else-if="hasAssistantBody">
             <view class="assistant-summary">
               <view class="assistant-summary__item">
                 <text class="assistant-summary__value">{{ assistantState.assistant?.summary.prepStepCount || 0 }}</text>
@@ -57,6 +65,8 @@
               </view>
             </view>
 
+            <button class="assistant-button assistant-button--wide" @click="openCookMode">进入炊火智厨</button>
+
             <view v-for="phase in phaseSections" :key="phase.value" class="assistant-card">
               <text class="assistant-card__title">{{ phase.label }}</text>
               <view v-if="phase.steps.length" class="assistant-steps">
@@ -70,6 +80,11 @@
               <text v-else class="assistant-card__empty">这个阶段暂无步骤</text>
             </view>
           </template>
+          <view v-else class="assistant-card assistant-card--locked">
+            <text class="assistant-card__title">炊火智厨暂时没有可执行步骤</text>
+            <text class="assistant-card__text">你仍然可以按原菜谱步骤开始做饭。</text>
+            <button class="assistant-button assistant-button--ghost" @click="openCookMode">按菜谱做饭</button>
+          </view>
         </view>
       </scroll-view>
     </view>
@@ -79,21 +94,24 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad, onUnload } from "@dcloudio/uni-app";
-import { ApiClientError, type UUID } from "@/apis/http";
+import { ApiClientError, UnauthorizedError, type UUID } from "@/apis/http";
 import {
   recipeApi,
-  type RecipeAssistantStep,
   type RecipeAssistantStepPhase,
   type RecipeCookAssistantResponse
 } from "@/apis/recipe";
 import { userApi, type CookAssistantUsageResponse } from "@/apis/user";
+import emptyStateArt from "@/assets/empty.png";
+import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { useTheme } from "@/composables/useTheme";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";
 import { useAppConfigStore } from "@/stores/app-config";
+import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 
 const THINKING_MIN_MS = 900;
@@ -110,6 +128,8 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const appConfigStore = useAppConfigStore();
+const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(() => void loadPage());
 const recipeVersionId = ref<UUID | "">("");
 const recipeId = ref<UUID | "">("");
 const recipeKind = ref<"my" | "inspiration">("my");
@@ -126,7 +146,8 @@ const tipsText = computed(() => appConfigStore.cookAssistant.tipText || FALLBACK
 const activityEnabled = computed(() => usage.value?.activityEnabled ?? appConfigStore.cookAssistant.activityEnabled);
 const remainingCount = computed(() => usage.value?.remainingCount ?? 0);
 const canUnlock = computed(() => Boolean(activityEnabled.value && remainingCount.value > 0));
-const heroTitle = computed(() => (assistantState.value?.unlocked ? "按 Wiki 步骤做这道菜" : "解锁后查看完整步骤"));
+const hasAssistantBody = computed(() => Boolean(assistantState.value?.unlocked && assistantState.value.assistant?.steps.length));
+const heroTitle = computed(() => (hasAssistantBody.value ? "按 Wiki 步骤做这道菜" : "解锁后查看完整步骤"));
 const generatedAtText = computed(() => formatDateTime(assistantState.value?.generatedAt || ""));
 const unlockHint = computed(() => {
   if (!activityEnabled.value) return "当前活动暂未开放，仍可使用按菜谱做饭。";
@@ -157,6 +178,7 @@ onUnload(() => {
 });
 
 async function loadPage() {
+  if (!sessionStore.isLoggedIn) return;
   if (!recipeVersionId.value) {
     unavailableText.value = "菜谱版本无效";
     return;
@@ -226,6 +248,12 @@ function clearThinkingTimer() {
 }
 
 function handleAssistantError(error: unknown) {
+  if (error instanceof UnauthorizedError) {
+    errorText.value = "";
+    unavailableText.value = "";
+    openLogin();
+    return;
+  }
   if (error instanceof ApiClientError && error.code === 409) {
     unavailableText.value = "做饭助手暂不可用";
     return;
@@ -242,8 +270,11 @@ function openCookMode() {
     void uniPlatform.navigation.navigateBack();
     return;
   }
+  const flowQuery = hasAssistantBody.value
+    ? `&flow=assistant&recipeVersionId=${encodeURIComponent(String(recipeVersionId.value))}`
+    : "&flow=original";
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(recipeKind.value)}`
+    `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(recipeKind.value)}${flowQuery}`
   );
 }
 
@@ -294,8 +325,8 @@ defineExpose({
   margin: 24rpx 24rpx 0;
   padding: 18rpx 22rpx;
   border-radius: 24rpx;
-  background: rgba(255, 183, 77, 0.18);
-  color: #9a5a00;
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -399,7 +430,7 @@ defineExpose({
   height: 88rpx;
   border-radius: 999rpx;
   background: var(--color-brand-primary);
-  color: #fff;
+  color: var(--button-primary-text);
   font-size: 28rpx;
   font-weight: 700;
   line-height: 88rpx;
@@ -415,8 +446,13 @@ defineExpose({
 
 .assistant-button--ghost {
   min-width: 220rpx;
-  background: rgba(33, 110, 78, 0.1);
-  color: var(--color-brand-primary);
+  background: var(--color-tag-primary-bg);
+  color: var(--color-tag-primary-text);
+}
+
+.assistant-button--wide {
+  width: 100%;
+  margin-top: 24rpx;
 }
 
 .assistant-summary {

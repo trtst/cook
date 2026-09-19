@@ -960,17 +960,10 @@ expectSelectorIncludes(mealDetailPageSource, ".meal-inline-action", [
   "color: var(--color-tag-primary-text);"
 ]);
 expectSelectorExcludes(mealDetailPageSource, ".meal-inline-action", ["background: var(--color-primary-soft-fill-subtle);"]);
-expectIncludes(cookModePageSource, `.cook-slide__index,
-.cook-slide__tag,
-.cook-slide__time {
+expectIncludes(cookModePageSource, `.cook-slide__tag {
   color: var(--color-overlay-text);
-  background: var(--color-overlay-control);
-  -webkit-backdrop-filter: var(--material-mask-filter);
-  backdrop-filter: var(--material-mask-filter);
 }`);
-expectExcludes(cookModePageSource, `.cook-slide__index,
-.cook-slide__tag,
-.cook-slide__time {
+expectExcludes(cookModePageSource, `.cook-slide__tag {
   color: var(--color-overlay-text);
   -webkit-backdrop-filter: blur(18rpx);
   backdrop-filter: blur(18rpx);
@@ -1024,7 +1017,7 @@ expectSelectorIncludes(recipeDetailPageSource, ".detail-page", [
 expectSelectorExcludes(recipeDetailPageSource, ".detail-page", [
   "radial-gradient(circle at top left, var(--color-secondary-soft) 0%, transparent 34%)"
 ]);
-expectSelectorExcludes(recipeDetailPageSource, ".notice", ["border: 1rpx solid var(--material-card-border);"]);
+expectExcludes(recipeDetailPageSource, "border: 1rpx solid var(--material-card-border);");
 expectSelectorExcludes(recipeDetailPageSource, ".summary-card", ["border: 1rpx solid var(--material-card-border);"]);
 expectSelectorIncludes(recipeDetailPageSource, ".plan-link-row", [
   "background: var(--material-card-bg);",
@@ -1344,8 +1337,8 @@ expectSelectorIncludes(shoppingListPickerSheetSource, ".shopping-list-option--ac
   "background: var(--color-tag-primary-bg);"
 ]);
 expectSelectorIncludes(shoppingListPickerSheetSource, ".shopping-create__button", [
-  "background: var(--color-tag-primary-bg);",
-  "color: var(--color-tag-primary-text);"
+  "background: var(--button-primary-bg);",
+  "color: var(--button-primary-text);"
 ]);
 expectExcludes(shoppingListPickerSheetSource, LEGACY_SECONDARY_OUTLINE);
 expectSelectorExcludes(shoppingListPickerSheetSource, ".shopping-list-option", ["border: 1rpx solid var(--material-card-border);"]);

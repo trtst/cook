@@ -1,10 +1,13 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" title="做饭助手" full-screen>
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       title="登录后查看做饭建议"
       description="这桌菜的准备顺序、开做节奏和上桌安排，都需要登录后继续处理。"
+      clickable
+      @click="openLogin"
     />
 
     <view v-else class="assistant-page">
@@ -60,6 +63,12 @@
             <view v-else-if="cookAssistantLoading && cookAssistant?.status !== 'READY'" class="assistant-panel assistant-panel--loading">
               <text class="assistant-panel__title">正在整理这桌菜</text>
               <text class="assistant-panel__text">准备顺序、开做节奏和上桌安排正在生成中。</text>
+            </view>
+
+            <view v-else-if="cookAssistantError" class="assistant-panel assistant-panel--error">
+              <text class="assistant-panel__title">做饭助手加载失败</text>
+              <text class="assistant-panel__text">{{ cookAssistantError }}</text>
+              <button class="assistant-actions__button assistant-actions__button--primary" @click="retryCookAssistant">重试</button>
             </view>
 
             <view v-else-if="hasAssistantBody" class="assistant-panel">
@@ -128,8 +137,7 @@
               <button
                 v-if="!hasAssistantBody"
                 class="assistant-actions__button assistant-actions__button--primary"
-                :class="{ 'assistant-actions__button--disabled': !canUnlock && cookAssistant?.status === 'READY' }"
-                :disabled="submitting || (!canUnlock && cookAssistant?.status === 'READY')"
+                :class="{ 'assistant-actions__button--disabled': submitting || (!canUnlock && cookAssistant?.status === 'READY') }"
                 @click="handleUnlockCookAssistant"
               >
                 {{ actionLabel }}
@@ -139,7 +147,7 @@
                 class="assistant-actions__button assistant-actions__button--primary"
                 @click="openCookMode"
               >
-                按菜谱做饭
+                进入炊火智厨
               </button>
               <text v-if="!hasAssistantBody" class="assistant-actions__link" @click="openCookMode">按菜谱做饭</text>
             </view>
@@ -153,10 +161,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onShow, onUnload } from "@dcloudio/uni-app";
-import { ApiClientError, type UUID } from "@/apis/http";
+import { ApiClientError, UnauthorizedError, type UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -196,6 +205,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(() => void loadDetail());
 const appConfigStore = useAppConfigStore();
 const loading = ref(false);
 const submitting = ref(false);
@@ -208,6 +218,7 @@ const planDetail = ref<MealAssistantPlan | null>(null);
 const eventDetail = ref<DiningEventSummary | null>(null);
 const cookAssistantLoading = ref(false);
 const cookAssistant = ref<MealPlanCookAssistant | null>(null);
+const cookAssistantError = ref("");
 const usage = ref<CookAssistantUsageResponse | null>(null);
 let thinkingTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -249,6 +260,7 @@ const heroMeta = computed(() => {
 
 const assistantStatusText = computed(() => {
   if (thinking.value) return "思考中";
+  if (cookAssistantError.value) return "加载失败";
   if (cookAssistantLoading.value && cookAssistant.value?.status !== "READY") return "生成中";
   if (!cookAssistant.value || cookAssistant.value.status === "NOT_GENERATED") return "未生成";
   if (cookAssistant.value.status === "GENERATING") return "生成中";
@@ -266,10 +278,10 @@ const cookSteps = computed(() => assistantSteps.value.filter(item => item.phase 
 const serveSteps = computed(() => assistantSteps.value.filter(item => item.phase === "SERVE"));
 const assistantNotes = computed(() => cookAssistant.value?.assistant?.notes ?? []);
 const assistantSummary = computed(() => cookAssistant.value?.assistant?.summary || "");
-const hasAssistantBody = computed(() => Boolean(cookAssistant.value?.unlocked && cookAssistant.value.assistant));
+const hasAssistantBody = computed(() => Boolean(cookAssistant.value?.unlocked && cookAssistant.value.assistant?.steps.length));
 const actionLabel = computed(() => {
   if (!currentMenuItems.value.length) return "按菜谱做饭";
-  if (hasAssistantBody.value) return "按菜谱做饭";
+  if (hasAssistantBody.value) return "进入炊火智厨";
   if (!canUnlock.value) return "次数不足";
   return cookAssistant.value?.status === "READY" ? "解锁查看" : "生成并解锁";
 });
@@ -325,6 +337,11 @@ async function loadDetail() {
       eventDetail.value = null;
     }
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      errorText.value = "";
+      openLogin();
+      return;
+    }
     errorText.value = error instanceof Error ? error.message : "做饭助手加载失败，点此重试";
   } finally {
     loading.value = false;
@@ -346,16 +363,24 @@ function toMealAssistantPlan(context: MealCookContextResponse): MealAssistantPla
 
 async function loadCookAssistant(currentPlanItemId: UUID) {
   cookAssistantLoading.value = true;
+  cookAssistantError.value = "";
   try {
     cookAssistant.value = await mealApi.getCookAssistant(currentPlanItemId);
     if (!cookAssistant.value.unlocked) {
       usage.value = await userApi.getCookAssistantUsage();
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof UnauthorizedError) throw error;
     cookAssistant.value = null;
+    cookAssistantError.value = error instanceof Error ? error.message : "暂时无法读取做饭助手，请稍后重试";
   } finally {
     cookAssistantLoading.value = false;
   }
+}
+
+function retryCookAssistant() {
+  if (!planDetail.value) return;
+  void loadCookAssistant(planDetail.value.id);
 }
 
 function clearPageState() {
@@ -365,6 +390,7 @@ function clearPageState() {
   planDetail.value = null;
   eventDetail.value = null;
   cookAssistant.value = null;
+  cookAssistantError.value = "";
   cookAssistantLoading.value = false;
   usage.value = null;
   thinking.value = false;
@@ -390,6 +416,10 @@ async function handleUnlockCookAssistant() {
     }
     usage.value = await userApi.getCookAssistantUsage().catch(() => usage.value);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      openLogin();
+      return;
+    }
     const message = error instanceof ApiClientError && error.code === 429 ? "今日次数已用完" : error instanceof Error ? error.message : "解锁失败";
     await uniPlatform.feedback.toast({ title: message, icon: "none" });
   } finally {
@@ -421,8 +451,9 @@ function clearThinkingTimer() {
 function openCookMode() {
   if (!planDetail.value || !planDate.value || !currentMenuItems.value.length) return;
   const eventQuery = eventDetail.value?.id ? `&eventId=${encodeURIComponent(String(eventDetail.value.id))}` : "";
+  const flowQuery = hasAssistantBody.value ? "&flow=assistant" : "&flow=original";
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/cook-mode/index?source=plan&planItemId=${encodeURIComponent(String(planDetail.value.id))}&planDate=${encodeURIComponent(planDate.value)}${eventQuery}`
+    `/pages_meal/cook-mode/index?source=plan&planItemId=${encodeURIComponent(String(planDetail.value.id))}&planDate=${encodeURIComponent(planDate.value)}${flowQuery}${eventQuery}`
   );
 }
 

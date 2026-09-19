@@ -1,48 +1,70 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout
-    :class="[themeClasses, { 'cook-layout--immersive': isImmersive }]"
+    :class="[themeClasses, 'cook-mode-layout', { 'cook-layout--immersive': isImmersive }]"
     title=""
     full-screen
     :navbar-capsule-guard="true"
-    :navbar-placeholder="!isImmersive"
-    :navbar-transparent="isImmersive"
+    :navbar-placeholder="true"
+    :navbar-transparent="false"
+    :navbar-background-color="navbarBackgroundColor"
     :navbar-foreground-color="isImmersive ? 'var(--color-overlay-text)' : undefined"
   >
     <template #navbar-center>
       <view class="cook-nav__main" :class="{ 'cook-nav__main--immersive': isImmersive }">
         <text v-if="isImmersive" class="cook-slide__tag">{{ currentStep?.dishTitle }}</text>
-        <text v-else class="cook-nav__title">做饭模式</text>
-        <view class="cook-nav__settings" hover-class="cook-nav__settings--hover" hover-stay-time="100" @click="openSettings">
-          <text class="cookfont icon-account-settings cook-nav__settings-icon" />
+        <text v-else class="cook-nav__title">{{ sourceTitle }}</text>
+        <view class="cook-nav__settings">
+          <view
+            class="cook-nav__settings-button"
+            hover-class="cook-nav__settings-button--hover"
+            hover-stay-time="100"
+            @click="openSettings"
+          >
+            <text class="cookfont icon-reminder-settings cook-nav__settings-icon" aria-hidden="true" />
+          </view>
+          <view
+            class="cook-nav__mode-toggle"
+            :class="{ 'cook-nav__mode-toggle--immersive': isImmersive }"
+            hover-class="cook-nav__mode-toggle--hover"
+            hover-stay-time="100"
+            @click="toggleViewMode"
+          >
+            <view class="cook-nav__mode-state cook-nav__mode-state--list">
+              <view class="cook-nav__mode-dot" aria-hidden="true" />
+              <text class="cook-nav__mode-label cook-nav__mode-label--immersive">沉浸模式</text>
+            </view>
+            <view class="cook-nav__mode-state cook-nav__mode-state--immersive">
+              <text class="cook-nav__mode-label cook-nav__mode-label--list">列表模式</text>
+              <view class="cook-nav__mode-dot" aria-hidden="true" />
+            </view>
+          </view>
         </view>
       </view>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="requiresLogin && !sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       title="登录后继续做饭"
       description="计划、饭局和整桌菜的做饭步骤，需要登录后继续处理。"
+      clickable
+      @click="openLogin"
     />
 
     <view v-else class="cook-mode-page" :class="{ 'cook-mode-page--immersive': isImmersive }">
       <view v-if="loading" class="cook-mode-state">加载中...</view>
-      <view v-else-if="errorText" class="cook-mode-state cook-mode-state--error" @click="loadData">{{ errorText }}</view>
+      <view v-else-if="errorText" class="cook-mode-state cook-mode-state--error" @click="loadData">
+        <text>{{ errorText }}</text>
+        <button v-if="isAssistantMode" class="cook-mode-state__switch" @click.stop="switchToOriginal">切换到普通做饭</button>
+      </view>
       <view v-else-if="!steps.length" class="cook-mode-empty">
         <Empty title="还没有可执行步骤" description="先补全菜谱步骤，或先生成这桌菜的做饭建议。" />
       </view>
 
       <template v-else>
-        <view class="cook-toolbar" :class="{ 'cook-toolbar--immersive': isImmersive }" :style="immersiveToolbarStyle">
-          <view class="cook-toolbar__top">
-            <view class="cook-toolbar__main">
-              <text class="cook-toolbar__title">{{ sourceTitle }}</text>
-              <text class="cook-toolbar__meta">{{ toolbarMeta }}</text>
-            </view>
-          </view>
-
+        <view v-if="hasMenuTabs" class="cook-toolbar" :class="{ 'cook-toolbar--immersive': isImmersive }">
           <scroll-view
-            v-if="menuTabs.length > 1"
             id="cook-menu-scroll"
             scroll-x
             scroll-with-animation
@@ -51,46 +73,64 @@
             :show-scrollbar="false"
             @scroll="handleMenuScroll"
           >
-            <view class="cook-toolbar__flow-indicator" :style="menuIndicatorStyle" />
-            <view
-              v-for="(item, index) in menuTabs"
-              :key="item.key"
-              :id="`cook-menu-${index}`"
-              class="cook-toolbar__flow-mode"
-              :class="{ 'cook-toolbar__flow-mode--active': selectedDishIndex === index }"
-              @click="setSelectedDish(index)"
-            >
-              {{ item.title }}
+            <view class="cook-toolbar__flow-list">
+              <view class="cook-toolbar__flow-indicator" :style="menuIndicatorStyle" />
+              <view
+                v-for="(item, index) in menuTabs"
+                :id="`cook-menu-${index}`"
+                :key="item.key"
+                class="cook-toolbar__flow-mode"
+                :class="{ 'cook-toolbar__flow-mode--active': selectedDishIndex === index }"
+                @click="setSelectedDish(index)"
+              >
+                {{ item.title }}
+              </view>
             </view>
           </scroll-view>
-        </view>
-
-        <view
-          class="cook-toolbar__modes cook-toolbar__modes--floating"
-          :class="{ 'cook-toolbar__modes--dark': isImmersive }"
-          :style="floatingModesStyle"
-        >
-          <view class="cook-toolbar__mode" :class="{ 'cook-toolbar__mode--active': viewMode === 'list' }" @click="setViewMode('list')">
-            列表
-          </view>
-          <view class="cook-toolbar__mode" :class="{ 'cook-toolbar__mode--active': viewMode === 'swiper' }" @click="setViewMode('swiper')">
-            沉浸
-          </view>
         </view>
 
         <view class="cook-content-stage" :class="{ 'cook-content-stage--immersive': isImmersive }">
           <view class="cook-content-stage__flipper">
             <view class="cook-content cook-content--list cook-content-stage__face" :class="{ 'cook-content-stage__face--inactive': isImmersive }">
-              <swiper class="cook-list-swiper" :current="selectedDishIndex" :disable-touch="listDishes.length < 2" @change="handleListSwiperChange">
+              <scroll-view v-if="isSingleListFlow" scroll-y class="cook-list-scroll" :show-scrollbar="false">
+                <view class="cook-list">
+                  <view class="cook-step-list">
+                    <view v-for="(item, index) in listDishes[0]?.steps || []" :key="item.id" class="cook-step-card">
+                      <view class="cook-step-card__index-row">
+                        <text class="cook-step-card__index">
+                          <text class="cook-step-card__index-current">{{ index + 1 }} </text>
+                          <text class="cook-step-card__index-total">{{ `/ ${(listDishes[0]?.steps || []).length}` }}</text>
+                        </text>
+                        <text v-if="item.phase" class="cook-step-card__phase">{{ phaseLabel(item.phase) }}</text>
+                        <view v-if="item.durationText" class="cook-step-card__duration">
+                          <text class="cookfont icon-alarm cook-step-card__duration-icon" aria-hidden="true" />
+                          <text>{{ item.durationText }}</text>
+                        </view>
+                      </view>
+                      <image v-if="item.imageUrl" class="cook-step-card__image" :src="item.imageUrl" mode="widthFix" @click.stop="previewDishImages(listDishes[0]?.steps || [], item.imageUrl)" />
+                      <text v-if="item.bodyText" class="cook-step-card__text">{{ item.bodyText }}</text>
+                      <text v-if="item.note" class="cook-step-card__note">{{ item.note }}</text>
+                    </view>
+                  </view>
+                </view>
+              </scroll-view>
+              <swiper v-else class="cook-list-swiper" :current="selectedDishIndex" :disable-touch="listDishes.length < 2" @change="handleListSwiperChange">
                 <swiper-item v-for="dish in listDishes" :key="dish.key" class="cook-list-swiper__item">
                   <scroll-view scroll-y class="cook-list-scroll" :show-scrollbar="false">
                     <view class="cook-list">
                       <view class="cook-step-list">
                         <view v-for="(item, index) in dish.steps" :key="item.id" class="cook-step-card">
-                          <text class="cook-step-card__index">
-                            <text class="cook-step-card__index-current">{{ index + 1 }} </text>
-                            <text class="cook-step-card__index-total">{{ `/ ${dish.steps.length}` }}</text>
-                          </text>
+                          <view class="cook-step-card__index-row">
+                            <text class="cook-step-card__index">
+                              <text class="cook-step-card__index-current">{{ index + 1 }} </text>
+                              <text class="cook-step-card__index-total">{{ `/ ${dish.steps.length}` }}</text>
+                            </text>
+                            <text v-if="item.phase" class="cook-step-card__phase">{{ phaseLabel(item.phase) }}</text>
+                            <view v-if="item.durationText" class="cook-step-card__duration">
+                              <text class="cookfont icon-alarm cook-step-card__duration-icon" aria-hidden="true" />
+                              <text>{{ item.durationText }}</text>
+                            </view>
+                          </view>
                           <image v-if="item.imageUrl" class="cook-step-card__image" :src="item.imageUrl" mode="widthFix" @click.stop="previewDishImages(dish.steps, item.imageUrl)" />
                           <text v-if="item.bodyText" class="cook-step-card__text">{{ item.bodyText }}</text>
                           <text v-if="item.note" class="cook-step-card__note">{{ item.note }}</text>
@@ -115,7 +155,9 @@
                           <text class="cook-slide__index-separator">/</text>
                           <NumberIcon class="cook-slide__index-total" :value="getDishStepCount(index)" />
                         </view>
-                        <text v-if="item.durationText" class="cook-slide__time">{{ item.durationText }}</text>
+                        <view v-if="item.phase" class="cook-slide__meta">
+                          <text class="cook-slide__phase">{{ phaseLabel(item.phase) }}</text>
+                        </view>
                       </view>
                     </view>
 
@@ -159,26 +201,40 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onShow, onUnload } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
-import { recipeApi, type RecipeContentSnapshot } from "@/apis/recipe";
+import emptyStateArt from "@/assets/empty.png";
+import {
+  recipeApi,
+  type RecipeAssistantStep,
+  type RecipeAssistantStepPhase,
+  type RecipeContentSnapshot,
+  type RecipeCookAssistantResponse
+} from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import NumberIcon from "@/components/NumberIcon/NumberIcon.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { useSystemInfo } from "@/composables/useSystemInfo";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { formatMealSlot } from "@/utils/meal-slot";
-import { mealApi, type MealCookContextResponse } from "../apis/meal";
+import {
+  mealApi,
+  type MealCookAssistantDishSource,
+  type MealCookAssistantStep,
+  type MealCookContextResponse,
+  type MealPlanCookAssistant
+} from "../apis/meal";
 
 type SourceType = "recipe" | "plan";
 type RecipeKind = "my" | "inspiration" | "collection";
 type ViewMode = "list" | "swiper";
 type FlowMode = "assistant" | "original";
 type StepDisplayMode = "text" | "image" | "mixed";
+type CookStepPhase = RecipeAssistantStepPhase | null;
+type CookStepSource = "WIKI" | "ORIGINAL" | null;
 type StepDurationInfo = {
   text: string;
   seconds: number | null;
@@ -186,10 +242,14 @@ type StepDurationInfo = {
 type CookStep = {
   id: string;
   dishKey: string;
+  dishKeys: string[];
   title: string;
   bodyText: string;
   dishTitle: string;
   sourceTag: "菜谱步骤" | "建议流程";
+  phase: CookStepPhase;
+  source: CookStepSource;
+  parallelKey: string | null;
   recipeId: UUID | null;
   recipeKind: RecipeKind;
   note: string;
@@ -202,14 +262,15 @@ type CookStep = {
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
-const { navBarTotalHeight } = useSystemInfo();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState();
 const loading = ref(false);
 const errorText = ref("");
 const sourceType = ref<SourceType>("recipe");
 const recipeKind = ref<RecipeKind>("my");
 const recipeId = ref<UUID | "">("");
+const assistantRecipeVersionId = ref<UUID | "">("");
 const planItemId = ref<UUID | "">("");
 const planDate = ref("");
 const originalSteps = ref<CookStep[]>([]);
@@ -229,20 +290,15 @@ const expandedMixedStepIds = ref<string[]>([]);
 const mixedReadingStepId = ref("");
 
 const requiresLogin = computed(() => sourceType.value === "plan");
+const isAssistantMode = computed(() => flowMode.value === "assistant");
 const isImmersive = computed(() => viewMode.value === "swiper");
-const immersiveToolbarStyle = computed<Record<string, string> | undefined>(() => {
-  if (!isImmersive.value) return undefined;
-  return {
-    height: `${navBarTotalHeight.value}px`,
-    padding: "0",
-    boxSizing: "border-box"
-  };
-});
-const floatingModesStyle = computed(() => ({ top: `${navBarTotalHeight.value + 12}px` }));
+const hasMenuTabs = computed(() => sourceType.value === "plan" && menuTabs.value.length > 1);
+const showMenuTabs = computed(() => !isImmersive.value && hasMenuTabs.value);
+const navbarBackgroundColor = computed(() => isImmersive.value ? "var(--color-overlay-medium)" : "var(--color-page)");
 const currentDishSteps = computed(() => {
   const tab = menuTabs.value[selectedDishIndex.value];
   if (!tab) return originalSteps.value;
-  const filtered = originalSteps.value.filter(item => item.dishKey === tab.key);
+  const filtered = originalSteps.value.filter(item => !item.dishKeys.length || item.dishKeys.includes(tab.key));
   return filtered.length ? filtered : originalSteps.value;
 });
 const steps = computed(() => (sourceType.value === "plan" ? currentDishSteps.value : originalSteps.value));
@@ -251,26 +307,24 @@ const listDishes = computed(() => {
   if (sourceType.value !== "plan") return [{ key: "recipe", steps: visibleListSteps.value }];
   return menuTabs.value.map(tab => ({
     key: tab.key,
-    steps: originalSteps.value.filter(item => item.dishKey === tab.key && Boolean(item.imageUrl || item.bodyText))
+    steps: originalSteps.value.filter(item => (!item.dishKeys.length || item.dishKeys.includes(tab.key)) && Boolean(item.imageUrl || item.bodyText))
   }));
 });
+const isSingleListFlow = computed(() => listDishes.value.length <= 1);
 const immersiveSteps = computed(() => (sourceType.value === "plan" ? originalSteps.value : steps.value));
 const currentIndex = computed(() => originalCurrentIndex.value);
-const hasOriginalFlow = computed(() => originalSteps.value.length > 0);
-const canSwitchFlowMode = computed(() => false);
 const currentStep = computed(() => {
   return viewMode.value === "swiper" ? immersiveSteps.value[immersiveIndex.value] ?? null : steps.value[currentIndex.value] ?? null;
 });
-const toolbarMeta = computed(() => {
-  return sourceType.value === "plan" ? "当前按各道菜的原步骤继续。" : "当前按原菜谱步骤继续。";
-});
-
+const canSwitchFlowMode = computed(() => isAssistantMode.value);
 onLoad(query => {
   sourceType.value = parseSourceType(query?.source);
   recipeKind.value = parseRecipeKind(query?.kind);
   recipeId.value = parseQueryId(query?.recipeId);
+  assistantRecipeVersionId.value = parseQueryId(query?.recipeVersionId);
   planItemId.value = parseQueryId(query?.planItemId);
   planDate.value = parseQueryText(query?.planDate);
+  flowMode.value = parseFlowMode(query?.flow);
   void loadData();
 });
 
@@ -307,7 +361,13 @@ async function loadData() {
   loading.value = true;
   errorText.value = "";
   try {
-    if (sourceType.value === "plan") {
+    if (flowMode.value === "assistant") {
+      if (sourceType.value === "plan") {
+        await loadPlanAssistantFlow();
+      } else {
+        await loadRecipeAssistantFlow();
+      }
+    } else if (sourceType.value === "plan") {
       await loadPlanFlow();
     } else {
       await loadRecipeFlow();
@@ -318,7 +378,7 @@ async function loadData() {
   } finally {
     loading.value = false;
     void nextTick(() => {
-      if (menuTabs.value.length > 1) void syncMenuVisual(selectedDishIndex.value, false);
+      if (showMenuTabs.value) void syncMenuVisual(selectedDishIndex.value, false);
     });
   }
 }
@@ -331,6 +391,19 @@ async function loadRecipeFlow() {
   sourceTitle.value = detail.title || "开始做饭";
   const original = ensureSteps(buildRecipeSteps(detail.id, recipeKind.value, detail.title, detail.content), detail.title || "这道菜", recipeKind.value);
   applyFlowData(original);
+}
+
+async function loadRecipeAssistantFlow() {
+  if (!recipeId.value || !assistantRecipeVersionId.value) {
+    throw new Error("缺少炊火智厨信息，请先从助手入口进入");
+  }
+  const [detail, assistant] = await Promise.all([
+    loadRecipeDetail(recipeKind.value, recipeId.value),
+    recipeApi.getRecipeVersionCookAssistant(assistantRecipeVersionId.value)
+  ]);
+  assertAssistantReady(assistant);
+  sourceTitle.value = detail.title || "炊火智厨";
+  applyFlowData(buildRecipeAssistantSteps(detail.id, recipeKind.value, detail.title || sourceTitle.value, assistant.assistant.steps));
 }
 
 async function loadPlanFlow() {
@@ -348,6 +421,23 @@ async function loadPlanFlow() {
   applyFlowData(original);
 }
 
+async function loadPlanAssistantFlow() {
+  if (!planItemId.value || !planDate.value) {
+    throw new Error("缺少计划信息");
+  }
+
+  const [context, assistant] = await Promise.all([
+    mealApi.getCookContext(planItemId.value),
+    mealApi.getCookAssistant(planItemId.value)
+  ]);
+  assertAssistantReady(assistant);
+  sourceTitle.value = assistant.assistant.title || context.title || `${formatPlanDate(context.planDate)} · ${formatMealSlot(context.mealSlot)}`;
+  menuTabs.value = assistant.assistant.dishes
+    .slice()
+    .map(item => ({ key: `dish-${item.dishId}`, title: item.title }));
+  applyFlowData(buildMealAssistantSteps(assistant.assistant.dishes, assistant.assistant.steps, context.planItemId, sourceTitle.value));
+}
+
 async function loadRecipeDetail(kind: RecipeKind, targetRecipeId: UUID) {
   if (kind === "inspiration") {
     return recipeApi.getInspirationRecipe(targetRecipeId);
@@ -355,7 +445,7 @@ async function loadRecipeDetail(kind: RecipeKind, targetRecipeId: UUID) {
   if (kind === "collection") {
     return recipeApi.getCollectionRecipe(targetRecipeId);
   }
-  return recipeApi.getMyRecipe(targetRecipeId);
+  return recipeApi.getRecipeDetail(targetRecipeId);
 }
 
 function buildRecipeSteps(
@@ -373,10 +463,14 @@ function buildRecipeSteps(
     nextSteps.push({
       id: `recipe-${targetRecipeId}-${index + 1}`,
       dishKey,
+      dishKeys: [dishKey],
       title: resolveRecipeStepTitle(bodyText, index),
       bodyText,
       dishTitle,
       sourceTag: "菜谱步骤",
+      phase: null,
+      source: null,
+      parallelKey: null,
       recipeId: targetRecipeId,
       recipeKind: targetRecipeKind,
       note: "",
@@ -388,6 +482,85 @@ function buildRecipeSteps(
     });
   });
   return nextSteps;
+}
+
+function buildRecipeAssistantSteps(
+  targetRecipeId: UUID,
+  targetRecipeKind: RecipeKind,
+  dishTitle: string,
+  assistantSteps: RecipeAssistantStep[]
+) {
+  const dishKey = `recipe-${targetRecipeId}`;
+  return assistantSteps
+    .slice()
+    .sort((left, right) => left.order - right.order)
+    .map(item => {
+      const durationSeconds = item.durationMinutes && item.durationMinutes > 0 ? Math.round(item.durationMinutes * 60) : null;
+      return {
+        id: `assistant-recipe-${targetRecipeId}-${item.order}`,
+        dishKey,
+        dishKeys: [dishKey],
+        title: item.title,
+        bodyText: item.detail,
+        dishTitle,
+        sourceTag: "建议流程" as const,
+        phase: item.phase,
+        source: "WIKI" as const,
+        parallelKey: null,
+        recipeId: targetRecipeId,
+        recipeKind: targetRecipeKind,
+        note: "",
+        imageUrl: item.imageUrl || null,
+        displayMode: resolveDisplayMode(item.detail, item.imageUrl || null),
+        durationMinutes: durationSeconds === null ? null : durationSeconds / 60,
+        durationText: item.durationText || "",
+        durationSeconds
+      } satisfies CookStep;
+    });
+}
+
+function buildMealAssistantSteps(
+  dishes: MealCookAssistantDishSource[],
+  assistantSteps: MealCookAssistantStep[],
+  planItemId: UUID,
+  mealTitle: string
+) {
+  const dishMap = new Map(dishes.map(dish => [`dish-${dish.dishId}`, dish]));
+  const allDishKeys = dishes.map(dish => `dish-${dish.dishId}`);
+  return assistantSteps
+    .slice()
+    .sort((left, right) => left.order - right.order)
+    .map(item => {
+      const dishKeys = item.dishIds.map(dishId => `dish-${dishId}`).filter(dishKey => dishMap.has(dishKey));
+      const dishTitles = dishKeys.map(dishKey => dishMap.get(dishKey)?.title).filter((title): title is string => Boolean(title));
+      const duration = resolveStepDuration(item.durationText || "");
+      return {
+        id: `assistant-meal-${planItemId}-${item.order}`,
+        dishKey: dishKeys[0] || allDishKeys[0] || `meal-${planItemId}`,
+        dishKeys,
+        title: item.title,
+        bodyText: item.detail,
+        dishTitle: dishTitles.join("、") || mealTitle,
+        sourceTag: item.source === "WIKI" ? ("建议流程" as const) : ("菜谱步骤" as const),
+        phase: item.phase,
+        source: item.source,
+        parallelKey: item.parallelKey,
+        recipeId: null,
+        recipeKind: "my" as const,
+        note: "",
+        imageUrl: item.imageUrl || null,
+        displayMode: resolveDisplayMode(item.detail, item.imageUrl || null),
+        durationMinutes: duration.seconds === null ? null : duration.seconds / 60,
+        durationText: item.durationText || "",
+        durationSeconds: duration.seconds
+      } satisfies CookStep;
+    });
+}
+
+function assertAssistantReady(assistant: RecipeCookAssistantResponse | MealPlanCookAssistant): asserts assistant is (RecipeCookAssistantResponse | MealPlanCookAssistant) & { assistant: NonNullable<RecipeCookAssistantResponse["assistant"]> | NonNullable<MealPlanCookAssistant["assistant"]> } {
+  if (!assistant.unlocked || !assistant.assistant || !assistant.assistant.steps.length) {
+    throw new Error("炊火智厨暂不可用，请先回到助手页完成解锁");
+  }
 }
 
 function buildPlanContextSteps(context: MealCookContextResponse) {
@@ -406,10 +579,14 @@ function buildFallbackStep(id: string, dishTitle: string, dishKey = id): CookSte
   return {
     id,
     dishKey,
+    dishKeys: [dishKey],
     title: `开始做${dishTitle}`,
     bodyText: "当前没有拿到这道菜的细分步骤，先按原菜谱内容继续，必要时点“查看原菜谱”。",
     dishTitle,
     sourceTag: "菜谱步骤",
+    phase: null,
+    source: null,
+    parallelKey: null,
     recipeId: null,
     recipeKind: "my",
     note: "",
@@ -427,10 +604,14 @@ function ensureSteps(currentSteps: CookStep[], fallbackTitle: string, fallbackKi
     {
       id: `empty-${fallbackTitle}`,
       dishKey: `empty-${fallbackTitle}`,
+      dishKeys: [`empty-${fallbackTitle}`],
       title: `开始做${fallbackTitle}`,
       bodyText: "当前还没有整理出可执行步骤，请先查看原菜谱或回到上一页补全菜单/建议。",
       dishTitle: fallbackTitle,
       sourceTag: "菜谱步骤",
+      phase: null,
+      source: null,
+      parallelKey: null,
       recipeId: null,
       recipeKind: fallbackKind,
       note: "",
@@ -505,8 +686,15 @@ function setViewMode(nextMode: ViewMode) {
     immersiveIndex.value = nextIndex >= 0 ? nextIndex : 0;
   } else {
     syncDishFromImmersiveStep(immersiveIndex.value);
+    void nextTick(() => {
+      if (showMenuTabs.value) void syncMenuVisual(selectedDishIndex.value, false);
+    });
   }
   viewMode.value = nextMode;
+}
+
+function toggleViewMode() {
+  setViewMode(isImmersive.value ? "list" : "swiper");
 }
 
 function openSettings() {
@@ -518,8 +706,15 @@ function closeSettings() {
 }
 
 function setFlowMode(nextMode: FlowMode) {
-  if (nextMode !== "original" || !hasOriginalFlow.value) return;
+  if (nextMode !== "original" || !canSwitchFlowMode.value) return;
   flowMode.value = "original";
+}
+
+function switchToOriginal() {
+  if (!canSwitchFlowMode.value) return;
+  setFlowMode("original");
+  errorText.value = "";
+  void loadData();
 }
 
 function applyFlowData(nextOriginalSteps: CookStep[]) {
@@ -530,7 +725,6 @@ function applyFlowData(nextOriginalSteps: CookStep[]) {
   menuScrollLeft.value = 0;
   menuScrollTarget.value = 0;
   menuIndicatorStyle.value = { opacity: "0" };
-  flowMode.value = "original";
 }
 
 function setCurrentStep(index: number) {
@@ -546,7 +740,9 @@ function setSelectedDish(index: number) {
   if (changed) void syncMenuVisual(index, true);
   if (viewMode.value === "swiper") {
     const currentDish = menuTabs.value[index];
-    const nextIndex = currentDish ? immersiveSteps.value.findIndex(item => item.dishKey === currentDish.key) : -1;
+    const nextIndex = currentDish
+      ? immersiveSteps.value.findIndex(item => (item.dishKeys.length ? item.dishKeys.includes(currentDish.key) : item.dishKey === currentDish.key))
+      : -1;
     immersiveIndex.value = nextIndex >= 0 ? nextIndex : 0;
   }
 }
@@ -584,6 +780,11 @@ function handleListSwiperChange(event: { detail?: { current?: number } }) {
 }
 
 function resetPage() {
+  if (keepScreenOn.value) {
+    void uniPlatform.system.setKeepScreenOn(false).catch(() => undefined);
+  }
+  keepScreenOn.value = false;
+  settingsVisible.value = false;
   loading.value = false;
   errorText.value = "";
   sourceTitle.value = "";
@@ -592,7 +793,6 @@ function resetPage() {
 
 function resetSteps() {
   originalSteps.value = [];
-  flowMode.value = "original";
   originalCurrentIndex.value = 0;
   immersiveIndex.value = 0;
   menuTabs.value = [];
@@ -613,7 +813,9 @@ function handleSwiperChange(event: { detail?: { current?: number } }) {
 function syncDishFromImmersiveStep(index: number) {
   const currentImmersiveStep = immersiveSteps.value[index];
   if (!currentImmersiveStep) return;
-  const nextDishIndex = menuTabs.value.findIndex(item => item.key === currentImmersiveStep.dishKey);
+  const nextDishIndex = menuTabs.value.findIndex(item =>
+    currentImmersiveStep.dishKeys.length ? currentImmersiveStep.dishKeys.includes(item.key) : item.key === currentImmersiveStep.dishKey
+  );
   if (nextDishIndex < 0) {
     originalCurrentIndex.value = index;
     return;
@@ -628,13 +830,16 @@ function syncDishFromImmersiveStep(index: number) {
 function getDishStepIndex(index: number) {
   const step = immersiveSteps.value[index];
   if (!step) return 0;
-  return immersiveSteps.value.slice(0, index).filter(item => item.dishKey === step.dishKey).length;
+  return immersiveSteps.value
+    .slice(0, index)
+    .filter(item => (step.dishKeys.length ? item.dishKeys.includes(step.dishKeys[0]) : item.dishKey === step.dishKey))
+    .length;
 }
 
 function getDishStepCount(index: number) {
   const step = immersiveSteps.value[index];
   if (!step) return 0;
-  return immersiveSteps.value.filter(item => item.dishKey === step.dishKey).length;
+  return immersiveSteps.value.filter(item => (step.dishKeys.length ? item.dishKeys.includes(step.dishKeys[0]) : item.dishKey === step.dishKey)).length;
 }
 
 function getPlainTextSizeClass(text: string) {
@@ -700,6 +905,10 @@ function parseSourceType(value: unknown): SourceType {
   return text === "plan" ? "plan" : "recipe";
 }
 
+function parseFlowMode(value: unknown): FlowMode {
+  return parseQueryText(value) === "assistant" ? "assistant" : "original";
+}
+
 function parseRecipeKind(value: unknown): RecipeKind {
   const text = parseQueryText(value);
   if (text === "inspiration" || text === "collection") return text;
@@ -723,6 +932,13 @@ function formatPlanDate(value: string) {
   return `${Number(month)}月${Number(day)}日`;
 }
 
+function phaseLabel(phase: CookStepPhase) {
+  if (phase === "PREP") return "准备";
+  if (phase === "COOK") return "烹饪";
+  if (phase === "SERVE") return "上桌";
+  return "步骤";
+}
+
 async function automatorApplySession(snapshot: { token: string; uid: number; expiresAt: string }) {
   await sessionStore.setSession(snapshot);
   await loadData();
@@ -732,12 +948,11 @@ async function automatorReadState() {
   await nextTick();
   return {
     sourceTitle: sourceTitle.value,
-    toolbarMeta: toolbarMeta.value,
     flowMode: flowMode.value,
     viewMode: viewMode.value,
     canSwitchFlowMode: canSwitchFlowMode.value,
-    assistantStepCount: 0,
-    originalStepCount: originalSteps.value.length,
+    assistantStepCount: isAssistantMode.value ? originalSteps.value.length : 0,
+    originalStepCount: isAssistantMode.value ? 0 : originalSteps.value.length,
     menuCount: menuTabs.value.length,
     selectedDishIndex: selectedDishIndex.value,
     currentDishStepCount: currentDishSteps.value.length,
@@ -770,6 +985,7 @@ defineExpose({
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 280ms ease;
 }
 
 .cook-nav__main {
@@ -784,23 +1000,117 @@ defineExpose({
   display: flex;
   flex: 0 0 auto;
   align-items: center;
+  gap: 8rpx;
   justify-content: flex-end;
-  width: 64rpx;
+  width: auto;
   height: 64rpx;
 }
 
-.cook-nav__settings--hover {
+.cook-nav__mode-toggle {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 150rpx;
+  height: 48rpx;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  background: linear-gradient(to right, var(--color-surface-muted) 50%, var(--color-overlay-control) 50%) no-repeat;
+  background-size: 205%;
+  background-position: 0;
+  transition: background-position 320ms ease, color 280ms ease, transform 180ms ease;
+}
+
+.cook-nav__mode-toggle--hover,
+.cook-nav__settings-button--hover {
   opacity: 0.68;
+}
+
+.cook-nav__mode-toggle--immersive {
+  background-position: 100%;
+}
+
+.cook-nav__mode-state {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  width: max-content;
+  height: 100%;
+  gap: 6rpx;
+  flex: 0 0 auto;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(24rpx);
+  transition: opacity 220ms ease, transform 320ms ease;
+}
+
+.cook-nav__mode-state--list {
+  opacity: 1;
+  transform: translateX(12rpx);
+}
+
+.cook-nav__mode-dot {
+  flex: 0 0 auto;
+  width: 24rpx;
+  height: 24rpx;
+  border-radius: 50%;
+  background-color: currentColor;
+  transition: background-color 280ms ease;
+}
+
+.cook-nav__mode-label {
+  display: block;
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cook-nav__mode-toggle--immersive .cook-nav__mode-state--list {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8rpx);
+}
+
+.cook-nav__mode-toggle--immersive .cook-nav__mode-state--immersive {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(12rpx);
+}
+
+.cook-nav__settings-button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
 }
 
 .cook-nav__settings-icon {
   color: var(--color-text);
   font-size: 34rpx;
   line-height: 1;
+  transition: color 280ms ease;
+}
+
+.cook-mode-layout :deep(.navbar__fixed) {
+  transition: background-color 280ms ease;
+}
+
+.cook-mode-layout :deep(.navbar__title),
+.cook-mode-layout :deep(.navbar__icon) {
+  transition: color 280ms ease;
 }
 
 .cook-nav__main--immersive .cook-nav__title,
-.cook-nav__main--immersive .cook-nav__settings-icon {
+.cook-nav__main--immersive .cook-nav__settings-icon,
+.cook-nav__main--immersive .cook-nav__mode-toggle {
   color: var(--color-overlay-text);
 }
 
@@ -810,11 +1120,6 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
-}
-
-.cook-layout--immersive :deep(.navbar__fixed) {
-  background: var(--overlay-image-mask);
 }
 
 .cook-mode-page,
@@ -828,11 +1133,12 @@ defineExpose({
   min-height: 0;
   width: 100%;
   flex-direction: column;
-  background: var(--page-warm-bg);
+  background-color: var(--page-warm-bg);
+  transition: background-color 280ms ease;
 }
 
 .cook-mode-page--immersive {
-  background: var(--color-overlay-medium);
+  background-color: var(--color-overlay-medium);
 }
 
 .cook-mode-state,
@@ -844,12 +1150,32 @@ defineExpose({
 }
 
 .cook-mode-state {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24rpx;
   padding: 56rpx var(--space-page);
   color: var(--color-text-secondary);
 }
 
 .cook-mode-state--error {
   color: var(--color-state-danger-text);
+}
+
+.cook-mode-state__switch {
+  min-width: 240rpx;
+  height: 76rpx;
+  margin: 0;
+  padding: 0 28rpx;
+  border: 0;
+  border-radius: 999rpx;
+  color: var(--color-text-inverse);
+  background: var(--button-primary-bg);
+  font-size: 26rpx;
+  line-height: 76rpx;
+}
+
+.cook-mode-state__switch::after {
+  border: 0;
 }
 
 .cook-mode-empty {
@@ -879,37 +1205,9 @@ defineExpose({
   pointer-events: none;
 }
 
-.cook-toolbar__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18rpx;
-}
-
-.cook-toolbar__main {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 10rpx;
-}
-
-.cook-toolbar__title {
-  font-size: 34rpx;
-  font-weight: var(--font-weight-heavy);
-  color: var(--color-text);
-}
-
-.cook-toolbar__meta {
-  font-size: 24rpx;
-  line-height: 1.7;
-  color: var(--color-text-secondary);
-}
-
 .cook-toolbar__flow-scroll {
   position: relative;
   width: 100%;
-  padding: 8rpx;
   box-sizing: border-box;
   border-radius: 999rpx;
   background: var(--color-surface-soft-card);
@@ -917,11 +1215,21 @@ defineExpose({
   white-space: nowrap;
 }
 
+.cook-toolbar__flow-list {
+  display: flex;
+  position: relative;
+  min-width: 100%;
+  width: max-content;
+  gap: 8rpx;
+  padding: 8rpx;
+  box-sizing: border-box;
+}
+
 .cook-toolbar__flow-indicator {
   position: absolute;
   z-index: 0;
-  top: 0;
-  left: 0;
+  top: 8rpx;
+  left: 8rpx;
   border-radius: 999rpx;
   background: var(--color-tag-primary-bg);
   transition: transform 220ms ease, width 220ms ease, opacity 160ms ease;
@@ -929,64 +1237,22 @@ defineExpose({
 }
 
 .cook-toolbar__flow-mode {
-  display: inline-flex;
+  display: flex;
   position: relative;
   z-index: 1;
   align-items: center;
-  vertical-align: top;
-  margin-right: 8rpx;
+  justify-content: center;
+  flex: 1 0 auto;
   padding: 10rpx 20rpx;
   border-radius: 999rpx;
   font-size: 22rpx;
   color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .cook-toolbar__flow-mode--active {
   color: var(--color-tag-primary-text);
   font-weight: var(--font-weight-medium);
-}
-
-.cook-toolbar__modes {
-  display: flex;
-  gap: 10rpx;
-  padding: 8rpx;
-  border-radius: 999rpx;
-  background: var(--color-surface-raised);
-}
-
-.cook-toolbar__modes--floating {
-  position: fixed;
-  right: var(--space-page);
-  z-index: 10;
-  transition: background-color 180ms ease, padding 180ms ease;
-}
-
-.cook-toolbar__mode {
-  padding: 8rpx 16rpx;
-  border-radius: var(--radius-pill);
-  font-size: 24rpx;
-  color: var(--color-text-secondary);
-}
-
-.cook-toolbar__mode--active {
-  color: var(--color-text-inverse);
-  background: var(--button-primary-bg);
-}
-
-.cook-toolbar__modes--dark {
-  background: var(--color-overlay-control);
-  -webkit-backdrop-filter: var(--material-mask-filter);
-  backdrop-filter: var(--material-mask-filter);
-}
-
-.cook-toolbar__modes--dark .cook-toolbar__mode {
-  color: var(--color-overlay-text-muted);
-  transition: color 180ms ease, background-color 180ms ease, padding 180ms ease, font-size 180ms ease;
-}
-
-.cook-toolbar__modes--dark .cook-toolbar__mode--active {
-  color: var(--color-text);
-  background: var(--color-overlay-text);
 }
 
 .cook-content-stage {
@@ -1080,6 +1346,12 @@ defineExpose({
   display: block;
 }
 
+.cook-step-card__index-row {
+  display: flex;
+  align-items: end;
+  width: 100%;
+}
+
 .cook-step-card__index {
   color: var(--color-text);
   font-size: 80rpx;
@@ -1091,6 +1363,31 @@ defineExpose({
   display: inline-block;
   font-style: italic;
   vertical-align: baseline;
+}
+
+.cook-slide__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.cook-step-card__phase,
+.cook-slide__phase {
+  padding: 4rpx 12rpx;
+  border-radius: var(--radius-xs);
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+.cook-step-card__phase {
+  margin-left: 12rpx;
+}
+
+.cook-step-card__phase,
+.cook-slide__phase {
+  color: var(--color-brand-primary);
+  background: var(--color-tag-primary-bg);
 }
 
 .cook-step-card__index-current {
@@ -1113,10 +1410,29 @@ defineExpose({
 }
 
 .cook-step-card__text {
-  margin-top: 16rpx;
+  margin-top: 20rpx;
   font-size: 32rpx;
   line-height: 1.6;
   color: var(--color-text);
+}
+
+.cook-step-card__duration {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6rpx;
+  margin-left: auto;
+  padding-left: 12rpx;
+  color: var(--color-support-action);
+  font-size: 32rpx;
+  line-height: 1;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.cook-step-card__duration-icon {
+  flex-shrink: 0;
+  font-size: 50rpx;
 }
 
 .cook-step-card__note {
@@ -1131,6 +1447,10 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 10rpx;
+}
+
+.cook-slide__meta {
+  margin-left: 8rpx;
 }
 
 .cook-slide__top {
@@ -1160,17 +1480,11 @@ defineExpose({
 .cook-slide__index-separator {
   font-size: 50rpx;
   line-height: 1;
-  margin: 0 10rpx 0 -10rpx;
+  margin: 0;
 }
 
-.cook-slide__tag,
-.cook-slide__time {
-  padding: 8rpx 16rpx;
-  border-radius: 999rpx;
+.cook-slide__tag {
   color: var(--color-overlay-text);
-  background: var(--color-overlay-control);
-  -webkit-backdrop-filter: var(--material-mask-filter);
-  backdrop-filter: var(--material-mask-filter);
 }
 
 .cook-slide__copy {
@@ -1249,6 +1563,26 @@ defineExpose({
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background-color: var(--page-warm-bg);
+  transition: background-color 280ms ease;
+}
+
+.cook-mode-page--immersive .cook-slide {
+  background-color: var(--color-overlay-medium);
+}
+
+.cook-slide::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background-color: transparent;
+  opacity: 1;
+  transition: background-color 280ms ease;
+  pointer-events: none;
+}
+
+.cook-mode-page--immersive .cook-slide::after {
+  background-color: var(--color-overlay-scrim);
 }
 
 .cook-slide__image {

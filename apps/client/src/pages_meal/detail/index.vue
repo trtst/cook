@@ -14,11 +14,14 @@
 
     <view class="meal-detail-page">
       <view class="detail-nav-backdrop" :style="navBackdropStyle" />
-      <LoginEmptyState
+      <Empty
         v-if="!sessionStore.isLoggedIn"
         class="meal-detail-empty"
+        :art="emptyStateArt"
         title="登录后查看餐次详情"
         description="顶部标题会继续保留；登录后再安排这顿饭、继续发起饭局和查看参与情况。"
+        clickable
+        @click="openLogin"
       />
 
       <template v-else-if="loading && !planDetail && !eventDetail">
@@ -385,7 +388,17 @@
 
               <view v-if="planDetail?.menuLocked" id="meal-assistant-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'assistant' }">
                 <view class="meal-panel__head">
-                  <text class="meal-panel__title">{{ cookAssistantPanelTitle }}</text>
+                  <view class="meal-helper__head">
+                    <text class="meal-panel__title">{{ cookAssistantPanelTitle }}</text>
+                    <view
+                      v-if="canManageCookAssistant && currentMenuItems.length && !eventClosed && !planClosed"
+                      class="meal-inline-action meal-inline-action--ghost meal-helper__cook-action"
+                      @click="openCookMode"
+                    >
+                      <text class="cookfont icon-cook meal-helper__cook-action-icon" />
+                      <text>边做边看</text>
+                    </view>
+                  </view>
                   <text class="meal-panel__meta">{{ cookAssistantMeta }}</text>
                 </view>
 
@@ -419,19 +432,10 @@
                 </view>
 
                 <view v-if="canManageCookAssistant && currentMenuItems.length && !eventClosed && !planClosed" class="meal-helper__actions">
-                  <template v-if="cookAssistant?.unlocked">
-                    <button class="meal-helper__button meal-helper__button--primary meal-helper__button--main" @click="openCookAssistantPage">查看做饭助手</button>
-                    <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
-                  </template>
-                  <template v-else>
-                    <button
-                      class="meal-helper__button meal-helper__button--primary meal-helper__button--main"
-                      @click="handleCookAssistantAction"
-                    >
-                      生成/解锁做饭助手
-                    </button>
-                    <text class="meal-helper__text-action" @click="openCookMode">按菜谱做饭</text>
-                  </template>
+                  <button class="meal-helper__button meal-helper__button--primary" @click="handleCookAssistantAction">
+                    <text class="cookfont icon-cook-assistant meal-helper__button-icon" aria-hidden="true" />
+                    <text>炊火智厨</text>
+                  </button>
                 </view>
               </view>
 
@@ -605,6 +609,17 @@
           @confirm="handleConfirmMenuAction"
         />
 
+        <CookAssistantUnlockSheet
+          :visible="cookAssistantSheetVisible"
+          :loading="cookAssistantSheetLoading"
+          :remaining-count="cookAssistantRemainingCount"
+          :can-unlock="cookAssistantCanUnlock"
+          :submitting="cookAssistantSheetSubmitting"
+          :error-text="cookAssistantSheetError"
+          @close="closeCookAssistantSheet"
+          @unlock="unlockCookAssistant"
+        />
+
         <SheetShell
           :visible="recipeSheetVisible"
           :title="recipeSheetTitle"
@@ -772,12 +787,13 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onShow, onUnload } from "@dcloudio/uni-app";
 import { mealApi, type DiningEventSummary, type MealPlanCookAssistant, type MealPlanSummary } from "../apis/meal";
-import type { UUID } from "@/apis/http";
+import { UnauthorizedError, type UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import { recipeApi, type MyRecipeSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
+import CookAssistantUnlockSheet from "@/components/CookAssistantUnlockSheet.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import MenuConfirmSheet from "@/components/Meal/MenuConfirmSheet.vue";
 import ParticipantManageSheet from "@/components/Meal/ParticipantManageSheet.vue";
@@ -788,10 +804,12 @@ import ImageField from "@/components/ImageField.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
 import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingGapWindow, type ShoppingListSummary } from "@/apis/shopping";
+import { userApi, type CookAssistantUsageResponse } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -927,6 +945,18 @@ const scheduledTime = ref("18:30");
 const scheduledMealSlot = ref<MealSlot>("DINNER");
 const cookAssistantLoading = ref(false);
 const cookAssistant = ref<MealPlanCookAssistant | null>(null);
+const cookAssistantSheetVisible = ref(false);
+const cookAssistantSheetLoading = ref(false);
+const cookAssistantSheetSubmitting = ref(false);
+const cookAssistantSheetError = ref("");
+const cookAssistantUsage = ref<CookAssistantUsageResponse | null>(null);
+const restoreCookAssistantAfterLogin = ref(false);
+const { openLogin } = useLoginEmptyState(() => {
+  if (!restoreCookAssistantAfterLogin.value) return;
+  restoreCookAssistantAfterLogin.value = false;
+  cookAssistantSheetVisible.value = true;
+  void loadCookAssistantUsage();
+});
 const scrollTop = ref(0);
 const scrollTarget = ref("");
 const entryFocus = ref<DetailFocus>("");
@@ -1666,6 +1696,8 @@ const cookAssistantMeta = computed(() => {
   }
   return "这顿饭的安排已备好";
 });
+const cookAssistantRemainingCount = computed(() => cookAssistantUsage.value?.remainingCount ?? 0);
+const cookAssistantCanUnlock = computed(() => Boolean(cookAssistantUsage.value?.activityEnabled && cookAssistantRemainingCount.value > 0));
 const cookAssistantEmptyText = computed(() => (
   "菜单已经定好，现在可以生成或解锁这顿饭的做饭助手。"
 ));
@@ -1876,6 +1908,12 @@ function clearPageState() {
   eventDetail.value = null;
   cookAssistant.value = null;
   cookAssistantLoading.value = false;
+  cookAssistantSheetVisible.value = false;
+  cookAssistantSheetLoading.value = false;
+  cookAssistantSheetSubmitting.value = false;
+  cookAssistantSheetError.value = "";
+  cookAssistantUsage.value = null;
+  restoreCookAssistantAfterLogin.value = false;
   showEventEditor.value = false;
   participantActionId.value = null;
   activeSharePath.value = "";
@@ -2229,12 +2267,12 @@ function handleNoteSheetAfterClose() {
   noteDraft.value = eventDetail.value?.note?.trim() || "";
 }
 
-function openCookAssistantPage() {
+function openCookAssistantMode() {
   if (eventClosed.value || planClosed.value) return;
   if (!planDetail.value || !planDate.value || !currentMenuItems.value.length) return;
   const eventQuery = eventDetail.value?.id ? `&eventId=${encodeURIComponent(String(eventDetail.value.id))}` : "";
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/assistant/index?planItemId=${encodeURIComponent(String(planDetail.value.id))}&planDate=${encodeURIComponent(planDate.value)}${eventQuery}`
+    `/pages_meal/cook-mode/index?source=plan&planItemId=${encodeURIComponent(String(planDetail.value.id))}&planDate=${encodeURIComponent(planDate.value)}&flow=assistant${eventQuery}`
   );
 }
 
@@ -2243,7 +2281,7 @@ function openCookMode() {
   if (!planDetail.value || !planDate.value || !currentMenuItems.value.length) return;
   const eventQuery = eventDetail.value?.id ? `&eventId=${encodeURIComponent(String(eventDetail.value.id))}` : "";
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/cook-mode/index?source=plan&planItemId=${encodeURIComponent(String(planDetail.value.id))}&planDate=${encodeURIComponent(planDate.value)}${eventQuery}`
+    `/pages_meal/cook-mode/index?source=plan&planItemId=${encodeURIComponent(String(planDetail.value.id))}&planDate=${encodeURIComponent(planDate.value)}&flow=original${eventQuery}`
   );
 }
 
@@ -2541,6 +2579,10 @@ async function loadCookAssistant(currentPlanItemId: UUID) {
   try {
     cookAssistant.value = await mealApi.getCookAssistant(currentPlanItemId);
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      openLogin();
+      return;
+    }
     const message = error instanceof Error ? error.message : "";
     if (message.includes("计划不存在")) {
       cookAssistant.value = null;
@@ -2558,27 +2600,81 @@ function assistantStepCount(phase: "PREP" | "COOK" | "SERVE") {
   return cookAssistant.value?.assistant?.steps.filter(item => item.phase === phase).length ?? 0;
 }
 
-async function handleCookAssistantAction() {
+function handleCookAssistantAction() {
   if (
     !planDetail.value ||
     !planDetail.value.menuLocked ||
     !canManageCookAssistant.value ||
     cookAssistantLoading.value ||
-    submitting.value ||
     eventClosed.value ||
     planClosed.value
   ) return;
+  if (cookAssistant.value?.unlocked && cookAssistant.value.assistant?.steps.length) {
+    openCookAssistantMode();
+    return;
+  }
+  cookAssistantSheetError.value = "";
+  cookAssistantSheetVisible.value = true;
+  void loadCookAssistantUsage();
+}
+
+function closeCookAssistantSheet() {
+  if (cookAssistantSheetSubmitting.value) return;
+  cookAssistantSheetVisible.value = false;
+}
+
+async function loadCookAssistantUsage() {
+  cookAssistantSheetLoading.value = true;
   cookAssistantLoading.value = true;
   try {
-    cookAssistant.value = await mealApi.unlockCookAssistant(planDetail.value.id, {
+    cookAssistantUsage.value = await userApi.getCookAssistantUsage();
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      cookAssistantSheetError.value = "";
+      restoreCookAssistantAfterLogin.value = true;
+      openLogin();
+      return;
+    }
+    cookAssistantSheetError.value = error instanceof Error ? error.message : "暂时无法读取可用次数，请稍后重试";
+  } finally {
+    cookAssistantSheetLoading.value = false;
+    cookAssistantLoading.value = false;
+  }
+}
+
+async function unlockCookAssistant() {
+  if (
+    !planDetail.value ||
+    cookAssistantSheetLoading.value ||
+    cookAssistantSheetSubmitting.value ||
+    eventClosed.value ||
+    planClosed.value ||
+    !cookAssistantCanUnlock.value
+  ) return;
+  cookAssistantSheetSubmitting.value = true;
+  cookAssistantSheetError.value = "";
+  try {
+    const result = await mealApi.unlockCookAssistant(planDetail.value.id, {
       operationId: createOperationId()
     });
-    await loadDetail();
-    await uniPlatform.feedback.toast({ title: "这顿饭的做饭助手已经备好啦", icon: "success" });
+    cookAssistant.value = result;
+    cookAssistantUsage.value = await userApi.getCookAssistantUsage().catch(() => cookAssistantUsage.value);
+    if (result.unlocked && result.assistant?.steps.length) {
+      cookAssistantSheetVisible.value = false;
+      openCookAssistantMode();
+      return;
+    }
+    cookAssistantSheetError.value = "炊火智厨暂时没有可执行步骤，请稍后重试";
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "生成失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      cookAssistantSheetError.value = "";
+      restoreCookAssistantAfterLogin.value = true;
+      openLogin();
+      return;
+    }
+    cookAssistantSheetError.value = error instanceof Error ? error.message : "解锁失败，请稍后重试";
   } finally {
-    cookAssistantLoading.value = false;
+    cookAssistantSheetSubmitting.value = false;
   }
 }
 
@@ -2941,10 +3037,6 @@ function handleFooterAction(action: FooterActionKey) {
     return;
   }
   if (action === "cook-assistant") {
-    if (cookAssistant.value?.unlocked) {
-      openCookAssistantPage();
-      return;
-    }
     void handleCookAssistantAction();
     return;
   }
@@ -3747,7 +3839,7 @@ function clearFocusedSection() {
   background: var(--color-tag-primary-bg);
   box-shadow: inset 0 0 0 1rpx var(--color-border-active);
   color: var(--color-tag-primary-text);
-  font-size: 24rpx;
+  font-size: 26rpx;
   font-weight: 600;
 }
 
@@ -3912,7 +4004,7 @@ function clearFocusedSection() {
 }
 
 .meal-menu__add-icon {
-  font-size: 22rpx;
+  font-size: 32rpx;
   line-height: 1;
 }
 
@@ -4155,6 +4247,27 @@ function clearFocusedSection() {
   margin-top: 24rpx;
 }
 
+.meal-helper__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  min-width: 0;
+}
+
+.meal-helper__cook-action {
+  flex: 0 0 auto;
+}
+
+.meal-helper__cook-action-icon {
+  font-size: 30rpx;
+}
+
+.meal-helper__button-icon {
+  color: inherit;
+  font-size: 30rpx;
+}
+
 .meal-helper__summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4193,6 +4306,7 @@ function clearFocusedSection() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10rpx;
   width: 100%;
   min-height: 84rpx;
   padding: 0 24rpx;
@@ -4212,19 +4326,6 @@ function clearFocusedSection() {
   color: var(--color-text-inverse);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
-}
-
-.meal-helper__button--main {
-  flex: 0 1 70%;
-}
-
-.meal-helper__text-action {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--color-text-tertiary);
-  font-size: 24rpx;
-  line-height: 1.6;
-  text-align: center;
 }
 
 .participant-list {
@@ -4418,7 +4519,7 @@ function clearFocusedSection() {
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
   margin-bottom: 14rpx;
 }

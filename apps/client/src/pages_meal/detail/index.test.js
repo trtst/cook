@@ -1,7 +1,7 @@
 const http = require("http");
 const https = require("https");
 const { URL } = require("url");
-const { readFileSync } = require("fs");
+const { existsSync, readFileSync } = require("fs");
 const { resolve } = require("path");
 const nodeAssert = require("assert").strict;
 const { loginWithPassword } = require("../../test-utils/auth-fixture");
@@ -522,5 +522,40 @@ if (!hasAutomatorRuntime && nodeTest) {
       detailPageSource,
       /isEventOrganizer\.value\s*\|\|\s*\["INVITED", "ACCEPTED"\]\.includes\(currentParticipant\.value\?\.status \?\? ""\)/
     );
+  });
+
+  nodeTest("meal detail uses the shared assistant unlock sheet and enters cook mode after unlock", () => {
+    const sheetPath = resolve(__dirname, "../../components/CookAssistantUnlockSheet.vue");
+    nodeAssert.ok(existsSync(sheetPath), "Expected the shared assistant unlock sheet to exist");
+    nodeAssert.match(detailPageSource, /import CookAssistantUnlockSheet from "@\/components\/CookAssistantUnlockSheet\.vue";/);
+    nodeAssert.match(detailPageSource, /<CookAssistantUnlockSheet[\s\S]*:visible="cookAssistantSheetVisible"[\s\S]*:remaining-count="cookAssistantRemainingCount"/);
+    nodeAssert.match(detailPageSource, /function handleCookAssistantAction\(\)[\s\S]*?cookAssistantSheetVisible\.value = true/);
+    nodeAssert.match(detailPageSource, /function unlockCookAssistant\(\)[\s\S]*?mealApi\.unlockCookAssistant[\s\S]*?openCookAssistantMode/);
+    nodeAssert.doesNotMatch(detailPageSource, /@click="openCookAssistantPage"/);
+    nodeAssert.doesNotMatch(detailPageSource, /openCookAssistantPage/);
+    nodeAssert.match(detailPageSource, /if \(action === "cook-assistant"\) \{\s+void handleCookAssistantAction\(\);/);
+    nodeAssert.doesNotMatch(detailPageSource, /查看做饭助手/);
+    nodeAssert.match(
+      detailPageSource,
+      /<view class="meal-helper__head">[\s\S]*?class="meal-inline-action meal-inline-action--ghost meal-helper__cook-action"[\s\S]*?@click="openCookMode"[\s\S]*?icon-cook meal-helper__cook-action-icon[\s\S]*?<text>边做边看<\/text>/
+    );
+    nodeAssert.match(
+      detailPageSource,
+      /<button class="meal-helper__button meal-helper__button--primary"[\s\S]*?icon-cook-assistant meal-helper__button-icon[\s\S]*?<text>炊火智厨<\/text>/
+    );
+    nodeAssert.match(detailPageSource, /\.meal-helper__button-icon\s*\{[^}]*color:\s*inherit;/);
+    nodeAssert.doesNotMatch(detailPageSource, /meal-helper__text-action|按菜谱做饭/);
+    nodeAssert.match(detailPageSource, /\.meal-helper__head\s*\{[\s\S]*?display: flex;[\s\S]*?justify-content: space-between;/);
+    nodeAssert.match(detailPageSource, /\.meal-helper__actions\s*\{[\s\S]*?display: flex;[\s\S]*?margin-top: 24rpx;/);
+    nodeAssert.doesNotMatch(detailPageSource, /\.meal-helper__button--main\s*\{/);
+    nodeAssert.doesNotMatch(detailPageSource, /\/pages_meal\/assistant\/index\?/);
+  });
+
+  nodeTest("meal detail restores the assistant unlock sheet after expired login", () => {
+    nodeAssert.match(detailPageSource, /import \{ UnauthorizedError, type UUID \} from "@\/apis\/http";/);
+    nodeAssert.match(detailPageSource, /restoreCookAssistantAfterLogin/);
+    nodeAssert.match(detailPageSource, /restoreCookAssistantAfterLogin\.value = true;[\s\S]*openLogin\(\)/);
+    nodeAssert.match(detailPageSource, /if \(!restoreCookAssistantAfterLogin\.value\) return;[\s\S]*cookAssistantSheetVisible\.value = true[\s\S]*loadCookAssistantUsage\(\)/);
+    nodeAssert.match(detailPageSource, /cookAssistantSheetVisible\.value = false;[\s\S]*cookAssistantSheetLoading\.value = false;[\s\S]*cookAssistantSheetError\.value = "";[\s\S]*cookAssistantUsage\.value = null;/);
   });
 }

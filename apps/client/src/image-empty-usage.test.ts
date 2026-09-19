@@ -35,7 +35,7 @@ expectExcludes(eventPageSource, 'import ImageEmpty from "@/components/ImageEmpty
 expectExcludes(eventPageSource, "event-card__cover-empty");
 
 expectIncludes(mealDetailSource, '<ImageEmpty v-else class="meal-hero__cover-empty" copy="封面图" ratio="fill" />');
-expectIncludes(mealDetailSource, '<ImageEmpty v-else class="recipe-sheet__cover-placeholder" copy="封面图" ratio="fill" />');
+expectIncludes(mealDetailSource, '<RecipeListRow');
 
 expectIncludes(recipeHistorySource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes(recipeHistorySource, '<ImageEmpty v-else class="history-card__image history-card__image--empty" copy="封面图" ratio="fill" />');

@@ -127,4 +127,15 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /toMealAssistantPlan\(context\)/);
     nodeAssert.doesNotMatch(pageSource, /mealApi\.listPlans\(\{ from: planDate\.value/);
   });
+
+  nodeTest("meal assistant enters the shared cook mode with assistant flow", () => {
+    nodeAssert.match(pageSource, /flow=assistant/);
+  });
+
+  nodeTest("meal assistant distinguishes expired login from assistant load failures", () => {
+    nodeAssert.match(pageSource, /import \{ ApiClientError, UnauthorizedError, type UUID \} from "@\/apis\/http";/);
+    nodeAssert.match(pageSource, /if \(error instanceof UnauthorizedError\) \{[\s\S]*openLogin\(\)/);
+    nodeAssert.match(pageSource, /cookAssistantError/);
+    nodeAssert.match(pageSource, /retryCookAssistant/);
+  });
 }
