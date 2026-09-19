@@ -22,7 +22,7 @@
             <view class="taste-shell">
               <view class="taste-head">
                 <view class="taste-head__copy">
-                  <text class="taste-head__description">这些信息只归本人所有。请用中文分号（{{ tasteSeparator }}）分隔多个条目。</text>
+                  <text class="taste-head__description">这些信息只归本人所有。输入后按回车生成标签，点击标签右侧的 × 可删除。</text>
                 </view>
               </view>
 
@@ -41,12 +41,13 @@
                     <text class="taste-field__label">{{ field.label }}</text>
                     <text class="taste-field__hint">例如 {{ field.placeholder }}</text>
                   </view>
-                  <textarea
+                  <TasteTagInput
                     v-model="tasteText[field.key]"
-                    class="taste-field__textarea"
-                    auto-height
+                    :max-count="tasteItemMaxCount"
+                    :max-length="tasteItemMaxLength"
                     :placeholder="`例如 ${field.placeholder}`"
                     :disabled="saving"
+                    @confirm="handleTagConfirm"
                   />
                 </view>
 
@@ -91,6 +92,7 @@ import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
+import TasteTagInput from "./TasteTagInput.vue";
 
 type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "flavorPreferences";
 type TasteField = { key: TasteListKey; label: string; placeholder: string };
@@ -100,7 +102,6 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const tasteItemMaxLength = 64;
 const tasteItemMaxCount = 50;
-const tasteSeparator = "；";
 
 const sessionStore = useSessionStore();
 const { openLogin } = useLoginEmptyState(() => loadTaste());
@@ -110,32 +111,32 @@ const loaded = ref(false);
 const loadErrorText = ref("");
 const saveErrorText = ref("");
 const noteText = ref("");
-const tasteText = reactive<Record<TasteListKey, string>>({
-  allergies: "",
-  strictDislikes: "",
-  dislikedIngredients: "",
-  flavorPreferences: ""
+const tasteText = reactive<Record<TasteListKey, string[]>>({
+  allergies: [],
+  strictDislikes: [],
+  dislikedIngredients: [],
+  flavorPreferences: []
 });
 const tasteFields: TasteField[] = [
   {
     key: "allergies",
     label: "过敏",
-    placeholder: `花生${tasteSeparator}虾`
+    placeholder: "花生"
   },
   {
     key: "strictDislikes",
     label: "严格忌口",
-    placeholder: `酒精${tasteSeparator}动物内脏`
+    placeholder: "酒精"
   },
   {
     key: "dislikedIngredients",
     label: "不喜欢",
-    placeholder: `香菜${tasteSeparator}苦瓜`
+    placeholder: "香菜"
   },
   {
     key: "flavorPreferences",
     label: "偏好",
-    placeholder: `微辣${tasteSeparator}少油`
+    placeholder: "微辣"
   }
 ];
 
@@ -161,10 +162,10 @@ async function loadTaste() {
 
   try {
     const profile = await userApi.getTasteProfile();
-    tasteText.allergies = profile.allergies.join(tasteSeparator);
-    tasteText.strictDislikes = profile.strictDislikes.join(tasteSeparator);
-    tasteText.dislikedIngredients = profile.dislikedIngredients.join(tasteSeparator);
-    tasteText.flavorPreferences = profile.flavorPreferences.join(tasteSeparator);
+    tasteText.allergies = [...profile.allergies];
+    tasteText.strictDislikes = [...profile.strictDislikes];
+    tasteText.dislikedIngredients = [...profile.dislikedIngredients];
+    tasteText.flavorPreferences = [...profile.flavorPreferences];
     noteText.value = profile.note ?? "";
     loaded.value = true;
   } catch (error) {
@@ -186,10 +187,10 @@ async function saveTaste() {
 
   try {
     const profile = await userApi.updateTasteProfile(payload);
-    tasteText.allergies = profile.allergies.join(tasteSeparator);
-    tasteText.strictDislikes = profile.strictDislikes.join(tasteSeparator);
-    tasteText.dislikedIngredients = profile.dislikedIngredients.join(tasteSeparator);
-    tasteText.flavorPreferences = profile.flavorPreferences.join(tasteSeparator);
+    tasteText.allergies = [...profile.allergies];
+    tasteText.strictDislikes = [...profile.strictDislikes];
+    tasteText.dislikedIngredients = [...profile.dislikedIngredients];
+    tasteText.flavorPreferences = [...profile.flavorPreferences];
     noteText.value = profile.note ?? "";
     loaded.value = true;
   } catch (error) {
@@ -202,11 +203,8 @@ async function saveTaste() {
   await uniPlatform.feedback.toast({ title: "已保存", icon: "success" }).catch(() => undefined);
 }
 
-function readItems(text: string) {
-  return text
-    .split(tasteSeparator)
-    .map((item) => item.trim())
-    .filter(Boolean);
+function handleTagConfirm() {
+  saveErrorText.value = "";
 }
 
 function buildPayload(): UpdateTasteProfileRequest | null {
@@ -219,7 +217,7 @@ function buildPayload(): UpdateTasteProfileRequest | null {
   };
 
   for (const field of tasteFields) {
-    const items = readItems(tasteText[field.key]);
+    const items = tasteText[field.key].map((item) => item.trim()).filter(Boolean);
     const errorText = validateItems(field, items);
     if (errorText) {
       saveErrorText.value = errorText;
