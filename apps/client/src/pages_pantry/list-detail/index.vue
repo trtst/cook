@@ -14,13 +14,14 @@
 
     <view class="detail-page">
       <view class="detail-nav-backdrop" :style="navBackdropStyle" />
-      <LoginEmptyState
+      <Empty
         v-if="!sessionStore.isLoggedIn"
         class="detail-empty"
         :art="emptyStateArt"
         title="登录后查看清单详情"
         description="顶部清单标题会继续保留；登录后再看采购进度、勾选和入库确认。"
-        @success="handleLoginSuccess"
+        clickable
+        @click="openLogin"
       />
 
       <template v-else-if="loading">
@@ -445,11 +446,11 @@ import { recipeApi, type IngredientSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -511,6 +512,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const userStore = useUserStore();
 
 const listId = ref<UUID | "">("");

@@ -5,12 +5,15 @@
       <text class="password-navbar__title">{{ pageTitle }}</text>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
       class="password-login-shell"
       :style="pageBodyStyle"
+      :art="emptyStateArt"
       title="登录后设置密码"
       description="密码只用于当前手机号账号登录。"
+      clickable
+      @click="openLogin"
     />
 
     <view v-else class="password-page" :style="pageBodyStyle">
@@ -71,9 +74,11 @@
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { ApiClientError } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import { userApi } from "@/apis/user";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -89,6 +94,7 @@ const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageS
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { openLogin } = useLoginEmptyState();
 
 const currentPassword = ref("");
 const newPassword = ref("");

@@ -29,12 +29,13 @@
       </view>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      clickable
+      @click="openLogin"
       title="登录后维护菜谱"
       description="登录后才能选择食材、保存草稿和发布你自己的菜谱。"
       :art="loadingIllustration"
-      @success="handleLoginSuccess"
     />
     <view v-else-if="loading" class="notice notice--state" :style="noticeStyle">
       <image class="notice__art" :src="loadingIllustration" mode="aspectFit" />
@@ -824,7 +825,7 @@ import {
   type UnitSummary
 } from "@/apis/recipe";
 import type { UUID } from "@/apis/http";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -837,6 +838,7 @@ import {
 import { buildCategoryDisplay } from "./category-display";
 import { useImageCropFlow } from "../composables/useImageCropFlow";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { usePageScrollLock } from "@/composables/usePageScrollLock";
@@ -951,6 +953,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const recipePreviewStore = useRecipePreviewStore();
 const { navBarTotalHeight, systemInfo } = useSystemInfo();
 const TITLE_LIMIT = 30;
@@ -4595,7 +4598,7 @@ function nextSlotKey() {
 .editor-field__label,
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 26rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
 }
 

@@ -32,11 +32,13 @@
           </view>
 
           <view class="gap-content">
-            <LoginEmptyState
+            <Empty
               v-if="!sessionStore.isLoggedIn"
+              :art="emptyStateArt"
               title="登录后看现在缺什么"
               description="缺口只按你自己的冰箱和待处理饭局来判断。"
-              @success="handleLoginSuccess"
+              clickable
+              @click="openLogin"
             />
 
             <template v-else>
@@ -151,12 +153,13 @@
 <script setup lang="ts">
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -174,6 +177,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 const GAP_NAV_GAP = 16;
 const GAP_NAV_FADE_DISTANCE = 96;

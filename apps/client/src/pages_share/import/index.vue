@@ -1,11 +1,13 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" title="加入分享饭局">
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       title="登录后加入饭局"
       description="分享预览可直接看；加入饭局需要登录并建立可信身份。"
-      @success="handleLoginSuccess"
+      clickable
+      @click="openLogin"
     />
 
     <template v-else>
@@ -23,10 +25,12 @@
 <script setup lang="ts">
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import emptyStateArt from "@/assets/empty.png";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import type { MeResponse } from "@/apis/user";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { shareApi } from "../apis/share";
@@ -42,6 +46,7 @@ const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageS
 
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const shareToken = ref("");
 const guestName = ref("");
 const submitting = ref(false);

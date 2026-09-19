@@ -3,10 +3,12 @@
   <Layout :class="themeClasses" title="最近看过">
     <template v-if="!sessionStore.isLoggedIn">
       <view class="recipe-history-login">
-        <LoginEmptyState
+        <Empty
+          :art="emptyStateArt"
           title="登录后查看最近看过的菜谱"
           description="登录后，你最近看过的菜谱会在这里按时间留下。"
-          @success="handleLoginSuccess"
+          clickable
+          @click="openLogin"
         />
       </view>
     </template>
@@ -109,10 +111,10 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -124,6 +126,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const {
   threshold: refresherThreshold,
   pullDistance,

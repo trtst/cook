@@ -17,6 +17,10 @@ assert.ok(
 );
 assert.ok(source.includes("登录后看看能做什么"), "Expected guest empty state to explain login-gated fridge matching.");
 assert.ok(!source.includes("去登录"), "Expected guest empty state not to render an extra login action.");
+assert.ok(!source.includes(':art="emptyStateArt"'), "Expected home fridge empty state to keep the original text-only presentation.");
+assert.ok(!source.includes("useLoginEmptyState"), "Expected home fridge empty state not to use the shared login empty-state composable.");
+assert.ok(!source.includes("openLoginEmpty"), "Expected home fridge empty state not to use a separate login handler.");
+assert.ok(source.includes('@click="openLogin()"'), "Expected home fridge empty state to use the original login action.");
 assert.ok(
   source.includes('<view v-if="sessionStore.isLoggedIn" class="fridge-empty__actions">'),
   "Expected fridge recipe empty actions to render only for logged-in users."

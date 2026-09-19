@@ -17,11 +17,16 @@
           <Skeleton width="82%" height="30rpx" />
         </view>
 
-        <view v-else-if="needLogin" class="detail-state" :style="pageBodyStyle" @click="reload">
-          <text class="detail-state__title">请先登录</text>
-          <text class="detail-state__text">登录后查看官方消息</text>
-          <text class="detail-state__action">点击登录</text>
-        </view>
+        <Empty
+          v-else-if="needLogin"
+          class="detail-state"
+          :style="pageBodyStyle"
+          :art="emptyStateArt"
+          title="请先登录"
+          description="登录后查看官方消息"
+          clickable
+          @click="openLogin"
+        />
 
         <view v-else-if="errorText" class="detail-state detail-state--error" :style="pageBodyStyle" @click="reload">
           <text class="detail-state__title">消息加载失败</text>
@@ -66,14 +71,16 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
+import emptyStateArt from "@/assets/empty.png";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { UnauthorizedError } from "@/apis/http";
 import { officialMessageApi, type OfficialMessageDetail } from "../apis/official-message";
@@ -83,7 +90,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
-const loginModalStore = useLoginModalStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 const messageId = ref(0);
 const detail = ref<OfficialMessageDetail | null>(null);
@@ -127,11 +134,7 @@ async function loadDetail() {
 
   if (!sessionStore.isLoggedIn) {
     showLoginState();
-    loginModalStore.open(null, () => {
-      needLogin.value = false;
-      loaded.value = false;
-      void loadDetail();
-    });
+    openLogin();
     return;
   }
 
@@ -144,11 +147,7 @@ async function loadDetail() {
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       showLoginState();
-      loginModalStore.open(null, () => {
-        needLogin.value = false;
-        loaded.value = false;
-        void loadDetail();
-      });
+      openLogin();
       return;
     }
     detail.value = null;
@@ -162,6 +161,12 @@ async function loadDetail() {
 function reload() {
   loaded.value = false;
   void loadDetail();
+}
+
+async function handleLoginSuccess() {
+  needLogin.value = false;
+  loaded.value = false;
+  await loadDetail();
 }
 
 function showLoginState() {

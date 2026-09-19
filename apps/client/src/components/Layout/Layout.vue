@@ -21,6 +21,7 @@
 			<view class="layout__body">
 				<slot />
 			</view>
+			<PageLoading :visible="pageLoading" :text="pageLoadingText" />
 			<TabBar v-if="showTabbar && currentTab" :current="currentTab" />
 			<Toast :top-offset="toastTop" />
 			<Confirm />
@@ -42,6 +43,7 @@ import { computed } from "vue";
 import Confirm from "@/components/Confirm/Confirm.vue";
 import LoginModal from "@/components/Login/LoginModal.vue";
 import NavBar from "@/components/NavBar/NavBar.vue";
+import PageLoading from "@/components/PageLoading/PageLoading.vue";
 import TabBar from "@/components/TabBar/TabBar.vue";
 import Toast from "@/components/Toast/Toast.vue";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -55,6 +57,8 @@ const props = withDefaults(
 		showLeft?: boolean;
 		currentTab?: TabKey;
 		fullScreen?: boolean;
+		pageLoading?: boolean;
+		pageLoadingText?: string;
 		navbarPlaceholder?: boolean;
 		navbarTransparent?: boolean;
 		navbarOpacity?: number;
@@ -69,6 +73,8 @@ const props = withDefaults(
 		showLeft: true,
 		currentTab: undefined,
 		fullScreen: false,
+		pageLoading: false,
+		pageLoadingText: "页面加载中...",
 		navbarPlaceholder: true,
 		navbarTransparent: false,
 		navbarOpacity: 1,
@@ -87,7 +93,8 @@ const toastTop = computed(() => (props.showNavbar ? navBarTotalHeight.value : sy
 
 <style scoped lang="scss">
 .layout {
-	height: 100vh;
+		position: relative;
+		height: 100vh;
 	overflow: hidden;
 	color: var(--color-text);
 	font-family: var(--font-family-base);

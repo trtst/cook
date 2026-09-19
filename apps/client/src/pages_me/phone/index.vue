@@ -5,12 +5,15 @@
       <text class="phone-navbar__title">{{ pageTitle }}</text>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
       class="phone-login-shell"
       :style="pageBodyStyle"
+      :art="emptyStateArt"
       :title="loginTitle"
       description="手机号仅用于账号安全、登录验证和重要通知。"
+      clickable
+      @click="openLogin"
     />
 
     <view v-else class="phone-page" :style="pageBodyStyle">
@@ -50,7 +53,6 @@
             <button
               class="code-row__button"
               :class="{ 'code-row__button--disabled': loading || countdown > 0 }"
-              :disabled="loading || countdown > 0"
               @click="handleSendCode"
             >
               {{ countdownText }}
@@ -82,9 +84,11 @@ import { computed, onBeforeUnmount, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { authApi } from "@/apis/auth";
 import { ApiClientError } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import { userApi } from "@/apis/user";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -100,6 +104,7 @@ const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageS
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { openLogin } = useLoginEmptyState();
 const phoneText = ref("");
 const codeText = ref("");
 const changeToken = ref("");

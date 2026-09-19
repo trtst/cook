@@ -5,12 +5,15 @@
       <text class="account-navbar__title">账号设置</text>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
       class="account-login-shell"
       :style="pageBodyStyle"
+      :art="emptyStateArt"
       title="登录后管理当前账号"
       description="账号设置里的手机号与退出登录只作用于当前登录账号。"
+      clickable
+      @click="openLogin"
     />
 
     <view v-else class="account-page" :style="pageBodyStyle">
@@ -49,10 +52,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { authApi } from "@/apis/auth";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import emptyStateArt from "@/assets/empty.png";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import type { MeResponse } from "@/apis/user";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -69,6 +74,7 @@ const { navBarTotalHeight } = useSystemInfo();
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { openLogin } = useLoginEmptyState();
 
 const pageBodyStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + 12}px`

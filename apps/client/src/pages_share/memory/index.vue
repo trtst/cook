@@ -27,7 +27,15 @@
             @update:caption="caption = $event"
           />
         </view>
-        <LoginEmptyState v-if="mode === 'event' && !sessionStore.isLoggedIn" class="login-state" title="登录后分享活动回忆" description="登录后可设置公开内容，并生成带小程序码的分享图片。" @success="handleLoginSuccess" />
+        <Empty
+          v-if="mode === 'event' && !sessionStore.isLoggedIn"
+          class="login-state"
+          :art="emptyStateArt"
+          title="登录后分享活动回忆"
+          description="登录后可设置公开内容，并生成带小程序码的分享图片。"
+          clickable
+          @click="openLogin"
+        />
         <view v-if="shareTips.length" class="share-tips">
           <text class="share-tips__title">分享前的小提醒</text>
           <view v-for="tip in shareTips" :key="tip" class="share-tips__item"><view class="share-tips__dot" /><text>{{ tip }}</text></view>
@@ -47,10 +55,11 @@
 import { onLoad, onShareAppMessage, onShow, onUnload } from "@dcloudio/uni-app";
 import { computed, getCurrentInstance, nextTick, ref, watch } from "vue";
 import type { UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
@@ -71,6 +80,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const instance = getCurrentInstance();
 const mode = ref<PageMode>("empty");
 const loading = ref(false);

@@ -6,11 +6,13 @@
       <text class="summary__description">边买边勾，买完后会自动进入采购记录。</text>
     </view>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       title="登录后进入超市模式"
       description="上面的使用说明会继续保留；登录后再看你自己的待买清单并逐条勾选。"
-      @success="handleLoginSuccess"
+      clickable
+      @click="openLogin"
     />
 
     <template v-else>
@@ -35,12 +37,13 @@
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import type { UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -51,6 +54,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");

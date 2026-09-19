@@ -83,11 +83,13 @@
               @refresherabort="onRefresherRestore"
             >
               <view class="plan-scroll__body">
-                <LoginEmptyState
+                <Empty
                   v-if="!sessionStore.isLoggedIn"
                   :art="emptyStateArt"
                   title="登录后查看这一天的安排"
                   description="顶部日历会继续保留；登录后再看这一天具体吃什么、要不要继续发起饭局。"
+                  clickable
+                  @click="openLoginEmpty"
                 />
 
                 <template v-else>
@@ -270,11 +272,11 @@ import { shoppingListApi, type ShoppingListSummary } from "../apis/shopping-list
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -335,6 +337,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
+const { openLogin: openLoginEmpty } = useLoginEmptyState();
 
 const today = todayText();
 const WEEK_PANEL_COUNT = 5;
@@ -1706,7 +1709,7 @@ defineExpose({
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.4;
 }

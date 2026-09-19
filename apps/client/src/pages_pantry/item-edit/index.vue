@@ -1,11 +1,13 @@
 <template>
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" :title="pageTitle">
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       :title="loginTitle"
       description="冰箱条目只归你本人所有。"
-      @success="handleLoginSuccess"
+      clickable
+      @click="openLogin"
     />
 
     <template v-else>
@@ -109,12 +111,14 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import type { UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import { recipeApi, type IngredientSummary, type UnitSummary } from "@/apis/recipe";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { fridgeApi } from "../apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -127,6 +131,7 @@ const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageS
 const notePresets = ["先吃这个", "已开封", "只剩一点", "今晚要用", "早餐要用", "冷冻保存", "冷藏保存", "临期先用"];
 
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const loading = ref(false);
 const submitting = ref(false);
 const ingredientLoading = ref(false);

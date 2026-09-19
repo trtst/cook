@@ -7,7 +7,10 @@
             v-for="item in roleTabs"
             :key="item.value"
             class="nav-tabs__item font-medium"
-            :class="{ 'nav-tabs__item--active': roleFilter === item.value }"
+            :class="{
+              'nav-tabs__item--active': roleFilter === item.value,
+              'nav-tab-active-indicator': roleFilter === item.value
+            }"
             @click="changeRoleFilter(item.value)"
           >
             {{ item.label }}
@@ -65,12 +68,14 @@
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
-          <LoginEmptyState
+          <Empty
             v-if="!sessionStore.isLoggedIn"
             class="page-empty"
             :art="emptyStateArt"
             title="登录后查看你的饭局"
             description="上面的分组会先保留；登录后再看你发起的、你参加的和已经结束的饭局。"
+            clickable
+            @click="openLoginEmpty"
           />
 
           <template v-else>
@@ -198,12 +203,12 @@ import { ApiClientError, type UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -252,6 +257,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin: openLoginEmpty } = useLoginEmptyState();
 const EVENT_PAGE_SIZE = 20;
 const EMPTY_STAGE_COUNTS: DiningEventStageCounts = {
   todoCount: 0,
@@ -822,20 +828,6 @@ defineExpose({
 
 .nav-tabs__item--active {
   color: var(--color-text);
-}
-
-.nav-tabs__item--active::after {
-  content: "";
-  position: absolute;
-  right: -8rpx;
-  bottom: 2rpx;
-  left: -8rpx;
-  z-index: -1;
-  height: 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-support-action);
-  opacity: 0.3;
-  transform: rotate(-5deg);
 }
 
 .ingredient-page-head {

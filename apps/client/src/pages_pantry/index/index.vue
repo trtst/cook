@@ -86,13 +86,14 @@
               </view>
             </view>
 
-            <LoginEmptyState
+            <Empty
               v-if="!sessionStore.isLoggedIn"
               class="pantry-empty"
               :art="emptyStateArt"
               title="登录后查看你的库存"
               description="这些统计先按 0 展示；登录后再看真实库存、到期和补货安排。"
-              @success="handleLoginSuccess"
+              clickable
+              @click="openLogin"
             />
 
             <template v-else>
@@ -264,12 +265,12 @@ import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -312,6 +313,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const { navBarTotalHeight } = useSystemInfo();
 const {
   threshold: refresherThreshold,
@@ -1335,7 +1337,7 @@ defineExpose({
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: var(--font-size-sm);
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
   margin-bottom: 14rpx;
 }

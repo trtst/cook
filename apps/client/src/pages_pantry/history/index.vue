@@ -14,10 +14,12 @@
     </view>
 
     <template v-if="!sessionStore.isLoggedIn">
-      <LoginEmptyState
+      <Empty
+        :art="emptyStateArt"
         title="登录后查看采购记录"
         description="顶部筛选会继续保留；登录后再看你自己的已买和已删记录。"
-        @success="handleLoginSuccess"
+        clickable
+        @click="openLogin"
       />
     </template>
 
@@ -40,12 +42,13 @@
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import { shoppingApi, type ShoppingItemSummary } from "../apis/shopping";
 import { useSessionStore } from "@/stores/session";
 
@@ -54,6 +57,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const status = ref<"BOUGHT" | "DELETED">("BOUGHT");
 const loading = ref(false);
 const errorText = ref("");

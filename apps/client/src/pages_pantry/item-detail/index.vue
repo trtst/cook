@@ -26,11 +26,13 @@
           </view>
 
           <view class="detail-content">
-            <LoginEmptyState
+            <Empty
               v-if="!sessionStore.isLoggedIn"
+              :art="emptyStateArt"
               title="登录后查看食材详情"
               description="库存条目只归你本人所有。"
-              @success="handleLoginSuccess"
+              clickable
+              @click="openLogin"
             />
 
             <template v-else>
@@ -198,12 +200,13 @@
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 import type { UUID } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -219,6 +222,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 const HERO_TOP_GAP = 16;
 const NAV_FADE_DISTANCE = 96;
@@ -775,7 +779,7 @@ async function submitShopping() {
 .sheet-section__title {
   margin-bottom: 18rpx;
   color: var(--color-text);
-  font-size: var(--font-size-md);
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
 }
 

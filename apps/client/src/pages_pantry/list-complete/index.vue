@@ -12,11 +12,13 @@
       </view>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       title="登录后继续入库"
       description="入库确认需要登录后处理。"
-      @success="handleLoginSuccess"
+      clickable
+      @click="openLogin"
     />
 
     <view v-else class="complete-page">
@@ -244,9 +246,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
+import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import type { UUID } from "@/apis/http";
@@ -254,6 +256,7 @@ import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -302,6 +305,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 const listId = ref<UUID | "">("");
 const source = ref<ShoppingCompleteSource>("detail");

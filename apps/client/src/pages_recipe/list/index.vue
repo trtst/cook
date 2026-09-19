@@ -47,12 +47,13 @@
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
-          <LoginEmptyState
+          <Empty
             v-if="!sessionStore.isLoggedIn"
             :art="emptyStateIllustration"
             :title="mode === 'recipes' ? '登录后查看我的菜谱' : '登录后查看草稿箱'"
             :description="mode === 'recipes' ? '顶部页签和搜索会继续保留；登录后再管理你的已发布菜谱。' : '顶部页签和搜索会继续保留；登录后再继续整理草稿。'"
-            @success="handleLoginSuccess"
+            clickable
+            @click="openLogin"
           />
 
           <template v-else>
@@ -124,11 +125,11 @@ import { recipeApi, type MyRecipeSummary, type RecipeDraftSummary } from "@/apis
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import LoadMore from "@/components/LoadMore.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -167,6 +168,7 @@ const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const loadingTips = [
 	"帮你翻翻最近做过的菜",
 	"先把常做菜端上桌",

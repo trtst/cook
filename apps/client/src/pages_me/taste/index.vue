@@ -85,11 +85,11 @@ import { ApiClientError, UnauthorizedError } from "@/apis/http";
 import { userApi, type UpdateTasteProfileRequest } from "@/apis/user";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { uniPlatform } from "@/platform/uni";
-import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 
 type TasteListKey = "allergies" | "strictDislikes" | "dislikedIngredients" | "flavorPreferences";
@@ -102,8 +102,8 @@ const tasteItemMaxLength = 64;
 const tasteItemMaxCount = 50;
 const tasteSeparator = "；";
 
-const loginModalStore = useLoginModalStore();
 const sessionStore = useSessionStore();
+const { openLogin } = useLoginEmptyState(() => loadTaste());
 const loading = ref(false);
 const saving = ref(false);
 const loaded = ref(false);
@@ -151,12 +151,6 @@ onShow(() => {
     void loadTaste();
   }
 });
-
-function openLogin() {
-  loginModalStore.open(null, () => {
-    void loadTaste();
-  });
-}
 
 async function loadTaste() {
   if (!sessionStore.isLoggedIn || loading.value) return;

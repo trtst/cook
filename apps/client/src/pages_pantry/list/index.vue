@@ -7,7 +7,10 @@
           v-for="item in statusTabs"
           :key="item.status"
           class="nav-tabs__item"
-          :class="{ 'nav-tabs__item--active': status === item.status }"
+          :class="{
+            'nav-tabs__item--active': status === item.status,
+            'nav-tab-active-indicator': status === item.status
+          }"
           @click="changeStatus(item.status)"
         >
           {{ item.label }}
@@ -38,12 +41,13 @@
           @refresherabort="onRefresherRestore"
         >
           <view class="shopping-home__body">
-            <LoginEmptyState
+            <Empty
               v-if="!sessionStore.isLoggedIn"
               :art="emptyStateArt"
               title="登录后查看你的采购清单"
               description="顶部状态筛选会继续保留；登录后再看共享清单、采购进度和协作入口。"
-              @success="handleLoginSuccess"
+              clickable
+              @click="openLogin"
             />
 
             <template v-else>
@@ -280,13 +284,13 @@ import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import emptyStateArt from "@/assets/empty.png";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -311,6 +315,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -1073,20 +1078,6 @@ defineExpose({
 
 .nav-tabs__item--active {
   color: var(--color-text);
-}
-
-.nav-tabs__item--active::after {
-  content: "";
-  position: absolute;
-  right: -8rpx;
-  bottom: 2rpx;
-  left: -8rpx;
-  z-index: -1;
-  height: 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-support-action);
-  opacity: 0.3;
-  transform: rotate(-5deg);
 }
 
 .notice,

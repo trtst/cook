@@ -10,10 +10,13 @@
         <text class="redeem-card__title">输入兑换码</text>
         <text class="redeem-card__description">兑换成功后，会员时长会自动到账当前账号。</text>
 
-        <LoginEmptyState
+        <Empty
           v-if="!sessionStore.isLoggedIn"
+          :art="emptyStateArt"
           title="登录后兑换"
           description="下方兑换说明会继续保留；登录后再把会员时长兑换到当前账号。"
+          clickable
+          @click="openLogin"
         />
 
         <template v-else>
@@ -57,9 +60,11 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { ApiClientError } from "@/apis/http";
+import emptyStateArt from "@/assets/empty.png";
 import { userApi } from "@/apis/user";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -74,6 +79,7 @@ const { themeVars, themeClasses } = useTheme();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const userStore = useUserStore();
+const { openLogin } = useLoginEmptyState();
 const redeemCode = ref("");
 const submitting = ref(false);
 const normalizedRedeemCode = computed(() => redeemCode.value.replace(/[\s-]/g, "").toUpperCase());

@@ -5,11 +5,13 @@
       <text class="medal-navbar__title">勋章详情</text>
     </template>
 
-    <LoginEmptyState
+    <Empty
       v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
       title="登录后查看勋章详情"
       description="勋章说明和获得状态只对你自己开放。"
-      @success="handleLoginSuccess"
+      clickable
+      @click="openLogin"
     />
 
     <template v-else>
@@ -83,11 +85,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
+import emptyStateArt from "@/assets/empty.png";
 import { medalApi, type UserMedalSummary } from "@/apis/medal";
+import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import LoginEmptyState from "@/components/Login/LoginEmptyState.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
+import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
@@ -104,6 +108,7 @@ const errorText = ref("");
 const medalCode = ref("");
 const item = ref<UserMedalSummary | null>(null);
 const noticeVisible = ref(false);
+const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 watch(
   () => noticeVisible.value,
