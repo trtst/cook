@@ -1,9 +1,8 @@
-/* 在线链接服务仅供平台体验和调试使用，平台不承诺服务的稳定性，企业客户需下载字体包自行发布使用并做好备份。 */
 @font-face {
-  font-family: 'cookfont';  /* Project id 5215640 */
-  src: url('//at.alicdn.com/t/c/font_5215640_56jd5ohc23v.woff2?t=1789566308025') format('woff2'),
-       url('//at.alicdn.com/t/c/font_5215640_56jd5ohc23v.woff?t=1789566308025') format('woff'),
-       url('//at.alicdn.com/t/c/font_5215640_56jd5ohc23v.ttf?t=1789566308025') format('truetype');
+  font-family: "cookfont"; /* Project id 5215640 */
+  src: url('iconfont.woff2?t=1789753045984') format('woff2'),
+       url('iconfont.woff?t=1789753045984') format('woff'),
+       url('iconfont.ttf?t=1789753045984') format('truetype');
 }
 
 .cookfont {
@@ -28,7 +27,7 @@
 }
 
 .icon-dining-event::before {
-    content: "\e626";
+    content: "\e65d";
 }
 
 .icon-meal-event::before {
@@ -243,6 +242,10 @@
     content: "\e6e4";
 }
 
+.icon-manage-add::before {
+    content: "\e6db";
+}
+
 .icon-select-off::before {
     content: "\e714";
 }
@@ -355,6 +358,23 @@
 .icon-clock::before {
     content: "\e6e8";
 }
+
+.icon-alarm::before {
+    content: "\e6fa";
+}
+
 .icon-cook::before {
     content: "\e62b";
+}
+
+.icon-cook-assistant::before {
+    content: "\e70e";
+}
+
+.icon-cook-mode-immersive::before {
+    content: "\e787";
+}
+
+.icon-cook-mode-list::before {
+    content: "\e6fc";
 }

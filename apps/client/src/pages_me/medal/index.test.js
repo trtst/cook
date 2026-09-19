@@ -96,6 +96,7 @@ describe("pages_me/medal/index", () => {
     const texts = await collectTexts(page);
     expect(texts).toContain("我的勋章");
     expect(texts).toContain("认真做饭，也值得被记录");
+    expect(await page.$$(".hero-card__count-meta")).toHaveLength(0);
     expect(texts).toContain("开饭打卡");
     expect(texts).toContain("饭局协作");
     expect(texts).toContain("节假日限定");

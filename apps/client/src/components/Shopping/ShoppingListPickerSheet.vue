@@ -26,9 +26,10 @@
           <button
             class="shopping-create__button"
             :class="{ 'shopping-create__button--disabled': !canCreate }"
-            :disabled="!canCreate"
             @click="handleCreate"
-          >新建</button>
+          >
+            新建
+          </button>
         </view>
       </view>
 
@@ -205,7 +206,7 @@ function handleConfirm() {
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
 }
 

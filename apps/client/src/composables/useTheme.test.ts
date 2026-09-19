@@ -52,7 +52,7 @@ for (const file of pageVueFiles) {
   const source = readFileSync(file, "utf8");
   const layoutTags = source.match(/<Layout\b[\s\S]*?>/g) ?? [];
   for (const layoutTag of layoutTags) {
-    assert.match(layoutTag, /:class="themeClasses"/, `${file} Layout host must carry themeClasses for mini-program slot inheritance`);
+    assert.match(layoutTag, /:class="(?:themeClasses|\[[^"]*themeClasses[^"]*\])"/, `${file} Layout host must carry themeClasses for mini-program slot inheritance`);
   }
 }
 

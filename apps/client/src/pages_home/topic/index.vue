@@ -953,8 +953,8 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: 700;
+  font-size: 32rpx;
+  font-weight: var(--font-weight-semibold);
 }
 
 .sheet-section__tag {
@@ -1008,7 +1008,7 @@ function handlePlanSuccess(payload: { recipeId: number; addedToPrivate: boolean 
   color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: 700;
-  line-height: 1;
+  line-height: 80rpx;
 }
 
 .chip-row {

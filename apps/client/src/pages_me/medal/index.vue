@@ -26,7 +26,6 @@
 
             <view class="hero-card__count-block">
               <text class="hero-card__count hero-card__tone">{{ wall?.earnedCount ?? "--" }}</text>
-              <text class="hero-card__count-meta hero-card__tone">已获得 / 共 {{ wall?.totalCount ?? "--" }}</text>
             </view>
 
             <text class="cookfont hero-card__laurel hero-card__laurel--right hero-card__tone icon-medal-right" />
@@ -370,12 +369,6 @@ defineExpose({
   font-size: 120rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 0.9;
-}
-
-.hero-card__count-meta {
-  margin-top: 10rpx;
-  font-size: 22rpx;
-  line-height: 1.4;
 }
 
 .hero-card__laurel {

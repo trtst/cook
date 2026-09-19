@@ -806,12 +806,6 @@ function openHomeEntry(item: HomeEntryItem | null) {
 }
 
 function openWeekOverview() {
-  if (!sessionStore.isLoggedIn) {
-    openLogin(() => {
-      openWeekOverview();
-    });
-    return;
-  }
   navigateTo(weekOverviewState.value?.targetValue || "/pages_meal/plan/index");
 }
 

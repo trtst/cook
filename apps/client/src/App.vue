@@ -27,6 +27,7 @@ onShow(() => {
 @use "@/styles/colors.scss";
 @use "@/styles/action-pill.scss";
 @use "@/styles/layout.scss";
+@use "@/styles/nav-tabs.scss";
 @use "@/assets/fonts/font.scss";
 @use "@/themes/skins.scss";
 

@@ -39,7 +39,7 @@ expectSelectorIncludes(reminderPageSource, ".setting-toggle", [
 ]);
 
 expectSelectorIncludes(reminderPageSource, ".setting-toggle--on", [
-  "background: var(--color-primary);"
+  "background: var(--color-support-action);"
 ]);
 
 expectSelectorIncludes(reminderPageSource, ".setting-toggle__thumb", [
@@ -67,7 +67,7 @@ expectSelectorIncludes(reminderPageSource, ".day-chip-list", [
 ]);
 
 expectSelectorIncludes(reminderPageSource, ".day-chip--active .day-chip__text", [
-  "color: var(--color-primary);"
+  "color: var(--color-support-action);"
 ]);
 
 expectSelectorIncludes(reminderPageSource, ".reminder-footer", [

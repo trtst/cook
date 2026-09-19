@@ -7,7 +7,10 @@
             v-for="item in tabs"
             :key="item.value"
             class="nav-tabs__item font-medium"
-            :class="{ 'nav-tabs__item--active': activeTab === item.value }"
+            :class="{
+              'nav-tabs__item--active': activeTab === item.value,
+              'nav-tab-active-indicator': activeTab === item.value
+            }"
             @click="switchTab(item.value)"
           >
             {{ item.label }}
@@ -995,20 +998,6 @@ defineExpose({
   color: var(--color-text);
 }
 
-.nav-tabs__item--active::after {
-  content: "";
-  position: absolute;
-  right: -8rpx;
-  bottom: 2rpx;
-  left: -8rpx;
-  z-index: -1;
-  height: 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-support-action);
-  opacity: 0.3;
-  transform: rotate(-5deg);
-}
-
 .search-row {
   flex: none;
   margin-top: 12rpx;
@@ -1388,7 +1377,7 @@ defineExpose({
   gap: 10rpx;
   margin-bottom: 24rpx;
   padding: 24rpx;
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-xs);
   background: var(--color-surface-primary-panel);
   box-shadow: var(--shadow-card);
 }

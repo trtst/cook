@@ -168,6 +168,7 @@ function handlePanelTransitionEnd(event: Event) {
 .sheet-shell__header {
   flex: 0 0 auto;
   padding-top: 34rpx;
+  padding-bottom: 24rpx;
 }
 
 .sheet-shell__header-main {
