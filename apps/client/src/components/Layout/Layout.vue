@@ -22,6 +22,7 @@
 				<slot />
 			</view>
 			<PageLoading :visible="pageLoading" :text="pageLoadingText" />
+			<slot name="global-loading" />
 			<TabBar v-if="showTabbar && currentTab" :current="currentTab" />
 			<Toast :top-offset="toastTop" />
 			<Confirm />

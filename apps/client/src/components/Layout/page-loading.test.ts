@@ -8,6 +8,7 @@ const loadingSource = readFileSync(resolve(__dirname, "../PageLoading/PageLoadin
 assert.ok(layoutSource.includes("import PageLoading from \"@/components/PageLoading/PageLoading.vue\";"));
 assert.ok(layoutSource.includes(":visible=\"pageLoading\""));
 assert.ok(layoutSource.includes("pageLoading?: boolean;"));
+assert.ok(layoutSource.includes("<slot name=\"global-loading\" />"));
 assert.ok(loadingSource.includes("position: absolute;"));
 assert.ok(loadingSource.includes("inset: 0;"));
 assert.ok(loadingSource.includes("class=\"page-loading__loader\""));
