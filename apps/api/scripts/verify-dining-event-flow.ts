@@ -89,7 +89,7 @@ async function resolveRecipeCategory(ownerAuth: Record<string, string>) {
   const created = await request<RecipeCategorySummary>("/recipe-categories", {
     method: "POST",
     headers: withIdempotencyKey(ownerAuth),
-    body: JSON.stringify({ name: `饭局验收分类${suffix}` })
+    body: JSON.stringify({ name: `饭局${suffix}` })
   });
   if (created.status >= 200 && created.status < 300 && created.body.code === 0) {
     return created.body.data;
@@ -453,7 +453,7 @@ async function main() {
     method: "POST",
     headers: withIdempotencyKey(memberAuth),
     body: JSON.stringify({
-      recipeId: memberRecipe.recipe.id
+      recipeIds: [memberRecipe.recipe.id]
     })
   });
   const wishedItem = wished.wishItems.find(item => item.recipeId === memberRecipe.recipe.id);
@@ -477,11 +477,11 @@ async function main() {
     method: "POST",
     headers: withIdempotencyKey(memberAuth),
     body: JSON.stringify({
-      recipeId: memberRecipe.recipe.id
+      recipeIds: [memberRecipe.recipe.id]
     })
   });
   const memberBring = bringUpdated.participants.find(item => item.userUid === member.user.uid);
-  assert(memberBring?.bringRecipeId === memberRecipe.recipe.id, "member bring recipe should be recorded independently");
+  assert(memberBring?.bringRecipes.some(item => item.recipeId === memberRecipe.recipe.id), "member bring recipe should be recorded independently");
 
   const disabled = await requestData<DiningEventSummary>(`/dining-events/${event.id}/share-link/disable`, {
     method: "POST",
@@ -505,7 +505,7 @@ async function main() {
         joinedParticipantStatus: joinedParticipant.status,
         wishedRecipeId: wishedItem.id,
         wishAddedToMenu: Boolean(addedMenuItem),
-        bringRecipeTitle: memberBring?.bringRecipeTitle ?? null,
+        bringRecipeTitles: memberBring?.bringRecipes.map(item => item.title) ?? [],
         shareDisabled: disabled.hasActiveShareLink === false
       },
       null,

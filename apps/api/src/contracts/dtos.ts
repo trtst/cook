@@ -2393,6 +2393,16 @@ export class UpdateDiningEventNoteDto extends OperationDto {
   note!: string | null;
 }
 
+export class UpdateDiningEventParticipantNoteDto extends OperationDto {
+  @ApiProperty({ nullable: true, maxLength: 255 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(255)
+  note!: string | null;
+}
+
 export class UpdateDiningEventCoverDto extends OperationDto {
   @ApiProperty({ minimum: 1 })
   @Type(() => Number)
@@ -2414,11 +2424,15 @@ export class RespondDiningEventDto extends OperationDto {
 export class CompleteDiningEventDto extends OperationDto {}
 
 export class ChooseDiningEventWishRecipeDto extends OperationDto {
-  @ApiProperty()
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 3, uniqueItems: true })
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  recipeId!: number;
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
 }
 
 export class UpdateDiningEventWishSupportDto extends OperationDto {
@@ -2451,11 +2465,15 @@ export class AcceptShareInviteDto extends OperationDto {
 }
 
 export class ChooseBringRecipeDto extends OperationDto {
-  @ApiProperty()
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 3, uniqueItems: true })
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  recipeId!: number;
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(3)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
 }
 
 export class CreateFridgeItemDto extends OperationDto {

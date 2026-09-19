@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS "dining_event_participant_bring_recipes_participant_id_recipe_id_recipe_version_id_key";
+
+CREATE UNIQUE INDEX "dining_event_participant_bring_recipes_participant_id_recipe_version_id_key"
+ON "dining_event_participant_bring_recipes"("participant_id", "recipe_version_id");

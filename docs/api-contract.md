@@ -1087,6 +1087,7 @@ POST /dining-events/{eventId}/wishes/{wishItemId}/support
 POST /dining-events/{eventId}/wishes/{wishItemId}/menu
 POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
+POST /dining-events/{eventId}/my-note
 POST /dining-events/{eventId}/complete
 GET  /fridge-items
 POST /fridge-items
@@ -1187,11 +1188,17 @@ interface MealPlanMenuItemSummary {
 interface DiningEventParticipantSummary {
   id: UUID;
   userUid: number | null;
+  displayName: string | null;
+  avatarUrl: string | null;
   guestName: string | null;
   sourceType: "DINING_GROUP" | "SHARE";
   status: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED";
-  bringRecipeId: UUID | null;
-  bringRecipeTitle: string | null;
+  bringRecipes: Array<{
+    recipeId: UUID | null;
+    recipeVersionId: UUID;
+    title: string;
+  }>;
+  note: string | null;
 }
 
 interface MealPollSummary {
@@ -2255,6 +2262,16 @@ interface UpdateDiningEventNoteRequest {
 
 当前只允许饭局发起人调用，且仅在饭局未取消、未完成时可成功；服务端继续按 `expectedVersion` 防并发覆盖。`note` 留空字符串时按 `null` 处理，读取 `GET /dining-events/{eventId}` 时统一通过 `DiningEventSummary.note` 回显给全部参与人。
 
+`POST /dining-events/{eventId}/my-note` 用于当前参与人补充或清空本次饭局专属备注，请求头继续使用 `Idempotency-Key`，请求体最小固定为：
+
+```ts
+interface UpdateDiningEventParticipantNoteRequest {
+  note: string | null;
+}
+```
+
+该备注属于“饭局 + 参与人”关系，不会写回个人口味档案，也不替代主家的公开 `DiningEventSummary.note`。仅当前饭局成员可写，空字符串按 `null` 处理，最大 `255` 个字符；参与人摘要里的 `note` 供主家参与人管理和饭局成员查看。成员读取饭局详情时，`shoppingListId / shoppingListName / shoppingListStatus` 固定返回 `null`，客户端不展示采购清单、食材准备和缺口区域。
+
 `GET /share/{shareToken}/preview` 继续作为饭局邀请落地页读取口，但现在只返回登录前可公开展示的轻信息，不再直接暴露完整菜单食材和精确地点。最小响应固定为：
 
 ```ts
@@ -2306,11 +2323,11 @@ interface UpdateDiningEventCoverRequest {
 
 当前只允许饭局发起人调用；服务端按 `expectedVersion` 防并发覆盖，并把图片固化成饭局公开资源。读取 `GET /dining-events/{eventId}` 时，若当前饭局已有封面图，摘要里的 `coverImageUrl` 返回可直接展示的公开地址，路径必须指向真实对象 key，例如 `/static/uploads/dining-event-covers/{eventId}/{fileName}.{ext}` 或静态域名下的 `/uploads/dining-event-covers/{eventId}/{fileName}.{ext}`；若没有封面图则返回 `null`。
 
-`POST /dining-events/{eventId}/wishes` 用于参与人把自己的一道私房菜放进当前饭局的我想吃池，请求体只接收：
+`POST /dining-events/{eventId}/wishes` 用于参与人把自己的私房菜一次性加入当前饭局的我想吃池，请求体只接收 1～3 道不重复菜谱：
 
 ```ts
 interface ChooseDiningEventWishRecipeRequest {
-  recipeId: UUID;
+  recipeIds: UUID[];
 }
 ```
 
@@ -2324,7 +2341,7 @@ interface UpdateDiningEventWishSupportRequest {
 
 `POST /dining-events/{eventId}/wishes/{wishItemId}/menu` 用于饭局发起人把某道我想吃加入本次菜单，不接收额外请求体。`我想吃池` 只作为菜单确认参考，不改写个人购物、冰箱、带菜或菜谱所有权。
 
-`POST /dining-events/{eventId}/bring` 继续用于“我带菜”，不新增并行写路径。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
+`POST /dining-events/{eventId}/bring` 继续用于“我带菜”，请求体为 1～3 道不重复的 `recipeIds`，每次提交完整替换当前参与人的带菜集合；菜谱必须属于当前参与人并引用其固定版本。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
 
 `POST /dining-events/{eventId}/memory-shares` 用于在已到开饭时间或已完成的饭局上生成一张不可变餐桌回忆卡快照。当前只允许饭局发起人调用，请求体只接收：
 

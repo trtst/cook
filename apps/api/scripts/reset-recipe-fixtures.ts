@@ -190,10 +190,7 @@ async function main() {
       where: { recipeId: { not: null } },
       data: { recipeId: null }
     });
-    const clearedDiningEventParticipantRefs = await tx.diningEventParticipant.updateMany({
-      where: { bringRecipeId: { not: null } },
-      data: { bringRecipeId: null }
-    });
+    const clearedDiningEventParticipantRefs = await tx.diningEventParticipantBringRecipe.deleteMany({});
     await tx.recipe.deleteMany({});
 
     const completeIngredients = [

@@ -23,6 +23,7 @@ import {
   CheckRandomMenuGapDto,
   ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
+  UpdateDiningEventParticipantNoteDto,
   UpdateDiningEventNoteDto,
   UpdateDiningEventWishSupportDto,
   UpdateMealPlanTitleDto,
@@ -482,7 +483,7 @@ export class MealController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(DiningEventModel, "参与人把一道菜加入当前饭局的我想吃池")
+  @ApiOkModel(DiningEventModel, "参与人一次选择最多三道菜加入当前饭局的我想吃池")
   chooseDiningEventWishRecipe(
     @Req() request: RequestWithUser,
     @Param("eventId", ParseIntPipe) eventId: number,
@@ -490,7 +491,7 @@ export class MealController {
     @Body() body: ChooseDiningEventWishRecipeDto
   ) {
     return this.mealService
-      .chooseDiningEventWishRecipe(request.user.userId, eventId, body.recipeId, operationId)
+      .chooseDiningEventWishRecipe(request.user.userId, eventId, body.recipeIds, operationId)
       .then(result => ok(result));
   }
 
@@ -539,7 +540,23 @@ export class MealController {
     @Body() body: ChooseBringRecipeDto
   ) {
     return this.mealService
-      .chooseBringRecipe(request.user.userId, eventId, body.recipeId, operationId)
+      .chooseBringRecipe(request.user.userId, eventId, body.recipeIds, operationId)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/my-note")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "参与人更新本次饭局的我的备注")
+  updateDiningEventParticipantNote(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateDiningEventParticipantNoteDto
+  ) {
+    return this.mealService
+      .updateDiningEventParticipantNote(request.user.userId, eventId, operationId, body.note)
       .then(result => ok(result));
   }
 

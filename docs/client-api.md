@@ -275,6 +275,7 @@ POST /api/dining-events/{eventId}/wishes
 POST /api/dining-events/{eventId}/wishes/{wishItemId}/support
 POST /api/dining-events/{eventId}/wishes/{wishItemId}/menu
 POST /api/dining-events/{eventId}/bring
+POST /api/dining-events/{eventId}/my-note
 POST /api/dining-events/{eventId}/memory-shares
 GET  /api/memory-shares/{shareToken}/preview
 ```
@@ -317,11 +318,11 @@ interface DiningEventListQuery {
 
 #### 我想吃池
 
-`POST /api/dining-events/{eventId}/wishes` 用于参与人从自己的菜谱里选一道菜放进当前饭局的我想吃池。请求体：
+`POST /api/dining-events/{eventId}/wishes` 用于参与人从自己的菜谱里一次性选择最多 3 道菜放进当前饭局的我想吃池。请求体：
 
 ```ts
 interface ChooseDiningEventWishRecipeRequest {
-  recipeId: UUID;
+  recipeIds: UUID[];
 }
 ```
 
@@ -334,6 +335,26 @@ interface UpdateDiningEventWishSupportRequest {
 ```
 
 `POST /api/dining-events/{eventId}/wishes/{wishItemId}/menu` 用于发起人把某条提议加入本次菜单，不需要额外请求体。`我想吃池` 只影响菜单确认参考，不进入采购、库存或带菜事实。
+
+#### 我带菜与我的备注
+
+`POST /api/dining-events/{eventId}/bring` 用于参与人从自己的菜谱里一次性选择最多 3 道带菜；每次提交都是当前带菜集合的完整替换，服务端按参与人自己的固定菜谱版本校验并保存：
+
+```ts
+interface ChooseBringRecipeRequest {
+  recipeIds: UUID[];
+}
+```
+
+`POST /api/dining-events/{eventId}/my-note` 用于参与人保存本次饭局专属备注：
+
+```ts
+interface UpdateDiningEventParticipantNoteRequest {
+  note: string | null;
+}
+```
+
+备注只保存到“饭局 + 参与人”关系，不会修改 `/api/users/me/taste-profile` 的个人口味；备注输入框可从个人口味分类标签快速追加，空字符串按 `null` 保存，最多 255 个字符。饭局详情的参与人摘要返回 `bringRecipes` 和 `note`；成员读取时采购清单、食材准备和缺口相关字段不提供可用数据，客户端不应渲染这些区域。
 
 #### 餐桌回忆卡快照
 

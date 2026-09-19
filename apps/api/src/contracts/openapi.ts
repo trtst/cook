@@ -2139,6 +2139,12 @@ export class RandomGapPreviewModel {
   @ApiProperty({ type: Boolean }) canCreatePlan!: boolean;
 }
 
+export class DiningEventParticipantBringRecipeModel {
+  @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
+  @ApiProperty(uuid) recipeVersionId!: string;
+  @ApiProperty({ type: String }) title!: string;
+}
+
 export class DiningEventParticipantModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: Number, nullable: true }) userUid!: number | null;
@@ -2147,8 +2153,8 @@ export class DiningEventParticipantModel {
   @ApiProperty(nullableString) guestName!: string | null;
   @ApiProperty({ type: String, enum: ["DINING_GROUP", "SHARE"] }) sourceType!: string;
   @ApiProperty({ type: String, enum: ["INVITED", "ACCEPTED", "DECLINED", "REMOVED"] }) status!: string;
-  @ApiProperty({ ...uuid, nullable: true }) bringRecipeId!: string | null;
-  @ApiProperty(nullableString) bringRecipeTitle!: string | null;
+  @ApiProperty({ type: [DiningEventParticipantBringRecipeModel] }) bringRecipes!: DiningEventParticipantBringRecipeModel[];
+  @ApiProperty(nullableString) note!: string | null;
 }
 
 export class DiningEventWishItemModel {

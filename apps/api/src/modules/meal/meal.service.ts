@@ -98,7 +98,17 @@ const diningEventArgs = Prisma.validator<Prisma.DiningEventDefaultArgs>()({
     participants: {
       include: {
         user: { select: { uid: true, nickname: true, avatarUrl: true } },
-        bringRecipe: true
+        bringRecipes: {
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+          include: {
+            recipeVersion: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
       }
     },
     wishItems: {
@@ -148,7 +158,9 @@ const diningEventListArgs = Prisma.validator<Prisma.DiningEventDefaultArgs>()({
       select: {
         userId: true,
         status: true,
-        bringRecipeId: true
+        bringRecipes: {
+          select: { id: true }
+        }
       }
     },
     menuItems: {
@@ -524,6 +536,19 @@ function toPositiveInt(value: number | string | undefined, fallback: number) {
 function normalizeOptionalText(value?: string | null) {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function normalizeEventRecipeIds(recipeIds: UUID[]) {
+  if (!Array.isArray(recipeIds) || recipeIds.length < 1 || recipeIds.length > 3) {
+    throw new BadRequestException("本次最多选择 3 道菜");
+  }
+  if (recipeIds.some(recipeId => !Number.isInteger(recipeId) || recipeId < 1)) {
+    throw new BadRequestException("菜谱参数不正确");
+  }
+  if (new Set(recipeIds).size !== recipeIds.length) {
+    throw new BadRequestException("菜谱不能重复选择");
+  }
+  return recipeIds;
 }
 
 function normalizeNameKey(value: string) {
@@ -2131,6 +2156,9 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:participant:revoke", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const lockedEvent = await tx.diningEvent.findUnique({ where: { id: eventId } });
+      if (!lockedEvent || lockedEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
       const participant = await tx.diningEventParticipant.findFirst({
         where: {
           id: participantId,
@@ -2141,21 +2169,27 @@ export class MealService {
         }
       });
       if (!participant || participant.diningEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
-      if (participant.diningEvent.status === "CANCELLED" || participant.diningEvent.status === "COMPLETED") {
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      const lockedParticipant = await tx.diningEventParticipant.findUnique({
+        where: { id: participant.id },
+        include: { diningEvent: true }
+      });
+      if (!lockedParticipant || lockedParticipant.diningEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
+      if (lockedParticipant.diningEvent.status === "CANCELLED" || lockedParticipant.diningEvent.status === "COMPLETED") {
         throw new ConflictException("当前饭局不能继续调整邀请");
       }
-      if (participant.status !== "INVITED") {
+      if (lockedParticipant.status !== "INVITED") {
         throw new ConflictException("当前邀请不能撤回");
       }
 
-      const updated = await tx.diningEventParticipant.update({
-        where: { id: participant.id },
+      await tx.diningEventParticipant.update({
+        where: { id: lockedParticipant.id },
         data: {
           status: "REMOVED",
           respondedAt: new Date()
         }
       });
-      await upsertStorageLedger(tx, participant.diningEvent.userId, "MEAL_GUEST", participant.id, sizeOfJson(updated));
+      await this.upsertDiningEventParticipantLedger(tx, lockedParticipant.diningEvent.userId, lockedParticipant.id);
       const result = await this.getDiningEvent(userId, eventId, tx, request);
       await completeIdempotentOperation(tx, operationId, "dining-event:participant:revoke", userId, null, requestHash, result);
       return result;
@@ -2175,6 +2209,9 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:participant:reinvite", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const lockedEvent = await tx.diningEvent.findUnique({ where: { id: eventId } });
+      if (!lockedEvent || lockedEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
       const participant = await tx.diningEventParticipant.findFirst({
         where: {
           id: participantId,
@@ -2185,27 +2222,32 @@ export class MealService {
         }
       });
       if (!participant || participant.diningEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
-      if (participant.diningEvent.status === "CANCELLED" || participant.diningEvent.status === "COMPLETED") {
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      const lockedParticipant = await tx.diningEventParticipant.findUnique({
+        where: { id: participant.id },
+        include: { diningEvent: true }
+      });
+      if (!lockedParticipant || lockedParticipant.diningEvent.userId !== userId) throw new NotFoundException("邀请记录不存在");
+      if (lockedParticipant.diningEvent.status === "CANCELLED" || lockedParticipant.diningEvent.status === "COMPLETED") {
         throw new ConflictException("当前饭局不能继续调整邀请");
       }
-      if (!participant.userId || participant.sourceType !== "DINING_GROUP") {
+      if (!lockedParticipant.userId || lockedParticipant.sourceType !== "DINING_GROUP") {
         throw new ConflictException("当前邀请不能再次发送");
       }
-      if (participant.status !== "DECLINED" && participant.status !== "REMOVED") {
+      if (lockedParticipant.status !== "DECLINED" && lockedParticipant.status !== "REMOVED") {
         throw new ConflictException("当前邀请不能再次发送");
       }
 
-      const updated = await tx.diningEventParticipant.update({
-        where: { id: participant.id },
+      await tx.diningEventParticipant.update({
+        where: { id: lockedParticipant.id },
         data: {
           status: "INVITED",
           invitedByUserId: userId,
           respondedAt: null,
-          bringRecipeId: null,
-          bringVersionId: null
         }
       });
-      await upsertStorageLedger(tx, participant.diningEvent.userId, "MEAL_GUEST", participant.id, sizeOfJson(updated));
+      await tx.diningEventParticipantBringRecipe.deleteMany({ where: { participantId: lockedParticipant.id } });
+      await this.upsertDiningEventParticipantLedger(tx, lockedParticipant.diningEvent.userId, lockedParticipant.id);
       const result = await this.getDiningEvent(userId, eventId, tx, request);
       await completeIdempotentOperation(tx, operationId, "dining-event:participant:reinvite", userId, null, requestHash, result);
       return result;
@@ -2220,6 +2262,9 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:respond", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const lockedEvent = await tx.diningEvent.findUnique({ where: { id: eventId } });
+      if (!lockedEvent) throw new NotFoundException("饭局不存在");
       const participant = await tx.diningEventParticipant.findFirst({
         where: { diningEventId: eventId, userId },
         include: {
@@ -2227,28 +2272,116 @@ export class MealService {
         }
       });
       if (!participant) throw new NotFoundException("饭局不存在");
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      const lockedParticipant = await tx.diningEventParticipant.findUnique({
+        where: { id: participant.id },
+        include: { diningEvent: true }
+      });
+      if (!lockedParticipant) throw new NotFoundException("饭局不存在");
+      if (lockedParticipant.diningEvent.userId === userId) {
+        throw new ForbiddenException("主家不能回应自己的饭局邀请");
+      }
+      if (lockedParticipant.status === "REMOVED") {
+        throw new ConflictException("当前邀请已被撤回");
+      }
+      if (lockedParticipant.diningEvent.status === "CANCELLED" || lockedParticipant.diningEvent.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能继续回应邀请");
+      }
 
       await tx.diningEventParticipant.update({
-        where: { id: participant.id },
+        where: { id: lockedParticipant.id },
         data: {
           status: normalizedStatus,
           respondedAt: new Date()
         }
       });
-      await upsertStorageLedger(tx, participant.diningEvent.userId, "MEAL_GUEST", participant.id, sizeOfJson(participant));
+      if (normalizedStatus === "DECLINED") {
+        await tx.diningEventParticipantBringRecipe.deleteMany({ where: { participantId: lockedParticipant.id } });
+        const wishSupports = await tx.diningEventWishSupport.findMany({
+          where: {
+            userId,
+            wishItem: { diningEventId: eventId }
+          },
+          select: { wishItemId: true }
+        });
+        await tx.diningEventWishSupport.deleteMany({
+          where: {
+            userId,
+            wishItem: { diningEventId: eventId }
+          }
+        });
+        for (const wishSupport of wishSupports) {
+          const remainingSupportCount = await tx.diningEventWishSupport.count({
+            where: { wishItemId: wishSupport.wishItemId }
+          });
+          if (remainingSupportCount === 0) {
+            await tx.diningEventWishItem.delete({ where: { id: wishSupport.wishItemId } });
+          }
+        }
+      }
+      await this.upsertDiningEventParticipantLedger(tx, lockedParticipant.diningEvent.userId, lockedParticipant.id);
       const result = await this.getDiningEvent(userId, eventId, tx);
       await completeIdempotentOperation(tx, operationId, "dining-event:respond", userId, null, requestHash, result);
       return result;
     });
   }
 
-  async chooseDiningEventWishRecipe(userId: UUID, eventId: UUID, recipeId: UUID, operationId: OperationId) {
-    const requestHash = `${eventId}:${recipeId}`;
+  async updateDiningEventParticipantNote(userId: UUID, eventId: UUID, operationId: OperationId, note: string | null) {
+    const normalizedNote = normalizeOptionalText(note);
+    if (normalizedNote && normalizedNote.length > 255) {
+      throw new BadRequestException("我的备注最多 255 个字符");
+    }
+    const requestHash = `${eventId}:${normalizedNote ?? ""}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:participant-note", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:participant-note", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const lockedEvent = await tx.diningEvent.findUnique({ where: { id: eventId } });
+      if (!lockedEvent) throw new ForbiddenException("无权编辑这顿饭的我的备注");
+      let participant = await tx.diningEventParticipant.findFirst({
+        where: { diningEventId: eventId, userId },
+        include: { diningEvent: true }
+      });
+      if (!participant || participant.status === "DECLINED" || participant.status === "REMOVED") {
+        throw new ForbiddenException("无权编辑这顿饭的我的备注");
+      }
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      participant = await tx.diningEventParticipant.findUnique({
+        where: { id: participant.id },
+        include: { diningEvent: true }
+      });
+      if (!participant || participant.status === "DECLINED" || participant.status === "REMOVED") {
+        throw new ForbiddenException("无权编辑这顿饭的我的备注");
+      }
+      if (participant.diningEvent.userId === userId) {
+        throw new ForbiddenException("主家不能编辑参与人备注");
+      }
+      if (participant.diningEvent.status === "CANCELLED" || participant.diningEvent.status === "COMPLETED") {
+        throw new ConflictException("当前饭局不能继续编辑备注");
+      }
+
+      await tx.diningEventParticipant.update({
+        where: { id: participant.id },
+        data: { note: normalizedNote }
+      });
+      await this.upsertDiningEventParticipantLedger(tx, participant.diningEvent.userId, participant.id);
+      const result = await this.getDiningEvent(userId, eventId, tx);
+      await completeIdempotentOperation(tx, operationId, "dining-event:participant-note", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async chooseDiningEventWishRecipe(userId: UUID, eventId: UUID, recipeIds: UUID[], operationId: OperationId) {
+    const selectedRecipeIds = normalizeEventRecipeIds(recipeIds);
+    const requestHash = `${eventId}:${selectedRecipeIds.join(",")}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:wish", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:wish", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
       const event = await tx.diningEvent.findUnique({
         where: { id: eventId }
       });
@@ -2260,7 +2393,7 @@ export class MealService {
         throw new ConflictException("当前饭局状态不能继续提议想吃的菜");
       }
 
-      const participant = await tx.diningEventParticipant.findFirst({
+      let participant = await tx.diningEventParticipant.findFirst({
         where: {
           diningEventId: eventId,
           userId
@@ -2270,23 +2403,33 @@ export class MealService {
         throw new ForbiddenException("无权参与这顿饭的我想吃池");
       }
 
-      const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
-      const recipeVersion = await this.resolveRecipeVersion(tx, recipe);
-      const existingSupport = await tx.diningEventWishSupport.findFirst({
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      participant = await tx.diningEventParticipant.findUnique({ where: { id: participant.id } });
+      if (!participant || participant.status === "DECLINED" || participant.status === "REMOVED") {
+        throw new ForbiddenException("无权参与这顿饭的我想吃池");
+      }
+      const recipes = [] as Array<{
+        recipe: Prisma.RecipeGetPayload<{ include: { currentVersion: true } }>;
+        recipeVersion: Prisma.RecipeContentVersionGetPayload<{}>;
+      }>;
+      for (const recipeId of selectedRecipeIds) {
+        const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
+        recipes.push({ recipe, recipeVersion: await this.resolveRecipeVersion(tx, recipe) });
+      }
+      const existingSupports = await tx.diningEventWishSupport.findMany({
         where: {
           userId,
           wishItem: {
             diningEventId: eventId,
-            recipeVersionId: recipeVersion.id
+            recipeVersionId: { in: recipes.map(item => item.recipeVersion.id) }
           }
+        },
+        select: {
+          wishItem: { select: { recipeVersionId: true } }
         }
       });
-      if (existingSupport) {
-        const result = await this.getDiningEvent(userId, eventId, tx);
-        await completeIdempotentOperation(tx, operationId, "dining-event:wish", userId, null, requestHash, result);
-        return result;
-      }
-
+      const existingVersionIds = new Set(existingSupports.map(item => item.wishItem.recipeVersionId));
+      const newRecipes = recipes.filter(item => !existingVersionIds.has(item.recipeVersion.id));
       const currentCount = await tx.diningEventWishSupport.count({
         where: {
           userId,
@@ -2295,37 +2438,39 @@ export class MealService {
           }
         }
       });
-      if (currentCount >= 3) {
+      if (currentCount + newRecipes.length > 3) {
         throw new BadRequestException("我想吃最多先留 3 道菜");
       }
 
-      let wishItem = await tx.diningEventWishItem.findUnique({
-        where: {
-          diningEventId_recipeVersionId: {
-            diningEventId: eventId,
-            recipeVersionId: recipeVersion.id
+      for (const item of newRecipes) {
+        let wishItem = await tx.diningEventWishItem.findUnique({
+          where: {
+            diningEventId_recipeVersionId: {
+              diningEventId: eventId,
+              recipeVersionId: item.recipeVersion.id
+            }
           }
-        }
-      });
+        });
 
-      if (!wishItem) {
-        wishItem = await tx.diningEventWishItem.create({
+        if (!wishItem) {
+          wishItem = await tx.diningEventWishItem.create({
+            data: {
+              diningEventId: eventId,
+              recipeId: item.recipe.id,
+              recipeVersionId: item.recipeVersion.id,
+              suggestedByUserId: userId,
+              title: item.recipe.title
+            }
+          });
+        }
+
+        await tx.diningEventWishSupport.create({
           data: {
-            diningEventId: eventId,
-            recipeId: recipe.id,
-            recipeVersionId: recipeVersion.id,
-            suggestedByUserId: userId,
-            title: recipe.title
+            wishItemId: wishItem.id,
+            userId
           }
         });
       }
-
-      await tx.diningEventWishSupport.create({
-        data: {
-          wishItemId: wishItem.id,
-          userId
-        }
-      });
 
       if (participant.status === "INVITED") {
         await tx.diningEventParticipant.update({
@@ -2335,6 +2480,7 @@ export class MealService {
             respondedAt: new Date()
           }
         });
+        await this.upsertDiningEventParticipantLedger(tx, event.userId, participant.id);
       }
 
       const result = await this.getDiningEvent(userId, eventId, tx);
@@ -2357,6 +2503,7 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:wish-support", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
       const event = await tx.diningEvent.findUnique({
         where: { id: eventId }
       });
@@ -2368,12 +2515,17 @@ export class MealService {
         throw new ConflictException("当前饭局状态不能继续调整我想吃池");
       }
 
-      const participant = await tx.diningEventParticipant.findFirst({
+      let participant = await tx.diningEventParticipant.findFirst({
         where: {
           diningEventId: eventId,
           userId
         }
       });
+      if (!participant || participant.status === "DECLINED" || participant.status === "REMOVED") {
+        throw new ForbiddenException("无权参与这顿饭的我想吃池");
+      }
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      participant = await tx.diningEventParticipant.findUnique({ where: { id: participant.id } });
       if (!participant || participant.status === "DECLINED" || participant.status === "REMOVED") {
         throw new ForbiddenException("无权参与这顿饭的我想吃池");
       }
@@ -2422,6 +2574,7 @@ export class MealService {
               respondedAt: new Date()
             }
           });
+          await this.upsertDiningEventParticipantLedger(tx, event.userId, participant.id);
         }
       } else if (support) {
         await tx.diningEventWishSupport.delete({
@@ -2455,6 +2608,7 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:wish-menu", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
       const event = await tx.diningEvent.findUnique({
         where: { id: eventId }
       });
@@ -2526,51 +2680,79 @@ export class MealService {
     });
   }
 
-  async chooseBringRecipe(userId: UUID, eventId: UUID, recipeId: UUID, operationId: OperationId) {
-    const requestHash = `${eventId}:${recipeId}`;
+  async chooseBringRecipe(userId: UUID, eventId: UUID, recipeIds: UUID[], operationId: OperationId) {
+    const selectedRecipeIds = normalizeEventRecipeIds(recipeIds);
+    const requestHash = `${eventId}:${selectedRecipeIds.join(",")}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:bring", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:bring", userId, null, requestHash);
 
-      const participant = await tx.diningEventParticipant.findFirst({
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const event = await tx.diningEvent.findUnique({ where: { id: eventId } });
+      if (!event) throw new NotFoundException("饭局不存在");
+      if (event.userId === userId) {
+        throw new ForbiddenException("主家不用把菜放进参与人带菜池");
+      }
+      if (event.status === "CANCELLED" || event.status === "COMPLETED" || event.status === "CONFIRMED") {
+        throw new ConflictException("当前饭局状态不能继续更新带菜");
+      }
+
+      let participant = await tx.diningEventParticipant.findFirst({
         where: {
           diningEventId: eventId,
           userId
-        },
-        include: {
-          diningEvent: true
         }
       });
       if (!participant) throw new NotFoundException("饭局不存在");
 
-      const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
-      const recipeVersion = await this.resolveRecipeVersion(tx, recipe);
+      await tx.$queryRaw`SELECT "id" FROM "dining_event_participants" WHERE "id" = ${participant.id} FOR UPDATE`;
+      participant = await tx.diningEventParticipant.findUnique({ where: { id: participant.id } });
+      if (!participant) throw new NotFoundException("饭局不存在");
+      if (participant.status !== "INVITED" && participant.status !== "ACCEPTED") {
+        throw new ForbiddenException("无权更新这顿饭的带菜");
+      }
+
+      const recipes = [] as Array<{
+        recipe: Prisma.RecipeGetPayload<{ include: { currentVersion: true } }>;
+        recipeVersion: Prisma.RecipeContentVersionGetPayload<{}>;
+      }>;
+      for (const recipeId of selectedRecipeIds) {
+        const recipe = await this.requireOwnedRecipe(tx, userId, recipeId);
+        recipes.push({ recipe, recipeVersion: await this.resolveRecipeVersion(tx, recipe) });
+      }
 
       await tx.diningEventParticipant.update({
         where: { id: participant.id },
         data: {
           status: "ACCEPTED",
-          respondedAt: new Date(),
-          bringRecipeId: recipe.id,
-          bringVersionId: recipeVersion.id
+          respondedAt: new Date()
         }
       });
+      await tx.diningEventParticipantBringRecipe.deleteMany({ where: { participantId: participant.id } });
+      await tx.diningEventParticipantBringRecipe.createMany({
+        data: recipes.map((item, index) => ({
+          participantId: participant.id,
+          recipeId: item.recipe.id,
+          recipeVersionId: item.recipeVersion.id,
+          sortOrder: index
+        }))
+      });
 
-      if (participant.diningEvent.diningGroupId) {
+      if (event.diningGroupId) {
         await this.writeActivity(tx, {
-          diningGroupId: participant.diningEvent.diningGroupId,
+          diningGroupId: event.diningGroupId,
           kind: "BRING_UPDATED",
           state: "DONE",
           actorUserId: userId,
           title: "更新了我带菜",
-          detail: recipe.title,
+          detail: recipes.map(item => item.recipe.title).join("、"),
           diningEventId: eventId,
           dedupeKey: `bring-updated:${eventId}:${userId}`
         });
       }
 
-      await upsertStorageLedger(tx, participant.diningEvent.userId, "MEAL_GUEST", participant.id, sizeOfJson(participant));
+      await this.upsertDiningEventParticipantLedger(tx, event.userId, participant.id);
       const result = await this.getDiningEvent(userId, eventId, tx);
       await completeIdempotentOperation(tx, operationId, "dining-event:bring", userId, null, requestHash, result);
       return result;
@@ -2584,6 +2766,7 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "dining-event:complete", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
       const current = await this.loadDiningEventRow(tx, eventId);
       if (!current || current.userId !== userId) throw new NotFoundException("饭局不存在");
       if (current.status === "COMPLETED") {
@@ -3179,6 +3362,25 @@ export class MealService {
     });
   }
 
+  private async upsertDiningEventParticipantLedger(
+    tx: Prisma.TransactionClient,
+    ownerId: UUID,
+    participantId: UUID
+  ) {
+    const participant = await tx.diningEventParticipant.findUnique({
+      where: { id: participantId },
+      include: {
+        diningEvent: true,
+        bringRecipes: true
+      }
+    });
+    if (!participant) {
+      await removeStorageLedger(tx, ownerId, "MEAL_GUEST", participantId);
+      return;
+    }
+    await upsertStorageLedger(tx, ownerId, "MEAL_GUEST", participantId, sizeOfJson(participant));
+  }
+
   private async alignPlanToDiningTime(
     tx: Prisma.TransactionClient,
     event: { userId: UUID; mealPlanItemId: UUID | null },
@@ -3400,7 +3602,7 @@ export class MealService {
       menuCount: event.menuItems.length,
       participantCount: event.participants.length,
       acceptedCount: event.participants.filter(item => item.status === "ACCEPTED").length,
-      bringCount: event.participants.filter(item => Boolean(item.bringRecipeId)).length
+      bringCount: event.participants.filter(item => item.bringRecipes.length > 0).length
     };
   }
 
@@ -3435,6 +3637,7 @@ export class MealService {
   private toDiningEventSummary(event: DiningEventRow, viewerUserId: UUID, request?: RequestLike): DiningEventSummary {
     const menu = fromJson<RecipeContentSnapshot>(event.menuSnapshot);
     const currentMenuVersionIds = new Set(event.menuItems.map(item => item.recipeVersionId));
+    const isOrganizer = event.userId === viewerUserId;
     return {
       id: event.id,
       title: event.title,
@@ -3451,9 +3654,9 @@ export class MealService {
       organizerAvatarUrl: event.user?.avatarUrl ?? null,
       planItemId: event.mealPlanItemId,
       diningGroupId: event.diningGroupId,
-      shoppingListId: event.mealPlanItem?.shoppingList?.id ?? null,
-      shoppingListName: event.mealPlanItem?.shoppingList?.name ?? null,
-      shoppingListStatus: event.mealPlanItem?.shoppingList?.status ?? null,
+      shoppingListId: isOrganizer ? event.mealPlanItem?.shoppingList?.id ?? null : null,
+      shoppingListName: isOrganizer ? event.mealPlanItem?.shoppingList?.name ?? null : null,
+      shoppingListStatus: isOrganizer ? event.mealPlanItem?.shoppingList?.status ?? null : null,
       menu,
       menuItems: event.menuItems.map(item => ({
         id: item.id,
@@ -3487,8 +3690,12 @@ export class MealService {
         guestName: item.guestName,
         sourceType: item.sourceType,
         status: item.status,
-        bringRecipeId: item.bringRecipeId,
-        bringRecipeTitle: item.bringRecipe?.title ?? null
+        bringRecipes: item.bringRecipes.map(bring => ({
+          recipeId: bring.recipeId,
+          recipeVersionId: bring.recipeVersionId,
+          title: bring.recipeVersion.name
+        })),
+        note: item.note ?? null
       }) satisfies DiningEventParticipantSummary),
       hasActiveShareLink: event.shareInvites.length > 0,
       shareTokenPath: event.userId === viewerUserId && event.shareInvites[0] ? buildDiningEventSharePath(event.shareInvites[0].id) : null,

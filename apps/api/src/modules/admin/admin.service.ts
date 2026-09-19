@@ -5871,11 +5871,11 @@ export class AdminService {
         tx.recipeCollection.count({ where: { sourceRecipeId: recipeId } }),
         tx.homeTopicItem.count({ where: { recipeId } }),
         tx.mealPlanDish.count({ where: { recipeId } }),
-        tx.diningEventParticipant.count({ where: { bringRecipeId: recipeId } }),
+        tx.diningEventParticipantBringRecipe.count({ where: { recipeId } }),
         tx.recipeCollection.count({ where: { sourceVersionId: recipe.currentVersionId } }),
         tx.homeTopicItem.count({ where: { sourceVersionId: recipe.currentVersionId } }),
         tx.mealPlanDish.count({ where: { recipeVersionId: recipe.currentVersionId } }),
-        tx.diningEventParticipant.count({ where: { bringVersionId: recipe.currentVersionId } }),
+        tx.diningEventParticipantBringRecipe.count({ where: { recipeVersionId: recipe.currentVersionId } }),
         tx.diningEventWishItem.count({ where: { recipeVersionId: recipe.currentVersionId } }),
         tx.diningEventMenuItem.count({ where: { recipeVersionId: recipe.currentVersionId } }),
         tx.shoppingItem.count({ where: { sourceRecipeVersionId: recipe.currentVersionId } })
@@ -5908,7 +5908,7 @@ export class AdminService {
           shoppingSourceItems: { none: {} },
           mealPlanDishes: { none: {} },
           mealPollCandidates: { none: {} },
-          diningEventParticipants: { none: {} },
+          diningEventParticipantBringRecipes: { none: {} },
           diningEventMenuItems: { none: {} },
           diningEventWishItems: { none: {} },
           uploadAssets: { none: {} }
@@ -7585,9 +7585,8 @@ export class AdminService {
         UNION
         SELECT "recipe_version_id" AS "version_id" FROM "meal_plan_dishes"
         UNION
-        SELECT "bring_version_id" AS "version_id"
-        FROM "dining_event_participants"
-        WHERE "bring_version_id" IS NOT NULL
+        SELECT "recipe_version_id" AS "version_id"
+        FROM "dining_event_participant_bring_recipes"
       )
       SELECT EXISTS (
         SELECT 1
@@ -7611,9 +7610,8 @@ export class AdminService {
         UNION
         SELECT "recipe_version_id" AS "version_id" FROM "meal_plan_dishes"
         UNION
-        SELECT "bring_version_id" AS "version_id"
-        FROM "dining_event_participants"
-        WHERE "bring_version_id" IS NOT NULL
+        SELECT "recipe_version_id" AS "version_id"
+        FROM "dining_event_participant_bring_recipes"
       )
       SELECT EXISTS (
         SELECT 1

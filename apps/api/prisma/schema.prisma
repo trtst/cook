@@ -1350,7 +1350,7 @@ model RecipeContentVersion {
   shoppingSourceItems     ShoppingItem[]           @relation("ShoppingItemSourceVersion")
   mealPlanDishes          MealPlanDish[]           @relation("MealPlanDishVersion")
   mealPollCandidates      MealPollCandidate[]
-  diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringVersion")
+  diningEventParticipantBringRecipes DiningEventParticipantBringRecipe[] @relation("DiningEventParticipantBringVersion")
   diningEventMenuItems    DiningEventMenuItem[]
   diningEventWishItems    DiningEventWishItem[]
   uploadAssets            UploadAsset[]
@@ -1639,7 +1639,7 @@ model Recipe {
   draft                   RecipeDraft?
   shoppingSourceItems     ShoppingItem[]           @relation("ShoppingItemSourceRecipe")
   mealPlanDishes          MealPlanDish[]
-  diningEventParticipants DiningEventParticipant[] @relation("DiningEventBringRecipe")
+  diningEventParticipantBringRecipes DiningEventParticipantBringRecipe[] @relation("DiningEventParticipantBringRecipe")
   diningEventWishItems    DiningEventWishItem[]
   homeTopicItems          HomeTopicItem[]
   viewHistories           RecipeViewHistory[]
@@ -1989,8 +1989,7 @@ model DiningEventParticipant {
   guestName      String?                      @map("guest_name") @db.VarChar(120)
   sourceType     DiningEventParticipantSource @map("source_type")
   status         DiningEventParticipantStatus @default(INVITED)
-  bringRecipeId  Int?                         @map("bring_recipe_id")
-  bringVersionId Int?                         @map("bring_version_id")
+  note           String?                      @db.VarChar(255)
   respondedAt    DateTime?                    @map("responded_at") @db.Timestamptz(3)
   createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1998,12 +1997,30 @@ model DiningEventParticipant {
   diningEvent  DiningEvent           @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
   user         User?                 @relation("DiningEventParticipantUser", fields: [userId], references: [id])
   invitedBy    User?                 @relation("DiningEventParticipantInviter", fields: [invitedByUserId], references: [id])
-  bringRecipe  Recipe?               @relation("DiningEventBringRecipe", fields: [bringRecipeId], references: [id])
-  bringVersion RecipeContentVersion? @relation("DiningEventBringVersion", fields: [bringVersionId], references: [id])
+  bringRecipes DiningEventParticipantBringRecipe[]
 
   @@index([diningEventId, status])
   @@index([userId, status])
   @@map("dining_event_participants")
+}
+
+model DiningEventParticipantBringRecipe {
+  id              Int      @id @default(autoincrement())
+  participantId   Int      @map("participant_id")
+  recipeId        Int?     @map("recipe_id")
+  recipeVersionId Int      @map("recipe_version_id")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  participant   DiningEventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  recipe        Recipe?                @relation("DiningEventParticipantBringRecipe", fields: [recipeId], references: [id], onDelete: SetNull)
+  recipeVersion RecipeContentVersion  @relation("DiningEventParticipantBringVersion", fields: [recipeVersionId], references: [id])
+
+  @@unique([participantId, recipeVersionId])
+  @@index([participantId, sortOrder, id])
+  @@index([recipeId])
+  @@index([recipeVersionId])
+  @@map("dining_event_participant_bring_recipes")
 }
 
 model DiningEventShareInvite {
