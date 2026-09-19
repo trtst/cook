@@ -105,12 +105,13 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
-import type { UUID } from "@/apis/http";
+import { UnauthorizedError, type UUID } from "@/apis/http";
 import { mealApi } from "@/apis/meal";
 import { recipeApi, type RecipeCategorySummary } from "@/apis/recipe";
 import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { createOperationId } from "@/utils/operation-id";
 import {
   appendMealSlotToMark,
@@ -130,6 +131,8 @@ const props = defineProps<{
   sourceVersionId?: UUID | null;
   needAddToPrivate: boolean;
 }>();
+
+const loginModalStore = useLoginModalStore();
 
 const emit = defineEmits<{
   close: [];
@@ -187,7 +190,7 @@ watch(
   () => props.needAddToPrivate,
   needAddToPrivate => {
     if (props.visible && needAddToPrivate) {
-      void loadCategories();
+      void loadOptions();
     }
   }
 );
@@ -223,7 +226,12 @@ async function loadOptions() {
     }
     await loadPlanMarks(monthDate.value);
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "加入计划信息加载失败";
+    if (error instanceof UnauthorizedError) {
+      errorText.value = "";
+      loginModalStore.open(null, () => void loadOptions());
+    } else {
+      errorText.value = error instanceof Error ? error.message : "加入计划信息加载失败";
+    }
   } finally {
     loading.value = false;
   }
@@ -309,7 +317,11 @@ async function createCategory() {
     categoryDraftName.value = "";
     showCategoryCreator.value = false;
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      loginModalStore.open();
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
+    }
   } finally {
     categorySubmitting.value = false;
   }
@@ -326,7 +338,12 @@ function handleMonthChange(nextMonth: string) {
     selectedDate.value = monthDate.value < buildMonthAnchor(today) ? today : monthDate.value;
   }
   void loadPlanMarks(monthDate.value).catch(error => {
-    errorText.value = error instanceof Error ? error.message : "计划信息加载失败";
+    if (error instanceof UnauthorizedError) {
+      errorText.value = "";
+      loginModalStore.open(null, () => void loadOptions());
+    } else {
+      errorText.value = error instanceof Error ? error.message : "计划信息加载失败";
+    }
   });
 }
 
@@ -381,10 +398,14 @@ async function submit() {
     emit("close");
     await uniPlatform.feedback.toast({ title: addedToPrivate ? "已保存到私房菜并加入计划" : "已加入计划", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({
-      title: addedToPrivate ? "私房菜已保存，请重试加入计划" : error instanceof Error ? error.message : "加入计划失败",
-      icon: "none"
-    });
+    if (error instanceof UnauthorizedError) {
+      loginModalStore.open();
+    } else {
+      await uniPlatform.feedback.toast({
+        title: addedToPrivate ? "私房菜已保存，请重试加入计划" : error instanceof Error ? error.message : "加入计划失败",
+        icon: "none"
+      });
+    }
   } finally {
     submitting.value = false;
   }
@@ -433,11 +454,24 @@ onUnmounted(() => {
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
 }
 
-.sheet-section__tag,
+.sheet-section__tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32rpx;
+  padding: 4rpx 10rpx;
+  border: 1rpx solid var(--color-state-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-state-warning-soft);
+  color: var(--color-state-warning-text);
+  font-size: 22rpx;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
+}
+
 .sheet-section__hint {
   color: var(--color-text-tertiary);
   font-size: 22rpx;
@@ -561,7 +595,7 @@ onUnmounted(() => {
   color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 1;
+  line-height: 80rpx;
 }
 
 .sheet-creator__button::after {

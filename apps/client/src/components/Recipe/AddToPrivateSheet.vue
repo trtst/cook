@@ -1,8 +1,8 @@
 <template>
   <SheetShell
     :visible="visible"
-    title="保存为私房菜"
-    subtitle="先选一个个人分类，保存后就会生成你的私房菜副本。"
+    title="加到私房菜"
+    subtitle="先选一个个人分类，加到私房菜后就会生成你的私房菜副本。"
     @close="emit('close')"
   >
     <view v-if="loading" class="panel-note">加载中...</view>
@@ -63,7 +63,7 @@
           :class="{ 'sheet-actions__button--disabled': submitting || loading || !selectedCategoryId }"
           @click="submit"
         >
-          {{ submitting ? "保存中..." : "保存为私房菜" }}
+          {{ submitting ? "添加中..." : "加到私房菜" }}
         </button>
       </view>
     </template>
@@ -72,10 +72,11 @@
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { UUID } from "@/apis/http";
+import { UnauthorizedError, type UUID } from "@/apis/http";
 import { recipeApi, type RecipeCategorySummary } from "@/apis/recipe";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { uniPlatform } from "@/platform/uni";
+import { useLoginModalStore } from "@/stores/login-modal";
 import { createOperationId } from "@/utils/operation-id";
 
 const props = defineProps<{
@@ -83,6 +84,8 @@ const props = defineProps<{
   sourceRecipeId: UUID;
   sourceVersionId: UUID;
 }>();
+
+const loginModalStore = useLoginModalStore();
 
 const emit = defineEmits<{
   close: [];
@@ -117,7 +120,12 @@ async function loadCategories() {
   try {
     categories.value = await recipeApi.listCategories();
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "分类加载失败";
+    if (error instanceof UnauthorizedError) {
+      errorText.value = "";
+      loginModalStore.open(null, () => void loadCategories());
+    } else {
+      errorText.value = error instanceof Error ? error.message : "分类加载失败";
+    }
   } finally {
     loading.value = false;
   }
@@ -147,7 +155,11 @@ async function createCategory() {
     categoryDraftName.value = "";
     showCategoryCreator.value = false;
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      loginModalStore.open();
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建分类失败", icon: "none" });
+    }
   } finally {
     categorySubmitting.value = false;
   }
@@ -170,9 +182,13 @@ async function submit() {
     });
     emit("success", result.recipe.id);
     emit("close");
-    await uniPlatform.feedback.toast({ title: "已保存为私房菜", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已加到私房菜", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      loginModalStore.open();
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
+    }
   } finally {
     submitting.value = false;
   }
@@ -207,7 +223,7 @@ async function submit() {
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
 }
 
@@ -287,7 +303,7 @@ async function submit() {
   color: var(--color-tag-primary-text);
   font-size: 24rpx;
   font-weight: var(--font-weight-semibold);
-  line-height: 1;
+  line-height: 80rpx;
 }
 
 .sheet-creator__button--disabled,

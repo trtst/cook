@@ -127,7 +127,8 @@ async function loadInspirationRecipeFixture() {
   return {
     recipeId: detail.id,
     title: detail.title,
-    contentVersionId: detail.contentVersionId
+    contentVersionId: detail.contentVersionId,
+    categoryName: detail.category.name
   };
 }
 
@@ -484,6 +485,8 @@ describe("pages_recipe/detail/index", () => {
     expect(await title.text()).toBe(inspirationFixture.title);
 
     const texts = await collectTexts(page);
+    expect(texts).toContain("分类");
+    expect(texts).toContain(inspirationFixture.categoryName);
     expect(texts).toContain("营养和热量");
     expect(texts).toContain("单份营养为估算值，仅供参考");
     expect(texts).toContain("食材清单");
@@ -671,10 +674,27 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailSource, /assistantAvailable/);
     nodeAssert.match(detailSource, /canOpenRecipeAssistant/);
     nodeAssert.match(detailSource, /openRecipeAssistant/);
-    nodeAssert.match(detailSource, /\/pages_recipe\/assistant\/index\?recipeVersionId=/);
+    nodeAssert.match(detailSource, /recipeApi\.getRecipeVersionCookAssistant\(recipeVersionId\)/);
+    nodeAssert.match(detailSource, /recipeApi\.unlockRecipeVersionCookAssistant\(recipeVersionId,/);
+    nodeAssert.match(detailSource, /userApi\.getCookAssistantUsage\(\)/);
+    nodeAssert.match(detailSource, /\/pages_meal\/cook-mode\/index\?source=recipe/);
+    nodeAssert.match(detailSource, /flow=assistant/);
+    nodeAssert.match(detailSource, /recipeVersionId=/);
     nodeAssert.match(detailSource, /炊火智厨/);
-    nodeAssert.doesNotMatch(detailSource, /getRecipeVersionCookAssistant/);
-    nodeAssert.doesNotMatch(detailSource, /unlockRecipeVersionCookAssistant/);
+    nodeAssert.match(detailSource, /import CookAssistantUnlockSheet from "@\/components\/CookAssistantUnlockSheet\.vue";/);
+    nodeAssert.match(detailSource, /<CookAssistantUnlockSheet[\s\S]*:visible="cookAssistantSheetVisible"[\s\S]*:remaining-count="cookAssistantRemainingCount"/);
+    nodeAssert.doesNotMatch(detailSource, /\/pages_recipe\/assistant\/index\?/);
+  });
+
+  nodeTest("recipe detail checks assistant unlock state before showing the unlock sheet", () => {
+    const start = detailSource.indexOf("async function openRecipeAssistant()");
+    const end = detailSource.indexOf("\nfunction closeCookAssistantSheet", start);
+    const functionSource = detailSource.slice(start, end);
+    const statusReadIndex = functionSource.indexOf("const assistant = await recipeApi.getRecipeVersionCookAssistant(recipeVersionId)");
+    const sheetOpenIndex = functionSource.indexOf("cookAssistantSheetVisible.value = true;");
+
+    nodeAssert.ok(statusReadIndex >= 0, "Expected recipe assistant status to be read");
+    nodeAssert.ok(sheetOpenIndex > statusReadIndex, "Expected unlock sheet to open only after assistant status is known");
   });
 
   nodeTest("recipe detail names the plan and assistant actions explicitly", () => {

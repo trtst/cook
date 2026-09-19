@@ -25,13 +25,24 @@ assert.ok(!source.includes(".wiki"), "Expected the recipe detail not to consume 
 assert.ok(source.includes('import ImageLoader from "@/components/ImageLoader.vue";'), "Expected recipe detail to use the shared image loader.");
 assert.ok(source.includes('<ImageLoader class="hero__image" :src="coverImageUrl" />'), "Expected the recipe detail cover to keep loading until its image succeeds.");
 assert.ok(!source.includes('import ImageEmpty from "@/components/ImageEmpty.vue";'), "Expected recipe detail cover empty state to be owned by ImageLoader.");
+assert.ok(source.includes(':page-loading="pageLoading"'), "Expected recipe detail page loading to be owned by the shared Layout overlay.");
+assert.ok(source.includes('import RecipeDetailSkeleton from "./RecipeDetailSkeleton.vue";'), "Expected recipe detail to use a page-specific skeleton.");
+assert.ok(source.includes('<RecipeDetailSkeleton v-if="!pageLoading && loading" />'), "Expected the recipe detail skeleton to render only after page loading ends.");
+assert.ok(source.includes('<Empty\n      v-else-if="!pageLoading && !loading && !detail"'), "Expected the recipe detail empty state to render after the skeleton phase.");
+assert.ok(!source.includes('class="notice notice--floating">加载中...</view>'), "Expected recipe detail not to render an inline loading notice.");
+assert.ok(!source.includes('class="notice notice--floating" @click="loadDetail">{{ errorText }}</view>'), "Expected recipe detail not to render raw request errors inline.");
+assert.ok(!source.includes("登录后查看这道私房菜"), "Expected the private recipe empty state not to use a login-only title.");
+assert.ok(!source.includes("登录后即可查看个人菜谱"), "Expected the private recipe empty state not to use a login-only description.");
+assert.ok(source.includes(':art="detailEmptyArt"'), "Expected recipe detail empty states to use the shared illustration.");
+assert.ok(source.includes('import { ApiClientError, UnauthorizedError, type UUID } from "@/apis/http";'), "Expected recipe detail to classify auth failures separately from ordinary request errors.");
+assert.match(recipeApiSource, /get<InspirationRecipeDetail>\([\s\S]*auth: "optional"/, "Expected public recipe detail reads to retry anonymously after an expired optional token.");
 
 const tipsIndex = source.indexOf('<text class="tips-text">{{ detailContent.tips }}</text>');
 const curatedIndex = source.indexOf('<text v-if="attributionText" class="detail-curated">{{ attributionText }}</text>');
 const planLinksIndex = source.indexOf('<view v-if="primaryPlanLink" class="section section--plan-links">');
 assert.ok(tipsIndex >= 0 && tipsIndex < curatedIndex && curatedIndex < planLinksIndex, "Expected curated attribution to follow tips and precede later detail sections.");
 assert.ok(source.includes("const attributionName = computed(() => {"), "Expected recipe detail attribution to have one name source.");
-assert.ok(source.includes('myDetail.value?.owner : inspirationDetail.value?.owner'), "Expected all recipe details to read their frozen owner summary.");
+assert.ok(source.includes('myPersonal.value?.owner : inspirationDetail.value?.owner'), "Expected all recipe details to read their frozen owner summary.");
 assert.ok(source.includes('?.nickname?.trim() || "";'), "Expected an empty owner nickname to hide attribution.");
 assert.ok(!source.includes("curatedByName"), "Expected legacy curatedByName attribution to be removed.");
 
@@ -62,6 +73,14 @@ assert.ok(
 assert.ok(
   source.includes('v-if="showStickyActions"\n                    class="section__action"\n                    @click="openCookMode"'),
   "Expected cook mode to use the right-aligned section action treatment."
+);
+assert.ok(
+  source.includes('<text>边看边做</text>'),
+  "Expected the recipe detail cook-mode action to use the approved 边看边做 label."
+);
+assert.ok(
+  !source.includes('<text>按菜谱做饭</text>'),
+  "Expected the recipe detail cook-mode action not to retain the old label."
 );
 assert.ok(
   !source.includes('class="summary-card__cook-entry"'),

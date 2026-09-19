@@ -3,6 +3,7 @@
   <Layout :class="themeClasses"
     title=""
     full-screen
+    :page-loading="pageLoading"
     :navbar-transparent="true"
     :navbar-opacity="navOpacity"
     :navbar-placeholder="false"
@@ -14,7 +15,10 @@
           v-for="item in anchorTabs"
           :key="item.value"
           class="detail-nav-tabs__item font-medium"
-          :class="{ 'detail-nav-tabs__item--active': activeAnchor === item.value }"
+          :class="{
+            'detail-nav-tabs__item--active': activeAnchor === item.value,
+            'nav-tab-active-indicator': activeAnchor === item.value
+          }"
           @click="scrollToSection(item.value)"
         >
           {{ item.label }}
@@ -24,15 +28,18 @@
 
     <view class="detail-nav-backdrop" :style="navBackdropStyle" />
 
-    <view v-if="loading" class="notice notice--floating">加载中...</view>
-    <view v-else-if="errorText" class="notice notice--floating" @click="loadDetail">{{ errorText }}</view>
+    <RecipeDetailSkeleton v-if="!pageLoading && loading" />
+
     <Empty
-      v-else-if="!detail"
-      :title="mode === 'preview' ? '预览已失效' : '未找到菜谱'"
-      :description="mode === 'preview' ? '请返回编辑页重新打开预览。' : '可能已被删除、下架，或当前访问路径不正确。'"
+      v-else-if="!pageLoading && !loading && !detail"
+      :art="detailEmptyArt"
+      :title="detailEmptyTitle"
+      :description="detailEmptyDescription"
+      :clickable="detailEmptyClickable"
+      @click="handleDetailEmptyClick"
     />
 
-    <template v-else>
+    <template v-else-if="!pageLoading && detail">
       <view class="detail-page">
         <scroll-view
           id="detail-scroll"
@@ -199,7 +206,7 @@
                     @click="openCookMode"
                   >
                     <text class="cookfont icon-cook section__action-icon" />
-                    <text>按菜谱做饭</text>
+                    <text>边看边做</text>
                   </button>
                 </view>
                 <view v-if="detailSteps.length" class="step-list">
@@ -255,14 +262,14 @@
 	                  </button>
 	                  <button v-if="canAddToPrivate && !detailActionsVisible" class="detail-inline-actions__item" @click="openPrivateSheet">
 	                    <view class="cookfont detail-inline-actions__icon icon-collect" />
-	                    <view class="detail-inline-actions__text">保存为私房菜</view>
+	                    <view class="detail-inline-actions__text">加到私房菜</view>
 	                  </button>
 	                  <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleExternalPrimaryAction">
                     <view class="cookfont detail-inline-actions__icon icon-add-plan" />
                     <view class="detail-inline-actions__text">加入计划</view>
                   </button>
                   <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
-                    <view class="cookfont detail-inline-actions__icon icon-cook" />
+                    <view class="cookfont detail-inline-actions__icon icon-cook-assistant" />
                     <view class="detail-inline-actions__text">炊火智厨</view>
                   </button>
                   <button v-if="showReportEntry" class="detail-inline-actions__item" @click="openReportSheet">
@@ -289,10 +296,20 @@
 	                      <view class="detail-inline-actions__text">添加计划</view>
                 </button>
                   <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
-                    <view class="cookfont detail-inline-actions__icon icon-cook" />
+                    <view class="cookfont detail-inline-actions__icon icon-cook-assistant" />
                     <view class="detail-inline-actions__text">炊火智厨</view>
-                  </button>
-              </template>
+	                  </button>
+	              </template>
+	              <template v-else-if="isReadablePrivateDetail">
+	                <button v-if="!detailActionsVisible" class="detail-inline-actions__item" @click="handleAddPlan">
+	                  <view class="cookfont detail-inline-actions__icon icon-add-plan" />
+	                  <view class="detail-inline-actions__text">添加计划</view>
+	                </button>
+                <button v-if="canOpenRecipeAssistant && !detailActionsVisible" class="detail-inline-actions__item" @click="openRecipeAssistant">
+                  <view class="cookfont detail-inline-actions__icon icon-cook-assistant" />
+                  <view class="detail-inline-actions__text">炊火智厨</view>
+                </button>
+	              </template>
 	            </view>
             </view>
           </view>
@@ -308,27 +325,37 @@
           <template v-if="isExternalDetail">
             <button v-if="canAddToPrivate" class="detail-actions__item" @click="openPrivateSheet">
               <view class="cookfont icon-collect detail-actions__icon" />
-              <view class="detail-actions__text">保存为私房菜</view>
+              <view class="detail-actions__text">加到私房菜</view>
             </button>
             <button class="detail-actions__item" @click="handleExternalPrimaryAction">
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">加入计划</view>
             </button>
             <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
-              <view class="cookfont icon-cook detail-actions__icon" />
+              <view class="cookfont icon-cook-assistant detail-actions__icon" />
               <view class="detail-actions__text">炊火智厨</view>
             </button>
           </template>
-          <template v-else-if="isOwnedDetail">
+	          <template v-else-if="isOwnedDetail">
             <button class="detail-actions__item" @click="handleAddPlan">
               <view class="cookfont icon-add-plan detail-actions__icon" />
               <view class="detail-actions__text">添加计划</view>
             </button>
             <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
-              <view class="cookfont icon-cook detail-actions__icon" />
+              <view class="cookfont icon-cook-assistant detail-actions__icon" />
               <view class="detail-actions__text">炊火智厨</view>
-            </button>
-          </template>
+	            </button>
+	          </template>
+	          <template v-else-if="isReadablePrivateDetail">
+	            <button class="detail-actions__item" @click="handleAddPlan">
+	              <view class="cookfont icon-add-plan detail-actions__icon" />
+	              <view class="detail-actions__text">添加计划</view>
+	            </button>
+	            <button v-if="canOpenRecipeAssistant" class="detail-actions__item" @click="openRecipeAssistant">
+	              <view class="cookfont icon-cook-assistant detail-actions__icon" />
+	              <view class="detail-actions__text">炊火智厨</view>
+	            </button>
+	          </template>
         </view>
       </view>
 
@@ -427,6 +454,17 @@
         @success="handlePlanSuccess"
       />
 
+      <CookAssistantUnlockSheet
+        :visible="cookAssistantSheetVisible"
+        :loading="cookAssistantSheetLoading"
+        :remaining-count="cookAssistantRemainingCount"
+        :can-unlock="cookAssistantCanUnlock"
+        :submitting="cookAssistantSheetSubmitting"
+        :error-text="cookAssistantSheetError"
+        @close="closeCookAssistantSheet"
+        @unlock="unlockRecipeAssistant"
+      />
+
       <ShoppingListPickerSheet
         :visible="shoppingSheetVisible"
         :loading="shoppingListLoading"
@@ -482,12 +520,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onLoad, onShareAppMessage, onUnload } from "@dcloudio/uni-app";
-import type { UUID } from "@/apis/http";
+import { ApiClientError, UnauthorizedError, type UUID } from "@/apis/http";
 import {
   recipeApi,
   type InspirationCategorySummary,
   type InspirationRecipeDetail,
-  type MyRecipeDetail,
+  type RecipeDetail,
   type RecipePlanLinkSummary,
   type RecipeAmountSnapshot,
   type RecipeContentSnapshot,
@@ -498,8 +536,10 @@ import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
+import RecipeDetailSkeleton from "./RecipeDetailSkeleton.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
+import CookAssistantUnlockSheet from "@/components/CookAssistantUnlockSheet.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -512,16 +552,18 @@ import { uniPlatform } from "@/platform/uni";
 import { useLoginModalStore } from "@/stores/login-modal";
 import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDetail } from "../stores/recipe-preview";
 import { useSessionStore } from "@/stores/session";
+import { userApi, type CookAssistantUsageResponse } from "@/apis/user";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMealSlot, isMealSlotExpired } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
 import { buildDefaultShoppingListName } from "../utils/shopping";
 import { buildIngredientDisplay } from "./ingredient-display";
+import emptyStateIllustration from "@/assets/empty.png";
 
 type DetailKind = "my" | "inspiration";
 type DetailMode = "published" | "preview";
 type AnchorKey = "ingredients" | "nutrition" | "steps";
-type PublishedDetail = MyRecipeDetail | InspirationRecipeDetail;
+type PublishedDetail = RecipeDetail | InspirationRecipeDetail;
 type DetailContent = RecipeContentSnapshot | RecipePreviewDetail["content"];
 type DetailIngredient = DetailContent["ingredients"][number];
 
@@ -585,11 +627,17 @@ const recipeId = ref<UUID | "">("");
 const kind = ref<DetailKind>("my");
 const mode = ref<DetailMode>("published");
 const detail = ref<PublishedDetail | RecipePreviewDetail | null>(null);
+const pageLoading = ref(true);
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
 const reportReason = ref("");
 const reportSheetVisible = ref(false);
+const cookAssistantSheetVisible = ref(false);
+const cookAssistantSheetLoading = ref(false);
+const cookAssistantSheetSubmitting = ref(false);
+const cookAssistantSheetError = ref("");
+const cookAssistantUsage = ref<CookAssistantUsageResponse | null>(null);
 const privateSheetVisible = ref(false);
 const planSheetVisible = ref(false);
 const planLinksSheetVisible = ref(false);
@@ -618,6 +666,19 @@ const nutritionTop = ref(Number.POSITIVE_INFINITY);
 const stepTop = ref(Number.POSITIVE_INFINITY);
 const { setLocked: setPageLocked } = usePageScrollLock(Symbol("recipe-detail-report-sheet"));
 
+const detailEmptyTitle = computed(() => {
+	if (mode.value === "preview") return "预览已失效";
+	if (errorText.value) return "菜谱加载失败";
+	return "未找到菜谱";
+});
+const detailEmptyDescription = computed(() => {
+	if (mode.value === "preview") return "请返回编辑页重新打开预览。";
+	if (errorText.value) return "请点击重试，或稍后再试。";
+	return "可能已被删除、下架，或当前访问路径不正确。";
+});
+const detailEmptyClickable = computed(() => Boolean(errorText.value));
+const detailEmptyArt = emptyStateIllustration;
+
 let measureTimer: ReturnType<typeof setTimeout> | null = null;
 
 const previewDetail = computed(() => {
@@ -636,8 +697,10 @@ const inspirationDetail = computed(() => {
 });
 const myDetail = computed(() => {
 	if (mode.value !== "published" || kind.value !== "my" || !detail.value) return null;
-	return detail.value as MyRecipeDetail;
+	return detail.value as RecipeDetail;
 });
+
+const myPersonal = computed(() => myDetail.value?.personal ?? null);
 
 const detailTitle = computed(() => detail.value?.title || "");
 const coverImageUrl = computed(() =>
@@ -674,11 +737,13 @@ const detailCategoryName = computed(() => {
   if (previewDetail.value) {
     return previewDetail.value.categoryName || "";
   }
-  return publishedDetail.value?.category?.name || "";
+	if (inspirationDetail.value?.category?.name) return inspirationDetail.value.category.name;
+	if (myDetail.value?.personal?.category?.name) return myDetail.value.personal.category.name;
+	return myDetail.value?.inspirationCategory?.name || "";
 });
 
 const detailStory = computed(() => detailContent.value.story?.trim() || "");
-const currentRecommendation = computed(() => myDetail.value?.recommendation ?? null);
+const currentRecommendation = computed(() => myPersonal.value?.recommendation ?? null);
 const externalDetail = computed(() => inspirationDetail.value);
 const linkedOwnedRecipeId = computed(() => inspirationDetail.value?.ownedRecipeId || "");
 const externalRecipeRef = computed(() => {
@@ -691,7 +756,7 @@ const externalRecipeRef = computed(() => {
   return null;
 });
 const attributionName = computed(() => {
-  return (kind.value === "my" ? myDetail.value?.owner : inspirationDetail.value?.owner)?.nickname?.trim() || "";
+	return (kind.value === "my" ? myPersonal.value?.owner : inspirationDetail.value?.owner)?.nickname?.trim() || "";
 });
 const attributionText = computed(() => {
   const name = attributionName.value;
@@ -703,12 +768,15 @@ const canOpenRecommendSheet = computed(() => {
 	return !status || status === "REJECTED" || status === "WITHDRAWN";
 });
 const detailSteps = computed(() => detailContent.value.steps.filter(item => Boolean(item.imageUrl || hasStepText(item.text))));
-const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(detail.value));
+const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(myPersonal.value));
+const isReadablePrivateDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(myDetail.value));
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
 const canOpenRecipeAssistant = computed(() => Boolean(publishedDetail.value?.assistantAvailable && publishedDetail.value.contentVersionId));
-const canRecommendRecipe = computed(() => Boolean(myDetail.value?.canRecommend));
+const cookAssistantRemainingCount = computed(() => cookAssistantUsage.value?.remainingCount ?? 0);
+const cookAssistantCanUnlock = computed(() => Boolean(cookAssistantUsage.value?.activityEnabled && cookAssistantRemainingCount.value > 0));
+const canRecommendRecipe = computed(() => Boolean(myPersonal.value?.canRecommend));
 const planRecipeId = computed<UUID | "">(() => {
-  if (isOwnedDetail.value) return recipeId.value;
+  if (kind.value === "my" && myDetail.value) return recipeId.value;
   return linkedOwnedRecipeId.value || "";
 });
 const canAddToPrivate = computed(() => isExternalDetail.value && !linkedOwnedRecipeId.value);
@@ -737,7 +805,7 @@ const isRecommendReadonly = computed(() => {
 const externalEditActionLabel = computed(() => (linkedOwnedRecipeId.value && kind.value === "inspiration" ? "编辑" : "改编"));
 const showRecommendEntry = computed(() => isOwnedDetail.value && (canRecommendRecipe.value || Boolean(currentRecommendation.value)));
 const showStickyActions = computed(
-  () => mode.value === "published" && (isExternalDetail.value || isOwnedDetail.value)
+  () => mode.value === "published" && (isExternalDetail.value || isReadablePrivateDetail.value)
 );
 const detailActionsVisible = computed(
   () =>
@@ -773,10 +841,11 @@ const detailDurationText = computed(() => {
   return serverText || recipeDurationText(detailContent.value.duration);
 });
 const recipePlanLinks = computed<RecipePlanLinkSummary[]>(() => {
-  if (mode.value !== "published" || !publishedDetail.value?.planLinks?.length) return [];
-  const now = new Date();
-  return sortRecipePlanLinks(
-    publishedDetail.value.planLinks.filter(
+	const links = kind.value === "my" ? myPersonal.value?.planLinks : inspirationDetail.value?.planLinks;
+	if (mode.value !== "published" || !links?.length) return [];
+	const now = new Date();
+	return sortRecipePlanLinks(
+		links.filter(
       item => item.status !== "COMPLETED" && !isMealSlotExpired(item.planDate, item.mealSlot, now)
     )
   );
@@ -886,19 +955,29 @@ onLoad((query) => {
   const rawKind = Array.isArray(query?.kind) ? query.kind[0] : query?.kind;
   const rawMode = Array.isArray(query?.mode) ? query.mode[0] : query?.mode;
   recipeId.value = parseQueryId(query?.recipeId);
-	kind.value = rawKind === "inspiration" ? "inspiration" : "my";
+	kind.value = rawKind === "my" ? "my" : "inspiration";
   mode.value = rawMode === "preview" ? "preview" : "published";
 
-  if (mode.value === "preview") {
-    detail.value = recipePreviewStore.detail ? { ...recipePreviewStore.detail } : null;
-    scheduleMeasure();
-    return;
-  }
+	if (mode.value === "preview") {
+		detail.value = recipePreviewStore.detail ? { ...recipePreviewStore.detail } : null;
+		scheduleMeasure();
+		pageLoading.value = false;
+		return;
+	}
 
-  if (recipeId.value) {
-    void loadDetail();
-  }
+	void preparePublishedDetail();
 });
+
+async function preparePublishedDetail() {
+	if (!recipeId.value) {
+		pageLoading.value = false;
+		return;
+	}
+	loading.value = true;
+	pageLoading.value = false;
+	await nextTick();
+	void loadDetail(true);
+}
 
 function handleDetailScroll(event: { detail?: { scrollTop?: number } }) {
   const nextScrollTop = event.detail?.scrollTop ?? 0;
@@ -927,23 +1006,45 @@ onShareAppMessage(() => ({
   imageUrl: coverImageUrl.value || undefined
 }));
 
-async function loadDetail() {
-  if (!recipeId.value || loading.value || mode.value !== "published") return;
-  loading.value = true;
+async function loadDetail(initialLoading = false) {
+	if (!recipeId.value || (!initialLoading && loading.value) || mode.value !== "published") return;
+	if (!initialLoading) loading.value = true;
   errorText.value = "";
 		try {
 			detail.value = kind.value === "inspiration"
 				? await recipeApi.getInspirationRecipe(recipeId.value)
-				: await recipeApi.getMyRecipe(recipeId.value);
-			if (sessionStore.isLoggedIn) {
+				: await recipeApi.getRecipeDetail(recipeId.value);
+			if (sessionStore.isLoggedIn && (kind.value === "inspiration" || Boolean(myPersonal.value))) {
 				void recipeApi.recordRecipeView(recipeId.value, createOperationId()).catch(() => undefined);
 			}
 	    scheduleMeasure();
-  } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "菜谱加载失败";
-  } finally {
+	} catch (error) {
+		if (error instanceof UnauthorizedError) {
+			errorText.value = "菜谱加载失败";
+			await uniPlatform.feedback.toast({ title: "菜谱加载失败，请稍后再试", icon: "none" });
+		} else {
+			errorText.value = "菜谱加载失败";
+			await uniPlatform.feedback.toast({
+				title: getRequestErrorText(error, "菜谱加载失败"),
+				icon: "none"
+			});
+		}
+	  } finally {
     loading.value = false;
   }
+}
+
+function getRequestErrorText(error: unknown, fallback: string) {
+	if (error instanceof UnauthorizedError) return "登录状态已失效，请重新登录";
+	if (error instanceof ApiClientError && error.message) return error.message;
+	if (error instanceof Error && error.message) return error.message;
+	return fallback;
+}
+
+function handleDetailEmptyClick() {
+	if (errorText.value) {
+		void loadDetail();
+	}
 }
 
 function scheduleMeasure(delay = 80) {
@@ -1017,7 +1118,11 @@ function setNutritionView(view: "perServing" | "perRecipe") {
 }
 
 function openLogin(afterLogin?: () => void) {
-  loginModalStore.open(null, afterLogin);
+	loginModalStore.open(null, afterLogin);
+}
+
+function openLoginForUnauthorized(afterLogin?: () => void) {
+	openLogin(afterLogin);
 }
 
 function openReportSheet() {
@@ -1082,17 +1187,25 @@ async function loadRecommendCategories(force = false) {
 				"";
 		}
 	} catch (error) {
-		recommendSheetError.value = error instanceof Error ? error.message : "分类加载失败";
+		if (error instanceof UnauthorizedError) {
+			recommendSheetError.value = "";
+			openLoginForUnauthorized(() => void loadRecommendCategories(true));
+		} else {
+			recommendSheetError.value = error instanceof Error ? error.message : "分类加载失败";
+		}
 	} finally {
 		recommendSheetLoading.value = false;
 	}
 }
 
 function syncMyRecommendation(next: RecipeRecommendationSummary | null) {
-	if (!myDetail.value) return;
+	if (!myDetail.value || !myPersonal.value) return;
 	detail.value = {
 		...myDetail.value,
-		recommendation: next
+		personal: {
+			...myPersonal.value,
+			recommendation: next
+		}
 	};
 }
 
@@ -1209,7 +1322,13 @@ async function loadShoppingLists(force = false) {
       selectedShoppingListId.value = shoppingLists.value[0]?.id || "";
     }
   } catch (error) {
-    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
+    if (error instanceof UnauthorizedError) {
+      shoppingSheetVisible.value = false;
+      shoppingListError.value = "";
+      openLoginForUnauthorized(() => void openShoppingSheet());
+    } else {
+      shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
+    }
   } finally {
     shoppingListLoading.value = false;
   }
@@ -1235,7 +1354,11 @@ async function handleRecommendRecipe() {
 		closeRecommendSheet();
 		await uniPlatform.feedback.toast({ title: "已提交自荐", icon: "success" });
 	} catch (error) {
-		await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
+		if (error instanceof UnauthorizedError) {
+			openLoginForUnauthorized();
+		} else {
+			await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
+		}
 	} finally {
 		recommendSubmitting.value = false;
 	}
@@ -1303,21 +1426,114 @@ function handleExternalEditAction() {
 
 function openCookMode() {
   if (!showStickyActions.value || !recipeId.value || mode.value !== "published") return;
+  if (!sessionStore.isLoggedIn) {
+    openLogin(() => {
+      openCookMode();
+    });
+    return;
+  }
   void uniPlatform.navigation.navigateTo(
-    `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}`
+    `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}&flow=original`
   );
 }
 
-function openRecipeAssistant() {
-  const recipeVersionId = publishedDetail.value?.contentVersionId;
-  if (!showStickyActions.value || !recipeVersionId || !canOpenRecipeAssistant.value) return;
+function openRecipeCookMode(recipeVersionId: UUID) {
   void uniPlatform.navigation.navigateTo(
-    `/pages_recipe/assistant/index?recipeVersionId=${encodeURIComponent(String(recipeVersionId))}&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}`
+    `/pages_meal/cook-mode/index?source=recipe&recipeId=${encodeURIComponent(String(recipeId.value))}&kind=${encodeURIComponent(kind.value)}&flow=assistant&recipeVersionId=${encodeURIComponent(String(recipeVersionId))}`
   );
+}
+
+async function openRecipeAssistant() {
+	const recipeVersionId = publishedDetail.value?.contentVersionId;
+	if (!showStickyActions.value || !recipeVersionId || !canOpenRecipeAssistant.value) return;
+	if (!sessionStore.isLoggedIn) {
+		openLogin(() => {
+			void openRecipeAssistant();
+		});
+		return;
+	}
+
+  cookAssistantSheetLoading.value = true;
+  cookAssistantSheetError.value = "";
+  try {
+    const assistant = await recipeApi.getRecipeVersionCookAssistant(recipeVersionId);
+    if (assistant.unlocked && assistant.assistant?.steps.length) {
+      cookAssistantSheetVisible.value = false;
+      openRecipeCookMode(recipeVersionId);
+      return;
+    }
+    if (assistant.unlocked) {
+		cookAssistantSheetVisible.value = true;
+      cookAssistantSheetError.value = "炊火智厨暂时没有可执行步骤，请稍后重试";
+      return;
+    }
+		cookAssistantSheetVisible.value = true;
+    cookAssistantUsage.value = await userApi.getCookAssistantUsage();
+    if (!cookAssistantUsage.value.activityEnabled) {
+      cookAssistantSheetError.value = "当前暂未开放解锁";
+    } else if (cookAssistantUsage.value.remainingCount <= 0) {
+      cookAssistantSheetError.value = "今日可用次数已用完";
+    }
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      cookAssistantSheetVisible.value = false;
+      cookAssistantSheetError.value = "";
+      openLoginForUnauthorized(() => void openRecipeAssistant());
+    } else {
+		cookAssistantSheetVisible.value = true;
+      cookAssistantSheetError.value = error instanceof Error ? error.message : "暂时无法读取炊火智厨状态，请稍后重试";
+    }
+  } finally {
+    cookAssistantSheetLoading.value = false;
+  }
+}
+
+function closeCookAssistantSheet() {
+  if (cookAssistantSheetSubmitting.value) return;
+  cookAssistantSheetVisible.value = false;
+}
+
+async function unlockRecipeAssistant() {
+  const recipeVersionId = publishedDetail.value?.contentVersionId;
+  if (
+    !showStickyActions.value ||
+    !recipeVersionId ||
+    cookAssistantSheetLoading.value ||
+    cookAssistantSheetSubmitting.value
+  ) return;
+  if (!cookAssistantCanUnlock.value) {
+    cookAssistantSheetError.value = cookAssistantUsage.value?.activityEnabled === false ? "当前暂未开放解锁" : "今日可用次数已用完";
+    return;
+  }
+
+  cookAssistantSheetSubmitting.value = true;
+  cookAssistantSheetError.value = "";
+  try {
+    const result = await recipeApi.unlockRecipeVersionCookAssistant(recipeVersionId, {
+      operationId: createOperationId()
+    });
+    cookAssistantUsage.value = await userApi.getCookAssistantUsage().catch(() => cookAssistantUsage.value);
+    if (result.unlocked && result.assistant?.steps.length) {
+      cookAssistantSheetVisible.value = false;
+      openRecipeCookMode(recipeVersionId);
+      return;
+    }
+    cookAssistantSheetError.value = "炊火智厨暂时没有可执行步骤，请稍后重试";
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      cookAssistantSheetVisible.value = false;
+      cookAssistantSheetError.value = "";
+      openLoginForUnauthorized(() => void openRecipeAssistant());
+    } else {
+      cookAssistantSheetError.value = error instanceof Error ? error.message : "解锁失败，请稍后重试";
+    }
+  } finally {
+    cookAssistantSheetSubmitting.value = false;
+  }
 }
 
 function handleEditRecipe() {
-  if (!showStickyActions.value || kind.value !== "my" || !recipeId.value) return;
+  if (!showStickyActions.value || !isOwnedDetail.value || !recipeId.value) return;
   void uniPlatform.navigation.navigateTo(`/pages_recipe/edit/index?recipeId=${encodeURIComponent(String(recipeId.value))}`);
 }
 
@@ -1350,7 +1566,11 @@ async function createShoppingList() {
     shoppingCreateName.value = buildDefaultShoppingListName();
     await uniPlatform.feedback.toast({ title: "已新建清单", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      openLoginForUnauthorized();
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建失败", icon: "none" });
+    }
   } finally {
     shoppingSubmitting.value = false;
   }
@@ -1369,7 +1589,11 @@ async function confirmAddToShoppingList() {
     closeShoppingSheet();
     await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      openLoginForUnauthorized();
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
+    }
   } finally {
     shoppingSubmitting.value = false;
   }
@@ -1402,7 +1626,11 @@ async function handleReport() {
     closeReportSheet();
     await uniPlatform.feedback.toast({ title: "举报已提交", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "举报失败", icon: "none" });
+    if (error instanceof UnauthorizedError) {
+      openLoginForUnauthorized();
+    } else {
+      await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "举报失败", icon: "none" });
+    }
   } finally {
     submitting.value = false;
   }
@@ -1517,10 +1745,26 @@ function formatRecipePlanLink(link: RecipePlanLinkSummary) {
 
 function syncDetailPlanLinks(nextLink: RecipePlanLinkSummary) {
   if (!publishedDetail.value) return;
-  detail.value = {
-    ...publishedDetail.value,
-    planLinks: mergeRecipePlanLinks(publishedDetail.value.planLinks, nextLink)
-  };
+	if (kind.value === "my") {
+		if (!myDetail.value || !myPersonal.value) {
+			void loadDetail();
+			return;
+		}
+		detail.value = {
+			...myDetail.value,
+			personal: {
+				...myPersonal.value,
+				planLinks: mergeRecipePlanLinks(myPersonal.value.planLinks, nextLink)
+			}
+		};
+		return;
+	}
+	const external = inspirationDetail.value;
+	if (!external) return;
+	detail.value = {
+		...external,
+		planLinks: mergeRecipePlanLinks(external.planLinks, nextLink)
+	};
 }
 
 function hasNutritionValue(value: number | null): value is number {
@@ -1553,15 +1797,16 @@ async function automatorApplySession(snapshot: { token: string; uid?: number; ex
 }
 
 function automatorReadState() {
-  return {
-    isLoggedIn: sessionStore.isLoggedIn,
-    loading: loading.value,
+	return {
+		isLoggedIn: sessionStore.isLoggedIn,
+		pageLoading: pageLoading.value,
+		loading: loading.value,
     errorText: errorText.value,
     title: detailTitle.value,
     planLinkCount: recipePlanLinks.value.length,
     primaryPlanText: primaryPlanText.value,
     canOpenRecipeAssistant: canOpenRecipeAssistant.value,
-    canRecommend: myDetail.value?.canRecommend ?? false,
+	    canRecommend: myPersonal.value?.canRecommend ?? false,
     showRecommendEntry: showRecommendEntry.value,
     recommendationStatus: currentRecommendation.value?.status ?? null,
     recommendActionLabel: recommendActionLabel.value,
@@ -1579,18 +1824,6 @@ defineExpose({
 </script>
 
 <style scoped lang="scss">
-.notice {
-  padding: var(--space-md);
-  border-radius: 28rpx;
-  background: var(--material-card-bg);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
-}
-
-.notice--floating {
-  margin: calc(v-bind(navTopOffset) + var(--space-page)) var(--space-page) 0;
-}
 
 .detail-nav-backdrop {
   position: fixed;
@@ -1624,20 +1857,6 @@ defineExpose({
 
 .detail-nav-tabs__item--active {
   color: var(--color-text);
-}
-
-.detail-nav-tabs__item--active::after {
-  content: "";
-  position: absolute;
-  right: -6rpx;
-  bottom: 2rpx;
-  left: -6rpx;
-  z-index: -1;
-  height: 16rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-support-action);
-  opacity: 0.3;
-  transform: rotate(-5deg);
 }
 
 .detail-page {
@@ -1696,7 +1915,7 @@ defineExpose({
 }
 
 .content--with-actions {
-  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(160rpx + env(safe-area-inset-bottom));
 }
 
 .summary-card {
@@ -1873,7 +2092,7 @@ defineExpose({
   justify-content: center;
   width: auto;
   height: auto;
-  font-size: 40rpx;
+  font-size: 50rpx;
   color: var(--color-text);
 }
 
@@ -2126,7 +2345,7 @@ defineExpose({
 
 .section__label {
   color: var(--color-text);
-  font-size: 34rpx;
+  font-size: 36rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.2;
 }
@@ -2158,7 +2377,7 @@ defineExpose({
 
 .section__action-icon {
   color: inherit;
-  font-size: 28rpx;
+  font-size: 32rpx;
   line-height: 1;
 }
 
@@ -2431,7 +2650,7 @@ defineExpose({
 
 .sheet-section__title {
   color: var(--color-text);
-  font-size: 28rpx;
+  font-size: 32rpx;
   font-weight: var(--font-weight-semibold);
   line-height: 1.4;
 }
@@ -2485,7 +2704,7 @@ defineExpose({
   justify-content: space-between;
   gap: 20rpx;
   padding: 22rpx 24rpx;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xs);
   background: var(--material-card-bg);
   box-shadow: var(--material-card-shadow);
   -webkit-backdrop-filter: var(--material-card-filter);
@@ -2566,7 +2785,7 @@ defineExpose({
   justify-content: center;
   min-width: 132rpx;
   height: 80rpx;
-  line-height: 1;
+  line-height: 80rpx;
    border-radius: var(--radius-xs);
   background: var(--button-primary-bg);
   box-shadow: var(--button-primary-shadow);
@@ -2694,7 +2913,6 @@ defineExpose({
   align-items: center;
   justify-content: center;
   color: inherit;
-  font-size: 32rpx;
   line-height: 1;
 }
 

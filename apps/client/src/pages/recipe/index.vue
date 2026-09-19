@@ -1,16 +1,36 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :class="themeClasses" current-tab="recipe" :show-left="false" full-screen>
+  <Layout
+    :class="themeClasses"
+    current-tab="recipe"
+    :show-left="false"
+    full-screen
+    :navbar-capsule-guard="true"
+  >
     <template #navbar-center>
-      <view class="nav-tabs">
+      <view class="recipe-navbar">
+        <view class="nav-tabs">
+          <view
+            v-for="item in tabs"
+            :key="item.value"
+            class="nav-tabs__item font-medium"
+            :class="{
+              'nav-tabs__item--active': activeTab === item.value,
+              'nav-tab-active-indicator': activeTab === item.value
+            }"
+            @click="switchTab(item.value)"
+          >
+            {{ item.label }}
+          </view>
+        </view>
         <view
-          v-for="item in tabs"
-          :key="item.value"
-          class="nav-tabs__item font-medium"
-          :class="{ 'nav-tabs__item--active': activeTab === item.value }"
-          @click="switchTab(item.value)"
+          v-if="sessionStore.isLoggedIn && activeTab !== 'inspiration'"
+          class="manage-fab"
+          hover-class="manage-fab--hover"
+          hover-stay-time="100"
+          @click="handleFab"
         >
-          {{ item.label }}
+          <text class="cookfont icon-manage-add manage-fab__icon" />
         </view>
       </view>
     </template>
@@ -173,14 +193,19 @@
           :refresher-threshold="refresherThreshold"
           :refresher-triggered="refresherTriggered"
           :lower-threshold="120"
-          @scroll="handleListScroll"
           @scrolltolower="loadMoreActiveTab"
           @refresherpulling="onRefresherPulling"
           @refresherrefresh="handleRefresherRefresh"
           @refresherrestore="onRefresherRestore"
           @refresherabort="onRefresherRestore"
         >
-          <view v-if="errorText" class="notice" @click="retryLoadActiveTab">{{ errorText }}</view>
+          <Empty
+            v-if="errorText"
+            title="菜谱加载失败"
+            description="请点击重试，或稍后再试。"
+            clickable
+            @click="retryLoadActiveTab"
+          />
           <view v-else-if="loading && !cards.length" class="recipe-list-skeleton">
             <view v-for="index in 4" :key="index" class="recipe-card recipe-card--skeleton">
               <view class="recipe-card__cover recipe-card__cover--skeleton">
@@ -246,18 +271,6 @@
         </scroll-view>
       </view>
 
-      <view
-        v-if="sessionStore.isLoggedIn && activeTab !== 'inspiration'"
-        class="manage-fab"
-        :class="{ 'manage-fab--hidden': fabHidden }"
-        hover-class="manage-fab--hover"
-        hover-stay-time="100"
-        @click="handleFab"
-      >
-        <text class="cookfont icon-manage manage-fab__icon" />
-        <text class="manage-fab__text">{{ fabText }}</text>
-      </view>
-
       <SheetShell
         v-if="sheetMode"
         :visible="sheetVisible"
@@ -303,7 +316,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { onHide, onShow } from "@dcloudio/uni-app";
 import emptyStateIllustration from "@/assets/empty.png";
 import {
@@ -316,7 +329,7 @@ import {
 	type RecipeDifficulty,
 	type RecipeDuration
 } from "@/apis/recipe";
-import type { UUID } from "@/apis/http";
+import { UnauthorizedError, type UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
@@ -337,6 +350,7 @@ import { useSessionStore } from "@/stores/session";
 import { useSettingsStore, type ThemeMode, type ThemePalette, type ThemeSkin } from "@/stores/settings";
 import { formatThemeText } from "@/themes";
 import { difficultyOptions, durationOptions } from "@/utils/recipe-meta";
+import { defaultRecipeTab } from "@/utils/recipe-access";
 
 type RecipeTab = "my" | "inspiration";
 type SheetMode = "" | "my";
@@ -412,13 +426,12 @@ const sortItems = [
 const difficultyItems = [{ value: "" as const, label: "全部" }, ...difficultyOptions];
 const durationItems = [{ value: "" as const, label: "全部" }, ...durationOptions];
 
-const activeTab = ref<RecipeTab>(sessionStore.isLoggedIn ? "my" : "inspiration");
+const activeTab = ref<RecipeTab>(defaultRecipeTab(sessionStore.isLoggedIn));
 const keyword = ref("");
 const showFilters = ref(false);
 const loading = ref(false);
 const loadingMore = ref(false);
 const errorText = ref("");
-const fabHidden = ref(false);
 const myCategories = ref<RecipeCategorySummary[]>([]);
 const inspirationCategories = ref<InspirationCategorySummary[]>([]);
 const myCategoryId = ref<UUID | "">("");
@@ -475,7 +488,6 @@ const {
 	}
 });
 
-let scrollTimer: ReturnType<typeof setTimeout> | null = null;
 const categoryItems = computed<CategoryItem[]>(() => {
 	if (activeTab.value === "my") {
 		return [{ id: "", name: "全部" }, ...myCategories.value.map(item => ({ id: item.id, name: item.name }))];
@@ -534,9 +546,6 @@ const emptyStateDescription = computed(() =>
 			: "换个分类、关键词或筛选条件试试。"
 );
 const emptyStateArt = computed(() => emptyStateIllustration);
-const fabText = computed(() => {
-	return "添加";
-});
 const currentHasNext = computed(() => tabHasNext.value[activeTab.value]);
 const loadedMoreOnceMap = ref<Record<RecipeTab, boolean>>({
 	my: false,
@@ -574,6 +583,11 @@ watch(
 		}
 		if (!isLoggedIn) {
 			closeSheet();
+			if (activeTab.value === "my") {
+				activeTab.value = "inspiration";
+				resetInspirationFilters();
+				keyword.value = "";
+			}
 		}
 		void loadActiveTab({ force: true, source: "switch" });
 	}
@@ -596,20 +610,6 @@ watch(
 		}
 	}
 );
-function handleListScroll() {
-	if (activeTab.value === "inspiration") return;
-	fabHidden.value = true;
-	if (scrollTimer) clearTimeout(scrollTimer);
-	scrollTimer = setTimeout(() => {
-		fabHidden.value = false;
-		scrollTimer = null;
-	}, 180);
-}
-
-onUnmounted(() => {
-	if (scrollTimer) clearTimeout(scrollTimer);
-});
-
 function switchTab(tab: RecipeTab) {
 	if (activeTab.value === tab) return;
 	const previousTab = activeTab.value;
@@ -631,6 +631,7 @@ function consumeRecipeTabIntent() {
 	if (!intentTab) return;
 	uniPlatform.storage.removeSync(RECIPE_HOME_INTENT_STORAGE_KEY);
 	if (intentTab !== "my" && intentTab !== "inspiration") return;
+	if (intentTab === "my" && !sessionStore.isLoggedIn) return;
 	if (activeTab.value === intentTab) return;
 	if (activeTab.value === "inspiration" && intentTab !== "inspiration") {
 		resetInspirationFilters();
@@ -836,7 +837,19 @@ async function loadActiveTab(options: { force?: boolean; source?: LoadSource } =
 		syncTabLoadState(currentTab);
 		success = true;
 	} catch (error) {
-		errorText.value = error instanceof Error ? error.message : "菜谱加载失败";
+		if (error instanceof UnauthorizedError) {
+			activeTab.value = "inspiration";
+			loginModalStore.open(null, () => {
+				void loadActiveTab({ force: true, source: "retry" });
+			});
+			errorText.value = "";
+		} else {
+			errorText.value = "菜谱加载失败";
+			await uniPlatform.feedback.toast({
+				title: error instanceof Error && error.message ? error.message : "菜谱加载失败",
+				icon: "none"
+			});
+		}
 	} finally {
 		loading.value = false;
 		loadSource.value = "idle";
@@ -890,7 +903,19 @@ async function loadMoreActiveTab() {
 		}
 		syncTabLoadState(currentTab);
 	} catch (error) {
-		errorText.value = error instanceof Error ? error.message : "加载更多失败";
+		if (error instanceof UnauthorizedError) {
+			activeTab.value = "inspiration";
+			loginModalStore.open(null, () => {
+				void loadActiveTab({ force: true, source: "retry" });
+			});
+			errorText.value = "";
+		} else {
+			errorText.value = "加载更多失败";
+			await uniPlatform.feedback.toast({
+				title: error instanceof Error && error.message ? error.message : "加载更多失败",
+				icon: "none"
+			});
+		}
 	} finally {
 		loadingMore.value = false;
 	}
@@ -1074,11 +1099,21 @@ defineExpose({
   background: var(--color-page);
 }
 
+.recipe-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  width: 100%;
+  min-width: 0;
+}
+
 .nav-tabs {
   display: flex;
+  flex: 1;
   gap: 52rpx;
   align-items: flex-start;
-  width: 100%;
+  min-width: 0;
 }
 
 .nav-tabs__item {
@@ -1095,20 +1130,6 @@ defineExpose({
 
 .nav-tabs__item--active {
   color: var(--color-text);
-}
-
-.nav-tabs__item--active::after {
-  content: "";
-  position: absolute;
-  right: -8rpx;
-  bottom: 2rpx;
-  left: -8rpx;
-  z-index: -1;
-  height: 18rpx;
-  border-radius: var(--radius-pill);
-  background: var(--color-support-action);
-  opacity: 0.3;
-  transform: rotate(-5deg);
 }
 
 .recipe-head {
@@ -1300,7 +1321,7 @@ defineExpose({
   top: calc(100% + 10rpx);
   right: 0;
   z-index: 2;
-  width: 500rpx;
+  width: 600rpx;
   max-width: calc(100% - 40rpx);
   padding: var(--space-md);
   border-radius: var(--radius-xs);
@@ -1517,36 +1538,18 @@ defineExpose({
 }
 
 .manage-fab {
-  position: fixed;
-  right: 32rpx;
-  bottom: calc(148rpx + env(safe-area-inset-bottom));
-  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  padding: 14rpx 24rpx;
-  border-radius: var(--radius-xs);
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
-  box-shadow: var(--button-primary-shadow);
-  transform: translateX(0);
-  transition: transform 180ms ease, opacity 180ms ease;
+  justify-content: center;
+  width: 56rpx;
+  height: 56rpx;
 }
 
 .manage-fab__icon {
-  color: var(--button-primary-text);
-  font-size: 32rpx;
+  color: var(--color-text);
+  font-size: 50rpx;
   line-height: 1;
   flex: 0 0 auto;
-}
-
-.manage-fab__text {
-  line-height: 1;
-}
-
-.manage-fab--hidden {
-  opacity: 0;
-  transform: translateX(140%);
 }
 
 .action-card {

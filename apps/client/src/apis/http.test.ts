@@ -20,5 +20,7 @@ test("refresh clears local session when refresh returns business code 401", () =
   assert.match(httpSource, /useSessionStore\(\)\.accessToken/);
   assert.match(httpSource, /await refreshAccessToken\(\);[\s\S]*continue;/);
   assert.match(httpSource, /await clearUnauthorized\(new UnauthorizedError\(message\)\)/);
+  assert.match(httpSource, /auth === "optional"/);
+  assert.match(httpSource, /anonymousRetried/);
   assert.doesNotMatch(httpSource, /catch \(error\) \{\s*await clearUserSessionState\(\);/);
 });

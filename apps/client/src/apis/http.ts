@@ -235,9 +235,10 @@ async function requestByMethod<T>(method: HttpMethod, url: string, options: Requ
 	const shouldClearUnauthorized = auth === true;
 	const idempotencyKey = options.idempotencyKey ? normalizeIdempotencyKey(options.idempotencyKey) : undefined;
 	let replayed = false;
+	let anonymousRetried = false;
 
 	while (true) {
-		const token = auth ? useSessionStore().accessToken : "";
+		const token = auth === "optional" && anonymousRetried ? "" : auth ? useSessionStore().accessToken : "";
 		const result = await uniRequestAdapter({
 			url: buildUrl(url, options.query),
 			method,
@@ -254,9 +255,15 @@ async function requestByMethod<T>(method: HttpMethod, url: string, options: Requ
 			return await readResponse<T>(result);
 		} catch (error) {
 			const canRefresh = error instanceof UnauthorizedError && auth === true && !replayed;
+			const canRetryAnonymously = error instanceof UnauthorizedError && auth === "optional" && Boolean(token) && !anonymousRetried;
 			if (canRefresh && useSessionStore().refreshToken && !useSessionStore().logoutExplicit) {
 				replayed = true;
 				await refreshAccessToken();
+				continue;
+			}
+			if (canRetryAnonymously) {
+				await clearUserSessionState();
+				anonymousRetried = true;
 				continue;
 			}
 

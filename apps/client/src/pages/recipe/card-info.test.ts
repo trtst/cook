@@ -45,6 +45,10 @@ expectIncludes(recipePageSource, "estimatedCalories: number | null;");
 expectIncludes(recipePageSource, "caloriesText: string;");
 expectIncludes(recipePageSource, 'import Skeleton from "@/components/Skeleton/Skeleton.vue";');
 expectIncludes(recipePageSource, 'v-else-if="loading && !cards.length" class="recipe-list-skeleton"');
+expectIncludes(recipePageSource, 'import { defaultRecipeTab } from "@/utils/recipe-access";');
+expectIncludes(recipePageSource, 'const activeTab = ref<RecipeTab>(defaultRecipeTab(sessionStore.isLoggedIn));');
+expectExcludes(recipePageSource, 'if (tab === "my" && !sessionStore.isLoggedIn)');
+expectExcludes(recipePageSource, '<view v-if="errorText" class="notice" @click="retryLoadActiveTab">{{ errorText }}</view>');
 expectIncludes(recipePageSource, 'v-for="index in 4"');
 expectExcludes(recipePageSource, 'class="notice">加载中...</view>');
 expectIncludes(recipePageSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
@@ -102,7 +106,7 @@ expectSelectorIncludes(imageEmptySource, ".image-empty__body", [
 
 expectSelectorIncludes(imageEmptySource, ".image-empty__icon", [
   "color: var(--color-icon-tertiary);",
-  "font-size: 100rpx;"
+  "font-size: var(--image-empty-icon-size, 100rpx);"
 ]);
 
 expectSelectorIncludes(imageEmptySource, ".image-empty--16-9", [

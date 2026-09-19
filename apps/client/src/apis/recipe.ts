@@ -282,6 +282,35 @@ export interface MyRecipeDetail {
 	updatedAt: IsoDateTime;
 }
 
+export interface RecipeDetailPersonal {
+	category: RecipeCategorySummary | null;
+	scenes: RecipeSceneSummary[];
+	planLinks: RecipePlanLinkSummary[];
+	ingredientRefs: IngredientSummary[];
+	unitRefs: UnitSummary[];
+	canRecommend: boolean;
+	recommendation: RecipeRecommendationSummary | null;
+	owner: RecipeOwnerSummary;
+	status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+	version: number;
+	createdAt: IsoDateTime;
+}
+
+export interface RecipeDetail {
+	id: UUID;
+	title: string;
+	coverImageUrl: string | null;
+	difficultyText: string | null;
+	durationText: string | null;
+	inspirationCategory: InspirationCategorySummary | null;
+	contentVersionId: UUID;
+	content: RecipeContentSnapshot;
+	nutrition: RecipeNutritionSummary;
+	assistantAvailable: boolean;
+	personal: RecipeDetailPersonal | null;
+	updatedAt: IsoDateTime;
+}
+
 export interface RecipePlanLinkSummary {
 	planItemId: UUID;
 	planDate: string;
@@ -391,6 +420,36 @@ export interface InspirationRecipeDetail {
 	ownedRecipeId: UUID | null;
 	owner: RecipeOwnerSummary;
 	updatedAt: IsoDateTime;
+}
+
+function toMyRecipeDetail(detail: RecipeDetail): MyRecipeDetail {
+	if (!detail.personal) {
+		throw new Error("当前菜谱不属于你");
+	}
+	return {
+		id: detail.id,
+		title: detail.title,
+		coverImageUrl: detail.coverImageUrl,
+		difficultyText: detail.difficultyText,
+		durationText: detail.durationText,
+		category: detail.personal.category,
+		inspirationCategory: detail.inspirationCategory,
+		scenes: detail.personal.scenes,
+		contentVersionId: detail.contentVersionId,
+		content: detail.content,
+		nutrition: detail.nutrition,
+		assistantAvailable: detail.assistantAvailable,
+		planLinks: detail.personal.planLinks,
+		ingredientRefs: detail.personal.ingredientRefs,
+		unitRefs: detail.personal.unitRefs,
+		canRecommend: detail.personal.canRecommend,
+		recommendation: detail.personal.recommendation,
+		owner: detail.personal.owner,
+		status: detail.personal.status,
+		version: detail.personal.version,
+		createdAt: detail.personal.createdAt,
+		updatedAt: detail.updatedAt
+	};
 }
 
 export type RecipeViewSourceType = "MY" | "INSPIRATION";
@@ -816,8 +875,13 @@ export const recipeApi = {
 			items: result.items.map(item => ({ ...item, keywords: normalizeRecipeKeywords(item.keywords) }))
 		}));
 	},
+	getRecipeDetail(recipeId: UUID) {
+		return get<RecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`, undefined, {
+			auth: "optional"
+		});
+	},
 	getMyRecipe(recipeId: UUID) {
-		return get<MyRecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`);
+		return get<RecipeDetail>(`${cfg.domain}/api/recipes/${encodeURIComponent(String(recipeId))}`).then(toMyRecipeDetail);
 	},
 	recordRecipeView(recipeId: UUID, operationId: OperationId) {
 		return post<RecipeViewHistoryItem>(
@@ -897,7 +961,9 @@ export const recipeApi = {
 		}));
 	},
 	getInspirationRecipe(recipeId: UUID) {
-		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(String(recipeId))}`);
+		return get<InspirationRecipeDetail>(`${cfg.domain}/api/inspiration-recipes/${encodeURIComponent(String(recipeId))}`, undefined, {
+			auth: "optional"
+		});
 	},
 	reportRecipe(recipeId: UUID, operationId: OperationId, reason: string) {
 		return post<RecipeReportResult>(

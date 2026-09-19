@@ -40,8 +40,8 @@ const emit = defineEmits<{
 }
 
 .recipe-list-row__cover {
-  flex: 0 0 208rpx;
-  width: 208rpx;
+  flex: 0 0 240rpx;
+  width: 240rpx;
   overflow: hidden;
   aspect-ratio: 4 / 3;
   background: var(--page-cover-fresh-bg);

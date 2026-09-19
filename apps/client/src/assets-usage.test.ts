@@ -70,7 +70,7 @@ for (const pagePath of [
 }
 
 const recipePageSource = readFileSync(join(clientSrcDir, "pages/recipe/index.vue"), "utf8");
-assert.ok(recipePageSource.includes("cookfont icon-manage manage-fab__icon"));
+assert.ok(recipePageSource.includes("cookfont icon-manage-add manage-fab__icon"));
 assert.ok(!recipePageSource.includes("manageIcon"));
 
 console.log("asset usage tests passed");
