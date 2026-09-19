@@ -14,30 +14,20 @@
       <view class="cook-nav__main" :class="{ 'cook-nav__main--immersive': isImmersive }">
         <text v-if="isImmersive" class="cook-slide__tag">{{ currentStep?.dishTitle }}</text>
         <text v-else class="cook-nav__title">{{ sourceTitle }}</text>
-        <view class="cook-nav__settings">
-          <view
-            class="cook-nav__settings-button"
-            hover-class="cook-nav__settings-button--hover"
-            hover-stay-time="100"
-            @click="openSettings"
-          >
-            <text class="cookfont icon-reminder-settings cook-nav__settings-icon" aria-hidden="true" />
+        <view
+          class="cook-nav__mode-toggle"
+          :class="{ 'cook-nav__mode-toggle--immersive': isImmersive }"
+          hover-class="cook-nav__mode-toggle--hover"
+          hover-stay-time="100"
+          @click="toggleViewMode"
+        >
+          <view class="cook-nav__mode-state cook-nav__mode-state--list">
+            <view class="cook-nav__mode-dot" aria-hidden="true" />
+            <text class="cook-nav__mode-label cook-nav__mode-label--immersive">沉浸模式</text>
           </view>
-          <view
-            class="cook-nav__mode-toggle"
-            :class="{ 'cook-nav__mode-toggle--immersive': isImmersive }"
-            hover-class="cook-nav__mode-toggle--hover"
-            hover-stay-time="100"
-            @click="toggleViewMode"
-          >
-            <view class="cook-nav__mode-state cook-nav__mode-state--list">
-              <view class="cook-nav__mode-dot" aria-hidden="true" />
-              <text class="cook-nav__mode-label cook-nav__mode-label--immersive">沉浸模式</text>
-            </view>
-            <view class="cook-nav__mode-state cook-nav__mode-state--immersive">
-              <text class="cook-nav__mode-label cook-nav__mode-label--list">列表模式</text>
-              <view class="cook-nav__mode-dot" aria-hidden="true" />
-            </view>
+          <view class="cook-nav__mode-state cook-nav__mode-state--immersive">
+            <text class="cook-nav__mode-label cook-nav__mode-label--list">列表模式</text>
+            <view class="cook-nav__mode-dot" aria-hidden="true" />
           </view>
         </view>
       </view>
@@ -102,7 +92,7 @@
                           <text class="cook-step-card__index-total">{{ `/ ${(listDishes[0]?.steps || []).length}` }}</text>
                         </text>
                         <text v-if="item.phase" class="cook-step-card__phase">{{ phaseLabel(item.phase) }}</text>
-                        <view v-if="item.durationText" class="cook-step-card__duration">
+                        <view v-if="isAssistantMode && item.durationText" class="cook-step-card__duration">
                           <text class="cookfont icon-alarm cook-step-card__duration-icon" aria-hidden="true" />
                           <text>{{ item.durationText }}</text>
                         </view>
@@ -126,7 +116,7 @@
                               <text class="cook-step-card__index-total">{{ `/ ${dish.steps.length}` }}</text>
                             </text>
                             <text v-if="item.phase" class="cook-step-card__phase">{{ phaseLabel(item.phase) }}</text>
-                            <view v-if="item.durationText" class="cook-step-card__duration">
+                            <view v-if="isAssistantMode && item.durationText" class="cook-step-card__duration">
                               <text class="cookfont icon-alarm cook-step-card__duration-icon" aria-hidden="true" />
                               <text>{{ item.durationText }}</text>
                             </view>
@@ -180,18 +170,6 @@
             </view>
           </view>
         </view>
-
-        <SheetShell :visible="settingsVisible" title="做饭设置" @close="closeSettings">
-          <view class="cook-settings">
-            <view class="cook-settings__screen-on">
-              <view class="cook-settings__copy">
-                <text class="cook-settings__title">页面常亮</text>
-                <text class="cook-settings__desc">做饭时保持屏幕常亮</text>
-              </view>
-              <switch :checked="keepScreenOn" color="var(--color-support-action)" @change="handleKeepScreenOnChange" />
-            </view>
-          </view>
-        </SheetShell>
       </template>
     </view>
   </Layout>
@@ -199,7 +177,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { onLoad, onShow, onUnload } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import type { UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
 import {
@@ -212,7 +190,6 @@ import {
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import NumberIcon from "@/components/NumberIcon/NumberIcon.vue";
-import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -283,8 +260,6 @@ const selectedDishIndex = ref(0);
 const menuScrollLeft = ref(0);
 const menuScrollTarget = ref(0);
 const menuIndicatorStyle = ref<Record<string, string>>({ opacity: "0" });
-const settingsVisible = ref(false);
-const keepScreenOn = ref(false);
 const viewMode = ref<ViewMode>("list");
 const expandedMixedStepIds = ref<string[]>([]);
 const mixedReadingStepId = ref("");
@@ -331,12 +306,6 @@ onLoad(query => {
 onShow(() => {
   if (sourceType.value === "plan" && sessionStore.isLoggedIn && !loading.value && !originalSteps.value.length) {
     void loadData();
-  }
-});
-
-onUnload(() => {
-  if (keepScreenOn.value) {
-    void uniPlatform.system.setKeepScreenOn(false).catch(() => undefined);
   }
 });
 
@@ -697,14 +666,6 @@ function toggleViewMode() {
   setViewMode(isImmersive.value ? "list" : "swiper");
 }
 
-function openSettings() {
-  settingsVisible.value = true;
-}
-
-function closeSettings() {
-  settingsVisible.value = false;
-}
-
 function setFlowMode(nextMode: FlowMode) {
   if (nextMode !== "original" || !canSwitchFlowMode.value) return;
   flowMode.value = "original";
@@ -780,11 +741,6 @@ function handleListSwiperChange(event: { detail?: { current?: number } }) {
 }
 
 function resetPage() {
-  if (keepScreenOn.value) {
-    void uniPlatform.system.setKeepScreenOn(false).catch(() => undefined);
-  }
-  keepScreenOn.value = false;
-  settingsVisible.value = false;
   loading.value = false;
   errorText.value = "";
   sourceTitle.value = "";
@@ -889,17 +845,6 @@ async function previewDishImages(dishSteps: CookStep[], current: string | null) 
   await uniPlatform.media.previewImage({ urls, current });
 }
 
-async function handleKeepScreenOnChange(event: Event) {
-  const nextValue = Boolean((event as unknown as { detail?: { value?: boolean } }).detail?.value);
-  try {
-    await uniPlatform.system.setKeepScreenOn(nextValue);
-    keepScreenOn.value = nextValue;
-  } catch {
-    keepScreenOn.value = false;
-    await uniPlatform.feedback.toast({ title: "页面常亮设置失败", icon: "none" });
-  }
-}
-
 function parseSourceType(value: unknown): SourceType {
   const text = parseQueryText(value);
   return text === "plan" ? "plan" : "recipe";
@@ -996,16 +941,6 @@ defineExpose({
   gap: 16rpx;
 }
 
-.cook-nav__settings {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8rpx;
-  justify-content: flex-end;
-  width: auto;
-  height: 64rpx;
-}
-
 .cook-nav__mode-toggle {
   position: relative;
   display: flex;
@@ -1024,8 +959,7 @@ defineExpose({
   transition: background-position 320ms ease, color 280ms ease, transform 180ms ease;
 }
 
-.cook-nav__mode-toggle--hover,
-.cook-nav__settings-button--hover {
+.cook-nav__mode-toggle--hover {
   opacity: 0.68;
 }
 
@@ -1083,22 +1017,6 @@ defineExpose({
   transform: translateX(12rpx);
 }
 
-.cook-nav__settings-button {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 64rpx;
-  height: 64rpx;
-}
-
-.cook-nav__settings-icon {
-  color: var(--color-text);
-  font-size: 34rpx;
-  line-height: 1;
-  transition: color 280ms ease;
-}
-
 .cook-mode-layout :deep(.navbar__fixed) {
   transition: background-color 280ms ease;
 }
@@ -1109,7 +1027,6 @@ defineExpose({
 }
 
 .cook-nav__main--immersive .cook-nav__title,
-.cook-nav__main--immersive .cook-nav__settings-icon,
 .cook-nav__main--immersive .cook-nav__mode-toggle {
   color: var(--color-overlay-text);
 }
@@ -1581,7 +1498,8 @@ defineExpose({
   pointer-events: none;
 }
 
-.cook-mode-page--immersive .cook-slide::after {
+.cook-mode-page--immersive .cook-slide--image::after,
+.cook-mode-page--immersive .cook-slide--mixed::after {
   background-color: var(--color-overlay-scrim);
 }
 
@@ -1644,36 +1562,4 @@ defineExpose({
   line-height: 1.5;
 }
 
-.cook-settings {
-  display: flex;
-  flex-direction: column;
-}
-
-.cook-settings__screen-on {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24rpx;
-  padding: 28rpx 0;
-}
-
-.cook-settings__copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.cook-settings__title {
-  color: var(--color-text);
-  font-size: 30rpx;
-  font-weight: var(--font-weight-medium);
-}
-
-.cook-settings__desc {
-  color: var(--color-text-secondary);
-  font-size: 24rpx;
-  line-height: 1.6;
-}
 </style>

@@ -26,6 +26,10 @@
       </view>
     </template>
 
+    <template #global-loading>
+      <CookAssistantThinkingLoading :visible="cookAssistantSheetSubmitting" @cancel="cancelCookAssistantUnlock" />
+    </template>
+
     <view class="detail-nav-backdrop" :style="navBackdropStyle" />
 
     <RecipeDetailSkeleton v-if="!pageLoading && loading" />
@@ -459,7 +463,7 @@
         :loading="cookAssistantSheetLoading"
         :remaining-count="cookAssistantRemainingCount"
         :can-unlock="cookAssistantCanUnlock"
-        :submitting="cookAssistantSheetSubmitting"
+        :submitting="cookAssistantSheetSubmitting || cookAssistantUnlockPending"
         :error-text="cookAssistantSheetError"
         @close="closeCookAssistantSheet"
         @unlock="unlockRecipeAssistant"
@@ -540,6 +544,7 @@ import RecipeDetailSkeleton from "./RecipeDetailSkeleton.vue";
 import AddToPrivateSheet from "@/components/Recipe/AddToPrivateSheet.vue";
 import AddToPlanSheet from "@/components/Recipe/AddToPlanSheet.vue";
 import CookAssistantUnlockSheet from "@/components/CookAssistantUnlockSheet.vue";
+import CookAssistantThinkingLoading from "@/components/CookAssistantThinkingLoading.vue";
 import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -554,6 +559,7 @@ import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDeta
 import { useSessionStore } from "@/stores/session";
 import { userApi, type CookAssistantUsageResponse } from "@/apis/user";
 import { createOperationId } from "@/utils/operation-id";
+import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "@/utils/cook-assistant-loading";
 import { formatMealSlot, isMealSlotExpired } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
 import { buildDefaultShoppingListName } from "../utils/shopping";
@@ -562,6 +568,7 @@ import emptyStateIllustration from "@/assets/empty.png";
 
 type DetailKind = "my" | "inspiration";
 type DetailMode = "published" | "preview";
+type CookAssistantUnlockState = "locked" | "unlocking" | "unlocked";
 type AnchorKey = "ingredients" | "nutrition" | "steps";
 type PublishedDetail = RecipeDetail | InspirationRecipeDetail;
 type DetailContent = RecipeContentSnapshot | RecipePreviewDetail["content"];
@@ -637,6 +644,9 @@ const cookAssistantSheetVisible = ref(false);
 const cookAssistantSheetLoading = ref(false);
 const cookAssistantSheetSubmitting = ref(false);
 const cookAssistantSheetError = ref("");
+const cookAssistantUnlockState = ref<CookAssistantUnlockState>("locked");
+let cookAssistantUnlockRequestId = 0;
+const cookAssistantUnlockPending = ref(false);
 const cookAssistantUsage = ref<CookAssistantUsageResponse | null>(null);
 const privateSheetVisible = ref(false);
 const planSheetVisible = ref(false);
@@ -1457,6 +1467,7 @@ async function openRecipeAssistant() {
   cookAssistantSheetError.value = "";
   try {
     const assistant = await recipeApi.getRecipeVersionCookAssistant(recipeVersionId);
+    cookAssistantUnlockState.value = assistant.unlocked ? "unlocked" : "locked";
     if (assistant.unlocked && assistant.assistant?.steps.length) {
       cookAssistantSheetVisible.value = false;
       openRecipeCookMode(recipeVersionId);
@@ -1493,42 +1504,70 @@ function closeCookAssistantSheet() {
   cookAssistantSheetVisible.value = false;
 }
 
+function cancelCookAssistantUnlock() {
+  if (!cookAssistantSheetSubmitting.value) return;
+  cookAssistantUnlockRequestId += 1;
+  cookAssistantSheetSubmitting.value = false;
+  cookAssistantUnlockState.value = "locked";
+  cookAssistantSheetError.value = "";
+  cookAssistantSheetVisible.value = true;
+}
+
 async function unlockRecipeAssistant() {
   const recipeVersionId = publishedDetail.value?.contentVersionId;
   if (
     !showStickyActions.value ||
     !recipeVersionId ||
     cookAssistantSheetLoading.value ||
-    cookAssistantSheetSubmitting.value
+    cookAssistantSheetSubmitting.value ||
+    cookAssistantUnlockPending.value
   ) return;
   if (!cookAssistantCanUnlock.value) {
     cookAssistantSheetError.value = cookAssistantUsage.value?.activityEnabled === false ? "当前暂未开放解锁" : "今日可用次数已用完";
     return;
   }
 
+  cookAssistantSheetVisible.value = false;
   cookAssistantSheetSubmitting.value = true;
   cookAssistantSheetError.value = "";
+  cookAssistantUnlockState.value = "unlocking";
+  const requestId = ++cookAssistantUnlockRequestId;
+  cookAssistantUnlockPending.value = true;
+  const unlockStartedAt = Date.now();
+  const unlockDurationMs = getCookAssistantLoadingDuration();
   try {
     const result = await recipeApi.unlockRecipeVersionCookAssistant(recipeVersionId, {
       operationId: createOperationId()
     });
+    if (requestId !== cookAssistantUnlockRequestId) return;
     cookAssistantUsage.value = await userApi.getCookAssistantUsage().catch(() => cookAssistantUsage.value);
     if (result.unlocked && result.assistant?.steps.length) {
+      await waitForCookAssistantLoading(unlockStartedAt, unlockDurationMs);
+      if (requestId !== cookAssistantUnlockRequestId) return;
+      cookAssistantUnlockState.value = "unlocked";
       cookAssistantSheetVisible.value = false;
       openRecipeCookMode(recipeVersionId);
       return;
     }
+    cookAssistantUnlockState.value = result.unlocked ? "unlocked" : "locked";
+    cookAssistantSheetVisible.value = true;
     cookAssistantSheetError.value = "炊火智厨暂时没有可执行步骤，请稍后重试";
   } catch (error) {
+    if (requestId !== cookAssistantUnlockRequestId) return;
+    cookAssistantUnlockState.value = "locked";
     if (error instanceof UnauthorizedError) {
       cookAssistantSheetVisible.value = false;
       cookAssistantSheetError.value = "";
       openLoginForUnauthorized(() => void openRecipeAssistant());
     } else {
+      cookAssistantSheetVisible.value = true;
       cookAssistantSheetError.value = error instanceof Error ? error.message : "解锁失败，请稍后重试";
     }
   } finally {
-    cookAssistantSheetSubmitting.value = false;
+    cookAssistantUnlockPending.value = false;
+    if (requestId === cookAssistantUnlockRequestId) {
+      cookAssistantSheetSubmitting.value = false;
+    }
   }
 }
 

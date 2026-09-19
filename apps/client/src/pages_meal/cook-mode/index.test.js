@@ -110,16 +110,13 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /:navbar-transparent="false"/);
     nodeAssert.match(pageSource, /<view class="cook-nav__main" :class="\{ 'cook-nav__main--immersive': isImmersive \}">/);
     nodeAssert.doesNotMatch(pageSource, /<template #navbar-right>/);
-    nodeAssert.match(pageSource, /<SheetShell\s+:visible="settingsVisible"\s+title="做饭设置"/);
-    nodeAssert.match(pageSource, /class="cook-settings__screen-on"/);
     nodeAssert.match(pageSource, /<text v-else class="cook-nav__title">\{\{ sourceTitle \}\}<\/text>/);
-    nodeAssert.match(pageSource, /<view\s+class="cook-nav__settings-button"[\s\S]*?@click="openSettings"/);
+    nodeAssert.doesNotMatch(pageSource, /cook-nav__settings|cook-settings|settingsVisible|openSettings|SheetShell/);
     nodeAssert.match(pageSource, /<view class="cook-nav__mode-state cook-nav__mode-state--list">[\s\S]*?<view class="cook-nav__mode-dot" aria-hidden="true" \/>[\s\S]*?class="cook-nav__mode-label cook-nav__mode-label--immersive">沉浸模式<\/text>/);
     nodeAssert.match(pageSource, /<view class="cook-nav__mode-state cook-nav__mode-state--immersive">[\s\S]*?class="cook-nav__mode-label cook-nav__mode-label--list">列表模式<\/text>[\s\S]*?<view class="cook-nav__mode-dot" aria-hidden="true" \/>/);
     nodeAssert.match(pageSource, /class="cook-nav__mode-label cook-nav__mode-label--immersive">沉浸模式<\/text>/);
     nodeAssert.match(pageSource, /class="cook-nav__mode-label cook-nav__mode-label--list">列表模式<\/text>/);
     nodeAssert.doesNotMatch(pageSource, /icon-cook-mode-(immersive|list)|cook-nav__mode-icon/);
-    nodeAssert.match(pageSource, /class="cook-nav__settings"[\s\S]*?@click="openSettings"/);
     nodeAssert.match(pageSource, /<view v-if="hasMenuTabs" class="cook-toolbar" :class="\{ 'cook-toolbar--immersive': isImmersive \}">/);
     nodeAssert.match(pageSource, /<scroll-view[\s\S]*?class="cook-toolbar__flow-scroll"/);
     nodeAssert.doesNotMatch(pageSource, /cook-toolbar__modes/);
@@ -159,7 +156,8 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /\.cook-slide\s*\{[\s\S]*?background-color: var\(--page-warm-bg\);/);
     nodeAssert.match(pageSource, /\.cook-slide::after\s*\{[\s\S]*?background-color: transparent;/);
     nodeAssert.match(pageSource, /\.cook-mode-page--immersive\s+\.cook-slide\s*\{[\s\S]*?background-color: var\(--color-overlay-medium\);/);
-    nodeAssert.match(pageSource, /\.cook-mode-page--immersive \.cook-slide::after\s*\{[\s\S]*?background-color: var\(--color-overlay-scrim\);/);
+    nodeAssert.doesNotMatch(pageSource, /\.cook-mode-page--immersive \.cook-slide::after\s*\{/);
+    nodeAssert.match(pageSource, /\.cook-mode-page--immersive \.cook-slide--image::after,[\s\S]*?\.cook-mode-page--immersive \.cook-slide--mixed::after\s*\{[\s\S]*?background-color: var\(--color-overlay-scrim\);/);
   });
 
   nodeTest("meal cook mode keeps the alarm font icon mapping", () => {
@@ -221,7 +219,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /切换到普通做饭/);
     nodeAssert.match(pageSource, /function switchToOriginal/);
     nodeAssert.match(pageSource, /<text v-if="item\.phase" class="cook-step-card__phase">/);
-    nodeAssert.match(pageSource, /<view v-if="item\.durationText" class="cook-step-card__duration">/);
+    nodeAssert.match(pageSource, /<view v-if="isAssistantMode && item\.durationText" class="cook-step-card__duration">/);
     nodeAssert.match(pageSource, /<view v-if="item\.phase" class="cook-slide__meta">/);
     nodeAssert.doesNotMatch(pageSource, /cook-timer|hasStepTimer|timerRemainingSeconds|timerRunning|timerCompleted|timerHandle|timerDisplay|startTimer|pauseTimer|resetTimer|stopTimer|formatTimer/);
     nodeAssert.doesNotMatch(pageSource, /autoAdvance|自动翻页/);
@@ -233,8 +231,8 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(pageSource, /menuTabs\.value = assistant\.assistant\.dishes\s*\.slice\(\)\s*\.sort\(/);
   });
 
-  nodeTest("cook mode logout reset turns off screen-on and closes settings", () => {
-    nodeAssert.match(pageSource, /function resetPage\(\)[\s\S]*?keepScreenOn\.value[\s\S]*?setKeepScreenOn\(false\)[\s\S]*?keepScreenOn\.value = false[\s\S]*?settingsVisible\.value = false/);
+  nodeTest("cook mode does not retain the hidden settings flow", () => {
+    nodeAssert.doesNotMatch(pageSource, /keepScreenOn|setKeepScreenOn|页面常亮/);
   });
 
   nodeTest("meal cook mode gives the list scroll a fixed-height viewport inside the flip face", () => {
@@ -386,7 +384,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.strictEqual((pageSource.match(/class="cook-step-card__index-row"/g) || []).length, 2);
     nodeAssert.strictEqual((pageSource.match(/class="cook-step-card__phase"/g) || []).length, 2);
     nodeAssert.strictEqual((pageSource.match(/class="cook-step-card__duration"/g) || []).length, 2);
-    nodeAssert.match(pageSource, /<view class="cook-step-card__index-row">[\s\S]*?<text class="cook-step-card__index">[\s\S]*?<\/text>[\s\S]*?<text v-if="item\.phase" class="cook-step-card__phase">[\s\S]*?<\/text>[\s\S]*?<view v-if="item\.durationText" class="cook-step-card__duration">[\s\S]*?<\/view>[\s\S]*?<\/view>/);
+    nodeAssert.match(pageSource, /<view class="cook-step-card__index-row">[\s\S]*?<text class="cook-step-card__index">[\s\S]*?<\/text>[\s\S]*?<text v-if="item\.phase" class="cook-step-card__phase">[\s\S]*?<\/text>[\s\S]*?<view v-if="isAssistantMode && item\.durationText" class="cook-step-card__duration">[\s\S]*?<\/view>[\s\S]*?<\/view>/);
     nodeAssert.match(pageSource, /<text class="cookfont icon-alarm cook-step-card__duration-icon"[^>]*\/>[\s\S]*?<text>\{\{ item\.durationText \}\}<\/text>/);
     nodeAssert.doesNotMatch(pageSource, /建议时长/);
     nodeAssert.match(pageSource, /\.cook-step-card__index-row\s*\{[\s\S]*?display: flex;[\s\S]*?align-items: center;/);
@@ -410,10 +408,12 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(pageSource, /uniPlatform\.storage/);
   });
 
-  nodeTest("meal cook mode keeps static duration information without timer actions", () => {
+  nodeTest("meal cook mode shows static duration only for assistant steps", () => {
     nodeAssert.doesNotMatch(pageSource, /cook-bottom/);
     nodeAssert.match(pageSource, /class="cook-step-card__duration"/);
     nodeAssert.match(pageSource, /item\.durationText/);
+    nodeAssert.strictEqual((pageSource.match(/v-if="isAssistantMode && item\.durationText"/g) || []).length, 2);
+    nodeAssert.doesNotMatch(pageSource, /v-if="item\.durationText"/);
     nodeAssert.doesNotMatch(pageSource, /cook-timer|startTimer|pauseTimer|resetTimer|timerRemainingSeconds|timerRunning|timerCompleted/);
     nodeAssert.doesNotMatch(pageSource, /toggleTimer/);
   });

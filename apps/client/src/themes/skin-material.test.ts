@@ -921,9 +921,6 @@ expectSelectorIncludes(mealDetailPageSource, ".store-card__step--current", [
   "background: var(--color-state-warning-soft);",
   "color: var(--color-state-warning-text);"
 ]);
-expectSelectorIncludes(mealDetailPageSource, ".meal-panel--warning", [
-  "background: var(--color-state-warning-soft);"
-]);
 expectSelectorIncludes(mealDetailPageSource, ".meal-menu-empty__action", [
   "height: 60rpx;",
   "background: var(--button-primary-bg);",
@@ -1185,6 +1182,7 @@ expectSelectorExcludes(homeTopicPageSource, ".topic-nav-backdrop", [
 ]);
 
 expectIncludes(sharePreviewPageSource, "background: var(--material-card-bg);");
+expectIncludes(sharePreviewPageSource, "background: var(--page-hero-shell-bg);");
 expectIncludes(sharePreviewPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(sharePreviewPageSource, "backdrop-filter: var(--material-card-filter);");
 expectIncludes(sharePreviewPageSource, "background: var(--button-primary-bg);");

@@ -697,6 +697,36 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.ok(sheetOpenIndex > statusReadIndex, "Expected unlock sheet to open only after assistant status is known");
   });
 
+  nodeTest("recipe detail keeps the assistant thinking state before entering cook mode", () => {
+    nodeAssert.match(detailSource, /type CookAssistantUnlockState = "locked" \| "unlocking" \| "unlocked";/);
+    nodeAssert.match(detailSource, /const cookAssistantUnlockState = ref<CookAssistantUnlockState>\("locked"\);/);
+    nodeAssert.match(detailSource, /getCookAssistantLoadingDuration/);
+    nodeAssert.match(detailSource, /waitForCookAssistantLoading/);
+    nodeAssert.match(detailSource, /import CookAssistantThinkingLoading from "@\/components\/CookAssistantThinkingLoading\.vue";/);
+    nodeAssert.match(detailSource, /<template #global-loading>\s*<CookAssistantThinkingLoading :visible="cookAssistantSheetSubmitting" @cancel="cancelCookAssistantUnlock" \/>\s*<\/template>/);
+
+    const start = detailSource.indexOf("async function unlockRecipeAssistant()");
+    const end = detailSource.indexOf("\nfunction handleEditRecipe", start);
+    const functionSource = detailSource.slice(start, end);
+    const unlockIndex = functionSource.indexOf('cookAssistantUnlockState.value = "unlocking"');
+    const waitIndex = functionSource.indexOf("await waitForCookAssistantLoading");
+    const unlockedIndex = functionSource.indexOf('cookAssistantUnlockState.value = "unlocked"');
+    const navigationIndex = functionSource.indexOf("openRecipeCookMode(recipeVersionId)");
+
+    nodeAssert.ok(unlockIndex >= 0, "Expected the recipe assistant to enter unlocking state");
+    nodeAssert.ok(waitIndex > unlockIndex, "Expected the thinking wait after unlocking starts");
+    nodeAssert.ok(unlockedIndex > waitIndex, "Expected the unlocked state after the minimum wait");
+    nodeAssert.ok(navigationIndex > unlockedIndex, "Expected cook mode navigation after unlock completes");
+  });
+
+  nodeTest("recipe detail can cancel assistant thinking without navigating", () => {
+    nodeAssert.match(detailSource, /function cancelCookAssistantUnlock\(\)[\s\S]*?cookAssistantSheetVisible\.value = true/);
+    nodeAssert.match(detailSource, /cookAssistantUnlockRequestId\s*\+=\s*1/);
+    nodeAssert.match(detailSource, /cookAssistantUnlockPending\.value/);
+    nodeAssert.match(detailSource, /cookAssistantUnlockPending\.value = false/);
+    nodeAssert.match(detailSource, /if \(requestId !== cookAssistantUnlockRequestId\) return;/);
+  });
+
   nodeTest("recipe detail names the plan and assistant actions explicitly", () => {
     nodeAssert.match(detailSource, /detail-actions__text">添加计划<\/view>/);
     nodeAssert.match(detailSource, /detail-actions__text">炊火智厨<\/view>/);
