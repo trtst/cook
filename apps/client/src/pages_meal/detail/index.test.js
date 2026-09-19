@@ -506,6 +506,33 @@ describe("pages_meal/detail/index", () => {
 if (!hasAutomatorRuntime && nodeTest) {
   const detailPageSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
 
+  nodeTest("饭局成员可以一次提交最多三道带菜和想吃", () => {
+    nodeAssert.match(detailPageSource, /MAX_EVENT_RECIPE_SELECTION\s*=\s*3/);
+    nodeAssert.match(detailPageSource, /recipeIds:\s*nextRecipeIds/);
+    nodeAssert.match(detailPageSource, /recipeSelectedIds\.value\.length\s*>=\s*MAX_EVENT_RECIPE_SELECTION/);
+  });
+
+  nodeTest("饭局成员读取我的口味并通过我的备注 Sheet 快速回填", () => {
+    nodeAssert.match(detailPageSource, /userApi\.getTasteProfile\(\)/);
+    nodeAssert.match(detailPageSource, /DiningEventParticipantNoteSheet/);
+    nodeAssert.match(detailPageSource, /updateDiningEventParticipantNote/);
+    nodeAssert.match(detailPageSource, /我的备注/);
+  });
+
+  nodeTest("饭局成员不显示采购准备和底部采购动作", () => {
+    nodeAssert.match(detailPageSource, /showShoppingPanel[\s\S]*isEventOrganizer/);
+    nodeAssert.match(detailPageSource, /footerPrimaryAction[\s\S]*isEventOrganizer/);
+    nodeAssert.match(detailPageSource, /v-if="eventDetail && isEventOrganizer && !eventClosed"/);
+    nodeAssert.match(detailPageSource, /!eventDetail\.value \|\| eventClosed\.value \|\| !isEventOrganizer\.value \|\| !currentMenuItems\.value\.length/);
+  });
+
+  nodeTest("餐次加载不到时使用 Toast，不渲染页面内错误重试块", () => {
+    nodeAssert.doesNotMatch(detailPageSource, /class="meal-detail-state meal-detail-state--error"/);
+    nodeAssert.doesNotMatch(detailPageSource, /class="meal-panel meal-panel--warning" @click="loadDetail"/);
+    nodeAssert.match(detailPageSource, /showLoadErrorToast\("这条餐次暂时找不到了"\)/);
+    nodeAssert.match(detailPageSource, /async function showLoadErrorToast[\s\S]*uniPlatform\.feedback\.toast/);
+  });
+
   nodeTest("schedule editor derives the visible meal slot from the edited time", () => {
     nodeAssert.match(detailPageSource, /:meal-slot="scheduledMealSlot"/);
     nodeAssert.match(detailPageSource, /scheduledMealSlot\.value = nextSlot;/);
@@ -557,5 +584,35 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailPageSource, /restoreCookAssistantAfterLogin\.value = true;[\s\S]*openLogin\(\)/);
     nodeAssert.match(detailPageSource, /if \(!restoreCookAssistantAfterLogin\.value\) return;[\s\S]*cookAssistantSheetVisible\.value = true[\s\S]*loadCookAssistantUsage\(\)/);
     nodeAssert.match(detailPageSource, /cookAssistantSheetVisible\.value = false;[\s\S]*cookAssistantSheetLoading\.value = false;[\s\S]*cookAssistantSheetError\.value = "";[\s\S]*cookAssistantUsage\.value = null;/);
+  });
+
+  nodeTest("meal detail keeps the assistant thinking state before entering cook mode", () => {
+    nodeAssert.match(detailPageSource, /type CookAssistantUnlockState = "locked" \| "unlocking" \| "unlocked";/);
+    nodeAssert.match(detailPageSource, /const cookAssistantUnlockState = ref<CookAssistantUnlockState>\("locked"\);/);
+    nodeAssert.match(detailPageSource, /getCookAssistantLoadingDuration/);
+    nodeAssert.match(detailPageSource, /waitForCookAssistantLoading/);
+    nodeAssert.match(detailPageSource, /import CookAssistantThinkingLoading from "@\/components\/CookAssistantThinkingLoading\.vue";/);
+    nodeAssert.match(detailPageSource, /<template #global-loading>\s*<CookAssistantThinkingLoading :visible="cookAssistantSheetSubmitting" @cancel="cancelCookAssistantUnlock" \/>\s*<\/template>/);
+
+    const start = detailPageSource.indexOf("async function unlockCookAssistant()");
+    const end = detailPageSource.indexOf("\nasync function submitTitleUpdate", start);
+    const functionSource = detailPageSource.slice(start, end);
+    const unlockIndex = functionSource.indexOf('cookAssistantUnlockState.value = "unlocking"');
+    const waitIndex = functionSource.indexOf("await waitForCookAssistantLoading");
+    const unlockedIndex = functionSource.indexOf('cookAssistantUnlockState.value = "unlocked"');
+    const navigationIndex = functionSource.indexOf("openCookAssistantMode()");
+
+    nodeAssert.ok(unlockIndex >= 0, "Expected the meal assistant to enter unlocking state");
+    nodeAssert.ok(waitIndex > unlockIndex, "Expected the thinking wait after unlocking starts");
+    nodeAssert.ok(unlockedIndex > waitIndex, "Expected the unlocked state after the minimum wait");
+    nodeAssert.ok(navigationIndex > unlockedIndex, "Expected cook mode navigation after unlock completes");
+  });
+
+  nodeTest("meal detail can cancel assistant thinking without navigating", () => {
+    nodeAssert.match(detailPageSource, /function cancelCookAssistantUnlock\(\)[\s\S]*?cookAssistantSheetVisible\.value = true/);
+    nodeAssert.match(detailPageSource, /cookAssistantUnlockRequestId\s*\+=\s*1/);
+    nodeAssert.match(detailPageSource, /cookAssistantUnlockPending\.value/);
+    nodeAssert.match(detailPageSource, /cookAssistantUnlockPending\.value = false/);
+    nodeAssert.match(detailPageSource, /if \(requestId !== cookAssistantUnlockRequestId\) return;/);
   });
 }

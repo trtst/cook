@@ -22,6 +22,7 @@
             <view class="participant-sheet__main">
               <text class="participant-sheet__name">{{ item.name }}</text>
               <text class="participant-sheet__meta">{{ item.statusText }}</text>
+              <text v-if="item.noteText" class="participant-sheet__note">{{ item.noteText }}</text>
             </view>
           </view>
         </view>
@@ -66,6 +67,7 @@
             <view class="participant-sheet__main">
               <text class="participant-sheet__name">{{ item.name }}</text>
               <text class="participant-sheet__meta">{{ item.statusText }}</text>
+              <text v-if="item.noteText" class="participant-sheet__note">{{ item.noteText }}</text>
             </view>
             <button
               class="participant-sheet__action"
@@ -93,6 +95,7 @@
             <view class="participant-sheet__main">
               <text class="participant-sheet__name">{{ item.name }}</text>
               <text class="participant-sheet__meta">{{ item.statusText }}</text>
+              <text v-if="item.noteText" class="participant-sheet__note">{{ item.noteText }}</text>
             </view>
             <button
               class="participant-sheet__action participant-sheet__action--primary"
@@ -134,6 +137,7 @@ type ParticipantManageItem = {
   dimmed: boolean;
   canRevoke: boolean;
   canReinvite: boolean;
+  noteText: string;
 };
 
 const props = defineProps<{
@@ -255,6 +259,14 @@ function handleInvite() {
 .participant-sheet__name,
 .participant-sheet__meta {
   display: block;
+}
+
+.participant-sheet__note {
+  display: block;
+  margin-top: 4rpx;
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.5;
 }
 
 .participant-sheet__name {

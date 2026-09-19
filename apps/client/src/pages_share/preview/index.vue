@@ -430,14 +430,20 @@ function formatInviteDateTime(value: string) {
 
 <style scoped lang="scss">
 .preview-shell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
   padding: var(--space-md) var(--space-page) calc(var(--space-xl) + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
 .notice,
 .invite-card {
-  border-radius: 24rpx;
-  background: var(--material-card-bg);
+  width: 100%;
+  border-radius: var(--radius-xs);
   box-shadow: var(--material-card-shadow);
   -webkit-backdrop-filter: var(--material-card-filter);
   backdrop-filter: var(--material-card-filter);
@@ -446,10 +452,12 @@ function formatInviteDateTime(value: string) {
 .notice {
   margin: var(--space-md) var(--space-page);
   padding: var(--space-md);
+  background: var(--material-card-bg);
 }
 
 .invite-card {
   overflow: hidden;
+  background: var(--page-hero-shell-bg);
 }
 
 .invite-skeleton {
@@ -796,9 +804,11 @@ function formatInviteDateTime(value: string) {
 
 .invite-footer__button {
   width: 100%;
+  height: 80rpx;
+  line-height: 80rpx;
   margin: 0;
   border: 0;
-  border-radius: 14rpx;
+  border-radius: var(--radius-xs);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
   font-size: 30rpx;

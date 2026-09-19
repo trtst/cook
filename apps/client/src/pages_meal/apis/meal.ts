@@ -147,8 +147,12 @@ export interface DiningEventParticipantSummary {
   guestName: string | null;
   sourceType: "DINING_GROUP" | "SHARE";
   status: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED";
-  bringRecipeId: UUID | null;
-  bringRecipeTitle: string | null;
+  bringRecipes: Array<{
+    recipeId: UUID | null;
+    recipeVersionId: UUID;
+    title: string;
+  }>;
+  note: string | null;
 }
 
 export interface DiningEventWishItemSummary {
@@ -298,7 +302,7 @@ export interface UnlockMealPlanCookAssistantRequest {
 
 export interface ChooseDiningEventWishRecipeRequest {
   operationId: OperationId;
-  recipeId: UUID;
+  recipeIds: UUID[];
 }
 
 export interface UpdateDiningEventWishSupportRequest {
@@ -308,7 +312,12 @@ export interface UpdateDiningEventWishSupportRequest {
 
 export interface ChooseBringRecipeRequest {
   operationId: OperationId;
-  recipeId: UUID;
+  recipeIds: UUID[];
+}
+
+export interface UpdateDiningEventParticipantNoteRequest {
+  operationId: OperationId;
+  note: string | null;
 }
 
 export const mealApi = {
@@ -490,6 +499,14 @@ export const mealApi = {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/bring`,
+      payload,
+      { idempotencyKey: operationId }
+    );
+  },
+  updateDiningEventParticipantNote(eventId: UUID, body: UpdateDiningEventParticipantNoteRequest) {
+    const { operationId, ...payload } = body;
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/my-note`,
       payload,
       { idempotencyKey: operationId }
     );

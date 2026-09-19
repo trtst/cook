@@ -10,8 +10,12 @@ export interface DiningEventParticipantSummary {
   guestName: string | null;
   sourceType: "DINING_GROUP" | "SHARE";
   status: "INVITED" | "ACCEPTED" | "DECLINED" | "REMOVED";
-  bringRecipeId: UUID | null;
-  bringRecipeTitle: string | null;
+  bringRecipes: Array<{
+    recipeId: UUID | null;
+    recipeVersionId: UUID;
+    title: string;
+  }>;
+  note: string | null;
 }
 
 export interface DiningEventSummary {
