@@ -57,6 +57,7 @@ import {
     InspirationRecipeDetailModel,
     InspirationRecipeSummaryModel,
     RecipeCookAssistantResponseModel,
+    RecipeDetailModel,
     MyRecipeDetailModel,
     MyRecipeSummaryModel,
     PublishRecipeDraftResultModel,
@@ -521,11 +522,11 @@ export class RecipeController {
   }
 
   @Get("recipes/:recipeId")
-  @UseGuards(UserAuthGuard)
+  @UseGuards(OptionalUserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(MyRecipeDetailModel, "读取我的一个已发布菜谱详情")
-  getMyRecipe(@Req() request: RequestWithUser, @Param("recipeId", ParseIntPipe) recipeId: number) {
-    return this.recipeService.getMyRecipe(request.user.userId, recipeId).then(result => ok(result));
+  @ApiOkModel(RecipeDetailModel, "匿名读取菜谱正文；当前持有人带回个人数据")
+  getRecipeDetail(@Req() request: Partial<RequestWithUser>, @Param("recipeId", ParseIntPipe) recipeId: number) {
+    return this.recipeService.getRecipeDetail(request.user?.userId ?? null, recipeId).then(result => ok(result));
   }
 
   @Get("recipe-versions/:recipeVersionId/cook-assistant")

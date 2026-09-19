@@ -1273,6 +1273,35 @@ export class MyRecipeDetailModel {
   @ApiProperty(dateTime) updatedAt!: string;
 }
 
+export class RecipeDetailPersonalModel {
+  @ApiProperty({ type: RecipeCategoryModel, nullable: true }) category!: RecipeCategoryModel | null;
+  @ApiProperty({ type: [RecipeSceneModel] }) scenes!: RecipeSceneModel[];
+  @ApiProperty({ type: [RecipePlanLinkModel] }) planLinks!: RecipePlanLinkModel[];
+  @ApiProperty({ type: [IngredientModel] }) ingredientRefs!: IngredientModel[];
+  @ApiProperty({ type: [UnitModel] }) unitRefs!: UnitModel[];
+  @ApiProperty({ type: Boolean }) canRecommend!: boolean;
+  @ApiProperty({ type: () => RecipeRecommendationModel, nullable: true }) recommendation!: RecipeRecommendationModel | null;
+  @ApiProperty({ type: () => RecipeOwnerModel }) owner!: RecipeOwnerModel;
+  @ApiProperty({ type: String, enum: ["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"] }) status!: string;
+  @ApiProperty({ type: Number, minimum: 1 }) version!: number;
+  @ApiProperty(dateTime) createdAt!: string;
+}
+
+export class RecipeDetailModel {
+  @ApiProperty(uuid) id!: string;
+  @ApiProperty({ type: String }) title!: string;
+  @ApiProperty(nullableString) coverImageUrl!: string | null;
+  @ApiProperty(nullableString) difficultyText!: string | null;
+  @ApiProperty(nullableString) durationText!: string | null;
+  @ApiProperty({ type: InspirationCategoryModel, nullable: true }) inspirationCategory!: InspirationCategoryModel | null;
+  @ApiProperty(uuid) contentVersionId!: string;
+  @ApiProperty({ type: RecipeContentModel }) content!: RecipeContentModel;
+  @ApiProperty({ type: RecipeNutritionModel }) nutrition!: RecipeNutritionModel;
+  @ApiProperty({ type: Boolean }) assistantAvailable!: boolean;
+  @ApiProperty({ type: () => RecipeDetailPersonalModel, nullable: true }) personal!: RecipeDetailPersonalModel | null;
+  @ApiProperty(dateTime) updatedAt!: string;
+}
+
 export class CollectionSceneModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) name!: string;

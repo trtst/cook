@@ -44,6 +44,8 @@ import type {
   RecipeDraftDetail,
   RecipeDraftSummary,
   RecipeDraftStepInput,
+  RecipeDetail,
+  RecipeDetailPersonal,
   RecipeIngredientInput,
   RecipeReportSummary,
   RecipeSceneSummary,
@@ -92,6 +94,13 @@ type RecipeRow = Prisma.RecipeGetPayload<{
         scene: true;
       };
     };
+  };
+}>;
+
+type ReadableRecipeRow = Prisma.RecipeGetPayload<{
+  include: {
+    inspirationCategory: true;
+    currentVersion: true;
   };
 }>;
 
@@ -1636,6 +1645,14 @@ export class RecipeService {
     };
   }
 
+  async getRecipeDetail(userId: UUID | null, recipeId: UUID): Promise<RecipeDetail> {
+    const recipe = await this.loadReadableRecipe(this.prisma, userId, recipeId);
+    const ownedRecipe = userId !== null && userId === recipe.ownerId
+      ? await this.loadOwnedRecipe(this.prisma, userId, recipeId)
+      : null;
+    return this.toRecipeDetail(this.prisma, recipe, ownedRecipe);
+  }
+
   async getMyRecipe(userId: UUID, recipeId: UUID) {
     const recipe = await this.loadOwnedRecipe(this.prisma, userId, recipeId);
     return this.toMyRecipeDetail(this.prisma, userId, recipe);
@@ -2439,6 +2456,24 @@ export class RecipeService {
     return recipe;
   }
 
+  private async loadReadableRecipe(tx: RecipeDb, userId: UUID | null, recipeId: UUID): Promise<ReadableRecipeRow> {
+    const recipe = await tx.recipe.findFirst({
+      where: {
+        id: recipeId,
+        OR: [
+          publicInspirationRecipeWhere("ACTIVE"),
+          ...(userId === null ? [] : [{ ownerId: userId, status: { in: activeRecipeStatuses } }])
+        ]
+      },
+      include: {
+        inspirationCategory: true,
+        currentVersion: true
+      }
+    });
+    if (!recipe) throw new NotFoundException("菜谱不存在");
+    return recipe;
+  }
+
   private async getOwnerNicknameSnapshot(tx: RecipeDb, userId: UUID) {
     const owner = await tx.user.findUnique({
       where: { id: userId },
@@ -2621,6 +2656,71 @@ export class RecipeService {
       version: recipe.version,
       createdAt: toIsoDate(recipe.createdAt),
       updatedAt: toIsoDate(recipe.updatedAt)
+    };
+  }
+
+  private async toRecipeDetail(
+    tx: RecipeDb,
+    recipe: ReadableRecipeRow,
+    ownedRecipe: RecipeRow | null
+  ): Promise<RecipeDetail> {
+    const baseContent = versionToContent(recipe.currentVersion);
+    const [nutrition, assistantAvailable, personal] = await Promise.all([
+      loadRecipeNutritionSummary(tx, recipe.currentVersionId, baseContent),
+      this.hasReadyRecipeAssistant(tx, recipe.currentVersionId),
+      ownedRecipe ? this.toRecipeDetailPersonal(tx, ownedRecipe.ownerId, ownedRecipe) : Promise.resolve<RecipeDetailPersonal | null>(null)
+    ]);
+    const ownerRefs = ownedRecipe
+      ? await this.loadRecipeEditRefs(tx, ownedRecipe.ownerId, baseContent.ingredients)
+      : null;
+    const content = ownerRefs
+      ? this.normalizeRecipeEditContent(baseContent, ownerRefs.ingredientMap)
+      : baseContent;
+    return {
+      id: recipe.id,
+      title: recipe.title,
+      coverImageUrl: recipe.coverImageUrl,
+      difficultyText: recipeDifficultyText(content.difficulty),
+      durationText: recipeDurationText(content.duration),
+      inspirationCategory: recipe.inspirationCategory
+        ? toInspirationCategorySummary(recipe.inspirationCategory)
+        : null,
+      contentVersionId: recipe.currentVersionId,
+      content,
+      nutrition,
+      assistantAvailable,
+      personal,
+      updatedAt: toIsoDate(recipe.updatedAt)
+    };
+  }
+
+  private async toRecipeDetailPersonal(
+    tx: RecipeDb,
+    userId: UUID,
+    recipe: RecipeRow
+  ): Promise<RecipeDetailPersonal> {
+    const content = versionToContent(recipe.currentVersion);
+    const [refs, recommendation, planLinks, recommendBlockMessage] = await Promise.all([
+      this.loadRecipeEditRefs(tx, userId, content.ingredients),
+      this.loadLatestRecipeRecommendation(tx, recipe.id),
+      this.loadRecipePlanLinks(tx, userId, recipe.id),
+      this.getRecipeRecommendBlockMessage(tx, recipe)
+    ]);
+    return {
+      category: recipe.category ? toRecipeCategorySummary(recipe.category) : null,
+      scenes: recipe.sceneLinks.map(link => toRecipeSceneSummary(link.scene)),
+      planLinks,
+      ingredientRefs: refs.ingredientRefs,
+      unitRefs: refs.unitRefs,
+      canRecommend: !recommendBlockMessage,
+      recommendation,
+      owner: {
+        uid: recipe.owner.uid,
+        nickname: recipe.ownerNicknameSnapshot
+      },
+      status: recipe.status,
+      version: recipe.version,
+      createdAt: toIsoDate(recipe.createdAt)
     };
   }
 

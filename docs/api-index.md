@@ -95,7 +95,7 @@
 | Recipe | POST | `/recipe-drafts/{draftId}/publish` | 发布草稿到“我的” |
 | Recipe | GET | `/recipes` | 当前用户已发布菜谱分页 |
 | Recipe | POST | `/recipes/from-inspiration` | 从灵感详情保存到私房菜，供加入计划流程复用 |
-| Recipe | GET | `/recipes/{recipeId}` | 当前用户已发布菜谱详情 |
+| Recipe | GET | `/recipes/{recipeId}` | 可选登录读取菜谱详情；匿名/非持有人仅返回公开正文，持有人额外返回 `personal` |
 | Recipe | POST | `/recipes/{recipeId}/recommendations` | 推荐当前个人菜谱到系统菜谱审核 |
 | Recipe | POST | `/recipe-recommendations/{recommendationId}/withdraw` | 撤回待审核的菜谱推荐 |
 | Recipe | POST | `/recipes/reorder` | 当前分类下重排我的菜谱 |

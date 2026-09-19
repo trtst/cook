@@ -1664,6 +1664,35 @@ export interface MyRecipeDetail {
   updatedAt: IsoDateTime;
 }
 
+export interface RecipeDetailPersonal {
+  category: RecipeCategorySummary | null;
+  scenes: RecipeSceneSummary[];
+  planLinks: RecipePlanLinkSummary[];
+  ingredientRefs: IngredientSummary[];
+  unitRefs: UnitSummary[];
+  canRecommend: boolean;
+  recommendation: RecipeRecommendationSummary | null;
+  owner: RecipeOwnerSummary;
+  status: "ACTIVE" | "RECYCLED" | "BLOCKED" | "DELETED";
+  version: number;
+  createdAt: IsoDateTime;
+}
+
+export interface RecipeDetail {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  difficultyText: string | null;
+  durationText: string | null;
+  inspirationCategory: InspirationCategorySummary | null;
+  contentVersionId: UUID;
+  content: RecipeContentSnapshot;
+  nutrition: RecipeNutritionSummary;
+  assistantAvailable: boolean;
+  personal: RecipeDetailPersonal | null;
+  updatedAt: IsoDateTime;
+}
+
 export interface RecipePlanLinkSummary {
   planItemId: UUID;
   planDate: string;
