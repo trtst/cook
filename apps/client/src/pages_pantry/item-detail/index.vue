@@ -7,151 +7,151 @@
 
     <view class="detail-nav-backdrop" :style="navBackdropStyle" />
 
-    <view class="detail-scroll-wrap">
-      <scroll-view scroll-y class="detail-scroll" :show-scrollbar="false" @scroll="handleScroll">
-        <view class="detail-page">
-          <view class="detail-hero" :style="heroStyle">
-            <view class="detail-hero__avatar">
-              <ImageLoader class="detail-hero__image" :src="itemImageUrl" />
-            </view>
-            <text class="detail-hero__eyebrow">厨房小管家</text>
-            <text class="detail-hero__title">{{ currentItem?.name || "食材详情" }}</text>
-            <text class="detail-hero__stock">{{ stockSummary }}</text>
-            <text class="detail-hero__description">{{ expireSummary }}</text>
-            <view v-if="currentItem" class="badge-row">
-              <text v-if="isExpiringSoon(currentItem.expireAt)" class="badge badge--warning">{{ formatExpireLabel(currentItem.expireAt) }}</text>
-              <text v-if="hasReservations(currentItem)" class="badge badge--info">预占中</text>
-              <text v-if="needsExact(currentItem)" class="badge badge--muted">待补精确数量</text>
-            </view>
+    <view class="detail-page">
+      <view v-if="sessionStore.isLoggedIn" class="detail-hero">
+        <view class="detail-hero__cover">
+          <ImageLoader class="detail-hero__image" :src="itemImageUrl" />
+        </view>
+        <view v-if="currentItem" class="summary-card">
+          <text class="summary-card__eyebrow">厨房小管家</text>
+          <text class="summary-card__title">{{ currentItem.name }}</text>
+          <text class="summary-card__stock">{{ stockSummary }}</text>
+          <text class="summary-card__description">{{ expireSummary }}</text>
+          <view class="badge-row">
+            <text v-if="isExpiringSoon(currentItem.expireAt)" class="badge badge--warning">{{ formatExpireLabel(currentItem.expireAt) }}</text>
+            <text v-if="hasReservations(currentItem)" class="badge badge--info">预占中</text>
+            <text v-if="needsExact(currentItem)" class="badge badge--muted">待补精确数量</text>
           </view>
+        </view>
+      </view>
 
-          <view class="detail-content">
+      <scroll-view scroll-y class="detail-content-scroll" show-scrollbar="false" @scroll="handleScroll">
+        <view class="detail-content">
+          <Empty
+            v-if="!sessionStore.isLoggedIn"
+            :art="emptyStateArt"
+            title="登录后查看食材详情"
+            description="库存条目只归你本人所有。"
+            clickable
+            @click="openLogin"
+          />
+
+          <template v-else>
+            <view v-if="errorText" class="notice" @click="loadContext">
+              <text class="notice__text">{{ errorText }}</text>
+              <text class="notice__action">重新加载</text>
+            </view>
+
+            <view v-else-if="loading" class="notice">
+              <text class="notice__text">正在加载库存详情...</text>
+            </view>
+
             <Empty
-              v-if="!sessionStore.isLoggedIn"
-              :art="emptyStateArt"
-              title="登录后查看食材详情"
-              description="库存条目只归你本人所有。"
-              clickable
-              @click="openLogin"
+              v-else-if="!currentItem"
+              title="没找到这条库存"
+              description="它可能已经被删除，或刚刚被其他操作修改了。"
             />
 
             <template v-else>
-              <view v-if="errorText" class="notice" @click="loadContext">
-                <text class="notice__text">{{ errorText }}</text>
-                <text class="notice__action">重新加载</text>
+              <view class="section-card">
+                <view class="section-card__header">
+                  <text class="section-card__title">现在还剩多少</text>
+                  <text class="section-card__hint">帮你把这份食材的库存、预占和可用量看清楚，做饭前心里更有数。</text>
+                </view>
+                <view v-if="showExactMetrics" class="metric-grid">
+                  <view class="metric-card">
+                    <text class="metric-card__label">实际库存</text>
+                    <text class="metric-card__value">{{ currentItem.stockText || "-" }}</text>
+                  </view>
+                  <view class="metric-card">
+                    <text class="metric-card__label">已预占</text>
+                    <text class="metric-card__value">{{ currentItem.reservedText || zeroReservedText }}</text>
+                  </view>
+                  <view class="metric-card">
+                    <text class="metric-card__label">可用库存</text>
+                    <text class="metric-card__value">{{ currentItem.availableText || "-" }}</text>
+                  </view>
+                </view>
+                <view v-else class="info-list">
+                  <view class="info-row">
+                    <text class="info-row__label">当前库存</text>
+                    <text class="info-row__value">{{ currentItem.stockText || currentItem.quantityText || "未填数量" }}</text>
+                  </view>
+                </view>
+                <view class="info-list">
+                  <view class="info-row">
+                    <text class="info-row__label">到期时间</text>
+                    <text class="info-row__value">{{ currentItem.expireAt ? currentItem.expireAt.slice(0, 10) : "未设置" }}</text>
+                  </view>
+                  <view class="info-row">
+                    <text class="info-row__label">备注</text>
+                    <text class="info-row__value">{{ currentItem.note || "暂无备注" }}</text>
+                  </view>
+                </view>
               </view>
 
-              <view v-else-if="loading" class="notice">
-                <text class="notice__text">正在加载库存详情...</text>
+              <view v-if="currentItem.reservations.length" class="section-card">
+                <view class="section-card__header">
+                  <text class="section-card__title">哪些安排已经用上它</text>
+                  <text class="section-card__hint">这里会提醒你哪些清单先占了这份库存，避免重复买或误扣。</text>
+                </view>
+                <view class="reservation-list">
+                  <view
+                    v-for="reservation in currentItem.reservations"
+                    :key="`${currentItem.id}-${reservation.shoppingItemId}`"
+                    class="reservation-row"
+                  >
+                    <view class="reservation-row__main">
+                      <text class="reservation-row__title">{{ reservation.shoppingListName }}</text>
+                      <text class="reservation-row__meta">购物项 {{ reservation.shoppingItemId }}</text>
+                    </view>
+                    <text class="reservation-row__value">{{ reservation.reservedText }}</text>
+                  </view>
+                </view>
               </view>
 
-              <Empty
-                v-else-if="!currentItem"
-                title="没找到这条库存"
-                description="它可能已经被删除，或刚刚被其他操作修改了。"
-              />
-
-              <template v-else>
-                <view class="section-card">
-                  <view class="section-card__header">
-                    <text class="section-card__title">现在还剩多少</text>
-                    <text class="section-card__hint">帮你把这份食材的库存、预占和可用量看清楚，做饭前心里更有数。</text>
+              <view class="section-card">
+                <view class="section-card__header">
+                  <text class="section-card__title">接下来怎么处理</text>
+                  <text class="section-card__hint">想改数量、补一点，还是记一笔消耗，都可以在这里顺手完成。</text>
+                </view>
+                <view class="action-grid">
+                  <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openEdit">
+                    <text class="action-button__title">编辑库存</text>
+                    <text class="action-button__meta">修改库存、到期时间和备注</text>
                   </view>
-                  <view v-if="showExactMetrics" class="metric-grid">
-                    <view class="metric-card">
-                      <text class="metric-card__label">实际库存</text>
-                      <text class="metric-card__value">{{ currentItem.stockText || "-" }}</text>
-                    </view>
-                    <view class="metric-card">
-                      <text class="metric-card__label">已预占</text>
-                      <text class="metric-card__value">{{ currentItem.reservedText || zeroReservedText }}</text>
-                    </view>
-                    <view class="metric-card">
-                      <text class="metric-card__label">可用库存</text>
-                      <text class="metric-card__value">{{ currentItem.availableText || "-" }}</text>
-                    </view>
+                  <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openRestock">
+                    <text class="action-button__title">补货</text>
+                    <text class="action-button__meta">继续补这项食材的库存</text>
                   </view>
-                  <view v-else class="info-list">
-                    <view class="info-row">
-                      <text class="info-row__label">当前库存</text>
-                      <text class="info-row__value">{{ currentItem.stockText || currentItem.quantityText || "未填数量" }}</text>
-                    </view>
-                  </view>
-                  <view class="info-list">
-                    <view class="info-row">
-                      <text class="info-row__label">到期时间</text>
-                      <text class="info-row__value">{{ currentItem.expireAt ? currentItem.expireAt.slice(0, 10) : "未设置" }}</text>
-                    </view>
-                    <view class="info-row">
-                      <text class="info-row__label">备注</text>
-                      <text class="info-row__value">{{ currentItem.note || "暂无备注" }}</text>
-                    </view>
+                  <view
+                    class="action-button action-button--accent"
+                    :class="{ 'action-button--disabled': consuming }"
+                    hover-class="action-button--hover"
+                    hover-stay-time="100"
+                    @click="consumeCurrent"
+                  >
+                    <text class="action-button__title">{{ consuming ? "处理中..." : "扣减" }}</text>
+                    <text class="action-button__meta">快速扣减当前库存</text>
                   </view>
                 </view>
+              </view>
 
-                <view v-if="currentItem.reservations.length" class="section-card">
-                  <view class="section-card__header">
-                    <text class="section-card__title">哪些安排已经用上它</text>
-                    <text class="section-card__hint">这里会提醒你哪些清单先占了这份库存，避免重复买或误扣。</text>
-                  </view>
-                  <view class="reservation-list">
-                    <view
-                      v-for="reservation in currentItem.reservations"
-                      :key="`${currentItem.id}-${reservation.shoppingItemId}`"
-                      class="reservation-row"
-                    >
-                      <view class="reservation-row__main">
-                        <text class="reservation-row__title">{{ reservation.shoppingListName }}</text>
-                        <text class="reservation-row__meta">购物项 {{ reservation.shoppingItemId }}</text>
-                      </view>
-                      <text class="reservation-row__value">{{ reservation.reservedText }}</text>
-                    </view>
-                  </view>
+              <view class="section-card">
+                <view class="section-card__header">
+                  <text class="section-card__title">缺了就顺手记进清单</text>
+                  <text class="section-card__hint">发现快用完时，直接把它放进采购清单，回头买菜不容易漏。</text>
                 </view>
-
-                <view class="section-card">
-                  <view class="section-card__header">
-                    <text class="section-card__title">接下来怎么处理</text>
-                    <text class="section-card__hint">想改数量、补一点，还是记一笔消耗，都可以在这里顺手完成。</text>
+                <view class="shopping-card" hover-class="shopping-card--hover" hover-stay-time="100" @click="openShoppingSheet">
+                  <view class="shopping-card__main">
+                    <text class="shopping-card__title">加入采购清单</text>
+                    <text class="shopping-card__meta">可选现有活跃清单，也可现场新建一张清单。</text>
                   </view>
-                  <view class="action-grid">
-                    <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openEdit">
-                      <text class="action-button__title">编辑库存</text>
-                      <text class="action-button__meta">修改库存、到期时间和备注</text>
-                    </view>
-                    <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openRestock">
-                      <text class="action-button__title">补货</text>
-                      <text class="action-button__meta">继续补这项食材的库存</text>
-                    </view>
-                    <view
-                      class="action-button action-button--accent"
-                      :class="{ 'action-button--disabled': consuming }"
-                      hover-class="action-button--hover"
-                      hover-stay-time="100"
-                      @click="consumeCurrent"
-                    >
-                      <text class="action-button__title">{{ consuming ? "处理中..." : "扣减" }}</text>
-                      <text class="action-button__meta">快速扣减当前库存</text>
-                    </view>
-                  </view>
+                  <text class="shopping-card__arrow">›</text>
                 </view>
-
-                <view class="section-card">
-                  <view class="section-card__header">
-                    <text class="section-card__title">缺了就顺手记进清单</text>
-                    <text class="section-card__hint">发现快用完时，直接把它放进采购清单，回头买菜不容易漏。</text>
-                  </view>
-                  <view class="shopping-card" hover-class="shopping-card--hover" hover-stay-time="100" @click="openShoppingSheet">
-                    <view class="shopping-card__main">
-                      <text class="shopping-card__title">加入采购清单</text>
-                      <text class="shopping-card__meta">可选现有活跃清单，也可现场新建一张清单。</text>
-                    </view>
-                    <text class="shopping-card__arrow">›</text>
-                  </view>
-                </view>
-              </template>
+              </view>
             </template>
-          </view>
+          </template>
         </view>
       </scroll-view>
     </view>
@@ -198,7 +198,7 @@
 
 <script setup lang="ts">
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import type { UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
@@ -213,6 +213,7 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
+import { onSessionCleared } from "@/utils/session-events";
 import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
 import { formatExpireLabel, isExpiringSoon, resolveFridgeImageMap } from "../utils/fridge";
@@ -224,7 +225,6 @@ const { navBarTotalHeight } = useSystemInfo();
 const sessionStore = useSessionStore();
 const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
-const HERO_TOP_GAP = 16;
 const NAV_FADE_DISTANCE = 96;
 
 const itemId = ref<UUID | "">("");
@@ -242,6 +242,27 @@ const selectedListId = ref<UUID | "">("");
 const newListName = ref("");
 const shoppingQuantityText = ref("");
 const shoppingNote = ref("");
+let contextRequestId = 0;
+
+function clearPrivateState() {
+  contextRequestId += 1;
+  loading.value = false;
+  consuming.value = false;
+  errorText.value = "";
+  currentItem.value = null;
+  itemImageUrl.value = "";
+  shoppingSheetVisible.value = false;
+  shoppingSubmitting.value = false;
+  shoppingCreateMode.value = false;
+  activeShoppingLists.value = [];
+  selectedListId.value = "";
+  newListName.value = "";
+  shoppingQuantityText.value = "";
+  shoppingNote.value = "";
+}
+
+const stopSessionCleanup = onSessionCleared(clearPrivateState);
+onBeforeUnmount(stopSessionCleanup);
 
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
 const navBackdropStyle = computed(() => ({
@@ -250,9 +271,6 @@ const navBackdropStyle = computed(() => ({
 }));
 const navTitleStyle = computed(() => ({
   opacity: `${navProgress.value}`
-}));
-const heroStyle = computed(() => ({
-  paddingTop: `${navBarTotalHeight.value + HERO_TOP_GAP}px`
 }));
 const showExactMetrics = computed(() => Boolean(currentItem.value?.exactQuantity && currentItem.value?.exactUnitName));
 const zeroReservedText = computed(() => (currentItem.value?.exactUnitName ? `0 ${currentItem.value.exactUnitName}` : "0"));
@@ -288,21 +306,25 @@ async function handleLoginSuccess() {
 
 async function loadContext() {
   if (!sessionStore.isLoggedIn || loading.value || !itemId.value) return;
+  const requestId = ++contextRequestId;
   loading.value = true;
   errorText.value = "";
   try {
     const result = await fridgeApi.list(1, 100);
+    if (requestId !== contextRequestId || !sessionStore.isLoggedIn) return;
     const nextItem = result.items.find(item => item.id === itemId.value) ?? null;
     currentItem.value = nextItem;
     if (!nextItem) {
       throw new Error("库存条目不存在");
     }
     const imageMap = await resolveFridgeImageMap([nextItem], 1);
+    if (requestId !== contextRequestId || !sessionStore.isLoggedIn) return;
     itemImageUrl.value = imageMap[String(nextItem.id)] || "";
   } catch (error) {
+    if (requestId !== contextRequestId || !sessionStore.isLoggedIn) return;
     errorText.value = error instanceof Error ? error.message : "食材详情加载失败";
   } finally {
-    loading.value = false;
+    if (requestId === contextRequestId) loading.value = false;
   }
 }
 
@@ -435,39 +457,64 @@ async function submitShopping() {
   transition: opacity 180ms ease;
 }
 
-.detail-scroll-wrap {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-
-.detail-scroll {
-  height: 100%;
-  background: var(--color-page);
-}
-
 .detail-page {
-  min-height: 100%;
-  padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--page-ambient-duo-bg);
 }
 
 .detail-hero {
-  padding: 60rpx var(--space-page) 160rpx;
-  background: var(--page-cover-fresh-bg);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.detail-hero__cover {
+  position: relative;
+  overflow: hidden;
+  padding-top: 100%;
+  background: var(--color-surface);
+}
+
+.detail-hero__image {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--color-surface);
+}
+
+.detail-content-scroll {
+  z-index: 1;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  margin-top: -54rpx;
 }
 
 .detail-content {
-  position: relative;
-  z-index: 1;
-  margin-top: -96rpx;
-  padding: 0 var(--space-page);
+  min-height: 100%;
+  padding: 32rpx var(--space-page) max(48rpx, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  border-radius: 36rpx 36rpx 0 0;
+  background: var(--color-surface);
 }
 
-.detail-hero__avatar,
-.detail-hero__eyebrow,
-.detail-hero__title,
-.detail-hero__stock,
-.detail-hero__description,
+.summary-card {
+  position: absolute;
+  right: var(--space-page);
+  bottom: 54rpx;
+  left: var(--space-page);
+  z-index: 2;
+}
+
+.summary-card__eyebrow,
+.summary-card__title,
+.summary-card__stock,
+.summary-card__description,
 .badge,
 .notice__text,
 .notice__action,
@@ -491,45 +538,28 @@ async function submitShopping() {
   display: block;
 }
 
-.detail-hero__avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 148rpx;
-  height: 148rpx;
-  border-radius: 40rpx;
-  background: var(--page-cover-fresh-bg);
-  overflow: hidden;
-}
-
-.detail-hero__image {
-  width: 100%;
-  height: 100%;
-}
-
-.detail-hero__eyebrow {
-  margin-top: 24rpx;
+.summary-card__eyebrow {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   letter-spacing: 0.12em;
 }
 
-.detail-hero__title {
-  margin-top: 14rpx;
+.summary-card__title {
+  margin-top: 12rpx;
   color: var(--color-text);
-  font-size: 58rpx;
+  font-size: 50rpx;
   font-weight: var(--font-weight-heavy);
-  line-height: 1.18;
+  line-height: 1.3;
 }
 
-.detail-hero__stock {
+.summary-card__stock {
   margin-top: 18rpx;
   color: var(--color-text);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
 }
 
-.detail-hero__description {
+.summary-card__description {
   margin-top: 12rpx;
   max-width: 620rpx;
   color: var(--color-text-secondary);
