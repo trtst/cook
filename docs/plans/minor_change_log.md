@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-09-20 | 部署脚本增加统一发布版本信息：版本由当前提交日期和 Git 短提交号组成；API 部署完成后复核 Prisma migration 状态，并将版本、提交号、组件部署状态和数据库迁移摘要写入被忽略的 `.run-logs/release.json`；明确该脚本不发布微信小程序。新增 `./deploy.sh --version` 查询当前提交对应版本。 | `deploy.sh`、`scripts/deploy-version.test.sh`、`docs/plans/minor_change_log.md` | 已执行：版本脚本测试、`bash -n deploy.sh`、`./deploy.sh --version`、目标文件 `git diff --check`；未执行真实线上再次部署。 |
+
 | 2026-09-19 | 上线前修复饭局参与人偏好改动的服务端状态/权限门禁、带菜账本重算、Admin 固定版本引用查询和带菜版本唯一约束；客户端清理登出后的私有库存详情，并在炊火智厨取消后保持原请求完成前不可重复提交。 | `apps/api/prisma/schema.prisma`、`apps/api/prisma/migrations/20260919130000_unique_dining_event_participant_bring_version/`、`apps/api/src/modules/admin/admin.service.ts`、`apps/api/src/modules/meal/meal.service.ts`、`apps/client/src/pages_pantry/item-detail/index.vue`、`apps/client/src/pages_recipe/detail/index.vue`、`apps/client/src/pages_meal/detail/index.vue` | 已执行：API 参与人偏好回归 6/6、Client 相关回归、API/Client type-check；仍需执行完整迁移部署、饭局真实接口链路和微信开发者工具/真机验收。 |
 
 | 2026-09-19 | 定稿菜谱转 JSON 规范：删除第 6 节表格后的重复边界说明，明确 `content.steps` 指向 2.2 节 `steps[].text` 的语义保留规则；保留 `durationMinutes` 契约说明。 | `docs/plans/recipe-admin-json-conversion.md`、`docs/plans/minor_change_log.md` | 已执行：文档差异核对、`git diff --check`；未执行代码测试，因本次未修改代码。 |
