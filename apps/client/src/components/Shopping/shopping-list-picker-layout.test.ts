@@ -57,6 +57,16 @@ assert.match(
   /function handleCreate\(\)\s*\{[\s\S]*?if \(!canCreate\.value\) return;[\s\S]*?emit\("create"\);/,
   "the create event should also be guarded in code"
 );
+assert.match(
+  pickerSource,
+  /const createPending = ref\(false\);/,
+  "the picker should track an in-flight create request independently from submitting"
+);
+assert.match(
+  pickerSource,
+  /watch\(\s*\[\(\) => props\.items, \(\) => props\.selectedId\][\s\S]*?createPending\.value = false;[\s\S]*?showCreateForm\.value = false;/,
+  "the create form should collapse after the newly created selected list arrives"
+);
 assert.match(pickerSource, /shoppingListMetaText\(row\.item\)/, "list cards should show progress and update time");
 assert.doesNotMatch(pickerSource, /memberCount\s*}}\s*人/, "list cards should not show low-value member counts");
 

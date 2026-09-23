@@ -692,15 +692,29 @@ export interface UnlockRecipeCookAssistantRequest {
 
 export interface RecipeCookAssistantResponse {
 	recipeVersionId: UUID;
-	status: "READY";
+	status: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "READY" | "FAILED" | "REJECTED";
 	unlocked: boolean;
 	unlockedAt: IsoDateTime | null;
-	generatedAt: IsoDateTime;
+	generatedAt: IsoDateTime | null;
+	requestAt: IsoDateTime | null;
+	rejectionReason: string | null;
 	assistant: RecipeAssistantSnapshot | null;
 }
 
 export interface UnlockRecipeCookAssistantResponse extends RecipeCookAssistantResponse {
 	newlyUnlocked: boolean;
+}
+
+export interface RequestRecipeCookAssistantResponse extends RecipeCookAssistantResponse {
+	newlyRequested: boolean;
+	usage: {
+		activityEnabled: boolean;
+		businessDate: string;
+		dailyUnlockLimit: number;
+		usedCount: number;
+		remainingCount: number;
+		resetsAt: IsoDateTime | null;
+	};
 }
 
 export interface SaveCollectionRecipeResponse {
@@ -896,6 +910,13 @@ export const recipeApi = {
 	getRecipeVersionCookAssistant(recipeVersionId: UUID) {
 		return get<RecipeCookAssistantResponse>(
 			`${cfg.domain}/api/recipe-versions/${encodeURIComponent(String(recipeVersionId))}/cook-assistant`
+		);
+	},
+	requestRecipeVersionCookAssistant(recipeVersionId: UUID, body: UnlockRecipeCookAssistantRequest) {
+		return post<RequestRecipeCookAssistantResponse>(
+			`${cfg.domain}/api/recipe-versions/${encodeURIComponent(String(recipeVersionId))}/cook-assistant/request`,
+			undefined,
+			{ idempotencyKey: body.operationId }
 		);
 	},
 	unlockRecipeVersionCookAssistant(recipeVersionId: UUID, body: UnlockRecipeCookAssistantRequest) {

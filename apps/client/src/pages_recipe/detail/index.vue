@@ -463,6 +463,9 @@
         :loading="cookAssistantSheetLoading"
         :remaining-count="cookAssistantRemainingCount"
         :can-unlock="cookAssistantCanUnlock"
+        :wiki-status="cookAssistantState?.status ?? 'MISSING'"
+        :request-at="cookAssistantState?.requestAt ?? null"
+        :rejection-reason="cookAssistantState?.rejectionReason ?? null"
         :submitting="cookAssistantSheetSubmitting || cookAssistantUnlockPending"
         :error-text="cookAssistantSheetError"
         @close="closeCookAssistantSheet"
@@ -534,7 +537,8 @@ import {
   type RecipeAmountSnapshot,
   type RecipeContentSnapshot,
   type RecipeNutritionSummary,
-  type RecipeRecommendationSummary
+  type RecipeRecommendationSummary,
+  type RecipeCookAssistantResponse
 } from "@/apis/recipe";
 import { shoppingApi } from "@/apis/shopping";
 import Empty from "@/components/Empty/Empty.vue";
@@ -644,6 +648,7 @@ const cookAssistantSheetVisible = ref(false);
 const cookAssistantSheetLoading = ref(false);
 const cookAssistantSheetSubmitting = ref(false);
 const cookAssistantSheetError = ref("");
+const cookAssistantState = ref<RecipeCookAssistantResponse | null>(null);
 const cookAssistantUnlockState = ref<CookAssistantUnlockState>("locked");
 let cookAssistantUnlockRequestId = 0;
 const cookAssistantUnlockPending = ref(false);
@@ -781,9 +786,13 @@ const detailSteps = computed(() => detailContent.value.steps.filter(item => Bool
 const isOwnedDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(myPersonal.value));
 const isReadablePrivateDetail = computed(() => mode.value === "published" && kind.value === "my" && Boolean(myDetail.value));
 const isExternalDetail = computed(() => mode.value === "published" && Boolean(externalDetail.value));
-const canOpenRecipeAssistant = computed(() => Boolean(publishedDetail.value?.assistantAvailable && publishedDetail.value.contentVersionId));
+const canOpenRecipeAssistant = computed(() => Boolean(publishedDetail.value?.contentVersionId));
 const cookAssistantRemainingCount = computed(() => cookAssistantUsage.value?.remainingCount ?? 0);
-const cookAssistantCanUnlock = computed(() => Boolean(cookAssistantUsage.value?.activityEnabled && cookAssistantRemainingCount.value > 0));
+const cookAssistantCanUnlock = computed(() => Boolean(
+  cookAssistantUsage.value?.activityEnabled &&
+  cookAssistantRemainingCount.value > 0 &&
+  !["PENDING", "GENERATING", "NEEDS_REVIEW", "REJECTED"].includes(cookAssistantState.value?.status ?? "")
+));
 const canRecommendRecipe = computed(() => Boolean(myPersonal.value?.canRecommend));
 const planRecipeId = computed<UUID | "">(() => {
   if (kind.value === "my" && myDetail.value) return recipeId.value;
@@ -1467,6 +1476,7 @@ async function openRecipeAssistant() {
   cookAssistantSheetError.value = "";
   try {
     const assistant = await recipeApi.getRecipeVersionCookAssistant(recipeVersionId);
+    cookAssistantState.value = assistant;
     cookAssistantUnlockState.value = assistant.unlocked ? "unlocked" : "locked";
     if (assistant.unlocked && assistant.assistant?.steps.length) {
       cookAssistantSheetVisible.value = false;
@@ -1480,9 +1490,11 @@ async function openRecipeAssistant() {
     }
 		cookAssistantSheetVisible.value = true;
     cookAssistantUsage.value = await userApi.getCookAssistantUsage();
-    if (!cookAssistantUsage.value.activityEnabled) {
-      cookAssistantSheetError.value = "当前暂未开放解锁";
-    } else if (cookAssistantUsage.value.remainingCount <= 0) {
+    if (assistant.status === "REJECTED") {
+      cookAssistantSheetError.value = assistant.rejectionReason || "菜谱不够完整，请重新编辑后再申请";
+    } else if (assistant.status !== "READY" && !cookAssistantUsage.value.activityEnabled) {
+      cookAssistantSheetError.value = "当前暂未开放申请";
+    } else if (assistant.status !== "READY" && cookAssistantUsage.value.remainingCount <= 0) {
       cookAssistantSheetError.value = "今日可用次数已用完";
     }
   } catch (error) {
@@ -1523,7 +1535,7 @@ async function unlockRecipeAssistant() {
     cookAssistantUnlockPending.value
   ) return;
   if (!cookAssistantCanUnlock.value) {
-    cookAssistantSheetError.value = cookAssistantUsage.value?.activityEnabled === false ? "当前暂未开放解锁" : "今日可用次数已用完";
+    cookAssistantSheetError.value = cookAssistantUsage.value?.activityEnabled === false ? "当前暂未开放申请" : "今日可用次数已用完";
     return;
   }
 
@@ -1533,17 +1545,23 @@ async function unlockRecipeAssistant() {
   cookAssistantUnlockState.value = "unlocking";
   const requestId = ++cookAssistantUnlockRequestId;
   cookAssistantUnlockPending.value = true;
+  const shouldUnlockReadyWiki = cookAssistantState.value?.status === "READY";
   const unlockStartedAt = Date.now();
-  const unlockDurationMs = getCookAssistantLoadingDuration();
+  const unlockDurationMs = shouldUnlockReadyWiki ? getCookAssistantLoadingDuration() : 0;
   try {
-    const result = await recipeApi.unlockRecipeVersionCookAssistant(recipeVersionId, {
-      operationId: createOperationId()
-    });
+    const result = shouldUnlockReadyWiki
+      ? await recipeApi.unlockRecipeVersionCookAssistant(recipeVersionId, { operationId: createOperationId() })
+      : await recipeApi.requestRecipeVersionCookAssistant(recipeVersionId, { operationId: createOperationId() });
     if (requestId !== cookAssistantUnlockRequestId) return;
-    cookAssistantUsage.value = await userApi.getCookAssistantUsage().catch(() => cookAssistantUsage.value);
+    cookAssistantState.value = result;
+    cookAssistantUsage.value = "usage" in result
+      ? result.usage
+      : await userApi.getCookAssistantUsage().catch(() => cookAssistantUsage.value);
     if (result.unlocked && result.assistant?.steps.length) {
-      await waitForCookAssistantLoading(unlockStartedAt, unlockDurationMs);
-      if (requestId !== cookAssistantUnlockRequestId) return;
+      if (shouldUnlockReadyWiki) {
+        await waitForCookAssistantLoading(unlockStartedAt, unlockDurationMs);
+        if (requestId !== cookAssistantUnlockRequestId) return;
+      }
       cookAssistantUnlockState.value = "unlocked";
       cookAssistantSheetVisible.value = false;
       openRecipeCookMode(recipeVersionId);
@@ -1551,7 +1569,11 @@ async function unlockRecipeAssistant() {
     }
     cookAssistantUnlockState.value = result.unlocked ? "unlocked" : "locked";
     cookAssistantSheetVisible.value = true;
-    cookAssistantSheetError.value = "炊火智厨暂时没有可执行步骤，请稍后重试";
+    cookAssistantSheetError.value = "newlyRequested" in result
+      ? result.status === "REJECTED"
+        ? result.rejectionReason || "菜谱不够完整，请重新编辑后再申请"
+        : result.newlyRequested ? "已提交 Wiki 申请，完成后会通知你" : "已提交 Wiki 申请，请等待后台处理"
+      : "炊火智厨暂时没有可执行步骤，请稍后重试";
   } catch (error) {
     if (requestId !== cookAssistantUnlockRequestId) return;
     cookAssistantUnlockState.value = "locked";

@@ -12,7 +12,11 @@
           {{ loading ? "读取中..." : remainingCount + " 次" }}
         </text>
       </view>
-      <text class="cook-assistant-unlock-sheet__description">AI 智能分析当前菜谱，拆解烹饪步骤与操作要点，让你边看边做更轻松。</text>
+      <text class="cook-assistant-unlock-sheet__description">
+        {{ descriptionText }}
+      </text>
+      <text v-if="requestAt" class="cook-assistant-unlock-sheet__request-time">申请时间：{{ formatDateTime(requestAt) }}</text>
+      <text v-if="rejectionReason" class="cook-assistant-unlock-sheet__error">{{ rejectionReason }}</text>
       <text v-if="errorText" class="cook-assistant-unlock-sheet__error">{{ errorText }}</text>
     </view>
 
@@ -30,7 +34,7 @@
           :class="{ 'cook-assistant-unlock-sheet__button--disabled': submitting || loading || !canUnlock }"
           @click="handleUnlock"
         >
-          {{ submitting ? "解锁中..." : "立即解锁" }}
+          {{ submitting ? "申请中..." : actionText }}
         </button>
       </view>
     </template>
@@ -38,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 
 const props = defineProps<{
@@ -47,6 +52,9 @@ const props = defineProps<{
   canUnlock: boolean;
   submitting: boolean;
   errorText: string;
+  wikiStatus?: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "READY" | "FAILED" | "REJECTED";
+  requestAt?: string | null;
+  rejectionReason?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -62,6 +70,30 @@ function handleClose() {
 function handleUnlock() {
   if (props.submitting || props.loading || !props.canUnlock) return;
   emit("unlock");
+}
+
+const descriptionText = computed(() => {
+  if (!props.wikiStatus) return "AI 智能分析当前菜谱，拆解烹饪步骤与操作要点，让你边看边做更轻松。";
+  if (props.wikiStatus === "READY") return "Wiki 已准备好，解锁后即可打开炊火智厨。";
+  if (props.wikiStatus === "PENDING" || props.wikiStatus === "GENERATING" || props.wikiStatus === "NEEDS_REVIEW") {
+    return "Wiki 正在制作中，完成后会通知你。申请本身不再重复扣次。";
+  }
+  if (props.wikiStatus === "REJECTED") return "当前菜谱不满足生成条件，请重新编辑菜谱后再申请。";
+  return "当前还没有可用 Wiki，申请后由后台补充烹饪步骤与操作要点。";
+});
+
+const actionText = computed(() => {
+  if (!props.wikiStatus) return "立即解锁";
+  if (props.wikiStatus === "READY") return "立即解锁";
+  if (props.wikiStatus === "PENDING" || props.wikiStatus === "GENERATING" || props.wikiStatus === "NEEDS_REVIEW") return "已申请";
+  if (props.wikiStatus === "REJECTED") return "请先编辑菜谱";
+  return "申请 Wiki";
+});
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 </script>
 

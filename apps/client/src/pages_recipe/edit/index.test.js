@@ -245,12 +245,46 @@ describe("pages_recipe/edit/index", () => {
 if (!hasAutomatorRuntime) {
   const editSource = readFileSync(resolve(__dirname, "index.vue"), "utf8");
 
+  nodeTest("ingredient search confirmation reloads the current keyword", () => {
+    nodeAssert.match(
+      editSource,
+      /@confirm="handleIngredientSearchConfirm"/,
+      "ingredient search should bind confirmation to an explicit search handler"
+    );
+    nodeAssert.match(
+      editSource,
+      /function handleIngredientSearchConfirm\(\)\s*\{[\s\S]*?clearTimeout\(ingredientSearchTimer\)[\s\S]*?void reloadIngredientOptions\(\)/,
+      "confirming ingredient search should cancel the pending debounce and reload results"
+    );
+    nodeAssert.match(
+      editSource,
+      /keyword:\s*ingredientSearchText\.value \|\| undefined/,
+      "ingredient search should send the current keyword to the API"
+    );
+    nodeAssert.match(
+      editSource,
+      /const searchedIngredients = computed\(\(\) => \{[\s\S]*?if \(ingredientSearchMode\.value\) \{\s*return ingredientOptions\.value;\s*\}[\s\S]*?return ingredientOptions\.value\.filter\(matchesCurrentIngredientFilter\);/,
+      "ingredient search should render the server-filtered result so aliases remain selectable"
+    );
+  });
+
   nodeTest("publishing a recipe does not trigger cook assistant generation", () => {
     nodeAssert.match(editSource, /recipeApi\.publishDraft/);
     nodeAssert.match(editSource, /redirectTo\(`\/pages_recipe\/detail\/index\?recipeId=/);
     nodeAssert.doesNotMatch(editSource, /maybeGenerateRecipeAssistantAfterPublish/);
     nodeAssert.doesNotMatch(editSource, /generateMyRecipeAssistant/);
     nodeAssert.doesNotMatch(editSource, /生成做饭建议/);
+  });
+
+  nodeTest("recipe edit confirms before invalidating an existing Wiki", () => {
+    nodeAssert.match(editSource, /recipeHasReadyWiki/);
+    nodeAssert.match(editSource, /Wiki 将失效/);
+    nodeAssert.match(editSource, /if \(!confirmed\) return/);
+  });
+
+  nodeTest("recipe edit restores Wiki validity when continuing an existing recipe draft", () => {
+    nodeAssert.match(editSource, /draft\.recipeId\s*\?\s*await\s+recipeApi\.getMyRecipe\(draft\.recipeId\)/);
+    nodeAssert.match(editSource, /recipeHasReadyWiki\.value\s*=\s*recipe\?\.assistantAvailable\s*\?\?\s*false/);
   });
 
 }

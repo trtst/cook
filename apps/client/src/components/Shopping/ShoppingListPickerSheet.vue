@@ -26,6 +26,7 @@
           <button
             class="shopping-create__button"
             :class="{ 'shopping-create__button--disabled': !canCreate }"
+            :disabled="!canCreate"
             @click="handleCreate"
           >
             新建
@@ -141,11 +142,27 @@ const createNameModel = computed({
 const listRows = computed(() => shoppingListRows(props.items, props.selectedId));
 const canCreate = computed(() => !props.submitting);
 const showCreateForm = ref(false);
+const createPending = ref(false);
+const existingListIds = ref<UUID[]>([]);
 
 watch(
   () => props.visible,
   visible => {
-    if (!visible) return;
+    if (!visible) {
+      createPending.value = false;
+      return;
+    }
+    createPending.value = false;
+    showCreateForm.value = false;
+  }
+);
+
+watch(
+  [() => props.items, () => props.selectedId],
+  ([items, selectedId]) => {
+    if (!createPending.value || !selectedId || existingListIds.value.includes(selectedId)) return;
+    if (!items.some(item => item.id === selectedId)) return;
+    createPending.value = false;
     showCreateForm.value = false;
   }
 );
@@ -157,6 +174,8 @@ function toggleCreateForm() {
 
 function handleCreate() {
   if (!canCreate.value) return;
+  existingListIds.value = props.items.map(item => item.id);
+  createPending.value = true;
   emit("create");
 }
 

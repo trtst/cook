@@ -670,8 +670,7 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(detailSource, /canGenerateRecipeAssistant/);
   });
 
-  nodeTest("recipe detail shows single recipe assistant entry only from assistantAvailable", () => {
-    nodeAssert.match(detailSource, /assistantAvailable/);
+  nodeTest("recipe detail shows the assistant entry for every fixed recipe version", () => {
     nodeAssert.match(detailSource, /canOpenRecipeAssistant/);
     nodeAssert.match(detailSource, /openRecipeAssistant/);
     nodeAssert.match(detailSource, /recipeApi\.getRecipeVersionCookAssistant\(recipeVersionId\)/);
@@ -695,6 +694,16 @@ if (!hasAutomatorRuntime && nodeTest) {
 
     nodeAssert.ok(statusReadIndex >= 0, "Expected recipe assistant status to be read");
     nodeAssert.ok(sheetOpenIndex > statusReadIndex, "Expected unlock sheet to open only after assistant status is known");
+  });
+
+  nodeTest("recipe detail unlocks an existing READY Wiki and requests a missing Wiki", () => {
+    const start = detailSource.indexOf("async function unlockRecipeAssistant()");
+    const end = detailSource.indexOf("\nfunction handleEditRecipe", start);
+    const functionSource = detailSource.slice(start, end);
+
+    nodeAssert.match(functionSource, /const shouldUnlockReadyWiki = cookAssistantState\.value\?\.status === "READY"/);
+    nodeAssert.match(functionSource, /shouldUnlockReadyWiki\s*\n\s*\?\s*await recipeApi\.unlockRecipeVersionCookAssistant/);
+    nodeAssert.match(functionSource, /:\s*await recipeApi\.requestRecipeVersionCookAssistant/);
   });
 
   nodeTest("recipe detail keeps the assistant thinking state before entering cook mode", () => {

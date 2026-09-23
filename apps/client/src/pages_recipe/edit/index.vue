@@ -340,7 +340,7 @@
                   v-model="ingredientKeyword"
                   class="sheet-search__bar"
                   placeholder="搜索食材名称"
-                  @confirm="dismissSheetKeyboard"
+                  @confirm="handleIngredientSearchConfirm"
                   @clear="exitIngredientSearch"
                 />
               </view>
@@ -987,6 +987,7 @@ const errorText = ref("");
 const navOpacity = ref(0);
 const draftVersion = ref<number | null>(null);
 const recipeVersion = ref<number | null>(null);
+const recipeHasReadyWiki = ref(false);
 const stepSortVisible = ref(false);
 const stepSortOpen = ref(false);
 const stepSortRows = ref<StepRow[]>([]);
@@ -1188,7 +1189,10 @@ const searchedIngredients = computed(() => {
   if (ingredientSearchMode.value && !ingredientSearchReady.value) {
     return [];
   }
-  return ingredientOptions.value;
+  if (ingredientSearchMode.value) {
+    return ingredientOptions.value;
+  }
+  return ingredientOptions.value.filter(matchesCurrentIngredientFilter);
 });
 const ingredientCreateCategoryName = computed(() => {
   return ingredientCategories.value.find(item => item.id === ingredientCreateDraft.categoryId)?.name || "";
@@ -1675,12 +1679,14 @@ async function loadPage() {
         recipeApi.listUnits({ page: 1, pageSize: 100, source: "SYSTEM" }),
         recipeApi.getDraft(draftId.value)
       ]);
+      const recipe = draft.recipeId ? await recipeApi.getMyRecipe(draft.recipeId) : null;
       categories.value = categoryList;
       ingredientCategories.value = ingredientCategoryList;
       applyEditRefs(ingredientResult.items, unitResult.items, draft);
       categoriesLoaded.value = true;
       ingredientCategoriesLoaded.value = true;
       unitsLoaded.value = true;
+      recipeHasReadyWiki.value = recipe?.assistantAvailable ?? false;
       fillFromDraft(draft);
     } else if (recipeId.value) {
       const [categoryList, ingredientCategoryList, ingredientResult, unitResult, recipe] = await Promise.all([
@@ -1754,6 +1760,7 @@ function fillFromDraft(draft: RecipeDraftDetail) {
 
 function fillFromRecipe(recipe: MyRecipeDetail) {
   recipeVersion.value = recipe.version;
+  recipeHasReadyWiki.value = recipe.assistantAvailable;
   const content: RecipeDraftContentInput = {
     name: recipe.content.name,
     story: recipe.content.story,
@@ -1988,6 +1995,17 @@ function removePendingIngredient(ingredientId: ResourceId) {
 
 function dismissSheetKeyboard() {
   void uniPlatform.feedback.hideKeyboard().catch(() => undefined);
+}
+
+function handleIngredientSearchConfirm() {
+  dismissSheetKeyboard();
+  if (!ingredientSearchMode.value) return;
+  if (ingredientSearchTimer) {
+    clearTimeout(ingredientSearchTimer);
+    ingredientSearchTimer = null;
+  }
+  ingredientSearchPending.value = true;
+  void reloadIngredientOptions();
 }
 
 function exitIngredientSearch() {
@@ -2679,6 +2697,15 @@ async function publishDraft() {
   if (submitting.value) return;
   const cacheItemKey = getRecipeEditCacheItemKey();
   if (!(await validatePublishForm())) return;
+  if (recipeId.value && recipeHasReadyWiki.value) {
+    const confirmed = await uniPlatform.feedback.confirm({
+      title: "Wiki 将失效",
+      content: "保存后会生成新的菜谱版本，当前 Wiki 将失效，需要重新申请生成。确认继续保存吗？",
+      confirmText: "确认保存",
+      cancelText: "取消"
+    }).catch(() => false);
+    if (!confirmed) return;
+  }
   submitting.value = true;
   try {
     await syncDraftForSubmit();
