@@ -35,6 +35,7 @@ import type {
   PageResult,
   PublishRecipeDraftResponse,
   RecipeCookAssistantResponse,
+  RequestRecipeCookAssistantResponse,
   RecipeAssistantSnapshot,
   RecipePlanLinkSummary,
   RecipeRecommendationSummary,
@@ -65,6 +66,7 @@ import { EntitlementService } from "../entitlement/entitlement.service";
 import { UploadService } from "../upload/upload.service";
 import {
   buildDraftSearchText,
+  buildIngredientSearchWhere,
   buildRecipeSearchText,
   buildSearchKey,
   cleanDraftContent,
@@ -684,10 +686,10 @@ export class RecipeService {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
+    const ownerWhere = this.buildIngredientOwnerWhere(userId, source);
     const where: Prisma.IngredientWhereInput = {
       ...(categoryId ? { categoryId } : {}),
-      ...(keyword ? { searchKey: { contains: buildSearchKey(keyword) } } : {}),
-      ...this.buildIngredientOwnerWhere(userId, source)
+      ...(keyword ? { AND: [buildIngredientSearchWhere(keyword), ownerWhere] } : ownerWhere)
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -1660,9 +1662,31 @@ export class RecipeService {
 
   async getRecipeVersionCookAssistant(userId: UUID, recipeVersionId: UUID): Promise<RecipeCookAssistantResponse> {
     await this.assertRecipeVersionAccess(this.prisma, userId, recipeVersionId);
-    const assistant = await this.loadReadyRecipeAssistant(this.prisma, recipeVersionId);
-    const unlock = await this.cookAssistantAccessService.getRecipeVersionUnlock(userId, recipeVersionId);
-    return this.toRecipeCookAssistantResponse(recipeVersionId, assistant, unlock);
+    const [assistantRecord, request, unlock] = await Promise.all([
+      this.loadRecipeAssistantRecord(this.prisma, recipeVersionId),
+      this.cookAssistantAccessService.getRecipeWikiRequest(userId, recipeVersionId),
+      this.cookAssistantAccessService.getRecipeVersionUnlock(userId, recipeVersionId)
+    ]);
+    return this.toRecipeCookAssistantResponse(recipeVersionId, assistantRecord, request, unlock);
+  }
+
+  async requestRecipeVersionCookAssistant(
+    userId: UUID,
+    recipeVersionId: UUID,
+    operationId: OperationId
+  ): Promise<RequestRecipeCookAssistantResponse> {
+    await this.assertRecipeVersionAccess(this.prisma, userId, recipeVersionId);
+    const result = await this.cookAssistantAccessService.requestRecipeWiki(userId, recipeVersionId, operationId);
+    const [assistantRecord, request, unlock] = await Promise.all([
+      this.loadRecipeAssistantRecord(this.prisma, recipeVersionId),
+      this.cookAssistantAccessService.getRecipeWikiRequest(userId, recipeVersionId),
+      this.cookAssistantAccessService.getRecipeVersionUnlock(userId, recipeVersionId)
+    ]);
+    return {
+      ...this.toRecipeCookAssistantResponse(recipeVersionId, assistantRecord, request, unlock),
+      newlyRequested: result.newlyRequested,
+      usage: result.usage
+    };
   }
 
   async unlockRecipeVersionCookAssistant(
@@ -1673,8 +1697,9 @@ export class RecipeService {
     await this.assertRecipeVersionAccess(this.prisma, userId, recipeVersionId);
     const assistant = await this.loadReadyRecipeAssistant(this.prisma, recipeVersionId);
     const unlock = await this.cookAssistantAccessService.unlockRecipeVersion(userId, recipeVersionId, operationId);
+    const assistantRecord = await this.loadRecipeAssistantRecord(this.prisma, recipeVersionId);
     return {
-      ...this.toRecipeCookAssistantResponse(recipeVersionId, assistant, {
+      ...this.toRecipeCookAssistantResponse(recipeVersionId, assistantRecord, null, {
         unlockedAt: new Date(unlock.unlockedAt)
       }),
       newlyUnlocked: unlock.newlyUnlocked
@@ -3022,6 +3047,17 @@ export class RecipeService {
     return snapshot;
   }
 
+  private async loadRecipeAssistantRecord(tx: RecipeDb, recipeVersionId: UUID) {
+    return tx.recipeCookAssistant.findUnique({
+      where: { recipeVersionId },
+      select: {
+        status: true,
+        generatedAt: true,
+        snapshotJson: true
+      }
+    });
+  }
+
   private async assertRecipeVersionAccess(tx: RecipeDb, userId: UUID, recipeVersionId: UUID) {
     const [owned, collected, inspiration] = await Promise.all([
       tx.recipe.findFirst({
@@ -3053,15 +3089,22 @@ export class RecipeService {
 
   private toRecipeCookAssistantResponse(
     recipeVersionId: UUID,
-    assistant: RecipeAssistantSnapshot,
+    assistantRecord: { status: string; generatedAt: Date | null; snapshotJson: unknown } | null,
+    request: { status: "PENDING" | "READY" | "REJECTED"; requestedAt: Date; rejectionReason: string | null } | null,
     unlock: { unlockedAt: Date } | null
   ): RecipeCookAssistantResponse {
+    const assistant = versionAssistantToSnapshot(assistantRecord);
+    const status = request?.status === "REJECTED"
+      ? "REJECTED"
+      : (assistantRecord?.status ?? "MISSING") as RecipeCookAssistantResponse["status"];
     return {
       recipeVersionId,
-      status: "READY",
+      status,
       unlocked: Boolean(unlock),
       unlockedAt: unlock ? toIsoDate(unlock.unlockedAt) : null,
-      generatedAt: assistant.generatedAt,
+      generatedAt: assistant?.generatedAt ?? null,
+      requestAt: request?.requestedAt ? toIsoDate(request.requestedAt) : null,
+      rejectionReason: request?.rejectionReason ?? null,
       assistant: unlock ? assistant : null
     };
   }

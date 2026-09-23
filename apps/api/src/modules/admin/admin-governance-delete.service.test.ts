@@ -145,6 +145,47 @@ test("admin cannot delete a referenced system ingredient", async () => {
   assert.equal(deleted, false);
 });
 
+test("admin deletes an unused pending imported ingredient with nutrition data", async () => {
+  const ingredient = {
+    id: 32,
+    ownerId: null,
+    status: "PENDING",
+    version: 1,
+    name: "土豆",
+    categoryId: 7,
+    defaultUnitId: 3,
+    category: { id: 7, name: "蔬果菌菇", code: "PRODUCE" },
+    defaultUnit: { id: 3, name: "个", type: "COMMON", ownerId: null }
+  };
+  let deleted = false;
+  const tx = {
+    $queryRaw: async () => [{ exists: false }],
+    idempotencyRecord: idempotencyMock(),
+    ingredient: {
+      findFirst: async () => ingredient,
+      count: async () => 0,
+      delete: async () => {
+        deleted = true;
+      }
+    },
+    ingredientRecommendation: { count: async () => 0 },
+    ingredientFeedback: { count: async () => 0 },
+    fridgeItem: { count: async () => 0 },
+    shoppingItem: { count: async () => 0 },
+    ingredientNutrientMapping: { count: async () => 1 },
+    ingredientUnitNutrientConversion: { count: async () => 1 },
+    auditEvent: { create: async () => undefined }
+  };
+  const service = createAdminService(tx);
+
+  const result = await (service as unknown as {
+    deleteSystemIngredient(ingredientId: number, operationId: string, expectedVersion: number, adminId: number): Promise<{ ingredientId: number }>;
+  }).deleteSystemIngredient(ingredient.id, "202609060105", ingredient.version, 1);
+
+  assert.equal(result.ingredientId, ingredient.id);
+  assert.equal(deleted, true);
+});
+
 test("admin deletes a pending unit recommendation", async () => {
   const recommendation = {
     id: 41,

@@ -10,6 +10,17 @@ type UnlockRow = {
   planItemId: number | null;
   unlockedOn: Date;
   unlockedAt: Date;
+  status?: "RESERVED" | "CONSUMED";
+};
+
+type WikiRequestRow = {
+  id: number;
+  userId: number;
+  recipeVersionId: number;
+  status: "PENDING" | "READY" | "REJECTED";
+  requestedAt: Date;
+  resolvedAt: Date | null;
+  rejectionReason: string | null;
 };
 
 type IdempotencyRow = {
@@ -26,6 +37,7 @@ type IdempotencyRow = {
 
 class FakePrisma {
   unlockRows: UnlockRow[] = [];
+  wikiRequestRows: WikiRequestRow[] = [];
   idempotencyRows: IdempotencyRow[] = [];
   lockKeys: string[] = [];
   private nextUnlockId = 1;
@@ -34,23 +46,80 @@ class FakePrisma {
   cookAssistantUnlock = {
     count: async ({ where }: { where: { userId: number; unlockedOn: Date } }) =>
       this.unlockRows.filter(row => row.userId === where.userId && row.unlockedOn.toISOString() === where.unlockedOn.toISOString()).length,
-    findFirst: async ({ where }: { where: { userId: number; recipeVersionId?: number; planItemId?: number } }) =>
+    findFirst: async ({ where }: { where: { userId: number; recipeVersionId?: number; planItemId?: number; status?: string } }) =>
       this.unlockRows.find(row => {
         if (row.userId !== where.userId) return false;
+        if (where.status !== undefined && row.status !== where.status) return false;
         if (where.recipeVersionId !== undefined) return row.recipeVersionId === where.recipeVersionId;
         return row.planItemId === where.planItemId;
       }) ?? null,
-    create: async ({ data }: { data: { userId: number; recipeVersionId?: number; planItemId?: number; unlockedOn: Date } }) => {
+    create: async ({ data }: { data: { userId: number; recipeVersionId?: number; planItemId?: number; unlockedOn: Date; status?: "RESERVED" | "CONSUMED" } }) => {
       const row: UnlockRow = {
         id: this.nextUnlockId++,
         userId: data.userId,
         recipeVersionId: data.recipeVersionId ?? null,
         planItemId: data.planItemId ?? null,
         unlockedOn: data.unlockedOn,
-        unlockedAt: new Date("2026-09-13T03:00:00.000Z")
+        unlockedAt: new Date("2026-09-13T03:00:00.000Z"),
+        status: data.status ?? "CONSUMED"
       };
       this.unlockRows.push(row);
       return row;
+    },
+    updateMany: async ({ where, data }: { where: { userId?: number; recipeVersionId?: number; status?: string }; data: { status?: string } }) => {
+      let count = 0;
+      for (const row of this.unlockRows) {
+        if (where.userId !== undefined && row.userId !== where.userId) continue;
+        if (where.recipeVersionId !== undefined && row.recipeVersionId !== where.recipeVersionId) continue;
+        if (where.status !== undefined && row.status !== where.status) continue;
+        Object.assign(row, data);
+        count += 1;
+      }
+      return { count };
+    },
+    deleteMany: async ({ where }: { where: { userId?: number; recipeVersionId?: number; status?: string } }) => {
+      const before = this.unlockRows.length;
+      this.unlockRows = this.unlockRows.filter(row => {
+        if (where.userId !== undefined && row.userId !== where.userId) return true;
+        if (where.recipeVersionId !== undefined && row.recipeVersionId !== where.recipeVersionId) return true;
+        if (where.status !== undefined && row.status !== where.status) return true;
+        return false;
+      });
+      return { count: before - this.unlockRows.length };
+    }
+  };
+
+  recipeCookAssistantRequest = {
+    findUnique: async ({ where }: { where: { userId_recipeVersionId?: { userId: number; recipeVersionId: number } } }) => {
+      const key = where.userId_recipeVersionId;
+      return this.wikiRequestRows.find(row => row.userId === key?.userId && row.recipeVersionId === key?.recipeVersionId) ?? null;
+    },
+    findMany: async ({ where }: { where: { recipeVersionId?: number; status?: string } }) => this.wikiRequestRows.filter(row => {
+      if (where.recipeVersionId !== undefined && row.recipeVersionId !== where.recipeVersionId) return false;
+      if (where.status !== undefined && row.status !== where.status) return false;
+      return true;
+    }),
+    upsert: async ({ where, create, update }: { where: { userId_recipeVersionId: { userId: number; recipeVersionId: number } }; create: Omit<WikiRequestRow, "id">; update: Partial<WikiRequestRow> }) => {
+      const key = where.userId_recipeVersionId;
+      const existing = this.wikiRequestRows.find(row => row.userId === key.userId && row.recipeVersionId === key.recipeVersionId);
+      if (existing) {
+        Object.assign(existing, update);
+        return existing;
+      }
+      const row = { id: this.wikiRequestRows.length + 1, ...create };
+      this.wikiRequestRows.push(row);
+      return row;
+    },
+    updateMany: async ({ where, data }: { where: { recipeVersionId?: number; userId?: number; status?: string }; data: Partial<WikiRequestRow> }) => {
+      let count = 0;
+      for (const row of this.wikiRequestRows) {
+        if (where.recipeVersionId !== undefined && row.recipeVersionId !== where.recipeVersionId) continue;
+        if (where.userId !== undefined && row.userId !== where.userId) continue;
+        if (where.status !== undefined && row.status !== where.status) continue;
+        Object.assign(row, data);
+        count += 1;
+      }
+      return { count };
     }
   };
 
@@ -184,4 +253,56 @@ test("returns the first result for an idempotent retry and rejects key reuse for
 
   assert.deepEqual(retry, first);
   await assert.rejects(() => service.unlockMealPlan(7, 200, "1001", now), ConflictException);
+});
+
+test("reserves one count for a recipe Wiki request and only refreshes its latest request time", async () => {
+  const prisma = new FakePrisma();
+  const service = new CookAssistantAccessService(prisma as never);
+
+  const first = await service.requestRecipeWiki(7, 100, "2001", now);
+  const repeated = await service.requestRecipeWiki(7, 100, "2002", new Date("2026-09-13T15:40:00.000Z"));
+
+  assert.equal(first.status, "PENDING");
+  assert.equal(first.usage.usedCount, 1);
+  assert.equal(repeated.status, "PENDING");
+  assert.equal(repeated.usage.usedCount, 1);
+  assert.equal(prisma.unlockRows.length, 1);
+  assert.equal(prisma.wikiRequestRows.length, 1);
+  assert.equal(prisma.wikiRequestRows[0]?.requestedAt.toISOString(), "2026-09-13T15:40:00.000Z");
+});
+
+test("settling a Wiki request consumes or releases only the requesting user's reservation", async () => {
+  const prisma = new FakePrisma();
+  const service = new CookAssistantAccessService(prisma as never);
+
+  await service.requestRecipeWiki(7, 100, "2101", now);
+  await service.requestRecipeWiki(8, 100, "2102", now);
+  const readyUsers = await service.settleRecipeWikiRequest(prisma as never, 100, "READY", now);
+
+  assert.deepEqual(readyUsers, [7, 8]);
+  assert.deepEqual(prisma.unlockRows.map(row => row.status), ["CONSUMED", "CONSUMED"]);
+  assert.deepEqual(prisma.wikiRequestRows.map(row => row.status), ["READY", "READY"]);
+
+  await service.requestRecipeWiki(7, 101, "2103", now);
+  const rejectedUsers = await service.settleRecipeWikiRequest(prisma as never, 101, "REJECTED", now, "菜谱不够完整");
+  assert.deepEqual(rejectedUsers, [7]);
+  assert.equal(prisma.unlockRows.some(row => row.recipeVersionId === 101), false);
+  assert.equal(prisma.wikiRequestRows.find(row => row.recipeVersionId === 101)?.rejectionReason, "菜谱不够完整");
+});
+
+test("does not treat a reserved Wiki request as an unlocked recipe assistant", async () => {
+  const prisma = new FakePrisma();
+  prisma.unlockRows.push({
+    id: 99,
+    userId: 7,
+    recipeVersionId: 100,
+    planItemId: null,
+    unlockedOn: new Date("2026-09-13T00:00:00.000Z"),
+    unlockedAt: now,
+    status: "RESERVED"
+  });
+  await assert.rejects(
+    () => new CookAssistantAccessService(prisma as never).unlockRecipeVersion(7, 100, "2201", now),
+    /Wiki 正在制作中/
+  );
 });

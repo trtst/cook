@@ -46,6 +46,7 @@ class FakePrisma {
   accessibleRecipeVersions = new Set<number>();
   collectedRecipeVersions = new Set<number>();
   assistantByVersion = new Map<number, { status: string; generatedAt: Date | null; snapshotJson: unknown }>();
+  wikiRequestByVersion = new Map<number, { status: "PENDING" | "READY" | "REJECTED"; requestedAt: Date; rejectionReason: string | null }>();
   assistantLookupCount = 0;
 
   recipe = {
@@ -72,14 +73,24 @@ class FakePrisma {
       return this.assistantByVersion.get(where.recipeVersionId) ?? null;
     }
   };
+
+  recipeCookAssistantRequest = {
+    findUnique: async ({ where }: { where: { userId_recipeVersionId: { recipeVersionId: number } } }) =>
+      this.wikiRequestByVersion.get(where.userId_recipeVersionId.recipeVersionId) ?? null
+  };
 }
 
 class FakeCookAssistantAccess {
+  constructor(private readonly prisma?: FakePrisma) {}
   unlockByVersion = new Map<number, { unlockedAt: Date }>();
   unlockCalls: Array<{ userId: number; recipeVersionId: number; operationId: string }> = [];
 
   async getRecipeVersionUnlock(_userId: number, recipeVersionId: number) {
     return this.unlockByVersion.get(recipeVersionId) ?? null;
+  }
+
+  async getRecipeWikiRequest(_userId: number, recipeVersionId: number) {
+    return this.prisma?.wikiRequestByVersion.get(recipeVersionId) ?? null;
   }
 
   async unlockRecipeVersion(userId: number, recipeVersionId: number, operationId: string) {
@@ -117,7 +128,7 @@ class FakeCookAssistantAccess {
   }
 }
 
-function createService(prisma: FakePrisma, access = new FakeCookAssistantAccess()) {
+function createService(prisma: FakePrisma, access = new FakeCookAssistantAccess(prisma)) {
   return {
     access,
     service: new RecipeService(prisma as never, access as never, {} as never, {} as never, {} as never, {} as never)
@@ -137,6 +148,8 @@ test("hides single-recipe assistant body until the current user unlocks the fixe
     unlocked: false,
     unlockedAt: null,
     generatedAt: generatedAt.toISOString(),
+    requestAt: null,
+    rejectionReason: null,
     assistant: null
   });
 
@@ -177,6 +190,27 @@ test("does not unlock when the fixed version has no READY Wiki assistant", async
 
   await assert.rejects(() => service.unlockRecipeVersionCookAssistant(7, 201, "1001"), ConflictException);
   assert.equal(access.unlockCalls.length, 0);
+});
+
+test("exposes a rejected Wiki request as the current assistant status", async () => {
+  const prisma = new FakePrisma();
+  prisma.accessibleRecipeVersions.add(201);
+  prisma.assistantByVersion.set(201, {
+    status: "NEEDS_REVIEW",
+    generatedAt: null,
+    snapshotJson: null
+  });
+  prisma.wikiRequestByVersion.set(201, {
+    status: "REJECTED",
+    requestedAt: generatedAt,
+    rejectionReason: "菜谱不够完整"
+  });
+  const { service } = createService(prisma);
+
+  const result = await service.getRecipeVersionCookAssistant(7, 201);
+  assert.equal(result.status, "REJECTED");
+  assert.equal(result.rejectionReason, "菜谱不够完整");
+  assert.equal(result.assistant, null);
 });
 
 test("rejects hidden or inaccessible fixed recipe versions before reading assistant content", async () => {

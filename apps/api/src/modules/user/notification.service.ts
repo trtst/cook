@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
-import { Prisma, type User } from "@prisma/client";
+import { Prisma, type RecipeWikiRequestStatus, type User } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
 import type {
@@ -22,9 +22,36 @@ type FeedSourceResult = {
   items: NotificationFeedItem[];
   total: number;
 };
+type ReadNotificationSummary = {
+  allCount: number;
+  nonReminderCount: number;
+  reminderCount: number;
+};
 
 const officialChannelCode = "OFFICIAL_NOTICE";
 const dayMs = 24 * 60 * 60 * 1000;
+const recipeWikiResolvedStatuses: RecipeWikiRequestStatus[] = ["READY", "REJECTED"];
+
+const recipeWikiFeedSelect = {
+  id: true,
+  status: true,
+  rejectionReason: true,
+  resolvedAt: true,
+  updatedAt: true,
+  recipeVersion: {
+    select: {
+      name: true,
+      currentRecipes: {
+        where: { status: "ACTIVE" },
+        orderBy: { updatedAt: "desc" },
+        take: 1,
+        select: { id: true, isInspiration: true }
+      }
+    }
+  }
+} satisfies Prisma.RecipeCookAssistantRequestSelect;
+
+type RecipeWikiFeedRow = Prisma.RecipeCookAssistantRequestGetPayload<{ select: typeof recipeWikiFeedSelect }>;
 
 function addDays(base: Date, days: number) {
   return new Date(base.getTime() + days * dayMs);
@@ -119,7 +146,7 @@ export class NotificationService {
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
 
-      return this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
+      return this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
     });
   }
 
@@ -134,22 +161,24 @@ export class NotificationService {
       const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
       const sourceLimit = nextPage * nextPageSize;
       const now = new Date();
-      const [stateRow, ingredientSource, unitSource, inviteSource, officialSource, fridgeSource] = await Promise.all([
+      const [stateRow, ingredientSource, unitSource, inviteSource, officialSource, fridgeSource, recipeWikiSource] = await Promise.all([
         tx.userNotificationState.findUnique({ where: { userId } }),
         this.loadIngredientFeed(tx, userId, sourceLimit),
         this.loadUnitFeed(tx, userId, sourceLimit),
         this.loadInviteFeed(tx, userId, sourceLimit),
         this.loadOfficialFeed(tx, user.createdAt, sourceLimit),
-        this.loadFridgeReminderFeed(tx, userId, now, settings, sourceLimit)
+        this.loadFridgeReminderFeed(tx, userId, now, settings, sourceLimit),
+        this.loadRecipeWikiFeed(tx, userId, sourceLimit)
       ]);
       const mergedItems = [
         ...ingredientSource.items,
         ...unitSource.items,
         ...inviteSource.items,
         ...officialSource.items,
-        ...fridgeSource.items
+        ...fridgeSource.items,
+        ...recipeWikiSource.items
       ].sort((left, right) => new Date(right.timeValue).getTime() - new Date(left.timeValue).getTime());
-      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + fridgeSource.total;
+      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + fridgeSource.total + recipeWikiSource.total;
       const start = (nextPage - 1) * nextPageSize;
       const end = start + nextPageSize;
       const pageItems = mergedItems.slice(start, end);
@@ -188,22 +217,24 @@ export class NotificationService {
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
       const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
-      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settings);
+      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settings);
 
       if (!currentBadge.latestTime) {
         return currentBadge;
       }
 
-      const nextReadAt = maxDate(stateRow?.badgeReadAt ?? null, new Date(currentBadge.latestTime));
+      const nextReadAt = maxDate(stateRow?.feedReadAt ?? null, new Date(currentBadge.latestTime));
       if (!nextReadAt) return currentBadge;
       await tx.userNotificationState.upsert({
         where: { userId },
         create: {
           userId,
-          badgeReadAt: nextReadAt
+          badgeReadAt: nextReadAt,
+          feedReadAt: nextReadAt
         },
         update: {
-          badgeReadAt: nextReadAt
+          badgeReadAt: nextReadAt,
+          feedReadAt: nextReadAt
         }
       });
 
@@ -222,7 +253,7 @@ export class NotificationService {
         tx.userNotificationState.findUnique({ where: { userId } })
       ]);
       const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
-      const badge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settings);
+      const badge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settings);
       const latestAt = badge.latestTime ? new Date(badge.latestTime) : null;
       if (!latestAt) {
         return badge;
@@ -237,7 +268,7 @@ export class NotificationService {
         });
       }
 
-      return this.buildBadge(tx, userId, user.createdAt, stateRow?.badgeReadAt ?? null, settings);
+      return this.buildBadge(tx, userId, user.createdAt, nextReadAt ?? stateRow?.feedReadAt ?? null, settings);
     });
   }
 
@@ -554,6 +585,41 @@ export class NotificationService {
     };
   }
 
+  private async loadRecipeWikiFeed(db: NotificationDb, userId: UUID, take: number): Promise<FeedSourceResult> {
+    const where = { userId, status: { in: recipeWikiResolvedStatuses } };
+    const requestDelegate = db.recipeCookAssistantRequest as PrismaService["recipeCookAssistantRequest"];
+    const [total, items] = await Promise.all([
+      requestDelegate.count({ where }),
+      requestDelegate.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        take,
+        select: recipeWikiFeedSelect
+      }) as unknown as RecipeWikiFeedRow[]
+    ]);
+
+    return {
+      total,
+      items: items.map(item => {
+        const recipe = item.recipeVersion.currentRecipes[0] ?? null;
+        const timeValue = item.resolvedAt ?? item.updatedAt;
+        const targetPath = recipe
+          ? `/pages_recipe/detail/index?recipeId=${encodeURIComponent(String(recipe.id))}&kind=${recipe.isInspiration ? "inspiration" : "my"}`
+          : null;
+        return {
+          id: `recipe-wiki:${item.id}`,
+          isUnread: false,
+          typeLabel: "菜谱 Wiki",
+          tone: "recipe-wiki",
+          title: item.status === "READY" ? `炊火智厨已完成：${item.recipeVersion.name}` : `炊火智厨申请未通过：${item.recipeVersion.name}`,
+          desc: item.status === "READY" ? "Wiki 已制作完成，点击即可打开炊火智厨" : item.rejectionReason || "菜谱内容暂不满足生成条件，请重新编辑后再申请",
+          timeValue: toIsoDate(timeValue),
+          targetPath
+        } satisfies NotificationFeedItem;
+      })
+    };
+  }
+
   private isFeedItemUnread(timeValue: string, feedReadAt: Date | null, itemReadAt: Date | null) {
     const notificationAt = new Date(timeValue);
     if (feedReadAt && notificationAt.getTime() <= feedReadAt.getTime()) return false;
@@ -610,6 +676,15 @@ export class NotificationService {
       return item?.updatedAt ?? null;
     }
 
+    const recipeWikiId = notificationId.match(/^recipe-wiki:(\d+)$/)?.[1];
+    if (recipeWikiId) {
+      const item = await db.recipeCookAssistantRequest.findFirst({
+        where: { id: Number(recipeWikiId), userId, status: { in: recipeWikiResolvedStatuses } },
+        select: { resolvedAt: true, updatedAt: true }
+      });
+      return item?.resolvedAt ?? item?.updatedAt ?? null;
+    }
+
     const fridgeId = notificationId.match(/^reminder:fridge-expiring:(\d+)$/)?.[1];
     if (fridgeId && settings.fridge.enabled) {
       const item = await db.fridgeItem.findFirst({
@@ -634,32 +709,40 @@ export class NotificationService {
     db: NotificationDb,
     userId: UUID,
     userCreatedAt: Date,
-    readAt: Date | null,
+    feedReadAt: Date | null,
     settings: NotificationSettings
   ): Promise<NotificationBadgeResponse> {
     const now = new Date();
-    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, fridgeSummary] = await Promise.all([
-      this.loadIngredientSummary(db, userId, readAt),
-      this.loadUnitSummary(db, userId, readAt),
-      this.loadInviteSummary(db, userId, readAt),
-      this.loadOfficialSummary(db, userCreatedAt, readAt),
-      this.loadFridgeReminderSummary(db, userId, readAt, now, settings)
+    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, fridgeSummary, recipeWikiSummary, readSummary] = await Promise.all([
+      this.loadIngredientSummary(db, userId, feedReadAt),
+      this.loadUnitSummary(db, userId, feedReadAt),
+      this.loadInviteSummary(db, userId, feedReadAt),
+      this.loadOfficialSummary(db, userCreatedAt, feedReadAt),
+      this.loadFridgeReminderSummary(db, userId, feedReadAt, now, settings),
+      this.loadRecipeWikiSummary(db, userId, feedReadAt),
+      this.loadReadNotificationSummary(db, userId, userCreatedAt, feedReadAt, settings)
     ]);
 
-    const reminderUnreadCount = fridgeSummary.unreadCount;
-    const unreadCount =
+    const reminderUnreadCount = Math.max(fridgeSummary.unreadCount - readSummary.reminderCount, 0);
+    const sourceUnreadCount =
       ingredientSummary.unreadCount +
       unitSummary.unreadCount +
       inviteSummary.unreadCount +
       officialSummary.unreadCount +
+      recipeWikiSummary.unreadCount +
       (settings.reminderDotOnly ? 0 : reminderUnreadCount);
+    const unreadCount = Math.max(
+      sourceUnreadCount - (settings.reminderDotOnly ? readSummary.nonReminderCount : readSummary.allCount),
+      0
+    );
 
     const latestAt = maxDate(
       ingredientSummary.latestAt,
       unitSummary.latestAt,
       inviteSummary.latestAt,
       officialSummary.latestAt,
-      fridgeSummary.latestAt
+      fridgeSummary.latestAt,
+      recipeWikiSummary.latestAt
     );
 
     return {
@@ -667,6 +750,47 @@ export class NotificationService {
       reminderUnreadCount,
       showReminderDot: settings.reminderDotOnly && reminderUnreadCount > 0,
       latestTime: latestAt?.toISOString() ?? ""
+    };
+  }
+
+  private async loadReadNotificationSummary(
+    db: NotificationDb,
+    userId: UUID,
+    userCreatedAt: Date,
+    feedReadAt: Date | null,
+    settings: NotificationSettings
+  ): Promise<ReadNotificationSummary> {
+    const reads = await db.userNotificationRead.findMany({
+      where: feedReadAt
+        ? { userId, notificationAt: { gt: feedReadAt } }
+        : { userId },
+      select: {
+        notificationId: true,
+        notificationAt: true
+      }
+    });
+
+    if (!reads.length) {
+      return { allCount: 0, nonReminderCount: 0, reminderCount: 0 };
+    }
+
+    const currentTimes = await Promise.all(
+      reads.map(read => this.findNotificationTime(db, userId, userCreatedAt, settings, read.notificationId))
+    );
+    let allCount = 0;
+    let reminderCount = 0;
+
+    reads.forEach((read, index) => {
+      const currentTime = currentTimes[index];
+      if (!currentTime || currentTime.getTime() !== read.notificationAt.getTime()) return;
+      allCount += 1;
+      if (read.notificationId.startsWith("reminder:fridge-expiring:")) reminderCount += 1;
+    });
+
+    return {
+      allCount,
+      nonReminderCount: allCount - reminderCount,
+      reminderCount
     };
   }
 
@@ -742,6 +866,24 @@ export class NotificationService {
     };
   }
 
+  private async loadRecipeWikiSummary(db: NotificationDb, userId: UUID, readAt: Date | null): Promise<TimedUnreadSummary> {
+    const where = { userId, status: { in: recipeWikiResolvedStatuses } };
+    const [latest, unreadCount] = await Promise.all([
+      db.recipeCookAssistantRequest.findFirst({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: { resolvedAt: true, updatedAt: true }
+      }),
+      db.recipeCookAssistantRequest.count({
+        where: readAt ? { ...where, updatedAt: { gt: readAt } } : where
+      })
+    ]);
+    return {
+      unreadCount,
+      latestAt: latest ? latest.resolvedAt ?? latest.updatedAt : null
+    };
+  }
+
   private async loadOfficialSummary(db: NotificationDb, userCreatedAt: Date, readAt: Date | null): Promise<TimedUnreadSummary> {
     const unreadAfter = maxDate(userCreatedAt, readAt) ?? userCreatedAt;
     const sourceWhere = {
@@ -776,7 +918,7 @@ export class NotificationService {
   private async loadFridgeReminderSummary(
     db: NotificationDb,
     userId: UUID,
-    readAt: Date | null,
+    feedReadAt: Date | null,
     now: Date,
     settings: NotificationSettings
   ): Promise<TimedUnreadSummary> {
@@ -787,22 +929,33 @@ export class NotificationService {
       };
     }
 
-    const latest = await db.fridgeItem.findFirst({
-      where: {
-        userId,
-        available: true,
-        expireAt: {
-          not: null,
-          lte: addDays(now, settings.fridge.days)
-        }
-      },
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      select: { updatedAt: true }
-    });
+    const where = {
+      userId,
+      available: true,
+      expireAt: {
+        not: null,
+        lte: addDays(now, settings.fridge.days)
+      }
+    };
+    const [latest, unreadCount] = await Promise.all([
+      db.fridgeItem.findFirst({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: { updatedAt: true }
+      }),
+      db.fridgeItem.count({
+        where: feedReadAt
+          ? {
+              ...where,
+              updatedAt: { gt: feedReadAt }
+            }
+          : where
+      })
+    ]);
 
     const latestAt = latest?.updatedAt ?? null;
     return {
-      unreadCount: latestAt && (!readAt || latestAt.getTime() > readAt.getTime()) ? 1 : 0,
+      unreadCount,
       latestAt
     };
   }

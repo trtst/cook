@@ -5,6 +5,21 @@ import test from "node:test";
 import { hashIdempotencyRequest } from "../../common/idempotency";
 import { AdminService } from "./admin.service";
 
+test("normalizes system ingredient names and aliases before checking conflicts", async () => {
+  const service = new AdminService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const tx = {
+    ingredient: {
+      findFirst: async () => null,
+      findMany: async () => [{ id: 20000001, name: "Green Pepper", searchKey: "greenpepper", aliases: ["青椒"] }]
+    }
+  };
+
+  await assert.rejects(
+    (service as any).assertSystemIngredientTermsAvailable(tx, [" green pepper "], []),
+    /系统食材名称已存在/
+  );
+});
+
 const mergeMigrationPath = resolve(
   process.cwd(),
   "prisma/migrations/20260915233000_system_ingredient_merge/migration.sql"
@@ -290,6 +305,52 @@ test("lists merged system ingredients with their active target", async () => {
   assert.deepEqual(result.items[0]?.mergedTo, { id: 10000001, name: "茄子" });
 });
 
+test("admin ingredient search includes aliases and merged source names", async () => {
+  let listWhere: unknown;
+  const service = new AdminService(
+    {
+      adminAccount: {
+        findUnique: async () => ({ status: "ACTIVE", roles: ["SUPER_ADMIN"] })
+      },
+      ingredient: {
+        findMany: async ({ where }: { where: unknown }) => {
+          listWhere = where;
+          return [];
+        },
+        count: async () => 0
+      },
+      $transaction: async (operations: Array<Promise<unknown>>) => Promise.all(operations)
+    } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    { buildImageUrl: () => null } as never,
+    {} as never
+  );
+
+  await service.listIngredients({}, 1, 20, undefined, "马铃薯", "ACTIVE", "ALL", 1);
+
+  assert.deepEqual(listWhere, {
+    ownerId: null,
+    status: "ACTIVE",
+    OR: [
+      { searchKey: { contains: "马铃薯" } },
+      { aliases: { has: "马铃薯" } },
+      {
+        mergedFrom: {
+          some: {
+            status: "MERGED",
+            OR: [
+              { searchKey: { contains: "马铃薯" } },
+              { aliases: { has: "马铃薯" } }
+            ]
+          }
+        }
+      }
+    ]
+  });
+});
+
 test("the all-status ingredient query includes merged governance rows", async () => {
   let listWhere: unknown;
   const service = new AdminService(
@@ -377,6 +438,7 @@ test("merges a system ingredient and repoints mutable references in one transact
   const ingredientUpdates: Array<{ where: unknown; data: unknown }> = [];
   const fridgeUpdates: Array<{ where: unknown; data: unknown }> = [];
   const shoppingUpdates: Array<{ where: unknown; data: unknown }> = [];
+  const targetUpdates: Array<{ where: unknown; data: unknown }> = [];
   const audits: Array<Record<string, unknown>> = [];
   const lockedIngredientIds: number[] = [];
   const tx = {
@@ -390,7 +452,8 @@ test("merges a system ingredient and repoints mutable references in one transact
       updateMany: async () => ({ count: 1 })
     },
     ingredient: {
-      findFirst: async ({ where }: { where: { id: number } }) => {
+      findFirst: async ({ where }: { where: { id?: number } }) => {
+        if (where.id === undefined) return null;
         if (where.id === 10000024) {
           return {
             id: 10000024,
@@ -400,7 +463,8 @@ test("merges a system ingredient and repoints mutable references in one transact
             status: "ACTIVE",
             categoryId: 5001,
             category: { id: 5001, name: "蔬果菌菇", code: "PRODUCE" },
-            defaultUnit: { id: 3001, name: "克", type: "WEIGHT", source: "SYSTEM" }
+            defaultUnit: { id: 3001, name: "克", type: "WEIGHT", source: "SYSTEM" },
+            aliases: ["长茄别名"]
           };
         }
         return {
@@ -411,11 +475,16 @@ test("merges a system ingredient and repoints mutable references in one transact
           status: "ACTIVE",
           categoryId: 5001,
           category: { id: 5001, name: "蔬果菌菇", code: "PRODUCE" },
-          defaultUnit: { id: 3001, name: "克", type: "WEIGHT", source: "SYSTEM" }
+          defaultUnit: { id: 3001, name: "克", type: "WEIGHT", source: "SYSTEM" },
+          aliases: ["茄子别名"]
         };
       },
       findMany: async ({ where }: { where: Record<string, unknown> }) =>
-        where.mergedToId === 10000024 ? [{ id: 10000025 }] : [],
+        where.mergedToId === 10000024 ? [{ id: 10000025, name: "小长茄", aliases: ["小茄"] }] : [],
+      update: async (args: { where: unknown; data: unknown }) => {
+        targetUpdates.push(args);
+        return {};
+      },
       updateMany: async (args: { where: unknown; data: unknown }) => {
         ingredientUpdates.push(args);
         return { count: 1 };
@@ -475,6 +544,13 @@ test("merges a system ingredient and repoints mutable references in one transact
       data: { status: "MERGED", mergedToId: 10000001, version: { increment: 1 } }
     }
   ]);
+  assert.deepEqual(targetUpdates, [{
+    where: { id: 10000001 },
+    data: {
+      aliases: ["茄子别名", "长茄子", "长茄别名", "小长茄", "小茄"],
+      version: { increment: 1 }
+    }
+  }]);
   assert.deepEqual(fridgeUpdates, [{
     where: { ingredientId: { in: [10000024, 10000025] } },
     data: { ingredientId: 10000001 }
@@ -492,6 +568,70 @@ test("merges a system ingredient and repoints mutable references in one transact
     shoppingCount: 3,
     importItemCount: 0
   });
+});
+
+test("rejects a system ingredient name that is a merged name or another ingredient alias", async () => {
+  const service = new AdminService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const queries: unknown[] = [];
+  const tx = {
+    ingredient: {
+      findMany: async ({ where }: { where: unknown }) => {
+        queries.push(where);
+        return [{ id: 10000001, name: "土豆", searchKey: "土豆", aliases: ["马铃薯"] }];
+      }
+    }
+  };
+
+  await assert.rejects(
+    (service as any).assertSystemIngredientNameAvailable(tx, "马铃薯", null),
+    /系统食材名称已存在/
+  );
+  assert.equal(queries.length > 0, true);
+});
+
+test("does not create a system ingredient when an alias already belongs to another ingredient", async () => {
+  let created = false;
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    ingredient: {
+      findMany: async () => [{ id: 10000001, name: "土豆", searchKey: "土豆", aliases: ["马铃薯"] }],
+      create: async () => {
+        created = true;
+        return {};
+      }
+    }
+  };
+  const service = new AdminService(
+    { $transaction: async (work: (transaction: typeof tx) => Promise<unknown>) => work(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never
+  );
+  (service as any).requireSuperAdmin = async () => undefined;
+  (service as any).requireSelectableIngredientCategory = async () => ({ id: 5001 });
+  (service as any).requireSystemUnit = async () => ({ id: 3001 });
+
+  await assert.rejects(
+    service.createIngredient({
+      operationId: "95001",
+      name: "新食材",
+      categoryId: 5001,
+      defaultUnitId: 3001,
+      proteinType: null,
+      isStaple: false,
+      isSpicyIngredient: false,
+      aliases: ["马铃薯"]
+    }, 1),
+    /系统食材名称已存在/
+  );
+  assert.equal(created, false);
 });
 
 test("rejects invalid ingredient merge source and target states before mutation", async () => {
@@ -682,8 +822,9 @@ test("allows a disabled system ingredient to become a merged lookup item", async
       updateMany: async () => ({ count: 1 })
     },
     ingredient: {
-      findFirst: async ({ where }: { where: { id: number } }) => where.id === source.id ? source : target,
+      findFirst: async ({ where }: { where: { id?: number } }) => where.id === undefined ? null : where.id === source.id ? source : target,
       findMany: async () => [],
+      update: async () => ({}),
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         ingredientUpdates.push({ where, data });
         return { count: 1 };

@@ -68,6 +68,7 @@ import {
   RecipeReportModel,
     RecipeSceneModel,
     RecipeViewHistoryItemModel,
+  RequestRecipeCookAssistantResponseModel,
   SaveRecipeDraftResultModel,
   SaveCollectionRecipeResultModel,
   UnlockRecipeCookAssistantResponseModel,
@@ -548,6 +549,19 @@ export class RecipeController {
     @ReadIdempotencyKey() operationId: string
   ) {
     return this.recipeService.unlockRecipeVersionCookAssistant(request.user.userId, recipeVersionId, operationId).then(result => ok(result));
+  }
+
+  @Post("recipe-versions/:recipeVersionId/cook-assistant/request")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(RequestRecipeCookAssistantResponseModel, "申请固定菜谱版本的 Wiki")
+  requestRecipeVersionCookAssistant(
+    @Req() request: RequestWithUser,
+    @Param("recipeVersionId", ParseIntPipe) recipeVersionId: number,
+    @ReadIdempotencyKey() operationId: string
+  ) {
+    return this.recipeService.requestRecipeVersionCookAssistant(request.user.userId, recipeVersionId, operationId).then(result => ok(result));
   }
 
   @Post("recipes/from-inspiration")

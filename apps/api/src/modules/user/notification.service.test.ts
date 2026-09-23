@@ -2,7 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { NotificationService } from "./notification.service";
 
-function createNotificationPrisma(fridgeRows: Array<{ id: number; name: string; updatedAt: Date }> = [], options: { officialRows?: Array<{ id: number; title: string; summary: string; bodyHtml: string; publishedAt: Date; updatedAt: Date }> } = {}) {
+function createNotificationPrisma(
+  fridgeRows: Array<{ id: number; name: string; updatedAt: Date }> = [],
+  options: {
+    officialRows?: Array<{ id: number; title: string; summary: string; bodyHtml: string; publishedAt: Date; updatedAt: Date }>;
+    wikiRows?: Array<{
+      id: number;
+      status: "PENDING" | "READY" | "REJECTED";
+      rejectionReason: string | null;
+      resolvedAt: Date | null;
+      updatedAt: Date;
+      recipeVersion: { name: string; currentRecipes: Array<{ id: number; isInspiration: boolean }> };
+    }>;
+  } = {}
+) {
   const userCreatedAt = new Date("2026-09-04T08:00:00.000Z");
   const oldOfficialAt = new Date("2026-09-03T08:00:00.000Z");
   const newOfficialAt = new Date("2026-09-04T09:00:00.000Z");
@@ -24,6 +37,7 @@ function createNotificationPrisma(fridgeRows: Array<{ id: number; name: string; 
       updatedAt: newOfficialAt
     }
   ];
+  const wikiRows = options.wikiRows ?? [];
 
   const emptySource = {
     count: async () => 0,
@@ -48,11 +62,15 @@ function createNotificationPrisma(fridgeRows: Array<{ id: number; name: string; 
       }
     },
     userNotificationRead: {
-      findMany: async ({ where }: { where: { notificationId: { in: string[] } } }) =>
-        where.notificationId.in.flatMap(notificationId => {
-          const notificationAt = notificationReads.get(notificationId);
-          return notificationAt ? [{ notificationId, notificationAt }] : [];
-        }),
+      findMany: async ({ where }: { where: { notificationId?: { in: string[] }; notificationAt?: { gt?: Date } } }) => {
+        const rows = Array.from(notificationReads.entries()).map(([notificationId, notificationAt]) => ({ notificationId, notificationAt }));
+        const notificationIds = where.notificationId?.in;
+        const notificationAfter = where.notificationAt?.gt;
+        const selected = notificationIds ? rows.filter(row => notificationIds.includes(row.notificationId)) : rows;
+        return notificationAfter
+          ? selected.filter(row => row.notificationAt.getTime() > notificationAfter.getTime())
+          : selected;
+      },
       upsert: async ({ create }: { create: { notificationId: string; notificationAt: Date } }) => {
         notificationReads.set(create.notificationId, create.notificationAt);
       }
@@ -60,9 +78,23 @@ function createNotificationPrisma(fridgeRows: Array<{ id: number; name: string; 
     ingredientRecommendation: emptySource,
     unitRecommendation: emptySource,
     shoppingListInvite: emptySource,
+    recipeCookAssistantRequest: {
+      count: async ({ where }: { where: { userId: number; status?: { in: string[] } } }) =>
+        where.userId === 9 ? wikiRows.filter(row => !where.status || where.status.in.includes(row.status)).length : 0,
+      findMany: async ({ where }: { where: { userId: number; status?: { in: string[] } }; take?: number }) =>
+        where.userId === 9
+          ? wikiRows.filter(row => !where.status || where.status.in.includes(row.status)).slice(0, 100)
+          : [],
+      findFirst: async ({ where }: { where: { userId: number; id: number; status?: { in: string[] } } }) =>
+        where.userId === 9 && wikiRows.find(row => row.id === where.id && (!where.status || where.status.in.includes(row.status)))
+    },
     fridgeItem: {
       ...emptySource,
-      count: async () => fridgeRows.length,
+      count: async ({ where }: { where?: { updatedAt?: { gt?: Date } } } = {}) => {
+        const updatedAfter = where?.updatedAt?.gt;
+        return fridgeRows.filter(row => !updatedAfter || row.updatedAt.getTime() > updatedAfter.getTime()).length;
+      },
+      findFirst: async () => fridgeRows.slice().sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())[0] ?? null,
       findMany: async ({ take }: { take?: number } = {}) => (typeof take === "number" ? fridgeRows.slice(0, take) : fridgeRows)
     },
     siteContent: {
@@ -125,7 +157,7 @@ test("official content is presented as a published message event", async () => {
   assert.equal(item?.desc, "注册后公告");
 });
 
-test("opening the feed clears its badge without clearing an unread card until the card is opened", async () => {
+test("opening the feed clears the badge and the matching unread card together", async () => {
   const service = new NotificationService(createNotificationPrisma() as never, {} as never);
 
   const badge = await (service as any).markBadgeSeen(9);
@@ -133,12 +165,44 @@ test("opening the feed clears its badge without clearing an unread card until th
   const item = beforeOpen.items.find(candidate => candidate.id === "official:2");
 
   assert.equal(badge.unreadCount, 0);
-  assert.equal(item?.isUnread, true);
+  assert.equal(item?.isUnread, false);
 
   await (service as any).markItemRead(9, "official:2", "2026-09-04T09:00:00.000Z");
 
   const afterOpen = await service.getFeed(9, 1, 20);
   assert.equal(afterOpen.items.find(candidate => candidate.id === "official:2")?.isUnread, false);
+});
+
+test("marking one notification read removes only that notification from the badge count", async () => {
+  const service = new NotificationService(
+    createNotificationPrisma([], {
+      officialRows: [
+        {
+          id: 1,
+          title: "第一条公告",
+          summary: "第一条",
+          bodyHtml: "",
+          publishedAt: new Date("2026-09-04T09:00:00.000Z"),
+          updatedAt: new Date("2026-09-04T09:00:00.000Z")
+        },
+        {
+          id: 2,
+          title: "第二条公告",
+          summary: "第二条",
+          bodyHtml: "",
+          publishedAt: new Date("2026-09-04T10:00:00.000Z"),
+          updatedAt: new Date("2026-09-04T10:00:00.000Z")
+        }
+      ]
+    }) as never,
+    {} as never
+  );
+
+  assert.equal((await service.getBadge(9)).unreadCount, 2);
+
+  await (service as any).markItemRead(9, "official:2", "2026-09-04T10:00:00.000Z");
+
+  assert.equal((await service.getBadge(9)).unreadCount, 1);
 });
 
 test("leaving the feed only clears cards at the entry frontier", async () => {
@@ -204,11 +268,14 @@ test("the newest official notification version stays on the first feed page", as
 
 test("fridge reminders keep one distinct notification for each expiring item", async () => {
   const service = new NotificationService(
-    createNotificationPrisma([
-      { id: 1, name: "西红柿", updatedAt: new Date("2026-09-04T10:00:00.000Z") },
-      { id: 2, name: "鸡蛋", updatedAt: new Date("2026-09-04T11:00:00.000Z") },
-      { id: 3, name: "香菇", updatedAt: new Date("2026-09-04T12:00:00.000Z") }
-    ]) as never,
+    createNotificationPrisma(
+      [
+        { id: 1, name: "西红柿", updatedAt: new Date("2026-09-04T10:00:00.000Z") },
+        { id: 2, name: "鸡蛋", updatedAt: new Date("2026-09-04T11:00:00.000Z") },
+        { id: 3, name: "香菇", updatedAt: new Date("2026-09-04T12:00:00.000Z") }
+      ],
+      { officialRows: [] }
+    ) as never,
     {} as never
   );
 
@@ -217,6 +284,67 @@ test("fridge reminders keep one distinct notification for each expiring item", a
 
   assert.equal(reminders.length, 3);
   assert.deepEqual(reminders.map(item => item.title).sort(), ["食材临期提醒：西红柿", "食材临期提醒：鸡蛋", "食材临期提醒：香菇"].sort());
+});
+
+test("fridge reminder badge count matches the number of unread reminder cards", async () => {
+  const service = new NotificationService(
+    createNotificationPrisma(
+      [
+        { id: 1, name: "西红柿", updatedAt: new Date("2026-09-04T10:00:00.000Z") },
+        { id: 2, name: "鸡蛋", updatedAt: new Date("2026-09-04T11:00:00.000Z") },
+        { id: 3, name: "香菇", updatedAt: new Date("2026-09-04T12:00:00.000Z") }
+      ],
+      { officialRows: [] }
+    ) as never,
+    {} as never
+  );
+
+  const badge = await service.getBadge(9);
+  const feed = await service.getFeed(9, 1, 20);
+
+  assert.equal(badge.unreadCount, 3);
+  assert.equal(feed.items.filter(item => item.isUnread).length, badge.unreadCount);
+});
+
+test("Wiki READY and rejection results notify only the requesting user", async () => {
+  const service = new NotificationService(
+    createNotificationPrisma([], {
+      officialRows: [],
+      wikiRows: [
+        {
+          id: 31,
+          status: "READY",
+          rejectionReason: null,
+          resolvedAt: new Date("2026-09-04T13:00:00.000Z"),
+          updatedAt: new Date("2026-09-04T13:00:00.000Z"),
+          recipeVersion: { name: "红烧排骨", currentRecipes: [{ id: 101, isInspiration: false }] }
+        },
+        {
+          id: 32,
+          status: "REJECTED",
+          rejectionReason: "菜谱不够完整",
+          resolvedAt: new Date("2026-09-04T12:00:00.000Z"),
+          updatedAt: new Date("2026-09-04T12:00:00.000Z"),
+          recipeVersion: { name: "番茄鸡蛋", currentRecipes: [{ id: 102, isInspiration: true }] }
+        },
+        {
+          id: 33,
+          status: "PENDING",
+          rejectionReason: null,
+          resolvedAt: null,
+          updatedAt: new Date("2026-09-04T14:00:00.000Z"),
+          recipeVersion: { name: "不应通知", currentRecipes: [{ id: 103, isInspiration: false }] }
+        }
+      ]
+    }) as never,
+    {} as never
+  );
+
+  const result = await service.getFeed(9, 1, 20);
+  const wikiItems = result.items.filter(item => item.id.startsWith("recipe-wiki:"));
+  assert.equal(wikiItems.length, 2);
+  assert.equal(wikiItems.find(item => item.id === "recipe-wiki:31")?.targetPath, "/pages_recipe/detail/index?recipeId=101&kind=my");
+  assert.equal(wikiItems.find(item => item.id === "recipe-wiki:32")?.desc, "菜谱不够完整");
 });
 
 test("fridge reminder pagination keeps the full source total", async () => {

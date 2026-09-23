@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Post, Put, Query, Req, UploadedFile, UploadedFiles, UseGuards, UseInterceptors } from "@nestjs/common";
 import { FilesInterceptor, FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { ok } from "../../common/api-response";
@@ -24,8 +24,11 @@ import {
   UpdateAdminIngredientNutritionDto,
   AdminUnitPayloadDto,
   AdminLoginDto,
-  AdminRecipeContentDto,
-  AdminRecipeQueryDto,
+    AdminRecipeContentDto,
+    AdminRecipeQueryDto,
+  AdminRecipeWikiExportDto,
+  AdminRecipeWikiQueryDto,
+  AdminRecipeWikiRejectDto,
   AdminRecipeReportQueryDto,
   AdminUserEntitlementQueryDto,
   BlockRecipeDto,
@@ -103,7 +106,12 @@ import {
   AdminUserRecipeDomainOverviewModel,
   AdminLoginResultModel,
   AdminResetUserPasswordResultModel,
-  AdminRecipeModel,
+    AdminRecipeModel,
+  AdminRecipeWikiImportResultModel,
+  AdminRecipeWikiBatchExportDocumentModel,
+  AdminRecipeWikiExportDocumentModel,
+  AdminRecipeWikiRejectResultModel,
+  AdminRecipeWikiSummaryModel,
   AdminUserEntitlementModel,
   AdminUserPhoneRevealModel,
   ApiOkArray,
@@ -475,6 +483,60 @@ export class AdminController {
     return this.adminService
       .listRecipes(query.page, query.pageSize, query.keyword, query.status, query.categoryId, request.admin.adminId)
       .then(result => ok(result));
+  }
+
+  @Get("recipe-wiki")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkPage(AdminRecipeWikiSummaryModel, "后台待补充菜谱 Wiki 列表")
+  listRecipeWiki(@Req() request: RequestWithAdmin, @Query() query: AdminRecipeWikiQueryDto) {
+    return this.adminService.listRecipeWiki(query.page, query.pageSize, query.keyword, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Get("recipe-wiki/:recipeId/export")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminRecipeWikiExportDocumentModel, "导出一个菜谱 Wiki JSON")
+  exportRecipeWiki(@Req() request: RequestWithAdmin, @Param("recipeId", ParseIntPipe) recipeId: number) {
+    return this.adminService.exportRecipeWiki(recipeId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipe-wiki/export")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiOkModel(AdminRecipeWikiBatchExportDocumentModel, "批量导出菜谱 Wiki JSON")
+  exportRecipeWikiBatch(@Req() request: RequestWithAdmin, @Body() body: AdminRecipeWikiExportDto) {
+    return this.adminService.exportRecipeWikiBatch(body.recipeIds, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipe-wiki/import")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @UseInterceptors(FileInterceptor("file", { storage: recipeJsonUploadStorage, limits: recipeJsonUploadLimits }))
+  @ApiConsumes("multipart/form-data")
+  @ApiOkModel(AdminRecipeWikiImportResultModel, "批量导入菜谱 Wiki JSON")
+  importRecipeWiki(
+    @Req() request: RequestWithAdmin,
+    @ReadIdempotencyKey() operationId: string,
+    @UploadedFile() file?: { buffer?: Buffer }
+  ) {
+    if (!file?.buffer) throw new BadRequestException("请上传 Wiki JSON 文件");
+    return this.adminService.importRecipeWiki(file.buffer, operationId, request.admin.adminId).then(result => ok(result));
+  }
+
+  @Post("recipe-wiki/:recipeId/reject")
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminRecipeWikiRejectResultModel, "拒绝一个菜谱 Wiki 申请")
+  rejectRecipeWiki(
+    @Req() request: RequestWithAdmin,
+    @Param("recipeId", ParseIntPipe) recipeId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: AdminRecipeWikiRejectDto
+  ) {
+    return this.adminService.rejectRecipeWiki(recipeId, body.reason, operationId, request.admin.adminId).then(result => ok(result));
   }
 
   @Post("recipe-import-jobs/json")
