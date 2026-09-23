@@ -149,6 +149,32 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(pageSource, /theme-dark/);
   });
 
+  nodeTest("meal cook mode opens a multi-menu picker from the immersive dish tag", () => {
+    nodeAssert.match(pageSource, /const dishMenuOpen = ref\(false\);/);
+    nodeAssert.match(pageSource, /const currentDishTitle = computed\(\(\) =>/);
+    nodeAssert.match(pageSource, /<view v-if="isImmersive && hasMenuTabs" class="cook-slide__menu-anchor">/);
+    nodeAssert.match(pageSource, /<text class="cook-slide__tag"[^>]*@click\.stop="toggleDishMenu"/);
+    nodeAssert.match(pageSource, /<view v-if="hasMenuTabs" class="cook-slide__menu"/);
+    nodeAssert.match(pageSource, /:class="\{ 'cook-slide__menu--open': dishMenuOpen \}"/);
+    nodeAssert.match(pageSource, /v-for="\(item, index\) in menuTabs"/);
+    nodeAssert.match(pageSource, /@click\.stop="selectDishFromMenu\(index\)"/);
+    nodeAssert.match(pageSource, /function toggleDishMenu\(\)/);
+    nodeAssert.match(pageSource, /function selectDishFromMenu\(index: number\)/);
+    nodeAssert.match(pageSource, /selectDishFromMenu[\s\S]*?setSelectedDish\(index\)[\s\S]*?closeDishMenu\(\);/);
+  });
+
+  nodeTest("meal cook mode closes the immersive menu from outside clicks and keeps it transparent", () => {
+    nodeAssert.match(pageSource, /<view v-if="dishMenuOpen && hasMenuTabs" class="cook-slide__menu-dismiss" @click="closeDishMenu" \/>/);
+    nodeAssert.match(pageSource, /function closeDishMenu\(\)/);
+    nodeAssert.match(pageSource, /function toggleViewMode\(\)[\s\S]*?closeDishMenu\(\)/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu\s*\{[\s\S]*?clip-path:[\s\S]*?transition:[\s\S]*?opacity:[\s\S]*?pointer-events:/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu--open\s*\{[\s\S]*?pointer-events: auto;/);
+    nodeAssert.doesNotMatch(pageSource, /\.cook-slide__menu\s*\{[^}]*background(?:-color)?:/);
+    nodeAssert.doesNotMatch(pageSource, /\.cook-slide__menu\s*\{[^}]*padding:/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu-item\s*\{[\s\S]*?padding: 20px 0;/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu-item:nth-child\(2\)/);
+  });
+
   nodeTest("meal cook mode shares semantic surfaces across the navbar, slide, and page", () => {
     nodeAssert.match(pageSource, /const navbarBackgroundColor = computed\(\(\) => isImmersive\.value \? "var\(--color-overlay-medium\)" : "var\(--color-page\)"\);/);
     nodeAssert.doesNotMatch(pageSource, /--cook-/);
@@ -201,6 +227,15 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.doesNotMatch(pageSource, /cook-list__head/);
   });
 
+  nodeTest("meal cook mode only handles cooking steps, not completion workflows", () => {
+    nodeAssert.doesNotMatch(pageSource, /cook-completion/);
+    nodeAssert.doesNotMatch(pageSource, /mealApi\.completeCooking/);
+    nodeAssert.doesNotMatch(pageSource, /mealApi\.undoCooking/);
+    nodeAssert.doesNotMatch(pageSource, /CookingConsumptionResponse/);
+    nodeAssert.doesNotMatch(pageSource, /consumptionOperationId/);
+    nodeAssert.doesNotMatch(pageSource, /撤销库存更新/);
+  });
+
   nodeTest("meal cook mode shows one dish at a time and switches dishes horizontally in list view", () => {
     nodeAssert.match(pageSource, /<scroll-view v-if="isSingleListFlow" scroll-y class="cook-list-scroll"/);
     nodeAssert.match(pageSource, /<swiper v-else class="cook-list-swiper" :current="selectedDishIndex"/);
@@ -246,7 +281,8 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /:current="immersiveIndex"/);
     nodeAssert.match(pageSource, /v-for="\(item, index\) in immersiveSteps"/);
     nodeAssert.match(pageSource, /class="cook-slide__image" :src="item\.imageUrl" mode="widthFix"/);
-    nodeAssert.match(pageSource, /<text v-if="isImmersive" class="cook-slide__tag">\{\{ currentStep\?\.dishTitle \}\}<\/text>/);
+    nodeAssert.match(pageSource, /<view v-if="isImmersive && hasMenuTabs" class="cook-slide__menu-anchor">[\s\S]*?<text class="cook-slide__tag"[^>]*>\{\{ currentDishTitle \}\}<\/text>/);
+    nodeAssert.match(pageSource, /<text v-else-if="isImmersive" class="cook-slide__tag">\{\{ currentStep\?\.dishTitle \}\}<\/text>/);
     nodeAssert.match(pageSource, /<text v-else class="cook-nav__title">\{\{ sourceTitle \}\}<\/text>/);
     nodeAssert.doesNotMatch(pageSource, /<view class="cook-slide__top-left">[\s\S]*?cook-slide__tag[\s\S]*?<\/view>/);
     nodeAssert.match(pageSource, /\.cook-slide\s*\{[\s\S]*?display: flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;/);

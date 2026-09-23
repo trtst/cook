@@ -122,7 +122,6 @@ function handleLeftClick() {
   right: 0;
   left: 0;
   z-index: 800;
-  overflow: hidden;
   background: var(--color-page);
 }
 

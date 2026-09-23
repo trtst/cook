@@ -12,7 +12,20 @@
   >
     <template #navbar-center>
       <view class="cook-nav__main" :class="{ 'cook-nav__main--immersive': isImmersive }">
-        <text v-if="isImmersive" class="cook-slide__tag">{{ currentStep?.dishTitle }}</text>
+        <view v-if="isImmersive && hasMenuTabs" class="cook-slide__menu-anchor">
+          <text class="cook-slide__tag" @click.stop="toggleDishMenu">{{ currentDishTitle }}</text>
+          <view v-if="hasMenuTabs" class="cook-slide__menu" :class="{ 'cook-slide__menu--open': dishMenuOpen }">
+            <view
+              v-for="(item, index) in menuTabs"
+              :key="item.key"
+              class="cook-slide__menu-item"
+              @click.stop="selectDishFromMenu(index)"
+            >
+              {{ item.title }}
+            </view>
+          </view>
+        </view>
+        <text v-else-if="isImmersive" class="cook-slide__tag">{{ currentStep?.dishTitle }}</text>
         <text v-else class="cook-nav__title">{{ sourceTitle }}</text>
         <view
           class="cook-nav__mode-toggle"
@@ -53,6 +66,8 @@
       </view>
 
       <template v-else>
+        <view v-if="dishMenuOpen && hasMenuTabs" class="cook-slide__menu-dismiss" @click="closeDishMenu" />
+
         <view v-if="hasMenuTabs" class="cook-toolbar" :class="{ 'cook-toolbar--immersive': isImmersive }">
           <scroll-view
             id="cook-menu-scroll"
@@ -178,7 +193,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
-import type { UUID } from "@/apis/http";
+import { type UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
 import {
   recipeApi,
@@ -263,6 +278,7 @@ const menuIndicatorStyle = ref<Record<string, string>>({ opacity: "0" });
 const viewMode = ref<ViewMode>("list");
 const expandedMixedStepIds = ref<string[]>([]);
 const mixedReadingStepId = ref("");
+const dishMenuOpen = ref(false);
 
 const requiresLogin = computed(() => sourceType.value === "plan");
 const isAssistantMode = computed(() => flowMode.value === "assistant");
@@ -291,6 +307,7 @@ const currentIndex = computed(() => originalCurrentIndex.value);
 const currentStep = computed(() => {
   return viewMode.value === "swiper" ? immersiveSteps.value[immersiveIndex.value] ?? null : steps.value[currentIndex.value] ?? null;
 });
+const currentDishTitle = computed(() => menuTabs.value[selectedDishIndex.value]?.title || currentStep.value?.dishTitle || "");
 const canSwitchFlowMode = computed(() => isAssistantMode.value);
 onLoad(query => {
   sourceType.value = parseSourceType(query?.source);
@@ -663,7 +680,23 @@ function setViewMode(nextMode: ViewMode) {
 }
 
 function toggleViewMode() {
+  closeDishMenu();
   setViewMode(isImmersive.value ? "list" : "swiper");
+}
+
+function toggleDishMenu() {
+  if (!isImmersive.value || !hasMenuTabs.value) return;
+  dishMenuOpen.value = !dishMenuOpen.value;
+}
+
+function closeDishMenu() {
+  dishMenuOpen.value = false;
+}
+
+function selectDishFromMenu(index: number) {
+  if (!hasMenuTabs.value) return;
+  setSelectedDish(index);
+  closeDishMenu();
 }
 
 function setFlowMode(nextMode: FlowMode) {
@@ -682,6 +715,7 @@ function applyFlowData(nextOriginalSteps: CookStep[]) {
   originalSteps.value = nextOriginalSteps;
   originalCurrentIndex.value = 0;
   immersiveIndex.value = 0;
+  dishMenuOpen.value = false;
   selectedDishIndex.value = 0;
   menuScrollLeft.value = 0;
   menuScrollTarget.value = 0;
@@ -751,6 +785,7 @@ function resetSteps() {
   originalSteps.value = [];
   originalCurrentIndex.value = 0;
   immersiveIndex.value = 0;
+  dishMenuOpen.value = false;
   menuTabs.value = [];
   selectedDishIndex.value = 0;
   menuScrollLeft.value = 0;
@@ -935,6 +970,7 @@ defineExpose({
 
 .cook-nav__main {
   display: flex;
+  position: relative;
   width: 100%;
   min-width: 0;
   align-items: center;
@@ -1037,6 +1073,79 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cook-slide__menu-anchor {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.cook-slide__menu-anchor .cook-slide__tag {
+  display: block;
+  width: 100%;
+}
+
+.cook-slide__menu {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 12rpx);
+  left: 0;
+  min-width: 100%;
+  overflow: hidden;
+  clip-path: inset(0 0 100% 0 round 0);
+  opacity: 0;
+  pointer-events: none;
+  transition: clip-path 320ms ease, opacity 220ms ease;
+}
+
+.cook-slide__menu--open {
+  clip-path: inset(0 0 0 0 round 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cook-slide__menu-item {
+  position: relative;
+  padding: 20px 0;
+  color: var(--color-overlay-text);
+  font-size: 26rpx;
+  line-height: 1.35;
+  text-shadow: 0 2rpx 10rpx var(--color-shadow-overlay);
+  white-space: nowrap;
+  transform: translateY(30rpx);
+  opacity: 0;
+  transition: transform 320ms ease 120ms, opacity 320ms ease 120ms;
+}
+
+.cook-slide__menu-item:not(:last-child) {
+  border-bottom: 1rpx solid var(--color-overlay-text-muted);
+}
+
+.cook-slide__menu--open .cook-slide__menu-item {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.cook-slide__menu--open .cook-slide__menu-item:nth-child(2) {
+  transition-delay: 270ms;
+}
+
+.cook-slide__menu--open .cook-slide__menu-item:nth-child(3) {
+  transition-delay: 420ms;
+}
+
+.cook-slide__menu--open .cook-slide__menu-item:nth-child(4) {
+  transition-delay: 570ms;
+}
+
+.cook-slide__menu-dismiss {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
 }
 
 .cook-mode-page,

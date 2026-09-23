@@ -22,6 +22,13 @@ function expectSelectorIncludes(selector: string, snippets: string[]) {
   }
 }
 
+function expectSelectorNotIncludes(selector: string, snippet: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\n\\}`, "m"));
+  assert.ok(match?.[1], `Expected selector block to exist: ${selector}`);
+  assert.ok(!match[1].includes(snippet), `Expected selector ${selector} not to include: ${snippet}`);
+}
+
 expectNotIncludes('"--navbar-side-width": `${navSideGuardWidth.value}px`');
 expectNotIncludes("navSideGuardWidth");
 expectNotIncludes("--navbar-right-width");
@@ -73,6 +80,7 @@ expectSelectorIncludes(".navbar__icon", ["color: var(--navbar-foreground-color, 
 expectSelectorIncludes(".navbar__side", ["flex: 0 0 var(--navbar-side-width);"]);
 expectSelectorIncludes(".navbar__side--right", ["justify-content: flex-end;"]);
 expectSelectorIncludes(".navbar__center", ["justify-content: center;"]);
+expectSelectorNotIncludes(".navbar__fixed", "overflow: hidden;");
 expectSelectorIncludes(".navbar__side--capsule", [
   "flex-basis: var(--navbar-capsule-width);",
   "width: var(--navbar-capsule-width);",
