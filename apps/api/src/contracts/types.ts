@@ -92,8 +92,8 @@ export interface NotificationBadgeResponse {
   latestTime: string;
 }
 
-export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "系统提醒" | "炊火记";
-export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official";
+export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "系统提醒" | "炊火记" | "菜谱 Wiki";
+export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official" | "recipe-wiki";
 
 export interface NotificationFeedItem {
   id: string;
@@ -278,6 +278,16 @@ export interface CookAssistantUsageResponse {
 export interface UnlockCookAssistantAccessResult {
   newlyUnlocked: boolean;
   unlockedAt: IsoDateTime;
+  usage: CookAssistantUsageResponse;
+}
+
+export type RecipeWikiRequestStatus = "PENDING" | "READY" | "REJECTED";
+
+export interface RequestRecipeWikiResult {
+  status: RecipeWikiRequestStatus;
+  requestAt: IsoDateTime | null;
+  rejectionReason: string | null;
+  newlyRequested: boolean;
   usage: CookAssistantUsageResponse;
 }
 
@@ -1522,15 +1532,22 @@ export interface RecipeAssistantSnapshot {
 
 export interface RecipeCookAssistantResponse {
   recipeVersionId: UUID;
-  status: "READY";
+  status: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "READY" | "FAILED" | "REJECTED";
   unlocked: boolean;
   unlockedAt: IsoDateTime | null;
-  generatedAt: IsoDateTime;
+  generatedAt: IsoDateTime | null;
+  requestAt: IsoDateTime | null;
+  rejectionReason: string | null;
   assistant: RecipeAssistantSnapshot | null;
 }
 
 export interface UnlockRecipeCookAssistantResponse extends RecipeCookAssistantResponse {
   newlyUnlocked: boolean;
+}
+
+export interface RequestRecipeCookAssistantResponse extends RecipeCookAssistantResponse {
+  newlyRequested: boolean;
+  usage: CookAssistantUsageResponse;
 }
 
 export type RecipeNutritionStatus = "COMPLETE" | "ESTIMATED" | "INSUFFICIENT" | "NONE";
@@ -1859,6 +1876,62 @@ export interface AdminRecipeSummary {
   ownerUid: number | null;
 }
 
+export interface AdminRecipeWikiSummary {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  contentVersionId: UUID;
+  ownerUid: number;
+  ownerNickname: string | null;
+  sourceType: "USER" | "PUBLIC_CONTENT_POOL";
+  wikiStatus: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "FAILED";
+  hasPendingRequest: boolean;
+  latestRequestAt: IsoDateTime | null;
+  latestRequestUserUid: number | null;
+  latestRequestUserNickname: string | null;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminRecipeWikiImportItem {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  tags: Array<{ tagCode: string; tagValue: string }>;
+  assistantSteps: RecipeImportAssistantStepDraft[];
+}
+
+export interface AdminRecipeWikiImportResult {
+  importedCount: number;
+  rejectedCount: number;
+  items: Array<{
+    recipeId: UUID;
+    status: "READY" | "REJECTED";
+    message: string | null;
+  }>;
+}
+
+export interface AdminRecipeWikiExportDocument {
+  schemaVersion: "recipe.wiki.v1";
+  recipeId: UUID;
+  contentVersionId: UUID;
+  wiki: {
+    tags: RecipeImportTagDraft[];
+    assistant: { steps: RecipeImportAssistantStepDraft[] };
+  };
+}
+
+export interface AdminRecipeWikiBatchExportDocument {
+  schemaVersion: "recipe.wiki.batch.v1";
+  recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
+}
+
+export interface AdminRecipeWikiRejectResult {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  status: "REJECTED";
+  rejectedRequestCount: number;
+  rejectionReason: string;
+}
+
 export interface AdminDeleteRecipeResult {
   recipeId: UUID;
   deletedAt: IsoDateTime;
@@ -2161,6 +2234,112 @@ export interface UpdateRecipeImportItemRequest {
 }
 
 export interface PublishRecipeImportItemRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
+export type IngredientImportJobStatus = "RUNNING" | "READY" | "FAILED" | "COMPLETED";
+export type IngredientImportItemStatus = "NEEDS_FIX" | "READY" | "IMPORTED" | "FAILED";
+export type IngredientImportMatchType = "EXACT_NAME" | "ALIAS" | "REPRESENTATIVE" | "LEAN_REPRESENTATIVE" | "MANUAL" | "REVIEW_NEEDED";
+
+export interface IngredientImportNutritionBody {
+  sourceVersion: string;
+  foodCode: string;
+  foodName: string;
+  matchType: IngredientImportMatchType;
+  confidence: number;
+  conversions: Array<{ unitName: string; gramsPerUnit: number }>;
+}
+
+export interface IngredientImportBody {
+  name: string;
+  aliases: string[];
+  categoryCode: string | null;
+  defaultUnitName: string | null;
+  proteinType: IngredientProteinType | null;
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+  imageUrl: string | null;
+  nutrition: IngredientImportNutritionBody | null;
+}
+
+export interface IngredientImportJobSummary {
+  id: UUID;
+  sourceName: string;
+  status: IngredientImportJobStatus;
+  totalCount: number;
+  readyCount: number;
+  needsFixCount: number;
+  importedCount: number;
+  failedCount: number;
+  createdByAdminId: UUID;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminDeleteIngredientImportJobResult {
+  jobId: UUID;
+  deletedAt: IsoDateTime;
+}
+
+export interface AdminDeleteIngredientImportItemResult {
+  itemId: UUID;
+  jobId: UUID;
+  deletedIngredientId: UUID | null;
+  deletedAt: IsoDateTime;
+}
+
+export interface IngredientImportMatchSummary {
+  kind: "MATCHED" | "CREATE" | "AMBIGUOUS";
+  matchType: "EXACT_NAME" | "ALIAS" | null;
+  ingredientId: UUID | null;
+  ingredientName: string | null;
+  ingredientStatus: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | null;
+  ingredientIds: UUID[];
+}
+
+export interface IngredientImportItemSummary {
+  id: UUID;
+  jobId: UUID;
+  sourcePath: string;
+  title: string;
+  categoryCode: string | null;
+  categoryName: string | null;
+  defaultUnitName: string | null;
+  status: IngredientImportItemStatus;
+  errorCount: number;
+  warnCount: number;
+  ingredientId: UUID | null;
+  matchType: string | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface IngredientImportJobDetail extends IngredientImportJobSummary {
+  items: PageResult<IngredientImportItemSummary>;
+}
+
+export interface IngredientImportItemDetail extends IngredientImportItemSummary {
+  rawBody: { sourcePath: string; jsonText: string };
+  ingredientBody: IngredientImportBody;
+  errorItems: RecipeImportIssue[];
+  warnItems: RecipeImportIssue[];
+  match: IngredientImportMatchSummary;
+}
+
+export interface UpdateIngredientImportItemRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+  ingredientBody: IngredientImportBody;
+}
+
+export interface ImportIngredientImportItemRequest {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
+export interface DeleteIngredientImportItemRequest {
   operationId: OperationId;
   expectedVersion: number;
 }
@@ -2637,6 +2816,23 @@ export interface MealCookContextResponse {
   dishes: MealCookContextDish[];
 }
 
+export interface CookingConsumptionResponse {
+  planItemId: UUID;
+  consumptionOperationId: OperationId;
+  completedAt: IsoDateTime;
+  updatedCount: number;
+  unknownCount: number;
+  shortageCount: number;
+  skippedFuzzyCount: number;
+  message: string;
+  canUndo: boolean;
+}
+
+export interface CookingUndoResponse {
+  undone: boolean;
+  message: string;
+}
+
 export interface MealCookAssistantDishSource {
   dishId: UUID;
   recipeVersionId: UUID;
@@ -2995,6 +3191,73 @@ export interface FridgeSummaryResponse {
   latestTime: IsoDateTime | "";
 }
 
+export interface FridgeStockGroup {
+  unitId: UUID;
+  unitName: string;
+  quantity: string;
+  batchCount: number;
+}
+
+export interface FridgeBatchSummary {
+  id: UUID;
+  ingredientId: UUID | null;
+  name: string;
+  quantityText: string | null;
+  exactQuantity: string | null;
+  exactUnitId: UUID | null;
+  exactUnitName: string | null;
+  note: string | null;
+  available: boolean;
+  expireAt: IsoDateTime | null;
+  isExpired: boolean;
+  isExpiredWithin15Days: boolean;
+  stockText: string | null;
+  reservedText: string | null;
+  availableText: string | null;
+  reservations: Array<{
+    shoppingListId: UUID;
+    shoppingListName: string;
+    shoppingItemId: UUID;
+    reservedText: string;
+  }>;
+  needsConfirmation: boolean;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface FridgeIngredientSummary {
+  id: UUID;
+  ingredientId: UUID | null;
+  categoryName: string | null;
+  name: string;
+  stockText: string;
+  stockGroups: FridgeStockGroup[];
+  expireAt: IsoDateTime | null;
+  isExpired: boolean;
+  expiredBatchCount: number;
+  batchCount: number;
+  hasReservation: boolean;
+  needsConfirmation: boolean;
+  identityPending: boolean;
+  updatedAt: IsoDateTime;
+}
+
+export interface FridgeIngredientDetail extends FridgeIngredientSummary {
+  activeBatches: FridgeBatchSummary[];
+  expiredBatches: FridgeBatchSummary[];
+}
+
+export interface FridgeConsumeAllocation {
+  batchId: UUID;
+  quantity: string;
+  unitId: UUID;
+}
+
+export interface FridgeConsumeResponse {
+  detail: FridgeIngredientDetail;
+  allocations: FridgeConsumeAllocation[];
+}
+
 export interface CreateFridgeItemRequest {
   operationId: OperationId;
   name: string;
@@ -3008,6 +3271,7 @@ export interface CreateFridgeItemRequest {
 
 export interface UpdateFridgeItemRequest {
   operationId: OperationId;
+  available?: boolean;
   quantityText?: string | null;
   exactQuantity?: string | null;
   exactUnitId?: UUID | null;
@@ -3069,7 +3333,7 @@ export type ShoppingListRole = "OWNER" | "COLLABORATOR";
 export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
 export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
 export type ShoppingListItemStatus = "OPEN" | "CHECKED" | "REMOVED";
-export type ShoppingListItemFridgeAction = "APPLY" | "UNDO";
+export type ShoppingListItemFridgeAction = "APPLY" | "UNDO" | "CONFIRM_ENOUGH";
 export type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
 export type ShoppingInventoryStatus = "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
 

@@ -447,12 +447,37 @@ enum RecipeImportItemStatus {
   FAILED
 }
 
+enum IngredientImportJobStatus {
+  RUNNING
+  READY
+  FAILED
+  COMPLETED
+}
+
+enum IngredientImportItemStatus {
+  NEEDS_FIX
+  READY
+  IMPORTED
+  FAILED
+}
+
 enum RecipeAssistantStatus {
   PENDING
   GENERATING
   NEEDS_REVIEW
   READY
   FAILED
+}
+
+enum CookAssistantUnlockStatus {
+  RESERVED
+  CONSUMED
+}
+
+enum RecipeWikiRequestStatus {
+  PENDING
+  READY
+  REJECTED
 }
 
 enum MealAssistantStatus {
@@ -490,6 +515,7 @@ model AdminAccount {
   materialImages     AdminMaterialImage[] @relation("AdminMaterialImageUploader")
   recipeAssistantUpdates RecipeCookAssistant[] @relation("RecipeCookAssistantUpdater")
   nutritionSnapshotUpdates RecipeNutritionSnapshot[] @relation("RecipeNutritionSnapshotUpdater")
+  ingredientImportJobs IngredientImportJob[]
 
   @@map("admin_accounts")
 }
@@ -709,6 +735,7 @@ model User {
   recipeRecommendations    RecipeRecommendation[]
   recipeCollections         RecipeCollection[]
   recipeViewHistories       RecipeViewHistory[]
+  recipeWikiRequests        RecipeCookAssistantRequest[]
   cookAssistantUnlocks      CookAssistantUnlock[]
   randomMenuUsage           RandomMenuUsage?
   ingredients               Ingredient[]               @relation("IngredientOwner")
@@ -1257,6 +1284,7 @@ model Ingredient {
   shoppingSourceItems   ShoppingItem[]             @relation("ShoppingItemIngredient")
   nutrientMappings      IngredientNutrientMapping[]
   nutrientConversions   IngredientUnitNutrientConversion[]
+  importItems           IngredientImportItem[]      @relation("IngredientImportItemIngredient")
 
   /// PostgreSQL partial unique indexes for active system/category sort order, global display order, and ingredient name scope are kept in hand-written SQL migrations.
   @@index([ownerId, status, categoryId, systemSortOrder, id])
@@ -1356,6 +1384,7 @@ model RecipeContentVersion {
   uploadAssets            UploadAsset[]
   versionTags             RecipeVersionTag[]
   cookAssistant           RecipeCookAssistant?
+  recipeWikiRequests      RecipeCookAssistantRequest[]
   cookAssistantUnlocks    CookAssistantUnlock[]
   nutritionSnapshots      RecipeNutritionSnapshot[]
   completenessSnapshots   RecipeCompletenessSnapshot[]
@@ -1385,6 +1414,26 @@ model RecipeCookAssistant {
 
   @@index([updatedByAdminId])
   @@map("recipe_cook_assistants")
+}
+
+model RecipeCookAssistantRequest {
+  id              Int                     @id @default(autoincrement())
+  userId          Int                     @map("user_id")
+  recipeVersionId Int                     @map("recipe_version_id")
+  status          RecipeWikiRequestStatus @default(PENDING)
+  requestedAt     DateTime                @default(now()) @map("requested_at") @db.Timestamptz(3)
+  resolvedAt      DateTime?               @map("resolved_at") @db.Timestamptz(3)
+  rejectionReason String?                 @map("rejection_reason") @db.VarChar(255)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipeVersion RecipeContentVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recipeVersionId])
+  @@index([recipeVersionId, status, requestedAt])
+  @@index([userId, status, requestedAt])
+  @@map("recipe_cook_assistant_requests")
 }
 
 model NutrientSourceBatch {
@@ -1598,6 +1647,51 @@ model RecipeImportItem {
   @@index([jobId, status, updatedAt])
   @@index([recipeId])
   @@map("recipe_import_items")
+}
+
+model IngredientImportJob {
+  id               Int                       @id @default(autoincrement())
+  sourceName       String                    @map("source_name") @db.VarChar(255)
+  status           IngredientImportJobStatus @default(RUNNING)
+  totalCount       Int                       @default(0) @map("total_count")
+  readyCount       Int                       @default(0) @map("ready_count")
+  needsFixCount    Int                       @default(0) @map("needs_fix_count")
+  importedCount    Int                       @default(0) @map("imported_count")
+  failedCount      Int                       @default(0) @map("failed_count")
+  createdByAdminId Int                       @map("created_by_admin_id")
+  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdByAdmin AdminAccount          @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  items          IngredientImportItem[]
+
+  @@index([status, updatedAt])
+  @@index([createdByAdminId, updatedAt])
+  @@map("ingredient_import_jobs")
+}
+
+model IngredientImportItem {
+  id             Int                        @id @default(autoincrement())
+  jobId          Int                        @map("job_id")
+  sourcePath     String                     @map("source_path") @db.VarChar(512)
+  title          String                     @db.VarChar(64)
+  status         IngredientImportItemStatus @default(NEEDS_FIX)
+  rawBodyJson    Json                       @map("raw_body_json")
+  ingredientBodyJson Json                   @map("ingredient_body_json")
+  errorJson      Json                       @map("error_json")
+  warnJson       Json                       @map("warn_json")
+  ingredientId   Int?                       @map("ingredient_id")
+  matchType      String?                    @map("match_type") @db.VarChar(32)
+  version        Int                        @default(1)
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  job        IngredientImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  ingredient Ingredient? @relation("IngredientImportItemIngredient", fields: [ingredientId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, status, updatedAt])
+  @@index([ingredientId])
+  @@map("ingredient_import_items")
 }
 
 model Recipe {
@@ -1929,6 +2023,7 @@ model CookAssistantUnlock {
   userId          Int      @map("user_id")
   recipeVersionId Int?     @map("recipe_version_id")
   planItemId      Int?     @map("plan_item_id")
+  status          CookAssistantUnlockStatus @default(CONSUMED)
   unlockedOn      DateTime @map("unlocked_on") @db.Date
   unlockedAt      DateTime @default(now()) @map("unlocked_at") @db.Timestamptz(3)
 
@@ -2275,6 +2370,7 @@ model FridgeItem {
   @@index([userId, expireAt, updatedAt])
   @@index([userId, name])
   @@index([userId, ingredientId, exactUnitId, available])
+  @@index([userId, ingredientId, available, expireAt, createdAt, id])
   @@map("fridge_items")
 }
 

@@ -973,6 +973,8 @@ export class FridgeSummaryQueryDto {
   days?: 1 | 2 | 3 | 5 | 7;
 }
 
+export class FridgeHistoryQueryDto extends PageQueryDto {}
+
 export class AdminMedalTemplateQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ enum: medalStatusValues })
   @IsOptional()
@@ -2413,6 +2415,21 @@ export class UpdateDiningEventCoverDto extends OperationDto {
 
 export class CompleteMealPlanDto extends OperationDto {}
 
+export class CompleteCookingDto extends OperationDto {
+  @ApiPropertyOptional({ type: Boolean, description: "饭局没有分配责任菜时，明确确认按整桌处理" })
+  @IsOptional()
+  @Transform(({ value }) => toOptionalBoolean(value))
+  @IsBoolean()
+  markWholeTable?: boolean;
+}
+
+export class UndoCookingDto extends OperationDto {
+  @ApiProperty({ example: "1726900000000123" })
+  @IsString()
+  @Matches(/^[1-9]\d{0,63}$/)
+  consumptionOperationId!: string;
+}
+
 export class GenerateMealPlanCookAssistantDto extends OperationDto {}
 
 export class RespondDiningEventDto extends OperationDto {
@@ -2528,6 +2545,11 @@ export class CreateFridgeItemDto extends OperationDto {
 }
 
 export class UpdateFridgeItemDto extends OperationDto {
+  @ApiPropertyOptional({ example: true, description: "是否仍属于当前可用库存" })
+  @IsOptional()
+  @IsBoolean()
+  available?: boolean;
+
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @ValidateIf((_object, value) => value !== null)
@@ -2563,6 +2585,46 @@ export class UpdateFridgeItemDto extends OperationDto {
   @IsString()
   @MaxLength(255)
   note?: string | null;
+}
+
+export class UpdateFridgeItemsDto extends OperationDto {
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 100, uniqueItems: true })
+  @Type(() => Number)
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  itemIds!: number[];
+
+  @ApiPropertyOptional({ example: true, description: "是否仍属于当前可用库存" })
+  @IsOptional()
+  @IsBoolean()
+  available?: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @IsString()
+  @MaxLength(64)
+  quantityText?: string | null;
+
+  @ApiPropertyOptional({ example: "2.5", nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/)
+  exactQuantity?: string | null;
+
+  @ApiPropertyOptional({ example: resourceIdExample, nullable: true })
+  @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  exactUnitId?: number | null;
 }
 
 export class CreateShoppingItemDto extends OperationDto {
@@ -2815,9 +2877,9 @@ export class ApplyShoppingListItemFridgeDto extends OperationDto {
   @Min(1)
   version!: number;
 
-  @ApiProperty({ enum: ["APPLY", "UNDO"] })
-  @IsIn(["APPLY", "UNDO"])
-  action!: "APPLY" | "UNDO";
+  @ApiProperty({ enum: ["APPLY", "UNDO", "CONFIRM_ENOUGH"] })
+  @IsIn(["APPLY", "UNDO", "CONFIRM_ENOUGH"])
+  action!: "APPLY" | "UNDO" | "CONFIRM_ENOUGH";
 }
 
 export class RemoveShoppingListItemDto extends OperationDto {
@@ -2927,15 +2989,23 @@ export class UpdateShoppingGroupStatusDto extends OperationDto {
 }
 
 export class ConsumeFridgeItemsDto extends OperationDto {
-  @ApiProperty({ type: [String] })
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayMaxSize(100)
-  @ArrayUnique()
+  @ApiProperty({ example: resourceIdExample })
   @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  itemIds!: number[];
+  @IsInt()
+  @Min(1)
+  ingredientId!: number;
+
+  @ApiProperty({ example: "0.5" })
+  @Transform(({ value }) => trimString(value))
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/)
+  exactQuantity!: string;
+
+  @ApiProperty({ example: resourceIdExample })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  exactUnitId!: number;
 }
 
 export class AdminRecipeQueryDto extends PageQueryDto {
@@ -2950,6 +3020,30 @@ export class AdminRecipeQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(["ACTIVE", "RECYCLED", "BLOCKED", "DELETED"])
   status?: string;
+}
+
+export class AdminRecipeWikiQueryDto extends PageQueryDto {
+}
+
+export class AdminRecipeWikiExportDto {
+  @ApiProperty({ type: [Number], minItems: 1, maxItems: 100, example: [10000001] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  recipeIds!: number[];
+}
+
+export class AdminRecipeWikiRejectDto extends OperationDto {
+  @ApiProperty({ maxLength: 255, example: "菜谱内容不够完整，请补充关键步骤后重新编辑" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(255)
+  reason!: string;
 }
 
 export class AdminRecipeReportQueryDto extends PageQueryDto {
@@ -3306,6 +3400,157 @@ export class RecipeImportItemQueryDto extends PageQueryDto {
   @IsIn(["PENDING_PARSE", "NEEDS_FIX", "READY", "PUBLISHING", "PUBLISHED", "FAILED"])
   status?: "PENDING_PARSE" | "NEEDS_FIX" | "READY" | "PUBLISHING" | "PUBLISHED" | "FAILED";
 }
+
+export class IngredientImportJobQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ enum: ["RUNNING", "READY", "FAILED", "COMPLETED"] })
+  @IsOptional()
+  @IsIn(["RUNNING", "READY", "FAILED", "COMPLETED"])
+  status?: "RUNNING" | "READY" | "FAILED" | "COMPLETED";
+}
+
+export class IngredientImportItemQueryDto extends PageQueryDto {
+  @ApiPropertyOptional({ enum: ["NEEDS_FIX", "READY", "IMPORTED", "FAILED"] })
+  @IsOptional()
+  @IsIn(["NEEDS_FIX", "READY", "IMPORTED", "FAILED"])
+  status?: "NEEDS_FIX" | "READY" | "IMPORTED" | "FAILED";
+}
+
+export class IngredientImportConversionDto {
+  @ApiProperty({ maxLength: 16 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(16)
+  unitName!: string;
+
+  @ApiProperty({ minimum: 0.01, maximum: 100000 })
+  @Type(() => Number)
+  @Min(0.01)
+  @Max(100000)
+  gramsPerUnit!: number;
+}
+
+export class IngredientImportNutritionDto {
+  @ApiProperty({ maxLength: 64 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  sourceVersion!: string;
+
+  @ApiProperty({ maxLength: 32 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(32)
+  foodCode!: string;
+
+  @ApiProperty({ maxLength: 128 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  foodName!: string;
+
+  @ApiProperty({ enum: ["EXACT_NAME", "ALIAS", "REPRESENTATIVE", "LEAN_REPRESENTATIVE", "MANUAL", "REVIEW_NEEDED"] })
+  @IsIn(["EXACT_NAME", "ALIAS", "REPRESENTATIVE", "LEAN_REPRESENTATIVE", "MANUAL", "REVIEW_NEEDED"])
+  matchType!: string;
+
+  @ApiProperty({ minimum: 0, maximum: 1 })
+  @Type(() => Number)
+  @Min(0)
+  @Max(1)
+  confidence!: number;
+
+  @ApiProperty({ type: [IngredientImportConversionDto], maxItems: 30 })
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ValidateNested({ each: true })
+  @Type(() => IngredientImportConversionDto)
+  conversions!: IngredientImportConversionDto[];
+}
+
+export class IngredientImportBodyDto {
+  @ApiProperty({ maxLength: 64 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  name!: string;
+
+  @ApiProperty({ type: [String], maxItems: 20 })
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @Transform(({ value }) => trimItems(value))
+  @IsString({ each: true })
+  @MinLength(1, { each: true })
+  @MaxLength(32, { each: true })
+  aliases!: string[];
+
+  @ApiProperty({ nullable: true, maxLength: 32 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(32)
+  categoryCode!: string | null;
+
+  @ApiProperty({ nullable: true, maxLength: 16 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(16)
+  defaultUnitName!: string | null;
+
+  @ApiProperty({ nullable: true, enum: ingredientProteinTypeValues })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @IsIn(ingredientProteinTypeValues)
+  proteinType!: string | null;
+
+  @ApiProperty()
+  @IsBoolean()
+  isStaple!: boolean;
+
+  @ApiProperty()
+  @IsBoolean()
+  isSpicyIngredient!: boolean;
+
+  @ApiProperty({ nullable: true, maxLength: 512 })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(512)
+  imageUrl!: string | null;
+
+  @ApiProperty({ type: IngredientImportNutritionDto, nullable: true })
+  @IsDefined()
+  @ValidateIf((_object, value) => value !== null)
+  @ValidateNested()
+  @Type(() => IngredientImportNutritionDto)
+  nutrition!: IngredientImportNutritionDto | null;
+}
+
+export class UpdateIngredientImportItemDto extends OperationDto {
+  @ApiProperty({ minimum: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
+  @ApiProperty({ type: IngredientImportBodyDto })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => IngredientImportBodyDto)
+  ingredientBody!: IngredientImportBodyDto;
+}
+
+export class ImportIngredientImportItemDto extends VersionedOperationDto {}
+
+export class DeleteIngredientImportItemDto extends VersionedOperationDto {}
 
 export class RecipeImportIssueDto {
   @ApiPropertyOptional({ nullable: true })
