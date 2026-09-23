@@ -134,6 +134,14 @@
 | AdminIngredient | GET | `/admin/ingredient-feedbacks` | 后台待审核系统食材纠错分页列表 |
 | AdminIngredient | POST | `/admin/ingredient-feedbacks/{feedbackId}/review` | 后台审核系统食材纠错 |
 | AdminIngredient | DELETE | `/admin/ingredient-feedbacks/{feedbackId}` | 后台删除待审核系统食材纠错 |
+| AdminIngredientImport | POST | `/admin/ingredient-import-jobs/json` | 后台创建 ingredient.import.v1 食材导入任务 |
+| AdminIngredientImport | GET | `/admin/ingredient-import-jobs` | 后台食材导入任务分页列表 |
+| AdminIngredientImport | GET | `/admin/ingredient-import-jobs/{jobId}` | 后台食材导入任务详情与条目列表 |
+| AdminIngredientImport | DELETE | `/admin/ingredient-import-jobs/{jobId}` | 删除食材导入任务记录 |
+| AdminIngredientImport | GET | `/admin/ingredient-import-items/{itemId}` | 后台食材导入条目详情 |
+| AdminIngredientImport | PUT | `/admin/ingredient-import-items/{itemId}` | 保存食材导入条目修正 |
+| AdminIngredientImport | POST | `/admin/ingredient-import-items/{itemId}/import` | 确认导入食材条目 |
+| AdminIngredientImport | DELETE | `/admin/ingredient-import-items/{itemId}` | 删除食材导入条目；仅安全清理仍待审核且无引用的导入食材 |
 | AdminRecipe | GET | `/admin/inspiration-categories` | 后台系统菜谱分类列表 |
 | AdminRecipe | POST | `/admin/inspiration-categories` | 后台新建系统菜谱分类 |
 | AdminRecipe | PUT | `/admin/inspiration-categories/{categoryId}` | 后台编辑系统菜谱分类 |
@@ -169,8 +177,11 @@
 | Share | POST | `/share/{shareToken}/accept` | 以临时参与人接受分享 |
 | Share | GET | `/memory-shares/{shareToken}/preview` | 读取公开餐桌回忆卡快照 |
 | Fridge | GET/POST | `/fridge-items` | 查询或创建个人冰箱条目 |
+| Fridge | GET | `/fridge-items/{ingredientId}` | 查询一个食材的当前库存批次 |
+| Fridge | GET | `/fridge-items/{ingredientId}/history` | 查询一个食材的历史库存批次 |
+| Fridge | GET | `/fridge-items/batch/{itemId}` | 兼容旧批次深链并反查食材详情 |
 | Fridge | PUT | `/fridge-items/{itemId}` | 更新个人冰箱条目 |
-| Fridge | POST | `/fridge-items/consume` | 消耗个人冰箱条目 |
+| Fridge | POST | `/fridge-items/consume` | 按食材总量跨批次扣减个人库存 |
 | Shopping | GET/POST | `/shopping-items` | 查询或创建当前用户个人购物事实，供超市模式和采购记录使用 |
 | Shopping | GET | `/shopping-items/board` | 读取现有旧购物页聚合板，后续将被共享清单首页替代 |
 | Shopping | POST | `/shopping-items/from-recipe` | 把一份可读菜谱固定版本写入旧购物事实链路 |
@@ -185,6 +196,11 @@
 | AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
 | AdminRecipe | GET | `/admin/recipes/{recipeId}` | 后台菜谱详情 |
 | AdminRecipe | PUT | `/admin/recipes/{recipeId}` | 后台编辑系统菜谱正文 |
+| AdminRecipeWiki | GET | `/admin/recipe-wiki` | ACTIVE 当前版本待补充 Wiki 列表，含来源和最近申请信息 |
+| AdminRecipeWiki | GET | `/admin/recipe-wiki/{recipeId}/export` | 导出单个菜谱 Wiki JSON |
+| AdminRecipeWiki | POST | `/admin/recipe-wiki/export` | 批量导出菜谱 Wiki JSON |
+| AdminRecipeWiki | POST | `/admin/recipe-wiki/import` | 批量导入 Wiki，仅更新 Wiki 并置为 READY |
+| AdminRecipeWiki | POST | `/admin/recipe-wiki/{recipeId}/reject` | 拒绝当前版本 Wiki 申请并释放预扣次数 |
 | AdminRecipe | GET | `/admin/pending-recipes` | 后台待审核菜谱分页列表 |
 | AdminRecipe | POST | `/admin/pending-recipes/{recommendationId}/review` | 后台审核个人菜谱推荐 |
 | AdminRecipe | GET | `/admin/recipe-reports` | 后台举报查询 |
