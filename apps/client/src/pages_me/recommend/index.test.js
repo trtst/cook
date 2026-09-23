@@ -419,7 +419,10 @@ describe("pages_me/recommend/index", () => {
     const feedAfterBadgeSeen = await requestData("/users/me/notification-feed?page=1&pageSize=20", {
       headers: buildAuthHeaders(session)
     });
-    expect(feedAfterBadgeSeen.items.find((item) => item.title.includes(unreadFixture.unitName))?.isUnread).toBe(true);
+    expect(feedAfterBadgeSeen.items.find((item) => item.title.includes(unreadFixture.unitName))?.isUnread).toBe(false);
+
+    const pageStateAfterBadgeSeen = await page.callMethod("automatorReadState");
+    expect(pageStateAfterBadgeSeen.items.find((item) => item.title.includes(unreadFixture.unitName))?.isUnread).toBe(false);
   });
 
   it("通知中心支持滚动容器与下拉刷新重新加载消息", async () => {

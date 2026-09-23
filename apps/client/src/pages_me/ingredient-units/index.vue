@@ -472,6 +472,7 @@ const {
 
 let categoryPromise: Promise<void> | null = null;
 let unitPromise: Promise<void> | null = null;
+let ingredientRequestId = 0;
 
 onShow(() => {
   void loadActiveTab();
@@ -595,12 +596,15 @@ async function ensureUnits(force = false) {
 }
 
 async function loadIngredients() {
+  const requestId = ++ingredientRequestId;
   ingredientLoading.value = true;
   ingredientErrorText.value = "";
 
   try {
     if (!ingredientCategoryId.value) {
-      ingredients.value = [];
+      if (requestId === ingredientRequestId) {
+        ingredients.value = [];
+      }
       return;
     }
     const result = await recipeApi.listIngredients({
@@ -610,13 +614,17 @@ async function loadIngredients() {
       categoryId: ingredientSearchKeyword.value ? undefined : ingredientCategoryId.value,
       source: sessionStore.isLoggedIn ? undefined : "SYSTEM"
     });
+    if (requestId !== ingredientRequestId) return;
     ingredients.value = result.items;
   } catch (error) {
+    if (requestId !== ingredientRequestId) return;
     ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
   } finally {
-    ingredientLoading.value = false;
-    if (loadSource.value !== "refresh") {
-      loadSource.value = "idle";
+    if (requestId === ingredientRequestId) {
+      ingredientLoading.value = false;
+      if (loadSource.value !== "refresh") {
+        loadSource.value = "idle";
+      }
     }
   }
 }

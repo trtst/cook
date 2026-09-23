@@ -208,7 +208,10 @@ async function doLoadPage() {
       feedEntryTime = result.items[0]?.timeValue ?? "";
       feedEntryCaptured = true;
     }
-    await markNotificationBadgeSeen();
+    const badge = await markNotificationBadgeSeen();
+    if (badge.latestTime) {
+      messageItems.value = messageItems.value.map(item => ({ ...item, isUnread: false }));
+    }
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       showLoginState();
@@ -347,6 +350,7 @@ function automatorReadState() {
     hasNext: hasNext.value,
     items: displayItems.value.map(item => ({
       id: item.id,
+      isUnread: item.isUnread,
       typeLabel: item.typeLabel,
       title: item.title,
       desc: item.desc,

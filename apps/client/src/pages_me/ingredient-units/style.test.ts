@@ -20,6 +20,9 @@ function expectSelectorIncludes(selector: string, snippets: string[]) {
 
 expectIncludes('import ImageLoader from "@/components/ImageLoader.vue";');
 expectIncludes('<ImageLoader class="ingredient-card__image" :src="item.imageUrl" />');
+assert.match(source, /let ingredientRequestId = 0;/, "Ingredient search should track the latest request");
+assert.match(source, /const requestId = \+\+ingredientRequestId;/, "Ingredient loading should capture its request id");
+assert.match(source, /if \(requestId !== ingredientRequestId\) return;/, "Stale ingredient responses should not replace search results");
 expectSelectorIncludes(".ingredient-card__unit", [
   "background: var(--color-surface-raised);",
   "color: var(--color-text);"
