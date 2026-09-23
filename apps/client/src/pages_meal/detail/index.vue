@@ -821,7 +821,11 @@ import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
-import { shoppingApi, type ShoppingGapResponse, type ShoppingGapWindow, type ShoppingListSummary } from "@/apis/shopping";
+import {
+  shoppingApi,
+  type ShoppingGapPreviewItem,
+  type ShoppingListSummary
+} from "@/apis/shopping";
 import { userApi, type CookAssistantUsageResponse, type TasteProfileResponse } from "@/apis/user";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
@@ -838,7 +842,7 @@ import {
   buildDefaultShoppingListName,
   buildMealShoppingListName,
   buildShoppingListDetailPath,
-  hasShoppingListLink
+  hasActiveShoppingListLink
 } from "../utils/shopping";
 import { formatDateTimeMinute } from "../utils/date";
 import { buildMenuDisplay, buildShoppingDisplay, menuItemMetaText } from "./menu-display";
@@ -910,6 +914,9 @@ type FooterActionKey =
   | "bring"
   | "create-event"
   | "confirm-menu"
+  | "complete-plan"
+  | "complete-event"
+  | "cancel-event"
   | "shopping"
   | "cook-assistant"
   | "share-memory"
@@ -922,8 +929,6 @@ type FooterAction = {
 };
 type MealGapPreviewItem = {
   key: string;
-  window: ShoppingGapWindow;
-  windowTitle: string;
   name: string;
   quantityText: string | null;
   recipeTitles: string[];
@@ -1020,7 +1025,8 @@ const tasteProfileError = ref("");
 const menuConfirmSheetVisible = ref(false);
 const gapLoading = ref(false);
 const gapErrorText = ref("");
-const gapData = ref<ShoppingGapResponse | null>(null);
+const eventGapItems = ref<ShoppingGapPreviewItem[] | null>(null);
+const planGapItems = ref<ShoppingGapPreviewItem[]>([]);
 const scheduleMonthDate = ref(todayText());
 const nowMs = ref(Date.now());
 let footerTimer: ReturnType<typeof setInterval> | null = null;
@@ -1108,22 +1114,11 @@ watch(
   }
 );
 const addedRecipeIds = computed(() => new Set(currentMenuItems.value.map(item => item.recipeId).filter((value): value is UUID => value !== null)));
-const currentPlanShoppingItems = computed(() => {
-  if (eventDetail.value) return [];
-  const seen = new Set<string>();
-  return currentMenuItems.value.filter(item => {
-    if (!item.recipeId || !item.recipeVersionId || item.purchaseState !== "PENDING") return false;
-    const key = `${item.recipeId}:${item.recipeVersionId}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-});
-const currentPlanShoppingCount = computed(() => currentPlanShoppingItems.value.length);
+const currentPlanShoppingCount = computed(() => (eventDetail.value ? 0 : planGapItems.value.length));
 const shoppingLinkTarget = computed(() => eventDetail.value ?? planDetail.value ?? null);
 const linkedShoppingListId = computed(() => shoppingLinkTarget.value?.shoppingListId ?? null);
 const linkedShoppingListName = computed(() => shoppingLinkTarget.value?.shoppingListName?.trim() || "");
-const hasLinkedShoppingList = computed(() => hasShoppingListLink(shoppingLinkTarget.value));
+const hasLinkedShoppingList = computed(() => hasActiveShoppingListLink(shoppingLinkTarget.value));
 const shoppingActionDisabled = computed(() => !hasLinkedShoppingList.value && (shoppingWriting.value || gapLoading.value));
 const shoppingActionText = computed(() => {
   if (hasLinkedShoppingList.value) return "查看清单";
@@ -1139,6 +1134,16 @@ const visibleEventParticipants = computed(() => {
 });
 const acceptedCount = computed(() => visibleEventParticipants.value.filter(item => item.status === "ACCEPTED").length);
 const pendingCount = computed(() => visibleEventParticipants.value.filter(item => item.status === "INVITED").length);
+const eventGapReady = computed(() => Boolean(eventDetail.value && eventGapItems.value && !gapLoading.value && !gapErrorText.value));
+const planGapReady = computed(() => Boolean(
+  !eventDetail.value &&
+    planDetail.value?.menuLocked &&
+    currentMenuItems.value.length &&
+    !gapLoading.value &&
+    !gapErrorText.value
+));
+const canCompleteEvent = computed(() => Boolean(eventGapReady.value && isEventOrganizer.value && acceptedCount.value > 0 && !eventClosed.value));
+const canCancelEvent = computed(() => Boolean(eventGapReady.value && isEventOrganizer.value && acceptedCount.value === 0 && !eventClosed.value));
 const displayParticipants = computed(() => visibleEventParticipants.value.filter(item => item.status !== "REMOVED"));
 const menuPanelTitle = computed(() => {
   if (!eventDetail.value) return "菜单";
@@ -1388,23 +1393,13 @@ const canUpdateCover = computed(() => Boolean(eventDetail.value && eventDetail.v
 const canQuickShareInvite = computed(() => Boolean(eventDetail.value && !eventClosed.value && inviteShareReady.value));
 const inviteShareReady = computed(() => Boolean(activeSharePath.value));
 const currentEventGapItems = computed<MealGapPreviewItem[]>(() => {
-  if (!eventDetail.value || !gapData.value) return [];
-  const items: MealGapPreviewItem[] = [];
-  for (const section of gapData.value.sections) {
-    for (const item of section.items) {
-      const matchedEvent = item.events.find(event => event.eventId === eventDetail.value?.id);
-      if (!matchedEvent) continue;
-      items.push({
-        key: `${section.window}:${item.key}`,
-        window: section.window,
-        windowTitle: section.title,
-        name: item.name,
-        quantityText: item.quantityText,
-        recipeTitles: matchedEvent.recipeTitles
-      });
-    }
-  }
-  return items;
+  if (!eventDetail.value || !eventGapItems.value) return [];
+  return eventGapItems.value.map(item => ({
+    key: item.sourceKey ?? String(item.id),
+    name: item.name,
+    quantityText: item.quantityText,
+    recipeTitles: item.sourceTitles
+  }));
 });
 const currentEventGapCount = computed(() => currentEventGapItems.value.length);
 const shoppingDisplay = computed(() => buildShoppingDisplay(currentEventGapItems.value, shoppingExpanded.value));
@@ -1475,16 +1470,16 @@ const footerStatusText = computed(() => {
 });
 const footerStatusMeta = computed(() => {
   if (footerStage.value === "READY_TO_START" && eventDetail.value && isEventOrganizer.value) {
-    if (gapLoading.value) return "正在按当前菜单刷新这顿饭的缺口。";
-    if (currentEventGapCount.value > 0) return `还差 ${currentEventGapCount.value} 样食材，下一步先去采购。`;
-    if (!gapErrorText.value && currentMenuItems.value.length) return "当前菜单没有明显缺口，可以直接开始做饭。";
+    if (gapLoading.value) return "正在整理这顿饭需要准备的食材。";
+    if (currentEventGapCount.value > 0) return `这顿需要准备 ${currentEventGapCount.value} 样食材，下一步先去采购。`;
+    if (!gapErrorText.value && currentMenuItems.value.length) return "这顿需要准备的食材已列好，可以直接开始做饭。";
   }
   if (footerStage.value === "READY_TO_START" && !eventDetail.value && currentPlanShoppingCount.value > 0) {
-    return `这顿饭还有 ${currentPlanShoppingCount.value} 道菜待补采购，下一步去选一个采购清单。`;
+    return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，下一步去选一个采购清单。`;
   }
   if (footerStage.value === "MENU_EDITING" && eventDetail.value && isEventOrganizer.value && currentMenuItems.value.length) {
-    if (gapLoading.value) return "当前缺口会跟着菜单实时更新。";
-    if (currentEventGapCount.value > 0) return `按当前菜单看，还差 ${currentEventGapCount.value} 样食材。`;
+    if (gapLoading.value) return "需要准备的食材会跟着菜单实时更新。";
+    if (currentEventGapCount.value > 0) return `按当前菜单看，需要准备 ${currentEventGapCount.value} 样食材。`;
   }
   return "";
 });
@@ -1531,12 +1526,17 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
     return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
   if (footerStage.value === "READY_TO_START") {
-    if (eventDetail.value && isEventOrganizer.value && currentEventGapCount.value > 0) {
-      return {
-        key: "shopping",
-        label: hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
-        disabled: hasLinkedShoppingList.value ? false : shoppingWriting.value || gapLoading.value
-      };
+    if (eventDetail.value && isEventOrganizer.value) {
+      if (currentEventGapCount.value > 0) {
+        return {
+          key: "shopping",
+          label: hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
+          disabled: hasLinkedShoppingList.value ? false : shoppingWriting.value
+        };
+      }
+      if (canCompleteEvent.value) return { key: "complete-event", label: "结束饭局" };
+      if (canCancelEvent.value) return { key: "cancel-event", label: "取消饭局" };
+      return null;
     }
     if (!eventDetail.value && currentPlanShoppingCount.value > 0) {
       return {
@@ -1545,9 +1545,8 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
         disabled: hasLinkedShoppingList.value ? false : shoppingWriting.value
       };
     }
-    if (isEventOrganizer.value || !eventDetail.value) {
-      return currentMenuItems.value.length ? { key: "cook-assistant", label: "做饭助手" } : null;
-    }
+    if (!eventDetail.value && !planGapReady.value) return null;
+    if (!eventDetail.value) return { key: "complete-plan", label: "结束计划" };
     return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
   return null;
@@ -1558,7 +1557,11 @@ const footerPrimaryGapText = computed(() => {
   }
   if (footerPrimaryAction.value?.key === "shopping" && eventDetail.value) {
     if (gapLoading.value) return "计算中";
-    if (currentEventGapCount.value > 0) return `还差 ${currentEventGapCount.value} 样`;
+    if (currentEventGapCount.value > 0) return `需准备 ${currentEventGapCount.value} 样`;
+  }
+  if (footerPrimaryAction.value?.key === "shopping" && !eventDetail.value) {
+    if (gapLoading.value) return "计算中";
+    if (currentPlanShoppingCount.value > 0) return `需准备 ${currentPlanShoppingCount.value} 样`;
   }
   return "";
 });
@@ -1580,7 +1583,7 @@ const menuConfirmSummaryTitle = computed(() => {
 });
 const menuConfirmSummaryText = computed(() => {
   if (!currentMenuItems.value.length) return "这次确认只固定这顿吃什么，不处理带菜和采购。";
-  return "这次确认只固定主家菜单；带菜不会算进这里，食材缺口确认后再看。";
+  return "这次确认只固定主家菜单；带菜不会算进这里，确认后可查看需要准备的食材。";
 });
 const menuConfirmEmptyText = computed(() => (
   currentMenuItems.value.length ? `已选 ${currentMenuItems.value.length} 道主家菜单。` : "先补一两道主家菜单，再来确认。"
@@ -1762,29 +1765,32 @@ const shoppingPanelText = computed(() => {
   }
   if (!eventDetail.value) {
     if (hasLinkedShoppingList.value && linkedShoppingListName.value) {
+      if (currentPlanShoppingCount.value > 0) {
+        return `清单已列，还有 ${currentPlanShoppingCount.value} 样食材需要准备，去「${linkedShoppingListName.value}」继续采购。`;
+      }
       return `这顿饭已挂到「${linkedShoppingListName.value}」，后面要补采购时先回这张清单继续。`;
     }
     if (currentPlanShoppingCount.value > 0) {
-      return `这顿饭还有 ${currentPlanShoppingCount.value} 道菜待补采购，点击去采购后可以选择已有清单，或现场新建一张。`;
+      return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，点击去采购后可以选择已有清单，或现场新建一张。`;
     }
-    return "这顿饭当前不用额外采购，可以直接开始做饭。";
+    return "这顿饭当前没有可列出的食材，可以直接开始做饭。";
   }
-  if (gapLoading.value) return "正在按当前菜单刷新这顿饭的缺口。";
+  if (gapLoading.value) return "正在整理这顿饭需要准备的食材。";
   if (hasLinkedShoppingList.value && linkedShoppingListName.value && currentEventGapCount.value > 0) {
     return isEventOrganizer.value
-      ? `已同步到「${linkedShoppingListName.value}」，缺的食材继续补到这张清单。`
+      ? `已同步到「${linkedShoppingListName.value}」，需要准备的食材继续补到这张清单。`
       : `主家正在通过「${linkedShoppingListName.value}」准备食材。`;
   }
   if (currentEventGapCount.value > 0) {
     return isEventOrganizer.value
-      ? `还差 ${currentEventGapCount.value} 样食材，一起补齐再开饭。`
+      ? `需要准备 ${currentEventGapCount.value} 样食材，一起准备好再开饭。`
       : `主家正在准备 ${currentEventGapCount.value} 样食材。`;
   }
   if (eventDetail.value?.status === "CONFIRMED") {
     return isEventOrganizer.value ? "食材都备齐了，可以开始做饭。" : "食材已经准备好，等开饭啦。";
   }
-  if (gapErrorText.value) return "缺口暂时没同步出来，先确认菜单，后面再去缺口页看。";
-  return isEventOrganizer.value ? "菜单定好后，这里会告诉你还差什么。" : "主家定好菜单后，食材准备的进度会显示在这里。";
+  if (gapErrorText.value) return "需要准备的食材暂时没同步出来，请稍后重试。";
+  return isEventOrganizer.value ? "菜单定好后，这里会告诉你需要准备什么。" : "主家定好菜单后，食材准备的进度会显示在这里。";
 });
 const memoryPanelTitle = computed(() => (eventClosed.value ? "这顿饭可以留个回忆了" : "饭局回忆"));
 const memoryPanelText = computed(() => {
@@ -1856,7 +1862,7 @@ async function loadDetail() {
       } catch (error) {
         eventDetail.value = null;
         activeSharePath.value = "";
-        gapData.value = null;
+        eventGapItems.value = null;
         gapErrorText.value = "";
         if (!hasPlanQuery) {
           await showLoadErrorToast("饭局信息暂时没同步出来");
@@ -1897,8 +1903,9 @@ async function loadDetail() {
     if (!targetEventId) {
       eventDetail.value = null;
       activeSharePath.value = "";
-      gapData.value = null;
+      eventGapItems.value = null;
       gapErrorText.value = "";
+      await loadGapPreview();
       await applyEntryFocus();
       return;
     }
@@ -1909,7 +1916,7 @@ async function loadDetail() {
         if (!hasEventQuery && shouldIgnorePlanLinkedEvent(nextPlan, nextEvent)) {
           eventDetail.value = null;
           activeSharePath.value = "";
-          gapData.value = null;
+          eventGapItems.value = null;
           gapErrorText.value = "";
           await applyEntryFocus();
           return;
@@ -1921,7 +1928,7 @@ async function loadDetail() {
       } catch (error) {
         eventDetail.value = null;
         activeSharePath.value = "";
-        gapData.value = null;
+        eventGapItems.value = null;
         gapErrorText.value = "";
         await showLoadErrorToast("饭局信息暂时没同步出来");
         await applyEntryFocus();
@@ -1989,7 +1996,8 @@ function clearPageState() {
   menuConfirmSheetVisible.value = false;
   gapLoading.value = false;
   gapErrorText.value = "";
-  gapData.value = null;
+  eventGapItems.value = null;
+  planGapItems.value = [];
 }
 
 async function automatorApplySession(snapshot: { token: string; uid: number; expiresAt: string }) {
@@ -3024,20 +3032,109 @@ async function handleConfirmMenuAction() {
   }
 }
 
+async function handleCompleteEventAction() {
+  if (!eventDetail.value || !canCompleteEvent.value || eventClosed.value || submitting.value) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "结束饭局",
+    content: "结束后将关闭这场饭局的继续推进，并进入饭局回忆。确定结束吗？"
+  });
+  if (!confirmed) return;
+
+  submitting.value = true;
+  try {
+    eventDetail.value = await mealApi.completeDiningEvent(eventDetail.value.id, createOperationId());
+    openMemory();
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "结束饭局失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleCompletePlanAction() {
+  if (!planDetail.value || eventDetail.value || !planGapReady.value || currentPlanShoppingCount.value > 0 || planClosed.value || submitting.value) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "结束计划",
+    content: "结束后这条计划将不再继续推进，也不能再发起饭局。确定结束吗？"
+  });
+  if (!confirmed) return;
+
+  submitting.value = true;
+  try {
+    planDetail.value = await mealApi.completePlan(planDetail.value.id, createOperationId());
+    await uniPlatform.feedback.toast({ title: "计划已结束", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "结束计划失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleCancelEventAction() {
+  if (!eventDetail.value || !canCancelEvent.value || eventClosed.value || submitting.value) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "取消饭局",
+    content: "取消后不会进入回忆，原计划和菜单会保留，之后还可以重新发起饭局。确定取消吗？"
+  });
+  if (!confirmed) return;
+
+  submitting.value = true;
+  try {
+    await mealApi.cancelDiningEvent(eventDetail.value.id, createOperationId());
+    eventDetail.value = null;
+    eventId.value = "";
+    activeSharePath.value = "";
+    planDetail.value = planDetail.value
+      ? { ...planDetail.value, hasDiningEvent: false, diningEventId: null }
+      : null;
+    eventGapItems.value = null;
+    gapErrorText.value = "";
+    await loadDetail();
+    await uniPlatform.feedback.toast({ title: "饭局已取消，可重新发起", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "取消饭局失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
 async function loadGapPreview() {
-  if (!sessionStore.isLoggedIn || !eventDetail.value || eventClosed.value || !isEventOrganizer.value || !currentMenuItems.value.length) {
+  if (!sessionStore.isLoggedIn || planClosed.value) {
     gapLoading.value = false;
     gapErrorText.value = "";
-    gapData.value = null;
+    eventGapItems.value = null;
+    planGapItems.value = [];
+    return;
+  }
+  if (eventDetail.value && (eventClosed.value || !isEventOrganizer.value || !currentMenuItems.value.length)) {
+    gapLoading.value = false;
+    gapErrorText.value = "";
+    eventGapItems.value = null;
+    planGapItems.value = [];
+    return;
+  }
+  if (!eventDetail.value && (!planDetail.value || !planDetail.value.menuLocked || !currentMenuItems.value.length)) {
+    gapLoading.value = false;
+    gapErrorText.value = "";
+    eventGapItems.value = null;
+    planGapItems.value = [];
     return;
   }
   if (gapLoading.value) return;
   gapLoading.value = true;
   gapErrorText.value = "";
   try {
-    gapData.value = await shoppingApi.previewGap();
+    if (eventDetail.value) {
+      eventGapItems.value = await shoppingApi.previewEventGap(eventDetail.value.id);
+      planGapItems.value = [];
+    } else {
+      eventGapItems.value = null;
+      planGapItems.value = await shoppingApi.previewPlanGap(planDetail.value!.id);
+    }
   } catch (error) {
-    gapErrorText.value = error instanceof Error ? error.message : "缺口暂时没刷新出来";
+    eventGapItems.value = null;
+    planGapItems.value = [];
+    gapErrorText.value = error instanceof Error ? error.message : "需要准备的食材暂时没刷新出来";
   } finally {
     gapLoading.value = false;
   }
@@ -3100,7 +3197,7 @@ async function openShoppingPage() {
   }
   if (eventDetail.value && gapLoading.value) return;
   if (!eventDetail.value && !currentPlanShoppingCount.value) {
-    await uniPlatform.feedback.toast({ title: "这顿饭当前没有待采购的菜谱", icon: "none" });
+    await uniPlatform.feedback.toast({ title: "这顿饭当前没有可采购的菜谱", icon: "none" });
     return;
   }
   await loadShoppingLists(true);
@@ -3139,11 +3236,11 @@ async function confirmAddToShoppingList() {
   try {
     const listId = selectedShoppingListId.value;
     if (eventDetail.value) {
-      if (!gapData.value) {
+      if (!eventGapItems.value) {
         await loadGapPreview();
       }
       if (!currentEventGapItems.value.length) {
-        throw new Error(gapErrorText.value || "当前这顿还没有可写入采购清单的缺口");
+        throw new Error(gapErrorText.value || "当前这顿还没有可写入采购清单的食材");
       }
       await shoppingApi.addEventToList(listId, {
         operationId: createOperationId(),
@@ -3152,7 +3249,7 @@ async function confirmAddToShoppingList() {
     } else {
       const currentPlan = planDetail.value;
       if (!currentPlanShoppingCount.value || !currentPlan) {
-        throw new Error("这顿饭当前没有待采购的菜谱");
+        throw new Error("这顿饭当前没有可采购的菜谱");
       }
       await shoppingApi.addPlanToList(listId, {
         operationId: createOperationId(),
@@ -3207,6 +3304,18 @@ function handleFooterAction(action: FooterActionKey) {
       return;
     }
     void handleConfirmMenuAction();
+    return;
+  }
+  if (action === "complete-plan") {
+    void handleCompletePlanAction();
+    return;
+  }
+  if (action === "complete-event") {
+    void handleCompleteEventAction();
+    return;
+  }
+  if (action === "cancel-event") {
+    void handleCancelEventAction();
     return;
   }
   if (action === "shopping") {

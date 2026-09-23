@@ -12,8 +12,10 @@
       </view>
     </template>
 
+    <view v-if="legacyRouteState === 'REDIRECTING'" class="notice">正在打开采购清单...</view>
+    <view v-else-if="legacyRouteState === 'ERROR'" class="notice" @click="redirectLegacyCompletePage">{{ legacyRouteError }}</view>
     <Empty
-      v-if="!sessionStore.isLoggedIn"
+      v-else-if="!sessionStore.isLoggedIn"
       :art="emptyStateArt"
       title="登录后继续入库"
       description="入库确认需要登录后处理。"
@@ -259,9 +261,8 @@ import { useSystemInfo } from "@/composables/useSystemInfo";
 import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
-import { createOperationId } from "@/utils/operation-id";
 import { shoppingApi, type ShoppingListDetail, type ShoppingListDetailItem } from "../apis/shopping";
-import { type ShoppingCompleteSource, stashShoppingCompleteResult } from "./bridge";
+import { type ShoppingCompleteSource } from "./bridge";
 
 interface CompleteEntry {
   itemId: UUID;
@@ -309,6 +310,8 @@ const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 
 const listId = ref<UUID | "">("");
 const source = ref<ShoppingCompleteSource>("detail");
+const legacyRouteState = ref<"REDIRECTING" | "ERROR">("REDIRECTING");
+const legacyRouteError = ref("");
 const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
@@ -388,12 +391,23 @@ onLoad((query) => {
   listId.value = rawId ? Number(rawId) || "" : "";
   source.value = rawSource === "list" ? "list" : "detail";
   if (!listId.value) {
+    legacyRouteState.value = "ERROR";
     errorText.value = "清单不存在";
+    legacyRouteError.value = errorText.value;
     return;
   }
-  if (!sessionStore.isLoggedIn) return;
-  void loadDetail();
+  redirectLegacyCompletePage();
 });
+
+function redirectLegacyCompletePage() {
+  if (!listId.value) return;
+  legacyRouteState.value = "REDIRECTING";
+  legacyRouteError.value = "";
+  void uniPlatform.navigation.redirectTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(listId.value))}`).catch(() => {
+    legacyRouteState.value = "ERROR";
+    legacyRouteError.value = "清单详情打开失败，点击重试";
+  });
+}
 
 async function handleLoginSuccess() {
   if (!listId.value) return;
@@ -664,29 +678,8 @@ function buildMonthAnchor(dateText: string) {
   return `${year}-${month}-01`;
 }
 
-async function submitComplete() {
-  if (!detail.value || submitting.value) return;
-  submitting.value = true;
-  try {
-    const nextDetail = await shoppingApi.completeList(detail.value.id, {
-      operationId: createOperationId(),
-      version: detail.value.version,
-      entries: entries.value.map(item => ({
-        itemId: item.itemId,
-        store: item.store,
-        quantityText: item.quantityText.trim() || null,
-        expireDays: item.expireAt ? null : item.expireDays,
-        expireAt: item.expireAt
-      }))
-    });
-    stashShoppingCompleteResult(source.value, nextDetail);
-    await uniPlatform.feedback.toast({ title: storeCount.value ? "已完成并入库" : "已完成清单", icon: "success" });
-    await goBack();
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
+function submitComplete() {
+  redirectLegacyCompletePage();
 }
 
 async function goBack() {

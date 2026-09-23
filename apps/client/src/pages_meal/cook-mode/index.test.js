@@ -171,8 +171,13 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(pageSource, /\.cook-slide__menu--open\s*\{[\s\S]*?pointer-events: auto;/);
     nodeAssert.doesNotMatch(pageSource, /\.cook-slide__menu\s*\{[^}]*background(?:-color)?:/);
     nodeAssert.doesNotMatch(pageSource, /\.cook-slide__menu\s*\{[^}]*padding:/);
-    nodeAssert.match(pageSource, /\.cook-slide__menu-item\s*\{[\s\S]*?padding: 20px 0;/);
-    nodeAssert.match(pageSource, /\.cook-slide__menu-item:nth-child\(2\)/);
+    nodeAssert.match(pageSource, /:style="menuItemStyle\(index\)"/);
+    nodeAssert.match(pageSource, /function menuItemStyle\(index: number\)/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu\s*\{[\s\S]*?width: 100%;/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu-item\s*\{[\s\S]*?overflow: hidden;[\s\S]*?text-overflow: ellipsis;[\s\S]*?white-space: nowrap;/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu-item\s*\{[\s\S]*?padding: 30rpx 10rpx;/);
+    nodeAssert.match(pageSource, /\.cook-slide__menu--open \.cook-slide__menu-item\s*\{[\s\S]*?transition-delay: var\(--menu-delay\);/);
+    nodeAssert.doesNotMatch(pageSource, /cook-slide__menu-item:nth-child\(/);
   });
 
   nodeTest("meal cook mode shares semantic surfaces across the navbar, slide, and page", () => {

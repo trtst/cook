@@ -19,7 +19,7 @@
         class="detail-empty"
         :art="emptyStateArt"
         title="登录后查看清单详情"
-        description="顶部清单标题会继续保留；登录后再看采购进度、勾选和入库确认。"
+        description="顶部清单标题会继续保留；登录后再看采购进度、勾选和食材来源。"
         clickable
         @click="openLogin"
       />
@@ -94,28 +94,6 @@
                     <text class="store-card__desc">{{ endedCardDesc }}</text>
                   </view>
                 </view>
-                <view v-if="canShowPrimaryAction" class="store-card" :class="{ 'store-card--finish': canShowFinishButton }">
-                  <view class="store-card__head">
-                    <text class="store-card__title">{{ primaryCardTitle }}</text>
-                    <view
-                      class="store-card__button"
-                      :class="{
-                        'store-card__button--finish': canShowFinishButton,
-                        'store-card__button--disabled': submitting
-                      }"
-                      @click="submitting ? undefined : handlePrimaryAction()"
-                    >
-                      {{ primaryCardButtonText }}
-                    </view>
-                  </view>
-                  <view class="store-card__detail">
-                    <text class="store-card__desc">{{ primaryCardDesc }}</text>
-                    <view class="store-card__stat">
-                      <text class="store-card__stat-number">{{ primaryCardStatNumber }}</text>
-                      <text class="store-card__stat-label">{{ primaryCardStatLabel }}</text>
-                    </view>
-                  </view>
-                </view>
               </view>
 
               <transition-group v-if="groups.length" name="group-list" tag="view" class="group-list">
@@ -142,15 +120,8 @@
                             <text class="item-row__title">{{ group.name }}</text>
                             <text class="item-row__quantity">{{ itemQuantityText(group) }}</text>
                           </view>
-                          <view v-if="group.categoryName || inventoryText(group)" class="item-row__info">
+                          <view v-if="group.categoryName" class="item-row__info">
                             <text class="item-row__category">{{ group.categoryName || "未分类" }}</text>
-                            <text
-                              v-if="inventoryText(group)"
-                              class="item-row__inventory"
-                              :class="{ 'item-row__inventory--warning': hasInventoryWarning(group) }"
-                            >
-                              {{ inventoryText(group) }}
-                            </text>
                           </view>
                             <view class="item-row__bottom">
                               <view class="item-row__bottom-left">
@@ -164,27 +135,12 @@
                               </text>
                               </view>
                               <view v-if="canEditItems" class="item-row__actions">
-                                <button
-                                  v-if="canShowInventoryAction(group)"
-                                  class="mini-pill"
-                                  hover-class="none"
-                                  :class="{
-                                    'mini-pill--active': isInventoryApplied(group),
-                                    'mini-pill--pending': isItemPending(group.id, 'fridge'),
-                                    'mini-pill--disabled': isInventoryDisabled(group) && !isInventoryApplied(group),
-                                    'mini-pill--locked': isInventoryDisabled(group) && isInventoryApplied(group)
-                                  }"
-                                  @click.stop="handleFridgeAction(group)"
-                                >
-                                  {{ group.fridgeActionLabel || "用库存" }}
-                                </button>
                               <button
                                 class="mini-pill"
                                 hover-class="none"
                                 :class="{
                                   'mini-pill--active': isItemChecked(group),
-                                  'mini-pill--pending': isItemPending(group.id, 'check'),
-                                  'mini-pill--disabled': isBoughtDisabled(group)
+                                  'mini-pill--pending': isItemPending(group.id, 'check')
                                 }"
                                 @click.stop="toggleItem(group)"
                               >
@@ -327,94 +283,6 @@
       </template>
     </SheetShell>
 
-    <SheetShell
-      :visible="mealSourceSheetVisible"
-      title="添加餐次"
-      subtitle="直接选一顿餐次；已挂饭局的，会按当前缺口写进这张清单。"
-      @close="closeMealSourceSheet"
-      @after-close="handleMealSourceSheetAfterClose"
-    >
-      <view class="sheet-section">
-        <view v-if="planSheetLoading" class="sheet-note">正在加载近期餐次...</view>
-        <view v-else-if="planSheetError" class="sheet-note sheet-note--error" @click="loadPlanCandidates(true)">{{ planSheetError }}</view>
-        <scroll-view v-else-if="planCandidates.length" scroll-y class="plan-sheet__scroll" :show-scrollbar="false">
-          <view class="sheet-option-list">
-            <view
-              v-for="plan in planCandidates"
-              :key="plan.id"
-              class="sheet-option"
-              :class="{ 'sheet-option--active': selectedPlanId === plan.id }"
-              @click="selectedPlanId = plan.id"
-            >
-              <view class="sheet-option__main">
-                <text class="sheet-option__title">{{ planSheetTitle(plan) }}</text>
-                <text class="sheet-option__meta">{{ planSheetMeta(plan) }}</text>
-              </view>
-            </view>
-          </view>
-        </scroll-view>
-        <view v-else class="sheet-note">最近两周还没有可加入当前清单的餐次。</view>
-      </view>
-
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeMealSourceSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitPlanSheet">
-            {{ submitting ? "加入中..." : "加入清单" }}
-          </button>
-        </view>
-      </template>
-    </SheetShell>
-
-    <SheetShell
-      :visible="unknownSheetVisible"
-      title="确认库存"
-      :subtitle="unknownSheetSubtitle"
-      :mask-closable="!unknownSheetSubmitting"
-      @close="closeUnknownInventorySheet"
-      @after-close="handleUnknownInventorySheetAfterClose"
-    >
-      <view v-if="unknownInventoryGroup" class="unknown-inventory-sheet">
-        <view class="editor-card">
-          <text class="editor-card__label">当前食材</text>
-          <text class="editor-card__value">{{ unknownInventoryGroup.name }}</text>
-          <text class="sheet-note">数量还没有记录，不影响继续做饭。你可以现在告诉我，也可以稍后再处理。</text>
-        </view>
-        <view class="sheet-option-list unknown-inventory-options">
-          <view
-            class="sheet-option"
-            :class="{ 'sheet-option--disabled': unknownSheetSubmitting }"
-            @click="handleUnknownInventoryChoice('CONFIRM_ENOUGH')"
-          >
-            <view class="sheet-option__main">
-              <text class="sheet-option__title">够用</text>
-              <text class="sheet-option__meta">记为有库存，不虚构具体数量。</text>
-            </view>
-          </view>
-          <view
-            class="sheet-option"
-            :class="{ 'sheet-option--disabled': unknownSheetSubmitting }"
-            @click="handleUnknownInventoryChoice('KEEP_OPEN')"
-          >
-            <view class="sheet-option__main">
-              <text class="sheet-option__title">不够，加入采购</text>
-              <text class="sheet-option__meta">保留当前清单项，不重复添加。</text>
-            </view>
-          </view>
-          <view
-            class="sheet-option"
-            :class="{ 'sheet-option--disabled': unknownSheetSubmitting }"
-            @click="handleUnknownInventoryChoice('DEFER')"
-          >
-            <view class="sheet-option__main">
-              <text class="sheet-option__title">暂不处理</text>
-              <text class="sheet-option__meta">先不改变库存和采购状态。</text>
-            </view>
-          </view>
-        </view>
-      </view>
-    </SheetShell>
-
     <InviteShareSheet
       :visible="shareSheetVisible"
       :title="shareSheetTitle"
@@ -489,7 +357,6 @@
 import { computed, reactive, ref } from "vue";
 import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/empty.png";
-import { mealApi, type MealPlanSummary } from "@/apis/meal";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientSummary } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
@@ -507,24 +374,18 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
-import { formatMealSlot, isPastLocalDateTime, mealSlotDefaultTime } from "@/utils/meal-slot";
 import { formatMonthDay } from "../utils/date";
 import {
   shoppingApi,
-  type ShoppingGapResponse,
-  type ShoppingGapWindow,
   type ShoppingListCollaborator,
   type ShoppingListDetail,
   type ShoppingListDetailItem,
   type ShoppingItemSourceSummary,
-  type ShoppingListItemFridgeActionMode,
-  type ShoppingInventoryStatus,
   type ShoppingListItemPatchResponse
 } from "../apis/shopping";
-import { consumeShoppingCompleteResult } from "../list-complete/bridge";
 
-type DetailAction = "" | "share" | "complete";
-type ManageActionKey = "add-meal" | "add" | "share" | "void" | "restore" | "delete" | "leave";
+type DetailAction = "" | "share";
+type ManageActionKey = "add" | "share" | "void" | "restore" | "delete" | "leave";
 
 interface GroupView {
   key: string;
@@ -535,22 +396,8 @@ interface GroupView {
   imageUrl: string | null;
   quantityText: string;
   requiredQuantityText: string | null;
-  remainingQuantityText: string | null;
-  appliedInventoryQuantityText: string | null;
-  fridgeText: string | null;
-  inventoryStatus: ShoppingInventoryStatus;
-  inventoryApplied: boolean;
-  inventoryCovered: boolean;
-  fridgeStatusText: string | null;
-  fridgeActionLabel: string | null;
-  fridgeActionMode: ShoppingListItemFridgeActionMode;
   checkedAt: string | null;
   sources: ShoppingItemSourceSummary[];
-}
-
-interface MealSourceCandidate extends MealPlanSummary {
-  sourceMode: "PLAN" | "EVENT";
-  gapCount: number;
 }
 
 const NAV_FADE_DISTANCE = 132;
@@ -582,22 +429,6 @@ const ingredientOptions = ref<IngredientSummary[]>([]);
 const selectedIngredientId = ref<UUID | "">("");
 const addQuantityText = ref("");
 const addNote = ref("");
-const mealSourceSheetVisible = ref(false);
-const planSheetLoading = ref(false);
-const planSheetError = ref("");
-const planCandidates = ref<MealSourceCandidate[]>([]);
-const selectedPlanId = ref<UUID | "">("");
-const unknownSheetVisible = ref(false);
-const unknownGroupKey = ref("");
-const unknownInventoryGroup = computed(() => groups.value.find(group => group.key === unknownGroupKey.value) ?? null);
-const unknownSheetSubtitle = computed(() => {
-  const name = unknownInventoryGroup.value?.name;
-  return name ? `${name} 的数量还没有记录` : "数量还没有记录";
-});
-const unknownSheetSubmitting = computed(() => Boolean(
-  unknownInventoryGroup.value && isItemPending(unknownInventoryGroup.value.id, "fridge")
-));
-
 const shareSheetVisible = ref(false);
 const shareNoticeVisible = ref(false);
 const shareUrl = ref("");
@@ -607,7 +438,7 @@ const scrollTop = ref(0);
 const manageMenuOpen = ref(false);
 const openSwipeItemId = ref<string>("");
 const itemPendingId = ref<string>("");
-const itemPendingAction = ref<"" | "check" | "fridge" | "remove">("");
+const itemPendingAction = ref<"" | "check" | "remove">("");
 const openOriginItemIds = ref<string[]>([]);
 const swipeState = reactive({
   itemId: "",
@@ -622,7 +453,7 @@ function resolveGroupSortRank(group: GroupView) {
   if (isGroupResolved(group)) {
     return isItemChecked(group) ? 3 : 2;
   }
-  if (group.items.some(item => Boolean(item.checkedAt) || item.status === "CHECKED" || item.inventoryApplied)) {
+  if (group.items.some(item => Boolean(item.checkedAt) || item.status === "CHECKED")) {
     return 1;
   }
   return 0;
@@ -732,23 +563,8 @@ const canDelete = computed(() => detail.value?.role === "OWNER" && (detail.value
 const canLeave = computed(() => detail.value?.role === "COLLABORATOR");
 const canEditItems = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
 const canAddItem = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
-const hasPendingGroups = computed(() => groups.value.some(group => !isGroupResolved(group)));
-const hasCheckedGroups = computed(() => groups.value.some(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))));
-const storeReadyCount = computed(() => groups.value.filter(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))).length);
-const canShowPrimaryAction = computed(() => (
-  detail.value?.status === "ACTIVE"
-  && groups.value.length > 0
-  && (hasCheckedGroups.value || !hasPendingGroups.value)
-));
-const canShowFinishButton = canShowPrimaryAction;
-const primaryCardTitle = computed(() => "采购完成啦");
-const primaryCardDesc = computed(() => "点击完成采购，买到的食材会自动记入冰箱；数量和到期时间可以之后再补充。");
-const primaryCardStatNumber = computed(() => String(hasCheckedGroups.value ? storeReadyCount.value : progressDoneCount.value));
-const primaryCardStatLabel = computed(() => (hasCheckedGroups.value ? "项已购" : "项已处理"));
-const primaryCardButtonText = computed(() => "完成采购");
 const manageActions = computed(() => {
   const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
-  if (canAddItem.value) actions.push({ key: "add-meal", label: "加餐次", iconClass: "icon-plan", tone: "default" });
   if (canAddItem.value) actions.push({ key: "add", label: "添加食材", iconClass: "icon-add", tone: "default" });
   if (canOpenShare.value) actions.push({ key: "share", label: "协作", iconClass: "icon-share", tone: "default" });
   if (canVoid.value) actions.push({ key: "void", label: "作废", iconClass: "icon-close", tone: "danger" });
@@ -813,16 +629,11 @@ onLoad((query) => {
   const rawId = Array.isArray(query?.id) ? query.id[0] : query?.id;
   const nextAction = Array.isArray(query?.action) ? query.action[0] : query?.action;
   listId.value = rawId ? Number(rawId) || "" : "";
-  pendingAction.value = nextAction === "share" || nextAction === "complete" ? nextAction : "";
+  pendingAction.value = nextAction === "share" ? nextAction : "";
 });
 
 onShow(() => {
   if (!sessionStore.isLoggedIn || !listId.value) return;
-  const completedDetail = consumeShoppingCompleteResult("detail", listId.value);
-  if (completedDetail) {
-    detail.value = completedDetail;
-    return;
-  }
   void loadDetail();
 });
 
@@ -863,10 +674,6 @@ function handlePendingAction() {
   pendingAction.value = "";
   if (action === "share" && canOpenShare.value) {
     openShareSheet();
-    return;
-  }
-  if (action === "complete" && canShowPrimaryAction.value) {
-    void handlePrimaryAction();
   }
 }
 
@@ -886,72 +693,7 @@ function handleScroll(event: { detail: { scrollTop?: number } }) {
   scrollTop.value = event.detail.scrollTop ?? 0;
 }
 
-function canAddPlanCandidate(plan: MealPlanSummary, now = new Date()) {
-  if (plan.status === "COMPLETED" || plan.shoppingListId) return false;
-  if (plan.planDate === formatLocalDate(now) && isPastLocalDateTime(plan.planDate, mealSlotDefaultTime(plan.mealSlot), now)) {
-    return false;
-  }
-  return plan.menuItems.some(item => item.purchaseState === "READY");
-}
-
-function collectGapItemsByEvent(gapData: ShoppingGapResponse | null | undefined, currentMs = Date.now()) {
-  const eventMap = new Map<UUID, Array<{ window: ShoppingGapWindow; key: string }>>();
-  if (!gapData) return eventMap;
-  for (const section of gapData.sections) {
-    for (const item of section.items) {
-      for (const event of item.events) {
-        const scheduledAt = new Date(event.scheduledAt).getTime();
-        if (Number.isFinite(scheduledAt) && scheduledAt <= currentMs) continue;
-        const current = eventMap.get(event.eventId) ?? [];
-        current.push({
-          window: section.window,
-          key: item.key
-        });
-        eventMap.set(event.eventId, current);
-      }
-    }
-  }
-  return eventMap;
-}
-
-function planSheetTitle(plan: MealSourceCandidate) {
-  const title = plan.title?.trim() || `${formatMealSlot(plan.mealSlot) || "这顿饭"}计划`;
-  return `${formatMonthDay(plan.planDate)} · ${title}`;
-}
-
-function planSheetMeta(plan: MealSourceCandidate) {
-  if (plan.sourceMode === "EVENT") {
-    return `${formatMealSlot(plan.mealSlot) || "这顿饭"} · 已挂饭局 · 还差${plan.gapCount}样`;
-  }
-  const readyCount = plan.menuItems.filter(item => item.purchaseState === "READY").length;
-  const menuCount = plan.menuItems.length;
-  return `${formatMealSlot(plan.mealSlot) || "这顿饭"} · ${menuCount}道菜单 · ${readyCount}道待采购`;
-}
-
-function todayDateText() {
-  return formatLocalDate(new Date());
-}
-
-function addDaysText(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return formatLocalDate(date);
-}
-
-function formatLocalDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function itemQuantityText(group: GroupView) {
-  if (group.inventoryCovered) {
-    return "不需购买";
-  }
-  if (group.inventoryApplied && group.remainingQuantityText) {
-    return `还需购买 ${group.remainingQuantityText}`;
-  }
   return group.requiredQuantityText || group.quantityText || "未填数量";
 }
 
@@ -967,22 +709,8 @@ function toggleItemOrigin(itemId: string) {
   openOriginItemIds.value = [...openOriginItemIds.value, itemId];
 }
 
-function inventoryText(group: GroupView) {
-  if (!group.fridgeText) return null;
-  const text = group.fridgeText.replace(/^冰箱：/, "库存：");
-  return isInventoryApplied(group) ? `已用 ${text}` : text;
-}
-
-function hasInventoryWarning(group: GroupView) {
-  return group.items.some(item => {
-    if (item.inventoryStatus === "SHORTAGE") return true;
-    return Boolean(item.inventoryApplied && item.remainingQuantityText);
-  });
-}
-
 function isItemChecked(group: GroupView) {
-  const purchasableItems = group.items.filter(item => !item.inventoryCovered);
-  return purchasableItems.length > 0 && purchasableItems.every(item => item.status === "CHECKED" || Boolean(item.checkedAt));
+  return group.items.length > 0 && group.items.every(item => item.status === "CHECKED" || Boolean(item.checkedAt));
 }
 
 function isGroupResolved(group: GroupView) {
@@ -991,43 +719,13 @@ function isGroupResolved(group: GroupView) {
 
 function isResolvedItem(item: ShoppingListDetailItem) {
   return item.status === "CHECKED"
-    || Boolean(item.checkedAt)
-    || isFullyCoveredItem(item);
+    || Boolean(item.checkedAt);
 }
 
-function isFullyCoveredItem(item: ShoppingListDetailItem) {
-  return item.inventoryCovered;
-}
-
-function isItemPending(itemId: string, action?: "check" | "fridge" | "remove") {
+function isItemPending(itemId: string, action?: "check" | "remove") {
   if (itemPendingId.value !== itemId) return false;
   if (!action) return true;
   return itemPendingAction.value === action;
-}
-
-function isInventoryApplied(group: GroupView) {
-  return group.inventoryApplied;
-}
-
-function isInventoryDisabled(group: GroupView) {
-  if (!canShowInventoryAction(group)) return true;
-  if (group.inventoryApplied) {
-    return group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt));
-  }
-  if (isItemChecked(group) && group.inventoryStatus === "ENOUGH") return true;
-  return group.fridgeActionMode === "NONE";
-}
-
-function isBoughtDisabled(group: GroupView) {
-  return group.inventoryCovered;
-}
-
-function canShowInventoryAction(group: GroupView) {
-  return group.inventoryApplied
-    || group.fridgeActionMode === "APPLY_FULL"
-    || group.fridgeActionMode === "APPLY_PARTIAL"
-    || group.fridgeActionMode === "NEED_CONFIRM"
-    || group.fridgeActionMode === "UNDO";
 }
 
 function applyItemPatch(patch: ShoppingListItemPatchResponse) {
@@ -1167,7 +865,6 @@ async function toggleItem(group: GroupView) {
     const currentItems = getCurrentGroupItems(group.key);
     let changed = false;
     for (const currentItem of currentItems) {
-      if (targetChecked && isFullyCoveredItem(currentItem)) continue;
       if (Boolean(currentItem.checkedAt) === targetChecked) continue;
       const patch = await shoppingApi.checkListItem(detail.value.id, currentItem.id, {
         operationId: createOperationId(),
@@ -1182,103 +879,6 @@ async function toggleItem(group: GroupView) {
     }
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
-  } finally {
-    itemPendingId.value = "";
-    itemPendingAction.value = "";
-  }
-}
-
-async function handleFridgeAction(group: GroupView) {
-  if (!detail.value || submitting.value || itemPendingId.value || isInventoryDisabled(group)) return;
-  openSwipeItemId.value = "";
-  if (group.fridgeActionMode === "NEED_CONFIRM") {
-    openUnknownInventorySheet(group);
-    return;
-  }
-  if (group.fridgeActionMode === "NONE") return;
-  itemPendingId.value = group.id;
-  itemPendingAction.value = "fridge";
-  try {
-    const targetAction = group.items.some(item => item.inventoryApplied) ? "UNDO" : "APPLY";
-    const currentItems = getCurrentGroupItems(group.key);
-    let changed = false;
-    for (const currentItem of currentItems) {
-      if (targetAction === "UNDO" && !currentItem.inventoryApplied) continue;
-      if (targetAction === "APPLY" && currentItem.inventoryApplied) continue;
-      if (targetAction === "APPLY" && (currentItem.fridgeActionMode !== "APPLY_FULL" && currentItem.fridgeActionMode !== "APPLY_PARTIAL")) continue;
-      const patch = await shoppingApi.applyListItemFridge(detail.value.id, currentItem.id, {
-        operationId: createOperationId(),
-        version: detail.value.version,
-        action: targetAction
-      });
-      applyItemPatch(patch);
-      changed = true;
-    }
-    if (changed) {
-      await refreshDetailSilently();
-    }
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "库存应用失败", icon: "none" });
-  } finally {
-    itemPendingId.value = "";
-    itemPendingAction.value = "";
-  }
-}
-
-function openUnknownInventorySheet(group: GroupView) {
-  if (group.fridgeActionMode !== "NEED_CONFIRM") return;
-  unknownGroupKey.value = group.key;
-  unknownSheetVisible.value = true;
-}
-
-function closeUnknownInventorySheet() {
-  if (unknownSheetSubmitting.value) return;
-  unknownSheetVisible.value = false;
-}
-
-function handleUnknownInventorySheetAfterClose() {
-  unknownGroupKey.value = "";
-}
-
-type UnknownInventoryChoice = "CONFIRM_ENOUGH" | "KEEP_OPEN" | "DEFER";
-
-async function handleUnknownInventoryChoice(choice: UnknownInventoryChoice) {
-  const group = unknownInventoryGroup.value;
-  if (!group || !detail.value || unknownSheetSubmitting.value) return;
-
-  if (choice === "DEFER") {
-    closeUnknownInventorySheet();
-    return;
-  }
-
-  if (choice === "KEEP_OPEN") {
-    closeUnknownInventorySheet();
-    await uniPlatform.feedback.toast({ title: "已保留在采购清单", icon: "none" });
-    return;
-  }
-
-  itemPendingId.value = group.id;
-  itemPendingAction.value = "fridge";
-  try {
-    const currentItems = getCurrentGroupItems(group.key);
-    let changed = false;
-    for (const currentItem of currentItems) {
-      if (currentItem.fridgeActionMode !== "NEED_CONFIRM") continue;
-      const patch = await shoppingApi.applyListItemFridge(detail.value.id, currentItem.id, {
-        operationId: createOperationId(),
-        version: detail.value.version,
-        action: "CONFIRM_ENOUGH"
-      });
-      applyItemPatch(patch);
-      changed = true;
-    }
-    if (changed) {
-      await refreshDetailSilently();
-    }
-    closeUnknownInventorySheet();
-    await uniPlatform.feedback.toast({ title: "已记为够用", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认失败", icon: "none" });
   } finally {
     itemPendingId.value = "";
     itemPendingAction.value = "";
@@ -1338,10 +938,7 @@ function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView
   const primary = items[0]!;
   const sources = mergeGroupSources(items);
   const checkedItems = items.map(item => item.checkedAt).filter((value): value is string => Boolean(value));
-  const inventoryApplied = items.some(item => item.inventoryApplied);
-  const inventoryCovered = items.length > 0 && items.every(item => item.inventoryCovered);
-  const requiredQuantityText = buildGroupQuantityText(items, false);
-  const remainingQuantityText = inventoryApplied && !inventoryCovered ? buildGroupQuantityText(items, true) : null;
+  const requiredQuantityText = buildGroupQuantityText(items);
   return {
     key,
     id: key,
@@ -1349,17 +946,8 @@ function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView
     name: primary.name,
     categoryName: primary.categoryName,
     imageUrl: primary.imageUrl,
-    quantityText: remainingQuantityText || requiredQuantityText,
+    quantityText: requiredQuantityText,
     requiredQuantityText,
-    remainingQuantityText,
-    appliedInventoryQuantityText: buildGroupAppliedQuantityText(items),
-    fridgeText: buildGroupFridgeText(items),
-    inventoryStatus: resolveGroupInventoryStatus(items),
-    inventoryApplied,
-    inventoryCovered,
-    fridgeStatusText: resolveGroupFridgeStatusText(items),
-    fridgeActionLabel: resolveGroupFridgeActionLabel(items),
-    fridgeActionMode: resolveGroupFridgeActionMode(items),
     checkedAt: items.every(item => Boolean(item.checkedAt))
       ? checkedItems.sort()[checkedItems.length - 1] ?? primary.checkedAt
       : null,
@@ -1471,86 +1059,11 @@ function manageActionStyle(index: number) {
   };
 }
 
-function buildGroupQuantityText(items: ShoppingListDetailItem[], remainingOnly = false) {
-  if (!items.length || (remainingOnly && items.every(item => item.inventoryCovered))) {
-    return "不需购买";
-  }
-  const lines = collectDistinctQuantityLines(
-    items
-      .filter(item => !(remainingOnly && item.inventoryCovered))
-      .map((item) => (remainingOnly && item.inventoryApplied
-        ? item.remainingQuantityText
-        : item.requiredQuantityText ?? item.quantityText))
-  );
+function buildGroupQuantityText(items: ShoppingListDetailItem[]) {
+  if (!items.length) return "未填数量";
+  const lines = collectDistinctQuantityLines(items.map(item => item.requiredQuantityText ?? item.quantityText));
   if (!lines.length) return "未填数量";
   return lines.join(" / ");
-}
-
-function buildGroupAppliedQuantityText(items: ShoppingListDetailItem[]) {
-  const lines = collectDistinctQuantityLines(items.map(item => item.appliedInventoryQuantityText));
-  return lines.length ? lines.join(" / ") : null;
-}
-
-function resolveGroupInventoryStatus(items: ShoppingListDetailItem[]): ShoppingInventoryStatus {
-  if (items.some(item => item.inventoryStatus === "SHORTAGE")) return "SHORTAGE";
-  if (items.some(item => item.inventoryStatus === "UNKNOWN")) return "UNKNOWN";
-  if (items.some(item => item.inventoryStatus === "ENOUGH")) return "ENOUGH";
-  return "NONE";
-}
-
-function buildGroupFridgeText(items: ShoppingListDetailItem[]) {
-  const exactOrder: string[] = [];
-  const exactMap = new Map<string, { unit: string; total: number }>();
-  let recordCount = 0;
-  let fallbackText: string | null = null;
-
-  for (const item of items) {
-    const text = item.fridgeText?.replace(/^冰箱：/, "").trim();
-    if (!text) continue;
-    const parsed = parseExactQuantityText(text);
-    if (parsed) {
-      if (!exactMap.has(parsed.unitKey)) {
-        exactOrder.push(parsed.unitKey);
-        exactMap.set(parsed.unitKey, {
-          unit: parsed.unitText,
-          total: parsed.amount
-        });
-      } else {
-        exactMap.get(parsed.unitKey)!.total += parsed.amount;
-      }
-      continue;
-    }
-    if (text === "有库存记录") {
-      recordCount += 1;
-      continue;
-    }
-    const recordMatch = text.match(/^有\s*(\d+)\s*条记录$/);
-    if (recordMatch) {
-      recordCount += Number(recordMatch[1] ?? 0);
-      continue;
-    }
-    fallbackText = fallbackText ?? text;
-  }
-
-  if (exactOrder.length) {
-    const exactText = exactOrder
-      .map((unitKey) => {
-        const current = exactMap.get(unitKey)!;
-        return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
-      })
-      .join(" / ");
-    if (recordCount > 0) {
-      return `冰箱：${exactText}，另有${recordCount}条记录`;
-    }
-    return `冰箱：${exactText}`;
-  }
-  if (recordCount > 1) {
-    return `冰箱：有 ${recordCount} 条记录`;
-  }
-  if (recordCount === 1) {
-    return "冰箱：有库存记录";
-  }
-  return fallbackText ? `冰箱：${fallbackText}` : null;
 }
 
 function parseExactQuantityText(value: string) {
@@ -1604,53 +1117,6 @@ function collectDistinctQuantityLines(values: Array<string | null | undefined>) 
       return `${formatQuantityNumber(current.total)} ${current.unit}`.trim();
     })
     .concat(lines);
-}
-
-function resolveGroupFridgeActionMode(items: ShoppingListDetailItem[]): ShoppingListItemFridgeActionMode {
-  const modes = items.map(item => item.fridgeActionMode);
-  if (items.some(item => item.inventoryApplied)) {
-    return modes.includes("UNDO") ? "UNDO" : "NONE";
-  }
-  const hasApplyPartial = modes.includes("APPLY_PARTIAL");
-  const hasApplyFull = modes.includes("APPLY_FULL");
-  const hasShortage = items.some(item => item.inventoryStatus === "SHORTAGE");
-  if (hasApplyPartial) return "APPLY_PARTIAL";
-  if (hasApplyFull) {
-    return modes.includes("NEED_CONFIRM") || hasShortage ? "APPLY_PARTIAL" : "APPLY_FULL";
-  }
-  if (modes.includes("UNDO")) return "UNDO";
-  if (modes.includes("NEED_CONFIRM")) return "NEED_CONFIRM";
-  return "NONE";
-}
-
-function resolveGroupFridgeActionLabel(items: ShoppingListDetailItem[]) {
-  const mode = resolveGroupFridgeActionMode(items);
-  if (mode === "NONE") return null;
-  if (mode === "NEED_CONFIRM") return "确认库存";
-  if (mode === "UNDO") {
-    return items.find(item => item.fridgeActionMode === "UNDO")?.fridgeActionLabel ?? "撤销";
-  }
-  return items.find(item => item.fridgeActionMode === mode)?.fridgeActionLabel ?? "用库存";
-}
-
-function resolveGroupFridgeStatusText(items: ShoppingListDetailItem[]) {
-  const hasNeedConfirm = items.some(item => item.fridgeActionMode === "NEED_CONFIRM");
-  const hasApplied = items.some(item => item.inventoryApplied);
-  const hasShortage = items.some(item => item.inventoryStatus === "SHORTAGE");
-  if (items.length > 0 && items.every(item => item.inventoryCovered) && !hasNeedConfirm) {
-    return "库存足够，不买了";
-  }
-  if (hasApplied && hasShortage) {
-    return hasNeedConfirm ? "已应用部分库存，其余待确认" : "已应用部分库存，仍需补买";
-  }
-  if (hasShortage) {
-    return hasNeedConfirm ? "部分库存待确认，仍需补买" : "库存不足，仍需补买";
-  }
-  if (hasApplied) {
-    return hasNeedConfirm ? "已应用部分库存，其余待确认" : "已应用部分库存";
-  }
-  if (hasNeedConfirm) return "部分库存待确认";
-  return items.find(item => item.fridgeStatusText)?.fridgeStatusText ?? null;
 }
 
 function getCurrentGroupItems(groupKey: string) {
@@ -1899,33 +1365,7 @@ async function handleManageLeave() {
   await leaveList();
 }
 
-async function finishList() {
-  if (!detail.value || submitting.value) return;
-  closeManageMenu();
-  submitting.value = true;
-  try {
-    detail.value = await shoppingApi.completeList(detail.value.id, {
-      operationId: createOperationId(),
-      version: detail.value.version,
-      entries: []
-    });
-    await uniPlatform.feedback.toast({ title: "已完成采购，食材已记入冰箱", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function handlePrimaryAction() {
-  if (canShowPrimaryAction.value) await finishList();
-}
-
 async function handleManageAction(action: ManageActionKey) {
-  if (action === "add-meal") {
-    openMealSourceSheet();
-    return;
-  }
   if (action === "add") {
     handleManageAdd();
     return;
@@ -1947,93 +1387,6 @@ async function handleManageAction(action: ManageActionKey) {
     return;
   }
   await handleManageLeave();
-}
-
-function openMealSourceSheet() {
-  if (!detail.value || !canAddItem.value || submitting.value) return;
-  closeManageMenu();
-  selectedPlanId.value = "";
-  mealSourceSheetVisible.value = true;
-  void loadPlanCandidates(true);
-}
-
-function closeMealSourceSheet() {
-  mealSourceSheetVisible.value = false;
-}
-
-function handleMealSourceSheetAfterClose() {
-  planSheetError.value = "";
-  selectedPlanId.value = "";
-}
-
-async function loadPlanCandidates(force = false) {
-  if (planSheetLoading.value && !force) return;
-  planSheetLoading.value = true;
-  planSheetError.value = "";
-  try {
-    const [plans, gapData] = await Promise.all([
-      mealApi.listAllPlans({
-        from: todayDateText(),
-        to: addDaysText(14)
-      }),
-      shoppingApi.previewGap().catch(() => null)
-    ]);
-    const now = new Date();
-    const eventGapMap = collectGapItemsByEvent(gapData, now.getTime());
-    planCandidates.value = plans.flatMap((plan): MealSourceCandidate[] => {
-      if (plan.status === "COMPLETED" || plan.shoppingListId) return [];
-      const gapItems = plan.diningEventId ? eventGapMap.get(plan.diningEventId) ?? [] : [];
-      if (gapItems.length) {
-        return [{
-          ...plan,
-          sourceMode: "EVENT" as const,
-          gapCount: gapItems.length
-        }];
-      }
-      if (!canAddPlanCandidate(plan, now)) return [];
-      return [{
-        ...plan,
-        sourceMode: "PLAN" as const,
-        gapCount: 0
-      }];
-    });
-    if (!planCandidates.value.some(item => item.id === selectedPlanId.value)) {
-      selectedPlanId.value = planCandidates.value[0]?.id || "";
-    }
-  } catch (error) {
-    planSheetError.value = error instanceof Error ? error.message : "餐次加载失败";
-  } finally {
-    planSheetLoading.value = false;
-  }
-}
-
-async function submitPlanSheet() {
-  if (!detail.value || !selectedPlanId.value || submitting.value) return;
-  const selected = planCandidates.value.find(item => item.id === selectedPlanId.value) ?? null;
-  if (!selected) return;
-  submitting.value = true;
-  try {
-    if (selected.sourceMode === "EVENT") {
-      if (!selected.diningEventId) {
-        throw new Error("当前餐次还没有可写入采购清单的饭局");
-      }
-      detail.value = await shoppingApi.addEventToList(detail.value.id, {
-        operationId: createOperationId(),
-        eventId: selected.diningEventId
-      });
-    } else {
-      detail.value = await shoppingApi.addPlanToList(detail.value.id, {
-        operationId: createOperationId(),
-        planItemId: selected.id
-      });
-    }
-    closeMealSourceSheet();
-    await uniPlatform.feedback.toast({ title: "已加入清单", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入清单失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
 }
 
 async function voidList() {
@@ -2679,59 +2032,6 @@ defineExpose({
   backdrop-filter: var(--button-primary-filter);
 }
 
-.sheet-section + .sheet-section {
-  margin-top: 20rpx;
-}
-
-.plan-sheet__scroll {
-  max-height: 720rpx;
-}
-
-.sheet-option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.unknown-inventory-options {
-  margin-top: 20rpx;
-}
-
-.sheet-option {
-  padding: 24rpx;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-overlay);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-light);
-}
-
-.sheet-option--disabled {
-  opacity: 0.58;
-  pointer-events: none;
-}
-
-.sheet-option--active {
-  background: var(--color-tag-primary-bg);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
-}
-
-.sheet-option__main {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.sheet-option__title {
-  color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet-option__meta {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.6;
-}
-
 .mini-pill--danger {
   background: var(--color-state-danger-soft);
   color: var(--color-state-danger-text);
@@ -2865,17 +2165,6 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-}
-
-.item-row__inventory {
-  flex: 0 0 auto;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.item-row__inventory--warning {
-  color: var(--color-state-danger-text);
-  font-weight: var(--font-weight-semibold);
 }
 
 .item-row__actions {

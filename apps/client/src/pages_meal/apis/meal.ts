@@ -511,6 +511,13 @@ export const mealApi = {
       { idempotencyKey: operationId }
     );
   },
+  cancelDiningEvent(eventId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/cancel`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
   chooseDiningEventWishRecipe(eventId: UUID, body: ChooseDiningEventWishRecipeRequest) {
     const { operationId, ...payload } = body;
     return post<DiningEventSummary>(

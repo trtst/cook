@@ -113,9 +113,6 @@
                       >
                         协作
                       </button>
-                      <button class="action-pill action-pill--primary" @click.stop="markComplete(item)">
-                        标记完成
-                      </button>
                       <button class="action-pill action-pill--muted" @click.stop="voidList(item)">作废</button>
                     </template>
 
@@ -308,7 +305,7 @@ import {
   type ShoppingListSummary,
   type ShoppingSharePreview
 } from "../apis/shopping";
-import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
+import { consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -788,36 +785,6 @@ async function deleteList(item: ShoppingListSummary) {
   }
 }
 
-async function markComplete(item: ShoppingListSummary) {
-  if (submitting.value || isListBusy(item.id)) return;
-  busyListId.value = item.id;
-  try {
-    if (!item.progressTotalCount) {
-      const detail = await shoppingApi.completeList(item.id, {
-        operationId: createOperationId(),
-        version: item.version,
-        entries: []
-      });
-      applyCompletedSummary(detail);
-      await loadPage();
-      await uniPlatform.feedback.toast({ title: "已标记完成", icon: "success" });
-      return;
-    }
-    const detail = item.progressTotalCount > 0 && item.progressDoneCount < item.progressTotalCount
-      ? await shoppingApi.checkAllListItems(item.id, {
-          operationId: createOperationId(),
-          version: item.version
-        })
-      : await shoppingApi.getListDetail(item.id);
-    syncListSummary(detail);
-    openCompletePage(detail.id);
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "标记失败", icon: "none" });
-  } finally {
-    busyListId.value = "";
-  }
-}
-
 function syncListSummary(detail: ShoppingListDetail) {
   const nextItem = buildListSummary(detail);
   lists.value = lists.value.map(item => (
@@ -839,10 +806,6 @@ function applyCompletedSummary(detail: ShoppingListDetail) {
     return;
   }
   syncListSummary(detail);
-}
-
-function openCompletePage(listId: UUID) {
-  void uniPlatform.navigation.navigateTo(buildShoppingCompletePagePath(listId, "list"));
 }
 
 function closeShareSheet() {

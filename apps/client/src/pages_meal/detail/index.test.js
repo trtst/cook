@@ -478,6 +478,9 @@ describe("pages_meal/detail/index", () => {
     expect(texts).toContain("做饭助手");
     expect(texts).toContain("菜单已经定好，打开后会按你的次数权益生成或解锁。");
     expect(texts).not.toContain("重新生成建议");
+
+    const footerState = await confirmedPage.callMethod("automatorReadFooterState");
+    expect(footerState.primaryActionLabel).toBe("结束计划");
   });
 
   it("饭局到点后 footer 会自动切到分享回忆态", async () => {
@@ -523,7 +526,58 @@ if (!hasAutomatorRuntime && nodeTest) {
     nodeAssert.match(detailPageSource, /showShoppingPanel[\s\S]*isEventOrganizer/);
     nodeAssert.match(detailPageSource, /footerPrimaryAction[\s\S]*isEventOrganizer/);
     nodeAssert.match(detailPageSource, /v-if="eventDetail && isEventOrganizer && !eventClosed"/);
-    nodeAssert.match(detailPageSource, /!eventDetail\.value \|\| eventClosed\.value \|\| !isEventOrganizer\.value \|\| !currentMenuItems\.value\.length/);
+    nodeAssert.match(detailPageSource, /eventDetail\.value && \(eventClosed\.value \|\| !isEventOrganizer\.value \|\| !currentMenuItems\.value\.length\)/);
+  });
+
+  nodeTest("计划详情按食材缺口显示待购数量", () => {
+    nodeAssert.match(detailPageSource, /shoppingApi\.previewPlanGap\(planDetail\.value!\.id\)/);
+    nodeAssert.match(detailPageSource, /planGapItems\.value\.length/);
+    nodeAssert.match(detailPageSource, /这顿饭需要准备 \$\{currentPlanShoppingCount\.value\} 样食材/);
+    const targetEventBranchStart = detailPageSource.indexOf("if (!targetEventId) {");
+    const targetEventBranchEnd = detailPageSource.indexOf("if (!eventDetail.value || eventDetail.value.id !== targetEventId)", targetEventBranchStart);
+    nodeAssert.ok(targetEventBranchStart >= 0 && targetEventBranchEnd > targetEventBranchStart);
+    nodeAssert.match(detailPageSource.slice(targetEventBranchStart, targetEventBranchEnd), /await loadGapPreview\(\);/);
+  });
+
+  nodeTest("饭局详情只预览当前饭局的采购需求", () => {
+    nodeAssert.match(detailPageSource, /shoppingApi\.previewEventGap\(eventDetail\.value\.id\)/);
+    nodeAssert.doesNotMatch(detailPageSource, /eventDetail\.value[\s\S]{0,120}shoppingApi\.previewGap\(\)/);
+  });
+
+  nodeTest("确认菜单后的饭局 footer 结束饭局并进入回忆", () => {
+    const readyStageStart = detailPageSource.indexOf('if (footerStage.value === "READY_TO_START")');
+    const readyStageEnd = detailPageSource.indexOf("const footerPrimaryGapText", readyStageStart);
+    const readyStageSource = detailPageSource.slice(readyStageStart, readyStageEnd);
+
+    nodeAssert.match(readyStageSource, /key: "complete-event"/);
+    nodeAssert.match(readyStageSource, /label: "结束饭局"/);
+    nodeAssert.doesNotMatch(readyStageSource, /key: "cook-assistant"/);
+    nodeAssert.match(detailPageSource, /title: "结束饭局"/);
+    nodeAssert.match(detailPageSource, /mealApi\.completeDiningEvent\(eventDetail\.value\.id, createOperationId\(\)\)/);
+    nodeAssert.match(detailPageSource, /navigateTo\(`\/pages_share\/memory\/index\?eventId=/);
+  });
+
+  nodeTest("确认菜单后的纯计划 footer 可以结束计划", () => {
+    const readyStageStart = detailPageSource.indexOf('if (footerStage.value === "READY_TO_START")');
+    const readyStageEnd = detailPageSource.indexOf("const footerPrimaryGapText", readyStageStart);
+    const readyStageSource = detailPageSource.slice(readyStageStart, readyStageEnd);
+
+    nodeAssert.match(readyStageSource, /if \(!eventDetail\.value\) return \{ key: "complete-plan", label: "结束计划" \}/);
+    nodeAssert.match(detailPageSource, /mealApi\.completePlan\(planDetail\.value\.id, createOperationId\(\)\)/);
+    nodeAssert.match(detailPageSource, /title: "结束计划"/);
+  });
+
+  nodeTest("饭局有采购缺口优先去采购，无缺口无人接受时显示取消饭局", () => {
+    const readyStageStart = detailPageSource.indexOf('if (footerStage.value === "READY_TO_START")');
+    const readyStageEnd = detailPageSource.indexOf("const footerPrimaryGapText", readyStageStart);
+    const readyStageSource = detailPageSource.slice(readyStageStart, readyStageEnd);
+
+    nodeAssert.match(readyStageSource, /currentEventGapCount\.value > 0[\s\S]*key: "shopping"/);
+    nodeAssert.match(readyStageSource, /canCompleteEvent\.value[\s\S]*key: "complete-event"/);
+    nodeAssert.match(readyStageSource, /canCancelEvent\.value[\s\S]*key: "cancel-event"/);
+    nodeAssert.match(detailPageSource, /mealApi\.cancelDiningEvent\(eventDetail\.value\.id, createOperationId\(\)\)/);
+    nodeAssert.match(detailPageSource, /title: "取消饭局"/);
+    nodeAssert.match(detailPageSource, /原计划和菜单会保留，之后还可以重新发起饭局/);
   });
 
   nodeTest("餐次加载不到时使用 Toast，不渲染页面内错误重试块", () => {

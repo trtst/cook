@@ -40,6 +40,19 @@ export interface ShoppingGapResponse {
   laterItemCount: number;
 }
 
+export interface ShoppingGapPreviewItem {
+  id: UUID;
+  name: string;
+  quantityText: string | null;
+  note: string | null;
+  sourceCount: number;
+  sourceTitles: string[];
+  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
+  sourceKey: string | null;
+  status: "OPEN" | "BOUGHT" | "DELETED";
+  updatedAt: IsoDateTime;
+}
+
 export interface ShoppingListSummary {
   id: UUID;
   name: string;
@@ -129,6 +142,12 @@ export interface AddRecipeToShoppingListRequest {
 export const shoppingApi = {
   previewGap() {
     return get<ShoppingGapResponse>(`${cfg.domain}/api/shopping-gap`);
+  },
+  previewPlanGap(planItemId: UUID) {
+    return get<ShoppingGapPreviewItem[]>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(String(planItemId))}/shopping-gap`);
+  },
+  previewEventGap(eventId: UUID) {
+    return get<ShoppingGapPreviewItem[]>(`${cfg.domain}/api/dining-events/${encodeURIComponent(String(eventId))}/shopping-gap`);
   },
   getListSummary() {
     return get<ShoppingListSummaryResponse>(`${cfg.domain}/api/shopping-lists/summary`);

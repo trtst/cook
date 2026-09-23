@@ -19,6 +19,7 @@
               v-for="(item, index) in menuTabs"
               :key="item.key"
               class="cook-slide__menu-item"
+              :style="menuItemStyle(index)"
               @click.stop="selectDishFromMenu(index)"
             >
               {{ item.title }}
@@ -699,6 +700,10 @@ function selectDishFromMenu(index: number) {
   closeDishMenu();
 }
 
+function menuItemStyle(index: number) {
+  return { "--menu-delay": `${120 + index * 150}ms` };
+}
+
 function setFlowMode(nextMode: FlowMode) {
   if (nextMode !== "original" || !canSwitchFlowMode.value) return;
   flowMode.value = "original";
@@ -1093,8 +1098,10 @@ defineExpose({
   position: absolute;
   z-index: 2;
   top: calc(100% + 12rpx);
-  left: 0;
+  left: -10%;
+  width: 100%;
   min-width: 100%;
+  box-sizing: border-box;
   overflow: hidden;
   clip-path: inset(0 0 100% 0 round 0);
   opacity: 0;
@@ -1110,36 +1117,28 @@ defineExpose({
 
 .cook-slide__menu-item {
   position: relative;
-  padding: 20px 0;
+  display: block;
+  padding: 30rpx 10rpx;
+  overflow: hidden;
   color: var(--color-overlay-text);
   font-size: 26rpx;
   line-height: 1.35;
   text-shadow: 0 2rpx 10rpx var(--color-shadow-overlay);
+  text-overflow: ellipsis;
   white-space: nowrap;
   transform: translateY(30rpx);
   opacity: 0;
-  transition: transform 320ms ease 120ms, opacity 320ms ease 120ms;
-}
-
-.cook-slide__menu-item:not(:last-child) {
-  border-bottom: 1rpx solid var(--color-overlay-text-muted);
+  margin-bottom: 10rpx;
+  background: var(--color-overlay-medium);
+  border-radius: var(--radius-xs);
+  border: 1rpx solid color-mix(in srgb, var(--color-overlay-control) 90%, transparent);
+  transition: transform 320ms ease, opacity 320ms ease;
 }
 
 .cook-slide__menu--open .cook-slide__menu-item {
   transform: translateY(0);
   opacity: 1;
-}
-
-.cook-slide__menu--open .cook-slide__menu-item:nth-child(2) {
-  transition-delay: 270ms;
-}
-
-.cook-slide__menu--open .cook-slide__menu-item:nth-child(3) {
-  transition-delay: 420ms;
-}
-
-.cook-slide__menu--open .cook-slide__menu-item:nth-child(4) {
-  transition-delay: 570ms;
+  transition-delay: var(--menu-delay);
 }
 
 .cook-slide__menu-dismiss {

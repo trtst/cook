@@ -151,7 +151,7 @@
                         <view class="meal-card__actions">
                           <button
                             class="action-pill action-pill--primary meal-card__action-button"
-                            :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id && !hasShoppingListLink(plan) }"
+                            :class="{ 'meal-card__action-button--disabled': shoppingSubmitting && shoppingPlan?.id === plan.id && !hasActiveShoppingListLink(plan) }"
                             @click.stop="handlePlanShoppingAction(plan)"
                           >
                             {{ planShoppingActionText(plan) }}
@@ -288,7 +288,7 @@ import {
   buildDefaultShoppingListName,
   buildMealShoppingListName,
   buildShoppingListDetailPath,
-  hasShoppingListLink
+  hasActiveShoppingListLink
 } from "../utils/shopping";
 import {
   appendMealSlotToMark,
@@ -812,7 +812,7 @@ async function addPlanToShoppingList(plan: MealPlanSummary) {
 }
 
 function planShoppingActionText(plan: MealPlanSummary) {
-  if (hasShoppingListLink(plan)) return "查看采购清单";
+  if (hasActiveShoppingListLink(plan)) return "查看采购清单";
   return shoppingSubmitting.value && shoppingPlan.value?.id === plan.id ? "加入中..." : "加入采购清单";
 }
 
@@ -822,7 +822,7 @@ function openLinkedShoppingList(plan: MealPlanSummary) {
 }
 
 function handlePlanShoppingAction(plan: MealPlanSummary) {
-  if (hasShoppingListLink(plan)) {
+  if (hasActiveShoppingListLink(plan)) {
     openLinkedShoppingList(plan);
     return;
   }
