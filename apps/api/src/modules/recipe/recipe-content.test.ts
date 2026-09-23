@@ -1,6 +1,56 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildImportedRecipeAssistantSnapshot, versionAssistantToSnapshot, versionToContent } from "./recipe-content";
+import {
+  buildImportedRecipeAssistantSnapshot,
+  buildIngredientSearchWhere,
+  versionAssistantToSnapshot,
+  versionToContent
+} from "./recipe-content";
+
+test("searches an active ingredient by its alias and merged source name", () => {
+  assert.equal(typeof buildIngredientSearchWhere, "function");
+  if (typeof buildIngredientSearchWhere !== "function") return;
+
+  assert.deepEqual(buildIngredientSearchWhere("马铃薯"), {
+    OR: [
+      { searchKey: { contains: "马铃薯" } },
+      { aliases: { has: "马铃薯" } },
+      {
+        mergedFrom: {
+          some: {
+            status: "MERGED",
+            OR: [
+              { searchKey: { contains: "马铃薯" } },
+              { aliases: { has: "马铃薯" } }
+            ]
+          }
+        }
+      }
+    ]
+  });
+});
+
+test("searches aliases by both display text and the canonical search key", () => {
+  assert.deepEqual(buildIngredientSearchWhere(" Green Pepper "), {
+    OR: [
+      { searchKey: { contains: "greenpepper" } },
+      { aliases: { has: "Green Pepper" } },
+      { aliases: { has: "greenpepper" } },
+      {
+        mergedFrom: {
+          some: {
+            status: "MERGED",
+            OR: [
+              { searchKey: { contains: "greenpepper" } },
+              { aliases: { has: "Green Pepper" } },
+              { aliases: { has: "greenpepper" } }
+            ]
+          }
+        }
+      }
+    ]
+  });
+});
 
 test("reads body keywords from the immutable recipe content version", () => {
   const content = versionToContent({

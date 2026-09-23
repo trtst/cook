@@ -572,6 +572,12 @@ function assertZipEntryPath(entryName: string) {
   if (entryName.split("/").length > maxZipDepth) throw new Error("ZIP 目录层级不能超过 8 层");
 }
 
+export function validateZipEntrySize(uncompressedSize: number) {
+  if (!Number.isSafeInteger(uncompressedSize) || uncompressedSize < 0 || uncompressedSize > maxJsonFileBytes) {
+    throw new Error("ZIP 内单个 JSON 文件大小不能超过 10 MB");
+  }
+}
+
 function readZipJsonSources(
   file: { originalname?: string; buffer?: Buffer },
   sources: RecipeImportJsonSource[],
@@ -597,9 +603,10 @@ function readZipJsonSources(
     const unixFileType = ((entry.header.attr >>> 16) & 0o170000);
     if (unixFileType === 0o120000) throw new Error("ZIP 不允许符号链接");
     if (!entryName.toLowerCase().endsWith(".json")) throw new Error("ZIP 只允许包含 JSON 文件");
+    validateZipEntrySize(entry.header.size);
+    addBytes(entry.header.size);
     const content = entry.getData();
     if (content.byteLength > maxJsonFileBytes) throw new Error("ZIP 内单个 JSON 文件大小不能超过 10 MB");
-    addBytes(content.byteLength);
     addJsonDocumentSources(sources, `${file.originalname}/${entryName}`, content.toString("utf8"));
     if (sources.length > maxJsonFiles) throw new Error("展开后的菜谱数量不能超过 100 个");
   }

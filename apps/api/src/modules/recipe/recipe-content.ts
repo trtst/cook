@@ -17,6 +17,34 @@ export function buildSearchKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
 
+function buildIngredientAliasSearchValues(value: string) {
+  return Array.from(new Set([value.trim(), buildSearchKey(value)].filter(Boolean)));
+}
+
+export function buildIngredientSearchWhere(keyword: string): Prisma.IngredientWhereInput {
+  const normalizedKeyword = keyword.trim();
+  const searchKey = buildSearchKey(normalizedKeyword);
+  const aliasSearchValues = buildIngredientAliasSearchValues(normalizedKeyword);
+  const aliasWhere = aliasSearchValues.map(value => ({ aliases: { has: value } }));
+  return {
+    OR: [
+      { searchKey: { contains: searchKey } },
+      ...aliasWhere,
+      {
+        mergedFrom: {
+          some: {
+            status: "MERGED",
+            OR: [
+              { searchKey: { contains: searchKey } },
+              ...aliasWhere
+            ]
+          }
+        }
+      }
+    ]
+  };
+}
+
 export function cleanDraftContent(content: RecipeDraftContentInput): RecipeDraftContentInput {
   return {
     name: content.name.trim(),

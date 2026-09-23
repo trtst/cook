@@ -21,6 +21,8 @@ import {
 } from "./admin-site-content.controller";
 import { AdminSiteContentService } from "./admin-site-content.service";
 import { AdminService } from "./admin.service";
+import { AdminIngredientImportController } from "./admin-ingredient-import.controller";
+import { AdminIngredientImportService } from "./admin-ingredient-import.service";
 import { IngredientImageService } from "./ingredient-image.service";
 import { SiteContentImageService } from "./site-content-image.service";
 
@@ -28,6 +30,7 @@ import { SiteContentImageService } from "./site-content-image.service";
   imports: [EntitlementModule, UserModule],
   controllers: [
     AdminController,
+    AdminIngredientImportController,
     AdminDashboardController,
     AdminMembershipCodeController,
     AdminMaterialImageController,
@@ -42,6 +45,7 @@ import { SiteContentImageService } from "./site-content-image.service";
   ],
   providers: [
     AdminService,
+    AdminIngredientImportService,
     AdminDashboardService,
     AdminMembershipCodeService,
     AdminMaterialImageService,

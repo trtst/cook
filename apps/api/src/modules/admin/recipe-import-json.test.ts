@@ -6,9 +6,14 @@ import {
   isImportedIngredientPlaceholder,
   parseJsonSource,
   readJsonSourcesFromFiles,
+  validateZipEntrySize,
   rebuildJsonItemState,
   type RecipeImportJsonRefs
 } from "./recipe-import-json";
+
+test("rejects an oversized ZIP entry before decompression", () => {
+  assert.throws(() => validateZipEntrySize(10 * 1024 * 1024 + 1), /ZIP 内单个 JSON 文件大小不能超过 10 MB/);
+});
 
 const refs: RecipeImportJsonRefs = {
   ingredientByName: new Map([

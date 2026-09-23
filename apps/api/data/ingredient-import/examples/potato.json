@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "ingredient.import.v1",
+  "ingredients": [
+    {
+      "name": "土豆",
+      "aliases": ["马铃薯", "洋芋"],
+      "categoryCode": "PRODUCE",
+      "defaultUnitName": "个",
+      "proteinType": null,
+      "isStaple": true,
+      "isSpicyIngredient": false,
+      "imageUrl": null,
+      "nutrition": {
+        "sourceVersion": "2026-08-22-primary-subset-v1",
+        "foodCode": "021101",
+        "foodName": "马铃薯[土豆、洋芋]",
+        "matchType": "ALIAS",
+        "confidence": 0.98,
+        "conversions": [
+          { "unitName": "个", "gramsPerUnit": 200 }
+        ]
+      }
+    }
+  ]
+}
