@@ -13,6 +13,55 @@ export interface AdminRecipeSummary {
   ownerUid: number | null;
 }
 
+export interface AdminRecipeWikiSummary {
+  id: UUID;
+  title: string;
+  coverImageUrl: string | null;
+  contentVersionId: UUID;
+  ownerUid: number;
+  ownerNickname: string | null;
+  sourceType: "USER" | "PUBLIC_CONTENT_POOL";
+  wikiStatus: "MISSING" | "PENDING" | "GENERATING" | "NEEDS_REVIEW" | "FAILED";
+  hasPendingRequest: boolean;
+  latestRequestAt: IsoDateTime | null;
+  latestRequestUserUid: number | null;
+  latestRequestUserNickname: string | null;
+  updatedAt: IsoDateTime;
+}
+
+export interface AdminRecipeWikiQuery extends PageQuery {
+  keyword?: string;
+}
+
+export interface AdminRecipeWikiExportDocument {
+  schemaVersion: "recipe.wiki.v1";
+  recipeId: UUID;
+  contentVersionId: UUID;
+  wiki: {
+    tags: Array<{ tagCode: string; tagValue: string }>;
+    assistant: { steps: RecipeImportAssistantStepDraft[] };
+  };
+}
+
+export interface AdminRecipeWikiBatchExportDocument {
+  schemaVersion: "recipe.wiki.batch.v1";
+  recipes: Array<Omit<AdminRecipeWikiExportDocument, "schemaVersion">>;
+}
+
+export interface AdminRecipeWikiImportResult {
+  importedCount: number;
+  rejectedCount: number;
+  items: Array<{ recipeId: UUID; status: "READY" | "REJECTED"; message: string | null }>;
+}
+
+export interface AdminRecipeWikiRejectResult {
+  recipeId: UUID;
+  contentVersionId: UUID;
+  status: "REJECTED";
+  rejectedRequestCount: number;
+  rejectionReason: string;
+}
+
 export interface RecipeReportSummary {
   id: UUID;
   recipeId: UUID;
@@ -446,6 +495,32 @@ export const recipeApi = {
   list(query: AdminRecipeQuery) {
     return requestData<PageResult<AdminRecipeSummary>>("/admin/recipes", {
       query: { ...query }
+    });
+  },
+  listWiki(query: AdminRecipeWikiQuery) {
+    return requestData<PageResult<AdminRecipeWikiSummary>>("/admin/recipe-wiki", {
+      query: { ...query }
+    });
+  },
+  exportWiki(recipeId: UUID) {
+    return requestData<AdminRecipeWikiExportDocument>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}/export`);
+  },
+  exportWikiBatch(recipeIds: UUID[]) {
+    return requestData<AdminRecipeWikiBatchExportDocument>("/admin/recipe-wiki/export", {
+      method: "POST",
+      body: { recipeIds }
+    });
+  },
+  importWiki(file: File, operationId: OperationId) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return uploadForm<AdminRecipeWikiImportResult>("/admin/recipe-wiki/import", formData, { idempotencyKey: operationId });
+  },
+  rejectWiki(recipeId: UUID, reason: string, operationId: OperationId) {
+    return requestData<AdminRecipeWikiRejectResult>(`/admin/recipe-wiki/${encodeURIComponent(String(recipeId))}/reject`, {
+      method: "POST",
+      body: { reason },
+      idempotencyKey: operationId
     });
   },
   listPending(query: AdminPendingRecipeQuery) {
