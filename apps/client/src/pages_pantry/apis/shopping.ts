@@ -103,7 +103,7 @@ export type ShoppingListRole = "OWNER" | "COLLABORATOR";
 export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
 export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
 export type ShoppingListItemStatus = "OPEN" | "CHECKED" | "REMOVED";
-export type ShoppingListItemFridgeAction = "APPLY" | "UNDO";
+export type ShoppingListItemFridgeAction = "APPLY" | "UNDO" | "CONFIRM_ENOUGH";
 export type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
 export type ShoppingInventoryStatus = "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
 

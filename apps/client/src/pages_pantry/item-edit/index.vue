@@ -169,6 +169,15 @@ onLoad(options => {
     return;
   }
   itemId.value = "";
+  if (typeof options?.ingredientId === "string" && options.ingredientId) {
+    const parsed = Number(options.ingredientId);
+    selectedIngredientId.value = Number.isInteger(parsed) && parsed > 0 ? parsed : "";
+  }
+  if (typeof options?.name === "string" && options.name) {
+    name.value = options.name;
+    ingredientKeyword.value = options.name;
+    selectedIngredientName.value = options.name;
+  }
 });
 
 onShow(() => {
@@ -201,10 +210,14 @@ async function loadUnits() {
 
 async function loadItem() {
   if (!itemId.value) return;
-  const result = await fridgeApi.list(1, 100);
-  const current = result.items.find(item => item.id === itemId.value);
+  const detail = await fridgeApi.getBatchDetail(itemId.value);
+  let current = [...detail.activeBatches, ...detail.expiredBatches].find(item => item.id === itemId.value) ?? null;
+  if (!current && detail.ingredientId) {
+    const history = await fridgeApi.getHistory(detail.ingredientId, 1, 50);
+    current = history.items.find(item => item.id === itemId.value) ?? null;
+  }
   if (!current) {
-    throw new Error("库存条目不存在");
+    throw new Error(detail.identityPending ? "这条库存还未绑定正式食材，请先从新增食材重新记录" : "库存批次不存在");
   }
   name.value = current.name;
   ingredientKeyword.value = current.name;

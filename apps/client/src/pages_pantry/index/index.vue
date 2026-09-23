@@ -282,7 +282,7 @@ import { formatDateOnly, parseDateOnly } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 import { buildDefaultShoppingListName } from "../utils/shopping";
 import { requestFridgeExpirySubscribeMessage, resolveFridgeExpirySubscribeOutcome } from "../services/subscribe-message";
-import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
+import { fridgeApi, type FridgeIngredientSummary } from "../apis/fridge";
 import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
 import {
   formatExpireLabel,
@@ -306,6 +306,7 @@ interface PantryCard {
   expireSoon: boolean;
   hasReservation: boolean;
   needExact: boolean;
+  identityPending: boolean;
   imageUrl: string;
 }
 
@@ -343,7 +344,7 @@ const errorText = ref("");
 const scrollTop = ref(0);
 const keyword = ref("");
 const activeFilter = ref<FilterKey>("ALL");
-const fridgeItems = ref<FridgeItemSummary[]>([]);
+const fridgeItems = ref<FridgeIngredientSummary[]>([]);
 const gapData = ref<ShoppingGapResponse | null>(null);
 const activeLists = ref<ShoppingListSummary[]>([]);
 const imageMap = ref<Record<string, string>>({});
@@ -372,15 +373,16 @@ const cards = computed<PantryCard[]>(() =>
       id: item.id,
       name: item.name,
       ingredientId: item.ingredientId,
-      exactUnitId: item.exactUnitId,
-      exactUnitName: item.exactUnitName,
+      exactUnitId: item.stockGroups.length === 1 ? item.stockGroups[0]?.unitId ?? null : null,
+      exactUnitName: item.stockGroups.length === 1 ? item.stockGroups[0]?.unitName ?? null : null,
       categoryText: item.categoryName || "未分类",
-      stockText: item.stockText || item.quantityText || "未填库存",
+      stockText: item.stockText || "未填库存",
       expireAt: item.expireAt,
       expireLabel: formatExpireLabel(item.expireAt),
       expireSoon: isExpiringSoon(item.expireAt),
-      hasReservation: item.reservations.length > 0,
-      needExact: !item.exactQuantity || !item.exactUnitId,
+      hasReservation: item.hasReservation,
+      needExact: item.needsConfirmation,
+      identityPending: item.identityPending,
       imageUrl: imageMap.value[String(item.id)] || ""
     }))
     .sort((left, right) => {
@@ -577,7 +579,10 @@ function openShoppingLists() {
 }
 
 function handleCardClick(card: PantryCard) {
-  void uniPlatform.navigation.navigateTo(`/pages_pantry/item-detail/index?itemId=${encodeURIComponent(String(card.id))}`);
+  const key = card.ingredientId
+    ? `ingredientId=${encodeURIComponent(String(card.ingredientId))}`
+    : `itemId=${encodeURIComponent(String(card.id))}`;
+  void uniPlatform.navigation.navigateTo(`/pages_pantry/item-detail/index?${key}`);
 }
 
 async function openRestockSheet(card: PantryCard) {

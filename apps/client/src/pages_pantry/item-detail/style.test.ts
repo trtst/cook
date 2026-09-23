@@ -18,8 +18,8 @@ assert.ok(!source.includes('class="detail-hero__avatar"'), "The ingredient image
 assert.ok(source.includes('class="detail-hero__cover"'), "The ingredient image should use the recipe-detail cover structure");
 assert.match(
   source,
-  /<view[^>]*class="detail-hero"[^>]*>[\s\S]*class="detail-hero__cover"[\s\S]*class="summary-card"[\s\S]*<\/view>\s*<\/view>\s*<scroll-view/,
-  "The summary card should float inside the cover instead of moving below the image"
+  /<scroll-view[\s\S]*class="detail-content-scroll"[\s\S]*class="detail-hero"[\s\S]*class="detail-hero__cover"[\s\S]*class="summary-card"/,
+  "The detail hero and summary should live inside the scrolling content"
 );
 
 const page = selectorBody(".detail-page");
@@ -32,7 +32,7 @@ assert.match(cover, /padding-top:\s*100%;/, "The ingredient cover should preserv
 assert.match(cover, /overflow:\s*hidden;/, "The square cover should clip its image layer");
 
 const hero = selectorBody(".detail-hero");
-assert.match(hero, /position:\s*relative;/, "The cover should provide the positioning context for the floating summary");
+assert.match(hero, /position:\s*relative;/, "The scrolling hero should provide the positioning context for the floating summary");
 
 const image = selectorBody(".detail-hero__image");
 assert.match(image, /position:\s*absolute;/, "The ingredient image should be a cover background layer");
@@ -47,10 +47,17 @@ const contentScroll = selectorBody(".detail-content-scroll");
 assert.match(contentScroll, /flex:\s*1;/, "The content area should take the remaining fixed viewport");
 assert.match(contentScroll, /min-height:\s*0;/, "The content area should be shrinkable inside the fixed page");
 
+const content = selectorBody(".detail-content");
+assert.match(content, /padding:\s*32rpx 0 max\(48rpx, env\(safe-area-inset-bottom\)\);/, "The content wrapper should not own horizontal padding");
+assert.doesNotMatch(content, /var\(--space-page\)/, "The content wrapper should not apply page-side padding");
+
+const sectionCard = selectorBody(".section-card");
+assert.match(sectionCard, /padding:\s*var\(--space-md\);/, "Each section card should own its inner spacing");
+
 assert.match(source, /onSessionCleared/, "Private pantry detail state should subscribe to session cleanup");
 assert.match(source, /function clearPrivateState\(\)/, "Private pantry detail state should have one cleanup path");
 assert.match(source, /currentItem\.value = null[\s\S]*itemImageUrl\.value = ""/, "Logout should clear the loaded item and private image");
-assert.match(source, /<view v-if="sessionStore\.isLoggedIn" class="detail-hero">/, "The pantry summary must not remain visible for guests");
+assert.match(source, /<view v-if="sessionStore\.isLoggedIn && currentItem" class="detail-hero">/, "The pantry summary must not remain visible for guests");
 assert.match(source, /catch \(error\) \{[\s\S]*requestId !== contextRequestId[\s\S]*errorText\.value/, "A stale request must not restore private error state after logout");
 
 console.log("pantry item-detail style tests passed");

@@ -8,25 +8,24 @@
     <view class="detail-nav-backdrop" :style="navBackdropStyle" />
 
     <view class="detail-page">
-      <view v-if="sessionStore.isLoggedIn" class="detail-hero">
-        <view class="detail-hero__cover">
-          <ImageLoader class="detail-hero__image" :src="itemImageUrl" />
-        </view>
-        <view v-if="currentItem" class="summary-card">
-          <text class="summary-card__eyebrow">厨房小管家</text>
-          <text class="summary-card__title">{{ currentItem.name }}</text>
-          <text class="summary-card__stock">{{ stockSummary }}</text>
-          <text class="summary-card__description">{{ expireSummary }}</text>
-          <view class="badge-row">
-            <text v-if="isExpiringSoon(currentItem.expireAt)" class="badge badge--warning">{{ formatExpireLabel(currentItem.expireAt) }}</text>
-            <text v-if="hasReservations(currentItem)" class="badge badge--info">预占中</text>
-            <text v-if="needsExact(currentItem)" class="badge badge--muted">待补精确数量</text>
-          </view>
-        </view>
-      </view>
-
       <scroll-view scroll-y class="detail-content-scroll" show-scrollbar="false" @scroll="handleScroll">
         <view class="detail-content">
+          <view v-if="sessionStore.isLoggedIn && currentItem" class="detail-hero">
+            <view class="detail-hero__cover">
+              <ImageLoader class="detail-hero__image" :src="itemImageUrl" />
+            </view>
+            <view class="summary-card">
+              <text class="summary-card__eyebrow">厨房小管家</text>
+              <text class="summary-card__title">{{ currentItem.name }}</text>
+              <text class="summary-card__stock">{{ stockSummary }}</text>
+              <text class="summary-card__description">{{ expireSummary }}</text>
+              <view class="badge-row">
+                <text v-if="currentItem.expiredBatchCount" class="badge badge--warning">已过期 {{ currentItem.expiredBatchCount }} 批</text>
+                <text v-if="currentItem.needsConfirmation" class="badge badge--muted">有库存待补精确数量</text>
+              </view>
+            </view>
+          </view>
+
           <Empty
             v-if="!sessionStore.isLoggedIn"
             :art="emptyStateArt"
@@ -48,99 +47,142 @@
 
             <Empty
               v-else-if="!currentItem"
-              title="没找到这条库存"
+              title="没找到这份食材"
               description="它可能已经被删除，或刚刚被其他操作修改了。"
             />
 
             <template v-else>
-              <view class="section-card">
+              <view v-if="!currentItem.identityPending" class="section-card">
                 <view class="section-card__header">
                   <text class="section-card__title">现在还剩多少</text>
-                  <text class="section-card__hint">帮你把这份食材的库存、预占和可用量看清楚，做饭前心里更有数。</text>
-                </view>
-                <view v-if="showExactMetrics" class="metric-grid">
-                  <view class="metric-card">
-                    <text class="metric-card__label">实际库存</text>
-                    <text class="metric-card__value">{{ currentItem.stockText || "-" }}</text>
-                  </view>
-                  <view class="metric-card">
-                    <text class="metric-card__label">已预占</text>
-                    <text class="metric-card__value">{{ currentItem.reservedText || zeroReservedText }}</text>
-                  </view>
-                  <view class="metric-card">
-                    <text class="metric-card__label">可用库存</text>
-                    <text class="metric-card__value">{{ currentItem.availableText || "-" }}</text>
-                  </view>
-                </view>
-                <view v-else class="info-list">
-                  <view class="info-row">
-                    <text class="info-row__label">当前库存</text>
-                    <text class="info-row__value">{{ currentItem.stockText || currentItem.quantityText || "未填数量" }}</text>
-                  </view>
+                  <text class="section-card__hint">这里看总库存和到期提醒，批次细节往下看。</text>
                 </view>
                 <view class="info-list">
                   <view class="info-row">
-                    <text class="info-row__label">到期时间</text>
-                    <text class="info-row__value">{{ currentItem.expireAt ? currentItem.expireAt.slice(0, 10) : "未设置" }}</text>
+                    <text class="info-row__label">当前库存</text>
+                    <text class="info-row__value">{{ currentItem.stockText }}</text>
                   </view>
                   <view class="info-row">
-                    <text class="info-row__label">备注</text>
-                    <text class="info-row__value">{{ currentItem.note || "暂无备注" }}</text>
+                    <text class="info-row__label">批次数</text>
+                    <text class="info-row__value">{{ currentItem.batchCount }} 批</text>
                   </view>
                 </view>
               </view>
 
-              <view v-if="currentItem.reservations.length" class="section-card">
+              <view v-if="currentItem.activeBatches.length" class="section-card">
                 <view class="section-card__header">
-                  <text class="section-card__title">哪些安排已经用上它</text>
-                  <text class="section-card__hint">这里会提醒你哪些清单先占了这份库存，避免重复买或误扣。</text>
+                  <text class="section-card__title">当前批次</text>
+                  <text class="section-card__hint">按到期时间优先排列，做饭时直接扣减总量。</text>
                 </view>
-                <view class="reservation-list">
-                  <view
-                    v-for="reservation in currentItem.reservations"
-                    :key="`${currentItem.id}-${reservation.shoppingItemId}`"
-                    class="reservation-row"
-                  >
-                    <view class="reservation-row__main">
-                      <text class="reservation-row__title">{{ reservation.shoppingListName }}</text>
-                      <text class="reservation-row__meta">购物项 {{ reservation.shoppingItemId }}</text>
+                <view class="batch-list">
+                  <view v-for="batch in currentItem.activeBatches" :key="batch.id" class="batch-row">
+                    <view class="batch-row__main">
+                      <text class="batch-row__title">{{ batch.stockText || batch.quantityText || "未填数量" }}</text>
+                      <text class="batch-row__meta">{{ batch.expireAt ? formatExpireLabel(batch.expireAt) : "未设置到期时间" }}</text>
                     </view>
-                    <text class="reservation-row__value">{{ reservation.reservedText }}</text>
+                    <view class="batch-row__side">
+                      <text v-if="batch.reservedText" class="batch-row__value">预占 {{ batch.reservedText }}</text>
+                      <text class="batch-row__edit" @click.stop="openBatchEdit(batch.id)">补充数量</text>
+                    </view>
                   </view>
+                </view>
+              </view>
+
+              <view v-if="currentItem.expiredBatches.length" class="section-card">
+                <view class="collapse-header" @click="showExpired = !showExpired">
+                  <view>
+                    <text class="section-card__title">已过期库存 · {{ currentItem.expiredBatches.length }} 批</text>
+                    <text class="section-card__hint">过期只是提醒，确认还能用时仍可扣减。</text>
+                  </view>
+                  <text class="collapse-header__arrow">{{ showExpired ? "收起" : "展开" }}</text>
+                </view>
+                <view v-if="showExpired" class="batch-list">
+                  <view v-for="batch in currentItem.expiredBatches" :key="batch.id" class="batch-row batch-row--expired">
+                    <view class="batch-row__main">
+                      <text class="batch-row__title">{{ batch.stockText || batch.quantityText || "未填数量" }}</text>
+                      <text class="batch-row__meta">{{ formatExpireLabel(batch.expireAt) }}</text>
+                    </view>
+                    <view class="batch-row__side">
+                      <text v-if="batch.reservedText" class="batch-row__value">预占 {{ batch.reservedText }}</text>
+                      <text class="batch-row__edit" @click.stop="openBatchEdit(batch.id)">补充数量</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+
+              <view v-if="!currentItem.identityPending" class="section-card">
+                <view class="collapse-header" @click="toggleHistory">
+                  <view>
+                    <text class="section-card__title">历史批次</text>
+                    <text class="section-card__hint">已用完的批次默认收起，需要时再查询。</text>
+                  </view>
+                  <text class="collapse-header__arrow">{{ showHistory ? "收起" : historyLoading ? "查询中" : "查询" }}</text>
+                </view>
+                <view v-if="showHistory" class="batch-list">
+                  <view v-for="batch in historyBatches" :key="batch.id" class="batch-row">
+                    <view class="batch-row__main">
+                      <text class="batch-row__title">{{ batch.stockText || batch.quantityText || "已用完" }}</text>
+                      <text class="batch-row__meta">入库于 {{ batch.createdAt.slice(0, 10) }}</text>
+                    </view>
+                    <text class="batch-row__value">已用完</text>
+                  </view>
+                  <view v-if="historyHasNext && !historyLoading" class="history-more" @click="loadMoreHistory">
+                    <text class="history-more__text">加载更多历史</text>
+                  </view>
+                  <text v-if="historyLoading && historyBatches.length" class="section-card__hint">正在加载更多历史...</text>
+                  <text v-if="!historyBatches.length && !historyLoading" class="section-card__hint">还没有历史批次</text>
                 </view>
               </view>
 
               <view class="section-card">
                 <view class="section-card__header">
-                  <text class="section-card__title">接下来怎么处理</text>
-                  <text class="section-card__hint">想改数量、补一点，还是记一笔消耗，都可以在这里顺手完成。</text>
+                  <text class="section-card__title">库存操作</text>
+                  <text class="section-card__hint">只记总量，系统会自动按最早到期批次扣减。</text>
                 </view>
                 <view class="action-grid">
-                  <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openEdit">
-                    <text class="action-button__title">编辑库存</text>
-                    <text class="action-button__meta">修改库存、到期时间和备注</text>
-                  </view>
                   <view class="action-button" hover-class="action-button--hover" hover-stay-time="100" @click="openRestock">
-                    <text class="action-button__title">补货</text>
-                    <text class="action-button__meta">继续补这项食材的库存</text>
+                    <text class="action-button__title">新增库存</text>
+                    <text class="action-button__meta">这次买了新的就新增一批</text>
                   </view>
                   <view
                     class="action-button action-button--accent"
                     :class="{ 'action-button--disabled': consuming }"
                     hover-class="action-button--hover"
                     hover-stay-time="100"
-                    @click="consumeCurrent"
+                    @click="openConsumeSheet"
                   >
-                    <text class="action-button__title">{{ consuming ? "处理中..." : "扣减" }}</text>
-                    <text class="action-button__meta">快速扣减当前库存</text>
+                    <text class="action-button__title">{{ consuming ? "处理中..." : "扣减库存" }}</text>
+                    <text class="action-button__meta">做饭或手动用掉一部分</text>
+                  </view>
+                </view>
+                <view class="action-grid action-grid--status">
+                  <view
+                    class="action-button action-button--status"
+                    :class="{ 'action-button--disabled': correcting }"
+                    hover-class="action-button--hover"
+                    hover-stay-time="100"
+                    @click="markFridgeState('ROUGH')"
+                  >
+                    <text class="action-button__title">快用完</text>
+                    <text class="action-button__meta">保留食材，但不再精算数量</text>
+                  </view>
+                  <view
+                    class="action-button action-button--status action-button--danger"
+                    :class="{ 'action-button--disabled': correcting }"
+                    hover-class="action-button--hover"
+                    hover-stay-time="100"
+                    @click="markFridgeState('EMPTY')"
+                  >
+                    <text class="action-button__title">用完</text>
+                    <text class="action-button__meta">从当前库存移出，历史仍可查询</text>
                   </view>
                 </view>
               </view>
 
               <view class="section-card">
                 <view class="section-card__header">
-                  <text class="section-card__title">缺了就顺手记进清单</text>
-                  <text class="section-card__hint">发现快用完时，直接把它放进采购清单，回头买菜不容易漏。</text>
+                  <text class="section-card__title">需要再买时</text>
+                  <text class="section-card__hint">采购只是记录待买项，不会直接扣减库存。</text>
                 </view>
                 <view class="shopping-card" hover-class="shopping-card--hover" hover-stay-time="100" @click="openShoppingSheet">
                   <view class="shopping-card__main">
@@ -155,6 +197,32 @@
         </view>
       </scroll-view>
     </view>
+
+    <SheetShell
+      :visible="consumeSheetVisible"
+      title="扣减库存"
+      subtitle="输入这次实际用掉的总量，系统会优先扣减更早到期的批次。"
+      @close="consumeSheetVisible = false"
+    >
+      <view class="sheet-section">
+        <text class="sheet-section__title">扣减数量</text>
+        <view class="sheet-input-group">
+          <input v-model="consumeQuantity" class="sheet-input sheet-input--grow" placeholder="输入用掉的数量" />
+          <view class="sheet-input__suffix">{{ consumeUnitName || "选择单位" }}</view>
+        </view>
+        <picker v-if="consumeUnitOptions.length > 1" mode="selector" :range="consumeUnitNames" :value="consumeUnitIndex" @change="handleConsumeUnitChange">
+          <view class="picker">选择单位：{{ consumeUnitName }}</view>
+        </picker>
+      </view>
+      <template #footer>
+        <view class="sheet-actions">
+          <button class="sheet-actions__button sheet-actions__button--cancel" @click="consumeSheetVisible = false">取消</button>
+          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitConsume">
+            {{ consuming ? "扣减中..." : "确认扣减" }}
+          </button>
+        </view>
+      </template>
+    </SheetShell>
 
     <ShoppingTargetSheet
       :visible="shoppingSheetVisible"
@@ -204,6 +272,7 @@ import emptyStateArt from "@/assets/empty.png";
 import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
+import SheetShell from "@/components/Sheet/SheetShell.vue";
 import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
@@ -214,9 +283,9 @@ import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
 import { onSessionCleared } from "@/utils/session-events";
-import { fridgeApi, type FridgeItemSummary } from "../apis/fridge";
+import { fridgeApi, type FridgeBatchSummary, type FridgeIngredientDetail } from "../apis/fridge";
 import { shoppingApi, type ShoppingListSummary } from "../apis/shopping";
-import { formatExpireLabel, isExpiringSoon, resolveFridgeImageMap } from "../utils/fridge";
+import { formatExpireLabel, resolveFridgeImageMap } from "../utils/fridge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -228,12 +297,23 @@ const { openLogin } = useLoginEmptyState(handleLoginSuccess);
 const NAV_FADE_DISTANCE = 96;
 
 const itemId = ref<UUID | "">("");
+const ingredientId = ref<UUID | "">("");
 const loading = ref(false);
 const consuming = ref(false);
+const correcting = ref(false);
 const errorText = ref("");
 const scrollTop = ref(0);
-const currentItem = ref<FridgeItemSummary | null>(null);
+const currentItem = ref<FridgeIngredientDetail | null>(null);
 const itemImageUrl = ref("");
+const showExpired = ref(false);
+const showHistory = ref(false);
+const historyLoading = ref(false);
+const historyBatches = ref<FridgeBatchSummary[]>([]);
+const historyPage = ref(0);
+const historyHasNext = ref(false);
+const consumeSheetVisible = ref(false);
+const consumeQuantity = ref("");
+const consumeUnitIndex = ref(0);
 const shoppingSheetVisible = ref(false);
 const shoppingSubmitting = ref(false);
 const shoppingCreateMode = ref(false);
@@ -248,9 +328,21 @@ function clearPrivateState() {
   contextRequestId += 1;
   loading.value = false;
   consuming.value = false;
+  correcting.value = false;
   errorText.value = "";
   currentItem.value = null;
   itemImageUrl.value = "";
+  ingredientId.value = "";
+  itemId.value = "";
+  showExpired.value = false;
+  showHistory.value = false;
+  historyLoading.value = false;
+  historyBatches.value = [];
+  historyPage.value = 0;
+  historyHasNext.value = false;
+  consumeSheetVisible.value = false;
+  consumeQuantity.value = "";
+  consumeUnitIndex.value = 0;
   shoppingSheetVisible.value = false;
   shoppingSubmitting.value = false;
   shoppingCreateMode.value = false;
@@ -272,16 +364,19 @@ const navBackdropStyle = computed(() => ({
 const navTitleStyle = computed(() => ({
   opacity: `${navProgress.value}`
 }));
-const showExactMetrics = computed(() => Boolean(currentItem.value?.exactQuantity && currentItem.value?.exactUnitName));
-const zeroReservedText = computed(() => (currentItem.value?.exactUnitName ? `0 ${currentItem.value.exactUnitName}` : "0"));
 const stockSummary = computed(() => {
   if (!currentItem.value) return "未找到库存";
-  return currentItem.value.stockText || currentItem.value.quantityText || "未填数量";
+  return currentItem.value.stockText || "未填数量";
 });
 const expireSummary = computed(() => {
   if (!currentItem.value) return "请返回上一页重试";
-  return currentItem.value.expireAt ? formatExpireLabel(currentItem.value.expireAt) : `更新于 ${currentItem.value.updatedAt.slice(5, 10)}`;
+  if (currentItem.value.expiredBatchCount) return "有过期库存，请确认还能用再安排";
+  return currentItem.value.expireAt ? `最近到期：${formatExpireLabel(currentItem.value.expireAt)}` : "到期时间未设置";
 });
+const consumeUnitOptions = computed(() => currentItem.value?.stockGroups ?? []);
+const consumeUnitNames = computed(() => consumeUnitOptions.value.map(item => item.unitName));
+const consumeUnitId = computed(() => consumeUnitOptions.value[consumeUnitIndex.value]?.unitId ?? null);
+const consumeUnitName = computed(() => consumeUnitOptions.value[consumeUnitIndex.value]?.unitName ?? "");
 const shoppingSubmitDisabled = computed(() => {
   if (shoppingSubmitting.value || !currentItem.value) return true;
   if (shoppingCreateMode.value) return !newListName.value.trim();
@@ -289,6 +384,10 @@ const shoppingSubmitDisabled = computed(() => {
 });
 
 onLoad(options => {
+  if (typeof options?.ingredientId === "string" && options.ingredientId) {
+    const parsed = Number(options.ingredientId);
+    ingredientId.value = Number.isInteger(parsed) && parsed > 0 ? parsed : "";
+  }
   if (typeof options?.itemId === "string" && options.itemId) {
     const parsed = Number(options.itemId);
     itemId.value = Number.isInteger(parsed) && parsed > 0 ? parsed : "";
@@ -305,19 +404,17 @@ async function handleLoginSuccess() {
 }
 
 async function loadContext() {
-  if (!sessionStore.isLoggedIn || loading.value || !itemId.value) return;
+  if (!sessionStore.isLoggedIn || loading.value || (!ingredientId.value && !itemId.value)) return;
   const requestId = ++contextRequestId;
   loading.value = true;
   errorText.value = "";
   try {
-    const result = await fridgeApi.list(1, 100);
+    const nextItem = itemId.value && !ingredientId.value
+      ? await fridgeApi.getBatchDetail(itemId.value)
+      : await fridgeApi.getDetail(ingredientId.value as UUID);
     if (requestId !== contextRequestId || !sessionStore.isLoggedIn) return;
-    const nextItem = result.items.find(item => item.id === itemId.value) ?? null;
     currentItem.value = nextItem;
-    if (!nextItem) {
-      throw new Error("库存条目不存在");
-    }
-    const imageMap = await resolveFridgeImageMap([nextItem], 1);
+    const imageMap = await resolveFridgeImageMap([{ id: nextItem.id, ingredientId: nextItem.ingredientId, name: nextItem.name }], 1);
     if (requestId !== contextRequestId || !sessionStore.isLoggedIn) return;
     itemImageUrl.value = imageMap[String(nextItem.id)] || "";
   } catch (error) {
@@ -332,35 +429,117 @@ function handleScroll(event: { detail?: { scrollTop?: number } }) {
   scrollTop.value = event.detail?.scrollTop ?? 0;
 }
 
-function hasReservations(item: FridgeItemSummary) {
-  return item.reservations.length > 0;
-}
-
-function needsExact(item: FridgeItemSummary) {
-  return !item.exactQuantity || !item.exactUnitId;
-}
-
-function openEdit() {
-  if (!currentItem.value) return;
-  void uniPlatform.navigation.navigateTo(`/pages_pantry/item-edit/index?itemId=${encodeURIComponent(String(currentItem.value.id))}`);
-}
-
 function openRestock() {
-  openEdit();
+  if (!currentItem.value) return;
+  const query = currentItem.value.ingredientId
+    ? `ingredientId=${encodeURIComponent(String(currentItem.value.ingredientId))}&name=${encodeURIComponent(currentItem.value.name)}`
+    : `name=${encodeURIComponent(currentItem.value.name)}`;
+  void uniPlatform.navigation.navigateTo(`/pages_pantry/item-edit/index?${query}`);
 }
 
-async function consumeCurrent() {
-  if (!currentItem.value || consuming.value) return;
+function openBatchEdit(batchId: UUID) {
+  void uniPlatform.navigation.navigateTo(`/pages_pantry/item-edit/index?itemId=${encodeURIComponent(String(batchId))}`);
+}
+
+async function markFridgeState(mode: "ROUGH" | "EMPTY") {
+  if (!currentItem.value || correcting.value) return;
+  const batches = [...currentItem.value.activeBatches, ...currentItem.value.expiredBatches];
+  if (!batches.length) return;
+  if (mode === "EMPTY") {
+    const confirmed = await uniPlatform.feedback.confirm({
+      title: "标记用完",
+      content: `确认把${currentItem.value.name}的当前库存标记为已用完吗？`
+    });
+    if (!confirmed) return;
+  }
+  correcting.value = true;
+  try {
+    await fridgeApi.updateMany({
+      operationId: createOperationId(),
+      itemIds: batches.map(batch => batch.id),
+      available: mode === "ROUGH",
+      quantityText: mode === "ROUGH" ? "快用完" : "已用完",
+      exactQuantity: null,
+      exactUnitId: null
+    });
+    await uniPlatform.feedback.toast({ title: mode === "ROUGH" ? "已标记快用完" : "已标记用完", icon: "success" });
+    await loadContext();
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "库存更新失败", icon: "none" });
+    await loadContext();
+  } finally {
+    correcting.value = false;
+  }
+}
+
+function openConsumeSheet() {
+  if (!currentItem.value?.ingredientId) {
+    void uniPlatform.feedback.toast({ title: "请先确认食材身份", icon: "none" });
+    return;
+  }
+  if (!consumeUnitOptions.value.length) {
+    void uniPlatform.feedback.toast({ title: "请先补充精确数量和单位", icon: "none" });
+    return;
+  }
+  consumeQuantity.value = "";
+  consumeUnitIndex.value = 0;
+  consumeSheetVisible.value = true;
+}
+
+function handleConsumeUnitChange(event: { detail: { value: string } }) {
+  consumeUnitIndex.value = Number(event.detail.value) || 0;
+}
+
+async function submitConsume() {
+  if (!currentItem.value?.ingredientId || !consumeUnitId.value || consuming.value) return;
+  const quantity = consumeQuantity.value.trim();
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,3})?$/.test(quantity) || Number(quantity) <= 0) {
+    await uniPlatform.feedback.toast({ title: "请输入大于 0 的数量", icon: "none" });
+    return;
+  }
   consuming.value = true;
   try {
-    await fridgeApi.consume([currentItem.value.id], createOperationId());
+    await fridgeApi.consume(currentItem.value.ingredientId, quantity, consumeUnitId.value, createOperationId());
     await uniPlatform.feedback.toast({ title: "已扣减", icon: "success" });
+    consumeSheetVisible.value = false;
     await loadContext();
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "扣减失败", icon: "none" });
   } finally {
     consuming.value = false;
   }
+}
+
+async function toggleHistory() {
+  if (showHistory.value) {
+    showHistory.value = false;
+    return;
+  }
+  if (!currentItem.value?.ingredientId || historyLoading.value) return;
+  showHistory.value = true;
+  if (historyPage.value > 0) return;
+  await loadHistoryPage(1, true);
+}
+
+async function loadHistoryPage(page: number, initial = false) {
+  if (!currentItem.value?.ingredientId || historyLoading.value) return;
+  historyLoading.value = true;
+  try {
+    const result = await fridgeApi.getHistory(currentItem.value.ingredientId, page, 100);
+    historyBatches.value = page === 1 ? result.items : [...historyBatches.value, ...result.items];
+    historyPage.value = page;
+    historyHasNext.value = result.hasNext;
+  } catch (error) {
+    if (initial) showHistory.value = false;
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "历史批次加载失败", icon: "none" });
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+async function loadMoreHistory() {
+  if (!historyHasNext.value || historyLoading.value) return;
+  await loadHistoryPage(historyPage.value + 1);
 }
 
 async function openShoppingSheet() {
@@ -497,7 +676,7 @@ async function submitShopping() {
 
 .detail-content {
   min-height: 100%;
-  padding: 32rpx var(--space-page) max(48rpx, env(safe-area-inset-bottom));
+  padding: 32rpx 0 max(48rpx, env(safe-area-inset-bottom));
   box-sizing: border-box;
   border-radius: 36rpx 36rpx 0 0;
   background: var(--color-surface);
@@ -728,6 +907,95 @@ async function submitShopping() {
   gap: 12rpx;
 }
 
+.batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.batch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 22rpx 20rpx;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.batch-row--expired {
+  background: var(--color-tag-warning-bg);
+}
+
+.batch-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.batch-row__side {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
+}
+
+.batch-row__title,
+.batch-row__meta,
+.batch-row__value,
+.collapse-header__arrow {
+  display: block;
+}
+
+.history-more {
+  display: flex;
+  justify-content: center;
+  padding: 18rpx 0 4rpx;
+}
+
+.history-more__text {
+  color: var(--color-support-action);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.batch-row__title {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.batch-row__meta {
+  margin-top: 6rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.batch-row__value,
+.collapse-header__arrow {
+  color: var(--color-support-action);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.batch-row__edit {
+  color: var(--color-support-action);
+  font-size: var(--font-size-sm);
+}
+
+.collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin: calc(-1 * var(--space-md));
+  padding: var(--space-md);
+}
+
+.collapse-header__arrow {
+  flex: 0 0 auto;
+}
+
 .reservation-row__main {
   flex: 1;
   min-width: 0;
@@ -753,6 +1021,10 @@ async function submitShopping() {
   gap: var(--space-sm);
 }
 
+.action-grid--status {
+  margin-top: var(--space-sm);
+}
+
 .action-button {
   min-height: 168rpx;
   padding: 24rpx 20rpx;
@@ -760,6 +1032,14 @@ async function submitShopping() {
 
 .action-button--accent {
   background: var(--color-state-warning-soft);
+}
+
+.action-button--status {
+  min-height: 142rpx;
+}
+
+.action-button--danger {
+  background: var(--color-tag-warning-bg);
 }
 
 .action-button--disabled {

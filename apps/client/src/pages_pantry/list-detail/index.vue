@@ -176,7 +176,7 @@
                                   }"
                                   @click.stop="handleFridgeAction(group)"
                                 >
-                                  用库存
+                                  {{ group.fridgeActionLabel || "用库存" }}
                                 </button>
                               <button
                                 class="mini-pill"
@@ -366,6 +366,55 @@
       </template>
     </SheetShell>
 
+    <SheetShell
+      :visible="unknownSheetVisible"
+      title="确认库存"
+      :subtitle="unknownSheetSubtitle"
+      :mask-closable="!unknownSheetSubmitting"
+      @close="closeUnknownInventorySheet"
+      @after-close="handleUnknownInventorySheetAfterClose"
+    >
+      <view v-if="unknownInventoryGroup" class="unknown-inventory-sheet">
+        <view class="editor-card">
+          <text class="editor-card__label">当前食材</text>
+          <text class="editor-card__value">{{ unknownInventoryGroup.name }}</text>
+          <text class="sheet-note">数量还没有记录，不影响继续做饭。你可以现在告诉我，也可以稍后再处理。</text>
+        </view>
+        <view class="sheet-option-list unknown-inventory-options">
+          <view
+            class="sheet-option"
+            :class="{ 'sheet-option--disabled': unknownSheetSubmitting }"
+            @click="handleUnknownInventoryChoice('CONFIRM_ENOUGH')"
+          >
+            <view class="sheet-option__main">
+              <text class="sheet-option__title">够用</text>
+              <text class="sheet-option__meta">记为有库存，不虚构具体数量。</text>
+            </view>
+          </view>
+          <view
+            class="sheet-option"
+            :class="{ 'sheet-option--disabled': unknownSheetSubmitting }"
+            @click="handleUnknownInventoryChoice('KEEP_OPEN')"
+          >
+            <view class="sheet-option__main">
+              <text class="sheet-option__title">不够，加入采购</text>
+              <text class="sheet-option__meta">保留当前清单项，不重复添加。</text>
+            </view>
+          </view>
+          <view
+            class="sheet-option"
+            :class="{ 'sheet-option--disabled': unknownSheetSubmitting }"
+            @click="handleUnknownInventoryChoice('DEFER')"
+          >
+            <view class="sheet-option__main">
+              <text class="sheet-option__title">暂不处理</text>
+              <text class="sheet-option__meta">先不改变库存和采购状态。</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </SheetShell>
+
     <InviteShareSheet
       :visible="shareSheetVisible"
       :title="shareSheetTitle"
@@ -472,7 +521,7 @@ import {
   type ShoppingInventoryStatus,
   type ShoppingListItemPatchResponse
 } from "../apis/shopping";
-import { buildShoppingCompletePagePath, consumeShoppingCompleteResult } from "../list-complete/bridge";
+import { consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 type DetailAction = "" | "share" | "complete";
 type ManageActionKey = "add-meal" | "add" | "share" | "void" | "restore" | "delete" | "leave";
@@ -538,6 +587,16 @@ const planSheetLoading = ref(false);
 const planSheetError = ref("");
 const planCandidates = ref<MealSourceCandidate[]>([]);
 const selectedPlanId = ref<UUID | "">("");
+const unknownSheetVisible = ref(false);
+const unknownGroupKey = ref("");
+const unknownInventoryGroup = computed(() => groups.value.find(group => group.key === unknownGroupKey.value) ?? null);
+const unknownSheetSubtitle = computed(() => {
+  const name = unknownInventoryGroup.value?.name;
+  return name ? `${name} 的数量还没有记录` : "数量还没有记录";
+});
+const unknownSheetSubmitting = computed(() => Boolean(
+  unknownInventoryGroup.value && isItemPending(unknownInventoryGroup.value.id, "fridge")
+));
 
 const shareSheetVisible = ref(false);
 const shareNoticeVisible = ref(false);
@@ -676,27 +735,17 @@ const canAddItem = computed(() => Boolean(detail.value) && detail.value?.status 
 const hasPendingGroups = computed(() => groups.value.some(group => !isGroupResolved(group)));
 const hasCheckedGroups = computed(() => groups.value.some(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))));
 const storeReadyCount = computed(() => groups.value.filter(group => group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt))).length);
-const canShowStoreButton = computed(() => detail.value?.status === "ACTIVE" && groups.value.length > 0 && !hasPendingGroups.value && hasCheckedGroups.value);
-const canShowFinishButton = computed(() => detail.value?.status === "ACTIVE" && groups.value.length > 0 && !hasPendingGroups.value && !hasCheckedGroups.value);
-const canShowPrimaryAction = computed(() => canShowStoreButton.value || canShowFinishButton.value);
-const primaryActionText = computed(() => {
-  if (canShowStoreButton.value) return "入库";
-  if (canShowFinishButton.value) return "完成清单";
-  return "";
-});
-const primaryCardTitle = computed(() => {
-  if (canShowStoreButton.value) return "把食材安顿好";
-  return "这一趟都处理好啦";
-});
-const primaryCardDesc = computed(() => {
-  if (canShowStoreButton.value) {
-    return "再确认一下数量和保鲜时间，就能把它们好好收进食材库啦。";
-  }
-  return "确认一下，就把这张清单安心收进已完成吧。";
-});
-const primaryCardStatNumber = computed(() => String(canShowStoreButton.value ? storeReadyCount.value : progressDoneCount.value));
-const primaryCardStatLabel = computed(() => (canShowStoreButton.value ? "项等入库" : "项已妥当"));
-const primaryCardButtonText = computed(() => (canShowStoreButton.value ? "去入库" : "完成清单"));
+const canShowPrimaryAction = computed(() => (
+  detail.value?.status === "ACTIVE"
+  && groups.value.length > 0
+  && (hasCheckedGroups.value || !hasPendingGroups.value)
+));
+const canShowFinishButton = canShowPrimaryAction;
+const primaryCardTitle = computed(() => "采购完成啦");
+const primaryCardDesc = computed(() => "点击完成采购，买到的食材会自动记入冰箱；数量和到期时间可以之后再补充。");
+const primaryCardStatNumber = computed(() => String(hasCheckedGroups.value ? storeReadyCount.value : progressDoneCount.value));
+const primaryCardStatLabel = computed(() => (hasCheckedGroups.value ? "项已购" : "项已处理"));
+const primaryCardButtonText = computed(() => "完成采购");
 const manageActions = computed(() => {
   const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
   if (canAddItem.value) actions.push({ key: "add-meal", label: "加餐次", iconClass: "icon-plan", tone: "default" });
@@ -966,7 +1015,7 @@ function isInventoryDisabled(group: GroupView) {
     return group.items.some(item => item.status === "CHECKED" || Boolean(item.checkedAt));
   }
   if (isItemChecked(group) && group.inventoryStatus === "ENOUGH") return true;
-  return group.fridgeActionMode === "NONE" || group.fridgeActionMode === "NEED_CONFIRM";
+  return group.fridgeActionMode === "NONE";
 }
 
 function isBoughtDisabled(group: GroupView) {
@@ -977,6 +1026,7 @@ function canShowInventoryAction(group: GroupView) {
   return group.inventoryApplied
     || group.fridgeActionMode === "APPLY_FULL"
     || group.fridgeActionMode === "APPLY_PARTIAL"
+    || group.fridgeActionMode === "NEED_CONFIRM"
     || group.fridgeActionMode === "UNDO";
 }
 
@@ -1142,7 +1192,7 @@ async function handleFridgeAction(group: GroupView) {
   if (!detail.value || submitting.value || itemPendingId.value || isInventoryDisabled(group)) return;
   openSwipeItemId.value = "";
   if (group.fridgeActionMode === "NEED_CONFIRM") {
-    await uniPlatform.feedback.toast({ title: "这条库存还不能自动计算，请先把冰箱数量改成精确数量。", icon: "none" });
+    openUnknownInventorySheet(group);
     return;
   }
   if (group.fridgeActionMode === "NONE") return;
@@ -1169,6 +1219,66 @@ async function handleFridgeAction(group: GroupView) {
     }
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "库存应用失败", icon: "none" });
+  } finally {
+    itemPendingId.value = "";
+    itemPendingAction.value = "";
+  }
+}
+
+function openUnknownInventorySheet(group: GroupView) {
+  if (group.fridgeActionMode !== "NEED_CONFIRM") return;
+  unknownGroupKey.value = group.key;
+  unknownSheetVisible.value = true;
+}
+
+function closeUnknownInventorySheet() {
+  if (unknownSheetSubmitting.value) return;
+  unknownSheetVisible.value = false;
+}
+
+function handleUnknownInventorySheetAfterClose() {
+  unknownGroupKey.value = "";
+}
+
+type UnknownInventoryChoice = "CONFIRM_ENOUGH" | "KEEP_OPEN" | "DEFER";
+
+async function handleUnknownInventoryChoice(choice: UnknownInventoryChoice) {
+  const group = unknownInventoryGroup.value;
+  if (!group || !detail.value || unknownSheetSubmitting.value) return;
+
+  if (choice === "DEFER") {
+    closeUnknownInventorySheet();
+    return;
+  }
+
+  if (choice === "KEEP_OPEN") {
+    closeUnknownInventorySheet();
+    await uniPlatform.feedback.toast({ title: "已保留在采购清单", icon: "none" });
+    return;
+  }
+
+  itemPendingId.value = group.id;
+  itemPendingAction.value = "fridge";
+  try {
+    const currentItems = getCurrentGroupItems(group.key);
+    let changed = false;
+    for (const currentItem of currentItems) {
+      if (currentItem.fridgeActionMode !== "NEED_CONFIRM") continue;
+      const patch = await shoppingApi.applyListItemFridge(detail.value.id, currentItem.id, {
+        operationId: createOperationId(),
+        version: detail.value.version,
+        action: "CONFIRM_ENOUGH"
+      });
+      applyItemPatch(patch);
+      changed = true;
+    }
+    if (changed) {
+      await refreshDetailSilently();
+    }
+    closeUnknownInventorySheet();
+    await uniPlatform.feedback.toast({ title: "已记为够用", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认失败", icon: "none" });
   } finally {
     itemPendingId.value = "";
     itemPendingAction.value = "";
@@ -1516,7 +1626,7 @@ function resolveGroupFridgeActionMode(items: ShoppingListDetailItem[]): Shopping
 function resolveGroupFridgeActionLabel(items: ShoppingListDetailItem[]) {
   const mode = resolveGroupFridgeActionMode(items);
   if (mode === "NONE") return null;
-  if (mode === "NEED_CONFIRM") return "库存待确认";
+  if (mode === "NEED_CONFIRM") return "确认库存";
   if (mode === "UNDO") {
     return items.find(item => item.fridgeActionMode === "UNDO")?.fridgeActionLabel ?? "撤销";
   }
@@ -1789,20 +1899,9 @@ async function handleManageLeave() {
   await leaveList();
 }
 
-function openStoreFlow() {
-  if (!detail.value || submitting.value) return;
-  closeManageMenu();
-  void uniPlatform.navigation.navigateTo(buildShoppingCompletePagePath(detail.value.id, "detail"));
-}
-
 async function finishList() {
   if (!detail.value || submitting.value) return;
   closeManageMenu();
-  const confirmed = await uniPlatform.feedback.confirm({
-    title: "完成清单",
-    content: "这张清单已经都处理完了，确认后会结束当前采购。"
-  });
-  if (!confirmed) return;
   submitting.value = true;
   try {
     detail.value = await shoppingApi.completeList(detail.value.id, {
@@ -1810,7 +1909,7 @@ async function finishList() {
       version: detail.value.version,
       entries: []
     });
-    await uniPlatform.feedback.toast({ title: "已完成清单", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已完成采购，食材已记入冰箱", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
   } finally {
@@ -1819,13 +1918,7 @@ async function finishList() {
 }
 
 async function handlePrimaryAction() {
-  if (canShowStoreButton.value) {
-    openStoreFlow();
-    return;
-  }
-  if (canShowFinishButton.value) {
-    await finishList();
-  }
+  if (canShowPrimaryAction.value) await finishList();
 }
 
 async function handleManageAction(action: ManageActionKey) {
@@ -2600,11 +2693,20 @@ defineExpose({
   gap: 16rpx;
 }
 
+.unknown-inventory-options {
+  margin-top: 20rpx;
+}
+
 .sheet-option {
   padding: 24rpx;
   border-radius: var(--radius-xs);
   background: var(--color-surface-overlay);
   box-shadow: inset 0 0 0 1rpx var(--color-border-light);
+}
+
+.sheet-option--disabled {
+  opacity: 0.58;
+  pointer-events: none;
 }
 
 .sheet-option--active {

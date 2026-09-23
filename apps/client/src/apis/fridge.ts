@@ -46,8 +46,50 @@ export interface CreateFridgeItemRequest {
   note?: string | null;
 }
 
+export interface FridgeStockGroup {
+  unitId: UUID;
+  unitName: string;
+  quantity: string;
+  batchCount: number;
+}
+
+export interface FridgeBatchSummary extends FridgeItemSummary {
+  isExpired: boolean;
+  isExpiredWithin15Days: boolean;
+  needsConfirmation: boolean;
+  createdAt: string;
+}
+
+export interface FridgeIngredientSummary {
+  id: UUID;
+  ingredientId: UUID | null;
+  categoryName: string | null;
+  name: string;
+  stockText: string;
+  stockGroups: FridgeStockGroup[];
+  expireAt: string | null;
+  isExpired: boolean;
+  expiredBatchCount: number;
+  batchCount: number;
+  hasReservation: boolean;
+  needsConfirmation: boolean;
+  identityPending: boolean;
+  updatedAt: string;
+}
+
+export interface FridgeIngredientDetail extends FridgeIngredientSummary {
+  activeBatches: FridgeBatchSummary[];
+  expiredBatches: FridgeBatchSummary[];
+}
+
+export interface FridgeConsumeResponse {
+  detail: FridgeIngredientDetail;
+  allocations: Array<{ batchId: UUID; quantity: string; unitId: UUID }>;
+}
+
 export interface UpdateFridgeItemRequest {
   operationId: OperationId;
+  available?: boolean;
   quantityText?: string | null;
   exactQuantity?: string | null;
   exactUnitId?: UUID | null;
@@ -76,11 +118,45 @@ function normalizeFridgeItem(item: Partial<FridgeItemSummary> & Pick<FridgeItemS
   };
 }
 
+function normalizeFridgeBatch(item: FridgeBatchSummary): FridgeBatchSummary {
+  return {
+    ...item,
+    ...normalizeFridgeItem(item)
+  };
+}
+
 export const fridgeApi = {
   list(page = 1, pageSize = 50) {
-    return get<PageResult<FridgeItemSummary>>(`${cfg.domain}/api/fridge-items`, { page, pageSize }).then(result => ({
+    return get<PageResult<FridgeIngredientSummary>>(`${cfg.domain}/api/fridge-items`, { page, pageSize }).then(result => ({
       ...result,
-      items: result.items.map(item => normalizeFridgeItem(item))
+      items: result.items.map(item => ({
+        ...item,
+        stockGroups: Array.isArray(item.stockGroups) ? item.stockGroups : [],
+        stockText: item.stockText || "未填库存"
+      }))
+    }));
+  },
+  getDetail(ingredientId: UUID) {
+    return get<FridgeIngredientDetail>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(String(ingredientId))}`).then(detail => ({
+      ...detail,
+      activeBatches: detail.activeBatches.map(item => normalizeFridgeBatch(item)),
+      expiredBatches: detail.expiredBatches.map(item => normalizeFridgeBatch(item))
+    }));
+  },
+  getBatchDetail(itemId: UUID) {
+    return get<FridgeIngredientDetail>(`${cfg.domain}/api/fridge-items/batch/${encodeURIComponent(String(itemId))}`).then(detail => ({
+      ...detail,
+      activeBatches: detail.activeBatches.map(item => normalizeFridgeBatch(item)),
+      expiredBatches: detail.expiredBatches.map(item => normalizeFridgeBatch(item))
+    }));
+  },
+  getHistory(ingredientId: UUID, page = 1, pageSize = 20) {
+    return get<PageResult<FridgeBatchSummary>>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(String(ingredientId))}/history`, {
+      page,
+      pageSize
+    }).then(result => ({
+      ...result,
+      items: result.items.map(item => normalizeFridgeBatch(item))
     }));
   },
   getSummary(days?: 1 | 2 | 3 | 5 | 7) {
@@ -105,12 +181,18 @@ export const fridgeApi = {
       idempotencyKey: operationId
     }).then(item => normalizeFridgeItem(item));
   },
-  consume(itemIds: UUID[], operationId: OperationId) {
-    return post<PageResult<FridgeItemSummary>>(`${cfg.domain}/api/fridge-items/consume`, { itemIds }, { idempotencyKey: operationId }).then(
-      result => ({
-        ...result,
-        items: result.items.map(item => normalizeFridgeItem(item))
-      })
-    );
+  consume(ingredientId: UUID, exactQuantity: string, exactUnitId: UUID, operationId: OperationId) {
+    return post<FridgeConsumeResponse>(
+      `${cfg.domain}/api/fridge-items/consume`,
+      { ingredientId, exactQuantity, exactUnitId },
+      { idempotencyKey: operationId }
+    ).then(result => ({
+      ...result,
+      detail: {
+        ...result.detail,
+        activeBatches: result.detail.activeBatches.map(item => normalizeFridgeBatch(item)),
+        expiredBatches: result.detail.expiredBatches.map(item => normalizeFridgeBatch(item))
+      }
+    }));
   }
 };

@@ -96,6 +96,23 @@ export interface MealCookContextResponse {
   dishes: MealCookContextDish[];
 }
 
+export interface CookingConsumptionResponse {
+  planItemId: UUID;
+  consumptionOperationId: OperationId;
+  completedAt: IsoDateTime;
+  updatedCount: number;
+  unknownCount: number;
+  shortageCount: number;
+  skippedFuzzyCount: number;
+  message: string;
+  canUndo: boolean;
+}
+
+export interface CookingUndoResponse {
+  undone: boolean;
+  message: string;
+}
+
 export interface MealCookAssistantDishSource {
   dishId: UUID;
   recipeVersionId: UUID;
@@ -300,6 +317,16 @@ export interface UnlockMealPlanCookAssistantRequest {
   operationId: OperationId;
 }
 
+export interface CompleteCookingRequest {
+  operationId: OperationId;
+  markWholeTable?: boolean;
+}
+
+export interface UndoCookingRequest {
+  operationId: OperationId;
+  consumptionOperationId: OperationId;
+}
+
 export interface ChooseDiningEventWishRecipeRequest {
   operationId: OperationId;
   recipeIds: UUID[];
@@ -359,6 +386,18 @@ export const mealApi = {
   },
   getCookContext(planItemId: UUID) {
     return get<MealCookContextResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cook-context`);
+  },
+  completeCooking(planItemId: UUID, body: CompleteCookingRequest) {
+    const { operationId, ...payload } = body;
+    return post<CookingConsumptionResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cooking-complete`, payload, {
+      idempotencyKey: operationId
+    });
+  },
+  undoCooking(planItemId: UUID, body: UndoCookingRequest) {
+    const { operationId, ...payload } = body;
+    return post<CookingUndoResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cooking-complete/undo`, payload, {
+      idempotencyKey: operationId
+    });
   },
   unlockCookAssistant(planItemId: UUID, body: UnlockMealPlanCookAssistantRequest) {
     const { operationId, ...payload } = body;
