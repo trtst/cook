@@ -197,11 +197,6 @@ async function quickApprove(row: AdminPendingIngredientSummary) {
     return;
   }
   try {
-    await ElMessageBox.confirm(`确认将“${row.name}”快捷通过为系统食材？`, "快捷审核通过", {
-      type: "warning",
-      confirmButtonText: "通过",
-      cancelButtonText: "取消"
-    });
     await ingredientApi.reviewPendingIngredient(row.id, {
       operationId: createOperationId(),
       action: "APPROVE_CREATE",
@@ -214,7 +209,6 @@ async function quickApprove(row: AdminPendingIngredientSummary) {
     await loadPendingItems();
     ElMessage.success("食材已快捷审核通过");
   } catch (error) {
-    if (error === "cancel" || error === "close") return;
     ElMessage.error(error instanceof Error ? error.message : "快捷审核失败");
   }
 }

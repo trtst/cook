@@ -1033,6 +1033,9 @@ watch(
                 <div class="ingredient-card__action-item">
                   <el-button link type="primary" @click="openPendingReview">处理</el-button>
                 </div>
+                <div class="ingredient-card__action-item">
+                  <el-button link type="danger" @click="removeIngredient(row)">删除</el-button>
+                </div>
               </template>
               <template v-else-if="row.status === 'MERGED'">
                 <span class="table-hint">归并项只用于识别和追溯</span>

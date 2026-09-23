@@ -1,0 +1,171 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import { FolderAdd } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { useRouter } from "vue-router";
+import { ingredientApi, type IngredientImportJobSummary } from "@/apis/ingredient";
+import type { UUID } from "@/apis/http";
+import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
+import { createOperationId } from "@/utils/operation-id";
+import { formatDateTime } from "@/utils/date";
+import { formatStatusText } from "@/utils/status";
+
+const router = useRouter();
+const loading = ref(false);
+const saving = ref(false);
+const dialogVisible = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+const jobs = ref<IngredientImportJobSummary[]>([]);
+const total = ref(0);
+const query = reactive({ page: 1, pageSize: 20, status: "" as "" | IngredientImportJobSummary["status"] });
+const form = reactive({ files: [] as File[] });
+const selectedFileName = computed(() => form.files.length ? form.files.map(file => file.name).join("、") : "未选择文件");
+
+useAdminHeaderRefresh(() => {
+  void loadJobs();
+});
+
+async function loadJobs() {
+  loading.value = true;
+  try {
+    const result = await ingredientApi.listImportJobs({ page: query.page, pageSize: query.pageSize, status: query.status || undefined });
+    jobs.value = result.items;
+    total.value = result.total;
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "加载食材导入任务失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openDialog() {
+  form.files = [];
+  dialogVisible.value = true;
+}
+
+function chooseFile() {
+  fileInput.value?.click();
+}
+
+function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  form.files = Array.from(input.files ?? []);
+  input.value = "";
+}
+
+async function submitImport() {
+  if (!form.files.length) {
+    ElMessage.error("请选择至少一个 JSON 或 ZIP 文件");
+    return;
+  }
+  saving.value = true;
+  try {
+    const job = await ingredientApi.createImportJob({ operationId: createOperationId(), files: form.files });
+    ElMessage.success("食材导入任务已创建");
+    dialogVisible.value = false;
+    await router.push(`/ingredients/imports/${job.id}`);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : "创建食材导入任务失败");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openJob(jobId: UUID) {
+  void router.push(`/ingredients/imports/${jobId}`);
+}
+
+async function removeJob(job: IngredientImportJobSummary) {
+  try {
+    await ElMessageBox.confirm(`确认删除导入任务“${job.sourceName}”？只删除导入记录，不删除已入库食材。`, "删除导入任务", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消"
+    });
+    await ingredientApi.deleteImportJob(job.id, createOperationId());
+    ElMessage.success("导入任务已删除");
+    if (jobs.value.length === 1 && query.page > 1) query.page -= 1;
+    await loadJobs();
+  } catch (error) {
+    if (error === "cancel" || error === "close") return;
+    ElMessage.error(error instanceof Error ? error.message : "删除导入任务失败");
+  }
+}
+
+function handleStatusChange() {
+  query.page = 1;
+  void loadJobs();
+}
+
+onMounted(() => {
+  void loadJobs();
+});
+</script>
+
+<template>
+  <section class="page-stack">
+    <div class="toolbar-panel page-toolbar">
+      <span class="page-toolbar__hint">先审核导入条目，再写入正式食材；未匹配项会进入待审核食材</span>
+      <el-select v-model="query.status" class="toolbar-select" placeholder="全部状态" @change="handleStatusChange">
+        <el-option label="全部状态" value="" />
+        <el-option label="处理中" value="RUNNING" />
+        <el-option label="待审核" value="READY" />
+        <el-option label="已完成" value="COMPLETED" />
+        <el-option label="失败" value="FAILED" />
+      </el-select>
+      <el-button type="primary" :icon="FolderAdd" @click="openDialog">批量导入 JSON</el-button>
+    </div>
+
+    <div v-loading="loading" class="table-panel">
+      <el-table :data="jobs">
+        <el-table-column prop="sourceName" label="来源文件" min-width="240" />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'FAILED' ? 'danger' : row.status === 'COMPLETED' ? 'success' : 'warning'">{{ formatStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="totalCount" label="条目" width="72" />
+        <el-table-column prop="readyCount" label="待导入" width="82" />
+        <el-table-column prop="importedCount" label="已导入" width="82" />
+        <el-table-column prop="needsFixCount" label="待修正" width="82" />
+        <el-table-column prop="failedCount" label="失败" width="68" />
+        <el-table-column label="更新时间" width="180">
+          <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="170" fixed="right">
+          <template #default="{ row }">
+            <el-button text type="primary" @click="openJob(row.id)">审核条目</el-button>
+            <el-button text type="danger" :disabled="row.status === 'RUNNING'" @click="removeJob(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pagination-row">
+        <el-pagination background layout="total, prev, pager, next" :total="total" :current-page="query.page" :page-size="query.pageSize" @current-change="(value: number) => { query.page = value; loadJobs(); }" />
+      </div>
+    </div>
+
+    <el-dialog v-model="dialogVisible" title="创建食材导入任务" width="520px">
+      <el-form label-position="top">
+        <el-form-item label="导入文件" required>
+          <div class="upload-box">
+            <div class="upload-box__name">{{ selectedFileName }}</div>
+            <div class="upload-box__hint">支持多个 `.json` / `.zip`；格式使用 ingredient.import.v1。</div>
+            <el-button @click="chooseFile">选择文件</el-button>
+            <input ref="fileInput" class="hidden-input" type="file" accept=".json,.zip" multiple @change="handleFileChange" />
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="submitImport">开始导入</el-button>
+      </template>
+    </el-dialog>
+  </section>
+</template>
+
+<style scoped lang="scss">
+.upload-box { display: grid; gap: 10px; padding: 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px; }
+.upload-box__name { font-weight: 600; color: #111827; }
+.upload-box__hint { font-size: 13px; color: #6b7280; }
+.hidden-input { display: none; }
+</style>

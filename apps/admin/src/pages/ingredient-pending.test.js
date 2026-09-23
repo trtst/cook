@@ -19,3 +19,9 @@ test("opening an incomplete ingredient review does not guess category or default
 test("merge targets exclude system ingredients without a default unit", () => {
   assert.match(page, /mergeOptions\.value\.filter\([\s\S]*item\.defaultUnit !== null/);
 });
+
+test("quick approval does not ask for a second confirmation", () => {
+  const quickApprove = page.match(/async function quickApprove\([\s\S]*?(?=async function removeImportedPlaceholder)/)?.[0] ?? "";
+  assert.match(quickApprove, /reviewPendingIngredient/);
+  assert.doesNotMatch(quickApprove, /ElMessageBox\.confirm/);
+});

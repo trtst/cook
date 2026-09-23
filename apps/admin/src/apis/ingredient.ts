@@ -269,6 +269,122 @@ export interface AdminIngredientFeedbackListQuery {
   keyword?: string;
 }
 
+export type IngredientImportJobStatus = "RUNNING" | "READY" | "FAILED" | "COMPLETED";
+export type IngredientImportItemStatus = "NEEDS_FIX" | "READY" | "IMPORTED" | "FAILED";
+export type IngredientImportMatchType = "EXACT_NAME" | "ALIAS" | "REPRESENTATIVE" | "LEAN_REPRESENTATIVE" | "MANUAL" | "REVIEW_NEEDED";
+
+export interface IngredientImportNutritionBody {
+  sourceVersion: string;
+  foodCode: string;
+  foodName: string;
+  matchType: IngredientImportMatchType;
+  confidence: number;
+  conversions: Array<{ unitName: string; gramsPerUnit: number }>;
+}
+
+export interface IngredientImportBody {
+  name: string;
+  aliases: string[];
+  categoryCode: string | null;
+  defaultUnitName: string | null;
+  proteinType: AdminIngredientSummary["proteinType"];
+  isStaple: boolean;
+  isSpicyIngredient: boolean;
+  imageUrl: string | null;
+  nutrition: IngredientImportNutritionBody | null;
+}
+
+export interface IngredientImportJobSummary {
+  id: UUID;
+  sourceName: string;
+  status: IngredientImportJobStatus;
+  totalCount: number;
+  readyCount: number;
+  needsFixCount: number;
+  importedCount: number;
+  failedCount: number;
+  createdByAdminId: UUID;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface IngredientImportItemSummary {
+  id: UUID;
+  jobId: UUID;
+  sourcePath: string;
+  title: string;
+  categoryCode: string | null;
+  categoryName: string | null;
+  defaultUnitName: string | null;
+  status: IngredientImportItemStatus;
+  errorCount: number;
+  warnCount: number;
+  ingredientId: UUID | null;
+  matchType: string | null;
+  version: number;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+export interface IngredientImportJobDetail extends IngredientImportJobSummary {
+  items: PageResult<IngredientImportItemSummary>;
+}
+
+export interface IngredientImportMatchSummary {
+  kind: "MATCHED" | "CREATE" | "AMBIGUOUS";
+  matchType: "EXACT_NAME" | "ALIAS" | null;
+  ingredientId: UUID | null;
+  ingredientName: string | null;
+  ingredientStatus: "PENDING" | "ACTIVE" | "DISABLED" | "MERGED" | null;
+  ingredientIds: UUID[];
+}
+
+export interface IngredientImportIssue {
+  field: string | null;
+  message: string;
+}
+
+export interface IngredientImportItemDetail extends IngredientImportItemSummary {
+  rawBody: { sourcePath: string; jsonText: string };
+  ingredientBody: IngredientImportBody;
+  errorItems: IngredientImportIssue[];
+  warnItems: IngredientImportIssue[];
+  match: IngredientImportMatchSummary;
+}
+
+export interface DeleteIngredientImportItemPayload {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
+export interface IngredientImportJobQuery {
+  page: number;
+  pageSize: number;
+  status?: IngredientImportJobStatus;
+}
+
+export interface IngredientImportItemQuery {
+  page: number;
+  pageSize: number;
+  status?: IngredientImportItemStatus;
+}
+
+export interface CreateIngredientImportJobPayload {
+  operationId: OperationId;
+  files: File[];
+}
+
+export interface UpdateIngredientImportItemPayload {
+  operationId: OperationId;
+  expectedVersion: number;
+  ingredientBody: IngredientImportBody;
+}
+
+export interface ImportIngredientImportItemPayload {
+  operationId: OperationId;
+  expectedVersion: number;
+}
+
 export interface AdminPendingUnitRecommendationListQuery {
   page: number;
   pageSize: number;
@@ -276,6 +392,52 @@ export interface AdminPendingUnitRecommendationListQuery {
 }
 
 export const ingredientApi = {
+  createImportJob(body: CreateIngredientImportJobPayload) {
+    const formData = new FormData();
+    body.files.forEach(file => formData.append("files", file));
+    return uploadForm<IngredientImportJobSummary>("/admin/ingredient-import-jobs/json", formData, {
+      idempotencyKey: body.operationId
+    });
+  },
+  listImportJobs(query: IngredientImportJobQuery) {
+    return requestData<PageResult<IngredientImportJobSummary>>("/admin/ingredient-import-jobs", { query: { ...query } });
+  },
+  getImportJobDetail(jobId: UUID, query: IngredientImportItemQuery) {
+    return requestData<IngredientImportJobDetail>(`/admin/ingredient-import-jobs/${encodeURIComponent(String(jobId))}`, { query: { ...query } });
+  },
+  deleteImportJob(jobId: UUID, operationId: OperationId) {
+    return requestData<{ jobId: UUID; deletedAt: IsoDateTime }>(`/admin/ingredient-import-jobs/${encodeURIComponent(String(jobId))}`, {
+      method: "DELETE",
+      idempotencyKey: operationId
+    });
+  },
+  getImportItemDetail(itemId: UUID) {
+    return requestData<IngredientImportItemDetail>(`/admin/ingredient-import-items/${encodeURIComponent(String(itemId))}`);
+  },
+  updateImportItem(itemId: UUID, body: UpdateIngredientImportItemPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<IngredientImportItemDetail>(`/admin/ingredient-import-items/${encodeURIComponent(String(itemId))}`, {
+      method: "PUT",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  importItem(itemId: UUID, body: ImportIngredientImportItemPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<IngredientImportItemDetail>(`/admin/ingredient-import-items/${encodeURIComponent(String(itemId))}/import`, {
+      method: "POST",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
+  deleteImportItem(itemId: UUID, body: DeleteIngredientImportItemPayload) {
+    const { operationId, ...payload } = body;
+    return requestData<{ itemId: UUID; jobId: UUID; deletedIngredientId: UUID | null; deletedAt: IsoDateTime }>(`/admin/ingredient-import-items/${encodeURIComponent(String(itemId))}`, {
+      method: "DELETE",
+      body: payload,
+      idempotencyKey: operationId
+    });
+  },
   listNutritionFoods(query: { page: number; pageSize: number; keyword?: string; category?: string }) {
     return requestData<PageResult<AdminNutritionFoodSummary>>("/admin/nutrition-foods", { query });
   },
