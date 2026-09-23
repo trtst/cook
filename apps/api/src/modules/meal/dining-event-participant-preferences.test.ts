@@ -18,7 +18,7 @@ test("bring and wish DTOs accept one to three unique recipe ids and reject four"
 });
 
 test("dining event summary exposes all participant bring recipes and the participant note", () => {
-  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   const summary = (service as any).toDiningEventSummary({
     id: 901,
     userId: 9,

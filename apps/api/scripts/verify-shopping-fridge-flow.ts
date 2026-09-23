@@ -3,7 +3,9 @@ import { loginWithPassword } from "./auth-fixture";
 import type {
   CreateFridgeItemRequest,
   DiningEventSummary,
-  FridgeItemSummary,
+  FridgeIngredientDetail,
+  FridgeIngredientSummary,
+  FridgeBatchSummary,
   FridgeSummaryResponse,
   IngredientSummary,
   MealPlanSummary,
@@ -267,7 +269,19 @@ async function createFridgeItem(ownerAuth: Record<string, string>, ingredient: I
 }
 
 async function listFridge(ownerAuth: Record<string, string>) {
-  return requestData<PageResult<FridgeItemSummary>>("/fridge-items?page=1&pageSize=50", {
+  return requestData<PageResult<FridgeIngredientSummary>>("/fridge-items?page=1&pageSize=50", {
+    headers: ownerAuth
+  });
+}
+
+async function getFridgeDetail(ownerAuth: Record<string, string>, ingredientId: number) {
+  return requestData<FridgeIngredientDetail>(`/fridge-items/${ingredientId}`, {
+    headers: ownerAuth
+  });
+}
+
+async function getFridgeHistory(ownerAuth: Record<string, string>, ingredientId: number) {
+  return requestData<PageResult<FridgeBatchSummary>>(`/fridge-items/${ingredientId}/history?page=1&pageSize=50`, {
     headers: ownerAuth
   });
 }
@@ -480,8 +494,8 @@ async function main() {
   assert(applied.item?.inventoryApplied === true, "fridge apply should mark inventoryApplied");
 
   const fridgeAfterApply = await listFridge(ownerAuth);
-  const reservedFridgeItem = fridgeAfterApply.items.find(item => item.id === createdFridge.id);
-  assert(reservedFridgeItem?.reservations.some(item => item.shoppingListId === planList.id), "fridge detail should show reservation");
+  const reservedFridgeItem = fridgeAfterApply.items.find(item => item.ingredientId === stockedIngredient.id);
+  assert(reservedFridgeItem?.hasReservation === true, "fridge summary should show a reservation");
 
   const completed = await requestData<ShoppingListDetail>(`/shopping-lists/${planList.id}/complete`, {
     method: "POST",
@@ -494,10 +508,13 @@ async function main() {
   assert(completed.status === "COMPLETED", "shopping list should become COMPLETED");
 
   const fridgeAfterComplete = await listFridge(ownerAuth);
-  const settledFridgeItem = fridgeAfterComplete.items.find(item => item.id === createdFridge.id);
-  assert(settledFridgeItem, "settled fridge item should still exist");
-  assert(settledFridgeItem.reservations.length === 0, "shopping list completion should settle fridge reservations");
-  assert(Number(settledFridgeItem.exactQuantity || "0") < Number(createdFridge.exactQuantity || "0"), "fridge quantity should be deducted after completion");
+  const settledFridgeItem = fridgeAfterComplete.items.find(item => item.ingredientId === stockedIngredient.id);
+  const settledDetail = await getFridgeDetail(ownerAuth, stockedIngredient.id);
+  const settledHistory = await getFridgeHistory(ownerAuth, stockedIngredient.id);
+  const settledBatch = settledHistory.items.find(item => item.id === createdFridge.id);
+  assert(settledFridgeItem ? settledFridgeItem.hasReservation === false : settledDetail.batchCount === 0, "shopping list completion should settle fridge reservations");
+  assert(settledBatch?.available === false, "settled fridge batch should move to history");
+  assert(Number(settledBatch?.exactQuantity || "0") < Number(createdFridge.exactQuantity || "0"), "fridge quantity should be deducted after completion");
 
   console.log(
     JSON.stringify(
@@ -514,7 +531,7 @@ async function main() {
         appliedInventory: applied.item?.inventoryApplied ?? false,
         completedStatus: completed.status,
         fridgeQuantityBefore: createdFridge.exactQuantity,
-        fridgeQuantityAfter: settledFridgeItem.exactQuantity
+        fridgeQuantityAfter: settledBatch?.exactQuantity ?? null
       },
       null,
       2

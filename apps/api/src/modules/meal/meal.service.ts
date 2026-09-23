@@ -19,6 +19,8 @@ import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperat
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
   CheckRandomMenuGapResponse,
+  CookingConsumptionResponse,
+  CookingUndoResponse,
   DiningMemorySharePreview,
   DiningMemoryShareSnapshot,
   DiningEventParticipantSummary,
@@ -68,6 +70,7 @@ import { fromJson, toJson, versionAssistantToSnapshot, versionToContent } from "
 import { UploadService } from "../upload/upload.service";
 import { MedalService } from "../user/medal.service";
 import { WechatMiniCodeService } from "../wechat/wechat-mini-code.service";
+import { PantryService } from "../pantry/pantry.service";
 
 const diningEventArgs = Prisma.validator<Prisma.DiningEventDefaultArgs>()({
   include: {
@@ -813,7 +816,8 @@ export class MealService {
     @Inject(UploadService) private readonly uploadService: UploadService,
     @Inject(MedalService) private readonly medalService: MedalService,
     @Inject(WechatMiniCodeService) private readonly wechatMiniCodeService: WechatMiniCodeService,
-    @Inject(CookAssistantAccessService) private readonly cookAssistantAccessService: CookAssistantAccessService
+    @Inject(CookAssistantAccessService) private readonly cookAssistantAccessService: CookAssistantAccessService,
+    @Inject(PantryService) private readonly pantryService: PantryService
   ) {}
 
   async listMealPlans(userId: UUID, page: number, pageSize: number, from?: string, to?: string): Promise<PageResult<MealPlanSummary>> {
@@ -1565,6 +1569,24 @@ export class MealService {
     return this.toMealPlanCookAssistant(plan, unlock);
   }
 
+  async completeMealCooking(
+    userId: UUID,
+    planItemId: UUID,
+    operationId: OperationId,
+    markWholeTable = false
+  ): Promise<CookingConsumptionResponse> {
+    return this.pantryService.completeMealCooking(userId, planItemId, operationId, markWholeTable);
+  }
+
+  async undoMealCooking(
+    userId: UUID,
+    planItemId: UUID,
+    operationId: OperationId,
+    consumptionOperationId: OperationId
+  ): Promise<CookingUndoResponse> {
+    return this.pantryService.undoMealCooking(userId, planItemId, operationId, consumptionOperationId);
+  }
+
   async confirmMealPlanMenu(
     userId: UUID,
     planItemId: UUID,
@@ -1613,6 +1635,7 @@ export class MealService {
       }
 
       const nextPlan = await this.getMealPlanOrThrow(tx, plan.id);
+      await this.pantryService.syncPlanShoppingGapInTransaction(tx, userId, plan.id, operationId);
       if (shouldLockMenu) {
         await upsertStorageLedger(tx, userId, "MEAL", nextPlan.id, sizeOfJson(nextPlan));
       }

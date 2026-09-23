@@ -14,7 +14,13 @@ import { completeIdempotentOperation, getIdempotentResult, hashIdempotencyReques
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
   CompleteShoppingListEntryRequest,
+  CookingConsumptionResponse,
+  CookingUndoResponse,
   CreateRandomMenuShoppingItemRequest,
+  FridgeBatchSummary,
+  FridgeConsumeResponse,
+  FridgeIngredientDetail,
+  FridgeIngredientSummary,
   FridgeItemSummary,
   FridgeSummaryResponse,
   ShoppingListCollaborator,
@@ -48,6 +54,24 @@ import type {
   ShoppingItemSummary,
   UUID
 } from "../../contracts/types";
+import {
+  buildEmptyFridgeIngredientSummary,
+  buildFridgeBatchSummary,
+  groupFridgeBatches,
+  type InventoryBatchRecord,
+  type InventoryReservationRecord
+} from "./pantry.inventory-model";
+import { planBestEffortInventoryConsumption, planInventoryConsumption, type InventoryConsumptionCandidate } from "./pantry.inventory-write";
+import { buildFridgeCorrectionPatch } from "./pantry.inventory-correction";
+import { buildUnknownInventoryConfirmationPatch } from "./pantry.unknown-confirmation";
+import { buildCookingConsumptionPlan, scaleCookingQuantity } from "./pantry.cooking-consumption";
+import {
+  buildAutomaticGapLine,
+  buildInventoryUsageSummary,
+  buildShoppingStatusUpdate,
+  planAutomaticGapWrite
+} from "./pantry.low-friction-model";
+import { buildAutomaticStockIn } from "./pantry.shopping-inventory";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
 import { isPublicInspirationRecipe } from "../recipe/public-content-user-pool";
@@ -219,6 +243,26 @@ type PlanShoppingRecipe = {
   sourceVersionId: UUID;
 };
 
+type PlanShoppingGapLine = {
+  sourceKey: string;
+  recipeId: UUID;
+  sourceVersionId: UUID;
+  recipeTitle: string;
+  baseServings: number;
+  ingredientSort: number;
+  ingredientId: UUID;
+  ingredientName: string;
+  requiredAmount: Extract<RecipeAmountSnapshot, { kind: "EXACT" }>;
+  state: "READY" | "SHORTAGE" | "UNKNOWN" | "MISSING";
+  quantity: string | null;
+};
+
+type PlanShoppingGapSyncResult = {
+  listId: UUID | null;
+  createdCount: number;
+  pendingCount: number;
+};
+
 type ExactAmountGroup = {
   unitId: UUID;
   unitName: string;
@@ -272,6 +316,25 @@ type ShoppingSourceMeta = {
   planMap: Map<UUID, { title: string; planDate: string }>;
   eventMap: Map<UUID, { title: string; planItemId: UUID | null; planDate: string | null }>;
   recipeMap: Map<UUID, "my" | "inspiration">;
+};
+
+type CookingAllocationRecord = {
+  batchId: UUID;
+  mode: "EXACT" | "ROUGH";
+  quantity: string;
+  unitId: UUID;
+  beforeQuantityText: string | null;
+  beforeQuantity: string;
+  beforeExactUnitId: UUID | null;
+  beforeAvailable: boolean;
+  beforeConsumedAt: string | null;
+  afterVersion: number;
+};
+
+type StoredCookingConsumptionResult = CookingConsumptionResponse & {
+  allocations: CookingAllocationRecord[];
+  servings: number;
+  recipeScales: Array<{ recipeVersionId: UUID; baseServings: number; servings: number }>;
 };
 
 type EntitlementReader = Pick<Prisma.TransactionClient, "entitlementGrant" | "diningGroupMember" | "diningGroup">;
@@ -345,82 +408,87 @@ export class PantryService {
     @Inject(WechatSubscribeService) private readonly wechatSubscribeService: WechatSubscribeService
   ) {}
 
-  async listFridge(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeItemSummary>> {
+  async listFridge(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeIngredientSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
     const normalizedPageSize = toPositiveInt(pageSize, 20);
     const skip = (normalizedPage - 1) * normalizedPageSize;
-    const where = { userId };
     return this.prisma.$transaction(async tx => {
-      const [items, total] = await Promise.all([
-        tx.fridgeItem.findMany({
-          where,
-          orderBy: [{ available: "desc" }, { updatedAt: "desc" }],
-          skip,
-          take: normalizedPageSize,
-          include: {
-            ingredient: {
-              select: {
-                category: {
-                  select: {
-                    name: true
-                  }
-                }
-              }
-            },
-            exactUnit: {
-              select: {
-                id: true,
-                name: true
-              }
-            },
-            sourceShoppingItem: {
-              select: {
-                amountJson: true
-              }
-            }
-          }
-        }),
-        tx.fridgeItem.count({ where })
-      ]);
-      const reservationMap = await this.loadFridgeReservationMap(tx, items.map(item => item.id));
+      const rows = await this.loadInventoryBatchRows(tx, userId, true);
+      const summaries = groupFridgeBatches(rows).map(({ batches: _batches, ...summary }) => summary);
 
       return {
-        items: items.map(item => this.toFridgeItemSummary(item, reservationMap.get(item.id) ?? [])),
+        items: summaries.slice(skip, skip + normalizedPageSize),
         page: normalizedPage,
         pageSize: normalizedPageSize,
-        total,
-        hasNext: skip + items.length < total
+        total: summaries.length,
+        hasNext: skip + normalizedPageSize < summaries.length
       };
     });
   }
 
+  async getFridgeIngredientDetail(userId: UUID, ingredientId: UUID): Promise<FridgeIngredientDetail> {
+    return this.prisma.$transaction(async tx => {
+      const rows = await this.loadInventoryBatchRows(tx, userId);
+      const summary = groupFridgeBatches(rows).find(item => item.ingredientId === ingredientId);
+      if (summary) return this.toFridgeIngredientDetail(summary);
+
+      const historyRows = rows.filter(row => row.ingredientId === ingredientId);
+      if (!historyRows.length) throw new NotFoundException("食材不存在");
+      return this.toFridgeIngredientDetail(buildEmptyFridgeIngredientSummary(historyRows));
+    });
+  }
+
+  async getFridgeItemDetail(userId: UUID, itemId: UUID): Promise<FridgeIngredientDetail> {
+    return this.prisma.$transaction(async tx => {
+      const rows = await this.loadInventoryBatchRows(tx, userId);
+      const item = rows.find(row => row.id === itemId);
+      if (!item) throw new NotFoundException("库存批次不存在");
+
+      if (item.ingredientId !== null) {
+        const summary = groupFridgeBatches(rows).find(itemSummary => itemSummary.ingredientId === item.ingredientId);
+        if (summary) return this.toFridgeIngredientDetail(summary);
+        return this.toFridgeIngredientDetail(
+          buildEmptyFridgeIngredientSummary(rows.filter(row => row.ingredientId === item.ingredientId))
+        );
+      }
+
+      const summary = item.available ? groupFridgeBatches([item])[0] : null;
+      return this.toFridgeIngredientDetail(summary ?? buildEmptyFridgeIngredientSummary([item]));
+    });
+  }
+
+  async listFridgeHistory(userId: UUID, ingredientId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeBatchSummary>> {
+    const normalizedPage = toPositiveInt(page, 1);
+    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const rows = await this.loadInventoryBatchRows(this.prisma, userId, false);
+    const history = rows
+      .filter(row => row.ingredientId === ingredientId)
+      .map(row => buildFridgeBatchSummary(row))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id - left.id);
+    const skip = (normalizedPage - 1) * normalizedPageSize;
+    return {
+      items: history.slice(skip, skip + normalizedPageSize),
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total: history.length,
+      hasNext: skip + normalizedPageSize < history.length
+    };
+  }
+
   async getFridgeSummary(userId: UUID, days: 1 | 2 | 3 | 5 | 7 = 3): Promise<FridgeSummaryResponse> {
     const cutoff = this.resolveFridgeExpireCutoff(days);
-    const where = { userId };
-    const expiringWhere = {
-      ...where,
-      available: true,
-      expireAt: {
-        not: null,
-        lte: cutoff
-      }
-    } as const;
-    const [totalCount, expiringCount, latest] = await Promise.all([
-      this.prisma.fridgeItem.count({ where }),
-      this.prisma.fridgeItem.count({
-        where: expiringWhere
-      }),
-      this.prisma.fridgeItem.findFirst({
-        where: expiringWhere,
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
-      })
-    ]);
+    const rows = await this.loadInventoryBatchRows(this.prisma, userId, true);
+    const groups = groupFridgeBatches(rows);
+    const expiringGroups = groups.filter(group => group.batches.some(batch => batch.expireAt !== null && new Date(batch.expireAt).getTime() <= cutoff.getTime()));
+    const latestTime = expiringGroups
+      .flatMap(group => group.batches.map(batch => batch.updatedAt))
+      .sort()
+      .at(-1) ?? "";
 
     return {
-      totalCount,
-      expiringCount,
-      latestTime: latest?.updatedAt.toISOString() ?? ""
+      totalCount: groups.length,
+      expiringCount: expiringGroups.length,
+      latestTime
     };
   }
 
@@ -612,6 +680,7 @@ export class PantryService {
     userId: UUID,
     itemId: UUID,
     operationId: OperationId,
+    available?: boolean,
     quantityText?: string | null,
     exactQuantity?: string | null,
     exactUnitId?: UUID | null,
@@ -626,7 +695,8 @@ export class PantryService {
       exactQuantity: exactQuantity ?? null,
       exactUnitId: exactUnitId ?? null,
       expireAt: normalizedExpireAt?.toISOString() ?? null,
-      note: normalizedNote
+      note: normalizedNote,
+      available: available ?? null
     })}`;
     return this.prisma.$transaction(async tx => {
       const repeated = await getIdempotentResult<FridgeItemSummary>(tx, operationId, "fridge:update", userId, null, requestHash);
@@ -636,6 +706,12 @@ export class PantryService {
 
       const item = await tx.fridgeItem.findUnique({ where: { id: itemId } });
       if (!item || item.userId !== userId) throw new NotFoundException("食材不存在");
+      if (available === false && exactQuantity) {
+        throw new BadRequestException("标记用完时不能保留精确数量");
+      }
+      const correction = available === undefined || exactQuantity
+        ? null
+        : buildFridgeCorrectionPatch(available ? "ROUGH" : "EMPTY");
       const fridgeInput = await this.buildFridgeWriteInput(
         tx,
         userId,
@@ -650,7 +726,16 @@ export class PantryService {
 
       const next = await tx.fridgeItem.update({
         where: { id: itemId },
-        data: fridgeInput,
+        data: {
+          ...fridgeInput,
+          ...(available === undefined && exactQuantity
+            ? { available: true, consumedAt: null }
+            : available === undefined
+              ? {}
+              : correction
+                ? { ...correction, consumedAt: available ? null : new Date() }
+                : { available, consumedAt: available ? null : new Date() })
+        },
         include: {
           exactUnit: {
             select: {
@@ -667,29 +752,512 @@ export class PantryService {
     });
   }
 
-  async consumeFridgeItems(userId: UUID, operationId: OperationId, itemIds: UUID[]) {
-    const uniqueIds = Array.from(new Set(itemIds));
-    const requestHash = uniqueIds.join(",");
+  async updateFridgeItems(
+    userId: UUID,
+    itemIds: UUID[],
+    operationId: OperationId,
+    available?: boolean,
+    quantityText?: string | null,
+    exactQuantity?: string | null,
+    exactUnitId?: UUID | null
+  ): Promise<FridgeItemSummary[]> {
+    const uniqueItemIds = Array.from(new Set(itemIds));
+    if (!uniqueItemIds.length) throw new BadRequestException("请选择至少一个库存批次");
+    const normalizedQuantityText = quantityText?.trim() || null;
+    const requestHash = JSON.stringify({
+      itemIds: [...uniqueItemIds].sort((left, right) => left - right),
+      quantityText: normalizedQuantityText,
+      exactQuantity: exactQuantity ?? null,
+      exactUnitId: exactUnitId ?? null,
+      available: available ?? null
+    });
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<PageResult<FridgeItemSummary>>(tx, operationId, "fridge:consume", userId, null, requestHash);
+      const repeated = await getIdempotentResult<FridgeItemSummary[]>(tx, operationId, "fridge:update-many", userId, null, requestHash);
       if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge:consume", userId, null, requestHash);
-
-      await tx.fridgeItem.updateMany({
-        where: {
-          id: { in: uniqueIds },
-          userId
-        },
-        data: {
-          available: false,
-          consumedAt: new Date()
-        }
+      await startIdempotentOperation(tx, operationId, "fridge:update-many", userId, null, requestHash);
+      await this.assertStorageWritable(tx, userId, 0);
+      if (available === false && exactQuantity) {
+        throw new BadRequestException("标记用完时不能保留精确数量");
+      }
+      const items = await tx.fridgeItem.findMany({
+        where: { id: { in: uniqueItemIds }, userId },
+        orderBy: { id: "asc" }
       });
-
-      const result = await this.listFridge(userId, 1, 50);
-      await completeIdempotentOperation(tx, operationId, "fridge:consume", userId, null, requestHash, result);
+      if (items.length !== uniqueItemIds.length) throw new NotFoundException("食材不存在");
+      const correction = available === undefined || exactQuantity
+        ? null
+        : buildFridgeCorrectionPatch(available ? "ROUGH" : "EMPTY");
+      for (const item of items) {
+        const fridgeInput = await this.buildFridgeWriteInput(
+          tx,
+          userId,
+          item.ingredientId,
+          item.name,
+          normalizedQuantityText,
+          exactQuantity,
+          exactUnitId,
+          item.expireAt,
+          item.note
+        );
+        const next = await tx.fridgeItem.update({
+          where: { id: item.id },
+          data: {
+            ...fridgeInput,
+            ...(available === undefined && exactQuantity
+              ? { available: true, consumedAt: null }
+              : available === undefined
+                ? {}
+                : correction
+                  ? { ...correction, consumedAt: available ? null : new Date() }
+                  : { available, consumedAt: available ? null : new Date() })
+          }
+        });
+        await upsertStorageLedger(tx, userId, "FRIDGE", next.id, sizeOfJson(next));
+      }
+      const result = await Promise.all(uniqueItemIds.map(itemId => this.loadFridgeItemSummaryFromTx(tx, userId, itemId)));
+      await completeIdempotentOperation(tx, operationId, "fridge:update-many", userId, null, requestHash, result);
       return result;
     });
+  }
+
+  async consumeFridgeStock(
+    userId: UUID,
+    operationId: OperationId,
+    ingredientId: UUID,
+    exactQuantity: string,
+    exactUnitId: UUID
+  ): Promise<FridgeConsumeResponse> {
+    const requestHash = JSON.stringify({ ingredientId, exactQuantity, exactUnitId });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<FridgeConsumeResponse>(tx, operationId, "fridge:consume-stock", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "fridge:consume-stock", userId, null, requestHash);
+
+      const rows = await this.loadInventoryBatchRows(tx, userId, true);
+      const matchedRows = rows.filter(row => row.ingredientId === ingredientId);
+      const candidates: InventoryConsumptionCandidate[] = matchedRows.map(row => ({
+        id: row.id,
+        exactQuantity: row.exactQuantity,
+        exactUnitId: row.exactUnitId,
+        reservedQuantity: row.reservedQuantity,
+        available: row.available,
+        expireAt: row.expireAt ? new Date(row.expireAt) : null,
+        createdAt: new Date(row.createdAt),
+        version: row.version
+      }));
+      const plan = planInventoryConsumption(candidates, exactQuantity, exactUnitId);
+      const consumedAt = new Date();
+
+      for (const allocation of plan.allocations) {
+        const current = await tx.fridgeItem.findFirst({
+          where: {
+            id: allocation.batchId,
+            userId,
+            available: true
+          },
+          select: {
+            id: true,
+            exactQuantity: true,
+            exactUnitId: true,
+            version: true
+          }
+        });
+        if (!current || current.exactQuantity === null || current.exactUnitId !== exactUnitId) {
+          throw new ConflictException("库存批次已变化，请刷新后重试");
+        }
+        const nextQuantity = new Prisma.Decimal(current.exactQuantity).sub(allocation.quantity);
+        if (nextQuantity.lt(0)) throw new ConflictException("库存批次已变化，请刷新后重试");
+        const updated = await tx.fridgeItem.updateMany({
+          where: {
+            id: current.id,
+            userId,
+            available: true,
+            version: current.version
+          },
+          data: {
+            exactQuantity: nextQuantity,
+            quantityText: this.formatExactQuantityText(nextQuantity, matchedRows.find(row => row.id === current.id)?.exactUnitName ?? ""),
+            available: nextQuantity.gt(0),
+            consumedAt: nextQuantity.gt(0) ? null : consumedAt,
+            version: { increment: 1 }
+          }
+        });
+        if (updated.count !== 1) throw new ConflictException("库存批次已变化，请刷新后重试");
+      }
+
+      const updatedRows = await this.loadInventoryBatchRows(tx, userId, true);
+      const summary = groupFridgeBatches(updatedRows).find(item => item.ingredientId === ingredientId);
+      const previousRows = rows.filter(row => row.ingredientId === ingredientId);
+      if (!summary && !previousRows.length) throw new NotFoundException("食材不存在");
+      const result: FridgeConsumeResponse = {
+        detail: this.toFridgeIngredientDetail(summary ?? buildEmptyFridgeIngredientSummary(previousRows)),
+        allocations: plan.allocations
+      };
+      await completeIdempotentOperation(tx, operationId, "fridge:consume-stock", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async completeMealCooking(
+    userId: UUID,
+    planItemId: UUID,
+    operationId: OperationId,
+    markWholeTable = false
+  ): Promise<CookingConsumptionResponse> {
+    const requestHash = JSON.stringify({ planItemId, markWholeTable });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<StoredCookingConsumptionResult>(
+        tx,
+        operationId,
+        "meal:cooking-complete",
+        userId,
+        null,
+        requestHash
+      );
+      if (repeated) return this.toCookingConsumptionResponse(repeated);
+      await startIdempotentOperation(tx, operationId, "meal:cooking-complete", userId, null, requestHash);
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
+
+      const plan = await tx.mealPlanItem.findUnique({
+        where: { id: planItemId },
+        select: {
+          id: true,
+          userId: true,
+          diningEvent: {
+            select: {
+              id: true,
+              participants: {
+                where: { status: "ACCEPTED" },
+                select: { id: true, userId: true }
+              },
+              menuItems: {
+                orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+                select: {
+                  recipeVersionId: true,
+                  cookUserId: true
+                }
+              }
+            }
+          },
+          dishes: {
+            orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+            select: {
+              recipeVersionId: true,
+              recipeVersion: {
+                select: {
+                  id: true,
+                  name: true,
+                  baseServings: true,
+                  ingredientsJson: true
+                }
+              }
+            }
+          }
+        }
+      });
+      if (!plan) throw new NotFoundException("计划不存在");
+      const isEventParticipant = Boolean(plan.diningEvent?.participants.some(item => item.userId === userId));
+      if (plan.userId !== userId && !isEventParticipant) {
+        throw new NotFoundException("计划不存在");
+      }
+      const previousCompletion = await tx.auditEvent.findFirst({
+        where: {
+          actorType: "USER",
+          actorUserId: userId,
+          action: "MEAL_COOKING_COMPLETED",
+          objectType: "MEAL_PLAN_ITEM",
+          objectId: planItemId
+        },
+        select: { id: true }
+      });
+      if (previousCompletion) throw new ConflictException("本次餐次已完成库存扣减");
+
+      const eventMenu = plan.diningEvent?.menuItems ?? [];
+      const assignedVersionIds = eventMenu.filter(item => item.cookUserId === userId).map(item => item.recipeVersionId);
+      const selectedVersionIds = eventMenu.length
+        ? assignedVersionIds.length
+          ? assignedVersionIds
+          : markWholeTable
+            ? eventMenu.map(item => item.recipeVersionId)
+            : (() => { throw new ConflictException("当前没有你负责的菜，请确认是否标记整桌完成"); })()
+        : plan.dishes.map(item => item.recipeVersionId);
+      const selected = new Set(selectedVersionIds);
+      const selectedDishes = plan.dishes.filter(item => selected.has(item.recipeVersionId));
+      const missingVersionIds = selectedVersionIds.filter(versionId => !selectedDishes.some(item => item.recipeVersionId === versionId));
+      const missingVersions = missingVersionIds.length
+        ? await tx.recipeContentVersion.findMany({
+            where: { id: { in: Array.from(new Set(missingVersionIds)) } },
+            select: { id: true, name: true, baseServings: true, ingredientsJson: true }
+          })
+        : [];
+      const recipeVersions = [
+        ...selectedDishes.map(item => item.recipeVersion),
+        ...missingVersions
+      ];
+      const versionMap = new Map(recipeVersions.map(item => [item.id, item]));
+      const servings = plan.diningEvent ? plan.diningEvent.participants.length + 1 : 1;
+      const recipeScales = Array.from(new Map(recipeVersions.map(version => [version.id, {
+        recipeVersionId: version.id,
+        baseServings: version.baseServings,
+        servings
+      }])).values());
+      const lines = selectedVersionIds.flatMap(versionId => {
+        const version = versionMap.get(versionId);
+        if (!version) throw new NotFoundException("菜谱版本不存在");
+        const content = fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson);
+        return content.map(item => ({
+          ingredientKey: String(item.ingredientId),
+          ingredientId: item.ingredientId,
+          ingredientName: item.ingredientName,
+          unitId: item.amount.kind === "EXACT" ? item.amount.unitId : 0,
+          quantity: item.amount.kind === "EXACT" ? scaleCookingQuantity(item.amount.quantity, version.baseServings, servings) : "0",
+          recipeTitle: version.name,
+          recipeVersionId: version.id,
+          precision: item.amount.kind === "EXACT" ? "EXACT" as const : "FUZZY" as const
+        }));
+      });
+      const consumption = buildCookingConsumptionPlan(lines);
+      const inventoryRows = await this.loadInventoryBatchRows(tx, userId, true);
+      const allocations: CookingAllocationRecord[] = [];
+      let updatedCount = 0;
+      let unknownCount = 0;
+      let shortageCount = 0;
+
+      for (const line of consumption.exactLines) {
+        const matchedRows = inventoryRows.filter(row => row.ingredientId === line.ingredientId);
+        const candidates: InventoryConsumptionCandidate[] = matchedRows.map(row => ({
+          id: row.id,
+          exactQuantity: row.exactQuantity,
+          exactUnitId: row.exactUnitId,
+          reservedQuantity: row.reservedQuantity,
+          available: row.available,
+          expireAt: row.expireAt ? new Date(row.expireAt) : null,
+          createdAt: new Date(row.createdAt),
+          version: row.version
+        }));
+        const plan = planBestEffortInventoryConsumption(candidates, line.quantity, line.unitId);
+        const hasComparableStock = candidates.some(candidate => candidate.available && candidate.exactUnitId === line.unitId && candidate.exactQuantity !== null);
+        if (!hasComparableStock) {
+          const roughRow = matchedRows.find(row => row.available && row.exactQuantity === null && row.exactUnitId === null);
+          if (roughRow) {
+            const current = await tx.fridgeItem.findFirst({
+              where: { id: roughRow.id, userId, available: true },
+              select: {
+                id: true,
+                quantityText: true,
+                exactQuantity: true,
+                exactUnitId: true,
+                available: true,
+                consumedAt: true,
+                version: true
+              }
+            });
+            if (!current || current.exactQuantity !== null || current.exactUnitId !== null) {
+              throw new ConflictException("库存批次已变化，请刷新后重试");
+            }
+            const updated = await tx.fridgeItem.updateMany({
+              where: { id: current.id, userId, available: true, version: current.version },
+              data: {
+                quantityText: "本次使用过，余量未知",
+                version: { increment: 1 }
+              }
+            });
+            if (updated.count !== 1) throw new ConflictException("库存批次已变化，请刷新后重试");
+            allocations.push({
+              batchId: current.id,
+              mode: "ROUGH",
+              quantity: line.quantity,
+              unitId: line.unitId,
+              beforeQuantityText: current.quantityText,
+              beforeQuantity: "0",
+              beforeExactUnitId: current.exactUnitId,
+              beforeAvailable: current.available,
+              beforeConsumedAt: current.consumedAt?.toISOString() ?? null,
+              afterVersion: current.version + 1
+            });
+            updatedCount += 1;
+            unknownCount += 1;
+          } else if (matchedRows.length) {
+            unknownCount += 1;
+          } else {
+            shortageCount += 1;
+          }
+          continue;
+        }
+        if (new Prisma.Decimal(plan.unfulfilledQuantity).gt(0)) shortageCount += 1;
+        if (!plan.allocations.length) continue;
+
+        for (const allocation of plan.allocations) {
+          const current = await tx.fridgeItem.findFirst({
+            where: { id: allocation.batchId, userId, available: true },
+            select: {
+              id: true,
+              quantityText: true,
+              exactQuantity: true,
+              exactUnitId: true,
+              available: true,
+              consumedAt: true,
+              version: true,
+              exactUnit: { select: { name: true } }
+            }
+          });
+          if (!current || current.exactQuantity === null || current.exactUnitId !== line.unitId) {
+            throw new ConflictException("库存批次已变化，请刷新后重试");
+          }
+          const nextQuantity = new Prisma.Decimal(current.exactQuantity).sub(allocation.quantity);
+          if (nextQuantity.lt(0)) throw new ConflictException("库存批次已变化，请刷新后重试");
+          const nextAvailable = nextQuantity.gt(0);
+          const updated = await tx.fridgeItem.updateMany({
+            where: { id: current.id, userId, available: true, version: current.version },
+            data: {
+              exactQuantity: nextQuantity,
+              quantityText: this.formatExactQuantityText(nextQuantity, current.exactUnit?.name ?? ""),
+              available: nextAvailable,
+              consumedAt: nextAvailable ? null : new Date(),
+              version: { increment: 1 }
+            }
+          });
+          if (updated.count !== 1) throw new ConflictException("库存批次已变化，请刷新后重试");
+          allocations.push({
+            batchId: current.id,
+            mode: "EXACT",
+            quantity: allocation.quantity,
+            unitId: allocation.unitId,
+            beforeQuantityText: current.quantityText,
+            beforeQuantity: current.exactQuantity.toString(),
+            beforeAvailable: current.available,
+            beforeExactUnitId: current.exactUnitId,
+            beforeConsumedAt: current.consumedAt?.toISOString() ?? null,
+            afterVersion: current.version + 1
+          });
+        }
+        updatedCount += 1;
+      }
+
+      const summary = buildInventoryUsageSummary({
+        updatedCount,
+        unknownCount,
+        shortageCount,
+        skippedFuzzyCount: consumption.skippedFuzzySources.length
+      });
+      const result: CookingConsumptionResponse = {
+        planItemId,
+        consumptionOperationId: operationId,
+        completedAt: new Date().toISOString(),
+        ...summary,
+        canUndo: true
+      };
+      const stored: StoredCookingConsumptionResult = { ...result, allocations, servings, recipeScales };
+      await tx.idempotencyRecord.updateMany({
+        where: {
+          operationId,
+          operationType: "meal:cooking-complete",
+          userId,
+          diningGroupId: null,
+          requestHash: hashIdempotencyRequest(requestHash),
+          status: "PROCESSING"
+        },
+        data: {
+          status: "SUCCEEDED",
+          resultJson: stored as unknown as Prisma.InputJsonValue
+        }
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorType: "USER",
+          actorUserId: userId,
+          action: "MEAL_COOKING_COMPLETED",
+          objectType: "MEAL_PLAN_ITEM",
+          objectId: planItemId,
+          payload: {
+            operationId,
+            servings,
+            recipeScales,
+            exactAllocations: allocations.filter(item => item.mode === "EXACT").map(item => ({
+              batchId: item.batchId,
+              quantity: item.quantity,
+              unitId: item.unitId
+            })),
+            roughAllocations: allocations.filter(item => item.mode === "ROUGH").map(item => ({
+              batchId: item.batchId,
+              quantity: item.quantity,
+              unitId: item.unitId
+            })),
+            exceptionSummary: {
+              unknownCount,
+              shortageCount,
+              skippedFuzzyCount: consumption.skippedFuzzySources.length
+            }
+          }
+        }
+      });
+      return result;
+    });
+  }
+
+  async undoMealCooking(
+    userId: UUID,
+    planItemId: UUID,
+    operationId: OperationId,
+    consumptionOperationId: OperationId
+  ): Promise<CookingUndoResponse> {
+    const requestHash = `${planItemId}:${consumptionOperationId}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<CookingUndoResponse>(tx, operationId, "meal:cooking-undo", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "meal:cooking-undo", userId, null, requestHash);
+      const source = await tx.idempotencyRecord.findFirst({
+        where: {
+          operationId: consumptionOperationId,
+          operationType: "meal:cooking-complete",
+          userId,
+          diningGroupId: null,
+          status: "SUCCEEDED"
+        },
+        select: { resultJson: true }
+      });
+      const stored = source?.resultJson ? fromJson<StoredCookingConsumptionResult>(source.resultJson) : null;
+      if (!stored || stored.planItemId !== planItemId) throw new ConflictException("找不到可撤销的本次库存更新");
+      if (Date.now() - new Date(stored.completedAt).getTime() > 5 * 60 * 1000) {
+        throw new ConflictException("撤销窗口已结束，请到冰箱详情页手动修正");
+      }
+      for (const allocation of stored.allocations) {
+        const current = await tx.fridgeItem.findFirst({
+          where: { id: allocation.batchId, userId },
+          select: {
+            id: true,
+            version: true,
+            quantityText: true,
+            exactUnitId: true,
+            exactUnit: { select: { name: true } }
+          }
+        });
+        if (!current || current.version !== allocation.afterVersion) {
+          throw new ConflictException("冰箱数据已被后续修改，无法撤销");
+        }
+        const restoredQuantity = new Prisma.Decimal(allocation.beforeQuantity);
+        const updated = await tx.fridgeItem.updateMany({
+          where: { id: allocation.batchId, userId, version: allocation.afterVersion },
+          data: {
+            exactQuantity: allocation.mode === "ROUGH" ? null : restoredQuantity,
+            exactUnitId: allocation.beforeExactUnitId ?? (allocation.mode === "EXACT" ? allocation.unitId : null),
+            quantityText: allocation.beforeQuantityText ?? (allocation.mode === "EXACT" ? this.formatExactQuantityText(restoredQuantity, current.exactUnit?.name ?? "") : current.quantityText),
+            available: allocation.beforeAvailable,
+            consumedAt: allocation.beforeConsumedAt ? new Date(allocation.beforeConsumedAt) : null,
+            version: { increment: 1 }
+          }
+        });
+        if (updated.count !== 1) throw new ConflictException("冰箱数据已被后续修改，无法撤销");
+      }
+      const result = { undone: true, message: "已撤销本次库存更新，冰箱数据已恢复。" } satisfies CookingUndoResponse;
+      await completeIdempotentOperation(tx, operationId, "meal:cooking-undo", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  private toCookingConsumptionResponse(stored: StoredCookingConsumptionResult): CookingConsumptionResponse {
+    const { allocations: _allocations, servings: _servings, recipeScales: _recipeScales, ...result } = stored;
+    return result;
   }
 
   async listShopping(userId: UUID, page: number, pageSize: number, status?: string): Promise<PageResult<ShoppingItemSummary>> {
@@ -1074,118 +1642,222 @@ export class PantryService {
       const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:item:plan", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:item:plan", userId, null, requestHash);
-      const access = await this.assertShoppingListWritable(tx, userId, listId);
-      const recipes = await this.readPlanShoppingRecipes(tx, userId, planItemId);
-      const allSources = await Promise.all(
-        recipes.map(item => this.loadRecipeShoppingSource(tx, userId, item.recipeId, item.sourceVersionId, true))
-      );
-      const sources = await this.filterPendingPlanSources(tx, listId, planItemId, allSources);
-      if (!sources.length) {
-        await this.bindMealPlanShoppingList(tx, userId, planItemId, listId);
-        const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
-        await completeIdempotentOperation(tx, operationId, "shopping-list:item:plan", userId, null, requestHash, result);
-        return result;
-      }
-      const batchKey = String(operationId);
-      const itemSourceKey = String(planItemId);
-      const sizeBytes = sources.reduce(
-        (total, source) =>
-          total +
-          source.ingredients.reduce(
-            (innerTotal, ingredient, index) =>
-              innerTotal +
-              sizeOfJson({
-                userId: access.ownerUserId,
-                listId,
-                name: ingredient.ingredientName,
-                quantityText: formatRecipeAmount(ingredient.amount),
-                note: source.title,
-                sourceType: planSourceType,
-                sourceKey: itemSourceKey,
-                sourceRecipeId: source.recipeId,
-                sourceRecipeVersionId: source.sourceVersionId,
-                sourceRecipeTitle: source.title,
-                sourceBaseServings: source.baseServings,
-                sourceBatchKey: batchKey,
-                sourceIngredientSort: index + 1,
-                ingredientId: ingredient.ingredientId,
-                amountJson: ingredient.amount
-              }),
-            0
-          ),
-        0
-      );
-      await this.assertStorageWritable(tx, access.ownerUserId, sizeBytes);
-
-      for (const source of sources) {
-        for (const [index, ingredient] of source.ingredients.entries()) {
-          const created = await tx.shoppingItem.create({
-          data: {
-            userId: access.ownerUserId,
-            listId,
-            name: ingredient.ingredientName,
-            quantityText: formatRecipeAmount(ingredient.amount),
-            baseQuantityText: formatRecipeAmount(ingredient.amount),
-            note: source.title,
-            sourceType: planSourceType,
-              sourceKey: itemSourceKey,
-              sourceRecipeId: source.recipeId,
-              sourceRecipeVersionId: source.sourceVersionId,
-              sourceRecipeTitle: source.title,
-              sourceBaseServings: source.baseServings,
-              sourceBatchKey: batchKey,
-              sourceIngredientSort: index + 1,
-              ingredientId: ingredient.ingredientId,
-              amountJson: ingredient.amount
-            }
-          });
-          await upsertStorageLedger(tx, access.ownerUserId, "SHOPPING", created.id, sizeOfJson(created));
-        }
-      }
-
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
-        }
-      });
-      await this.bindMealPlanShoppingList(tx, userId, planItemId, listId);
+      await this.syncPlanShoppingGapInTransaction(tx, userId, planItemId, operationId, listId);
       const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
       await completeIdempotentOperation(tx, operationId, "shopping-list:item:plan", userId, null, requestHash, result);
       return result;
     });
   }
 
-  private async filterPendingPlanSources(
+  async syncPlanShoppingGapInTransaction(
     tx: Prisma.TransactionClient,
-    listId: UUID,
+    userId: UUID,
     planItemId: UUID,
-    sources: RecipeShoppingSource[]
-  ): Promise<RecipeShoppingSource[]> {
-    if (!sources.length) return [];
-    const items = await tx.shoppingItem.findMany({
+    operationId: OperationId,
+    requestedListId: UUID | null = null
+  ): Promise<PlanShoppingGapSyncResult> {
+    const plan = await tx.mealPlanItem.findFirst({
       where: {
-        listId,
-        sourceType: planSourceType,
-        sourceKey: String(planItemId),
-        status: {
-          not: "DELETED"
-        }
+        id: planItemId,
+        userId
       },
       select: {
-        sourceRecipeId: true,
-        sourceRecipeVersionId: true
+        shoppingListId: true
       }
     });
-    const existing = new Set(
-      items
-        .filter(
-          (item): item is { sourceRecipeId: UUID; sourceRecipeVersionId: UUID } =>
-            item.sourceRecipeId !== null && item.sourceRecipeVersionId !== null
-        )
-        .map(item => `${item.sourceRecipeId}:${item.sourceRecipeVersionId}`)
+    if (!plan) throw new NotFoundException("计划不存在");
+
+    const lines = await this.buildPlanShoppingGapLines(tx, userId, planItemId);
+    const definiteLines = lines.filter(line => (line.state === "MISSING" || line.state === "SHORTAGE") && line.quantity !== null);
+    const pendingCount = lines.filter(line => line.state === "UNKNOWN").length;
+    let listId = requestedListId ?? plan.shoppingListId;
+
+    if (!definiteLines.length) {
+      if (requestedListId) {
+        await this.assertShoppingListOwner(tx, userId, requestedListId);
+        await this.bindMealPlanShoppingList(tx, userId, planItemId, requestedListId);
+        listId = requestedListId;
+      }
+      return { listId, createdCount: 0, pendingCount };
+    }
+
+    if (!listId) {
+      const active = await tx.shoppingList.findFirst({
+        where: {
+          ownerUserId: userId,
+          status: "ACTIVE"
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        select: { id: true }
+      });
+      listId = active?.id ?? (await this.createShoppingListInTx(tx, userId, userId, this.buildDefaultShoppingListName())).id;
+    }
+
+    const access = await this.assertShoppingListOwner(tx, userId, listId);
+    if (access.status !== "ACTIVE") throw new ConflictException("当前采购清单不可继续加入缺口");
+    const sourceKeys = definiteLines.map(line => line.sourceKey);
+    const existing = await tx.shoppingItem.findMany({
+      where: {
+        userId,
+        listId,
+        sourceType: planSourceType,
+        sourceKey: { in: sourceKeys }
+      },
+      select: {
+        sourceKey: true,
+        sourceType: true,
+        status: true,
+        removedByUserId: true
+      }
+    });
+    const writePlan = planAutomaticGapWrite(
+      definiteLines.map(line => ({ sourceKey: line.sourceKey, state: line.state })),
+      existing.filter((item): item is typeof item & { sourceKey: string } => item.sourceKey !== null)
     );
-    return sources.filter(source => !existing.has(`${source.recipeId}:${source.sourceVersionId}`));
+    const createKeys = new Set(writePlan.createdSourceKeys);
+    const writes = definiteLines.filter(line => createKeys.has(line.sourceKey));
+    const batchKey = String(operationId);
+    const sizeBytes = writes.reduce((total, line) => {
+      const amount = { ...line.requiredAmount, quantity: line.quantity! };
+      return total + sizeOfJson({
+        userId,
+        listId,
+        name: line.ingredientName,
+        quantityText: formatRecipeAmount(amount),
+        note: line.recipeTitle,
+        sourceType: planSourceType,
+        sourceKey: line.sourceKey,
+        sourceRecipeId: line.recipeId,
+        sourceRecipeVersionId: line.sourceVersionId,
+        sourceRecipeTitle: line.recipeTitle,
+        sourceBaseServings: line.baseServings,
+        sourceBatchKey: batchKey,
+        sourceIngredientSort: line.ingredientSort,
+        ingredientId: line.ingredientId,
+        amountJson: amount
+      });
+    }, 0);
+    await this.assertStorageWritable(tx, userId, sizeBytes);
+
+    for (const line of writes) {
+      const amount = { ...line.requiredAmount, quantity: line.quantity! };
+      const created = await tx.shoppingItem.create({
+        data: {
+          userId,
+          listId,
+          name: line.ingredientName,
+          quantityText: formatRecipeAmount(amount),
+          baseQuantityText: formatRecipeAmount(amount),
+          note: line.recipeTitle,
+          sourceType: planSourceType,
+          sourceKey: line.sourceKey,
+          sourceRecipeId: line.recipeId,
+          sourceRecipeVersionId: line.sourceVersionId,
+          sourceRecipeTitle: line.recipeTitle,
+          sourceBaseServings: line.baseServings,
+          sourceBatchKey: batchKey,
+          sourceIngredientSort: line.ingredientSort,
+          ingredientId: line.ingredientId,
+          amountJson: amount
+        }
+      });
+      await upsertStorageLedger(tx, userId, "SHOPPING", created.id, sizeOfJson(created));
+    }
+
+    if (writes.length) {
+      await tx.shoppingList.update({
+        where: { id: listId },
+        data: { version: { increment: 1 } }
+      });
+    }
+    await this.bindMealPlanShoppingList(tx, userId, planItemId, listId);
+    return { listId, createdCount: writes.length, pendingCount };
+  }
+
+  private async buildPlanShoppingGapLines(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    planItemId: UUID
+  ): Promise<PlanShoppingGapLine[]> {
+    const recipes = await this.readPlanShoppingRecipes(tx, userId, planItemId);
+    const sources = await Promise.all(
+      recipes.map(item => this.loadRecipeShoppingSource(tx, userId, item.recipeId, item.sourceVersionId, true))
+    );
+    const inventoryRows = await this.loadInventoryBatchRows(tx, userId, true);
+    const groups = new Map<string, {
+      source: RecipeShoppingSource;
+      ingredientId: UUID;
+      ingredientName: string;
+      ingredientSort: number;
+      amount: Extract<RecipeAmountSnapshot, { kind: "EXACT" }>;
+    }>();
+
+    for (const source of sources) {
+      for (const [index, ingredient] of source.ingredients.entries()) {
+        if (!ingredient.ingredientId || ingredient.amount.kind !== "EXACT") continue;
+        const key = `${source.sourceVersionId}:${ingredient.ingredientId}:${ingredient.amount.unitId}`;
+        const current = groups.get(key);
+        if (current) {
+          current.amount = {
+            ...current.amount,
+            quantity: new Prisma.Decimal(current.amount.quantity).add(ingredient.amount.quantity).toString()
+          };
+          current.ingredientSort = Math.min(current.ingredientSort, index + 1);
+          continue;
+        }
+        groups.set(key, {
+          source,
+          ingredientId: ingredient.ingredientId,
+          ingredientName: ingredient.ingredientName,
+          ingredientSort: index + 1,
+          amount: { ...ingredient.amount }
+        });
+      }
+    }
+
+    return [...groups.values()].map(group => {
+      const rows = inventoryRows.filter(row => row.ingredientId === group.ingredientId && row.available && this.hasAvailableInventory(row));
+      const comparableRows = rows.filter(row => row.exactQuantity !== null && row.exactUnitId === group.amount.unitId);
+      const exactStock = comparableRows.reduce((total, row) => {
+        const available = new Prisma.Decimal(row.exactQuantity!).sub(row.reservedQuantity ?? 0);
+        return total.add(Prisma.Decimal.max(available, 0));
+      }, new Prisma.Decimal(0));
+      const hasComparableStock = comparableRows.some(row => new Prisma.Decimal(row.exactQuantity!).sub(row.reservedQuantity ?? 0).gt(0));
+      const hasRoughStock = rows.some(row => {
+        if (row.exactQuantity === null || row.exactUnitId === null) return true;
+        if (row.exactUnitId !== group.amount.unitId) return true;
+        return !new Prisma.Decimal(row.exactQuantity).sub(row.reservedQuantity ?? 0).gt(0);
+      });
+      const sourceKey = `plan:${planItemId}:recipe:${group.source.sourceVersionId}:ingredient:${group.ingredientId}`;
+      const gap = buildAutomaticGapLine({
+        sourceKey,
+        ingredientId: group.ingredientId,
+        ingredientName: group.ingredientName,
+        requiredQuantity: group.amount.quantity,
+        requiredUnitId: group.amount.unitId,
+        exactStock: hasComparableStock ? exactStock : null,
+        exactStockUnitId: hasComparableStock ? group.amount.unitId : null,
+        hasRoughStock
+      });
+      return {
+        sourceKey,
+        recipeId: group.source.recipeId,
+        sourceVersionId: group.source.sourceVersionId,
+        recipeTitle: group.source.title,
+        baseServings: group.source.baseServings,
+        ingredientSort: group.ingredientSort,
+        ingredientId: group.ingredientId,
+        ingredientName: group.ingredientName,
+        requiredAmount: group.amount,
+        state: gap.state,
+        quantity: gap.quantity
+      };
+    });
+  }
+
+  private hasAvailableInventory(row: InventoryBatchRecord) {
+    if (row.exactQuantity === null) return true;
+    return new Prisma.Decimal(row.exactQuantity).sub(row.reservedQuantity ?? 0).gt(0);
   }
 
   async updateShoppingListItemCheck(
@@ -1250,7 +1922,7 @@ export class PantryService {
     itemId: UUID,
     operationId: OperationId,
     version: number,
-    action: "APPLY" | "UNDO"
+    action: "APPLY" | "UNDO" | "CONFIRM_ENOUGH"
   ): Promise<ShoppingListItemPatchResponse> {
     const requestHash = `${listId}:${itemId}:${version}:${action}`;
     return this.prisma.$transaction(async tx => {
@@ -1306,30 +1978,43 @@ export class PantryService {
         }
         const fridgeRows = await this.loadShoppingFridgeRows(tx, access.ownerUserId);
         const reservationPlan = this.buildShoppingItemReservationPlan(item, fridgeRows);
-        if (reservationPlan.mode === "NEED_CONFIRM") {
-          throw new BadRequestException("当前库存数量还不能自动计算，请先补齐结构化数量");
-        }
-        if (reservationPlan.mode === "NONE" || !reservationPlan.reservations.length) {
-          throw new BadRequestException("当前购物项没有可自动使用的库存");
-        }
-        await tx.shoppingItemFridgeReservation.createMany({
-          data: reservationPlan.reservations.map(current => ({
-            userId: access.ownerUserId,
-            shoppingListId: listId,
-            shoppingItemId: itemId,
-            fridgeItemId: current.fridgeItemId,
-            reservedQuantity: current.reservedQuantity,
-            reservedUnitId: current.reservedUnitId
-          }))
-        });
-        await tx.shoppingItem.update({
-          where: { id: itemId },
-          data: {
-            fridgeAppliedQuantityText: reservationPlan.appliedQuantityText,
-            fridgeCovered: reservationPlan.covered,
-            version: { increment: 1 }
+        if (action === "CONFIRM_ENOUGH") {
+          if (reservationPlan.mode !== "NEED_CONFIRM") {
+            throw new BadRequestException("当前购物项不是数量未知的库存");
           }
-        });
+          await tx.shoppingItem.update({
+            where: { id: itemId },
+            data: {
+              ...buildUnknownInventoryConfirmationPatch(),
+              version: { increment: 1 }
+            }
+          });
+        } else {
+          if (reservationPlan.mode === "NEED_CONFIRM") {
+            throw new BadRequestException("当前库存数量还不能自动计算，请先补齐结构化数量");
+          }
+          if (reservationPlan.mode === "NONE" || !reservationPlan.reservations.length) {
+            throw new BadRequestException("当前购物项没有可自动使用的库存");
+          }
+          await tx.shoppingItemFridgeReservation.createMany({
+            data: reservationPlan.reservations.map(current => ({
+              userId: access.ownerUserId,
+              shoppingListId: listId,
+              shoppingItemId: itemId,
+              fridgeItemId: current.fridgeItemId,
+              reservedQuantity: current.reservedQuantity,
+              reservedUnitId: current.reservedUnitId
+            }))
+          });
+          await tx.shoppingItem.update({
+            where: { id: itemId },
+            data: {
+              fridgeAppliedQuantityText: reservationPlan.appliedQuantityText,
+              fridgeCovered: reservationPlan.covered,
+              version: { increment: 1 }
+            }
+          });
+        }
       }
 
       await tx.shoppingList.update({
@@ -1629,7 +2314,17 @@ export class PantryService {
         }
       });
       const checkedMap = new Map(checkedItems.map(item => [item.id, item]));
-      for (const entry of entries) {
+      const automaticMode = entries.length === 0;
+      const completionEntries: CompleteShoppingListEntryRequest[] = automaticMode
+        ? checkedItems.map(item => ({
+            itemId: item.id,
+            store: true,
+            quantityText: null,
+            expireDays: null,
+            expireAt: null
+          }))
+        : entries;
+      for (const entry of completionEntries) {
         const item = checkedMap.get(entry.itemId);
         if (!item) {
           throw new BadRequestException("入库项必须来自当前已勾选的购物项");
@@ -1637,10 +2332,33 @@ export class PantryService {
       }
       let expectedDeltaBytes = 0;
       const now = new Date();
-      for (const entry of entries) {
-        if (!entry.store) continue;
+      const fridgeWrites = completionEntries
+        .filter(entry => entry.store)
+        .map(entry => {
         const item = checkedMap.get(entry.itemId)!;
-        const expireAt = entry.expireAt ? new Date(entry.expireAt) : addDays(now, entry.expireDays ?? 7);
+        if (automaticMode) {
+          const automatic = buildAutomaticStockIn({
+            itemId: item.id,
+            ingredientId: item.ingredientId,
+            name: item.name,
+            explicitQuantity: null,
+            explicitUnitId: null,
+            explicitUnitName: null,
+            explicitExpireAt: null
+          });
+          return {
+            item,
+            quantityText: automatic.quantityText,
+            exactQuantity: automatic.exactQuantity,
+            exactUnitId: automatic.exactUnitId,
+            expireAt: null
+          };
+        }
+        const expireAt = entry.expireAt
+          ? new Date(entry.expireAt)
+          : entry.expireDays === null || entry.expireDays === undefined
+            ? null
+            : addDays(now, entry.expireDays);
         const customQuantityText = entry.quantityText?.trim() || null;
         const quantities = this.resolveShoppingItemQuantities(item);
         const storedQuantityText = customQuantityText || quantities.remainingQuantityText || quantities.requiredQuantityText;
@@ -1652,49 +2370,51 @@ export class PantryService {
               ? this.parseExactQuantityByUnit(quantities.remainingQuantityText, exactAmount.unitName)
               : null
           : null;
+        return {
+          item,
+          quantityText: exactAmount && exactQuantity !== null
+            ? this.formatExactQuantityText(exactQuantity, exactAmount.unitName)
+            : storedQuantityText,
+          exactQuantity,
+          exactUnitId: exactQuantity !== null ? exactAmount?.unitId ?? null : null,
+          expireAt
+        };
+      });
+      for (const write of fridgeWrites) {
         expectedDeltaBytes += sizeOfJson({
           userId: access.ownerUserId,
-          ingredientId: item.ingredientId,
+          ingredientId: write.item.ingredientId,
           sourceShoppingListId: listId,
-          sourceShoppingItemId: item.id,
-          name: item.name,
-          quantityText: exactAmount && exactQuantity !== null ? this.formatExactQuantityText(exactQuantity, exactAmount.unitName) : storedQuantityText,
-          exactQuantity,
-          exactUnitId: exactAmount && exactQuantity !== null ? exactAmount.unitId : null,
-          note: item.note,
+          sourceShoppingItemId: write.item.id,
+          name: write.item.name,
+          quantityText: write.quantityText,
+          exactQuantity: write.exactQuantity,
+          exactUnitId: write.exactUnitId,
+          note: write.item.note,
           available: true,
-          expireAt
+          expireAt: write.expireAt
         });
       }
       await this.assertStorageWritable(tx, access.ownerUserId, expectedDeltaBytes);
       await this.settleShoppingListReservations(tx, listId, now);
-      for (const entry of entries) {
-        if (!entry.store) continue;
-        const item = checkedMap.get(entry.itemId)!;
-        const expireAt = entry.expireAt ? new Date(entry.expireAt) : addDays(now, entry.expireDays ?? 7);
-        const customQuantityText = entry.quantityText?.trim() || null;
-        const quantities = this.resolveShoppingItemQuantities(item);
-        const storedQuantityText = customQuantityText || quantities.remainingQuantityText || quantities.requiredQuantityText;
-        const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
-        const exactQuantity = exactAmount
-          ? customQuantityText
-            ? this.parseExactQuantityByUnit(customQuantityText, exactAmount.unitName)
-            : quantities.remainingQuantityText
-              ? this.parseExactQuantityByUnit(quantities.remainingQuantityText, exactAmount.unitName)
-              : null
-          : null;
+      for (const write of fridgeWrites) {
+        const fridgeInput = await this.buildFridgeWriteInput(
+          tx,
+          access.ownerUserId,
+          write.item.ingredientId,
+          write.item.name,
+          write.quantityText,
+          write.exactQuantity?.toString() ?? null,
+          write.exactUnitId,
+          write.expireAt,
+          write.item.note
+        );
         const created = await tx.fridgeItem.create({
           data: {
             userId: access.ownerUserId,
-            ingredientId: item.ingredientId,
             sourceShoppingListId: listId,
-            sourceShoppingItemId: item.id,
-            name: item.name,
-            quantityText: exactAmount && exactQuantity !== null ? this.formatExactQuantityText(exactQuantity, exactAmount.unitName) : storedQuantityText,
-            exactQuantity,
-            exactUnitId: exactAmount && exactQuantity !== null ? exactAmount.unitId : null,
-            note: item.note,
-            expireAt
+            sourceShoppingItemId: write.item.id,
+            ...fridgeInput
           }
         });
         await upsertStorageLedger(tx, access.ownerUserId, "FRIDGE", created.id, sizeOfJson(created));
@@ -2456,15 +3176,10 @@ export class PantryService {
       const item = await tx.shoppingItem.findUnique({ where: { id: itemId } });
       if (!item || item.userId !== userId) throw new NotFoundException("购物项不存在");
 
+      const statusUpdate = buildShoppingStatusUpdate(normalizedStatus, userId, new Date());
       const next = await tx.shoppingItem.update({
         where: { id: itemId },
-        data: {
-          status: normalizedStatus,
-          checkedAt: normalizedStatus === "BOUGHT" ? new Date() : null,
-          checkedByUserId: normalizedStatus === "BOUGHT" ? userId : null,
-          removedAt: normalizedStatus === "DELETED" ? new Date() : null,
-          removedByUserId: normalizedStatus === "DELETED" ? userId : null
-        }
+        data: statusUpdate
       });
 
       if (normalizedStatus === "DELETED") {
@@ -2507,17 +3222,12 @@ export class PantryService {
         throw new NotFoundException("购物项不存在");
       }
 
+      const statusUpdate = buildShoppingStatusUpdate(normalizedStatus, userId, new Date());
       await tx.shoppingItem.updateMany({
         where: {
           id: { in: items.map(item => item.id) }
         },
-        data: {
-          status: normalizedStatus,
-          checkedAt: normalizedStatus === "BOUGHT" ? new Date() : null,
-          checkedByUserId: normalizedStatus === "BOUGHT" ? userId : null,
-          removedAt: normalizedStatus === "DELETED" ? new Date() : null,
-          removedByUserId: normalizedStatus === "DELETED" ? userId : null
-        }
+        data: statusUpdate
       });
 
       if (normalizedStatus === "DELETED") {
@@ -4868,8 +5578,45 @@ export class PantryService {
       throw new BadRequestException("使用精确数量时需要绑定食材");
     }
 
+    let resolvedIngredientId = ingredientId;
+    let resolvedName = name;
+    if (ingredientId !== null) {
+      const ingredient = await tx.ingredient.findUnique({
+        where: { id: ingredientId },
+        select: {
+          id: true,
+          ownerId: true,
+          status: true,
+          name: true,
+          mergedTo: {
+            select: {
+              id: true,
+              ownerId: true,
+              status: true,
+              name: true
+            }
+          }
+        }
+      });
+      if (!ingredient || (ingredient.ownerId !== null && ingredient.ownerId !== userId)) {
+        throw new NotFoundException("食材不存在");
+      }
+      if (ingredient.status === "MERGED") {
+        if (!ingredient.mergedTo || ingredient.mergedTo.ownerId !== null || ingredient.mergedTo.status !== "ACTIVE") {
+          throw new BadRequestException("食材归并目标无效");
+        }
+        resolvedIngredientId = ingredient.mergedTo.id;
+        resolvedName = ingredient.mergedTo.name;
+      } else {
+        resolvedName = ingredient.name;
+      }
+    }
+
     let resolvedQuantityText = quantityText;
     if (hasExactQuantity && hasExactUnit) {
+      if (!new Prisma.Decimal(exactQuantity!).gt(0)) {
+        throw new BadRequestException("精确数量必须大于 0");
+      }
       const unit = await tx.unit.findFirst({
         where: {
           id: exactUnitId,
@@ -4887,8 +5634,8 @@ export class PantryService {
     }
 
     return {
-      ingredientId,
-      name,
+      ingredientId: resolvedIngredientId,
+      name: resolvedName,
       quantityText: resolvedQuantityText,
       exactQuantity: hasExactQuantity ? new Prisma.Decimal(exactQuantity!) : null,
       exactUnitId: hasExactUnit ? exactUnitId! : null,
@@ -4897,7 +5644,106 @@ export class PantryService {
     };
   }
 
-  private async loadFridgeReservationMap(tx: Prisma.TransactionClient, fridgeItemIds: UUID[]) {
+  private async loadInventoryBatchRows(
+    tx: Prisma.TransactionClient | PrismaService,
+    userId: UUID,
+    available?: boolean
+  ): Promise<InventoryBatchRecord[]> {
+    const rows = await tx.fridgeItem.findMany({
+      where: {
+        userId,
+        ...(available === undefined ? {} : { available })
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      include: {
+        ingredient: {
+          select: {
+            id: true,
+            status: true,
+            name: true,
+            mergedTo: {
+              select: {
+                id: true,
+                status: true,
+                name: true,
+                category: {
+                  select: {
+                    name: true
+                  }
+                }
+              }
+            },
+            category: {
+              select: {
+                name: true
+              }
+            }
+          }
+        },
+        exactUnit: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        sourceShoppingItem: {
+          select: {
+            amountJson: true
+          }
+        }
+      }
+    });
+    const reservationMap = await this.loadFridgeReservationMap(tx, rows.map(row => row.id));
+
+    return rows.map(row => {
+      const currentIngredient = row.ingredient?.status === "MERGED" && row.ingredient.mergedTo
+        ? row.ingredient.mergedTo
+        : row.ingredient;
+      const resolvedExact = this.resolveFridgeExactAmount(row);
+      const reservations = reservationMap.get(row.id) ?? [];
+      const reservedQuantity = reservations.reduce(
+        (total, reservation) => total.add(reservation.reservedQuantity),
+        new Prisma.Decimal(0)
+      );
+      return {
+        id: row.id,
+        ingredientId: currentIngredient?.id ?? null,
+        name: currentIngredient?.name ?? row.name,
+        categoryName: currentIngredient?.category?.name ?? null,
+        quantityText: row.quantityText,
+        exactQuantity: resolvedExact?.quantity ?? row.exactQuantity,
+        exactUnitId: resolvedExact?.unitId ?? row.exactUnitId,
+        exactUnitName: resolvedExact?.unitName ?? row.exactUnit?.name ?? null,
+        note: row.note,
+        available: row.available,
+        version: row.version,
+        expireAt: row.expireAt,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        reservedQuantity,
+        reservations: reservations.map(reservation => ({
+          shoppingListId: reservation.shoppingListId,
+          shoppingListName: reservation.shoppingListName,
+          shoppingItemId: reservation.shoppingItemId,
+          reservedText: this.formatExactQuantityText(reservation.reservedQuantity, reservation.reservedUnitName)
+        })) satisfies InventoryReservationRecord[]
+      } satisfies InventoryBatchRecord;
+    });
+  }
+
+  private toFridgeIngredientDetail(summary: ReturnType<typeof groupFridgeBatches>[number]): FridgeIngredientDetail {
+    const { batches, ...base } = summary;
+    return {
+      ...base,
+      activeBatches: batches.filter(batch => !batch.isExpired),
+      expiredBatches: batches.filter(batch => batch.isExpired)
+    };
+  }
+
+  private async loadFridgeReservationMap(
+    tx: Prisma.TransactionClient | PrismaService,
+    fridgeItemIds: UUID[]
+  ) {
     const uniqueIds = Array.from(new Set(fridgeItemIds));
     if (!uniqueIds.length) {
       return new Map<UUID, FridgeReservationSummaryRow[]>();

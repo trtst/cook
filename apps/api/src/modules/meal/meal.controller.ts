@@ -10,9 +10,11 @@ import {
   AddMealPlanItemDto,
   ChooseBringRecipeDto,
   ChooseDiningEventWishRecipeDto,
+  CompleteCookingDto,
   CompleteDiningEventDto,
   ConfirmMealPlanMenuDto,
   CompleteMealPlanDto,
+  UndoCookingDto,
   CreateDiningMemoryShareDto,
   CreateDirectDiningEventDto,
   CreateDiningEventDto,
@@ -39,6 +41,8 @@ import {
   DiningEventModel,
   DiningEventListPageModel,
   DiningEventShareLinkModel,
+  CookingConsumptionResponseModel,
+  CookingUndoResponseModel,
   MealCookContextResponseModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
@@ -103,6 +107,38 @@ export class MealController {
   @ApiOkModel(MealCookContextResponseModel, "读取当前计划餐次的原始做饭上下文")
   getMealPlanCookContext(@Req() request: RequestWithUser, @Param("planItemId", ParseIntPipe) planItemId: number) {
     return this.mealService.getMealPlanCookContext(request.user.userId, planItemId).then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/cooking-complete")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(CookingConsumptionResponseModel, "完成这顿饭并按菜谱用量估算更新本人冰箱")
+  completeMealCooking(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CompleteCookingDto
+  ) {
+    return this.mealService
+      .completeMealCooking(request.user.userId, planItemId, operationId, body.markWholeTable ?? false)
+      .then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/cooking-complete/undo")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(CookingUndoResponseModel, "撤销当前结果页内最近一次库存更新")
+  undoMealCooking(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UndoCookingDto
+  ) {
+    return this.mealService
+      .undoMealCooking(request.user.userId, planItemId, operationId, body.consumptionOperationId)
+      .then(result => ok(result));
   }
 
   @Post("meal-plans")

@@ -90,7 +90,7 @@ test("public dining memory code reads the newest snapshot for its event", async 
     }
   } as never, {} as never, {
     buildDiningMemoryAssetUrl: (_request: unknown, storageKey: string) => `/static/${storageKey}`
-  } as never, {} as never, {} as never, {} as never);
+  } as never, {} as never, {} as never, {} as never, {} as never);
 
   const preview = await service.getDiningMemorySharePreview({}, createDiningMemoryShareToken(82));
 
@@ -107,6 +107,7 @@ test("legacy memory snapshots without a generated code do not expose a broken UR
       buildDiningMemoryAssetUrl: () => "/static/missing",
       buildDiningMemoryMiniCodeStorageKey: () => "uploads/dining-event-memory-codes/missing.png"
     } as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never
@@ -131,7 +132,7 @@ test("legacy memory snapshots without a generated code do not expose a broken UR
 
 test("next dining invite locks the event before checking active invites", async () => {
   const calls: string[] = [];
-  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService({} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   const tx = {
     $queryRaw: async () => {
       calls.push("lock");
@@ -162,6 +163,7 @@ test("failed dining memory asset cleanup is recorded in the outbox", async () =>
         }
       }
     } as never,
+    {} as never,
     {} as never,
     {} as never,
     {} as never,
@@ -283,6 +285,7 @@ test("dining memory share creates the event code once and reuses it for later sn
     uploadService as never,
     {} as never,
     wechatMiniCodeService as never,
+    {} as never,
     {} as never
   );
 
@@ -514,7 +517,7 @@ function createMealAssistantService(prisma = new FakeMealAssistantPrisma(), acce
   return {
     prisma,
     access,
-    service: new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, access as never)
+    service: new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, access as never)
   };
 }
 
@@ -660,7 +663,7 @@ class FakeDiningSchedulePrisma {
 
 test("dining event menu summaries expose keywords from the fixed recipe version", () => {
   const prisma = new FakeDiningSchedulePrisma();
-  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   const event = prisma.eventRow({
     menuItems: [
       {
@@ -683,7 +686,7 @@ test("dining event menu summaries expose keywords from the fixed recipe version"
 
 test("dining event schedule update moves the linked plan to the scheduled time range", async () => {
   const prisma = new FakeDiningSchedulePrisma();
-  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 
   await service.updateDiningEventSchedule({}, 9, 901, "2001", 1, "2026-10-01T15:10:00.000Z", null);
 
@@ -700,7 +703,7 @@ test("dining event schedule update rejects a slot that already has another plan"
     mealSlot: "LATE_NIGHT",
     title: "已有夜宵"
   });
-  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never);
 
   await assert.rejects(
     () => service.updateDiningEventSchedule({}, 9, 901, "2002", 1, "2026-10-01T15:10:00.000Z", null),

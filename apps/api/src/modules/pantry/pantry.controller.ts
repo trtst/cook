@@ -19,6 +19,7 @@ import {
   CreateShoppingItemDto,
   DeleteShoppingListDto,
   CompleteShoppingListDto,
+  FridgeHistoryQueryDto,
   FridgeSummaryQueryDto,
   LeaveShoppingListDto,
   OperationDto,
@@ -30,6 +31,7 @@ import {
   ShoppingListQueryDto,
   ShoppingItemQueryDto,
   UpdateFridgeItemDto,
+  UpdateFridgeItemsDto,
   UpdateShoppingGroupStatusDto,
   UpdateShoppingListItemCheckDto,
   UpdateShoppingListStatusDto,
@@ -39,6 +41,10 @@ import {
   ApiOkArray,
   ApiOkModel,
   ApiOkPage,
+  FridgeConsumeModel,
+  FridgeBatchModel,
+  FridgeIngredientDetailModel,
+  FridgeIngredientModel,
   FridgeItemModel,
   FridgeSummaryModel,
   SubscribeMessageSendResultModel,
@@ -64,7 +70,7 @@ export class PantryController {
   constructor(@Inject(PantryService) private readonly pantryService: PantryService) {}
 
   @Get("fridge-items")
-  @ApiOkPage(FridgeItemModel, "分页查询当前用户自己的冰箱条目")
+  @ApiOkPage(FridgeIngredientModel, "按食材聚合查询当前用户自己的库存")
   listFridge(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
     return this.pantryService.listFridge(request.user.userId, query.page, query.pageSize).then(result => ok(result));
   }
@@ -73,6 +79,34 @@ export class PantryController {
   @ApiOkModel(FridgeSummaryModel, "读取当前用户冰箱摘要")
   getFridgeSummary(@Req() request: RequestWithUser, @Query() query: FridgeSummaryQueryDto) {
     return this.pantryService.getFridgeSummary(request.user.userId, query.days).then(result => ok(result));
+  }
+
+  @Get("fridge-items/batch/:itemId")
+  @ApiOkModel(FridgeIngredientDetailModel, "兼容旧库存批次深链，返回对应食材详情")
+  getFridgeItemDetail(
+    @Req() request: RequestWithUser,
+    @Param("itemId", ParseIntPipe) itemId: number
+  ) {
+    return this.pantryService.getFridgeItemDetail(request.user.userId, itemId).then(result => ok(result));
+  }
+
+  @Get("fridge-items/:ingredientId/history")
+  @ApiOkPage(FridgeBatchModel, "分页查询一个食材的历史库存批次")
+  listFridgeHistory(
+    @Req() request: RequestWithUser,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number,
+    @Query() query: FridgeHistoryQueryDto
+  ) {
+    return this.pantryService.listFridgeHistory(request.user.userId, ingredientId, query.page, query.pageSize).then(result => ok(result));
+  }
+
+  @Get("fridge-items/:ingredientId")
+  @ApiOkModel(FridgeIngredientDetailModel, "查询一个食材的当前库存批次")
+  getFridgeIngredientDetail(
+    @Req() request: RequestWithUser,
+    @Param("ingredientId", ParseIntPipe) ingredientId: number
+  ) {
+    return this.pantryService.getFridgeIngredientDetail(request.user.userId, ingredientId).then(result => ok(result));
   }
 
   @Post("fridge-items/:itemId/expiry-reminder")
@@ -109,6 +143,27 @@ export class PantryController {
       .then(result => ok(result));
   }
 
+  @Put("fridge-items/batch-state")
+  @ApiIdempotencyKey()
+  @ApiOkArray(FridgeItemModel, "在一个事务中更新多个冰箱库存批次")
+  updateFridgeItems(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateFridgeItemsDto
+  ) {
+    return this.pantryService
+      .updateFridgeItems(
+        request.user.userId,
+        body.itemIds,
+        operationId,
+        body.available,
+        body.quantityText ?? null,
+        body.exactQuantity ?? null,
+        body.exactUnitId ?? null
+      )
+      .then(result => ok(result));
+  }
+
   @Put("fridge-items/:itemId")
   @ApiIdempotencyKey()
   @ApiOkModel(FridgeItemModel, "更新一个冰箱条目")
@@ -123,6 +178,7 @@ export class PantryController {
         request.user.userId,
         itemId,
         operationId,
+        body.available,
         body.quantityText ?? null,
         body.exactQuantity ?? null,
         body.exactUnitId ?? null,
@@ -134,13 +190,15 @@ export class PantryController {
 
   @Post("fridge-items/consume")
   @ApiIdempotencyKey()
-  @ApiOkPage(FridgeItemModel, "本人确认库存扣减")
+  @ApiOkModel(FridgeConsumeModel, "按食材总量扣减本人库存")
   consumeFridgeItems(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
     @Body() body: ConsumeFridgeItemsDto
   ) {
-    return this.pantryService.consumeFridgeItems(request.user.userId, operationId, body.itemIds).then(result => ok(result));
+    return this.pantryService
+      .consumeFridgeStock(request.user.userId, operationId, body.ingredientId, body.exactQuantity, body.exactUnitId)
+      .then(result => ok(result));
   }
 
   @Get("shopping-items")
