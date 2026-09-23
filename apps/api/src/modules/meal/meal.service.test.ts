@@ -57,6 +57,109 @@ test("dining-event share token is stable per invite and rejects tampering", () =
   assert.equal(parseDiningEventShareInviteId(`${token}x`), null);
 });
 
+test("cancelling an unaccepted dining event expires invites and releases its plan", async () => {
+  const inviteUpdates: unknown[] = [];
+  let event = {
+    id: 82,
+    userId: 9,
+    mealPlanItemId: 501,
+    status: "CONFIRMED",
+    scheduledAt: new Date("2026-10-01T12:00:00.000Z"),
+    completedAt: null,
+    version: 3,
+    participants: [{ userId: 10, status: "INVITED" }]
+  };
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    diningEvent: {
+      findUnique: async () => event,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        event = { ...event, ...data, version: event.version + 1 };
+        return event;
+      }
+    },
+    diningEventShareInvite: {
+      updateMany: async (args: unknown) => {
+        inviteUpdates.push(args);
+        return { count: 1 };
+      }
+    }
+  };
+  const service = new MealService(
+    { $transaction: async <T>(callback: (db: typeof tx) => Promise<T>) => callback(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never
+  );
+  (service as any).toDiningEventSummary = (row: typeof event) => ({
+    id: row.id,
+    status: row.status,
+    planItemId: row.mealPlanItemId
+  });
+
+  const result = await (service as any).cancelDiningEvent(9, 82, "1001");
+
+  assert.deepEqual(result, { id: 82, status: "CANCELLED", planItemId: null });
+  assert.equal(event.status, "CANCELLED");
+  assert.equal(event.mealPlanItemId, null);
+  assert.equal(inviteUpdates.length, 1);
+  const inviteUpdate = inviteUpdates[0] as any;
+  assert.deepEqual(inviteUpdate.where, {
+    diningEventId: 82,
+    status: { in: ["ACTIVE", "OPENED"] }
+  });
+  assert.equal(inviteUpdate.data.status, "EXPIRED");
+  assert.ok(inviteUpdate.data.expiredAt instanceof Date);
+});
+
+test("confirming a menu does not create shopping items before the user chooses to shop", async () => {
+  const pantryCalls: unknown[] = [];
+  const plan = {
+    id: 501,
+    status: "CONFIRMED",
+    dishes: [{ id: 701 }],
+    version: 3,
+    menuLockedAt: new Date("2026-09-24T08:00:00.000Z"),
+    diningEvent: null
+  };
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    mealPlanItem: {
+      update: async () => plan
+    }
+  };
+  const service = new MealService(
+    { $transaction: async <T>(callback: (db: typeof tx) => Promise<T>) => callback(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    { syncPlanShoppingGapInTransaction: async (...args: unknown[]) => pantryCalls.push(args) } as never
+  );
+  (service as any).getOwnedMealPlanOrThrow = async () => plan;
+  (service as any).getMealPlanOrThrow = async () => plan;
+  (service as any).toMealPlanSummary = () => ({ id: plan.id, version: plan.version });
+
+  const result = await service.confirmMealPlanMenu(9, plan.id, "1001", plan.version);
+
+  assert.deepEqual(result, { id: plan.id, version: plan.version });
+  assert.deepEqual(pantryCalls, []);
+});
+
 test("dining memory code token is stable per event and rejects tampering", () => {
   const token = createDiningMemoryShareToken(82);
 
@@ -517,7 +620,7 @@ function createMealAssistantService(prisma = new FakeMealAssistantPrisma(), acce
   return {
     prisma,
     access,
-    service: new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, access as never)
+    service: new MealService(prisma as never, {} as never, {} as never, {} as never, {} as never, access as never, {} as never)
   };
 }
 

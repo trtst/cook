@@ -1075,6 +1075,8 @@ interface UpdateTasteProfileRequest {
 
 ### 勋章、计划、饭局与购物
 
+> 2026-09-24 低维护 V1 说明：当前主路径只生成固定菜谱的完整准备需求，购物清单只勾选“已买”，购买与做饭只留下行为痕迹，不读取库存差额、不创建预占、不执行采购入库或自动扣减。下文冰箱批次、库存预占、`UNKNOWN / NEED_CONFIRM` 和 `/shopping-lists/{listId}/complete` 保留为历史兼容能力，不是新客户端主路径。
+
 ```text
 GET  /users/me/medals
 GET  /users/me/cook-assistant-usage
@@ -1106,6 +1108,7 @@ POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
 POST /dining-events/{eventId}/my-note
 POST /dining-events/{eventId}/complete
+POST /dining-events/{eventId}/cancel
 GET  /fridge-items
 POST /fridge-items
 PUT  /fridge-items/{itemId}
@@ -1144,6 +1147,8 @@ POST /shopping-lists/{listId}/leave
 GET  /shopping-shares/{shareToken}
 POST /shopping-shares/{shareToken}/join
 GET  /shopping-gap
+GET  /meal-plans/{planItemId}/shopping-gap
+GET  /dining-events/{eventId}/shopping-gap
 POST /dining-events/{eventId}/shopping-gap
 ```
 
@@ -1512,7 +1517,7 @@ interface ConfirmMealPlanMenuRequest {
 }
 ```
 
-`POST /meal-plans/{planItemId}/confirm-menu` 只允许计划 owner 调用，要求当前餐次至少已有一道菜，且必须提交最新 `expectedVersion`。成功后服务端把 `MealPlanSummary.menuLocked` 置为 `true`，并同步把当前未结束饭局推进到 `CONFIRMED`。菜单固定后，不再允许通过 `POST /meal-plans` 或 `POST /meal-plans/items` 修改结构性内容，包括换菜、增删、排序和切换菜谱版本；但计划标题、饭局时间、餐次时间展示仍可继续调整。确认成功同时在同一事务内按当前本人冰箱重新计算菜谱缺口：只把 `MISSING / SHORTAGE` 的确定缺口写入本人当前或新建的 `ACTIVE` 采购清单；`UNKNOWN`（有库存但数量未记录或单位不可比较）保留为待确认，不自动写成确定缺口；已有来源键、手动项和用户移除来源墓碑不被覆盖。没有确定缺口时不为了自动流程创建清单。来源键固定为 `plan:{planItemId}:recipe:{sourceVersionId}:ingredient:{ingredientId}`，同食材同单位只在展示层合并，来源明细仍保留。
+`POST /meal-plans/{planItemId}/confirm-menu` 只允许计划 owner 调用，要求当前餐次至少已有一道菜，且必须提交最新 `expectedVersion`。成功后服务端把 `MealPlanSummary.menuLocked` 置为 `true`，并同步把当前未结束饭局推进到 `CONFIRMED`。菜单固定后，不再允许通过 `POST /meal-plans` 或 `POST /meal-plans/items` 修改结构性内容，包括换菜、增删、排序和切换菜谱版本；但计划标题、饭局时间、餐次时间展示仍可继续调整。确认成功只锁定菜单，不创建采购清单、不写购物项，也不读取冰箱库存；详情页展示当前固定菜谱的完整准备需求，用户点击“去采购”后才生成完整需求清单。来源需求按同食材且同单位合并，`适量` 保留为文字，不伪造精确数量。
 
 做饭完成和撤销使用独立写口：
 
@@ -1887,7 +1892,7 @@ interface AddMealPlanItemRequest {
 4. 本功能当前不新增随机草稿表、随机历史表、随机候选缓存表。
 5. 计划写入只接受 `menuItems[]`，不保留 `recipeIds[]` 兼容输入。
 
-购物域当前改成“共享清单头 + 清单项”模型。`/shopping-items` 不再承担购物首页职责，只保留为个人购物事实查询接口，供超市模式、采购历史和底层兼容读取使用。购物清单首页与详情改读新的 `/shopping-lists*` 契约。
+购物域当前改成“共享清单头 + 清单项”模型。`/shopping-items` 不再承担购物首页职责，只保留为个人购物事实查询接口，供超市模式、采购历史和底层兼容读取使用。购物清单首页与详情改读新的 `/shopping-lists*` 契约。低维护 V1 主路径只使用完整需求写入、`check`、`remove` 和来源查看；旧库存动作与完成入库接口不得由新页面调用。
 
 `ShoppingItemSummary` 当前统一返回：
 
@@ -1907,8 +1912,8 @@ interface ShoppingItemSummary {
 
 type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
 type ShoppingListRole = "OWNER" | "COLLABORATOR";
-type ShoppingListItemFridgeAction = "APPLY" | "UNDO" | "CONFIRM_ENOUGH";
-type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
+type ShoppingListItemFridgeAction = "APPLY" | "UNDO" | "CONFIRM_ENOUGH"; // 历史兼容
+type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO"; // 历史兼容
 
 interface ShoppingListStatusCount {
   status: ShoppingListStatus;
@@ -1956,18 +1961,18 @@ interface ShoppingListDetailItem {
   categoryName: string | null;
   imageUrl: string | null;
   quantityText: string | null;
-  requiredQuantityText: string | null;
-  remainingQuantityText: string | null;
-  appliedInventoryQuantityText: string | null;
+  requiredQuantityText: string | null; // V1 完整准备需求
+  remainingQuantityText: string | null; // 历史兼容字段，新 V1 不读取
+  appliedInventoryQuantityText: string | null; // 历史兼容字段，新 V1 不读取
   note: string | null;
   status: "OPEN" | "CHECKED" | "REMOVED";
   fridgeText: string | null;
-  inventoryStatus: "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
-  inventoryApplied: boolean;
-  inventoryCovered: boolean;
-  fridgeStatusText: string | null;
-  fridgeActionLabel: string | null;
-  fridgeActionMode: ShoppingListItemFridgeActionMode;
+  inventoryStatus: "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN"; // 历史兼容字段
+  inventoryApplied: boolean; // 历史兼容字段
+  inventoryCovered: boolean; // 历史兼容字段
+  fridgeStatusText: string | null; // 历史兼容字段
+  fridgeActionLabel: string | null; // 历史兼容字段
+  fridgeActionMode: ShoppingListItemFridgeActionMode; // 历史兼容字段
   checkedAt: IsoDateTime | null;
   updatedAt: IsoDateTime;
   sources: ShoppingItemSourceSummary[];
@@ -2036,12 +2041,9 @@ interface CreateShoppingListRequest {
 `GET /shopping-lists/{listId}` 返回单张清单详情，当前默认按食材项聚合展示，不强制提供“按菜谱 / 按食材”双视图。每个食材项必须保留来源摘要，至少能表达它来自哪些菜谱、计划或饭局。详情页额外下发：
 
 1. `categoryName`、`imageUrl`：供食材卡片直接展示分类和封面；没有图片时客户端显示占位图。
-2. `quantityText` 与 `requiredQuantityText` 只表示原始采购需求，不因点击 `已购` 或 `用库存` 改写。
-3. `remainingQuantityText` 表示扣除当前清单库存预占后的待买量；`appliedInventoryQuantityText` 表示本清单已经预占的库存量。
-4. `fridgeText` 显示当前可用库存摘要，`inventoryStatus` 明确表示无库存、库存足够、库存不足或数量待确认；`inventoryApplied / inventoryCovered` 是按钮和进度判断使用的事实状态。
-5. `fridgeStatusText` 只负责展示 `库存不足，还需买 X`、`库存足够，不买了` 或 `库存待确认`，不能作为客户端状态判断依据。
-6. `fridgeActionLabel`、`fridgeActionMode`：驱动详情页上的 `用库存 / 确认库存 / 撤销` 按钮；当前只对清单创建者开放，协作者固定返回 `NONE`，且不读取创建者的冰箱精确数量。
-7. 清单摘要里的 `progressDoneCount / progressTotalCount` 按合并后的食材组统计；组内所有采购项均已购或 `inventoryCovered = true` 才算完成。
+2. `quantityText` 与 `requiredQuantityText` 表示完整准备需求，不因点击 `已买` 改写，也不扣除冰箱数量。
+3. `remainingQuantityText`、`appliedInventoryQuantityText`、`fridgeText`、`inventoryStatus`、`inventoryApplied`、`inventoryCovered`、`fridgeStatusText`、`fridgeActionLabel`、`fridgeActionMode` 仅为历史兼容回包，新 V1 页面不得据此展示库存决策。
+4. 清单摘要里的 `progressDoneCount / progressTotalCount` 按合并后的食材组统计；组内所有采购项均已勾选 `CHECKED` 才算完成。
 
 `POST /shopping-lists/{listId}/rename` 只允许清单创建者调用：
 
@@ -2078,7 +2080,7 @@ interface AddRecipeToShoppingListRequest {
 当请求携带 `planItemId` 时，服务端必须校验该计划属于当前用户，且该计划下确实包含本次写入的 `recipeId + sourceVersionId`。写入后的清单项来源摘要继续保留菜谱字段，同时把 `sourceType` 记为 `PLAN`、`planItemId` 记为对应计划，供后续按计划或按菜谱聚合展示。
 若这顿餐次已经绑定过另一张采购清单，服务端直接返回冲突，不允许把同一顿餐次改绑到别的清单；若本次写入的就是当前已绑定清单，则允许只补新增来源，不重复改绑。
 
-`POST /shopping-lists/{listId}/items/from-plan` 用于把一顿计划里的确定采购缺口一次性写入购物清单，避免前端逐菜循环时出现部分成功：
+`POST /shopping-lists/{listId}/items/from-plan` 用于把一顿计划里的完整准备需求一次性写入购物清单，避免前端逐菜循环时出现部分成功：
 
 ```ts
 interface AddPlanToShoppingListRequest {
@@ -2086,10 +2088,10 @@ interface AddPlanToShoppingListRequest {
 }
 ```
 
-服务端必须校验该计划属于当前用户，并按当前固定菜谱版本和本人冰箱重新计算缺口：只写 `MISSING / SHORTAGE`，按精确可比较单位写入确定缺口量；`UNKNOWN` 不写入确定缺口，`READY`、已有来源键和用户移除来源墓碑跳过；手动来源项不被修改。任一菜谱版本校验失败时整单回滚，不允许留下部分成功的购物项。
-写入成功后，服务端会把这顿餐次绑定到当前采购清单，并在后续 `MealPlanSummary / DiningEventSummary` 里回传 `shoppingListId / shoppingListName / shoppingListStatus`，供前台优先回跳到已绑定清单。若该餐次已绑定别的采购清单，则返回冲突；若已绑定当前清单，则只补当前来源键尚不存在的缺口，不重复累计已有来源。来源键固定为 `plan:{planItemId}:recipe:{sourceVersionId}:ingredient:{ingredientId}`。
+服务端必须校验该计划属于当前用户，并读取当前固定菜谱版本生成完整需求：不读取或扣除冰箱库存；同食材且同单位合并数量，`适量` 保留原文字；已有来源键和用户移除来源墓碑跳过，手动来源项不被修改。任一菜谱版本或当前食材状态校验失败时整单回滚，不允许留下部分成功的购物项。
+写入成功后，服务端会把这顿餐次绑定到当前采购清单，并在后续 `MealPlanSummary / DiningEventSummary` 里回传 `shoppingListId / shoppingListName / shoppingListStatus`，供前台优先回跳到已绑定清单。若该餐次已绑定别的采购清单，则返回冲突；若已绑定当前清单，则只补当前来源键尚不存在的需求，不重复累计已有来源。来源键以计划 ID 为前缀，详情读取仍可反查计划来源。
 
-`POST /shopping-lists/{listId}/items/from-gap` 用于把缺口页当前选中的食材写入指定购物清单：
+`POST /shopping-lists/{listId}/items/from-gap` 用于把需求页当前选中的食材写入指定购物清单：
 
 ```ts
 type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
@@ -2100,9 +2102,9 @@ interface AddShoppingGapItemsRequest {
 }
 ```
 
-服务端必须按当前登录用户当下的饭局与冰箱重新计算缺口，只接受当前时间层里仍有效的 `gapKeys`；写入时按真实来源饭局拆成 `EVENT` 来源购物项，同一张清单里已存在相同 `sourceKey` 的未完成缺口项时跳过，不重复堆叠。
+服务端必须按当前登录用户当下的饭局菜单重新生成完整需求，只接受当前时间层里仍有效的 `gapKeys`；写入时按真实来源饭局拆成 `EVENT` 来源购物项，同一张清单里已存在相同 `sourceKey` 的来源项（包括已买或用户移除的墓碑）时跳过，不重复堆叠，也不读取冰箱库存。
 
-`POST /shopping-lists/{listId}/items/from-event-gap` 用于把某个饭局当前仍缺的食材写入指定购物清单，供饭局详情或采购清单详情里的“加餐次”定向写入：
+`POST /shopping-lists/{listId}/items/from-event-gap` 用于把某个饭局当前完整需求写入指定购物清单，供饭局详情定向写入：
 
 ```ts
 interface AddEventGapToShoppingListRequest {
@@ -2110,7 +2112,7 @@ interface AddEventGapToShoppingListRequest {
 }
 ```
 
-服务端必须校验该饭局属于当前登录用户，并只按这一个饭局的当前菜单与冰箱状态重新计算缺口；不能把同一时间层里其他饭局碰巧同名同单位的食材一起写入。
+服务端必须校验该饭局属于当前登录用户，并只按这一个饭局的当前菜单重新生成完整需求；不能把同一时间层里其他饭局碰巧同名同单位的食材一起写入，也不读取冰箱库存。
 若该饭局对应的餐次尚未绑定采购清单，写入成功后同样把这顿餐次绑定到当前清单；若此前已绑定其他清单，则返回冲突，不允许跨清单改绑。
 
 `POST /shopping-lists/{listId}/items/{itemId}/check` 用于勾选或取消采购完成：
@@ -2122,11 +2124,13 @@ interface UpdateShoppingListItemCheckRequest {
 }
 ```
 
-已被库存完全覆盖的购物项当前不能再走这条勾选链路；它们通过库存动作直接变为“无需购买”。
+低维护 V1 中所有 `ACTIVE` 清单项都通过这条勾选链路标记 `已买`；不根据冰箱库存禁用或替代勾选。
 
 这条接口成功后不再回整份 `ShoppingListDetail`，而是返回 `ShoppingListItemPatchResponse`：只带清单新 `version`、顶部进度，以及当前变更的购物项。
 
-`POST /shopping-lists/{listId}/items/{itemId}/fridge` 用于为当前购物项创建或撤销个人库存预占：
+#### 历史兼容：购物项库存预占
+
+`POST /shopping-lists/{listId}/items/{itemId}/fridge` 仅供旧客户端兼容读取和迁移期间的旧数据操作，新 V1 客户端不得调用：
 
 ```ts
 interface ApplyShoppingListItemFridgeRequest {
@@ -2197,7 +2201,9 @@ interface DeleteShoppingListRequest {
 
 删除后，这张清单及其清单项不再出现在共享清单首页、旧购物记录页或超市模式兼容链路里；已入库的冰箱事实保留，但来源引用允许因源清单删除而置空。
 
-`POST /shopping-lists/{listId}/complete` 不是简单改状态，而是“完成采购并入库”的事务操作。低摩擦主路径直接提交空 `entries`，不再进入独立入库确认；需要精确补充数量或到期时间时，才由高级入口提交明细：
+#### 历史兼容：完成采购入库
+
+`POST /shopping-lists/{listId}/complete` 是旧客户端的“完成采购并入库”事务接口，不属于低维护 V1 主路径；新客户端只更新清单项的 `CHECKED` 状态，不提交 `entries` 入库：
 
 ```ts
 interface CompleteShoppingListRequest {
@@ -2295,21 +2301,25 @@ interface ShoppingSharePreview {
 
 `handledAt` 在 `ACCEPTED / DECLINED` 时返回处理时间，否则为 `null`。`POST /shopping-list-invites/{inviteId}/accept` 由被邀请人确认加入；若用户已经通过好友链接先加入同一张清单，服务端会把这条待确认邀请同步结清为 `ACCEPTED`，避免首页继续残留旧卡片。`POST /shopping-list-invites/{inviteId}/decline` 只把当前邀请标记为 `DECLINED`，不影响该清单后续重新发起新邀请。
 
-`GET /shopping-gap` 当前返回“当前用户待处理饭局”的时间分层缺口，不再要求先选某一场饭局。响应固定分成 `NEXT_48_HOURS / NEXT_7_DAYS / LATER` 三段，每段按食材平铺，单条食材缺口继续只在“同食材且同精确单位”下合法合并数量，并返回：
+`GET /shopping-gap` 当前返回“当前用户待处理饭局”的时间分层准备需求，不再要求先选某一场饭局。响应固定分成 `NEXT_48_HOURS / NEXT_7_DAYS / LATER` 三段，每段按食材平铺，单条食材需求只在“同食材且同精确单位”下合并数量，并返回：
 
-1. `key`：当前时间层内该条缺口的稳定键，供后续 `from-gap` 写入使用。
+1. `key`：当前时间层内该条需求的稳定键，供后续 `from-gap` 写入使用。
 2. `ingredientId / name / quantityText`：食材主视角摘要。
 3. `sourceCount / eventCount`：当前条目覆盖了几道菜、几场饭局。
-4. `events[]`：每场来源饭局的 `eventId / title / scheduledAt / recipeTitles[]`，用于页面展示“这条缺口对应哪些饭局、哪些菜谱”。
+4. `events[]`：每场来源饭局的 `eventId / title / scheduledAt / recipeTitles[]`，用于页面展示“这条需求对应哪些饭局、哪些菜谱”。
+
+`GET /meal-plans/{planItemId}/shopping-gap` 只预览当前用户指定计划餐次的完整准备需求，不写入购物清单。服务端校验计划归属，读取该餐次固定菜谱版本并按当前食材状态校验后生成需求；不读取或扣除冰箱库存。响应为 `ShoppingItemSummary[]`，数组长度就是该餐次当前需要采购的食材项数量，供计划详情页展示准备数量。没有需求时返回空数组。
+
+`GET /dining-events/{eventId}/shopping-gap` 只预览当前用户指定饭局的完整准备需求，不写入购物清单。服务端校验饭局归属，按当前菜单的固定菜谱版本生成需求；不读取或扣除冰箱库存。响应为 `ShoppingItemSummary[]`，供饭局详情页展示当前饭局的准备数量和菜谱来源。没有需求时返回空数组。
 
 `POST /dining-events/{eventId}/shopping-gap` 仍保持单饭局写入旧个人购物事实链路的职责，不扩成整包写入所有饭局，也不作为新共享购物清单的主写入口。
 
-缺口合并规则当前保持：
+准备需求合并规则当前保持：
 
-1. 只围绕当前用户自己的冰箱来判断缺口。
+1. 只围绕固定菜谱版本生成需求，不以冰箱库存判断是否需要购买。
 2. 相同食材只有在相同精确单位下才自动合并数量。
-3. `sourceCount` 返回该条缺口实际覆盖了几道菜。
-4. 模糊用量保持逐项提示，不自动相加成虚假的精确数量。
+3. `sourceCount` 返回该条需求实际覆盖了几道菜。
+4. 模糊用量保持文字提示，不自动相加成虚假的精确数量。
 
 共享清单当前不要求实时协同。详情页使用“操作后刷新 + 页面重进刷新 + 下拉刷新 + 轻轮询”即可；所有写接口必须提交 `version`，冲突时返回业务 `code=409`，提示客户端刷新后重试。
 
@@ -2441,6 +2451,8 @@ interface UpdateDiningEventWishSupportRequest {
 `POST /dining-events/{eventId}/wishes/{wishItemId}/menu` 用于饭局发起人把某道我想吃加入本次菜单，不接收额外请求体。`我想吃池` 只作为菜单确认参考，不改写个人购物、冰箱、带菜或菜谱所有权。
 
 `POST /dining-events/{eventId}/bring` 继续用于“我带菜”，请求体为 1～3 道不重复的 `recipeIds`，每次提交完整替换当前参与人的带菜集合；菜谱必须属于当前参与人并引用其固定版本。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
+
+`POST /dining-events/{eventId}/cancel` 只允许饭局发起人取消尚未到开饭时间、且没有任何 `ACCEPTED` 参与人的饭局。服务端在同一事务内将饭局置为 `CANCELLED`、立即让当前 `ACTIVE / OPENED` 分享邀请失效，并把已取消饭局与原计划解绑；原计划、已确认菜单和已取消饭局的菜单快照保留，不生成回忆、不派发完成勋章、不触发做饭库存消耗。取消后的同一计划可以再次创建新的饭局，已取消饭局本身不可恢复、不可完成；重复提交同一幂等键返回已取消摘要，重复使用其他幂等键也返回当前已取消摘要。
 
 `POST /dining-events/{eventId}/memory-shares` 用于在已到开饭时间或已完成的饭局上生成一张不可变餐桌回忆卡快照。当前只允许饭局发起人调用，请求体只接收：
 

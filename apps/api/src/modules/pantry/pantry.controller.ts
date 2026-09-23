@@ -302,7 +302,7 @@ export class PantryController {
 
   @Post("shopping-lists/:listId/items/from-gap")
   @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListDetailModel, "把缺口页选中的食材写入购物清单")
+  @ApiOkModel(ShoppingListDetailModel, "把需求页选中的食材写入购物清单")
   addGapItemsToShoppingList(
     @Req() request: RequestWithUser,
     @Param("listId", ParseIntPipe) listId: number,
@@ -316,7 +316,7 @@ export class PantryController {
 
   @Post("shopping-lists/:listId/items/from-event-gap")
   @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListDetailModel, "把某个饭局当前缺口写入指定购物清单")
+  @ApiOkModel(ShoppingListDetailModel, "把某个饭局当前完整需求写入指定购物清单")
   addEventGapToShoppingList(
     @Req() request: RequestWithUser,
     @Param("listId", ParseIntPipe) listId: number,
@@ -650,14 +650,32 @@ export class PantryController {
   }
 
   @Get("shopping-gap")
-  @ApiOkModel(ShoppingGapResponseModel, "预览当前用户待处理饭局汇总后的购物缺口")
+  @ApiOkModel(ShoppingGapResponseModel, "预览当前用户待处理饭局汇总后的准备需求")
   previewGap(@Req() request: RequestWithUser) {
     return this.pantryService.previewGap(request.user.userId).then(result => ok(result));
   }
 
+  @Get("meal-plans/:planItemId/shopping-gap")
+  @ApiOkArray(ShoppingItemModel, "预览指定餐次的完整准备需求")
+  previewPlanGap(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number
+  ) {
+    return this.pantryService.previewPlanGap(request.user.userId, planItemId).then(result => ok(result));
+  }
+
+  @Get("dining-events/:eventId/shopping-gap")
+  @ApiOkArray(ShoppingItemModel, "预览指定饭局的完整准备需求")
+  previewEventGap(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number
+  ) {
+    return this.pantryService.previewEventGap(request.user.userId, eventId).then(result => ok(result));
+  }
+
   @Post("dining-events/:eventId/shopping-gap")
   @ApiIdempotencyKey()
-  @ApiOkArray(ShoppingItemModel, "把某个饭局菜单缺口写入本人购物清单")
+  @ApiOkArray(ShoppingItemModel, "把某个饭局菜单完整需求写入本人购物清单")
   createGap(
     @Req() request: RequestWithUser,
     @Param("eventId", ParseIntPipe) eventId: number,

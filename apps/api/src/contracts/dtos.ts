@@ -2440,6 +2440,8 @@ export class RespondDiningEventDto extends OperationDto {
 
 export class CompleteDiningEventDto extends OperationDto {}
 
+export class CancelDiningEventDto extends OperationDto {}
+
 export class ChooseDiningEventWishRecipeDto extends OperationDto {
   @ApiProperty({ type: [Number], minItems: 1, maxItems: 3, uniqueItems: true })
   @Type(() => Number)

@@ -74,6 +74,35 @@ test("participant note endpoint and batch recipe contract are present", () => {
   assert.doesNotMatch(controllerSource, /参与人把一道菜加入当前饭局的我想吃池/);
 });
 
+test("dining event cancellation releases the plan for a later relaunch", () => {
+  const controllerSource = readFileSync(resolve(process.cwd(), "src/modules/meal/meal.controller.ts"), "utf8");
+  const dtoSource = readFileSync(resolve(process.cwd(), "src/contracts/dtos.ts"), "utf8");
+  const serviceSource = readFileSync(resolve(process.cwd(), "src/modules/meal/meal.service.ts"), "utf8");
+
+  assert.match(controllerSource, /dining-events\/:eventId\/cancel/);
+  assert.match(controllerSource, /cancelDiningEvent/);
+  assert.match(dtoSource, /class CancelDiningEventDto extends OperationDto/);
+
+  const cancelStart = serviceSource.indexOf("async cancelDiningEvent(");
+  const cancelEnd = serviceSource.indexOf("\n  async createDiningMemoryShare(", cancelStart);
+  const cancelSource = serviceSource.slice(cancelStart, cancelEnd);
+  assert.match(cancelSource, /current\.participants\.some\(item => item\.status === "ACCEPTED"\)/);
+  assert.match(cancelSource, /isDiningEventTimeUp\(current\)/);
+  assert.match(cancelSource, /status: "CANCELLED"/);
+  assert.match(cancelSource, /mealPlanItemId: null/);
+  assert.match(cancelSource, /status: \{ in: \["ACTIVE", "OPENED"\] \}/);
+
+  const createStart = serviceSource.indexOf("async createDiningEvent(");
+  const createEnd = serviceSource.indexOf("\n  async createDirectDiningEvent(", createStart);
+  const createSource = serviceSource.slice(createStart, createEnd);
+  assert.match(createSource, /plan\.diningEvent && plan\.diningEvent\.status !== "CANCELLED"/);
+
+  const directStart = serviceSource.indexOf("async createDirectDiningEvent(");
+  const directEnd = serviceSource.indexOf("\n  async updateDiningEventCover(", directStart);
+  const directSource = serviceSource.slice(directStart, directEnd);
+  assert.match(directSource, /plan\?\.diningEvent && plan\.diningEvent\.status !== "CANCELLED"/);
+});
+
 test("bring writes enforce event and participant state and recalculate the participant ledger", () => {
   const serviceSource = readFileSync(resolve(process.cwd(), "src/modules/meal/meal.service.ts"), "utf8");
   const start = serviceSource.indexOf("async chooseBringRecipe(");

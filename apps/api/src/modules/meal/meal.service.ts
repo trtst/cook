@@ -1635,7 +1635,6 @@ export class MealService {
       }
 
       const nextPlan = await this.getMealPlanOrThrow(tx, plan.id);
-      await this.pantryService.syncPlanShoppingGapInTransaction(tx, userId, plan.id, operationId);
       if (shouldLockMenu) {
         await upsertStorageLedger(tx, userId, "MEAL", nextPlan.id, sizeOfJson(nextPlan));
       }
@@ -1778,7 +1777,7 @@ export class MealService {
       });
       if (!plan || plan.userId !== userId) throw new NotFoundException("计划不存在");
       if (plan.status === "COMPLETED") throw new ConflictException("已完成餐次不能再发起饭局");
-      if (plan.diningEvent) throw new ConflictException("该餐次已发起饭局");
+      if (plan.diningEvent && plan.diningEvent.status !== "CANCELLED") throw new ConflictException("该餐次已发起饭局");
 
       const normalizedLocation = normalizeOptionalText(location);
       const eventRequestHash = `${planItemId}:${scheduledAt}:${normalizedLocation ?? ""}`;
@@ -1862,7 +1861,7 @@ export class MealService {
       if (plan?.status === "COMPLETED") {
         throw new ConflictException("已完成餐次不能再发起饭局");
       }
-      if (plan?.diningEvent) {
+      if (plan?.diningEvent && plan.diningEvent.status !== "CANCELLED") {
         throw new ConflictException("该餐次已发起饭局");
       }
 
@@ -2851,6 +2850,60 @@ export class MealService {
 
       const result = this.toDiningEventSummary(event, userId);
       await completeIdempotentOperation(tx, operationId, "dining-event:complete", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async cancelDiningEvent(userId: UUID, eventId: UUID, operationId: OperationId) {
+    const requestHash = String(eventId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:cancel", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:cancel", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const current = await this.loadDiningEventRow(tx, eventId);
+      if (!current || current.userId !== userId) throw new NotFoundException("饭局不存在");
+      if (current.status === "CANCELLED") {
+        const result = this.toDiningEventSummary(current, userId);
+        await completeIdempotentOperation(tx, operationId, "dining-event:cancel", userId, null, requestHash, result);
+        return result;
+      }
+      if (current.status === "COMPLETED") {
+        throw new ConflictException("已完成饭局不能取消");
+      }
+      if (isDiningEventTimeUp(current)) {
+        throw new ConflictException("已到开饭时间的饭局不能取消");
+      }
+      if (current.participants.some(item => item.status === "ACCEPTED")) {
+        throw new ConflictException("已有参与人接受，不能取消饭局");
+      }
+
+      const cancelledAt = new Date();
+      await tx.diningEvent.update({
+        where: { id: current.id },
+        data: {
+          status: "CANCELLED",
+          mealPlanItemId: null,
+          shareTokenExpiresAt: cancelledAt,
+          version: { increment: 1 }
+        }
+      });
+      await tx.diningEventShareInvite.updateMany({
+        where: {
+          diningEventId: current.id,
+          status: { in: ["ACTIVE", "OPENED"] }
+        },
+        data: {
+          status: "EXPIRED",
+          expiredAt: cancelledAt
+        }
+      });
+
+      const event = await this.loadDiningEventRow(tx, current.id);
+      if (!event) throw new NotFoundException("饭局不存在");
+      const result = this.toDiningEventSummary(event, userId);
+      await completeIdempotentOperation(tx, operationId, "dining-event:cancel", userId, null, requestHash, result);
       return result;
     });
   }

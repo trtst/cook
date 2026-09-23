@@ -10,6 +10,7 @@ import {
   AddMealPlanItemDto,
   ChooseBringRecipeDto,
   ChooseDiningEventWishRecipeDto,
+  CancelDiningEventDto,
   CompleteCookingDto,
   CompleteDiningEventDto,
   ConfirmMealPlanMenuDto,
@@ -608,6 +609,20 @@ export class MealController {
     @Body() _body: CompleteDiningEventDto
   ) {
     return this.mealService.completeDiningEvent(request.user.userId, eventId, operationId).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/cancel")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "饭局发起人取消一场尚未开始且无人接受的饭局")
+  cancelDiningEvent(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CancelDiningEventDto
+  ) {
+    return this.mealService.cancelDiningEvent(request.user.userId, eventId, operationId).then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/memory-shares")

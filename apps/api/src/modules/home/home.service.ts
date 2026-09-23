@@ -610,6 +610,7 @@ export class HomeService {
     const items = recipes
       .map(item => this.toHomeFridgeRecipe(item, fridgeIngredientIds, ownedRecipeMap))
       .filter((item): item is HomeFridgeRecipeItem => Boolean(item))
+      .filter(item => item.kind !== "INSPIRATION" || item.ownedRecipeId === null)
       .sort((left, right) => {
         const fitDiff = fridgeFitRank(right.fridgeFit) - fridgeFitRank(left.fridgeFit);
         if (fitDiff !== 0) return fitDiff;
