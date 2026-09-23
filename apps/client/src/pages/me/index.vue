@@ -1031,16 +1031,6 @@ function showComingSoon(name: string) {
 	gap: var(--space-lg);
 }
 
-.membership-card,
-.service-list,
-.knowledge-grid {
-	border-radius: var(--radius-xs);
-	background: var(--material-card-bg);
-	box-shadow: var(--material-card-shadow);
-	-webkit-backdrop-filter: var(--material-card-filter);
-	backdrop-filter: var(--material-card-filter);
-}
-
 .membership-card {
 	min-width: 0;
 	padding: 26rpx 24rpx 22rpx;
@@ -1129,7 +1119,6 @@ function showComingSoon(name: string) {
 
 .service-list {
 	margin-top: var(--space-lg);
-	padding: 0 var(--space-md);
 	overflow: hidden;
 }
 
