@@ -41,6 +41,7 @@ const activeMenu = computed(() => {
     route.path !== "/recipes/list" &&
     route.path !== "/recipes/reports" &&
     route.path !== "/recipes/categories" &&
+    route.path !== "/recipes/wiki" &&
     route.path !== "/recipes/imports" &&
     route.path !== "/recipes/pending"
   ) {
@@ -48,6 +49,11 @@ const activeMenu = computed(() => {
       return "/recipes/imports";
     }
     return "/recipes/list";
+  }
+  if (route.path.startsWith("/ingredients/")) {
+    if (route.path.startsWith("/ingredients/imports") || route.path.startsWith("/ingredients/import-items")) {
+      return "/ingredients/imports";
+    }
   }
   if (route.path.startsWith("/membership/")) {
     return route.path;
@@ -131,6 +137,7 @@ function triggerHeaderRefresh() {
           </template>
           <el-menu-item index="/recipes/categories">系统菜谱分类</el-menu-item>
           <el-menu-item index="/recipes/list">系统菜谱</el-menu-item>
+          <el-menu-item index="/recipes/wiki">Wiki 补充</el-menu-item>
           <el-menu-item index="/recipes/imports">菜谱导入中心</el-menu-item>
           <el-menu-item index="/recipes/pending">待审核菜谱</el-menu-item>
           <el-menu-item index="/recipes/reports">菜谱举报</el-menu-item>
@@ -143,6 +150,7 @@ function triggerHeaderRefresh() {
           <el-menu-item index="/ingredients/categories">系统食材分类</el-menu-item>
           <el-menu-item index="/ingredients/items">系统食材</el-menu-item>
           <el-menu-item index="/ingredients/nutrition">食材营养表</el-menu-item>
+          <el-menu-item index="/ingredients/imports">食材导入中心</el-menu-item>
           <el-menu-item index="/ingredients/pending">待审核食材</el-menu-item>
           <el-menu-item index="/ingredients/feedbacks">食材纠错</el-menu-item>
           <el-menu-item index="/ingredients/units">单位</el-menu-item>

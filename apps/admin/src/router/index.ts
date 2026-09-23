@@ -134,6 +134,12 @@ const router = createRouter({
           meta: { title: "系统菜谱" }
         },
         {
+          path: "recipes/wiki",
+          name: "recipe-wiki",
+          component: () => import("@/pages/RecipeWikiPage.vue"),
+          meta: { title: "Wiki 补充" }
+        },
+        {
           path: "recipes/imports",
           name: "recipe-import-jobs",
           component: () => import("@/pages/RecipeImportJobsPage.vue"),
@@ -196,6 +202,24 @@ const router = createRouter({
           name: "ingredient-nutrition",
           component: () => import("@/pages/NutritionFoodsPage.vue"),
           meta: { title: "食材营养表" }
+        },
+        {
+          path: "ingredients/imports",
+          name: "ingredient-import-jobs",
+          component: () => import("@/pages/IngredientImportJobsPage.vue"),
+          meta: { title: "食材导入中心" }
+        },
+        {
+          path: "ingredients/imports/:jobId",
+          name: "ingredient-import-job-detail",
+          component: () => import("@/pages/IngredientImportJobDetailPage.vue"),
+          meta: { title: "食材导入任务详情" }
+        },
+        {
+          path: "ingredients/import-items/:itemId",
+          name: "ingredient-import-item-detail",
+          component: () => import("@/pages/IngredientImportItemPage.vue"),
+          meta: { title: "食材导入条目审核" }
         },
         {
           path: "ingredients/pending",
