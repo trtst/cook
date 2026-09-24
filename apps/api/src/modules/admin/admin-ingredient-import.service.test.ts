@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ConflictException, BadRequestException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
-import { AdminIngredientImportService, buildIngredientImportRequestHash, matchIngredientImportItem, toIngredientImportItemSummary, type IngredientMatchCandidate } from "./admin-ingredient-import.service";
+import { AdminIngredientImportService, buildIngredientImportRequestHash, matchIngredientBody, matchIngredientImportItem, toIngredientImportItemSummary, type IngredientMatchCandidate } from "./admin-ingredient-import.service";
 
 function candidate(overrides: Partial<IngredientMatchCandidate> = {}): IngredientMatchCandidate {
   return {
@@ -15,6 +15,33 @@ function candidate(overrides: Partial<IngredientMatchCandidate> = {}): Ingredien
     ...overrides
   };
 }
+
+test("resolves an active alias over a disabled canonical name", () => {
+  const result = matchIngredientBody(
+    {
+      name: "旧土豆",
+      aliases: ["新土豆"],
+      categoryCode: "PRODUCE",
+      defaultUnitName: null,
+      proteinType: null,
+      isStaple: false,
+      isSpicyIngredient: false,
+      imageUrl: null,
+      nutrition: null
+    },
+    [
+      candidate({ id: 100, name: "旧土豆", aliases: [], status: "DISABLED" }),
+      candidate({ id: 200, name: "新土豆", aliases: [], status: "ACTIVE" })
+    ]
+  );
+
+  assert.deepEqual(result, {
+    kind: "MATCHED",
+    matchType: "ALIAS",
+    ingredientId: 200,
+    ingredientName: "新土豆"
+  });
+});
 
 test("matches an imported alias to the canonical active ingredient", () => {
   const result = matchIngredientImportItem("马铃薯", [candidate()]);

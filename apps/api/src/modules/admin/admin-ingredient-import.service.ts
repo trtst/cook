@@ -46,6 +46,11 @@ const statusPriority: Record<IngredientMatchCandidate["status"], number> = {
   DISABLED: 1
 };
 
+type IngredientCandidateMatch = {
+  candidate: IngredientMatchCandidate;
+  matchType: "EXACT_NAME" | "ALIAS";
+};
+
 export function buildIngredientImportRequestHash(sources: Array<{ sourcePath: string; jsonText: string }>) {
   const hash = createHash("sha256");
   for (const source of sources) {
@@ -62,8 +67,12 @@ function isUniqueConstraintError(error: unknown) {
 }
 
 export function matchIngredientImportItem(name: string, candidates: IngredientMatchCandidate[]): IngredientMatchResult {
+  return resolveIngredientMatches(collectIngredientMatches(name, candidates), candidates);
+}
+
+function collectIngredientMatches(name: string, candidates: IngredientMatchCandidate[]): IngredientCandidateMatch[] {
   const searchKey = buildSearchKey(name);
-  const matches = candidates
+  return candidates
     .flatMap(candidate => {
       const exact = buildSearchKey(candidate.name) === searchKey;
       const alias = candidate.aliases.some(item => buildSearchKey(item) === searchKey);
@@ -71,11 +80,16 @@ export function matchIngredientImportItem(name: string, candidates: IngredientMa
       return [{ candidate, matchType: exact ? ("EXACT_NAME" as const) : ("ALIAS" as const) }];
     })
     .sort((left, right) => statusPriority[right.candidate.status] - statusPriority[left.candidate.status] || left.candidate.id - right.candidate.id);
+}
 
+function resolveIngredientMatches(matches: IngredientCandidateMatch[], candidates: IngredientMatchCandidate[]): IngredientMatchResult {
   if (matches.length === 0) return { kind: "CREATE" };
+  const orderedMatches = [...matches].sort(
+    (left, right) => statusPriority[right.candidate.status] - statusPriority[left.candidate.status] || left.candidate.id - right.candidate.id
+  );
 
-  const topPriority = statusPriority[matches[0]?.candidate.status ?? "DISABLED"];
-  const topMatches = matches.filter(match => statusPriority[match.candidate.status] === topPriority);
+  const topPriority = statusPriority[orderedMatches[0]?.candidate.status ?? "DISABLED"];
+  const topMatches = orderedMatches.filter(match => statusPriority[match.candidate.status] === topPriority);
   const activeIds = new Set<number>();
   for (const match of topMatches) {
     const resolvedId = match.candidate.status === "MERGED" ? match.candidate.mergedToId : match.candidate.id;
@@ -85,7 +99,7 @@ export function matchIngredientImportItem(name: string, candidates: IngredientMa
     return { kind: "AMBIGUOUS", ingredientIds: Array.from(activeIds).sort((a, b) => a - b) };
   }
 
-  const selected = matches.find(match => match.candidate.status !== "MERGED" || match.candidate.mergedToId !== null) ?? matches[0];
+  const selected = orderedMatches.find(match => match.candidate.status !== "MERGED" || match.candidate.mergedToId !== null) ?? orderedMatches[0];
   const ingredientId = selected.candidate.status === "MERGED" ? selected.candidate.mergedToId : selected.candidate.id;
   if (ingredientId === null) return { kind: "CREATE" };
   const target = candidates.find(candidate => candidate.id === ingredientId);
@@ -562,14 +576,15 @@ function draftToBody(item: IngredientImportItemDraft): IngredientImportBody {
   };
 }
 
-function matchIngredientBody(body: IngredientImportBody, candidates: IngredientMatchCandidate[]): IngredientMatchResult {
+export function matchIngredientBody(body: IngredientImportBody, candidates: IngredientMatchCandidate[]): IngredientMatchResult {
   const terms = [body.name, ...body.aliases].filter(Boolean);
-  for (const [index, term] of terms.entries()) {
-    const result = matchIngredientImportItem(term, candidates);
-    if (result.kind === "AMBIGUOUS") return result;
-    if (result.kind === "MATCHED") return index === 0 ? result : { ...result, matchType: "ALIAS" };
-  }
-  return { kind: "CREATE" };
+  const matches = terms.flatMap((term, index) =>
+    collectIngredientMatches(term, candidates).map(match => ({
+      ...match,
+      matchType: index === 0 ? match.matchType : ("ALIAS" as const)
+    }))
+  );
+  return resolveIngredientMatches(matches, candidates);
 }
 
 function toJobSummary(item: { id: number; sourceName: string; status: string; totalCount: number; readyCount: number; needsFixCount: number; importedCount: number; failedCount: number; createdByAdminId: number; createdAt: Date; updatedAt: Date }): IngredientImportJobSummary {
