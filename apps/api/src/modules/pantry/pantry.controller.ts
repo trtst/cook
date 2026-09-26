@@ -95,6 +95,23 @@ export class PantryController {
       .then(result => ok(result));
   }
 
+  @Post("fridge-traces/empty/batch")
+  @ApiIdempotencyKey()
+  @ApiOkArray(FridgeTraceModel, "在单个事务中标记多项食材已没有")
+  markFridgeTracesEmpty(
+    @Req() request: RequestWithUser,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: CreateFridgeTraceBatchDto
+  ) {
+    return this.pantryService
+      .markFridgeTracesEmpty(request.user.userId, operationId, body.items.map(item => ({
+        ingredientId: item.ingredientId ?? null,
+        name: item.name,
+        categoryName: item.categoryName ?? null
+      })))
+      .then(result => ok(result));
+  }
+
   @Post("fridge-traces/empty")
   @ApiIdempotencyKey()
   @ApiOkModel(FridgeTraceModel, "手动标记食材用完")
@@ -281,6 +298,18 @@ export class PantryController {
     @Body() body: UpdateShoppingListStatusDto
   ) {
     return this.pantryService.voidShoppingList(request.user.userId, listId, operationId, body.version).then(result => ok(result));
+  }
+
+  @Post("shopping-lists/:listId/complete")
+  @ApiIdempotencyKey()
+  @ApiOkModel(ShoppingListDetailModel, "完成购物清单，并把已勾选食材加入食材库")
+  completeShoppingList(
+    @Req() request: RequestWithUser,
+    @Param("listId", ParseIntPipe) listId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: UpdateShoppingListStatusDto
+  ) {
+    return this.pantryService.completeShoppingList(request.user.userId, listId, operationId, body.version).then(result => ok(result));
   }
 
   @Post("shopping-lists/:listId/restore")

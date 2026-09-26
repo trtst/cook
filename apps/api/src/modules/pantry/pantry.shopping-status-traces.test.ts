@@ -51,7 +51,7 @@ test("共享清单成员勾选已买时仍写入清单所属用户的食材痕�
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
-  } as never, {} as never, {} as never, {} as never);
+  } as never, {} as never, {} as never);
   Object.defineProperty(service, "assertShoppingListWritable", {
     value: async () => ({ id: 12, name: "共享清单", status: "ACTIVE", version: 1, ownerUserId: 8, role: "MEMBER" })
   });

@@ -11,7 +11,7 @@ test("冰箱分页在数据库内归并并限制结果行数", async () => {
         recordedAt: new Date("2026-09-24T00:00:00.000Z"), windowDays: 7, presence: "PRESENT",
         archived: false, recentlyPurchased: true, label: "最近买过", total: 51 }];
     }
-  } as never, {} as never, {} as never, {} as never);
+  } as never, {} as never, {} as never);
 
   const result = await service.listFridgeTraces(9, 2, 25);
 

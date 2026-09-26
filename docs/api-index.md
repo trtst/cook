@@ -2,7 +2,7 @@
 
 > 当前索引已经收口为个人数据 + 饭局协作 + 四档个人会员模型。已下线的饭搭子关系接口、旧空间切换模型和 `/entitlements/current` 都不再作为现行合同。
 >
-> 低维护 V1 主路径只保留完整准备需求、已买勾选和购买/做饭行为痕迹；不计算库存差额、不预占、不自动入库或扣减。
+> 低维护 V1 主路径只保留完整准备需求、已买勾选和购买/做饭行为痕迹；完成采购时将已勾选项标记为食材“有”，不计算库存差额、不预占或扣减。
 
 ## 状态说明
 
@@ -187,6 +187,7 @@
 | FridgeTrace | POST | `/fridge-traces/present` | 手动确认食材还有 |
 | FridgeTrace | POST | `/fridge-traces/present/batch` | 在单个事务中批量确认食材还有 |
 | FridgeTrace | POST | `/fridge-traces/empty` | 手动确认食材没有 |
+| FridgeTrace | POST | `/fridge-traces/empty/batch` | 在单个事务中批量标记食材没有 |
 | FridgeTrace | GET | `/fridge-traces/summary` | 查询食材痕迹摘要 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-gap` | 把需求页选中的食材写入目标购物清单 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-event-gap` | 把某个饭局当前完整需求写入目标购物清单 |
@@ -229,7 +230,7 @@
 | --- | --- | --- |
 | Membership | 待冻结 | 订单、补差、回调和到期选择 |
 | Activity / Achievement | 部分已实现 | 勋章模板治理、勋章墙分类详情、完成餐次/饭局/采购闭环勋章与推荐贡献勋章已实现；更广活动与成就系统仍待冻结 |
-| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、好友分享链接、手动添加食材、逐项已买勾选、删除已完成/已作废清单和版本冲突语义已接入主链路；不提供完成清单自动入库接口 |
+| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、好友分享链接、手动添加食材、逐项已买勾选、完成采购时将已勾选项记为食材“有”、删除已完成/已作废清单和版本冲突语义已接入主链路 |
 
 ## 暂不创建
 

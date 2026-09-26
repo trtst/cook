@@ -477,19 +477,6 @@ export class NotificationMealSettingsDto {
   times!: NotificationMealTimesDto;
 }
 
-export class NotificationFridgeSettingsDto {
-  @ApiProperty({ example: true })
-  @Transform(({ value }) => toOptionalBoolean(value))
-  @IsBoolean()
-  enabled!: boolean;
-
-  @ApiProperty({ enum: notificationReminderDayValues, example: 3 })
-  @Type(() => Number)
-  @IsInt()
-  @IsIn(notificationReminderDayValues)
-  days!: 1 | 2 | 3 | 5 | 7;
-}
-
 export class NotificationRecommendSettingsDto {
   @ApiProperty({ example: false })
   @Transform(({ value }) => toOptionalBoolean(value))
@@ -498,20 +485,10 @@ export class NotificationRecommendSettingsDto {
 }
 
 export class UpdateNotificationSettingsDto {
-  @ApiProperty({ example: false })
-  @Transform(({ value }) => toOptionalBoolean(value))
-  @IsBoolean()
-  reminderDotOnly!: boolean;
-
   @ApiProperty({ type: NotificationMealSettingsDto })
   @Type(() => NotificationMealSettingsDto)
   @ValidateNested()
   meal!: NotificationMealSettingsDto;
-
-  @ApiProperty({ type: NotificationFridgeSettingsDto })
-  @Type(() => NotificationFridgeSettingsDto)
-  @ValidateNested()
-  fridge!: NotificationFridgeSettingsDto;
 
   @ApiProperty({ type: NotificationRecommendSettingsDto })
   @Type(() => NotificationRecommendSettingsDto)

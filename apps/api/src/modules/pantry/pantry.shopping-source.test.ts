@@ -3,7 +3,7 @@ import test from "node:test";
 import { PantryService } from "./pantry.service";
 
 function createService() {
-  return new PantryService({} as never, {} as never, {} as never, {} as never);
+  return new PantryService({} as never, {} as never, {} as never);
 }
 
 function sourceSummary(overrides: Record<string, unknown> = {}) {
@@ -188,6 +188,9 @@ test("accepted dining-event participants can preview ingredients for their own f
   service.prisma = {
     diningEvent: {
       findUnique: async (args: any) => {
+        if (args.select.ingredientsReadyAt) {
+          return { ingredientsReadyAt: null };
+        }
         participantFilter = args.select.participants.where;
         return ({
         id: 501,
@@ -211,6 +214,12 @@ test("accepted dining-event participants can preview ingredients for their own f
         }]
         });
       }
+    },
+    diningEventPreparation: {
+      findMany: async () => []
+    },
+    shoppingItem: {
+      findMany: async () => []
     }
   };
 

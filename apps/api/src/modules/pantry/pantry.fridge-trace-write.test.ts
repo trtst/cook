@@ -42,7 +42,7 @@ test("批量确认食材有状态使用单个幂等事务并按食材去重", as
       transactionCount += 1;
       return run(tx);
     }
-  } as never, {} as never, {} as never, {} as never);
+  } as never, {} as never, {} as never);
 
   const result = await service.markFridgeTracesPresent(9, "123456", [
     { ingredientId: 7, name: " 鸡蛋 ", categoryName: "肉禽蛋" },
@@ -94,7 +94,7 @@ test("手动食材痕迹不关联其他用户的个人食材", async () => {
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
-  } as never, {} as never, {} as never, {} as never);
+  } as never, {} as never, {} as never);
 
   await service.markFridgeTracePresent(9, "223456", 77, "私有食材", "蔬菜");
 

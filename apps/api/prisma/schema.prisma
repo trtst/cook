@@ -905,10 +905,7 @@ model UserNotificationSettings {
   mealAfternoonTeaTime  String   @default("15:30") @map("meal_afternoon_tea_time") @db.VarChar(5)
   mealDinnerTime        String   @default("18:30") @map("meal_dinner_time") @db.VarChar(5)
   mealLateNightTime     String   @default("21:30") @map("meal_late_night_time") @db.VarChar(5)
-  fridgeEnabled         Boolean  @default(true) @map("fridge_enabled")
-  fridgeDays            Int      @default(3) @map("fridge_days")
   recommendEnabled      Boolean  @default(false) @map("recommend_enabled")
-  reminderDotOnly       Boolean  @default(false) @map("reminder_dot_only")
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -2386,6 +2383,7 @@ model ShoppingList {
   mealPlans    MealPlanItem[]
 
   @@index([ownerUserId, status, updatedAt])
+  @@index([status, voidedAt, id])
   @@map("shopping_lists")
 }
 

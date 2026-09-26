@@ -44,7 +44,7 @@ test("new food status keeps only the latest status, purchase, and use trace", as
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
-  } as never, {} as never, {} as never, {} as never);
+  } as never, {} as never, {} as never);
 
   await service.markFridgeTraceEmpty(9, "123456", 7, "芹菜", "蔬果菌菇");
 

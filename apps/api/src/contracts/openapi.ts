@@ -351,34 +351,25 @@ export class NotificationMealSettingsModel {
   @ApiProperty({ type: NotificationMealTimesModel }) times!: NotificationMealTimesModel;
 }
 
-export class NotificationFridgeSettingsModel {
-  @ApiProperty({ type: Boolean }) enabled!: boolean;
-  @ApiProperty({ type: Number, enum: [1, 2, 3, 5, 7] }) days!: number;
-}
-
 export class NotificationRecommendSettingsModel {
   @ApiProperty({ type: Boolean }) enabled!: boolean;
 }
 
 export class NotificationSettingsModel {
-  @ApiProperty({ type: Boolean }) reminderDotOnly!: boolean;
   @ApiProperty({ type: NotificationMealSettingsModel }) meal!: NotificationMealSettingsModel;
-  @ApiProperty({ type: NotificationFridgeSettingsModel }) fridge!: NotificationFridgeSettingsModel;
   @ApiProperty({ type: NotificationRecommendSettingsModel }) recommend!: NotificationRecommendSettingsModel;
 }
 
 export class NotificationBadgeModel {
   @ApiProperty({ type: Number, minimum: 0 }) unreadCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) reminderUnreadCount!: number;
-  @ApiProperty({ type: Boolean }) showReminderDot!: boolean;
   @ApiProperty({ type: String, example: "2026-08-30T00:00:00.000Z" }) latestTime!: string;
 }
 
 export class NotificationFeedItemModel {
   @ApiProperty({ type: String, example: "unit:12" }) id!: string;
   @ApiProperty({ type: Boolean }) isUnread!: boolean;
-  @ApiProperty({ type: String, enum: ["系统审核", "购物清单协作", "系统提醒", "炊火记"] }) typeLabel!: string;
-  @ApiProperty({ type: String, enum: ["review", "shopping", "reminder", "official"] }) tone!: string;
+  @ApiProperty({ type: String, enum: ["系统审核", "购物清单协作", "炊火记", "菜谱 Wiki"] }) typeLabel!: string;
+  @ApiProperty({ type: String, enum: ["review", "shopping", "official", "recipe-wiki"] }) tone!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String }) desc!: string;
   @ApiProperty(dateTime) timeValue!: string;

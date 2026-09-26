@@ -12,6 +12,7 @@ import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
+import { isShoppingListRetentionExpired } from "./shopping-list-retention";
 import type {
   CookingTraceResponse,
   ShoppingListCollaborator,
@@ -51,7 +52,6 @@ import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
 import { isPublicInspirationRecipe } from "../recipe/public-content-user-pool";
 import { IngredientImageService } from "../admin/ingredient-image.service";
-import { WechatSubscribeService } from "../wechat/wechat-subscribe.service";
 import { fridgeTraceLabel, fridgeTraceWindowDays, type FridgeTraceKind } from "./pantry.fridge-trace";
 
 function toIsoDate(value: Date) {
@@ -215,8 +215,7 @@ export class PantryService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
-    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService,
-    @Inject(WechatSubscribeService) private readonly wechatSubscribeService: WechatSubscribeService
+    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService
   ) {}
 
   async listFridgeTraces(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeTraceIngredientSummary>> {
@@ -406,6 +405,54 @@ export class PantryService {
         ingredientId: item.ingredientId !== null && categories.has(item.ingredientId) ? item.ingredientId : null
       })));
       await completeIdempotentOperation(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async markFridgeTracesEmpty(
+    userId: UUID,
+    operationId: OperationId,
+    items: Array<{ ingredientId: UUID | null; name: string; categoryName: string | null }>
+  ): Promise<FridgeTraceSummary[]> {
+    const uniqueItems = new Map<string, { ingredientId: UUID | null; name: string; categoryName: string | null }>();
+    for (const item of items) {
+      const name = item.name.trim();
+      if (!name) throw new BadRequestException("食材名称不能为空");
+      const normalized = { ingredientId: item.ingredientId, name, categoryName: item.categoryName?.trim() || null };
+      const key = item.ingredientId === null ? `name:${normalizeNameKey(name)}` : `ingredient:${item.ingredientId}`;
+      if (!uniqueItems.has(key)) uniqueItems.set(key, normalized);
+    }
+    const normalizedItems = [...uniqueItems.values()];
+    if (!normalizedItems.length || normalizedItems.length > 100) {
+      throw new BadRequestException("一次需要标记 1 到 100 项食材");
+    }
+    const requestHash = JSON.stringify(normalizedItems);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<FridgeTraceSummary[]>(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash);
+      const categories = await this.loadFridgeCategoryMap(tx, userId, normalizedItems.map(item => item.ingredientId));
+      const result: FridgeTraceSummary[] = [];
+      for (const item of normalizedItems) {
+        const category = item.ingredientId === null ? undefined : categories.get(item.ingredientId);
+        const safeIngredientId = category ? item.ingredientId : null;
+        const created = await tx.fridgeTrace.create({
+          data: {
+            userId,
+            ingredientId: safeIngredientId,
+            kind: "MANUAL_EMPTY",
+            name: item.name,
+            categoryName: category?.name ?? null,
+            categoryCode: category?.code ?? null
+          }
+        });
+        result.push(this.toFridgeTraceSummary(created));
+      }
+      await this.compactFridgeTraceHistory(tx, userId, normalizedItems.map(item => ({
+        ...item,
+        ingredientId: item.ingredientId !== null && categories.has(item.ingredientId) ? item.ingredientId : null
+      })));
+      await completeIdempotentOperation(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash, result);
       return result;
     });
   }
@@ -1330,6 +1377,56 @@ export class PantryService {
     });
   }
 
+  async completeShoppingList(userId: UUID, listId: UUID, operationId: OperationId, version: number): Promise<ShoppingListDetail> {
+    const requestHash = `${listId}:${version}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:complete", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "shopping-list:complete", userId, null, requestHash);
+      const access = await this.assertShoppingListOwner(tx, userId, listId);
+      this.assertShoppingListVersion(access.version, version);
+      if (access.status !== "ACTIVE") {
+        throw new BadRequestException("当前清单不能完成采购");
+      }
+
+      const now = new Date();
+      const boughtItems = await tx.shoppingItem.findMany({
+        where: { listId, status: "BOUGHT", checkedAt: { not: null } },
+        select: { id: true, ingredientId: true, name: true }
+      });
+      if (boughtItems.length) {
+        const categories = await this.loadFridgeCategoryMap(tx, userId, boughtItems.map(item => item.ingredientId));
+        const traces = boughtItems.map(item => {
+          const category = item.ingredientId === null ? undefined : categories.get(item.ingredientId);
+          return {
+            userId,
+            sourceShoppingItemId: item.id,
+            ingredientId: category ? item.ingredientId : null,
+            kind: "MANUAL_PRESENT" as const,
+            name: item.name,
+            categoryName: category?.name ?? null,
+            categoryCode: category?.code ?? null,
+            createdAt: now
+          };
+        });
+        await tx.fridgeTrace.createMany({ data: traces });
+        await this.compactFridgeTraceHistory(tx, userId, traces.map(trace => ({ ingredientId: trace.ingredientId, name: trace.name })));
+      }
+
+      const updated = await tx.shoppingList.updateMany({
+        where: { id: listId, status: "ACTIVE", version },
+        data: { status: "COMPLETED", completedAt: now, version: { increment: 1 } }
+      });
+      if (updated.count !== 1) {
+        throw new ConflictException("清单内容已变化，请刷新后重试");
+      }
+      await this.closeShoppingShareInTx(tx, listId);
+      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
+      await completeIdempotentOperation(tx, operationId, "shopping-list:complete", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   async checkAllShoppingListItems(userId: UUID, listId: UUID, operationId: OperationId, version: number): Promise<ShoppingListDetail> {
     const requestHash = `${listId}:${version}`;
     return this.prisma.$transaction(async tx => {
@@ -1388,6 +1485,9 @@ export class PantryService {
       if (access.status !== "VOIDED") {
         throw new BadRequestException("当前清单不能恢复");
       }
+      if (isShoppingListRetentionExpired(access.voidedAt)) {
+        throw new BadRequestException("已超过 30 天保留期限，清单即将清理，无法恢复");
+      }
       await tx.shoppingList.update({
         where: { id: listId },
         data: {
@@ -1411,6 +1511,9 @@ export class PantryService {
       await startIdempotentOperation(tx, operationId, "shopping-list:copy", userId, null, requestHash);
       const access = await this.assertShoppingListReadable(tx, userId, listId);
       this.assertShoppingListVersion(access.version, version);
+      if (access.status === "VOIDED" && isShoppingListRetentionExpired(access.voidedAt)) {
+        throw new BadRequestException("已超过 30 天保留期限，清单即将清理，无法复制");
+      }
       const sourceItems = await tx.shoppingItem.findMany({
         where: {
           listId,
@@ -1695,6 +1798,7 @@ export class PantryService {
       const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:invite:accept", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:invite:accept", userId, null, requestHash);
+      await this.lockShoppingList(tx, invite.listId);
       await tx.$queryRaw`SELECT "id" FROM "shopping_list_invites" WHERE "id" = ${inviteId} FOR UPDATE`;
       const currentInvite = await tx.shoppingListInvite.findUnique({
         where: { id: inviteId },
@@ -1836,6 +1940,7 @@ export class PantryService {
       const repeated = await getIdempotentResult<ShoppingListPageResponse>(tx, operationId, "shopping-list:leave", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:leave", userId, null, requestHash);
+      await this.lockShoppingList(tx, listId);
       const access = await this.assertShoppingListReadable(tx, userId, listId);
       this.assertShoppingListVersion(access.version, version);
       if (access.role !== "COLLABORATOR") {
@@ -1936,6 +2041,14 @@ export class PantryService {
         }
       });
       if (!token) {
+        throw new NotFoundException("分享链接不存在");
+      }
+      await this.lockShoppingList(tx, token.listId);
+      const currentToken = await tx.shoppingShareToken.findFirst({
+        where: { token: shareToken, disabledAt: null },
+        select: { listId: true }
+      });
+      if (!currentToken || currentToken.listId !== token.listId) {
         throw new NotFoundException("分享链接不存在");
       }
       const list = await tx.shoppingList.findUnique({
@@ -2459,6 +2572,7 @@ export class PantryService {
         id: true,
         name: true,
         status: true,
+        voidedAt: true,
         version: true,
         ownerUserId: true,
         members: {
@@ -2478,6 +2592,7 @@ export class PantryService {
       id: list.id,
       name: list.name,
       status: list.status,
+      voidedAt: list.voidedAt,
       version: list.version,
       ownerUserId: list.ownerUserId,
       role: list.members[0].role
@@ -2485,6 +2600,7 @@ export class PantryService {
   }
 
   private async assertShoppingListOwner(tx: Prisma.TransactionClient, userId: UUID, listId: UUID) {
+    await this.lockShoppingList(tx, listId);
     const access = await this.assertShoppingListReadable(tx, userId, listId);
     if (access.role !== "OWNER") {
       throw new ForbiddenException("只有创建者可以执行该操作");
@@ -2493,11 +2609,16 @@ export class PantryService {
   }
 
   private async assertShoppingListWritable(tx: Prisma.TransactionClient, userId: UUID, listId: UUID) {
+    await this.lockShoppingList(tx, listId);
     const access = await this.assertShoppingListReadable(tx, userId, listId);
     if (access.status !== "ACTIVE") {
       throw new BadRequestException("当前清单不是采购中状态");
     }
     return access;
+  }
+
+  private async lockShoppingList(tx: Prisma.TransactionClient, listId: UUID) {
+    await tx.$queryRaw`SELECT "id" FROM "shopping_lists" WHERE "id" = ${listId} FOR UPDATE`;
   }
 
   private async loadShoppingListItemPatchFromTx(

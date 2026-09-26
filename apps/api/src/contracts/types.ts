@@ -71,14 +71,9 @@ export interface NotificationMealTimes {
 }
 
 export interface NotificationSettings {
-  reminderDotOnly: boolean;
   meal: {
     enabled: boolean;
     times: NotificationMealTimes;
-  };
-  fridge: {
-    enabled: boolean;
-    days: 1 | 2 | 3 | 5 | 7;
   };
   recommend: {
     enabled: boolean;
@@ -87,13 +82,11 @@ export interface NotificationSettings {
 
 export interface NotificationBadgeResponse {
   unreadCount: number;
-  reminderUnreadCount: number;
-  showReminderDot: boolean;
   latestTime: string;
 }
 
-export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "系统提醒" | "炊火记" | "菜谱 Wiki";
-export type NotificationFeedTone = "review" | "shopping" | "reminder" | "official" | "recipe-wiki";
+export type NotificationFeedTypeLabel = "系统审核" | "购物清单协作" | "炊火记" | "菜谱 Wiki";
+export type NotificationFeedTone = "review" | "shopping" | "official" | "recipe-wiki";
 
 export interface NotificationFeedItem {
   id: string;

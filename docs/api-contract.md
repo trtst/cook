@@ -154,14 +154,9 @@ interface NotificationMealTimes {
 }
 
 interface NotificationSettings {
-  reminderDotOnly: boolean;
   meal: {
     enabled: boolean;
     times: NotificationMealTimes;
-  };
-  fridge: {
-    enabled: boolean;
-    days: 1 | 2 | 3 | 5 | 7;
   };
   recommend: {
     enabled: boolean;
@@ -170,8 +165,6 @@ interface NotificationSettings {
 
 interface NotificationBadgeResponse {
   unreadCount: number;
-  reminderUnreadCount: number;
-  showReminderDot: boolean;
   latestTime: IsoDateTime | "";
 }
 
@@ -599,13 +592,13 @@ interface RedeemMembershipCodeResult {
 }
 ```
 
-`GET /users/me/notification-settings` 只返回当前登录用户自己的提醒偏好：`饭点提醒 / 食材提醒 / 每日推荐提醒 / 消息免打扰`，以及服务端当前用于提醒计算的餐次默认时间和食材提前天数。当前前台提醒设置页只开放开关与 `fridge.days` 调整，不提供早餐 / 午餐 / 下午茶 / 晚餐 / 夜宵具体时钟编辑入口。它不混入未读数、消息列表、微信订阅授权状态或后台发送配置。
+`GET /users/me/notification-settings` 只返回当前登录用户自己的提醒偏好：餐次提醒、推荐提醒，以及餐次默认时间。餐次与推荐提醒开关目前只保存用户偏好，不代表已启用微信订阅消息发送；当前没有对应发送任务。
 
-`PUT /users/me/notification-settings` 完整替换当前用户的提醒偏好，请求体固定提交完整 `NotificationSettings`。服务端继续校验布尔值、餐次时间格式和 `fridge.days` 只允许 `1 | 2 | 3 | 5 | 7`；但当前前台页面只提交现有开关和提前天数对应的完整快照，不承诺开放餐次时间编辑。前端不再以本地 `storage` 作为权威来源。
+`PUT /users/me/notification-settings` 完整替换当前用户的提醒偏好，请求体固定提交完整 `NotificationSettings`。服务端校验布尔值和餐次时间格式；前台当前只开放两个提醒开关，不提供餐次具体时钟编辑。前端不再以本地 `storage` 作为权威来源。
 
-`GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / reminderUnreadCount / showReminderDot / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。`unreadCount` 与通知流卡片的 `isUnread` 共用 `feedReadAt` 和单条消息版本已读事实；每条临期食材对应一条通知，不能把整类临期提醒固定折算为 `1`。当 `reminderDotOnly=true` 时，临期提醒从数字 `unreadCount` 中移出，但仍由 `reminderUnreadCount / showReminderDot` 单独表达。
+`GET /users/me/notification-badge` 只返回当前用户通知中心入口的聚合未读事实：`unreadCount / latestTime`。该接口由服务端统一聚合当前真实来源，不新增独立消息表，也不要求客户端再并发多个业务接口自行计算未读。`unreadCount` 与通知流卡片的 `isUnread` 共用 `feedReadAt` 和单条消息版本已读事实。
 
-`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核 / 购物清单协作 / 系统提醒 / 炊火记` 四类消息，其中站内 `系统提醒` 只保留食材临期这类明确时效风险，首页周计划状态摘要不得合成通知中心消息。每条消息统一返回 `id / isUnread / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`isUnread` 只服务通知中心内的弱标识，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
+`GET /users/me/notification-feed` 返回当前登录用户自己的通知中心统一时间流分页列表，查询参数固定为 `page + pageSize`。服务端继续复用真实来源，不新增独立消息表，但由服务端统一完成多源读取、混排和倒序分页；当前承接 `系统审核 / 购物清单协作 / 炊火记 / 菜谱 Wiki` 四类消息。餐次与推荐提醒不是通知流消息，也不会由此接口触发微信发送。首页周计划状态摘要不得合成通知中心消息。每条消息统一返回 `id / isUnread / typeLabel / tone / title / desc / timeValue / targetPath`，其中 `timeValue` 作为时间倒序排序依据，`isUnread` 只服务通知中心内的弱标识，`targetPath` 为空时表示只读消息。客户端通知中心首页只消费这一接口，不再自行按类型并发请求后本地混排。
 
 `PUT /users/me/notification-badge-seen` 在进入通知中心时确认当前通知流，和卡片未读状态共用同一条总已读游标：服务端将进入时已有消息推进为已读并返回 `NotificationBadgeResponse`，客户端同步清理当前列表中的未读点；进入期间新到达的消息不受影响。`PUT /users/me/notification-read` 接收 `notificationId + notificationTime`，服务端校验该消息当前仍属于调用用户且版本时间一致后，写入该用户对这一消息版本的单条已读事实，并同步影响入口未读数。`PUT /users/me/notification-feed-read` 接收进入页面时取得的 `beforeTime`；离开通知中心时，服务端仅把不晚于该边界的卡片写入同一条总已读游标，不会清掉用户停留期间新到达的通知。三个写接口均要求 `Idempotency-Key`；它们只执行单调推进或同键 upsert，因此重复请求不会重复改变通知状态。入口徽标、单条卡片和离页批量已读均以服务端状态为准，客户端本地 storage 只保存最新入口徽标快照。
 
@@ -1073,7 +1066,7 @@ interface UpdateTasteProfileRequest {
 
 ### 勋章、计划、饭局与购物
 
-> 2026-09-24 低维护 V1：食材只记录“有 / 没有 / 未确认”，不保存精确数量、批次、到期日，不计算库存差额、不预占、不自动入库或扣减。购物项只勾选“已买”。
+> 2026-09-24 低维护 V1：食材只记录“有 / 没有 / 未确认”，不保存精确数量、批次、到期日，不计算库存差额、不预占或扣减。购物项勾选“已买”只记录购买行为；用户完成清单时，服务端将已勾选项记为食材“有”，未勾选项保持未买。
 
 ```text
 GET  /users/me/medals
@@ -1115,6 +1108,7 @@ GET  /fridge-traces/summary
 POST /fridge-traces/present
 POST /fridge-traces/present/batch
 POST /fridge-traces/empty
+POST /fridge-traces/empty/batch
 GET  /shopping-lists/summary
 GET  /shopping-lists
 POST /shopping-lists
@@ -1128,6 +1122,7 @@ POST /shopping-lists/{listId}/items/{itemId}/check
 POST /shopping-lists/{listId}/items/check
 POST /shopping-lists/{listId}/items/{itemId}/remove
 POST /shopping-lists/{listId}/void
+POST /shopping-lists/{listId}/complete
 POST /shopping-lists/{listId}/restore
 POST /shopping-lists/{listId}/copy
 POST /shopping-lists/{listId}/delete
@@ -1381,7 +1376,7 @@ interface FridgeTraceSummaryResponse {
 
 `GET /fridge-traces?page=1&pageSize=20` 按食材聚合返回当前用户的状态痕迹，在数据库内完成状态归并并分页，单页最多 100 项。蔬菜、水果等易腐食材 7 天、其他或未知分类 15 天后降为“未确认”；超过 30 天移入折叠区但不删除。最近购买提示仅保留 3 天。痕迹不包含数量、单位、批次或到期日，不参与采购差额计算。
 
-`POST /fridge-traces/present` 与 `POST /fridge-traces/empty` 使用 `Idempotency-Key`，请求体为 `{ ingredientId?: UUID | null, name, categoryName?: string | null }`，分别记录用户明确确认的“有”与“没有”。食材 ID 仅在对应食材为系统可用或当前用户 ACTIVE 个人食材时关联；其他 ID 按名称痕迹保存。分类由服务端从已验证食材读取，忽略客户端分类。`POST /fridge-traces/present/batch` 使用 `Idempotency-Key`，请求体为 `{ items: Array<{ ingredientId?: UUID | null, name, categoryName?: string | null }> }`，最多 100 项；服务端在单个事务中去重并写入，供饭局/餐次完成页的“全部确认有”使用，重复请求返回同一结果。购物项勾选“已买”会记录 `PURCHASED` 痕迹；饭局完成后的逐项确认调用对应单项状态接口。`GET /fridge-traces/summary` 只返回近期痕迹数量和最近记录时间。
+`POST /fridge-traces/present` 与 `POST /fridge-traces/empty` 使用 `Idempotency-Key`，请求体为 `{ ingredientId?: UUID | null, name, categoryName?: string | null }`，分别记录用户明确确认的“有”与“没有”。食材 ID 仅在对应食材为系统可用或当前用户 ACTIVE 个人食材时关联；其他 ID 按名称痕迹保存。分类由服务端从已验证食材读取，忽略客户端分类。`POST /fridge-traces/present/batch` 与 `POST /fridge-traces/empty/batch` 使用 `Idempotency-Key`，请求体为 `{ items: Array<{ ingredientId?: UUID | null, name, categoryName?: string | null }> }`，最多 100 项；服务端在单个事务中去重并写入，分别用于批量确认“有”和批量标记“没有”，重复请求返回同一结果。购物项勾选“已买”会记录 `PURCHASED` 痕迹；饭局完成后的逐项确认调用对应单项状态接口。`GET /fridge-traces/summary` 只返回近期痕迹数量和最近记录时间。
 
 `POST /meal-plans` 继续用于创建或更新本人某一天某餐次的计划，但当前一个餐次可同时承载多道菜；请求体固定提交：
 
@@ -1974,7 +1969,7 @@ interface UpdateShoppingListItemCheckRequest {
 
 这条接口成功后不再回整份 `ShoppingListDetail`，而是返回 `ShoppingListItemPatchResponse`：只带清单新 `version`、顶部进度，以及当前变更的购物项。
 
-`POST /shopping-lists/{listId}/items/check` 用于一次提交清单详情中暂存的多项勾选变化：
+`POST /shopping-lists/{listId}/items/check` 用于原子保存同一食材分组卡片的一次勾选变化。客户端点击勾选或取消勾选后立即请求；分组卡片下关联的多条来源项通过 `items` 一次更新：
 
 ```ts
 interface UpdateShoppingListItemChecksRequest {
@@ -1983,7 +1978,7 @@ interface UpdateShoppingListItemChecksRequest {
 }
 ```
 
-`items` 必须为 1 至 500 项且 `itemId` 不重复。服务端在一个事务中校验清单版本和所有项目，应用勾选变化并最多递增一次清单版本；任一项目无效或版本冲突时整批回滚。成功后返回更新后的 `ShoppingListDetail`。客户端只提交相对服务端状态实际发生变化的项目。
+`items` 必须为 1 至 500 项且 `itemId` 不重复。服务端在一个事务中校验清单版本和所有项目，应用勾选变化并最多递增一次清单版本；任一项目无效或版本冲突时整批回滚。成功后返回更新后的 `ShoppingListDetail`。客户端只提交本次分组卡片里状态实际发生变化的项目；请求期间锁定该卡片，防止重复提交和清单版本竞争。
 
 `POST /shopping-lists/{listId}/items/{itemId}/remove` 用于把食材项从当前有效采购项中移除，不抹掉来源事实：
 
@@ -2007,15 +2002,17 @@ interface RemoveShoppingListMemberRequest {
 
 1. `ACTIVE`：采购中，可编辑、可共享、可勾选完成、可作废。
 2. `COMPLETED`：已完成，可复制和删除。
-3. `VOIDED`：已作废，可恢复、复制和删除。
+3. `VOIDED`：已作废；自 `voidedAt` 起保留 30 天，期限内可恢复、复制和删除。超过期限后禁止恢复/复制，后台任务每日 00:00（Asia/Shanghai）开始分批永久清理过期清单、食材项及对应存储账本记录；已完成清单不受此期限影响。
 
-`POST /shopping-lists/{listId}/void` 和 `POST /shopping-lists/{listId}/restore` 当前只接收并发控制字段：
+`POST /shopping-lists/{listId}/void`、`POST /shopping-lists/{listId}/complete` 和 `POST /shopping-lists/{listId}/restore` 当前只接收并发控制字段：
 
 ```ts
 interface UpdateShoppingListStatusRequest {
   version: number;
 }
 ```
+
+`POST /shopping-lists/{listId}/complete` 仅允许清单创建者完成采购。服务端在一个事务中校验清单版本、把清单改为 `COMPLETED` 并关闭清单分享；将 `BOUGHT` 项记为当前用户食材状态“有”，不改变未勾选项，也不修改计划或饭局状态。该操作带 `Idempotency-Key`，并发版本冲突时整体回滚。
 
 `POST /shopping-lists/{listId}/copy` 会复制当前清单的有效食材项，并生成一张新的 `ACTIVE` 清单；若操作者是协作者，复制结果默认归该操作者个人所有，不继承原协作成员。
 
