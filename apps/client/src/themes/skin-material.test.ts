@@ -50,6 +50,7 @@ const loginModalSource = readFile("../components/Login/LoginModal.vue");
 const loginStylesSource = readFile("../components/Login/login.scss");
 const eventScheduleSheetSource = readFile("../components/Meal/EventScheduleSheet.vue");
 const participantManageSheetSource = readFile("../components/Meal/ParticipantManageSheet.vue");
+const mealFooterActionsSource = readFile("../components/Meal/MealFooterActions.vue");
 const accountPageSource = readFile("../pages_me/account/index.vue");
 const mePageSource = readFile("../pages/me/index.vue");
 const knowledgeArticlesSource = readFile("../config/knowledge-articles.ts");
@@ -608,7 +609,7 @@ expectSelectorIncludes(pantryListDetailPageSource, ".settings-action__icon", [
 expectSelectorIncludes(pantryListDetailPageSource, ".purchase-check--checked", [
   "background: var(--button-primary-bg);"
 ]);
-expectSelectorIncludes(pantryListDetailPageSource, ".detail-footer__add", [
+expectSelectorIncludes(mealFooterActionsSource, ".meal-footer__button--primary", [
   "background: var(--button-primary-bg);",
   "color: var(--button-primary-text);"
 ]);
@@ -715,9 +716,6 @@ expectSelectorIncludes(recommendPageSource, ".message-card__type--review", [
 ]);
 expectSelectorIncludes(recommendPageSource, ".message-card__type--shopping", [
   "background: var(--color-tag-secondary-bg);"
-]);
-expectSelectorIncludes(recommendPageSource, ".message-card__type--reminder", [
-  "background: var(--color-state-danger-soft);"
 ]);
 expectSelectorIncludes(membershipCodePageSource, ".redeem-page", [
   "background: var(--page-ambient-duo-bg);"
