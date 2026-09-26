@@ -9,8 +9,6 @@ const NOTIFICATION_BADGE_KEY = "cook_meal_notification_badge_v1";
 
 export const EMPTY_BADGE_SNAPSHOT: NotificationBadgeSnapshot = {
   unreadCount: 0,
-  reminderUnreadCount: 0,
-  showReminderDot: false,
   latestTime: ""
 };
 

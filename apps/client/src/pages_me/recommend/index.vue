@@ -485,11 +485,6 @@ defineExpose({
   background: var(--color-tag-secondary-bg);
 }
 
-.message-card__type--reminder {
-  color: var(--color-state-danger-text);
-  background: var(--color-state-danger-soft);
-}
-
 .message-card__type--official {
   color: var(--color-tag-primary-text);
   background: var(--color-tag-primary-bg);

@@ -246,7 +246,6 @@ async function updateNotificationSettings(session, overrides = {}) {
     method: "PUT",
     headers: buildAuthHeaders(session),
     body: JSON.stringify({
-      reminderDotOnly: false,
       meal: {
         enabled: true,
         times: {
@@ -350,7 +349,7 @@ describe("pages_me/recommend/index", () => {
     expect(feed.total).toBeGreaterThanOrEqual(2);
     expect(feed.hasNext).toBe(true);
     expect(feed.items).toHaveLength(1);
-    expect(["系统审核", "购物清单协作", "系统提醒", "炊火记"]).toContain(feed.items[0].typeLabel);
+    expect(["系统审核", "购物清单协作", "炊火记", "菜谱 Wiki"]).toContain(feed.items[0].typeLabel);
     expect(feed.items[0].timeValue).toBeTruthy();
   });
 
@@ -397,8 +396,6 @@ describe("pages_me/recommend/index", () => {
       headers: buildAuthHeaders(session)
     });
     expect(afterBadge.unreadCount).toBe(0);
-    expect(afterBadge.reminderUnreadCount).toBe(0);
-    expect(afterBadge.showReminderDot).toBe(false);
 
     const feedAfterBadgeSeen = await requestData("/users/me/notification-feed?page=1&pageSize=20", {
       headers: buildAuthHeaders(session)
@@ -424,34 +421,6 @@ describe("pages_me/recommend/index", () => {
 
     expect(afterRefresh.loadCount).toBeGreaterThan(beforeRefresh.loadCount);
     expect(afterRefresh.refreshing).toBe(false);
-  });
-
-  it("低维护 V1 通知中心不展示按到期日计算的食材提醒", async () => {
-    await updateNotificationSettings(session, {
-      meal: {
-        enabled: false,
-        times: {
-          breakfast: "08:00",
-          lunch: "12:00",
-          afternoonTea: "15:30",
-          dinner: "18:30",
-          lateNight: "21:30"
-        }
-      },
-      fridge: {
-        enabled: false,
-        days: 3
-      }
-    });
-
-    await page.callMethod("automatorApplySession", {
-      token: session.token,
-      uid: session.user.uid,
-      expiresAt: session.expiresAt
-    });
-    const state = await waitForState(page, (nextState) => nextState && nextState.loading === false);
-
-    expect(state.items.some((item) => item.title === "食材临期提醒")).toBe(false);
   });
 
   it("未登录直达通知中心会拉起登录而不是直接落加载失败", async () => {

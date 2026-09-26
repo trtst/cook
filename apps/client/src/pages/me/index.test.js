@@ -51,11 +51,9 @@ describe("pages/me/index", () => {
     expect(await page.$$(".knowledge-entry__icon")).toHaveLength(0);
   });
 
-  it("通知中心入口和 TabBar 的我的都支持展示未读数或提醒红点", async () => {
+  it("通知中心入口和 TabBar 的我的都支持展示未读数", async () => {
     await page.callMethod("automatorApplyNotificationBadgeSnapshot", {
-      unreadCount: 3,
-      reminderUnreadCount: 1,
-      showReminderDot: false
+      unreadCount: 3
     });
     await page.waitFor(".service-row__badge-count", 2000);
     await page.waitFor(".tabbar__badge", 2000);
@@ -63,12 +61,10 @@ describe("pages/me/index", () => {
     expect((await (await page.$(".tabbar__badge")).text()).trim()).toBe("3");
 
     await page.callMethod("automatorApplyNotificationBadgeSnapshot", {
-      unreadCount: 0,
-      reminderUnreadCount: 2,
-      showReminderDot: true
+      unreadCount: 0
     });
-    await page.waitFor(".service-row__badge-dot", 2000);
-    await page.waitFor(".tabbar__dot", 2000);
+    expect(await page.$$(".service-row__badge-count")).toHaveLength(0);
+    expect(await page.$$(".tabbar__badge")).toHaveLength(0);
   });
 
   it("未登录点击我的勋章只呼起登录，不直接跳详情页", async () => {
@@ -123,32 +119,18 @@ describe("pages/me/index", () => {
     });
   });
 
-  it("我的页的主题摘要和页面底色会跟随主题切换同步更新", async () => {
+  it("我的页的主题摘要和页面底色固定使用默认主题与色系", async () => {
     const defaultState = await page.callMethod("automatorReadThemeState");
-    expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");
+    expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题");
     expect(defaultState.colorPage).toBe("#fff");
     expect(defaultState.themePageStyle).toContain("background-color: #fff;");
 
-    const minimalState = await page.callMethod("automatorApplyThemeSettings", {
-      themeSkin: "minimal-white"
+    const legacyState = await page.callMethod("automatorApplyThemeSettings", {
+      themeSkin: "minimal-white",
+      themePalette: "sage"
     });
-    expect(minimalState.currentThemeText).toBe("跟随系统 · 简白");
-    expect(minimalState.colorPage).toBe("#ffffff");
-    expect(minimalState.themePageStyle).toContain("background-color: #ffffff;");
-
-    const glassState = await page.callMethod("automatorApplyThemeSettings", {
-      themeSkin: "apple-glass"
-    });
-    expect(glassState.currentThemeText).toBe("跟随系统 · 磨砂玻璃");
-    expect(glassState.colorPage).toBe("#eef1f4");
-    expect(glassState.themePageStyle).toContain("background-color: #eef1f4;");
-
-    const warmState = await page.callMethod("automatorApplyThemeSettings", {
-      themeSkin: "default",
-      themePalette: "warm"
-    });
-    expect(warmState.currentThemeText).toBe("跟随系统 · 默认主题 · 暖黄");
-    expect(warmState.colorPage).toBe("#fbf4e5");
-    expect(warmState.themePageStyle).toContain("background-color: #fbf4e5;");
+    expect(legacyState.currentThemeText).toBe("跟随系统 · 默认主题");
+    expect(legacyState.colorPage).toBe("#fff");
+    expect(legacyState.themePageStyle).toContain("background-color: #fff;");
   });
 });

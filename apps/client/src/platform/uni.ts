@@ -80,9 +80,6 @@ interface ClientPlatform {
 		getPhoneNumberCode(event: unknown): Promise<string>;
 		getDeviceId(): string;
 	};
-	subscription: {
-		requestSubscribeMessage(templateIds: string[]): Promise<SubscribeMessageResult>;
-	};
 	/**
 	 * 剪贴板能力。
 	 * 目前只需要写入；读取能力没有真实场景时不提前增加。
@@ -247,9 +244,6 @@ interface SaveFileResult {
 interface LoginCodeResult {
 	code: string;
 }
-
-export type SubscribeMessageStatus = "accept" | "reject" | "ban" | "filter" | "back" | "unsupported";
-export type SubscribeMessageResult = Record<string, SubscribeMessageStatus>;
 
 type RuntimeChannel = "mini_program" | "h5" | "pc" | "ios" | "android" | "harmony";
 
@@ -420,33 +414,6 @@ function getDeviceId() {
 	const next = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 	uni.setStorageSync(APP_STORAGE_KEYS.deviceId, next);
 	return next;
-}
-
-function requestSubscribeMessage(templateIds: string[]) {
-	return callUni<SubscribeMessageResult>((resolve, reject) => {
-		if (getRuntimeChannel() !== "mini_program" || typeof uni.requestSubscribeMessage !== "function") {
-			resolve({});
-			return;
-		}
-
-		uni.requestSubscribeMessage({
-			tmplIds: templateIds,
-			success: (result) => {
-				const rawResult = result as unknown as Record<string, unknown>;
-				const mapped: SubscribeMessageResult = {};
-				for (const templateId of templateIds) {
-					const status = rawResult?.[templateId];
-					if (status === "accept" || status === "reject" || status === "ban" || status === "filter" || status === "back") {
-						mapped[templateId] = status;
-						continue;
-					}
-					mapped[templateId] = "unsupported";
-				}
-				resolve(mapped);
-			},
-			fail: reject
-		});
-	});
 }
 
 /**
@@ -817,9 +784,6 @@ export const uniPlatform: ClientPlatform = {
 		login,
 		getPhoneNumberCode,
 		getDeviceId
-	},
-	subscription: {
-		requestSubscribeMessage
 	},
 	clipboard: {
 		set: setClipboardData

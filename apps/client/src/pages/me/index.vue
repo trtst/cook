@@ -131,7 +131,6 @@
 									<text class="service-row__title">{{ notificationEntry.title }}</text>
 								</view>
 								<text v-if="notificationBadge.unreadCount > 0" class="service-row__badge-count">{{ notificationBadgeText }}</text>
-								<view v-else-if="notificationBadge.showReminderDot" class="service-row__badge-dot" />
 								<text class="service-row__arrow cookfont icon-back" />
 							</view>
 							<view class="service-row" hover-class="is-pressed" hover-stay-time="100" @click="handleMedalClick">
@@ -725,34 +724,21 @@ async function automatorApplyThemeSettings(snapshot: {
 	themeSkin?: ThemeSkin;
 	themePalette?: ThemePalette;
 }) {
-	if (snapshot.themeMode) {
-		await settingsStore.setThemeMode(snapshot.themeMode);
-	}
-	if (snapshot.themeSkin) {
-		await settingsStore.setThemeSkin(snapshot.themeSkin);
-	}
-	if (snapshot.themePalette) {
-		await settingsStore.setThemePalette(snapshot.themePalette);
-	}
+	await settingsStore.applyThemeSettings({ ...settingsStore.readCurrentThemeSettings(), ...snapshot });
 	return automatorReadThemeState();
 }
 
 function automatorApplyNotificationBadgeSnapshot(snapshot: {
 	unreadCount: number;
-	reminderUnreadCount: number;
-	showReminderDot: boolean;
 	latestTime?: string;
 }) {
 	writeNotificationBadgeSnapshot({
 		unreadCount: snapshot.unreadCount,
-		reminderUnreadCount: snapshot.reminderUnreadCount,
-		showReminderDot: snapshot.showReminderDot,
 		latestTime: snapshot.latestTime ?? ""
 	});
 	notificationBadge.value = readNotificationBadgeSnapshot();
 	return {
-		unreadCount: notificationBadge.value.unreadCount,
-		showReminderDot: notificationBadge.value.showReminderDot
+		unreadCount: notificationBadge.value.unreadCount
 	};
 }
 
@@ -1201,13 +1187,9 @@ function showComingSoon(name: string) {
 	transform: rotate(180deg);
 }
 
-.service-row__badge-count,
-.service-row__badge-dot {
+.service-row__badge-count {
 	flex: 0 0 auto;
 	margin-left: auto;
-}
-
-.service-row__badge-count {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1220,13 +1202,6 @@ function showComingSoon(name: string) {
 	font-size: 22rpx;
 	font-weight: var(--font-weight-bold);
 	line-height: 1;
-}
-
-.service-row__badge-dot {
-	width: 16rpx;
-	height: 16rpx;
-	border-radius: 50%;
-	background: var(--color-state-danger-base);
 }
 
 .knowledge-grid {
