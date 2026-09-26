@@ -103,7 +103,7 @@
           </picker>
         </view>
         <view class="plan-sheet__tips">
-          <text class="plan-sheet__tips-text">这桌里食材不足的菜会一起写入计划，并标记为 `待采购`。</text>
+          <text class="plan-sheet__tips-text">选中的菜会一起写入计划；食材需求可在计划详情查看，是否采购由你决定。</text>
         </view>
         <view v-if="inspirationSlots.length" class="plan-sheet__inspiration">
           <view class="plan-sheet__section-head">
@@ -186,9 +186,7 @@ import RandomEmptySlotCard from "../components/RandomEmptySlotCard.vue";
 import RandomSlotCard from "../components/RandomSlotCard.vue";
 import { todayText } from "../utils/date";
 import {
-  buildGapState,
   buildRandomBoardSlots,
-  createEmptyGapState,
   createRandomSlotViewModel,
   type RandomPageState,
   type RandomPlanMenuItemInput,
@@ -225,13 +223,11 @@ const state = ref<RandomPageState>({
     fridgePreferred: false
   },
   slotPlan: null,
-  slots: [],
-  gap: createEmptyGapState()
+  slots: []
 });
 const errorText = ref("");
 const randomScrollTop = ref(0);
 const pageMutating = ref(false);
-const gapRequestSeq = ref(0);
 const planSheetMounted = ref(false);
 const planSheetVisible = ref(false);
 const planDate = ref(todayText());
@@ -254,8 +250,8 @@ const removedCount = computed(() => state.value.slots.filter(item => item.status
 const quotaDepleted = computed(() => Boolean(quota.value && quota.value.remainingCount <= 0));
 const generateDisabled = computed(() => !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || quotaDepleted.value);
 const submitLoading = computed(() => planSubmitting.value);
-const conditionLoading = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
-const slotActionLocked = computed(() => pageMutating.value || state.value.gap.loading || submitLoading.value);
+const conditionLoading = computed(() => pageMutating.value || submitLoading.value);
+const slotActionLocked = computed(() => pageMutating.value || submitLoading.value);
 const canCreatePlan = computed(() => activeSlots.value.length > 0);
 const inspirationSlots = computed(() => activeSlots.value.filter(item => item.sourceType === "INSPIRATION"));
 const planReady = computed(() => {
@@ -304,12 +300,10 @@ const boardDescription = computed(() => {
 });
 
 const bottomTitle = computed(() => {
-  if (state.value.gap.loading) return "正在比对这桌和冰箱";
   return "这桌可以加入计划";
 });
 
 const bottomDescription = computed(() => {
-  if (state.value.gap.loading) return "这一步只对比冰箱现有食材，不在这里逐个确认库存。";
   return "喜欢这桌的话，直接加入计划，后续在计划里继续处理食材。";
 });
 
@@ -383,8 +377,7 @@ function resetRandomState() {
       fridgePreferred: state.value.conditions.fridgePreferred
     },
     slotPlan: buildDefaultSlotPlan(state.value.conditions.mealSlot, state.value.conditions.peopleCount),
-    slots: [],
-    gap: createEmptyGapState()
+    slots: []
   };
   errorText.value = "";
   rejectedRecipeVersionIds.value = [];
@@ -424,14 +417,14 @@ function selectMealSlot(value: MealSlot) {
   if (conditionLoading.value) return;
   state.value.conditions.mealSlot = value;
   void persistRandomMenuConditions();
-  clearMenuAndGap();
+  clearMenu();
 }
 
 function selectPeopleCount(value: number) {
   if (conditionLoading.value) return;
   state.value.conditions.peopleCount = value;
   void persistRandomMenuConditions();
-  clearMenuAndGap();
+  clearMenu();
 }
 
 function toggleFridgePreferred() {
@@ -441,7 +434,7 @@ function toggleFridgePreferred() {
   if (conditionLoading.value) return;
   state.value.conditions.fridgePreferred = !state.value.conditions.fridgePreferred;
   void persistRandomMenuConditions();
-  clearMenuAndGap();
+  clearMenu();
 }
 
 function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
@@ -451,12 +444,11 @@ function adjustSlotPlan(key: keyof RandomSlotPlan, delta: -1 | 1) {
   next[key] = clampCount(next[key] + delta);
   if (slotPlanTotal(next) > MAX_SLOT_TOTAL) return;
   state.value.slotPlan = next;
-  clearMenuAndGap();
+  clearMenu();
 }
 
-function clearMenuAndGap() {
+function clearMenu() {
   state.value.slots = [];
-  state.value.gap = createEmptyGapState();
   rejectedRecipeVersionIds.value = [];
   errorText.value = "";
   if (sessionStore.isLoggedIn) {
@@ -509,7 +501,6 @@ async function generateMenu() {
       state.value.slotPlan = result.slotPlan;
       state.value.slots = result.items.map(createRandomSlotViewModel);
     }
-    await refreshGap(true);
     state.value.pageStatus = "MENU_READY";
   } catch (error) {
     errorText.value = error instanceof Error ? error.message : "生成失败";
@@ -527,7 +518,6 @@ function removeSlot(slotId: string) {
   updateSlot(slotId, slot => {
     slot.status = "REMOVED";
   });
-  syncGapPreview();
 }
 
 function toggleSlotLock(slotId: string) {
@@ -540,7 +530,7 @@ function toggleSlotLock(slotId: string) {
 }
 
 async function replaceSlot(slotId: string) {
-  if (state.value.gap.loading || submitLoading.value) return;
+  if (submitLoading.value) return;
   const slot = state.value.slots.find(item => item.slotId === slotId);
   if (!slot || slot.status === "REPLACING" || !state.value.conditions.mealSlot || !state.value.conditions.peopleCount || !state.value.slotPlan) return;
 
@@ -597,7 +587,6 @@ async function replaceSlot(slotId: string) {
       current.latestAppliedSeq = requestSeq;
       current.status = "RECOMMENDED";
     });
-    await refreshGap(true);
   } catch (error) {
     updateSlot(slotId, current => {
       current.status = previousStatus === "REMOVED" ? "REMOVED" : "RECOMMENDED";
@@ -608,56 +597,10 @@ async function replaceSlot(slotId: string) {
   }
 }
 
-async function refreshGap(openPanel = false) {
-  if (!activeSlots.value.length) {
-    state.value.gap = createEmptyGapState();
-    return;
-  }
-  if (!state.value.conditions.mealSlot || !state.value.conditions.peopleCount) return;
-  const requestSeq = gapRequestSeq.value + 1;
-  gapRequestSeq.value = requestSeq;
-  state.value.pageStatus = "GAP_CHECKING";
-  state.value.gap.loading = true;
-  if (openPanel) {
-    state.value.gap.visible = true;
-  }
-
-  try {
-    const result = await randomMealApi.previewGap({
-      mealSlot: state.value.conditions.mealSlot,
-      peopleCount: state.value.conditions.peopleCount,
-      items: activeSlots.value.map(item => ({
-        slotId: item.slotId,
-        slotType: item.slotType,
-        recipeId: item.recipeId,
-        recipeVersionId: item.recipeVersionId
-      })),
-      inventoryDecisions: []
-    });
-    if (requestSeq !== gapRequestSeq.value) return;
-    state.value.gap = buildGapState(result);
-    state.value.pageStatus = "MENU_READY";
-  } catch (error) {
-    if (requestSeq !== gapRequestSeq.value) return;
-    state.value.gap.loading = false;
-    errorText.value = error instanceof Error ? error.message : "缺口检查失败";
-    state.value.pageStatus = "MENU_READY";
-  }
-}
-
-function syncGapPreview() {
-  if (!hasMenu.value || !activeSlots.value.length) {
-    state.value.gap = createEmptyGapState();
-    return;
-  }
-  void refreshGap(true);
-}
-
 async function openPlanSheet() {
   if (!ensureLoggedIn(() => {
     void openPlanSheet();
   })) return;
-  if (state.value.gap.loading) return;
   if (!canCreatePlan.value || planSubmitting.value) return;
   planDate.value = todayText();
   selectedCategoryIds.value = {};
@@ -786,9 +729,6 @@ async function createPlan() {
 }
 
 async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
-  const shortageMap = new Map(
-    state.value.gap.items.map(item => [item.slotId, item.missingIngredients.some(ingredient => ingredient.inventoryStatus !== "ENOUGH")])
-  );
   const imported = new Map<UUID, { recipeId: UUID; recipeVersionId: UUID }>();
   for (const item of inspirationSlots.value) {
     const categoryId = selectedCategoryIds.value[item.recipeVersionId];
@@ -813,7 +753,7 @@ async function buildPlanMenuItems(): Promise<RandomPlanMenuItemInput[]> {
       sortOrder: item.slotIndex,
       recipeId: imported.get(item.recipeVersionId)?.recipeId ?? item.recipeId,
       recipeVersionId: imported.get(item.recipeVersionId)?.recipeVersionId ?? item.recipeVersionId,
-      purchaseState: shortageMap.get(item.slotId) ? "PENDING" : "READY"
+      purchaseState: "READY"
     }));
 }
 
@@ -1021,12 +961,11 @@ function automatorPrimeConditions(next: { mealSlot?: MealSlot | null; peopleCoun
     state.value.conditions.fridgePreferred = next.fridgePreferred;
   }
   syncSlotPlan();
-  clearMenuAndGap();
+  clearMenu();
 }
 
 function automatorPrimeSlots(items: RandomMenuItem[]) {
   state.value.slots = items.map(createRandomSlotViewModel);
-  state.value.gap = createEmptyGapState();
   state.value.pageStatus = items.length ? "MENU_READY" : "CONFIG_READY";
   errorText.value = "";
 }

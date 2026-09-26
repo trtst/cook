@@ -315,13 +315,24 @@
               <view v-if="eventDetail && isEventOrganizer && !eventClosed" id="meal-shopping-panel" class="meal-panel" :class="{ 'meal-panel--focus': focusedSection === 'shopping' }">
                 <view class="meal-panel__head meal-panel__head--row">
                   <text class="meal-panel__title">{{ shoppingPanelTitle }}</text>
-                  <view
-                    class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
-                    :class="{ 'meal-inline-action--disabled': shoppingActionDisabled }"
-                    @click="openShoppingPage"
-                  >
-                    <text class="cookfont icon-plan meal-menu__add-icon" />
-                    <text>{{ shoppingActionText }}</text>
+                  <view class="meal-panel__head-actions">
+                    <view
+                      class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
+                      :class="{ 'meal-inline-action--disabled': shoppingActionDisabled }"
+                      @click="openShoppingPage"
+                    >
+                      <text class="cookfont icon-plan meal-menu__add-icon" />
+                      <text>{{ shoppingActionText }}</text>
+                    </view>
+                    <view
+                      v-if="!eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
+                      class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
+                      :class="{ 'meal-inline-action--disabled': submitting }"
+                      @click="handlePrepareDiningEventAction"
+                    >
+                      <text class="cookfont icon-complete-order meal-menu__add-icon" />
+                      <text>已备齐</text>
+                    </view>
                   </view>
                 </view>
                 <view class="meal-helper-state">
@@ -337,12 +348,19 @@
                       'meal-shopping-preview__row--extra-expanded': shoppingDisplay.expanded && row.extra
                     }"
                   >
-                    <view class="menu-confirm__item">
-                      <view class="menu-confirm__item-main">
-                        <text class="menu-confirm__item-name">{{ row.item.name }}</text>
-                        <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
+                    <view class="menu-confirm__item-main">
+                      <text class="menu-confirm__item-name">{{ row.item.name }}</text>
+                      <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
+                    </view>
+                    <view class="meal-shopping-preview__state">
+                      <text>{{ preparationStatusText(row.item.preparationStatus) }}</text>
+                      <view
+                        v-if="row.item.preparationStatus !== 'READY' && row.item.preparationStatus !== 'BOUGHT' && !eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
+                        class="meal-shopping-preview__home"
+                        @click="toggleEventPreparation(row.item)"
+                      >
+                        {{ preparationSubmittingKey === row.item.key ? "处理中" : row.item.preparationStatus === "HOME" ? "撤销" : "我已备好" }}
                       </view>
-                      <text v-if="row.item.recipeTitles.length" class="menu-confirm__item-recipes">{{ row.item.recipeTitles.join(" · ") }}</text>
                     </view>
                   </view>
                   <view
@@ -377,6 +395,35 @@
                 </view>
                 <view class="meal-helper-state">
                   {{ shoppingPanelText }}
+                </view>
+                <view v-if="currentPlanGapItems.length" class="menu-confirm__list meal-shopping-preview">
+                  <view
+                    v-for="row in planShoppingDisplay.rows"
+                    :key="row.item.key"
+                    class="meal-shopping-preview__row"
+                    :class="{
+                      'meal-shopping-preview__row--extra': row.extra,
+                      'meal-shopping-preview__row--extra-expanded': planShoppingDisplay.expanded && row.extra
+                    }"
+                  >
+                    <view class="menu-confirm__item">
+                      <view class="menu-confirm__item-main">
+                        <text class="menu-confirm__item-name">{{ row.item.name }}</text>
+                        <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
+                      </view>
+                    </view>
+                  </view>
+                  <view
+                    v-if="planShoppingDisplay.showToggle"
+                    class="meal-menu__toggle"
+                    hover-class="meal-menu__toggle--hover"
+                    hover-stay-time="100"
+                    @click="shoppingExpanded = !shoppingExpanded"
+                  >
+                    <view class="meal-menu__toggle-line" />
+                    <text class="meal-menu__toggle-text">{{ planShoppingDisplay.toggleText }}</text>
+                    <view class="meal-menu__toggle-line" />
+                  </view>
                 </view>
               </view>
 
@@ -469,6 +516,11 @@
                   <text class="meal-memory-entry__text">{{ memoryPanelText }}</text>
                 </view>
               </view>
+              <view v-if="showDetailCancelAction" class="meal-panel meal-cancel-panel">
+                <button class="meal-inline-action meal-inline-action--ghost" :disabled="submitting" @click="handleDetailCancelAction">
+                  {{ eventDetail ? "取消饭局" : "取消计划" }}
+                </button>
+              </view>
             </view>
           </view>
         </scroll-view>
@@ -501,11 +553,15 @@
             </template>
           </view>
 
-          <view v-if="endedMemoryAction" class="meal-footer__actions meal-footer__actions--ended">
-            <button class="meal-footer__memory" @click="handleFooterAction(endedMemoryAction.key)">
-              <text class="cookfont meal-footer__memory-icon" :class="endedMemoryAction.iconClass" />
-              <text class="meal-footer__memory-label">{{ endedMemoryAction.label }}</text>
-            </button>
+          <view v-if="endedActionsVisible" class="meal-footer__ended">
+            <text class="meal-footer__ended-hint">{{ endedPromptText }}</text>
+            <view class="meal-footer__actions meal-footer__actions--ended">
+              <button class="meal-footer__update" @click="openCompletedIngredientSheet">更新食材</button>
+              <button v-if="endedMemoryAction" class="meal-footer__memory" @click="handleFooterAction(endedMemoryAction.key)">
+                <text class="cookfont meal-footer__memory-icon" :class="endedMemoryAction.iconClass" />
+                <text class="meal-footer__memory-label">{{ endedMemoryAction.label }}</text>
+              </button>
+            </view>
           </view>
 
         <view v-else class="meal-footer__actions">
@@ -551,23 +607,6 @@
           </view>
         </view>
 
-        <ShoppingListPickerSheet
-          :visible="shoppingSheetVisible"
-          :loading="shoppingListLoading"
-          :error-text="shoppingListError"
-          :items="shoppingLists"
-          :selected-id="selectedShoppingListId"
-          :create-name="shoppingCreateName"
-          :submitting="shoppingWriting"
-          @close="closeShoppingSheet"
-          @after-close="handleShoppingSheetAfterClose"
-          @retry="loadShoppingLists(true)"
-          @create="createShoppingList"
-          @confirm="confirmAddToShoppingList"
-          @update:selected-id="selectedShoppingListId = $event"
-          @update:create-name="shoppingCreateName = $event"
-        />
-
         <ParticipantManageSheet
           :visible="participantSheetVisible"
           :current-items="participantCurrentItems"
@@ -588,19 +627,6 @@
           @invite="handleInviteShare"
           @revoke="revokeParticipantInvite"
           @reinvite="reinviteParticipant"
-        />
-
-        <MenuConfirmSheet
-          :visible="menuConfirmSheetVisible"
-          :subtitle="menuConfirmSummaryText"
-          :summary-title="menuConfirmSummaryTitle"
-          :summary-text="menuConfirmSummaryText"
-          :loading="false"
-          :items="menuConfirmItems"
-          :empty-text="menuConfirmEmptyText"
-          :submitting="submitting"
-          @close="closeMenuConfirmSheet"
-          @confirm="handleConfirmMenuAction"
         />
 
         <CookAssistantUnlockSheet
@@ -789,6 +815,48 @@
           @close="closeEventEditor"
         />
 
+        <SheetShell
+          :visible="completedIngredientSheetVisible"
+          title="更新食材"
+          subtitle="只记录你确认的有或没有，不填写数量。"
+          @close="closeCompletedIngredientSheet"
+          @after-close="handleCompletedIngredientSheetAfterClose"
+        >
+          <view v-if="completedIngredientLoading" class="meal-sheet-state">正在整理这顿饭的食材...</view>
+          <view v-else-if="!completedIngredientItems.length" class="meal-sheet-state">这顿饭没有可更新的菜谱食材。</view>
+          <scroll-view v-else class="completed-ingredient-list" scroll-y>
+            <view v-for="item in completedIngredientItems" :key="item.key" class="completed-ingredient-row">
+              <text class="completed-ingredient-row__name">{{ item.name }}</text>
+              <view class="completed-ingredient-row__actions">
+                <button
+                  class="completed-ingredient-row__button"
+                  :class="{
+                    'completed-ingredient-row__button--active': completedIngredientStates[item.key] === 'PRESENT',
+                    'completed-ingredient-row__button--busy': completedIngredientSubmittingKey === item.key
+                  }"
+                  @click="setCompletedIngredientPresence(item, 'PRESENT')"
+                >有</button>
+                <button
+                  class="completed-ingredient-row__button completed-ingredient-row__button--muted"
+                  :class="{
+                    'completed-ingredient-row__button--active': completedIngredientStates[item.key] === 'EMPTY',
+                    'completed-ingredient-row__button--busy': completedIngredientSubmittingKey === item.key
+                  }"
+                  @click="setCompletedIngredientPresence(item, 'EMPTY')"
+                >没有</button>
+              </view>
+            </view>
+          </scroll-view>
+          <template #footer>
+            <view class="meal-sheet-actions">
+              <button class="meal-sheet-actions__secondary" :class="{ 'meal-sheet-actions__button--busy': completedIngredientBusy }" @click="skipCompletedIngredientUpdate">全部跳过</button>
+              <button class="meal-sheet-actions__primary" :class="{ 'meal-sheet-actions__button--busy': completedIngredientBusy || !completedIngredientItems.length }" @click="markAllCompletedIngredientsPresent">
+                {{ completedIngredientBusy ? "更新中..." : "全部确认有" }}
+              </button>
+            </view>
+          </template>
+        </SheetShell>
+
       </template>
     </view>
   </Layout>
@@ -807,10 +875,8 @@ import LoadMore from "@/components/LoadMore.vue";
 import CookAssistantUnlockSheet from "@/components/CookAssistantUnlockSheet.vue";
 import CookAssistantThinkingLoading from "@/components/CookAssistantThinkingLoading.vue";
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
-import MenuConfirmSheet from "@/components/Meal/MenuConfirmSheet.vue";
 import ParticipantManageSheet from "@/components/Meal/ParticipantManageSheet.vue";
 import DiningEventParticipantNoteSheet from "@/components/Meal/DiningEventParticipantNoteSheet.vue";
-import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import ImageField from "@/components/ImageField.vue";
@@ -823,10 +889,10 @@ import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
 import {
   shoppingApi,
-  type ShoppingGapPreviewItem,
-  type ShoppingListSummary
+  type ShoppingGapPreviewItem
 } from "@/apis/shopping";
 import { userApi, type CookAssistantUsageResponse, type TasteProfileResponse } from "@/apis/user";
+import { fridgeApi } from "@/apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
@@ -844,6 +910,7 @@ import {
   buildShoppingListDetailPath,
   hasActiveShoppingListLink
 } from "../utils/shopping";
+import { formatDateOnly } from "@/utils/date";
 import { formatDateTimeMinute } from "../utils/date";
 import { buildMenuDisplay, buildShoppingDisplay, menuItemMetaText } from "./menu-display";
 import { buildTasteQuickGroups, type TasteQuickGroup } from "@/components/Meal/dining-event-participant-note";
@@ -916,7 +983,7 @@ type FooterActionKey =
   | "confirm-menu"
   | "complete-plan"
   | "complete-event"
-  | "cancel-event"
+  | "start-cooking"
   | "shopping"
   | "cook-assistant"
   | "share-memory"
@@ -931,7 +998,12 @@ type MealGapPreviewItem = {
   key: string;
   name: string;
   quantityText: string | null;
-  recipeTitles: string[];
+  preparationStatus: "OPEN" | "BOUGHT" | "HOME" | "READY";
+};
+type CompletedIngredientItem = {
+  key: string;
+  ingredientId: UUID | null;
+  name: string;
 };
 type RecipeSheetItem = MyRecipeSummary;
 type RecipeSheetMode = "menu" | "bring" | "wish";
@@ -948,12 +1020,6 @@ const { navBarTotalHeight } = useSystemInfo();
 const loading = ref(false);
 const submitting = ref(false);
 const shoppingWriting = ref(false);
-const shoppingSheetVisible = ref(false);
-const shoppingListLoading = ref(false);
-const shoppingListError = ref("");
-const shoppingLists = ref<ShoppingListSummary[]>([]);
-const selectedShoppingListId = ref<UUID | "">("");
-const shoppingCreateName = ref("");
 const planItemId = ref<UUID | "">("");
 const planDate = ref("");
 const eventId = ref<UUID | "">("");
@@ -1022,11 +1088,17 @@ const participantNoteDraft = ref("");
 const tasteProfile = ref<TasteProfileResponse | null>(null);
 const tasteProfileLoading = ref(false);
 const tasteProfileError = ref("");
-const menuConfirmSheetVisible = ref(false);
+const completedIngredientSheetVisible = ref(false);
+const completedIngredientLoading = ref(false);
+const completedIngredientBusy = ref(false);
+const completedIngredientItems = ref<CompletedIngredientItem[]>([]);
+const completedIngredientStates = ref<Record<string, "PRESENT" | "EMPTY">>({});
+const completedIngredientSubmittingKey = ref("");
 const gapLoading = ref(false);
 const gapErrorText = ref("");
 const eventGapItems = ref<ShoppingGapPreviewItem[] | null>(null);
 const planGapItems = ref<ShoppingGapPreviewItem[]>([]);
+const preparationSubmittingKey = ref("");
 const scheduleMonthDate = ref(todayText());
 const nowMs = ref(Date.now());
 let footerTimer: ReturnType<typeof setInterval> | null = null;
@@ -1057,7 +1129,7 @@ const heroCoverUrl = computed(() => eventDetail.value?.coverImageUrl || null);
 const hasDiningEvent = computed(() => Boolean(eventDetail.value || planDetail.value?.hasDiningEvent));
 const planDeadlineMs = computed(() => resolvePlanDeadlineMs(planDetail.value?.planDate, planDetail.value?.mealSlot));
 const planAutoEnded = computed(() => Boolean(!eventDetail.value && planDeadlineMs.value > 0 && planDeadlineMs.value <= nowMs.value));
-const planClosed = computed(() => Boolean(planDetail.value && (planDetail.value.status === "COMPLETED" || planAutoEnded.value)));
+const planClosed = computed(() => Boolean(planDetail.value && (planDetail.value.status === "COMPLETED" || planDetail.value.status === "CANCELLED" || planAutoEnded.value)));
 const planHeroTitle = computed(() => {
   const label = planDetail.value ? slotLabel(planDetail.value.mealSlot) : "";
   return label ? `${label}吃什么？` : "这顿饭吃什么？";
@@ -1067,6 +1139,7 @@ const planHeroEyebrow = computed(() => {
   return `${planDateText.value} · ${slotLabel(planDetail.value.mealSlot)}`;
 });
 const planHeroMeta = computed(() => {
+  if (planDetail.value?.status === "CANCELLED") return "计划已取消，菜单和记录仍保留。";
   if (planClosed.value) return "这一餐已结束，菜单与记录仍在。";
   if (hasDiningEvent.value) return "饭局已约好，在这里看菜单和参与情况。";
   if (planDetail.value?.menuLocked) {
@@ -1142,8 +1215,28 @@ const planGapReady = computed(() => Boolean(
     !gapLoading.value &&
     !gapErrorText.value
 ));
-const canCompleteEvent = computed(() => Boolean(eventGapReady.value && isEventOrganizer.value && acceptedCount.value > 0 && !eventClosed.value));
-const canCancelEvent = computed(() => Boolean(eventGapReady.value && isEventOrganizer.value && acceptedCount.value === 0 && !eventClosed.value));
+const canCompleteEvent = computed(() => Boolean(
+  eventGapReady.value &&
+    isEventOrganizer.value &&
+    (acceptedCount.value > 0 || eventDetail.value?.cookingStartedAt) &&
+    !eventClosed.value
+));
+const canCancelEvent = computed(() => Boolean(
+  isEventOrganizer.value &&
+    acceptedCount.value === 0 &&
+    !eventDetail.value?.cookingStartedAt &&
+    scheduledAtMs.value > nowMs.value &&
+    !eventClosed.value
+));
+const showDetailCancelAction = computed(() => {
+  if (eventDetail.value) return canCancelEvent.value;
+  return Boolean(
+    planDetail.value &&
+      planDetail.value.status === "PLANNED" &&
+      !planDetail.value.hasDiningEvent &&
+      planDetail.value.planDate >= formatDateOnly(new Date(nowMs.value))
+  );
+});
 const displayParticipants = computed(() => visibleEventParticipants.value.filter(item => item.status !== "REMOVED"));
 const menuPanelTitle = computed(() => {
   if (!eventDetail.value) return "菜单";
@@ -1398,13 +1491,27 @@ const currentEventGapItems = computed<MealGapPreviewItem[]>(() => {
     key: item.sourceKey ?? String(item.id),
     name: item.name,
     quantityText: item.quantityText,
-    recipeTitles: item.sourceTitles
+    preparationStatus: item.preparationStatus
   }));
 });
 const currentEventGapCount = computed(() => currentEventGapItems.value.length);
+const currentEventPendingCount = computed(() => currentEventGapItems.value.filter(item => item.preparationStatus === "OPEN").length);
 const shoppingDisplay = computed(() => buildShoppingDisplay(currentEventGapItems.value, shoppingExpanded.value));
+const currentPlanGapItems = computed<MealGapPreviewItem[]>(() => planGapItems.value.map(item => ({
+  key: item.sourceKey ?? String(item.id),
+  name: item.name,
+  quantityText: item.quantityText,
+  preparationStatus: item.preparationStatus
+})));
+const planShoppingDisplay = computed(() => buildShoppingDisplay(currentPlanGapItems.value, shoppingExpanded.value));
 watch(
   () => currentEventGapItems.value.length,
+  (count, previousCount) => {
+    if (count <= 5 || previousCount <= 5) shoppingExpanded.value = false;
+  }
+);
+watch(
+  () => currentPlanGapItems.value.length,
   (count, previousCount) => {
     if (count <= 5 || previousCount <= 5) shoppingExpanded.value = false;
   }
@@ -1421,6 +1528,12 @@ const footerStage = computed<FooterStage>(() => {
   if (eventDetail.value?.status === "CONFIRMED" || planDetail.value?.menuLocked) return "READY_TO_START";
   return "MENU_EDITING";
 });
+const mealActuallyCompleted = computed(() => Boolean(
+  eventDetail.value && (eventDetail.value.status === "COMPLETED" || eventDetail.value.completedAt) ||
+  !eventDetail.value && planDetail.value?.status === "COMPLETED"
+));
+const endedActionsVisible = computed(() => mealActuallyCompleted.value);
+const endedPromptText = computed(() => "饭局结束啦，要不要顺手看看食材还有没有？");
 const scheduledAtMs = computed(() => {
   if (!eventDetail.value?.scheduledAt) return 0;
   const value = new Date(eventDetail.value.scheduledAt).getTime();
@@ -1471,11 +1584,12 @@ const footerStatusText = computed(() => {
 const footerStatusMeta = computed(() => {
   if (footerStage.value === "READY_TO_START" && eventDetail.value && isEventOrganizer.value) {
     if (gapLoading.value) return "正在整理这顿饭需要准备的食材。";
-    if (currentEventGapCount.value > 0) return `这顿需要准备 ${currentEventGapCount.value} 样食材，下一步先去采购。`;
-    if (!gapErrorText.value && currentMenuItems.value.length) return "这顿需要准备的食材已列好，可以直接开始做饭。";
+    if (currentEventPendingCount.value > 0) return `还有 ${currentEventPendingCount.value} 样食材待准备，可以去采购或标记家里已有。`;
+    if (!gapErrorText.value && currentMenuItems.value.length && !eventDetail.value.cookingStartedAt) return "食材已备齐，可以开始做饭。";
+    if (eventDetail.value.cookingStartedAt) return "已经开做，结束后可以记录这顿饭。";
   }
   if (footerStage.value === "READY_TO_START" && !eventDetail.value && currentPlanShoppingCount.value > 0) {
-    return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，下一步去选一个采购清单。`;
+    return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，下一步去采购。`;
   }
   if (footerStage.value === "MENU_EDITING" && eventDetail.value && isEventOrganizer.value && currentMenuItems.value.length) {
     if (gapLoading.value) return "需要准备的食材会跟着菜单实时更新。";
@@ -1484,7 +1598,7 @@ const footerStatusMeta = computed(() => {
   return "";
 });
 const endedMemoryAction = computed<FooterAction | null>(() => {
-  if (footerStage.value === "TIME_UP" && eventDetail.value) {
+  if (mealActuallyCompleted.value && eventDetail.value) {
     return { key: "share-memory", label: "分享回忆", iconClass: "icon-share" };
   }
   return null;
@@ -1527,15 +1641,16 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
   }
   if (footerStage.value === "READY_TO_START") {
     if (eventDetail.value && isEventOrganizer.value) {
-      if (currentEventGapCount.value > 0) {
+      if (currentEventPendingCount.value > 0) {
         return {
           key: "shopping",
           label: hasLinkedShoppingList.value ? "查看采购清单" : "去采购",
           disabled: hasLinkedShoppingList.value ? false : shoppingWriting.value
         };
       }
+      if (!eventGapReady.value) return null;
+      if (!eventDetail.value.cookingStartedAt) return { key: "start-cooking", label: "开始做饭" };
       if (canCompleteEvent.value) return { key: "complete-event", label: "结束饭局" };
-      if (canCancelEvent.value) return { key: "cancel-event", label: "取消饭局" };
       return null;
     }
     if (!eventDetail.value && currentPlanShoppingCount.value > 0) {
@@ -1557,7 +1672,7 @@ const footerPrimaryGapText = computed(() => {
   }
   if (footerPrimaryAction.value?.key === "shopping" && eventDetail.value) {
     if (gapLoading.value) return "计算中";
-    if (currentEventGapCount.value > 0) return `需准备 ${currentEventGapCount.value} 样`;
+    if (currentEventPendingCount.value > 0) return `还需准备 ${currentEventPendingCount.value} 样`;
   }
   if (footerPrimaryAction.value?.key === "shopping" && !eventDetail.value) {
     if (gapLoading.value) return "计算中";
@@ -1571,23 +1686,6 @@ function isFooterActionDisabled(action: FooterActionKey) {
   const currentActions = [footerQuickAction.value, footerSecondaryAction.value, footerPrimaryAction.value, endedMemoryAction.value];
   return currentActions.some(item => item?.key === action && Boolean(item.disabled));
 }
-const menuConfirmItems = computed(() => currentMenuItems.value.map(item => ({
-  key: item.key,
-  name: item.title,
-  quantityText: resolveMenuMeta(item) || null,
-  recipeTitles: [] as string[]
-})));
-const menuConfirmSummaryTitle = computed(() => {
-  if (!currentMenuItems.value.length) return "这顿饭还没定菜";
-  return `这顿饭共 ${currentMenuItems.value.length} 道菜`;
-});
-const menuConfirmSummaryText = computed(() => {
-  if (!currentMenuItems.value.length) return "这次确认只固定这顿吃什么，不处理带菜和采购。";
-  return "这次确认只固定主家菜单；带菜不会算进这里，确认后可查看需要准备的食材。";
-});
-const menuConfirmEmptyText = computed(() => (
-  currentMenuItems.value.length ? `已选 ${currentMenuItems.value.length} 道主家菜单。` : "先补一两道主家菜单，再来确认。"
-));
 const shareHeadline = computed(() => eventDetail.value?.title?.trim() || detailTitle.value);
 const recipePendingAddCount = computed(() => {
   if (recipeSheetMode.value === "bring" || recipeSheetMode.value === "wish") {
@@ -1771,27 +1869,36 @@ const shoppingPanelText = computed(() => {
       return `这顿饭已挂到「${linkedShoppingListName.value}」，后面要补采购时先回这张清单继续。`;
     }
     if (currentPlanShoppingCount.value > 0) {
-      return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，点击去采购后可以选择已有清单，或现场新建一张。`;
+      return `这顿饭需要准备 ${currentPlanShoppingCount.value} 样食材，点击去采购后会加入当前清单。`;
     }
     return "这顿饭当前没有可列出的食材，可以直接开始做饭。";
   }
   if (gapLoading.value) return "正在整理这顿饭需要准备的食材。";
-  if (hasLinkedShoppingList.value && linkedShoppingListName.value && currentEventGapCount.value > 0) {
+  if (currentEventPendingCount.value > 0 && hasLinkedShoppingList.value && linkedShoppingListName.value) {
     return isEventOrganizer.value
-      ? `已同步到「${linkedShoppingListName.value}」，需要准备的食材继续补到这张清单。`
-      : `主家正在通过「${linkedShoppingListName.value}」准备食材。`;
+      ? `已同步到「${linkedShoppingListName.value}」，剩余食材继续补到这张清单，也可以标记家里已有。`
+      : `主家正在通过「${linkedShoppingListName.value}」准备剩余食材。`;
   }
-  if (currentEventGapCount.value > 0) {
+  if (currentEventPendingCount.value > 0) {
     return isEventOrganizer.value
-      ? `需要准备 ${currentEventGapCount.value} 样食材，一起准备好再开饭。`
-      : `主家正在准备 ${currentEventGapCount.value} 样食材。`;
+      ? `还有 ${currentEventPendingCount.value} 样食材待准备，可去采购或标记家里已有。`
+      : `主家正在准备 ${currentEventPendingCount.value} 样食材。`;
   }
-  if (eventDetail.value?.status === "CONFIRMED") {
+  if (eventDetail.value?.cookingStartedAt) {
+    return "已经开始做饭。";
+  }
+  if (eventDetail.value?.ingredientsReadyAt || eventDetail.value?.status === "CONFIRMED") {
     return isEventOrganizer.value ? "食材都备齐了，可以开始做饭。" : "食材已经准备好，等开饭啦。";
   }
   if (gapErrorText.value) return "需要准备的食材暂时没同步出来，请稍后重试。";
   return isEventOrganizer.value ? "菜单定好后，这里会告诉你需要准备什么。" : "主家定好菜单后，食材准备的进度会显示在这里。";
 });
+function preparationStatusText(status: MealGapPreviewItem["preparationStatus"]) {
+  if (status === "BOUGHT") return "已买";
+  if (status === "HOME") return "我已备好";
+  if (status === "READY") return "已备齐";
+  return "待准备";
+}
 const memoryPanelTitle = computed(() => (eventClosed.value ? "这顿饭可以留个回忆了" : "饭局回忆"));
 const memoryPanelText = computed(() => {
   if (eventClosed.value) return "聚完了别忘了补一张回忆卡，后面翻这顿饭会更完整。";
@@ -1993,11 +2100,11 @@ function clearPageState() {
   tasteProfile.value = null;
   tasteProfileLoading.value = false;
   tasteProfileError.value = "";
-  menuConfirmSheetVisible.value = false;
   gapLoading.value = false;
   gapErrorText.value = "";
   eventGapItems.value = null;
   planGapItems.value = [];
+  preparationSubmittingKey.value = "";
 }
 
 async function automatorApplySession(snapshot: { token: string; uid: number; expiresAt: string }) {
@@ -2348,11 +2455,6 @@ function handleParticipantNoteSheetAfterClose() {
 function closeNoteSheet() {
   if (submitting.value) return;
   noteSheetVisible.value = false;
-}
-
-function closeMenuConfirmSheet() {
-  if (submitting.value) return;
-  menuConfirmSheetVisible.value = false;
 }
 
 async function revokeParticipantInvite(item: ParticipantSheetItem) {
@@ -3015,6 +3117,15 @@ async function handleConfirmMenuAction() {
   if (!planDetail.value || !canManageMenu.value || submitting.value) return;
   submitting.value = true;
   try {
+    if (eventDetail.value) {
+      const confirmed = await uniPlatform.feedback.confirm({
+        title: "确认菜单",
+        content: "确认后菜单将固定，不能再调整。要继续吗？",
+        confirmText: "确认并固定",
+        cancelText: "再看看"
+      });
+      if (!confirmed) return;
+    }
     planDetail.value = await mealApi.confirmPlanMenu(planDetail.value.id, {
       operationId: createOperationId(),
       expectedVersion: planDetail.value.version
@@ -3023,7 +3134,6 @@ async function handleConfirmMenuAction() {
       eventDetail.value = await mealApi.getDiningEvent(eventDetail.value.id);
     }
     await loadGapPreview();
-    menuConfirmSheetVisible.value = false;
     await uniPlatform.feedback.toast({ title: "菜单已固定", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认菜单失败", icon: "none" });
@@ -3043,12 +3153,93 @@ async function handleCompleteEventAction() {
   submitting.value = true;
   try {
     eventDetail.value = await mealApi.completeDiningEvent(eventDetail.value.id, createOperationId());
-    openMemory();
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "结束饭局失败", icon: "none" });
   } finally {
     submitting.value = false;
   }
+}
+
+async function openCompletedIngredientSheet() {
+  if (!mealActuallyCompleted.value || completedIngredientLoading.value || completedIngredientBusy.value) return;
+  completedIngredientSheetVisible.value = true;
+  completedIngredientLoading.value = true;
+  completedIngredientItems.value = [];
+  completedIngredientStates.value = {};
+  try {
+    const rows = eventDetail.value
+      ? await shoppingApi.previewEventGap(eventDetail.value.id)
+      : planDetail.value
+        ? await shoppingApi.previewPlanGap(planDetail.value.id)
+        : [];
+    const unique = new Map<string, CompletedIngredientItem>();
+    for (const row of rows) {
+      const name = row.name.trim();
+      if (!name) continue;
+      const key = row.ingredientId ? `ingredient:${row.ingredientId}` : `name:${name.toLocaleLowerCase()}`;
+      if (!unique.has(key)) unique.set(key, { key, ingredientId: row.ingredientId, name });
+    }
+    completedIngredientItems.value = [...unique.values()];
+  } catch (error) {
+    completedIngredientSheetVisible.value = false;
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "读取这顿饭的食材失败", icon: "none" });
+  } finally {
+    completedIngredientLoading.value = false;
+  }
+}
+
+function closeCompletedIngredientSheet() {
+  if (completedIngredientBusy.value) return;
+  completedIngredientSheetVisible.value = false;
+}
+
+function handleCompletedIngredientSheetAfterClose() {
+  completedIngredientItems.value = [];
+  completedIngredientStates.value = {};
+  completedIngredientSubmittingKey.value = "";
+}
+
+async function setCompletedIngredientPresence(item: CompletedIngredientItem, presence: "PRESENT" | "EMPTY") {
+  if (completedIngredientBusy.value || completedIngredientSubmittingKey.value || completedIngredientStates.value[item.key] === presence) return;
+  completedIngredientSubmittingKey.value = item.key;
+  try {
+    const body = { operationId: createOperationId(), ingredientId: item.ingredientId, name: item.name };
+    if (presence === "PRESENT") await fridgeApi.markPresent(body);
+    else await fridgeApi.markEmpty(body);
+    completedIngredientStates.value = { ...completedIngredientStates.value, [item.key]: presence };
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新食材状态失败", icon: "none" });
+  } finally {
+    completedIngredientSubmittingKey.value = "";
+  }
+}
+
+async function markAllCompletedIngredientsPresent() {
+  if (completedIngredientBusy.value || !completedIngredientItems.value.length) return;
+  completedIngredientBusy.value = true;
+  try {
+    const pending = completedIngredientItems.value.filter(item => completedIngredientStates.value[item.key] !== "PRESENT");
+    if (pending.length) {
+      await fridgeApi.markPresentBatch(pending.map(item => ({
+        ingredientId: item.ingredientId,
+        name: item.name
+      })), createOperationId());
+      completedIngredientStates.value = {
+        ...completedIngredientStates.value,
+        ...Object.fromEntries(pending.map(item => [item.key, "PRESENT"]))
+      };
+    }
+    completedIngredientSheetVisible.value = false;
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新食材状态失败", icon: "none" });
+  } finally {
+    completedIngredientBusy.value = false;
+  }
+}
+
+function skipCompletedIngredientUpdate() {
+  if (completedIngredientBusy.value) return;
+  completedIngredientSheetVisible.value = false;
 }
 
 async function handleCompletePlanAction() {
@@ -3065,6 +3256,26 @@ async function handleCompletePlanAction() {
     await uniPlatform.feedback.toast({ title: "计划已结束", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "结束计划失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleCancelPlanAction() {
+  if (!planDetail.value || !showDetailCancelAction.value || submitting.value) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "取消计划",
+    content: "取消后会保留这条计划和菜单，也可以为同一天同一餐次重新创建计划。确定取消吗？"
+  });
+  if (!confirmed) return;
+
+  submitting.value = true;
+  try {
+    planDetail.value = await mealApi.cancelPlan(planDetail.value.id, createOperationId());
+    planGapItems.value = [];
+    await uniPlatform.feedback.toast({ title: "计划已取消", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "取消计划失败", icon: "none" });
   } finally {
     submitting.value = false;
   }
@@ -3093,6 +3304,65 @@ async function handleCancelEventAction() {
     await uniPlatform.feedback.toast({ title: "饭局已取消，可重新发起", icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "取消饭局失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleDetailCancelAction() {
+  if (eventDetail.value) {
+    await handleCancelEventAction();
+  } else {
+    await handleCancelPlanAction();
+  }
+}
+
+async function toggleEventPreparation(item: MealGapPreviewItem) {
+  if (!eventDetail.value || preparationSubmittingKey.value) return;
+  preparationSubmittingKey.value = item.key;
+  try {
+    eventDetail.value = await mealApi.setEventPreparation(
+      eventDetail.value.id,
+      item.key,
+      item.preparationStatus !== "HOME",
+      createOperationId()
+    );
+    await loadGapPreview();
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新准备状态失败", icon: "none" });
+  } finally {
+    preparationSubmittingKey.value = "";
+  }
+}
+
+async function handlePrepareDiningEventAction() {
+  if (!eventDetail.value || eventDetail.value.ingredientsReadyAt || eventDetail.value.cookingStartedAt || submitting.value) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "确认已备齐",
+    content: "确认这顿饭需要的食材都已准备好？确认后将跳过采购，并可以开始做饭。"
+  });
+  if (!confirmed) return;
+
+  submitting.value = true;
+  try {
+    eventDetail.value = await mealApi.prepareDiningEvent(eventDetail.value.id, createOperationId());
+    await loadGapPreview();
+    await uniPlatform.feedback.toast({ title: "这顿饭已备齐", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认备齐失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function handleStartCookingAction() {
+  if (!eventDetail.value || !eventGapReady.value || currentEventPendingCount.value > 0 || eventDetail.value.cookingStartedAt || submitting.value) return;
+  submitting.value = true;
+  try {
+    eventDetail.value = await mealApi.startCooking(eventDetail.value.id, createOperationId());
+    await uniPlatform.feedback.toast({ title: "开始做饭", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "开始做饭失败", icon: "none" });
   } finally {
     submitting.value = false;
   }
@@ -3155,35 +3425,6 @@ function buildShoppingDraftName() {
   );
 }
 
-function closeShoppingSheet() {
-  shoppingSheetVisible.value = false;
-}
-
-function handleShoppingSheetAfterClose() {
-  shoppingListError.value = "";
-  shoppingCreateName.value = "";
-}
-
-async function loadShoppingLists(force = false) {
-  if (shoppingListLoading.value && !force) return;
-  shoppingListLoading.value = true;
-  shoppingListError.value = "";
-  try {
-    const result = await shoppingApi.listLists("ACTIVE");
-    shoppingLists.value = result.items;
-    if (selectedShoppingListId.value && !shoppingLists.value.some(item => item.id === selectedShoppingListId.value)) {
-      selectedShoppingListId.value = "";
-    }
-    if (!selectedShoppingListId.value) {
-      selectedShoppingListId.value = shoppingLists.value[0]?.id || "";
-    }
-  } catch (error) {
-    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
-  } finally {
-    shoppingListLoading.value = false;
-  }
-}
-
 function openLinkedShoppingList() {
   if (!linkedShoppingListId.value) return;
   void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(linkedShoppingListId.value));
@@ -3200,41 +3441,14 @@ async function openShoppingPage() {
     await uniPlatform.feedback.toast({ title: "这顿饭当前没有可采购的菜谱", icon: "none" });
     return;
   }
-  await loadShoppingLists(true);
-  if (!shoppingCreateName.value.trim()) {
-    shoppingCreateName.value = buildShoppingDraftName();
-  }
-  shoppingSheetVisible.value = true;
-}
-
-async function createShoppingList() {
-  if (shoppingWriting.value) return;
   shoppingWriting.value = true;
   try {
-    const created = await shoppingApi.createList({
+    const activeLists = await shoppingApi.listLists("ACTIVE");
+    const currentList = activeLists.items[0] ?? await shoppingApi.createList({
       operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || null
+      name: buildShoppingDraftName()
     });
-    shoppingLists.value = [
-      created,
-      ...shoppingLists.value.filter(item => item.id !== created.id)
-    ];
-    selectedShoppingListId.value = created.id;
-    shoppingCreateName.value = buildShoppingDraftName();
-    await uniPlatform.feedback.toast({ title: "清单已创建", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
-  } finally {
-    shoppingWriting.value = false;
-  }
-}
-
-async function confirmAddToShoppingList() {
-  if ((!planDetail.value && !eventDetail.value) || !selectedShoppingListId.value || planClosed.value || shoppingWriting.value) return;
-  if (eventDetail.value && gapLoading.value) return;
-  shoppingWriting.value = true;
-  try {
-    const listId = selectedShoppingListId.value;
+    const listId = currentList.id;
     if (eventDetail.value) {
       if (!eventGapItems.value) {
         await loadGapPreview();
@@ -3256,7 +3470,6 @@ async function confirmAddToShoppingList() {
         planItemId: currentPlan.id
       });
     }
-    closeShoppingSheet();
     await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
     void uniPlatform.navigation.navigateTo(`/pages_pantry/list-detail/index?id=${encodeURIComponent(String(listId))}`);
   } catch (error) {
@@ -3299,10 +3512,6 @@ function handleFooterAction(action: FooterActionKey) {
     return;
   }
   if (action === "confirm-menu") {
-    if (eventDetail.value) {
-      menuConfirmSheetVisible.value = true;
-      return;
-    }
     void handleConfirmMenuAction();
     return;
   }
@@ -3314,8 +3523,8 @@ function handleFooterAction(action: FooterActionKey) {
     void handleCompleteEventAction();
     return;
   }
-  if (action === "cancel-event") {
-    void handleCancelEventAction();
+  if (action === "start-cooking") {
+    void handleStartCookingAction();
     return;
   }
   if (action === "shopping") {
@@ -4063,6 +4272,13 @@ function clearFocusedSection() {
   align-items: center;
   justify-content: space-between;
   gap: 24rpx;
+}
+
+.meal-panel__head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .meal-panel__head-main {
@@ -5030,6 +5246,31 @@ function clearFocusedSection() {
   margin-top: 12rpx;
 }
 
+.meal-shopping-preview__row {
+  padding: 24rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-state-warning-soft);
+}
+
+.meal-shopping-preview__state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8rpx;
+  color: var(--text-tertiary);
+  font-size: 22rpx;
+}
+
+.meal-shopping-preview__home {
+  color: var(--brand-primary);
+  font-size: 22rpx;
+}
+
+.meal-cancel-panel {
+  display: flex;
+  justify-content: center;
+}
+
 .meal-shopping-preview__row--extra {
   overflow: hidden;
   max-height: 0;
@@ -5249,6 +5490,132 @@ function clearFocusedSection() {
 
 .meal-footer__actions--ended {
   margin-top: 0;
+}
+
+.meal-footer__ended {
+  margin-top: 14rpx;
+}
+
+.meal-footer__ended-hint {
+  display: block;
+  margin-bottom: 12rpx;
+  color: var(--color-text-secondary);
+  font-size: 23rpx;
+  line-height: 1.5;
+}
+
+.meal-footer__update,
+.meal-footer__memory {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  height: 80rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  border: 0;
+  border-radius: 18rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.meal-footer__update {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.meal-footer__memory {
+  gap: 10rpx;
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.meal-footer__update::after,
+.meal-footer__memory::after {
+  border: 0;
+}
+
+.completed-ingredient-list {
+  max-height: 60vh;
+}
+
+.completed-ingredient-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid var(--color-border-light);
+}
+
+.completed-ingredient-row__name {
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 27rpx;
+}
+
+.completed-ingredient-row__actions,
+.meal-sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.completed-ingredient-row__button,
+.meal-sheet-actions__secondary,
+.meal-sheet-actions__primary {
+  margin: 0;
+  padding: 0 24rpx;
+  border: 0;
+  border-radius: 14rpx;
+  font-size: 23rpx;
+  line-height: 64rpx;
+}
+
+.completed-ingredient-row__button {
+  background: var(--button-secondary-bg);
+  color: var(--color-text-secondary);
+}
+
+.completed-ingredient-row__button--busy,
+.meal-sheet-actions__button--busy {
+  opacity: 0.55;
+}
+
+.completed-ingredient-row__button--muted {
+  color: var(--color-text-tertiary);
+}
+
+.completed-ingredient-row__button--active {
+  background: var(--color-state-success-soft);
+  color: var(--color-state-success-text);
+}
+
+.meal-sheet-actions {
+  width: 100%;
+}
+
+.meal-sheet-actions__secondary,
+.meal-sheet-actions__primary {
+  flex: 1;
+}
+
+.meal-sheet-actions__secondary {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.meal-sheet-actions__primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.completed-ingredient-row__button::after,
+.meal-sheet-actions__secondary::after,
+.meal-sheet-actions__primary::after {
+  border: 0;
 }
 
 .meal-footer__quick {

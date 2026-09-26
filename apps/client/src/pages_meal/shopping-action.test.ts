@@ -12,3 +12,10 @@ test("meal shopping actions only treat ACTIVE lists as the current writable bind
   assert.doesNotMatch(planSource, /hasShoppingListLink\(plan\)/);
   assert.doesNotMatch(detailSource, /hasShoppingListLink\(shoppingLinkTarget\.value\)/);
 });
+
+test("plan and meal detail go straight to an active list instead of asking the user to choose", () => {
+  assert.doesNotMatch(planSource, /ShoppingListPickerSheet/);
+  assert.doesNotMatch(detailSource, /ShoppingListPickerSheet/);
+  assert.match(planSource, /async function addPlanToShoppingList\([\s\S]*?listActive\(\)[\s\S]*?createList\([\s\S]*?addPlanToList/);
+  assert.match(detailSource, /async function openShoppingPage\([\s\S]*?listLists\("ACTIVE"\)[\s\S]*?createList\([\s\S]*?addEventToList[\s\S]*?addPlanToList/);
+});

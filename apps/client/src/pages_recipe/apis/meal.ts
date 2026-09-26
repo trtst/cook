@@ -21,7 +21,7 @@ export interface MealPlanSummary {
   mealSlot: MealSlot;
   title: string;
   menuItems: MealPlanMenuItemSummary[];
-  status: "PLANNED" | "COMPLETED";
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;

@@ -18,7 +18,7 @@ export interface MealPlanSummary {
   title: string;
   menuItems: MealPlanMenuItemSummary[];
   menuLocked: boolean;
-  status: "PLANNED" | "COMPLETED";
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
   hasDiningEvent: boolean;
   diningEventId: UUID | null;

@@ -140,7 +140,7 @@
                     <text class="section__label">营养和热量</text>
                     <text class="section__caption">{{ nutritionCaption }}</text>
                   </view>
-                  <view v-if="publishedNutrition?.perRecipe" class="nutrition-toggle">
+                  <view v-if="showNutritionToggle" class="nutrition-toggle">
                     <button
                       class="nutrition-toggle__item"
                       :class="{ 'nutrition-toggle__item--active': nutritionView === 'perServing' }"
@@ -158,7 +158,7 @@
                     </button>
                   </view>
                 </view>
-                <view v-if="visibleNutritionMetrics.length" :key="nutritionMotionKey" class="nutrition-grid">
+                <view :key="nutritionMotionKey" class="nutrition-grid">
                   <view class="nutrition-grid__chart">
                     <view
                       v-for="segment in nutritionRingSegments"
@@ -195,7 +195,6 @@
                     <text class="nutrition-grid__calories-unit">kcal</text>
                   </view>
                 </view>
-                <text v-else class="section__empty">暂无营养估算</text>
               </view>
 
               <view id="detail-steps" class="section">
@@ -865,7 +864,7 @@ const recipePlanLinks = computed<RecipePlanLinkSummary[]>(() => {
 	const now = new Date();
 	return sortRecipePlanLinks(
 		links.filter(
-      item => item.status !== "COMPLETED" && !isMealSlotExpired(item.planDate, item.mealSlot, now)
+      item => item.status !== "COMPLETED" && item.status !== "CANCELLED" && !isMealSlotExpired(item.planDate, item.mealSlot, now)
     )
   );
 });
@@ -879,6 +878,9 @@ const planLinksSheetSubtitle = computed(() => {
 });
 const nutritionCaption = computed(() =>
   nutritionView.value === "perRecipe" ? "整份营养为估算值，仅供参考" : "单份营养为估算值，仅供参考"
+);
+const hasFuzzyIngredient = computed(() =>
+  detailContent.value.ingredients.some(item => item.amount.kind === "FUZZY")
 );
 const nutritionMotionTick = ref(0);
 const currentNutritionMetrics = computed(() => {
@@ -895,10 +897,22 @@ const currentNutritionMetrics = computed(() => {
 const visibleNutritionMetrics = computed<NutritionMetricCard[]>(() => {
   return currentNutritionMetrics.value ? buildNutritionMetrics(currentNutritionMetrics.value) : [];
 });
+const showNutritionToggle = computed(
+  () =>
+    hasCompleteNutrition(publishedNutrition.value?.perServing ?? null) &&
+    hasCompleteNutrition(publishedNutrition.value?.perRecipe ?? null)
+);
 const currentNutritionCalories = computed(() => formatNutritionNumber(currentNutritionMetrics.value?.calories ?? null));
 const nutritionMotionKey = computed(() => `${nutritionView.value}-${nutritionMotionTick.value}`);
 const nutritionRingSegments = computed<NutritionRingSegment[]>(() => buildNutritionRingSegments(visibleNutritionMetrics.value));
-const showNutritionSection = computed(() => visibleNutritionMetrics.value.length > 0);
+const showNutritionSection = computed(() => {
+  const status = publishedNutrition.value?.status;
+  return (
+    !hasFuzzyIngredient.value &&
+    (status === "COMPLETE" || status === "ESTIMATED") &&
+    hasCompleteNutrition(currentNutritionMetrics.value)
+  );
+});
 const anchorTabs = computed(() => {
   const tabs: Array<{ value: AnchorKey; label: string }> = [{ value: "ingredients", label: "食材" }];
   if (showNutritionSection.value) {
@@ -954,11 +968,11 @@ watch([reportSheetVisible, recommendSheetVisible, privateSheetVisible, planSheet
 watch(
   publishedNutrition,
   nutrition => {
-    if (!nutrition?.perRecipe) {
-      nutritionView.value = "perServing";
-      return;
-    }
-    nutritionView.value = nutrition.perServing ? "perServing" : "perRecipe";
+    nutritionView.value = hasCompleteNutrition(nutrition?.perServing ?? null)
+      ? "perServing"
+      : hasCompleteNutrition(nutrition?.perRecipe ?? null)
+        ? "perRecipe"
+        : "perServing";
   },
   { immediate: true }
 );
@@ -1830,6 +1844,15 @@ function syncDetailPlanLinks(nextLink: RecipePlanLinkSummary) {
 
 function hasNutritionValue(value: number | null): value is number {
   return value !== null && Number.isFinite(value);
+}
+
+function hasCompleteNutrition(
+  metrics: RecipeNutritionSummary["perServing"]
+): metrics is NonNullable<RecipeNutritionSummary["perServing"]> {
+  return Boolean(
+    metrics &&
+    [metrics.calories, metrics.protein, metrics.fat, metrics.carbohydrate].every(hasNutritionValue)
+  );
 }
 
 function formatNutritionNumber(value: number | null) {

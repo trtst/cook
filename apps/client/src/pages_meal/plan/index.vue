@@ -243,23 +243,6 @@
         </template>
       </SheetShell>
 
-      <ShoppingListPickerSheet
-        :visible="shoppingSheetVisible"
-        :loading="shoppingListLoading"
-        :error-text="shoppingListError"
-        :items="shoppingLists"
-        :selected-id="selectedShoppingListId"
-        :create-name="shoppingCreateName"
-        :submitting="shoppingSubmitting"
-        @close="closeShoppingSheet"
-        @after-close="handleShoppingSheetAfterClose"
-        @retry="loadShoppingLists(true)"
-        @create="createShoppingList"
-        @confirm="confirmAddToShoppingList"
-        @update:selected-id="selectedShoppingListId = $event"
-        @update:create-name="shoppingCreateName = $event"
-      />
-
   </Layout>
 </template>
 
@@ -268,12 +251,11 @@ import { onHide, onLoad, onShow, onUnload } from "@dcloudio/uni-app";
 import { computed, nextTick, ref, watch } from "vue";
 import { type UUID } from "@/apis/http";
 import emptyStateArt from "@/assets/empty.png";
-import { shoppingListApi, type ShoppingListSummary } from "../apis/shopping-list";
+import { shoppingListApi } from "../apis/shopping-list";
 import { recipeApi, type RecipeDuration } from "@/apis/recipe";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
-import ShoppingListPickerSheet from "@/components/Shopping/ShoppingListPickerSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
 import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
@@ -363,12 +345,6 @@ const monthTransition = ref<{
   targetIndex: number;
   targetWeekStart: string;
 } | null>(null);
-const shoppingSheetVisible = ref(false);
-const shoppingListLoading = ref(false);
-const shoppingListError = ref("");
-const shoppingLists = ref<ShoppingListSummary[]>([]);
-const selectedShoppingListId = ref<UUID | "">("");
-const shoppingCreateName = ref("");
 const shoppingSubmitting = ref(false);
 const shoppingPlan = ref<MealPlanSummary | null>(null);
 const emptyDockOpen = ref(false);
@@ -419,6 +395,7 @@ const selectedDateTitle = computed(() => {
 const planMap = computed(() => {
   const dateMap = new Map<string, Map<MealSlot, MealPlanSummary>>();
   for (const item of plans.value) {
+    if (item.status === "CANCELLED") continue;
     const slotMap = dateMap.get(item.planDate) ?? new Map<MealSlot, MealPlanSummary>();
     slotMap.set(item.mealSlot, item);
     dateMap.set(item.planDate, slotMap);
@@ -803,11 +780,25 @@ async function addPlanToShoppingList(plan: MealPlanSummary) {
     return;
   }
   shoppingPlan.value = plan;
+  shoppingSubmitting.value = true;
   try {
-    await openShoppingSheet();
+    const activeLists = await shoppingListApi.listActive();
+    const currentList = activeLists[0] ?? await shoppingListApi.createList({
+      operationId: createOperationId(),
+      name: buildShoppingDraftName(plan)
+    });
+    await shoppingListApi.addPlanToList(currentList.id, {
+      operationId: createOperationId(),
+      planItemId: plan.id
+    });
+    await loadWeekPlans();
+    await uniPlatform.feedback.toast({ title: "已加入当前采购清单", icon: "success" });
+    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(currentList.id));
   } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
+  } finally {
+    shoppingSubmitting.value = false;
     shoppingPlan.value = null;
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "清单加载失败", icon: "none" });
   }
 }
 
@@ -846,6 +837,7 @@ function planCardTitle(plan: MealPlanSummary) {
 }
 
 function planCardStateText(plan: MealPlanSummary) {
+  if (plan.status === "CANCELLED") return "已取消";
   if (plan.status === "COMPLETED") return "已完成";
   if (isPlanExpired(plan, nowMs.value)) return "已结束";
   return "";
@@ -928,7 +920,7 @@ function hasPlanShoppingRecipes(plan: MealPlanSummary) {
 }
 
 function canShowShoppingAction(plan: MealPlanSummary) {
-  return !isPlanExpired(plan, nowMs.value) && plan.status !== "COMPLETED";
+  return !isPlanExpired(plan, nowMs.value) && plan.status === "PLANNED";
 }
 
 function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">) {
@@ -938,90 +930,6 @@ function resolvePlanDeadlineMs(plan: Pick<MealPlanSummary, "planDate" | "mealSlo
 function isPlanExpired(plan: Pick<MealPlanSummary, "planDate" | "mealSlot">, currentMs = Date.now()) {
   const deadlineMs = resolvePlanDeadlineMs(plan);
   return deadlineMs > 0 && deadlineMs <= currentMs;
-}
-
-function closeShoppingSheet() {
-  shoppingSheetVisible.value = false;
-}
-
-function handleShoppingSheetAfterClose() {
-  shoppingListError.value = "";
-  shoppingCreateName.value = "";
-  shoppingPlan.value = null;
-}
-
-async function loadShoppingLists(force = false) {
-  if (shoppingListLoading.value && !force) return;
-  shoppingListLoading.value = true;
-  shoppingListError.value = "";
-  try {
-    shoppingLists.value = await shoppingListApi.listActive();
-    if (selectedShoppingListId.value && !shoppingLists.value.some(item => item.id === selectedShoppingListId.value)) {
-      selectedShoppingListId.value = "";
-    }
-    if (!selectedShoppingListId.value) {
-      selectedShoppingListId.value = shoppingLists.value[0]?.id || "";
-    }
-  } catch (error) {
-    shoppingListError.value = error instanceof Error ? error.message : "清单加载失败";
-  } finally {
-    shoppingListLoading.value = false;
-  }
-}
-
-async function openShoppingSheet() {
-  await loadShoppingLists(true);
-  if (!shoppingCreateName.value.trim()) {
-    shoppingCreateName.value = buildShoppingDraftName(shoppingPlan.value);
-  }
-  shoppingSheetVisible.value = true;
-}
-
-async function createShoppingList() {
-  if (shoppingSubmitting.value) return;
-  shoppingSubmitting.value = true;
-  try {
-    const created = await shoppingListApi.createList({
-      operationId: createOperationId(),
-      name: shoppingCreateName.value.trim() || null
-    });
-    shoppingLists.value = [
-      created,
-      ...shoppingLists.value.filter(item => item.id !== created.id)
-    ];
-    selectedShoppingListId.value = created.id;
-    shoppingCreateName.value = buildShoppingDraftName(shoppingPlan.value);
-    await uniPlatform.feedback.toast({ title: "清单已创建", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
-  }
-}
-
-async function confirmAddToShoppingList() {
-  if (!shoppingPlan.value || !selectedShoppingListId.value || shoppingSubmitting.value) return;
-  if (isPlanExpired(shoppingPlan.value, nowMs.value) || shoppingPlan.value.status === "COMPLETED") {
-    closeShoppingSheet();
-    await uniPlatform.feedback.toast({ title: "这条计划已经结束，不能再加入采购清单", icon: "none" });
-    return;
-  }
-  shoppingSubmitting.value = true;
-  try {
-    const listId = selectedShoppingListId.value;
-    await shoppingListApi.addPlanToList(listId, {
-      operationId: createOperationId(),
-      planItemId: shoppingPlan.value.id
-    });
-    await loadWeekPlans();
-    closeShoppingSheet();
-    await uniPlatform.feedback.toast({ title: "已加入采购清单", icon: "success" });
-    void uniPlatform.navigation.navigateTo(buildShoppingListDetailPath(listId));
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入采购清单失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
-  }
 }
 
 function sortPlans(items: MealPlanSummary[]) {
@@ -1087,12 +995,6 @@ function clearPageState() {
   monthTransition.value = null;
   weekSwiperCurrent.value = WEEK_PANEL_MID;
   weekSwiperDuration.value = WEEK_SWIPER_DURATION_MS;
-  shoppingSheetVisible.value = false;
-  shoppingListLoading.value = false;
-  shoppingListError.value = "";
-  shoppingLists.value = [];
-  selectedShoppingListId.value = "";
-  shoppingCreateName.value = "";
   shoppingSubmitting.value = false;
   shoppingPlan.value = null;
   emptyDockOpen.value = false;

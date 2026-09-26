@@ -333,187 +333,57 @@
             </template>
 
             <template v-if="sheetMode === 'ingredient'">
-              <text class="ingredient-picker__hint">{{ ingredientHintText }}</text>
-
-              <view v-if="!ingredientCreateVisible" class="sheet-search">
-                <RecipeSearchBar
-                  v-model="ingredientKeyword"
-                  class="sheet-search__bar"
-                  placeholder="搜索食材名称"
-                  @confirm="handleIngredientSearchConfirm"
-                  @clear="exitIngredientSearch"
-                />
-              </view>
-
-              <view v-if="!ingredientCreateVisible && !ingredientSearchMode" class="ingredient-filter">
-                <view
-                  class="ingredient-filter__chip"
-                  :class="{ 'ingredient-filter__chip--active': ingredientAllActive }"
-                  @click="clearIngredientCategory"
-                >
-                  全部食材
-                </view>
-                <view class="ingredient-filter__right">
-                  <view
-                    class="ingredient-filter__action"
-                    :class="{ 'ingredient-filter__action--hidden': !showIngredientPersonalActions }"
-                    @click="startIngredientCreate()"
-                  >
-                    添加食材
+              <IngredientPickerContent
+                v-if="!ingredientCreateVisible"
+                :hint-text="ingredientHintText"
+                v-model:keyword="ingredientKeyword"
+                :search-mode="ingredientSearchMode"
+                :search-loading="ingredientSearchLoading"
+                :search-items="searchedIngredients"
+                :loading="ingredientLoading"
+                :category-items="categoryIngredients"
+                :categories="ingredientCategories"
+                :category-id="ingredientCategoryId"
+                :all-active="ingredientAllActive"
+                :source-filter="ingredientSourceFilter"
+                :show-personal-actions="showIngredientPersonalActions"
+                :selected-ids="pendingIngredientIds"
+                :selected-items="pendingSelectedIngredients"
+                :existing-ids="[]"
+                :footer-text="ingredientFooterText"
+                :error-text="''"
+                :empty-text="ingredientEmptyText"
+                :show-empty-create="showIngredientEmptyCreate"
+                show-search-create
+                :confirm-disabled="ingredientConfirmDisabled"
+                confirm-text="确认"
+                picker-height="320px"
+                :main-style="ingredientPickerMainStyle"
+                @search="handleIngredientSearchConfirm"
+                @clear-search="exitIngredientSearch"
+                @clear-category="clearIngredientCategory"
+                @change-source="changeIngredientSourceFilter"
+                @change-category="changeIngredientCategory"
+                @load-more="loadMoreIngredients"
+                @toggle="togglePendingIngredient"
+                @remove="removePendingIngredient"
+                @create="startIngredientCreate"
+                @confirm="confirmIngredientSelection"
+              >
+                <template #item-actions="{ item }">
+                  <view v-if="showIngredientItemActions(item)" class="ingredient-choice__actions">
+                    <text v-if="canEditIngredient(item)" class="ingredient-choice__action" @click.stop="startIngredientEdit(item)">编辑</text>
+                    <text
+                      v-if="canRecommendIngredient(item)"
+                      class="ingredient-choice__action ingredient-choice__action--primary"
+                      @click.stop="recommendIngredient(item)"
+                    >
+                      推荐
+                    </text>
+                    <text v-else-if="isIngredientRecommendationPending(item)" class="ingredient-choice__status">审核中</text>
                   </view>
-                  <view
-                    class="ingredient-filter__chip"
-                    :class="{ 'ingredient-filter__chip--active': ingredientSourceFilter === 'PERSONAL' }"
-                    @click="changeIngredientSourceFilter('PERSONAL')"
-                  >
-                    我的食材
-                    <text class="cookfont icon-filter ingredient-filter__icon" />
-                  </view>
-                </view>
-              </view>
-
-              <view class="ingredient-stage">
-                <view v-if="!ingredientCreateVisible" class="ingredient-stage__pane">
-                    <template v-if="ingredientSearchMode">
-                      <view v-if="ingredientSearchLoading && !searchedIngredients.length" class="ingredient-picker__empty ingredient-picker__empty--create">
-                        <text class="ingredient-picker__empty-text">加载中...</text>
-                      </view>
-                      <view v-else-if="searchedIngredients.length" class="ingredient-search">
-                        <text class="ingredient-search__count">搜索结果 {{ searchedIngredients.length }} 条</text>
-                        <scroll-view
-                          class="ingredient-search__scroll"
-                          scroll-y
-                          lower-threshold="240"
-                          @scrolltolower="loadMoreIngredients"
-                        >
-                          <view class="ingredient-grid ingredient-grid--search">
-                          <view
-                            v-for="item in searchedIngredients"
-                            :key="item.id"
-                            class="ingredient-choice"
-                            :class="{ 'ingredient-choice--active': pendingIngredientIds.includes(item.id) }"
-                            @click="togglePendingIngredient(item.id)"
-                          >
-                            <view class="ingredient-choice__head">
-                              <text class="ingredient-choice__name">{{ item.name }}</text>
-                            </view>
-                            <view v-if="showIngredientItemActions(item)" class="ingredient-choice__actions">
-                              <text v-if="canEditIngredient(item)" class="ingredient-choice__action" @click.stop="startIngredientEdit(item)">编辑</text>
-                              <text
-                                v-if="canRecommendIngredient(item)"
-                                class="ingredient-choice__action ingredient-choice__action--primary"
-                                @click.stop="recommendIngredient(item)"
-                              >
-                                推荐
-                              </text>
-                              <text v-else-if="isIngredientRecommendationPending(item)" class="ingredient-choice__status">审核中</text>
-                            </view>
-                          </view>
-                          </view>
-                          <text v-if="ingredientFooterText" class="ingredient-search__footer">{{ ingredientFooterText }}</text>
-                        </scroll-view>
-                      </view>
-                      <view v-else class="ingredient-picker__empty ingredient-picker__empty--create">
-                        <text class="ingredient-picker__empty-text">没有搜索到“{{ ingredientSearchText }}”</text>
-                        <button class="ingredient-picker__create" @click="startIngredientCreate()">
-                          创建 {{ ingredientSearchText }}
-                        </button>
-                      </view>
-                    </template>
-                    <view v-else class="ingredient-picker">
-                      <view id="ingredient-picker-side" class="ingredient-picker__side">
-                        <view
-                          v-for="item in ingredientCategories"
-                          :key="item.id"
-                          class="ingredient-category"
-                          :class="{ 'ingredient-category--active': ingredientCategoryId === item.id }"
-                          @click="changeIngredientCategory(item.id)"
-                        >
-                          {{ item.name }}
-                        </view>
-                      </view>
-
-                      <view class="ingredient-picker__main" :style="ingredientPickerMainStyle">
-                        <view v-if="ingredientLoading && !categoryIngredients.length" class="ingredient-picker__empty">
-                          <text class="ingredient-picker__empty-text">加载中...</text>
-                        </view>
-                        <scroll-view
-                          v-else-if="categoryIngredients.length"
-                          class="ingredient-picker__scroll"
-                          scroll-y
-                          show-scrollbar="false"
-                          lower-threshold="240"
-                          @scrolltolower="loadMoreIngredients"
-                        >
-                          <view class="ingredient-grid">
-                            <view
-                              v-for="item in categoryIngredients"
-                              :key="item.id"
-                              class="ingredient-choice"
-                              :class="{ 'ingredient-choice--active': pendingIngredientIds.includes(item.id) }"
-                              @click="togglePendingIngredient(item.id)"
-                            >
-                              <view class="ingredient-choice__head">
-                                <text class="ingredient-choice__name">{{ item.name }}</text>
-                              </view>
-                              <view v-if="showIngredientItemActions(item)" class="ingredient-choice__actions">
-                                <text v-if="canEditIngredient(item)" class="ingredient-choice__action" @click.stop="startIngredientEdit(item)">编辑</text>
-                                <text
-                                  v-if="canRecommendIngredient(item)"
-                                  class="ingredient-choice__action ingredient-choice__action--primary"
-                                  @click.stop="recommendIngredient(item)"
-                                >
-                                  推荐
-                                </text>
-                                <text v-else-if="isIngredientRecommendationPending(item)" class="ingredient-choice__status">审核中</text>
-                              </view>
-                            </view>
-                          </view>
-                          <text v-if="ingredientFooterText" class="ingredient-search__footer">{{ ingredientFooterText }}</text>
-                        </scroll-view>
-                        <view v-else class="ingredient-picker__empty">
-                          <text class="ingredient-picker__empty-text">{{ ingredientEmptyText }}</text>
-                          <button
-                            v-if="showIngredientEmptyCreate"
-                            class="ingredient-picker__create"
-                            @click="startIngredientCreate()"
-                          >
-                            创建个人食材
-                          </button>
-                        </view>
-                      </view>
-                    </view>
-
-                    <view class="ingredient-picker__footer">
-                      <scroll-view scroll-x class="ingredient-selected" show-scrollbar="false">
-                        <view class="ingredient-selected__track">
-                          <view
-                            v-for="item in pendingSelectedIngredients"
-                            :key="item.id"
-                            class="ingredient-selected__chip"
-                          >
-                            <text class="ingredient-selected__name">{{ item.name }}</text>
-                            <text class="cookfont icon-close ingredient-selected__remove" @click.stop="removePendingIngredient(item.id)" />
-                          </view>
-                        </view>
-                      </scroll-view>
-                      <button
-                        v-if="ingredientSearchMode"
-                        class="sheet-cancel"
-                        @click="exitIngredientSearch"
-                      >
-                        取消
-                      </button>
-                      <button
-                        class="sheet-confirm"
-                        :class="{ 'sheet-confirm--disabled': ingredientConfirmDisabled }"
-                        @click="confirmIngredientSelection"
-                      >
-                        确认
-                      </button>
-                    </view>
-                </view>
-
+                </template>
+              </IngredientPickerContent>
                 <view v-else class="ingredient-stage__pane">
                     <view class="ingredient-create">
                       <view class="ingredient-create__summary">
@@ -600,22 +470,9 @@
                       </button>
                     </view>
                 </view>
-              </view>
             </template>
 
             <template v-else-if="sheetMode === 'unit'">
-              <view v-if="activeUnitRow?.categoryCode === 'SEASONING'" class="sheet-section">
-                <text class="sheet-section__title">模糊用量</text>
-                <view class="chip-row">
-                  <view
-                    class="chip"
-                    :class="{ 'chip--active': activeUnitRow?.fuzzyText === '适量' }"
-                    @click="selectFuzzyAmount"
-                  >
-                    适量
-                  </view>
-                </view>
-              </view>
               <view
                 v-for="group in unitGroups"
                 :key="group.type"
@@ -630,6 +487,18 @@
                     @click="selectUnitOption(item.id)"
                   >
                     {{ item.name }}
+                  </view>
+                </view>
+              </view>
+              <view class="sheet-section">
+                <text class="sheet-section__title">模糊用量</text>
+                <view class="chip-row">
+                  <view
+                    class="chip"
+                    :class="{ 'chip--active': activeUnitRow?.fuzzyText === '适量' }"
+                    @click="selectFuzzyAmount"
+                  >
+                    适量
                   </view>
                 </view>
               </view>
@@ -827,12 +696,11 @@ import {
 import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
+import IngredientPickerContent from "@/components/Ingredient/IngredientPickerContent.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { buildIngredientUnitHint, resolveRecommendedIngredientUnitName } from "@/pages_recipe/ingredient-unit-policy";
 import {
   applyIngredientSelection,
-  canUseFuzzyAmount,
   chooseFuzzyAmount
 } from "./ingredient-row-policy";
 import { buildCategoryDisplay } from "./category-display";
@@ -967,8 +835,7 @@ const INGREDIENT_DRAG_PRESS_DELAY_MS = 260;
 const INGREDIENT_DRAG_PRESS_MOVE_PX = 8;
 const INGREDIENT_DRAG_GAP_RPX = 16;
 const INGREDIENT_PAGE_SIZE = 20;
-const INGREDIENT_ALL_PAGE_SIZE = 48;
-const INGREDIENT_ALL_REVEAL_STEP = 12;
+const INGREDIENT_ALL_PAGE_SIZE = 30;
 const INGREDIENT_SEARCH_DEBOUNCE_MS = 240;
 const STEP_SORT_PRESS_DELAY_MS = 260;
 const STEP_SORT_PRESS_MOVE_PX = 8;
@@ -1046,8 +913,6 @@ const ingredientHasNext = ref(false);
 const ingredientLoading = ref(false);
 const ingredientLoadingMore = ref(false);
 const ingredientSearchPending = ref(false);
-const ingredientVisibleCount = ref(0);
-const ingredientPickerHeight = ref(0);
 const pendingIngredientIds = ref<ResourceId[]>([]);
 const ingredientCreateVisible = ref(false);
 const ingredientCreateSubmitting = ref(false);
@@ -1135,7 +1000,6 @@ const ingredientSearchText = computed(() => ingredientKeyword.value.trim());
 const ingredientSearchMode = computed(() => Boolean(ingredientSearchText.value));
 const ingredientLoadedKeyword = ref("");
 const ingredientAllActive = computed(() => ingredientSourceFilter.value === "ALL" && !ingredientCategoryId.value);
-const ingredientUseWindowedList = computed(() => !ingredientSearchMode.value);
 const ingredientSearchReady = computed(() => ingredientLoadedKeyword.value === ingredientSearchText.value);
 const ingredientSearchLoading = computed(() => ingredientSearchMode.value && (ingredientSearchPending.value || ingredientLoading.value));
 const ingredientConfirmDisabled = computed(() => !ingredientSearchMode.value && !pendingIngredientIds.value.length);
@@ -1181,10 +1045,7 @@ const sheetTitleTag = computed(() => {
   }
   return `新增 ${pendingIngredientAddCount.value} 项`;
 });
-const categoryIngredients = computed(() => {
-  if (!ingredientUseWindowedList.value) return ingredientOptions.value;
-  return ingredientOptions.value.slice(0, ingredientVisibleCount.value);
-});
+const categoryIngredients = computed(() => ingredientOptions.value);
 const searchedIngredients = computed(() => {
   if (ingredientSearchMode.value && !ingredientSearchReady.value) {
     return [];
@@ -1213,15 +1074,11 @@ const categoryDisplay = computed(() => buildCategoryDisplay(categories.value, ca
 const showIngredientEmptyCreate = computed(() => ingredientSourceFilter.value === "PERSONAL");
 const ingredientFooterText = computed(() => {
   if (ingredientLoadingMore.value) return "加载中...";
+  if (ingredientHasNext.value) return "上滑加载更多";
   if (ingredientOptions.value.length) return "没有更多了";
   return "";
 });
-const ingredientPickerMainStyle = computed(() => {
-  if (!ingredientPickerHeight.value) return undefined;
-  return {
-    height: `${ingredientPickerHeight.value}px`
-  };
-});
+const ingredientPickerMainStyle = { height: "320px" };
 const activeUnitRow = computed(() => ingredientRows.value.find(item => item.localId === activeUnitRowId.value) || null);
 const unitGroups = computed(() => {
   const groups = new Map<UnitSummary["type"], UnitSummary[]>();
@@ -1383,19 +1240,6 @@ watch(
 );
 
 watch(
-  [
-    () => sheetMode.value,
-    () => sheetVisible.value,
-    () => ingredientCreateVisible.value,
-    () => ingredientSearchMode.value,
-    () => ingredientCategories.value.length
-  ],
-  () => {
-    void syncIngredientPickerHeight();
-  }
-);
-
-watch(
   () => sheetVisible.value,
   (visible) => {
     setPageLocked(visible || stepSortVisible.value || ingredientDragging.value);
@@ -1431,23 +1275,6 @@ function handleFormFieldFocus() {
 
 function handleFormFieldBlur() {
   formFieldFocused.value = false;
-}
-
-async function syncIngredientPickerHeight() {
-  if (
-    sheetMode.value !== "ingredient" ||
-    !sheetVisible.value ||
-    ingredientCreateVisible.value ||
-    ingredientSearchMode.value ||
-    !ingredientCategories.value.length
-  ) {
-    ingredientPickerHeight.value = 0;
-    return;
-  }
-
-  await nextTick();
-  const rect = await uniPlatform.system.measure("#ingredient-picker-side");
-  ingredientPickerHeight.value = rect?.height ? Math.round(rect.height) : 0;
 }
 
 function handleLoginSuccess() {
@@ -1560,27 +1387,7 @@ async function ensureUnitsLoaded() {
 }
 
 function buildIngredientPageSize() {
-  if (ingredientUseWindowedList.value) return INGREDIENT_ALL_PAGE_SIZE;
-  return INGREDIENT_PAGE_SIZE;
-}
-
-function syncIngredientVisibleCount(reset: boolean) {
-  if (!ingredientUseWindowedList.value) {
-    ingredientVisibleCount.value = ingredientOptions.value.length;
-    return;
-  }
-  if (reset) {
-    ingredientVisibleCount.value = Math.min(INGREDIENT_ALL_PAGE_SIZE, ingredientOptions.value.length);
-    return;
-  }
-  ingredientVisibleCount.value = Math.min(ingredientVisibleCount.value + INGREDIENT_ALL_REVEAL_STEP, ingredientOptions.value.length);
-}
-
-function revealMoreIngredientOptions() {
-  if (!ingredientUseWindowedList.value) return false;
-  if (ingredientVisibleCount.value >= ingredientOptions.value.length) return false;
-  ingredientVisibleCount.value = Math.min(ingredientVisibleCount.value + INGREDIENT_ALL_REVEAL_STEP, ingredientOptions.value.length);
-  return true;
+  return ingredientSearchMode.value ? INGREDIENT_PAGE_SIZE : INGREDIENT_ALL_PAGE_SIZE;
 }
 
 function buildIngredientQuery(page: number) {
@@ -1617,7 +1424,6 @@ async function loadIngredientOptionsPage(reset: boolean) {
     ingredientSearchPending.value = ingredientSearchText.value !== queryKeyword;
     mergeIngredients(result.items);
     updateIngredientOptions(result.items, reset);
-    syncIngredientVisibleCount(reset);
   } catch (error) {
     if (requestId === ingredientRequestSeed && ingredientSearchText.value === queryKeyword) {
       ingredientSearchPending.value = false;
@@ -1645,7 +1451,6 @@ async function reloadIngredientOptions(showError = true) {
 
 async function loadMoreIngredients() {
   try {
-    if (revealMoreIngredientOptions()) return;
     await loadIngredientOptionsPage(false);
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "食材加载失败", icon: "none" });
@@ -1900,7 +1705,6 @@ async function openIngredientPicker(selectedIds: ResourceId[]) {
   ingredientPage.value = 1;
   ingredientHasNext.value = false;
   ingredientOptions.value = [];
-  ingredientVisibleCount.value = 0;
   ingredientSearchPending.value = false;
   pendingIngredientIds.value = selectedIds;
   resetIngredientCreate();
@@ -3238,9 +3042,6 @@ async function buildIngredients(): Promise<RecipeIngredientInput[]> {
     }
     const ingredientId = row.ingredientId;
     if (row.fuzzyText) {
-      if (!canUseFuzzyAmount(row.categoryCode)) {
-        throw new Error(`第 ${index + 1} 个食材不是调味料，不能使用“适量”`);
-      }
       result.push({
         ingredientId,
         amount: {
@@ -3310,11 +3111,6 @@ function applyIngredientUpdate(updated: IngredientSummary, previousDefaultUnitId
     row.categoryCode = ingredientCategoryCode(updated.categoryId);
     row.source = updated.source;
     row.defaultUnitId = updated.defaultUnit.id;
-    if (row.fuzzyText && !canUseFuzzyAmount(row.categoryCode)) {
-      row.quantity = "";
-      row.unitId = updated.defaultUnit.id;
-      row.fuzzyText = "";
-    }
     if (previousDefaultUnitId && row.unitId === previousDefaultUnitId) {
       row.unitId = updated.defaultUnit.id;
     }
@@ -3323,7 +3119,7 @@ function applyIngredientUpdate(updated: IngredientSummary, previousDefaultUnitId
 
 function createIngredientRow(partial: Partial<Omit<IngredientRow, "localId">> = {}): IngredientRow {
   const categoryCode = partial.categoryCode || ingredientCategoryCode(partial.categoryId);
-  const fuzzyText = partial.fuzzyText && canUseFuzzyAmount(categoryCode) ? "适量" : "";
+  const fuzzyText = partial.fuzzyText === "适量" ? "适量" : "";
   return {
     localId: nextLocalId("ingredient"),
     ingredientId: partial.ingredientId || "",

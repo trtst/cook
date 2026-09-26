@@ -213,22 +213,6 @@ async function createUnitRecommendationFixture(session) {
   };
 }
 
-async function createExpiringFridgeItemFixture(session) {
-  const expireAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  return requestData("/fridge-items", {
-    method: "POST",
-    headers: {
-      ...buildAuthHeaders(session),
-      "Idempotency-Key": nextIdempotencyKey()
-    },
-    body: JSON.stringify({
-      name: `临期食材${nextIdempotencyKey().slice(-6)}`,
-      quantityText: "1 份",
-      expireAt
-    })
-  });
-}
-
 async function createFutureMealPlanFixture(session) {
   const suffix = nextIdempotencyKey().slice(-6);
   for (let attempt = 0; attempt < 7; attempt += 1) {
@@ -442,8 +426,7 @@ describe("pages_me/recommend/index", () => {
     expect(afterRefresh.refreshing).toBe(false);
   });
 
-  it("关闭食材提醒后不再展示临期提醒消息", async () => {
-    await createExpiringFridgeItemFixture(session);
+  it("低维护 V1 通知中心不展示按到期日计算的食材提醒", async () => {
     await updateNotificationSettings(session, {
       meal: {
         enabled: false,

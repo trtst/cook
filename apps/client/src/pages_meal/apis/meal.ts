@@ -23,7 +23,7 @@ export interface MealPlanSummary {
   title: string;
   menuItems: MealPlanMenuItemSummary[];
   menuLocked: boolean;
-  status: "PLANNED" | "COMPLETED";
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
@@ -96,20 +96,10 @@ export interface MealCookContextResponse {
   dishes: MealCookContextDish[];
 }
 
-export interface CookingConsumptionResponse {
+export interface CookingTraceResponse {
   planItemId: UUID;
-  consumptionOperationId: OperationId;
-  completedAt: IsoDateTime;
-  updatedCount: number;
-  unknownCount: number;
-  shortageCount: number;
-  skippedFuzzyCount: number;
-  message: string;
-  canUndo: boolean;
-}
-
-export interface CookingUndoResponse {
-  undone: boolean;
+  recordedAt: IsoDateTime;
+  usedCount: number;
   message: string;
 }
 
@@ -214,6 +204,8 @@ export interface DiningEventSummary {
   hasActiveShareLink: boolean;
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
+  ingredientsReadyAt: IsoDateTime | null;
+  cookingStartedAt: IsoDateTime | null;
   version: number;
   createdAt: IsoDateTime;
 }
@@ -322,11 +314,6 @@ export interface CompleteCookingRequest {
   markWholeTable?: boolean;
 }
 
-export interface UndoCookingRequest {
-  operationId: OperationId;
-  consumptionOperationId: OperationId;
-}
-
 export interface ChooseDiningEventWishRecipeRequest {
   operationId: OperationId;
   recipeIds: UUID[];
@@ -389,13 +376,7 @@ export const mealApi = {
   },
   completeCooking(planItemId: UUID, body: CompleteCookingRequest) {
     const { operationId, ...payload } = body;
-    return post<CookingConsumptionResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cooking-complete`, payload, {
-      idempotencyKey: operationId
-    });
-  },
-  undoCooking(planItemId: UUID, body: UndoCookingRequest) {
-    const { operationId, ...payload } = body;
-    return post<CookingUndoResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cooking-complete/undo`, payload, {
+    return post<CookingTraceResponse>(`${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cooking-complete`, payload, {
       idempotencyKey: operationId
     });
   },
@@ -410,6 +391,13 @@ export const mealApi = {
   completePlan(planItemId: UUID, operationId: OperationId) {
     return post<MealPlanSummary>(
       `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/complete`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  cancelPlan(planItemId: UUID, operationId: OperationId) {
+    return post<MealPlanSummary>(
+      `${cfg.domain}/api/meal-plans/${encodeURIComponent(planItemId)}/cancel`,
       undefined,
       { idempotencyKey: operationId }
     );
@@ -514,6 +502,27 @@ export const mealApi = {
   cancelDiningEvent(eventId: UUID, operationId: OperationId) {
     return post<DiningEventSummary>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/cancel`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  setEventPreparation(eventId: UUID, sourceKey: string, isPresent: boolean, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/preparations`,
+      { sourceKey, isPresent },
+      { idempotencyKey: operationId }
+    );
+  },
+  prepareDiningEvent(eventId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/prepare`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  startCooking(eventId: UUID, operationId: OperationId) {
+    return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/start-cooking`,
       undefined,
       { idempotencyKey: operationId }
     );

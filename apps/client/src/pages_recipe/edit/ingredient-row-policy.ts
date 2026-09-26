@@ -19,12 +19,7 @@ export type IngredientSelectionState = {
   source: "SYSTEM" | "PERSONAL";
 };
 
-export function canUseFuzzyAmount(categoryCode: string | null | undefined) {
-  return categoryCode === "SEASONING";
-}
-
 export function chooseFuzzyAmount(row: IngredientRowPolicyState) {
-  if (!canUseFuzzyAmount(row.categoryCode)) return false;
   row.quantity = "";
   row.unitId = "";
   row.fuzzyText = "适量";
@@ -41,7 +36,7 @@ export function applyIngredientSelection(row: IngredientRowPolicyState, ingredie
   row.defaultUnitId = ingredient.defaultUnitId;
   row.source = ingredient.source;
 
-  if (hadFuzzyAmount && canUseFuzzyAmount(ingredient.categoryCode)) return;
+  if (hadFuzzyAmount) return;
   if (!hadFuzzyAmount && isSameIngredient) return;
   row.quantity = "";
   row.fuzzyText = "";

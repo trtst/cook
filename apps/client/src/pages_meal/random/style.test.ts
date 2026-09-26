@@ -37,7 +37,6 @@ function expectSelectorExcludes(source: string, selector: string, snippets: stri
 const randomPageSource = readFile("./index.vue");
 const randomConditionBarSource = readFile("../components/RandomConditionBar.vue");
 const randomBottomBarSource = readFile("../components/RandomBottomBar.vue");
-const randomGapPanelSource = readFile("../components/RandomGapPanel.vue");
 const randomEmptySlotCardSource = readFile("../components/RandomEmptySlotCard.vue");
 const randomSlotCardSource = readFile("../components/RandomSlotCard.vue");
 const fontSource = readFile("../../assets/fonts/font.scss");
@@ -47,6 +46,8 @@ expectIncludes(randomPageSource, '@click="generateMenu"');
 expectIncludes(randomPageSource, 'class="plan-sheet__inspiration"');
 expectIncludes(randomPageSource, 'class="plan-sheet__category-row"');
 expectIncludes(randomPageSource, 'class="plan-sheet__category-chip"');
+expectIncludes(randomPageSource, "选中的菜会一起写入计划；食材需求可在计划详情查看，是否采购由你决定。");
+expectExcludes(randomPageSource, "食材不足的菜");
 expectIncludes(randomPageSource, '@click="createPlan"');
 expectIncludes(randomPageSource, "for (const item of inspirationSlots.value) selectCategory(item.recipeVersionId, created.id);");
 expectIncludes(randomPageSource, 'v-for="boardSlot in boardSlots"');
@@ -64,6 +65,9 @@ expectExcludes(randomPageSource, "shortageDishCount");
 expectExcludes(randomPageSource, "待补");
 expectExcludes(randomPageSource, "还缺食材");
 expectExcludes(randomPageSource, "和缺什么理清楚");
+expectExcludes(randomPageSource, "randomMealApi.previewGap");
+expectExcludes(randomPageSource, "shortageMap");
+expectIncludes(randomPageSource, 'purchaseState: "READY"');
 expectIncludes(randomPageSource, "暂时没有更多可换的菜了");
 expectIncludes(randomPageSource, "if (isReroll) {");
 expectIncludes(randomPageSource, "if (result.items.length === 0) {");
@@ -119,11 +123,6 @@ expectExcludes(randomBottomBarSource, "加入清单");
 expectExcludes(randomBottomBarSource, "createShopping");
 expectIncludes(randomBottomBarSource, "加入计划");
 
-expectExcludes(randomGapPanelSource, "确认有");
-expectExcludes(randomGapPanelSource, "确认无");
-expectExcludes(randomGapPanelSource, "保留待采购");
-expectExcludes(randomGapPanelSource, "采购这道缺口");
-expectIncludes(randomGapPanelSource, "冰箱对比");
 
 expectExcludes(randomSlotCardSource, "取消保留");
 expectExcludes(randomSlotCardSource, 'emit("lock"');

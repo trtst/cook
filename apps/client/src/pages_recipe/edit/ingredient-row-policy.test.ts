@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { applyIngredientSelection, chooseFuzzyAmount } from "./ingredient-row-policy";
+
+test("the edit page exposes 适量 in the unit sheet for every ingredient category", () => {
+  const source = readFileSync(resolve(import.meta.dirname, "index.vue"), "utf8");
+
+  assert.match(source, /<text class="sheet-section__title">模糊用量<\/text>/);
+  assert.doesNotMatch(source, /v-if="activeUnitRow\?\.categoryCode === 'SEASONING'"/);
+  const unitSheetStart = source.indexOf('<template v-else-if="sheetMode === \'unit\'">');
+  const unitGroupIndex = source.indexOf('v-for="group in unitGroups"', unitSheetStart);
+  const fuzzySectionIndex = source.indexOf('<text class="sheet-section__title">模糊用量</text>', unitSheetStart);
+  assert.ok(unitGroupIndex >= 0 && fuzzySectionIndex > unitGroupIndex, "Expected 适量 after all system unit groups");
+});
 
 function buildRow() {
   return {
@@ -16,13 +29,13 @@ function buildRow() {
   };
 }
 
-test("non-seasoning rows cannot switch to 适量", () => {
+test("all ingredient categories can switch to 适量", () => {
   const row = { ...buildRow(), categoryCode: "PRODUCE", fuzzyText: "" as const, quantity: "2", unitId: 3005 as number | "" };
 
-  assert.equal(chooseFuzzyAmount(row), false);
+  assert.equal(chooseFuzzyAmount(row), true);
   assert.deepEqual(
     { quantity: row.quantity, unitId: row.unitId, fuzzyText: row.fuzzyText },
-    { quantity: "2", unitId: 3005, fuzzyText: "" }
+    { quantity: "", unitId: "", fuzzyText: "适量" }
   );
 });
 
@@ -62,7 +75,7 @@ test("reselecting the same ingredient keeps its exact amount", () => {
   );
 });
 
-test("replacing a fuzzy seasoning with a non-seasoning clears 适量 and keeps the new identity", () => {
+test("replacing a fuzzy ingredient keeps 适量 across categories", () => {
   const row = buildRow();
 
   applyIngredientSelection(row, {
@@ -74,15 +87,8 @@ test("replacing a fuzzy seasoning with a non-seasoning clears 适量 and keeps t
     source: "SYSTEM"
   });
 
-  assert.deepEqual(row, {
-    ingredientId: 10000001,
-    name: "番茄",
-    quantity: "",
-    unitId: 3005,
-    fuzzyText: "",
-    categoryId: 5001,
-    categoryCode: "PRODUCE",
-    defaultUnitId: 3005,
-    source: "SYSTEM"
-  });
+  assert.deepEqual(
+    { ingredientId: row.ingredientId, name: row.name, quantity: row.quantity, unitId: row.unitId, fuzzyText: row.fuzzyText },
+    { ingredientId: 10000001, name: "番茄", quantity: "", unitId: "", fuzzyText: "适量" }
+  );
 });

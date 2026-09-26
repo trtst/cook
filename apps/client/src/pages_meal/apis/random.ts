@@ -14,9 +14,6 @@ export type RecipeSlotType =
 export type RecipeProteinType = "PORK" | "CHICKEN" | "BEEF" | "LAMB" | "DUCK" | "FISH" | "NONE";
 export type RandomReplaceConstraintKind = "FLAVOR" | "DURATION" | "INGREDIENT" | "AVOID_INGREDIENT";
 export type RandomMenuWarningCode = "INSUFFICIENT_CANDIDATES" | "PARTIAL_MENU";
-export type RandomGapStatus = "OK" | "PARTIAL" | "MISSING" | "UNKNOWN";
-export type RandomGapInventoryStatus = "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN";
-export type RandomGapDecision = "HAS" | "MISSING";
 export type RandomFridgeFit = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
 export type RandomRecipeSourceType = "MY" | "INSPIRATION";
 
@@ -118,66 +115,6 @@ export interface ReplaceRandomMenuSlotResponse {
   warning: RandomMenuWarning | null;
 }
 
-export interface RandomGapInventoryDecisionItem {
-  slotId: string;
-  ingredientId?: UUID | null;
-  ingredientName: string;
-  decision: RandomGapDecision;
-}
-
-export interface RandomGapCheckItem {
-  slotId: string;
-  slotType: RecipeSlotType;
-  recipeId: UUID;
-  recipeVersionId: UUID;
-}
-
-export interface CheckRandomMenuGapRequest {
-  mealSlot: MealSlot;
-  peopleCount: number;
-  items: RandomGapCheckItem[];
-  inventoryDecisions: RandomGapInventoryDecisionItem[];
-}
-
-export interface RandomGapIngredient {
-  decisionKey: string;
-  ingredientId: UUID | null;
-  ingredientName: string;
-  quantityText: string | null;
-  inventoryStatus: RandomGapInventoryStatus;
-  purchasable: boolean;
-}
-
-export interface RandomGapItem {
-  slotId: string;
-  slotType: RecipeSlotType;
-  recipeId: UUID;
-  recipeVersionId: UUID;
-  recipeName: string;
-  status: RandomGapStatus;
-  missingIngredients: RandomGapIngredient[];
-  actions: {
-    canKeep: boolean;
-    canReplace: boolean;
-    canRemove: boolean;
-    canAddToShopping: boolean;
-  };
-  unresolvedUnknownCount: number;
-}
-
-export interface RandomGapSummary {
-  okCount: number;
-  partialCount: number;
-  missingCount: number;
-  unknownCount: number;
-}
-
-export interface CheckRandomMenuGapResponse {
-  items: RandomGapItem[];
-  summary: RandomGapSummary;
-  canCreatePlan: boolean;
-}
-
 export const randomMealApi = {
   generateMenu(body: GenerateRandomMenuRequest, operationId: OperationId) {
     return post<RandomMenuResponse>(`${cfg.domain}/api/random-menus/generate`, body, { idempotencyKey: operationId });
@@ -187,8 +124,5 @@ export const randomMealApi = {
   },
   replaceSlot(body: ReplaceRandomMenuSlotRequest) {
     return post<ReplaceRandomMenuSlotResponse>(`${cfg.domain}/api/random-menu-slots/replace`, body);
-  },
-  previewGap(body: CheckRandomMenuGapRequest) {
-    return post<CheckRandomMenuGapResponse>(`${cfg.domain}/api/random-menu-gap/preview`, body);
   }
 };

@@ -316,7 +316,7 @@ export interface RecipePlanLinkSummary {
 	planDate: string;
 	mealSlot: "BREAKFAST" | "LUNCH" | "AFTERNOON_TEA" | "DINNER" | "LATE_NIGHT";
 	menuLocked: boolean;
-	status: "PLANNED" | "COMPLETED";
+	status: "PLANNED" | "COMPLETED" | "CANCELLED";
 	hasDiningEvent: boolean;
 }
 
