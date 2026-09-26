@@ -1,0 +1,1 @@
+ALTER TYPE "MealPlanStatus" ADD VALUE 'CANCELLED';

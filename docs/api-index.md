@@ -2,7 +2,7 @@
 
 > 当前索引已经收口为个人数据 + 饭局协作 + 四档个人会员模型。已下线的饭搭子关系接口、旧空间切换模型和 `/entitlements/current` 都不再作为现行合同。
 >
-> 低维护 V1 主路径只保留完整准备需求、已买勾选和购买/做饭行为痕迹；冰箱精确库存、库存预占、`UNKNOWN / NEED_CONFIRM`、采购入库和自动扣减接口均为历史兼容能力，不得作为新客户端入口。
+> 低维护 V1 主路径只保留完整准备需求、已买勾选和购买/做饭行为痕迹；不计算库存差额、不预占、不自动入库或扣减。
 
 ## 状态说明
 
@@ -161,6 +161,7 @@
 | Meal | GET/POST | `/meal-plans` | 查询或创建个人计划，支持当前餐次的空白计划壳子 |
 | Meal | POST | `/meal-plans/{planItemId}/title` | 更新一个计划餐次标题 |
 | Meal | POST | `/meal-plans/{planItemId}/complete` | 完成一个计划餐次 |
+| Meal | POST | `/meal-plans/{planItemId}/cancel` | 保留计划与菜单并取消计划餐次 |
 | Meal | POST | `/meal-plans/{planItemId}/title` | 单独修改一个计划餐次标题 |
 | DiningEvent | POST | `/meal-plans/{planItemId}/dining-event` | 从计划创建饭局 |
 | DiningEvent | GET | `/dining-events` | 分页查询当前用户可见的饭局摘要列表 |
@@ -176,26 +177,23 @@
 | DiningEvent | POST | `/dining-events/{eventId}/bring` | 选择带菜 |
 | DiningEvent | POST | `/dining-events/{eventId}/complete` | 完成一场饭局 |
 | DiningEvent | POST | `/dining-events/{eventId}/cancel` | 取消尚未开始且无人接受的饭局 |
+| DiningEvent | POST | `/dining-events/{eventId}/preparations` | 设置或撤销本顿“家里有”确认 |
+| DiningEvent | POST | `/dining-events/{eventId}/prepare` | 确认本顿食材已备齐 |
+| DiningEvent | POST | `/dining-events/{eventId}/start-cooking` | 持久化开始做饭时间 |
 | Share | GET | `/share/{shareToken}/preview` | 饭局分享预览 |
 | Share | POST | `/share/{shareToken}/accept` | 以临时参与人接受分享 |
 | Share | GET | `/memory-shares/{shareToken}/preview` | 读取公开餐桌回忆卡快照 |
-| Fridge（兼容） | GET/POST | `/fridge-items` | 历史精确库存查询或创建，不属于低维护 V1 主路径 |
-| Fridge（兼容） | GET | `/fridge-items/{ingredientId}` | 查询历史食材库存批次 |
-| Fridge（兼容） | GET | `/fridge-items/{ingredientId}/history` | 查询历史库存批次 |
-| Fridge（兼容） | GET | `/fridge-items/batch/{itemId}` | 兼容旧批次深链并反查食材详情 |
-| Fridge（兼容） | PUT | `/fridge-items/{itemId}` | 更新历史精确库存条目 |
-| Fridge（兼容） | POST | `/fridge-items/consume` | 历史按食材总量跨批次扣减，不由新客户端调用 |
-| Shopping | GET/POST | `/shopping-items` | 查询或创建当前用户个人购物事实，供超市模式和采购记录使用 |
-| Shopping | GET | `/shopping-items/board` | 读取现有旧购物页聚合板，后续将被共享清单首页替代 |
-| Shopping | POST | `/shopping-items/from-recipe` | 把一份可读菜谱固定版本写入旧购物事实链路 |
-| Shopping | POST | `/shopping-items/{itemId}/status` | 更新个人购物事实状态，供旧超市模式兼容使用 |
-| Shopping | POST | `/shopping-items/group-status` | 更新旧购物页聚合板分组状态 |
+| FridgeTrace | GET | `/fridge-traces` | 查询近期食材状态痕迹，按食材聚合为有/没有/未确认 |
+| FridgeTrace | POST | `/fridge-traces/present` | 手动确认食材还有 |
+| FridgeTrace | POST | `/fridge-traces/present/batch` | 在单个事务中批量确认食材还有 |
+| FridgeTrace | POST | `/fridge-traces/empty` | 手动确认食材没有 |
+| FridgeTrace | GET | `/fridge-traces/summary` | 查询食材痕迹摘要 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-gap` | 把需求页选中的食材写入目标购物清单 |
 | ShoppingList | POST | `/shopping-lists/{listId}/items/from-event-gap` | 把某个饭局当前完整需求写入目标购物清单 |
+| ShoppingList | POST | `/shopping-lists/{listId}/items/check` | 一次提交购物清单中多项暂存的勾选变化 |
 | Shopping | GET | `/shopping-gap` | 查询当前用户待处理饭局汇总需求 |
 | Shopping | GET | `/meal-plans/{planItemId}/shopping-gap` | 预览指定计划餐次的完整准备需求 |
 | Shopping | GET | `/dining-events/{eventId}/shopping-gap` | 预览指定饭局的完整准备需求 |
-| Shopping | POST | `/dining-events/{eventId}/shopping-gap` | 生成饭局完整准备需求 |
 | AdminRecipe | GET | `/admin/recipes` | 后台系统菜谱列表 |
 | AdminRecipe | DELETE | `/admin/inspiration-categories/{categoryId}` | 删除空的系统菜谱分类 |
 | AdminRecipe | POST | `/admin/recipes` | 后台新增系统菜谱 |
@@ -221,7 +219,7 @@
 
 | 模块 | 方法与路径 | 状态 |
 | --- | --- | --- |
-| RandomMenu | `POST /random-menus/generate`、`POST /random-menu-slots/replace`、`POST /random-menu-gap/preview`、`POST /shopping-items/from-random-menu`、`POST /meal-plans` | 已落最小真实流程；后续仅继续补前端接入与真实联调验收 |
+| RandomMenu | `POST /random-menus/generate`、`POST /random-menu-slots/replace`、`POST /meal-plans` | 生成与调整不读取库存数量或要求确认库存 |
 | MealPlanCookAssistant | `GET /meal-plans/{planItemId}/cook-assistant`、`POST /meal-plans/{planItemId}/cook-assistant` | 已冻结为计划附属快照：一次生成、挂靠计划、菜单变更后按签名判过期 |
 | HomeRecentArrangement | `GET /home/recent-arrangement` | 已冻结首页“最近安排”单卡摘要契约：`24h -> 24~36h` 补位，当前窗口内饭局优先于计划，只返回 1 条最小摘要 |
 | RecipePromotion | 升级合集快照为“我的” | 已确认非本轮范围，待契约 |
@@ -231,7 +229,7 @@
 | --- | --- | --- |
 | Membership | 待冻结 | 订单、补差、回调和到期选择 |
 | Activity / Achievement | 部分已实现 | 勋章模板治理、勋章墙分类详情、完成餐次/饭局/采购闭环勋章与推荐贡献勋章已实现；更广活动与成就系统仍待冻结 |
-| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、好友分享链接、已买勾选、删除已完成/已作废清单和版本冲突语义已接入主链路；完成清单入库仅保留兼容接口 |
+| ShoppingList | `/shopping-lists*`、`/shopping-list-invites*`、`/shopping-shares*` | 共享购物清单首页、清单详情、待确认邀请卡片、好友分享链接、手动添加食材、逐项已买勾选、删除已完成/已作废清单和版本冲突语义已接入主链路；不提供完成清单自动入库接口 |
 
 ## 暂不创建
 

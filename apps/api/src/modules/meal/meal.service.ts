@@ -18,9 +18,7 @@ import { rateLimitService } from "../../common/rate-limit.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
-  CheckRandomMenuGapResponse,
-  CookingConsumptionResponse,
-  CookingUndoResponse,
+  CookingTraceResponse,
   DiningMemorySharePreview,
   DiningMemoryShareSnapshot,
   DiningEventParticipantSummary,
@@ -41,10 +39,6 @@ import type {
   MealPlanSummary,
   OperationId,
   PageResult,
-  RandomGapIngredient,
-  RandomGapInventoryDecision,
-  RandomGapItem,
-  RandomGapSummary,
   RandomMenuItem,
   RandomMenuQuotaResponse,
   RandomMenuResponse,
@@ -69,6 +63,7 @@ import { EntitlementService } from "../entitlement/entitlement.service";
 import { fromJson, toJson, versionAssistantToSnapshot, versionToContent } from "../recipe/recipe-content";
 import { UploadService } from "../upload/upload.service";
 import { MedalService } from "../user/medal.service";
+import { fridgePresentIngredientIds } from "../pantry/pantry.fridge-trace";
 import { WechatMiniCodeService } from "../wechat/wechat-mini-code.service";
 import { PantryService } from "../pantry/pantry.service";
 
@@ -1179,102 +1174,6 @@ export class MealService {
     };
   }
 
-  async previewRandomMenuGap(
-    userId: UUID,
-    mealSlot: string,
-    peopleCount: number,
-    items: Array<{
-      slotId: string;
-      slotType: string;
-      recipeId: UUID;
-      recipeVersionId: UUID;
-    }>,
-    inventoryDecisions: RandomGapInventoryDecision[]
-  ): Promise<CheckRandomMenuGapResponse> {
-    normalizeCoreMealSlot(mealSlot);
-    this.normalizePeopleCount(peopleCount);
-    if (!items.length) {
-      throw new BadRequestException("当前菜单不能为空");
-    }
-
-    const [recipes, inventoryFacts] = await Promise.all([
-      this.prisma.recipe.findMany({
-        where: {
-          id: { in: items.map(item => item.recipeId) },
-          status: "ACTIVE",
-          OR: [
-            { ownerId: userId },
-            publicInspirationRecipeWhere("ACTIVE")
-          ]
-        },
-        include: {
-          currentVersion: true
-        }
-      }),
-      this.loadRandomInventoryFacts(userId)
-    ]);
-    const recipeMap = new Map(recipes.map(item => [item.id, item]));
-    const decisionMap = new Map<string, "HAS" | "MISSING">(
-      inventoryDecisions.map(item => [this.buildGapDecisionKey(item.slotId, item.ingredientId ?? null, item.ingredientName), item.decision])
-    );
-
-    const gapItems: RandomGapItem[] = items.map(item => {
-      const recipe = recipeMap.get(item.recipeId);
-      if (!recipe || recipe.currentVersionId !== item.recipeVersionId) {
-        throw new NotFoundException("菜谱不存在");
-      }
-      const slotType = normalizeRecipeSlotType(item.slotType);
-      const content = this.getEffectiveRecipeContent(recipe);
-      const totalIngredientCount = content.ingredients.length;
-      const gapIngredients = content.ingredients
-        .map(ingredient => this.buildRandomGapIngredient(item.slotId, ingredient, inventoryFacts, decisionMap))
-        .filter((ingredient): ingredient is RandomGapIngredient => ingredient !== null);
-      const unknownCount = gapIngredients.filter(ingredient => ingredient.inventoryStatus === "UNKNOWN").length;
-      const missingCount = gapIngredients.filter(ingredient => ingredient.inventoryStatus === "MISSING").length;
-      const partialCount = gapIngredients.filter(ingredient => ingredient.inventoryStatus === "PARTIAL").length;
-      const status =
-        unknownCount > 0
-          ? "UNKNOWN"
-          : gapIngredients.length === 0
-            ? "OK"
-            : gapIngredients.length < totalIngredientCount
-              ? "PARTIAL"
-              : missingCount > 0 && partialCount === 0
-              ? "MISSING"
-              : "PARTIAL";
-
-      return {
-        slotId: item.slotId,
-        slotType,
-        recipeId: recipe.id,
-        recipeVersionId: recipe.currentVersionId,
-        recipeName: recipe.title,
-        status,
-        missingIngredients: gapIngredients,
-        actions: {
-          canKeep: true,
-          canReplace: true,
-          canRemove: true,
-          canAddToShopping: gapIngredients.some(ingredient => ingredient.inventoryStatus !== "UNKNOWN")
-        },
-        unresolvedUnknownCount: unknownCount
-      };
-    });
-
-    const summary: RandomGapSummary = {
-      okCount: gapItems.filter(item => item.status === "OK").length,
-      partialCount: gapItems.filter(item => item.status === "PARTIAL").length,
-      missingCount: gapItems.filter(item => item.status === "MISSING").length,
-      unknownCount: gapItems.filter(item => item.status === "UNKNOWN").length
-    };
-
-    return {
-      items: gapItems,
-      summary,
-      canCreatePlan: gapItems.length > 0
-    };
-  }
-
   async createMealPlan(
     userId: UUID,
     operationId: OperationId,
@@ -1320,14 +1219,8 @@ export class MealService {
 
       await startIdempotentOperation(tx, operationId, "meal-plan:create", userId, null, requestHash);
 
-      const existing = await tx.mealPlanItem.findUnique({
-        where: {
-          userId_planDate_mealSlot: {
-            userId,
-            planDate: normalizedPlanDate,
-            mealSlot: slot
-          }
-        },
+      const existing = await tx.mealPlanItem.findFirst({
+        where: { userId, planDate: normalizedPlanDate, mealSlot: slot, status: { not: "CANCELLED" } },
         include: mealPlanInclude
       });
 
@@ -1434,14 +1327,8 @@ export class MealService {
           throw new ConflictException("菜谱版本已变化，请重新选择");
         }
 
-        let existing = await tx.mealPlanItem.findUnique({
-          where: {
-            userId_planDate_mealSlot: {
-              userId,
-              planDate: normalizedPlanDate,
-              mealSlot: normalizedSlot
-            }
-          },
+        let existing = await tx.mealPlanItem.findFirst({
+          where: { userId, planDate: normalizedPlanDate, mealSlot: normalizedSlot, status: { not: "CANCELLED" } },
           include: mealPlanInclude
         });
 
@@ -1450,6 +1337,9 @@ export class MealService {
           existing = await this.getMealPlanOrThrow(tx, existing.id);
         }
 
+        if (existing?.status === "CANCELLED") {
+          throw new ConflictException("已取消计划不能添加菜单");
+        }
         if (existing?.status === "COMPLETED") {
           throw new ConflictException("已完成餐次不能修改");
         }
@@ -1574,17 +1464,8 @@ export class MealService {
     planItemId: UUID,
     operationId: OperationId,
     markWholeTable = false
-  ): Promise<CookingConsumptionResponse> {
-    return this.pantryService.completeMealCooking(userId, planItemId, operationId, markWholeTable);
-  }
-
-  async undoMealCooking(
-    userId: UUID,
-    planItemId: UUID,
-    operationId: OperationId,
-    consumptionOperationId: OperationId
-  ): Promise<CookingUndoResponse> {
-    return this.pantryService.undoMealCooking(userId, planItemId, operationId, consumptionOperationId);
+  ): Promise<CookingTraceResponse> {
+    return this.pantryService.completeMealCookingTrace(userId, planItemId, operationId, markWholeTable);
   }
 
   async confirmMealPlanMenu(
@@ -1599,9 +1480,13 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "meal-plan:confirm-menu", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
       const plan = await this.getOwnedMealPlanOrThrow(tx, userId, planItemId);
       if (plan.status === "COMPLETED") {
         throw new ConflictException("已完成餐次不能再确认菜单");
+      }
+      if (plan.status === "CANCELLED") {
+        throw new ConflictException("已取消计划不能确认菜单");
       }
       if (!plan.dishes.length) {
         throw new ConflictException("请先添加菜单后再确认");
@@ -1665,9 +1550,13 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "meal-plan:title", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
       const plan = await this.getOwnedMealPlanOrThrow(tx, userId, planItemId);
       if (plan.status === "COMPLETED") {
         throw new ConflictException("已完成餐次不能修改标题");
+      }
+      if (plan.status === "CANCELLED") {
+        throw new ConflictException("已取消计划不能修改标题");
       }
       if (plan.version !== expectedVersion) {
         throw new ConflictException("计划已被更新，请刷新后重试");
@@ -1733,11 +1622,13 @@ export class MealService {
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "meal-plan:complete", userId, null, requestHash);
 
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
       const current = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
         include: mealPlanInclude
       });
       if (!current || current.userId !== userId) throw new NotFoundException("计划不存在");
+      if (current.status === "CANCELLED") throw new ConflictException("已取消计划不能结束");
 
       const item =
         current.status === "COMPLETED"
@@ -1762,6 +1653,45 @@ export class MealService {
     });
   }
 
+  async cancelMealPlan(userId: UUID, planItemId: UUID, operationId: OperationId) {
+    const requestHash = String(planItemId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<MealPlanSummary>(tx, operationId, "meal-plan:cancel", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "meal-plan:cancel", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
+      const current = await this.getOwnedMealPlanOrThrow(tx, userId, planItemId);
+      if (current.status === "CANCELLED") {
+        const result = this.toMealPlanSummary(current);
+        await completeIdempotentOperation(tx, operationId, "meal-plan:cancel", userId, null, requestHash, result);
+        return result;
+      }
+      if (current.status === "COMPLETED") throw new ConflictException("已完成计划不能取消");
+      if (current.diningEvent && current.diningEvent.status !== "CANCELLED") {
+        throw new ConflictException("已发起饭局的计划请先取消饭局");
+      }
+      const planDateText = current.planDate.toISOString().slice(0, 10);
+      if (planDateText < shanghaiClockParts(new Date()).dateText) {
+        throw new ConflictException("计划日期已结束，不能取消");
+      }
+
+      const item = await tx.mealPlanItem.update({
+        where: { id: current.id },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          version: { increment: 1 }
+        },
+        include: mealPlanInclude
+      });
+      await upsertStorageLedger(tx, userId, "MEAL", item.id, sizeOfJson(item));
+      const result = this.toMealPlanSummary(item);
+      await completeIdempotentOperation(tx, operationId, "meal-plan:cancel", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
   async createDiningEvent(
     userId: UUID,
     planItemId: UUID,
@@ -1771,12 +1701,14 @@ export class MealService {
     request?: RequestLike
   ) {
     return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
       let plan = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
         include: mealPlanInclude
       });
       if (!plan || plan.userId !== userId) throw new NotFoundException("计划不存在");
       if (plan.status === "COMPLETED") throw new ConflictException("已完成餐次不能再发起饭局");
+      if (plan.status === "CANCELLED") throw new ConflictException("已取消计划不能发起饭局");
       if (plan.diningEvent && plan.diningEvent.status !== "CANCELLED") throw new ConflictException("该餐次已发起饭局");
 
       const normalizedLocation = normalizeOptionalText(location);
@@ -1842,14 +1774,8 @@ export class MealService {
       const normalizedPlanDate = mealPlanDateFromScheduledAt(resolvedScheduledAt);
       const slot = mealSlotFromScheduledAt(resolvedScheduledAt);
 
-      let plan = await tx.mealPlanItem.findUnique({
-        where: {
-          userId_planDate_mealSlot: {
-            userId,
-            planDate: normalizedPlanDate,
-            mealSlot: slot
-          }
-        },
+      let plan = await tx.mealPlanItem.findFirst({
+        where: { userId, planDate: normalizedPlanDate, mealSlot: slot, status: { not: "CANCELLED" } },
         include: mealPlanInclude
       });
 
@@ -2804,7 +2730,7 @@ export class MealService {
         .filter(item => item.status === "ACCEPTED" && item.userId !== null)
         .map(item => item.userId as UUID);
 
-      if (!acceptedUserIds.length) {
+      if (!acceptedUserIds.length && !current.cookingStartedAt) {
         throw new BadRequestException("至少有一位接受参与人后才能完成饭局");
       }
 
@@ -2906,6 +2832,121 @@ export class MealService {
       await completeIdempotentOperation(tx, operationId, "dining-event:cancel", userId, null, requestHash, result);
       return result;
     });
+  }
+
+  async setDiningEventPreparation(
+    userId: UUID,
+    eventId: UUID,
+    operationId: OperationId,
+    sourceKey: string,
+    isPresent: boolean
+  ) {
+    const requestHash = `${eventId}:${sourceKey}:${isPresent ? "1" : "0"}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:preparation", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:preparation", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const current = await this.loadDiningEventRow(tx, eventId);
+      if (!current || current.userId !== userId) throw new NotFoundException("饭局不存在");
+      this.assertDiningEventPreparationOpen(current);
+      const currentItems = await this.pantryService.previewEventGap(userId, eventId);
+      if (!currentItems.some(item => item.sourceKey === sourceKey)) {
+        throw new BadRequestException("食材已不在当前菜单中，请刷新后重试");
+      }
+
+      const existing = await tx.diningEventPreparation.findUnique({
+        where: { diningEventId_sourceKey: { diningEventId: eventId, sourceKey } },
+        select: { id: true }
+      });
+      const changed = isPresent ? !existing : Boolean(existing);
+      if (changed && isPresent) {
+        await tx.diningEventPreparation.create({
+          data: { diningEventId: eventId, sourceKey, confirmedByUserId: userId }
+        });
+      } else if (changed) {
+        await tx.diningEventPreparation.delete({
+          where: { diningEventId_sourceKey: { diningEventId: eventId, sourceKey } }
+        });
+      }
+      if (changed) {
+        await tx.diningEvent.update({ where: { id: eventId }, data: { version: { increment: 1 } } });
+      }
+      const event = await this.loadDiningEventRow(tx, eventId);
+      if (!event) throw new NotFoundException("饭局不存在");
+      const result = this.toDiningEventSummary(event, userId);
+      await completeIdempotentOperation(tx, operationId, "dining-event:preparation", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async markDiningEventPrepared(userId: UUID, eventId: UUID, operationId: OperationId) {
+    const requestHash = String(eventId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:prepare", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:prepare", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const current = await this.loadDiningEventRow(tx, eventId);
+      if (!current || current.userId !== userId) throw new NotFoundException("饭局不存在");
+      this.assertDiningEventPreparationOpen(current, false, true);
+      let event: DiningEventRow | null = current;
+      if (!current.ingredientsReadyAt) {
+        await tx.diningEvent.update({
+          where: { id: current.id },
+          data: { ingredientsReadyAt: new Date(), version: { increment: 1 } }
+        });
+        event = await this.loadDiningEventRow(tx, eventId);
+      }
+      if (!event) throw new NotFoundException("饭局不存在");
+      const result = this.toDiningEventSummary(event, userId);
+      await completeIdempotentOperation(tx, operationId, "dining-event:prepare", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async startDiningEventCooking(userId: UUID, eventId: UUID, operationId: OperationId) {
+    const requestHash = String(eventId);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<DiningEventSummary>(tx, operationId, "dining-event:start-cooking", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "dining-event:start-cooking", userId, null, requestHash);
+
+      await tx.$queryRaw`SELECT "id" FROM "dining_events" WHERE "id" = ${eventId} FOR UPDATE`;
+      const current = await this.loadDiningEventRow(tx, eventId);
+      if (!current || current.userId !== userId) throw new NotFoundException("饭局不存在");
+      this.assertDiningEventPreparationOpen(current, true, true);
+      if (!current.cookingStartedAt && !current.ingredientsReadyAt) {
+        const preparationItems = await this.pantryService.previewEventGap(userId, eventId);
+        if (preparationItems.some(item => item.preparationStatus === "OPEN")) {
+          throw new ConflictException("请先确认食材已备齐");
+        }
+      }
+      if (!current.cookingStartedAt) {
+        const startedAt = new Date();
+        await tx.diningEvent.update({
+          where: { id: current.id },
+          data: {
+            ingredientsReadyAt: current.ingredientsReadyAt ?? startedAt,
+            cookingStartedAt: startedAt,
+            version: { increment: 1 }
+          }
+        });
+      }
+      const event = await this.loadDiningEventRow(tx, eventId);
+      if (!event) throw new NotFoundException("饭局不存在");
+      const result = this.toDiningEventSummary(event, userId);
+      await completeIdempotentOperation(tx, operationId, "dining-event:start-cooking", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  private assertDiningEventPreparationOpen(event: DiningEventRow, allowCookingStarted = false, allowAlreadyReady = false) {
+    if (event.status !== "CONFIRMED") throw new ConflictException("请先确认菜单后再准备食材");
+    if (event.cookingStartedAt && !allowCookingStarted) throw new ConflictException("已经开始做饭，不能修改准备状态");
+    if (event.ingredientsReadyAt && !allowAlreadyReady) throw new ConflictException("食材已确认备齐，不能再修改准备状态");
   }
 
   async createDiningMemoryShare(
@@ -3475,13 +3516,12 @@ export class MealService {
     const samePlanDate = current.planDate.toISOString().slice(0, 10) === nextPlanDate.toISOString().slice(0, 10);
     if (samePlanDate && current.mealSlot === nextMealSlot) return current;
 
-    const occupied = await tx.mealPlanItem.findUnique({
+    const occupied = await tx.mealPlanItem.findFirst({
       where: {
-        userId_planDate_mealSlot: {
-          userId: event.userId,
-          planDate: nextPlanDate,
-          mealSlot: nextMealSlot
-        }
+        userId: event.userId,
+        planDate: nextPlanDate,
+        mealSlot: nextMealSlot,
+        status: { not: "CANCELLED" }
       }
     });
     if (occupied && occupied.id !== current.id) {
@@ -3776,6 +3816,8 @@ export class MealService {
       hasActiveShareLink: event.shareInvites.length > 0,
       shareTokenPath: event.userId === viewerUserId && event.shareInvites[0] ? buildDiningEventSharePath(event.shareInvites[0].id) : null,
       completedAt: event.completedAt ? toIsoDate(event.completedAt) : null,
+      ingredientsReadyAt: event.ingredientsReadyAt ? toIsoDate(event.ingredientsReadyAt) : null,
+      cookingStartedAt: event.cookingStartedAt ? toIsoDate(event.cookingStartedAt) : null,
       version: event.version,
       createdAt: toIsoDate(event.createdAt)
     };
@@ -4278,28 +4320,35 @@ export class MealService {
   }
 
   private async loadRandomInventoryFacts(userId: UUID, db: MealDb = this.prisma): Promise<RandomInventoryFacts> {
-    const fridgeItems = await db.fridgeItem.findMany({
+    const fridgeTraces = await db.fridgeTrace.findMany({
       where: {
-        userId,
-        available: true
+        userId
       },
       select: {
         ingredientId: true,
-        name: true
+        name: true,
+        kind: true,
+        createdAt: true,
+        categoryName: true,
+        categoryCode: true,
+        ingredient: { select: { category: { select: { name: true, code: true } } } }
       }
     });
+    const fridgeIngredientIds = fridgePresentIngredientIds(fridgeTraces.map(item => ({
+      ingredientId: item.ingredientId,
+      kind: item.kind,
+      createdAt: item.createdAt,
+      categoryName: item.categoryName ?? item.ingredient?.category.name ?? null,
+      categoryCode: item.categoryCode ?? item.ingredient?.category.code ?? null
+    })));
     const fridgeIngredientNames = new Map<UUID, string>();
-    for (const item of fridgeItems) {
-      if (typeof item.ingredientId === "number" && item.ingredientId > 0 && item.name.trim()) {
+    for (const item of fridgeTraces) {
+      if (item.ingredientId !== null && fridgeIngredientIds.has(item.ingredientId) && item.name.trim()) {
         fridgeIngredientNames.set(item.ingredientId, item.name.trim());
       }
     }
     return {
-      fridgeIngredientIds: new Set(
-        fridgeItems
-          .map(item => item.ingredientId)
-          .filter((item): item is UUID => typeof item === "number" && item > 0)
-      ),
+      fridgeIngredientIds,
       fridgeIngredientNames
     };
   }
@@ -4566,48 +4615,6 @@ export class MealService {
         slotTypes: uniqueSlotTypes
       }
     ];
-  }
-
-  private buildGapDecisionKey(slotId: string, ingredientId: UUID | null, ingredientName: string) {
-    return `${slotId}:${ingredientId ?? 0}:${normalizeNameKey(ingredientName)}`;
-  }
-
-  private buildRandomGapIngredient(
-    slotId: string,
-    ingredient: RecipeContentSnapshot["ingredients"][number],
-    inventoryFacts: RandomInventoryFacts,
-    decisionMap: Map<string, "HAS" | "MISSING">
-  ): RandomGapIngredient | null {
-    const ingredientId = ((ingredient.ingredientId ?? null) as UUID | null) ?? null;
-    const decisionKey = this.buildGapDecisionKey(slotId, ingredientId, ingredient.ingredientName);
-    const manualDecision = decisionMap.get(decisionKey);
-    const hasInventory =
-      ingredientId !== null && inventoryFacts.fridgeIngredientIds.has(ingredientId);
-
-    if (manualDecision === "HAS" || hasInventory) {
-      return null;
-    }
-
-    const inventoryStatus =
-      manualDecision === "MISSING"
-        ? "MISSING"
-        : ingredientId === null
-          ? "UNKNOWN"
-          : "MISSING";
-
-    return {
-      decisionKey,
-      ingredientId,
-      ingredientName: ingredient.ingredientName,
-      quantityText: ingredient.amount ? this.formatGapAmount(ingredient.amount) : null,
-      inventoryStatus,
-      purchasable: true
-    };
-  }
-
-  private formatGapAmount(amount: RecipeContentSnapshot["ingredients"][number]["amount"]) {
-    if (amount.kind === "FUZZY") return amount.text;
-    return `${amount.quantity}${amount.unitName}`;
   }
 
   private resolveRandomTagSnapshot(

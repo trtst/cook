@@ -59,7 +59,19 @@ export function validateOpenApiDocument(document: { paths?: Record<string, any>;
       const schema = content?.["application/json"]?.schema as Record<string, any> | undefined;
       assert(schema?.type === "object", `${method.toUpperCase()} ${path} has no response envelope schema`);
       assert(schema.required?.includes("data"), `${method.toUpperCase()} ${path} envelope does not require data`);
-      validateDataSchema(path, method, schema.properties?.data, schemas);
+      const dataSchema = schema.properties?.data as Record<string, any> | undefined;
+      const requiredModel = method === "get" && path.endsWith("/fridge-traces/summary")
+        ? "FridgeTraceSummaryResponseModel"
+        : method === "post" && path.endsWith("/meal-plans/{planItemId}/cooking-complete")
+          ? "CookingTraceResponseModel"
+          : null;
+      if (requiredModel) {
+        assert(
+          dataSchema?.$ref === `#/components/schemas/${requiredModel}`,
+          `${method.toUpperCase()} ${path} must reference ${requiredModel}`
+        );
+      }
+      validateDataSchema(path, method, dataSchema, schemas);
     }
   }
 

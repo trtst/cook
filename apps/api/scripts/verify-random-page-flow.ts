@@ -1,8 +1,7 @@
 import { loadLocalEnv } from "../src/common/load-env";
 import { loginWithPassword } from "./auth-fixture";
 import type {
-  CheckRandomMenuGapResponse,
-  FridgeItemSummary,
+  FridgeTraceSummary,
   IngredientSummary,
   MealPlanSummary,
   MyRecipeDetail,
@@ -231,18 +230,13 @@ async function createOwnedRecipe(
   return published.recipe;
 }
 
-async function createFridgeItem(headers: Record<string, string>, ingredient: IngredientSummary, quantityText: string) {
-  return requestData<FridgeItemSummary>("/fridge-items", {
+async function createFridgeTrace(headers: Record<string, string>, ingredient: IngredientSummary) {
+  return requestData<FridgeTraceSummary>("/fridge-traces/present", {
     method: "POST",
     headers: withIdempotencyKey(headers),
     body: JSON.stringify({
       name: ingredient.name,
-      ingredientId: ingredient.id,
-      quantityText,
-      exactQuantity: null,
-      exactUnitId: null,
-      expireAt: null,
-      note: "随机页验收库存"
+      ingredientId: ingredient.id
     })
   });
 }
@@ -322,11 +316,11 @@ async function main() {
     })
   ]);
   await Promise.all([
-    createFridgeItem(ownerAuth, chicken, "200g"),
-    createFridgeItem(ownerAuth, pork, "200g"),
-    createFridgeItem(ownerAuth, cabbage, "1棵"),
-    createFridgeItem(ownerAuth, pepper, "2个"),
-    createFridgeItem(ownerAuth, onion, "1个")
+    createFridgeTrace(ownerAuth, chicken),
+    createFridgeTrace(ownerAuth, pork),
+    createFridgeTrace(ownerAuth, cabbage),
+    createFridgeTrace(ownerAuth, pepper),
+    createFridgeTrace(ownerAuth, onion)
   ]);
 
   const generated = await requestData<RandomMenuResponse>("/random-menus/generate", {
@@ -427,79 +421,26 @@ async function main() {
     })
   });
   assert(replace.requestSeq === 1, "replace response should preserve requestSeq");
-  assert(replace.slot, "replace response should return a replacement slot");
-  assert(replace.slot.slotId === meatSlot.slotId, "replacement slot should target the same slot");
-  assert(replace.slot.recipeVersionId !== meatSlot.recipeVersionId, "replacement slot should change the meat recipe");
+  const replacement = replace.slot;
+  assert(replacement, "replace response should return a replacement slot");
+  assert(replacement.slotId === meatSlot.slotId, "replacement slot should target the same slot");
+  assert(replacement.recipeVersionId !== meatSlot.recipeVersionId, "replacement slot should change the meat recipe");
   assert(
-    ["MY", "INSPIRATION"].includes((replace.slot as { sourceType?: string }).sourceType ?? ""),
+    ["MY", "INSPIRATION"].includes((replacement as { sourceType?: string }).sourceType ?? ""),
     "replacement slot should return its source type"
   );
   assert(
-    typeof (replace.slot as { recommendationReason?: unknown }).recommendationReason === "string",
+    typeof (replacement as { recommendationReason?: unknown }).recommendationReason === "string",
     "replacement slot should return one recommendation reason"
   );
 
-  const finalItems = replaceMenuItem(generated.items, replace.slot);
-  const gap = await requestData<CheckRandomMenuGapResponse>("/random-menu-gap/preview", {
-    method: "POST",
-    headers: ownerAuth,
-    body: JSON.stringify({
-      mealSlot: "DINNER",
-      peopleCount: 2,
-      items: finalItems.map(item => ({
-        slotId: item.slotId,
-        slotType: item.slotType,
-        recipeId: item.recipeId,
-        recipeVersionId: item.recipeVersionId
-      })),
-      inventoryDecisions: []
-    })
-  });
-  assert(gap.items.length === finalItems.length, "gap preview should return one record per menu slot");
-  assert(gap.summary.missingCount + gap.summary.partialCount + gap.summary.unknownCount >= 1, "gap preview should surface unresolved ingredients");
-  assert(gap.canCreatePlan === true, "gap preview should allow saving unresolved gaps to a plan");
-  const unresolvedInventoryStatuses = gap.items.flatMap(item => item.missingIngredients.map(ingredient => ingredient.inventoryStatus));
-  assert(
-    unresolvedInventoryStatuses.some(status => status === "MISSING" || status === "PARTIAL" || status === "UNKNOWN"),
-    "gap preview should expose at least one unresolved inventory status before decisions are handled"
-  );
-
-  const resolvedGap = await requestData<CheckRandomMenuGapResponse>("/random-menu-gap/preview", {
-    method: "POST",
-    headers: ownerAuth,
-    body: JSON.stringify({
-      mealSlot: "DINNER",
-      peopleCount: 2,
-      items: finalItems.map(item => ({
-        slotId: item.slotId,
-        slotType: item.slotType,
-        recipeId: item.recipeId,
-        recipeVersionId: item.recipeVersionId
-      })),
-      inventoryDecisions: gap.items.flatMap(item =>
-        item.missingIngredients.map(ingredient => ({
-          slotId: item.slotId,
-          ingredientId: ingredient.ingredientId,
-          ingredientName: ingredient.ingredientName,
-          decision: "HAS"
-        }))
-      )
-    })
-  });
-  assert(resolvedGap.canCreatePlan === true, "gap preview should allow create plan after all missing ingredients are handled");
-  assert(
-    resolvedGap.items.every(item => item.missingIngredients.length === 0),
-    "resolved gap preview should clear missing ingredients after all decisions are marked HAS"
-  );
-  assert(resolvedGap.summary.missingCount === 0, "resolved gap preview should clear missing summary count");
-  assert(resolvedGap.summary.partialCount === 0, "resolved gap preview should clear partial summary count");
-  assert(resolvedGap.summary.unknownCount === 0, "resolved gap preview should clear unknown summary count");
+  const finalItems = replaceMenuItem(generated.items, replacement);
 
   const createdPlan = await createMealPlanFromRandom(ownerAuth, "随机验收餐次", suffix, finalItems);
   assert(createdPlan.mealSlot === "DINNER", "created plan should keep the random meal slot");
   assert(createdPlan.menuItems.length === finalItems.length, "created plan should keep all final random slots");
   assert(
-    createdPlan.menuItems.some(item => item.recipeVersionId === replace.slot.recipeVersionId),
+    createdPlan.menuItems.some(item => item.recipeVersionId === replacement.recipeVersionId),
     "created plan should include the replaced recipe version"
   );
 
@@ -509,12 +450,10 @@ async function main() {
         apiBaseUrl,
         generatedCount: generated.items.length,
         quotaRemaining: defaultDinner.quota.remainingCount,
-        replacedSlotId: replace.slot.slotId,
-        replacedRecipeVersionId: replace.slot.recipeVersionId,
+        replacedSlotId: replacement.slotId,
+        replacedRecipeVersionId: replacement.recipeVersionId,
         planId: createdPlan.id,
-        planMenuCount: createdPlan.menuItems.length,
-        canCreatePlanBefore: gap.canCreatePlan,
-        canCreatePlanAfter: resolvedGap.canCreatePlan
+        planMenuCount: createdPlan.menuItems.length
       },
       null,
       2

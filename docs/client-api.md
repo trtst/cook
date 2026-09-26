@@ -277,8 +277,13 @@ POST /api/dining-events/{eventId}/wishes/{wishItemId}/menu
 POST /api/dining-events/{eventId}/bring
 POST /api/dining-events/{eventId}/my-note
 POST /api/dining-events/{eventId}/memory-shares
+POST /api/dining-events/{eventId}/preparations
+POST /api/dining-events/{eventId}/prepare
+POST /api/dining-events/{eventId}/start-cooking
 GET  /api/memory-shares/{shareToken}/preview
 ```
+
+饭局详情按 `/api/dining-events/{eventId}/shopping-gap` 的 `preparationStatus` 展示待准备、已买、家里有和已备齐。主家可逐项设置“家里有，不用买”，也可直接确认整顿已备齐；全部需求处理后“开始做饭”会写入饭局事实，开做后主操作切到结束饭局。采购预览只展示食材与用量，不显示菜谱来源名。计划取消入口在正文底部，取消计划保留内容并允许同日同餐次另建计划。
 
 动态不得混入冰箱、购物明细、过敏、忌口、内部备注、未采用候选菜或投票明细。
 
@@ -405,19 +410,18 @@ interface DiningMemorySharePreview {
 随机页当前确认的目标不是“摇一摇玩具”，而是：
 
 ```text
-选条件 -> 生成一桌 -> 逐道调整 -> 本桌缺口预检 -> 加入计划或去采购
+选条件 -> 生成一桌 -> 逐道调整 -> 加入计划
 ```
 
-这部分当前已落最小真实流程。客户端按以下边界接入，不得额外扩展 owner、缓存草稿或共享写入口。
+随机页不计算库存缺口、不要求确认库存，也不直接写购物清单；计划/饭局详情展示食材需求，是否采购由用户决定。
+客户端按以下边界接入，不得额外扩展 owner、缓存草稿或共享写入口。
 
 当前最小接口面评审为：
 
 ```text
 POST /api/random-menus/generate
 POST /api/random-menu-slots/replace
-POST /api/random-menu-gap/preview
 POST /api/meal-plans
-POST /api/shopping-items/from-random-menu
 ```
 
 #### 生成一桌
@@ -500,40 +504,6 @@ interface ReplaceRandomMenuSlotRequest {
 2. 旧响应不得覆盖新响应。
 3. 只替换目标菜位，不要因为“状态统一”把整桌重置。
 
-#### 本桌缺口预检
-
-```text
-POST /api/random-menu-gap/preview
-Auth: UserBearerAuth
-```
-
-最小请求：
-
-```ts
-interface CheckRandomMenuGapRequest {
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
-  peopleCount: number;
-  items: Array<{
-    slotId: string;
-    slotType: "MEAT" | "VEGETABLE" | "SOUP" | "STAPLE" | "BREAKFAST_STAPLE" | "BREAKFAST_PROTEIN" | "BREAKFAST_SIDE";
-    recipeId: UUID;
-    recipeVersionId: UUID;
-  }>;
-  inventoryDecisions: Array<{
-    slotId: string;
-    ingredientId?: UUID | null;
-    ingredientName: string;
-    decision: "HAS" | "MISSING";
-  }>;
-}
-```
-
-客户端约束：
-
-1. `unknown` 不自动视为 `missing`。
-2. 存在未处理 `unknown` 时，不允许直接触发加入计划。
-3. 这里只处理当前这桌，不去混用 `GET /api/shopping-gap` 的全局汇总结果。
-
 #### 计划写入升级
 
 随机页最终写计划仍回真实 owner：`POST /api/meal-plans`。
@@ -563,37 +533,6 @@ interface CreateMealPlanRequestV2 {
 3. 计划写入只接受完整 `menuItems[]`，不再存在裸菜谱 ID 输入。
 4. 计划页“添加计划”允许对当前选中日期 + 餐次发送 `menuItems = []`，先建一条空白计划；若该餐次已有计划，则应直接打开已有计划，不重复发空白新建。
 5. 随机页和详情页调整菜单时，仍必须提交至少一道菜，不允许用空数组清空已有菜单。
-
-#### 缺口写入购物
-
-```text
-POST /api/shopping-items/from-random-menu
-Auth: UserBearerAuth
-Idempotency-Key: 172251000101
-```
-
-最小请求：
-
-```ts
-interface CreateRandomMenuShoppingItemsRequest {
-  items: Array<{
-    slotId: string;
-    recipeId: UUID;
-    recipeVersionId: UUID;
-    ingredients: Array<{
-      ingredientId?: UUID | null;
-      ingredientName: string;
-      quantityText: string | null;
-    }>;
-  }>;
-}
-```
-
-客户端约束：
-
-1. 只提交用户明确决定采购的缺口。
-2. 不自己拼 `sourceKey`。
-3. 成功后按购物域返回结果刷新，不假定写入一定命中某张特定共享清单。
 
 ## 3. 个人存储
 

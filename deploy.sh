@@ -30,7 +30,7 @@ Usage:
 Notes:
   - 需在服务器项目根目录执行，或直接执行 /srv/cook/deploy.sh
   - 默认会执行 git pull、pnpm install
-  - api 模式会先执行 Prisma Client generate，再执行 migrate deploy 并重启 cook-api
+  - api 模式会在停止 cook-api 后执行迁移预检和迁移；迁移失败时服务保持停止，等待数据库恢复处理
   - admin/site 模式会重新构建对应前端并重启 nginx
 EOF
 }
@@ -96,8 +96,22 @@ deploy_api() {
   log "prisma generate"
   pnpm --filter @next-meal/api prisma:generate
 
+  log "stop cook-api before final migration preflight"
+  pm2 stop cook-api
+
+  log "verify migration preflights while API writes are stopped"
+  if ! pnpm --filter @next-meal/api run verify:idempotency-migration-preflight \
+    || ! pnpm --filter @next-meal/api run verify:fridge-trace-migration-preflight; then
+    log "migration preflight failed; restart cook-api without applying migrations"
+    pm2 restart cook-api
+    return 1
+  fi
+
   log "prisma migrate deploy"
-  pnpm --filter @next-meal/api exec prisma migrate deploy
+  if ! pnpm --filter @next-meal/api exec prisma migrate deploy --schema prisma/schema.prisma; then
+    log "migration failed; cook-api remains stopped for database recovery"
+    return 1
+  fi
 
   log "verify prisma migrations"
   pnpm --filter @next-meal/api exec prisma migrate status --schema prisma/schema.prisma

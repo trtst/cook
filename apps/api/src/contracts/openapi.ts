@@ -219,7 +219,7 @@ export class HomeWeekOverviewModel {
   @ApiProperty({ type: Number, minimum: 0 }) plannedDayCount!: number;
   @ApiProperty({ type: Number, minimum: 1 }) totalDayCount!: number;
   @ApiProperty({ type: Number, minimum: 0 }) activeListCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) expiringCount!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) traceCount!: number;
   @ApiProperty({ type: HomeRecentArrangementModel, nullable: true }) arrangement!: HomeRecentArrangementModel | null;
   @ApiProperty({ type: [HomeWeekOverviewDayModel] }) days!: HomeWeekOverviewDayModel[];
 }
@@ -1246,7 +1246,7 @@ export class RecipePlanLinkModel {
   @ApiProperty({ type: String, format: "date" }) planDate!: string;
   @ApiProperty({ type: String, enum: ["BREAKFAST", "LUNCH", "AFTERNOON_TEA", "DINNER", "LATE_NIGHT"] }) mealSlot!: string;
   @ApiProperty({ type: Boolean }) menuLocked!: boolean;
-  @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED", "CANCELLED"] }) status!: string;
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
 }
 
@@ -2103,7 +2103,7 @@ export class MealPlanModel {
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: [MealPlanMenuItemModel] }) menuItems!: MealPlanMenuItemModel[];
   @ApiProperty({ type: Boolean }) menuLocked!: boolean;
-  @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED"] }) status!: string;
+  @ApiProperty({ type: String, enum: ["PLANNED", "COMPLETED", "CANCELLED"] }) status!: string;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
   @ApiProperty({ type: Boolean }) hasDiningEvent!: boolean;
@@ -2169,20 +2169,10 @@ export class MealCookContextResponseModel {
   @ApiProperty({ type: [MealCookContextDishModel] }) dishes!: MealCookContextDishModel[];
 }
 
-export class CookingConsumptionResponseModel {
+export class CookingTraceResponseModel {
   @ApiProperty(uuid) planItemId!: string;
-  @ApiProperty({ type: String, description: "用于当前结果页撤销的做饭完成幂等键" }) consumptionOperationId!: string;
-  @ApiProperty(dateTime) completedAt!: string;
-  @ApiProperty({ type: Number, minimum: 0 }) updatedCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) unknownCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) shortageCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) skippedFuzzyCount!: number;
-  @ApiProperty({ type: String }) message!: string;
-  @ApiProperty({ type: Boolean }) canUndo!: boolean;
-}
-
-export class CookingUndoResponseModel {
-  @ApiProperty({ type: Boolean }) undone!: boolean;
+  @ApiProperty(dateTime) recordedAt!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) usedCount!: number;
   @ApiProperty({ type: String }) message!: string;
 }
 
@@ -2300,51 +2290,6 @@ export class ReplaceRandomMenuSlotModel {
   @ApiProperty({ type: RandomMenuWarningModel, nullable: true }) warning!: RandomMenuWarningModel | null;
 }
 
-export class RandomGapIngredientModel {
-  @ApiProperty({ type: String }) decisionKey!: string;
-  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
-  @ApiProperty({ type: String }) ingredientName!: string;
-  @ApiProperty(nullableString) quantityText!: string | null;
-  @ApiProperty({ type: String, enum: ["ENOUGH", "PARTIAL", "MISSING", "UNKNOWN"] }) inventoryStatus!: string;
-  @ApiProperty({ type: Boolean }) purchasable!: boolean;
-}
-
-export class RandomGapActionsModel {
-  @ApiProperty({ type: Boolean }) canKeep!: boolean;
-  @ApiProperty({ type: Boolean }) canReplace!: boolean;
-  @ApiProperty({ type: Boolean }) canRemove!: boolean;
-  @ApiProperty({ type: Boolean }) canAddToShopping!: boolean;
-}
-
-export class RandomGapItemModel {
-  @ApiProperty({ type: String }) slotId!: string;
-  @ApiProperty({
-    type: String,
-    enum: ["MEAT", "VEGETABLE", "SOUP", "STAPLE", "BREAKFAST_STAPLE", "BREAKFAST_PROTEIN", "BREAKFAST_SIDE"]
-  })
-  slotType!: string;
-  @ApiProperty(uuid) recipeId!: string;
-  @ApiProperty(uuid) recipeVersionId!: string;
-  @ApiProperty({ type: String }) recipeName!: string;
-  @ApiProperty({ type: String, enum: ["OK", "PARTIAL", "MISSING", "UNKNOWN"] }) status!: string;
-  @ApiProperty({ type: [RandomGapIngredientModel] }) missingIngredients!: RandomGapIngredientModel[];
-  @ApiProperty({ type: RandomGapActionsModel }) actions!: RandomGapActionsModel;
-  @ApiProperty({ type: Number, minimum: 0 }) unresolvedUnknownCount!: number;
-}
-
-export class RandomGapSummaryModel {
-  @ApiProperty({ type: Number, minimum: 0 }) okCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) partialCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) missingCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) unknownCount!: number;
-}
-
-export class RandomGapPreviewModel {
-  @ApiProperty({ type: [RandomGapItemModel] }) items!: RandomGapItemModel[];
-  @ApiProperty({ type: RandomGapSummaryModel }) summary!: RandomGapSummaryModel;
-  @ApiProperty({ type: Boolean }) canCreatePlan!: boolean;
-}
-
 export class DiningEventParticipantBringRecipeModel {
   @ApiProperty({ ...uuid, nullable: true }) recipeId!: string | null;
   @ApiProperty(uuid) recipeVersionId!: string;
@@ -2407,6 +2352,8 @@ export class DiningEventModel {
   @ApiProperty({ type: Boolean }) hasActiveShareLink!: boolean;
   @ApiProperty(nullableString) shareTokenPath!: string | null;
   @ApiProperty({ ...dateTime, nullable: true }) completedAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) ingredientsReadyAt!: string | null;
+  @ApiProperty({ ...dateTime, nullable: true }) cookingStartedAt!: string | null;
   @ApiProperty({ type: Number, minimum: 1 }) version!: number;
   @ApiProperty(dateTime) createdAt!: string;
 }
@@ -2570,98 +2517,26 @@ export class SharePreviewViewerModel {
   @ApiProperty(nullableString) statusHint!: string | null;
 }
 
-export class FridgeReservationModel {
-  @ApiProperty(uuid) shoppingListId!: string;
-  @ApiProperty({ type: String }) shoppingListName!: string;
-  @ApiProperty(uuid) shoppingItemId!: string;
-  @ApiProperty({ type: String }) reservedText!: string;
-}
-
-export class FridgeItemModel {
+export class FridgeTraceModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty({ type: String }) name!: string;
   @ApiProperty(nullableString) categoryName!: string | null;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty(nullableString) quantityText!: string | null;
-  @ApiProperty(nullableString) exactQuantity!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) exactUnitId!: string | null;
-  @ApiProperty(nullableString) exactUnitName!: string | null;
-  @ApiProperty(nullableString) note!: string | null;
-  @ApiProperty({ type: Boolean }) available!: boolean;
-  @ApiProperty({ ...dateTime, nullable: true }) expireAt!: string | null;
-  @ApiProperty(nullableString) stockText!: string | null;
-  @ApiProperty(nullableString) reservedText!: string | null;
-  @ApiProperty(nullableString) availableText!: string | null;
-  @ApiProperty({ type: [FridgeReservationModel] }) reservations!: FridgeReservationModel[];
-  @ApiProperty(dateTime) updatedAt!: string;
+  @ApiProperty({ type: String, enum: ["PURCHASED", "USED", "MANUAL_PRESENT", "MANUAL_EMPTY"] }) kind!: string;
+  @ApiProperty({ type: String }) label!: string;
+  @ApiProperty(dateTime) recordedAt!: string;
+  @ApiProperty({ type: Number, enum: [7, 15] }) windowDays!: number;
 }
 
-export class FridgeSummaryModel {
-  @ApiProperty({ type: Number, minimum: 0 }) totalCount!: number;
-  @ApiProperty({ type: Number, minimum: 0 }) expiringCount!: number;
-  @ApiProperty({ type: String, example: "2026-08-30T00:00:00.000Z" }) latestTime!: string;
+export class FridgeTraceSummaryResponseModel {
+  @ApiProperty({ type: Number }) totalCount!: number;
+  @ApiProperty({ ...nullableString, example: null }) latestTime!: string | null;
 }
 
-export class FridgeStockGroupModel {
-  @ApiProperty(uuid) unitId!: string;
-  @ApiProperty({ type: String }) unitName!: string;
-  @ApiProperty({ type: String }) quantity!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) batchCount!: number;
-}
-
-export class FridgeBatchModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty(nullableString) quantityText!: string | null;
-  @ApiProperty(nullableString) exactQuantity!: string | null;
-  @ApiProperty({ ...uuid, nullable: true }) exactUnitId!: string | null;
-  @ApiProperty(nullableString) exactUnitName!: string | null;
-  @ApiProperty(nullableString) note!: string | null;
-  @ApiProperty({ type: Boolean }) available!: boolean;
-  @ApiProperty({ ...dateTime, nullable: true }) expireAt!: string | null;
-  @ApiProperty({ type: Boolean }) isExpired!: boolean;
-  @ApiProperty({ type: Boolean }) isExpiredWithin15Days!: boolean;
-  @ApiProperty(nullableString) stockText!: string | null;
-  @ApiProperty(nullableString) reservedText!: string | null;
-  @ApiProperty(nullableString) availableText!: string | null;
-  @ApiProperty({ type: [FridgeReservationModel] }) reservations!: FridgeReservationModel[];
-  @ApiProperty({ type: Boolean }) needsConfirmation!: boolean;
-  @ApiProperty(dateTime) createdAt!: string;
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class FridgeIngredientModel {
-  @ApiProperty(uuid) id!: string;
-  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
-  @ApiProperty(nullableString) categoryName!: string | null;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: String }) stockText!: string;
-  @ApiProperty({ type: [FridgeStockGroupModel] }) stockGroups!: FridgeStockGroupModel[];
-  @ApiProperty({ ...dateTime, nullable: true }) expireAt!: string | null;
-  @ApiProperty({ type: Boolean }) isExpired!: boolean;
-  @ApiProperty({ type: Number, minimum: 0 }) expiredBatchCount!: number;
-  @ApiProperty({ type: Number, minimum: 1 }) batchCount!: number;
-  @ApiProperty({ type: Boolean }) hasReservation!: boolean;
-  @ApiProperty({ type: Boolean }) needsConfirmation!: boolean;
-  @ApiProperty({ type: Boolean }) identityPending!: boolean;
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class FridgeIngredientDetailModel extends FridgeIngredientModel {
-  @ApiProperty({ type: [FridgeBatchModel] }) activeBatches!: FridgeBatchModel[];
-  @ApiProperty({ type: [FridgeBatchModel] }) expiredBatches!: FridgeBatchModel[];
-}
-
-export class FridgeConsumeAllocationModel {
-  @ApiProperty(uuid) batchId!: string;
-  @ApiProperty({ type: String }) quantity!: string;
-  @ApiProperty(uuid) unitId!: string;
-}
-
-export class FridgeConsumeModel {
-  @ApiProperty({ type: FridgeIngredientDetailModel }) detail!: FridgeIngredientDetailModel;
-  @ApiProperty({ type: [FridgeConsumeAllocationModel] }) allocations!: FridgeConsumeAllocationModel[];
+export class FridgeTraceIngredientModel extends FridgeTraceModel {
+  @ApiProperty({ type: String, enum: ["PRESENT", "EMPTY", "UNCONFIRMED"] }) presence!: string;
+  @ApiProperty({ type: Boolean }) archived!: boolean;
+  @ApiProperty({ type: Boolean }) recentlyPurchased!: boolean;
 }
 
 export class ShoppingItemModel {
@@ -2675,6 +2550,11 @@ export class ShoppingItemModel {
   @ApiProperty(nullableString) sourceKey!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "BOUGHT", "DELETED"] }) status!: string;
   @ApiProperty(dateTime) updatedAt!: string;
+}
+
+export class ShoppingGapPreviewItemModel extends ShoppingItemModel {
+  @ApiProperty({ ...uuid, nullable: true }) ingredientId!: string | null;
+  @ApiProperty({ type: String, enum: ["OPEN", "BOUGHT", "HOME", "READY"] }) preparationStatus!: string;
 }
 
 export class ShoppingGapEventSummaryModel {
@@ -2794,18 +2674,8 @@ export class ShoppingListDetailItemModel {
   @ApiProperty(nullableString) categoryName!: string | null;
   @ApiProperty(nullableString) imageUrl!: string | null;
   @ApiProperty(nullableString) quantityText!: string | null;
-  @ApiProperty(nullableString) requiredQuantityText!: string | null;
-  @ApiProperty(nullableString) remainingQuantityText!: string | null;
-  @ApiProperty(nullableString) appliedInventoryQuantityText!: string | null;
   @ApiProperty(nullableString) note!: string | null;
   @ApiProperty({ type: String, enum: ["OPEN", "CHECKED", "REMOVED"] }) status!: string;
-  @ApiProperty(nullableString) fridgeText!: string | null;
-  @ApiProperty({ type: String, enum: ["NONE", "ENOUGH", "SHORTAGE", "UNKNOWN"] }) inventoryStatus!: string;
-  @ApiProperty({ type: Boolean }) inventoryApplied!: boolean;
-  @ApiProperty({ type: Boolean }) inventoryCovered!: boolean;
-  @ApiProperty(nullableString) fridgeStatusText!: string | null;
-  @ApiProperty(nullableString) fridgeActionLabel!: string | null;
-  @ApiProperty({ type: String, enum: ["NONE", "APPLY_FULL", "APPLY_PARTIAL", "NEED_CONFIRM", "UNDO"] }) fridgeActionMode!: string;
   @ApiProperty({ ...dateTime, nullable: true }) checkedAt!: string | null;
   @ApiProperty(dateTime) updatedAt!: string;
   @ApiProperty({ type: [ShoppingItemSourceSummaryModel] }) sources!: ShoppingItemSourceSummaryModel[];
@@ -2848,39 +2718,4 @@ export class ShoppingSharePreviewModel {
   @ApiProperty({ type: Boolean }) canJoin!: boolean;
   @ApiProperty({ type: Number, minimum: 0 }) itemCount!: number;
   @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) status!: string;
-}
-
-export class ShoppingIngredientGroupModel {
-  @ApiProperty({ type: String }) key!: string;
-  @ApiProperty(uuid) ingredientId!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: [String] }) quantityLines!: string[];
-  @ApiProperty({ type: Number, minimum: 1 }) recipeCount!: number;
-  @ApiProperty({ type: [String] }) recipeTitles!: string[];
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class ShoppingRecipeIngredientGroupModel {
-  @ApiProperty({ type: String }) key!: string;
-  @ApiProperty(uuid) ingredientId!: string;
-  @ApiProperty({ type: String }) name!: string;
-  @ApiProperty({ type: [String] }) quantityLines!: string[];
-  @ApiProperty(dateTime) updatedAt!: string;
-}
-
-export class ShoppingRecipeGroupModel {
-  @ApiProperty({ type: String }) key!: string;
-  @ApiProperty(uuid) recipeId!: string;
-  @ApiProperty(uuid) sourceVersionId!: string;
-  @ApiProperty({ type: String }) title!: string;
-  @ApiProperty({ type: Number, minimum: 1 }) addCount!: number;
-  @ApiProperty({ type: Number, minimum: 1 }) totalServings!: number;
-  @ApiProperty(dateTime) updatedAt!: string;
-  @ApiProperty({ type: [ShoppingRecipeIngredientGroupModel] }) items!: ShoppingRecipeIngredientGroupModel[];
-}
-
-export class ShoppingBoardModel {
-  @ApiProperty({ type: [ShoppingIngredientGroupModel] }) ingredientGroups!: ShoppingIngredientGroupModel[];
-  @ApiProperty({ type: [ShoppingRecipeGroupModel] }) recipeGroups!: ShoppingRecipeGroupModel[];
-  @ApiProperty({ type: [ShoppingItemModel] }) otherItems!: ShoppingItemModel[];
 }

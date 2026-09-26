@@ -41,6 +41,171 @@ test("only a non-empty random result consumes quota", () => {
   assert.equal(shouldConsumeRandomMenuQuota([{ recipeVersionId: 1 }]), true);
 });
 
+test("cancelling a future plan preserves the row and marks it cancelled", async () => {
+  const future = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  const planDate = new Date(Date.UTC(future.getUTCFullYear(), future.getUTCMonth(), future.getUTCDate()));
+  let plan: Record<string, any> = {
+    id: 501,
+    userId: 9,
+    planDate,
+    status: "PLANNED",
+    diningEvent: null,
+    version: 3,
+    dishes: [],
+    shoppingList: null,
+    cookAssistant: null,
+    title: "晚餐饮食计划",
+    menuSnapshot: {},
+    note: null,
+    completedAt: null,
+    cancelledAt: null,
+    menuLockedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const updates: unknown[] = [];
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    mealPlanItem: {
+      findUnique: async () => plan,
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updates.push(data);
+        plan = { ...plan, ...data, version: plan.version + 1 };
+        return plan;
+      }
+    },
+    storageLedger: { upsert: async () => ({}) }
+  };
+  const service = new MealService(
+    { $transaction: async <T>(callback: (db: typeof tx) => Promise<T>) => callback(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never
+  );
+  (service as any).toMealPlanSummary = (row: typeof plan) => ({ id: row.id, status: row.status });
+
+  const result = await (service as any).cancelMealPlan(9, 501, "1001");
+
+  assert.deepEqual(result, { id: 501, status: "CANCELLED" });
+  assert.equal(plan.status, "CANCELLED");
+  assert.ok(plan.cancelledAt instanceof Date);
+  assert.equal(updates.length, 1);
+  assert.equal((updates[0] as any).status, "CANCELLED");
+});
+
+test("creating a dining event locks and rechecks the plan before accepting its status", async () => {
+  const calls: string[] = [];
+  const plan: Record<string, any> = {
+    id: 501,
+    userId: 9,
+    status: "PLANNED",
+    diningEvent: null,
+    dishes: [],
+    version: 1,
+    planDate: new Date("2026-10-01T00:00:00.000Z"),
+    mealSlot: "DINNER"
+  };
+  const tx = {
+    $queryRaw: async () => {
+      calls.push("lock");
+      plan.status = "CANCELLED";
+      return [];
+    },
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    mealPlanItem: {
+      findUnique: async () => {
+        calls.push("read");
+        return plan;
+      }
+    }
+  };
+  const service = new MealService(
+    { $transaction: async <T>(callback: (db: typeof tx) => Promise<T>) => callback(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never
+  );
+  (service as any).alignPlanToDiningTime = async () => {
+    throw new Error("计划状态检查后仍继续执行");
+  };
+
+  await assert.rejects(
+    (service as any).createDiningEvent(9, 501, "1002", "2026-10-01T12:00:00.000Z"),
+    /已取消计划不能发起饭局/
+  );
+  assert.deepEqual(calls, ["lock", "read"]);
+});
+
+test("starting cooking requires all preparation items resolved and persists the start time", async () => {
+  const event: Record<string, any> = {
+    id: 82,
+    userId: 9,
+    status: "CONFIRMED",
+    scheduledAt: new Date(Date.now() + 60_000),
+    completedAt: null,
+    ingredientsReadyAt: null,
+    cookingStartedAt: null,
+    version: 3
+  };
+  const tx = {
+    $queryRaw: async () => [],
+    idempotencyRecord: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      updateMany: async () => ({ count: 1 })
+    },
+    diningEvent: {
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        Object.assign(event, data, { version: event.version + 1 });
+        return event;
+      }
+    }
+  };
+  let preparationStatus: "OPEN" | "HOME" = "OPEN";
+  const service = new MealService(
+    { $transaction: async <T>(callback: (db: typeof tx) => Promise<T>) => callback(tx) } as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    { previewEventGap: async () => [{ preparationStatus }] } as never
+  );
+  (service as any).loadDiningEventRow = async () => event;
+  (service as any).toDiningEventSummary = (row: typeof event) => ({
+    id: row.id,
+    cookingStartedAt: row.cookingStartedAt ? row.cookingStartedAt.toISOString() : null
+  });
+
+  await assert.rejects((service as any).startDiningEventCooking(9, 82, "1001"), /请先确认食材已备齐/);
+  preparationStatus = "HOME";
+  const result = await (service as any).startDiningEventCooking(9, 82, "1002");
+
+  assert.equal(result.id, 82);
+  assert.ok(event.cookingStartedAt instanceof Date);
+
+  event.ingredientsReadyAt = new Date();
+  event.cookingStartedAt = null;
+  const readyResult = await (service as any).startDiningEventCooking(9, 82, "1003");
+  assert.equal(readyResult.id, 82);
+  assert.ok(event.cookingStartedAt instanceof Date);
+});
+
 test("empty random result uses the confirmed user rate-limit window", () => {
   assert.deepEqual(randomMenuEmptyLimitOptions(42), {
     key: "random-menu:empty:42",
@@ -681,6 +846,15 @@ class FakeDiningSchedulePrisma {
         return this.plan;
       }
       return null;
+    },
+    findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+      const candidates = [this.plan, this.conflictPlan].filter((plan): plan is ReturnType<typeof diningSchedulePlan> => Boolean(plan));
+      return candidates.find(plan =>
+        plan.userId === where.userId &&
+        plan.mealSlot === where.mealSlot &&
+        plan.planDate.toISOString() === (where.planDate as Date).toISOString() &&
+        plan.status !== "CANCELLED"
+      ) ?? null;
     },
     update: async ({ where, data }: { where: { id: number }; data: Record<string, unknown> }) => {
       assert.equal(where.id, this.plan.id);

@@ -369,7 +369,7 @@ export interface HomeWeekOverview {
   plannedDayCount: number;
   totalDayCount: number;
   activeListCount: number;
-  expiringCount: number;
+  traceCount: number;
   arrangement: HomeRecentArrangement | null;
   days: HomeWeekOverviewDay[];
 }
@@ -1715,7 +1715,7 @@ export interface RecipePlanLinkSummary {
   planDate: string;
   mealSlot: MealSlot;
   menuLocked: boolean;
-  status: "PLANNED" | "COMPLETED";
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
   hasDiningEvent: boolean;
 }
 
@@ -2678,69 +2678,6 @@ export interface ReplaceRandomMenuSlotResponse {
   warning: RandomMenuWarning | null;
 }
 
-export interface RandomGapInventoryDecision {
-  slotId: string;
-  ingredientId?: UUID | null;
-  ingredientName: string;
-  decision: "HAS" | "MISSING";
-}
-
-export interface RandomGapCheckItem {
-  slotId: string;
-  slotType: RecipeSlotType;
-  recipeId: UUID;
-  recipeVersionId: UUID;
-}
-
-export interface CheckRandomMenuGapRequest {
-  mealSlot: "BREAKFAST" | "LUNCH" | "DINNER";
-  peopleCount: number;
-  items: RandomGapCheckItem[];
-  inventoryDecisions: RandomGapInventoryDecision[];
-}
-
-export type RandomGapStatus = "OK" | "PARTIAL" | "MISSING" | "UNKNOWN";
-export type RandomGapInventoryStatus = "ENOUGH" | "PARTIAL" | "MISSING" | "UNKNOWN";
-
-export interface RandomGapIngredient {
-  decisionKey: string;
-  ingredientId: UUID | null;
-  ingredientName: string;
-  quantityText: string | null;
-  inventoryStatus: RandomGapInventoryStatus;
-  purchasable: boolean;
-}
-
-export interface RandomGapItem {
-  slotId: string;
-  slotType: RecipeSlotType;
-  recipeId: UUID;
-  recipeVersionId: UUID;
-  recipeName: string;
-  status: RandomGapStatus;
-  missingIngredients: RandomGapIngredient[];
-  actions: {
-    canKeep: boolean;
-    canReplace: boolean;
-    canRemove: boolean;
-    canAddToShopping: boolean;
-  };
-  unresolvedUnknownCount: number;
-}
-
-export interface RandomGapSummary {
-  okCount: number;
-  partialCount: number;
-  missingCount: number;
-  unknownCount: number;
-}
-
-export interface CheckRandomMenuGapResponse {
-  items: RandomGapItem[];
-  summary: RandomGapSummary;
-  canCreatePlan: boolean;
-}
-
 export interface AdminUnitSummary {
   id: UUID;
   name: string;
@@ -2773,7 +2710,7 @@ export interface MealPlanSummary {
   title: string;
   menuItems: MealPlanMenuItemSummary[];
   menuLocked: boolean;
-  status: "PLANNED" | "COMPLETED";
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
   version: number;
   completedAt: IsoDateTime | null;
   hasDiningEvent: boolean;
@@ -2816,20 +2753,10 @@ export interface MealCookContextResponse {
   dishes: MealCookContextDish[];
 }
 
-export interface CookingConsumptionResponse {
+export interface CookingTraceResponse {
   planItemId: UUID;
-  consumptionOperationId: OperationId;
-  completedAt: IsoDateTime;
-  updatedCount: number;
-  unknownCount: number;
-  shortageCount: number;
-  skippedFuzzyCount: number;
-  message: string;
-  canUndo: boolean;
-}
-
-export interface CookingUndoResponse {
-  undone: boolean;
+  recordedAt: IsoDateTime;
+  usedCount: number;
   message: string;
 }
 
@@ -2990,6 +2917,8 @@ export interface DiningEventSummary {
   hasActiveShareLink: boolean;
   shareTokenPath: string | null;
   completedAt: IsoDateTime | null;
+  ingredientsReadyAt: IsoDateTime | null;
+  cookingStartedAt: IsoDateTime | null;
   version: number;
   createdAt: IsoDateTime;
 }
@@ -3161,125 +3090,31 @@ export interface UpdateAdminMedalTemplateImageRequest {
   expectedVersion: number;
 }
 
-export interface FridgeItemSummary {
+export type FridgeTraceKind = "PURCHASED" | "USED" | "MANUAL_PRESENT" | "MANUAL_EMPTY";
+
+export interface FridgeTraceSummary {
   id: UUID;
   ingredientId: UUID | null;
-  categoryName: string | null;
   name: string;
-  quantityText: string | null;
-  exactQuantity: string | null;
-  exactUnitId: UUID | null;
-  exactUnitName: string | null;
-  note: string | null;
-  available: boolean;
-  expireAt: IsoDateTime | null;
-  stockText: string | null;
-  reservedText: string | null;
-  availableText: string | null;
-  reservations: Array<{
-    shoppingListId: UUID;
-    shoppingListName: string;
-    shoppingItemId: UUID;
-    reservedText: string;
-  }>;
-  updatedAt: IsoDateTime;
+  categoryName: string | null;
+  kind: FridgeTraceKind;
+  label: string;
+  recordedAt: IsoDateTime;
+  windowDays: 7 | 15;
 }
 
-export interface FridgeSummaryResponse {
+export interface FridgeTraceIngredientSummary extends FridgeTraceSummary {
+  presence: "PRESENT" | "EMPTY" | "UNCONFIRMED";
+  archived: boolean;
+  recentlyPurchased: boolean;
+}
+
+export interface FridgeTraceSummaryResponse {
   totalCount: number;
-  expiringCount: number;
-  latestTime: IsoDateTime | "";
+  latestTime: IsoDateTime | null;
 }
 
-export interface FridgeStockGroup {
-  unitId: UUID;
-  unitName: string;
-  quantity: string;
-  batchCount: number;
-}
-
-export interface FridgeBatchSummary {
-  id: UUID;
-  ingredientId: UUID | null;
-  name: string;
-  quantityText: string | null;
-  exactQuantity: string | null;
-  exactUnitId: UUID | null;
-  exactUnitName: string | null;
-  note: string | null;
-  available: boolean;
-  expireAt: IsoDateTime | null;
-  isExpired: boolean;
-  isExpiredWithin15Days: boolean;
-  stockText: string | null;
-  reservedText: string | null;
-  availableText: string | null;
-  reservations: Array<{
-    shoppingListId: UUID;
-    shoppingListName: string;
-    shoppingItemId: UUID;
-    reservedText: string;
-  }>;
-  needsConfirmation: boolean;
-  createdAt: IsoDateTime;
-  updatedAt: IsoDateTime;
-}
-
-export interface FridgeIngredientSummary {
-  id: UUID;
-  ingredientId: UUID | null;
-  categoryName: string | null;
-  name: string;
-  stockText: string;
-  stockGroups: FridgeStockGroup[];
-  expireAt: IsoDateTime | null;
-  isExpired: boolean;
-  expiredBatchCount: number;
-  batchCount: number;
-  hasReservation: boolean;
-  needsConfirmation: boolean;
-  identityPending: boolean;
-  updatedAt: IsoDateTime;
-}
-
-export interface FridgeIngredientDetail extends FridgeIngredientSummary {
-  activeBatches: FridgeBatchSummary[];
-  expiredBatches: FridgeBatchSummary[];
-}
-
-export interface FridgeConsumeAllocation {
-  batchId: UUID;
-  quantity: string;
-  unitId: UUID;
-}
-
-export interface FridgeConsumeResponse {
-  detail: FridgeIngredientDetail;
-  allocations: FridgeConsumeAllocation[];
-}
-
-export interface CreateFridgeItemRequest {
-  operationId: OperationId;
-  name: string;
-  ingredientId?: UUID | null;
-  quantityText?: string | null;
-  exactQuantity?: string | null;
-  exactUnitId?: UUID | null;
-  expireAt?: IsoDateTime | null;
-  note?: string | null;
-}
-
-export interface UpdateFridgeItemRequest {
-  operationId: OperationId;
-  available?: boolean;
-  quantityText?: string | null;
-  exactQuantity?: string | null;
-  exactUnitId?: UUID | null;
-  expireAt?: IsoDateTime | null;
-  note?: string | null;
-}
-
-export interface ShoppingItemSummary {
+export interface ShoppingGapPreviewItem {
   id: UUID;
   name: string;
   quantityText: string | null;
@@ -3289,7 +3124,9 @@ export interface ShoppingItemSummary {
   sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   sourceKey: string | null;
   status: "OPEN" | "BOUGHT" | "DELETED";
+  preparationStatus: "OPEN" | "BOUGHT" | "HOME" | "READY";
   updatedAt: IsoDateTime;
+  ingredientId: UUID | null;
 }
 
 export type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
@@ -3333,9 +3170,6 @@ export type ShoppingListRole = "OWNER" | "COLLABORATOR";
 export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
 export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
 export type ShoppingListItemStatus = "OPEN" | "CHECKED" | "REMOVED";
-export type ShoppingListItemFridgeAction = "APPLY" | "UNDO" | "CONFIRM_ENOUGH";
-export type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
-export type ShoppingInventoryStatus = "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
 
 export interface ShoppingListStatusCount {
   status: ShoppingListStatus;
@@ -3414,18 +3248,8 @@ export interface ShoppingListDetailItem {
   categoryName: string | null;
   imageUrl: string | null;
   quantityText: string | null;
-  requiredQuantityText: string | null;
-  remainingQuantityText: string | null;
-  appliedInventoryQuantityText: string | null;
   note: string | null;
   status: ShoppingListItemStatus;
-  fridgeText: string | null;
-  inventoryStatus: ShoppingInventoryStatus;
-  inventoryApplied: boolean;
-  inventoryCovered: boolean;
-  fridgeStatusText: string | null;
-  fridgeActionLabel: string | null;
-  fridgeActionMode: ShoppingListItemFridgeActionMode;
   checkedAt: IsoDateTime | null;
   updatedAt: IsoDateTime;
   sources: ShoppingItemSourceSummary[];
@@ -3455,12 +3279,6 @@ export interface ShoppingListItemPatchResponse {
 export interface CreateShoppingListRequest {
   operationId: OperationId;
   name: string | null;
-}
-
-export interface ApplyShoppingListItemFridgeRequest {
-  operationId: OperationId;
-  version: number;
-  action: ShoppingListItemFridgeAction;
 }
 
 export interface RenameShoppingListRequest {
@@ -3500,28 +3318,16 @@ export interface AddPlanToShoppingListRequest {
   planItemId: UUID;
 }
 
-export interface CreateRandomMenuShoppingIngredientRequest {
-  ingredientId?: UUID | null;
-  ingredientName: string;
-  quantityText: string | null;
-}
-
-export interface CreateRandomMenuShoppingItemRequest {
-  slotId: string;
-  recipeId: UUID;
-  recipeVersionId: UUID;
-  ingredients: CreateRandomMenuShoppingIngredientRequest[];
-}
-
-export interface CreateRandomMenuShoppingItemsRequest {
-  operationId: OperationId;
-  items: CreateRandomMenuShoppingItemRequest[];
-}
-
 export interface UpdateShoppingListItemCheckRequest {
   operationId: OperationId;
   version: number;
   checked: boolean;
+}
+
+export interface UpdateShoppingListItemChecksRequest {
+  operationId: OperationId;
+  version: number;
+  items: Array<{ itemId: UUID; checked: boolean }>;
 }
 
 export interface RemoveShoppingListItemRequest {
@@ -3537,20 +3343,6 @@ export interface UpdateShoppingListStatusRequest {
 export interface DeleteShoppingListRequest {
   operationId: OperationId;
   version: number;
-}
-
-export interface CompleteShoppingListEntryRequest {
-  itemId: UUID;
-  store: boolean;
-  quantityText: string | null;
-  expireDays: number | null;
-  expireAt: string | null;
-}
-
-export interface CompleteShoppingListRequest {
-  operationId: OperationId;
-  version: number;
-  entries: CompleteShoppingListEntryRequest[];
 }
 
 export interface ShareShoppingListLinkResponse {
@@ -3589,53 +3381,6 @@ export interface ShoppingSharePreview {
   canJoin: boolean;
   itemCount: number;
   status: ShoppingListStatus;
-}
-
-export interface ShoppingIngredientGroup {
-  key: string;
-  ingredientId: UUID;
-  name: string;
-  quantityLines: string[];
-  recipeCount: number;
-  recipeTitles: string[];
-  updatedAt: IsoDateTime;
-}
-
-export interface ShoppingRecipeIngredientGroup {
-  key: string;
-  ingredientId: UUID;
-  name: string;
-  quantityLines: string[];
-  updatedAt: IsoDateTime;
-}
-
-export interface ShoppingRecipeGroup {
-  key: string;
-  recipeId: UUID;
-  sourceVersionId: UUID;
-  title: string;
-  addCount: number;
-  totalServings: number;
-  updatedAt: IsoDateTime;
-  items: ShoppingRecipeIngredientGroup[];
-}
-
-export interface ShoppingBoardResponse {
-  ingredientGroups: ShoppingIngredientGroup[];
-  recipeGroups: ShoppingRecipeGroup[];
-  otherItems: ShoppingItemSummary[];
-}
-
-export interface CreateRecipeShoppingItemsRequest {
-  operationId: OperationId;
-  recipeId: UUID;
-  sourceVersionId: UUID;
-}
-
-export interface UpdateShoppingGroupStatusRequest {
-  operationId: OperationId;
-  targetKey: string;
-  status: "OPEN" | "BOUGHT" | "DELETED";
 }
 
 export interface SharePreviewResponse {

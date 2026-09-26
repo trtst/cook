@@ -11,11 +11,11 @@ import {
   ChooseBringRecipeDto,
   ChooseDiningEventWishRecipeDto,
   CancelDiningEventDto,
+  CancelMealPlanDto,
   CompleteCookingDto,
   CompleteDiningEventDto,
   ConfirmMealPlanMenuDto,
   CompleteMealPlanDto,
-  UndoCookingDto,
   CreateDiningMemoryShareDto,
   CreateDirectDiningEventDto,
   CreateDiningEventDto,
@@ -23,9 +23,9 @@ import {
   DiningEventListQueryDto,
   GenerateRandomMenuDto,
   MealPlanQueryDto,
-  CheckRandomMenuGapDto,
   ReplaceRandomMenuSlotDto,
   RespondDiningEventDto,
+  SetDiningEventPreparationDto,
   UpdateDiningEventParticipantNoteDto,
   UpdateDiningEventNoteDto,
   UpdateDiningEventWishSupportDto,
@@ -42,12 +42,10 @@ import {
   DiningEventModel,
   DiningEventListPageModel,
   DiningEventShareLinkModel,
-  CookingConsumptionResponseModel,
-  CookingUndoResponseModel,
+  CookingTraceResponseModel,
   MealCookContextResponseModel,
   MealPlanCookAssistantModel,
   MealPlanModel,
-  RandomGapPreviewModel,
   RandomMenuQuotaModel,
   RandomMenuModel,
   ReplaceRandomMenuSlotModel,
@@ -114,7 +112,7 @@ export class MealController {
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
   @ApiIdempotencyKey()
-  @ApiOkModel(CookingConsumptionResponseModel, "完成这顿饭并按菜谱用量估算更新本人冰箱")
+  @ApiOkModel(CookingTraceResponseModel, "完成这顿饭并记录用过的食材痕迹")
   completeMealCooking(
     @Req() request: RequestWithUser,
     @Param("planItemId", ParseIntPipe) planItemId: number,
@@ -123,22 +121,6 @@ export class MealController {
   ) {
     return this.mealService
       .completeMealCooking(request.user.userId, planItemId, operationId, body.markWholeTable ?? false)
-      .then(result => ok(result));
-  }
-
-  @Post("meal-plans/:planItemId/cooking-complete/undo")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiIdempotencyKey()
-  @ApiOkModel(CookingUndoResponseModel, "撤销当前结果页内最近一次库存更新")
-  undoMealCooking(
-    @Req() request: RequestWithUser,
-    @Param("planItemId", ParseIntPipe) planItemId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: UndoCookingDto
-  ) {
-    return this.mealService
-      .undoMealCooking(request.user.userId, planItemId, operationId, body.consumptionOperationId)
       .then(result => ok(result));
   }
 
@@ -307,16 +289,6 @@ export class MealController {
       .then(result => ok(result));
   }
 
-  @Post("random-menu-gap/preview")
-  @UseGuards(UserAuthGuard)
-  @ApiBearerAuth("UserBearerAuth")
-  @ApiOkModel(RandomGapPreviewModel, "预检当前随机菜单的本桌缺口")
-  previewRandomMenuGap(@Req() request: RequestWithUser, @Body() body: CheckRandomMenuGapDto) {
-    return this.mealService
-      .previewRandomMenuGap(request.user.userId, body.mealSlot, body.peopleCount, body.items, body.inventoryDecisions)
-      .then(result => ok(result));
-  }
-
   @Post("meal-plans/:planItemId/complete")
   @UseGuards(UserAuthGuard)
   @ApiBearerAuth("UserBearerAuth")
@@ -329,6 +301,20 @@ export class MealController {
     @Body() _body: CompleteMealPlanDto
   ) {
     return this.mealService.completeMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
+  }
+
+  @Post("meal-plans/:planItemId/cancel")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(MealPlanModel, "计划所有者取消未到计划日期且未发起饭局的计划")
+  cancelMealPlan(
+    @Req() request: RequestWithUser,
+    @Param("planItemId", ParseIntPipe) planItemId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CancelMealPlanDto
+  ) {
+    return this.mealService.cancelMealPlan(request.user.userId, planItemId, operationId).then(result => ok(result));
   }
 
   @Post("meal-plans/:planItemId/cook-assistant/unlock")
@@ -623,6 +609,50 @@ export class MealController {
     @Body() _body: CancelDiningEventDto
   ) {
     return this.mealService.cancelDiningEvent(request.user.userId, eventId, operationId).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/preparations")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "饭局发起人按菜单食材设置或撤销家中已有状态")
+  setDiningEventPreparation(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetDiningEventPreparationDto
+  ) {
+    return this.mealService
+      .setDiningEventPreparation(request.user.userId, eventId, operationId, body.sourceKey, body.isPresent)
+      .then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/prepare")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "饭局发起人确认本顿食材已备齐")
+  markDiningEventPrepared(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CompleteDiningEventDto
+  ) {
+    return this.mealService.markDiningEventPrepared(request.user.userId, eventId, operationId).then(result => ok(result));
+  }
+
+  @Post("dining-events/:eventId/start-cooking")
+  @UseGuards(UserAuthGuard)
+  @ApiBearerAuth("UserBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(DiningEventModel, "饭局发起人开始做饭")
+  startDiningEventCooking(
+    @Req() request: RequestWithUser,
+    @Param("eventId", ParseIntPipe) eventId: number,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() _body: CompleteDiningEventDto
+  ) {
+    return this.mealService.startDiningEventCooking(request.user.userId, eventId, operationId).then(result => ok(result));
   }
 
   @Post("dining-events/:eventId/memory-shares")
