@@ -34,19 +34,15 @@ describe("pages_me/theme visual capture", () => {
     await page.callMethod("automatorResetThemeSettings");
   });
 
-  it.skip("导出主题页的关键皮肤截图（HBuilderX CLI App.captureScreenshot 不稳定，保留为手工留档候选）", async () => {
+  it.skip("导出默认主题的明暗模式截图（HBuilderX CLI App.captureScreenshot 不稳定，保留为手工留档候选）", async () => {
     const captured = {};
 
     await page.callMethod("automatorResetThemeSettings");
     captured.default = await captureCurrentPage("theme-default.png");
 
-    await page.callMethod("automatorSetThemeSkin", "minimal-white");
+    await page.callMethod("automatorSetThemeMode", "dark");
     await page.waitFor(300);
-    captured.minimalWhite = await captureCurrentPage("theme-minimal-white.png");
-
-    await page.callMethod("automatorSetThemeSkin", "apple-glass");
-    await page.waitFor(300);
-    captured.appleGlass = await captureCurrentPage("theme-apple-glass.png");
+    captured.dark = await captureCurrentPage("theme-default-dark.png");
 
     console.log(JSON.stringify(captured, null, 2));
   });

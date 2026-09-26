@@ -2,7 +2,7 @@
   <page-meta :page-style="themePageStyle" />
   <Layout :class="themeClasses" title="" full-screen :navbar-placeholder="false" navbar-transparent>
     <template #navbar-center>
-      <text class="theme-navbar__title">主题皮肤</text>
+      <text class="theme-navbar__title">主题设置</text>
     </template>
 
     <view class="theme-shell" :style="pageBodyStyle">
@@ -13,7 +13,7 @@
             <view class="theme-hero__blob theme-hero__blob--right" />
             <text class="theme-card__eyebrow">当前主题</text>
             <text class="theme-card__title">{{ currentThemeText }}</text>
-            <text class="theme-card__description">个性皮肤</text>
+            <text class="theme-card__description">可选默认、暖橙和冰川蓝色系</text>
           </view>
 
           <view class="theme-card">
@@ -57,7 +57,7 @@
                 v-for="option in modeOptions"
                 :key="option.value"
                 class="option-chip"
-                :class="{ 'option-chip--active': option.value === currentModeValue }"
+                :class="{ 'option-chip--active': option.value === themeMode }"
                 hover-class="is-pressed"
                 hover-stay-time="100"
                 @click="handleThemeModeChange(option.value)"
@@ -98,10 +98,11 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import { useSessionStore } from "@/stores/session";
 import { useSettingsStore } from "@/stores/settings";
 import {
-  DEFAULT_THEME_PALETTE,
   THEME_MODE_LABELS,
   THEME_PALETTE_LABELS,
+  THEME_PALETTE_OPTIONS,
   THEME_SKIN_LABELS,
+  THEME_SKIN_OPTIONS,
   supportsDarkForSkin,
   type ThemePalette,
   type ThemeSkin
@@ -131,19 +132,14 @@ const THEME_MODE_OPTIONS = [
   { label: THEME_MODE_LABELS.light, value: "light" },
   { label: THEME_MODE_LABELS.dark, value: "dark" }
 ] as const;
-const DEFAULT_THEME_SCHEME_OPTIONS = [
-  { label: THEME_PALETTE_LABELS.default, value: "default" },
-  { label: THEME_PALETTE_LABELS.warm, value: "warm" },
-  { label: THEME_PALETTE_LABELS.olive, value: "olive" },
-  { label: THEME_PALETTE_LABELS.cool, value: "cool" }
-] as const;
-const THEME_OPTIONS = [
-  { label: THEME_SKIN_LABELS["default"], value: "default" },
-  { label: THEME_SKIN_LABELS["fresh-ingredient"], value: "fresh-ingredient" },
-  { label: THEME_SKIN_LABELS["minimal-white"], value: "minimal-white" },
-  { label: THEME_SKIN_LABELS["apple-glass"], value: "apple-glass" }
-] as const;
-
+const DEFAULT_THEME_SCHEME_OPTIONS = THEME_PALETTE_OPTIONS.map((value) => ({
+  label: THEME_PALETTE_LABELS[value],
+  value
+}));
+const THEME_OPTIONS = THEME_SKIN_OPTIONS.map((option) => ({
+  label: THEME_SKIN_LABELS[option.value],
+  value: option.value
+}));
 type ThemeFamily = (typeof THEME_OPTIONS)[number]["value"];
 type ThemeSchemeValue = (typeof DEFAULT_THEME_SCHEME_OPTIONS)[number]["value"];
 
@@ -151,24 +147,19 @@ const pageBodyStyle = computed(() => ({
   paddingTop: `${navBarTotalHeight.value + 12}px`
 }));
 
-const currentThemeFamily = computed<ThemeFamily>(() => effectiveSkin.value);
-const themeOptions = THEME_OPTIONS;
 const currentThemeLabel = computed(() => THEME_SKIN_LABELS[effectiveSkin.value]);
+const themeOptions = THEME_OPTIONS;
+const currentThemeFamily = computed<ThemeFamily>(() => effectiveSkin.value);
 const schemeOptions = computed(() => (effectiveSkin.value === "default" ? DEFAULT_THEME_SCHEME_OPTIONS : []));
 const showSchemeCard = computed(() => schemeOptions.value.length > 0);
 const showModeCard = computed(() => supportsDarkForSkin(effectiveSkin.value));
+const modeOptions = computed(() => showModeCard.value ? THEME_MODE_OPTIONS : []);
 const currentSchemeValue = computed<ThemeSchemeValue>(() => {
-  return effectiveSkin.value === "default" ? effectivePalette.value : DEFAULT_THEME_PALETTE;
+  return effectiveSkin.value === "default" ? effectivePalette.value : "default";
 });
-const currentSchemeLabel = computed(() => {
-  if (!showSchemeCard.value) return "";
-  return THEME_PALETTE_LABELS[effectivePalette.value];
-});
-const modeOptions = computed(() => (showModeCard.value ? THEME_MODE_OPTIONS : []));
-const currentModeValue = computed(() => (showModeCard.value ? themeMode.value : ""));
-const currentModeLabel = computed(() => (showModeCard.value ? THEME_MODE_LABELS[themeMode.value] : ""));
+const currentSchemeLabel = computed(() => showSchemeCard.value ? THEME_PALETTE_LABELS[effectivePalette.value] : "");
 const currentThemeText = computed(() =>
-  [currentThemeLabel.value, currentSchemeLabel.value, currentModeLabel.value].filter(Boolean).join(" · ")
+  [currentThemeLabel.value, currentSchemeLabel.value, THEME_MODE_LABELS[themeMode.value]].filter(Boolean).join(" · ")
 );
 
 function buildAutomatorState() {
@@ -176,7 +167,9 @@ function buildAutomatorState() {
     themeMode: themeMode.value,
     effectiveSkin: effectiveSkin.value,
     effectivePalette: effectivePalette.value,
-    currentThemeFamily: currentThemeFamily.value,
+    currentThemeFamily: effectiveSkin.value,
+    currentSchemeValue: currentSchemeValue.value,
+    currentModeValue: themeMode.value,
     currentThemeText: currentThemeText.value,
     showSchemeCard: showSchemeCard.value,
     showModeCard: showModeCard.value,
@@ -193,14 +186,8 @@ async function handleThemeModeChange(mode: (typeof THEME_MODE_OPTIONS)[number]["
 }
 
 async function applyThemeFamily(themeFamily: ThemeFamily) {
-  if (themeFamily === "default") {
-    await setThemeSkin("default", false);
-    await setThemePalette(DEFAULT_THEME_PALETTE, false);
-    return;
-  }
-
   await setThemeSkin(themeFamily, false);
-  await setThemePalette(DEFAULT_THEME_PALETTE, false);
+  await setThemePalette("default", false);
   if (!supportsDarkForSkin(themeFamily)) {
     await setThemeMode("light", false);
   }
@@ -212,8 +199,6 @@ async function handleThemeFamilyChange(themeFamily: ThemeFamily) {
 
 async function handleThemeSchemeChange(value: ThemeSchemeValue) {
   if (effectiveSkin.value !== "default") return;
-
-  await setThemeSkin("default", false);
   await setThemePalette(value as ThemePalette, false);
 }
 
@@ -244,9 +229,11 @@ async function restoreCommittedTheme() {
 }
 
 async function automatorReadState() {
+  const persistedTheme = settingsStore.readPersistedThemeSettings();
   return {
     ...buildAutomatorState(),
-    persistedThemeSkin: settingsStore.readPersistedThemeSettings().themeSkin,
+    persistedThemeMode: persistedTheme.themeMode,
+    persistedThemeSkin: persistedTheme.themeSkin,
     loginModalVisible: loginModalStore.visible
   };
 }
@@ -255,6 +242,11 @@ async function automatorResetThemeSettings() {
   await settingsStore.clearSettings();
   committedTheme = settingsStore.readPersistedThemeSettings();
   confirmedThisVisit = false;
+  return automatorReadState();
+}
+
+async function automatorSetThemeMode(mode: (typeof THEME_MODE_OPTIONS)[number]["value"]) {
+  await handleThemeModeChange(mode);
   return automatorReadState();
 }
 
@@ -299,6 +291,7 @@ defineExpose({
   automatorClearSession,
   automatorReadState,
   automatorResetThemeSettings,
+  automatorSetThemeMode,
   automatorSetThemeSkin,
   automatorSetThemePalette,
   automatorSelectThemeFamily,

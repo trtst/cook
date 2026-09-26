@@ -26,32 +26,18 @@ describe("pages/recipe/index theme runtime", () => {
     await page.callMethod("automatorResetThemeSettings");
   });
 
-  it("菜谱页的主题摘要和页面底色会跟随主题切换同步更新", async () => {
+  it("菜谱页固定使用默认主题和默认色系", async () => {
     const defaultState = await page.callMethod("automatorReadThemeState");
-    expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题 · 默认");
+    expect(defaultState.currentThemeText).toBe("跟随系统 · 默认主题");
     expect(defaultState.colorPage).toBe("#fff");
     expect(defaultState.themePageStyle).toContain("background-color: #fff;");
 
-    const minimalState = await page.callMethod("automatorApplyThemeSettings", {
-      themeSkin: "minimal-white"
+    const legacyState = await page.callMethod("automatorApplyThemeSettings", {
+      themeSkin: "minimal-white",
+      themePalette: "sage"
     });
-    expect(minimalState.currentThemeText).toBe("跟随系统 · 简白");
-    expect(minimalState.colorPage).toBe("#ffffff");
-    expect(minimalState.themePageStyle).toContain("background-color: #ffffff;");
-
-    const glassState = await page.callMethod("automatorApplyThemeSettings", {
-      themeSkin: "apple-glass"
-    });
-    expect(glassState.currentThemeText).toBe("跟随系统 · 磨砂玻璃");
-    expect(glassState.colorPage).toBe("#eef1f4");
-    expect(glassState.themePageStyle).toContain("background-color: #eef1f4;");
-
-    const warmState = await page.callMethod("automatorApplyThemeSettings", {
-      themeSkin: "default",
-      themePalette: "warm"
-    });
-    expect(warmState.currentThemeText).toBe("跟随系统 · 默认主题 · 暖黄");
-    expect(warmState.colorPage).toBe("#fbf4e5");
-    expect(warmState.themePageStyle).toContain("background-color: #fbf4e5;");
+    expect(legacyState.currentThemeText).toBe("跟随系统 · 默认主题");
+    expect(legacyState.colorPage).toBe("#fff");
+    expect(legacyState.themePageStyle).toContain("background-color: #fff;");
   });
 });

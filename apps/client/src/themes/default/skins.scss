@@ -1,35 +1,34 @@
 @use "@/styles/colors.scss" as colors;
 
 /*
- * 默认主题。
- * 这里按 warm / olive / cool 三套浅色盘分开维护；
- * 如果你想改默认主题的整体观感，优先改下面这几个 `theme-derived-colors` 入参。
+ * 默认主题的可选色系。
+ * `theme-derived-colors` 入参按顺序为：
+ * $bg 页面大底色；$surface 卡片、弹层和输入框底色；$text 正文基准色；
+ * $primary 主操作强调色（纯色按钮、选中态、链接）；$secondary 辅助强调色（次级标签和装饰）；
+ * $on-primary 主色底上的文字/图标色；$on-secondary 次色底上的文字/图标色；
+ * $on-danger 危险状态底上的文字/图标色（可选）；$mode 浅色或深色派生模式（可选）。
+ * 修改配色时按这个顺序填写源色，其余页面与组件 token 会从这些值派生。
  */
-.theme-skin-default.theme-palette-warm.theme-light {
-  @include colors.theme-derived-colors(#fbf4e5, #fffaf0, #2d2418, #d67a54, #f0b16b, #ffffff, #2d2418);
+.theme-skin-default.theme-palette-default.theme-light {
+  @include colors.theme-derived-colors(#ffffff, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);
 }
 
-.theme-skin-default.theme-palette-olive.theme-light {
-  @include colors.theme-derived-colors(#f2f4ea, #fffef8, #202719, #7a9b61, #b7c76f, #ffffff, #202719);
-}
-
-.theme-skin-default.theme-palette-cool.theme-light {
-  @include colors.theme-derived-colors(#f0f5f8, #ffffff, #17242d, #4e93bf, #83b6df, #ffffff, #17242d);
-}
-
-/* 深色模式仍保留当前色系，分别维护对应的暗色源头。 */
 .theme-skin-default.theme-palette-default.theme-dark {
   @include colors.theme-derived-colors(#111715, #18201d, #f6efe8, #5a9d90, #8fbf8c, #0f1713, #0f1713, #ffffff, dark);
 }
 
+.theme-skin-default.theme-palette-warm.theme-light {
+  @include colors.theme-derived-palette(#f9eee0, #eb6408, #ff9f41, light, #ffffff, #2b1a0d);
+}
+
 .theme-skin-default.theme-palette-warm.theme-dark {
-  @include colors.theme-derived-colors(#1b1511, #241c17, #f7eee4, #d8895f, #e5ad72, #21140e, #21140e, #ffffff, dark);
+  @include colors.theme-derived-palette(#f9eee0, #eb6408, #ff9f41, dark, #ffffff, #2b1a0d);
 }
 
-.theme-skin-default.theme-palette-olive.theme-dark {
-  @include colors.theme-derived-colors(#151a14, #1e261b, #edf2e5, #91ad68, #b8c987, #17200f, #17200f, #ffffff, dark);
+.theme-skin-default.theme-palette-glacier.theme-light {
+  @include colors.theme-derived-palette(#e7f8f9, #2599b7, #61b0c7, light, #ffffff, #14252b);
 }
 
-.theme-skin-default.theme-palette-cool.theme-dark {
-  @include colors.theme-derived-colors(#121923, #192330, #edf3fa, #6ea6d3, #8ebce0, #101b29, #101b29, #ffffff, dark);
+.theme-skin-default.theme-palette-glacier.theme-dark {
+  @include colors.theme-derived-palette(#e7f8f9, #2599b7, #61b0c7, dark, #ffffff, #14252b);
 }

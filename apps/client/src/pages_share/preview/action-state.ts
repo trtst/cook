@@ -14,7 +14,6 @@ export interface SharePreviewActionState {
   action: SharePreviewAction;
   label: string;
   disabled: boolean;
-  secondary: boolean;
 }
 
 export function resolveSharePreviewActionState(input: SharePreviewActionStateInput): SharePreviewActionState {
@@ -22,8 +21,7 @@ export function resolveSharePreviewActionState(input: SharePreviewActionStateInp
     return {
       action: "LOGIN",
       label: "登录查看",
-      disabled: false,
-      secondary: false
+      disabled: false
     };
   }
 
@@ -31,8 +29,7 @@ export function resolveSharePreviewActionState(input: SharePreviewActionStateInp
     return {
       action: "ACCEPT",
       label: "加入中...",
-      disabled: true,
-      secondary: false
+      disabled: true
     };
   }
 
@@ -40,8 +37,7 @@ export function resolveSharePreviewActionState(input: SharePreviewActionStateInp
     return {
       action: "PENDING",
       label: "加载中...",
-      disabled: true,
-      secondary: false
+      disabled: true
     };
   }
 
@@ -49,8 +45,7 @@ export function resolveSharePreviewActionState(input: SharePreviewActionStateInp
     return {
       action: input.viewer.action,
       label: input.viewer.action === "VIEW" ? "查看邀请" : input.viewer.action === "BLOCKED" ? "无法加入" : "确认加入",
-      disabled: input.viewer.action === "BLOCKED",
-      secondary: input.viewer.action === "VIEW" || input.viewer.action === "BLOCKED"
+      disabled: input.viewer.action === "BLOCKED"
     };
   }
 
@@ -58,15 +53,13 @@ export function resolveSharePreviewActionState(input: SharePreviewActionStateInp
     return {
       action: "RETRY",
       label: "重试加载",
-      disabled: false,
-      secondary: true
+      disabled: false
     };
   }
 
   return {
     action: "PENDING",
     label: "加载中...",
-    disabled: true,
-    secondary: false
+    disabled: true
   };
 }

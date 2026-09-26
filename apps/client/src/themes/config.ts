@@ -1,37 +1,3 @@
-/*
- * 主题配置使用说明
- *
- * 新增皮肤需要改三处：
- * 1. 先在 `src/themes/presets.ts` 增加主题能力声明。
- * 2. 新建 `src/themes/{skinId}/skins.scss`。
- * 3. 在 `src/themes/skins.scss` 里显式 `@use` 新皮肤样式文件。
- *
- * 颜色源头只放在对应 `src/themes/{skinId}/skins.scss` 或全局 fallback。
- * `presets.ts` 不保存颜色，避免 TS inline 变量覆盖皮肤样式。
- *
- * 新增 `icon` 字体图标皮肤：
- * 1. 在 `src/themes/{skinId}/skins.scss` 中注册本地字体文件和 icon class。
- * 2. 必须提供三个固定 class：`icon-tab-dining`、`icon-tab-recipe`、`icon-tab-me`。
- * 3. 在 `src/themes/presets.ts` 中设置 `assetType: "icon"`。
- * 4. 在 `src/themes/skins.scss` 中添加 `@use "./{skinId}/skins.scss" as {skinId}Skin;`。
- * 5. 字体图标会跟随 CSS `color` 变色，适合支持换色或暗黑模式的主题。
- *
- * 新增 SVG 图片皮肤：
- * 1. 新建 `src/themes/{skinId}/skins.scss`。
- * 2. 在同一目录放入固定命名的 SVG：
- *    `home.svg`、`home-active.svg`、`recipe.svg`、`recipe-active.svg`、`me.svg`、`me-active.svg`。
- * 3. 在 `src/themes/presets.ts` 中设置 `assetType: "svg"`。
- * 4. 在 `src/themes/skins.scss` 中添加 `@use "./{skinId}/skins.scss" as {skinId}Skin;`。
- * 5. SVG 颜色来自图片文件本身，适合固定插画、多色、不可简单换色的皮肤。
- *
- * 目录约束：
- * 1. 全局基础变量放在 `src/styles/colors.scss`。
- * 2. 默认皮肤的可切换色系放在 `src/themes/default/skins.scss`。
- * 3. 主题公共逻辑只放在 `src/themes/config.ts`、`src/themes/index.ts`。
- * 4. 皮肤包直接使用 `src/themes/{skinId}/`，不要再加 `skins/`、`template/`、`assets/` 这类中间目录。
- * 5. 正式小程序运行态不要依赖远程 iconfont/CDN，字体文件需要下载到本地皮肤目录。
- * 6. 小程序构建不会把 TS 中的 SCSS import 稳定合并到全局 wxss，因此皮肤样式必须通过 `themes/skins.scss` 显式 @use。
- */
 const tabbarSvgModules = import.meta.glob<string>("./*/*.svg", {
   eager: true,
   import: "default"
@@ -41,6 +7,7 @@ import {
   DEFAULT_THEME_PALETTE,
   DEFAULT_THEME_SKIN,
   FALLBACK_ASSET_SKIN,
+  formatEffectiveThemeText,
   formatThemeText,
   THEME_MODE_LABELS,
   THEME_PALETTE_LABELS,
@@ -154,6 +121,7 @@ export {
   DEFAULT_THEME_PALETTE,
   DEFAULT_THEME_SKIN,
   FALLBACK_ASSET_SKIN,
+  formatEffectiveThemeText,
   formatThemeText,
   THEME_MODE_LABELS,
   THEME_PALETTE_LABELS,

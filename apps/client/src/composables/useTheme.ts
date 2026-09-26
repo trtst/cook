@@ -24,32 +24,10 @@ const themePageColors: Record<ThemeSkin, ThemePageColors> = {
   default: {
     light: {
       default: "#fff",
-      warm: "#fbf4e5",
-      olive: "#f2f4ea",
-      cool: "#f0f5f8"
+      warm: "#f9eee0",
+      glacier: "#e7f8f9"
     },
-    dark: {
-      default: "#111715",
-      warm: "#1b1511",
-      olive: "#151a14",
-      cool: "#121923"
-    }
-  },
-  "fresh-ingredient": {
-    light: {
-      default: "#f4f7f5"
-    }
-  },
-  "minimal-white": {
-    light: {
-      default: "#ffffff"
-    },
-    dark: "#101211"
-  },
-  "apple-glass": {
-    light: {
-      default: "#eef1f4"
-    }
+    dark: "#111715"
   }
 };
 

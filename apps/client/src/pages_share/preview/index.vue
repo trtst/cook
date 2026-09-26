@@ -134,7 +134,6 @@
 
               <button
                 class="invite-footer__button"
-                :class="{ 'invite-footer__button--secondary': primaryActionState.secondary }"
                 @click="handlePrimaryAction"
               >
                 {{ primaryActionLabel }}
@@ -783,8 +782,8 @@ function formatInviteDateTime(value: string) {
   height: 40rpx;
   padding: 0 8rpx;
   border-radius: 10rpx;
-  background: var(--color-state-danger-soft);
-  color: var(--color-text-inverse);
+  background: var(--color-tag-danger-bg);
+  color: var(--color-tag-danger-text);
   font-size: 22rpx;
   font-weight: 700;
   line-height: 1;
@@ -820,14 +819,6 @@ function formatInviteDateTime(value: string) {
 
 .invite-footer__button::after {
   border: none;
-}
-
-.invite-footer__button--secondary {
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
-  box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--button-secondary-filter);
-  backdrop-filter: var(--button-secondary-filter);
 }
 
 .invite-footer__status {

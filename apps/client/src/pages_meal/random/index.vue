@@ -1027,15 +1027,7 @@ async function automatorApplyThemeSettings(snapshot: {
   themeSkin?: ThemeSkin;
   themePalette?: ThemePalette;
 }) {
-  if (snapshot.themeMode) {
-    await settingsStore.setThemeMode(snapshot.themeMode);
-  }
-  if (snapshot.themeSkin) {
-    await settingsStore.setThemeSkin(snapshot.themeSkin);
-  }
-  if (snapshot.themePalette) {
-    await settingsStore.setThemePalette(snapshot.themePalette);
-  }
+  await settingsStore.applyThemeSettings({ ...settingsStore.readCurrentThemeSettings(), ...snapshot });
   return automatorReadThemeState();
 }
 

@@ -25,7 +25,6 @@
             aria-hidden="true"
           />
           <text v-if="item.key === 'me' && badgeSnapshot.unreadCount > 0" class="tabbar__badge">{{ badgeText }}</text>
-          <view v-else-if="item.key === 'me' && badgeSnapshot.showReminderDot" class="tabbar__dot" />
         </view>
         <text class="tabbar__label">{{ item.text }}</text>
       </view>
@@ -133,7 +132,7 @@ async function syncBadgeSnapshot() {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--material-tabbar-bg);
+  background: transparent;
   -webkit-mask-image: var(--frosted-mask-image);
   mask-image: var(--frosted-mask-image);
   -webkit-backdrop-filter: var(--material-mask-filter);
@@ -151,7 +150,7 @@ async function syncBadgeSnapshot() {
   height: var(--tabbar-panel-height);
   padding: 10rpx;
   border-radius: var(--radius-pill);
-  background: var(--material-tabbar-bg);
+  background: var(--color-tabbar-bg);
   box-shadow: var(--material-tabbar-shadow);
   pointer-events: auto;
   -webkit-backdrop-filter: var(--material-tabbar-filter);
@@ -172,7 +171,7 @@ async function syncBadgeSnapshot() {
   width: calc((100% - 20rpx) / 3);
   height: 88rpx;
   border-radius: var(--radius-pill);
-  background: var(--color-surface-muted);
+  background: var(--color-tabbar-active-bg);
   transition: transform 0.22s ease;
   backdrop-filter: var(--material-tabbar-filter);
 }
@@ -209,15 +208,11 @@ async function syncBadgeSnapshot() {
   margin-bottom: 4rpx;
 }
 
-.tabbar__badge,
-.tabbar__dot {
+.tabbar__badge {
   position: absolute;
   top: -5rpx;
   left: 40rpx;
   z-index: 2;
-}
-
-.tabbar__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -232,24 +227,16 @@ async function syncBadgeSnapshot() {
   line-height: 1;
 }
 
-.tabbar__dot {
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  background: var(--color-state-danger-base);
-  box-shadow: 0 0 0 4rpx var(--material-tabbar-bg);
-}
-
-.tabbar__icon {
-  width: 38rpx;
-  height: 38rpx;
-}
-
 .tabbar__font-icon {
   display: block;
   color: var(--color-text);
   line-height: 1;
   text-align: center;
+}
+
+.tabbar__icon {
+  width: 38rpx;
+  height: 38rpx;
 }
 
 .tabbar__label {

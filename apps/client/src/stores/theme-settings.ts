@@ -28,28 +28,27 @@ function isThemeSkin(value: unknown): value is ThemeSkin {
   return THEME_SKIN_PRESETS.some((option) => option.value === value);
 }
 
-function isThemePalette(value: unknown): value is ThemePalette {
-  return THEME_PALETTE_OPTIONS.includes(value as ThemePalette);
-}
-
-function getThemePreset(themeSkin: ThemeSkin) {
-  return THEME_SKIN_PRESETS.find((option) => option.value === themeSkin) ?? THEME_SKIN_PRESETS[0];
+function getStoredThemePalette(value: unknown): ThemePalette | undefined {
+  if (value === "cool") return "glacier";
+  return THEME_PALETTE_OPTIONS.includes(value as ThemePalette) ? value as ThemePalette : undefined;
 }
 
 function getDefaultPaletteForSkin(themeSkin: ThemeSkin): ThemePalette {
-  return getThemePreset(themeSkin).palettes[0] ?? DEFAULT_THEME_PALETTE;
+  const preset = THEME_SKIN_PRESETS.find((option) => option.value === themeSkin) ?? THEME_SKIN_PRESETS[0];
+  return preset.palettes[0] ?? DEFAULT_THEME_PALETTE;
 }
 
 function isPaletteSupportedBySkin(themeSkin: ThemeSkin, themePalette: ThemePalette) {
-  return (getThemePreset(themeSkin).palettes as readonly ThemePalette[]).includes(themePalette);
+  const preset = THEME_SKIN_PRESETS.find((option) => option.value === themeSkin) ?? THEME_SKIN_PRESETS[0];
+  return (preset.palettes as readonly ThemePalette[]).includes(themePalette);
 }
 
 export function resolveThemeSettingsSnapshot(snapshot: ThemeSettingsSnapshot | null | undefined): ResolvedThemeSettings {
   const themeSkin = isThemeSkin(snapshot?.themeSkin) ? snapshot.themeSkin : DEFAULT_THEME_SKIN;
-  const themePalette =
-    isThemePalette(snapshot?.themePalette) && isPaletteSupportedBySkin(themeSkin, snapshot.themePalette)
-      ? snapshot.themePalette
-      : getDefaultPaletteForSkin(themeSkin);
+  const storedPalette = getStoredThemePalette(snapshot?.themePalette);
+  const themePalette = storedPalette && isPaletteSupportedBySkin(themeSkin, storedPalette)
+    ? storedPalette
+    : getDefaultPaletteForSkin(themeSkin);
 
   return {
     themeMode: isThemeMode(snapshot?.themeMode) ? snapshot.themeMode : "system",

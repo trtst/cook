@@ -2,6 +2,7 @@ export {
   DEFAULT_THEME_PALETTE,
   DEFAULT_THEME_SKIN,
   FALLBACK_ASSET_SKIN,
+  formatEffectiveThemeText,
   formatThemeText,
   THEME_MODE_LABELS,
   THEME_PALETTE_LABELS,

@@ -258,11 +258,12 @@
   --color-overlay-sheen-bottom: rgba(255, 255, 255, 0.01);
   --color-overlay-scrim: rgba(0, 0, 0, 0.56);
   --color-cover-empty-warm-bg: radial-gradient(circle at top right, var(--color-secondary-soft), transparent 40%), linear-gradient(135deg, var(--color-surface-primary-panel-soft), var(--color-state-warning-soft));
-  --color-tabbar-bg: #{rgba($surface, theme-value($dark, 0.9, 0.92))};
+  --color-tabbar-bg: #{rgba(color.mix($primary, $surface, 5%), 0.78)};
+  --color-tabbar-active-bg: #{color.mix($primary, $surface, 28%)};
 
   --button-primary-gradient-start: var(--theme-primary);
   --button-primary-gradient-end: var(--theme-secondary);
-  --button-primary-bg: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+  --button-primary-bg: var(--theme-primary);
   --button-primary-text: var(--theme-on-primary);
   --button-primary-shadow: 0 3rpx 10rpx #{rgba($primary, theme-value($dark, 0.14, 0.1))};
   --button-primary-border: transparent;
@@ -297,7 +298,7 @@
   --material-panel-border: transparent;
   --material-panel-shadow: var(--shadow-floating);
   --material-panel-filter: none;
-  --material-tabbar-bg: var(--color-tabbar-bg);
+  --material-tabbar-bg: #{rgba($surface, theme-value($dark, 0.9, 0.92))};
   --material-tabbar-border: transparent;
   --material-tabbar-shadow: var(--shadow-tabbar);
   --material-tabbar-filter: saturate(180%) blur(28rpx);
@@ -445,31 +446,44 @@
   --size-list-item: 104rpx;
 }
 
+/* 新增简单色盘时只需提供页面底色、主色和辅色；中性色与按钮前景色沿用统一规则。 */
+@mixin theme-derived-palette($bg, $primary, $secondary, $mode: light, $on-primary: null, $on-secondary: null) {
+  $dark: $mode == dark;
+  $palette-bg: theme-value($dark, #111715, $bg);
+  $surface: theme-value($dark, #18201d, #ffffff);
+  $text: theme-value($dark, #f6efe8, #17231d);
+  $primary-text: if($on-primary == null, theme-value($dark, #0c2115, #ffffff), $on-primary);
+  $secondary-text: if($on-secondary == null, theme-value($dark, #f6efe8, #17231d), $on-secondary);
+
+  @include theme-derived-colors(
+    $palette-bg,
+    $surface,
+    $text,
+    $primary,
+    $secondary,
+    $primary-text,
+    $secondary-text,
+    #ffffff,
+    $mode
+  );
+}
+
 /*
  * 这里开始不是“某个主题皮肤”的专属配置，而是全局兜底层：
  * 1. `page`       : 默认浅色兜底，未挂任何 theme class 时也能正常显示。
  * 2. `@media ...` : 跟随系统暗黑时的兜底。
  * 3. `.theme-dark`: 用户手动切到暗黑模式时的统一兜底。
  *
- * 真正区分主题/色系的地方不在这一段，而在：
- * - `src/themes/default/skins.scss`
- *   - default + warm / olive / cool
- *   - default + dark
- * - `src/themes/fresh-ingredient/skins.scss`
- *   - fresh-ingredient 浅色
- * - `src/themes/minimal-white/skins.scss`
- *   - minimal-white 浅色
- *   - minimal-white dark
- * - `src/themes/apple-glass/skins.scss`
- *   - apple-glass 浅色
+ * 默认皮肤和默认色系在 `src/themes/default/skins.scss` 中显式定义，
+ * 仅区分浅色和深色模式。
  *
  * 所以如果你要判断“哪个主题、哪个色系、是不是暗黑”：
  * - 先看 DOM class：`theme-skin-*`、`theme-palette-*`、`theme-light` / `theme-dark`
- * - 再去对应 `themes/{skin}/skins.scss` 找源头颜色
+ * - 再去 `themes/default/skins.scss` 找源头颜色
  * - 这一段只负责没有命中皮肤时的保底显示
  */
 page {
-  /* 全局默认浅色兜底：视觉上接近 `fresh-ingredient`，但它不是主题切换配置入口。 */
+  /* 全局默认浅色兜底，未挂主题 class 时使用。 */
   @include theme-derived-colors(#ffffff, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);
   @include global-layout-tokens;
   color-scheme: light;

@@ -1035,15 +1035,7 @@ async function automatorApplyThemeSettings(snapshot: {
   themeSkin?: ThemeSkin;
   themePalette?: ThemePalette;
 }) {
-  if (snapshot.themeMode) {
-    await settingsStore.setThemeMode(snapshot.themeMode);
-  }
-  if (snapshot.themeSkin) {
-    await settingsStore.setThemeSkin(snapshot.themeSkin);
-  }
-  if (snapshot.themePalette) {
-    await settingsStore.setThemePalette(snapshot.themePalette);
-  }
+  await settingsStore.applyThemeSettings({ ...settingsStore.readCurrentThemeSettings(), ...snapshot });
   return await buildAutomatorThemeState();
 }
 
@@ -1838,7 +1830,7 @@ defineExpose({
 }
 
 .recent-arrangement__button-text {
-  color: var(--color-text-inverse);
+  color: var(--button-primary-text);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-heavy);
   line-height: 1.2;
