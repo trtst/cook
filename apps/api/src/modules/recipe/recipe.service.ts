@@ -14,7 +14,6 @@ import { toOwnerNicknameSnapshot } from "./recipe-owner-snapshot";
 import { UserTokenService } from "../../common/security/user-token.service";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, upsertStorageLedger } from "../../common/storage-ledger";
-import { canUseFuzzyAmount, fuzzyAmountCategoryMessage } from "../../common/recipe-amount-policy";
 import type {
   CollectionListResponse,
   CollectionSceneSummary,
@@ -3251,9 +3250,6 @@ export class RecipeService {
         if (!sourceIngredient) throw new NotFoundException("食材不存在");
         const ingredient = sourceIngredient.status === "MERGED" && sourceIngredient.mergedTo ? sourceIngredient.mergedTo : sourceIngredient;
         if (item.fuzzyText) {
-          if (!canUseFuzzyAmount(ingredient.category.code)) {
-            throw new BadRequestException(fuzzyAmountCategoryMessage);
-          }
           return {
             ingredientId: ingredient.id,
             ingredientName: ingredient.name,

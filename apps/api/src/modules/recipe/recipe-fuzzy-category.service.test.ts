@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BadRequestException } from "@nestjs/common";
 import { RecipeService } from "./recipe.service";
 
 function createService() {
@@ -36,7 +35,7 @@ function buildContent() {
   };
 }
 
-test("publishing rejects 适量 when the referenced ingredient is not SEASONING", async () => {
+test("publishing accepts 适量 when the referenced ingredient is not SEASONING", async () => {
   const service = createService();
   const tx = {
     ingredient: {
@@ -56,10 +55,8 @@ test("publishing rejects 适量 when the referenced ingredient is not SEASONING"
     }
   };
 
-  await assert.rejects(
-    () => (service as any).buildPublishedContent(tx, 1, buildContent()),
-    (error: unknown) => error instanceof BadRequestException && error.message === "仅调味料可使用“适量”"
-  );
+  const result = await (service as any).buildPublishedContent(tx, 1, buildContent());
+  assert.deepEqual(result.ingredients[0]?.amount, { kind: "FUZZY", text: "适量" });
 });
 
 test("publishing accepts 适量 when the referenced ingredient is SEASONING", async () => {

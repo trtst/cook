@@ -32,7 +32,9 @@
 }
 ```
 
-所有字段都必须出现；无法确定的可选事实使用 `null` 或 `[]`，不得猜测。
+所有字段都必须出现；无法确定的可选事实使用 `null` 或 `[]`，不得猜测。`isStaple` 和 `isSpicyIngredient` 是必填布尔属性，转换时必须逐项判断并填写 `true` 或 `false`，不能漏掉，也不能统一默认 `false`。
+
+这两个属性描述食材本身，不描述它在某道菜中的主料、辅料或调味角色：`isStaple` 表示是否属于日常主食类食材（如米、面、薯类）；`isSpicyIngredient` 表示是否主要提供辣味（如辣椒及辣椒制品）。不符合对应定义时填 `false`。
 
 `ingredients` 数组内，所有正式名称和别名在去除首尾空白、统一大小写并移除空白后不得重复；正式名称也不能出现在自己的 `aliases` 中。
 
@@ -46,8 +48,8 @@
 | `ingredients[].categoryCode` | 稳定分类，取值见下表。 |
 | `ingredients[].defaultUnitName` | 默认单位，例如“个”“克”；无法确定时为 `null`。 |
 | `ingredients[].proteinType` | 主蛋白类型，取值见下表，或为 `null`。 |
-| `ingredients[].isStaple` | 是否主食。 |
-| `ingredients[].isSpicyIngredient` | 是否为辣味驱动食材。 |
+| `ingredients[].isStaple` | 必填布尔值；是否属于米、面、薯类等主食食材，不等于“在某道菜里是主料”。 |
+| `ingredients[].isSpicyIngredient` | 必填布尔值；是否主要提供辣味，如辣椒及辣椒制品。 |
 | `ingredients[].imageUrl` | 食材图片地址；没有时为 `null`。 |
 | `ingredients[].nutrition` | 对应的营养食品数据；没有可靠对应项时为 `null`。 |
 | `nutrition.sourceVersion` | 营养数据来源版本。 |

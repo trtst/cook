@@ -284,7 +284,6 @@ function validateRecipeImportJson(body: ReturnType<typeof buildRecipeImportJson>
       return `导出 JSON 前请补全${rowLabel}分类`;
     }
     if (ingredient.fuzzyText === "适量") {
-      if (ingredient.categoryCode !== "SEASONING") return `导出 JSON 前请修正${rowLabel}的模糊用量`;
       if (ingredient.quantity !== null || ingredient.unit !== null) return `导出 JSON 前请修正${rowLabel}的用量`;
     } else {
       if (!ingredient.quantity || !/^\d+(?:\.\d+)?$/.test(ingredient.quantity) || Number(ingredient.quantity) <= 0) {

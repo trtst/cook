@@ -188,7 +188,7 @@ test("requires complete source content and rejects fuzzy text in quantity", () =
   assert.equal(result.errorItems.some(item => item.field === "recipe.content.ingredients.0.quantity"), true);
 });
 
-test("accepts 适量 only for SEASONING JSON ingredients", () => {
+test("accepts 适量 for every JSON ingredient category", () => {
   const document = validDocument();
   document.recipe.content.ingredients[1] = {
     name: "海带",
@@ -218,7 +218,7 @@ test("accepts 适量 only for SEASONING JSON ingredients", () => {
   assert.deepEqual(rebuildJsonItemState(result.recipeBody).errorItems, []);
 });
 
-test("rejects 适量 for non-seasoning JSON ingredients", () => {
+test("accepts 适量 for non-seasoning JSON ingredients", () => {
   const document = validDocument();
   document.recipe.content.ingredients[1] = {
     name: "海带",
@@ -233,10 +233,8 @@ test("rejects 适量 for non-seasoning JSON ingredients", () => {
     refs
   );
 
-  assert.equal(
-    result.errorItems.some(item => item.field === "recipe.content.ingredients.1.fuzzyText" && item.message === "仅调味料可使用“适量”"),
-    true
-  );
+  assert.deepEqual(result.errorItems, []);
+  assert.equal(result.recipeBody.ingredients[1]?.fuzzyText, "适量");
 });
 
 test("requires fuzzyText to be explicit for every JSON ingredient", () => {

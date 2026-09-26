@@ -12,7 +12,6 @@ import type {
   RecipeImportTagDraft,
   RecipeImportToolDraft
 } from "../../contracts/types";
-import { canUseFuzzyAmount, fuzzyAmountCategoryMessage } from "../../common/recipe-amount-policy";
 import { buildSearchKey } from "../recipe/recipe-content";
 
 const AdmZip = require("adm-zip");
@@ -377,9 +376,6 @@ export function parseJsonSource(source: RecipeImportJsonSource, refs: RecipeImpo
     if (!name) addIssue(errors, `${field}.name`, "食材名称不能为空");
     if (!isFuzzy && !sourceUnit) addIssue(errors, `${field}.unit`, "单位不能为空，无法确认时待人工确认");
     if (!ingredientCategoryCodes.has(categoryCode)) addIssue(errors, `${field}.categoryCode`, "食材分类代码不支持");
-    if (isFuzzy && !canUseFuzzyAmount(categoryCode)) {
-      addIssue(errors, `${field}.fuzzyText`, fuzzyAmountCategoryMessage);
-    }
     const unitAlias = unitAliasMap.get(sourceUnit.toLowerCase());
     const unitName = unitAlias?.name ?? sourceUnit;
     const normalizedQuantity = quantity && unitAlias ? scaleQuantity(quantity, unitAlias.factor) : quantity;
@@ -485,9 +481,6 @@ export function rebuildJsonItemState(recipeBody: RecipeImportRecipeBody) {
     if (!item.ingredientName?.trim()) addIssue(errors, `ingredients.${index}.ingredientName`, "食材名称不能为空");
     if (item.fuzzyText) {
       if (item.fuzzyText !== "适量") addIssue(errors, `ingredients.${index}.fuzzyText`, "模糊用量只支持“适量”");
-      if (!canUseFuzzyAmount(item.categoryCode)) {
-        addIssue(errors, `ingredients.${index}.fuzzyText`, fuzzyAmountCategoryMessage);
-      }
       if (item.quantity !== null || item.unitId !== null || item.unitText !== null) {
         addIssue(errors, `ingredients.${index}.fuzzyText`, "精确用量与模糊用量不能同时填写");
       }

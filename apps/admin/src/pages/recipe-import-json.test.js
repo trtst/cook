@@ -103,6 +103,10 @@ test("admin recipe amount editors only offer 适量", () => {
     assert.match(source, /const fuzzyOptions: FuzzyText\[\] = \["适量"\];/);
     assert.doesNotMatch(source, /"少许"|"按需"/);
   }
+  assert.match(createPage, /:disabled="!canUseIngredientFuzzyAmount\(item\.ingredientId\)"/);
+  assert.match(detailPage, /:disabled="!canUseIngredientFuzzyAmount\(item\.ingredientId\)"/);
+  assert.match(itemPage, /:disabled="!canUseFuzzyAmount\(item\.categoryCode\)"/);
+  assert.doesNotMatch(detailPage, /ingredient\.categoryCode !== "SEASONING"/);
 });
 
 test("recipe detail follows the four-section two-column layout", () => {

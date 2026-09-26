@@ -481,7 +481,7 @@ export class AdminIngredientImportService {
     const [recommendationCount, feedbackCount, fridgeCount, shoppingCount] = await Promise.all([
       tx.ingredientRecommendation.count({ where: { OR: [{ ingredientId }, { targetIngredientId: ingredientId }] } }),
       tx.ingredientFeedback.count({ where: { ingredientId } }),
-      tx.fridgeItem.count({ where: { ingredientId } }),
+      tx.fridgeTrace.count({ where: { ingredientId } }),
       tx.shoppingItem.count({ where: { ingredientId } })
     ]);
     if (recommendationCount > 0 || feedbackCount > 0 || fridgeCount > 0 || shoppingCount > 0) return true;

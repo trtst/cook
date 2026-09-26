@@ -108,7 +108,6 @@ import type {
   PublishRecipeImportItemRequest
 } from "../../contracts/types";
 import { PrismaService } from "../../common/prisma.service";
-import { canUseFuzzyAmount, fuzzyAmountCategoryMessage } from "../../common/recipe-amount-policy";
 import {
   completeAdminIdempotentOperation,
   getAdminIdempotentResult,
@@ -2613,7 +2612,7 @@ export class AdminService {
       }
 
       const [fridgeResult, shoppingResult] = await Promise.all([
-        tx.fridgeItem.updateMany({
+        tx.fridgeTrace.updateMany({
           where: { ingredientId: { in: sourceIds } },
           data: { ingredientId: target.id }
         }),
@@ -2698,7 +2697,7 @@ export class AdminService {
         tx.ingredientRecommendation.count({ where: { ingredientId } }),
         tx.ingredientRecommendation.count({ where: { targetIngredientId: ingredientId } }),
         tx.ingredientFeedback.count({ where: { ingredientId } }),
-        tx.fridgeItem.count({ where: { ingredientId } }),
+        tx.fridgeTrace.count({ where: { ingredientId } }),
         tx.shoppingItem.count({ where: { ingredientId } }),
         tx.ingredientNutrientMapping.count({ where: { ingredientId } }),
         tx.ingredientUnitNutrientConversion.count({ where: { ingredientId } })
@@ -7205,9 +7204,6 @@ export class AdminService {
         const ingredient = ingredientMap.get(item.ingredientId);
         if (!ingredient) throw new NotFoundException("系统食材不存在或已下架");
         if (item.amount.kind === "FUZZY") {
-          if (!canUseFuzzyAmount(ingredient.category.code)) {
-            throw new BadRequestException(fuzzyAmountCategoryMessage);
-          }
           return {
             ingredientId: ingredient.id,
             ingredientName: ingredient.name,

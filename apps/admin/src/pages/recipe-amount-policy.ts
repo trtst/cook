@@ -15,7 +15,7 @@ export type RecipeIngredientAmountRow = {
 };
 
 export function canUseFuzzyAmount(categoryCode: string | null | undefined) {
-  return categoryCode === "SEASONING";
+  return true;
 }
 
 export function applyRecipeIngredientCategory(
