@@ -127,7 +127,7 @@ pages/error/index
 
 1. `pages_recipe/`：菜谱列表、详情、编辑、导入和系统菜谱。
 2. `pages_meal/`：下一餐计划、点菜征集、想吃池、随机和结果汇总。
-3. `pages_pantry/`：食材与采购首页、食材编辑、食材缺口、购物清单、超市模式和采购记录。
+3. `pages_pantry/`：食材有无参考、近期需求、购物清单与清单详情。
 4. `pages_share/`：分享预览、分享导入和餐桌回忆卡。
 
 首页可以预加载 `pages_recipe` 和 `pages_meal` 两个分包。
