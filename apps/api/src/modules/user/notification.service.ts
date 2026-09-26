@@ -22,11 +22,7 @@ type FeedSourceResult = {
   items: NotificationFeedItem[];
   total: number;
 };
-type ReadNotificationSummary = {
-  allCount: number;
-  nonReminderCount: number;
-  reminderCount: number;
-};
+type ReadNotificationSummary = { allCount: number };
 
 const officialChannelCode = "OFFICIAL_NOTICE";
 const dayMs = 24 * 60 * 60 * 1000;
@@ -88,7 +84,6 @@ function resolveDirectUrl(bodyHtml: string) {
 
 function buildDefaultSettings(): NotificationSettings {
   return {
-    reminderDotOnly: false,
     meal: {
       enabled: true,
       times: {
@@ -98,10 +93,6 @@ function buildDefaultSettings(): NotificationSettings {
         dinner: "18:30",
         lateNight: "21:30"
       }
-    },
-    fridge: {
-      enabled: true,
-      days: 3
     },
     recommend: {
       enabled: false
@@ -141,33 +132,23 @@ export class NotificationService {
   async getBadge(userId: UUID): Promise<NotificationBadgeResponse> {
     return this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
-      const [settingsRow, stateRow] = await Promise.all([
-        tx.userNotificationSettings.findUnique({ where: { userId } }),
-        tx.userNotificationState.findUnique({ where: { userId } })
-      ]);
-
-      return this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings());
+      const stateRow = await tx.userNotificationState.findUnique({ where: { userId } });
+      return this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null);
     });
   }
 
   async getFeed(userId: UUID, page: number, pageSize: number): Promise<PageResult<NotificationFeedItem>> {
     return this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
-      const settingsRow = await tx.userNotificationSettings.findUnique({
-        where: { userId }
-      });
-      const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
       const nextPage = toPositiveInt(page, 1);
       const nextPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
       const sourceLimit = nextPage * nextPageSize;
-      const now = new Date();
-      const [stateRow, ingredientSource, unitSource, inviteSource, officialSource, fridgeSource, recipeWikiSource] = await Promise.all([
+      const [stateRow, ingredientSource, unitSource, inviteSource, officialSource, recipeWikiSource] = await Promise.all([
         tx.userNotificationState.findUnique({ where: { userId } }),
         this.loadIngredientFeed(tx, userId, sourceLimit),
         this.loadUnitFeed(tx, userId, sourceLimit),
         this.loadInviteFeed(tx, userId, sourceLimit),
         this.loadOfficialFeed(tx, user.createdAt, sourceLimit),
-        this.loadFridgeReminderFeed(tx, userId, now, settings, sourceLimit),
         this.loadRecipeWikiFeed(tx, userId, sourceLimit)
       ]);
       const mergedItems = [
@@ -175,10 +156,9 @@ export class NotificationService {
         ...unitSource.items,
         ...inviteSource.items,
         ...officialSource.items,
-        ...fridgeSource.items,
         ...recipeWikiSource.items
       ].sort((left, right) => new Date(right.timeValue).getTime() - new Date(left.timeValue).getTime());
-      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + fridgeSource.total + recipeWikiSource.total;
+      const total = ingredientSource.total + unitSource.total + inviteSource.total + officialSource.total + recipeWikiSource.total;
       const start = (nextPage - 1) * nextPageSize;
       const end = start + nextPageSize;
       const pageItems = mergedItems.slice(start, end);
@@ -212,12 +192,8 @@ export class NotificationService {
   async markBadgeSeen(userId: UUID): Promise<NotificationBadgeResponse> {
     return this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
-      const [settingsRow, stateRow] = await Promise.all([
-        tx.userNotificationSettings.findUnique({ where: { userId } }),
-        tx.userNotificationState.findUnique({ where: { userId } })
-      ]);
-      const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
-      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settings);
+      const stateRow = await tx.userNotificationState.findUnique({ where: { userId } });
+      const currentBadge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null);
 
       if (!currentBadge.latestTime) {
         return currentBadge;
@@ -238,7 +214,7 @@ export class NotificationService {
         }
       });
 
-      return this.buildBadge(tx, userId, user.createdAt, nextReadAt, settings);
+      return this.buildBadge(tx, userId, user.createdAt, nextReadAt);
     });
   }
 
@@ -248,12 +224,8 @@ export class NotificationService {
 
     return this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
-      const [settingsRow, stateRow] = await Promise.all([
-        tx.userNotificationSettings.findUnique({ where: { userId } }),
-        tx.userNotificationState.findUnique({ where: { userId } })
-      ]);
-      const settings = settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings();
-      const badge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null, settings);
+      const stateRow = await tx.userNotificationState.findUnique({ where: { userId } });
+      const badge = await this.buildBadge(tx, userId, user.createdAt, stateRow?.feedReadAt ?? null);
       const latestAt = badge.latestTime ? new Date(badge.latestTime) : null;
       if (!latestAt) {
         return badge;
@@ -268,7 +240,7 @@ export class NotificationService {
         });
       }
 
-      return this.buildBadge(tx, userId, user.createdAt, nextReadAt ?? stateRow?.feedReadAt ?? null, settings);
+      return this.buildBadge(tx, userId, user.createdAt, nextReadAt ?? stateRow?.feedReadAt ?? null);
     });
   }
 
@@ -278,8 +250,7 @@ export class NotificationService {
 
     await this.prisma.$transaction(async tx => {
       const user = await this.loadActiveUser(tx, userId);
-      const settingsRow = await tx.userNotificationSettings.findUnique({ where: { userId } });
-      const notificationAt = await this.findNotificationTime(tx, userId, user.createdAt, settingsRow ? this.toSettings(settingsRow) : buildDefaultSettings(), notificationId);
+      const notificationAt = await this.findNotificationTime(tx, userId, user.createdAt, notificationId);
 
       if (!notificationAt || notificationAt.getTime() !== requestedAt.getTime()) {
         throw new NotFoundException("通知已更新或不存在");
@@ -537,21 +508,6 @@ export class NotificationService {
     };
   }
 
-  private async loadFridgeReminderFeed(
-    db: NotificationDb,
-    userId: UUID,
-    now: Date,
-    settings: NotificationSettings,
-    take: number
-  ): Promise<FeedSourceResult> {
-    void db;
-    void userId;
-    void now;
-    void settings;
-    void take;
-    return { items: [], total: 0 };
-  }
-
   private async loadRecipeWikiFeed(db: NotificationDb, userId: UUID, take: number): Promise<FeedSourceResult> {
     const where = { userId, status: { in: recipeWikiResolvedStatuses } };
     const requestDelegate = db.recipeCookAssistantRequest as PrismaService["recipeCookAssistantRequest"];
@@ -598,7 +554,6 @@ export class NotificationService {
     db: NotificationDb,
     userId: UUID,
     userCreatedAt: Date,
-    settings: NotificationSettings,
     notificationId: string
   ): Promise<Date | null> {
     const ingredientId = notificationId.match(/^ingredient:(\d+)$/)?.[1];
@@ -652,10 +607,6 @@ export class NotificationService {
       return item?.resolvedAt ?? item?.updatedAt ?? null;
     }
 
-    const fridgeId = notificationId.match(/^reminder:fridge-expiring:(\d+)$/)?.[1];
-    void fridgeId;
-    void settings;
-
     return null;
   }
 
@@ -663,46 +614,35 @@ export class NotificationService {
     db: NotificationDb,
     userId: UUID,
     userCreatedAt: Date,
-    feedReadAt: Date | null,
-    settings: NotificationSettings
+    feedReadAt: Date | null
   ): Promise<NotificationBadgeResponse> {
-    const now = new Date();
-    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, fridgeSummary, recipeWikiSummary, readSummary] = await Promise.all([
+    const [ingredientSummary, unitSummary, inviteSummary, officialSummary, recipeWikiSummary, readSummary] = await Promise.all([
       this.loadIngredientSummary(db, userId, feedReadAt),
       this.loadUnitSummary(db, userId, feedReadAt),
       this.loadInviteSummary(db, userId, feedReadAt),
       this.loadOfficialSummary(db, userCreatedAt, feedReadAt),
-      this.loadFridgeReminderSummary(db, userId, feedReadAt, now, settings),
       this.loadRecipeWikiSummary(db, userId, feedReadAt),
-      this.loadReadNotificationSummary(db, userId, userCreatedAt, feedReadAt, settings)
+      this.loadReadNotificationSummary(db, userId, userCreatedAt, feedReadAt)
     ]);
 
-    const reminderUnreadCount = Math.max(fridgeSummary.unreadCount - readSummary.reminderCount, 0);
     const sourceUnreadCount =
       ingredientSummary.unreadCount +
       unitSummary.unreadCount +
       inviteSummary.unreadCount +
       officialSummary.unreadCount +
-      recipeWikiSummary.unreadCount +
-      (settings.reminderDotOnly ? 0 : reminderUnreadCount);
-    const unreadCount = Math.max(
-      sourceUnreadCount - (settings.reminderDotOnly ? readSummary.nonReminderCount : readSummary.allCount),
-      0
-    );
+      recipeWikiSummary.unreadCount;
+    const unreadCount = Math.max(sourceUnreadCount - readSummary.allCount, 0);
 
     const latestAt = maxDate(
       ingredientSummary.latestAt,
       unitSummary.latestAt,
       inviteSummary.latestAt,
       officialSummary.latestAt,
-      fridgeSummary.latestAt,
       recipeWikiSummary.latestAt
     );
 
     return {
       unreadCount,
-      reminderUnreadCount,
-      showReminderDot: settings.reminderDotOnly && reminderUnreadCount > 0,
       latestTime: latestAt?.toISOString() ?? ""
     };
   }
@@ -711,8 +651,7 @@ export class NotificationService {
     db: NotificationDb,
     userId: UUID,
     userCreatedAt: Date,
-    feedReadAt: Date | null,
-    settings: NotificationSettings
+    feedReadAt: Date | null
   ): Promise<ReadNotificationSummary> {
     const reads = await db.userNotificationRead.findMany({
       where: feedReadAt
@@ -725,27 +664,21 @@ export class NotificationService {
     });
 
     if (!reads.length) {
-      return { allCount: 0, nonReminderCount: 0, reminderCount: 0 };
+      return { allCount: 0 };
     }
 
     const currentTimes = await Promise.all(
-      reads.map(read => this.findNotificationTime(db, userId, userCreatedAt, settings, read.notificationId))
+      reads.map(read => this.findNotificationTime(db, userId, userCreatedAt, read.notificationId))
     );
     let allCount = 0;
-    let reminderCount = 0;
 
     reads.forEach((read, index) => {
       const currentTime = currentTimes[index];
       if (!currentTime || currentTime.getTime() !== read.notificationAt.getTime()) return;
       allCount += 1;
-      if (read.notificationId.startsWith("reminder:fridge-expiring:")) reminderCount += 1;
     });
 
-    return {
-      allCount,
-      nonReminderCount: allCount - reminderCount,
-      reminderCount
-    };
+    return { allCount };
   }
 
   private async loadIngredientSummary(db: NotificationDb, userId: UUID, readAt: Date | null): Promise<TimedUnreadSummary> {
@@ -869,27 +802,8 @@ export class NotificationService {
     };
   }
 
-  private async loadFridgeReminderSummary(
-    db: NotificationDb,
-    userId: UUID,
-    feedReadAt: Date | null,
-    now: Date,
-    settings: NotificationSettings
-  ): Promise<TimedUnreadSummary> {
-    void db;
-    void userId;
-    void feedReadAt;
-    void now;
-    void settings;
-    return {
-      unreadCount: 0,
-      latestAt: null
-    };
-  }
-
   private toSettings(settings: Prisma.UserNotificationSettingsGetPayload<Record<string, never>>): NotificationSettings {
     return {
-      reminderDotOnly: settings.reminderDotOnly,
       meal: {
         enabled: settings.mealEnabled,
         times: {
@@ -899,10 +813,6 @@ export class NotificationService {
           dinner: settings.mealDinnerTime,
           lateNight: settings.mealLateNightTime
         }
-      },
-      fridge: {
-        enabled: settings.fridgeEnabled,
-        days: settings.fridgeDays as NotificationSettings["fridge"]["days"]
       },
       recommend: {
         enabled: settings.recommendEnabled
@@ -925,10 +835,7 @@ export class NotificationService {
       mealAfternoonTeaTime: body.meal.times.afternoonTea,
       mealDinnerTime: body.meal.times.dinner,
       mealLateNightTime: body.meal.times.lateNight,
-      fridgeEnabled: body.fridge.enabled,
-      fridgeDays: body.fridge.days,
       recommendEnabled: body.recommend.enabled,
-      reminderDotOnly: body.reminderDotOnly
     };
   }
 
