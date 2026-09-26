@@ -58,10 +58,16 @@
             <view class="detail-hero" :style="heroStyle">
               <view class="detail-hero__title-row">
                 <text class="detail-hero__title" :style="heroTitleStyle">{{ detail.name }}</text>
+                <text
+                  v-if="canRename"
+                  class="cookfont icon-edit detail-hero__edit"
+                  @click.stop="openRenameSheet"
+                />
               </view>
               <text class="detail-hero__meta">{{ heroMeta }}</text>
               <view v-if="detailStatusTagText" class="detail-hero__tags">
                 <text class="detail-hero__tag" :class="detailStatusTagClass">{{ detailStatusTagText }}</text>
+                <text v-if="voidedRetentionText" class="detail-hero__tag detail-hero__tag--retention">{{ voidedRetentionText }}</text>
               </view>
             </view>
 
@@ -98,7 +104,12 @@
               </view>
 
               <transition-group v-if="groups.length" name="group-list" tag="view" class="group-list">
-                <view v-for="group in groups" :key="group.key" class="group-card">
+                <view
+                  v-for="group in groups"
+                  :key="group.key"
+                  class="group-card"
+                  :class="{ 'group-card--loading': checkPendingGroupId === group.id }"
+                >
                   <view
                     class="item-swipe"
                     @touchstart="handleItemTouchStart(group.id, $event)"
@@ -166,6 +177,10 @@
                       </view>
                     </view>
                   </view>
+                  <view v-if="checkPendingGroupId === group.id" class="group-card__loading" @touchmove.stop>
+                    <view class="group-card__loading-spinner" />
+                    <text>保存中...</text>
+                  </view>
                 </view>
               </transition-group>
 
@@ -175,27 +190,16 @@
         </scroll-view>
 
         <view v-if="canAddItem" class="detail-footer">
-          <view class="meal-footer__actions">
-            <view
-              class="meal-footer__quick"
-              :class="{ 'meal-footer__quick--disabled': submitting }"
-              @click="submitting ? undefined : openAddSheet()"
-            >
-              <text class="cookfont meal-footer__quick-icon icon-add" />
-              <text class="meal-footer__quick-label">添加食材</text>
-            </view>
-            <view class="meal-footer__buttons meal-footer__buttons--single">
-              <button
-                class="meal-footer__button meal-footer__button--primary"
-                :class="{ 'meal-footer__button--disabled': !pendingCheckCount || submitting }"
-                :disabled="!pendingCheckCount || submitting"
-                hover-class="none"
-                @click="submitPendingChecks"
-              >
-                <text class="meal-footer__button-content">{{ submitting ? "提交中..." : "提交勾选" }}</text>
-              </button>
-            </view>
-          </view>
+          <MealFooterActions
+            :quick-action="{ label: '添加食材', iconClass: 'icon-add' }"
+            :primary-action="canComplete ? { label: '完成采购' } : null"
+            single-button
+            :submitting="submitting"
+            :quick-blocked="submitting"
+            :primary-native-disabled="submitting"
+            @quick="openAddSheet"
+            @primary="completeList"
+          />
         </view>
 
         <view v-if="canShowManageDock" class="floating-dock" :class="{ 'floating-dock--above-footer': canAddItem }">
@@ -241,6 +245,23 @@
         </view>
       </view>
     </SheetShell>
+
+    <TextFieldSheet
+      :visible="renameSheetVisible"
+      title="修改清单名"
+      subtitle="改成更好识别的名字，方便这次采购和后续继续维护。"
+      :model-value="renameName"
+      placeholder="请输入采购清单名"
+      :maxlength="20"
+      :submitting="submitting"
+      :confirm-disabled="!renameName.trim()"
+      confirm-text="保存"
+      confirm-loading-text="保存中..."
+      @close="closeRenameSheet"
+      @after-close="handleRenameSheetAfterClose"
+      @confirm="submitRename"
+      @update:model-value="renameName = $event"
+    />
 
     <SheetShell
       :visible="addSheetVisible"
@@ -358,7 +379,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
+import { onHide, onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
 import { recipeApi, type IngredientCategorySummary, type IngredientSummary } from "@/apis/recipe";
@@ -367,9 +388,11 @@ import Empty from "@/components/Empty/Empty.vue";
 import IngredientPickerContent from "@/components/Ingredient/IngredientPickerContent.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
+import MealFooterActions from "@/components/Meal/MealFooterActions.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -405,6 +428,8 @@ interface GroupView {
 
 const NAV_FADE_DISTANCE = 132;
 const SWIPE_DELETE_WIDTH = typeof uni !== "undefined" && typeof uni.upx2px === "function" ? uni.upx2px(156) : 78;
+const SHOPPING_LIST_VOID_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -438,8 +463,9 @@ const ingredientLoadedKeyword = ref("");
 const ingredientSearchPending = ref(false);
 let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
 const selectedIngredients = ref<IngredientSummary[]>([]);
-const pendingCheckValues = ref<Record<string, boolean>>({});
 const settingsSheetVisible = ref(false);
+const renameSheetVisible = ref(false);
+const renameName = ref("");
 const shareSheetVisible = ref(false);
 const shareNoticeVisible = ref(false);
 const shareUrl = ref("");
@@ -450,7 +476,10 @@ const manageMenuOpen = ref(false);
 const openSwipeItemId = ref<string>("");
 const itemPendingId = ref<string>("");
 const itemPendingAction = ref<"" | "remove">("");
+const checkPendingGroupId = ref("");
 const openOriginItemIds = ref<string[]>([]);
+const retentionNow = ref(Date.now());
+let retentionTimer: ReturnType<typeof setInterval> | null = null;
 const swipeState = reactive({
   itemId: "",
   startX: 0,
@@ -486,14 +515,6 @@ const ingredientFooterText = computed(() => {
   if (ingredientLoadingMore.value) return "加载中...";
   return ingredientHasNext.value ? "上滑加载更多" : "";
 });
-const pendingCheckCount = computed(() => {
-  if (!detail.value) return 0;
-  return detail.value.items.filter(item => {
-    const pendingValue = pendingCheckValues.value[item.id];
-    return pendingValue !== undefined && pendingValue !== isPersistedItemChecked(item);
-  }).length;
-});
-
 watch(ingredientKeyword, () => {
   if (!addSheetVisible.value) return;
   if (ingredientSearchTimer) clearTimeout(ingredientSearchTimer);
@@ -537,7 +558,7 @@ const collaborationText = computed(() => {
 const showCollaborationMeta = computed(() => (detail.value?.memberCount ?? 0) > 1);
 const heroMeta = computed(() => {
   if (detail.value?.status === "COMPLETED") return "这一趟采购已经收好尾，买回来的食材也都安顿好了。";
-  if (detail.value?.status === "VOIDED") return "这张清单先放一放，需要时随时可以回来继续采购。";
+  if (detail.value?.status === "VOIDED") return "这张清单已作废，30 天内还可以恢复继续采购。";
   return "把想买的食材记在这里，逛一圈就能安心带齐。";
 });
 const detailStatusTagText = computed(() => {
@@ -550,6 +571,19 @@ const detailStatusTagClass = computed(() => {
   if (detail.value?.status === "VOIDED") return "detail-hero__tag--voided";
   return "";
 });
+const voidedRetentionDays = computed(() => {
+  const voidedAt = detail.value?.status === "VOIDED" ? detail.value.voidedAt : null;
+  if (!voidedAt) return null;
+  const voidedAtMs = new Date(voidedAt).getTime();
+  if (!Number.isFinite(voidedAtMs)) return null;
+  return Math.max(0, Math.ceil((voidedAtMs + SHOPPING_LIST_VOID_RETENTION_MS - retentionNow.value) / DAY_MS));
+});
+const voidedRetentionText = computed(() => {
+  if (voidedRetentionDays.value === null) return "";
+  if (voidedRetentionDays.value === 0) return "即将自动清理";
+  return `剩余 ${voidedRetentionDays.value} 天自动清理`;
+});
+const voidedRetentionExpired = computed(() => voidedRetentionDays.value === 0);
 const showEndedCard = computed(() => detail.value?.status === "COMPLETED" || detail.value?.status === "VOIDED");
 const canOpenPantryHome = computed(() => detail.value?.status === "COMPLETED");
 const endedCardClass = computed(() => {
@@ -570,14 +604,16 @@ const endedCardDesc = computed(() => {
   }
   if (detail.value.status === "VOIDED") {
     const dayText = detail.value.voidedAt ? formatMonthDay(detail.value.voidedAt) : "刚刚";
-    return `${dayText} 暂停了这次采购，需要时随时可以恢复继续买。`;
+    return `${dayText} 作废的清单会保留 30 天，之后自动清理。`;
   }
   return "";
 });
 const showShoppingShareEntrances = false;
 const canOpenShare = computed(() => showShoppingShareEntrances && detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canVoid = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
-const canRestore = computed(() => detail.value?.role === "OWNER" && detail.value.status === "VOIDED");
+const canRename = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
+const canComplete = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
+const canRestore = computed(() => detail.value?.role === "OWNER" && detail.value.status === "VOIDED" && !voidedRetentionExpired.value);
 const canDelete = computed(() => detail.value?.role === "OWNER" && (detail.value.status === "COMPLETED" || detail.value.status === "VOIDED"));
 const canLeave = computed(() => detail.value?.role === "COLLABORATOR");
 const canEditItems = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
@@ -645,8 +681,19 @@ onLoad((query) => {
 });
 
 onShow(() => {
+  retentionNow.value = Date.now();
+  if (!retentionTimer) {
+    retentionTimer = setInterval(() => {
+      retentionNow.value = Date.now();
+    }, 60 * 1000);
+  }
   if (!sessionStore.isLoggedIn || !listId.value) return;
   void loadDetail();
+});
+
+onHide(() => {
+  if (retentionTimer) clearInterval(retentionTimer);
+  retentionTimer = null;
 });
 
 async function handleLoginSuccess() {
@@ -669,9 +716,9 @@ async function requestDetail(options?: { silent?: boolean }) {
       shoppingApi.getListDetail(listId.value),
       loadAllFridgeTraces((page, pageSize) => fridgeApi.list(page, pageSize))
     ]);
-    if (!silent) pendingCheckValues.value = {};
-    detail.value = nextDetail;
-    fridgeStates.value = nextFridgeStates;
+      detail.value = nextDetail;
+      retentionNow.value = Date.now();
+      fridgeStates.value = nextFridgeStates;
     syncGroupUiState(detail.value.items);
     handlePendingAction();
   } catch (error) {
@@ -724,9 +771,7 @@ function toggleItemOrigin(itemId: string) {
 }
 
 function isItemChecked(group: GroupView) {
-  return group.items.length > 0 && group.items.every(item => {
-    return pendingCheckValues.value[item.id] ?? isPersistedItemChecked(item);
-  });
+  return group.items.length > 0 && group.items.every(isPersistedItemChecked);
 }
 
 function isPersistedItemChecked(item: ShoppingListDetailItem) {
@@ -734,7 +779,7 @@ function isPersistedItemChecked(item: ShoppingListDetailItem) {
 }
 
 function isGroupResolved(group: GroupView) {
-  return group.items.every(item => pendingCheckValues.value[item.id] ?? isResolvedItem(item));
+  return group.items.every(isResolvedItem);
 }
 
 function isResolvedItem(item: ShoppingListDetailItem) {
@@ -838,53 +883,29 @@ function handleItemTouchEnd() {
   resetSwipeState();
 }
 
-function toggleItem(group: GroupView) {
-  if (!detail.value || submitting.value || itemPendingId.value) return;
+async function toggleItem(group: GroupView) {
+  if (!detail.value || submitting.value || itemPendingId.value || checkPendingGroupId.value) return;
   openSwipeItemId.value = "";
   const targetChecked = !isItemChecked(group);
-  const nextValues = { ...pendingCheckValues.value };
-  for (const item of group.items) {
-    if (targetChecked === isPersistedItemChecked(item)) {
-      delete nextValues[item.id];
-    } else {
-      nextValues[item.id] = targetChecked;
-    }
-  }
-  pendingCheckValues.value = nextValues;
-}
-
-async function submitPendingChecks() {
-  if (!detail.value || submitting.value || !pendingCheckCount.value) return;
-  const changes = detail.value.items.flatMap(item => {
-    const checked = pendingCheckValues.value[item.id];
-    return checked === undefined || checked === isPersistedItemChecked(item)
-      ? []
-      : [{ itemId: item.id, checked }];
-  });
-  if (!changes.length) {
-    pendingCheckValues.value = {};
-    return;
-  }
-
+  checkPendingGroupId.value = group.id;
   submitting.value = true;
   try {
     const current = detail.value;
     const updated = await shoppingApi.checkListItems(current.id, {
       operationId: createOperationId(),
       version: current.version,
-      items: changes
+      items: group.items.map(item => ({ itemId: item.id, checked: targetChecked }))
     });
     const updatedById = new Map(updated.items.map(item => [item.id, item]));
     detail.value = {
       ...updated,
       items: current.items.map(item => updatedById.get(item.id) ?? item)
     };
-    pendingCheckValues.value = {};
     syncGroupUiState(detail.value.items);
-    await uniPlatform.feedback.toast({ title: "勾选已提交", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
   } finally {
+    checkPendingGroupId.value = "";
     submitting.value = false;
   }
 }
@@ -908,9 +929,6 @@ async function removeItem(group: GroupView) {
         version: detail.value.version
       });
       applyItemPatch(patch);
-      const nextValues = { ...pendingCheckValues.value };
-      delete nextValues[currentItem.id];
-      pendingCheckValues.value = nextValues;
       changed = true;
     }
     if (changed) {
@@ -1505,12 +1523,67 @@ async function voidList() {
   }
 }
 
+async function completeList() {
+  if (!detail.value || !canComplete.value || submitting.value) return;
+  const confirmed = await uniPlatform.feedback.confirm({
+    title: "完成采购",
+    content: "结束后，已勾选的食材会加入食材库；未勾选的食材仍保持未买。"
+  });
+  if (!confirmed) return;
+  submitting.value = true;
+  try {
+    detail.value = await shoppingApi.completeList(detail.value.id, {
+      operationId: createOperationId(),
+      version: detail.value.version
+    });
+    await uniPlatform.feedback.toast({ title: "采购已完成", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "操作失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
+}
+
 function openSettingsSheet() {
   if (canVoid.value) settingsSheetVisible.value = true;
 }
 
 function closeSettingsSheet() {
   settingsSheetVisible.value = false;
+}
+
+function openRenameSheet() {
+  if (!detail.value || !canRename.value || submitting.value) return;
+  renameName.value = detail.value.name;
+  renameSheetVisible.value = true;
+}
+
+function closeRenameSheet() {
+  renameSheetVisible.value = false;
+}
+
+function handleRenameSheetAfterClose() {
+  renameName.value = "";
+}
+
+async function submitRename() {
+  const current = detail.value;
+  const name = renameName.value.trim();
+  if (!current || !canRename.value || !name || submitting.value) return;
+  submitting.value = true;
+  try {
+    detail.value = await shoppingApi.renameList(current.id, {
+      operationId: createOperationId(),
+      version: current.version,
+      name
+    });
+    closeRenameSheet();
+    await uniPlatform.feedback.toast({ title: "已更新清单名", icon: "success" });
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
+  } finally {
+    submitting.value = false;
+  }
 }
 
 async function handleSettingsVoid() {
@@ -1776,12 +1849,18 @@ defineExpose({
 .detail-hero__title {
   display: block;
   min-width: 0;
-  margin-top: 8rpx;
   color: var(--color-text);
   font-size: 62rpx;
   font-weight: var(--font-weight-heavy);
   line-height: 1.08;
   transition: opacity 180ms ease;
+}
+
+.detail-hero__edit {
+  flex: 0 0 auto;
+  margin-top: 12rpx;
+  color: var(--color-text-secondary);
+  font-size: 30rpx;
 }
 
 .detail-hero__meta {
@@ -1821,6 +1900,11 @@ defineExpose({
 .detail-hero__tag--voided {
   background: var(--color-state-danger-soft);
   color: var(--color-state-danger-text);
+}
+
+.detail-hero__tag--retention {
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
 }
 
 .detail-content {
@@ -2153,6 +2237,40 @@ defineExpose({
   margin-top: 18rpx;
 }
 
+.group-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.group-card__loading {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  border-radius: inherit;
+  background: var(--color-surface-overlay-soft);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.group-card__loading-spinner {
+  width: 28rpx;
+  height: 28rpx;
+  border: 4rpx solid var(--color-text-quaternary);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: group-card-loading-spin 0.8s linear infinite;
+}
+
+@keyframes group-card-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .day-chip {
   display: inline-flex;
   align-items: center;
@@ -2428,85 +2546,6 @@ defineExpose({
   -webkit-backdrop-filter: var(--material-tabbar-filter);
   backdrop-filter: var(--material-tabbar-filter);
   box-sizing: border-box;
-}
-
-.meal-footer__actions {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  padding: 0;
-}
-
-.meal-footer__quick {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6rpx;
-  min-width: 86rpx;
-}
-
-.meal-footer__quick--disabled {
-  opacity: 0.42;
-}
-
-.meal-footer__quick-icon {
-  font-size: 30rpx;
-  color: var(--color-text);
-}
-
-.meal-footer__quick-label {
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.4;
-}
-
-.meal-footer__buttons {
-  flex: 1;
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
-
-.meal-footer__buttons--single .meal-footer__button {
-  width: 100%;
-  flex: 1 1 100%;
-}
-
-.meal-footer__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 90rpx;
-  margin: 0;
-  padding: 0 28rpx;
-  border-radius: 999rpx;
-  font-size: 28rpx;
-  font-weight: 700;
-  line-height: 1;
-  box-sizing: border-box;
-}
-
-.meal-footer__button::after {
-  border: none;
-  display: none;
-}
-
-.meal-footer__button--primary {
-  background: var(--button-primary-bg);
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
-}
-
-.meal-footer__button--disabled {
-  opacity: 0.46;
-  box-shadow: var(--button-primary-shadow);
-}
-
-.meal-footer__button-content {
-  line-height: 1;
 }
 
 .settings-action {

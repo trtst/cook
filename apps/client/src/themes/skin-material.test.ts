@@ -42,9 +42,6 @@ const LEGACY_SECONDARY_OUTLINE = "box-shadow: inset 0 0 0 1rpx var(--button-seco
 const fallbackColorsSource = readFile("../styles/colors.scss");
 const skinsEntrypointSource = readFile("./skins.scss");
 const defaultSkinSource = readFile("./default/skins.scss");
-const freshIngredientSkinSource = readFile("./fresh-ingredient/skins.scss");
-const minimalWhiteSkinSource = readFile("./minimal-white/skins.scss");
-const appleGlassSkinSource = readFile("./apple-glass/skins.scss");
 const confirmSource = readFile("../components/Confirm/Confirm.vue");
 const emptySource = readFile("../components/Empty/Empty.vue");
 const imageFieldSource = readFile("../components/ImageField.vue");
@@ -107,26 +104,32 @@ const textFieldSheetSource = readFile("../components/Sheet/TextFieldSheet.vue");
 const tabbarSource = readFile("../components/TabBar/TabBar.vue");
 const toastSource = readFile("../components/Toast/Toast.vue");
 
+expectIncludes(skinsEntrypointSource, '@use "./default/skins.scss" as defaultSkin;');
+expectExcludes(skinsEntrypointSource, "apple-glass");
+expectExcludes(skinsEntrypointSource, "fresh-ingredient");
+expectExcludes(skinsEntrypointSource, "minimal-white");
 expectIncludes(fallbackColorsSource, "@include theme-derived-colors(#ffffff, #ffffff, #17231d, #216e4e, #216e4e, #ffffff, #17231d);");
 expectIncludes(fallbackColorsSource, "--color-raw-primary: var(--theme-primary);");
 expectIncludes(fallbackColorsSource, "--button-primary-gradient-start: var(--theme-primary);");
-expectIncludes(fallbackColorsSource, "--button-primary-bg: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);");
+expectIncludes(fallbackColorsSource, "--button-primary-bg: var(--theme-primary);");
+expectIncludes(fallbackColorsSource, "--color-tabbar-bg: #{rgba(color.mix($primary, $surface, 5%), 0.78)};");
+expectIncludes(fallbackColorsSource, "--color-tabbar-active-bg: #{color.mix($primary, $surface, 28%)};");
+expectIncludes(fallbackColorsSource, "--material-tabbar-bg: #{rgba($surface, theme-value($dark, 0.9, 0.92))};");
 expectExcludes(fallbackColorsSource, "--color-raw-primary: #");
 expectExcludes(fallbackColorsSource, "--button-primary-gradient-start: #");
 expectExcludes(fallbackColorsSource, "--color-primary: #");
-expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm");
+expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-default.theme-light");
 expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-default.theme-dark");
-expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm.theme-dark");
-expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-olive.theme-dark");
-expectIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-cool.theme-dark");
-expectExcludes(defaultSkinSource, ".theme-skin-default.theme-dark {");
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-default.theme-light", ["#ffffff", "#216e4e"]);
 expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-default.theme-dark", ["#111715", "#5a9d90"]);
-expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm.theme-dark", ["#1b1511", "#d8895f"]);
-expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-olive.theme-dark", ["#151a14", "#91ad68"]);
-expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-cool.theme-dark", ["#121923", "#6ea6d3"]);
-expectIncludes(freshIngredientSkinSource, "colors.theme-derived-colors(#f4f7f5, #ffffff, #17231d, #216e4e, #dff1e8, #ffffff, #17231d);");
-expectIncludes(minimalWhiteSkinSource, "colors.theme-derived-colors(#ffffff, #ffffff, #161616, #7da35b, #94b873, #ffffff, #161616);");
-expectIncludes(appleGlassSkinSource, "colors.theme-derived-colors(#eef1f4, rgba(255, 255, 255, 0.74), #1d1d1f, #0a84ff, #78b9ff, #ffffff, #1d1d1f);");
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm.theme-light", ["#f9eee0", "#eb6408", "#ff9f41", "#ffffff", "#2b1a0d"]);
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-warm.theme-dark", ["#eb6408", "#ff9f41", "#ffffff", "#2b1a0d"]);
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-glacier.theme-light", ["#e7f8f9", "#2599b7", "#61b0c7", "#ffffff", "#14252b"]);
+expectSelectorIncludes(defaultSkinSource, ".theme-skin-default.theme-palette-glacier.theme-dark", ["#2599b7", "#61b0c7", "#ffffff", "#14252b"]);
+expectExcludes(defaultSkinSource, "theme-palette-sage");
+expectExcludes(defaultSkinSource, "theme-palette-olive");
+expectExcludes(defaultSkinSource, "theme-palette-forest");
+expectExcludes(defaultSkinSource, "theme-palette-sprout");
 
 expectIncludes(fallbackColorsSource, "--material-mask-filter:");
 expectIncludes(fallbackColorsSource, "--material-card-bg:");
@@ -258,30 +261,6 @@ expectIncludes(fallbackColorsSource, "--shadow-card: 0 2rpx 8rpx");
 expectIncludes(fallbackColorsSource, "--shadow-floating: 0 -2rpx 8rpx");
 expectIncludes(fallbackColorsSource, "--shadow-tabbar: 0 2rpx 8rpx");
 
-expectIncludes(appleGlassSkinSource, "--material-card-bg:");
-expectIncludes(appleGlassSkinSource, "--material-card-border: transparent;");
-expectIncludes(appleGlassSkinSource, "--material-card-filter:");
-expectIncludes(appleGlassSkinSource, "--material-panel-bg:");
-expectIncludes(appleGlassSkinSource, "--material-panel-border: transparent;");
-expectIncludes(appleGlassSkinSource, "--material-panel-filter:");
-expectIncludes(appleGlassSkinSource, "--material-tabbar-bg:");
-expectIncludes(appleGlassSkinSource, "--material-tabbar-border: transparent;");
-expectIncludes(appleGlassSkinSource, "--material-tabbar-filter:");
-expectIncludes(appleGlassSkinSource, "--material-input-bg:");
-expectIncludes(appleGlassSkinSource, "--material-input-border:");
-expectIncludes(appleGlassSkinSource, "--material-input-shadow:");
-expectIncludes(appleGlassSkinSource, "--material-input-filter:");
-expectIncludes(appleGlassSkinSource, "--material-control-bg:");
-expectIncludes(appleGlassSkinSource, "--material-control-border:");
-expectIncludes(appleGlassSkinSource, "--material-control-shadow:");
-expectIncludes(appleGlassSkinSource, "--material-control-filter:");
-expectIncludes(appleGlassSkinSource, "--button-primary-border: transparent;");
-expectIncludes(appleGlassSkinSource, "--button-primary-filter:");
-expectIncludes(appleGlassSkinSource, "--button-secondary-border: transparent;");
-expectIncludes(appleGlassSkinSource, "--button-secondary-filter:");
-expectIncludes(appleGlassSkinSource, "--login-popup-sheet-border: transparent;");
-expectIncludes(appleGlassSkinSource, "--login-popup-backdrop-filter:");
-expectIncludes(appleGlassSkinSource, "--login-popup-sheet-filter:");
 expectExcludes(skinsEntrypointSource, '@use "./handdrawn-food/skins.scss"');
 
 expectIncludes(confirmSource, "background: var(--material-card-bg);");
@@ -548,26 +527,11 @@ expectExcludes(pantryListPageSource, LEGACY_SECONDARY_OUTLINE);
 expectExcludes(pantryListPageSource, "border: 1rpx solid var(--material-card-border);");
 expectExcludes(pantryListPageSource, "border: 1rpx solid var(--button-secondary-border);");
 
-expectSelectorIncludes(pantryIndexPageSource, ".add-search__input", [
-  "background: var(--color-surface-muted);"
-]);
-expectSelectorIncludes(pantryIndexPageSource, ".add-search__button", [
-  "background: var(--button-primary-bg);",
-  "color: var(--button-primary-text);"
-]);
-expectSelectorIncludes(pantryIndexPageSource, ".trace-intro,\n.trace-card", [
+expectSelectorIncludes(pantryIndexPageSource, ".trace-card", [
   "background: var(--material-card-bg);",
   "box-shadow: var(--material-card-shadow);"
 ]);
 expectExcludes(pantryIndexPageSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorIncludes(pantryIndexPageSource, ".trace-card__presence--present", [
-  "background: var(--color-state-success-soft);",
-  "color: var(--color-state-success-text);"
-]);
-expectSelectorIncludes(pantryIndexPageSource, ".trace-card__presence--empty", [
-  "background: var(--color-state-warning-soft);",
-  "color: var(--color-state-warning-text);"
-]);
 expectSelectorIncludes(imageLoaderSource, ".image-loader", [
   "background: var(--page-cover-fresh-bg);"
 ]);
@@ -1106,8 +1070,6 @@ expectIncludes(sharePreviewPageSource, "box-shadow: var(--material-card-shadow);
 expectIncludes(sharePreviewPageSource, "backdrop-filter: var(--material-card-filter);");
 expectIncludes(sharePreviewPageSource, "background: var(--button-primary-bg);");
 expectIncludes(sharePreviewPageSource, "backdrop-filter: var(--button-primary-filter);");
-expectIncludes(sharePreviewPageSource, "background: var(--button-secondary-bg);");
-expectIncludes(sharePreviewPageSource, "backdrop-filter: var(--button-secondary-filter);");
 expectExcludes(sharePreviewPageSource, "border: 1rpx solid var(--material-card-border);");
 expectExcludes(sharePreviewPageSource, "border: 1rpx solid var(--button-primary-border);");
 expectExcludes(sharePreviewPageSource, "border: 1rpx solid var(--button-secondary-border);");
@@ -1120,7 +1082,8 @@ expectSelectorIncludes(sharePreviewPageSource, ".invite-footer__hint-text", [
 ]);
 expectSelectorExcludes(sharePreviewPageSource, ".invite-footer__hint-text", ["color: var(--color-primary);"]);
 expectSelectorIncludes(sharePreviewPageSource, ".meal-footer__countdown-box", [
-  "background: var(--color-state-danger-soft);"
+  "background: var(--color-tag-danger-bg);",
+  "color: var(--color-tag-danger-text);"
 ]);
 expectSelectorIncludes(sharePreviewPageSource, ".invite-footer__error", [
   "color: var(--color-state-danger-text);"
@@ -1288,7 +1251,9 @@ expectExcludes(textFieldSheetSource, LEGACY_SECONDARY_OUTLINE);
 expectSelectorExcludes(textFieldSheetSource, ".text-field-sheet__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
 expectSelectorExcludes(textFieldSheetSource, ".text-field-sheet__button--confirm", ["border: 1rpx solid var(--button-primary-border);"]);
 
-expectIncludes(tabbarSource, "background: var(--material-tabbar-bg);");
+expectIncludes(tabbarSource, "background: var(--color-tabbar-bg);");
+expectSelectorIncludes(tabbarSource, ".tabbar-shell::after", ["background: transparent;"]);
+expectSelectorIncludes(tabbarSource, ".tabbar__active-pill", ["background: var(--color-tabbar-active-bg);"]);
 expectIncludes(tabbarSource, "box-shadow: var(--material-tabbar-shadow);");
 expectIncludes(tabbarSource, "backdrop-filter: var(--material-tabbar-filter);");
 expectExcludes(tabbarSource, "border: 1rpx solid var(--material-tabbar-border);");

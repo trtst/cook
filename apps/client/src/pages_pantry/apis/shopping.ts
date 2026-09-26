@@ -323,6 +323,10 @@ export const shoppingApi = {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(`${listPath(listId)}/void`, payload, { idempotencyKey: operationId });
   },
+  completeList(listId: UUID, body: UpdateShoppingListStatusRequest) {
+    const { operationId, ...payload } = body;
+    return post<ShoppingListDetail>(`${listPath(listId)}/complete`, payload, { idempotencyKey: operationId });
+  },
   restoreList(listId: UUID, body: UpdateShoppingListStatusRequest) {
     const { operationId, ...payload } = body;
     return post<ShoppingListDetail>(`${listPath(listId)}/restore`, payload, { idempotencyKey: operationId });

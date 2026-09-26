@@ -43,6 +43,9 @@ export const fridgeApi = {
   markPresentBatch(items: Array<Omit<CreateFridgeTraceRequest, "operationId">>, operationId: OperationId) {
     return post<FridgeTraceSummary[]>(`${cfg.domain}/api/fridge-traces/present/batch`, { items }, { idempotencyKey: operationId });
   },
+  markEmptyBatch(items: Array<Omit<CreateFridgeTraceRequest, "operationId">>, operationId: OperationId) {
+    return post<FridgeTraceSummary[]>(`${cfg.domain}/api/fridge-traces/empty/batch`, { items }, { idempotencyKey: operationId });
+  },
   markEmpty(body: CreateFridgeTraceRequest) {
     const { operationId, ...payload } = body;
     return post<FridgeTraceSummary>(`${cfg.domain}/api/fridge-traces/empty`, payload, { idempotencyKey: operationId });

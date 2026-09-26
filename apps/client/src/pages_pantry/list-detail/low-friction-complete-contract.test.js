@@ -30,12 +30,19 @@ nodeTest("添加食材只选择食材并以按需购买加入清单", () => {
   nodeAssert.doesNotMatch(pageSource, /当前搜索词作为手动项/);
 });
 
-nodeTest("清单设置从导航栏打开，且不再提供改名入口", () => {
+nodeTest("清单标题仅允许清单创建者在进行中状态修改", () => {
+  nodeAssert.match(pageSource, /v-if="canRename"[\s\S]*?icon-edit detail-hero__edit/);
+  nodeAssert.match(pageSource, /const canRename = computed\(\(\) => detail\.value\?\.role === "OWNER" && detail\.value\.status === "ACTIVE"\)/);
+  nodeAssert.match(pageSource, /title="修改清单名"/);
+  nodeAssert.match(pageSource, /shoppingApi\.renameList\(current\.id/);
+  nodeAssert.match(pageSource, /version: current\.version/);
+});
+
+nodeTest("清单作废仍从导航栏设置打开", () => {
   nodeAssert.match(pageSource, /#navbar-right/);
   nodeAssert.match(pageSource, /openSettingsSheet/);
   nodeAssert.match(pageSource, /title="清单设置"/);
   nodeAssert.match(pageSource, /作废清单/);
-  nodeAssert.doesNotMatch(pageSource, /renameSheetVisible|renameList|openRenameSheet|修改清单名/);
 });
 
 nodeTest("添加食材固定显示在页面底部，清单项使用自定义勾选框", () => {

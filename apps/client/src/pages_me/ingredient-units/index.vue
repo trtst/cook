@@ -71,6 +71,7 @@
             @refresherrefresh="handleRefresherRefresh"
             @refresherrestore="onRefresherRestore"
             @refresherabort="onRefresherRestore"
+            @scrolltolower="handleScrollToLower"
           >
             <view v-if="activeTab === 'unit'" class="list list--unit unit-section-list sheet-unit-list">
               <view class="unit-guide">
@@ -151,6 +152,20 @@
                   <text class="ingredient-card__name">{{ item.name }}</text>
                 </view>
               </view>
+              <view
+                v-if="ingredientMoreErrorText"
+                class="notice notice--error"
+                @click="loadIngredients(true)"
+              >
+                {{ ingredientMoreErrorText }}，点击重试
+              </view>
+              <LoadMore
+                :loading="ingredientLoadingMore"
+                :has-next="ingredientHasNext"
+                :show-done="ingredientLoadedMoreOnce && !ingredientHasNext"
+                next-text="继续上拉，查看更多食材"
+                done-text="已经翻到底啦"
+              />
             </view>
           </scroll-view>
         </view>
@@ -311,6 +326,7 @@ import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
+import LoadMore from "@/components/LoadMore.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
@@ -376,9 +392,14 @@ const ingredientSearchKeyword = ref("");
 const ingredientCategoryId = ref<UUID | "">("");
 const categoryLoading = ref(false);
 const ingredientLoading = ref(true);
+const ingredientLoadingMore = ref(false);
+const ingredientPage = ref(1);
+const ingredientHasNext = ref(false);
+const ingredientLoadedMoreOnce = ref(false);
 const unitLoading = ref(false);
 const categoryErrorText = ref("");
 const ingredientErrorText = ref("");
+const ingredientMoreErrorText = ref("");
 const unitErrorText = ref("");
 const loadSource = ref<LoadSource>("idle");
 const sheetMode = ref<SheetMode | "">("");
@@ -495,7 +516,12 @@ function resetPageState() {
   ingredientCategoryId.value = "";
   categoryErrorText.value = "";
   ingredientErrorText.value = "";
+  ingredientMoreErrorText.value = "";
   unitErrorText.value = "";
+  ingredientPage.value = 1;
+  ingredientHasNext.value = false;
+  ingredientLoadingMore.value = false;
+  ingredientLoadedMoreOnce.value = false;
   closeSheet();
 }
 
@@ -595,37 +621,66 @@ async function ensureUnits(force = false) {
   await loadUnits(force);
 }
 
-async function loadIngredients() {
+async function loadIngredients(loadMore = false) {
+  if (loadMore) {
+    if (!ingredientHasNext.value || ingredientLoading.value || ingredientLoadingMore.value) return;
+    ingredientLoadingMore.value = true;
+    ingredientMoreErrorText.value = "";
+  } else {
+    ingredientLoading.value = true;
+    ingredientLoadingMore.value = false;
+    ingredientPage.value = 1;
+    ingredientHasNext.value = false;
+    ingredientLoadedMoreOnce.value = false;
+    ingredientMoreErrorText.value = "";
+  }
   const requestId = ++ingredientRequestId;
-  ingredientLoading.value = true;
-  ingredientErrorText.value = "";
+  if (!loadMore) ingredientErrorText.value = "";
 
   try {
     if (!ingredientCategoryId.value) {
       if (requestId === ingredientRequestId) {
         ingredients.value = [];
+        ingredientPage.value = 1;
       }
       return;
     }
     const result = await recipeApi.listIngredients({
-      page: 1,
+      page: loadMore ? ingredientPage.value + 1 : 1,
       pageSize: 20,
       keyword: ingredientSearchKeyword.value || undefined,
       categoryId: ingredientSearchKeyword.value ? undefined : ingredientCategoryId.value,
       source: sessionStore.isLoggedIn ? undefined : "SYSTEM"
     });
     if (requestId !== ingredientRequestId) return;
-    ingredients.value = result.items;
+    ingredients.value = loadMore ? [...ingredients.value, ...result.items] : result.items;
+    ingredientPage.value = result.page;
+    ingredientHasNext.value = result.hasNext;
+    if (loadMore) ingredientLoadedMoreOnce.value = true;
   } catch (error) {
     if (requestId !== ingredientRequestId) return;
-    ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
+    if (loadMore) {
+      ingredientMoreErrorText.value = error instanceof Error ? error.message : "食材加载失败";
+    } else {
+      ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
+    }
   } finally {
     if (requestId === ingredientRequestId) {
-      ingredientLoading.value = false;
+      if (loadMore) {
+        ingredientLoadingMore.value = false;
+      } else {
+        ingredientLoading.value = false;
+      }
       if (loadSource.value !== "refresh") {
         loadSource.value = "idle";
       }
     }
+  }
+}
+
+function handleScrollToLower() {
+  if (activeTab.value === "ingredient" && ingredientHasNext.value) {
+    void loadIngredients(true);
   }
 }
 

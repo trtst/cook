@@ -75,7 +75,7 @@
               <text v-if="planHeroMeta" class="meal-hero__meta">{{ planHeroMeta }}</text>
             </view>
 
-            <view class="meal-detail-content" :class="{ 'meal-detail-content--plan-ended': planClosed && !eventDetail }">
+            <view class="meal-detail-content" :class="{ 'meal-detail-content--plan-ended': planClosed && !eventDetail, 'meal-detail-content--no-footer': !footerVisible }">
               <view class="meal-detail-summary">
                 <view class="summary-card">
                   <view class="summary-card__topline">
@@ -325,7 +325,7 @@
                       <text>{{ shoppingActionText }}</text>
                     </view>
                     <view
-                      v-if="!eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
+                      v-if="eventDetail.status === 'CONFIRMED' && !eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
                       class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                       :class="{ 'meal-inline-action--disabled': submitting }"
                       @click="handlePrepareDiningEventAction"
@@ -352,7 +352,13 @@
                       <text class="menu-confirm__item-name">{{ row.item.name }}</text>
                       <text class="menu-confirm__item-meta">{{ row.item.quantityText || "未填数量" }}</text>
                     </view>
-                    <view class="meal-shopping-preview__state">
+                    <view
+                      v-if="eventDetail.status === 'CONFIRMED'"
+                      class="meal-shopping-preview__state"
+                      :class="{
+                        'meal-shopping-preview__state--status-only': row.item.preparationStatus === 'READY' || row.item.preparationStatus === 'BOUGHT' || eventDetail.ingredientsReadyAt || eventDetail.cookingStartedAt
+                      }"
+                    >
                       <text>{{ preparationStatusText(row.item.preparationStatus) }}</text>
                       <view
                         v-if="row.item.preparationStatus !== 'READY' && row.item.preparationStatus !== 'BOUGHT' && !eventDetail.ingredientsReadyAt && !eventDetail.cookingStartedAt"
@@ -361,6 +367,9 @@
                       >
                         {{ preparationSubmittingKey === row.item.key ? "处理中" : row.item.preparationStatus === "HOME" ? "撤销" : "我已备好" }}
                       </view>
+                    </view>
+                    <view v-if="row.item.preparationStatus !== 'OPEN'" class="meal-shopping-preview__prepared-mark">
+                      <text class="cookfont icon-done-circle meal-shopping-preview__prepared-icon" />
                     </view>
                   </view>
                   <view
@@ -564,47 +573,21 @@
             </view>
           </view>
 
-        <view v-else class="meal-footer__actions">
-          <view
-            v-if="footerQuickAction && footerQuickAction.key !== 'share-invite'"
-            class="meal-footer__quick"
-            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled || submitting }"
-            @click="handleFooterAction(footerQuickAction.key)"
-          >
-            <text class="cookfont meal-footer__quick-icon" :class="footerQuickAction.iconClass" />
-            <text class="meal-footer__quick-label">{{ footerQuickAction.label }}</text>
-          </view>
-          <button
-            v-else-if="footerQuickAction"
-            class="meal-footer__quick meal-footer__quick--button"
-            :class="{ 'meal-footer__quick--disabled': footerQuickAction.disabled || submitting }"
-            :open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
-            @click="handleFooterAction(footerQuickAction.key)"
-          >
-            <text class="cookfont meal-footer__quick-icon" :class="footerQuickAction.iconClass" />
-            <text class="meal-footer__quick-label">{{ footerQuickAction.label }}</text>
-          </button>
-
-            <view class="meal-footer__buttons" :class="{ 'meal-footer__buttons--single': footerButtonCount === 1 }">
-              <button
-                v-if="footerSecondaryAction"
-                class="meal-footer__button meal-footer__button--ghost"
-                :class="{ 'meal-footer__button--disabled': footerSecondaryAction.disabled || submitting }"
-                @click="handleFooterAction(footerSecondaryAction.key)"
-              >
-                {{ footerSecondaryAction.label }}
-              </button>
-              <button
-                v-if="footerPrimaryAction"
-                class="meal-footer__button meal-footer__button--primary"
-                :class="{ 'meal-footer__button--disabled': footerPrimaryAction.disabled || submitting }"
-                @click="handleFooterAction(footerPrimaryAction.key)"
-              >
-                <text class="meal-footer__button-content">{{ footerPrimaryAction.label }}</text>
-                <text v-if="footerPrimaryGapText" class="meal-footer__button-badge">{{ footerPrimaryGapText }}</text>
-              </button>
-            </view>
-          </view>
+        <MealFooterActions
+          v-else
+          meal
+          :quick-action="footerQuickAction"
+          :secondary-action="footerSecondaryAction"
+          :primary-action="footerPrimaryAction"
+          :primary-gap-text="footerPrimaryGapText"
+          :single-button="footerButtonCount === 1"
+          :submitting="submitting"
+          :quick-as-button="footerQuickAction?.key === 'share-invite'"
+          :quick-open-type="inviteShareReady && !inviteSharing ? 'share' : ''"
+          @quick="footerQuickAction && handleFooterAction(footerQuickAction.key)"
+          @secondary="footerSecondaryAction && handleFooterAction(footerSecondaryAction.key)"
+          @primary="footerPrimaryAction && handleFooterAction(footerPrimaryAction.key)"
+        />
         </view>
 
         <ParticipantManageSheet
@@ -818,7 +801,7 @@
         <SheetShell
           :visible="completedIngredientSheetVisible"
           title="更新食材"
-          subtitle="只记录你确认的有或没有，不填写数量。"
+          subtitle="顺手记下家里食材近况，之后安排菜单更省心。"
           @close="closeCompletedIngredientSheet"
           @after-close="handleCompletedIngredientSheetAfterClose"
         >
@@ -877,13 +860,14 @@ import CookAssistantThinkingLoading from "@/components/CookAssistantThinkingLoad
 import EventScheduleSheet from "@/components/Meal/EventScheduleSheet.vue";
 import ParticipantManageSheet from "@/components/Meal/ParticipantManageSheet.vue";
 import DiningEventParticipantNoteSheet from "@/components/Meal/DiningEventParticipantNoteSheet.vue";
+import MealFooterActions from "@/components/Meal/MealFooterActions.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import ImageField from "@/components/ImageField.vue";
 import ImageEmpty from "@/components/ImageEmpty.vue";
 import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";
 import { useSystemInfo } from "@/composables/useSystemInfo";
@@ -896,7 +880,7 @@ import { fridgeApi } from "@/apis/fridge";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
 import { createOperationId } from "@/utils/operation-id";
-import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "@/utils/cook-assistant-loading";
+import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "../utils/cook-assistant-loading";
 import { formatMealSlot, isPastLocalDateTime, resolveMealSlotByTime, resolveMealSlotExpireMs, resolveMealSlotSuggestedTime } from "@/utils/meal-slot";
 import {
   parseRecentArrangementDetailFocus,
@@ -1565,8 +1549,14 @@ const menuDeadlineText = computed(() => (eventDetail.value ? "调整时间" : "�
 const showMenuDeadlineAction = computed(() => Boolean(eventDetail.value && canManageParticipants.value && !eventClosed.value));
 const footerVisible = computed(() => {
   if (!planDetail.value || footerStage.value === "CANCELLED") return false;
-  if (footerStage.value !== "TIME_UP") return true;
-  return Boolean(eventDetail.value);
+  if (footerStage.value === "TIME_UP" && !eventDetail.value) return false;
+  return Boolean(
+    endedActionsVisible.value ||
+    showFooterStatus.value ||
+    footerQuickAction.value ||
+    footerSecondaryAction.value ||
+    footerPrimaryAction.value
+  );
 });
 const showFooterStatus = computed(() => Boolean(eventDetail.value && footerStage.value !== "TIME_UP"));
 const footerStatusIcon = computed(() => {
@@ -2583,6 +2573,7 @@ async function createEvent() {
         });
     eventId.value = result.id;
     eventDetail.value = result;
+    activeSharePath.value = result.shareTokenPath || "";
     planDate.value = nextDate;
     planDetail.value = {
       ...planDetail.value,
@@ -3869,6 +3860,10 @@ function clearFocusedSection() {
 }
 
 .meal-detail-content--plan-ended {
+  padding-bottom: calc(50rpx + env(safe-area-inset-bottom));
+}
+
+.meal-detail-content--no-footer {
   padding-bottom: calc(50rpx + env(safe-area-inset-bottom));
 }
 
@@ -5247,7 +5242,7 @@ function clearFocusedSection() {
 }
 
 .meal-shopping-preview__row {
-  padding: 24rpx;
+  position: relative;
   border-radius: var(--radius-xs);
   background: var(--color-state-warning-soft);
 }
@@ -5256,14 +5251,37 @@ function clearFocusedSection() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8rpx;
-  color: var(--text-tertiary);
+  padding: 12rpx 24rpx;
+  color: var(--color-text-tertiary);
   font-size: 22rpx;
+}
+
+.meal-shopping-preview__state--status-only {
+  justify-content: flex-end;
 }
 
 .meal-shopping-preview__home {
   color: var(--brand-primary);
   font-size: 22rpx;
+}
+
+.meal-shopping-preview__prepared-mark {
+  position: absolute;
+  bottom: 6rpx;
+  left: 24rpx;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  opacity: 0.1;
+  box-sizing: border-box;
+}
+
+.meal-shopping-preview__prepared-icon {
+  line-height: 1;
+  font-size: 100rpx;
+  color: var(--color-text-tertiary);
 }
 
 .meal-cancel-panel {
@@ -5298,6 +5316,7 @@ function clearFocusedSection() {
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
+  padding: 12rpx 24rpx;
 }
 
 .menu-confirm__item-meta {
@@ -5618,55 +5637,6 @@ function clearFocusedSection() {
   border: 0;
 }
 
-.meal-footer__quick {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6rpx;
-  min-width: 86rpx;
-}
-
-.meal-footer__quick--button {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.meal-footer__quick--button::after {
-  border: 0;
-}
-
-.meal-footer__quick--disabled {
-  opacity: 0.42;
-}
-
-.meal-footer__quick-icon {
-  font-size: 30rpx;
-  color: var(--color-text);
-}
-
-.meal-footer__quick-label {
-  color: var(--color-text-secondary);
-  font-size: 22rpx;
-  line-height: 1.4;
-}
-
-.meal-footer__buttons {
-  flex: 1;
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
-
-.meal-footer__buttons--single .meal-footer__button {
-  width: 100%;
-  flex: 1 1 100%;
-}
-
 .meal-footer__memory {
   display: inline-flex;
   align-items: center;
@@ -5699,51 +5669,4 @@ function clearFocusedSection() {
   line-height: 1;
 }
 
-.meal-footer__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 90rpx;
-  margin: 0;
-  padding: 0 28rpx;
-  border-radius: 999rpx;
-  font-size: 28rpx;
-  font-weight: 700;
-  line-height: 1;
-  box-sizing: border-box;
-}
-
-.meal-footer__button::after {
-  border: none;
-  display: none;
-}
-
-.meal-footer__button--ghost {
-  color: var(--button-secondary-text);
-  background: var(--button-secondary-bg);
-}
-
-.meal-footer__button--primary {
-  color: var(--button-primary-text);
-  background: var(--button-primary-bg);
-  box-shadow: var(--button-primary-shadow);
-}
-
-.meal-footer__button--disabled {
-  opacity: 0.46;
-  box-shadow: var(--button-primary-shadow);
-}
-
-.meal-footer__button-content {
-  line-height: 1;
-}
-
-.meal-footer__button-badge {
-  margin-left: 10rpx;
-  padding: 8rpx 12rpx;
-  border-radius: 999rpx;
-  background: var(--color-surface-mask-weak);
-  font-size: 22rpx;
-  line-height: 1;
-}
 </style>
