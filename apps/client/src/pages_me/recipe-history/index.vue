@@ -114,7 +114,7 @@ import ImageEmpty from "@/components/ImageEmpty.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import Skeleton from "@/components/Skeleton/Skeleton.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";

@@ -129,7 +129,7 @@ import RecipeListRow from "@/components/Recipe/RecipeListRow.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";

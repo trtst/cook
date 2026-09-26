@@ -106,7 +106,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { useTheme } from "@/composables/useTheme";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { uniPlatform } from "@/platform/uni";

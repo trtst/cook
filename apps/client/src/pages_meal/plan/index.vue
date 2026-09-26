@@ -258,7 +258,7 @@ import Layout from "@/components/Layout/Layout.vue";
 import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import { useCustomRefresher } from "@/composables/useCustomRefresher";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";

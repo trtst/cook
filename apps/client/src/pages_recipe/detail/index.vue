@@ -562,7 +562,7 @@ import { useRecipePreviewStore, type RecipePreviewAmount, type RecipePreviewDeta
 import { useSessionStore } from "@/stores/session";
 import { userApi, type CookAssistantUsageResponse } from "@/apis/user";
 import { createOperationId } from "@/utils/operation-id";
-import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "@/utils/cook-assistant-loading";
+import { getCookAssistantLoadingDuration, waitForCookAssistantLoading } from "../utils/cook-assistant-loading";
 import { formatMealSlot, isMealSlotExpired } from "@/utils/meal-slot";
 import { difficultyText as recipeDifficultyText, durationText as recipeDurationText } from "@/utils/recipe-meta";
 import { buildDefaultShoppingListName } from "../utils/shopping";

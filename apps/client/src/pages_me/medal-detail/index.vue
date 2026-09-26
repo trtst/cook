@@ -91,7 +91,7 @@ import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
 import SharePillButton from "@/components/Share/SharePillButton.vue";
-import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
+import { useLoginEmptyState } from "../composables/useLoginEmptyState";
 import { usePageScrollLock, usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
 import { useTheme } from "@/composables/useTheme";

@@ -14,16 +14,18 @@ const sourceRoot = resolve(__dirname);
 const forbiddenMainFiles = [
   "apis/knowledge.js",
   "composables/useImageCropFlow.js",
-  "services/subscribe-message.js",
+  "composables/useLoginEmptyState.js",
   "utils/image-crop.js",
+  "utils/cook-assistant-loading.js",
   "utils/shopping.js"
 ];
 
 const forbiddenSourceImports = [
   "@/apis/knowledge",
   "@/composables/useImageCropFlow",
-  "@/services/subscribe-message",
+  "@/composables/useLoginEmptyState",
   "@/utils/image-crop",
+  "@/utils/cook-assistant-loading",
   "@/utils/shopping",
   "@/pages_pantry/apis/fridge"
 ];
@@ -40,8 +42,24 @@ const sourceFiles = [
   "pages_pantry/list/index.vue",
   "pages_pantry/gap/index.vue",
   "pages_recipe/detail/index.vue",
+  "pages_recipe/list/index.vue",
+  "pages_recipe/assistant/index.vue",
   "pages_meal/detail/index.vue",
-  "pages_meal/plan/index.vue"
+  "pages_meal/plan/index.vue",
+  "pages_meal/assistant/index.vue",
+  "pages_meal/cook-mode/index.vue",
+  "pages_meal/event/index.vue",
+  "pages_pantry/list-detail/index.vue",
+  "pages_share/import/index.vue",
+  "pages_share/memory/index.vue",
+  "pages_me/account/index.vue",
+  "pages_me/password/index.vue",
+  "pages_me/phone/index.vue",
+  "pages_me/medal-detail/index.vue",
+  "pages_me/recipe-history/index.vue",
+  "pages_me/taste/index.vue",
+  "pages_me/membership-code/index.vue",
+  "pages_me/official-message/index.vue"
 ];
 
 for (const sourceFile of sourceFiles) {
