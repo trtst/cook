@@ -31,6 +31,7 @@ import { PantryService } from "../pantry/pantry.service";
 import { versionToContent } from "../recipe/recipe-content";
 import { publicInspirationRecipeWhere } from "../recipe/public-content-user-pool";
 import { HomeImageService } from "./home-image.service";
+import { fridgePresentIngredientIds } from "../pantry/pantry.fridge-trace";
 
 type BoardDb = Prisma.TransactionClient | PrismaService;
 type HomeCardInput = Pick<HomeFeatureBoardCard, "placement" | "title" | "subtitle" | "targetType" | "targetValue" | "artImageUrl" | "badgeText">;
@@ -150,7 +151,7 @@ type WeekPlanRow = {
   planDate: Date;
   mealSlot: MealSlot;
   menuLockedAt: Date | null;
-  status: "PLANNED" | "COMPLETED";
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
   completedAt: Date | null;
   updatedAt: Date;
   diningEvent: {
@@ -464,7 +465,7 @@ export class HomeService {
 
     const [nextMealState, fridgeSummary, shoppingSummary, plans, latestShoppingList] = await Promise.all([
       this.getNextMealState(userId),
-      this.pantryService.getFridgeSummary(userId),
+      this.pantryService.getFridgeTraceSummary(userId),
       this.pantryService.getShoppingListSummary(userId),
       this.prisma.mealPlanItem.findMany({
         where: {
@@ -567,14 +568,14 @@ export class HomeService {
       plannedDayCount,
       totalDayCount: homeWeekDayCount,
       activeListCount: shoppingSummary.activeListCount,
-      expiringCount: fridgeSummary.expiringCount,
+      traceCount: fridgeSummary.totalCount,
       arrangement,
       days
     };
   }
 
   async getFridgeRecipes(userId: UUID): Promise<HomeFridgeRecipesResponse> {
-    const [recipes, fridgeItems] = await Promise.all([
+    const [recipes, fridgeTraces] = await Promise.all([
       this.prisma.recipe.findMany({
         where: {
           status: "ACTIVE",
@@ -585,22 +586,28 @@ export class HomeService {
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
       }),
-      this.prisma.fridgeItem.findMany({
+      this.prisma.fridgeTrace.findMany({
         where: {
-          userId,
-          available: true
+          userId
         },
         select: {
-          ingredientId: true
+          ingredientId: true,
+          kind: true,
+          createdAt: true,
+          categoryName: true,
+          categoryCode: true,
+          ingredient: { select: { category: { select: { name: true, code: true } } } }
         }
       })
     ]);
 
-    const fridgeIngredientIds = new Set(
-      fridgeItems
-        .map(item => item.ingredientId)
-        .filter((item): item is UUID => typeof item === "number" && item > 0)
-    );
+    const fridgeIngredientIds = fridgePresentIngredientIds(fridgeTraces.map(item => ({
+      ingredientId: item.ingredientId,
+      kind: item.kind,
+      createdAt: item.createdAt,
+      categoryName: item.categoryName ?? item.ingredient?.category.name ?? null,
+      categoryCode: item.categoryCode ?? item.ingredient?.category.code ?? null
+    })));
     if (fridgeIngredientIds.size === 0) return { items: [] };
 
     const inspirationVersionIds = recipes

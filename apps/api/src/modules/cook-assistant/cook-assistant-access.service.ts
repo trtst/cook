@@ -1,4 +1,4 @@
-import { HttpException, Injectable } from "@nestjs/common";
+import { HttpException, Inject, Injectable } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
 import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { PrismaService } from "../../common/prisma.service";
@@ -79,7 +79,7 @@ async function lockDailyUsage(tx: CookAssistantTx, userId: UUID, day: string) {
 
 @Injectable()
 export class CookAssistantAccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getUsage(userId: UUID, now = new Date()): Promise<CookAssistantUsageResponse> {
     const unlockedOn = businessDateValue(now);

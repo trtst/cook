@@ -227,6 +227,7 @@ enum MealSlot {
 enum MealPlanStatus {
   PLANNED
   COMPLETED
+  CANCELLED
 }
 
 enum MealPlanDishPurchaseState {
@@ -303,6 +304,13 @@ enum ShoppingStatus {
   OPEN
   BOUGHT
   DELETED
+}
+
+enum FridgeTraceKind {
+  PURCHASED
+  USED
+  MANUAL_PRESENT
+  MANUAL_EMPTY
 }
 
 enum ShoppingListStatus {
@@ -744,6 +752,7 @@ model User {
   units                     Unit[]                     @relation("UnitOwner")
   unitRecommendations       UnitRecommendation[]
   mealPlans                 MealPlanItem[]
+  confirmedDiningEventPreparations DiningEventPreparation[] @relation("DiningEventPreparationConfirmer")
   mealPolls                 MealPoll[]                @relation("MealPollCreator")
   mealPollSuggestions       MealPollCandidate[]       @relation("MealPollCandidateSuggester")
   mealPollResponses         MealPollResponse[]
@@ -757,9 +766,8 @@ model User {
   acceptedDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteAcceptor")
   diningEventMemoryShares   DiningEventMemoryShare[]   @relation("DiningEventMemoryShareCreator")
   diningGroupActivities     DiningGroupActivity[]      @relation("DiningGroupActivityActor")
-  fridgeItems               FridgeItem[]
+  fridgeTraces              FridgeTrace[]
   shoppingItems             ShoppingItem[]
-  shoppingItemFridgeReservations ShoppingItemFridgeReservation[]
   ownedShoppingLists        ShoppingList[]          @relation("ShoppingListOwner")
   shoppingListMembers       ShoppingListMember[]    @relation("ShoppingListMemberUser")
   addedShoppingListMembers  ShoppingListMember[]    @relation("ShoppingListMemberAdder")
@@ -1217,8 +1225,6 @@ model Unit {
 
   owner              User?        @relation("UnitOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   defaultIngredients Ingredient[] @relation("IngredientDefaultUnit")
-  fridgeItems        FridgeItem[] @relation("FridgeItemExactUnit")
-  shoppingItemFridgeReservations ShoppingItemFridgeReservation[] @relation("ShoppingItemFridgeReservationUnit")
   targetRecommendations UnitRecommendation[] @relation("UnitRecommendationTarget")
   nutrientConversions IngredientUnitNutrientConversion[]
 
@@ -1280,7 +1286,7 @@ model Ingredient {
   recommendations       IngredientRecommendation[] @relation("IngredientRecommendationSource")
   targetRecommendations IngredientRecommendation[] @relation("IngredientRecommendationTarget")
   feedbacks             IngredientFeedback[]
-  fridgeItems           FridgeItem[]               @relation("FridgeItemIngredient")
+  fridgeTraces          FridgeTrace[]
   shoppingSourceItems   ShoppingItem[]             @relation("ShoppingItemIngredient")
   nutrientMappings      IngredientNutrientMapping[]
   nutrientConversions   IngredientUnitNutrientConversion[]
@@ -1960,6 +1966,7 @@ model MealPlanItem {
   menuLockedAt DateTime?      @map("menu_locked_at") @db.Timestamptz(3)
   status       MealPlanStatus @default(PLANNED)
   completedAt  DateTime?      @map("completed_at") @db.Timestamptz(3)
+  cancelledAt  DateTime?      @map("cancelled_at") @db.Timestamptz(3)
   version      Int            @default(1)
   createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1972,9 +1979,10 @@ model MealPlanItem {
   shoppingList  ShoppingList?         @relation(fields: [shoppingListId], references: [id], onDelete: SetNull)
   confirmedPolls MealPoll[]           @relation("MealPollConfirmedPlanItem")
   activities    DiningGroupActivity[]
+  fridgeTraces FridgeTrace[]
 
-  @@unique([userId, planDate, mealSlot])
-  @@index([userId, planDate])
+  // Partial unique slot ownership for non-cancelled plans is maintained by forward SQL migration.
+  @@index([userId, planDate, mealSlot])
   @@index([shoppingListId])
   @@map("meal_plan_items")
 }
@@ -2056,6 +2064,8 @@ model DiningEvent {
   shareTokenExpiresAt DateTime?         @map("share_token_expires_at") @db.Timestamptz(3)
   memoryMiniCodeStorageKey String?      @map("memory_mini_code_storage_key") @db.VarChar(512)
   completedAt         DateTime?         @map("completed_at") @db.Timestamptz(3)
+  ingredientsReadyAt  DateTime?         @map("ingredients_ready_at") @db.Timestamptz(3)
+  cookingStartedAt    DateTime?         @map("cooking_started_at") @db.Timestamptz(3)
   version             Int               @default(1)
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -2065,6 +2075,7 @@ model DiningEvent {
   diningGroup  DiningGroup?             @relation(fields: [diningGroupId], references: [id])
   confirmedPolls MealPoll[]             @relation("MealPollConfirmedDiningEvent")
   activities   DiningGroupActivity[]
+  preparations DiningEventPreparation[]
   menuItems    DiningEventMenuItem[]
   participants DiningEventParticipant[]
   wishItems    DiningEventWishItem[]
@@ -2341,37 +2352,19 @@ model DiningEventMenuItem {
   @@map("dining_event_menu_items")
 }
 
-model FridgeItem {
-  id                   Int       @id @default(autoincrement())
-  userId               Int       @map("user_id")
-  ingredientId         Int?      @map("ingredient_id")
-  exactUnitId          Int?      @map("exact_unit_id")
-  sourceShoppingListId Int?      @map("source_shopping_list_id")
-  sourceShoppingItemId Int?      @map("source_shopping_item_id")
-  name                 String    @db.VarChar(120)
-  quantityText         String?   @map("quantity_text") @db.VarChar(64)
-  exactQuantity        Decimal?  @map("exact_quantity") @db.Decimal(12, 3)
-  note                 String?   @db.VarChar(255)
-  available            Boolean   @default(true)
-  expireAt             DateTime? @map("expire_at") @db.Timestamptz(3)
-  consumedAt           DateTime? @map("consumed_at") @db.Timestamptz(3)
-  version              Int       @default(1)
-  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+model DiningEventPreparation {
+  id                Int      @id @default(autoincrement())
+  diningEventId     Int      @map("dining_event_id")
+  sourceKey         String   @map("source_key") @db.VarChar(120)
+  confirmedByUserId Int      @map("confirmed_by_user_id")
+  confirmedAt       DateTime @default(now()) @map("confirmed_at") @db.Timestamptz(3)
 
-  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ingredient         Ingredient?   @relation("FridgeItemIngredient", fields: [ingredientId], references: [id], onDelete: SetNull)
-  exactUnit          Unit?         @relation("FridgeItemExactUnit", fields: [exactUnitId], references: [id], onDelete: SetNull)
-  sourceShoppingList ShoppingList? @relation("FridgeItemSourceShoppingList", fields: [sourceShoppingListId], references: [id], onDelete: SetNull)
-  sourceShoppingItem ShoppingItem? @relation("FridgeItemSourceShoppingItem", fields: [sourceShoppingItemId], references: [id], onDelete: SetNull)
-  fridgeReservations ShoppingItemFridgeReservation[]
+  diningEvent DiningEvent @relation(fields: [diningEventId], references: [id], onDelete: Cascade)
+  confirmedBy User        @relation("DiningEventPreparationConfirmer", fields: [confirmedByUserId], references: [id], onDelete: Cascade)
 
-  @@index([userId, available, updatedAt])
-  @@index([userId, expireAt, updatedAt])
-  @@index([userId, name])
-  @@index([userId, ingredientId, exactUnitId, available])
-  @@index([userId, ingredientId, available, expireAt, createdAt, id])
-  @@map("fridge_items")
+  @@unique([diningEventId, sourceKey])
+  @@index([confirmedByUserId, confirmedAt])
+  @@map("dining_event_preparations")
 }
 
 model ShoppingList {
@@ -2390,8 +2383,6 @@ model ShoppingList {
   invites     ShoppingListInvite[]
   items       ShoppingItem[]
   shareTokens ShoppingShareToken[]
-  fridgeItems FridgeItem[]        @relation("FridgeItemSourceShoppingList")
-  fridgeReservations ShoppingItemFridgeReservation[]
   mealPlans    MealPlanItem[]
 
   @@index([ownerUserId, status, updatedAt])
@@ -2466,8 +2457,6 @@ model ShoppingItem {
   removedAt             DateTime?          @map("removed_at") @db.Timestamptz(3)
   name                  String             @db.VarChar(120)
   quantityText          String?            @map("quantity_text") @db.VarChar(64)
-  baseQuantityText      String?            @map("base_quantity_text") @db.VarChar(64)
-  fridgeAppliedQuantityText String?        @map("fridge_applied_quantity_text") @db.VarChar(64)
   note                  String?            @db.VarChar(255)
   sourceType            ShoppingSourceType @map("source_type")
   sourceKey             String?            @map("source_key") @db.VarChar(120)
@@ -2479,7 +2468,6 @@ model ShoppingItem {
   sourceIngredientSort  Int?               @map("source_ingredient_sort")
   ingredientId          Int?               @map("ingredient_id")
   amountJson            Json?              @map("amount_json")
-  fridgeCovered         Boolean            @default(false) @map("fridge_covered")
   status                ShoppingStatus     @default(OPEN)
   version               Int                @default(1)
   createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -2492,8 +2480,7 @@ model ShoppingItem {
   sourceRecipe        Recipe?               @relation("ShoppingItemSourceRecipe", fields: [sourceRecipeId], references: [id], onDelete: SetNull)
   sourceRecipeVersion RecipeContentVersion? @relation("ShoppingItemSourceVersion", fields: [sourceRecipeVersionId], references: [id], onDelete: SetNull)
   ingredient          Ingredient?           @relation("ShoppingItemIngredient", fields: [ingredientId], references: [id], onDelete: SetNull)
-  fridgeItems         FridgeItem[]          @relation("FridgeItemSourceShoppingItem")
-  fridgeReservations  ShoppingItemFridgeReservation[]
+  fridgeTraces        FridgeTrace[]
 
   @@index([listId, status, updatedAt])
   @@index([userId, status, updatedAt])
@@ -2502,30 +2489,28 @@ model ShoppingItem {
   @@map("shopping_items")
 }
 
-model ShoppingItemFridgeReservation {
-  id               Int       @id @default(autoincrement())
-  userId           Int       @map("user_id")
-  shoppingListId   Int       @map("shopping_list_id")
-  shoppingItemId   Int       @map("shopping_item_id")
-  fridgeItemId     Int       @map("fridge_item_id")
-  reservedQuantity Decimal   @map("reserved_quantity") @db.Decimal(12, 3)
-  reservedUnitId   Int       @map("reserved_unit_id")
-  releasedAt       DateTime? @map("released_at") @db.Timestamptz(3)
-  settledAt        DateTime? @map("settled_at") @db.Timestamptz(3)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+model FridgeTrace {
+  id                 Int             @id @default(autoincrement())
+  userId             Int             @map("user_id")
+  ingredientId       Int?            @map("ingredient_id")
+  sourceShoppingItemId Int?          @map("source_shopping_item_id")
+  sourceMealPlanItemId Int?         @map("source_meal_plan_item_id")
+  kind               FridgeTraceKind
+  name               String          @db.VarChar(120)
+  categoryName       String?         @map("category_name") @db.VarChar(40)
+  categoryCode       String?         @map("category_code") @db.VarChar(40)
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shoppingList    ShoppingList @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
-  shoppingItem    ShoppingItem @relation(fields: [shoppingItemId], references: [id], onDelete: Cascade)
-  fridgeItem      FridgeItem   @relation(fields: [fridgeItemId], references: [id], onDelete: Cascade)
-  reservedUnit    Unit         @relation("ShoppingItemFridgeReservationUnit", fields: [reservedUnitId], references: [id], onDelete: Restrict)
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredient         Ingredient?     @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  sourceShoppingItem ShoppingItem?   @relation(fields: [sourceShoppingItemId], references: [id], onDelete: SetNull)
+  sourceMealPlanItem MealPlanItem?   @relation(fields: [sourceMealPlanItemId], references: [id], onDelete: SetNull)
 
-  @@index([userId, releasedAt, settledAt, createdAt])
-  @@index([shoppingListId, releasedAt, settledAt, createdAt])
-  @@index([shoppingItemId, releasedAt, settledAt, createdAt])
-  @@index([fridgeItemId, releasedAt, settledAt, createdAt])
-  @@map("shopping_item_fridge_reservations")
+  @@unique([sourceShoppingItemId, kind])
+  @@index([userId, createdAt, id])
+  @@index([userId, ingredientId, createdAt, id])
+  @@index([userId, kind, createdAt, id])
+  @@map("fridge_traces")
 }
 
 model MedalTemplate {

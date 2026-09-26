@@ -182,6 +182,45 @@ test("event demand loading selects recipe base servings for source facts", async
   assert.equal(result[0]?.sourceBaseServings, 4);
 });
 
+test("accepted dining-event participants can preview ingredients for their own fridge update", async () => {
+  const service = createService() as any;
+  let participantFilter: unknown;
+  service.prisma = {
+    diningEvent: {
+      findUnique: async (args: any) => {
+        participantFilter = args.select.participants.where;
+        return ({
+        id: 501,
+        userId: 9,
+        title: "周三晚餐",
+        scheduledAt: new Date("2026-09-24T10:00:00.000Z"),
+        updatedAt: new Date("2026-09-24T08:00:00.000Z"),
+        participants: [{ id: 601 }],
+        menuItems: [{
+          title: "番茄炒蛋",
+          recipeId: 1001,
+          recipeVersionId: 2001,
+          recipeVersion: {
+            baseServings: 2,
+            ingredientsJson: [{
+              ingredientId: 7,
+              ingredientName: "鸡蛋",
+              amount: { kind: "EXACT", quantity: "2", unitId: 1, unitName: "个", unitType: "COMMON" }
+            }]
+          }
+        }]
+        });
+      }
+    }
+  };
+
+  const result = await service.previewEventGap(10, 501);
+
+  assert.equal(result[0]?.name, "鸡蛋");
+  assert.equal(result[0]?.quantityText, "2个");
+  assert.deepEqual(participantFilter, { userId: 10, status: "ACCEPTED" });
+});
+
 test("event gap writes do not recreate a user-deleted source", async () => {
   let created = false;
   let existingWhere: Record<string, unknown> | null = null;
@@ -330,8 +369,92 @@ test("event gap writes keep one shopping row per source fact while preview stays
     "501:ingredient:7:EXACT:1:r1001:v2001:i1",
     "501:ingredient:7:EXACT:1:r1002:v2002:i2"
   ]);
-  assert.deepEqual(creates.map(item => item.sourceRecipeTitle), ["番茄炒蛋", "紫菜蛋花汤"]);
+  assert.deepEqual(creates.map(item => item.sourceRecipeTitle), [null, null]);
+  assert.deepEqual(creates.map(item => item.sourceRecipeVersionId), [null, null]);
+  assert.deepEqual(creates.map(item => item.sourceBatchKey), [null, null]);
   assert.deepEqual(creates.map(item => item.quantityText), ["2个", "1个"]);
+});
+
+test("event gap writes keep recipe details in the source key, not recipe source columns", () => {
+  const service = createService();
+  const [item] = (service as any).buildShoppingDemandWriteItems({
+    id: -1,
+    name: "鸡蛋",
+    quantityText: "2个",
+    note: "番茄炒蛋",
+    sourceCount: 1,
+    sourceTitles: ["番茄炒蛋"],
+    sourceType: "EVENT",
+    sourceKey: "501:ingredient:7:EXACT:1",
+    status: "OPEN",
+    updatedAt: "2026-09-24T08:00:00.000Z",
+    ingredientId: 7,
+    amountJson: { kind: "EXACT", quantity: "2", unitId: 1, unitName: "个", unitType: "COMMON" },
+    sourceRecipeId: 1001,
+    sourceRecipeVersionId: 2001,
+    sourceRecipeTitle: "番茄炒蛋",
+    sourceBaseServings: 2,
+    sourceIngredientSort: 1,
+    sourceFacts: [{
+      sourceId: 501,
+      sourceTitle: "周三晚餐",
+      scheduledAt: new Date("2026-09-24T10:00:00.000Z"),
+      updatedAt: new Date("2026-09-24T08:00:00.000Z"),
+      recipeTitle: "番茄炒蛋",
+      recipeId: 1001,
+      sourceVersionId: 2001,
+      baseServings: 2,
+      ingredientSort: 1,
+      ingredientId: 7,
+      ingredientName: "鸡蛋",
+      amount: { kind: "EXACT", quantity: "2", unitId: 1, unitName: "个", unitType: "COMMON" }
+    }]
+  }, "10001");
+
+  assert.equal(item.sourceKey, "501:ingredient:7:EXACT:1:r1001:v2001:i1");
+  assert.equal(item.sourceRecipeId, null);
+  assert.equal(item.sourceRecipeVersionId, null);
+  assert.equal(item.sourceRecipeTitle, null);
+  assert.equal(item.sourceBaseServings, null);
+  assert.equal(item.sourceBatchKey, null);
+  assert.equal(item.sourceIngredientSort, null);
+  assert.equal(item.ingredientId, 7);
+  assert.deepEqual(item.amountJson, { kind: "EXACT", quantity: "2", unitId: 1, unitName: "个", unitType: "COMMON" });
+});
+
+test("event gap writes without source facts still clear recipe source columns", () => {
+  const service = createService();
+  const [item] = (service as any).buildShoppingDemandWriteItems({
+    id: -1,
+    name: "鸡蛋",
+    quantityText: "2个",
+    note: "番茄炒蛋",
+    sourceCount: 1,
+    sourceTitles: ["番茄炒蛋"],
+    sourceType: "EVENT",
+    sourceKey: "501:ingredient:7:EXACT:1",
+    status: "OPEN",
+    updatedAt: "2026-09-24T08:00:00.000Z",
+    ingredientId: 7,
+    amountJson: { kind: "EXACT", quantity: "2", unitId: 1, unitName: "个", unitType: "COMMON" },
+    sourceRecipeId: 1001,
+    sourceRecipeVersionId: 2001,
+    sourceRecipeTitle: "番茄炒蛋",
+    sourceBaseServings: 2,
+    sourceIngredientSort: 1
+  }, "10001");
+
+  assert.deepEqual(
+    [
+      item.sourceRecipeId,
+      item.sourceRecipeVersionId,
+      item.sourceRecipeTitle,
+      item.sourceBaseServings,
+      item.sourceBatchKey,
+      item.sourceIngredientSort
+    ],
+    [null, null, null, null, null, null]
+  );
 });
 
 test("plan gap writes preserve each fixed recipe source behind a merged demand line", async () => {

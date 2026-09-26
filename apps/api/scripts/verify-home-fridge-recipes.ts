@@ -1,7 +1,7 @@
 import { loadLocalEnv } from "../src/common/load-env";
 import { loginWithPassword } from "./auth-fixture";
 import type {
-  FridgeItemSummary,
+  FridgeTraceSummary,
   HomeFridgeRecipesResponse,
   IngredientSummary,
   MyRecipeDetail,
@@ -134,18 +134,13 @@ async function createRecipe(headers: Record<string, string>, categoryId: number,
   return published.recipe;
 }
 
-async function createFridgeItem(headers: Record<string, string>, ingredient: IngredientSummary) {
-  return requestData<FridgeItemSummary>("/fridge-items", {
+async function createFridgeTrace(headers: Record<string, string>, ingredient: IngredientSummary) {
+  return requestData<FridgeTraceSummary>("/fridge-traces/present", {
     method: "POST",
     headers: withIdempotencyKey(headers),
     body: JSON.stringify({
       name: ingredient.name,
-      ingredientId: ingredient.id,
-      quantityText: "1份",
-      exactQuantity: null,
-      exactUnitId: null,
-      expireAt: null,
-      note: "首页冰箱推荐验收"
+      ingredientId: ingredient.id
     })
   });
 }
@@ -166,7 +161,7 @@ async function main() {
     "home fridge recipes should be empty for recipes that match zero fridge ingredients"
   );
 
-  await createFridgeItem(auth, secondIngredient);
+  await createFridgeTrace(auth, secondIngredient);
   const noOverlapResult = await requestData<HomeFridgeRecipesResponse>("/home/fridge-recipes", { headers: auth });
   assert(
     noOverlapResult.items.every(item => item.recipeId !== noFridgeRecipe.id),

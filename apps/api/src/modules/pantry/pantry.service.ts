@@ -10,19 +10,10 @@ import { randomBytes } from "node:crypto";
 import { Prisma, type ShoppingSourceType } from "@prisma/client";
 import { PrismaService } from "../../common/prisma.service";
 import { policy } from "../../config/policy";
-import { completeIdempotentOperation, getIdempotentResult, hashIdempotencyRequest, startIdempotentOperation } from "../../common/idempotency";
+import { completeIdempotentOperation, getIdempotentResult, startIdempotentOperation } from "../../common/idempotency";
 import { removeStorageLedger, sizeOfJson, upsertStorageLedger } from "../../common/storage-ledger";
 import type {
-  CompleteShoppingListEntryRequest,
-  CookingConsumptionResponse,
-  CookingUndoResponse,
-  CreateRandomMenuShoppingItemRequest,
-  FridgeBatchSummary,
-  FridgeConsumeResponse,
-  FridgeIngredientDetail,
-  FridgeIngredientSummary,
-  FridgeItemSummary,
-  FridgeSummaryResponse,
+  CookingTraceResponse,
   ShoppingListCollaborator,
   ShoppingListInviteActionResponse,
   ShoppingListInviteFilter,
@@ -31,9 +22,7 @@ import type {
   ShoppingListInviteSummary,
   ShoppingListDetail,
   ShoppingListDetailItem,
-  ShoppingListItemFridgeActionMode,
   ShoppingListItemPatchResponse,
-  ShoppingInventoryStatus,
   ShoppingListPageResponse,
   ShoppingListStatusCount,
   ShoppingListSummary,
@@ -43,44 +32,27 @@ import type {
   ShoppingItemSourceSummary,
   OperationId,
   PageResult,
-  RecipeAmountSnapshot,
   RecipeContentSnapshot,
-  ShoppingBoardResponse,
   ShoppingGapResponse,
+  ShoppingGapPreviewItem,
   ShoppingGapWindow,
-  ShoppingIngredientGroup,
-  ShoppingRecipeGroup,
-  ShoppingRecipeIngredientGroup,
-  ShoppingItemSummary,
+  FridgeTraceIngredientSummary,
+  FridgeTraceSummary,
+  FridgeTraceSummaryResponse,
   UUID
 } from "../../contracts/types";
-import {
-  buildEmptyFridgeIngredientSummary,
-  buildFridgeBatchSummary,
-  groupFridgeBatches,
-  type InventoryBatchRecord,
-  type InventoryReservationRecord
-} from "./pantry.inventory-model";
-import { planBestEffortInventoryConsumption, planInventoryConsumption, type InventoryConsumptionCandidate } from "./pantry.inventory-write";
-import { buildFridgeCorrectionPatch } from "./pantry.inventory-correction";
-import { buildUnknownInventoryConfirmationPatch } from "./pantry.unknown-confirmation";
-import { buildCookingConsumptionPlan, scaleCookingQuantity } from "./pantry.cooking-consumption";
-import {
-  buildInventoryUsageSummary,
-  buildShoppingStatusUpdate
-} from "./pantry.low-friction-model";
 import {
   buildShoppingDemandFactKey,
   buildShoppingDemandLines,
   parseShoppingSourceId,
   type ShoppingDemandSource
 } from "./pantry.shopping-demand";
-import { buildAutomaticStockIn } from "./pantry.shopping-inventory";
 import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
 import { isPublicInspirationRecipe } from "../recipe/public-content-user-pool";
 import { IngredientImageService } from "../admin/ingredient-image.service";
 import { WechatSubscribeService } from "../wechat/wechat-subscribe.service";
+import { fridgeTraceLabel, fridgeTraceWindowDays, type FridgeTraceKind } from "./pantry.fridge-trace";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -93,13 +65,6 @@ function toPositiveInt(value: number | string | undefined, fallback: number) {
     if (Number.isInteger(parsed) && parsed > 0) return parsed;
   }
   return fallback;
-}
-
-function normalizeShoppingStatus(value: string) {
-  if (value !== "OPEN" && value !== "BOUGHT" && value !== "DELETED") {
-    throw new BadRequestException("购物状态参数错误");
-  }
-  return value;
 }
 
 function toListItemStatus(value: "OPEN" | "BOUGHT" | "DELETED"): "OPEN" | "CHECKED" | "REMOVED" {
@@ -124,10 +89,6 @@ function normalizeNameKey(value: string) {
   return value.trim().toLowerCase();
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 const gapWindowMeta: Record<ShoppingGapWindow, { title: string; description: string }> = {
   NEXT_48_HOURS: {
     title: "未来 48 小时",
@@ -142,7 +103,6 @@ const gapWindowMeta: Record<ShoppingGapWindow, { title: string; description: str
     description: "更后面的安排先收起，不打扰最近做饭。"
   }
 };
-const fridgeExpiryReminderDuplicateWindowMs = 5 * 60 * 1000;
 
 function resolveGapWindow(scheduledAt: Date, now: Date): ShoppingGapWindow | null {
   const diffMs = scheduledAt.getTime() - now.getTime();
@@ -169,7 +129,7 @@ type GapEvent = {
   }>;
 };
 
-type EventGapSummaryItem = ShoppingItemSummary & {
+type EventGapSummaryItem = ShoppingGapPreviewItem & {
   sourceKey: string;
   ingredientId: UUID | null;
   amountJson: Prisma.InputJsonValue | null;
@@ -180,40 +140,6 @@ type EventGapSummaryItem = ShoppingItemSummary & {
   sourceIngredientSort: number | null;
   sourceBatchKey?: string | null;
   sourceFacts?: ShoppingDemandSource[];
-};
-
-type ShoppingRow = {
-  id: UUID;
-  listId: UUID | null;
-  name: string;
-  quantityText: string | null;
-  note: string | null;
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
-  sourceKey: string | null;
-  sourceRecipeId: UUID | null;
-  sourceRecipeVersionId: UUID | null;
-  sourceRecipeTitle: string | null;
-  sourceBaseServings: number | null;
-  sourceBatchKey: string | null;
-  sourceIngredientSort: number | null;
-  ingredientId: UUID | null;
-  amountJson: Prisma.JsonValue | null;
-  status: "OPEN" | "BOUGHT" | "DELETED";
-  checkedAt: Date | null;
-  updatedAt: Date;
-};
-
-type RecipeShoppingRow = ShoppingRow & {
-  sourceType: "RECIPE";
-  sourceKey: string;
-  sourceRecipeId: UUID;
-  sourceRecipeVersionId: UUID;
-  sourceRecipeTitle: string;
-  sourceBaseServings: number;
-  sourceBatchKey: string;
-  sourceIngredientSort: number;
-  ingredientId: UUID;
-  amountJson: Prisma.JsonValue;
 };
 
 type RecipeShoppingSource = {
@@ -230,49 +156,10 @@ type PlanShoppingGapSyncResult = {
   pendingCount: number;
 };
 
-type ExactAmountGroup = {
-  unitId: UUID;
-  unitName: string;
-  quantity: Prisma.Decimal;
-};
-
-type FridgeMatchRow = {
-  id: UUID;
-  ingredientId: UUID | null;
-  name: string;
-  quantityText: string | null;
-  exactQuantity: Prisma.Decimal | null;
-  exactUnitId: UUID | null;
-  exactUnitName: string | null;
-  available: boolean;
-};
-
-type FridgeReservationSummaryRow = {
-  shoppingListId: UUID;
-  shoppingListName: string;
-  shoppingItemId: UUID;
-  reservedQuantity: Prisma.Decimal;
-  reservedUnitName: string;
-};
-
-type ShoppingItemFridgeMeta = {
-  requiredQuantityText: string | null;
-  remainingQuantityText: string | null;
-  appliedInventoryQuantityText: string | null;
-  fridgeText: string | null;
-  inventoryStatus: ShoppingInventoryStatus;
-  inventoryApplied: boolean;
-  inventoryCovered: boolean;
-  fridgeStatusText: string | null;
-  fridgeActionLabel: string | null;
-  fridgeActionMode: ShoppingListItemFridgeActionMode;
-};
-
 type ShoppingListProgressRow = {
   ingredientId: UUID | null;
   name: string;
   status: "OPEN" | "BOUGHT" | "DELETED";
-  fridgeCovered: boolean;
 };
 
 type PendingShoppingGroupCountRow = {
@@ -285,59 +172,16 @@ type ShoppingSourceMeta = {
   recipeMap: Map<UUID, "my" | "inspiration">;
 };
 
-type CookingAllocationRecord = {
-  batchId: UUID;
-  mode: "EXACT" | "ROUGH";
-  quantity: string;
-  unitId: UUID;
-  beforeQuantityText: string | null;
-  beforeQuantity: string;
-  beforeExactUnitId: UUID | null;
-  beforeAvailable: boolean;
-  beforeConsumedAt: string | null;
-  afterVersion: number;
-};
-
-type StoredCookingConsumptionResult = CookingConsumptionResponse & {
-  allocations: CookingAllocationRecord[];
-  servings: number;
-  recipeScales: Array<{ recipeVersionId: UUID; baseServings: number; servings: number }>;
-};
-
 type EntitlementReader = Pick<Prisma.TransactionClient, "entitlementGrant" | "diningGroupMember" | "diningGroup">;
 
 const recipeSourceType = "RECIPE" as ShoppingSourceType;
 const planSourceType = "PLAN" as ShoppingSourceType;
-
-const shoppingRowSelect = {
-  id: true,
-  listId: true,
-  name: true,
-  quantityText: true,
-  note: true,
-  sourceType: true,
-  sourceKey: true,
-  sourceRecipeId: true,
-  sourceRecipeVersionId: true,
-  sourceRecipeTitle: true,
-  sourceBaseServings: true,
-  sourceBatchKey: true,
-  sourceIngredientSort: true,
-  ingredientId: true,
-  amountJson: true,
-  status: true,
-  checkedAt: true,
-  updatedAt: true
-} satisfies Prisma.ShoppingItemSelect;
 
 const shoppingDetailItemSelect = {
   id: true,
   ingredientId: true,
   name: true,
   quantityText: true,
-  baseQuantityText: true,
-  fridgeAppliedQuantityText: true,
-  fridgeCovered: true,
   note: true,
   status: true,
   checkedAt: true,
@@ -375,569 +219,369 @@ export class PantryService {
     @Inject(WechatSubscribeService) private readonly wechatSubscribeService: WechatSubscribeService
   ) {}
 
-  async listFridge(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeIngredientSummary>> {
+  async listFridgeTraces(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeTraceIngredientSummary>> {
     const normalizedPage = toPositiveInt(page, 1);
-    const normalizedPageSize = toPositiveInt(pageSize, 20);
+    const normalizedPageSize = Math.min(toPositiveInt(pageSize, 20), 100);
     const skip = (normalizedPage - 1) * normalizedPageSize;
-    return this.prisma.$transaction(async tx => {
-      const rows = await this.loadInventoryBatchRows(tx, userId, true);
-      const summaries = groupFridgeBatches(rows).map(({ batches: _batches, ...summary }) => summary);
-
-      return {
-        items: summaries.slice(skip, skip + normalizedPageSize),
-        page: normalizedPage,
-        pageSize: normalizedPageSize,
-        total: summaries.length,
-        hasNext: skip + normalizedPageSize < summaries.length
-      };
-    });
-  }
-
-  async getFridgeIngredientDetail(userId: UUID, ingredientId: UUID): Promise<FridgeIngredientDetail> {
-    return this.prisma.$transaction(async tx => {
-      const rows = await this.loadInventoryBatchRows(tx, userId);
-      const summary = groupFridgeBatches(rows).find(item => item.ingredientId === ingredientId);
-      if (summary) return this.toFridgeIngredientDetail(summary);
-
-      const historyRows = rows.filter(row => row.ingredientId === ingredientId);
-      if (!historyRows.length) throw new NotFoundException("食材不存在");
-      return this.toFridgeIngredientDetail(buildEmptyFridgeIngredientSummary(historyRows));
-    });
-  }
-
-  async getFridgeItemDetail(userId: UUID, itemId: UUID): Promise<FridgeIngredientDetail> {
-    return this.prisma.$transaction(async tx => {
-      const rows = await this.loadInventoryBatchRows(tx, userId);
-      const item = rows.find(row => row.id === itemId);
-      if (!item) throw new NotFoundException("库存批次不存在");
-
-      if (item.ingredientId !== null) {
-        const summary = groupFridgeBatches(rows).find(itemSummary => itemSummary.ingredientId === item.ingredientId);
-        if (summary) return this.toFridgeIngredientDetail(summary);
-        return this.toFridgeIngredientDetail(
-          buildEmptyFridgeIngredientSummary(rows.filter(row => row.ingredientId === item.ingredientId))
-        );
-      }
-
-      const summary = item.available ? groupFridgeBatches([item])[0] : null;
-      return this.toFridgeIngredientDetail(summary ?? buildEmptyFridgeIngredientSummary([item]));
-    });
-  }
-
-  async listFridgeHistory(userId: UUID, ingredientId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeBatchSummary>> {
-    const normalizedPage = toPositiveInt(page, 1);
-    const normalizedPageSize = toPositiveInt(pageSize, 20);
-    const rows = await this.loadInventoryBatchRows(this.prisma, userId, false);
-    const history = rows
-      .filter(row => row.ingredientId === ingredientId)
-      .map(row => buildFridgeBatchSummary(row))
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id - left.id);
-    const skip = (normalizedPage - 1) * normalizedPageSize;
+    const summaries = this.fridgeTraceSummariesSql(userId);
+    const rows = await this.prisma.$queryRaw<Array<{
+      id: number | null;
+      ingredientId: number | null;
+      name: string | null;
+      categoryName: string | null;
+      kind: FridgeTraceKind | null;
+      label: string | null;
+      recordedAt: Date | null;
+      windowDays: 7 | 15 | null;
+      presence: "PRESENT" | "EMPTY" | "UNCONFIRMED" | null;
+      archived: boolean | null;
+      recentlyPurchased: boolean | null;
+      total: number;
+    }>>(Prisma.sql`
+      WITH summaries AS (${summaries}), page AS (
+        SELECT * FROM summaries
+        ORDER BY "recordedAt" DESC, id DESC
+        LIMIT ${normalizedPageSize} OFFSET ${skip}
+      ), total AS (SELECT COUNT(*) AS total FROM summaries)
+      SELECT page.*, total.total FROM total LEFT JOIN page ON TRUE
+    `);
+    const firstRow = rows[0];
+    const items: FridgeTraceIngredientSummary[] = rows.filter(row => row.id !== null).map(row => ({
+      id: row.id!,
+      ingredientId: row.ingredientId,
+      name: row.name!,
+      categoryName: row.categoryName,
+      kind: row.kind!,
+      label: row.label!,
+      recordedAt: toIsoDate(row.recordedAt!),
+      windowDays: row.windowDays!,
+      presence: row.presence!,
+      archived: row.archived!,
+      recentlyPurchased: row.recentlyPurchased!
+    }));
+    const total = Number(firstRow?.total ?? 0);
     return {
-      items: history.slice(skip, skip + normalizedPageSize),
+      items,
       page: normalizedPage,
       pageSize: normalizedPageSize,
-      total: history.length,
-      hasNext: skip + normalizedPageSize < history.length
+      total,
+      hasNext: skip + items.length < total
     };
   }
 
-  async getFridgeSummary(userId: UUID, days: 1 | 2 | 3 | 5 | 7 = 3): Promise<FridgeSummaryResponse> {
-    const cutoff = this.resolveFridgeExpireCutoff(days);
-    const rows = await this.loadInventoryBatchRows(this.prisma, userId, true);
-    const groups = groupFridgeBatches(rows);
-    const expiringGroups = groups.filter(group => group.batches.some(batch => batch.expireAt !== null && new Date(batch.expireAt).getTime() <= cutoff.getTime()));
-    const latestTime = expiringGroups
-      .flatMap(group => group.batches.map(batch => batch.updatedAt))
-      .sort()
-      .at(-1) ?? "";
-
-    return {
-      totalCount: groups.length,
-      expiringCount: expiringGroups.length,
-      latestTime
-    };
+  async getFridgeTraceSummary(userId: UUID): Promise<FridgeTraceSummaryResponse> {
+    const rows = await this.prisma.$queryRaw<Array<{ totalCount: number; latestTime: Date | null }>>(Prisma.sql`
+      WITH summaries AS (${this.fridgeTraceSummariesSql(userId)})
+      SELECT COUNT(*)::INTEGER AS "totalCount", MAX("recordedAt") AS "latestTime" FROM summaries
+    `);
+    return { totalCount: Number(rows[0]?.totalCount ?? 0), latestTime: rows[0]?.latestTime?.toISOString() ?? null };
   }
 
-  async createFridgeItem(
+  private fridgeTraceSummariesSql(userId: UUID) {
+    return Prisma.sql`
+      WITH source AS (
+        SELECT trace.id, trace.ingredient_id AS "ingredientId", trace.name,
+          COALESCE(trace.category_name, category.name) AS "categoryName",
+          COALESCE(trace.category_code, category.code) AS "categoryCode",
+          trace.kind, trace.created_at AS "recordedAt",
+          CASE WHEN trace.ingredient_id IS NULL
+            THEN 'name:' || LOWER(BTRIM(trace.name))
+            ELSE 'ingredient:' || trace.ingredient_id::text
+          END AS "identityKey"
+        FROM fridge_traces trace
+        LEFT JOIN ingredients ingredient ON ingredient.id = trace.ingredient_id
+        LEFT JOIN ingredient_categories category ON category.id = ingredient.category_id
+        WHERE trace.user_id = ${userId}
+      ), latest_state AS (
+        SELECT DISTINCT ON ("identityKey") * FROM source
+        WHERE kind <> 'USED'
+        ORDER BY "identityKey", "recordedAt" DESC, id DESC
+      ), latest_purchase AS (
+        SELECT DISTINCT ON ("identityKey") "identityKey", "recordedAt"
+        FROM source WHERE kind = 'PURCHASED'
+        ORDER BY "identityKey", "recordedAt" DESC, id DESC
+      ), calculated AS (
+        SELECT state.id, state."ingredientId", state.name, state."categoryName", state.kind,
+          state."recordedAt",
+          CASE WHEN state."categoryName" IN ('蔬菜', '水果', '鲜肉', '鲜鱼', '豆制品', '鲜奶')
+            OR state."categoryCode" IN ('PRODUCE', 'VEGETABLES', 'FRUIT', 'FRESH_MEAT', 'FRESH_FISH', 'TOFU', 'FRESH_MILK')
+            THEN 7 ELSE 15 END AS "windowDays",
+          CASE WHEN CURRENT_TIMESTAMP - state."recordedAt" >=
+            (CASE WHEN state."categoryName" IN ('蔬菜', '水果', '鲜肉', '鲜鱼', '豆制品', '鲜奶')
+              OR state."categoryCode" IN ('PRODUCE', 'VEGETABLES', 'FRUIT', 'FRESH_MEAT', 'FRESH_FISH', 'TOFU', 'FRESH_MILK')
+              THEN INTERVAL '7 days' ELSE INTERVAL '15 days' END)
+            THEN 'UNCONFIRMED'
+            WHEN state.kind = 'MANUAL_EMPTY' THEN 'EMPTY' ELSE 'PRESENT' END AS presence,
+          CURRENT_TIMESTAMP - state."recordedAt" >= INTERVAL '30 days' AS archived,
+          COALESCE(CURRENT_TIMESTAMP - purchase."recordedAt" < INTERVAL '3 days', FALSE) AS "recentlyPurchased"
+        FROM latest_state state
+        LEFT JOIN latest_purchase purchase USING ("identityKey")
+      )
+      SELECT calculated.id, calculated."ingredientId", calculated.name, calculated."categoryName",
+        calculated.kind,
+        CASE WHEN calculated.presence = 'UNCONFIRMED' THEN '没有近期记录'
+          WHEN calculated.presence = 'EMPTY' THEN '已标记没有'
+          WHEN calculated."recentlyPurchased" THEN '最近买过' ELSE '可能还有' END AS label,
+        calculated."recordedAt", calculated."windowDays", calculated.presence,
+        calculated.archived, calculated."recentlyPurchased"
+      FROM calculated
+    `;
+  }
+
+  async markFridgeTracePresent(
     userId: UUID,
     operationId: OperationId,
-    name: string,
     ingredientId: UUID | null,
-    quantityText?: string | null,
-    exactQuantity?: string | null,
-    exactUnitId?: UUID | null,
-    expireAt?: string | null,
-    note?: string | null
-  ) {
-    const normalized = this.normalizePantryFields(name, quantityText, note);
-    const normalizedExpireAt = this.normalizeExpireAt(expireAt);
-    const requestHash = JSON.stringify({
-      ...normalized,
-      ingredientId,
-      exactQuantity: exactQuantity ?? null,
-      exactUnitId: exactUnitId ?? null,
-      expireAt: normalizedExpireAt?.toISOString() ?? null
-    });
+    name: string,
+    categoryName: string | null
+  ): Promise<FridgeTraceSummary> {
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new BadRequestException("食材名称不能为空");
+    const requestHash = JSON.stringify({ ingredientId, name: normalizedName, categoryName: categoryName?.trim() || null });
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<FridgeItemSummary>(tx, operationId, "fridge:create", userId, null, requestHash);
+      const repeated = await getIdempotentResult<FridgeTraceSummary>(tx, operationId, "fridge-trace:present", userId, null, requestHash);
       if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge:create", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, sizeOfJson(normalized));
-      const fridgeInput = await this.buildFridgeWriteInput(
-        tx,
+      await startIdempotentOperation(tx, operationId, "fridge-trace:present", userId, null, requestHash);
+      const categories = await this.loadFridgeCategoryMap(tx, userId, [ingredientId]);
+      const category = ingredientId === null ? undefined : categories.get(ingredientId);
+      const safeIngredientId = category ? ingredientId : null;
+      const created = await tx.fridgeTrace.create({
+        data: {
+          userId,
+          ingredientId: safeIngredientId,
+          kind: "MANUAL_PRESENT",
+          name: normalizedName,
+          categoryName: category?.name ?? null,
+          categoryCode: category?.code ?? null
+        }
+      });
+      await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: safeIngredientId, name: normalizedName }]);
+      const result = this.toFridgeTraceSummary(created);
+      await completeIdempotentOperation(tx, operationId, "fridge-trace:present", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async markFridgeTracesPresent(
+    userId: UUID,
+    operationId: OperationId,
+    items: Array<{ ingredientId: UUID | null; name: string; categoryName: string | null }>
+  ): Promise<FridgeTraceSummary[]> {
+    const uniqueItems = new Map<string, { ingredientId: UUID | null; name: string; categoryName: string | null }>();
+    for (const item of items) {
+      const name = item.name.trim();
+      if (!name) throw new BadRequestException("食材名称不能为空");
+      const normalized = { ingredientId: item.ingredientId, name, categoryName: item.categoryName?.trim() || null };
+      const key = item.ingredientId === null ? `name:${normalizeNameKey(name)}` : `ingredient:${item.ingredientId}`;
+      if (!uniqueItems.has(key)) uniqueItems.set(key, normalized);
+    }
+    const normalizedItems = [...uniqueItems.values()];
+    if (!normalizedItems.length || normalizedItems.length > 100) {
+      throw new BadRequestException("一次需要确认 1 到 100 项食材");
+    }
+    const requestHash = JSON.stringify(normalizedItems);
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<FridgeTraceSummary[]>(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash);
+      const categories = await this.loadFridgeCategoryMap(tx, userId, normalizedItems.map(item => item.ingredientId));
+      const result: FridgeTraceSummary[] = [];
+      for (const item of normalizedItems) {
+        const category = item.ingredientId === null ? undefined : categories.get(item.ingredientId);
+        const safeIngredientId = category ? item.ingredientId : null;
+        const created = await tx.fridgeTrace.create({
+          data: {
+            userId,
+            ingredientId: safeIngredientId,
+            kind: "MANUAL_PRESENT",
+            name: item.name,
+            categoryName: category?.name ?? null,
+            categoryCode: category?.code ?? null
+          }
+        });
+        result.push(this.toFridgeTraceSummary(created));
+      }
+      await this.compactFridgeTraceHistory(tx, userId, normalizedItems.map(item => ({
+        ...item,
+        ingredientId: item.ingredientId !== null && categories.has(item.ingredientId) ? item.ingredientId : null
+      })));
+      await completeIdempotentOperation(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  async markFridgeTraceEmpty(
+    userId: UUID,
+    operationId: OperationId,
+    ingredientId: UUID | null,
+    name: string,
+    categoryName: string | null = null
+  ): Promise<FridgeTraceSummary> {
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new BadRequestException("食材名称不能为空");
+    const requestHash = JSON.stringify({ ingredientId, name: normalizedName, categoryName: categoryName?.trim() || null });
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getIdempotentResult<FridgeTraceSummary>(tx, operationId, "fridge-trace:empty", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "fridge-trace:empty", userId, null, requestHash);
+      const categories = await this.loadFridgeCategoryMap(tx, userId, [ingredientId]);
+      const category = ingredientId === null ? undefined : categories.get(ingredientId);
+      const safeIngredientId = category ? ingredientId : null;
+      const created = await tx.fridgeTrace.create({
+        data: {
+          userId,
+          ingredientId: safeIngredientId,
+          kind: "MANUAL_EMPTY",
+          name: normalizedName,
+          categoryName: category?.name ?? null,
+          categoryCode: category?.code ?? null
+        }
+      });
+      await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: safeIngredientId, name: normalizedName }]);
+      const result = this.toFridgeTraceSummary(created);
+      await completeIdempotentOperation(tx, operationId, "fridge-trace:empty", userId, null, requestHash, result);
+      return result;
+    });
+  }
+
+  private async loadFridgeCategoryMap(tx: Prisma.TransactionClient, userId: UUID, ingredientIds: Array<UUID | null>) {
+    const ids = [...new Set(ingredientIds.filter((id): id is UUID => id !== null))];
+    if (!ids.length) return new Map<UUID, { name: string; code: string }>();
+    const ingredients = await tx.ingredient.findMany({
+      where: { id: { in: ids }, status: "ACTIVE", OR: [{ ownerId: null }, { ownerId: userId }] },
+      select: { id: true, category: { select: { name: true, code: true } } }
+    });
+    return new Map(ingredients.map(ingredient => [ingredient.id, ingredient.category]));
+  }
+
+  private async compactFridgeTraceHistory(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    items: Array<{ ingredientId: UUID | null; name: string }>
+  ) {
+    const ingredientIds = [...new Set(items.flatMap(item => item.ingredientId === null ? [] : [item.ingredientId]))];
+    const names = [...new Set(items.filter(item => item.ingredientId === null).map(item => item.name.trim()))];
+    const identities: Prisma.FridgeTraceWhereInput[] = [
+      ...(ingredientIds.length ? [{ ingredientId: { in: ingredientIds } }] : []),
+      ...(names.length ? [{ ingredientId: null, name: { in: names, mode: "insensitive" as const } }] : [])
+    ];
+    if (!identities.length) return;
+
+    const traces = await tx.fridgeTrace.findMany({
+      where: { userId, OR: identities },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true, ingredientId: true, name: true, kind: true }
+    });
+    const grouped = new Map<string, typeof traces>();
+    for (const trace of traces) {
+      const key = trace.ingredientId === null ? `name:${normalizeNameKey(trace.name)}` : `ingredient:${trace.ingredientId}`;
+      const bucket = grouped.get(key) ?? [];
+      bucket.push(trace);
+      grouped.set(key, bucket);
+    }
+
+    const removeIds: number[] = [];
+    for (const bucket of grouped.values()) {
+      const keepIds = new Set([
+        bucket.find(trace => trace.kind !== "USED")?.id,
+        bucket.find(trace => trace.kind === "PURCHASED")?.id,
+        bucket.find(trace => trace.kind === "USED")?.id
+      ].filter((id): id is number => id !== undefined));
+      for (const trace of bucket) {
+        if (!keepIds.has(trace.id)) removeIds.push(trace.id);
+      }
+    }
+    if (removeIds.length) {
+      await tx.fridgeTrace.deleteMany({ where: { userId, id: { in: removeIds } } });
+    }
+  }
+
+  private toFridgeTraceSummary(trace: {
+    id: UUID;
+    ingredientId: UUID | null;
+    name: string;
+    categoryName: string | null;
+    categoryCode?: string | null;
+    kind: FridgeTraceKind;
+    createdAt: Date;
+  }): FridgeTraceSummary {
+    return {
+      id: trace.id,
+      ingredientId: trace.ingredientId,
+      name: trace.name,
+      categoryName: trace.categoryName,
+      kind: trace.kind,
+      label: fridgeTraceLabel(trace.kind),
+      recordedAt: toIsoDate(trace.createdAt),
+      windowDays: fridgeTraceWindowDays(trace.categoryName, trace.categoryCode ?? null) as 7 | 15
+    };
+  }
+
+  private async recordPurchaseTrace(tx: Prisma.TransactionClient, userId: UUID, itemId: UUID, createdAt = new Date()) {
+    const item = await tx.shoppingItem.findFirst({
+      where: { id: itemId, userId },
+      select: {
+        id: true,
+        ingredientId: true,
+        name: true,
+        ingredient: { select: { ownerId: true, status: true, category: { select: { name: true, code: true } } } }
+      }
+    });
+    if (!item) throw new NotFoundException("购物项不存在");
+    await tx.fridgeTrace.deleteMany({ where: { sourceShoppingItemId: item.id, kind: "PURCHASED" } });
+    const ingredientIsVisible = item.ingredient && item.ingredient.status === "ACTIVE"
+      && (item.ingredient.ownerId === null || item.ingredient.ownerId === userId);
+    const ingredientId = ingredientIsVisible ? item.ingredientId : null;
+    const created = await tx.fridgeTrace.create({
+      data: {
         userId,
         ingredientId,
-        normalized.name,
-        normalized.quantityText,
-        exactQuantity,
-        exactUnitId,
-        normalizedExpireAt,
-        normalized.note
-      );
-
-      const item = await tx.fridgeItem.create({
-        data: {
-          userId,
-          ...fridgeInput
-        },
-        include: {
-          exactUnit: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      });
-      await upsertStorageLedger(tx, userId, "FRIDGE", item.id, sizeOfJson(item));
-      const result = await this.loadFridgeItemSummaryFromTx(tx, userId, item.id);
-      await completeIdempotentOperation(tx, operationId, "fridge:create", userId, null, requestHash, result);
-      return result;
+        sourceShoppingItemId: item.id,
+        kind: "PURCHASED",
+        name: item.name,
+        categoryName: ingredientIsVisible ? item.ingredient?.category.name ?? null : null,
+        categoryCode: ingredientIsVisible ? item.ingredient?.category.code ?? null : null,
+        createdAt
+      }
     });
+    await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId, name: item.name }]);
+    return created;
   }
 
-  async sendFridgeExpiryReminder(userId: UUID, itemId: UUID, operationId: OperationId) {
-    const requestHash = `${itemId}:expiry-reminder`;
-    const normalizedRequestHash = hashIdempotencyRequest(requestHash);
-    const duplicateWindowStart = new Date(Date.now() - fridgeExpiryReminderDuplicateWindowMs);
-    let startedRecordId = 0;
-    let item: { name: string; expireAt: Date | null; createdAt: Date; available: boolean } | null = null;
-
-    const repeated = await this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<{ sentAt: string }>(tx, operationId, "fridge:expiry-reminder", userId, null, requestHash);
-      if (repeated) return repeated;
-      const [processing, recentSuccess] = await Promise.all([
-        tx.idempotencyRecord.findFirst({
-          where: {
-            operationType: "fridge:expiry-reminder",
-            userId,
-            diningGroupId: null,
-            requestHash: normalizedRequestHash,
-            status: "PROCESSING"
-          },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-        }),
-        tx.idempotencyRecord.findFirst({
-          where: {
-            operationType: "fridge:expiry-reminder",
-            userId,
-            diningGroupId: null,
-            requestHash: normalizedRequestHash,
-            status: "SUCCEEDED",
-            createdAt: {
-              gte: duplicateWindowStart
-            }
-          },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-        })
-      ]);
-      if (processing) {
-        throw new ConflictException("提醒发送中，请稍后重试");
-      }
-      if (recentSuccess?.resultJson) {
-        return fromJson<{ sentAt: string }>(recentSuccess.resultJson);
-      }
-      const existing = await tx.idempotencyRecord.findFirst({
-        where: {
-          operationType: "fridge:expiry-reminder",
-          userId,
-          diningGroupId: null,
-          requestHash: normalizedRequestHash,
-          createdAt: {
-            gte: duplicateWindowStart
-          }
-        },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-      });
-      if (existing?.status === "SUCCEEDED" && existing.resultJson) return fromJson<{ sentAt: string }>(existing.resultJson);
-      const started = await startIdempotentOperation(tx, operationId, "fridge:expiry-reminder", userId, null, requestHash);
-      startedRecordId = started.id;
-      const settings = await tx.userNotificationSettings.findUnique({
-        where: { userId },
-        select: {
-          fridgeDays: true
-        }
-      });
-      const cutoff = this.resolveFridgeExpireCutoff(settings?.fridgeDays ?? 3);
-
-      item = await tx.fridgeItem.findFirst({
-        where: {
-          id: itemId,
-          userId
-        },
-        select: {
-          name: true,
-          expireAt: true,
-          createdAt: true,
-          available: true
-        }
-      });
-      if (!item) {
-        throw new NotFoundException("食材不存在");
-      }
-      if (!item.available) {
-        throw new BadRequestException("当前食材已不在可用库存中");
-      }
-      if (!item.expireAt) {
-        throw new BadRequestException("当前食材未设置到期时间");
-      }
-      if (item.expireAt.getTime() > cutoff.getTime()) {
-        throw new BadRequestException("当前食材还未到提醒时间");
-      }
-      return null;
-    });
-
-    if (repeated) {
-      return repeated;
-    }
-
-    try {
-      const result = await this.wechatSubscribeService.sendFridgeExpiryReminder({
-        userId,
-        ingredientName: item!.name,
-        expireAt: item!.expireAt!.toISOString(),
-        daysLeft: this.calculateDaySpan(new Date(), item!.expireAt!),
-        storedDays: this.calculateDaySpan(item!.createdAt, new Date()),
-        tipText: "记得优先安排，减少浪费",
-        pagePath: "pages_pantry/index/index"
-      });
-
-      await this.prisma.$transaction(async tx => {
-        await completeIdempotentOperation(tx, operationId, "fridge:expiry-reminder", userId, null, requestHash, result);
-      });
-
-      return result;
-    } catch (error) {
-      if (startedRecordId) {
-        await this.prisma.$transaction(async tx => {
-          await tx.idempotencyRecord.deleteMany({
-            where: {
-              id: startedRecordId,
-              status: "PROCESSING"
-            }
-          });
-        });
-      }
-      throw error;
-    }
-  }
-
-  async updateFridgeItem(
-    userId: UUID,
-    itemId: UUID,
-    operationId: OperationId,
-    available?: boolean,
-    quantityText?: string | null,
-    exactQuantity?: string | null,
-    exactUnitId?: UUID | null,
-    expireAt?: string | null,
-    note?: string | null
-  ) {
-    const normalizedQuantityText = quantityText?.trim() || null;
-    const normalizedNote = note?.trim() || null;
-    const normalizedExpireAt = this.normalizeExpireAt(expireAt);
-    const requestHash = `${itemId}:${JSON.stringify({
-      quantityText: normalizedQuantityText,
-      exactQuantity: exactQuantity ?? null,
-      exactUnitId: exactUnitId ?? null,
-      expireAt: normalizedExpireAt?.toISOString() ?? null,
-      note: normalizedNote,
-      available: available ?? null
-    })}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<FridgeItemSummary>(tx, operationId, "fridge:update", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge:update", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, 0);
-
-      const item = await tx.fridgeItem.findUnique({ where: { id: itemId } });
-      if (!item || item.userId !== userId) throw new NotFoundException("食材不存在");
-      if (available === false && exactQuantity) {
-        throw new BadRequestException("标记用完时不能保留精确数量");
-      }
-      const correction = available === undefined || exactQuantity
-        ? null
-        : buildFridgeCorrectionPatch(available ? "ROUGH" : "EMPTY");
-      const fridgeInput = await this.buildFridgeWriteInput(
-        tx,
-        userId,
-        item.ingredientId,
-        item.name,
-        normalizedQuantityText,
-        exactQuantity,
-        exactUnitId,
-        normalizedExpireAt,
-        normalizedNote
-      );
-
-      const next = await tx.fridgeItem.update({
-        where: { id: itemId },
-        data: {
-          ...fridgeInput,
-          ...(available === undefined && exactQuantity
-            ? { available: true, consumedAt: null }
-            : available === undefined
-              ? {}
-              : correction
-                ? { ...correction, consumedAt: available ? null : new Date() }
-                : { available, consumedAt: available ? null : new Date() })
-        },
-        include: {
-          exactUnit: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      });
-      await upsertStorageLedger(tx, userId, "FRIDGE", next.id, sizeOfJson(next));
-      const result = await this.loadFridgeItemSummaryFromTx(tx, userId, next.id);
-      await completeIdempotentOperation(tx, operationId, "fridge:update", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async updateFridgeItems(
-    userId: UUID,
-    itemIds: UUID[],
-    operationId: OperationId,
-    available?: boolean,
-    quantityText?: string | null,
-    exactQuantity?: string | null,
-    exactUnitId?: UUID | null
-  ): Promise<FridgeItemSummary[]> {
-    const uniqueItemIds = Array.from(new Set(itemIds));
-    if (!uniqueItemIds.length) throw new BadRequestException("请选择至少一个库存批次");
-    const normalizedQuantityText = quantityText?.trim() || null;
-    const requestHash = JSON.stringify({
-      itemIds: [...uniqueItemIds].sort((left, right) => left - right),
-      quantityText: normalizedQuantityText,
-      exactQuantity: exactQuantity ?? null,
-      exactUnitId: exactUnitId ?? null,
-      available: available ?? null
-    });
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<FridgeItemSummary[]>(tx, operationId, "fridge:update-many", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge:update-many", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, 0);
-      if (available === false && exactQuantity) {
-        throw new BadRequestException("标记用完时不能保留精确数量");
-      }
-      const items = await tx.fridgeItem.findMany({
-        where: { id: { in: uniqueItemIds }, userId },
-        orderBy: { id: "asc" }
-      });
-      if (items.length !== uniqueItemIds.length) throw new NotFoundException("食材不存在");
-      const correction = available === undefined || exactQuantity
-        ? null
-        : buildFridgeCorrectionPatch(available ? "ROUGH" : "EMPTY");
-      for (const item of items) {
-        const fridgeInput = await this.buildFridgeWriteInput(
-          tx,
-          userId,
-          item.ingredientId,
-          item.name,
-          normalizedQuantityText,
-          exactQuantity,
-          exactUnitId,
-          item.expireAt,
-          item.note
-        );
-        const next = await tx.fridgeItem.update({
-          where: { id: item.id },
-          data: {
-            ...fridgeInput,
-            ...(available === undefined && exactQuantity
-              ? { available: true, consumedAt: null }
-              : available === undefined
-                ? {}
-                : correction
-                  ? { ...correction, consumedAt: available ? null : new Date() }
-                  : { available, consumedAt: available ? null : new Date() })
-          }
-        });
-        await upsertStorageLedger(tx, userId, "FRIDGE", next.id, sizeOfJson(next));
-      }
-      const result = await Promise.all(uniqueItemIds.map(itemId => this.loadFridgeItemSummaryFromTx(tx, userId, itemId)));
-      await completeIdempotentOperation(tx, operationId, "fridge:update-many", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async consumeFridgeStock(
-    userId: UUID,
-    operationId: OperationId,
-    ingredientId: UUID,
-    exactQuantity: string,
-    exactUnitId: UUID
-  ): Promise<FridgeConsumeResponse> {
-    const requestHash = JSON.stringify({ ingredientId, exactQuantity, exactUnitId });
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<FridgeConsumeResponse>(tx, operationId, "fridge:consume-stock", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "fridge:consume-stock", userId, null, requestHash);
-
-      const rows = await this.loadInventoryBatchRows(tx, userId, true);
-      const matchedRows = rows.filter(row => row.ingredientId === ingredientId);
-      const candidates: InventoryConsumptionCandidate[] = matchedRows.map(row => ({
-        id: row.id,
-        exactQuantity: row.exactQuantity,
-        exactUnitId: row.exactUnitId,
-        reservedQuantity: row.reservedQuantity,
-        available: row.available,
-        expireAt: row.expireAt ? new Date(row.expireAt) : null,
-        createdAt: new Date(row.createdAt),
-        version: row.version
-      }));
-      const plan = planInventoryConsumption(candidates, exactQuantity, exactUnitId);
-      const consumedAt = new Date();
-
-      for (const allocation of plan.allocations) {
-        const current = await tx.fridgeItem.findFirst({
-          where: {
-            id: allocation.batchId,
-            userId,
-            available: true
-          },
-          select: {
-            id: true,
-            exactQuantity: true,
-            exactUnitId: true,
-            version: true
-          }
-        });
-        if (!current || current.exactQuantity === null || current.exactUnitId !== exactUnitId) {
-          throw new ConflictException("库存批次已变化，请刷新后重试");
-        }
-        const nextQuantity = new Prisma.Decimal(current.exactQuantity).sub(allocation.quantity);
-        if (nextQuantity.lt(0)) throw new ConflictException("库存批次已变化，请刷新后重试");
-        const updated = await tx.fridgeItem.updateMany({
-          where: {
-            id: current.id,
-            userId,
-            available: true,
-            version: current.version
-          },
-          data: {
-            exactQuantity: nextQuantity,
-            quantityText: this.formatExactQuantityText(nextQuantity, matchedRows.find(row => row.id === current.id)?.exactUnitName ?? ""),
-            available: nextQuantity.gt(0),
-            consumedAt: nextQuantity.gt(0) ? null : consumedAt,
-            version: { increment: 1 }
-          }
-        });
-        if (updated.count !== 1) throw new ConflictException("库存批次已变化，请刷新后重试");
-      }
-
-      const updatedRows = await this.loadInventoryBatchRows(tx, userId, true);
-      const summary = groupFridgeBatches(updatedRows).find(item => item.ingredientId === ingredientId);
-      const previousRows = rows.filter(row => row.ingredientId === ingredientId);
-      if (!summary && !previousRows.length) throw new NotFoundException("食材不存在");
-      const result: FridgeConsumeResponse = {
-        detail: this.toFridgeIngredientDetail(summary ?? buildEmptyFridgeIngredientSummary(previousRows)),
-        allocations: plan.allocations
-      };
-      await completeIdempotentOperation(tx, operationId, "fridge:consume-stock", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async completeMealCooking(
+  async completeMealCookingTrace(
     userId: UUID,
     planItemId: UUID,
     operationId: OperationId,
     markWholeTable = false
-  ): Promise<CookingConsumptionResponse> {
+  ): Promise<CookingTraceResponse> {
     const requestHash = JSON.stringify({ planItemId, markWholeTable });
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<StoredCookingConsumptionResult>(
-        tx,
-        operationId,
-        "meal:cooking-complete",
-        userId,
-        null,
-        requestHash
-      );
-      if (repeated) return this.toCookingConsumptionResponse(repeated);
-      await startIdempotentOperation(tx, operationId, "meal:cooking-complete", userId, null, requestHash);
+      const repeated = await getIdempotentResult<CookingTraceResponse>(tx, operationId, "meal:cooking-trace", userId, null, requestHash);
+      if (repeated) return repeated;
+      await startIdempotentOperation(tx, operationId, "meal:cooking-trace", userId, null, requestHash);
       await tx.$queryRaw`SELECT "id" FROM "meal_plan_items" WHERE "id" = ${planItemId} FOR UPDATE`;
-
       const plan = await tx.mealPlanItem.findUnique({
         where: { id: planItemId },
         select: {
           id: true,
           userId: true,
+          status: true,
           diningEvent: {
             select: {
-              id: true,
-              participants: {
-                where: { status: "ACCEPTED" },
-                select: { id: true, userId: true }
-              },
-              menuItems: {
-                orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-                select: {
-                  recipeVersionId: true,
-                  cookUserId: true
-                }
-              }
+              participants: { where: { status: "ACCEPTED" }, select: { userId: true } },
+              menuItems: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { recipeVersionId: true, cookUserId: true } }
             }
           },
           dishes: {
             orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-            select: {
-              recipeVersionId: true,
-              recipeVersion: {
-                select: {
-                  id: true,
-                  name: true,
-                  baseServings: true,
-                  ingredientsJson: true
-                }
-              }
-            }
+            select: { recipeVersionId: true, recipeVersion: { select: { id: true, name: true, ingredientsJson: true } } }
           }
         }
       });
       if (!plan) throw new NotFoundException("计划不存在");
-      const isEventParticipant = Boolean(plan.diningEvent?.participants.some(item => item.userId === userId));
-      if (plan.userId !== userId && !isEventParticipant) {
-        throw new NotFoundException("计划不存在");
-      }
-      const previousCompletion = await tx.auditEvent.findFirst({
-        where: {
-          actorType: "USER",
-          actorUserId: userId,
-          action: "MEAL_COOKING_COMPLETED",
-          objectType: "MEAL_PLAN_ITEM",
-          objectId: planItemId
-        },
-        select: { id: true }
-      });
-      if (previousCompletion) throw new ConflictException("本次餐次已完成库存扣减");
+      if (plan.status === "CANCELLED") throw new ConflictException("已取消计划不能记录做饭食材");
+      const isParticipant = Boolean(plan.diningEvent?.participants.some(item => item.userId === userId));
+      if (plan.userId !== userId && !isParticipant) throw new NotFoundException("计划不存在");
 
       const eventMenu = plan.diningEvent?.menuItems ?? [];
       const assignedVersionIds = eventMenu.filter(item => item.cookUserId === userId).map(item => item.recipeVersionId);
@@ -954,304 +598,65 @@ export class PantryService {
       const missingVersions = missingVersionIds.length
         ? await tx.recipeContentVersion.findMany({
             where: { id: { in: Array.from(new Set(missingVersionIds)) } },
-            select: { id: true, name: true, baseServings: true, ingredientsJson: true }
+            select: { id: true, name: true, ingredientsJson: true }
           })
         : [];
-      const recipeVersions = [
-        ...selectedDishes.map(item => item.recipeVersion),
-        ...missingVersions
-      ];
-      const versionMap = new Map(recipeVersions.map(item => [item.id, item]));
-      const servings = plan.diningEvent ? plan.diningEvent.participants.length + 1 : 1;
-      const recipeScales = Array.from(new Map(recipeVersions.map(version => [version.id, {
-        recipeVersionId: version.id,
-        baseServings: version.baseServings,
-        servings
-      }])).values());
-      const lines = selectedVersionIds.flatMap(versionId => {
-        const version = versionMap.get(versionId);
-        if (!version) throw new NotFoundException("菜谱版本不存在");
-        const content = fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson);
-        return content.map(item => ({
-          ingredientKey: String(item.ingredientId),
-          ingredientId: item.ingredientId,
-          ingredientName: item.ingredientName,
-          unitId: item.amount.kind === "EXACT" ? item.amount.unitId : 0,
-          quantity: item.amount.kind === "EXACT" ? scaleCookingQuantity(item.amount.quantity, version.baseServings, servings) : "0",
-          recipeTitle: version.name,
-          recipeVersionId: version.id,
-          precision: item.amount.kind === "EXACT" ? "EXACT" as const : "FUZZY" as const
-        }));
-      });
-      const consumption = buildCookingConsumptionPlan(lines);
-      const inventoryRows = await this.loadInventoryBatchRows(tx, userId, true);
-      const allocations: CookingAllocationRecord[] = [];
-      let updatedCount = 0;
-      let unknownCount = 0;
-      let shortageCount = 0;
-
-      for (const line of consumption.exactLines) {
-        const matchedRows = inventoryRows.filter(row => row.ingredientId === line.ingredientId);
-        const candidates: InventoryConsumptionCandidate[] = matchedRows.map(row => ({
-          id: row.id,
-          exactQuantity: row.exactQuantity,
-          exactUnitId: row.exactUnitId,
-          reservedQuantity: row.reservedQuantity,
-          available: row.available,
-          expireAt: row.expireAt ? new Date(row.expireAt) : null,
-          createdAt: new Date(row.createdAt),
-          version: row.version
-        }));
-        const plan = planBestEffortInventoryConsumption(candidates, line.quantity, line.unitId);
-        const hasComparableStock = candidates.some(candidate => candidate.available && candidate.exactUnitId === line.unitId && candidate.exactQuantity !== null);
-        if (!hasComparableStock) {
-          const roughRow = matchedRows.find(row => row.available && row.exactQuantity === null && row.exactUnitId === null);
-          if (roughRow) {
-            const current = await tx.fridgeItem.findFirst({
-              where: { id: roughRow.id, userId, available: true },
-              select: {
-                id: true,
-                quantityText: true,
-                exactQuantity: true,
-                exactUnitId: true,
-                available: true,
-                consumedAt: true,
-                version: true
-              }
-            });
-            if (!current || current.exactQuantity !== null || current.exactUnitId !== null) {
-              throw new ConflictException("库存批次已变化，请刷新后重试");
-            }
-            const updated = await tx.fridgeItem.updateMany({
-              where: { id: current.id, userId, available: true, version: current.version },
-              data: {
-                quantityText: "本次使用过，余量未知",
-                version: { increment: 1 }
-              }
-            });
-            if (updated.count !== 1) throw new ConflictException("库存批次已变化，请刷新后重试");
-            allocations.push({
-              batchId: current.id,
-              mode: "ROUGH",
-              quantity: line.quantity,
-              unitId: line.unitId,
-              beforeQuantityText: current.quantityText,
-              beforeQuantity: "0",
-              beforeExactUnitId: current.exactUnitId,
-              beforeAvailable: current.available,
-              beforeConsumedAt: current.consumedAt?.toISOString() ?? null,
-              afterVersion: current.version + 1
-            });
-            updatedCount += 1;
-            unknownCount += 1;
-          } else if (matchedRows.length) {
-            unknownCount += 1;
-          } else {
-            shortageCount += 1;
-          }
-          continue;
-        }
-        if (new Prisma.Decimal(plan.unfulfilledQuantity).gt(0)) shortageCount += 1;
-        if (!plan.allocations.length) continue;
-
-        for (const allocation of plan.allocations) {
-          const current = await tx.fridgeItem.findFirst({
-            where: { id: allocation.batchId, userId, available: true },
-            select: {
-              id: true,
-              quantityText: true,
-              exactQuantity: true,
-              exactUnitId: true,
-              available: true,
-              consumedAt: true,
-              version: true,
-              exactUnit: { select: { name: true } }
-            }
-          });
-          if (!current || current.exactQuantity === null || current.exactUnitId !== line.unitId) {
-            throw new ConflictException("库存批次已变化，请刷新后重试");
-          }
-          const nextQuantity = new Prisma.Decimal(current.exactQuantity).sub(allocation.quantity);
-          if (nextQuantity.lt(0)) throw new ConflictException("库存批次已变化，请刷新后重试");
-          const nextAvailable = nextQuantity.gt(0);
-          const updated = await tx.fridgeItem.updateMany({
-            where: { id: current.id, userId, available: true, version: current.version },
-            data: {
-              exactQuantity: nextQuantity,
-              quantityText: this.formatExactQuantityText(nextQuantity, current.exactUnit?.name ?? ""),
-              available: nextAvailable,
-              consumedAt: nextAvailable ? null : new Date(),
-              version: { increment: 1 }
-            }
-          });
-          if (updated.count !== 1) throw new ConflictException("库存批次已变化，请刷新后重试");
-          allocations.push({
-            batchId: current.id,
-            mode: "EXACT",
-            quantity: allocation.quantity,
-            unitId: allocation.unitId,
-            beforeQuantityText: current.quantityText,
-            beforeQuantity: current.exactQuantity.toString(),
-            beforeAvailable: current.available,
-            beforeExactUnitId: current.exactUnitId,
-            beforeConsumedAt: current.consumedAt?.toISOString() ?? null,
-            afterVersion: current.version + 1
+      const versions = [...selectedDishes.map(item => item.recipeVersion), ...missingVersions];
+      const seen = new Set<string>();
+      const facts: Array<{
+        userId: UUID;
+        planId: UUID;
+        ingredientId: UUID | null;
+        name: string;
+        categoryCode: string | null;
+        kind: "USED";
+      }> = [];
+      for (const version of versions) {
+        const ingredients = fromJson<RecipeContentSnapshot["ingredients"]>(version.ingredientsJson);
+        for (const ingredient of ingredients) {
+          const key = ingredient.ingredientId === null ? `name:${normalizeNameKey(ingredient.ingredientName)}` : `ingredient:${ingredient.ingredientId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          facts.push({
+            userId,
+            planId: planItemId,
+            ingredientId: ingredient.ingredientId,
+            name: ingredient.ingredientName.trim(),
+            categoryCode: ingredient.categoryCode ?? null,
+            kind: "USED"
           });
         }
-        updatedCount += 1;
       }
-
-      const summary = buildInventoryUsageSummary({
-        updatedCount,
-        unknownCount,
-        shortageCount,
-        skippedFuzzyCount: consumption.skippedFuzzySources.length
-      });
-      const result: CookingConsumptionResponse = {
+      const createdAt = new Date();
+      if (facts.length) {
+        const categories = await this.loadFridgeCategoryMap(tx, userId, facts.map(fact => fact.ingredientId));
+        for (const fact of facts) {
+          const category = fact.ingredientId === null ? undefined : categories.get(fact.ingredientId);
+          if (!category) fact.ingredientId = null;
+          else fact.categoryCode = category.code;
+        }
+        await tx.fridgeTrace.createMany({
+          data: facts.map(fact => ({
+            userId: fact.userId,
+            sourceMealPlanItemId: fact.planId,
+            ingredientId: fact.ingredientId,
+            kind: fact.kind,
+            name: fact.name,
+            categoryCode: fact.categoryCode,
+            createdAt
+          }))
+        });
+        await this.compactFridgeTraceHistory(tx, userId, facts.map(fact => ({ ingredientId: fact.ingredientId, name: fact.name })));
+      }
+      const result: CookingTraceResponse = {
         planItemId,
-        consumptionOperationId: operationId,
-        completedAt: new Date().toISOString(),
-        ...summary,
-        canUndo: true
+        recordedAt: createdAt.toISOString(),
+        usedCount: facts.length,
+        message: facts.length ? "已记录用过，余量未知" : "本顿没有可记录的食材"
       };
-      const stored: StoredCookingConsumptionResult = { ...result, allocations, servings, recipeScales };
-      await tx.idempotencyRecord.updateMany({
-        where: {
-          operationId,
-          operationType: "meal:cooking-complete",
-          userId,
-          diningGroupId: null,
-          requestHash: hashIdempotencyRequest(requestHash),
-          status: "PROCESSING"
-        },
-        data: {
-          status: "SUCCEEDED",
-          resultJson: stored as unknown as Prisma.InputJsonValue
-        }
-      });
-      await tx.auditEvent.create({
-        data: {
-          actorType: "USER",
-          actorUserId: userId,
-          action: "MEAL_COOKING_COMPLETED",
-          objectType: "MEAL_PLAN_ITEM",
-          objectId: planItemId,
-          payload: {
-            operationId,
-            servings,
-            recipeScales,
-            exactAllocations: allocations.filter(item => item.mode === "EXACT").map(item => ({
-              batchId: item.batchId,
-              quantity: item.quantity,
-              unitId: item.unitId
-            })),
-            roughAllocations: allocations.filter(item => item.mode === "ROUGH").map(item => ({
-              batchId: item.batchId,
-              quantity: item.quantity,
-              unitId: item.unitId
-            })),
-            exceptionSummary: {
-              unknownCount,
-              shortageCount,
-              skippedFuzzyCount: consumption.skippedFuzzySources.length
-            }
-          }
-        }
-      });
+      await completeIdempotentOperation(tx, operationId, "meal:cooking-trace", userId, null, requestHash, result);
       return result;
     });
-  }
-
-  async undoMealCooking(
-    userId: UUID,
-    planItemId: UUID,
-    operationId: OperationId,
-    consumptionOperationId: OperationId
-  ): Promise<CookingUndoResponse> {
-    const requestHash = `${planItemId}:${consumptionOperationId}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<CookingUndoResponse>(tx, operationId, "meal:cooking-undo", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "meal:cooking-undo", userId, null, requestHash);
-      const source = await tx.idempotencyRecord.findFirst({
-        where: {
-          operationId: consumptionOperationId,
-          operationType: "meal:cooking-complete",
-          userId,
-          diningGroupId: null,
-          status: "SUCCEEDED"
-        },
-        select: { resultJson: true }
-      });
-      const stored = source?.resultJson ? fromJson<StoredCookingConsumptionResult>(source.resultJson) : null;
-      if (!stored || stored.planItemId !== planItemId) throw new ConflictException("找不到可撤销的本次库存更新");
-      if (Date.now() - new Date(stored.completedAt).getTime() > 5 * 60 * 1000) {
-        throw new ConflictException("撤销窗口已结束，请到冰箱详情页手动修正");
-      }
-      for (const allocation of stored.allocations) {
-        const current = await tx.fridgeItem.findFirst({
-          where: { id: allocation.batchId, userId },
-          select: {
-            id: true,
-            version: true,
-            quantityText: true,
-            exactUnitId: true,
-            exactUnit: { select: { name: true } }
-          }
-        });
-        if (!current || current.version !== allocation.afterVersion) {
-          throw new ConflictException("冰箱数据已被后续修改，无法撤销");
-        }
-        const restoredQuantity = new Prisma.Decimal(allocation.beforeQuantity);
-        const updated = await tx.fridgeItem.updateMany({
-          where: { id: allocation.batchId, userId, version: allocation.afterVersion },
-          data: {
-            exactQuantity: allocation.mode === "ROUGH" ? null : restoredQuantity,
-            exactUnitId: allocation.beforeExactUnitId ?? (allocation.mode === "EXACT" ? allocation.unitId : null),
-            quantityText: allocation.beforeQuantityText ?? (allocation.mode === "EXACT" ? this.formatExactQuantityText(restoredQuantity, current.exactUnit?.name ?? "") : current.quantityText),
-            available: allocation.beforeAvailable,
-            consumedAt: allocation.beforeConsumedAt ? new Date(allocation.beforeConsumedAt) : null,
-            version: { increment: 1 }
-          }
-        });
-        if (updated.count !== 1) throw new ConflictException("冰箱数据已被后续修改，无法撤销");
-      }
-      const result = { undone: true, message: "已撤销本次库存更新，冰箱数据已恢复。" } satisfies CookingUndoResponse;
-      await completeIdempotentOperation(tx, operationId, "meal:cooking-undo", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  private toCookingConsumptionResponse(stored: StoredCookingConsumptionResult): CookingConsumptionResponse {
-    const { allocations: _allocations, servings: _servings, recipeScales: _recipeScales, ...result } = stored;
-    return result;
-  }
-
-  async listShopping(userId: UUID, page: number, pageSize: number, status?: string): Promise<PageResult<ShoppingItemSummary>> {
-    const normalizedPage = toPositiveInt(page, 1);
-    const normalizedPageSize = toPositiveInt(pageSize, 20);
-    const skip = (normalizedPage - 1) * normalizedPageSize;
-    const where: Prisma.ShoppingItemWhereInput = {
-      userId,
-      ...(status ? { status: normalizeShoppingStatus(status) } : {})
-    };
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.shoppingItem.findMany({
-        where,
-        orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
-        skip,
-        take: normalizedPageSize
-      }),
-      this.prisma.shoppingItem.count({ where })
-    ]);
-
-    return {
-      items: items.map(this.toShoppingItemSummary),
-      page: normalizedPage,
-      pageSize: normalizedPageSize,
-      total,
-      hasNext: skip + items.length < total
-    };
   }
 
   async getShoppingListSummary(userId: UUID): Promise<ShoppingListSummaryResponse> {
@@ -1271,7 +676,7 @@ export class PantryService {
         from (
           select
             coalesce(item.ingredient_id::text, 'none') || ':' || lower(trim(item.name)) as group_key,
-            bool_and(item.status = 'BOUGHT' or item.fridge_covered = true) as is_done
+            bool_and(item.status = 'BOUGHT') as is_done
           from shopping_items item
           inner join shopping_lists list on list.id = item.list_id
           inner join shopping_list_members member on member.list_id = list.id
@@ -1367,8 +772,7 @@ export class PantryService {
           select: {
             ingredientId: true,
             name: true,
-            status: true,
-            fridgeCovered: true
+            status: true
           }
         }
       }
@@ -1502,7 +906,6 @@ export class PantryService {
           listId,
           name: normalized.name,
           quantityText: normalized.quantityText,
-          baseQuantityText: normalized.quantityText,
           note: normalized.note,
           sourceType: "MANUAL",
           ingredientId
@@ -1572,7 +975,6 @@ export class PantryService {
             listId,
             name: ingredient.ingredientName,
             quantityText: formatRecipeAmount(ingredient.amount),
-            baseQuantityText: formatRecipeAmount(ingredient.amount),
             note: source.title,
             sourceType: itemSourceType,
             sourceKey: itemSourceKey ?? `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
@@ -1685,7 +1087,6 @@ export class PantryService {
         listId,
         name: line.name,
         quantityText: line.quantityText,
-        baseQuantityText: line.quantityText,
         note: line.note,
         sourceType: planSourceType,
         sourceKey: line.sourceKey,
@@ -1708,7 +1109,6 @@ export class PantryService {
           listId,
           name: line.name,
           quantityText: line.quantityText,
-          baseQuantityText: line.quantityText,
           note: line.note,
           sourceType: planSourceType,
           sourceKey: line.sourceKey,
@@ -1762,23 +1162,28 @@ export class PantryService {
       if (item.status === "DELETED") {
         throw new BadRequestException("当前购物项已移除");
       }
-      if (item.fridgeCovered) {
-        throw new BadRequestException("当前购物项已由库存覆盖，无需勾选采购");
-      }
+      const now = new Date();
       await tx.shoppingItem.update({
         where: { id: itemId },
         data: checked
           ? {
               status: "BOUGHT",
-              checkedAt: new Date(),
+              checkedAt: now,
               checkedByUserId: userId
             }
           : {
               status: "OPEN",
               checkedAt: null,
               checkedByUserId: null
-            }
+          }
       });
+      if (checked) {
+        await this.recordPurchaseTrace(tx, item.userId, itemId, now);
+      } else {
+        await tx.fridgeTrace.deleteMany({
+          where: { sourceShoppingItemId: itemId, kind: "PURCHASED" }
+        });
+      }
       await tx.shoppingList.update({
         where: { id: listId },
         data: {
@@ -1791,115 +1196,66 @@ export class PantryService {
     });
   }
 
-  async applyShoppingListItemFridge(
+  async updateShoppingListItemChecks(
     userId: UUID,
     listId: UUID,
-    itemId: UUID,
     operationId: OperationId,
     version: number,
-    action: "APPLY" | "UNDO" | "CONFIRM_ENOUGH"
-  ): Promise<ShoppingListItemPatchResponse> {
-    const requestHash = `${listId}:${itemId}:${version}:${action}`;
+    changes: Array<{ itemId: number; checked: boolean }>
+  ): Promise<ShoppingListDetail> {
+    const requestHash = `${listId}:${version}:${JSON.stringify(changes)}`;
     return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingListItemPatchResponse>(tx, operationId, "shopping-list:item:fridge", userId, null, requestHash);
+      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:items:check", userId, null, requestHash);
       if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping-list:item:fridge", userId, null, requestHash);
-      const access = await this.assertShoppingListOwner(tx, userId, listId);
+      await startIdempotentOperation(tx, operationId, "shopping-list:items:check", userId, null, requestHash);
+      const access = await this.assertShoppingListWritable(tx, userId, listId);
       this.assertShoppingListVersion(access.version, version);
-      if (access.status !== "ACTIVE") {
-        throw new BadRequestException("当前清单不能调整库存抵扣");
-      }
-      const item = await tx.shoppingItem.findFirst({
-        where: {
-          id: itemId,
-          listId
-        },
-        select: shoppingDetailItemSelect
+
+      const itemIds = changes.map(change => change.itemId);
+      const items = await tx.shoppingItem.findMany({
+        where: { listId, id: { in: itemIds }, status: { not: "DELETED" } },
+        select: { id: true, userId: true, status: true, checkedAt: true }
       });
-      if (!item) {
-        throw new NotFoundException("购物项不存在");
-      }
-      if (item.status !== "OPEN") {
-        throw new BadRequestException("当前购物项不能调整库存抵扣");
+      if (items.length !== itemIds.length) {
+        throw new NotFoundException("购物项不存在或已移除");
       }
 
-      if (action === "UNDO") {
-        if (!item.fridgeAppliedQuantityText) {
-          throw new BadRequestException("当前购物项还没有应用库存");
-        }
-        await this.releaseShoppingItemReservations(tx, [itemId], new Date());
+      const currentById = new Map(items.map(item => [item.id, item]));
+      const now = new Date();
+      let changed = false;
+      for (const change of changes) {
+        const item = currentById.get(change.itemId);
+        if (!item) throw new NotFoundException("购物项不存在或已移除");
+        const wasChecked = item.status === "BOUGHT" || Boolean(item.checkedAt);
+        if (wasChecked === change.checked) continue;
+
         await tx.shoppingItem.update({
-          where: { id: itemId },
-          data: {
-            quantityText: item.baseQuantityText ?? item.quantityText,
-            fridgeAppliedQuantityText: null,
-            fridgeCovered: false,
-            version: { increment: 1 }
-          }
+          where: { id: item.id },
+          data: change.checked
+            ? { status: "BOUGHT", checkedAt: now, checkedByUserId: userId }
+            : { status: "OPEN", checkedAt: null, checkedByUserId: null }
         });
-      } else {
-        if (item.fridgeAppliedQuantityText) {
-          throw new BadRequestException("当前购物项已经应用库存");
-        }
-        const activeReservationCount = await tx.shoppingItemFridgeReservation.count({
-          where: {
-            shoppingItemId: itemId,
-            releasedAt: null,
-            settledAt: null
-          }
-        });
-        if (activeReservationCount > 0) {
-          throw new BadRequestException("当前购物项已经应用库存");
-        }
-        const fridgeRows = await this.loadShoppingFridgeRows(tx, access.ownerUserId);
-        const reservationPlan = this.buildShoppingItemReservationPlan(item, fridgeRows);
-        if (action === "CONFIRM_ENOUGH") {
-          if (reservationPlan.mode !== "NEED_CONFIRM") {
-            throw new BadRequestException("当前购物项不是数量未知的库存");
-          }
-          await tx.shoppingItem.update({
-            where: { id: itemId },
-            data: {
-              ...buildUnknownInventoryConfirmationPatch(),
-              version: { increment: 1 }
-            }
-          });
+        if (change.checked) {
+          await this.recordPurchaseTrace(tx, item.userId, item.id, now);
         } else {
-          if (reservationPlan.mode === "NEED_CONFIRM") {
-            throw new BadRequestException("当前库存数量还不能自动计算，请先补齐结构化数量");
-          }
-          if (reservationPlan.mode === "NONE" || !reservationPlan.reservations.length) {
-            throw new BadRequestException("当前购物项没有可自动使用的库存");
-          }
-          await tx.shoppingItemFridgeReservation.createMany({
-            data: reservationPlan.reservations.map(current => ({
-              userId: access.ownerUserId,
-              shoppingListId: listId,
-              shoppingItemId: itemId,
-              fridgeItemId: current.fridgeItemId,
-              reservedQuantity: current.reservedQuantity,
-              reservedUnitId: current.reservedUnitId
-            }))
-          });
-          await tx.shoppingItem.update({
-            where: { id: itemId },
-            data: {
-              fridgeAppliedQuantityText: reservationPlan.appliedQuantityText,
-              fridgeCovered: reservationPlan.covered,
-              version: { increment: 1 }
-            }
+          await tx.fridgeTrace.deleteMany({
+            where: { sourceShoppingItemId: item.id, kind: "PURCHASED" }
           });
         }
+        changed = true;
       }
 
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
+      if (changed) {
+        const versionUpdate = await tx.shoppingList.updateMany({
+          where: { id: listId, version },
+          data: { version: { increment: 1 } }
+        });
+        if (versionUpdate.count !== 1) {
+          throw new ConflictException("清单内容已变化，请刷新后重试");
         }
-      });
-      const result = await this.loadShoppingListItemPatchFromTx(tx, userId, listId, itemId, null);
-      await completeIdempotentOperation(tx, operationId, "shopping-list:item:fridge", userId, null, requestHash, result);
+      }
+      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
+      await completeIdempotentOperation(tx, operationId, "shopping-list:items:check", userId, null, requestHash, result);
       return result;
     });
   }
@@ -1927,7 +1283,6 @@ export class PantryService {
       if (!item) {
         throw new NotFoundException("购物项不存在");
       }
-      await this.releaseShoppingItemReservations(tx, [itemId], new Date());
       await tx.shoppingItem.update({
         where: { id: itemId },
         data: {
@@ -1959,7 +1314,6 @@ export class PantryService {
       if (access.status !== "ACTIVE") {
         throw new BadRequestException("当前清单不能作废");
       }
-      await this.releaseShoppingListReservationsAndRestoreItems(tx, listId, new Date());
       await this.closeShoppingShareInTx(tx, listId);
       await tx.shoppingList.update({
         where: { id: listId },
@@ -1988,10 +1342,16 @@ export class PantryService {
         throw new BadRequestException("当前清单不能标记完成");
       }
       const now = new Date();
+      const items = await tx.shoppingItem.findMany({
+        where: {
+          listId,
+          status: { not: "DELETED" }
+        },
+        select: { id: true }
+      });
       await tx.shoppingItem.updateMany({
         where: {
           listId,
-          fridgeCovered: false,
           status: {
             not: "DELETED"
           }
@@ -2002,6 +1362,9 @@ export class PantryService {
           checkedByUserId: userId
         }
       });
+      for (const item of items) {
+        await this.recordPurchaseTrace(tx, userId, item.id, now);
+      }
       await tx.shoppingList.update({
         where: { id: listId },
         data: {
@@ -2099,13 +1462,10 @@ export class PantryService {
             listId: targetList.id,
             name: item.name,
             quantityText: item.quantityText,
-            baseQuantityText: item.baseQuantityText,
-            fridgeAppliedQuantityText: null,
             note: item.note,
             sourceType: item.sourceType,
             sourceKey: item.sourceKey,
             ...sourceFields,
-            fridgeCovered: false,
             status: "OPEN",
             checkedAt: null,
             checkedByUserId: null,
@@ -2161,150 +1521,6 @@ export class PantryService {
 
       const result = await this.loadShoppingListPageFromTx(tx, userId);
       await completeIdempotentOperation(tx, operationId, "shopping-list:delete", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async completeShoppingList(
-    userId: UUID,
-    listId: UUID,
-    operationId: OperationId,
-    version: number,
-    entries: CompleteShoppingListEntryRequest[]
-  ): Promise<ShoppingListDetail> {
-    const requestHash = `${listId}:${version}:${JSON.stringify(entries)}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:complete", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping-list:complete", userId, null, requestHash);
-      const access = await this.assertShoppingListOwner(tx, userId, listId);
-      this.assertShoppingListVersion(access.version, version);
-      if (access.status !== "ACTIVE") {
-        throw new BadRequestException("当前清单不能完成");
-      }
-      const checkedItems = await tx.shoppingItem.findMany({
-        where: {
-          listId,
-          status: "BOUGHT"
-        }
-      });
-      const checkedMap = new Map(checkedItems.map(item => [item.id, item]));
-      const automaticMode = entries.length === 0;
-      const completionEntries: CompleteShoppingListEntryRequest[] = automaticMode
-        ? checkedItems.map(item => ({
-            itemId: item.id,
-            store: true,
-            quantityText: null,
-            expireDays: null,
-            expireAt: null
-          }))
-        : entries;
-      for (const entry of completionEntries) {
-        const item = checkedMap.get(entry.itemId);
-        if (!item) {
-          throw new BadRequestException("入库项必须来自当前已勾选的购物项");
-        }
-      }
-      let expectedDeltaBytes = 0;
-      const now = new Date();
-      const fridgeWrites = completionEntries
-        .filter(entry => entry.store)
-        .map(entry => {
-        const item = checkedMap.get(entry.itemId)!;
-        if (automaticMode) {
-          const automatic = buildAutomaticStockIn({
-            itemId: item.id,
-            ingredientId: item.ingredientId,
-            name: item.name,
-            explicitQuantity: null,
-            explicitUnitId: null,
-            explicitUnitName: null,
-            explicitExpireAt: null
-          });
-          return {
-            item,
-            quantityText: automatic.quantityText,
-            exactQuantity: automatic.exactQuantity,
-            exactUnitId: automatic.exactUnitId,
-            expireAt: null
-          };
-        }
-        const expireAt = entry.expireAt
-          ? new Date(entry.expireAt)
-          : entry.expireDays === null || entry.expireDays === undefined
-            ? null
-            : addDays(now, entry.expireDays);
-        const customQuantityText = entry.quantityText?.trim() || null;
-        const quantities = this.resolveShoppingItemQuantities(item);
-        const storedQuantityText = customQuantityText || quantities.remainingQuantityText || quantities.requiredQuantityText;
-        const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
-        const exactQuantity = exactAmount
-          ? customQuantityText
-            ? this.parseExactQuantityByUnit(customQuantityText, exactAmount.unitName)
-            : quantities.remainingQuantityText
-              ? this.parseExactQuantityByUnit(quantities.remainingQuantityText, exactAmount.unitName)
-              : null
-          : null;
-        return {
-          item,
-          quantityText: exactAmount && exactQuantity !== null
-            ? this.formatExactQuantityText(exactQuantity, exactAmount.unitName)
-            : storedQuantityText,
-          exactQuantity,
-          exactUnitId: exactQuantity !== null ? exactAmount?.unitId ?? null : null,
-          expireAt
-        };
-      });
-      for (const write of fridgeWrites) {
-        expectedDeltaBytes += sizeOfJson({
-          userId: access.ownerUserId,
-          ingredientId: write.item.ingredientId,
-          sourceShoppingListId: listId,
-          sourceShoppingItemId: write.item.id,
-          name: write.item.name,
-          quantityText: write.quantityText,
-          exactQuantity: write.exactQuantity,
-          exactUnitId: write.exactUnitId,
-          note: write.item.note,
-          available: true,
-          expireAt: write.expireAt
-        });
-      }
-      await this.assertStorageWritable(tx, access.ownerUserId, expectedDeltaBytes);
-      await this.settleShoppingListReservations(tx, listId, now);
-      for (const write of fridgeWrites) {
-        const fridgeInput = await this.buildFridgeWriteInput(
-          tx,
-          access.ownerUserId,
-          write.item.ingredientId,
-          write.item.name,
-          write.quantityText,
-          write.exactQuantity?.toString() ?? null,
-          write.exactUnitId,
-          write.expireAt,
-          write.item.note
-        );
-        const created = await tx.fridgeItem.create({
-          data: {
-            userId: access.ownerUserId,
-            sourceShoppingListId: listId,
-            sourceShoppingItemId: write.item.id,
-            ...fridgeInput
-          }
-        });
-        await upsertStorageLedger(tx, access.ownerUserId, "FRIDGE", created.id, sizeOfJson(created));
-      }
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          status: "COMPLETED",
-          completedAt: now,
-          voidedAt: null,
-          version: { increment: 1 }
-        }
-      });
-      const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
-      await completeIdempotentOperation(tx, operationId, "shopping-list:complete", userId, null, requestHash, result);
       return result;
     });
   }
@@ -2782,371 +1998,6 @@ export class PantryService {
     });
   }
 
-  async getShoppingBoard(userId: UUID): Promise<ShoppingBoardResponse> {
-    const items = await this.prisma.shoppingItem.findMany({
-      where: {
-        userId,
-        status: "OPEN"
-      },
-      select: shoppingRowSelect,
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
-    });
-    return this.buildShoppingBoard(items.map(this.toShoppingRow));
-  }
-
-  async createShoppingItem(userId: UUID, operationId: OperationId, name: string, quantityText?: string | null, note?: string | null) {
-    const normalized = this.normalizePantryFields(name, quantityText, note);
-    const requestHash = JSON.stringify(normalized);
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingItemSummary>(tx, operationId, "shopping:create", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping:create", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, sizeOfJson(normalized));
-      const listId = await this.resolveLegacyTargetListId(tx, userId);
-      const item = await tx.shoppingItem.create({
-        data: {
-          userId,
-          listId,
-          name: normalized.name,
-          quantityText: normalized.quantityText,
-          note: normalized.note,
-          sourceType: "MANUAL"
-        }
-      });
-      await upsertStorageLedger(tx, userId, "SHOPPING", item.id, sizeOfJson(item));
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
-        }
-      });
-      const result = this.toShoppingItemSummary(item);
-      await completeIdempotentOperation(tx, operationId, "shopping:create", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async createRecipeShoppingItems(userId: UUID, operationId: OperationId, recipeId: UUID, sourceVersionId: UUID) {
-    const requestHash = `${recipeId}:${sourceVersionId}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingBoardResponse>(tx, operationId, "shopping:create:recipe", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping:create:recipe", userId, null, requestHash);
-
-      const source = await this.loadRecipeShoppingSource(tx, userId, recipeId, sourceVersionId);
-      const batchKey = String(operationId);
-      const listId = await this.resolveLegacyTargetListId(tx, userId);
-      const sizeBytes = source.ingredients.reduce(
-        (total, ingredient, index) =>
-          total +
-          sizeOfJson({
-            userId,
-            listId,
-            name: ingredient.ingredientName,
-            quantityText: formatRecipeAmount(ingredient.amount),
-            note: `${source.title} · 第${index + 1}项食材`,
-            sourceType: "RECIPE",
-            sourceKey: `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
-            sourceRecipeId: source.recipeId,
-            sourceRecipeVersionId: source.sourceVersionId,
-            sourceRecipeTitle: source.title,
-            sourceBaseServings: source.baseServings,
-            sourceBatchKey: batchKey,
-            sourceIngredientSort: index + 1,
-            ingredientId: ingredient.ingredientId,
-            amountJson: ingredient.amount
-          }),
-        0
-      );
-      await this.assertStorageWritable(tx, userId, sizeBytes);
-
-      const created = await Promise.all(
-        source.ingredients.map((ingredient, index) =>
-          tx.shoppingItem.create({
-            data: {
-              userId,
-              listId,
-              name: ingredient.ingredientName,
-              quantityText: formatRecipeAmount(ingredient.amount),
-              note: source.title,
-              sourceType: recipeSourceType,
-              sourceKey: `${source.recipeId}:${source.sourceVersionId}:${batchKey}:${index + 1}`,
-              sourceRecipeId: source.recipeId,
-              sourceRecipeVersionId: source.sourceVersionId,
-              sourceRecipeTitle: source.title,
-              sourceBaseServings: source.baseServings,
-              sourceBatchKey: batchKey,
-              sourceIngredientSort: index + 1,
-              ingredientId: ingredient.ingredientId,
-              amountJson: ingredient.amount
-            }
-          })
-        )
-      );
-
-      for (const item of created) {
-        await upsertStorageLedger(tx, userId, "SHOPPING", item.id, sizeOfJson(item));
-      }
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
-        }
-      });
-
-      const board = await this.loadShoppingBoardFromTx(tx, userId);
-      await completeIdempotentOperation(tx, operationId, "shopping:create:recipe", userId, null, requestHash, board);
-      return board;
-    });
-  }
-
-  async createRandomMenuShoppingItems(
-    userId: UUID,
-    operationId: OperationId,
-    items: CreateRandomMenuShoppingItemRequest[]
-  ): Promise<ShoppingItemSummary[]> {
-    if (!items.length) {
-      throw new BadRequestException("当前缺口不能为空");
-    }
-    const normalizedItems = items.map(item => ({
-      slotId: item.slotId.trim(),
-      recipeId: item.recipeId,
-      recipeVersionId: item.recipeVersionId,
-      ingredients: item.ingredients.map(ingredient => ({
-        ingredientId: ingredient.ingredientId ?? null,
-        ingredientName: ingredient.ingredientName.trim(),
-        quantityText: ingredient.quantityText?.trim() || null
-      }))
-    }));
-    const ingredientTotal = normalizedItems.reduce((sum, item) => sum + item.ingredients.length, 0);
-    if (ingredientTotal < 1 || ingredientTotal > 80) {
-      throw new BadRequestException("缺口食材数量参数错误");
-    }
-    if (normalizedItems.some(item => !item.slotId || item.ingredients.some(ingredient => !ingredient.ingredientName))) {
-      throw new BadRequestException("缺口食材参数错误");
-    }
-
-    const requestHash = JSON.stringify(normalizedItems);
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingItemSummary[]>(
-        tx,
-        operationId,
-        "shopping:create:random-menu",
-        userId,
-        null,
-        requestHash
-      );
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping:create:random-menu", userId, null, requestHash);
-
-      const recipes = await tx.recipe.findMany({
-        where: {
-          id: { in: normalizedItems.map(item => item.recipeId) },
-          ownerId: userId,
-          status: "ACTIVE"
-        },
-        select: {
-          id: true,
-          title: true,
-          currentVersionId: true
-        }
-      });
-      const recipeMap = new Map(recipes.map(item => [item.id, item]));
-      normalizedItems.forEach(item => {
-        const recipe = recipeMap.get(item.recipeId);
-        if (!recipe || recipe.currentVersionId !== item.recipeVersionId) {
-          throw new NotFoundException("菜谱不存在");
-        }
-      });
-
-      const listId = await this.resolveLegacyTargetListId(tx, userId);
-      const batchKey = String(operationId);
-      const sizeBytes = normalizedItems.reduce((sum, item) => {
-        const recipe = recipeMap.get(item.recipeId)!;
-        return (
-          sum +
-          item.ingredients.reduce(
-            (innerSum, ingredient, index) =>
-              innerSum +
-              sizeOfJson({
-                userId,
-                listId,
-                name: ingredient.ingredientName,
-                quantityText: ingredient.quantityText,
-                note: recipe.title,
-                sourceType: "RANDOM_MENU",
-                sourceKey: `${item.recipeId}:${item.recipeVersionId}:${batchKey}:${item.slotId}:${index + 1}`,
-                sourceRecipeId: null,
-                sourceRecipeVersionId: null,
-                sourceRecipeTitle: null,
-                sourceBaseServings: null,
-                sourceBatchKey: null,
-                sourceIngredientSort: null,
-                ingredientId: null,
-                amountJson: null
-              }),
-            0
-          )
-        );
-      }, 0);
-      await this.assertStorageWritable(tx, userId, sizeBytes);
-
-      const results: ShoppingItemSummary[] = [];
-      for (const item of normalizedItems) {
-        const recipe = recipeMap.get(item.recipeId)!;
-        for (let index = 0; index < item.ingredients.length; index += 1) {
-          const ingredient = item.ingredients[index]!;
-          const sourceKey = `${item.recipeId}:${item.recipeVersionId}:${batchKey}:${item.slotId}:${index + 1}`;
-          const existing = await tx.shoppingItem.findFirst({
-            where: {
-              userId,
-              sourceType: "RANDOM_MENU",
-              sourceKey,
-              status: "OPEN"
-            }
-          });
-          const next =
-            existing ??
-            (await tx.shoppingItem.create({
-              data: {
-                userId,
-                listId,
-                name: ingredient.ingredientName,
-                quantityText: ingredient.quantityText,
-                note: recipe.title,
-                sourceType: "RANDOM_MENU",
-                sourceKey
-              }
-            }));
-          if (!existing) {
-            await upsertStorageLedger(tx, userId, "SHOPPING", next.id, sizeOfJson(next));
-          }
-          results.push({
-            ...this.toShoppingItemSummary(next),
-            sourceTitles: [recipe.title]
-          });
-        }
-      }
-
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
-        }
-      });
-
-      await completeIdempotentOperation(tx, operationId, "shopping:create:random-menu", userId, null, requestHash, results);
-      return results;
-    });
-  }
-
-  async updateShoppingStatus(userId: UUID, itemId: UUID, operationId: OperationId, status: string) {
-    const normalizedStatus = normalizeShoppingStatus(status);
-    const requestHash = `${itemId}:${normalizedStatus}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingItemSummary>(tx, operationId, "shopping:status", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping:status", userId, null, requestHash);
-
-      const item = await tx.shoppingItem.findUnique({ where: { id: itemId } });
-      if (!item || item.userId !== userId) throw new NotFoundException("购物项不存在");
-
-      const statusUpdate = buildShoppingStatusUpdate(normalizedStatus, userId, new Date());
-      const next = await tx.shoppingItem.update({
-        where: { id: itemId },
-        data: statusUpdate
-      });
-
-      if (normalizedStatus === "DELETED") {
-        await this.releaseShoppingItemReservations(tx, [itemId], new Date());
-        await removeStorageLedger(tx, userId, "SHOPPING", itemId);
-      } else {
-        await upsertStorageLedger(tx, userId, "SHOPPING", itemId, sizeOfJson(next));
-      }
-      if (item.listId) {
-        await tx.shoppingList.update({
-          where: { id: item.listId },
-          data: {
-            version: { increment: 1 }
-          }
-        });
-      }
-
-      const result = this.toShoppingItemSummary(next);
-      await completeIdempotentOperation(tx, operationId, "shopping:status", userId, null, requestHash, result);
-      return result;
-    });
-  }
-
-  async updateShoppingGroupStatus(userId: UUID, operationId: OperationId, targetKey: string, status: string) {
-    const normalizedStatus = normalizeShoppingStatus(status);
-    const requestHash = `${targetKey}:${normalizedStatus}`;
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingBoardResponse>(tx, operationId, "shopping:group:status", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping:group:status", userId, null, requestHash);
-
-      const targetWhere = this.resolveShoppingGroupWhere(userId, targetKey);
-      const items = await tx.shoppingItem.findMany({
-        where: targetWhere,
-        select: {
-          id: true,
-          userId: true
-        }
-      });
-      if (!items.length) {
-        throw new NotFoundException("购物项不存在");
-      }
-
-      const statusUpdate = buildShoppingStatusUpdate(normalizedStatus, userId, new Date());
-      await tx.shoppingItem.updateMany({
-        where: {
-          id: { in: items.map(item => item.id) }
-        },
-        data: statusUpdate
-      });
-
-      if (normalizedStatus === "DELETED") {
-        await this.releaseShoppingItemReservations(tx, items.map(item => item.id), new Date());
-        for (const item of items) {
-          await removeStorageLedger(tx, userId, "SHOPPING", item.id);
-        }
-      } else {
-        const updated = await tx.shoppingItem.findMany({
-          where: {
-            id: { in: items.map(item => item.id) }
-          }
-        });
-        for (const item of updated) {
-          await upsertStorageLedger(tx, userId, "SHOPPING", item.id, sizeOfJson(item));
-        }
-      }
-      const listIds = await tx.shoppingItem.findMany({
-        where: {
-          id: { in: items.map(item => item.id) },
-          listId: { not: null }
-        },
-        select: {
-          listId: true
-        },
-        distinct: ["listId"]
-      });
-      for (const item of listIds) {
-        if (!item.listId) continue;
-        await tx.shoppingList.update({
-          where: { id: item.listId },
-          data: {
-            version: { increment: 1 }
-          }
-        });
-      }
-
-      const board = await this.loadShoppingBoardFromTx(tx, userId);
-      await completeIdempotentOperation(tx, operationId, "shopping:group:status", userId, null, requestHash, board);
-      return board;
-    });
-  }
-
   async previewGap(userId: UUID): Promise<ShoppingGapResponse> {
     const events = await this.prisma.diningEvent.findMany({
         where: {
@@ -3179,18 +2030,60 @@ export class PantryService {
     return this.buildGapPreview(events, new Date());
   }
 
-  async previewEventGap(userId: UUID, eventId: UUID): Promise<ShoppingItemSummary[]> {
-    return this.loadEventGapSummary(this.prisma, userId, eventId);
+  async previewEventGap(userId: UUID, eventId: UUID): Promise<ShoppingGapPreviewItem[]> {
+    const lines = await this.loadEventGapSummary(this.prisma, userId, eventId, true);
+    const event = await this.prisma.diningEvent.findUnique({
+      where: { id: eventId },
+      select: { ingredientsReadyAt: true }
+    });
+    const preparations = await this.prisma.diningEventPreparation.findMany({
+      where: { diningEventId: eventId },
+      select: { sourceKey: true }
+    });
+    const sourceKeys = lines.flatMap(line =>
+      line.sourceFacts?.length
+        ? line.sourceFacts.map(source => buildShoppingDemandFactKey(line.sourceKey, source))
+        : [line.sourceKey]
+    );
+    const boughtKeys = new Set(
+      (
+        await this.prisma.shoppingItem.findMany({
+          where: {
+            userId,
+            sourceType: "EVENT",
+            sourceKey: { in: sourceKeys },
+            status: "BOUGHT"
+          },
+          select: { sourceKey: true }
+        })
+      ).map(item => item.sourceKey).filter((key): key is string => key !== null)
+    );
+    const preparedKeys = new Set(preparations.map(item => item.sourceKey));
+
+    return lines.map(item => {
+      const itemSourceKeys = item.sourceFacts?.length
+        ? item.sourceFacts.map(source => buildShoppingDemandFactKey(item.sourceKey, source))
+        : [item.sourceKey];
+      const preparationStatus = event?.ingredientsReadyAt
+        ? "READY"
+        : preparedKeys.has(item.sourceKey)
+          ? "HOME"
+          : itemSourceKeys.length && itemSourceKeys.every(key => boughtKeys.has(key))
+            ? "BOUGHT"
+            : "OPEN";
+      return { ...this.toShoppingGapPreviewItem(item), preparationStatus };
+    });
   }
 
-  async previewPlanGap(userId: UUID, planItemId: UUID): Promise<ShoppingItemSummary[]> {
-    return this.loadPlanGapSummary(this.prisma, userId, planItemId);
+  async previewPlanGap(userId: UUID, planItemId: UUID): Promise<ShoppingGapPreviewItem[]> {
+    return (await this.loadPlanGapSummary(this.prisma, userId, planItemId)).map(item => this.toShoppingGapPreviewItem(item));
   }
 
   private async loadEventGapSummary(
     db: Pick<Prisma.TransactionClient, "diningEvent">,
     userId: UUID,
-    eventId: UUID
+    eventId: UUID,
+    allowAcceptedParticipant = false
   ): Promise<EventGapSummaryItem[]> {
     const event = await db.diningEvent.findUnique({
         where: { id: eventId },
@@ -3212,10 +2105,15 @@ export class PantryService {
             },
             orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
           },
+          participants: allowAcceptedParticipant
+            ? { where: { userId, status: "ACCEPTED" }, select: { id: true } }
+            : undefined,
           userId: true
         }
       });
-    if (!event || event.userId !== userId) throw new NotFoundException("饭局不存在");
+    if (!event || (event.userId !== userId && (!allowAcceptedParticipant || !event.participants.length))) {
+      throw new NotFoundException("饭局不存在");
+    }
     return this.buildLegacyGapSummary([event], "EVENT", "EVENT", String(event.id));
   }
 
@@ -3274,76 +2172,6 @@ export class PantryService {
     );
   }
 
-  async createEventGap(userId: UUID, eventId: UUID, operationId: OperationId) {
-    const requestHash = String(eventId);
-    return this.prisma.$transaction(async tx => {
-      const repeated = await getIdempotentResult<ShoppingItemSummary[]>(tx, operationId, "shopping:gap", userId, null, requestHash);
-      if (repeated) return repeated;
-      await startIdempotentOperation(tx, operationId, "shopping:gap", userId, null, requestHash);
-      await this.assertStorageWritable(tx, userId, 0);
-
-      const preview = await this.loadEventGapSummary(tx, userId, eventId);
-      const listId = await this.resolveLegacyTargetListId(tx, userId);
-      const results: ShoppingItemSummary[] = [];
-      for (const item of preview) {
-        const facts = this.buildShoppingDemandWriteItems(item, String(operationId));
-        let representative: ShoppingRow | null = null;
-        for (const fact of facts) {
-          const existing = await tx.shoppingItem.findFirst({
-            where: {
-              userId,
-              sourceType: "EVENT",
-              sourceKey: fact.sourceKey
-            }
-          });
-          if (existing) {
-            if (existing.status !== "DELETED" && !representative) representative = existing;
-            continue;
-          }
-
-          const created = await tx.shoppingItem.create({
-            data: {
-              userId,
-              listId,
-              name: fact.name,
-              quantityText: fact.quantityText,
-              baseQuantityText: fact.quantityText,
-              note: fact.note,
-              sourceType: "EVENT",
-              sourceKey: fact.sourceKey,
-              sourceRecipeId: fact.sourceRecipeId,
-              sourceRecipeVersionId: fact.sourceRecipeVersionId,
-              sourceRecipeTitle: fact.sourceRecipeTitle,
-              sourceBaseServings: fact.sourceBaseServings,
-              sourceBatchKey: fact.sourceBatchKey,
-              sourceIngredientSort: fact.sourceIngredientSort,
-              ingredientId: fact.ingredientId,
-              amountJson: fact.amountJson ?? Prisma.DbNull
-            }
-          });
-          await upsertStorageLedger(tx, userId, "SHOPPING", created.id, sizeOfJson(created));
-          if (!representative) representative = created;
-        }
-        if (representative) {
-          results.push({
-            ...this.toShoppingItemSummary(representative),
-            sourceCount: item.sourceCount,
-            sourceTitles: item.sourceTitles
-          });
-        }
-      }
-      await tx.shoppingList.update({
-        where: { id: listId },
-        data: {
-          version: { increment: 1 }
-        }
-      });
-
-      await completeIdempotentOperation(tx, operationId, "shopping:gap", userId, null, requestHash, results);
-      return results;
-    });
-  }
-
   async addEventGapToShoppingList(userId: UUID, listId: UUID, operationId: OperationId, eventId: UUID): Promise<ShoppingListDetail> {
     const requestHash = `${listId}:${eventId}`;
     return this.prisma.$transaction(async tx => {
@@ -3379,7 +2207,6 @@ export class PantryService {
             listId,
             name: item.name,
             quantityText: item.quantityText,
-            baseQuantityText: item.quantityText,
             note: item.note,
             sourceType: "EVENT",
             sourceKey: item.sourceKey,
@@ -3404,7 +2231,6 @@ export class PantryService {
             listId,
             name: item.name,
             quantityText: item.quantityText,
-            baseQuantityText: item.quantityText,
             note: item.note,
             sourceType: "EVENT",
             sourceKey: item.sourceKey,
@@ -3514,7 +2340,6 @@ export class PantryService {
             listId,
             name: item.name,
             quantityText: item.quantityText,
-            baseQuantityText: item.quantityText,
             note: item.note,
             sourceType: "EVENT",
             sourceKey: item.sourceKey,
@@ -3539,7 +2364,6 @@ export class PantryService {
             listId,
             name: item.name,
             quantityText: item.quantityText,
-            baseQuantityText: item.quantityText,
             note: item.note,
             sourceType: "EVENT",
             sourceKey: item.sourceKey,
@@ -3621,22 +2445,6 @@ export class PantryService {
     return list;
   }
 
-  private async resolveLegacyTargetListId(tx: Prisma.TransactionClient, userId: UUID) {
-    const existing = await tx.shoppingList.findFirst({
-      where: {
-        ownerUserId: userId,
-        status: "ACTIVE"
-      },
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      select: {
-        id: true
-      }
-    });
-    if (existing) return existing.id;
-    const created = await this.createShoppingListInTx(tx, userId, userId, "旧待买清单");
-    return created.id;
-  }
-
   private async assertShoppingListReadable(tx: Prisma.TransactionClient, userId: UUID, listId: UUID) {
     const list = await tx.shoppingList.findFirst({
       where: {
@@ -3700,24 +2508,13 @@ export class PantryService {
     removedItemId: UUID | null
   ): Promise<ShoppingListItemPatchResponse> {
     const access = await this.assertShoppingListReadable(tx, userId, listId);
-    const canUseFridgeAction = access.role === "OWNER" && access.status === "ACTIVE";
-    const [items, fridgeRows] = await Promise.all([
-      changedItemId === null
-        ? Promise.resolve([] as ShoppingDetailItemRow[])
-        : tx.shoppingItem.findMany({
-            where: {
-              listId,
-              status: {
-                not: "DELETED"
-              }
-            },
-            orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-            select: shoppingDetailItemSelect
-          }),
-      changedItemId !== null && canUseFridgeAction
-        ? this.loadShoppingFridgeRows(tx, access.ownerUserId)
-        : Promise.resolve([] as FridgeMatchRow[])
-    ]);
+    const items = changedItemId === null
+      ? [] as ShoppingDetailItemRow[]
+      : await tx.shoppingItem.findMany({
+          where: { listId, status: { not: "DELETED" } },
+          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+          select: shoppingDetailItemSelect
+        });
     if (changedItemId !== null && !items.some(item => item.id === changedItemId)) {
       throw new NotFoundException("购物项不存在");
     }
@@ -3726,7 +2523,7 @@ export class PantryService {
       : await this.loadShoppingSourceMeta(tx, items);
     const itemMap = changedItemId === null
       ? null
-      : this.buildShoppingListDetailItemMap(items, fridgeRows, canUseFridgeAction, sourceMeta!);
+      : this.buildShoppingListDetailItemMap(items, sourceMeta!);
     const progress = this.buildShoppingListProgress(items);
     return {
       listId,
@@ -3736,240 +2533,6 @@ export class PantryService {
       item: changedItemId === null ? null : itemMap?.get(changedItemId) ?? null,
       removedItemId
     };
-  }
-
-  private async loadShoppingFridgeRows(tx: Prisma.TransactionClient, userId: UUID): Promise<FridgeMatchRow[]> {
-    const [fridgeItems, reservations] = await Promise.all([
-      tx.fridgeItem.findMany({
-        where: {
-          userId,
-          available: true
-        },
-        orderBy: [{ id: "asc" }],
-        select: {
-          id: true,
-          ingredientId: true,
-          name: true,
-          quantityText: true,
-          exactQuantity: true,
-          exactUnitId: true,
-          available: true,
-          exactUnit: {
-            select: {
-              name: true
-            }
-          },
-          sourceShoppingItem: {
-            select: {
-              amountJson: true
-            }
-          }
-        }
-      }),
-      tx.shoppingItemFridgeReservation.findMany({
-        where: {
-          userId,
-          releasedAt: null,
-          settledAt: null
-        },
-        select: {
-          fridgeItemId: true,
-          reservedQuantity: true
-        }
-      })
-    ]);
-
-    const reservedMap = new Map<UUID, Prisma.Decimal>();
-    for (const reservation of reservations) {
-      const current = reservedMap.get(reservation.fridgeItemId) ?? new Prisma.Decimal(0);
-      reservedMap.set(reservation.fridgeItemId, current.add(reservation.reservedQuantity));
-    }
-
-    return fridgeItems.map(item => {
-      const resolvedExact = this.resolveFridgeExactAmount(item);
-      if (!resolvedExact) {
-        return {
-          id: item.id,
-          ingredientId: item.ingredientId,
-          name: item.name,
-          quantityText: item.quantityText,
-          exactQuantity: null,
-          exactUnitId: null,
-          exactUnitName: null,
-          available: item.available
-        } satisfies FridgeMatchRow;
-      }
-      const reservedQuantity = reservedMap.get(item.id) ?? new Prisma.Decimal(0);
-      const remainingQuantity = resolvedExact.quantity.sub(reservedQuantity);
-      const exactQuantity = remainingQuantity.gt(0) ? remainingQuantity : new Prisma.Decimal(0);
-      return {
-        id: item.id,
-        ingredientId: item.ingredientId,
-        name: item.name,
-        quantityText: this.formatExactQuantityText(exactQuantity, resolvedExact.unitName),
-        exactQuantity,
-        exactUnitId: resolvedExact.unitId,
-        exactUnitName: resolvedExact.unitName,
-        available: exactQuantity.gt(0)
-      } satisfies FridgeMatchRow;
-    });
-  }
-
-  private async releaseShoppingItemReservations(tx: Prisma.TransactionClient, shoppingItemIds: UUID[], releasedAt: Date) {
-    const uniqueIds = Array.from(new Set(shoppingItemIds));
-    if (!uniqueIds.length) return;
-    await tx.shoppingItemFridgeReservation.updateMany({
-      where: {
-        shoppingItemId: {
-          in: uniqueIds
-        },
-        releasedAt: null,
-        settledAt: null
-      },
-      data: {
-        releasedAt
-      }
-    });
-  }
-
-  private async releaseShoppingListReservationsAndRestoreItems(tx: Prisma.TransactionClient, listId: UUID, releasedAt: Date) {
-    const appliedItems = await tx.shoppingItem.findMany({
-      where: {
-        listId,
-        fridgeAppliedQuantityText: {
-          not: null
-        },
-        status: {
-          not: "DELETED"
-        }
-      },
-      select: {
-        id: true,
-        quantityText: true,
-        baseQuantityText: true
-      }
-    });
-    if (!appliedItems.length) return;
-
-    await this.releaseShoppingItemReservations(tx, appliedItems.map(item => item.id), releasedAt);
-    for (const item of appliedItems) {
-      await tx.shoppingItem.update({
-        where: {
-          id: item.id
-        },
-        data: {
-          quantityText: item.baseQuantityText ?? item.quantityText,
-          fridgeAppliedQuantityText: null,
-          fridgeCovered: false,
-          version: { increment: 1 }
-        }
-      });
-    }
-  }
-
-  private async settleShoppingListReservations(tx: Prisma.TransactionClient, listId: UUID, settledAt: Date) {
-    const reservations = await tx.shoppingItemFridgeReservation.findMany({
-      where: {
-        shoppingListId: listId,
-        releasedAt: null,
-        settledAt: null
-      },
-      select: {
-        id: true,
-        fridgeItemId: true,
-        reservedQuantity: true,
-        reservedUnitId: true
-      }
-    });
-    if (!reservations.length) return;
-
-    const grouped = new Map<UUID, { reservedQuantity: Prisma.Decimal; reservedUnitId: UUID; reservationIds: UUID[] }>();
-    for (const reservation of reservations) {
-      const current = grouped.get(reservation.fridgeItemId);
-      if (current) {
-        if (current.reservedUnitId !== reservation.reservedUnitId) {
-          throw new BadRequestException("库存预占单位不一致，暂时不能完成清单");
-        }
-        current.reservedQuantity = current.reservedQuantity.add(reservation.reservedQuantity);
-        current.reservationIds.push(reservation.id);
-        continue;
-      }
-      grouped.set(reservation.fridgeItemId, {
-        reservedQuantity: new Prisma.Decimal(reservation.reservedQuantity),
-        reservedUnitId: reservation.reservedUnitId,
-        reservationIds: [reservation.id]
-      });
-    }
-
-    const fridgeItems = await tx.fridgeItem.findMany({
-      where: {
-        id: {
-          in: [...grouped.keys()]
-        }
-      },
-      select: {
-        id: true,
-        available: true,
-        quantityText: true,
-        exactQuantity: true,
-        exactUnitId: true,
-        exactUnit: {
-          select: {
-            name: true
-          }
-        },
-        sourceShoppingItem: {
-          select: {
-            amountJson: true
-          }
-        }
-      }
-    });
-    const fridgeMap = new Map(fridgeItems.map(item => [item.id, item]));
-    for (const [fridgeItemId, current] of grouped) {
-      const fridgeItem = fridgeMap.get(fridgeItemId);
-      if (!fridgeItem) {
-        throw new BadRequestException("预占库存已变更，请刷新后重试");
-      }
-      const resolvedExact = this.resolveFridgeExactAmount(fridgeItem);
-      if (!resolvedExact) {
-        throw new BadRequestException("预占库存已变更，请刷新后重试");
-      }
-      if (!fridgeItem.available) {
-        throw new BadRequestException("预占库存已失效，请刷新后重试");
-      }
-      if (resolvedExact.unitId !== current.reservedUnitId) {
-        throw new BadRequestException("预占库存单位已变更，请刷新后重试");
-      }
-      const remainingQuantity = resolvedExact.quantity.sub(current.reservedQuantity);
-      if (remainingQuantity.lt(0)) {
-        throw new BadRequestException("预占库存已不足，请刷新后重试");
-      }
-      const hasRemainingQuantity = remainingQuantity.gt(0);
-      await tx.fridgeItem.update({
-        where: {
-          id: fridgeItemId
-        },
-        data: {
-          quantityText: this.formatExactQuantityText(remainingQuantity, resolvedExact.unitName),
-          exactQuantity: hasRemainingQuantity ? remainingQuantity : null,
-          exactUnitId: hasRemainingQuantity ? resolvedExact.unitId : null,
-          available: hasRemainingQuantity,
-          consumedAt: hasRemainingQuantity ? null : settledAt,
-          version: { increment: 1 }
-        }
-      });
-      await tx.shoppingItemFridgeReservation.updateMany({
-        where: {
-          id: {
-            in: current.reservationIds
-          }
-        },
-        data: {
-          settledAt
-        }
-      });
-    }
   }
 
   private async loadShoppingListPageFromTx(
@@ -4039,7 +2602,6 @@ export class PantryService {
             ingredientId: true,
             name: true,
             status: true,
-            fridgeCovered: true
           }
         }
       }
@@ -4114,7 +2676,7 @@ export class PantryService {
               not: "DELETED"
             }
           },
-          orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           select: shoppingDetailItemSelect
         }
       }
@@ -4126,16 +2688,8 @@ export class PantryService {
     if (!currentMember) {
       throw new NotFoundException("购物清单不存在");
     }
-    const fridgeRows = currentMember.role === "OWNER" && list.status === "ACTIVE"
-      ? await this.loadShoppingFridgeRows(tx, list.ownerUserId)
-      : [];
     const sourceMeta = await this.loadShoppingSourceMeta(tx, list.items);
-    const detailItemMap = this.buildShoppingListDetailItemMap(
-      list.items,
-      fridgeRows,
-      currentMember.role === "OWNER" && list.status === "ACTIVE",
-      sourceMeta
-    );
+    const detailItemMap = this.buildShoppingListDetailItemMap(list.items, sourceMeta);
     return {
       ...(await this.toShoppingListSummary(tx, {
         ...list,
@@ -4405,7 +2959,7 @@ export class PantryService {
     }
     let progressDoneCount = 0;
     for (const groupItems of bucket.values()) {
-      if (groupItems.every(item => item.status === "BOUGHT" || item.fridgeCovered)) {
+      if (groupItems.every(item => item.status === "BOUGHT")) {
         progressDoneCount += 1;
       }
     }
@@ -4563,434 +3117,56 @@ export class PantryService {
     };
   }
 
-  private readShoppingItemExactAmount(amountJson: Prisma.JsonValue | null) {
-    if (!amountJson) return null;
-    const amount = fromJson<RecipeAmountSnapshot>(amountJson);
-    return amount.kind === "EXACT" ? amount : null;
-  }
-
-  private parseExactQuantityByUnit(quantityText: string | null, unitName: string) {
-    if (!quantityText) return null;
-    const pattern = new RegExp(`^([+-]?\\d+(?:\\.\\d+)?)\\s*${escapeRegExp(unitName)}$`);
-    const match = quantityText.trim().match(pattern);
-    if (!match?.[1]) return null;
-    return new Prisma.Decimal(match[1]);
-  }
-
-  private resolveFridgeExactAmount(item: {
-    quantityText: string | null;
-    exactQuantity: Prisma.Decimal | null;
-    exactUnitId: UUID | null;
-    exactUnit?: { name: string } | null;
-    sourceShoppingItem?: { amountJson: Prisma.JsonValue | null } | null;
-  }) {
-    if (item.exactQuantity !== null && item.exactUnitId !== null && item.exactUnit?.name) {
-      return {
-        quantity: new Prisma.Decimal(item.exactQuantity),
-        unitId: item.exactUnitId,
-        unitName: item.exactUnit.name
-      };
-    }
-    const sourceAmount = item.sourceShoppingItem?.amountJson
-      ? this.readShoppingItemExactAmount(item.sourceShoppingItem.amountJson)
-      : null;
-    if (!sourceAmount) return null;
-    const parsedQuantity = this.parseExactQuantityByUnit(item.quantityText, sourceAmount.unitName);
-    if (!parsedQuantity) return null;
+  private normalizePantryFields(name: string, quantityText?: string | null, note?: string | null) {
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new BadRequestException("名称不能为空");
     return {
-      quantity: parsedQuantity,
-      unitId: sourceAmount.unitId,
-      unitName: sourceAmount.unitName
+      name: normalizedName,
+      quantityText: quantityText?.trim() || null,
+      note: note?.trim() || null
     };
-  }
-
-  private matchFridgeRows(
-    item: { ingredientId: UUID | null; name: string },
-    fridgeRows: FridgeMatchRow[]
-  ) {
-    if (item.ingredientId !== null) {
-      const matchedByIngredient = fridgeRows.filter(row => row.ingredientId === item.ingredientId);
-      if (matchedByIngredient.length) {
-        return matchedByIngredient;
-      }
-    }
-    const nameKey = normalizeNameKey(item.name);
-    return fridgeRows.filter(row => normalizeNameKey(row.name) === nameKey);
-  }
-
-  private matchExactFridgeRows(
-    fridgeRows: FridgeMatchRow[],
-    exactAmount: Extract<RecipeAmountSnapshot, { kind: "EXACT" }>
-  ) {
-    const targetUnitKey = normalizeNameKey(exactAmount.unitName);
-    const comparable = fridgeRows.filter(
-      row =>
-        row.exactQuantity !== null &&
-        row.exactUnitId !== null &&
-        row.exactUnitName &&
-        (row.exactUnitId === exactAmount.unitId || normalizeNameKey(row.exactUnitName) === targetUnitKey)
-    );
-    const exactIdMatches = comparable.filter(row => row.exactUnitId === exactAmount.unitId);
-    return exactIdMatches.length ? exactIdMatches : comparable;
-  }
-
-  private sumMatchingFridgeQuantity(
-    fridgeRows: FridgeMatchRow[],
-    exactAmount: Extract<RecipeAmountSnapshot, { kind: "EXACT" }>
-  ) {
-    const comparable = this.matchExactFridgeRows(fridgeRows, exactAmount);
-    if (!comparable.length) return null;
-    return {
-      quantity: comparable.reduce((current, row) => current.add(row.exactQuantity ?? 0), new Prisma.Decimal(0)),
-      unitName: comparable[0]!.exactUnitName!
-    };
-  }
-
-  private buildFridgeText(fridgeRows: FridgeMatchRow[], exactText: string | null) {
-    if (exactText) return `冰箱：${exactText}`;
-    if (!fridgeRows.length) return null;
-    if (fridgeRows.length === 1) {
-      const [current] = fridgeRows;
-      if (current?.quantityText) return `冰箱：${current.quantityText}`;
-      return "冰箱：有库存记录";
-    }
-    return `冰箱：有 ${fridgeRows.length} 条记录`;
   }
 
   private buildShoppingItemGroupKey(item: { ingredientId: UUID | null; name: string }) {
     return `${item.ingredientId ?? "none"}:${normalizeNameKey(item.name)}`;
   }
 
-  private cloneFridgeRows(fridgeRows: FridgeMatchRow[]) {
-    return fridgeRows.map(row => ({
-      ...row,
-      exactQuantity: row.exactQuantity ? new Prisma.Decimal(row.exactQuantity) : null
-    }));
-  }
-
-  private reserveFridgeRows(
-    fridgeRows: FridgeMatchRow[],
-    reservations: Array<{ fridgeItemId: UUID; reservedQuantity: Prisma.Decimal }>
-  ) {
-    if (!reservations.length) return;
-    const reservedMap = new Map<UUID, Prisma.Decimal>();
-    for (const reservation of reservations) {
-      const current = reservedMap.get(reservation.fridgeItemId) ?? new Prisma.Decimal(0);
-      reservedMap.set(reservation.fridgeItemId, current.add(reservation.reservedQuantity));
+  private async assertStorageWritable(tx: Prisma.TransactionClient, userId: UUID, expectedDeltaBytes: number) {
+    const entitlements = await this.entitlementService.resolveForUser(tx, userId);
+    const current = await tx.storageLedger.aggregate({
+      where: { userId },
+      _sum: { usedBytes: true }
+    });
+    const usedBytes = current._sum.usedBytes ?? 0;
+    if (usedBytes > entitlements.storageLimitBytes) {
+      throw new ForbiddenException("当前个人空间已超额，只允许清理和查看");
     }
-    for (let index = 0; index < fridgeRows.length; index += 1) {
-      const currentRow = fridgeRows[index]!;
-      const reservedQuantity = reservedMap.get(currentRow.id);
-      if (!reservedQuantity || currentRow.exactQuantity === null) continue;
-      const nextQuantity = currentRow.exactQuantity.sub(reservedQuantity);
-      const exactQuantity = nextQuantity.gt(0) ? nextQuantity : new Prisma.Decimal(0);
-      fridgeRows[index] = {
-        ...currentRow,
-        quantityText: currentRow.exactUnitName ? this.formatExactQuantityText(exactQuantity, currentRow.exactUnitName) : currentRow.quantityText,
-        exactQuantity,
-        available: exactQuantity.gt(0)
-      };
+    if (usedBytes + expectedDeltaBytes > entitlements.storageLimitBytes) {
+      throw new ForbiddenException("当前个人空间不足");
     }
   }
 
-  private buildShoppingItemFridgeMeta(
-    item: Pick<
-      ShoppingDetailItemRow,
-      "ingredientId" | "name" | "quantityText" | "baseQuantityText" | "fridgeAppliedQuantityText" | "fridgeCovered" | "status" | "amountJson"
-    >,
-    fridgeRows: FridgeMatchRow[],
-    canUseFridgeAction: boolean,
-    showFridgeText = true,
-    displayAppliedQuantity: Prisma.Decimal | null = null
-  ): ShoppingItemFridgeMeta {
-    const quantities = this.resolveShoppingItemQuantities(item);
-    const matchedRows = this.matchFridgeRows(item, fridgeRows);
-    const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
-    let exactSummary = exactAmount ? this.sumMatchingFridgeQuantity(matchedRows, exactAmount) : null;
-    if (exactAmount && displayAppliedQuantity?.gt(0)) {
-      const appliedQuantity = new Prisma.Decimal(displayAppliedQuantity);
-      if (appliedQuantity.gt(0)) {
-        exactSummary = exactSummary
-          ? {
-              quantity: exactSummary.quantity.add(appliedQuantity),
-              unitName: exactSummary.unitName
-            }
-          : {
-              quantity: appliedQuantity,
-              unitName: exactAmount.unitName
-            };
-      }
-    }
-    const exactText = exactSummary ? this.formatExactQuantityText(exactSummary.quantity, exactSummary.unitName) : null;
-    const fridgeText = showFridgeText ? this.buildFridgeText(matchedRows, exactText) : null;
-    const canOperate = canUseFridgeAction && item.status === "OPEN";
-    const inventoryApplied = Boolean(item.fridgeAppliedQuantityText);
-
-    if (inventoryApplied) {
-      return {
-        ...quantities,
-        fridgeText,
-        inventoryStatus: item.fridgeCovered ? "ENOUGH" : "SHORTAGE",
-        inventoryApplied: true,
-        inventoryCovered: item.fridgeCovered,
-        fridgeStatusText: item.fridgeCovered
-          ? "库存足够，不买了"
-          : quantities.remainingQuantityText
-            ? `库存不足，还需买 ${quantities.remainingQuantityText}`
-            : "已用库存",
-        fridgeActionLabel: canOperate ? "撤销" : null,
-        fridgeActionMode: canOperate ? "UNDO" : "NONE"
-      } as const;
-    }
-
-    if (!matchedRows.length) {
-      return {
-        ...quantities,
-        fridgeText: null,
-        inventoryStatus: "NONE",
-        inventoryApplied: false,
-        inventoryCovered: false,
-        fridgeStatusText: null,
-        fridgeActionLabel: null,
-        fridgeActionMode: "NONE"
-      } as const;
-    }
-
-    if (exactAmount && exactSummary && exactSummary.quantity.gt(0)) {
-      const demand = new Prisma.Decimal(exactAmount.quantity);
-      if (exactSummary.quantity.gte(demand)) {
-        return {
-          ...quantities,
-          fridgeText,
-          inventoryStatus: "ENOUGH",
-          inventoryApplied: false,
-          inventoryCovered: false,
-          fridgeStatusText: null,
-          fridgeActionLabel: canOperate ? "用库存" : null,
-          fridgeActionMode: canOperate ? "APPLY_FULL" : "NONE"
-        } as const;
-      }
-      const remaining = demand.sub(exactSummary.quantity);
-      const remainingText = this.formatExactQuantityText(remaining, exactAmount.unitName);
-      return {
-        ...quantities,
-        fridgeText,
-        inventoryStatus: "SHORTAGE",
-        inventoryApplied: false,
-        inventoryCovered: false,
-        fridgeStatusText: `库存不足，还需买 ${remainingText}`,
-        fridgeActionLabel: canOperate ? "用库存" : null,
-        fridgeActionMode: canOperate ? "APPLY_PARTIAL" : "NONE"
-      } as const;
-    }
-
-    if (exactAmount && exactSummary) {
-      return {
-        ...quantities,
-        fridgeText,
-        inventoryStatus: "SHORTAGE",
-        inventoryApplied: false,
-        inventoryCovered: false,
-        fridgeStatusText: null,
-        fridgeActionLabel: null,
-        fridgeActionMode: "NONE"
-      } as const;
-    }
-
-    return {
-      ...quantities,
-      fridgeText,
-      inventoryStatus: "UNKNOWN",
-      inventoryApplied: false,
-      inventoryCovered: false,
-      fridgeStatusText: "库存待确认",
-      fridgeActionLabel: canOperate ? "库存待确认" : null,
-      fridgeActionMode: canOperate ? "NEED_CONFIRM" : "NONE"
-    } as const;
-  }
-
-  private resolveShoppingItemQuantities(item: Pick<ShoppingDetailItemRow, "quantityText" | "baseQuantityText" | "fridgeAppliedQuantityText" | "amountJson">) {
-    const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
-    const requiredQuantityText = item.baseQuantityText?.trim()
-      || (exactAmount ? this.formatExactQuantityText(exactAmount.quantity, exactAmount.unitName) : item.quantityText);
-    const appliedInventoryQuantityText = item.fridgeAppliedQuantityText?.trim() || null;
-    if (!exactAmount || !appliedInventoryQuantityText) {
-      return {
-        requiredQuantityText: requiredQuantityText ?? null,
-        remainingQuantityText: appliedInventoryQuantityText ? requiredQuantityText ?? null : requiredQuantityText ?? null,
-        appliedInventoryQuantityText
-      };
-    }
-    const appliedQuantity = this.parseExactQuantityByUnit(appliedInventoryQuantityText, exactAmount.unitName);
-    if (appliedQuantity === null) {
-      return {
-        requiredQuantityText: requiredQuantityText ?? null,
-        remainingQuantityText: requiredQuantityText ?? null,
-        appliedInventoryQuantityText
-      };
-    }
-    const remainingQuantity = new Prisma.Decimal(exactAmount.quantity).sub(appliedQuantity);
-    return {
-      requiredQuantityText: requiredQuantityText ?? null,
-      remainingQuantityText: remainingQuantity.gt(0) ? this.formatExactQuantityText(remainingQuantity, exactAmount.unitName) : null,
-      appliedInventoryQuantityText
-    };
-  }
-
-  private sumGroupAppliedDisplayQuantity(
-    groupItems: ShoppingDetailItemRow[],
-    amountJson: Prisma.JsonValue | null
-  ) {
-    const exactAmount = this.readShoppingItemExactAmount(amountJson);
-    if (!exactAmount) return null;
-    let total = new Prisma.Decimal(0);
-    let hasValue = false;
-    for (const item of groupItems) {
-      if (!item.fridgeAppliedQuantityText) continue;
-      const parsedQuantity = this.parseExactQuantityByUnit(item.fridgeAppliedQuantityText, exactAmount.unitName);
-      if (parsedQuantity === null) continue;
-      total = total.add(parsedQuantity);
-      hasValue = true;
-    }
-    return hasValue ? total : null;
-  }
-
-  private buildShoppingListDetailItemMap(
-    items: ShoppingDetailItemRow[],
-    fridgeRows: FridgeMatchRow[],
-    canUseFridgeAction: boolean,
-    sourceMeta: ShoppingSourceMeta
-  ) {
+  private buildShoppingListDetailItemMap(items: ShoppingDetailItemRow[], sourceMeta: ShoppingSourceMeta) {
     const result = new Map<UUID, ShoppingListDetailItem>();
-    const remainingFridgeRows = this.cloneFridgeRows(fridgeRows);
-    const groupedItems = new Map<string, ShoppingDetailItemRow[]>();
     for (const item of items) {
-      const groupKey = this.buildShoppingItemGroupKey(item);
-      const current = groupedItems.get(groupKey) ?? [];
-      current.push(item);
-      groupedItems.set(groupKey, current);
-    }
-    const shownGroupKeys = new Set<string>();
-    for (const item of items) {
-      const groupKey = this.buildShoppingItemGroupKey(item);
-      const showFridgeText = !shownGroupKeys.has(groupKey);
-      const groupItems = groupedItems.get(groupKey) ?? [item];
-      const displayAppliedQuantity = showFridgeText ? this.sumGroupAppliedDisplayQuantity(groupItems, item.amountJson) : null;
-      const fridgeMeta = this.buildShoppingItemFridgeMeta(
-        item,
-        remainingFridgeRows,
-        canUseFridgeAction,
-        showFridgeText,
-        displayAppliedQuantity
-      );
-      shownGroupKeys.add(groupKey);
-      result.set(item.id, this.toShoppingListDetailItem(item, fridgeMeta, sourceMeta));
-      if (!canUseFridgeAction || item.status !== "OPEN" || item.fridgeAppliedQuantityText) continue;
-      const reservationPlan = this.buildShoppingItemReservationPlan(item, remainingFridgeRows);
-      if (reservationPlan.mode !== "APPLY_FULL" && reservationPlan.mode !== "APPLY_PARTIAL") continue;
-      this.reserveFridgeRows(remainingFridgeRows, reservationPlan.reservations);
+      result.set(item.id, this.toShoppingListDetailItem(item, sourceMeta));
     }
     return result;
   }
 
-  private toShoppingListDetailItem(
-    item: ShoppingDetailItemRow,
-    fridgeMeta: ShoppingItemFridgeMeta,
-    sourceMeta: ShoppingSourceMeta
-  ): ShoppingListDetailItem {
+  private toShoppingListDetailItem(item: ShoppingDetailItemRow, sourceMeta: ShoppingSourceMeta): ShoppingListDetailItem {
     return {
       id: item.id,
       ingredientId: item.ingredientId,
       name: item.name,
       categoryName: item.ingredient?.category.name ?? null,
       imageUrl: item.ingredient ? this.ingredientImageService.buildImageUrl({}, item.ingredient.id, item.ingredient.imageUpdatedAt) : null,
-      quantityText: fridgeMeta.requiredQuantityText,
-      requiredQuantityText: fridgeMeta.requiredQuantityText,
-      remainingQuantityText: fridgeMeta.remainingQuantityText,
-      appliedInventoryQuantityText: fridgeMeta.appliedInventoryQuantityText,
+      quantityText: item.quantityText,
       note: item.note,
       status: toListItemStatus(item.status),
-      fridgeText: fridgeMeta.fridgeText,
-      inventoryStatus: fridgeMeta.inventoryStatus,
-      inventoryApplied: fridgeMeta.inventoryApplied,
-      inventoryCovered: fridgeMeta.inventoryCovered,
-      fridgeStatusText: fridgeMeta.fridgeStatusText,
-      fridgeActionLabel: fridgeMeta.fridgeActionLabel,
-      fridgeActionMode: fridgeMeta.fridgeActionMode,
       checkedAt: item.checkedAt ? toIsoDate(item.checkedAt) : null,
       updatedAt: toIsoDate(item.updatedAt),
       sources: [this.toShoppingItemSourceSummary(item, sourceMeta)]
-    };
-  }
-
-  private buildShoppingItemReservationPlan(
-    item: {
-      ingredientId: UUID | null;
-      name: string;
-      quantityText: string | null;
-      amountJson: Prisma.JsonValue | null;
-    },
-    fridgeRows: FridgeMatchRow[]
-  ) {
-    const exactAmount = this.readShoppingItemExactAmount(item.amountJson);
-    if (!exactAmount) {
-      return {
-        mode: "NEED_CONFIRM" as const,
-        reservations: [],
-        appliedQuantityText: null,
-        nextQuantityText: item.quantityText,
-        covered: false
-      };
-    }
-
-    const matchedRows = this.matchFridgeRows(item, fridgeRows);
-    const exactRows = this.matchExactFridgeRows(matchedRows, exactAmount)
-      .sort((left, right) => left.id - right.id);
-    if (!exactRows.length) {
-      return {
-        mode: matchedRows.length ? "NEED_CONFIRM" as const : "NONE" as const,
-        reservations: [],
-        appliedQuantityText: null,
-        nextQuantityText: item.quantityText,
-        covered: false
-      };
-    }
-
-    const totalAvailable = exactRows.reduce((current, row) => current.add(row.exactQuantity ?? 0), new Prisma.Decimal(0));
-    if (totalAvailable.lte(0)) {
-      return {
-        mode: "NONE" as const,
-        reservations: [],
-        appliedQuantityText: null,
-        nextQuantityText: item.quantityText,
-        covered: false
-      };
-    }
-
-    const demand = new Prisma.Decimal(exactAmount.quantity);
-    const reserveQuantity = totalAvailable.gte(demand) ? demand : totalAvailable;
-    let remainingReserve = new Prisma.Decimal(reserveQuantity);
-    const reservations: Array<{ fridgeItemId: UUID; reservedQuantity: Prisma.Decimal; reservedUnitId: UUID }> = [];
-    for (const row of exactRows) {
-      if (remainingReserve.lte(0)) break;
-      const currentQuantity = row.exactQuantity ?? new Prisma.Decimal(0);
-      if (currentQuantity.lte(0)) continue;
-      const reservedQuantity = currentQuantity.gte(remainingReserve) ? remainingReserve : currentQuantity;
-      reservations.push({
-        fridgeItemId: row.id,
-        reservedQuantity,
-        reservedUnitId: row.exactUnitId!
-      });
-      remainingReserve = remainingReserve.sub(reservedQuantity);
-    }
-
-    const covered = totalAvailable.gte(demand);
-    return {
-      mode: covered ? "APPLY_FULL" as const : "APPLY_PARTIAL" as const,
-      reservations,
-      appliedQuantityText: this.formatExactQuantityText(reserveQuantity, exactAmount.unitName),
-      nextQuantityText: covered ? null : this.formatExactQuantityText(demand.sub(reserveQuantity), exactAmount.unitName),
-      covered
     };
   }
 
@@ -5081,18 +3257,6 @@ export class PantryService {
         revokedAt: now
       }
     });
-  }
-
-  private async loadShoppingBoardFromTx(tx: Prisma.TransactionClient, userId: UUID) {
-    const items = await tx.shoppingItem.findMany({
-      where: {
-        userId,
-        status: "OPEN"
-      },
-      select: shoppingRowSelect,
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
-    });
-    return this.buildShoppingBoard(items.map(this.toShoppingRow));
   }
 
   private async currentShoppingIngredients(
@@ -5231,556 +3395,6 @@ export class PantryService {
     };
   }
 
-  private buildShoppingBoard(items: ShoppingRow[]): ShoppingBoardResponse {
-    const recipeItems = items.filter(item => this.isRecipeShoppingRow(item));
-    return {
-      ingredientGroups: this.buildIngredientGroups(recipeItems),
-      recipeGroups: this.buildRecipeGroups(recipeItems),
-      otherItems: items.filter(item => item.sourceType !== "RECIPE").map(this.toShoppingItemSummary)
-    };
-  }
-
-  private buildIngredientGroups(items: RecipeShoppingRow[]): ShoppingIngredientGroup[] {
-    const groupMap = new Map<
-      UUID,
-      {
-        name: string;
-        amountMap: Map<string, ExactAmountGroup>;
-        fuzzyMap: Map<string, number>;
-        recipeTitles: Set<string>;
-        updatedAt: Date;
-      }
-    >();
-
-    for (const item of items) {
-      const amount = this.readRecipeAmount(item);
-      const current = groupMap.get(item.ingredientId) ?? {
-        name: item.name,
-        amountMap: new Map<string, ExactAmountGroup>(),
-        fuzzyMap: new Map<string, number>(),
-        recipeTitles: new Set<string>(),
-        updatedAt: item.updatedAt
-      };
-      current.recipeTitles.add(item.sourceRecipeTitle);
-      if (item.updatedAt > current.updatedAt) {
-        current.updatedAt = item.updatedAt;
-      }
-      this.pushAmount(current.amountMap, current.fuzzyMap, amount);
-      groupMap.set(item.ingredientId, current);
-    }
-
-    return Array.from(groupMap.entries())
-      .map(([ingredientId, item]) => ({
-        key: this.getIngredientGroupKey(ingredientId),
-        ingredientId,
-        name: item.name,
-        quantityLines: this.toQuantityLines(item.amountMap, item.fuzzyMap),
-        recipeCount: item.recipeTitles.size,
-        recipeTitles: Array.from(item.recipeTitles),
-        updatedAt: toIsoDate(item.updatedAt)
-      }))
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.name.localeCompare(right.name, "zh-Hans-CN"));
-  }
-
-  private buildRecipeGroups(items: RecipeShoppingRow[]): ShoppingRecipeGroup[] {
-    const groupMap = new Map<
-      string,
-      {
-        recipeId: UUID;
-        sourceVersionId: UUID;
-        title: string;
-        baseServings: number;
-        batchKeys: Set<string>;
-        updatedAt: Date;
-        itemMap: Map<
-          UUID,
-          {
-            name: string;
-            sortOrder: number;
-            amountMap: Map<string, ExactAmountGroup>;
-            fuzzyMap: Map<string, number>;
-            updatedAt: Date;
-          }
-        >;
-      }
-    >();
-
-    for (const item of items) {
-      const groupKey = this.getRecipeGroupKey(item.sourceRecipeId, item.sourceRecipeVersionId);
-      const current = groupMap.get(groupKey) ?? {
-        recipeId: item.sourceRecipeId,
-        sourceVersionId: item.sourceRecipeVersionId,
-        title: item.sourceRecipeTitle,
-        baseServings: item.sourceBaseServings,
-        batchKeys: new Set<string>(),
-        updatedAt: item.updatedAt,
-        itemMap: new Map()
-      };
-      current.batchKeys.add(item.sourceBatchKey);
-      if (item.updatedAt > current.updatedAt) {
-        current.updatedAt = item.updatedAt;
-      }
-
-      const amount = this.readRecipeAmount(item);
-      const currentItem = current.itemMap.get(item.ingredientId) ?? {
-        name: item.name,
-        sortOrder: item.sourceIngredientSort,
-        amountMap: new Map<string, ExactAmountGroup>(),
-        fuzzyMap: new Map<string, number>(),
-        updatedAt: item.updatedAt
-      };
-      if (item.updatedAt > currentItem.updatedAt) {
-        currentItem.updatedAt = item.updatedAt;
-      }
-      if (item.sourceIngredientSort < currentItem.sortOrder) {
-        currentItem.sortOrder = item.sourceIngredientSort;
-      }
-      this.pushAmount(currentItem.amountMap, currentItem.fuzzyMap, amount);
-      current.itemMap.set(item.ingredientId, currentItem);
-      groupMap.set(groupKey, current);
-    }
-
-    return Array.from(groupMap.values())
-      .map(item => {
-        const addCount = item.batchKeys.size;
-        const groupItems: ShoppingRecipeIngredientGroup[] = Array.from(item.itemMap.entries())
-          .map(([ingredientId, groupItem]) => ({
-            key: this.getRecipeIngredientGroupKey(item.recipeId, item.sourceVersionId, ingredientId),
-            ingredientId,
-            name: groupItem.name,
-            quantityLines: this.toQuantityLines(groupItem.amountMap, groupItem.fuzzyMap),
-            updatedAt: toIsoDate(groupItem.updatedAt)
-          }))
-          .sort((left, right) => {
-            const leftSort = item.itemMap.get(left.ingredientId)?.sortOrder ?? 0;
-            const rightSort = item.itemMap.get(right.ingredientId)?.sortOrder ?? 0;
-            return leftSort - rightSort || left.name.localeCompare(right.name, "zh-Hans-CN");
-          });
-
-        return {
-          key: this.getRecipeGroupKey(item.recipeId, item.sourceVersionId),
-          recipeId: item.recipeId,
-          sourceVersionId: item.sourceVersionId,
-          title: item.title,
-          addCount,
-          totalServings: item.baseServings * addCount,
-          updatedAt: toIsoDate(item.updatedAt),
-          items: groupItems
-        };
-      })
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.title.localeCompare(right.title, "zh-Hans-CN"));
-  }
-
-  private resolveShoppingGroupWhere(userId: UUID, targetKey: string): Prisma.ShoppingItemWhereInput {
-    const ingredientMatch = /^ingredient:(\d+)$/.exec(targetKey);
-    if (ingredientMatch) {
-      return {
-        userId,
-        sourceType: recipeSourceType,
-        ingredientId: Number(ingredientMatch[1])
-      };
-    }
-
-    const recipeMatch = /^recipe:(\d+):(\d+):ingredient:(\d+)$/.exec(targetKey);
-    if (recipeMatch) {
-      return {
-        userId,
-        sourceType: recipeSourceType,
-        sourceRecipeId: Number(recipeMatch[1]),
-        sourceRecipeVersionId: Number(recipeMatch[2]),
-        ingredientId: Number(recipeMatch[3])
-      };
-    }
-
-    throw new BadRequestException("购物分组标识错误");
-  }
-
-  private normalizePantryFields(name: string, quantityText?: string | null, note?: string | null) {
-    const normalizedName = name.trim();
-    if (!normalizedName) throw new BadRequestException("名称不能为空");
-    return {
-      name: normalizedName,
-      quantityText: quantityText?.trim() || null,
-      note: note?.trim() || null
-    };
-  }
-
-  private formatExactQuantityText(quantity: Prisma.Decimal | string, unitName: string) {
-    return `${new Prisma.Decimal(quantity).toString()} ${unitName}`;
-  }
-
-  private normalizeExpireAt(expireAt?: string | null) {
-    if (!expireAt) return null;
-    const resolved = new Date(expireAt);
-    if (Number.isNaN(resolved.getTime())) {
-      throw new BadRequestException("到期时间参数错误");
-    }
-    return resolved;
-  }
-
-  private calculateDaySpan(startAt: Date, endAt: Date) {
-    const diffMs = endAt.getTime() - startAt.getTime();
-    return Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
-  }
-
-  private resolveFridgeExpireCutoff(days: number) {
-    const cutoff = new Date();
-    cutoff.setHours(23, 59, 59, 999);
-    cutoff.setDate(cutoff.getDate() + days);
-    return cutoff;
-  }
-
-  private async buildFridgeWriteInput(
-    tx: Prisma.TransactionClient,
-    userId: UUID,
-    ingredientId: UUID | null,
-    name: string,
-    quantityText: string | null,
-    exactQuantity?: string | null,
-    exactUnitId?: UUID | null,
-    expireAt?: Date | null,
-    note?: string | null
-  ) {
-    const hasExactQuantity = Boolean(exactQuantity);
-    const hasExactUnit = exactUnitId !== null && exactUnitId !== undefined;
-    if (hasExactQuantity !== hasExactUnit) {
-      throw new BadRequestException("精确数量和单位需要一起填写");
-    }
-    if (hasExactQuantity && !ingredientId) {
-      throw new BadRequestException("使用精确数量时需要绑定食材");
-    }
-
-    let resolvedIngredientId = ingredientId;
-    let resolvedName = name;
-    if (ingredientId !== null) {
-      const ingredient = await tx.ingredient.findUnique({
-        where: { id: ingredientId },
-        select: {
-          id: true,
-          ownerId: true,
-          status: true,
-          name: true,
-          mergedTo: {
-            select: {
-              id: true,
-              ownerId: true,
-              status: true,
-              name: true
-            }
-          }
-        }
-      });
-      if (!ingredient || (ingredient.ownerId !== null && ingredient.ownerId !== userId)) {
-        throw new NotFoundException("食材不存在");
-      }
-      if (ingredient.status === "MERGED") {
-        if (!ingredient.mergedTo || ingredient.mergedTo.ownerId !== null || ingredient.mergedTo.status !== "ACTIVE") {
-          throw new BadRequestException("食材归并目标无效");
-        }
-        resolvedIngredientId = ingredient.mergedTo.id;
-        resolvedName = ingredient.mergedTo.name;
-      } else {
-        resolvedName = ingredient.name;
-      }
-    }
-
-    let resolvedQuantityText = quantityText;
-    if (hasExactQuantity && hasExactUnit) {
-      if (!new Prisma.Decimal(exactQuantity!).gt(0)) {
-        throw new BadRequestException("精确数量必须大于 0");
-      }
-      const unit = await tx.unit.findFirst({
-        where: {
-          id: exactUnitId,
-          ownerId: null
-        },
-        select: {
-          id: true,
-          name: true
-        }
-      });
-      if (!unit) {
-        throw new NotFoundException("单位不存在");
-      }
-      resolvedQuantityText = this.formatExactQuantityText(exactQuantity!, unit.name);
-    }
-
-    return {
-      ingredientId: resolvedIngredientId,
-      name: resolvedName,
-      quantityText: resolvedQuantityText,
-      exactQuantity: hasExactQuantity ? new Prisma.Decimal(exactQuantity!) : null,
-      exactUnitId: hasExactUnit ? exactUnitId! : null,
-      expireAt: expireAt ?? null,
-      note: note ?? null
-    };
-  }
-
-  private async loadInventoryBatchRows(
-    tx: Prisma.TransactionClient | PrismaService,
-    userId: UUID,
-    available?: boolean
-  ): Promise<InventoryBatchRecord[]> {
-    const rows = await tx.fridgeItem.findMany({
-      where: {
-        userId,
-        ...(available === undefined ? {} : { available })
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      include: {
-        ingredient: {
-          select: {
-            id: true,
-            status: true,
-            name: true,
-            mergedTo: {
-              select: {
-                id: true,
-                status: true,
-                name: true,
-                category: {
-                  select: {
-                    name: true
-                  }
-                }
-              }
-            },
-            category: {
-              select: {
-                name: true
-              }
-            }
-          }
-        },
-        exactUnit: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        sourceShoppingItem: {
-          select: {
-            amountJson: true
-          }
-        }
-      }
-    });
-    const reservationMap = await this.loadFridgeReservationMap(tx, rows.map(row => row.id));
-
-    return rows.map(row => {
-      const currentIngredient = row.ingredient?.status === "MERGED" && row.ingredient.mergedTo
-        ? row.ingredient.mergedTo
-        : row.ingredient;
-      const resolvedExact = this.resolveFridgeExactAmount(row);
-      const reservations = reservationMap.get(row.id) ?? [];
-      const reservedQuantity = reservations.reduce(
-        (total, reservation) => total.add(reservation.reservedQuantity),
-        new Prisma.Decimal(0)
-      );
-      return {
-        id: row.id,
-        ingredientId: currentIngredient?.id ?? null,
-        name: currentIngredient?.name ?? row.name,
-        categoryName: currentIngredient?.category?.name ?? null,
-        quantityText: row.quantityText,
-        exactQuantity: resolvedExact?.quantity ?? row.exactQuantity,
-        exactUnitId: resolvedExact?.unitId ?? row.exactUnitId,
-        exactUnitName: resolvedExact?.unitName ?? row.exactUnit?.name ?? null,
-        note: row.note,
-        available: row.available,
-        version: row.version,
-        expireAt: row.expireAt,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-        reservedQuantity,
-        reservations: reservations.map(reservation => ({
-          shoppingListId: reservation.shoppingListId,
-          shoppingListName: reservation.shoppingListName,
-          shoppingItemId: reservation.shoppingItemId,
-          reservedText: this.formatExactQuantityText(reservation.reservedQuantity, reservation.reservedUnitName)
-        })) satisfies InventoryReservationRecord[]
-      } satisfies InventoryBatchRecord;
-    });
-  }
-
-  private toFridgeIngredientDetail(summary: ReturnType<typeof groupFridgeBatches>[number]): FridgeIngredientDetail {
-    const { batches, ...base } = summary;
-    return {
-      ...base,
-      activeBatches: batches.filter(batch => !batch.isExpired),
-      expiredBatches: batches.filter(batch => batch.isExpired)
-    };
-  }
-
-  private async loadFridgeReservationMap(
-    tx: Prisma.TransactionClient | PrismaService,
-    fridgeItemIds: UUID[]
-  ) {
-    const uniqueIds = Array.from(new Set(fridgeItemIds));
-    if (!uniqueIds.length) {
-      return new Map<UUID, FridgeReservationSummaryRow[]>();
-    }
-    const reservations = await tx.shoppingItemFridgeReservation.findMany({
-      where: {
-        fridgeItemId: {
-          in: uniqueIds
-        },
-        releasedAt: null,
-        settledAt: null
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-      select: {
-        fridgeItemId: true,
-        reservedQuantity: true,
-        shoppingList: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        shoppingItem: {
-          select: {
-            id: true
-          }
-        },
-        reservedUnit: {
-          select: {
-            name: true
-          }
-        }
-      }
-    });
-
-    const reservationMap = new Map<UUID, FridgeReservationSummaryRow[]>();
-    for (const reservation of reservations) {
-      const current = reservationMap.get(reservation.fridgeItemId) ?? [];
-      current.push({
-        shoppingListId: reservation.shoppingList.id,
-        shoppingListName: reservation.shoppingList.name,
-        shoppingItemId: reservation.shoppingItem.id,
-        reservedQuantity: reservation.reservedQuantity,
-        reservedUnitName: reservation.reservedUnit.name
-      });
-      reservationMap.set(reservation.fridgeItemId, current);
-    }
-    return reservationMap;
-  }
-
-  private async loadFridgeItemSummaryFromTx(tx: Prisma.TransactionClient, userId: UUID, itemId: UUID) {
-    const item = await tx.fridgeItem.findFirst({
-      where: {
-        id: itemId,
-        userId
-      },
-      include: {
-        ingredient: {
-          select: {
-            category: {
-              select: {
-                name: true
-              }
-            }
-          }
-        },
-        exactUnit: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        sourceShoppingItem: {
-          select: {
-            amountJson: true
-          }
-        }
-      }
-    });
-    if (!item) {
-      throw new NotFoundException("食材不存在");
-    }
-    const reservationMap = await this.loadFridgeReservationMap(tx, [item.id]);
-    return this.toFridgeItemSummary(item, reservationMap.get(item.id) ?? []);
-  }
-
-  private async assertStorageWritable(tx: Prisma.TransactionClient, userId: UUID, expectedDeltaBytes: number) {
-    const entitlements = await this.entitlementService.resolveForUser(tx, userId);
-    const current = await tx.storageLedger.aggregate({
-      where: { userId },
-      _sum: { usedBytes: true }
-    });
-    const usedBytes = current._sum.usedBytes ?? 0;
-    if (usedBytes > entitlements.storageLimitBytes) {
-      throw new ForbiddenException("当前个人空间已超额，只允许清理和查看");
-    }
-    if (usedBytes + expectedDeltaBytes > entitlements.storageLimitBytes) {
-      throw new ForbiddenException("当前个人空间不足");
-    }
-  }
-
-  private toFridgeItemSummary(item: {
-    id: UUID;
-    ingredientId: UUID | null;
-    ingredient?: {
-      category: {
-        name: string;
-      } | null;
-    } | null;
-    name: string;
-    quantityText: string | null;
-    exactQuantity: Prisma.Decimal | null;
-    exactUnitId: UUID | null;
-    expireAt: Date | null;
-    note: string | null;
-    available: boolean;
-    updatedAt: Date;
-    exactUnit?: {
-      id: UUID;
-      name: string;
-    } | null;
-    sourceShoppingItem?: {
-      amountJson: Prisma.JsonValue | null;
-    } | null;
-  }, reservations: FridgeReservationSummaryRow[]): FridgeItemSummary {
-    const resolvedExact = this.resolveFridgeExactAmount(item);
-    const stockText = resolvedExact
-      ? this.formatExactQuantityText(resolvedExact.quantity, resolvedExact.unitName)
-      : item.quantityText;
-    const reservedTotal = reservations.reduce((current, reservation) => current.add(reservation.reservedQuantity), new Prisma.Decimal(0));
-    const hasExactStock = Boolean(resolvedExact);
-    const reservedText = hasExactStock && reservedTotal.gt(0) ? this.formatExactQuantityText(reservedTotal, resolvedExact!.unitName) : null;
-    const availableQuantity = hasExactStock ? resolvedExact!.quantity.sub(reservedTotal) : null;
-    const normalizedAvailableQuantity =
-      availableQuantity && availableQuantity.gt(0) ? availableQuantity : hasExactStock ? new Prisma.Decimal(0) : null;
-    const availableText = hasExactStock
-      ? this.formatExactQuantityText(normalizedAvailableQuantity ?? new Prisma.Decimal(0), resolvedExact!.unitName)
-      : stockText;
-    const available = hasExactStock ? item.available && (normalizedAvailableQuantity?.gt(0) ?? false) : item.available;
-
-    return {
-      id: item.id,
-      ingredientId: item.ingredientId,
-      categoryName: item.ingredient?.category?.name ?? null,
-      name: item.name,
-      quantityText: item.quantityText,
-      exactQuantity: resolvedExact?.quantity.toString() ?? null,
-      exactUnitId: resolvedExact?.unitId ?? null,
-      exactUnitName: resolvedExact?.unitName ?? null,
-      note: item.note,
-      available,
-      expireAt: item.expireAt ? toIsoDate(item.expireAt) : null,
-      stockText,
-      reservedText,
-      availableText,
-      reservations: reservations.map(reservation => ({
-        shoppingListId: reservation.shoppingListId,
-        shoppingListName: reservation.shoppingListName,
-        shoppingItemId: reservation.shoppingItemId,
-        reservedText: this.formatExactQuantityText(reservation.reservedQuantity, reservation.reservedUnitName)
-      })),
-      updatedAt: toIsoDate(item.updatedAt)
-    };
-  }
-
   private buildGapPreview(events: GapEvent[], now: Date): ShoppingGapResponse {
     const activeEvents = events.filter(event => resolveGapWindow(event.scheduledAt, now) !== null);
     const totalEventIds = new Set(activeEvents.map(event => String(event.id)));
@@ -5841,6 +3455,7 @@ export class PantryService {
       sourceType,
       sourceKey: line.sourceKey,
       status: "OPEN" as const,
+      preparationStatus: "OPEN" as const,
       updatedAt: toIsoDate(line.updatedAt),
       ingredientId: line.ingredientId,
       amountJson: line.amount as Prisma.InputJsonValue,
@@ -5853,11 +3468,20 @@ export class PantryService {
     }));
   }
 
-  private buildShoppingDemandWriteItems(item: EventGapSummaryItem, batchKey: string) {
+  private buildShoppingDemandWriteItems(item: EventGapSummaryItem, batchKey: string): EventGapSummaryItem[] {
     if (!item.sourceFacts?.length) {
       return [{
         ...item,
-        sourceBatchKey: batchKey
+        ...(item.sourceType === "EVENT"
+          ? {
+              sourceRecipeId: null,
+              sourceRecipeVersionId: null,
+              sourceRecipeTitle: null,
+              sourceBaseServings: null,
+              sourceBatchKey: null,
+              sourceIngredientSort: null
+            }
+          : { sourceBatchKey: batchKey })
       }];
     }
 
@@ -5867,12 +3491,12 @@ export class PantryService {
       name: source.ingredientName,
       quantityText: formatRecipeAmount(source.amount),
       note: source.recipeTitle || item.note,
-      sourceRecipeId: source.recipeId,
-      sourceRecipeVersionId: source.sourceVersionId,
-      sourceRecipeTitle: source.recipeTitle || null,
-      sourceBaseServings: source.baseServings,
-      sourceBatchKey: batchKey,
-      sourceIngredientSort: source.ingredientSort,
+      sourceRecipeId: item.sourceType === "EVENT" ? null : source.recipeId,
+      sourceRecipeVersionId: item.sourceType === "EVENT" ? null : source.sourceVersionId,
+      sourceRecipeTitle: item.sourceType === "EVENT" ? null : source.recipeTitle || null,
+      sourceBaseServings: item.sourceType === "EVENT" ? null : source.baseServings,
+      sourceBatchKey: item.sourceType === "EVENT" ? null : batchKey,
+      sourceIngredientSort: item.sourceType === "EVENT" ? null : source.ingredientSort,
       ingredientId: source.ingredientId,
       amountJson: source.amount as Prisma.InputJsonValue
     }));
@@ -5898,127 +3522,10 @@ export class PantryService {
     }));
   }
 
-  private isRecipeShoppingRow(item: ShoppingRow): item is RecipeShoppingRow {
-    return (
-      item.sourceType === "RECIPE" &&
-      item.sourceKey !== null &&
-      item.sourceRecipeId !== null &&
-      item.sourceRecipeVersionId !== null &&
-      item.sourceRecipeTitle !== null &&
-      item.sourceBaseServings !== null &&
-      item.sourceBatchKey !== null &&
-      item.sourceIngredientSort !== null &&
-      item.ingredientId !== null &&
-      item.amountJson !== null
-    );
-  }
-
-  private readRecipeAmount(item: RecipeShoppingRow) {
-    return fromJson<RecipeAmountSnapshot>(item.amountJson);
-  }
-
-  private pushAmount(amountMap: Map<string, ExactAmountGroup>, fuzzyMap: Map<string, number>, amount: RecipeAmountSnapshot) {
-    if (amount.kind === "EXACT") {
-      const key = `${amount.unitId}`;
-      const current = amountMap.get(key);
-      if (!current) {
-        amountMap.set(key, {
-          unitId: amount.unitId,
-          unitName: amount.unitName,
-          quantity: new Prisma.Decimal(amount.quantity)
-        });
-        return;
-      }
-      current.quantity = current.quantity.add(amount.quantity);
-      return;
-    }
-
-    fuzzyMap.set(amount.text, (fuzzyMap.get(amount.text) ?? 0) + 1);
-  }
-
-  private toQuantityLines(amountMap: Map<string, ExactAmountGroup>, fuzzyMap: Map<string, number>) {
-    const exactLines = Array.from(amountMap.values())
-      .sort((left, right) => left.unitName.localeCompare(right.unitName, "zh-Hans-CN"))
-      .map(item => `${item.quantity.toString()}${item.unitName}`);
-    const fuzzyLines = Array.from(fuzzyMap.entries())
-      .sort((left, right) => left[0].localeCompare(right[0], "zh-Hans-CN"))
-      .map(([text, count]) => (count > 1 ? `${text} x${count}` : text));
-    return [...exactLines, ...fuzzyLines];
-  }
-
-  private getIngredientGroupKey(ingredientId: UUID) {
-    return `ingredient:${ingredientId}`;
-  }
-
-  private getRecipeGroupKey(recipeId: UUID, sourceVersionId: UUID) {
-    return `recipe:${recipeId}:${sourceVersionId}`;
-  }
-
-  private getRecipeIngredientGroupKey(recipeId: UUID, sourceVersionId: UUID, ingredientId: UUID) {
-    return `recipe:${recipeId}:${sourceVersionId}:ingredient:${ingredientId}`;
-  }
-
-  private toShoppingRow(item: {
-    id: UUID;
-    listId: UUID | null;
-    name: string;
-    quantityText: string | null;
-    note: string | null;
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
-    sourceKey: string | null;
-    sourceRecipeId: UUID | null;
-    sourceRecipeVersionId: UUID | null;
-    sourceRecipeTitle: string | null;
-    sourceBaseServings: number | null;
-    sourceBatchKey: string | null;
-    sourceIngredientSort: number | null;
-    ingredientId: UUID | null;
-    amountJson: Prisma.JsonValue | null;
-    status: "OPEN" | "BOUGHT" | "DELETED";
-    checkedAt: Date | null;
-    updatedAt: Date;
-  }): ShoppingRow {
+  private toShoppingGapPreviewItem(item: EventGapSummaryItem): ShoppingGapPreviewItem {
     return {
-      id: item.id,
-      listId: item.listId,
-      name: item.name,
-      quantityText: item.quantityText,
-      note: item.note,
-      sourceType: item.sourceType,
-      sourceKey: item.sourceKey,
-      sourceRecipeId: item.sourceRecipeId,
-      sourceRecipeVersionId: item.sourceRecipeVersionId,
-      sourceRecipeTitle: item.sourceRecipeTitle,
-      sourceBaseServings: item.sourceBaseServings,
-      sourceBatchKey: item.sourceBatchKey,
-      sourceIngredientSort: item.sourceIngredientSort,
-      ingredientId: item.ingredientId,
-      amountJson: item.amountJson,
-      status: item.status,
-      checkedAt: item.checkedAt,
-      updatedAt: item.updatedAt
+      ...item,
+      ingredientId: item.ingredientId
     };
   }
-
-  private toShoppingItemSummary = (item: {
-    id: UUID;
-    name: string;
-    quantityText: string | null;
-    note: string | null;
-    sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
-    sourceKey: string | null;
-    status: "OPEN" | "BOUGHT" | "DELETED";
-    updatedAt: Date;
-  }): ShoppingItemSummary => ({
-    id: item.id,
-    name: item.name,
-    quantityText: item.quantityText,
-    note: item.note,
-    sourceCount: 1,
-    sourceTitles: [],
-    sourceType: item.sourceType,
-    sourceKey: item.sourceKey,
-    status: item.status,
-    updatedAt: toIsoDate(item.updatedAt)
-  });
 }

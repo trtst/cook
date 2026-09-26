@@ -9,18 +9,11 @@ import {
   AddEventGapToShoppingListDto,
   AddPlanToShoppingListDto,
   AddRecipeToShoppingListDto,
-  ApplyShoppingListItemFridgeDto,
-  ConsumeFridgeItemsDto,
-  CreateRandomMenuShoppingItemsDto,
-  CreateFridgeItemDto,
-  CreateRecipeShoppingItemsDto,
+  CreateFridgeTraceDto,
+  CreateFridgeTraceBatchDto,
   CreateShoppingListDto,
   CreateShoppingListItemDto,
-  CreateShoppingItemDto,
   DeleteShoppingListDto,
-  CompleteShoppingListDto,
-  FridgeHistoryQueryDto,
-  FridgeSummaryQueryDto,
   LeaveShoppingListDto,
   OperationDto,
   PageQueryDto,
@@ -29,28 +22,19 @@ import {
   RemoveShoppingListMemberDto,
   ShoppingListInviteQueryDto,
   ShoppingListQueryDto,
-  ShoppingItemQueryDto,
-  UpdateFridgeItemDto,
-  UpdateFridgeItemsDto,
-  UpdateShoppingGroupStatusDto,
   UpdateShoppingListItemCheckDto,
-  UpdateShoppingListStatusDto,
-  UpdateShoppingStatusDto
+  UpdateShoppingListItemChecksDto,
+  UpdateShoppingListStatusDto
 } from "../../contracts/dtos";
 import {
   ApiOkArray,
   ApiOkModel,
   ApiOkPage,
-  FridgeConsumeModel,
-  FridgeBatchModel,
-  FridgeIngredientDetailModel,
-  FridgeIngredientModel,
-  FridgeItemModel,
-  FridgeSummaryModel,
-  SubscribeMessageSendResultModel,
-  ShoppingBoardModel,
+  FridgeTraceIngredientModel,
+  FridgeTraceModel,
+  FridgeTraceSummaryResponseModel,
+  ShoppingGapPreviewItemModel,
   ShoppingGapResponseModel,
-  ShoppingItemModel,
   ShoppingListDetailModel,
   ShoppingListItemPatchResponseModel,
   ShoppingListInviteActionModel,
@@ -69,143 +53,58 @@ import { PantryService } from "./pantry.service";
 export class PantryController {
   constructor(@Inject(PantryService) private readonly pantryService: PantryService) {}
 
-  @Get("fridge-items")
-  @ApiOkPage(FridgeIngredientModel, "按食材聚合查询当前用户自己的库存")
-  listFridge(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
-    return this.pantryService.listFridge(request.user.userId, query.page, query.pageSize).then(result => ok(result));
+  @Get("fridge-traces")
+  @ApiOkPage(FridgeTraceIngredientModel, "读取当前用户食材有无状态")
+  listFridgeTraces(@Req() request: RequestWithUser, @Query() query: PageQueryDto) {
+    return this.pantryService.listFridgeTraces(request.user.userId, query.page, query.pageSize).then(result => ok(result));
   }
 
-  @Get("fridge-items/summary")
-  @ApiOkModel(FridgeSummaryModel, "读取当前用户冰箱摘要")
-  getFridgeSummary(@Req() request: RequestWithUser, @Query() query: FridgeSummaryQueryDto) {
-    return this.pantryService.getFridgeSummary(request.user.userId, query.days).then(result => ok(result));
+  @Get("fridge-traces/summary")
+  @ApiOkModel(FridgeTraceSummaryResponseModel, "读取当前用户近期冰箱痕迹摘要")
+  getFridgeTraceSummary(@Req() request: RequestWithUser) {
+    return this.pantryService.getFridgeTraceSummary(request.user.userId).then(result => ok(result));
   }
 
-  @Get("fridge-items/batch/:itemId")
-  @ApiOkModel(FridgeIngredientDetailModel, "兼容旧库存批次深链，返回对应食材详情")
-  getFridgeItemDetail(
-    @Req() request: RequestWithUser,
-    @Param("itemId", ParseIntPipe) itemId: number
-  ) {
-    return this.pantryService.getFridgeItemDetail(request.user.userId, itemId).then(result => ok(result));
-  }
-
-  @Get("fridge-items/:ingredientId/history")
-  @ApiOkPage(FridgeBatchModel, "分页查询一个食材的历史库存批次")
-  listFridgeHistory(
-    @Req() request: RequestWithUser,
-    @Param("ingredientId", ParseIntPipe) ingredientId: number,
-    @Query() query: FridgeHistoryQueryDto
-  ) {
-    return this.pantryService.listFridgeHistory(request.user.userId, ingredientId, query.page, query.pageSize).then(result => ok(result));
-  }
-
-  @Get("fridge-items/:ingredientId")
-  @ApiOkModel(FridgeIngredientDetailModel, "查询一个食材的当前库存批次")
-  getFridgeIngredientDetail(
-    @Req() request: RequestWithUser,
-    @Param("ingredientId", ParseIntPipe) ingredientId: number
-  ) {
-    return this.pantryService.getFridgeIngredientDetail(request.user.userId, ingredientId).then(result => ok(result));
-  }
-
-  @Post("fridge-items/:itemId/expiry-reminder")
+  @Post("fridge-traces/present")
   @ApiIdempotencyKey()
-  @ApiOkModel(SubscribeMessageSendResultModel, "发送一条食材到期订阅消息")
-  sendFridgeExpiryReminder(
-    @Req() request: RequestWithUser,
-    @Param("itemId", ParseIntPipe) itemId: number,
-    @ReadIdempotencyKey() operationId: string
-  ) {
-    return this.pantryService.sendFridgeExpiryReminder(request.user.userId, itemId, operationId).then(result => ok(result));
-  }
-
-  @Post("fridge-items")
-  @ApiIdempotencyKey()
-  @ApiOkModel(FridgeItemModel, "创建一个冰箱条目")
-  createFridgeItem(
+  @ApiOkModel(FridgeTraceModel, "手动标记食材还有")
+  markFridgeTracePresent(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateFridgeItemDto
+    @Body() body: CreateFridgeTraceDto
   ) {
     return this.pantryService
-      .createFridgeItem(
-        request.user.userId,
-        operationId,
-        body.name,
-        body.ingredientId ?? null,
-        body.quantityText ?? null,
-        body.exactQuantity ?? null,
-        body.exactUnitId ?? null,
-        body.expireAt ?? null,
-        body.note ?? null
-      )
+      .markFridgeTracePresent(request.user.userId, operationId, body.ingredientId ?? null, body.name, body.categoryName ?? null)
       .then(result => ok(result));
   }
 
-  @Put("fridge-items/batch-state")
+  @Post("fridge-traces/present/batch")
   @ApiIdempotencyKey()
-  @ApiOkArray(FridgeItemModel, "在一个事务中更新多个冰箱库存批次")
-  updateFridgeItems(
+  @ApiOkArray(FridgeTraceModel, "在单个事务中确认多项食材还有")
+  markFridgeTracesPresent(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
-    @Body() body: UpdateFridgeItemsDto
+    @Body() body: CreateFridgeTraceBatchDto
   ) {
     return this.pantryService
-      .updateFridgeItems(
-        request.user.userId,
-        body.itemIds,
-        operationId,
-        body.available,
-        body.quantityText ?? null,
-        body.exactQuantity ?? null,
-        body.exactUnitId ?? null
-      )
+      .markFridgeTracesPresent(request.user.userId, operationId, body.items.map(item => ({
+        ingredientId: item.ingredientId ?? null,
+        name: item.name,
+        categoryName: item.categoryName ?? null
+      })))
       .then(result => ok(result));
   }
 
-  @Put("fridge-items/:itemId")
+  @Post("fridge-traces/empty")
   @ApiIdempotencyKey()
-  @ApiOkModel(FridgeItemModel, "更新一个冰箱条目")
-  updateFridgeItem(
-    @Req() request: RequestWithUser,
-    @Param("itemId", ParseIntPipe) itemId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: UpdateFridgeItemDto
-  ) {
-    return this.pantryService
-      .updateFridgeItem(
-        request.user.userId,
-        itemId,
-        operationId,
-        body.available,
-        body.quantityText ?? null,
-        body.exactQuantity ?? null,
-        body.exactUnitId ?? null,
-        body.expireAt ?? null,
-        body.note ?? null
-      )
-      .then(result => ok(result));
-  }
-
-  @Post("fridge-items/consume")
-  @ApiIdempotencyKey()
-  @ApiOkModel(FridgeConsumeModel, "按食材总量扣减本人库存")
-  consumeFridgeItems(
+  @ApiOkModel(FridgeTraceModel, "手动标记食材用完")
+  markFridgeTraceEmpty(
     @Req() request: RequestWithUser,
     @ReadIdempotencyKey() operationId: string,
-    @Body() body: ConsumeFridgeItemsDto
+    @Body() body: CreateFridgeTraceDto
   ) {
     return this.pantryService
-      .consumeFridgeStock(request.user.userId, operationId, body.ingredientId, body.exactQuantity, body.exactUnitId)
-      .then(result => ok(result));
-  }
-
-  @Get("shopping-items")
-  @ApiOkPage(ShoppingItemModel, "分页查询当前用户自己的购物清单")
-  listShopping(@Req() request: RequestWithUser, @Query() query: ShoppingItemQueryDto) {
-    return this.pantryService
-      .listShopping(request.user.userId, query.page, query.pageSize, query.status)
+      .markFridgeTraceEmpty(request.user.userId, operationId, body.ingredientId ?? null, body.name, body.categoryName ?? null)
       .then(result => ok(result));
   }
 
@@ -343,18 +242,17 @@ export class PantryController {
       .then(result => ok(result));
   }
 
-  @Post("shopping-lists/:listId/items/:itemId/fridge")
+  @Post("shopping-lists/:listId/items/check")
   @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListItemPatchResponseModel, "对一个购物清单项应用或撤销库存预占")
-  applyShoppingListItemFridge(
+  @ApiOkModel(ShoppingListDetailModel, "批量提交购物清单项的勾选变化")
+  updateShoppingListItemChecks(
     @Req() request: RequestWithUser,
     @Param("listId", ParseIntPipe) listId: number,
-    @Param("itemId", ParseIntPipe) itemId: number,
     @ReadIdempotencyKey() operationId: string,
-    @Body() body: ApplyShoppingListItemFridgeDto
+    @Body() body: UpdateShoppingListItemChecksDto
   ) {
     return this.pantryService
-      .applyShoppingListItemFridge(request.user.userId, listId, itemId, operationId, body.version, body.action)
+      .updateShoppingListItemChecks(request.user.userId, listId, operationId, body.version, body.items)
       .then(result => ok(result));
   }
 
@@ -431,32 +329,6 @@ export class PantryController {
     @Body() body: DeleteShoppingListDto
   ) {
     return this.pantryService.deleteShoppingList(request.user.userId, listId, operationId, body.version).then(result => ok(result));
-  }
-
-  @Post("shopping-lists/:listId/complete")
-  @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingListDetailModel, "完成一张购物清单并确认入库")
-  completeShoppingList(
-    @Req() request: RequestWithUser,
-    @Param("listId", ParseIntPipe) listId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: CompleteShoppingListDto
-  ) {
-    return this.pantryService
-      .completeShoppingList(
-        request.user.userId,
-        listId,
-        operationId,
-        body.version,
-        body.entries.map(entry => ({
-          itemId: entry.itemId,
-          store: entry.store,
-          quantityText: entry.quantityText ?? null,
-          expireDays: entry.expireDays ?? null,
-          expireAt: entry.expireAt ?? null
-        }))
-      )
-      .then(result => ok(result));
   }
 
   @Post("shopping-lists/:listId/share-link")
@@ -564,91 +436,6 @@ export class PantryController {
     return this.pantryService.joinShoppingShare(request.user.userId, shareToken, operationId).then(result => ok(result));
   }
 
-  @Get("shopping-items/board")
-  @ApiOkModel(ShoppingBoardModel, "读取当前用户待买购物清单的聚合视图")
-  getShoppingBoard(@Req() request: RequestWithUser) {
-    return this.pantryService.getShoppingBoard(request.user.userId).then(result => ok(result));
-  }
-
-  @Post("shopping-items")
-  @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingItemModel, "手动创建一个购物项")
-  createShoppingItem(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateShoppingItemDto
-  ) {
-    return this.pantryService
-      .createShoppingItem(request.user.userId, operationId, body.name, body.quantityText, body.note)
-      .then(result => ok(result));
-  }
-
-  @Post("shopping-items/from-recipe")
-  @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingBoardModel, "把一份可读菜谱按固定版本加入当前用户购物清单")
-  createRecipeShoppingItems(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateRecipeShoppingItemsDto
-  ) {
-    return this.pantryService
-      .createRecipeShoppingItems(request.user.userId, operationId, body.recipeId, body.sourceVersionId)
-      .then(result => ok(result));
-  }
-
-  @Post("shopping-items/from-random-menu")
-  @ApiIdempotencyKey()
-  @ApiOkArray(ShoppingItemModel, "把当前随机菜单确认采购的缺口写入本人购物清单")
-  createRandomMenuShoppingItems(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: CreateRandomMenuShoppingItemsDto
-  ) {
-    return this.pantryService
-      .createRandomMenuShoppingItems(
-        request.user.userId,
-        operationId,
-        body.items.map(item => ({
-          slotId: item.slotId,
-          recipeId: item.recipeId,
-          recipeVersionId: item.recipeVersionId,
-          ingredients: item.ingredients.map(ingredient => ({
-            ingredientId: ingredient.ingredientId ?? null,
-            ingredientName: ingredient.ingredientName,
-            quantityText: ingredient.quantityText ?? null
-          }))
-        }))
-      )
-      .then(result => ok(result));
-  }
-
-  @Post("shopping-items/:itemId/status")
-  @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingItemModel, "更新购物项状态")
-  updateShoppingStatus(
-    @Req() request: RequestWithUser,
-    @Param("itemId", ParseIntPipe) itemId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: UpdateShoppingStatusDto
-  ) {
-    return this.pantryService
-      .updateShoppingStatus(request.user.userId, itemId, operationId, body.status)
-      .then(result => ok(result));
-  }
-
-  @Post("shopping-items/group-status")
-  @ApiIdempotencyKey()
-  @ApiOkModel(ShoppingBoardModel, "更新一个购物聚合分组的状态")
-  updateShoppingGroupStatus(
-    @Req() request: RequestWithUser,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() body: UpdateShoppingGroupStatusDto
-  ) {
-    return this.pantryService
-      .updateShoppingGroupStatus(request.user.userId, operationId, body.targetKey, body.status)
-      .then(result => ok(result));
-  }
-
   @Get("shopping-gap")
   @ApiOkModel(ShoppingGapResponseModel, "预览当前用户待处理饭局汇总后的准备需求")
   previewGap(@Req() request: RequestWithUser) {
@@ -656,7 +443,7 @@ export class PantryController {
   }
 
   @Get("meal-plans/:planItemId/shopping-gap")
-  @ApiOkArray(ShoppingItemModel, "预览指定餐次的完整准备需求")
+  @ApiOkArray(ShoppingGapPreviewItemModel, "预览指定餐次的完整准备需求")
   previewPlanGap(
     @Req() request: RequestWithUser,
     @Param("planItemId", ParseIntPipe) planItemId: number
@@ -665,7 +452,7 @@ export class PantryController {
   }
 
   @Get("dining-events/:eventId/shopping-gap")
-  @ApiOkArray(ShoppingItemModel, "预览指定饭局的完整准备需求")
+  @ApiOkArray(ShoppingGapPreviewItemModel, "预览指定饭局的完整准备需求")
   previewEventGap(
     @Req() request: RequestWithUser,
     @Param("eventId", ParseIntPipe) eventId: number
@@ -673,15 +460,4 @@ export class PantryController {
     return this.pantryService.previewEventGap(request.user.userId, eventId).then(result => ok(result));
   }
 
-  @Post("dining-events/:eventId/shopping-gap")
-  @ApiIdempotencyKey()
-  @ApiOkArray(ShoppingItemModel, "把某个饭局菜单完整需求写入本人购物清单")
-  createGap(
-    @Req() request: RequestWithUser,
-    @Param("eventId", ParseIntPipe) eventId: number,
-    @ReadIdempotencyKey() operationId: string,
-    @Body() _body: OperationDto
-  ) {
-    return this.pantryService.createEventGap(request.user.userId, eventId, operationId).then(result => ok(result));
-  }
 }

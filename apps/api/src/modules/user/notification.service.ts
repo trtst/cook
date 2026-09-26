@@ -544,45 +544,12 @@ export class NotificationService {
     settings: NotificationSettings,
     take: number
   ): Promise<FeedSourceResult> {
-    if (!settings.fridge.enabled) {
-      return { items: [], total: 0 };
-    }
-
-    const where = {
-      userId,
-      available: true,
-      expireAt: {
-        not: null,
-        lte: addDays(now, settings.fridge.days)
-      }
-    };
-    const [expiringCount, expiringItems] = await Promise.all([
-      db.fridgeItem.count({ where }),
-      db.fridgeItem.findMany({
-        where,
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        take,
-        select: { id: true, name: true, updatedAt: true }
-      })
-    ]);
-
-    if (!expiringCount || !expiringItems.length) {
-      return { items: [], total: 0 };
-    }
-
-    return {
-      total: expiringCount,
-      items: expiringItems.map(item => ({
-        id: `reminder:fridge-expiring:${item.id}`,
-        isUnread: false,
-        typeLabel: "系统提醒",
-        tone: "reminder",
-        title: `食材临期提醒：${item.name}`,
-        desc: `${settings.fridge.days} 天内将到期，建议优先安排`,
-        timeValue: toIsoDate(item.updatedAt),
-        targetPath: "/pages_pantry/index/index"
-      }))
-    };
+    void db;
+    void userId;
+    void now;
+    void settings;
+    void take;
+    return { items: [], total: 0 };
   }
 
   private async loadRecipeWikiFeed(db: NotificationDb, userId: UUID, take: number): Promise<FeedSourceResult> {
@@ -686,21 +653,8 @@ export class NotificationService {
     }
 
     const fridgeId = notificationId.match(/^reminder:fridge-expiring:(\d+)$/)?.[1];
-    if (fridgeId && settings.fridge.enabled) {
-      const item = await db.fridgeItem.findFirst({
-        where: {
-          id: Number(fridgeId),
-          userId,
-          available: true,
-          expireAt: {
-            not: null,
-            lte: addDays(new Date(), settings.fridge.days)
-          }
-        },
-        select: { updatedAt: true }
-      });
-      return item?.updatedAt ?? null;
-    }
+    void fridgeId;
+    void settings;
 
     return null;
   }
@@ -922,41 +876,14 @@ export class NotificationService {
     now: Date,
     settings: NotificationSettings
   ): Promise<TimedUnreadSummary> {
-    if (!settings.fridge.enabled) {
-      return {
-        unreadCount: 0,
-        latestAt: null
-      };
-    }
-
-    const where = {
-      userId,
-      available: true,
-      expireAt: {
-        not: null,
-        lte: addDays(now, settings.fridge.days)
-      }
-    };
-    const [latest, unreadCount] = await Promise.all([
-      db.fridgeItem.findFirst({
-        where,
-        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-        select: { updatedAt: true }
-      }),
-      db.fridgeItem.count({
-        where: feedReadAt
-          ? {
-              ...where,
-              updatedAt: { gt: feedReadAt }
-            }
-          : where
-      })
-    ]);
-
-    const latestAt = latest?.updatedAt ?? null;
+    void db;
+    void userId;
+    void feedReadAt;
+    void now;
+    void settings;
     return {
-      unreadCount,
-      latestAt
+      unreadCount: 0,
+      latestAt: null
     };
   }
 

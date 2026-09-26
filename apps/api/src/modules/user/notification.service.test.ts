@@ -266,7 +266,7 @@ test("the newest official notification version stays on the first feed page", as
   assert.equal(result.items[0]?.timeValue, "2026-09-04T12:00:00.000Z");
 });
 
-test("fridge reminders keep one distinct notification for each expiring item", async () => {
+test("low-maintenance V1 does not create expiry reminders from fridge records", async () => {
   const service = new NotificationService(
     createNotificationPrisma(
       [
@@ -282,11 +282,10 @@ test("fridge reminders keep one distinct notification for each expiring item", a
   const result = await service.getFeed(9, 1, 20);
   const reminders = result.items.filter(item => item.typeLabel === "系统提醒");
 
-  assert.equal(reminders.length, 3);
-  assert.deepEqual(reminders.map(item => item.title).sort(), ["食材临期提醒：西红柿", "食材临期提醒：鸡蛋", "食材临期提醒：香菇"].sort());
+  assert.equal(reminders.length, 0);
 });
 
-test("fridge reminder badge count matches the number of unread reminder cards", async () => {
+test("fridge expiry records do not add unread notification badges", async () => {
   const service = new NotificationService(
     createNotificationPrisma(
       [
@@ -302,7 +301,7 @@ test("fridge reminder badge count matches the number of unread reminder cards", 
   const badge = await service.getBadge(9);
   const feed = await service.getFeed(9, 1, 20);
 
-  assert.equal(badge.unreadCount, 3);
+  assert.equal(badge.unreadCount, 0);
   assert.equal(feed.items.filter(item => item.isUnread).length, badge.unreadCount);
 });
 
@@ -347,7 +346,7 @@ test("Wiki READY and rejection results notify only the requesting user", async (
   assert.equal(wikiItems.find(item => item.id === "recipe-wiki:32")?.desc, "菜谱不够完整");
 });
 
-test("fridge reminder pagination keeps the full source total", async () => {
+test("notification pagination excludes fridge expiry reminders", async () => {
   const service = new NotificationService(
     createNotificationPrisma([
       { id: 1, name: "西红柿", updatedAt: new Date("2026-09-04T10:00:00.000Z") },
@@ -359,6 +358,6 @@ test("fridge reminder pagination keeps the full source total", async () => {
 
   const result = await service.getFeed(9, 2, 1);
 
-  assert.equal(result.total, 4);
-  assert.equal(result.hasNext, true);
+  assert.equal(result.total, 1);
+  assert.equal(result.hasNext, false);
 });
