@@ -1,198 +1,50 @@
 import { cfg } from "@/config";
-import { get, post, put, type PageResult, type OperationId, type UUID } from "@/apis/http";
+import { get, post, type OperationId, type PageResult, type UUID } from "@/apis/http";
 
-export interface FridgeItemSummary {
+export type FridgeTraceKind = "PURCHASED" | "USED" | "MANUAL_PRESENT" | "MANUAL_EMPTY";
+
+export interface FridgeTraceSummary {
   id: UUID;
   ingredientId: UUID | null;
+  name: string;
   categoryName: string | null;
-  name: string;
-  quantityText: string | null;
-  exactQuantity: string | null;
-  exactUnitId: UUID | null;
-  exactUnitName: string | null;
-  note: string | null;
-  available: boolean;
-  expireAt: string | null;
-  stockText: string | null;
-  reservedText: string | null;
-  availableText: string | null;
-  reservations: Array<{
-    shoppingListId: UUID;
-    shoppingListName: string;
-    shoppingItemId: UUID;
-    reservedText: string;
-  }>;
-  updatedAt: string;
+  kind: FridgeTraceKind;
+  label: string;
+  recordedAt: string;
+  windowDays: 7 | 15;
+  presence: "PRESENT" | "EMPTY" | "UNCONFIRMED";
+  archived: boolean;
+  recentlyPurchased: boolean;
 }
 
-export interface FridgeSummaryResponse {
-  totalCount: number;
-  expiringCount: number;
-  latestTime: string | "";
-}
-
-export interface FridgeExpiryReminderSendResponse {
-  sentAt: string;
-}
-
-export interface CreateFridgeItemRequest {
+export interface CreateFridgeTraceRequest {
   operationId: OperationId;
-  name: string;
   ingredientId?: UUID | null;
-  quantityText?: string | null;
-  exactQuantity?: string | null;
-  exactUnitId?: UUID | null;
-  expireAt?: string | null;
-  note?: string | null;
-}
-
-export interface FridgeStockGroup {
-  unitId: UUID;
-  unitName: string;
-  quantity: string;
-  batchCount: number;
-}
-
-export interface FridgeBatchSummary extends FridgeItemSummary {
-  isExpired: boolean;
-  isExpiredWithin15Days: boolean;
-  needsConfirmation: boolean;
-  createdAt: string;
-}
-
-export interface FridgeIngredientSummary {
-  id: UUID;
-  ingredientId: UUID | null;
-  categoryName: string | null;
   name: string;
-  stockText: string;
-  stockGroups: FridgeStockGroup[];
-  expireAt: string | null;
-  isExpired: boolean;
-  expiredBatchCount: number;
-  batchCount: number;
-  hasReservation: boolean;
-  needsConfirmation: boolean;
-  identityPending: boolean;
-  updatedAt: string;
+  categoryName?: string | null;
 }
 
-export interface FridgeIngredientDetail extends FridgeIngredientSummary {
-  activeBatches: FridgeBatchSummary[];
-  expiredBatches: FridgeBatchSummary[];
-}
-
-export interface FridgeConsumeResponse {
-  detail: FridgeIngredientDetail;
-  allocations: Array<{ batchId: UUID; quantity: string; unitId: UUID }>;
-}
-
-export interface UpdateFridgeItemRequest {
-  operationId: OperationId;
-  available?: boolean;
-  quantityText?: string | null;
-  exactQuantity?: string | null;
-  exactUnitId?: UUID | null;
-  expireAt?: string | null;
-  note?: string | null;
-}
-
-function normalizeFridgeItem(item: Partial<FridgeItemSummary> & Pick<FridgeItemSummary, "id" | "name" | "available" | "updatedAt">): FridgeItemSummary {
-  return {
-    id: item.id,
-    ingredientId: item.ingredientId ?? null,
-    categoryName: item.categoryName ?? null,
-    name: item.name,
-    quantityText: item.quantityText ?? null,
-    exactQuantity: item.exactQuantity ?? null,
-    exactUnitId: item.exactUnitId ?? null,
-    exactUnitName: item.exactUnitName ?? null,
-    note: item.note ?? null,
-    available: item.available,
-    expireAt: item.expireAt ?? null,
-    stockText: item.stockText ?? item.quantityText ?? null,
-    reservedText: item.reservedText ?? null,
-    availableText: item.availableText ?? item.stockText ?? item.quantityText ?? null,
-    reservations: Array.isArray(item.reservations) ? item.reservations : [],
-    updatedAt: item.updatedAt
-  };
-}
-
-function normalizeFridgeBatch(item: FridgeBatchSummary): FridgeBatchSummary {
-  return {
-    ...item,
-    ...normalizeFridgeItem(item)
-  };
+export interface FridgeTraceSummaryResponse {
+  totalCount: number;
+  latestTime: string | null;
 }
 
 export const fridgeApi = {
   list(page = 1, pageSize = 50) {
-    return get<PageResult<FridgeIngredientSummary>>(`${cfg.domain}/api/fridge-items`, { page, pageSize }).then(result => ({
-      ...result,
-      items: result.items.map(item => ({
-        ...item,
-        stockGroups: Array.isArray(item.stockGroups) ? item.stockGroups : [],
-        stockText: item.stockText || "未填库存"
-      }))
-    }));
+    return get<PageResult<FridgeTraceSummary>>(`${cfg.domain}/api/fridge-traces`, { page, pageSize });
   },
-  getDetail(ingredientId: UUID) {
-    return get<FridgeIngredientDetail>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(String(ingredientId))}`).then(detail => ({
-      ...detail,
-      activeBatches: detail.activeBatches.map(item => normalizeFridgeBatch(item)),
-      expiredBatches: detail.expiredBatches.map(item => normalizeFridgeBatch(item))
-    }));
+  getSummary() {
+    return get<FridgeTraceSummaryResponse>(`${cfg.domain}/api/fridge-traces/summary`);
   },
-  getBatchDetail(itemId: UUID) {
-    return get<FridgeIngredientDetail>(`${cfg.domain}/api/fridge-items/batch/${encodeURIComponent(String(itemId))}`).then(detail => ({
-      ...detail,
-      activeBatches: detail.activeBatches.map(item => normalizeFridgeBatch(item)),
-      expiredBatches: detail.expiredBatches.map(item => normalizeFridgeBatch(item))
-    }));
-  },
-  getHistory(ingredientId: UUID, page = 1, pageSize = 20) {
-    return get<PageResult<FridgeBatchSummary>>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(String(ingredientId))}/history`, {
-      page,
-      pageSize
-    }).then(result => ({
-      ...result,
-      items: result.items.map(item => normalizeFridgeBatch(item))
-    }));
-  },
-  getSummary(days?: 1 | 2 | 3 | 5 | 7) {
-    return get<FridgeSummaryResponse>(`${cfg.domain}/api/fridge-items/summary`, days ? { days } : undefined);
-  },
-  sendExpiryReminder(itemId: UUID, operationId: OperationId) {
-    return post<FridgeExpiryReminderSendResponse>(
-      `${cfg.domain}/api/fridge-items/${encodeURIComponent(itemId)}/expiry-reminder`,
-      {},
-      { idempotencyKey: operationId }
-    );
-  },
-  create(body: CreateFridgeItemRequest) {
+  markPresent(body: CreateFridgeTraceRequest) {
     const { operationId, ...payload } = body;
-    return post<FridgeItemSummary>(`${cfg.domain}/api/fridge-items`, payload, { idempotencyKey: operationId }).then(item =>
-      normalizeFridgeItem(item)
-    );
+    return post<FridgeTraceSummary>(`${cfg.domain}/api/fridge-traces/present`, payload, { idempotencyKey: operationId });
   },
-  update(itemId: UUID, body: UpdateFridgeItemRequest) {
+  markPresentBatch(items: Array<Omit<CreateFridgeTraceRequest, "operationId">>, operationId: OperationId) {
+    return post<FridgeTraceSummary[]>(`${cfg.domain}/api/fridge-traces/present/batch`, { items }, { idempotencyKey: operationId });
+  },
+  markEmpty(body: CreateFridgeTraceRequest) {
     const { operationId, ...payload } = body;
-    return put<FridgeItemSummary>(`${cfg.domain}/api/fridge-items/${encodeURIComponent(itemId)}`, payload, {
-      idempotencyKey: operationId
-    }).then(item => normalizeFridgeItem(item));
-  },
-  consume(ingredientId: UUID, exactQuantity: string, exactUnitId: UUID, operationId: OperationId) {
-    return post<FridgeConsumeResponse>(
-      `${cfg.domain}/api/fridge-items/consume`,
-      { ingredientId, exactQuantity, exactUnitId },
-      { idempotencyKey: operationId }
-    ).then(result => ({
-      ...result,
-      detail: {
-        ...result.detail,
-        activeBatches: result.detail.activeBatches.map(item => normalizeFridgeBatch(item)),
-        expiredBatches: result.detail.expiredBatches.map(item => normalizeFridgeBatch(item))
-      }
-    }));
+    return post<FridgeTraceSummary>(`${cfg.domain}/api/fridge-traces/empty`, payload, { idempotencyKey: operationId });
   }
 };

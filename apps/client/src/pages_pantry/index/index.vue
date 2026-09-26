@@ -1,531 +1,136 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :class="themeClasses" title="" full-screen navbar-transparent :navbar-placeholder="false">
-    <template #navbar-center>
-      <text class="home-nav__title" :style="navTitleStyle">食材</text>
-    </template>
+  <Layout title="食材参考" :class="themeClasses">
+    <Empty
+      v-if="!sessionStore.isLoggedIn"
+      :art="emptyStateArt"
+      title="登录后查看食材参考"
+      description="这里会显示最近买过或用过的食材痕迹，不需要维护精确库存。"
+      clickable
+      @click="openLogin"
+    />
 
-    <view class="home-nav-backdrop" :style="navBackdropStyle" />
+    <view v-else class="trace-page">
+      <view class="trace-intro">
+        <text class="trace-intro__title">只做参考，不做库存记账</text>
+        <text class="trace-intro__description">这里只记得食材“有 / 没有”，不记录数量。久未确认的记录会自动变成未确认。</text>
+        <view class="trace-intro__actions">
+          <button class="trace-intro__button" @click="openAddSheet">添加食材</button>
+          <button class="trace-intro__button" @click="openShopping">去看购物清单</button>
+        </view>
+      </view>
 
-    <view class="pantry-home">
-      <view class="top-dock" :style="topDockStyle">
-        <view class="summary-strip summary-strip--dock">
-          <view v-for="item in summaryItems" :key="item.label" class="summary-strip__item">
-            <text class="summary-strip__value">{{ item.value }}</text>
-            <text class="summary-strip__label">{{ item.label }}</text>
+      <view v-if="loading" class="trace-state">加载中...</view>
+      <view v-else-if="errorText" class="trace-state trace-state--error" @click="loadPage">{{ errorText }}，点此重试</view>
+      <Empty
+        v-else-if="!traces.length"
+        class="trace-empty"
+        :art="emptyStateArt"
+        title="还没有记录的食材"
+        description="可以手动添加，或在购物清单里勾选已买后自动记录。"
+      />
+      <view v-else class="trace-list">
+        <view v-for="trace in currentTraces" :key="trace.id" class="trace-card">
+          <view class="trace-card__main">
+            <view class="trace-card__name-row">
+              <text class="trace-card__name">{{ trace.name }}</text>
+              <text class="trace-card__presence" :class="`trace-card__presence--${trace.presence.toLowerCase()}`">
+                {{ presenceLabel(trace.presence) }}
+              </text>
+            </view>
+            <text class="trace-card__category">{{ trace.categoryName || "未分类" }}</text>
+            <text class="trace-card__label">{{ trace.label }} · {{ formatRecordedAt(trace.recordedAt) }}</text>
+          </view>
+          <view class="trace-card__actions">
+            <button class="trace-card__action" @click="markPresent(trace)">确认还有</button>
+            <button class="trace-card__action trace-card__action--muted" @click="markEmpty(trace)">标记没有</button>
           </view>
         </view>
       </view>
 
-      <view class="pantry-home__scroll-wrap">
-        <RecipeSearchLoading
-          :pull-distance="pullDistance"
-          :refreshing="refreshing"
-          :show-success="showSuccess"
-          :refresher-text="refresherText"
-          :threshold="refresherThreshold"
-        />
-        <scroll-view
-          scroll-y
-          class="pantry-home__scroll"
-          refresher-enabled
-          refresher-default-style="none"
-          :show-scrollbar="false"
-          :refresher-threshold="refresherThreshold"
-          :refresher-triggered="refresherTriggered"
-          @scroll="handleScroll"
-          @refresherpulling="onRefresherPulling"
-          @refresherrefresh="handleRefresherRefresh"
-          @refresherrestore="onRefresherRestore"
-          @refresherabort="onRefresherRestore"
-        >
-          <view class="pantry-home__body">
-            <view class="pantry-hero" :style="heroStyle">
-              <text class="pantry-hero__title">{{ heroTitle }}</text>
-              <text class="pantry-hero__description">{{ heroDescription }}</text>
+      <view v-if="archivedTraces.length" class="archive-section">
+        <button class="archive-toggle" @click="archiveExpanded = !archiveExpanded">
+          <text>很久没记录（{{ archivedTraces.length }} 项）</text>
+          <text>{{ archiveExpanded ? "收起" : "展开" }}</text>
+        </button>
+        <view v-if="archiveExpanded" class="trace-list">
+          <view v-for="trace in archivedTraces" :key="trace.id" class="trace-card trace-card--archived">
+            <view class="trace-card__main">
+              <view class="trace-card__name-row">
+                <text class="trace-card__name">{{ trace.name }}</text>
+                <text class="trace-card__presence trace-card__presence--unconfirmed">未确认</text>
+              </view>
+              <text class="trace-card__category">{{ trace.categoryName || "未分类" }}</text>
+              <text class="trace-card__label">{{ formatRecordedAt(trace.recordedAt) }} · 超过 30 天未更新</text>
             </view>
-
-            <view class="summary-strip">
-              <view v-for="item in summaryItems" :key="item.label" class="summary-strip__item">
-                <text class="summary-strip__value">{{ item.value }}</text>
-                <text class="summary-strip__label">{{ item.label }}</text>
-              </view>
+            <view class="trace-card__actions">
+              <button class="trace-card__action" @click="markPresent(trace)">确认还有</button>
+              <button class="trace-card__action trace-card__action--muted" @click="markEmpty(trace)">标记没有</button>
             </view>
-
-            <view class="quick-row">
-              <view class="quick-card" hover-class="quick-card--hover" hover-stay-time="100" @click="openGap">
-                <text class="quick-card__title">食材缺口</text>
-                <text class="quick-card__value">{{ gapCount }}</text>
-                <text class="quick-card__description">{{ gapDescription }}</text>
-              </view>
-              <view class="quick-card" hover-class="quick-card--hover" hover-stay-time="100" @click="openShoppingLists">
-                <text class="quick-card__title">采购清单</text>
-                <text class="quick-card__value">{{ pendingShoppingCount }}</text>
-                <text class="quick-card__description">{{ shoppingDescription }}</text>
-              </view>
-            </view>
-
-            <view class="search-row">
-              <RecipeSearchBar
-                v-model="keyword"
-                placeholder="搜索现有食材"
-                @clear="handleSearchClear"
-              />
-            </view>
-
-            <view class="filter-row">
-              <view
-                v-for="item in filterItems"
-                :key="item.key"
-                class="filter-chip"
-                :class="{ 'filter-chip--active': activeFilter === item.key }"
-                @click="changeFilter(item.key)"
-              >
-                <text class="filter-chip__label">{{ item.label }}</text>
-                <text class="filter-chip__count">{{ item.count }}</text>
-              </view>
-            </view>
-
-            <Empty
-              v-if="!sessionStore.isLoggedIn"
-              class="pantry-empty"
-              :art="emptyStateArt"
-              title="登录后查看你的库存"
-              description="这些统计先按 0 展示；登录后再看真实库存、到期和补货安排。"
-              clickable
-              @click="openLogin"
-            />
-
-            <template v-else>
-              <Empty
-                v-if="errorText"
-                class="pantry-empty"
-                :art="emptyStateArt"
-                clickable
-                title="食材加载遇到问题"
-                description="请检查网络后重新加载。"
-                @click="loadPage"
-              />
-              <view v-else-if="loading && !cards.length" class="notice">
-                <text class="notice__text">正在整理现有库存...</text>
-              </view>
-              <Empty
-                v-else-if="!filteredCards.length"
-                class="pantry-empty"
-                :art="emptyStateArt"
-                :title="emptyTitle"
-                :description="emptyDescription"
-              />
-
-              <view v-else class="item-list">
-              <view v-for="card in filteredCards" :key="card.id" class="item-card" hover-class="item-card--hover" hover-stay-time="100" @click="handleCardClick(card)">
-                <view class="item-card__media">
-                  <ImageLoader class="item-card__image" :src="card.imageUrl" />
-                </view>
-                <view class="item-card__main">
-                  <view class="item-card__top">
-                    <view class="item-card__identity">
-                      <text class="item-card__name">{{ card.name }}</text>
-                      <text class="item-card__category">{{ card.categoryText }}</text>
-                    </view>
-                    <text class="expiry-badge" :class="{ 'expiry-badge--warning': card.expireSoon }">{{ card.expireLabel }}</text>
-                  </view>
-                  <view class="item-card__bottom">
-                    <text class="item-card__meta">{{ card.stockText }}</text>
-                    <view class="item-card__actions">
-                      <view
-                        v-if="card.expireSoon"
-                        class="item-card__action item-card__action--notice"
-                        @click.stop="sendExpiryReminder(card)"
-                      >
-                        <view class="cookfont icon-notification-center item-card__action-icon" />
-                        <view>{{ reminderSubmittingId === card.id ? "发送中" : "提醒" }}</view>
-                      </view>
-                      <view class="item-card__action item-card__action--restock" @click.stop="openRestockSheet(card)">
-                        <view class="cookfont icon-add item-card__action-icon" />
-                        <view>补货</view>
-                      </view>
-                      <view class="item-card__action item-card__action--shopping" @click.stop="openShoppingSheet(card)">
-                        <view class="cookfont icon-shopping item-card__action-icon" />
-                        <view>采购</view>
-                      </view>
-                    </view>
-                  </view>
-                </view>
-              </view>
-              </view>
-            </template>
           </view>
-        </scroll-view>
+        </view>
       </view>
     </view>
 
-    <SheetShell
-      :visible="restockSheetVisible"
-      title="补充库存"
-      subtitle="这次把库存数量和到期时间记清楚就好。"
-      @close="closeRestockSheet"
-      @after-close="resetRestockSheet"
-    >
-      <view v-if="restockTarget" class="sheet-meta">
-        <text class="sheet-meta__title">{{ restockTarget.name }}</text>
-        <text class="sheet-meta__text">当前库存 · {{ restockTarget.stockText }} · {{ restockTarget.categoryText }}</text>
+    <SheetShell :visible="addSheetVisible" title="添加食材" subtitle="添加后默认标记为有，不填写数量。" @close="closeAddSheet">
+      <view class="add-search">
+        <input v-model="ingredientKeyword" class="add-search__input" placeholder="搜索食材" confirm-type="search" @confirm="searchIngredients" />
+        <button class="add-search__button" @click="searchIngredients">搜索</button>
       </view>
-
-      <view class="sheet-section">
-        <text class="sheet-section__title">补货</text>
-        <view v-if="restockUseFixedUnit" class="sheet-input-group">
-          <input v-model="restockExactQuantity" class="sheet-input sheet-input--grow" placeholder="输入补货数量" />
-          <view class="sheet-input__suffix">{{ restockFixedUnitName }}</view>
+      <view v-if="ingredientLoading" class="trace-state">搜索中...</view>
+      <view v-else-if="ingredientErrorText" class="trace-state trace-state--error">{{ ingredientErrorText }}</view>
+      <scroll-view v-else class="ingredient-results" scroll-y>
+        <view v-for="ingredient in ingredientOptions" :key="ingredient.id" class="ingredient-option" @click="addIngredient(ingredient)">
+          <text>{{ ingredient.name }}</text>
+          <text>{{ ingredient.source === "PERSONAL" ? "个人食材" : "系统食材" }}</text>
         </view>
-        <input
-          v-else
-          v-model="restockQuantityText"
-          class="sheet-input"
-          placeholder="输入补货数量，例如 2 包 / 500 克"
-        />
-      </view>
-
-      <view class="sheet-section">
-        <view class="sheet-calendar-head">
-          <text class="sheet-section__title">到期时间</text>
-          <text class="sheet-calendar-head__date">{{ restockExpireDateText }}</text>
-        </view>
-        <MealMonthCalendar
-          :selected-date="restockExpireDate"
-          :month-date="restockMonthDate"
-          :marks="{}"
-          :min-date="todayDate"
-          @select="handleRestockExpireSelect"
-          @month-change="handleRestockExpireMonthChange"
-        />
-      </view>
-
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeRestockSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitRestock">
-            {{ restockSubmitting ? "补货中..." : "补进库存" }}
-          </button>
-        </view>
-      </template>
+        <text v-if="!ingredientOptions.length" class="sheet-note">没有找到食材，请换个关键词搜索。</text>
+      </scroll-view>
     </SheetShell>
-
-    <ShoppingTargetSheet
-      :visible="shoppingSheetVisible"
-      title="加入采购清单"
-      subtitle="先记进清单里，后面补买更顺手。"
-      :meta-title="shoppingTarget?.name || ''"
-      :meta-text="shoppingTarget ? `当前库存 · ${shoppingTarget.stockText} · ${shoppingTarget.categoryText}` : ''"
-      :create-mode="shoppingCreateMode"
-      :creating="shoppingCreatingList"
-      :create-disabled="shoppingCreateDisabled"
-      :create-name="newListName"
-      :items="activeLists"
-      :selected-id="selectedListId"
-      empty-text="还没有现成清单，先创建一个再加入。"
-      @toggle-create="toggleShoppingCreateMode"
-      @select="selectActiveList"
-      @create="createShoppingList"
-      @update:create-name="newListName = $event"
-      @close="closeShoppingSheet"
-      @after-close="resetShoppingSheet"
-    >
-      <view class="sheet-section">
-        <text class="sheet-section__title">采购信息</text>
-        <view v-if="shoppingUseFixedUnit" class="sheet-input-group">
-          <input v-model="shoppingExactQuantity" class="sheet-input sheet-input--grow" placeholder="输入采购数量" />
-          <view class="sheet-input__suffix">{{ shoppingFixedUnitName }}</view>
-        </view>
-        <input
-          v-else
-          v-model="shoppingQuantityText"
-          class="sheet-input"
-          placeholder="输入采购数量，例如 2 包 / 500 克"
-        />
-      </view>
-
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeShoppingSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" @click="submitShopping">
-            {{ shoppingSubmitting ? "加入中..." : "加入清单" }}
-          </button>
-        </view>
-      </template>
-    </ShoppingTargetSheet>
   </Layout>
 </template>
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { computed, ref, type CSSProperties } from "vue";
+import { computed, ref } from "vue";
 import emptyStateArt from "@/assets/empty.png";
-import type { UUID } from "@/apis/http";
 import Empty from "@/components/Empty/Empty.vue";
-import ImageLoader from "@/components/ImageLoader.vue";
 import Layout from "@/components/Layout/Layout.vue";
-import MealMonthCalendar from "@/components/MealMonthCalendar.vue";
-import ShoppingTargetSheet from "../components/ShoppingTargetSheet.vue";
-import RecipeSearchBar from "@/components/Recipe/RecipeSearchBar.vue";
-import RecipeSearchLoading from "@/components/Recipe/RecipeSearchLoading.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
+import { recipeApi, type IngredientSummary } from "@/apis/recipe";
 import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
-import { useCustomRefresher } from "@/composables/useCustomRefresher";
-import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
+import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useTheme } from "@/composables/useTheme";
-import { useSystemInfo } from "@/composables/useSystemInfo";
 import { uniPlatform } from "@/platform/uni";
 import { useSessionStore } from "@/stores/session";
-import { formatDateOnly, parseDateOnly } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
-import { buildDefaultShoppingListName } from "../utils/shopping";
-import { requestFridgeExpirySubscribeMessage, resolveFridgeExpirySubscribeOutcome } from "../services/subscribe-message";
-import { fridgeApi, type FridgeIngredientSummary } from "../apis/fridge";
-import { shoppingApi, type ShoppingGapResponse, type ShoppingListSummary } from "../apis/shopping";
-import {
-  formatExpireLabel,
-  getExpireDiffDays,
-  isExpiringSoon,
-  resolveFridgeImageMap
-} from "../utils/fridge";
+import { fridgeApi, type FridgeTraceSummary } from "../apis/fridge";
+import { loadAllFridgeTraces } from "../utils/fridge-traces";
 
-type FilterKey = "ALL" | "EXPIRING" | "RESERVED" | "NEED_EXACT";
-
-interface PantryCard {
-  id: UUID;
-  name: string;
-  ingredientId: UUID | null;
-  exactUnitId: UUID | null;
-  exactUnitName: string | null;
-  categoryText: string;
-  stockText: string;
-  expireAt: string | null;
-  expireLabel: string;
-  expireSoon: boolean;
-  hasReservation: boolean;
-  needExact: boolean;
-  identityPending: boolean;
-  imageUrl: string;
-}
-
-const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
+const pageStyle = usePageScrollStyle();
 const themePageStyle = computed(() => buildThemePageStyle(themeVars.value, pageStyle.value));
 const sessionStore = useSessionStore();
 const { openLogin } = useLoginEmptyState(handleLoginSuccess);
-const { navBarTotalHeight } = useSystemInfo();
-const {
-  threshold: refresherThreshold,
-  pullDistance,
-  refreshing,
-  showSuccess,
-  refresherText,
-  refresherTriggered,
-  onRefresherPulling,
-  onRefresherRefresh,
-  onRefreshComplete,
-  onRefresherRestore
-} = useCustomRefresher({
-  text: {
-    pulling: "下拉刷新食材",
-    canRelease: ["松手刷新食材", "更新库存状态"],
-    success: "食材已刷新"
-  }
-});
-
-const HERO_TOP_GAP = 18;
-const NAV_FADE_DISTANCE = 112;
-const TOP_DOCK_DISTANCE = 172;
-
+const traces = ref<FridgeTraceSummary[]>([]);
+const currentTraces = computed(() => traces.value.filter(trace => !trace.archived));
+const archivedTraces = computed(() => traces.value.filter(trace => trace.archived));
 const loading = ref(false);
 const errorText = ref("");
-const scrollTop = ref(0);
-const keyword = ref("");
-const activeFilter = ref<FilterKey>("ALL");
-const fridgeItems = ref<FridgeIngredientSummary[]>([]);
-const gapData = ref<ShoppingGapResponse | null>(null);
-const activeLists = ref<ShoppingListSummary[]>([]);
-const imageMap = ref<Record<string, string>>({});
-const restockSheetVisible = ref(false);
-const restockSubmitting = ref(false);
-const restockTarget = ref<PantryCard | null>(null);
-const restockQuantityText = ref("");
-const restockExactQuantity = ref("");
-const restockExpireDate = ref("");
-const restockMonthDate = ref("");
-const shoppingSheetVisible = ref(false);
-const shoppingSubmitting = ref(false);
-const shoppingCreatingList = ref(false);
-const shoppingTarget = ref<PantryCard | null>(null);
-const shoppingCreateMode = ref(false);
-const selectedListId = ref<UUID | "">("");
-const newListName = ref("");
-const shoppingQuantityText = ref("");
-const shoppingExactQuantity = ref("");
-const reminderSubmittingId = ref<UUID | "">("");
-const lastReminderFeedback = ref("");
-
-const cards = computed<PantryCard[]>(() =>
-  [...fridgeItems.value]
-    .map(item => ({
-      id: item.id,
-      name: item.name,
-      ingredientId: item.ingredientId,
-      exactUnitId: item.stockGroups.length === 1 ? item.stockGroups[0]?.unitId ?? null : null,
-      exactUnitName: item.stockGroups.length === 1 ? item.stockGroups[0]?.unitName ?? null : null,
-      categoryText: item.categoryName || "未分类",
-      stockText: item.stockText || "未填库存",
-      expireAt: item.expireAt,
-      expireLabel: formatExpireLabel(item.expireAt),
-      expireSoon: isExpiringSoon(item.expireAt),
-      hasReservation: item.hasReservation,
-      needExact: item.needsConfirmation,
-      identityPending: item.identityPending,
-      imageUrl: imageMap.value[String(item.id)] || ""
-    }))
-    .sort((left, right) => {
-      const rankDiff = resolveCardRank(left) - resolveCardRank(right);
-      if (rankDiff !== 0) return rankDiff;
-      const expireDiff = resolveExpireSort(left.expireAt) - resolveExpireSort(right.expireAt);
-      if (expireDiff !== 0) return expireDiff;
-      return right.id - left.id;
-    })
-);
-
-const ingredientCount = computed(() => cards.value.length);
-const expiringCount = computed(() => cards.value.filter(item => item.expireSoon).length);
-const pendingShoppingCount = computed(() =>
-  activeLists.value.reduce((sum, item) => sum + Math.max(item.progressTotalCount - item.progressDoneCount, 0), 0)
-);
-const gapCount = computed(() => gapData.value?.totalItemCount ?? 0);
-
-const summaryItems = computed(() => [
-  { label: "食材数", value: String(ingredientCount.value) },
-  { label: "临期提醒", value: String(expiringCount.value) },
-  { label: "待采购", value: String(pendingShoppingCount.value) }
-]);
-
-const heroTitle = computed(() => {
-  if (!ingredientCount.value) return "先把现有食材理清";
-  if (expiringCount.value > 0) return "先把临期食材安排好";
-  if (gapCount.value > 0 || pendingShoppingCount.value > 0) return "缺什么、要不要补货，一眼清楚";
-  return "现有食材，一眼清楚";
-});
-
-const heroDescription = computed(() => {
-  if (!ingredientCount.value) return "补进第一批库存后，后面盘点和采购都会更顺手。";
-  if (expiringCount.value > 0) return `${expiringCount.value} 样食材快到期，先安排更省心。`;
-  if (pendingShoppingCount.value > 0) return `${pendingShoppingCount.value} 项待采购，库存和补货安排都在这里。`;
-  return "库存、到期和补货安排，都集中在这里。";
-});
-
-const gapDescription = computed(() => {
-  if (!gapCount.value) return "当前没有明显缺口";
-  return `${gapCount.value} 样还没备齐`;
-});
-
-const shoppingDescription = computed(() => {
-  if (!pendingShoppingCount.value) return activeLists.value.length ? "待买项已经处理完" : "还没有待处理清单";
-  return `${pendingShoppingCount.value} 项还待采购`;
-});
-
-const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
-const navBackdropStyle = computed(() => ({
-  height: `${navBarTotalHeight.value}px`,
-  opacity: `${navProgress.value}`
-}));
-const navTitleStyle = computed(() => ({
-  opacity: `${navProgress.value}`
-}));
-const heroStyle = computed(() => ({
-  paddingTop: `${navBarTotalHeight.value + HERO_TOP_GAP}px`
-}));
-const topDockStyle = computed<CSSProperties>(() => ({
-  top: `${navBarTotalHeight.value}px`,
-  opacity: `${scrollTop.value > TOP_DOCK_DISTANCE ? 1 : 0}`,
-  pointerEvents: scrollTop.value > TOP_DOCK_DISTANCE ? "auto" : "none",
-  left: 0,
-  right: 0
-}));
-
-const filterItems = computed(() => [
-  { key: "ALL" as FilterKey, label: "全部", count: ingredientCount.value },
-  { key: "EXPIRING" as FilterKey, label: "临期", count: cards.value.filter(item => item.expireSoon).length },
-  { key: "RESERVED" as FilterKey, label: "预占中", count: cards.value.filter(item => item.hasReservation).length },
-  { key: "NEED_EXACT" as FilterKey, label: "待补精确", count: cards.value.filter(item => item.needExact).length }
-]);
-
-const filteredCards = computed(() => {
-  const searchKey = keyword.value.trim().toLowerCase();
-  return cards.value.filter(item => {
-    const matchFilter =
-      activeFilter.value === "ALL" ||
-      (activeFilter.value === "EXPIRING" && item.expireSoon) ||
-      (activeFilter.value === "RESERVED" && item.hasReservation) ||
-      (activeFilter.value === "NEED_EXACT" && item.needExact);
-    if (!matchFilter) return false;
-    if (!searchKey) return true;
-    return item.name.toLowerCase().includes(searchKey) || item.categoryText.toLowerCase().includes(searchKey);
-  });
-});
-
-const emptyTitle = computed(() => {
-  if (!ingredientCount.value) return "还没有库存食材";
-  if (keyword.value.trim()) return "没找到对应食材";
-  return "当前筛选下没有食材";
-});
-
-const emptyDescription = computed(() => {
-  if (!ingredientCount.value) return "先补进一些库存，后面缺口、采购和到期安排都会更清楚。";
-  if (keyword.value.trim()) return "换个名字搜搜看，或者清空搜索后继续浏览。";
-  return "换个状态看看，或者先去补货。";
-});
-
-const todayDate = formatDateOnly(new Date());
-const restockUseFixedUnit = computed(() => Boolean(restockTarget.value?.exactUnitId && restockTarget.value?.exactUnitName));
-const restockFixedUnitId = computed(() => restockTarget.value?.exactUnitId || null);
-const restockFixedUnitName = computed(() => restockTarget.value?.exactUnitName || "");
-const restockExpireDateText = computed(() => {
-  if (!restockExpireDate.value) return "还没选到期日";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(restockExpireDate.value)) return restockExpireDate.value;
-  const [, month, day] = restockExpireDate.value.split("-");
-  return `${Number(month)}月${Number(day)}日`;
-});
-const restockSubmitDisabled = computed(() => {
-  if (restockSubmitting.value || !restockTarget.value) return true;
-  return restockUseFixedUnit.value ? !restockExactQuantity.value.trim() : !restockQuantityText.value.trim();
-});
-
-const shoppingUseFixedUnit = computed(() => Boolean(shoppingTarget.value?.exactUnitName));
-const shoppingFixedUnitName = computed(() => shoppingTarget.value?.exactUnitName || "");
-const shoppingCreateDisabled = computed(() => shoppingCreatingList.value || !newListName.value.trim());
-const shoppingSubmitDisabled = computed(() => {
-  if (shoppingSubmitting.value || shoppingCreatingList.value || !shoppingTarget.value) return true;
-  if (shoppingUseFixedUnit.value && !shoppingExactQuantity.value.trim()) return true;
-  return !selectedListId.value;
-});
+const archiveExpanded = ref(false);
+const addSheetVisible = ref(false);
+const ingredientKeyword = ref("");
+const ingredientLoading = ref(false);
+const ingredientErrorText = ref("");
+const ingredientOptions = ref<IngredientSummary[]>([]);
 
 onShow(() => {
-  if (!sessionStore.isLoggedIn) return;
-  void loadPage();
+  if (sessionStore.isLoggedIn) void loadPage();
 });
 
 async function handleLoginSuccess() {
   await loadPage();
-}
-
-function resolveCardRank(item: Pick<PantryCard, "expireSoon" | "hasReservation" | "needExact">) {
-  if (item.expireSoon) return 0;
-  if (item.hasReservation) return 1;
-  if (item.needExact) return 2;
-  return 3;
-}
-
-function resolveExpireSort(value: string | null) {
-  const diff = getExpireDiffDays(value);
-  return diff === null ? Number.MAX_SAFE_INTEGER : diff;
 }
 
 async function loadPage() {
@@ -533,915 +138,315 @@ async function loadPage() {
   loading.value = true;
   errorText.value = "";
   try {
-    const [fridgeResult, gapResult, listResult] = await Promise.all([
-      fridgeApi.list(1, 100),
-      shoppingApi.previewGap(),
-      shoppingApi.listLists("ACTIVE")
-    ]);
-    fridgeItems.value = fridgeResult.items;
-    gapData.value = gapResult;
-    activeLists.value = listResult.items;
-    imageMap.value = await resolveFridgeImageMap(fridgeResult.items, 18);
+    traces.value = await loadAllFridgeTraces((page, pageSize) => fridgeApi.list(page, pageSize));
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "食材首页加载失败";
+    errorText.value = error instanceof Error ? error.message : "食材参考加载失败";
   } finally {
     loading.value = false;
   }
 }
 
-async function handleRefresherRefresh() {
-  if (!onRefresherRefresh()) return;
+function formatRecordedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "最近";
+  return `${date.getMonth() + 1}月${date.getDate()}日记录`;
+}
+
+function presenceLabel(presence: FridgeTraceSummary["presence"]) {
+  if (presence === "PRESENT") return "有";
+  if (presence === "EMPTY") return "没有";
+  return "未确认";
+}
+
+function openAddSheet() {
+  addSheetVisible.value = true;
+  ingredientKeyword.value = "";
+  ingredientErrorText.value = "";
+  void searchIngredients();
+}
+
+function closeAddSheet() {
+  addSheetVisible.value = false;
+  ingredientOptions.value = [];
+}
+
+async function searchIngredients() {
+  ingredientLoading.value = true;
+  ingredientErrorText.value = "";
   try {
-    await loadPage();
+    const result = await recipeApi.listIngredients({ page: 1, pageSize: 30, keyword: ingredientKeyword.value.trim() || undefined, source: "ALL" });
+    ingredientOptions.value = result.items;
+  } catch (error) {
+    ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
   } finally {
-    await onRefreshComplete();
+    ingredientLoading.value = false;
   }
 }
 
-function handleScroll(event: { detail?: { scrollTop?: number } }) {
-  scrollTop.value = event.detail?.scrollTop ?? 0;
+async function addIngredient(ingredient: IngredientSummary) {
+  try {
+    await fridgeApi.markPresent({
+      operationId: createOperationId(),
+      ingredientId: ingredient.id,
+      name: ingredient.name
+    });
+    closeAddSheet();
+    await loadPage();
+  } catch (error) {
+    ingredientErrorText.value = error instanceof Error ? error.message : "添加失败";
+  }
 }
 
-function handleSearchClear() {
-  keyword.value = "";
+async function markPresent(trace: FridgeTraceSummary) {
+  try {
+    await fridgeApi.markPresent({
+      operationId: createOperationId(),
+      ingredientId: trace.ingredientId,
+      name: trace.name,
+      categoryName: trace.categoryName
+    });
+    await loadPage();
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : "更新痕迹失败";
+  }
 }
 
-function changeFilter(nextFilter: FilterKey) {
-  activeFilter.value = nextFilter;
+async function markEmpty(trace: FridgeTraceSummary) {
+  try {
+    await fridgeApi.markEmpty({
+      operationId: createOperationId(),
+      ingredientId: trace.ingredientId,
+      name: trace.name,
+      categoryName: trace.categoryName
+    });
+    await loadPage();
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : "更新状态失败";
+  }
 }
 
-function openGap() {
-  void uniPlatform.navigation.navigateTo("/pages_pantry/gap/index");
-}
-
-function openShoppingLists() {
+function openShopping() {
   void uniPlatform.navigation.navigateTo("/pages_pantry/list/index");
 }
-
-function handleCardClick(card: PantryCard) {
-  const key = card.ingredientId
-    ? `ingredientId=${encodeURIComponent(String(card.ingredientId))}`
-    : `itemId=${encodeURIComponent(String(card.id))}`;
-  void uniPlatform.navigation.navigateTo(`/pages_pantry/item-detail/index?${key}`);
-}
-
-async function openRestockSheet(card: PantryCard) {
-  restockTarget.value = card;
-  restockQuantityText.value = "";
-  restockExactQuantity.value = "";
-  restockExpireDate.value = "";
-  restockMonthDate.value = buildMonthAnchor(todayDate);
-  restockSheetVisible.value = true;
-}
-
-function closeRestockSheet() {
-  restockSheetVisible.value = false;
-}
-
-function resetRestockSheet() {
-  restockSubmitting.value = false;
-  restockTarget.value = null;
-  restockQuantityText.value = "";
-  restockExactQuantity.value = "";
-  restockExpireDate.value = "";
-  restockMonthDate.value = buildMonthAnchor(todayDate);
-}
-
-function buildMonthAnchor(dateText: string) {
-  const date = parseDateOnly(dateText);
-  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-01`;
-}
-
-function handleRestockExpireSelect(dateText: string) {
-  restockExpireDate.value = dateText;
-  restockMonthDate.value = buildMonthAnchor(dateText);
-}
-
-function handleRestockExpireMonthChange(monthDate: string) {
-  restockMonthDate.value = monthDate;
-}
-
-async function submitRestock() {
-  if (!restockTarget.value || restockSubmitDisabled.value) return;
-  const trimmedExactQuantity = restockExactQuantity.value.trim();
-  if (restockUseFixedUnit.value && (!trimmedExactQuantity || !restockFixedUnitId.value)) {
-    await uniPlatform.feedback.toast({ title: "请先输入补货数量", icon: "none" });
-    return;
-  }
-  restockSubmitting.value = true;
-  try {
-    const quantityText = restockUseFixedUnit.value
-      ? `${trimmedExactQuantity} ${restockFixedUnitName.value}`
-      : restockQuantityText.value.trim() || null;
-    await fridgeApi.create({
-      operationId: createOperationId(),
-      name: restockTarget.value.name,
-      ingredientId: restockTarget.value.ingredientId,
-      quantityText,
-      exactQuantity: restockUseFixedUnit.value ? trimmedExactQuantity || null : null,
-      exactUnitId: restockUseFixedUnit.value ? restockFixedUnitId.value : null,
-      expireAt: restockExpireDate.value || null
-    });
-    await uniPlatform.feedback.toast({ title: "已补进库存", icon: "success" });
-    closeRestockSheet();
-    await loadPage();
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "补货失败", icon: "none" });
-  } finally {
-    restockSubmitting.value = false;
-  }
-}
-
-async function openShoppingSheet(card: PantryCard) {
-  shoppingTarget.value = card;
-  shoppingCreateMode.value = !activeLists.value.length;
-  selectedListId.value = activeLists.value[0]?.id || "";
-  newListName.value = shoppingCreateMode.value ? buildDefaultShoppingListName() : "";
-  shoppingQuantityText.value = "";
-  shoppingExactQuantity.value = "";
-  shoppingSheetVisible.value = true;
-}
-
-function closeShoppingSheet() {
-  shoppingSheetVisible.value = false;
-}
-
-function resetShoppingSheet() {
-  shoppingSubmitting.value = false;
-  shoppingCreatingList.value = false;
-  shoppingTarget.value = null;
-  shoppingCreateMode.value = false;
-  selectedListId.value = activeLists.value[0]?.id || "";
-  newListName.value = "";
-  shoppingQuantityText.value = "";
-  shoppingExactQuantity.value = "";
-}
-
-function selectActiveList(listId: UUID) {
-  shoppingCreateMode.value = false;
-  selectedListId.value = listId;
-}
-
-function toggleShoppingCreateMode() {
-  shoppingCreateMode.value = !shoppingCreateMode.value;
-  if (shoppingCreateMode.value && !newListName.value.trim()) {
-    newListName.value = buildDefaultShoppingListName();
-  }
-  if (!shoppingCreateMode.value) {
-    newListName.value = "";
-    shoppingCreatingList.value = false;
-  }
-}
-
-async function createShoppingList() {
-  if (shoppingCreateDisabled.value) return;
-  shoppingCreatingList.value = true;
-  try {
-    const createdList = await shoppingApi.createList({
-      operationId: createOperationId(),
-      name: newListName.value.trim()
-    });
-    activeLists.value = [createdList, ...activeLists.value.filter(item => item.id !== createdList.id)];
-    selectedListId.value = createdList.id;
-    shoppingCreateMode.value = false;
-    newListName.value = "";
-    await uniPlatform.feedback.toast({ title: "已创建清单", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "创建清单失败", icon: "none" });
-  } finally {
-    shoppingCreatingList.value = false;
-  }
-}
-
-async function submitShopping() {
-  if (!shoppingTarget.value || shoppingSubmitDisabled.value) return;
-  shoppingSubmitting.value = true;
-  try {
-    if (!selectedListId.value) {
-      throw new Error("请选择采购清单");
-    }
-    const quantityText = shoppingUseFixedUnit.value
-      ? `${shoppingExactQuantity.value.trim()} ${shoppingFixedUnitName.value}`
-      : shoppingQuantityText.value.trim() || null;
-    await shoppingApi.createListItem(selectedListId.value, {
-      operationId: createOperationId(),
-      name: shoppingTarget.value.name,
-      ingredientId: shoppingTarget.value.ingredientId,
-      quantityText,
-      note: null
-    });
-    await uniPlatform.feedback.toast({ title: "已加入清单", icon: "success" });
-    closeShoppingSheet();
-    await loadPage();
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入清单失败", icon: "none" });
-  } finally {
-    shoppingSubmitting.value = false;
-  }
-}
-
-async function sendExpiryReminder(card: PantryCard) {
-  if (reminderSubmittingId.value) return;
-  reminderSubmittingId.value = card.id;
-  try {
-    const subscribeResult = await requestFridgeExpirySubscribeMessage();
-    const outcome = resolveFridgeExpirySubscribeOutcome(subscribeResult);
-    if (outcome !== "accepted") {
-      const title =
-        outcome === "rejected"
-          ? "你已取消订阅授权"
-          : outcome === "blocked"
-            ? "订阅消息已被微信禁用"
-            : "当前环境不支持订阅消息";
-      lastReminderFeedback.value = title;
-      await uniPlatform.feedback.toast({ title, icon: "none" });
-      return;
-    }
-
-    await fridgeApi.sendExpiryReminder(card.id, createOperationId());
-    lastReminderFeedback.value = "到期提醒已发送";
-    await uniPlatform.feedback.toast({ title: "到期提醒已发送", icon: "success" });
-  } catch (error) {
-    lastReminderFeedback.value = error instanceof Error ? error.message : "发送提醒失败";
-    await uniPlatform.feedback.toast({ title: lastReminderFeedback.value, icon: "none" });
-  } finally {
-    reminderSubmittingId.value = "";
-  }
-}
-
-async function automatorApplySession(snapshot: { token: string; uid?: number; expiresAt: string; refreshCheckedAt?: number }) {
-  await sessionStore.setSession(snapshot);
-}
-
-async function automatorHandleLoginSuccess() {
-  await handleLoginSuccess();
-  return automatorReadState();
-}
-
-async function automatorSendExpiryReminder(
-  index = 0,
-  mockOutcome?: "accepted" | "rejected" | "blocked" | "unsupported",
-  mockSendResult?: "success" | "error"
-) {
-  const card = cards.value.filter(item => item.expireSoon)[index] ?? null;
-  if (!card) {
-    throw new Error("missing expiring pantry card");
-  }
-  if (mockOutcome && mockOutcome !== "accepted") {
-    reminderSubmittingId.value = card.id;
-    const title =
-      mockOutcome === "rejected"
-        ? "你已取消订阅授权"
-        : mockOutcome === "blocked"
-          ? "订阅消息已被微信禁用"
-          : "当前环境不支持订阅消息";
-    lastReminderFeedback.value = title;
-    reminderSubmittingId.value = "";
-    return automatorReadState();
-  }
-  if (mockOutcome === "accepted" && mockSendResult) {
-    reminderSubmittingId.value = card.id;
-    try {
-      if (mockSendResult === "error") {
-        throw new Error("发送提醒失败");
-      }
-      lastReminderFeedback.value = "到期提醒已发送";
-      return automatorReadState();
-    } finally {
-      reminderSubmittingId.value = "";
-    }
-  }
-  await sendExpiryReminder(card);
-  return automatorReadState();
-}
-
-function automatorReadState() {
-  return {
-    loggedIn: sessionStore.isLoggedIn,
-    loading: loading.value,
-    errorText: errorText.value,
-    cardCount: cards.value.length,
-    firstCardName: cards.value[0]?.name || "",
-    gapCount: gapCount.value,
-    pendingShoppingCount: pendingShoppingCount.value,
-    reminderSubmittingId: reminderSubmittingId.value,
-    expiringCardCount: cards.value.filter(item => item.expireSoon).length,
-    lastReminderFeedback: lastReminderFeedback.value
-  };
-}
-
-defineExpose({
-  automatorApplySession,
-  automatorHandleLoginSuccess,
-  automatorSendExpiryReminder,
-  automatorReadState
-});
 </script>
 
-<style scoped lang="scss">
-.home-nav-backdrop {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 799;
-  overflow: hidden;
-  background: var(--material-tabbar-bg);
-  box-shadow: var(--material-tabbar-shadow);
-  pointer-events: none;
-  -webkit-backdrop-filter: var(--material-tabbar-filter);
-  backdrop-filter: var(--material-tabbar-filter);
-  transition: opacity 180ms ease;
+<style scoped>
+.trace-page {
+  padding: 30rpx 28rpx 60rpx;
 }
 
-.home-nav__title {
-  color: var(--color-text);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  transition: opacity 180ms ease;
-}
-
-.pantry-home {
-  position: relative;
-  height: 100%;
-}
-
-.pantry-home__scroll-wrap {
-  position: relative;
-  height: 100%;
-}
-
-.pantry-home__scroll {
-  height: 100%;
-}
-
-.pantry-home__body {
-  min-height: 100%;
-  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
-}
-
-.top-dock {
-  position: fixed;
-  right: var(--space-page);
-  left: var(--space-page);
-  z-index: 780;
-  transition: opacity 180ms ease,
-              left 200ms ease,
-              right 200ms ease;
-}
-
-.pantry-hero {
-  position: relative;
-  min-height: 418rpx;
-  padding: 56rpx var(--space-page) 138rpx;
-  border-bottom-right-radius: 56rpx;
-  border-bottom-left-radius: 56rpx;
-  background: var(--page-hero-halo-bg);
-  overflow: hidden;
-}
-
-.pantry-hero::before {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-}
-
-.pantry-hero::before {
-  top: 92rpx;
-  right: -76rpx;
-  z-index: 1;
-  width: 312rpx;
-  height: 224rpx;
-  border-radius: 50%;
-  background: var(--color-surface-mask-weak);
-  transform: rotate(-16deg);
-}
-
-.pantry-hero::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1;
-  height: 240rpx;
-  background: var(--color-page);
-  mask-image: var(--page-bottom-mask-image);
-  mask-size: 100% 100%;
-  -webkit-mask-image: var(--page-bottom-mask-image);
-  -webkit-mask-size: 100% 100%;
-}
-
-.pantry-hero__title,
-.pantry-hero__description,
-.summary-strip__value,
-.summary-strip__label,
-.quick-card__title,
-.quick-card__value,
-.quick-card__description,
-.filter-chip__label,
-.filter-chip__count,
-.notice__text,
-.notice__action,
-.item-card__name,
-.item-card__meta,
-.expiry-badge,
-.sheet-meta__title,
-.sheet-meta__text,
-.sheet-card__title,
-.sheet-card__meta,
-.sheet-section__title,
-.sheet-option__title,
-.sheet-option__meta {
-  display: block;
-}
-
-.pantry-hero__title,
-.pantry-hero__description {
-  position: relative;
-  z-index: 2;
-}
-
-.pantry-hero__title {
-  color: var(--color-text);
-  font-size: 58rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.16;
-}
-
-.pantry-hero__description {
-  margin-top: 16rpx;
-  max-width: 620rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
-  line-height: 1.65;
-}
-
-.summary-strip,
-.quick-card,
-.notice,
-.item-card,
-.sheet-card {
-  border-radius: var(--radius-xs);
+.trace-intro,
+.trace-card {
+  border-radius: 28rpx;
   background: var(--material-card-bg);
   box-shadow: var(--material-card-shadow);
-  -webkit-backdrop-filter: var(--material-card-filter);
-  backdrop-filter: var(--material-card-filter);
 }
 
-.sheet-input,
-.sheet-picker {
-  border: 1rpx solid var(--material-input-border);
-  border-radius: var(--radius-xs);
-  background: var(--material-input-bg);
-  box-shadow: var(--material-input-shadow);
-  -webkit-backdrop-filter: var(--material-input-filter);
-  backdrop-filter: var(--material-input-filter);
+.trace-intro {
+  padding: 30rpx;
+  margin-bottom: 24rpx;
 }
 
-.summary-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  margin: 0 var(--space-page);
-  padding: 22rpx 12rpx;
-}
-
-.pantry-home__body > .summary-strip {
-  position: relative;
-  z-index: 3;
-  margin-top: -54rpx;
-}
-
-.summary-strip--dock {
-  margin: 0;
-}
-
-.summary-strip__item {
-  position: relative;
-  padding: 10rpx 12rpx;
-  text-align: center;
-}
-
-.summary-strip__item + .summary-strip__item::before {
-  content: "";
-  position: absolute;
-  top: 18rpx;
-  bottom: 18rpx;
-  left: 0;
-  width: 1rpx;
-  background: var(--color-divider);
-}
-
-.summary-strip__value {
+.trace-intro__title,
+.trace-card__name {
   color: var(--color-text);
-  font-size: 38rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.1;
+  font-weight: 700;
 }
 
-.summary-strip__label {
-  margin-top: 10rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.quick-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18rpx;
-  margin: 18rpx var(--space-page) 0;
-}
-
-.quick-card {
-  padding: 28rpx 26rpx;
-}
-
-.quick-card--hover,
-.item-card--hover {
-  opacity: 0.92;
-}
-
-.quick-card__title {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.quick-card__value {
-  margin-top: 12rpx;
-  color: var(--color-text);
-  font-size: 42rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.1;
-}
-
-.quick-card__description {
-  margin-top: 10rpx;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
-}
-
-.search-row,
-.filter-row,
-.notice,
-.pantry-empty,
-.item-list {
-  margin-right: var(--space-page);
-  margin-left: var(--space-page);
-}
-
-.search-row {
-  margin-top: 18rpx;
-}
-
-.filter-row {
-  display: flex;
-  gap: 12rpx;
-  margin-top: 18rpx;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.filter-row::-webkit-scrollbar {
-  display: none;
-}
-
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10rpx;
-  padding: 14rpx 22rpx;
-  border-radius: var(--radius-xs);
-  background: var(--material-control-bg);
-  box-shadow: var(--material-control-shadow);
-  -webkit-backdrop-filter: var(--material-control-filter);
-  backdrop-filter: var(--material-control-filter);
-}
-
-.filter-chip--active {
-  border-color: transparent;
-  background: var(--color-tag-primary-bg);
-  box-shadow: inset 0 0 0 1rpx var(--color-border-active);
-}
-
-.filter-chip__label {
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.filter-chip__count {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.filter-chip--active .filter-chip__label,
-.filter-chip--active .filter-chip__count {
-  color: var(--color-tag-primary-text);
-}
-
-.notice,
-.pantry-empty,
-.item-list {
-  margin-top: 18rpx;
-}
-
-.notice {
-  padding: var(--space-md);
-}
-
-.notice__text {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.notice__action {
-  margin-top: 8rpx;
-  color: var(--color-support-action);
-  font-size: var(--font-size-sm);
-}
-
-.item-card + .item-card {
-  margin-top: 16rpx;
-}
-
-.item-card {
-  padding: 20rpx 24rpx;
-  display: flex;
-  align-items: stretch;
-  gap: 20rpx;
-  overflow: hidden;
-}
-
-.item-card__media {
-  flex: 0 0 140rpx;
-}
-
-.item-card__image {
-  --image-empty-icon-size: 80rpx;
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: var(--radius-sm);
-}
-
-.item-card__image {
-  display: block;
-  background: var(--color-surface-muted);
-}
-
-.item-card__main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-width: 0;
-  min-height: 140rpx;
-}
-
-.item-card__top,
-.item-card__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  min-width: 0;
-}
-
-.item-card__identity {
-  display: flex;
-  flex: 1;
-  align-items: baseline;
-  gap: 12rpx;
-  min-width: 0;
-}
-
-.item-card__name {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-text);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  line-height: 1.28;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-card__category {
-  display: block;
-  flex: 0 0 auto;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-regular);
-  line-height: 1.3;
-  white-space: nowrap;
-}
-
-.item-card__meta {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.expiry-badge {
-  flex: 0 0 auto;
-  max-width: 200rpx;
-  padding: 8rpx 18rpx;
-  border-radius: var(--radius-pill);
+.trace-card__presence,
+.archive-toggle {
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
   background: var(--color-surface-muted);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 1.3;
-  text-align: right;
-}
-
-.expiry-badge--warning {
-  background: var(--color-tag-warning-bg);
-  color: var(--color-tag-warning-text);
-}
-
-.item-card__actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 12rpx;
-}
-
-.item-card__action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-  height: 40rpx;
-  padding: 0 18rpx;
-  border-radius: var(--radius-xs);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
-
-.item-card__action-icon {
   font-size: 22rpx;
-  color: inherit;
 }
 
-.item-card__action--restock {
-  background: var(--color-tag-primary-bg);
-  color: var(--color-tag-primary-text);
+.trace-card__presence--present {
+  background: var(--color-state-success-soft);
+  color: var(--color-state-success-text);
 }
 
-.item-card__action--shopping {
+.trace-card__presence--empty {
   background: var(--color-state-warning-soft);
   color: var(--color-state-warning-text);
 }
 
-.sheet-meta__title {
-  color: var(--color-text);
-  font-size: 40rpx;
-  font-weight: var(--font-weight-heavy);
-  line-height: 1.16;
-}
-
-.sheet-meta {
-  margin-top: 16rpx;
-}
-
-.sheet-meta--shopping {
-  margin-top: 24rpx;
-}
-
-.sheet-meta__text {
-  margin-top: 10rpx;
+.trace-card__presence--unconfirmed {
+  background: var(--color-surface-muted);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
 }
 
-.sheet-card {
-  padding: 22rpx 24rpx;
+.archive-section {
+  margin-top: 28rpx;
 }
 
-.sheet-card__title {
+.archive-toggle {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 24rpx;
+}
+
+.trace-card--archived {
+  opacity: 0.78;
+}
+
+.add-search {
+  display: flex;
+  gap: 12rpx;
+  padding: 20rpx 24rpx;
+}
+
+.add-search__input {
+  flex: 1;
+  min-width: 0;
+  padding: 18rpx;
+  border-radius: 16rpx;
+  background: var(--color-surface-muted);
+}
+
+.add-search__button {
+  padding: 0 24rpx;
+  border-radius: 16rpx;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+.ingredient-results {
+  max-height: 540rpx;
+  padding: 0 24rpx 24rpx;
+  box-sizing: border-box;
+}
+
+.ingredient-option {
+  display: flex;
+  justify-content: space-between;
+  padding: 24rpx 8rpx;
+  border-bottom: 1rpx solid var(--color-divider);
   color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
 }
 
-.sheet-card__meta {
-  margin-top: 8rpx;
+.ingredient-option text:last-child {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
 
-.sheet-section {
+.trace-intro__title {
+  display: block;
+  font-size: 34rpx;
+}
+
+.trace-intro__description,
+.trace-card__category,
+.trace-card__label,
+.trace-card__window {
+  color: var(--color-text-secondary);
+}
+
+.trace-intro__description {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  line-height: 1.65;
+}
+
+.trace-intro__actions,
+.trace-card__actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.trace-intro__actions {
   margin-top: 24rpx;
 }
 
-.sheet-section__title {
-  color: var(--color-text);
-  font-size: 32rpx;
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: 14rpx;
+.trace-intro__button,
+.trace-card__action {
+  border: 0;
+  border-radius: 999rpx;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  font-size: 24rpx;
+  line-height: 68rpx;
 }
 
-.sheet-calendar-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 24rpx;
-  margin-bottom: 14rpx;
-}
-
-.sheet-calendar-head__date {
-  color: var(--color-text);
-  font-size: 26rpx;
-  font-weight: var(--font-weight-semibold);
-}
-
-.sheet-input + .sheet-input,
-.sheet-picker + .sheet-input,
-.sheet-input + .sheet-picker {
-  margin-top: 14rpx;
-}
-
-.sheet-input,
-.sheet-picker {
-  display: flex;
-  align-items: center;
-  min-height: 88rpx;
-  padding: 0 24rpx;
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  box-sizing: border-box;
-}
-
-.sheet-input-group {
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  border: 1rpx solid var(--material-input-border);
-  border-radius: var(--radius-xs);
-  background: var(--material-input-bg);
-  box-shadow: var(--material-input-shadow);
-  -webkit-backdrop-filter: var(--material-input-filter);
-  backdrop-filter: var(--material-input-filter);
-}
-
-.sheet-input--grow {
+.trace-intro__button {
   flex: 1;
-  min-width: 0;
 }
 
-.sheet-input__suffix {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 108rpx;
-  min-height: 88rpx;
-  padding: 0 24rpx;
-  border-left: 1rpx solid var(--color-divider);
+.trace-intro__button--plain,
+.trace-card__action--muted {
+  background: var(--color-surface-muted);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  box-sizing: border-box;
 }
 
-.sheet-picker--disabled {
-  color: var(--color-text-tertiary);
+.trace-state {
+  padding: 100rpx 30rpx;
+  color: var(--color-text-secondary);
+  text-align: center;
 }
 
-.sheet-actions__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.trace-state--error {
+  color: var(--color-state-danger-text);
 }
 
-.sheet-actions {
+.trace-empty {
+  margin-top: 60rpx;
+}
+
+.trace-list {
   display: flex;
+  flex-direction: column;
   gap: 18rpx;
 }
 
-.sheet-actions__button {
+.trace-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 24rpx;
+}
+
+.trace-card__main {
+  min-width: 0;
   flex: 1;
-  height: 90rpx;
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
 }
 
-.sheet-actions__button--cancel {
-  background: var(--button-secondary-bg);
-  color: var(--button-secondary-text);
-  -webkit-backdrop-filter: var(--button-secondary-filter);
-  backdrop-filter: var(--button-secondary-filter);
+.trace-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
-.sheet-actions__button--confirm {
-  background: var(--button-primary-bg);
-  box-shadow: var(--button-primary-shadow);
-  color: var(--button-primary-text);
+.trace-card__name {
+  max-width: 360rpx;
+  overflow: hidden;
+  font-size: 30rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-card__window {
+  flex: none;
+  font-size: 20rpx;
+}
+
+.trace-card__category,
+.trace-card__label {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+}
+
+.trace-card__actions {
+  flex: none;
+}
+
+.trace-card__action {
+  min-width: 92rpx;
+  padding: 0 18rpx;
+  line-height: 56rpx;
 }
 </style>

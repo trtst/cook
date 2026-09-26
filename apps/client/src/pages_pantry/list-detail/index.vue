@@ -3,12 +3,18 @@
   <Layout :class="themeClasses"
     title=""
     full-screen
+    :navbar-capsule-guard="true"
     :navbar-transparent="sessionStore.isLoggedIn"
     :navbar-placeholder="!sessionStore.isLoggedIn"
   >
     <template #navbar-center>
       <view class="detail-nav">
         <text class="detail-nav__title" :style="navTitleStyle">{{ detail?.name || "采购清单" }}</text>
+      </view>
+    </template>
+    <template #navbar-right>
+      <view v-if="canVoid" class="detail-nav-settings" hover-class="detail-nav-settings--hover" @click="openSettingsSheet">
+        <text class="cookfont icon-manage detail-nav-settings__icon" />
       </view>
     </template>
 
@@ -52,11 +58,6 @@
             <view class="detail-hero" :style="heroStyle">
               <view class="detail-hero__title-row">
                 <text class="detail-hero__title" :style="heroTitleStyle">{{ detail.name }}</text>
-                <text
-                  v-if="canRename"
-                  class="cookfont icon-edit detail-hero__edit"
-                  @click.stop="openRenameSheet"
-                />
               </view>
               <text class="detail-hero__meta">{{ heroMeta }}</text>
               <view v-if="detailStatusTagText" class="detail-hero__tags">
@@ -112,40 +113,35 @@
                       :style="itemSwipeStyle(group.id)"
                     >
                       <view class="item-card">
-                        <view class="item-row__cover">
-                          <ImageLoader class="item-row__image" :src="group.imageUrl" />
+                        <view
+                          v-if="canEditItems"
+                          class="purchase-check"
+                          :class="{
+                            'purchase-check--checked': isItemChecked(group)
+                          }"
+                          role="checkbox"
+                          :aria-label="group.name"
+                          :aria-checked="isItemChecked(group)"
+                          @click.stop="toggleItem(group)"
+                        >
+                          <text v-if="isItemChecked(group)" class="purchase-check__icon">✓</text>
                         </view>
-                        <view class="item-row__main">
-                          <view class="item-row__top">
-                            <text class="item-row__title">{{ group.name }}</text>
-                            <text class="item-row__quantity">{{ itemQuantityText(group) }}</text>
+                        <view class="item-row__main" @click="canEditItems ? toggleItem(group) : undefined">
+                          <view class="item-row__left">
+                            <view class="item-row__identity">
+                              <text class="item-row__title">{{ group.name }}</text>
+                              <text v-if="group.categoryName" class="item-row__category">· {{ group.categoryName }}</text>
+                            </view>
+                            <text class="item-row__quantity">{{ group.quantityText }}</text>
                           </view>
-                          <view v-if="group.categoryName" class="item-row__info">
-                            <text class="item-row__category">{{ group.categoryName || "未分类" }}</text>
-                          </view>
-                            <view class="item-row__bottom">
-                              <view class="item-row__bottom-left">
-                                <text
-                                  v-if="group.sources.length"
-                                  class="item-row__origin-toggle"
-                                :class="{ 'item-row__origin-toggle--open': isOriginOpen(group.id) }"
-                                @click.stop="toggleItemOrigin(group.id)"
-                              >
-                                {{ isOriginOpen(group.id) ? "收起来源" : "查看来源" }}
-                              </text>
-                              </view>
-                              <view v-if="canEditItems" class="item-row__actions">
-                              <button
-                                class="mini-pill"
-                                hover-class="none"
-                                :class="{
-                                  'mini-pill--active': isItemChecked(group),
-                                  'mini-pill--pending': isItemPending(group.id, 'check')
-                                }"
-                                @click.stop="toggleItem(group)"
-                              >
-                                已购
-                              </button>
+                          <view class="item-row__right" @click.stop="group.sources.length ? toggleItemOrigin(group.id) : undefined">
+                            <text class="item-row__fridge-hint">{{ group.fridgeHint }}</text>
+                            <view
+                              v-if="group.sources.length"
+                              class="item-row__origin-toggle"
+                              :class="{ 'item-row__origin-toggle--open': isOriginOpen(group.id) }"
+                            >
+                              <text class="cookfont icon-back item-row__origin-arrow" :class="{ 'item-row__origin-arrow--open': isOriginOpen(group.id) }" />
                             </view>
                           </view>
                         </view>
@@ -173,12 +169,36 @@
                 </view>
               </transition-group>
 
-              <Empty v-else class="detail-content__empty" title="这张清单还没有食材" description="可以从菜谱里继续加，也可以用右下角管理入口手动补食材。" />
+              <Empty v-else class="detail-content__empty" title="这张清单还没有食材" description="可以在页面底部添加食材。" />
             </view>
           </view>
         </scroll-view>
 
-        <view v-if="canShowManageDock" class="floating-dock">
+        <view v-if="canAddItem" class="detail-footer">
+          <view class="meal-footer__actions">
+            <view
+              class="meal-footer__quick"
+              :class="{ 'meal-footer__quick--disabled': submitting }"
+              @click="submitting ? undefined : openAddSheet()"
+            >
+              <text class="cookfont meal-footer__quick-icon icon-add" />
+              <text class="meal-footer__quick-label">添加食材</text>
+            </view>
+            <view class="meal-footer__buttons meal-footer__buttons--single">
+              <button
+                class="meal-footer__button meal-footer__button--primary"
+                :class="{ 'meal-footer__button--disabled': !pendingCheckCount || submitting }"
+                :disabled="!pendingCheckCount || submitting"
+                hover-class="none"
+                @click="submitPendingChecks"
+              >
+                <text class="meal-footer__button-content">{{ submitting ? "提交中..." : "提交勾选" }}</text>
+              </button>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="canShowManageDock" class="floating-dock" :class="{ 'floating-dock--above-footer': canAddItem }">
           <view v-if="manageMenuOpen" class="floating-dock__backdrop" @click="closeManageMenu" />
           <view class="manage-dock">
             <view class="manage-dock__actions">
@@ -210,77 +230,60 @@
       </template>
     </view>
 
-    <TextFieldSheet
-      :visible="renameSheetVisible"
-      title="修改清单名"
-      subtitle="这会同步更新当前共享清单的名称。"
-      :model-value="renameName"
-      placeholder="请输入清单名"
-      :maxlength="20"
-      :submitting="submitting"
-      :confirm-disabled="!renameName.trim()"
-      confirm-text="保存"
-      confirm-loading-text="保存中..."
-      @close="closeRenameSheet"
-      @after-close="handleRenameSheetAfterClose"
-      @confirm="renameList"
-      @update:model-value="renameName = $event"
-    />
+    <SheetShell :visible="settingsSheetVisible" title="清单设置" @close="closeSettingsSheet">
+      <view v-if="canVoid" class="settings-action" :class="{ 'settings-action--disabled': submitting }" @click="handleSettingsVoid">
+        <view class="settings-action__icon-wrap">
+          <text class="cookfont icon-close settings-action__icon" />
+        </view>
+        <view class="settings-action__copy">
+          <text class="settings-action__title">作废清单</text>
+          <text class="settings-action__hint">结束这张清单，并移入已作废列表</text>
+        </view>
+      </view>
+    </SheetShell>
 
     <SheetShell
       :visible="addSheetVisible"
       title="添加食材"
-      subtitle="先选食材，再补数量和备注。搜不到时，也可以把当前搜索词作为手动项加入。"
+      subtitle="支持多选食材，加入后按需购买。"
+      body-padding="none"
       @close="closeAddSheet"
       @after-close="handleAddSheetAfterClose"
     >
-      <view class="search-box">
-        <input
-          v-model="ingredientKeyword"
-          class="sheet-input sheet-input--compact"
-          maxlength="20"
-          placeholder="搜索食材"
-          @confirm="searchIngredients"
-        />
-        <button class="search-box__button" @click="searchIngredients">
-          {{ ingredientLoading ? "搜索中" : "搜索" }}
-        </button>
-      </view>
-
-      <view v-if="ingredientErrorText" class="sheet-note sheet-note--error">{{ ingredientErrorText }}</view>
-      <view v-else-if="ingredientLoading && !ingredientOptions.length" class="sheet-note">加载中...</view>
-
-      <scroll-view scroll-y class="ingredient-scroll" :show-scrollbar="false">
-        <view v-if="ingredientOptions.length" class="ingredient-list">
-          <view
-            v-for="item in ingredientOptions"
-            :key="item.id"
-            class="ingredient-item"
-            :class="{ 'ingredient-item--active': selectedIngredientId === item.id }"
-            @click="selectIngredient(item.id)"
-          >
-            <text class="ingredient-item__title">{{ item.name }}</text>
-            <text class="ingredient-item__meta">{{ ingredientMeta(item) }}</text>
-          </view>
-        </view>
-        <view v-else class="sheet-note">没有搜到食材，确认时会按手动项加入当前清单。</view>
-      </scroll-view>
-
-      <view class="editor-card">
-        <text class="editor-card__label">当前食材</text>
-        <text class="editor-card__value">{{ addItemName }}</text>
-        <input v-model="addQuantityText" class="sheet-input sheet-input--compact" maxlength="30" placeholder="数量，例如 2 包 / 500g" />
-        <input v-model="addNote" class="sheet-input sheet-input--compact" maxlength="40" placeholder="备注，例如 火锅补货" />
-      </view>
-
-      <template #footer>
-        <view class="sheet-actions">
-          <button class="sheet-actions__button sheet-actions__button--cancel" @click="closeAddSheet">取消</button>
-          <button class="sheet-actions__button sheet-actions__button--confirm" @click="createItem">
-            {{ submitting ? "添加中..." : "加入清单" }}
-          </button>
-        </view>
-      </template>
+      <IngredientPickerContent
+        hint-text="选择要加入清单的食材，可以一次添加多项。"
+        v-model:keyword="ingredientKeyword"
+        :search-mode="ingredientSearchMode"
+        :search-loading="ingredientSearchLoading"
+        :search-items="ingredientSearchItems"
+        :loading="ingredientLoading"
+        :category-items="ingredientOptions"
+        :categories="ingredientCategories"
+        :category-id="ingredientCategoryId"
+        :all-active="ingredientAllActive"
+        :source-filter="ingredientSourceFilter"
+        :show-personal-actions="false"
+        :selected-ids="selectedIngredientIds"
+        :selected-items="selectedIngredients"
+        :existing-ids="existingIngredientIds"
+        :footer-text="ingredientFooterText"
+        :error-text="ingredientErrorText"
+        empty-text="没有符合条件的食材。"
+        :show-empty-create="false"
+        :show-search-create="false"
+        :confirm-disabled="!selectedIngredients.length || submitting"
+        :confirm-text="submitting ? '添加中...' : `添加 ${selectedIngredients.length} 项`"
+        :main-style="{ height: '320px' }"
+        @search="searchIngredients"
+        @clear-search="exitIngredientSearch"
+        @clear-category="clearIngredientCategory"
+        @change-source="changeIngredientSourceFilter"
+        @change-category="changeIngredientCategory"
+        @load-more="loadMoreIngredients"
+        @toggle="selectIngredient"
+        @remove="removeSelectedIngredient"
+        @confirm="createItems"
+      />
     </SheetShell>
 
     <InviteShareSheet
@@ -354,17 +357,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { onLoad, onShareAppMessage, onShow } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/empty.png";
 import type { UUID } from "@/apis/http";
-import { recipeApi, type IngredientSummary } from "@/apis/recipe";
+import { recipeApi, type IngredientCategorySummary, type IngredientSummary } from "@/apis/recipe";
+import { fridgeApi, type FridgeTraceSummary } from "../apis/fridge";
 import Empty from "@/components/Empty/Empty.vue";
-import ImageLoader from "@/components/ImageLoader.vue";
+import IngredientPickerContent from "@/components/Ingredient/IngredientPickerContent.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import InviteShareSheet from "@/components/Share/InviteShareSheet.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";
-import TextFieldSheet from "@/components/Sheet/TextFieldSheet.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { useLoginEmptyState } from "@/composables/useLoginEmptyState";
 import { buildThemePageStyle } from "@/composables/theme-page-style";
@@ -375,6 +378,7 @@ import { useSessionStore } from "@/stores/session";
 import { useUserStore } from "@/stores/user";
 import { createOperationId } from "@/utils/operation-id";
 import { formatMonthDay } from "../utils/date";
+import { loadAllFridgeTraces } from "../utils/fridge-traces";
 import {
   shoppingApi,
   type ShoppingListCollaborator,
@@ -385,7 +389,7 @@ import {
 } from "../apis/shopping";
 
 type DetailAction = "" | "share";
-type ManageActionKey = "add" | "share" | "void" | "restore" | "delete" | "leave";
+type ManageActionKey = "share" | "restore" | "delete" | "leave";
 
 interface GroupView {
   key: string;
@@ -393,9 +397,8 @@ interface GroupView {
   items: ShoppingListDetailItem[];
   name: string;
   categoryName: string | null;
-  imageUrl: string | null;
   quantityText: string;
-  requiredQuantityText: string | null;
+  fridgeHint: string;
   checkedAt: string | null;
   sources: ShoppingItemSourceSummary[];
 }
@@ -417,18 +420,26 @@ const loading = ref(false);
 const submitting = ref(false);
 const errorText = ref("");
 const detail = ref<ShoppingListDetail | null>(null);
-
-const renameSheetVisible = ref(false);
-const renameName = ref("");
+const fridgeStates = ref<FridgeTraceSummary[]>([]);
 
 const addSheetVisible = ref(false);
 const ingredientLoading = ref(false);
 const ingredientKeyword = ref("");
 const ingredientErrorText = ref("");
 const ingredientOptions = ref<IngredientSummary[]>([]);
-const selectedIngredientId = ref<UUID | "">("");
-const addQuantityText = ref("");
-const addNote = ref("");
+const ingredientCategories = ref<IngredientCategorySummary[]>([]);
+const ingredientCategoryId = ref<UUID | "">("");
+const ingredientSourceFilter = ref<"ALL" | "PERSONAL">("ALL");
+const ingredientPage = ref(1);
+const ingredientHasNext = ref(false);
+const ingredientLoadingMore = ref(false);
+const ingredientRequestSeed = ref(0);
+const ingredientLoadedKeyword = ref("");
+const ingredientSearchPending = ref(false);
+let ingredientSearchTimer: ReturnType<typeof setTimeout> | null = null;
+const selectedIngredients = ref<IngredientSummary[]>([]);
+const pendingCheckValues = ref<Record<string, boolean>>({});
+const settingsSheetVisible = ref(false);
 const shareSheetVisible = ref(false);
 const shareNoticeVisible = ref(false);
 const shareUrl = ref("");
@@ -438,7 +449,7 @@ const scrollTop = ref(0);
 const manageMenuOpen = ref(false);
 const openSwipeItemId = ref<string>("");
 const itemPendingId = ref<string>("");
-const itemPendingAction = ref<"" | "check" | "remove">("");
+const itemPendingAction = ref<"" | "remove">("");
 const openOriginItemIds = ref<string[]>([]);
 const swipeState = reactive({
   itemId: "",
@@ -448,16 +459,6 @@ const swipeState = reactive({
   offset: 0,
   axis: "" as "" | "x" | "y"
 });
-
-function resolveGroupSortRank(group: GroupView) {
-  if (isGroupResolved(group)) {
-    return isItemChecked(group) ? 3 : 2;
-  }
-  if (group.items.some(item => Boolean(item.checkedAt) || item.status === "CHECKED")) {
-    return 1;
-  }
-  return 0;
-}
 
 const groups = computed<GroupView[]>(() => {
   const source = (detail.value?.items ?? []).filter(item => item.status !== "REMOVED");
@@ -469,19 +470,38 @@ const groups = computed<GroupView[]>(() => {
     bucket.set(key, current);
   });
   return [...bucket.entries()]
-    .map(([key, items], index) => ({
-      index,
-      group: buildGroupView(key, items)
-    }))
-    .sort((left, right) => {
-      const leftRank = resolveGroupSortRank(left.group);
-      const rightRank = resolveGroupSortRank(right.group);
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return left.index - right.index;
-    })
-    .map(entry => entry.group);
+    .map(([key, items]) => buildGroupView(key, items));
+});
+const ingredientSearchMode = computed(() => Boolean(ingredientKeyword.value.trim()));
+const ingredientSearchLoading = computed(() => ingredientSearchMode.value && (ingredientSearchPending.value || ingredientLoading.value));
+const ingredientSearchItems = computed(() => ingredientLoadedKeyword.value === ingredientKeyword.value.trim() ? ingredientOptions.value : []);
+const ingredientAllActive = computed(() => ingredientSourceFilter.value === "ALL" && !ingredientCategoryId.value);
+const selectedIngredientIds = computed(() => selectedIngredients.value.map(item => item.id));
+const existingIngredientIds = computed(() => [...new Set(
+  (detail.value?.items ?? [])
+    .filter(item => item.status !== "REMOVED" && item.ingredientId !== null)
+    .map(item => item.ingredientId as UUID)
+)]);
+const ingredientFooterText = computed(() => {
+  if (ingredientLoadingMore.value) return "加载中...";
+  return ingredientHasNext.value ? "上滑加载更多" : "";
+});
+const pendingCheckCount = computed(() => {
+  if (!detail.value) return 0;
+  return detail.value.items.filter(item => {
+    const pendingValue = pendingCheckValues.value[item.id];
+    return pendingValue !== undefined && pendingValue !== isPersistedItemChecked(item);
+  }).length;
+});
+
+watch(ingredientKeyword, () => {
+  if (!addSheetVisible.value) return;
+  if (ingredientSearchTimer) clearTimeout(ingredientSearchTimer);
+  ingredientSearchPending.value = Boolean(ingredientKeyword.value.trim());
+  ingredientSearchTimer = setTimeout(() => {
+    ingredientSearchTimer = null;
+    void loadIngredientOptions(true);
+  }, 280);
 });
 
 const navProgress = computed(() => Math.min(1, Math.max(0, scrollTop.value / NAV_FADE_DISTANCE)));
@@ -554,7 +574,6 @@ const endedCardDesc = computed(() => {
   }
   return "";
 });
-const canRename = computed(() => detail.value?.role === "OWNER" && detail.value?.status === "ACTIVE");
 const showShoppingShareEntrances = false;
 const canOpenShare = computed(() => showShoppingShareEntrances && detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
 const canVoid = computed(() => detail.value?.role === "OWNER" && detail.value.status === "ACTIVE");
@@ -565,9 +584,7 @@ const canEditItems = computed(() => Boolean(detail.value) && detail.value?.statu
 const canAddItem = computed(() => Boolean(detail.value) && detail.value?.status === "ACTIVE");
 const manageActions = computed(() => {
   const actions: Array<{ key: ManageActionKey; label: string; iconClass: string; tone?: "default" | "danger" }> = [];
-  if (canAddItem.value) actions.push({ key: "add", label: "添加食材", iconClass: "icon-add", tone: "default" });
   if (canOpenShare.value) actions.push({ key: "share", label: "协作", iconClass: "icon-share", tone: "default" });
-  if (canVoid.value) actions.push({ key: "void", label: "作废", iconClass: "icon-close", tone: "danger" });
   if (canRestore.value) actions.push({ key: "restore", label: "恢复采购", iconClass: "icon-back", tone: "default" });
   if (canDelete.value) actions.push({ key: "delete", label: "删除清单", iconClass: "icon-close", tone: "danger" });
   if (canLeave.value) actions.push({ key: "leave", label: "退出共享", iconClass: "icon-close", tone: "danger" });
@@ -615,11 +632,6 @@ const shareNoticeLimitText = computed(() => {
   if (!detail.value) return "当前只支持小范围协作，先加入者优先。";
   return `当前最多支持 ${detail.value.memberLimit} 人一起维护，先加入者优先。`;
 });
-const addItemName = computed(() => {
-  const selected = ingredientOptions.value.find(item => item.id === selectedIngredientId.value);
-  return selected?.name || ingredientKeyword.value.trim();
-});
-
 onShareAppMessage(() => ({
   title: detail.value?.name ? `${detail.value.name}，一起补齐这顿饭` : "邀请你一起维护采购清单",
   path: shareUrl.value || "/pages_pantry/list/index"
@@ -653,7 +665,13 @@ async function requestDetail(options?: { silent?: boolean }) {
     errorText.value = "";
   }
   try {
-    detail.value = await shoppingApi.getListDetail(listId.value);
+    const [nextDetail, nextFridgeStates] = await Promise.all([
+      shoppingApi.getListDetail(listId.value),
+      loadAllFridgeTraces((page, pageSize) => fridgeApi.list(page, pageSize))
+    ]);
+    if (!silent) pendingCheckValues.value = {};
+    detail.value = nextDetail;
+    fridgeStates.value = nextFridgeStates;
     syncGroupUiState(detail.value.items);
     handlePendingAction();
   } catch (error) {
@@ -693,10 +711,6 @@ function handleScroll(event: { detail: { scrollTop?: number } }) {
   scrollTop.value = event.detail.scrollTop ?? 0;
 }
 
-function itemQuantityText(group: GroupView) {
-  return group.requiredQuantityText || group.quantityText || "未填数量";
-}
-
 function isOriginOpen(itemId: string) {
   return openOriginItemIds.value.includes(itemId);
 }
@@ -710,22 +724,22 @@ function toggleItemOrigin(itemId: string) {
 }
 
 function isItemChecked(group: GroupView) {
-  return group.items.length > 0 && group.items.every(item => item.status === "CHECKED" || Boolean(item.checkedAt));
+  return group.items.length > 0 && group.items.every(item => {
+    return pendingCheckValues.value[item.id] ?? isPersistedItemChecked(item);
+  });
+}
+
+function isPersistedItemChecked(item: ShoppingListDetailItem) {
+  return item.status === "CHECKED" || Boolean(item.checkedAt);
 }
 
 function isGroupResolved(group: GroupView) {
-  return group.items.every(item => isResolvedItem(item));
+  return group.items.every(item => pendingCheckValues.value[item.id] ?? isResolvedItem(item));
 }
 
 function isResolvedItem(item: ShoppingListDetailItem) {
   return item.status === "CHECKED"
     || Boolean(item.checkedAt);
-}
-
-function isItemPending(itemId: string, action?: "check" | "remove") {
-  if (itemPendingId.value !== itemId) return false;
-  if (!action) return true;
-  return itemPendingAction.value === action;
 }
 
 function applyItemPatch(patch: ShoppingListItemPatchResponse) {
@@ -824,64 +838,54 @@ function handleItemTouchEnd() {
   resetSwipeState();
 }
 
-function openRenameSheet() {
-  renameName.value = detail.value?.name || "";
-  renameSheetVisible.value = true;
-}
-
-function closeRenameSheet() {
-  renameSheetVisible.value = false;
-}
-
-function handleRenameSheetAfterClose() {
-  renameName.value = "";
-}
-
-async function renameList() {
-  if (!detail.value || !renameName.value.trim() || submitting.value) return;
-  submitting.value = true;
-  try {
-    detail.value = await shoppingApi.renameList(detail.value.id, {
-      operationId: createOperationId(),
-      version: detail.value.version,
-      name: renameName.value.trim()
-    });
-    closeRenameSheet();
-    await uniPlatform.feedback.toast({ title: "已改名", icon: "success" });
-  } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "保存失败", icon: "none" });
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function toggleItem(group: GroupView) {
+function toggleItem(group: GroupView) {
   if (!detail.value || submitting.value || itemPendingId.value) return;
   openSwipeItemId.value = "";
-  itemPendingId.value = group.id;
-  itemPendingAction.value = "check";
+  const targetChecked = !isItemChecked(group);
+  const nextValues = { ...pendingCheckValues.value };
+  for (const item of group.items) {
+    if (targetChecked === isPersistedItemChecked(item)) {
+      delete nextValues[item.id];
+    } else {
+      nextValues[item.id] = targetChecked;
+    }
+  }
+  pendingCheckValues.value = nextValues;
+}
+
+async function submitPendingChecks() {
+  if (!detail.value || submitting.value || !pendingCheckCount.value) return;
+  const changes = detail.value.items.flatMap(item => {
+    const checked = pendingCheckValues.value[item.id];
+    return checked === undefined || checked === isPersistedItemChecked(item)
+      ? []
+      : [{ itemId: item.id, checked }];
+  });
+  if (!changes.length) {
+    pendingCheckValues.value = {};
+    return;
+  }
+
+  submitting.value = true;
   try {
-    const targetChecked = !isItemChecked(group);
-    const currentItems = getCurrentGroupItems(group.key);
-    let changed = false;
-    for (const currentItem of currentItems) {
-      if (Boolean(currentItem.checkedAt) === targetChecked) continue;
-      const patch = await shoppingApi.checkListItem(detail.value.id, currentItem.id, {
-        operationId: createOperationId(),
-        version: detail.value.version,
-        checked: targetChecked
-      });
-      applyItemPatch(patch);
-      changed = true;
-    }
-    if (changed) {
-      await refreshDetailSilently();
-    }
+    const current = detail.value;
+    const updated = await shoppingApi.checkListItems(current.id, {
+      operationId: createOperationId(),
+      version: current.version,
+      items: changes
+    });
+    const updatedById = new Map(updated.items.map(item => [item.id, item]));
+    detail.value = {
+      ...updated,
+      items: current.items.map(item => updatedById.get(item.id) ?? item)
+    };
+    pendingCheckValues.value = {};
+    syncGroupUiState(detail.value.items);
+    await uniPlatform.feedback.toast({ title: "勾选已提交", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "更新失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "提交失败", icon: "none" });
   } finally {
-    itemPendingId.value = "";
-    itemPendingAction.value = "";
+    submitting.value = false;
   }
 }
 
@@ -904,6 +908,9 @@ async function removeItem(group: GroupView) {
         version: detail.value.version
       });
       applyItemPatch(patch);
+      const nextValues = { ...pendingCheckValues.value };
+      delete nextValues[currentItem.id];
+      pendingCheckValues.value = nextValues;
       changed = true;
     }
     if (changed) {
@@ -918,11 +925,21 @@ async function removeItem(group: GroupView) {
   }
 }
 
-function openAddSheet() {
+async function openAddSheet() {
   closeManageMenu();
+  ingredientKeyword.value = "";
+  ingredientCategoryId.value = "";
+  ingredientSourceFilter.value = "ALL";
+  selectedIngredients.value = [];
+  ingredientErrorText.value = "";
   addSheetVisible.value = true;
-  if (!ingredientOptions.value.length) {
-    void searchIngredients();
+  try {
+    if (!ingredientCategories.value.length) {
+      ingredientCategories.value = await recipeApi.listIngredientCategories();
+    }
+    await loadIngredientOptions(true);
+  } catch (error) {
+    ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
   }
 }
 
@@ -938,21 +955,30 @@ function buildGroupView(key: string, items: ShoppingListDetailItem[]): GroupView
   const primary = items[0]!;
   const sources = mergeGroupSources(items);
   const checkedItems = items.map(item => item.checkedAt).filter((value): value is string => Boolean(value));
-  const requiredQuantityText = buildGroupQuantityText(items);
+  const quantityText = buildGroupQuantityText(items);
   return {
     key,
     id: key,
     items,
     name: primary.name,
     categoryName: primary.categoryName,
-    imageUrl: primary.imageUrl,
-    quantityText: requiredQuantityText,
-    requiredQuantityText,
+    quantityText,
+    fridgeHint: fridgeStateHint(primary.ingredientId, primary.name),
     checkedAt: items.every(item => Boolean(item.checkedAt))
       ? checkedItems.sort()[checkedItems.length - 1] ?? primary.checkedAt
       : null,
     sources
   };
+}
+
+function fridgeStateHint(ingredientId: UUID | null, name: string) {
+  const normalizedName = name.trim().toLowerCase();
+  const state = fridgeStates.value.find(item => ingredientId
+    ? item.ingredientId === ingredientId
+    : item.name.trim().toLowerCase() === normalizedName);
+  if (!state || state.presence === "UNCONFIRMED") return "没有近期记录";
+  if (state.presence === "EMPTY") return "已标记没有";
+  return state.recentlyPurchased ? "最近买过" : "可能还有";
 }
 
 function mergeGroupSources(items: ShoppingListDetailItem[]) {
@@ -1060,10 +1086,10 @@ function manageActionStyle(index: number) {
 }
 
 function buildGroupQuantityText(items: ShoppingListDetailItem[]) {
-  if (!items.length) return "未填数量";
-  const lines = collectDistinctQuantityLines(items.map(item => item.requiredQuantityText ?? item.quantityText));
-  if (!lines.length) return "未填数量";
-  return lines.join(" / ");
+  if (!items.length) return "按需购买";
+  const lines = collectDistinctQuantityLines(items.map(item => item.quantityText));
+  if (lines.length !== 1 || !parseExactQuantityText(lines[0] ?? "")) return "按需购买";
+  return `本次约需 ${lines[0]}`;
 }
 
 function parseExactQuantityText(value: string) {
@@ -1148,56 +1174,142 @@ async function refreshDetailSilently() {
 }
 
 function handleAddSheetAfterClose() {
+  if (ingredientSearchTimer) clearTimeout(ingredientSearchTimer);
+  ingredientSearchTimer = null;
   ingredientKeyword.value = "";
+  ingredientCategoryId.value = "";
+  ingredientSourceFilter.value = "ALL";
   ingredientErrorText.value = "";
   ingredientOptions.value = [];
-  selectedIngredientId.value = "";
-  addQuantityText.value = "";
-  addNote.value = "";
+  selectedIngredients.value = [];
 }
 
-async function searchIngredients() {
-  ingredientLoading.value = true;
+async function loadIngredientOptions(reset: boolean) {
+  if (!reset && (ingredientLoading.value || ingredientLoadingMore.value || !ingredientHasNext.value)) return;
+  const requestId = ingredientRequestSeed.value + 1;
+  ingredientRequestSeed.value = requestId;
+  const keyword = ingredientKeyword.value.trim();
+  const searchMode = Boolean(keyword);
+  const nextPage = reset ? 1 : ingredientPage.value + 1;
+  if (reset) {
+    ingredientLoading.value = true;
+    ingredientOptions.value = [];
+    ingredientLoadedKeyword.value = "";
+    ingredientSearchPending.value = searchMode;
+  }
+  else ingredientLoadingMore.value = true;
   ingredientErrorText.value = "";
   try {
     const result = await recipeApi.listIngredients({
-      page: 1,
-      pageSize: 30,
-      keyword: ingredientKeyword.value.trim() || undefined,
-      source: "ALL"
+      page: nextPage,
+      pageSize: searchMode ? 20 : 48,
+      keyword: keyword || undefined,
+      categoryId: searchMode ? undefined : ingredientCategoryId.value || undefined,
+      source: searchMode ? undefined : ingredientSourceFilter.value
     });
-    ingredientOptions.value = result.items;
-    if (selectedIngredientId.value && !result.items.find(item => item.id === selectedIngredientId.value)) {
-      selectedIngredientId.value = "";
+    if (requestId !== ingredientRequestSeed.value) return;
+    ingredientPage.value = result.page;
+    ingredientHasNext.value = result.hasNext;
+    ingredientLoadedKeyword.value = keyword;
+    ingredientSearchPending.value = false;
+    if (reset) {
+      ingredientOptions.value = result.items;
+    } else {
+      const itemMap = new Map(ingredientOptions.value.map(item => [item.id, item]));
+      result.items.forEach(item => itemMap.set(item.id, item));
+      ingredientOptions.value = Array.from(itemMap.values());
     }
   } catch (error) {
-    ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
+    if (requestId === ingredientRequestSeed.value) {
+      ingredientErrorText.value = error instanceof Error ? error.message : "食材加载失败";
+      ingredientSearchPending.value = false;
+    }
   } finally {
-    ingredientLoading.value = false;
+    if (requestId === ingredientRequestSeed.value) {
+      ingredientLoading.value = false;
+      ingredientLoadingMore.value = false;
+    }
   }
 }
 
+function searchIngredients() {
+  if (ingredientSearchTimer) clearTimeout(ingredientSearchTimer);
+  ingredientSearchTimer = null;
+  void loadIngredientOptions(true);
+}
+
+function exitIngredientSearch() {
+  if (ingredientSearchTimer) clearTimeout(ingredientSearchTimer);
+  ingredientSearchTimer = null;
+  ingredientKeyword.value = "";
+}
+
+function clearIngredientCategory() {
+  ingredientCategoryId.value = "";
+  ingredientSourceFilter.value = "ALL";
+  void loadIngredientOptions(true);
+}
+
+function changeIngredientCategory(categoryId: UUID) {
+  ingredientCategoryId.value = ingredientCategoryId.value === categoryId ? "" : categoryId;
+  void loadIngredientOptions(true);
+}
+
+function changeIngredientSourceFilter(source: "PERSONAL") {
+  ingredientSourceFilter.value = ingredientSourceFilter.value === source ? "ALL" : source;
+  void loadIngredientOptions(true);
+}
+
+function loadMoreIngredients() {
+  void loadIngredientOptions(false);
+}
+
 function selectIngredient(ingredientId: UUID) {
-  selectedIngredientId.value = selectedIngredientId.value === ingredientId ? "" : ingredientId;
+  if (isIngredientAlreadyInList(ingredientId)) return;
+  const selectedIndex = selectedIngredients.value.findIndex(item => item.id === ingredientId);
+  const ingredient = ingredientOptions.value.find(item => item.id === ingredientId);
+  if (!ingredient) return;
+  if (selectedIndex >= 0) {
+    selectedIngredients.value = selectedIngredients.value.filter(item => item.id !== ingredientId);
+    return;
+  }
+  selectedIngredients.value = [...selectedIngredients.value, ingredient];
 }
 
-function ingredientMeta(item: IngredientSummary) {
-  return `${item.source === "PERSONAL" ? "个人食材" : "系统食材"} · 默认 ${item.defaultUnit.name}`;
+function removeSelectedIngredient(ingredientId: UUID) {
+  selectedIngredients.value = selectedIngredients.value.filter(item => item.id !== ingredientId);
 }
 
-async function createItem() {
-  if (!detail.value || submitting.value || !addItemName.value) return;
+function isIngredientAlreadyInList(ingredientId: UUID) {
+  return Boolean(
+    detail.value?.items.some(item => item.status !== "REMOVED" && item.ingredientId === ingredientId)
+  );
+}
+
+async function createItems() {
+  if (!detail.value || submitting.value || !selectedIngredients.value.length) return;
+  const selected = selectedIngredients.value.filter(item => !isIngredientAlreadyInList(item.id));
+  if (!selected.length) {
+    closeAddSheet();
+    await uniPlatform.feedback.toast({ title: "食材已在清单中", icon: "none" });
+    return;
+  }
   submitting.value = true;
   try {
-    detail.value = await shoppingApi.createListItem(detail.value.id, {
-      operationId: createOperationId(),
-      name: addItemName.value,
-      ingredientId: selectedIngredientId.value || null,
-      quantityText: addQuantityText.value.trim() || null,
-      note: addNote.value.trim() || null
-    });
+    let nextDetail = detail.value;
+    for (const ingredient of selected) {
+      nextDetail = await shoppingApi.createListItem(nextDetail.id, {
+        operationId: createOperationId(),
+        name: ingredient.name,
+        ingredientId: ingredient.id,
+        quantityText: null,
+        note: null
+      });
+    }
+    detail.value = nextDetail;
+    syncGroupUiState(nextDetail.items);
     closeAddSheet();
-    await uniPlatform.feedback.toast({ title: "已加入清单", icon: "success" });
+    await uniPlatform.feedback.toast({ title: `已添加 ${selected.length} 项`, icon: "success" });
   } catch (error) {
     await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "添加失败", icon: "none" });
   } finally {
@@ -1337,17 +1449,8 @@ function closeManageMenu() {
   manageMenuOpen.value = false;
 }
 
-function handleManageAdd() {
-  openAddSheet();
-}
-
 function handleManageShare() {
   openShareSheet();
-}
-
-async function handleManageVoid() {
-  closeManageMenu();
-  await voidList();
 }
 
 async function handleManageRestore() {
@@ -1366,16 +1469,8 @@ async function handleManageLeave() {
 }
 
 async function handleManageAction(action: ManageActionKey) {
-  if (action === "add") {
-    handleManageAdd();
-    return;
-  }
   if (action === "share") {
     handleManageShare();
-    return;
-  }
-  if (action === "void") {
-    await handleManageVoid();
     return;
   }
   if (action === "restore") {
@@ -1408,6 +1503,20 @@ async function voidList() {
   } finally {
     submitting.value = false;
   }
+}
+
+function openSettingsSheet() {
+  if (canVoid.value) settingsSheetVisible.value = true;
+}
+
+function closeSettingsSheet() {
+  settingsSheetVisible.value = false;
+}
+
+async function handleSettingsVoid() {
+  if (submitting.value || !canVoid.value) return;
+  closeSettingsSheet();
+  await voidList();
 }
 
 async function restoreList() {
@@ -1562,6 +1671,24 @@ defineExpose({
   transition: opacity 180ms ease;
 }
 
+.detail-nav-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  color: var(--color-icon-active);
+}
+
+.detail-nav-settings--hover {
+  background: var(--color-surface-overlay-weak);
+}
+
+.detail-nav-settings__icon {
+  font-size: 34rpx;
+}
+
 .detail-hero {
   position: relative;
   overflow: hidden;
@@ -1624,8 +1751,8 @@ defineExpose({
 .summary-card__percent,
 .item-origin__tag,
 .item-origin__text,
-.editor-card__label,
-.editor-card__value,
+.add-selection-summary__text,
+.add-selection-summary__hint,
 .share-card__label,
 .share-card__path,
 .share-card__hint,
@@ -1655,13 +1782,6 @@ defineExpose({
   font-weight: var(--font-weight-heavy);
   line-height: 1.08;
   transition: opacity 180ms ease;
-}
-
-.detail-hero__edit {
-  flex: 0 0 auto;
-  margin-top: 16rpx;
-  color: var(--color-icon-active);
-  font-size: 32rpx;
 }
 
 .detail-hero__meta {
@@ -1706,7 +1826,7 @@ defineExpose({
 .detail-content {
   position: relative;
   margin-top: -42rpx;
-  padding: 126rpx var(--space-page) calc(24rpx + env(safe-area-inset-bottom));
+  padding: 126rpx var(--space-page) calc(184rpx + env(safe-area-inset-bottom));
   border-top-left-radius: 38rpx;
   border-top-right-radius: 38rpx;
   background: var(--color-surface-overlay-soft);
@@ -1725,7 +1845,7 @@ defineExpose({
 .group-card,
 .share-card,
 .complete-card,
-.editor-card {
+.add-selection-summary {
   border-radius: var(--radius-xs);
   background: var(--material-card-bg);
   box-shadow: var(--material-card-shadow);
@@ -1737,7 +1857,7 @@ defineExpose({
 .group-list,
 .share-card,
 .complete-list,
-.editor-card {
+.add-selection-summary {
   margin-top: 20rpx;
 }
 
@@ -1812,7 +1932,6 @@ defineExpose({
 }
 
 .day-chip,
-.mini-pill,
 .sheet-actions__button {
   border-radius: var(--radius-pill);
 }
@@ -2005,7 +2124,6 @@ defineExpose({
   margin-top: 28rpx;
 }
 
-.mini-pill,
 .sheet-actions__button,
 .search-box__button {
   margin: 0;
@@ -2013,8 +2131,7 @@ defineExpose({
 }
 
 .search-box__button,
-.sheet-actions__button--cancel,
-.mini-pill {
+.sheet-actions__button--cancel {
   background: var(--button-secondary-bg);
   color: var(--button-secondary-text);
   -webkit-backdrop-filter: var(--button-secondary-filter);
@@ -2030,11 +2147,6 @@ defineExpose({
   color: var(--button-primary-text);
   -webkit-backdrop-filter: var(--button-primary-filter);
   backdrop-filter: var(--button-primary-filter);
-}
-
-.mini-pill--danger {
-  background: var(--color-state-danger-soft);
-  color: var(--color-state-danger-text);
 }
 
 .group-card + .group-card {
@@ -2086,41 +2198,98 @@ defineExpose({
 
 .item-card {
   display: flex;
-  align-items: stretch;
-}
-
-.item-row__cover {
-  flex: 0 0 140rpx;
+  align-items: center;
+  gap: 24rpx;
 }
 
 .item-row__main {
   display: flex;
-  flex-direction: column;
-}
-
-.item-row__image {
-  --image-empty-icon-size: 80rpx;
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: var(--radius-xs);
-}
-
-.item-row__image {
-  display: block;
-  background: var(--color-surface-muted);
-}
-
-.item-row__top,
-.item-row__bottom {
-  display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
+  min-width: 0;
 }
 
-.item-row__bottom {
-  margin-top: auto;
+.purchase-check {
+  display: flex;
+  flex: 0 0 58rpx;
   align-items: center;
+  justify-content: center;
+  width: 58rpx;
+  height: 58rpx;
+  margin-top: 2rpx;
+  border: 3rpx solid var(--color-text);
+  border-radius: 18rpx 24rpx 16rpx 22rpx / 22rpx 16rpx 24rpx 18rpx;
+  background: var(--color-surface-raised);
+  box-shadow: 4rpx 4rpx 0 var(--color-text);
+  box-sizing: border-box;
+  transition:
+    transform 180ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-radius 180ms ease;
+}
+
+.purchase-check--checked {
+  border-radius: 24rpx 16rpx 22rpx 18rpx / 16rpx 24rpx 18rpx 22rpx;
+  background: var(--button-primary-bg);
+  transform: scale(1.05) rotate(-2deg);
+}
+
+.purchase-check:active {
+  box-shadow: 0 0 0 var(--color-text);
+  transform: scale(0.92) translateY(3rpx);
+}
+
+.purchase-check__icon {
+  color: var(--button-primary-text);
+  font-size: 38rpx;
+  font-weight: var(--font-weight-heavy);
+  line-height: 1;
+  animation: purchase-check-pop 240ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes purchase-check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(28deg);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1.18) rotate(0);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+.item-row__left,
+.item-row__right {
+  display: flex;
+  flex-direction: column;
+}
+
+.item-row__left {
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.item-row__right {
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8rpx;
+}
+
+.item-row__identity {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: baseline;
+  gap: 8rpx;
+  width: 100%;
+  min-width: 0;
 }
 
 .item-row__title,
@@ -2131,9 +2300,24 @@ defineExpose({
   font-weight: var(--font-weight-semibold);
 }
 
+.item-row__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .item-row__quantity {
-  flex: 0 0 auto;
-  text-align: right;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-row__category {
@@ -2144,38 +2328,38 @@ defineExpose({
   font-size: var(--font-size-sm);
 }
 
-.item-row__bottom-left {
-  flex: 1;
-  min-width: 0;
+.item-row__fridge-hint {
+  flex: 0 0 auto;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .item-row__origin-toggle {
+  display: flex;
   flex: 0 0 auto;
-  color: var(--color-text-tertiary);
+  align-items: center;
+  gap: 6rpx;
   font-size: var(--font-size-xs);
   line-height: 48rpx;
 }
 
+.item-row__origin-arrow {
+  display: inline-block;
+  font-size: 26rpx;
+  line-height: 1;
+  transform: rotate(-180deg);
+  color: var(--color-text-tertiary);
+  transition: transform 220ms ease;
+}
+
+.item-row__origin-arrow--open {
+  transform: rotate(-90deg);
+}
+
 .item-row__origin-toggle--open {
   color: var(--color-support-action);
-}
-
-.item-row__info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-}
-
-.item-row__actions {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.item-row__actions .mini-pill {
-  height: 48rpx;
-  line-height: 48rpx;
 }
 
 .item-origin-wrap {
@@ -2231,32 +2415,145 @@ defineExpose({
   text-align: right;
 }
 
-.mini-pill {
-  min-width: 118rpx;
-  padding: 0 20rpx;
+.detail-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  padding: 18rpx var(--space-page) calc(18rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid var(--color-divider);
+  background: var(--material-tabbar-bg);
+  box-shadow: var(--material-tabbar-shadow);
+  -webkit-backdrop-filter: var(--material-tabbar-filter);
+  backdrop-filter: var(--material-tabbar-filter);
+  box-sizing: border-box;
 }
 
-.mini-pill--pending {
-  opacity: 0.72;
+.meal-footer__actions {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 0;
 }
 
-.mini-pill--active {
+.meal-footer__quick {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  min-width: 86rpx;
+}
+
+.meal-footer__quick--disabled {
+  opacity: 0.42;
+}
+
+.meal-footer__quick-icon {
+  font-size: 30rpx;
+  color: var(--color-text);
+}
+
+.meal-footer__quick-label {
+  color: var(--color-text-secondary);
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.meal-footer__buttons {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.meal-footer__buttons--single .meal-footer__button {
+  width: 100%;
+  flex: 1 1 100%;
+}
+
+.meal-footer__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 90rpx;
+  margin: 0;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.meal-footer__button::after {
+  border: none;
+  display: none;
+}
+
+.meal-footer__button--primary {
   background: var(--button-primary-bg);
+  box-shadow: var(--button-primary-shadow);
   color: var(--button-primary-text);
-  box-shadow: none;
 }
 
-.mini-pill--disabled {
-  background: var(--color-surface-overlay-weak);
-  color: var(--color-text-tertiary);
-  box-shadow:
-    inset 0 0 0 1rpx var(--color-border-light),
-    none;
-  opacity: 1;
+.meal-footer__button--disabled {
+  opacity: 0.46;
+  box-shadow: var(--button-primary-shadow);
 }
 
-.mini-pill--locked {
-  opacity: 0.62;
+.meal-footer__button-content {
+  line-height: 1;
+}
+
+.settings-action {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  min-height: 112rpx;
+  padding: 16rpx 8rpx;
+}
+
+.settings-action--disabled {
+  opacity: 0.56;
+}
+
+.settings-action__icon-wrap {
+  display: flex;
+  flex: 0 0 72rpx;
+  align-items: center;
+  justify-content: center;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 22rpx;
+  background: var(--color-state-danger-soft);
+}
+
+.settings-action__icon {
+  color: var(--color-state-danger-text);
+  font-size: 34rpx;
+}
+
+.settings-action__copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6rpx;
+  min-width: 0;
+}
+
+.settings-action__title {
+  color: var(--color-state-danger-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.settings-action__hint {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
 }
 
 .floating-dock {
@@ -2268,6 +2565,10 @@ defineExpose({
   flex-direction: column;
   align-items: flex-end;
   gap: 18rpx;
+}
+
+.floating-dock--above-footer {
+  bottom: calc(148rpx + env(safe-area-inset-bottom));
 }
 
 .floating-dock__backdrop {
@@ -2472,6 +2773,9 @@ defineExpose({
 }
 
 .ingredient-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 22rpx;
   border-radius: 24rpx;
   background: var(--color-surface-muted);
@@ -2486,13 +2790,27 @@ defineExpose({
   background: var(--color-tag-primary-bg);
 }
 
+.ingredient-item--disabled {
+  opacity: 0.56;
+}
+
+.ingredient-item__copy {
+  min-width: 0;
+}
+
+.ingredient-item__check {
+  flex: 0 0 auto;
+  margin-left: 20rpx;
+  color: var(--color-state-success-text);
+  font-size: 30rpx;
+}
+
 .ingredient-item__title,
 .ingredient-item__meta {
   display: block;
 }
 
-.ingredient-item__title,
-.editor-card__value {
+.ingredient-item__title {
   color: var(--color-text);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
@@ -2504,18 +2822,31 @@ defineExpose({
   font-size: var(--font-size-xs);
 }
 
-.editor-card,
+.add-selection-summary,
 .share-card,
 .complete-card {
   padding: 24rpx;
 }
 
-.editor-card__value {
-  margin: 8rpx 0 16rpx;
+.add-selection-summary__text,
+.add-selection-summary__hint {
+  display: block;
 }
 
-.editor-card .sheet-input + .sheet-input {
-  margin-top: 12rpx;
+.add-selection-summary__text {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.add-selection-summary__hint {
+  margin-top: 8rpx;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.sheet-actions__button--disabled {
+  opacity: 0.45;
 }
 
 .share-card__path {

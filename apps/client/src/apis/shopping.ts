@@ -42,6 +42,7 @@ export interface ShoppingGapResponse {
 
 export interface ShoppingGapPreviewItem {
   id: UUID;
+  ingredientId: UUID | null;
   name: string;
   quantityText: string | null;
   note: string | null;
@@ -50,6 +51,7 @@ export interface ShoppingGapPreviewItem {
   sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
   sourceKey: string | null;
   status: "OPEN" | "BOUGHT" | "DELETED";
+  preparationStatus: "OPEN" | "BOUGHT" | "HOME" | "READY";
   updatedAt: IsoDateTime;
 }
 

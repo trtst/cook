@@ -25,7 +25,6 @@ const officialMessageSource = readFile("./pages_me/official-message/index.vue");
 const ingredientUnitsSource = readFile("./pages_me/ingredient-units/index.vue");
 const recipeDetailSource = readFile("./pages_recipe/detail/index.vue");
 const pantryIndexSource = readFile("./pages_pantry/index/index.vue");
-const pantryItemDetailSource = readFile("./pages_pantry/item-detail/index.vue");
 const imageFieldSource = readFile("./components/ImageField.vue");
 const loginModalSource = readFile("./components/Login/LoginModal.vue");
 
@@ -90,15 +89,8 @@ expectIncludes(recipeDetailSource, 'import ImageLoader from "@/components/ImageL
 expectIncludes(recipeDetailSource, '<ImageLoader class="hero__image" :src="coverImageUrl" />');
 expectExcludes(recipeDetailSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 
-expectIncludes(pantryIndexSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
-expectIncludes(pantryIndexSource, '<ImageLoader class="item-card__image" :src="card.imageUrl" />');
-expectExcludes(pantryIndexSource, "avatarText:");
+expectExcludes(pantryIndexSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
 expectExcludes(pantryIndexSource, "buildIngredientAvatarText");
-
-expectIncludes(pantryItemDetailSource, 'import ImageLoader from "@/components/ImageLoader.vue";');
-expectIncludes(pantryItemDetailSource, '<ImageLoader class="detail-hero__image" :src="itemImageUrl" />');
-expectExcludes(pantryItemDetailSource, "detail-hero__avatar-text");
-expectExcludes(pantryItemDetailSource, "buildIngredientAvatarText");
 
 expectIncludes(imageFieldSource, 'import ImageEmpty from "@/components/ImageEmpty.vue";');
 expectIncludes(imageFieldSource, '<ImageEmpty v-if="variant === \'cover\'" class="image-field__empty-cover" copy="封面图" ratio="fill" />');

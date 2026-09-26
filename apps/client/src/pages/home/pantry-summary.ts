@@ -1,9 +1,9 @@
-import type { FridgeSummaryResponse } from "@/apis/fridge";
+import type { FridgeTraceSummaryResponse } from "@/apis/fridge";
 import type { ShoppingListSummaryResponse } from "@/apis/shopping";
 
 export interface PantrySummaryState {
   ingredientCount: number;
-  expiringCount: number;
+  traceCount: number;
   pendingShoppingCount: number;
   activeListCount: number;
 }
@@ -11,20 +11,20 @@ export interface PantrySummaryState {
 export function createEmptyPantrySummary(): PantrySummaryState {
   return {
     ingredientCount: 0,
-    expiringCount: 0,
+    traceCount: 0,
     pendingShoppingCount: 0,
     activeListCount: 0
   };
 }
 
 export function buildPantrySummaryState(
-  fridgeSummary: FridgeSummaryResponse | null,
+  fridgeSummary: FridgeTraceSummaryResponse | null,
   shoppingSummary: ShoppingListSummaryResponse | null
 ): PantrySummaryState {
   const next = createEmptyPantrySummary();
   if (fridgeSummary) {
     next.ingredientCount = fridgeSummary.totalCount;
-    next.expiringCount = fridgeSummary.expiringCount;
+    next.traceCount = fridgeSummary.totalCount;
   }
   if (shoppingSummary) {
     next.pendingShoppingCount = Math.max(shoppingSummary.pendingItemCount, 0);
@@ -43,8 +43,8 @@ export function buildPantrySummaryHint(summary: PantrySummaryState) {
       ? `${summary.activeListCount} 张清单还在采购中`
       : `${summary.pendingShoppingCount} 项还等着补齐`;
   }
-  if (summary.expiringCount > 0) {
-    return `${summary.expiringCount} 样食材快到期，记得优先安排`;
+  if (summary.traceCount > 0) {
+    return `最近记录了 ${summary.traceCount} 样食材`;
   }
   if (summary.ingredientCount > 0) {
     return summary.activeListCount > 0

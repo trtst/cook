@@ -1,6 +1,6 @@
 <template>
   <page-meta :page-style="themePageStyle" />
-  <Layout :class="themeClasses" title="现在缺什么" full-screen :navbar-placeholder="false" navbar-transparent>
+  <Layout :class="themeClasses" title="近期要准备" full-screen :navbar-placeholder="false" navbar-transparent>
     <view class="gap-nav-backdrop" :style="navBackdropStyle" />
     <view class="gap-scroll-wrap">
       <RecipeSearchLoading
@@ -26,7 +26,7 @@
       >
         <view class="gap-page">
           <view class="gap-hero" :style="heroStyle">
-            <text class="gap-hero__eyebrow">近期缺口</text>
+            <text class="gap-hero__eyebrow">菜单食材需求</text>
             <text class="gap-hero__title">{{ summaryTitle }}</text>
             <text class="gap-hero__description">{{ summaryDescription }}</text>
           </view>
@@ -35,8 +35,8 @@
             <Empty
               v-if="!sessionStore.isLoggedIn"
               :art="emptyStateArt"
-              title="登录后看现在缺什么"
-              description="缺口只按你自己的冰箱和待处理饭局来判断。"
+              title="登录后查看待准备食材"
+              description="这里汇总待处理饭局的菜谱食材，不读取冰箱余量。"
               clickable
               @click="openLogin"
             />
@@ -47,7 +47,7 @@
                 <text class="notice__action">重新加载</text>
               </view>
 
-              <text class="gap-intro">缺口页只聚焦从今天起未来 7 天的做饭安排；采购清单继续负责真正的采购维护。</text>
+              <text class="gap-intro">这里汇总待处理饭局的菜谱食材，不判断冰箱里是否够用；是否购买由你决定。</text>
 
               <view class="target-card" hover-class="target-card--hover" hover-stay-time="100" @click="openTargetSheet()">
                 <view class="target-card__main">
@@ -59,7 +59,7 @@
               </view>
 
               <view v-if="showLoadingNotice" class="notice">
-                <text class="notice__text">正在按时间层级整理待处理饭局的缺口...</text>
+                <text class="notice__text">正在按时间整理待处理饭局的菜单食材...</text>
               </view>
 
               <template v-else-if="visibleSections.length">
@@ -106,8 +106,8 @@
               </template>
 
               <view v-else class="gap-section">
-                <text class="gap-section__title">当前缺口</text>
-                <Empty title="暂时没有待补食材" description="这几顿饭暂时没有明显缺口；如果已有待买项，直接去采购清单处理就行。" />
+                <text class="gap-section__title">待准备食材</text>
+                <Empty title="近期没有待准备食材" description="待处理饭局暂无菜谱食材需求；想买的食材可以直接在购物清单添加。" />
               </view>
             </template>
           </view>
@@ -214,9 +214,9 @@ const {
   onRefresherRestore
 } = useCustomRefresher({
   text: {
-    pulling: "下拉刷新缺口",
-    canRelease: ["松手刷新缺口"],
-    success: "缺口已刷新"
+    pulling: "下拉刷新菜单需求",
+    canRelease: ["松手刷新菜单需求"],
+    success: "菜单需求已刷新"
   }
 });
 
@@ -230,23 +230,22 @@ const visibleSections = computed(() => {
 const showLoadingNotice = computed(() => loading.value && !refreshing.value);
 const selectedListMeta = computed(() => {
   if (!selectedList.value) {
-    return activeLists.value.length ? "先选一张采购中的清单，再把缺口快速收进去。" : "还没有采购中的清单，先创建一张。";
+    return activeLists.value.length ? "先选一张采购中的清单，再把待准备食材收进去。" : "还没有采购中的清单，先创建一张。";
   }
   const remaining = Math.max(selectedList.value.progressTotalCount - selectedList.value.progressDoneCount, 0);
   return `剩余 ${remaining} 项待处理`;
 });
 const summaryTitle = computed(() => {
-  if (!sessionStore.isLoggedIn) return "先登录，再看现在缺什么";
-  if (loading.value) return "正在按时间层级整理缺口";
-  if (!totalItemCount.value) return "这几顿暂时不缺食材";
-  if (totalItemCount.value <= 2) return `还差 ${totalItemCount.value} 样，先把最近的补上`;
-  return `还差 ${totalItemCount.value} 样，先处理眼前几顿`;
+  if (!sessionStore.isLoggedIn) return "先登录，再看待准备的食材";
+  if (loading.value) return "正在整理菜单食材需求";
+  if (!totalItemCount.value) return "近期没有待准备食材";
+  return `有 ${totalItemCount.value} 样待准备食材`;
 });
 const summaryDescription = computed(() => {
-  if (!sessionStore.isLoggedIn) return "登录后按你自己的冰箱和待处理饭局来判断食材缺口。";
-  if (loading.value) return "先按未来 48 小时、3 到 7 天、7 天后，把待处理饭局的食材缺口收口。";
-  if (!totalItemCount.value) return "未来 7 天里没有明显缺口；如果已有待买项，直接去采购清单处理就行。";
-  return `当前缺口涉及 ${totalEventCount.value} 场饭局；7 天后的安排默认收起，避免干扰最近做饭。`;
+  if (!sessionStore.isLoggedIn) return "这里汇总待处理饭局的菜谱食材，不读取冰箱余量。";
+  if (loading.value) return "正在汇总未来 48 小时、3 到 7 天与 7 天后的菜单需求。";
+  if (!totalItemCount.value) return "待处理饭局暂时没有菜谱食材需求；想买的食材可直接在购物清单添加。";
+  return `来自 ${totalEventCount.value} 场饭局的菜单需求；不判断冰箱余量，你可以自行决定是否采购。`;
 });
 const sheetSubtitle = computed(() => {
   if (pendingGapItem.value) return `把 ${pendingGapItem.value.name} 收进哪张清单？`;
@@ -300,7 +299,7 @@ async function loadPage() {
       laterExpanded.value = false;
     }
   } catch (error) {
-    errorText.value = error instanceof Error ? error.message : "缺口加载失败";
+    errorText.value = error instanceof Error ? error.message : "菜单需求加载失败";
   } finally {
     loading.value = false;
   }

@@ -79,7 +79,7 @@ export interface HomeWeekOverview {
   plannedDayCount: number;
   totalDayCount: number;
   activeListCount: number;
-  expiringCount: number;
+  traceCount: number;
   arrangement: HomeRecentArrangement | null;
   days: HomeWeekOverviewDay[];
 }

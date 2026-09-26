@@ -355,7 +355,7 @@ const fridgeRecipePageIndex = ref(0);
 const pantrySummaryLoading = ref(false);
 const pantrySummaryLoaded = ref(false);
 const pantryIngredientCount = ref(0);
-const pantryExpiringCount = ref(0);
+const pantryTraceCount = ref(0);
 const pantryPendingShoppingCount = ref(0);
 const pantryActiveListCount = ref(0);
 let homeEntriesLoadPromise: Promise<void> | null = null;
@@ -424,20 +424,20 @@ const hasPantrySummaryData = computed(
   () =>
     resolveHasPantrySummaryData({
       ingredientCount: pantryIngredientCount.value,
-      expiringCount: pantryExpiringCount.value,
+      traceCount: pantryTraceCount.value,
       pendingShoppingCount: pantryPendingShoppingCount.value,
       activeListCount: pantryActiveListCount.value
     })
 );
 const pantrySummaryItems = computed(() => [
   { label: "冰箱食材", value: String(pantryIngredientCount.value) },
-  { label: "临期待处理", value: String(pantryExpiringCount.value) },
+  { label: "近期食材", value: String(pantryTraceCount.value) },
   { label: "待采购", value: String(pantryPendingShoppingCount.value) }
 ]);
 const pantrySummaryHintText = computed(() => {
   return buildPantrySummaryHint({
     ingredientCount: pantryIngredientCount.value,
-    expiringCount: pantryExpiringCount.value,
+    traceCount: pantryTraceCount.value,
     pendingShoppingCount: pantryPendingShoppingCount.value,
     activeListCount: pantryActiveListCount.value
   });
@@ -678,7 +678,7 @@ async function loadFridgeRecipes(force = false) {
 async function loadPantrySummary(force = false) {
   if (!sessionStore.isLoggedIn) {
     pantryIngredientCount.value = 0;
-    pantryExpiringCount.value = 0;
+    pantryTraceCount.value = 0;
     pantryPendingShoppingCount.value = 0;
     pantryActiveListCount.value = 0;
     pantrySummaryLoading.value = false;
@@ -701,14 +701,14 @@ async function loadPantrySummary(force = false) {
         shoppingResult.status === "fulfilled" ? shoppingResult.value : null
       );
       pantryIngredientCount.value = next.ingredientCount;
-      pantryExpiringCount.value = next.expiringCount;
+      pantryTraceCount.value = next.traceCount;
       pantryPendingShoppingCount.value = next.pendingShoppingCount;
       pantryActiveListCount.value = next.activeListCount;
       pantrySummaryLoaded.value = true;
     })
     .catch(() => {
       pantryIngredientCount.value = 0;
-      pantryExpiringCount.value = 0;
+      pantryTraceCount.value = 0;
       pantryPendingShoppingCount.value = 0;
       pantryActiveListCount.value = 0;
       pantrySummaryLoaded.value = true;

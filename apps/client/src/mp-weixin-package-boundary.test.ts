@@ -24,7 +24,8 @@ const forbiddenSourceImports = [
   "@/composables/useImageCropFlow",
   "@/services/subscribe-message",
   "@/utils/image-crop",
-  "@/utils/shopping"
+  "@/utils/shopping",
+  "@/pages_pantry/apis/fridge"
 ];
 
 const sourceFiles = [

@@ -161,20 +161,6 @@ const DISALLOWED_LOCAL_THEME_ALIASES = [
     ]
   },
   {
-    file: resolve(__dirname, "../pages_pantry/list-complete/index.vue"),
-    tokens: [
-      "--pantry-page-bg",
-      "--pantry-nav-backdrop-bg",
-      "--complete-hero-end",
-      "--complete-filter-active-bg",
-      "--complete-card-pending-shadow",
-      "--complete-card-cover-bg",
-      "--complete-card-placeholder-bg",
-      "--complete-quick-chip-bg",
-      "--quantity-sheet-divider"
-    ]
-  },
-  {
     file: resolve(__dirname, "../pages_recipe/detail/index.vue"),
     tokens: ["--detail-step-index-color", "--recipe-detail-page-bg"]
   },

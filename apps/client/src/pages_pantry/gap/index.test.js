@@ -352,7 +352,9 @@ describe("pages_pantry/gap/index", () => {
     expect(await page.path).toBe("pages_pantry/gap/index");
 
     const heroTitle = await page.$(".gap-hero__title");
-    expect(await heroTitle.text()).toBe("还差 1 样，先把最近的补上");
+    expect(await heroTitle.text()).toBe("有 1 样待准备食材");
+    const heroDescription = await page.$(".gap-hero__description");
+    expect(await heroDescription.text()).toBe("来自 1 场饭局的菜单需求；不判断冰箱余量，你可以自行决定是否采购。");
 
     const targetCardTitle = await page.$(".target-card__title");
     expect(await targetCardTitle.text()).toBe(fixture.shoppingList.listName);

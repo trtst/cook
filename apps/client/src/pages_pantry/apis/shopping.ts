@@ -1,18 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, type IsoDateTime, type OperationId, type PageResult, type UUID } from "@/apis/http";
-
-export interface ShoppingItemSummary {
-  id: UUID;
-  name: string;
-  quantityText: string | null;
-  note: string | null;
-  sourceCount: number;
-  sourceTitles: string[];
-  sourceType: "MANUAL" | "RECIPE" | "PLAN" | "EVENT" | "BRING" | "RANDOM_MENU";
-  sourceKey: string | null;
-  status: "OPEN" | "BOUGHT" | "DELETED";
-  updatedAt: IsoDateTime;
-}
+import { get, post, type IsoDateTime, type OperationId, type UUID } from "@/apis/http";
 
 export type ShoppingGapWindow = "NEXT_48_HOURS" | "NEXT_7_DAYS" | "LATER";
 
@@ -50,62 +37,11 @@ export interface ShoppingGapResponse {
   laterItemCount: number;
 }
 
-export interface ShoppingIngredientGroup {
-  key: string;
-  ingredientId: UUID;
-  name: string;
-  quantityLines: string[];
-  recipeCount: number;
-  recipeTitles: string[];
-  updatedAt: IsoDateTime;
-}
-
-export interface ShoppingRecipeIngredientGroup {
-  key: string;
-  ingredientId: UUID;
-  name: string;
-  quantityLines: string[];
-  updatedAt: IsoDateTime;
-}
-
-export interface ShoppingRecipeGroup {
-  key: string;
-  recipeId: UUID;
-  sourceVersionId: UUID;
-  title: string;
-  addCount: number;
-  totalServings: number;
-  updatedAt: IsoDateTime;
-  items: ShoppingRecipeIngredientGroup[];
-}
-
-export interface ShoppingBoardResponse {
-  ingredientGroups: ShoppingIngredientGroup[];
-  recipeGroups: ShoppingRecipeGroup[];
-  otherItems: ShoppingItemSummary[];
-}
-
-export interface CreateShoppingItemRequest {
-  operationId: OperationId;
-  name: string;
-  quantityText?: string | null;
-  note?: string | null;
-}
-
-export interface CreateRecipeShoppingItemsRequest {
-  operationId: OperationId;
-  recipeId: UUID;
-  sourceVersionId: UUID;
-}
-
 export type ShoppingListStatus = "ACTIVE" | "COMPLETED" | "VOIDED";
 export type ShoppingListRole = "OWNER" | "COLLABORATOR";
 export type ShoppingListInviteStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "REVOKED";
 export type ShoppingListInviteFilter = "ALL" | "PENDING" | "RESOLVED";
 export type ShoppingListItemStatus = "OPEN" | "CHECKED" | "REMOVED";
-export type ShoppingListItemFridgeAction = "APPLY" | "UNDO" | "CONFIRM_ENOUGH";
-export type ShoppingListItemFridgeActionMode = "NONE" | "APPLY_FULL" | "APPLY_PARTIAL" | "NEED_CONFIRM" | "UNDO";
-export type ShoppingInventoryStatus = "NONE" | "ENOUGH" | "SHORTAGE" | "UNKNOWN";
 
 export interface ShoppingListStatusCount {
   status: ShoppingListStatus;
@@ -184,18 +120,8 @@ export interface ShoppingListDetailItem {
   categoryName: string | null;
   imageUrl: string | null;
   quantityText: string | null;
-  requiredQuantityText: string | null;
-  remainingQuantityText: string | null;
-  appliedInventoryQuantityText: string | null;
   note: string | null;
   status: ShoppingListItemStatus;
-  fridgeText: string | null;
-  inventoryStatus: ShoppingInventoryStatus;
-  inventoryApplied: boolean;
-  inventoryCovered: boolean;
-  fridgeStatusText: string | null;
-  fridgeActionLabel: string | null;
-  fridgeActionMode: ShoppingListItemFridgeActionMode;
   checkedAt: IsoDateTime | null;
   updatedAt: IsoDateTime;
   sources: ShoppingItemSourceSummary[];
@@ -274,10 +200,10 @@ export interface UpdateShoppingListItemCheckRequest {
   checked: boolean;
 }
 
-export interface ApplyShoppingListItemFridgeRequest {
+export interface UpdateShoppingListItemChecksRequest {
   operationId: OperationId;
   version: number;
-  action: ShoppingListItemFridgeAction;
+  items: Array<{ itemId: UUID; checked: boolean }>;
 }
 
 export interface RemoveShoppingListItemRequest {
@@ -293,20 +219,6 @@ export interface UpdateShoppingListStatusRequest {
 export interface DeleteShoppingListRequest {
   operationId: OperationId;
   version: number;
-}
-
-export interface CompleteShoppingListEntryRequest {
-  itemId: UUID;
-  store: boolean;
-  quantityText: string | null;
-  expireDays: number | null;
-  expireAt: string | null;
-}
-
-export interface CompleteShoppingListRequest {
-  operationId: OperationId;
-  version: number;
-  entries: CompleteShoppingListEntryRequest[];
 }
 
 export interface ShareShoppingListLinkResponse {
@@ -348,41 +260,8 @@ function listPath(listId: UUID) {
 }
 
 export const shoppingApi = {
-  list(status?: "OPEN" | "BOUGHT" | "DELETED", page = 1, pageSize = 50) {
-    return get<PageResult<ShoppingItemSummary>>(`${cfg.domain}/api/shopping-items`, { status, page, pageSize });
-  },
-  getBoard() {
-    return get<ShoppingBoardResponse>(`${cfg.domain}/api/shopping-items/board`);
-  },
-  create(body: CreateShoppingItemRequest) {
-    const { operationId, ...payload } = body;
-    return post<ShoppingItemSummary>(`${cfg.domain}/api/shopping-items`, payload, { idempotencyKey: operationId });
-  },
-  createFromRecipe(body: CreateRecipeShoppingItemsRequest) {
-    const { operationId, ...payload } = body;
-    return post<ShoppingBoardResponse>(`${cfg.domain}/api/shopping-items/from-recipe`, payload, { idempotencyKey: operationId });
-  },
-  updateStatus(itemId: UUID, operationId: OperationId, status: "OPEN" | "BOUGHT" | "DELETED") {
-    return post<ShoppingItemSummary>(
-      `${cfg.domain}/api/shopping-items/${encodeURIComponent(String(itemId))}/status`,
-      { status },
-      { idempotencyKey: operationId }
-    );
-  },
-  updateGroupStatus(targetKey: string, operationId: OperationId, status: "OPEN" | "BOUGHT" | "DELETED") {
-    return post<ShoppingBoardResponse>(
-      `${cfg.domain}/api/shopping-items/group-status`,
-      { targetKey, status },
-      { idempotencyKey: operationId }
-    );
-  },
   previewGap() {
     return get<ShoppingGapResponse>(`${cfg.domain}/api/shopping-gap`);
-  },
-  createEventGap(eventId: UUID, operationId: OperationId) {
-    return post<ShoppingItemSummary[]>(`${cfg.domain}/api/dining-events/${encodeURIComponent(String(eventId))}/shopping-gap`, undefined, {
-      idempotencyKey: operationId
-    });
   },
   getListSummary() {
     return get<ShoppingListSummaryResponse>(`${cfg.domain}/api/shopping-lists/summary`);
@@ -430,11 +309,9 @@ export const shoppingApi = {
       idempotencyKey: operationId
     });
   },
-  applyListItemFridge(listId: UUID, itemId: UUID, body: ApplyShoppingListItemFridgeRequest) {
+  checkListItems(listId: UUID, body: UpdateShoppingListItemChecksRequest) {
     const { operationId, ...payload } = body;
-    return post<ShoppingListItemPatchResponse>(`${listPath(listId)}/items/${encodeURIComponent(String(itemId))}/fridge`, payload, {
-      idempotencyKey: operationId
-    });
+    return post<ShoppingListDetail>(`${listPath(listId)}/items/check`, payload, { idempotencyKey: operationId });
   },
   removeListItem(listId: UUID, itemId: UUID, body: RemoveShoppingListItemRequest) {
     const { operationId, ...payload } = body;
@@ -461,10 +338,6 @@ export const shoppingApi = {
   deleteList(listId: UUID, body: DeleteShoppingListRequest) {
     const { operationId, ...payload } = body;
     return post<ShoppingListPageResponse>(`${listPath(listId)}/delete`, payload, { idempotencyKey: operationId });
-  },
-  completeList(listId: UUID, body: CompleteShoppingListRequest) {
-    const { operationId, ...payload } = body;
-    return post<ShoppingListDetail>(`${listPath(listId)}/complete`, payload, { idempotencyKey: operationId });
   },
   createShareLink(listId: UUID, body: UpdateShoppingListStatusRequest) {
     const { operationId, ...payload } = body;

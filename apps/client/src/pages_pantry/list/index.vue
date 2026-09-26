@@ -305,7 +305,6 @@ import {
   type ShoppingListSummary,
   type ShoppingSharePreview
 } from "../apis/shopping";
-import { consumeShoppingCompleteResult } from "../list-complete/bridge";
 
 const pageStyle = usePageScrollStyle();
 const { themeVars, themeClasses } = useTheme();
@@ -449,12 +448,7 @@ onLoad((query) => {
 
 onShow(() => {
   if (!sessionStore.isLoggedIn) return;
-  const completedDetail = consumeShoppingCompleteResult("list");
-  if (completedDetail) {
-    applyCompletedSummary(completedDetail);
-  } else {
-    void loadInitialPage();
-  }
+  void loadInitialPage();
   if (shareToken.value) {
     void loadSharePreview();
   }
@@ -767,7 +761,7 @@ async function deleteList(item: ShoppingListSummary) {
   if (submitting.value || isListBusy(item.id)) return;
   const confirmed = await uniPlatform.feedback.confirm({
     title: "删除清单",
-    content: "删除后这张清单和其中食材会从采购清单与兼容记录里移除，无法恢复。"
+    content: "删除后这张清单和其中食材会一并移除，无法恢复。"
   });
   if (!confirmed) return;
   busyListId.value = item.id;
@@ -792,20 +786,6 @@ function syncListSummary(detail: ShoppingListDetail) {
       ? nextItem
       : item
   ));
-}
-
-function applyCompletedSummary(detail: ShoppingListDetail) {
-  const nextItem = buildListSummary(detail);
-  if (status.value === "ACTIVE") {
-    lists.value = lists.value.filter(item => item.id !== detail.id);
-    return;
-  }
-  if (status.value === "COMPLETED") {
-    const nextLists = lists.value.filter(item => item.id !== detail.id);
-    lists.value = [nextItem, ...nextLists];
-    return;
-  }
-  syncListSummary(detail);
 }
 
 function closeShareSheet() {

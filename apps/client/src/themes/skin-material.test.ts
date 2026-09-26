@@ -65,13 +65,10 @@ const assistantPageSource = readFile("../pages_meal/assistant/index.vue");
 const pantryListPageSource = readFile("../pages_pantry/list/index.vue");
 const pantryIndexPageSource = readFile("../pages_pantry/index/index.vue");
 const pantryGapPageSource = readFile("../pages_pantry/gap/index.vue");
-const pantryItemDetailPageSource = readFile("../pages_pantry/item-detail/index.vue");
-const pantryListCompletePageSource = readFile("../pages_pantry/list-complete/index.vue");
 const pantryListDetailPageSource = readFile("../pages_pantry/list-detail/index.vue");
 const randomPageSource = readFile("../pages_meal/random/index.vue");
 const randomBottomBarSource = readFile("../pages_meal/components/RandomBottomBar.vue");
 const randomConditionBarSource = readFile("../pages_meal/components/RandomConditionBar.vue");
-const randomGapPanelSource = readFile("../pages_meal/components/RandomGapPanel.vue");
 const randomSlotCardSource = readFile("../pages_meal/components/RandomSlotCard.vue");
 const recommendPageSource = readFile("../pages_me/recommend/index.vue");
 const recommendDetailPageSource = readFile("../pages_me/recommend-detail/index.vue");
@@ -80,7 +77,6 @@ const phonePageSource = readFile("../pages_me/phone/index.vue");
 const tastePageSource = readFile("../pages_me/taste/index.vue");
 const medalDetailPageSource = readFile("../pages_me/medal-detail/index.vue");
 const medalPageSource = readFile("../pages_me/medal/index.vue");
-const pantryHistoryPageSource = readFile("../pages_pantry/history/index.vue");
 const mealDetailPageSource = readFile("../pages_meal/detail/index.vue");
 const mealPlanPageSource = readFile("../pages_meal/plan/index.vue");
 const cookModePageSource = readFile("../pages_meal/cook-mode/index.vue");
@@ -95,12 +91,10 @@ const homeTopicPageSource = readFile("../pages_home/topic/index.vue");
 const tableTopicPageSource = readFile("../pages_home/table-topic/index.vue");
 const tableTopicDetailPageSource = readFile("../pages_home/table-topic-detail/index.vue");
 const shoppingTargetSheetSource = readFile("../pages_pantry/components/ShoppingTargetSheet.vue");
-const pantryItemEditPageSource = readFile("../pages_pantry/item-edit/index.vue");
 const shareImportPageSource = readFile("../pages_share/import/index.vue");
 const sharePreviewPageSource = readFile("../pages_share/preview/index.vue");
 const shareMemoryPageSource = readFile("../pages_share/memory/index.vue");
 const shareMemoryPosterSource = readFile("../pages_share/memory/MemoryPoster.vue");
-const menuConfirmSheetSource = readFile("../components/Meal/MenuConfirmSheet.vue");
 const shoppingListPickerSheetSource = readFile("../components/Shopping/ShoppingListPickerSheet.vue");
 const planArrangeSheetSource = readFile("../components/PlanArrangeSheet.vue");
 const addToPlanSheetSource = readFile("../components/Recipe/AddToPlanSheet.vue");
@@ -480,21 +474,15 @@ expectSelectorIncludes(mePageSource, ".profile-hero__mask", [
   "mask-image: var(--page-bottom-mask-image);",
   "-webkit-mask-image: var(--page-bottom-mask-image);"
 ]);
-expectSelectorIncludes(pantryIndexPageSource, ".pantry-hero::after", [
-  "mask-image: var(--page-bottom-mask-image);",
-  "-webkit-mask-image: var(--page-bottom-mask-image);"
-]);
+expectIncludes(pantryIndexPageSource, "background: var(--material-card-bg);");
+expectIncludes(pantryIndexPageSource, "box-shadow: var(--material-card-shadow);");
 expectSelectorIncludes(pantryListDetailPageSource, ".detail-hero::after", [
   "mask-image: var(--page-bottom-mask-image);",
   "-webkit-mask-image: var(--page-bottom-mask-image);"
 ]);
-expectSelectorIncludes(pantryListCompletePageSource, ".complete-hero::after", [
-  "mask-image: var(--page-bottom-mask-image);"
-]);
 expectExcludes(mePageSource, "radial-gradient(ellipse at 15% 100%");
 expectExcludes(pantryIndexPageSource, "radial-gradient(ellipse at 14% 100%");
 expectExcludes(pantryListDetailPageSource, "radial-gradient(ellipse at 15% 100%");
-expectExcludes(pantryListCompletePageSource, "radial-gradient(ellipse at 15% 100%");
 
 expectSelectorIncludes(tableTopicPageSource, ".topic-page", [
   "background: var(--page-secondary-soft-bg);"
@@ -560,43 +548,30 @@ expectExcludes(pantryListPageSource, LEGACY_SECONDARY_OUTLINE);
 expectExcludes(pantryListPageSource, "border: 1rpx solid var(--material-card-border);");
 expectExcludes(pantryListPageSource, "border: 1rpx solid var(--button-secondary-border);");
 
-expectIncludes(pantryIndexPageSource, "border: 1rpx solid var(--material-input-border);");
-expectIncludes(pantryIndexPageSource, "background: var(--material-input-bg);");
-expectIncludes(pantryIndexPageSource, "box-shadow: var(--material-input-shadow);");
-expectIncludes(pantryIndexPageSource, "backdrop-filter: var(--material-input-filter);");
-expectIncludes(pantryIndexPageSource, "background: var(--material-control-bg);");
-expectIncludes(pantryIndexPageSource, "box-shadow: var(--material-control-shadow);");
-expectIncludes(pantryIndexPageSource, "backdrop-filter: var(--material-control-filter);");
-expectIncludes(pantryIndexPageSource, "background: var(--material-card-bg);");
-expectIncludes(pantryIndexPageSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(pantryIndexPageSource, "backdrop-filter: var(--material-card-filter);");
-expectExcludes(pantryIndexPageSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorIncludes(pantryIndexPageSource, ".home-nav-backdrop", [
-  "background: var(--material-tabbar-bg);",
-  "box-shadow: var(--material-tabbar-shadow);",
-  "backdrop-filter: var(--material-tabbar-filter);"
+expectSelectorIncludes(pantryIndexPageSource, ".add-search__input", [
+  "background: var(--color-surface-muted);"
 ]);
-expectSelectorExcludes(pantryIndexPageSource, ".home-nav-backdrop", ["backdrop-filter: saturate(180%) blur(22rpx);"]);
-expectSelectorExcludes(pantryIndexPageSource, ".home-nav-backdrop", ["border-bottom: 1rpx solid var(--color-border);"]);
-expectSelectorIncludes(pantryIndexPageSource, ".pantry-hero", [
-  "background: var(--page-hero-halo-bg);"
+expectSelectorIncludes(pantryIndexPageSource, ".add-search__button", [
+  "background: var(--button-primary-bg);",
+  "color: var(--button-primary-text);"
+]);
+expectSelectorIncludes(pantryIndexPageSource, ".trace-intro,\n.trace-card", [
+  "background: var(--material-card-bg);",
+  "box-shadow: var(--material-card-shadow);"
+]);
+expectExcludes(pantryIndexPageSource, LEGACY_SECONDARY_OUTLINE);
+expectSelectorIncludes(pantryIndexPageSource, ".trace-card__presence--present", [
+  "background: var(--color-state-success-soft);",
+  "color: var(--color-state-success-text);"
+]);
+expectSelectorIncludes(pantryIndexPageSource, ".trace-card__presence--empty", [
+  "background: var(--color-state-warning-soft);",
+  "color: var(--color-state-warning-text);"
 ]);
 expectSelectorIncludes(imageLoaderSource, ".image-loader", [
   "background: var(--page-cover-fresh-bg);"
 ]);
-expectSelectorExcludes(pantryIndexPageSource, ".summary-strip,\n.quick-card,\n.notice,\n.item-card,\n.sheet-card", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorExcludes(pantryIndexPageSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
-expectSelectorExcludes(pantryIndexPageSource, ".filter-chip", ["border: 1rpx solid var(--material-control-border);"]);
-expectSelectorIncludes(pantryIndexPageSource, ".filter-chip--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);"
-]);
-expectSelectorExcludes(pantryIndexPageSource, ".filter-chip--active", ["border-color: var(--color-primary);"]);
-expectSelectorIncludes(pantryIndexPageSource, ".filter-chip--active .filter-chip__count", [
-  "color: var(--color-tag-primary-text);"
-]);
 expectExcludes(pantryGapPageSource, LEGACY_SECONDARY_OUTLINE);
-expectExcludes(pantryItemDetailPageSource, LEGACY_SECONDARY_OUTLINE);
 expectSelectorIncludes(pantryGapPageSource, ".notice", [
   "background: var(--color-state-warning-soft);",
   "color: var(--color-state-warning-text);"
@@ -610,44 +585,6 @@ expectSelectorIncludes(pantryGapPageSource, ".target-card__action", [
 expectSelectorIncludes(pantryGapPageSource, ".gap-section__toggle", [
   "color: var(--color-state-warning-text);"
 ]);
-expectSelectorIncludes(pantryItemDetailPageSource, ".badge--warning", [
-  "background: var(--color-tag-warning-bg);",
-  "color: var(--color-tag-warning-text);"
-]);
-expectSelectorIncludes(pantryItemDetailPageSource, ".detail-nav-backdrop", [
-  "background: var(--material-tabbar-bg);",
-  "box-shadow: var(--material-tabbar-shadow);",
-  "backdrop-filter: var(--material-tabbar-filter);"
-]);
-expectSelectorExcludes(pantryItemDetailPageSource, ".detail-nav-backdrop", ["backdrop-filter: saturate(180%) blur(22rpx);"]);
-expectSelectorExcludes(pantryItemDetailPageSource, ".detail-nav-backdrop", ["border-bottom: 1rpx solid var(--color-border);"]);
-expectSelectorIncludes(pantryItemDetailPageSource, ".action-button--accent", [
-  "background: var(--color-state-warning-soft);"
-]);
-expectExcludes(pantryListCompletePageSource, LEGACY_SECONDARY_OUTLINE);
-expectSelectorIncludes(pantryListCompletePageSource, ".complete-filter__item--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);"
-]);
-expectSelectorExcludes(pantryListCompletePageSource, ".complete-filter__item--active", ["background: var(--color-primary-soft-fill-subtle);"]);
-expectSelectorIncludes(pantryListCompletePageSource, ".quick-chip--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(pantryListCompletePageSource, ".quick-chip--active", ["background: var(--color-primary-soft-fill-subtle);"]);
-expectSelectorIncludes(pantryListCompletePageSource, ".complete-filter", [
-  "background: var(--material-control-bg);",
-  "box-shadow: var(--material-control-shadow);",
-  "backdrop-filter: var(--material-control-filter);"
-]);
-expectSelectorExcludes(pantryListCompletePageSource, ".complete-filter", ["backdrop-filter: saturate(180%) blur(18rpx);"]);
-expectSelectorIncludes(pantryListCompletePageSource, ".complete-footer", [
-  "background: var(--material-tabbar-bg);",
-  "box-shadow: var(--material-tabbar-shadow);",
-  "backdrop-filter: var(--material-tabbar-filter);"
-]);
-expectSelectorExcludes(pantryListCompletePageSource, ".complete-footer", ["backdrop-filter: blur(12rpx);"]);
 expectIncludes(pantryListDetailPageSource, "background: var(--material-card-bg);");
 expectIncludes(pantryListDetailPageSource, "box-shadow: var(--material-card-shadow);");
 expectIncludes(pantryListDetailPageSource, "backdrop-filter: var(--material-card-filter);");
@@ -698,14 +635,18 @@ expectSelectorIncludes(pantryListDetailPageSource, ".summary-card__badge--voided
   "background: var(--color-state-danger-soft);",
   "color: var(--color-state-danger-text);"
 ]);
-expectSelectorIncludes(pantryListDetailPageSource, ".sheet-option--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);"
-]);
-expectSelectorExcludes(pantryListDetailPageSource, ".sheet-option--active", ["background: var(--color-primary-soft-fill-subtle);"]);
-expectSelectorIncludes(pantryListDetailPageSource, ".mini-pill--danger", [
+expectSelectorIncludes(pantryListDetailPageSource, ".settings-action__icon-wrap", [
   "background: var(--color-state-danger-soft);",
+]);
+expectSelectorIncludes(pantryListDetailPageSource, ".settings-action__icon", [
   "color: var(--color-state-danger-text);"
+]);
+expectSelectorIncludes(pantryListDetailPageSource, ".purchase-check--checked", [
+  "background: var(--button-primary-bg);"
+]);
+expectSelectorIncludes(pantryListDetailPageSource, ".detail-footer__add", [
+  "background: var(--button-primary-bg);",
+  "color: var(--button-primary-text);"
 ]);
 expectSelectorIncludes(pantryListDetailPageSource, ".item-swipe__action", [
   "background: var(--color-state-danger-soft);",
@@ -757,18 +698,6 @@ expectSelectorIncludes(randomBottomBarSource, ".bottom-bar", [
 ]);
 expectSelectorExcludes(randomBottomBarSource, ".bottom-bar", ["backdrop-filter: saturate(180%) blur(18rpx);"]);
 
-expectIncludes(randomGapPanelSource, "background: var(--material-card-bg);");
-expectIncludes(randomGapPanelSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(randomGapPanelSource, "backdrop-filter: var(--material-card-filter);");
-expectSelectorExcludes(randomGapPanelSource, ".gap-panel", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorIncludes(randomGapPanelSource, ".gap-card__status--ok", [
-  "background: var(--color-state-success-soft);",
-  "color: var(--color-state-success-text);"
-]);
-expectSelectorIncludes(randomGapPanelSource, ".gap-card__status--partial,\n.gap-card__status--missing,\n.gap-card__status--unknown", [
-  "background: var(--color-state-warning-soft);",
-  "color: var(--color-state-warning-text);"
-]);
 expectSelectorIncludes(randomPageSource, ".plan-sheet__tips", [
   "background: var(--color-state-warning-soft);"
 ]);
@@ -811,16 +740,6 @@ expectIncludes(recommendPageSource, "backdrop-filter: var(--material-card-filter
 expectExcludes(recommendDetailPageSource, LEGACY_SECONDARY_OUTLINE);
 expectSelectorExcludes(recommendPageSource, ".message-list", ["border: 1rpx solid var(--material-card-border);"]);
 
-expectIncludes(pantryHistoryPageSource, "background: var(--material-card-bg);");
-expectIncludes(pantryHistoryPageSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(pantryHistoryPageSource, "backdrop-filter: var(--material-card-filter);");
-expectSelectorExcludes(pantryHistoryPageSource, ".notice,\n.card", ["border: 1rpx solid var(--material-card-border);"]);
-expectSelectorIncludes(pantryHistoryPageSource, ".filter-chip--active", [
-  "background: var(--color-tag-primary-bg);",
-  "box-shadow: inset 0 0 0 1rpx var(--color-border-active);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(pantryHistoryPageSource, ".filter-chip--active", ["background: var(--color-primary-soft);"]);
 expectSelectorIncludes(knowledgeListPageSource, ".knowledge-scroll-wrap", [
   "background: var(--page-ambient-primary-bg);"
 ]);
@@ -1241,15 +1160,6 @@ expectSelectorIncludes(participantManageSheetSource, ".participant-sheet__action
 ]);
 expectSelectorExcludes(participantManageSheetSource, ".participant-sheet__action--primary", ["background: var(--color-primary-soft-fill-subtle);"]);
 
-expectIncludes(menuConfirmSheetSource, "background: var(--material-card-bg);");
-expectIncludes(menuConfirmSheetSource, "box-shadow: var(--material-card-shadow);");
-expectIncludes(menuConfirmSheetSource, "backdrop-filter: var(--material-card-filter);");
-expectIncludes(menuConfirmSheetSource, "backdrop-filter: var(--button-primary-filter);");
-expectExcludes(menuConfirmSheetSource, LEGACY_SECONDARY_OUTLINE);
-expectExcludes(menuConfirmSheetSource, "border: 1rpx solid var(--material-card-border);");
-expectExcludes(menuConfirmSheetSource, "border: 1rpx solid var(--button-secondary-border);");
-expectExcludes(menuConfirmSheetSource, "border: 1rpx solid var(--button-primary-border);");
-
 expectIncludes(addToPlanSheetSource, "border: 1rpx solid var(--material-input-border);");
 expectIncludes(addToPlanSheetSource, "background: var(--material-input-bg);");
 expectIncludes(addToPlanSheetSource, "box-shadow: var(--material-input-shadow);");
@@ -1312,11 +1222,6 @@ expectSelectorIncludes(sharePillButtonSource, ".share-pill", [
   "color: var(--color-tag-primary-text);"
 ]);
 expectSelectorExcludes(sharePillButtonSource, ".share-pill", ["background: var(--color-primary-soft);"]);
-expectSelectorIncludes(pantryItemDetailPageSource, ".badge--info", [
-  "background: var(--color-tag-primary-bg);",
-  "color: var(--color-tag-primary-text);"
-]);
-expectSelectorExcludes(pantryItemDetailPageSource, ".badge--info", ["background: var(--color-primary-soft);"]);
 expectSelectorIncludes(randomPageSource, ".board-card__badge", [
   "background: var(--color-tag-primary-bg);",
   "color: var(--color-tag-primary-text);"
@@ -1451,16 +1356,6 @@ expectSelectorExcludes(knowledgeDetailPageSource, ".detail-article", [
   "background:",
   "box-shadow:"
 ]);
-expectIncludes(pantryItemEditPageSource, "border: 1rpx solid var(--material-input-border);");
-expectIncludes(pantryItemEditPageSource, "background: var(--material-input-bg);");
-expectIncludes(pantryItemEditPageSource, "box-shadow: var(--material-input-shadow);");
-expectIncludes(pantryItemEditPageSource, "backdrop-filter: var(--material-input-filter);");
-expectSelectorIncludes(pantryItemEditPageSource, ".ingredient-item,\n.readonly-card", [
-  "background: var(--material-card-bg);",
-  "box-shadow: var(--material-card-shadow);",
-  "backdrop-filter: var(--material-card-filter);"
-]);
-expectSelectorExcludes(pantryItemEditPageSource, ".ingredient-item,\n.readonly-card", ["border: 1rpx solid var(--color-border);"]);
 expectSelectorIncludes(shareImportPageSource, ".input", [
   "border: 1rpx solid var(--material-input-border);",
   "background: var(--material-input-bg);",
@@ -1541,8 +1436,6 @@ expectSelectorIncludes(pantryListDetailPageSource, ".share-member--active", [
   "box-shadow: inset 0 0 0 1rpx var(--color-border-active);"
 ]);
 expectSelectorExcludes(pantryGapPageSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
-expectSelectorExcludes(pantryItemDetailPageSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
-expectSelectorExcludes(pantryListCompletePageSource, ".sheet-actions__button--cancel", ["border: 1rpx solid var(--button-secondary-border);"]);
 expectSelectorIncludes(pantryGapPageSource, ".gap-nav-backdrop", [
   "background: var(--material-tabbar-bg);",
   "box-shadow: var(--material-tabbar-shadow);",
