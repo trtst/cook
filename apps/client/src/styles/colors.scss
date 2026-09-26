@@ -452,8 +452,8 @@
   $palette-bg: theme-value($dark, #111715, $bg);
   $surface: theme-value($dark, #18201d, #ffffff);
   $text: theme-value($dark, #f6efe8, #17231d);
-  $primary-text: if($on-primary == null, theme-value($dark, #0c2115, #ffffff), $on-primary);
-  $secondary-text: if($on-secondary == null, theme-value($dark, #f6efe8, #17231d), $on-secondary);
+  $primary-text: if(sass($on-primary == null): theme-value($dark, #0c2115, #ffffff); else: $on-primary);
+  $secondary-text: if(sass($on-secondary == null): theme-value($dark, #f6efe8, #17231d); else: $on-secondary);
 
   @include theme-derived-colors(
     $palette-bg,

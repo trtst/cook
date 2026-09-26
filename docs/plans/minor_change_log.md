@@ -1,5 +1,7 @@
 # 项目变更记录
 
+| 2026-09-27 | 按 Sass 新语法改写主题色盘中两处弃用的 `if()` 调用，保持主色/辅色前景色的原有判定和颜色值不变。 | `apps/client/src/styles/colors.scss`、`docs/plans/minor_change_log.md` | 已执行：客户端微信小程序开发构建通过，未再出现这两处 `if-function` 弃用警告。 |
+
 | 2026-09-27 | 修复饭局详情在无可用操作时隐藏倒计时/状态信息的问题；将饭后食材更新说明改为“顺手记下家里食材近况，之后安排菜单更省心”。 | `apps/client/src/pages_meal/detail/index.vue`、`docs/plans/minor_change_log.md` | 已做源码调用链复核及目标差异格式检查；按本轮要求未运行测试或构建，未做微信开发者工具/真机验收。 |
 
 | 2026-09-27 | 修复批量标记食材“没有”后的列表状态过期：写入成功后重新读取服务端痕迹，更新记录时间、归档状态和展示标签；将操作文案改为“家里没有了”，避免误以为删除食材；恢复默认、清新食材、简白、磨砂玻璃主题选项，并保留默认、暖橙、冰川蓝三个色系。 | `apps/client/src/pages_pantry/index/index.vue`、`apps/client/src/themes/presets.ts`、`apps/client/src/themes/skins.scss`、`apps/client/src/themes/apple-glass/skins.scss`、`apps/client/src/themes/fresh-ingredient/`、`apps/client/src/themes/minimal-white/skins.scss`、`apps/client/src/composables/useTheme.ts`、`apps/client/src/stores/theme-settings.ts`、`apps/client/src/pages_me/theme/index.vue`、`apps/client/src/themes/presets.test.ts`、`apps/client/src/themes/skin-registry.test.ts`、`apps/client/src/composables/useTheme.test.ts`、`apps/client/src/stores/theme-settings.test.ts`、`docs/plans/minor_change_log.md` | 本轮未运行测试或构建；已执行目标文件 `git diff --check`。未进行微信开发者工具/真机交互验收。 |
