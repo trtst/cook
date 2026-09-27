@@ -14,6 +14,7 @@ import {
   IsISO8601,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   MaxLength,
@@ -1209,6 +1210,15 @@ export class SetAdminMedalTemplateStatusDto extends VersionedOperationDto {
 }
 
 export class UpdateAdminMedalTemplateImageDto extends VersionedOperationDto {}
+
+export class SetAdminMedalTemplateImageUrlDto extends VersionedOperationDto {
+  @ApiProperty({ example: "https://static.example.com/uploads/material-store/medal.png", maxLength: 2048 })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MaxLength(2048)
+  @IsUrl({ protocols: ["https"], require_protocol: true })
+  imageUrl!: string;
+}
 
 export class AdminUserEntitlementQueryDto {
   @ApiProperty({ example: resourceIdExample })

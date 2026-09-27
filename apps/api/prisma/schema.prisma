@@ -2549,6 +2549,8 @@ model MedalTemplate {
   isLimited   Boolean             @default(false) @map("is_limited")
   startAt     DateTime?           @map("start_at") @db.Timestamptz(3)
   endAt       DateTime?           @map("end_at") @db.Timestamptz(3)
+  earnedImageSourceUrl String?    @map("earned_image_source_url") @db.VarChar(2048)
+  lockedImageSourceUrl String?    @map("locked_image_source_url") @db.VarChar(2048)
   earnedImageUpdatedAt DateTime?  @map("earned_image_updated_at") @db.Timestamptz(3)
   lockedImageUpdatedAt DateTime?  @map("locked_image_updated_at") @db.Timestamptz(3)
   version     Int                 @default(1)

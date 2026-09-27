@@ -74,6 +74,7 @@
 | AdminMedal | PUT | `/admin/medal-templates/{templateId}` | 后台编辑勋章模板 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/status` | 后台切换勋章模板状态 |
 | AdminMedal | POST | `/admin/medal-templates/{templateId}/image/{imageType}` | 后台上传或替换勋章图片，`imageType=earned/locked`，当前支持 `JPG/PNG/WEBP/SVG` |
+| AdminMedal | PUT | `/admin/medal-templates/{templateId}/image/{imageType}` | 设置已配置静态资源域名下的勋章图片地址，`imageType=earned/locked` |
 | AdminMedal | DELETE | `/admin/medal-templates/{templateId}/image/{imageType}` | 后台清空勋章图片，`imageType=earned/locked` |
 | AdminUser | GET | `/admin/users` | 用户查询 |
 | AdminUser | POST | `/admin/users` | 新增用户 |

@@ -69,6 +69,7 @@ import {
   UpdateAdminIngredientImageDto,
   UpdateAdminIngredientDto,
   UpdateAdminMedalTemplateImageDto,
+  SetAdminMedalTemplateImageUrlDto,
   UpdateRecipeImportItemDto,
   UpdateAdminUserDto
 } from "../../contracts/dtos";
@@ -308,6 +309,23 @@ export class AdminController {
   ) {
     return this.medalService
       .uploadTemplateImage(request, templateId, imageType, operationId, Number(body.expectedVersion), file, request.admin.adminId)
+      .then(result => ok(result));
+  }
+
+  @Put("medal-templates/:templateId/image/:imageType")
+  @UseGuards(AdminAuthGuard, SuperAdminGuard)
+  @ApiBearerAuth("AdminBearerAuth")
+  @ApiIdempotencyKey()
+  @ApiOkModel(AdminMedalTemplateModel, "设置勋章图片地址")
+  setMedalTemplateImageUrl(
+    @Req() request: RequestWithAdmin & AssetRequest,
+    @Param("templateId", ParseIntPipe) templateId: number,
+    @Param("imageType") imageType: MedalImageType,
+    @ReadIdempotencyKey() operationId: string,
+    @Body() body: SetAdminMedalTemplateImageUrlDto
+  ) {
+    return this.medalService
+      .setTemplateImageUrl(request, templateId, imageType, { ...body, operationId }, request.admin.adminId)
       .then(result => ok(result));
   }
 

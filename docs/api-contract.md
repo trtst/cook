@@ -673,6 +673,7 @@ GET  /admin/medal-templates
 POST /admin/medal-templates
 PUT  /admin/medal-templates/{templateId}
 POST /admin/medal-templates/{templateId}/status
+PUT  /admin/medal-templates/{templateId}/image/{imageType}
 GET  /admin/ingredient-categories
 POST /admin/ingredient-categories
 PUT  /admin/ingredient-categories/{categoryId}
@@ -954,10 +955,11 @@ POST /admin/medal-templates
 PUT  /admin/medal-templates/{templateId}
 POST /admin/medal-templates/{templateId}/status
 POST /admin/medal-templates/{templateId}/image/{imageType}
+PUT  /admin/medal-templates/{templateId}/image/{imageType}
 DELETE /admin/medal-templates/{templateId}/image/{imageType}
 ```
 
-这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / SHOPPING_COMPLETION / FRIDGE_MAINTENANCE / MEMORY_SHARE_STARTED_TOTAL / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。用户侧勋章名称、简介和获取说明不展示档位门槛数字；服务端仍按模板 `targetCount` 派发。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 负责单独治理勋章图片，其中 `imageType` 仅允许 `earned / locked`。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
+这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / SHOPPING_COMPLETION / FRIDGE_MAINTENANCE / MEMORY_SHARE_STARTED_TOTAL / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`，其展示名称依次为“厨房日常 / 饭局相聚 / 好味分享 / 节日限定”；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。用户侧勋章名称、简介和获取说明不展示档位门槛数字；服务端仍按模板 `targetCount` 派发。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}`、`PUT /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 分别负责上传、设置图片地址和清空图片，其中 `imageType` 仅允许 `earned / locked`。手动地址只接受 `ASSET_PUBLIC_BASE_URL` 配置域名下 HTTPS `/uploads/` 路径；未配置静态资源域名时不能手动填写地址，但图片上传仍可用。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
 
 勋章图片公开 URL 使用稳定对象 key：已获得图为 `/static/uploads/medals/{templateId}`，锁定图为 `/static/uploads/medals/{templateId}/locked`；读取端兼容历史带扩展名对象。
 

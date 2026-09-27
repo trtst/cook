@@ -3090,6 +3090,10 @@ export interface UpdateAdminMedalTemplateImageRequest {
   expectedVersion: number;
 }
 
+export interface SetAdminMedalTemplateImageUrlRequest extends UpdateAdminMedalTemplateImageRequest {
+  imageUrl: string;
+}
+
 export type FridgeTraceKind = "PURCHASED" | "USED" | "MANUAL_PRESENT" | "MANUAL_EMPTY";
 
 export interface FridgeTraceSummary {

@@ -16,6 +16,7 @@ import type {
   MedalWallResponse,
   PageResult,
   SetAdminMedalTemplateStatusRequest,
+  SetAdminMedalTemplateImageUrlRequest,
   UpdateAdminMedalTemplateRequest,
   UUID
 } from "../../contracts/types";
@@ -32,10 +33,10 @@ const orderedCategories: MedalCategory[] = [
 ];
 
 const categoryNameMap: Record<MedalCategory, string> = {
-  MEAL_CHECKIN: "开饭打卡",
-  DINING_COLLABORATION: "饭局协作",
-  RECOMMENDATION_CONTRIBUTION: "推荐贡献",
-  HOLIDAY_LIMITED: "节假日限定"
+  MEAL_CHECKIN: "厨房日常",
+  DINING_COLLABORATION: "饭局相聚",
+  RECOMMENDATION_CONTRIBUTION: "好味分享",
+  HOLIDAY_LIMITED: "节日限定"
 };
 
 const visibleHistoryStatuses = ["LISTED", "UNLISTED", "ARCHIVED"] as const;
@@ -125,6 +126,10 @@ function getTemplateImageUpdate(imageType: MedalImageType, updatedAt: Date | nul
   return imageType === "earned" ? { earnedImageUpdatedAt: updatedAt } : { lockedImageUpdatedAt: updatedAt };
 }
 
+function getTemplateImageSourceUpdate(imageType: MedalImageType, sourceUrl: string | null) {
+  return imageType === "earned" ? { earnedImageSourceUrl: sourceUrl } : { lockedImageSourceUrl: sourceUrl };
+}
+
 function toAdminTemplateSummary(
   template: MedalTemplate,
   request: AssetRequest,
@@ -140,9 +145,9 @@ function toAdminTemplateSummary(
     description: template.description,
     condition: template.condition,
     iconKey: template.iconKey,
-    imageUrl: medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
-    earnedImageUrl: medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
-    lockedImageUrl: medalImageService.buildImageUrl(request, template.id, "locked", template.lockedImageUpdatedAt),
+    imageUrl: medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt, template.earnedImageSourceUrl),
+    earnedImageUrl: medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt, template.earnedImageSourceUrl),
+    lockedImageUrl: medalImageService.buildImageUrl(request, template.id, "locked", template.lockedImageUpdatedAt, template.lockedImageSourceUrl),
     status: template.status,
     targetCount: template.targetCount,
     sortOrder: template.sortOrder,
@@ -207,9 +212,9 @@ export class MedalService {
         code: template.code,
         awardRule: template.awardRule,
         iconKey: template.iconKey,
-        imageUrl: this.medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
-        earnedImageUrl: this.medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt),
-        lockedImageUrl: this.medalImageService.buildImageUrl(request, template.id, "locked", template.lockedImageUpdatedAt),
+        imageUrl: this.medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt, template.earnedImageSourceUrl),
+        earnedImageUrl: this.medalImageService.buildImageUrl(request, template.id, "earned", template.earnedImageUpdatedAt, template.earnedImageSourceUrl),
+        lockedImageUrl: this.medalImageService.buildImageUrl(request, template.id, "locked", template.lockedImageUpdatedAt, template.lockedImageSourceUrl),
         category: template.category,
         categoryName: categoryNameMap[template.category],
         name: template.name,
@@ -508,6 +513,7 @@ export class MedalService {
           where: { id: templateId },
           data: {
             ...getTemplateImageUpdate(imageType, new Date()),
+            ...getTemplateImageSourceUpdate(imageType, null),
             version: { increment: 1 }
           }
         });
@@ -546,6 +552,61 @@ export class MedalService {
     }
   }
 
+  async setTemplateImageUrl(
+    request: AssetRequest,
+    templateId: UUID,
+    imageType: MedalImageType,
+    body: SetAdminMedalTemplateImageUrlRequest,
+    adminId: UUID
+  ): Promise<AdminMedalTemplateSummary> {
+    if (imageType !== "earned" && imageType !== "locked") {
+      throw new BadRequestException("勋章图片类型无效");
+    }
+    const imageUrl = body.imageUrl.trim();
+    if (!this.medalImageService.isConfiguredPublicUrl(imageUrl)) {
+      throw new BadRequestException("图片地址请使用已配置的静态资源域名，并选择 uploads 下的图片");
+    }
+
+    const requestHash = `${templateId}:${imageType}:${body.expectedVersion}:${imageUrl}`;
+    return this.prisma.$transaction(async tx => {
+      const repeated = await getAdminIdempotentResult<AdminMedalTemplateSummary>(
+        tx,
+        body.operationId,
+        "admin-medal-template:set-image-url",
+        adminId,
+        requestHash
+      );
+      if (repeated) return repeated;
+      await startAdminIdempotentOperation(tx, body.operationId, "admin-medal-template:set-image-url", adminId, requestHash);
+
+      const template = await this.requireTemplate(tx, templateId);
+      if (template.version !== body.expectedVersion) {
+        throw new ConflictException("勋章模板已被更新，请刷新后重试");
+      }
+
+      const updated = await tx.medalTemplate.update({
+        where: { id: templateId },
+        data: {
+          ...getTemplateImageSourceUpdate(imageType, imageUrl),
+          version: { increment: 1 }
+        }
+      });
+      const result = toAdminTemplateSummary(updated, request, this.medalImageService);
+      await tx.auditEvent.create({
+        data: {
+          actorType: "ADMIN",
+          actorAdminId: adminId,
+          action: "MEDAL_TEMPLATE_IMAGE_URL_UPDATED",
+          objectType: "MEDAL_TEMPLATE",
+          objectId: templateId,
+          payload: { code: template.code, imageType }
+        }
+      });
+      await completeAdminIdempotentOperation(tx, body.operationId, "admin-medal-template:set-image-url", adminId, requestHash, result);
+      return result;
+    });
+  }
+
   async clearTemplateImage(
     request: AssetRequest,
     templateId: UUID,
@@ -582,6 +643,7 @@ export class MedalService {
           where: { id: templateId },
           data: {
             ...getTemplateImageUpdate(imageType, null),
+            ...getTemplateImageSourceUpdate(imageType, null),
             version: { increment: 1 }
           }
         });

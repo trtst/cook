@@ -151,6 +151,28 @@ export class AssetStorageService {
     return assetPublicUrl(request, storageKey, updatedAt);
   }
 
+  isConfiguredPublicUrl(value: string) {
+    const configuredBaseUrl = envValue("ASSET_PUBLIC_BASE_URL");
+    if (!configuredBaseUrl) return false;
+
+    try {
+      const base = new URL(configuredBaseUrl);
+      const candidate = new URL(value);
+      const basePath = base.pathname.replace(/\/+$/u, "");
+      const uploadsPrefix = `${basePath}/uploads/` || "/uploads/";
+      return base.protocol === "https:"
+        && candidate.protocol === "https:"
+        && candidate.origin === base.origin
+        && candidate.username === ""
+        && candidate.password === ""
+        && candidate.hash === ""
+        && !/%2f|%5c/iu.test(candidate.pathname)
+        && candidate.pathname.startsWith(uploadsPrefix);
+    } catch {
+      return false;
+    }
+  }
+
   async writeObject(storageKey: string, buffer: Buffer, contentType: string) {
     const key = cleanStorageKey(storageKey);
     const objectKey = this.objectKey(key);

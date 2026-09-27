@@ -89,9 +89,14 @@ function getKindFromContentType(contentType: string): ImageKind {
 export class MedalImageService {
   constructor(@Inject(AssetStorageService) private readonly assetStorage: AssetStorageService) {}
 
-  buildImageUrl(request: RequestLike, templateId: UUID, imageType: MedalImageType, updatedAt: Date | null) {
+  buildImageUrl(request: RequestLike, templateId: UUID, imageType: MedalImageType, updatedAt: Date | null, sourceUrl: string | null = null) {
+    if (sourceUrl) return sourceUrl;
     if (!updatedAt) return null;
     return this.assetStorage.publicUrl(request, this.getPublicKey(templateId, imageType), updatedAt);
+  }
+
+  isConfiguredPublicUrl(value: string) {
+    return this.assetStorage.isConfiguredPublicUrl(value);
   }
 
   async stageImageUpload(templateId: UUID, imageType: MedalImageType, file: { buffer?: Buffer; size?: number } | undefined) {
