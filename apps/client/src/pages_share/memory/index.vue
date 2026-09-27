@@ -137,11 +137,16 @@ onLoad(query => {
 });
 onShow(() => { startClock(); void loadPage(); });
 onUnload(stopClock);
-onShareAppMessage(() => ({
-  title: `${posterTitle.value} · 活动回忆卡`,
-  path: shareSnapshot.value?.sharePath || (mode.value === "token" && shareToken.value ? `/pages_share/memory/index?token=${encodeURIComponent(shareToken.value)}` : "/pages/home/index"),
-  imageUrl: posterFilePath.value || cardData.value?.coverImageUrl || undefined
-}));
+onShareAppMessage(() => {
+  if (mode.value === "event" && eventDetail.value?.status === "COMPLETED" && shareSnapshot.value && canManageEventShare.value) {
+    void recordMemoryShareStarted().catch(() => undefined);
+  }
+  return {
+    title: `${posterTitle.value} · 活动回忆卡`,
+    path: shareSnapshot.value?.sharePath || (mode.value === "token" && shareToken.value ? `/pages_share/memory/index?token=${encodeURIComponent(shareToken.value)}` : "/pages/home/index"),
+    imageUrl: posterFilePath.value || cardData.value?.coverImageUrl || undefined
+  };
+});
 watch(normalizedCaption, invalidateShareSnapshot);
 watch(title, invalidatePosterImage);
 
@@ -209,7 +214,26 @@ async function readPosterColors() {
   };
 }
 async function previewPoster() { if (!canPreparePoster.value && !posterFilePath.value) return; const path = posterFilePath.value || await preparePoster(); if (path) await uniPlatform.media.previewImage({ urls: [path], current: path }); }
-async function sharePoster() { if (!canPreparePoster.value) return; const path = posterFilePath.value || await preparePoster(); if (!path) return; try { await uniPlatform.media.showShareImageMenu(path); } catch (error) { await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分享失败", icon: "none" }); } }
+async function recordMemoryShareStarted() {
+  if (!eventId.value || mode.value !== "event" || eventDetail.value?.status !== "COMPLETED" || !shareSnapshot.value || !canManageEventShare.value) return;
+  await shareApi.recordMemoryShareStarted(eventId.value, createOperationId());
+}
+async function sharePoster() {
+  if (!canPreparePoster.value) return;
+  const path = posterFilePath.value || await preparePoster();
+  if (!path) return;
+  try {
+    await uniPlatform.media.showShareImageMenu(path);
+  } catch (error) {
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "分享失败", icon: "none" });
+    return;
+  }
+  try {
+    await recordMemoryShareStarted();
+  } catch {
+    await uniPlatform.feedback.toast({ title: "分享已发起，打卡记录失败，请重试", icon: "none" });
+  }
+}
 async function savePoster() { if (!canPreparePoster.value) return; const path = posterFilePath.value || await preparePoster(); if (!path) return; try { await uniPlatform.media.saveImageToPhotosAlbum(path); await uniPlatform.feedback.toast({ title: "已保存，可前往朋友圈发布", icon: "success" }); } catch { await uniPlatform.feedback.toast({ title: "保存失败，请检查相册权限", icon: "none" }); } }
 function toggleParticipants() {
   showParticipants.value = !showParticipants.value;

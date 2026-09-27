@@ -105,6 +105,7 @@
                       <view
                         v-if="canManageParticipants"
                         class="meal-inline-action meal-inline-action--ghost summary-card__avatars-action"
+                        :class="{ 'meal-inline-action--disabled': participantSheetLoading }"
                         @click="openParticipantSheet"
                       >
                         <text class="cookfont icon-manage meal-menu__add-icon" />
@@ -247,22 +248,25 @@
                       </text>
                     </view>
                     <button
-                      v-if="isEventOrganizer"
+                      v-if="canManageMenu"
                       class="wish-list__action"
-                      :class="{ 'wish-list__action--disabled': item.inCurrentMenu || wishMenuLoadingId === item.id }"
+                      :class="{ 'wish-list__action--ghost': item.inCurrentMenu, 'wish-list__action--disabled': wishMenuLoadingId === item.id }"
                       @click="addWishItemToMenu(item)"
                     >
-                      {{ item.inCurrentMenu ? "已在菜单" : wishMenuLoadingId === item.id ? "加入中..." : "加入本次菜单" }}
+                      {{ wishMenuLoadingId === item.id ? "处理中..." : item.inCurrentMenu ? "移出本次菜单" : "加入本次菜单" }}
                     </button>
                     <button
                       v-else-if="canChooseWish"
                       class="wish-list__action"
-                      :class="{ 'wish-list__action--ghost': item.supportedByMe, 'wish-list__action--disabled': wishActionLoadingId === item.id }"
+                      :class="{ 'wish-list__action--ghost': item.supportedByMe, 'wish-list__action--disabled': wishActionLoadingId === item.id || (item.suggestedByMe && item.inCurrentMenu) }"
+                      :disabled="wishActionLoadingId === item.id || (item.suggestedByMe && item.inCurrentMenu)"
                       @click="toggleWishSupport(item)"
                     >
                       {{
                         wishActionLoadingId === item.id
                           ? "处理中..."
+                          : item.suggestedByMe && item.inCurrentMenu
+                            ? "已加入菜单"
                           : item.supportedByMe
                             ? item.suggestedByMe
                               ? "撤回建议"
@@ -493,7 +497,7 @@
                 <view class="meal-panel__head meal-panel__head--row">
                   <text class="meal-panel__title">{{ eventNotePanelTitle }}</text>
                   <view
-                    v-if="canEditEventNote || canEditParticipantNote"
+                    v-if="canEditEventNote"
                     class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
                     @click="openEventNoteEditor"
                   >
@@ -509,6 +513,42 @@
                 <view v-else class="meal-menu-empty">
                   <text class="meal-menu-empty__title">{{ eventNoteEmptyTitle }}</text>
                   <text class="meal-menu-empty__text">{{ eventNoteEmptyText }}</text>
+                </view>
+
+                <view v-if="isEventOrganizer && memberNoteItems.length" class="member-note-list">
+                  <view v-for="item in memberNoteItems" :key="item.id" class="member-note-list__row">
+                    <view class="member-note-list__avatar">
+                      <image v-if="item.avatarUrl" class="member-note-list__avatar-image" :src="item.avatarUrl" mode="aspectFill" />
+                      <text v-else class="member-note-list__avatar-fallback">{{ buildAvatarFallback(item.displayName || item.guestName || "饭友") }}</text>
+                    </view>
+                    <view class="member-note-list__main">
+                      <text class="member-note-list__name">{{ item.displayName || item.guestName || "饭友" }}</text>
+                      <text class="member-note-list__text">{{ item.note?.trim() }}</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+
+              <view v-if="eventDetail && !isEventOrganizer && currentParticipant" class="meal-panel">
+                <view class="meal-panel__head meal-panel__head--row">
+                  <text class="meal-panel__title">我的备注</text>
+                  <view
+                    v-if="canEditParticipantNote"
+                    class="meal-inline-action meal-inline-action--ghost meal-menu__add-action"
+                    @click="openEventNoteEditor"
+                  >
+                    <text class="cookfont icon-edit meal-menu__add-icon" />
+                    <text>{{ participantNoteActionText }}</text>
+                  </view>
+                </view>
+
+                <view v-if="participantNoteText" class="event-note">
+                  <text class="event-note__text">{{ participantNoteText }}</text>
+                </view>
+
+                <view v-else class="meal-menu-empty">
+                  <text class="meal-menu-empty__title">还没写本次备注</text>
+                  <text class="meal-menu-empty__text">可以补充这次饭局需要主家提前知道的信息。</text>
                 </view>
               </view>
 
@@ -1047,6 +1087,7 @@ const focusAttempt = ref<{
 });
 const uploadingCover = ref(false);
 const participantSheetVisible = ref(false);
+const participantSheetLoading = ref(false);
 const participantActionId = ref<UUID | null>(null);
 const inviteSharing = ref(false);
 const activeSharePath = ref("");
@@ -1278,23 +1319,23 @@ const detailFacts = computed<FactItem[]>(() => {
 const canEditTitle = computed(() => Boolean(planDetail.value && (!eventDetail.value || isEventOrganizer.value)));
 const canEditEventNote = computed(() => Boolean(eventDetail.value && isEventOrganizer.value && !eventClosed.value));
 const canEditParticipantNote = computed(() => Boolean(eventDetail.value && !isEventOrganizer.value && canChooseParticipantAction.value));
-const eventNoteText = computed(() => (
-  isEventOrganizer.value
-    ? eventDetail.value?.note?.trim() || ""
-    : currentParticipant.value?.note?.trim() || ""
+const eventNoteText = computed(() => eventDetail.value?.note?.trim() || "");
+const participantNoteText = computed(() => currentParticipant.value?.note?.trim() || "");
+const memberNoteItems = computed(() => (eventDetail.value?.participants ?? []).filter(item =>
+  ["INVITED", "ACCEPTED"].includes(item.status) && Boolean(item.note?.trim())
 ));
-const eventNotePanelTitle = computed(() => (isEventOrganizer.value ? "饭局提醒" : "我的备注"));
-const eventNoteActionText = computed(() => {
-  if (!isEventOrganizer.value) return eventNoteText.value ? "编辑备注" : "添加备注";
-  return eventNoteText.value ? "编辑提醒" : "添加提醒";
-});
-const eventNoteEmptyTitle = computed(() => (canEditEventNote.value ? "还没写给客人的提醒" : "主家暂未补充提醒"));
+const eventNotePanelTitle = computed(() => (isEventOrganizer.value ? "饭局提醒" : "主理人提醒"));
+const eventNoteActionText = computed(() => (eventNoteText.value ? "编辑提醒" : "添加提醒"));
+const participantNoteActionText = computed(() => (participantNoteText.value ? "编辑备注" : "添加备注"));
+const eventNoteEmptyTitle = computed(() => (
+  isEventOrganizer.value && canEditEventNote.value ? "还没写给客人的提醒" : "主理人暂未补充提醒"
+));
 const eventNoteEmptyText = computed(() => (
   isEventOrganizer.value
     ? canEditEventNote.value
       ? "可补充到场时间、忌口或临时安排。"
       : "有新的到场或饮食安排，会显示在这里。"
-    : "把这次饭局需要注意的饮食习惯告诉大家。"
+    : "主理人补充的到场时间、饮食或临时安排会显示在这里。"
 ));
 const organizerAvatarItem = computed<ParticipantAvatarItem | null>(() => {
   if (!eventDetail.value) return null;
@@ -1391,6 +1432,11 @@ const canManageCookAssistant = computed(() => Boolean(
   )
 ));
 const currentBringRecipeIds = computed(() => currentParticipant.value?.bringRecipes.map(item => item.recipeId).filter((item): item is UUID => item !== null) ?? []);
+const recipeBringSelectionChanged = computed(() => {
+  const selectedIds = recipeSelectedIds.value;
+  const currentIds = currentBringRecipeIds.value;
+  return selectedIds.length !== currentIds.length || selectedIds.some(id => !currentIds.includes(id));
+});
 const canChooseWish = computed(() =>
   Boolean(
     eventDetail.value &&
@@ -1651,7 +1697,7 @@ const footerPrimaryAction = computed<FooterAction | null>(() => {
       };
     }
     if (!eventDetail.value && !planGapReady.value) return null;
-    if (!eventDetail.value) return { key: "complete-plan", label: "结束计划" };
+    if (!eventDetail.value) return { key: "complete-plan", label: "完成用餐" };
     return canChooseBring.value ? { key: "bring", label: "我带菜" } : null;
   }
   return null;
@@ -1693,7 +1739,8 @@ const recipePendingRemoveCount = computed(() => {
 });
 const recipeConfirmDisabled = computed(() => {
   if (recipeSubmitting.value) return true;
-  if (recipeSheetMode.value === "bring" || recipeSheetMode.value === "wish") return recipePendingAddCount.value === 0;
+  if (recipeSheetMode.value === "bring") return !recipeBringSelectionChanged.value;
+  if (recipeSheetMode.value === "wish") return recipePendingAddCount.value === 0;
   return !recipePendingAddCount.value && !recipePendingRemoveCount.value;
 });
 const recipeSheetTitle = computed(() => {
@@ -2223,12 +2270,16 @@ function isRecipePendingAdd(item: RecipeSheetItem) {
 }
 
 function isRecipePendingRemove(item: RecipeSheetItem) {
-  if (recipeSheetMode.value === "bring" || recipeSheetMode.value === "wish") return false;
+  if (recipeSheetMode.value === "bring") {
+    return !isRecipeSelected(item) && currentBringRecipeIds.value.includes(item.id);
+  }
+  if (recipeSheetMode.value === "wish") return false;
   return isRecipeSelected(item) && isRecipeAdded(item);
 }
 
 function recipeSheetStatusText(item: RecipeSheetItem) {
   if (recipeSheetMode.value === "bring") {
+    if (isRecipePendingRemove(item)) return "待移除";
     if (isRecipeAdded(item)) return "当前带这道";
     if (isRecipePendingAdd(item)) return "待提交";
     return "选择";
@@ -2385,9 +2436,22 @@ function submitRecipeSheet() {
   void confirmRecipeSelection();
 }
 
-function openParticipantSheet() {
-  if (!eventDetail.value || !canManageParticipants.value) return;
-  participantSheetVisible.value = true;
+async function openParticipantSheet() {
+  const currentEvent = eventDetail.value;
+  if (!currentEvent || !canManageParticipants.value || participantSheetLoading.value) return;
+
+  participantSheetLoading.value = true;
+  try {
+    eventDetail.value = await mealApi.getDiningEvent(currentEvent.id);
+    participantSheetVisible.value = true;
+  } catch (error) {
+    await uniPlatform.feedback.toast({
+      title: error instanceof Error ? error.message : "参与人信息暂时没同步出来",
+      icon: "none"
+    });
+  } finally {
+    participantSheetLoading.value = false;
+  }
 }
 
 function closeParticipantSheet() {
@@ -2679,7 +2743,6 @@ async function confirmRecipeSelection() {
 async function confirmBringSelection() {
   if (!eventDetail.value || !canChooseBring.value || recipeSubmitting.value || submitting.value) return;
   const nextRecipeIds = recipeSelectedIds.value.slice(0, MAX_EVENT_RECIPE_SELECTION);
-  if (!nextRecipeIds.length) return;
   if (nextRecipeIds.length === currentBringRecipeIds.value.length && nextRecipeIds.every(id => currentBringRecipeIds.value.includes(id))) return;
   const hadBring = currentBringRecipeIds.value.length > 0;
 
@@ -2722,7 +2785,7 @@ async function confirmWishSelection() {
 }
 
 async function toggleWishSupport(item: WishEntry) {
-  if (!eventDetail.value || !canChooseWish.value || wishActionLoadingId.value) return;
+  if (!eventDetail.value || !canChooseWish.value || wishActionLoadingId.value || (item.suggestedByMe && item.inCurrentMenu)) return;
   wishActionLoadingId.value = item.id;
   try {
     eventDetail.value = await mealApi.updateDiningEventWishSupport(eventDetail.value.id, item.id, {
@@ -2741,14 +2804,23 @@ async function toggleWishSupport(item: WishEntry) {
 }
 
 async function addWishItemToMenu(item: WishEntry) {
-  if (!eventDetail.value || !isEventOrganizer.value || item.inCurrentMenu || wishMenuLoadingId.value) return;
+  if (!eventDetail.value || !isEventOrganizer.value || wishMenuLoadingId.value) return;
+  if (item.inCurrentMenu) {
+    const confirmed = await uniPlatform.feedback.confirm({
+      title: "移出本次菜单",
+      content: `确定把“${item.title}”从这顿饭的菜单移除吗？成员的心愿和支持会保留。`
+    });
+    if (!confirmed) return;
+  }
   wishMenuLoadingId.value = item.id;
   try {
-    eventDetail.value = await mealApi.addDiningEventWishToMenu(eventDetail.value.id, item.id, createOperationId());
+    eventDetail.value = item.inCurrentMenu
+      ? await mealApi.removeDiningEventWishFromMenu(eventDetail.value.id, item.id, createOperationId())
+      : await mealApi.addDiningEventWishToMenu(eventDetail.value.id, item.id, createOperationId());
     await loadDetail();
-    await uniPlatform.feedback.toast({ title: "已经加进这顿饭啦", icon: "success" });
+    await uniPlatform.feedback.toast({ title: item.inCurrentMenu ? "已从本次菜单移除" : "已经加进这顿饭啦", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "加入菜单失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "菜单操作失败", icon: "none" });
   } finally {
     wishMenuLoadingId.value = null;
   }
@@ -3236,17 +3308,17 @@ function skipCompletedIngredientUpdate() {
 async function handleCompletePlanAction() {
   if (!planDetail.value || eventDetail.value || !planGapReady.value || currentPlanShoppingCount.value > 0 || planClosed.value || submitting.value) return;
   const confirmed = await uniPlatform.feedback.confirm({
-    title: "结束计划",
-    content: "结束后这条计划将不再继续推进，也不能再发起饭局。确定结束吗？"
+    title: "确认完成用餐",
+    content: "仅在这顿饭确实已经完成后确认。确认后这条计划将结束，不能再发起饭局。确定吗？"
   });
   if (!confirmed) return;
 
   submitting.value = true;
   try {
     planDetail.value = await mealApi.completePlan(planDetail.value.id, createOperationId());
-    await uniPlatform.feedback.toast({ title: "计划已结束", icon: "success" });
+    await uniPlatform.feedback.toast({ title: "已完成用餐", icon: "success" });
   } catch (error) {
-    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "结束计划失败", icon: "none" });
+    await uniPlatform.feedback.toast({ title: error instanceof Error ? error.message : "确认用餐失败", icon: "none" });
   } finally {
     submitting.value = false;
   }
@@ -4992,6 +5064,68 @@ function clearFocusedSection() {
   font-size: var(--font-size-sm);
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.member-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 24rpx;
+}
+
+.member-note-list__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 18rpx;
+  padding: 20rpx 22rpx;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-muted);
+}
+
+.member-note-list__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--color-tag-primary-bg);
+}
+
+.member-note-list__avatar-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.member-note-list__avatar-fallback {
+  color: var(--color-tag-primary-text);
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.member-note-list__main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.member-note-list__name {
+  color: var(--color-text);
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.member-note-list__text {
+  color: var(--color-text-secondary);
+  font-size: 24rpx;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .recipe-sheet__status--added .recipe-sheet__status-text {

@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, post, uploadFile, type IsoDateTime, type OperationId, type PageResult, type UUID } from "@/apis/http";
+import { del, get, post, uploadFile, type IsoDateTime, type OperationId, type PageResult, type UUID } from "@/apis/http";
 import type { RecipeContentSnapshot, RecipeDuration } from "@/apis/recipe";
 import type { MealSlot } from "@/utils/meal-slot";
 import { addDays, formatDateOnly } from "../utils/date";
@@ -545,6 +545,13 @@ export const mealApi = {
   },
   addDiningEventWishToMenu(eventId: UUID, wishItemId: UUID, operationId: OperationId) {
     return post<DiningEventSummary>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/wishes/${encodeURIComponent(wishItemId)}/menu`,
+      undefined,
+      { idempotencyKey: operationId }
+    );
+  },
+  removeDiningEventWishFromMenu(eventId: UUID, wishItemId: UUID, operationId: OperationId) {
+    return del<DiningEventSummary>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/wishes/${encodeURIComponent(wishItemId)}/menu`,
       undefined,
       { idempotencyKey: operationId }

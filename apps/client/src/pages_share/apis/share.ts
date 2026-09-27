@@ -67,6 +67,10 @@ export interface ShareAcceptResponse {
   planItemId: UUID | null;
 }
 
+export interface RecordMemoryShareStartedResponse {
+  recorded: boolean;
+}
+
 export const shareApi = {
   getPreview(shareToken: string) {
     return get<SharePreviewResponse>(`${cfg.domain}/api/share/${encodeURIComponent(shareToken)}/preview`, undefined, {
@@ -92,6 +96,13 @@ export const shareApi = {
     return post<MemoryShareSnapshotResponse>(
       `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/memory-shares`,
       { showParticipants, caption },
+      { idempotencyKey: operationId }
+    );
+  },
+  recordMemoryShareStarted(eventId: UUID, operationId: OperationId) {
+    return post<RecordMemoryShareStartedResponse>(
+      `${cfg.domain}/api/dining-events/${encodeURIComponent(eventId)}/memory-share-started`,
+      {},
       { idempotencyKey: operationId }
     );
   }
