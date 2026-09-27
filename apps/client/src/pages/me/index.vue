@@ -209,7 +209,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { medalApi } from "@/apis/medal";
 import { userApi } from "@/apis/user";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
@@ -226,6 +225,7 @@ import { useLoginModalStore } from "@/stores/login-modal";
 import {
 	EMPTY_BADGE_SNAPSHOT,
 	clearNotificationBadgeSnapshot,
+	notificationBadgeState,
 	readNotificationBadgeSnapshot,
 	refreshNotificationBadgeSnapshot,
 	writeNotificationBadgeSnapshot
@@ -259,13 +259,12 @@ const { effectiveSkin, effectivePalette, themeMode, canSwitchPalette } = useThem
 const { navBarTotalHeight } = useSystemInfo();
 
 const profileLoading = ref(false);
-const medalCount = ref<number | null>(null);
-const notificationBadge = ref(readNotificationBadgeSnapshot());
+readNotificationBadgeSnapshot();
+const notificationBadge = notificationBadgeState;
 const profileHeroVariants = ["profile-hero--mist", "profile-hero--halo", "profile-hero--ripple"] as const;
 const profileHeroVariant = profileHeroVariants[Math.floor(Math.random() * profileHeroVariants.length)];
 let restoredOnce = false;
 let loadMePromise: Promise<void> | null = null;
-let loadMedalsPromise: Promise<void> | null = null;
 const showMemberEntrances = false;
 
 const profileHeroStyle = computed(() => ({
@@ -466,12 +465,11 @@ async function syncPageState() {
 	}
 
 	if (sessionStore.isLoggedIn) {
-		await Promise.allSettled([loadMe(), loadMedals(), syncNotificationBadge()]);
+		await Promise.allSettled([loadMe(), syncNotificationBadge()]);
 		return;
 	}
 
 	profileLoading.value = false;
-	medalCount.value = null;
 	clearNotificationBadgeSnapshot();
 	notificationBadge.value = EMPTY_BADGE_SNAPSHOT;
 }
@@ -529,29 +527,6 @@ async function doLoadMe() {
 	}
 
 	profileLoading.value = false;
-}
-
-async function loadMedals() {
-	if (!sessionStore.isLoggedIn) return;
-	if (loadMedalsPromise) {
-		await loadMedalsPromise;
-		return;
-	}
-
-	loadMedalsPromise = doLoadMedals().finally(() => {
-		loadMedalsPromise = null;
-	});
-
-	await loadMedalsPromise;
-}
-
-async function doLoadMedals() {
-	try {
-		const result = await medalApi.getCurrent();
-		medalCount.value = result.earnedCount;
-	} catch {
-		medalCount.value = null;
-	}
 }
 
 function handleMealHubOpen() {
@@ -657,7 +632,6 @@ async function automatorOpenReminder() {
 async function automatorClearSession() {
 	await sessionStore.clearSession();
 	userStore.clearProfile();
-	medalCount.value = null;
 	await nextTick();
 }
 
