@@ -341,9 +341,6 @@ enum ShoppingSourceType {
 }
 
 enum HomeFeatureBoardPlacement {
-  MAIN
-  SIDE_TOP
-  SIDE_BOTTOM
   QUICK_1
   QUICK_2
   QUICK_3
