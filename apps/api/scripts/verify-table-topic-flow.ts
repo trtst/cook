@@ -3,7 +3,6 @@ import { loginWithPassword } from "./auth-fixture";
 import type {
   AdminTableTopicItem,
   AdminTableTopicsResponse,
-  HomeEntriesResponse,
   TableTopicDetailResponse,
   TableTopicListResponse
 } from "../src/contracts/types";
@@ -235,15 +234,6 @@ async function main() {
   });
   assert(userDetailAfter.topic.joined === true, "user detail should show joined=true after participation");
   assert(userDetailAfter.topic.participantCount === joined.topic.participantCount, "detail count should stay in sync after participation");
-
-  const homeEntries = await requestData<HomeEntriesResponse>("/home-entries");
-  const tableTopicEntry = homeEntries.items.find(item => item.title === "餐桌话题") ?? null;
-  assert(tableTopicEntry, "home entries should include table topic");
-  assert(tableTopicEntry.targetType === "PAGE", "table topic entry should stay as page target");
-  assert(
-    tableTopicEntry.targetValue === "/pages_home/table-topic/index",
-    `table topic entry target mismatch: ${tableTopicEntry.targetValue}`
-  );
 
   console.log(
     JSON.stringify(

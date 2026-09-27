@@ -11,7 +11,7 @@
 基于 Saturday, August 22, 2026 当前工作树代码与本地 `3100` 实例核对：
 
 1. `apps/client/src/pages/home/index.vue` 已接通 `feature-board + action-dock + recent-arrangement` 首页结构。
-2. `GET /home-entries` 已通过 `pnpm --filter @next-meal/api verify:home-action-dock-flow` 真实联调，当前返回 `MAIN / SIDE_TOP / SIDE_BOTTOM / QUICK_1 / QUICK_2 / QUICK_3 / QUICK_4` 共 `7` 个坑位。
+2. 当前 `GET /home-entries` 仅返回 `QUICK_1 ... QUICK_4` 已上架入口；左侧周计划卡由 `GET /home/week-overview` 驱动，右侧两张卡在客户端固定文案和跳转。
 3. `HBuilderX cli launch mp-weixin --project /Users/yangpenghui/personal/cook/apps/client/src --compile true --continue-on-error false --runtime-log true` 已跑通，输出包含 `项目 src 编译成功` 与 `ready in 10224ms`。
 4. 已于 Sunday, August 23, 2026 跑通 `/pages/home/index` 官方 `mp-weixin` 真实登录态下的首页主状态自动化，确认当前首页可稳定展示 `饭局、计划、清单`、`还没有安排`、`今晚吃什么？`、未安排说明文案，以及四个 quick 入口标题 `翻菜谱 / 看食材 / 随机 / 缺什么`。
 5. 首页四宫格当前可视为“代码、真实接口、开发者工具编译链与首页真实登录主状态自动化已落地”；剩余主要缺口是首页真机走查，以及四个场景首页的页面级手动验收。
@@ -31,7 +31,7 @@
 
 ## 不在本轮范围
 
-- 不改首页首屏三张主卡 `MAIN / SIDE_TOP / SIDE_BOTTOM`
+- 首屏三卡独立于本执行单：左侧使用周计划状态，右侧固定为“本周灵感”和“餐桌话题”。
 - 不把首页改成动态流、聊天页或消息页
 - 不在本轮冻结新的接口字段、聚合摘要接口或缓存策略
 - 不在本轮细化视觉稿、动效稿和最终样式
@@ -290,7 +290,7 @@
 ## 实施约束
 
 1. 首先冻结页面行为，再决定是否需要新增摘要接口。
-2. 当前 `home-entries` 仍只承担运营配置和跳转，不承载四宫格的运行时状态事实。
+2. 当前 `home-entries` 仅承担四宫格快捷入口配置和跳转，不承载四宫格的运行时状态事实。
 3. 四宫格卡片上的动态状态若要落地，必须按各自 owner 页面和业务事实单独确认来源，不能用兜底文案假装状态已存在。
 4. 不为了首页四宫格引入聊天流、评论流、公开动态流或泛社区关系。
 

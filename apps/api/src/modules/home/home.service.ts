@@ -45,9 +45,7 @@ type RequestLike = {
   get?: (name: string) => string | undefined;
 };
 
-const featurePlacements: HomeFeatureBoardPlacement[] = ["MAIN", "SIDE_TOP", "SIDE_BOTTOM"];
 const quickPlacements: HomeFeatureBoardPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
-const allPlacements: HomeFeatureBoardPlacement[] = [...featurePlacements, ...quickPlacements];
 const primaryWindowMs = 24 * 60 * 60 * 1000;
 const fallbackWindowMs = 36 * 60 * 60 * 1000;
 const pastShareWindowMs = 24 * 60 * 60 * 1000;
@@ -63,9 +61,6 @@ const arrangementStatusPriority: Record<HomeRecentArrangementStatus, number> = {
   EMPTY_MENU: 1
 };
 const placementIds: Record<HomeFeatureBoardPlacement, string> = {
-  MAIN: "feature-main",
-  SIDE_TOP: "feature-side-top",
-  SIDE_BOTTOM: "feature-side-bottom",
   QUICK_1: "quick-1",
   QUICK_2: "quick-2",
   QUICK_3: "quick-3",
@@ -82,32 +77,8 @@ const pageTargets: HomeEntryPageTarget[] = [
   { label: "我的菜谱管理", value: "/pages_recipe/list/index" }
 ];
 const pageTargetSet = new Set(pageTargets.map(item => item.value));
-const imagePathPattern = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-entries\/(MAIN|SIDE_TOP|SIDE_BOTTOM|QUICK_1|QUICK_2|QUICK_3|QUICK_4)$/i;
+const imagePathPattern = /^(?:https?:\/\/[^/]+)?\/(?:static\/)?uploads\/home-entries\/(QUICK_1|QUICK_2|QUICK_3|QUICK_4)$/i;
 const defaultCards: Record<HomeFeatureBoardPlacement, Omit<HomeCardInput, "placement">> = {
-  MAIN: {
-    title: "一起吃饭",
-    subtitle: "挑挑自己想吃的",
-    targetType: "PAGE",
-    targetValue: "/pages_meal/plan/index",
-    artImageUrl: null,
-    badgeText: null
-  },
-  SIDE_TOP: {
-    title: "本周灵感",
-    subtitle: "这周吃点不一样",
-    targetType: "PAGE",
-    targetValue: "/pages_home/topic/index",
-    artImageUrl: null,
-    badgeText: "周"
-  },
-  SIDE_BOTTOM: {
-    title: "餐桌话题",
-    subtitle: "看看最近吃什么",
-    targetType: "PAGE",
-    targetValue: "/pages_home/table-topic/index",
-    artImageUrl: null,
-    badgeText: "题"
-  },
   QUICK_1: {
     title: "翻菜谱",
     subtitle: "先挑想做的",
@@ -188,17 +159,10 @@ function isInternalImagePath(value: string | null | undefined) {
 }
 
 function getPlacementLabel(placement: HomeFeatureBoardPlacement) {
-  if (placement === "MAIN") return "主卡";
-  if (placement === "SIDE_TOP") return "右上卡";
-  if (placement === "SIDE_BOTTOM") return "右下卡";
   if (placement === "QUICK_1") return "快捷入口 1";
   if (placement === "QUICK_2") return "快捷入口 2";
   if (placement === "QUICK_3") return "快捷入口 3";
   return "快捷入口 4";
-}
-
-function isQuickPlacement(placement: HomeFeatureBoardPlacement) {
-  return quickPlacements.includes(placement);
 }
 
 function mealSlotDefaultTime(slot: MealSlot) {
@@ -268,13 +232,10 @@ export class HomeService {
   async getHomeEntries(request: RequestLike): Promise<HomeEntriesResponse> {
     const items = await this.listCards();
     return {
-      items: [
-        ...featurePlacements.map(placement => this.toPublicItem(request, this.requireMappedCard(items, placement))),
-        ...quickPlacements
-          .map(placement => this.requireMappedCard(items, placement))
-          .filter(item => item.status === "LISTED")
-          .map(item => this.toPublicItem(request, item))
-      ]
+      items: quickPlacements
+        .map(placement => this.requireMappedCard(items, placement))
+        .filter(item => item.status === "LISTED")
+        .map(item => this.toPublicItem(request, item))
     };
   }
 
@@ -697,10 +658,6 @@ export class HomeService {
     placement: HomeFeatureBoardPlacement,
     body: SetHomeEntryStatusRequest
   ): Promise<AdminHomeEntryItem> {
-    if (!isQuickPlacement(placement)) {
-      throw new BadRequestException("只有首页四宫格入口支持上架和下架");
-    }
-
     const requestHash = hashText(JSON.stringify({ placement, status: body.status, expectedVersion: body.expectedVersion }));
     return this.prisma.$transaction(async tx => {
       const repeated = await getAdminIdempotentResult<AdminHomeEntryItem>(
@@ -853,7 +810,7 @@ export class HomeService {
   private async getAdminEntries(db: BoardDb): Promise<AdminHomeEntriesResponse> {
     const items = await this.listCards(db);
     return {
-      items: allPlacements.map(placement => this.toAdminItem(this.requireMappedCard(items, placement))),
+      items: quickPlacements.map(placement => this.toAdminItem(this.requireMappedCard(items, placement))),
       pageTargets
     };
   }
@@ -861,7 +818,7 @@ export class HomeService {
   private async listCards(db: BoardDb = this.prisma) {
     await this.ensureCards(db);
     const items = await db.homeFeatureBoardCard.findMany({
-      where: { placement: { in: allPlacements } }
+      where: { placement: { in: quickPlacements } }
     });
     const legacyItems = items.filter(item => item.targetType === "PAGE" && !pageTargetSet.has(item.targetValue));
     if (!legacyItems.length) {
@@ -881,13 +838,13 @@ export class HomeService {
     );
 
     return db.homeFeatureBoardCard.findMany({
-      where: { placement: { in: allPlacements } }
+      where: { placement: { in: quickPlacements } }
     });
   }
 
   private async ensureCards(db: BoardDb) {
     await db.homeFeatureBoardCard.createMany({
-      data: allPlacements.map(placement => ({
+      data: quickPlacements.map(placement => ({
         placement,
         status: "LISTED" as HomeEntryStatus,
         ...defaultCards[placement]
@@ -900,8 +857,8 @@ export class HomeService {
     if (!items.length) {
       throw new BadRequestException("首页快捷入口至少提交 1 个坑位");
     }
-    if (items.length > allPlacements.length) {
-      throw new BadRequestException("首页快捷入口最多提交 7 个坑位");
+    if (items.length > quickPlacements.length) {
+      throw new BadRequestException("首页快捷入口最多提交 4 个坑位");
     }
 
     const uniquePlacements = new Set<HomeFeatureBoardPlacement>();

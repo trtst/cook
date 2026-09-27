@@ -27,9 +27,6 @@ type ResponseLike = Writable & {
 
 function parsePlacement(placement: string): HomeFeatureBoardPlacement {
   if (
-    placement === "MAIN" ||
-    placement === "SIDE_TOP" ||
-    placement === "SIDE_BOTTOM" ||
     placement === "QUICK_1" ||
     placement === "QUICK_2" ||
     placement === "QUICK_3" ||
@@ -46,7 +43,7 @@ export class HomeController {
   constructor(@Inject(HomeService) private readonly homeService: HomeService) {}
 
   @Get("home-entries")
-  @ApiOkModel(HomeEntriesResponseModel, "读取小程序首页快捷入口")
+  @ApiOkModel(HomeEntriesResponseModel, "读取首页已上架快捷入口四宫格")
   getHomeEntries(@Req() request: HomeAssetRequest) {
     return this.homeService.getHomeEntries(request).then(result => ok(result));
   }

@@ -4,7 +4,6 @@ import type { HomeEntriesResponse, HomeEntryItem } from "../src/contracts/types"
 loadLocalEnv();
 
 const apiBaseUrl = process.env.API_BASE_URL ?? "http://127.0.0.1:3100/api";
-const featurePlacements = ["MAIN", "SIDE_TOP", "SIDE_BOTTOM"] as const;
 const quickPlacements = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] as const;
 
 interface ApiEnvelope<T> {
@@ -53,12 +52,9 @@ function assertTargetShape(item: HomeEntryItem) {
 
 async function main() {
   const entries = await requestData<HomeEntriesResponse>("/home-entries");
-  assert(entries.items.length >= 3, "home entries should always return the three feature placements");
-  assert(entries.items.length <= 7, "home entries should never exceed the seven configured placements");
+  assert(entries.items.length <= 4, "home entries should never exceed the four configured quick placements");
 
-  const placementOrder = new Map(
-    [...featurePlacements, ...quickPlacements].map((placement, index) => [placement, index] as const)
-  );
+  const placementOrder = new Map(quickPlacements.map((placement, index) => [placement, index] as const));
   const ids = new Set<string>();
   const placements = new Set<string>();
 
@@ -73,13 +69,9 @@ async function main() {
       const previous = entries.items[index - 1]!;
       assert(
         (placementOrder.get(previous.placement) ?? -1) < (placementOrder.get(item.placement) ?? -1),
-        "home entries should follow feature placements first, then quick placement order"
+        "home entries should follow quick placement order"
       );
     }
-  });
-
-  featurePlacements.forEach((placement, index) => {
-    assert(entries.items[index]?.placement === placement, `feature placement ${placement} should stay in fixed order`);
   });
 
   const quickItems = entries.items.filter(item => quickPlacements.includes(item.placement as (typeof quickPlacements)[number]));
@@ -90,7 +82,6 @@ async function main() {
       {
         apiBaseUrl,
         totalCount: entries.items.length,
-        featurePlacements: entries.items.slice(0, 3).map(item => item.placement),
         quickPlacements: quickItems.map(item => item.placement),
         quickTitles: quickItems.map(item => item.title)
       },

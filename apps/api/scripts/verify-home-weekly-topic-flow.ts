@@ -2,7 +2,6 @@ import { loadLocalEnv } from "../src/common/load-env";
 import type {
   AdminHomeTopicItem,
   AdminHomeTopicsResponse,
-  HomeEntriesResponse,
   HomeTopicCurrentResponse,
   HomeTopicDetailResponse,
   HomeTopicRecipeSearchResponse
@@ -192,12 +191,6 @@ async function main() {
   assert(detail.topic.id === listedCurrent.id, "topic detail id mismatch");
   assert(detail.topic.title === currentTitle, "topic detail title mismatch");
   assert(detail.topic.items[0]?.title, "topic detail should expose recipe titles");
-
-  const homeEntries = await requestData<HomeEntriesResponse>("/home-entries");
-  const weeklyEntry = homeEntries.items.find(item => item.title === "本周灵感") ?? null;
-  assert(weeklyEntry, "home entries should include weekly topic");
-  assert(weeklyEntry.targetType === "PAGE", "weekly topic entry should stay as page target");
-  assert(weeklyEntry.targetValue === "/pages_home/topic/index", `weekly topic entry target mismatch: ${weeklyEntry.targetValue}`);
 
   console.log(
     JSON.stringify(

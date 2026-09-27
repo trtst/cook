@@ -14,9 +14,6 @@ type AssetRequest = RequestWithAdmin & { protocol?: string; get?: (name: string)
 
 function parsePlacement(placement: string): HomeFeatureBoardPlacement {
   if (
-    placement === "MAIN" ||
-    placement === "SIDE_TOP" ||
-    placement === "SIDE_BOTTOM" ||
     placement === "QUICK_1" ||
     placement === "QUICK_2" ||
     placement === "QUICK_3" ||
@@ -35,14 +32,14 @@ export class AdminHomeController {
   constructor(@Inject(HomeService) private readonly homeService: HomeService) {}
 
   @Get()
-  @ApiOkModel(AdminHomeEntriesResponseModel, "读取小程序首页快捷入口配置")
+  @ApiOkModel(AdminHomeEntriesResponseModel, "读取小程序首页快捷入口四宫格配置")
   getHomeEntries() {
     return this.homeService.getAdminHomeEntries().then(result => ok(result));
   }
 
   @Put()
   @ApiIdempotencyKey()
-  @ApiOkModel(AdminHomeEntriesResponseModel, "更新小程序首页快捷入口配置")
+  @ApiOkModel(AdminHomeEntriesResponseModel, "更新小程序首页快捷入口四宫格配置")
   updateHomeEntries(
     @Req() request: AssetRequest,
     @ReadIdempotencyKey() operationId: string,
