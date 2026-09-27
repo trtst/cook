@@ -28,6 +28,9 @@ const awardRuleLabelMap: Record<MedalAwardRule, string> = {
   DINING_EVENT_COMPLETION: "完成饭局",
   GROUP_MEAL_COMPLETION: "多人饭局吃成",
   FULL_LOOP_COMPLETION: "完整闭环",
+  SHOPPING_COMPLETION: "完成采购",
+  FRIDGE_MAINTENANCE: "食材维护周数",
+  MEMORY_SHARE_STARTED_TOTAL: "回忆分享发起",
   RECOMMENDATION_ADOPTED_TOTAL: "推荐收录累计"
 };
 
@@ -555,7 +558,7 @@ onMounted(() => {
         <div class="dialog-section">
           <div class="dialog-section__title">基础信息</div>
           <el-form-item label="勋章名称">
-            <el-input v-model="form.name" maxlength="64" placeholder="例如：开火第一餐" />
+            <el-input v-model="form.name" maxlength="64" placeholder="例如：炉火初明" />
           </el-form-item>
           <el-form-item label="勋章简介">
             <el-input v-model="form.description" type="textarea" :rows="2" maxlength="255" />

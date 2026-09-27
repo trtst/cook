@@ -1,6 +1,6 @@
 import { requestData, uploadForm, type OperationId } from "./http";
 
-export type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
+export type HomeEntryPlacement = "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 export type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
 export type HomeEntryStatus = "LISTED" | "UNLISTED";
 

@@ -43,7 +43,7 @@ const router = createRouter({
           path: "operations/app-home",
           name: "operations-app-home",
           component: () => import("@/pages/HomeEntriesPage.vue"),
-          meta: { title: "小程序首页" }
+          meta: { title: "首页快捷入口" }
         },
         {
           path: "operations/weekly-topic",
@@ -238,6 +238,12 @@ const router = createRouter({
           name: "ingredient-units",
           component: () => import("@/pages/UnitsPage.vue"),
           meta: { title: "单位" }
+        },
+        {
+          path: "system-data",
+          name: "system-data",
+          component: () => import("@/pages/SystemDataPage.vue"),
+          meta: { title: "基础数据同步" }
         },
         {
           path: "config",

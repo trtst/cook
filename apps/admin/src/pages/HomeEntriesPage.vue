@@ -28,9 +28,7 @@ type HomeEntryFormItem = {
   badgeText: string;
 };
 
-const featureOrder: HomeEntryPlacement[] = ["MAIN", "SIDE_TOP", "SIDE_BOTTOM"];
 const quickOrder: HomeEntryPlacement[] = ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"];
-const allPlacements: HomeEntryPlacement[] = [...featureOrder, ...quickOrder];
 
 const loading = ref(true);
 const saveBusyPlacement = ref<HomeEntryPlacement | null>(null);
@@ -41,43 +39,25 @@ const selectedPlacement = ref<HomeEntryPlacement | null>(null);
 const pageTargets = ref<HomeEntryPageTarget[]>([]);
 const items = ref<HomeEntryFormItem[]>([]);
 
-const placementMeta: Record<HomeEntryPlacement, { label: string; description: string; kind: "feature" | "quick" }> = {
-  MAIN: { label: "主卡", description: "建议放首页本期主推内容、重点活动或核心专题。", kind: "feature" },
-  SIDE_TOP: { label: "右上卡", description: "建议放辅助推荐内容，例如节气主题、周末菜单或短期活动。", kind: "feature" },
-  SIDE_BOTTOM: { label: "右下卡", description: "建议放补充曝光内容，例如话题专题、城市风味或专题外链。", kind: "feature" },
-  QUICK_1: { label: "快捷入口 1", description: "建议放首页最高频的快捷入口。", kind: "quick" },
-  QUICK_2: { label: "快捷入口 2", description: "建议放首页第二优先级的快捷入口。", kind: "quick" },
-  QUICK_3: { label: "快捷入口 3", description: "建议放首页第三优先级的快捷入口。", kind: "quick" },
-  QUICK_4: { label: "快捷入口 4", description: "建议放首页补充型的快捷入口。", kind: "quick" }
+const placementMeta: Record<HomeEntryPlacement, { label: string; description: string }> = {
+  QUICK_1: { label: "快捷入口 1", description: "建议放首页最高频的快捷入口。" },
+  QUICK_2: { label: "快捷入口 2", description: "建议放首页第二优先级的快捷入口。" },
+  QUICK_3: { label: "快捷入口 3", description: "建议放首页第三优先级的快捷入口。" },
+  QUICK_4: { label: "快捷入口 4", description: "建议放首页补充型的快捷入口。" }
 };
 
 const titleMaxMap: Record<HomeEntryPlacement, number> = {
-  MAIN: 8,
-  SIDE_TOP: 6,
-  SIDE_BOTTOM: 6,
   QUICK_1: 4,
   QUICK_2: 4,
   QUICK_3: 4,
   QUICK_4: 4
 };
 
-const subtitleMaxMap: Record<HomeEntryPlacement, number> = {
-  MAIN: 12,
-  SIDE_TOP: 10,
-  SIDE_BOTTOM: 10,
-  QUICK_1: 0,
-  QUICK_2: 0,
-  QUICK_3: 0,
-  QUICK_4: 0
-};
-
 const apiOrigin = resolveApiOrigin();
 const itemMap = computed(() => new Map(items.value.map(item => [item.placement, item] as const)));
-const pageReady = computed(() => allPlacements.every(placement => itemMap.value.has(placement)));
-const featureItems = computed(() => (pageReady.value ? featureOrder.map(placement => itemMap.value.get(placement)!) : []));
+const pageReady = computed(() => quickOrder.every(placement => itemMap.value.has(placement)));
 const quickItems = computed(() => (pageReady.value ? quickOrder.map(placement => itemMap.value.get(placement)!) : []));
 const listedQuickItems = computed(() => quickItems.value.filter(item => item.status === "LISTED"));
-const orderedItems = computed(() => [...featureItems.value, ...quickItems.value]);
 
 useAdminHeaderRefresh(() => {
   void loadEntries();
@@ -91,22 +71,11 @@ function resolveApiOrigin() {
   }
 }
 
-function isFeaturePlacement(placement: HomeEntryPlacement) {
-  return placementMeta[placement].kind === "feature";
-}
-
 function getTitleMax(placement: HomeEntryPlacement) {
   return titleMaxMap[placement];
 }
 
-function getSubtitleMax(placement: HomeEntryPlacement) {
-  return subtitleMaxMap[placement];
-}
-
 function resolvePreviewClass(placement: HomeEntryPlacement) {
-  if (placement === "MAIN") return "entry-preview-shell--main";
-  if (placement === "SIDE_TOP") return "entry-preview-shell--mint";
-  if (placement === "SIDE_BOTTOM") return "entry-preview-shell--aqua";
   if (placement === "QUICK_1") return "entry-preview-shell--main";
   if (placement === "QUICK_2") return "entry-preview-shell--mint";
   if (placement === "QUICK_3") return "entry-preview-shell--aqua";
@@ -184,9 +153,7 @@ async function loadEntries() {
 
 function validateItem(item: HomeEntryFormItem) {
   const title = item.title.trim();
-  const subtitle = item.subtitle.trim();
   const titleMax = getTitleMax(item.placement);
-  const subtitleMax = getSubtitleMax(item.placement);
 
   if (!title) {
     throw new Error(`${placementMeta[item.placement].label}标题不能为空`);
@@ -194,13 +161,6 @@ function validateItem(item: HomeEntryFormItem) {
   if (title.length > titleMax) {
     throw new Error(`${placementMeta[item.placement].label}标题最多 ${titleMax} 个字`);
   }
-  if (isFeaturePlacement(item.placement) && !subtitle) {
-    throw new Error(`${placementMeta[item.placement].label}副标题不能为空`);
-  }
-  if (isFeaturePlacement(item.placement) && subtitle.length > subtitleMax) {
-    throw new Error(`${placementMeta[item.placement].label}副标题最多 ${subtitleMax} 个字`);
-  }
-
   if (item.targetType === "PAGE") {
     if (!pageTargets.value.some(target => target.value === item.targetValue)) {
       throw new Error(`${placementMeta[item.placement].label}请选择有效的站内页面`);
@@ -326,146 +286,11 @@ onMounted(() => {
         <section class="table-panel section-panel">
           <div class="section-panel__header">
             <div>
-              <h3>小程序首页</h3>
+              <h3>首页快捷入口</h3>
             </div>
           </div>
 
           <div class="home-layout">
-            <section class="surface-panel">
-              <div class="surface-panel__header">
-                <div>
-                  <h5>首屏 3 卡</h5>
-                </div>
-              </div>
-
-              <div class="preview-stage preview-stage--feature">
-                <div class="feature-preview">
-                  <article class="feature-card feature-card--main">
-                    <div class="feature-card__copy">
-                      <span class="feature-card__title">{{ featureItems[0].title || "请输入标题" }}</span>
-                      <span class="feature-card__subtitle">{{ featureItems[0].subtitle || "请输入副标题" }}</span>
-                    </div>
-
-                    <div class="feature-card__art-wrap">
-                      <button class="media-upload media-upload--feature" type="button" @click="chooseImageFile(featureItems[0].placement)">
-                        <img
-                          v-if="getPreviewUrl(featureItems[0])"
-                          :src="getPreviewUrl(featureItems[0])"
-                          :alt="`${placementMeta[featureItems[0].placement].label}预览图`"
-                          class="media-upload__image"
-                        />
-                        <span v-else class="media-upload__empty">
-                          <el-icon size="26"><Picture /></el-icon>
-                          <span>{{ imageSavingPlacement === featureItems[0].placement ? "上传中..." : "点击上传图片" }}</span>
-                        </span>
-                      </button>
-                      <el-button
-                        v-if="featureItems[0].imageUrl.trim()"
-                        class="media-upload__delete"
-                        circle
-                        size="small"
-                        :icon="Delete"
-                        :disabled="imageSavingPlacement === featureItems[0].placement"
-                        @click="clearImage(featureItems[0])"
-                      />
-                    </div>
-                  </article>
-
-                  <div class="feature-preview__side">
-                    <article
-                      v-for="item in featureItems.slice(1)"
-                      :key="item.placement"
-                      class="feature-card feature-card--side"
-                      :class="[item.placement === 'SIDE_TOP' ? 'feature-card--mint' : 'feature-card--aqua']"
-                    >
-                      <div class="feature-card__copy">
-                        <span class="feature-card__title">{{ item.title || "请输入标题" }}</span>
-                        <span class="feature-card__subtitle">{{ item.subtitle || "请输入副标题" }}</span>
-                      </div>
-
-                      <div class="feature-card__mini feature-card__mini--members">
-                        <button class="media-upload media-upload--mini" type="button" @click="chooseImageFile(item.placement)">
-                          <img
-                            v-if="getPreviewUrl(item)"
-                            :src="getPreviewUrl(item)"
-                            :alt="`${placementMeta[item.placement].label}预览图`"
-                            class="media-upload__image"
-                          />
-                          <span v-else class="media-upload__empty media-upload__empty--mini">
-                            <el-icon size="18"><Picture /></el-icon>
-                          </span>
-                        </button>
-                        <el-button
-                          v-if="item.imageUrl.trim()"
-                          class="media-upload__delete media-upload__delete--mini"
-                          circle
-                          size="small"
-                          :icon="Delete"
-                          :disabled="imageSavingPlacement === item.placement"
-                          @click="clearImage(item)"
-                        />
-                      </div>
-                    </article>
-                  </div>
-                </div>
-              </div>
-
-              <div class="editor-list editor-list--feature">
-                <article
-                  v-for="item in featureItems"
-                  :key="item.placement"
-                  class="editor-card"
-                >
-                  <div class="editor-card__header">
-                    <div class="editor-card__title-row">
-                      <h6>{{ placementMeta[item.placement].label }}</h6>
-                      <span class="entry-card__version">版本 {{ item.version }}</span>
-                    </div>
-                    <div>
-                      <p>{{ placementMeta[item.placement].description }}</p>
-                    </div>
-                  </div>
-
-                  <el-form label-position="top" class="entry-form entry-form--stacked">
-                    <el-form-item label="标题">
-                      <el-input v-model="item.title" :maxlength="getTitleMax(item.placement)" show-word-limit />
-                    </el-form-item>
-
-                    <el-form-item label="副标题">
-                      <el-input v-model="item.subtitle" :maxlength="getSubtitleMax(item.placement)" show-word-limit />
-                    </el-form-item>
-
-                    <el-form-item label="跳转类型">
-                      <el-radio-group v-model="item.targetType">
-                        <el-radio value="PAGE">站内页面</el-radio>
-                        <el-radio value="WEB_VIEW">外链 / H5</el-radio>
-                      </el-radio-group>
-                    </el-form-item>
-
-                    <el-form-item v-if="item.targetType === 'PAGE'">
-                      <el-select v-model="item.targetValue" class="entry-form__select">
-                        <el-option v-for="target in pageTargets" :key="target.value" :label="target.label" :value="target.value" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item v-else>
-                      <el-input v-model="item.targetValue" maxlength="512" placeholder="https://example.com/topic" />
-                    </el-form-item>
-
-                    <div class="entry-form__actions">
-                      <el-button
-                        type="primary"
-                        :loading="saveBusyPlacement === item.placement"
-                        :disabled="imageSavingPlacement === item.placement"
-                        @click="saveItem(item)"
-                      >
-                        保存
-                      </el-button>
-                    </div>
-                  </el-form>
-                </article>
-              </div>
-            </section>
-
             <section class="surface-panel">
               <div class="surface-panel__header">
                 <div>
@@ -570,8 +395,8 @@ onMounted(() => {
       <section v-else-if="!loading" class="table-panel section-panel">
         <div class="section-panel__header">
           <div>
-            <h4>首页入口数据未就绪</h4>
-            <p>后台尚未拿到完整的 7 个首页坑位配置，请刷新后重试。</p>
+            <h4>首页快捷入口数据未就绪</h4>
+            <p>后台尚未拿到完整的 4 个快捷入口配置，请刷新后重试。</p>
           </div>
         </div>
       </section>
@@ -600,7 +425,7 @@ onMounted(() => {
 
 .home-layout {
   display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 3fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
 }
 
@@ -654,108 +479,6 @@ onMounted(() => {
   border-radius: 18px;
   background: linear-gradient(180deg, #fffaf5, #f8fbff);
   border: 1px solid #edf2f7;
-}
-
-.preview-stage--feature {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.feature-preview {
-  display: flex;
-  gap: 9px;
-  width: 351px;
-  max-width: 100%;
-}
-
-.feature-preview__side {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.feature-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  overflow: hidden;
-  border-radius: 14px;
-}
-
-.feature-card--main {
-  flex: 1 1 0;
-  min-height: 150px;
-  padding: 10px;
-  background: linear-gradient(180deg, #fff1df, #fff8ee);
-}
-
-.feature-card--side {
-  flex: 1;
-  min-height: 70px;
-  padding: 10px;
-}
-
-.feature-card--mint {
-  background: linear-gradient(180deg, #e7f8ee, #f7fcf9);
-}
-
-.feature-card--aqua {
-  background: linear-gradient(180deg, #eaf3ff, #f8fbff);
-}
-
-.feature-card__copy {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  z-index: 1;
-}
-
-.entry-card__version {
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  color: #4b5563;
-  font-size: 12px;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.feature-card__title {
-  color: #111827;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.feature-card__subtitle {
-  margin-top: 5px;
-  color: #4b5563;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.feature-card__art-wrap {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  left: 10px;
-  height: 80px;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.feature-card__mini {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 50px;
-  height: 50px;
-  transform: rotate(-7deg);
 }
 
 .media-upload {
@@ -890,10 +613,6 @@ onMounted(() => {
   gap: 12px;
 }
 
-.editor-list--feature {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .editor-list--quick {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -974,19 +693,11 @@ onMounted(() => {
     align-items: stretch;
   }
 
-  .editor-list--feature,
   .editor-list--quick,
   .dock-preview {
     grid-template-columns: 1fr;
   }
 
-  .feature-preview {
-    flex-direction: column;
-  }
-
-  .feature-card--main {
-    min-height: 150px;
-  }
 
   .dock-preview__icon {
     width: 88px;

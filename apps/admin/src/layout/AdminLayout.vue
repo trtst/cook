@@ -117,7 +117,7 @@ function triggerHeaderRefresh() {
             <el-icon><Setting /></el-icon>
             <span>运营</span>
           </template>
-          <el-menu-item index="/operations/app-home">小程序首页</el-menu-item>
+          <el-menu-item index="/operations/app-home">首页快捷入口</el-menu-item>
           <el-menu-item index="/operations/material-images">图片素材库</el-menu-item>
           <el-menu-item index="/operations/weekly-topic">本周灵感</el-menu-item>
           <el-menu-item index="/operations/table-topic">餐桌话题</el-menu-item>
@@ -155,6 +155,7 @@ function triggerHeaderRefresh() {
           <el-menu-item index="/ingredients/feedbacks">食材纠错</el-menu-item>
           <el-menu-item index="/ingredients/units">单位</el-menu-item>
         </el-sub-menu>
+        <el-menu-item index="/system-data">基础数据同步</el-menu-item>
         <el-menu-item index="/config">
           <el-icon><Setting /></el-icon>
           <span>公共配置</span>
