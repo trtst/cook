@@ -49,7 +49,7 @@
         </view>
 
         <view class="table-content">
-          <view v-if="hasFeatureEntries" class="feature-board">
+          <view class="feature-board">
             <view class="feature-card feature-card--main feature-card--status" hover-class="feature-card--hover" hover-stay-time="100" @click="openWeekOverview">
               <view class="feature-card__copy feature-card__copy--status">
                 <view class="feature-card__status-body">
@@ -90,36 +90,6 @@
               </view>
             </view>
           </view>
-          <view v-else-if="showFeatureEntriesSkeleton" class="feature-board">
-            <view class="feature-card feature-card--main feature-card--skeleton">
-              <view class="feature-card__copy feature-card__copy--skeleton">
-                <Skeleton width="160rpx" height="30rpx" />
-                <Skeleton width="220rpx" height="22rpx" />
-                <Skeleton width="200rpx" height="22rpx" />
-              </view>
-            </view>
-            <view class="feature-side">
-              <view class="feature-card feature-card--side feature-card--mint feature-card--skeleton">
-                <view class="feature-card__copy feature-card__copy--skeleton">
-                  <Skeleton width="120rpx" height="30rpx" />
-                  <Skeleton width="170rpx" height="22rpx" />
-                </view>
-                <view class="feature-card__mini feature-card__mini--skeleton">
-                  <Skeleton width="100%" height="100%" radius="18rpx" />
-                </view>
-              </view>
-              <view class="feature-card feature-card--side feature-card--green feature-card--skeleton">
-                <view class="feature-card__copy feature-card__copy--skeleton">
-                  <Skeleton width="120rpx" height="30rpx" />
-                  <Skeleton width="170rpx" height="22rpx" />
-                </view>
-                <view class="feature-card__mini feature-card__mini--skeleton">
-                  <Skeleton width="100%" height="100%" radius="18rpx" />
-                </view>
-              </view>
-            </view>
-          </view>
-
           <view v-if="hasQuickEntries" class="action-dock">
             <view
               v-for="item in quickEntryItems"
@@ -322,6 +292,19 @@ import {
 const heroAssetBase = `${cfg.assetPublicBaseUrl}/uploads/material-store`;
 const heroImagePrimary = `${heroAssetBase}/3a0414c9-7f44-444c-93fe-873c226c8166.png?v=2026-09-05T15%3A51%3A22.009Z`;
 const heroImageSecondary = `${heroAssetBase}/5a7629a0-c9f7-4075-b36e-5716cee073ba.png?v=2026-09-05T15%3A51%3A32.022Z`;
+type SideFeatureCard = {
+  id: string;
+  placement: "SIDE_TOP" | "SIDE_BOTTOM";
+  title: string;
+  subtitle: string;
+  imageUrl: null;
+  badgeText: string;
+  targetType: "PAGE";
+  targetValue: string;
+};
+type HomeEntryLink = Pick<HomeEntryItem, "targetType" | "targetValue"> & {
+  placement?: HomeEntryItem["placement"] | SideFeatureCard["placement"];
+};
 
 const pageStyle = usePageScrollStyle();
 const settingsStore = useSettingsStore();
@@ -340,7 +323,6 @@ const pendingLoginPrompt = ref<"random" | null>(null);
 const homeEntriesLoading = ref(false);
 const homeEntriesLoaded = ref(false);
 const homeEntriesRequestBlocked = ref(false);
-const featureEntryItems = ref<HomeEntryItem[]>([]);
 const quickEntryItems = ref<HomeEntryItem[]>([]);
 const nextMealStateLoading = ref(false);
 const nextMealStateLoaded = ref(false);
@@ -374,42 +356,51 @@ const navBackdropStyle = computed(() => ({
 }));
 
 const navGreeting = computed(() => resolveNavGreeting(new Date().getHours()));
-const mainFeatureCard = computed(() => featureEntryItems.value.find(item => item.placement === "MAIN") ?? null);
-const sideFeatureCards = computed(() =>
-  featureEntryItems.value
-    .filter(item => item.placement === "SIDE_TOP" || item.placement === "SIDE_BOTTOM")
-    .sort((left, right) => (left.placement === "SIDE_TOP" ? 0 : 1) - (right.placement === "SIDE_TOP" ? 0 : 1))
-);
-const heroEntries = computed(() => {
-  const items = [mainFeatureCard.value, ...sideFeatureCards.value].filter((item): item is HomeEntryItem => Boolean(item));
-  return items.slice(0, 2);
-});
+const sideFeatureCards: SideFeatureCard[] = [
+  {
+    id: "side-top",
+    placement: "SIDE_TOP",
+    title: "本周灵感",
+    subtitle: "这周吃点不一样",
+    imageUrl: null,
+    badgeText: "周",
+    targetType: "PAGE",
+    targetValue: "/pages_home/topic/index"
+  },
+  {
+    id: "side-bottom",
+    placement: "SIDE_BOTTOM",
+    title: "餐桌话题",
+    subtitle: "看看最近吃什么",
+    imageUrl: null,
+    badgeText: "题",
+    targetType: "PAGE",
+    targetValue: "/pages_home/table-topic/index"
+  }
+];
 const heroSlides = computed(() => {
-  const fallbackItems = [
+  return [
     {
       key: "hero-secondary",
-      entry: heroEntries.value[1] ?? heroEntries.value[0] ?? null,
+      entry: null,
       imageUrl: heroImageSecondary,
       eyebrow: "今日餐桌灵感",
-      title: heroEntries.value[1]?.title ?? "看看今天能做什么",
-      description: heroEntries.value[1]?.subtitle ?? "从首页入口继续往下安排这一顿。",
-      actionText: (heroEntries.value[1] ?? heroEntries.value[0])?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
+      title: "看看今天能做什么",
+      description: "从首页入口继续往下安排这一顿。",
+      actionText: "去看看"
     },
     {
       key: "hero-primary",
-      entry: heroEntries.value[0] ?? null,
+      entry: null,
       imageUrl: heroImagePrimary,
       eyebrow: "本周厨房主题",
-      title: heroEntries.value[0]?.title ?? "今晚吃什么？",
-      description: heroEntries.value[0]?.subtitle ?? "这一周吃什么，可以慢慢安排。",
-      actionText: heroEntries.value[0]?.targetType === "WEB_VIEW" ? "查看专题" : "去看看"
+      title: "今晚吃什么？",
+      description: "这一周吃什么，可以慢慢安排。",
+      actionText: "去看看"
     }
   ];
-  return fallbackItems;
 });
-const hasFeatureEntries = computed(() => Boolean(mainFeatureCard.value) && sideFeatureCards.value.length === 2);
 const hasQuickEntries = computed(() => quickEntryItems.value.length > 0);
-const showFeatureEntriesSkeleton = computed(() => !hasFeatureEntries.value && (homeEntriesLoading.value || !homeEntriesLoaded.value));
 const showWeekOverviewSkeleton = computed(() => sessionStore.isLoggedIn && weekOverviewLoading.value && !weekOverviewLoaded.value);
 const showFridgeRecipesSkeleton = computed(
   () =>
@@ -539,9 +530,6 @@ async function loadHomeEntries(force = false) {
     .getHomeEntries()
     .then(result => {
       const visibleItems = result.items.filter(item => isVisibleHomeEntry(item.targetValue));
-      featureEntryItems.value = visibleItems.filter(
-        item => item.placement === "MAIN" || item.placement === "SIDE_TOP" || item.placement === "SIDE_BOTTOM"
-      );
       quickEntryItems.value = visibleItems.filter(
         item => item.placement === "QUICK_1" || item.placement === "QUICK_2" || item.placement === "QUICK_3" || item.placement === "QUICK_4"
       );
@@ -549,13 +537,10 @@ async function loadHomeEntries(force = false) {
       homeEntriesRequestBlocked.value = false;
     })
     .catch(async error => {
-      if (!hasFeatureEntries.value) {
-        featureEntryItems.value = [];
-      }
       if (!hasQuickEntries.value) {
         quickEntryItems.value = [];
       }
-      homeEntriesLoaded.value = hasFeatureEntries.value || hasQuickEntries.value;
+      homeEntriesLoaded.value = hasQuickEntries.value;
       homeEntriesRequestBlocked.value = isUniRequestBlockedError(error);
       await showLoadToast(error instanceof Error ? error.message : "首页快捷入口加载失败");
     })
@@ -728,7 +713,7 @@ async function showLoadToast(title: string) {
   }).catch(() => undefined);
 }
 
-function resolveSideCardClass(placement: HomeEntryItem["placement"]) {
+function resolveSideCardClass(placement: SideFeatureCard["placement"]) {
   return placement === "SIDE_TOP" ? "feature-card--mint" : "feature-card--green";
 }
 
@@ -787,9 +772,10 @@ function isVisibleHomeEntry(targetValue: string) {
   return !HIDDEN_HOME_TARGET_PREFIXES.some(prefix => targetValue.startsWith(prefix));
 }
 
-function openHomeEntry(item: HomeEntryItem | null) {
+function openHomeEntry(item: HomeEntryLink | null) {
   if (!item) return;
-  if (requiresLoginForQuickEntry(item) && !sessionStore.isLoggedIn) {
+  const requiresQuickLogin = item.placement?.startsWith("QUICK_") && requiresLoginForQuickEntry(item as HomeEntryItem);
+  if (requiresQuickLogin && !sessionStore.isLoggedIn) {
     openLogin(() => {
       openHomeEntry(item);
     });
@@ -843,8 +829,8 @@ function openQuickEntry(item: HomeEntryItem) {
   navigateTo(pantryActiveListCount.value > 0 ? "/pages_pantry/list/index" : "/pages_pantry/gap/index");
 }
 
-function requiresLoginForQuickEntry(item: HomeEntryItem) {
-  if (item.placement !== "QUICK_1" && item.placement !== "QUICK_2" && item.placement !== "QUICK_3" && item.placement !== "QUICK_4") {
+function requiresLoginForQuickEntry(item: HomeEntryLink) {
+  if (!item.placement?.startsWith("QUICK_")) {
     return false;
   }
 
@@ -1629,31 +1615,6 @@ defineExpose({
   transform: rotate(-7deg);
 }
 
-
-.feature-card--skeleton {
-  pointer-events: none;
-}
-
-.feature-card__copy--skeleton {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12rpx;
-}
-
-.feature-card__art--skeleton {
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.feature-card__mini--skeleton {
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
 
 .feature-card__mini-text {
   color: var(--color-text);
