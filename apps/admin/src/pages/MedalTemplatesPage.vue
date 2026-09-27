@@ -10,15 +10,17 @@ import {
   type MedalCategory,
   type MedalTemplateStatus
 } from "@/apis/medal";
+import { adminAppConfig } from "@/apis/config";
 import { useAdminHeaderRefresh } from "@/composables/useAdminHeader";
 import { formatDateTime } from "@/utils/date";
 import { createOperationId } from "@/utils/operation-id";
 
 type DialogMode = "create" | "edit";
-type ImageAction = "keep" | "upload" | "clear";
+type ImageAction = "keep" | "upload" | "url" | "clear";
 type ImageState = {
   originalUrl: string;
   previewUrl: string;
+  inputUrl: string;
   file: File | null;
   action: ImageAction;
 };
@@ -35,10 +37,10 @@ const awardRuleLabelMap: Record<MedalAwardRule, string> = {
 };
 
 const categoryLabelMap: Record<MedalCategory, string> = {
-  MEAL_CHECKIN: "开饭打卡",
-  DINING_COLLABORATION: "饭局协作",
-  RECOMMENDATION_CONTRIBUTION: "推荐贡献",
-  HOLIDAY_LIMITED: "节假日限定"
+  MEAL_CHECKIN: "厨房日常",
+  DINING_COLLABORATION: "饭局相聚",
+  RECOMMENDATION_CONTRIBUTION: "好味分享",
+  HOLIDAY_LIMITED: "节日限定"
 };
 
 const statusLabelMap: Record<MedalTemplateStatus, string> = {
@@ -115,12 +117,14 @@ const imageState = reactive<Record<MedalImageType, ImageState>>({
   earned: {
     originalUrl: "",
     previewUrl: "",
+    inputUrl: "",
     file: null,
     action: "keep"
   },
   locked: {
     originalUrl: "",
     previewUrl: "",
+    inputUrl: "",
     file: null,
     action: "keep"
   }
@@ -159,9 +163,32 @@ function hasImagePreview(imageType: MedalImageType) {
 function currentImageHint(imageType: MedalImageType) {
   const state = getImageState(imageType);
   if (state.action === "upload") return "已选择新图片，保存后生效。";
+  if (state.action === "url") {
+    return isAllowedImageUrl(state.inputUrl) ? "图片地址将在保存后生效。" : "请填写已配置静态域名下的 HTTPS 图片地址。";
+  }
   if (state.action === "clear") return "当前图片将在保存后清空。";
   if (state.originalUrl) return "当前图片已生效。";
   return "当前未上传图片。";
+}
+
+function isAllowedImageUrl(value: string) {
+  const configuredBaseUrl = adminAppConfig.assetPublicBaseUrl.trim();
+  if (!configuredBaseUrl) return false;
+  try {
+    const base = new URL(configuredBaseUrl);
+    const candidate = new URL(value.trim());
+    const uploadsPrefix = `${base.pathname.replace(/\/+$/u, "")}/uploads/`;
+    return base.protocol === "https:"
+      && candidate.protocol === "https:"
+      && candidate.origin === base.origin
+      && candidate.username === ""
+      && candidate.password === ""
+      && candidate.hash === ""
+      && !/%2f|%5c/iu.test(candidate.pathname)
+      && candidate.pathname.startsWith(uploadsPrefix || "/uploads/");
+  } catch {
+    return false;
+  }
 }
 
 function revokePreviewUrl(state: ImageState) {
@@ -175,6 +202,7 @@ function resetOneImageState(imageType: MedalImageType) {
   revokePreviewUrl(state);
   state.originalUrl = "";
   state.previewUrl = "";
+  state.inputUrl = "";
   state.file = null;
   state.action = "keep";
 }
@@ -189,6 +217,7 @@ function syncImageState(imageType: MedalImageType, url: string | null) {
   resetOneImageState(imageType);
   state.originalUrl = url ?? "";
   state.previewUrl = url ?? "";
+  state.inputUrl = url ?? "";
 }
 
 function resetForm() {
@@ -280,6 +309,12 @@ function normalizeForm() {
   if (form.sortOrder < 0) throw new Error("排序不能小于 0");
   if (form.isLimited && !form.startAt) throw new Error("请设置开始时间");
   if (form.isLimited && !form.endAt) throw new Error("请设置结束时间");
+  for (const imageType of ["earned", "locked"] as MedalImageType[]) {
+    const state = getImageState(imageType);
+    if (state.action === "url" && !isAllowedImageUrl(state.inputUrl)) {
+      throw new Error("图片地址请使用已配置静态域名下的 HTTPS uploads 地址");
+    }
+  }
   return {
     awardRule: form.awardRule,
     category: form.category,
@@ -303,6 +338,14 @@ async function syncTemplateImages(template: AdminMedalTemplateSummary) {
       current = await medalApi.uploadImage(current.id, imageType, state.file, {
         operationId: createOperationId(),
         expectedVersion: current.version
+      });
+      continue;
+    }
+    if (state.action === "url" && state.inputUrl.trim()) {
+      current = await medalApi.setImageUrl(current.id, imageType, {
+        operationId: createOperationId(),
+        expectedVersion: current.version,
+        imageUrl: state.inputUrl.trim()
       });
       continue;
     }
@@ -414,8 +457,17 @@ function handleImageFileChange(imageType: MedalImageType, event: Event) {
   }
   revokePreviewUrl(state);
   state.file = file;
+  state.inputUrl = "";
   state.previewUrl = URL.createObjectURL(file);
   state.action = "upload";
+}
+
+function handleImageUrlInput(imageType: MedalImageType, value: string) {
+  const state = getImageState(imageType);
+  revokePreviewUrl(state);
+  state.file = null;
+  state.previewUrl = isAllowedImageUrl(value) ? value.trim() : "";
+  state.action = value.trim() ? "url" : state.originalUrl ? "clear" : "keep";
 }
 
 function clearSelectedImage(imageType: MedalImageType) {
@@ -423,6 +475,7 @@ function clearSelectedImage(imageType: MedalImageType) {
   if (!state.originalUrl && !state.file) return;
   revokePreviewUrl(state);
   state.file = null;
+  state.inputUrl = "";
   state.previewUrl = "";
   state.action = state.originalUrl ? "clear" : "keep";
 }
@@ -585,6 +638,13 @@ onMounted(() => {
                     <div class="table-hint">{{ currentImageHint('earned') }}</div>
                   </div>
                 </div>
+                <el-input
+                  v-model="getImageState('earned').inputUrl"
+                  class="image-url-input"
+                  clearable
+                  placeholder="粘贴已配置静态域名下的图片地址"
+                  @input="handleImageUrlInput('earned', String($event))"
+                />
               </div>
 
               <div class="image-editor-card">
@@ -602,6 +662,13 @@ onMounted(() => {
                     <div class="table-hint">{{ currentImageHint('locked') }}</div>
                   </div>
                 </div>
+                <el-input
+                  v-model="getImageState('locked').inputUrl"
+                  class="image-url-input"
+                  clearable
+                  placeholder="粘贴已配置静态域名下的图片地址"
+                  @input="handleImageUrlInput('locked', String($event))"
+                />
               </div>
             </div>
           </el-form-item>

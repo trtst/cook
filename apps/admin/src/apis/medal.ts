@@ -89,6 +89,10 @@ export interface UpdateAdminMedalTemplateImagePayload {
   expectedVersion: number;
 }
 
+export interface SetAdminMedalTemplateImageUrlPayload extends UpdateAdminMedalTemplateImagePayload {
+  imageUrl: string;
+}
+
 export const medalApi = {
   list(query: AdminMedalTemplateQuery) {
     return requestData<PageResult<AdminMedalTemplateSummary>>("/admin/medal-templates", {
@@ -127,6 +131,16 @@ export const medalApi = {
       `/admin/medal-templates/${encodeURIComponent(String(templateId))}/image/${encodeURIComponent(imageType)}`,
       formData,
       {
+        idempotencyKey: body.operationId
+      }
+    );
+  },
+  setImageUrl(templateId: UUID, imageType: MedalImageType, body: SetAdminMedalTemplateImageUrlPayload) {
+    return requestData<AdminMedalTemplateSummary>(
+      `/admin/medal-templates/${encodeURIComponent(String(templateId))}/image/${encodeURIComponent(imageType)}`,
+      {
+        method: "PUT",
+        body: { expectedVersion: body.expectedVersion, imageUrl: body.imageUrl },
         idempotencyKey: body.operationId
       }
     );
