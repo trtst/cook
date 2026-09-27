@@ -44,7 +44,7 @@ describe("pages_me/medal-detail/index", () => {
 
     const state = await page.callMethod("automatorReadDetailState");
     expect(state.title).toBe(fixture.templates.meal.name);
-    expect(state.categoryName).toBe("开饭打卡");
+    expect(state.categoryName).toBe("厨房日常");
     expect(state.earned).toBe(true);
     expect(state.statusText).toBe("已点亮");
     expect(state.statusHint).toContain("获得于");
@@ -60,7 +60,7 @@ describe("pages_me/medal-detail/index", () => {
     expect(texts).toContain("所属类别");
     expect(texts).toContain("当前状态");
     expect(texts).toContain(fixture.templates.meal.condition);
-    expect(texts).toContain("开饭打卡");
+    expect(texts).toContain("厨房日常");
   });
 
   it("未获得勋章详情页会明确显示尚未获得", async () => {
@@ -68,7 +68,7 @@ describe("pages_me/medal-detail/index", () => {
     const state = await page.callMethod("automatorReadDetailState");
 
     expect(state.title).toBe(fixture.templates.locked.name);
-    expect(state.categoryName).toBe("节假日限定");
+    expect(state.categoryName).toBe("节日限定");
     expect(state.earned).toBe(false);
     expect(state.statusText).toBe("待点亮");
     expect(state.statusHint).toBe("达成条件后自动点亮");
@@ -76,6 +76,6 @@ describe("pages_me/medal-detail/index", () => {
     const texts = await collectTexts(page);
     expect(texts.some((item) => item.includes("尚未获得"))).toBe(true);
     expect(texts).toContain(fixture.templates.locked.name);
-    expect(texts).toContain("节假日限定");
+    expect(texts).toContain("节日限定");
   });
 });

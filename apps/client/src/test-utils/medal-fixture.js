@@ -434,12 +434,12 @@ async function createMedalFixture() {
     eventId: event.id,
     ownerWall,
     templates: {
-      meal: { code: templates.meal.code, name: templates.meal.name, condition: templates.meal.condition, categoryName: "开饭打卡" },
-      event: { code: templates.event.code, name: templates.event.name, condition: templates.event.condition, categoryName: "饭局协作" },
-      group: { code: templates.group.code, name: templates.group.name, condition: templates.group.condition, categoryName: "饭局协作" },
-      fullLoop: { code: templates.fullLoop.code, name: templates.fullLoop.name, condition: templates.fullLoop.condition, categoryName: "开饭打卡" },
-      locked: { code: templates.locked.code, name: templates.locked.name, condition: templates.locked.condition, categoryName: "节假日限定" },
-      hidden: { code: templates.hidden.code, name: templates.hidden.name, condition: templates.hidden.condition, categoryName: "推荐贡献" }
+      meal: { code: templates.meal.code, name: templates.meal.name, condition: templates.meal.condition, categoryName: "厨房日常" },
+      event: { code: templates.event.code, name: templates.event.name, condition: templates.event.condition, categoryName: "饭局相聚" },
+      group: { code: templates.group.code, name: templates.group.name, condition: templates.group.condition, categoryName: "饭局相聚" },
+      fullLoop: { code: templates.fullLoop.code, name: templates.fullLoop.name, condition: templates.fullLoop.condition, categoryName: "厨房日常" },
+      locked: { code: templates.locked.code, name: templates.locked.name, condition: templates.locked.condition, categoryName: "节日限定" },
+      hidden: { code: templates.hidden.code, name: templates.hidden.name, condition: templates.hidden.condition, categoryName: "好味分享" }
     }
   };
 }

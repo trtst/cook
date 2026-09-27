@@ -57,9 +57,9 @@ describe("pages_me/medal/index", () => {
 
     const categoryNames = state.categories.map((item) => item.name);
     expect(categoryNames).toContain("全部");
-    expect(categoryNames).toContain("开饭打卡");
-    expect(categoryNames).toContain("饭局协作");
-    expect(categoryNames).toContain("节假日限定");
+    expect(categoryNames).toContain("厨房日常");
+    expect(categoryNames).toContain("饭局相聚");
+    expect(categoryNames).toContain("节日限定");
 
     const mealItem = state.items.find((item) => item.code === fixture.templates.meal.code);
     const eventItem = state.items.find((item) => item.code === fixture.templates.event.code);
@@ -70,25 +70,25 @@ describe("pages_me/medal/index", () => {
     expect(mealItem).toMatchObject({
       name: fixture.templates.meal.name,
       earned: true,
-      categoryName: "开饭打卡",
+      categoryName: "厨房日常",
       state: "已点亮"
     });
     expect(eventItem).toMatchObject({
       name: fixture.templates.event.name,
       earned: true,
-      categoryName: "饭局协作",
+      categoryName: "饭局相聚",
       state: "已点亮"
     });
     expect(fullLoopItem).toMatchObject({
       name: fixture.templates.fullLoop.name,
       earned: true,
-      categoryName: "开饭打卡",
+      categoryName: "厨房日常",
       state: "已点亮"
     });
     expect(lockedItem).toMatchObject({
       name: fixture.templates.locked.name,
       earned: false,
-      categoryName: "节假日限定",
+      categoryName: "节日限定",
       state: "待点亮"
     });
     expect(hiddenItem).toBeUndefined();
@@ -97,9 +97,9 @@ describe("pages_me/medal/index", () => {
     expect(texts).toContain("我的勋章");
     expect(texts).toContain("认真做饭，也值得被记录");
     expect(await page.$$(".hero-card__count-meta")).toHaveLength(0);
-    expect(texts).toContain("开饭打卡");
-    expect(texts).toContain("饭局协作");
-    expect(texts).toContain("节假日限定");
+    expect(texts).toContain("厨房日常");
+    expect(texts).toContain("饭局相聚");
+    expect(texts).toContain("节日限定");
     expect(texts).toContain(fixture.templates.meal.name);
     expect(texts).toContain(fixture.templates.locked.name);
   });
