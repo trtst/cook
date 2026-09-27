@@ -4,6 +4,7 @@ import type {
   AdminMedalTemplateSummary,
   DiningEventShareLinkResponse,
   DiningEventSummary,
+  DiningMemoryShareSnapshot,
   IngredientSummary,
   MedalWallResponse,
   MealPlanSummary,
@@ -435,6 +436,14 @@ async function createDiningEvent(ownerAuth: Record<string, string>, planId: numb
   });
 }
 
+async function confirmMealPlanMenu(ownerAuth: Record<string, string>, plan: MealPlanSummary) {
+  return requestData<MealPlanSummary>(`/meal-plans/${plan.id}/confirm-menu`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ expectedVersion: plan.version })
+  });
+}
+
 async function createEventGapShopping(ownerAuth: Record<string, string>, eventId: number) {
   const list = await requestData<ShoppingListDetail>("/shopping-lists", {
     method: "POST",
@@ -468,6 +477,53 @@ async function createEventGapShopping(ownerAuth: Record<string, string>, eventId
   };
 }
 
+async function createAndCompleteManualShopping(ownerAuth: Record<string, string>, suffix: string) {
+  const list = await requestData<ShoppingListDetail>("/shopping-lists", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ name: `勋章验收日采购-${suffix}` })
+  });
+  const withItem = await requestData<ShoppingListDetail>(`/shopping-lists/${list.id}/items`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ name: `验收食材-${suffix}`, ingredientId: null })
+  });
+  const checked = await requestData<ShoppingListDetail>(`/shopping-lists/${list.id}/check-all`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ version: withItem.version })
+  });
+  return requestData<ShoppingListDetail>(`/shopping-lists/${list.id}/complete`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ version: checked.version })
+  });
+}
+
+async function completeShopping(ownerAuth: Record<string, string>, listId: number, version: number) {
+  return requestData<ShoppingListDetail>(`/shopping-lists/${listId}/complete`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ version })
+  });
+}
+
+async function markFridgePresent(ownerAuth: Record<string, string>, name: string) {
+  return requestData<unknown>("/fridge-traces/present", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ ingredientId: null, name })
+  });
+}
+
+async function markFridgeEmpty(ownerAuth: Record<string, string>, name: string) {
+  return requestData<unknown>("/fridge-traces/empty", {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ ingredientId: null, name })
+  });
+}
+
 async function createShareAndJoin(ownerAuth: Record<string, string>, memberAuth: Record<string, string>, eventId: number, memberUid: number) {
   const shareLink = await requestData<DiningEventShareLinkResponse>(`/dining-events/${eventId}/share-link`, {
     method: "POST",
@@ -491,6 +547,30 @@ async function completeDiningEvent(ownerAuth: Record<string, string>, eventId: n
   return requestData<DiningEventSummary>(`/dining-events/${eventId}/complete`, {
     method: "POST",
     headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({})
+  });
+}
+
+async function prepareDiningEvent(ownerAuth: Record<string, string>, eventId: number) {
+  return requestData<DiningEventSummary>(`/dining-events/${eventId}/prepare`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({})
+  });
+}
+
+async function createDiningMemoryShare(ownerAuth: Record<string, string>, eventId: number) {
+  return requestData<DiningMemoryShareSnapshot>(`/dining-events/${eventId}/memory-shares`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({ showParticipants: true, caption: null })
+  });
+}
+
+async function recordMemoryShareStarted(auth: Record<string, string>, eventId: number, operationId = nextIdempotencyKey()) {
+  return requestData<{ recorded: boolean }>(`/dining-events/${eventId}/memory-share-started`, {
+    method: "POST",
+    headers: withIdempotencyKey(auth, operationId),
     body: JSON.stringify({})
   });
 }
@@ -572,6 +652,66 @@ async function main() {
     targetCount: 1,
     sortOrder: 13
   });
+  const shoppingTemplate = await createMedalTemplate(adminSession.token, {
+    awardRule: "SHOPPING_COMPLETION",
+    category: "MEAL_CHECKIN",
+    name: `勋章联调采购${suffix}`,
+    description: "完成采购清单后自动点亮。",
+    condition: "真实完成 1 张非空采购清单",
+    status: "LISTED",
+    targetCount: 1,
+    sortOrder: 14
+  });
+  const shoppingCapTemplate = await createMedalTemplate(adminSession.token, {
+    awardRule: "SHOPPING_COMPLETION",
+    category: "MEAL_CHECKIN",
+    name: `勋章联调采购日上限${suffix}`,
+    description: "每天最多统计两张采购清单。",
+    condition: "真实完成 3 张采购清单",
+    status: "LISTED",
+    targetCount: 3,
+    sortOrder: 15
+  });
+  const fridgeTemplate = await createMedalTemplate(adminSession.token, {
+    awardRule: "FRIDGE_MAINTENANCE",
+    category: "MEAL_CHECKIN",
+    name: `勋章联调食材维护${suffix}`,
+    description: "持续维护食材库后自动点亮。",
+    condition: "食材库真实变化 1 个自然周",
+    status: "LISTED",
+    targetCount: 1,
+    sortOrder: 16
+  });
+  const fridgeWeeklyCapTemplate = await createMedalTemplate(adminSession.token, {
+    awardRule: "FRIDGE_MAINTENANCE",
+    category: "MEAL_CHECKIN",
+    name: `勋章联调食材维护周上限${suffix}`,
+    description: "每个自然周最多统计一次。",
+    condition: "食材库真实变化 2 个自然周",
+    status: "LISTED",
+    targetCount: 2,
+    sortOrder: 17
+  });
+  const memoryShareTemplate = await createMedalTemplate(adminSession.token, {
+    awardRule: "MEMORY_SHARE_STARTED_TOTAL",
+    category: "DINING_COLLABORATION",
+    name: `勋章联调回忆分享${suffix}`,
+    description: "完成饭局后发起回忆分享自动点亮。",
+    condition: "发起 1 场回忆分享",
+    status: "LISTED",
+    targetCount: 1,
+    sortOrder: 18
+  });
+  const memoryShareCapTemplate = await createMedalTemplate(adminSession.token, {
+    awardRule: "MEMORY_SHARE_STARTED_TOTAL",
+    category: "DINING_COLLABORATION",
+    name: `勋章联调回忆分享去重${suffix}`,
+    description: "同一场饭局最多统计一次。",
+    condition: "发起 2 场不同饭局的回忆分享",
+    status: "LISTED",
+    targetCount: 2,
+    sortOrder: 19
+  });
   const hiddenTemplate = await createMedalTemplate(adminSession.token, {
     awardRule: "RECOMMENDATION_ADOPTED_TOTAL",
     category: "RECOMMENDATION_CONTRIBUTION",
@@ -580,13 +720,26 @@ async function main() {
     condition: "真实推荐收录 1 次",
     status: "UNLISTED",
     targetCount: 1,
-    sortOrder: 14
+    sortOrder: 20
   });
 
   const listAfter = await listMedalTemplates(adminSession.token);
-  const createdTemplateIds = [mealTemplate.id, eventTemplate.id, groupTemplate.id, fullLoopTemplate.id, hiddenTemplate.id];
+  const listCreated = await listMedalTemplates(adminSession.token, suffix);
+  const createdTemplateIds = [
+    mealTemplate.id,
+    eventTemplate.id,
+    groupTemplate.id,
+    fullLoopTemplate.id,
+    shoppingTemplate.id,
+    shoppingCapTemplate.id,
+    fridgeTemplate.id,
+    fridgeWeeklyCapTemplate.id,
+    memoryShareTemplate.id,
+    memoryShareCapTemplate.id,
+    hiddenTemplate.id
+  ];
   assert(
-    createdTemplateIds.every(templateId => listAfter.items.some(item => item.id === templateId)),
+    createdTemplateIds.every(templateId => listCreated.items.some(item => item.id === templateId)),
     "created medal templates should be readable from admin list"
   );
 
@@ -606,6 +759,12 @@ async function main() {
   assert(findWallItem(ownerWallBefore, eventTemplate.code)?.earned === false, "event template should be visible and locked before completion");
   assert(findWallItem(ownerWallBefore, groupTemplate.code)?.earned === false, "group template should be visible and locked before completion");
   assert(findWallItem(ownerWallBefore, fullLoopTemplate.code)?.earned === false, "full-loop template should be visible and locked before completion");
+  assert(findWallItem(ownerWallBefore, shoppingTemplate.code)?.earned === false, "shopping template should be visible and locked before completion");
+  assert(findWallItem(ownerWallBefore, shoppingCapTemplate.code)?.earned === false, "shopping-cap template should be visible and locked before completion");
+  assert(findWallItem(ownerWallBefore, fridgeTemplate.code)?.earned === false, "fridge template should be visible and locked before completion");
+  assert(findWallItem(ownerWallBefore, fridgeWeeklyCapTemplate.code)?.earned === false, "fridge weekly-cap template should be visible and locked before completion");
+  assert(findWallItem(ownerWallBefore, memoryShareTemplate.code)?.earned === false, "memory-share template should be visible and locked before completion");
+  assert(findWallItem(ownerWallBefore, memoryShareCapTemplate.code)?.earned === false, "memory-share cap template should be visible and locked before completion");
   assert(findWallItem(ownerWallBefore, hiddenTemplate.code) === null, "unlisted unearned template should stay hidden");
 
   const viewerWallResult = await getCurrentMedals(viewer.token);
@@ -613,12 +772,50 @@ async function main() {
   assert(findWallItem(viewerWallResult.body.data, hiddenTemplate.code) === null, "fresh viewer should not see hidden template");
 
   const recipe = await createOwnerRecipe(ownerAuth);
-  const plan = await createMealPlan(ownerAuth, recipe);
+  const draftPlan = await createMealPlan(ownerAuth, recipe);
+  const plan = await confirmMealPlanMenu(ownerAuth, draftPlan);
   const event = await createDiningEvent(ownerAuth, plan.id);
   const shareTokenPath = await createShareAndJoin(ownerAuth, memberAuth, event.id, member.user.uid);
+  const unpreparedResult = await request<DiningEventSummary>(`/dining-events/${event.id}/prepare`, {
+    method: "POST",
+    headers: withIdempotencyKey(ownerAuth),
+    body: JSON.stringify({})
+  });
+  assert(unpreparedResult.body.code === 409, "event preparation should reject still-open ingredients");
   const shopping = await createEventGapShopping(ownerAuth, event.id);
+  const shoppingCompleted = await completeShopping(ownerAuth, shopping.listId, shopping.version);
+  assert(shoppingCompleted.status === "COMPLETED", "non-empty purchased shopping list should become COMPLETED");
+  await createAndCompleteManualShopping(ownerAuth, nextIdempotencyKey().slice(-6));
+  await createAndCompleteManualShopping(ownerAuth, nextIdempotencyKey().slice(-6));
+
+  const fridgeName = `勋章验收食材-${suffix}`;
+  await markFridgePresent(ownerAuth, fridgeName);
+  await markFridgePresent(ownerAuth, fridgeName);
+  await markFridgeEmpty(ownerAuth, fridgeName);
+  await markFridgeEmpty(ownerAuth, fridgeName);
+  await markFridgePresent(ownerAuth, `勋章验收食材变化-${suffix}`);
+
+  const preparedEvent = await prepareDiningEvent(ownerAuth, event.id);
+  assert(Boolean(preparedEvent.ingredientsReadyAt), "event preparation should be confirmed before meal completion");
   const completedEvent = await completeDiningEvent(ownerAuth, event.id);
   assert(completedEvent.status === "COMPLETED", "dining event should become COMPLETED");
+  await createDiningMemoryShare(ownerAuth, event.id);
+  const memoryShareOperationId = nextIdempotencyKey();
+  const firstMemoryShare = await recordMemoryShareStarted(ownerAuth, event.id, memoryShareOperationId);
+  const idempotentMemoryShareReplay = await recordMemoryShareStarted(ownerAuth, event.id, memoryShareOperationId);
+  const repeatedMemoryShare = await recordMemoryShareStarted(ownerAuth, event.id);
+  assert(firstMemoryShare.recorded, "first event memory share should be recorded");
+  assert(idempotentMemoryShareReplay.recorded, "same memory-share idempotency key should replay the original response");
+  assert(!repeatedMemoryShare.recorded, "repeated event memory share should be deduplicated");
+  const unauthorizedMemoryShare = await request<{ recorded: boolean }>(`/dining-events/${event.id}/memory-share-started`, {
+    method: "POST",
+    headers: withIdempotencyKey(memberAuth),
+    body: JSON.stringify({})
+  });
+  assert(
+    unauthorizedMemoryShare.status === 200 && unauthorizedMemoryShare.body.code === 404,
+    `non-organizer should not record event memory share (HTTP ${unauthorizedMemoryShare.status}, code ${unauthorizedMemoryShare.body.code})`
+  );
   const completedPlan = await completeMealPlan(ownerAuth, plan.id);
   assert(completedPlan.status === "COMPLETED", "meal plan should become COMPLETED");
 
@@ -629,6 +826,12 @@ async function main() {
   assert(findWallItem(ownerWallAfter, eventTemplate.code)?.earned === true, "owner should earn dining event medal");
   assert(findWallItem(ownerWallAfter, groupTemplate.code)?.earned === true, "owner should earn group dining medal");
   assert(findWallItem(ownerWallAfter, fullLoopTemplate.code)?.earned === true, "owner should earn full loop medal");
+  assert(findWallItem(ownerWallAfter, shoppingTemplate.code)?.earned === true, "owner should earn shopping completion medal");
+  assert(findWallItem(ownerWallAfter, shoppingCapTemplate.code)?.earned === false, "daily shopping cap should prevent three medals from counting in one day");
+  assert(findWallItem(ownerWallAfter, fridgeTemplate.code)?.earned === true, "owner should earn fridge maintenance medal after a real change");
+  assert(findWallItem(ownerWallAfter, fridgeWeeklyCapTemplate.code)?.earned === false, "multiple fridge changes in one week should count only once");
+  assert(findWallItem(ownerWallAfter, memoryShareTemplate.code)?.earned === true, "owner should earn memory-share medal after first share start");
+  assert(findWallItem(ownerWallAfter, memoryShareCapTemplate.code)?.earned === false, "repeated memory share for one event should count only once");
   assert(findWallItem(ownerWallAfter, hiddenTemplate.code) === null, "hidden template should remain invisible when unearned");
 
   const memberWallAfterResult = await getCurrentMedals(member.token);
@@ -636,8 +839,9 @@ async function main() {
   const memberWallAfter = memberWallAfterResult.body.data;
   assert(findWallItem(memberWallAfter, eventTemplate.code)?.earned === true, "accepted member should earn dining event medal");
   assert(findWallItem(memberWallAfter, groupTemplate.code)?.earned === false, "accepted member should not earn owner-only group medal");
-  assert(findWallItem(memberWallAfter, mealTemplate.code)?.earned === false, "accepted member should not earn owner meal medal");
+  assert(findWallItem(memberWallAfter, mealTemplate.code)?.earned === true, "accepted member should earn meal completion medal");
   assert(findWallItem(memberWallAfter, fullLoopTemplate.code)?.earned === false, "accepted member should not earn owner full-loop medal");
+  assert(findWallItem(memberWallAfter, memoryShareTemplate.code)?.earned === false, "accepted member should not earn organizer-only memory-share medal");
 
   console.log(
     JSON.stringify(

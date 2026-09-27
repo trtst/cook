@@ -52,7 +52,8 @@ import { EntitlementService } from "../entitlement/entitlement.service";
 import { formatRecipeAmount, fromJson, versionToContent } from "../recipe/recipe-content";
 import { isPublicInspirationRecipe } from "../recipe/public-content-user-pool";
 import { IngredientImageService } from "../admin/ingredient-image.service";
-import { fridgeTraceLabel, fridgeTraceWindowDays, type FridgeTraceKind } from "./pantry.fridge-trace";
+import { fridgeTraceLabel, fridgeTraceWindowDays, isFridgeTraceVisible, type FridgeTraceKind } from "./pantry.fridge-trace";
+import { MedalService } from "../user/medal.service";
 
 function toIsoDate(value: Date) {
   return value.toISOString();
@@ -215,7 +216,8 @@ export class PantryService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(EntitlementService) private readonly entitlementService: EntitlementService,
-    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService
+    @Inject(IngredientImageService) private readonly ingredientImageService: IngredientImageService,
+    @Inject(MedalService) private readonly medalService: MedalService
   ) {}
 
   async listFridgeTraces(userId: UUID, page: number, pageSize: number): Promise<PageResult<FridgeTraceIngredientSummary>> {
@@ -341,21 +343,31 @@ export class PantryService {
       const repeated = await getIdempotentResult<FridgeTraceSummary>(tx, operationId, "fridge-trace:present", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "fridge-trace:present", userId, null, requestHash);
-      const categories = await this.loadFridgeCategoryMap(tx, userId, [ingredientId]);
-      const category = ingredientId === null ? undefined : categories.get(ingredientId);
-      const safeIngredientId = category ? ingredientId : null;
-      const created = await tx.fridgeTrace.create({
-        data: {
-          userId,
-          ingredientId: safeIngredientId,
-          kind: "MANUAL_PRESENT",
-          name: normalizedName,
-          categoryName: category?.name ?? null,
-          categoryCode: category?.code ?? null
+      await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
+      const now = new Date();
+      const item = (await this.getFridgeManualChanges(tx, userId, [{ ingredientId, name: normalizedName }], "PRESENT", now))[0];
+      if (!item) throw new BadRequestException("没有可维护的食材");
+      let result: FridgeTraceSummary;
+      if (!item.changed && item.previous) {
+        result = this.toFridgeTraceSummary(item.previous);
+      } else {
+        const created = await tx.fridgeTrace.create({
+          data: {
+            userId,
+            ingredientId: item.ingredientId,
+            kind: "MANUAL_PRESENT",
+            name: normalizedName,
+            categoryName: item.category?.name ?? null,
+            categoryCode: item.category?.code ?? null,
+            createdAt: now
+          }
+        });
+        await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: item.ingredientId, name: normalizedName }]);
+        if (item.maintenanceEligible) {
+          await this.recordFridgeMaintenance(tx, userId, operationId, "ADDED", now);
         }
-      });
-      await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: safeIngredientId, name: normalizedName }]);
-      const result = this.toFridgeTraceSummary(created);
+        result = this.toFridgeTraceSummary(created);
+      }
       await completeIdempotentOperation(tx, operationId, "fridge-trace:present", userId, null, requestHash, result);
       return result;
     });
@@ -383,27 +395,38 @@ export class PantryService {
       const repeated = await getIdempotentResult<FridgeTraceSummary[]>(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash);
-      const categories = await this.loadFridgeCategoryMap(tx, userId, normalizedItems.map(item => item.ingredientId));
+      await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
+      const now = new Date();
+      const mutations = await this.getFridgeManualChanges(tx, userId, normalizedItems, "PRESENT", now);
       const result: FridgeTraceSummary[] = [];
-      for (const item of normalizedItems) {
-        const category = item.ingredientId === null ? undefined : categories.get(item.ingredientId);
-        const safeIngredientId = category ? item.ingredientId : null;
+      const changedItems: Array<{ ingredientId: UUID | null; name: string }> = [];
+      let hasMaintenanceChange = false;
+      for (const item of mutations) {
+        if (!item.changed && item.previous) {
+          result.push(this.toFridgeTraceSummary(item.previous));
+          continue;
+        }
         const created = await tx.fridgeTrace.create({
           data: {
             userId,
-            ingredientId: safeIngredientId,
+            ingredientId: item.ingredientId,
             kind: "MANUAL_PRESENT",
             name: item.name,
-            categoryName: category?.name ?? null,
-            categoryCode: category?.code ?? null
+            categoryName: item.category?.name ?? null,
+            categoryCode: item.category?.code ?? null,
+            createdAt: now
           }
         });
         result.push(this.toFridgeTraceSummary(created));
+        changedItems.push({ ingredientId: item.ingredientId, name: item.name });
+        hasMaintenanceChange ||= item.maintenanceEligible;
       }
-      await this.compactFridgeTraceHistory(tx, userId, normalizedItems.map(item => ({
-        ...item,
-        ingredientId: item.ingredientId !== null && categories.has(item.ingredientId) ? item.ingredientId : null
-      })));
+      if (changedItems.length) {
+        await this.compactFridgeTraceHistory(tx, userId, changedItems);
+      }
+      if (hasMaintenanceChange) {
+        await this.recordFridgeMaintenance(tx, userId, operationId, "ADDED", now);
+      }
       await completeIdempotentOperation(tx, operationId, "fridge-trace:present:batch", userId, null, requestHash, result);
       return result;
     });
@@ -431,27 +454,38 @@ export class PantryService {
       const repeated = await getIdempotentResult<FridgeTraceSummary[]>(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash);
-      const categories = await this.loadFridgeCategoryMap(tx, userId, normalizedItems.map(item => item.ingredientId));
+      await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
+      const now = new Date();
+      const mutations = await this.getFridgeManualChanges(tx, userId, normalizedItems, "EMPTY", now);
       const result: FridgeTraceSummary[] = [];
-      for (const item of normalizedItems) {
-        const category = item.ingredientId === null ? undefined : categories.get(item.ingredientId);
-        const safeIngredientId = category ? item.ingredientId : null;
+      const changedItems: Array<{ ingredientId: UUID | null; name: string }> = [];
+      let hasMaintenanceChange = false;
+      for (const item of mutations) {
+        if (!item.changed && item.previous) {
+          result.push(this.toFridgeTraceSummary(item.previous));
+          continue;
+        }
         const created = await tx.fridgeTrace.create({
           data: {
             userId,
-            ingredientId: safeIngredientId,
+            ingredientId: item.ingredientId,
             kind: "MANUAL_EMPTY",
             name: item.name,
-            categoryName: category?.name ?? null,
-            categoryCode: category?.code ?? null
+            categoryName: item.category?.name ?? null,
+            categoryCode: item.category?.code ?? null,
+            createdAt: now
           }
         });
         result.push(this.toFridgeTraceSummary(created));
+        changedItems.push({ ingredientId: item.ingredientId, name: item.name });
+        hasMaintenanceChange ||= item.maintenanceEligible;
       }
-      await this.compactFridgeTraceHistory(tx, userId, normalizedItems.map(item => ({
-        ...item,
-        ingredientId: item.ingredientId !== null && categories.has(item.ingredientId) ? item.ingredientId : null
-      })));
+      if (changedItems.length) {
+        await this.compactFridgeTraceHistory(tx, userId, changedItems);
+      }
+      if (hasMaintenanceChange) {
+        await this.recordFridgeMaintenance(tx, userId, operationId, "REMOVED", now);
+      }
       await completeIdempotentOperation(tx, operationId, "fridge-trace:empty:batch", userId, null, requestHash, result);
       return result;
     });
@@ -471,21 +505,31 @@ export class PantryService {
       const repeated = await getIdempotentResult<FridgeTraceSummary>(tx, operationId, "fridge-trace:empty", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "fridge-trace:empty", userId, null, requestHash);
-      const categories = await this.loadFridgeCategoryMap(tx, userId, [ingredientId]);
-      const category = ingredientId === null ? undefined : categories.get(ingredientId);
-      const safeIngredientId = category ? ingredientId : null;
-      const created = await tx.fridgeTrace.create({
-        data: {
-          userId,
-          ingredientId: safeIngredientId,
-          kind: "MANUAL_EMPTY",
-          name: normalizedName,
-          categoryName: category?.name ?? null,
-          categoryCode: category?.code ?? null
+      await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
+      const now = new Date();
+      const item = (await this.getFridgeManualChanges(tx, userId, [{ ingredientId, name: normalizedName }], "EMPTY", now))[0];
+      if (!item) throw new BadRequestException("没有可维护的食材");
+      let result: FridgeTraceSummary;
+      if (!item.changed && item.previous) {
+        result = this.toFridgeTraceSummary(item.previous);
+      } else {
+        const created = await tx.fridgeTrace.create({
+          data: {
+            userId,
+            ingredientId: item.ingredientId,
+            kind: "MANUAL_EMPTY",
+            name: normalizedName,
+            categoryName: item.category?.name ?? null,
+            categoryCode: item.category?.code ?? null,
+            createdAt: now
+          }
+        });
+        await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: item.ingredientId, name: normalizedName }]);
+        if (item.maintenanceEligible) {
+          await this.recordFridgeMaintenance(tx, userId, operationId, "REMOVED", now);
         }
-      });
-      await this.compactFridgeTraceHistory(tx, userId, [{ ingredientId: safeIngredientId, name: normalizedName }]);
-      const result = this.toFridgeTraceSummary(created);
+        result = this.toFridgeTraceSummary(created);
+      }
       await completeIdempotentOperation(tx, operationId, "fridge-trace:empty", userId, null, requestHash, result);
       return result;
     });
@@ -499,6 +543,64 @@ export class PantryService {
       select: { id: true, category: { select: { name: true, code: true } } }
     });
     return new Map(ingredients.map(ingredient => [ingredient.id, ingredient.category]));
+  }
+
+  private async getFridgeManualChanges(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    items: Array<{ ingredientId: UUID | null; name: string }>,
+    target: "PRESENT" | "EMPTY",
+    now: Date
+  ) {
+    const categories = await this.loadFridgeCategoryMap(tx, userId, items.map(item => item.ingredientId));
+    const candidates = items.map(item => {
+      const category = item.ingredientId === null ? undefined : categories.get(item.ingredientId);
+      const ingredientId = category ? item.ingredientId : null;
+      return {
+        ingredientId,
+        name: item.name,
+        category,
+        identityKey: ingredientId === null ? `name:${normalizeNameKey(item.name)}` : `ingredient:${ingredientId}`
+      };
+    });
+    const ingredientIds = [...new Set(candidates.flatMap(item => item.ingredientId === null ? [] : [item.ingredientId]))];
+    const names = [...new Set(candidates.filter(item => item.ingredientId === null).map(item => item.name))];
+    const identities: Prisma.FridgeTraceWhereInput[] = [
+      ...(ingredientIds.length ? [{ ingredientId: { in: ingredientIds } }] : []),
+      ...(names.length ? [{ ingredientId: null, name: { in: names, mode: "insensitive" as const } }] : [])
+    ];
+    const traces = await tx.fridgeTrace.findMany({
+      where: { userId, OR: identities },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true, ingredientId: true, name: true, categoryName: true, categoryCode: true, kind: true, createdAt: true }
+    });
+    const latestByKey = new Map<string, (typeof traces)[number]>();
+    for (const trace of traces) {
+      const key = trace.ingredientId === null ? `name:${normalizeNameKey(trace.name)}` : `ingredient:${trace.ingredientId}`;
+      if (!latestByKey.has(key)) latestByKey.set(key, trace);
+    }
+    return candidates.map(item => {
+      const previous = latestByKey.get(item.identityKey) ?? null;
+      const recent = previous && isFridgeTraceVisible(previous.createdAt, previous.categoryName, now, previous.categoryCode);
+      const previousPresence = !recent || previous.kind === "USED"
+        ? "UNKNOWN"
+        : previous.kind === "MANUAL_EMPTY" ? "EMPTY" : "PRESENT";
+      const maintenanceEligible = target === "PRESENT"
+        ? previousPresence !== "PRESENT" && !(recent && previous.kind === "USED")
+        : previousPresence === "PRESENT";
+      return { ...item, previous, changed: previousPresence !== target, maintenanceEligible };
+    });
+  }
+
+  private async recordFridgeMaintenance(
+    tx: Prisma.TransactionClient,
+    userId: UUID,
+    operationId: OperationId,
+    action: "ADDED" | "REMOVED",
+    createdAt: Date
+  ) {
+    await tx.fridgeMaintenanceEvent.create({ data: { userId, operationId, action, createdAt } });
+    await this.medalService.awardFridgeMaintenance(tx, userId, createdAt);
   }
 
   private async compactFridgeTraceHistory(
@@ -1383,6 +1485,7 @@ export class PantryService {
       const repeated = await getIdempotentResult<ShoppingListDetail>(tx, operationId, "shopping-list:complete", userId, null, requestHash);
       if (repeated) return repeated;
       await startIdempotentOperation(tx, operationId, "shopping-list:complete", userId, null, requestHash);
+      await tx.$queryRaw`SELECT "id" FROM "users" WHERE "id" = ${userId} FOR UPDATE`;
       const access = await this.assertShoppingListOwner(tx, userId, listId);
       this.assertShoppingListVersion(access.version, version);
       if (access.status !== "ACTIVE") {
@@ -1421,6 +1524,7 @@ export class PantryService {
         throw new ConflictException("清单内容已变化，请刷新后重试");
       }
       await this.closeShoppingShareInTx(tx, listId);
+      await this.medalService.awardShoppingCompletion(tx, userId, now);
       const result = await this.loadShoppingListDetailFromTx(tx, userId, listId);
       await completeIdempotentOperation(tx, operationId, "shopping-list:complete", userId, null, requestHash, result);
       return result;

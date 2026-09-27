@@ -13,7 +13,7 @@ test("shopping source metadata classifies public recipes by inspiration state, n
 });
 
 test("new shopping data resolves a historical merged ingredient to its active target", async () => {
-  const service = new PantryService({} as never, {} as never, {} as never);
+  const service = new PantryService({} as never, {} as never, {} as never, {} as never);
   const ingredients = [{
     ingredientId: 10000024,
     ingredientName: "长茄子",
@@ -57,7 +57,7 @@ test("new shopping data resolves a historical merged ingredient to its active ta
 });
 
 test("new shopping data rejects a merged ingredient whose target is not a system ingredient", async () => {
-  const service = new PantryService({} as never, {} as never, {} as never);
+  const service = new PantryService({} as never, {} as never, {} as never, {} as never);
   const tx = {
     ingredient: {
       findMany: async () => [{

@@ -24,7 +24,7 @@ test("已取消计划不能记录做饭食材痕迹", async () => {
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
-  } as never, {} as never, {} as never);
+  } as never, {} as never, {} as never, {} as never);
 
   await assert.rejects(
     service.completeMealCookingTrace(9, 55, "123457"),
@@ -92,7 +92,7 @@ test("饭局完成写入用过痕迹后清理更旧的同食材痕迹", async ()
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
-  } as never, {} as never, {} as never);
+  } as never, {} as never, {} as never, {} as never);
 
   const result = await service.completeMealCookingTrace(9, 55, "123456");
 

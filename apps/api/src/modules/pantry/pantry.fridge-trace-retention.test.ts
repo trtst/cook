@@ -11,6 +11,8 @@ test("new food status keeps only the latest status, purchase, and use trace", as
     { id: 3, userId: 9, ingredientId: 7, name: "芹菜", kind: "USED", createdAt: new Date(now - day) }
   ];
   const removedIds: number[] = [];
+  const maintenanceEvents: Array<Record<string, unknown>> = [];
+  let medalAwardCount = 0;
   const tx = {
     $queryRaw: async () => [],
     ingredient: {
@@ -40,11 +42,17 @@ test("new food status keeps only the latest status, purchase, and use trace", as
         }
         return { count: where.id.in.length };
       }
+    },
+    fridgeMaintenanceEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        maintenanceEvents.push(data);
+        return data;
+      }
     }
   };
   const service = new PantryService({
     $transaction: async (run: (client: typeof tx) => Promise<unknown>) => run(tx)
-  } as never, {} as never, {} as never);
+  } as never, {} as never, {} as never, { awardFridgeMaintenance: async () => { medalAwardCount += 1; } } as never);
 
   await service.markFridgeTraceEmpty(9, "123456", 7, "芹菜", "蔬果菌菇");
 
@@ -54,4 +62,6 @@ test("new food status keeps only the latest status, purchase, and use trace", as
     [3, "USED"],
     [4, "MANUAL_EMPTY"]
   ]);
+  assert.equal(maintenanceEvents.length, 0);
+  assert.equal(medalAwardCount, 0);
 });

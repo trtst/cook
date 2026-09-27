@@ -3,7 +3,7 @@ import test from "node:test";
 import { PantryService } from "./pantry.service";
 
 function createService() {
-  return new PantryService({} as never, {} as never, {} as never);
+  return new PantryService({} as never, {} as never, {} as never, {} as never);
 }
 
 function sourceSummary(overrides: Record<string, unknown> = {}) {

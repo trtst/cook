@@ -397,7 +397,15 @@ enum MedalAwardRule {
   DINING_EVENT_COMPLETION
   GROUP_MEAL_COMPLETION
   FULL_LOOP_COMPLETION
+  SHOPPING_COMPLETION
+  FRIDGE_MAINTENANCE
+  MEMORY_SHARE_STARTED_TOTAL
   RECOMMENDATION_ADOPTED_TOTAL
+}
+
+enum FridgeMaintenanceAction {
+  ADDED
+  REMOVED
 }
 
 enum MedalCategory {
@@ -762,6 +770,7 @@ model User {
   createdDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteCreator")
   acceptedDiningEventShareInvites DiningEventShareInvite[] @relation("DiningEventShareInviteAcceptor")
   diningEventMemoryShares   DiningEventMemoryShare[]   @relation("DiningEventMemoryShareCreator")
+  fridgeMaintenanceEvents  FridgeMaintenanceEvent[]
   diningGroupActivities     DiningGroupActivity[]      @relation("DiningGroupActivityActor")
   fridgeTraces              FridgeTrace[]
   shoppingItems             ShoppingItem[]
@@ -2058,6 +2067,7 @@ model DiningEvent {
   shareTokenExpiresAt DateTime?         @map("share_token_expires_at") @db.Timestamptz(3)
   memoryMiniCodeStorageKey String?      @map("memory_mini_code_storage_key") @db.VarChar(512)
   completedAt         DateTime?         @map("completed_at") @db.Timestamptz(3)
+  memoryShareStartedAt DateTime?       @map("memory_share_started_at") @db.Timestamptz(3)
   ingredientsReadyAt  DateTime?         @map("ingredients_ready_at") @db.Timestamptz(3)
   cookingStartedAt    DateTime?         @map("cooking_started_at") @db.Timestamptz(3)
   version             Int               @default(1)
@@ -2077,6 +2087,7 @@ model DiningEvent {
   memoryShares DiningEventMemoryShare[]
 
   @@index([userId, scheduledAt])
+  @@index([userId, memoryShareStartedAt])
   @@index([diningGroupId, scheduledAt])
   @@map("dining_events")
 }
@@ -2380,6 +2391,7 @@ model ShoppingList {
   mealPlans    MealPlanItem[]
 
   @@index([ownerUserId, status, updatedAt])
+  @@index([ownerUserId, status, completedAt])
   @@index([status, voidedAt, id])
   @@map("shopping_lists")
 }
@@ -2506,6 +2518,20 @@ model FridgeTrace {
   @@index([userId, ingredientId, createdAt, id])
   @@index([userId, kind, createdAt, id])
   @@map("fridge_traces")
+}
+
+model FridgeMaintenanceEvent {
+  id          Int                     @id @default(autoincrement())
+  userId      Int                     @map("user_id")
+  operationId String                  @map("operation_id") @db.VarChar(64)
+  action      FridgeMaintenanceAction
+  createdAt   DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, operationId])
+  @@index([userId, createdAt])
+  @@map("fridge_maintenance_events")
 }
 
 model MedalTemplate {

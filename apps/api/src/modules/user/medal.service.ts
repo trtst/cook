@@ -44,6 +44,9 @@ const awardRuleIconKeyMap: Record<MedalAwardRule, string> = {
   DINING_EVENT_COMPLETION: "DINING_EVENT",
   GROUP_MEAL_COMPLETION: "GROUP",
   FULL_LOOP_COMPLETION: "SHOPPING",
+  SHOPPING_COMPLETION: "SHOPPING",
+  FRIDGE_MAINTENANCE: "SHOPPING",
+  MEMORY_SHARE_STARTED_TOTAL: "DINING_EVENT",
   RECOMMENDATION_ADOPTED_TOTAL: "RECOMMEND"
 };
 
@@ -615,44 +618,37 @@ export class MedalService {
   async awardMealCompletion(
     db: MedalDb,
     userId: UUID,
-    diningEvent: { id: UUID; status: string } | null,
+    _diningEvent: { id: UUID; status: string } | null,
     awardedAt: Date
   ) {
     await this.grantByRule(db, [userId], "MEAL_COMPLETION", awardedAt);
-
-    if (!diningEvent || diningEvent.status !== "COMPLETED") {
-      return;
-    }
-
-    const bought = await db.shoppingItem.findFirst({
-      where: {
-        userId,
-        sourceType: "EVENT",
-        status: "BOUGHT",
-        sourceKey: {
-          startsWith: `${diningEvent.id}:`
-        }
-      },
-      select: { id: true }
-    });
-
-    if (!bought) {
-      return;
-    }
-
     await this.grantByRule(db, [userId], "FULL_LOOP_COMPLETION", awardedAt);
   }
 
   async awardDiningEventCompletion(db: MedalDb, ownerId: UUID, acceptedUserIds: UUID[], awardedAt: Date) {
     const participantIds = [...new Set([ownerId, ...acceptedUserIds])];
+    await this.grantByRule(db, participantIds, "MEAL_COMPLETION", awardedAt);
     await this.grantByRule(db, participantIds, "DINING_EVENT_COMPLETION", awardedAt);
     if (acceptedUserIds.length > 0) {
       await this.grantByRule(db, [ownerId], "GROUP_MEAL_COMPLETION", awardedAt);
     }
+    await this.grantByRule(db, [ownerId], "FULL_LOOP_COMPLETION", awardedAt);
   }
 
   async awardRecommendationContribution(db: MedalDb, userId: UUID, awardedAt: Date) {
     await this.grantByRule(db, [userId], "RECOMMENDATION_ADOPTED_TOTAL", awardedAt);
+  }
+
+  async awardShoppingCompletion(db: MedalDb, userId: UUID, awardedAt: Date) {
+    await this.grantByRule(db, [userId], "SHOPPING_COMPLETION", awardedAt);
+  }
+
+  async awardFridgeMaintenance(db: MedalDb, userId: UUID, awardedAt: Date) {
+    await this.grantByRule(db, [userId], "FRIDGE_MAINTENANCE", awardedAt);
+  }
+
+  async awardMemoryShareStarted(db: MedalDb, userId: UUID, awardedAt: Date) {
+    await this.grantByRule(db, [userId], "MEMORY_SHARE_STARTED_TOTAL", awardedAt);
   }
 
   private async grantByRule(db: MedalDb, userIds: UUID[], rule: MedalAwardRule, awardedAt: Date) {
@@ -706,6 +702,12 @@ export class MedalService {
         return this.countGroupMealCompletion(db, userIds);
       case "FULL_LOOP_COMPLETION":
         return this.countFullLoopCompletion(db, userIds);
+      case "SHOPPING_COMPLETION":
+        return this.countShoppingCompletion(db, userIds);
+      case "FRIDGE_MAINTENANCE":
+        return this.countFridgeMaintenance(db, userIds);
+      case "MEMORY_SHARE_STARTED_TOTAL":
+        return this.countMemoryShareStarted(db, userIds);
       case "RECOMMENDATION_ADOPTED_TOTAL":
         return this.countRecommendationAdoptedTotal(db, userIds);
       default:
@@ -714,17 +716,35 @@ export class MedalService {
   }
 
   private async countMealCompletion(db: MedalDb, userIds: UUID[]) {
-    const rows = await db.mealPlanItem.groupBy({
-      by: ["userId"],
-      where: {
-        userId: { in: userIds },
-        status: "COMPLETED"
-      },
-      _count: {
-        _all: true
-      }
-    });
-    return new Map(rows.map(row => [row.userId, row._count._all]));
+    const [plans, events] = await Promise.all([
+      db.mealPlanItem.findMany({
+        where: { userId: { in: userIds }, status: "COMPLETED" },
+        select: { userId: true, diningEvent: { select: { status: true } } }
+      }),
+      db.diningEvent.findMany({
+        where: {
+          status: "COMPLETED",
+          OR: [
+            { userId: { in: userIds } },
+            { participants: { some: { userId: { in: userIds }, status: "ACCEPTED" } } }
+          ]
+        },
+        select: {
+          userId: true,
+          participants: { where: { userId: { in: userIds }, status: "ACCEPTED" }, select: { userId: true } }
+        }
+      })
+    ]);
+    const counts = new Map<UUID, number>();
+    for (const plan of plans) {
+      if (plan.diningEvent?.status === "COMPLETED") continue;
+      counts.set(plan.userId, (counts.get(plan.userId) ?? 0) + 1);
+    }
+    for (const event of events) {
+      const participants = new Set([event.userId, ...event.participants.flatMap(item => item.userId ? [item.userId] : [])]);
+      for (const userId of participants) counts.set(userId, (counts.get(userId) ?? 0) + 1);
+    }
+    return counts;
   }
 
   private async countDiningEventCompletion(db: MedalDb, userIds: UUID[]) {
@@ -803,60 +823,60 @@ export class MedalService {
   }
 
   private async countFullLoopCompletion(db: MedalDb, userIds: UUID[]) {
-    const [items, shoppingItems] = await Promise.all([
-      db.mealPlanItem.findMany({
-        where: {
-          userId: { in: userIds },
-          status: "COMPLETED",
-          diningEvent: {
-            is: {
-              status: "COMPLETED"
-            }
-          }
-        },
-        select: {
-          userId: true,
-          diningEvent: {
-            select: {
-              id: true
-            }
-          }
-        }
-      }),
-      db.shoppingItem.findMany({
-        where: {
-          userId: { in: userIds },
-          sourceType: "EVENT",
-          status: "BOUGHT"
-        },
-        select: {
-          userId: true,
-          sourceKey: true
-        }
-      })
-    ]);
+    const rows = await db.diningEvent.groupBy({
+      by: ["userId"],
+      where: { userId: { in: userIds }, status: "COMPLETED", ingredientsReadyAt: { not: null } },
+      _count: { _all: true }
+    });
+    return new Map(rows.map(row => [row.userId, row._count._all]));
+  }
 
-    const boughtEventMap = new Map<UUID, Set<UUID>>();
-    for (const item of shoppingItems) {
-      if (!item.sourceKey) continue;
-      const eventIdText = item.sourceKey.split(":")[0];
-      const eventId = Number(eventIdText);
-      if (!Number.isInteger(eventId) || eventId <= 0) continue;
-      const set = boughtEventMap.get(item.userId) ?? new Set<UUID>();
-      set.add(eventId);
-      boughtEventMap.set(item.userId, set);
-    }
+  private async countShoppingCompletion(db: MedalDb, userIds: UUID[]) {
+    if (!userIds.length) return new Map<UUID, number>();
+    const rows = await db.$queryRaw<Array<{ userId: number; count: bigint | number }>>(Prisma.sql`
+      WITH qualified AS (
+        SELECT list.owner_user_id AS "userId", list.id, list.completed_at AS "completedAt",
+          ROW_NUMBER() OVER (
+            PARTITION BY list.owner_user_id, (list.completed_at AT TIME ZONE 'Asia/Shanghai')::date
+            ORDER BY list.completed_at ASC, list.id ASC
+          ) AS "dayRank"
+        FROM shopping_lists list
+        WHERE list.owner_user_id IN (${Prisma.join(userIds)})
+          AND list.status = 'COMPLETED'
+          AND list.completed_at IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM shopping_items item
+            WHERE item.list_id = list.id AND item.status <> 'DELETED'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM shopping_items item
+            WHERE item.list_id = list.id AND item.status NOT IN ('BOUGHT', 'DELETED')
+          )
+      )
+      SELECT "userId", COUNT(*)::BIGINT AS count FROM qualified
+      WHERE "dayRank" <= 2 GROUP BY "userId"
+    `);
+    return new Map(rows.map(row => [row.userId, Number(row.count)]));
+  }
 
-    const countMap = new Map<UUID, number>();
-    for (const item of items) {
-      const eventId = item.diningEvent?.id ?? null;
-      if (!eventId) continue;
-      const boughtEvents = boughtEventMap.get(item.userId);
-      if (!boughtEvents?.has(eventId)) continue;
-      countMap.set(item.userId, (countMap.get(item.userId) ?? 0) + 1);
-    }
+  private async countFridgeMaintenance(db: MedalDb, userIds: UUID[]) {
+    if (!userIds.length) return new Map<UUID, number>();
+    const rows = await db.$queryRaw<Array<{ userId: number; count: bigint | number }>>(Prisma.sql`
+      SELECT user_id AS "userId", COUNT(DISTINCT DATE_TRUNC('week', created_at AT TIME ZONE 'Asia/Shanghai'))::BIGINT AS count
+      FROM fridge_maintenance_events
+      WHERE user_id IN (${Prisma.join(userIds)})
+      GROUP BY user_id
+    `);
+    return new Map(rows.map(row => [row.userId, Number(row.count)]));
+  }
 
-    return countMap;
+  private async countMemoryShareStarted(db: MedalDb, userIds: UUID[]) {
+    const rows = await db.diningEvent.groupBy({
+      by: ["userId"],
+      where: { userId: { in: userIds }, status: "COMPLETED", memoryShareStartedAt: { not: null } },
+      _count: { _all: true }
+    });
+    return new Map(rows.map(row => [row.userId, row._count._all]));
   }
 
   private async countRecommendationAdoptedTotal(db: MedalDb, userIds: UUID[]) {

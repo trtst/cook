@@ -307,7 +307,7 @@ export class AdminController {
     @UploadedFile() file?: { buffer?: Buffer; size?: number }
   ) {
     return this.medalService
-      .uploadTemplateImage(request, templateId, imageType, operationId, body.expectedVersion, file, request.admin.adminId)
+      .uploadTemplateImage(request, templateId, imageType, operationId, Number(body.expectedVersion), file, request.admin.adminId)
       .then(result => ok(result));
   }
 
