@@ -105,7 +105,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
-import { medalApi, type MedalWallResponse } from "@/apis/medal";
+import { medalApi, type MedalWallResponse } from "../apis/medal";
 import Layout from "@/components/Layout/Layout.vue";
 import { usePageScrollStyle } from "@/composables/usePageScrollLock";
 import { buildThemePageStyle } from "@/composables/theme-page-style";

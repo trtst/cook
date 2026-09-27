@@ -1,5 +1,5 @@
 import { cfg } from "@/config";
-import { get, type IsoDateTime } from "./http";
+import { get, type IsoDateTime } from "@/apis/http";
 
 export type MedalAwardRule =
   | "MEAL_COMPLETION"

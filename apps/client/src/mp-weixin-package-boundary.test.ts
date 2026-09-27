@@ -13,6 +13,7 @@ const sourceRoot = resolve(__dirname);
 
 const forbiddenMainFiles = [
   "apis/knowledge.js",
+  "apis/medal.js",
   "composables/useImageCropFlow.js",
   "composables/useLoginEmptyState.js",
   "utils/image-crop.js",
@@ -22,6 +23,7 @@ const forbiddenMainFiles = [
 
 const forbiddenSourceImports = [
   "@/apis/knowledge",
+  "@/apis/medal",
   "@/composables/useImageCropFlow",
   "@/composables/useLoginEmptyState",
   "@/utils/image-crop",
@@ -55,6 +57,8 @@ const sourceFiles = [
   "pages_me/account/index.vue",
   "pages_me/password/index.vue",
   "pages_me/phone/index.vue",
+  "pages_me/medal/index.vue",
+  "pages_me/medal/present.ts",
   "pages_me/medal-detail/index.vue",
   "pages_me/recipe-history/index.vue",
   "pages_me/taste/index.vue",

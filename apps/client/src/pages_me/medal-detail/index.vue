@@ -86,7 +86,7 @@
 import { computed, ref, watch } from "vue";
 import { onLoad, onShow, onShareAppMessage } from "@dcloudio/uni-app";
 import emptyStateArt from "@/assets/empty.png";
-import { medalApi, type UserMedalSummary } from "@/apis/medal";
+import { medalApi, type UserMedalSummary } from "../apis/medal";
 import Empty from "@/components/Empty/Empty.vue";
 import Layout from "@/components/Layout/Layout.vue";
 import SheetShell from "@/components/Sheet/SheetShell.vue";

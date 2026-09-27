@@ -1,4 +1,4 @@
-import type { UserMedalSummary } from "@/apis/medal";
+import type { UserMedalSummary } from "../apis/medal";
 
 const medalIconClassMap: Record<string, string> = {
   PLAN: "icon-plan",
