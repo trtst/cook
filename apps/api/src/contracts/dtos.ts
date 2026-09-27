@@ -39,6 +39,9 @@ const medalRuleValues = [
   "DINING_EVENT_COMPLETION",
   "GROUP_MEAL_COMPLETION",
   "FULL_LOOP_COMPLETION",
+  "SHOPPING_COMPLETION",
+  "FRIDGE_MAINTENANCE",
+  "MEMORY_SHARE_STARTED_TOTAL",
   "RECOMMENDATION_ADOPTED_TOTAL"
 ] as const;
 const medalCategoryValues = [
@@ -591,9 +594,9 @@ export class ResetAdminUserPasswordDto extends OperationDto {
 export class UpdateLoginImageDto extends OperationDto {}
 
 export class UpdateHomeEntryItemDto {
-  @ApiProperty({ enum: ["MAIN", "SIDE_TOP", "SIDE_BOTTOM", "QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] })
-  @IsIn(["MAIN", "SIDE_TOP", "SIDE_BOTTOM", "QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"])
-  placement!: "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
+  @ApiProperty({ enum: ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] })
+  @IsIn(["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"])
+  placement!: "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 
   @ApiProperty({ maxLength: 20 })
   @Transform(({ value }) => trimString(value))
@@ -645,10 +648,10 @@ export class UpdateHomeEntryItemDto {
 }
 
 export class UpdateHomeEntriesDto extends OperationDto {
-  @ApiProperty({ type: [UpdateHomeEntryItemDto], minItems: 1, maxItems: 7 })
+  @ApiProperty({ type: [UpdateHomeEntryItemDto], minItems: 1, maxItems: 4 })
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(7)
+  @ArrayMaxSize(4)
   @ArrayUnique(item => (typeof item === "object" && item && "placement" in item ? (item as { placement?: unknown }).placement : item))
   @ValidateNested({ each: true })
   @Type(() => UpdateHomeEntryItemDto)
@@ -1023,21 +1026,21 @@ class MedalTemplateFieldsDto {
   @IsIn(medalCategoryValues)
   category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
 
-  @ApiProperty({ example: "开火第一餐" })
+  @ApiProperty({ example: "炉火初明" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "第一次把自己安排的一餐真正做完吃成。" })
+  @ApiProperty({ example: "让计划中的一餐落到实处，日常烟火由此开始。" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   description!: string;
 
-  @ApiProperty({ example: "完成任意一个自己的计划餐次。" })
+  @ApiProperty({ example: "本人明确确认完成用餐；取消或单纯结束计划不计，关联计划与饭局按同一餐去重。" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
@@ -1076,6 +1079,9 @@ export class CreateAdminMedalTemplateDto extends OperationDto {
     | "DINING_EVENT_COMPLETION"
     | "GROUP_MEAL_COMPLETION"
     | "FULL_LOOP_COMPLETION"
+    | "SHOPPING_COMPLETION"
+    | "FRIDGE_MAINTENANCE"
+    | "MEMORY_SHARE_STARTED_TOTAL"
     | "RECOMMENDATION_ADOPTED_TOTAL";
 
   @ApiProperty({ enum: editableMedalStatusValues, required: false })
@@ -1087,21 +1093,21 @@ export class CreateAdminMedalTemplateDto extends OperationDto {
   @IsIn(medalCategoryValues)
   category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
 
-  @ApiProperty({ example: "开火第一餐" })
+  @ApiProperty({ example: "炉火初明" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "第一次把自己安排的一餐真正做完吃成。" })
+  @ApiProperty({ example: "让计划中的一餐落到实处，日常烟火由此开始。" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   description!: string;
 
-  @ApiProperty({ example: "完成任意一个自己的计划餐次。" })
+  @ApiProperty({ example: "本人明确确认完成用餐；取消或单纯结束计划不计，关联计划与饭局按同一餐去重。" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
@@ -1144,21 +1150,21 @@ export class UpdateAdminMedalTemplateDto extends VersionedOperationDto {
   @IsIn(medalCategoryValues)
   category!: "MEAL_CHECKIN" | "DINING_COLLABORATION" | "HOLIDAY_LIMITED" | "RECOMMENDATION_CONTRIBUTION";
 
-  @ApiProperty({ example: "开火第一餐" })
+  @ApiProperty({ example: "炉火初明" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(64)
   name!: string;
 
-  @ApiProperty({ example: "第一次把自己安排的一餐真正做完吃成。" })
+  @ApiProperty({ example: "让计划中的一餐落到实处，日常烟火由此开始。" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
   @MaxLength(255)
   description!: string;
 
-  @ApiProperty({ example: "完成任意一个自己的计划餐次。" })
+  @ApiProperty({ example: "本人明确确认完成用餐；取消或单纯结束计划不计，关联计划与饭局按同一餐去重。" })
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @MinLength(1)
@@ -2441,10 +2447,9 @@ export class AcceptShareInviteDto extends OperationDto {
 }
 
 export class ChooseBringRecipeDto extends OperationDto {
-  @ApiProperty({ type: [Number], minItems: 1, maxItems: 3, uniqueItems: true })
+  @ApiProperty({ type: [Number], minItems: 0, maxItems: 3, uniqueItems: true })
   @Type(() => Number)
   @IsArray()
-  @ArrayNotEmpty()
   @ArrayMaxSize(3)
   @ArrayUnique()
   @IsInt({ each: true })

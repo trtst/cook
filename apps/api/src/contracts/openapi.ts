@@ -165,7 +165,7 @@ export class CookAssistantUsageResponseModel {
 
 export class HomeEntryItemModel {
   @ApiProperty({ type: String }) id!: string;
-  @ApiProperty({ type: String, enum: ["MAIN", "SIDE_TOP", "SIDE_BOTTOM", "QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] }) placement!: string;
+  @ApiProperty({ type: String, enum: ["QUICK_1", "QUICK_2", "QUICK_3", "QUICK_4"] }) placement!: string;
   @ApiProperty({ type: String }) title!: string;
   @ApiProperty({ type: String, nullable: true }) subtitle!: string | null;
   @ApiProperty({ type: String, enum: ["PAGE", "WEB_VIEW"] }) targetType!: string;
@@ -2384,11 +2384,15 @@ export class DiningMemoryShareSnapshotModel extends DiningMemorySharePreviewMode
   @ApiProperty({ type: String }) sharePath!: string;
 }
 
+export class RecordDiningMemoryShareStartedModel {
+  @ApiProperty({ type: Boolean }) recorded!: boolean;
+}
+
 export class UserMedalModel {
   @ApiProperty({ type: String })
   code!: string;
 
-  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "RECOMMENDATION_ADOPTED_TOTAL"] })
+  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "SHOPPING_COMPLETION", "FRIDGE_MAINTENANCE", "MEMORY_SHARE_STARTED_TOTAL", "RECOMMENDATION_ADOPTED_TOTAL"] })
   awardRule!: string;
 
   @ApiProperty({ type: String })
@@ -2444,7 +2448,7 @@ export class MedalWallModel {
 export class AdminMedalTemplateModel {
   @ApiProperty(uuid) id!: string;
   @ApiProperty({ type: String }) code!: string;
-  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "RECOMMENDATION_ADOPTED_TOTAL"] })
+  @ApiProperty({ type: String, enum: ["MEAL_COMPLETION", "DINING_EVENT_COMPLETION", "GROUP_MEAL_COMPLETION", "FULL_LOOP_COMPLETION", "SHOPPING_COMPLETION", "FRIDGE_MAINTENANCE", "MEMORY_SHARE_STARTED_TOTAL", "RECOMMENDATION_ADOPTED_TOTAL"] })
   awardRule!: string;
   @ApiProperty({ type: String, enum: ["MEAL_CHECKIN", "DINING_COLLABORATION", "HOLIDAY_LIMITED", "RECOMMENDATION_CONTRIBUTION"] }) category!: string;
   @ApiProperty({ type: String }) categoryName!: string;
@@ -2709,4 +2713,33 @@ export class ShoppingSharePreviewModel {
   @ApiProperty({ type: Boolean }) canJoin!: boolean;
   @ApiProperty({ type: Number, minimum: 0 }) itemCount!: number;
   @ApiProperty({ type: String, enum: ["ACTIVE", "COMPLETED", "VOIDED"] }) status!: string;
+}
+
+export class AdminSystemDataCollectionCountModel {
+  @ApiProperty({ type: Number, minimum: 0 }) total!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) existing!: number;
+  @ApiProperty({ type: Number, minimum: 0 }) new!: number;
+}
+
+export class AdminSystemDataExportModel {
+  @ApiProperty({ type: String, example: "cook.system-data.v1" }) schemaVersion!: string;
+  @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) sourceEnvironment!: string;
+  @ApiProperty(dateTime) exportedAt!: string;
+  @ApiProperty({ type: Object, additionalProperties: { type: "array", items: { type: "object" } } }) data!: Record<string, unknown[]>;
+}
+
+export class AdminSystemDataPreviewModel {
+  @ApiProperty({ type: String, example: "cook.system-data.v1" }) schemaVersion!: string;
+  @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) targetEnvironment!: string;
+  @ApiProperty(nullableString) sourceExportedAt!: string | null;
+  @ApiProperty({ type: Object, additionalProperties: { $ref: getSchemaPath(AdminSystemDataCollectionCountModel) } }) counts!: Record<string, AdminSystemDataCollectionCountModel>;
+  @ApiProperty({ type: [String] }) conflicts!: string[];
+  @ApiProperty({ type: String }) behavior!: string;
+}
+
+export class AdminSystemDataImportResultModel {
+  @ApiProperty({ type: String, example: "cook.system-data.v1" }) schemaVersion!: string;
+  @ApiProperty({ type: String, enum: ["TEST", "ONLINE"] }) targetEnvironment!: string;
+  @ApiProperty({ type: Number, minimum: 0 }) importedCount!: number;
+  @ApiProperty({ type: Object, additionalProperties: { $ref: getSchemaPath(AdminSystemDataCollectionCountModel) } }) counts!: Record<string, AdminSystemDataCollectionCountModel>;
 }

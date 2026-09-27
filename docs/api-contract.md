@@ -384,7 +384,7 @@ interface AppConfigResponse {
   };
 }
 
-type HomeEntryPlacement = "MAIN" | "SIDE_TOP" | "SIDE_BOTTOM" | "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
+type HomeEntryPlacement = "QUICK_1" | "QUICK_2" | "QUICK_3" | "QUICK_4";
 type HomeEntryTargetType = "PAGE" | "WEB_VIEW";
 type HomeEntryStatus = "LISTED" | "UNLISTED";
 type HomeRecentArrangementStatus =
@@ -616,7 +616,7 @@ interface RedeemMembershipCodeResult {
 
 `GET /app-config` 只返回公开启动配置。`login.imageUrl` 由后台维护登录弹窗背景图；登录图公开 URL 使用真实静态对象路径，未配置静态域名时为 `/static/uploads/admin/login-image/login-image.{ext}`，配置 `ASSET_PUBLIC_BASE_URL` 时为静态域名下的 `/uploads/admin/login-image/login-image.{ext}`。接口失败、字段为空、图片失效时，客户端回退本地图。`cookAssistant` 只承接活动是否开放、起止时间、服务端日界时区、每日首次解锁上限和顶部 Tips 文案，不返回任何用户态用量或会员结论；个人当日用量必须读取 `GET /users/me/cook-assistant-usage`。除这两类公开配置外，本接口不得混入权限、会员、饭搭子或展示背景配置。
 
-`GET /home-entries` 只返回小程序首页入口配置，统一使用一个按布局顺序排好的 `items` 数组。每个入口只返回当前布局真正需要的最小字段：`placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`。`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种；`PAGE` 的 `targetValue` 必须从后台白名单页面中选择，`WEB_VIEW` 的 `targetValue` 必须是以 `https://` 开头的外链地址。`imageUrl` 既可服务 hero 运营大图，也可服务右侧运营卡或图标区；如果后台使用上传能力，接口会返回可直接访问的公开图片 URL；如果后台手填外部图片地址，则原样返回该地址。标题、副标题、磨砂背景、主题字色、圆角和点击态都由客户端渲染，不由接口返回样式值。当前约定 `MAIN` 固定作为首页 hero 运营位，`SIDE_TOP / SIDE_BOTTOM` 固定作为 hero 下方右侧两张运营卡并始终返回，`QUICK_1 ... QUICK_4` 固定对应首页四个动作入口坑位，但公开接口只返回当前 `LISTED` 的四宫格入口；客户端仍按 `placement` 自己拆出 hero、右侧运营卡和下方快捷入口。
+`GET /home-entries` 只返回首页快捷入口四宫格中当前 `LISTED` 的入口，`placement` 仅允许 `QUICK_1 ... QUICK_4`。响应字段为 `placement + title + subtitle + targetType + targetValue + imageUrl + badgeText`；`targetType` 当前只允许 `PAGE` 和 `WEB_VIEW` 两种，站内页面从后台白名单选择，外链必须以 `https://` 开头。首屏三卡和顶部 hero 内容由客户端展示，不属于该接口或后台首页入口配置；右侧固定卡片分别使用“本周灵感｜这周吃点不一样”和“餐桌话题｜看看最近吃什么”。
 
 `GET /home/week-overview` 只服务首页左侧“这周吃饭安排”状态聚合主卡，职责上与 `GET /home-entries`、`GET /home/recent-arrangement` 分离。它返回当前登录用户首页主卡真正需要的最小摘要：`status + title + summary + actionText + targetType + targetValue + notificationTime + plannedDayCount + totalDayCount + activeListCount + expiringCount + arrangement + days[]`。其中 `status` 只允许 `NO_ARRANGEMENT / EMPTY_MENU / PENDING_CONFIRM / PENDING_SHOPPING / READY_TO_COOK / COMPLETED`；`targetType` 当前固定为 `PAGE`，`targetValue` 由服务端按当前最值得处理的状态给出真实落地页；`notificationTime` 是给通知中心排序和已读游标对齐用的服务端时间，不要求首页卡片直接展示；`plannedDayCount` 与 `days[]` 只覆盖从今天起未来 `7` 天的轻量周视图，不扩成完整计划详情；`arrangement` 复用现有首页最近安排最小摘要，供主卡在存在近期餐次时显示更具体的时间与状态。该接口不得返回完整菜单、购物清单明细、冰箱明细、参与人 UID、运营样式或通用任务流字段；首页左侧主卡点击后只跳转到真实页面继续处理，不在首页直接写入。
 
@@ -940,7 +940,7 @@ GET  /static/uploads/site-content-images/{fileName}
 
 `GET /admin/membership-codes/skus`、`POST /admin/membership-codes/skus/{skuId}/status`、`GET /admin/membership-codes/batches`、`POST /admin/membership-codes/batches`、`POST /admin/membership-codes/batches/{batchId}/status`、`POST /admin/membership-codes/batches/{batchId}/generate`、`GET /admin/membership-codes`、`GET /admin/membership-codes/generations`、`GET /admin/membership-codes/redemptions` 和 `POST /admin/membership-codes/{codeId}/disable` 共同组成后台会员兑换码治理面。固定 SKU 目录由服务端自动同步，当前只允许 `PLUS_30D / PRO_30D / PRO_TRIAL_1D / PRO_TRIAL_3D / PRO_TRIAL_7D` 五项；后台不得新增第六种 SKU，也不得基于其他数据库遗留 SKU 发码。SKU 摘要新增 `version`，只用于后台切换该 SKU 的核销开关；切换请求体固定提交 `redeemEnabled + expectedVersion`，服务端成功后才会递增 `version`。SKU 目录同步只负责校正 `code / kind / tier / durationDays` 这类固定事实，不会覆盖后台已设置的 `redeemEnabled`。批次读取固定返回分页 `PageResult<AdminMembershipCodeBatchItem>`，并附带 `windowState + version + codeCount / activeCodeCount / redeemedCodeCount / disabledCodeCount`，用于后台判断上架状态、时间窗和发码规模。创建批次时只收 `skuCode / name / redeemEnabled / startsAt / endsAt` 最小字段，`startsAt < endsAt` 由服务端校验；切换上下架时必须带 `expectedVersion`，避免多人后台覆盖。`POST /admin/membership-codes/batches/{batchId}/generate` 只收 `quantity`，单次上限 `1000`；服务端高熵生成明文码，但数据库、审计和后台列表只保留 `codeHash + codeMask`，明文码只在该次响应的 `codes[]` 中返回一次供导出。`GET /admin/membership-codes` 只返回掩码、批次、SKU、状态、使用人和使用时间；若后台输入完整兑换码查询，服务端只做哈希精确匹配，不回显明文。`GET /admin/membership-codes/generations` 按 `audit_events` 中的 `membership-code.generate` 事实分页返回生成记录，首版支持按 `batchId / skuCode` 过滤，响应只包含 `批次 / SKU / 生成数量 / 操作人 / 时间`，不回放明文码。`GET /admin/membership-codes/redemptions` 只返回已核销兑换码分页，首版支持按 `batchId / skuCode / uid / redeemedFrom / redeemedTo / code` 过滤，用于后台独立查看兑换使用事实。`POST /admin/membership-codes/{codeId}/disable` 仅允许停用未使用兑换码，已使用码不得再改状态。
 
-`GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/status`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护小程序首页 7 个快捷入口。后台固定一次返回全部 7 个坑位，不支持新增、删除或拖出第 8 个入口。后台读取接口统一返回 `items + pageTargets`：`items` 是按布局顺序排好的 7 个入口数组，后台页面自己按 `placement` 拆成首页 3 卡和 action-dock 4 格；`pageTargets` 供“站内页面”下拉选择。`PUT /admin/home-entries` 写入时支持按提交的 `items` 做部分保存，请求至少提交 `1` 个、最多提交 `7` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。`POST /admin/home-entries/{placement}/status` 当前只允许 `QUICK_1 ... QUICK_4`，请求体固定提交 `status + expectedVersion`；`LISTED` 表示该四宫格入口会出现在首页，`UNLISTED` 表示该坑位仍保留配置但不在首页展示，主卡 `MAIN / SIDE_TOP / SIDE_BOTTOM` 不支持下架。图片既支持直接手填 `https` 地址，也支持对单个 `placement` 单独上传/清空：上传和清空都要求 `expectedVersion`，成功后返回该坑位最新入口数据，并立即更新 `imageUrl + version`。上传后的数据库值固定保存为站内相对资源路径，由公开接口再转换成可访问 URL。这个后台面只服务 `运营 / 小程序首页`，不扩成通用首页装修或通用跳转配置中心。
+`GET /admin/home-entries`、`PUT /admin/home-entries`、`POST /admin/home-entries/{placement}/status`、`POST /admin/home-entries/{placement}/image` 和 `DELETE /admin/home-entries/{placement}/image` 共同维护首页快捷入口四宫格。后台固定返回 `QUICK_1 ... QUICK_4` 四个坑位，不支持新增、删除或拖出第 5 个入口；读取接口返回 `items + pageTargets`，供后台展示配置和选择站内页面。`PUT /admin/home-entries` 支持部分保存，请求至少提交 `1` 个、最多提交 `4` 个入口，每个入口都带 `expectedVersion`，且同一次请求内 `placement` 不得重复；`PAGE` 只能使用白名单页面，`WEB_VIEW` 必须以 `https://` 开头。状态接口只允许四宫格入口，`LISTED` 表示首页展示，`UNLISTED` 表示保留该坑位配置但首页隐藏。图片支持直接填写 `https` 地址或逐入口上传/清空；上传和清空都要求 `expectedVersion`，上传后的数据库值保存为站内相对资源路径，由公开接口转换成可访问 URL。首屏三卡不再由后台管理或接口配置，右侧卡片文案及跳转由客户端固定。
 
 `GET /admin/home-topics`、`GET /admin/home-topics/recipes`、`POST /admin/home-topics`、`PUT /admin/home-topics/{topicId}`、`POST /admin/home-topics/{topicId}/status`、`DELETE /admin/home-topics/{topicId}`、`POST /admin/home-topics/{topicId}/image` 和 `DELETE /admin/home-topics/{topicId}/image` 共同维护“运营 / 本周灵感”。后台读取接口返回 `topics + recTypes`：`topics` 返回全部专题，并额外携带 `status` 供后台做列表、预览和上架状态切换；`LISTED` 表示前台可见，`UNLISTED` 表示仅后台可见；`recTypes` 返回当前允许的推荐类别枚举与中文文案。`GET /admin/home-topics/recipes` 只搜索可曝光的灵感菜谱，当前最多返回 `20` 条，供后台把菜谱加入本期推荐。`POST /admin/home-topics` 和 `PUT /admin/home-topics/{topicId}` 只写入基础信息和推荐菜谱顺序，请求体固定提交 `title / subTitle / recType / issueNo / description / items`；`items` 当前至少 `3` 条，每条固定提交 `recipeId + recommendNote`，其中 `recommendNote` 可空，表示这道菜在本期专题推荐里的可选推荐说明；同一次提交内不得重复提交同一 `recipeId`，不再限制最多条数。前台专题详情和后台专题详情都返回每道菜的 `recommendNote`，有值才显示。新建专题默认写成 `UNLISTED`，由后台确认后再通过 `POST /admin/home-topics/{topicId}/status` 显式上架；切状态请求体固定提交 `status + expectedVersion`。`DELETE /admin/home-topics/{topicId}` 只允许删除 `UNLISTED` 专题，请求体固定提交 `expectedVersion`，删除后同时移除该专题的推荐项和自管封面图；`LISTED` 专题必须先下架。封面图不混进专题写 DTO，统一走单独上传/清空接口，并通过 `expectedVersion` 防并发覆盖。专题当前没有草稿态、定时发布、专题收藏或专题推荐统计；历史专题长期保留，但下架后不会继续出现在前台当前专题和往期滑卡里。
 
@@ -957,7 +957,7 @@ POST /admin/medal-templates/{templateId}/image/{imageType}
 DELETE /admin/medal-templates/{templateId}/image/{imageType}
 ```
 
-这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 负责单独治理勋章图片，其中 `imageType` 仅允许 `earned / locked`。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
+这一组接口治理 `勋章模板`，不治理用户已获得勋章事实。模板摘要固定返回 `id / code / awardRule / category / categoryName / name / description / condition / iconKey / imageUrl / earnedImageUrl / lockedImageUrl / status / targetCount / sortOrder / isLimited / startAt / endAt / version / createdAt / updatedAt`。`awardRule` 当前允许 `MEAL_COMPLETION / DINING_EVENT_COMPLETION / GROUP_MEAL_COMPLETION / FULL_LOOP_COMPLETION / SHOPPING_COMPLETION / FRIDGE_MAINTENANCE / MEMORY_SHARE_STARTED_TOTAL / RECOMMENDATION_ADOPTED_TOTAL`；`category` 当前允许 `MEAL_CHECKIN / DINING_COLLABORATION / RECOMMENDATION_CONTRIBUTION / HOLIDAY_LIMITED`；`status` 当前允许 `DRAFT / LISTED / UNLISTED / ARCHIVED`。`targetCount` 用于累计型勋章阈值，最小为 `1`。用户侧勋章名称、简介和获取说明不展示档位门槛数字；服务端仍按模板 `targetCount` 派发。`GET /admin/medal-templates` 固定使用 `page / pageSize` 分页，并支持 `keyword / status / category` 过滤。`POST /admin/medal-templates` 允许后台创建模板并指定初始状态，`code` 改为服务端自动生成；`PUT /admin/medal-templates/{templateId}` 只编辑展示与时间配置，不改 `code` 和 `awardRule`；`POST /admin/medal-templates/{templateId}/status` 只切换模板状态；`POST /admin/medal-templates/{templateId}/image/{imageType}` 和 `DELETE /admin/medal-templates/{templateId}/image/{imageType}` 负责单独治理勋章图片，其中 `imageType` 仅允许 `earned / locked`。后台上传当前允许 `JPG / PNG / WEBP / SVG`；其中 `SVG` 只允许纯静态矢量内容，服务端会拒绝带脚本、事件处理器或外部资源引用的文件。后台不得通过任何接口直接给用户补发、撤销或修改勋章获得时间。
 
 勋章图片公开 URL 使用稳定对象 key：已获得图为 `/static/uploads/medals/{templateId}`，锁定图为 `/static/uploads/medals/{templateId}/locked`；读取端兼容历史带扩展名对象。
 
@@ -1043,6 +1043,14 @@ POST /admin/recipe-wiki/{recipeId}/reject
 
 `GET /admin/recipe-wiki` 只返回 `Recipe.status = ACTIVE` 且当前固定正文版本 Wiki 尚未 `READY` 的菜谱，草稿、回收、下架和删除菜谱不进入列表。列表同时返回 `contentVersionId`、来源（用户 UID/昵称或“公共内容池”）、Wiki 状态、是否存在申请、最近申请时间和最近申请人。`GET /admin/recipe-wiki/{recipeId}/export` 与 `POST /admin/recipe-wiki/export` 分别导出单个或批量 `recipe.wiki.v1` / `recipe.wiki.batch.v1` JSON；每条数据必须带 `recipeId`、`contentVersionId`，正文不在导出范围内。`POST /admin/recipe-wiki/import` 只接受这两种 JSON，服务端校验菜谱仍为 ACTIVE 且正文版本 ID 一致，只替换当前版本的 Wiki 标签和助理步骤，并将 Wiki 置为 `READY`，不创建或修改菜谱正文；READY 会把对应申请的预扣次数转为正式消耗并通知申请人。`POST /admin/recipe-wiki/{recipeId}/reject` 写入拒绝原因、释放当前版本所有申请人的预扣次数并向申请人提供拒绝提示。上述后台写接口均要求管理员权限和数字字符串 `Idempotency-Key`（单纯导出和列表除外）。
 
+## 后台系统数据同步
+
+`GET /admin/system-data/export` 导出 `cook.system-data.v1` JSON 数据包，包内包含 `sourceEnvironment = TEST | ONLINE`；`POST /admin/system-data/preview` 和 `POST /admin/system-data/import` 通过 multipart 字段 `file` 接收同一格式的 JSON 文件。三条接口只允许 `SUPER_ADMIN`，导入写操作还要求数字字符串 `Idempotency-Key`。数据包同步系统菜谱分类、系统菜谱当前正文及 Wiki/营养/质量快照、系统食材分类、系统食材、单位、营养食品及其系统食材关联/单位换算。私房菜、个人食材、用户账号和用户私有记录不进入数据包。
+
+导入按主键 ID 新增或覆盖；数据包未包含的目标记录保留，不执行删除。导入前预览格式版本、新增/覆盖数量，以及系统/个人主键冲突和不可变菜谱正文版本冲突。确认导入后在一个数据库事务内写入，任一约束冲突整体回滚。系统菜谱的归属账号只从目标环境现有公共内容池映射，不同步用户账号；菜谱图片 URL 随数据导出，但图片文件本身不包含在 JSON 包中。导入上限为 10 MB、20,000 条数据记录。
+
+目标环境必须配置 `SYSTEM_DATA_ENVIRONMENT=TEST | ONLINE`。线上只接受来自测试环境的一次导入；导入成功后，线上到测试环境的同步成为唯一允许方向，且测试环境拒绝非线上来源的数据包。未配置环境标识时接口拒绝同步。该能力不记录数据集版本历史、不自动同步，也不按数据包缺失项清理目标记录。
+
 ## 其他领域接口摘要
 
 ### 我的口味
@@ -1095,6 +1103,7 @@ POST /dining-events/{eventId}/cover
 POST /dining-events/{eventId}/wishes
 POST /dining-events/{eventId}/wishes/{wishItemId}/support
 POST /dining-events/{eventId}/wishes/{wishItemId}/menu
+DELETE /dining-events/{eventId}/wishes/{wishItemId}/menu
 POST /dining-events/{eventId}/respond
 POST /dining-events/{eventId}/bring
 POST /dining-events/{eventId}/my-note
@@ -1152,6 +1161,9 @@ type MedalAwardRule =
   | "DINING_EVENT_COMPLETION"
   | "GROUP_MEAL_COMPLETION"
   | "FULL_LOOP_COMPLETION"
+  | "SHOPPING_COMPLETION"
+  | "FRIDGE_MAINTENANCE"
+  | "MEMORY_SHARE_STARTED_TOTAL"
   | "RECOMMENDATION_ADOPTED_TOTAL";
 type DiningGroupActivityKind =
   | "POLL_OPENED"
@@ -1397,7 +1409,7 @@ interface CreateMealPlanRequest {
 }
 ```
 
-同一用户同一 `planDate + mealSlot` 同时只允许一条非取消计划；取消记录保留菜单与状态，不占用该日期餐次，新计划会创建独立记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`；同一餐次进入完成态后不可逆。`POST /meal-plans/{planItemId}/cancel` 只允许所有者在计划日期结束前、且未关联有效饭局时调用；计划状态改为 `CANCELLED`，菜单和历史保留，不进入完成后的食材更新流程。同日期同餐次可以另建计划，取消记录保留但不占用餐次。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
+同一用户同一 `planDate + mealSlot` 同时只允许一条非取消计划；取消记录保留菜单与状态，不占用该日期餐次，新计划会创建独立记录；公开 `menuItems[]` 写入表示“按本次整顿菜单覆盖当前餐次”。新建时若未显式传 `title`，服务端默认写成 `餐次 + 饮食计划`，例如 `早餐饮食计划`、`晚餐饮食计划`；后续整餐更新若不传 `title`，继续保留现有标题。计划页新增“添加计划”时，允许用空数组 `menuItems = []` 先创建一条当前日期 + 餐次的空白计划壳子，菜单快照默认写成 `餐次待补充`，后续再去详情页补菜；但这条放宽只适用于“当前餐次原本不存在计划”的新建场景。覆盖已有计划时必须提交当前 `expectedVersion`，版本不一致返回业务 `code=409`；已有计划不允许用空数组把菜单整体清空，已经完成的餐次也不允许再被覆盖。旧 `recipeIds[]` 不再接受。当前历史老计划项允许 `slotType = null`，新写入必须显式提交 `slotType / recipeVersionId / purchaseState`。`POST /meal-plans/{planItemId}/complete` 只允许计划拥有者调用，并把该餐次从 `PLANNED` 推进到 `COMPLETED`，语义为计划拥有者明确确认这顿饭已完成；若计划仍关联未完成饭局，则必须先由饭局发起人完成饭局，不能借计划接口代替饭局确认。取消计划不计入开饭打卡。`POST /meal-plans/{planItemId}/cancel` 只允许所有者在计划日期结束前、且未关联有效饭局时调用；计划状态改为 `CANCELLED`，菜单和历史保留，不进入完成后的食材更新流程。同日期同餐次可以另建计划，取消记录保留但不占用餐次。`POST /meal-plans/{planItemId}/dining-event` 继续从计划餐次创建饭局，但已完成餐次不得再发起新饭局；若当前计划已经固定菜单，新饭局直接以 `CONFIRMED` 状态创建。若该餐次已经挂有未结束饭局，后续继续改计划菜单时，服务端会同步刷新这场饭局的标题、菜单快照和菜单项，避免计划与饭局各自漂移成两份事实。
 
 详情页单独改标题不再复用整餐覆盖接口，而是走独立写口：
 
@@ -2248,9 +2260,13 @@ interface UpdateDiningEventWishSupportRequest {
 }
 ```
 
+提议者不能撤回已经被主理人加入当前菜单的自己的提议；服务端以当前饭局菜单为准校验该限制。
+
 `POST /dining-events/{eventId}/wishes/{wishItemId}/menu` 用于饭局发起人把某道我想吃加入本次菜单，不接收额外请求体。`我想吃池` 只作为菜单确认参考，不改写个人购物、冰箱、带菜或菜谱所有权。
 
-`POST /dining-events/{eventId}/bring` 继续用于“我带菜”，请求体为 1～3 道不重复的 `recipeIds`，每次提交完整替换当前参与人的带菜集合；菜谱必须属于当前参与人并引用其固定版本。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
+`DELETE /dining-events/{eventId}/wishes/{wishItemId}/menu` 用于饭局发起人把对应菜谱从当前饭局菜单及绑定的计划餐次移除，不删除成员的心愿或支持记录，也不接收额外请求体。请求必须携带 `Idempotency-Key`；饭局必须仍可编辑、菜单未固定，且计划餐次至少保留一道菜。移除与计划菜单快照更新在同一事务内完成。
+
+`POST /dining-events/{eventId}/bring` 继续用于“我带菜”，请求体为 0～3 道不重复的 `recipeIds`，每次提交完整替换当前参与人的带菜集合；空数组用于清空自己的带菜安排，非空菜谱必须属于当前参与人并引用其固定版本。`POST /dining-events/{eventId}/complete` 只允许饭局发起人调用；当且仅当该饭局至少已有 1 位状态为 `ACCEPTED` 的参与人时才允许完成。已取消饭局不得完成，已完成饭局重复调用时直接返回当前摘要，不再次改写状态。
 
 `POST /dining-events/{eventId}/cancel` 只允许饭局发起人取消尚未到开饭时间、且没有任何 `ACCEPTED` 参与人的饭局。服务端在同一事务内将饭局置为 `CANCELLED`、立即让当前 `ACTIVE / OPENED` 分享邀请失效，并把已取消饭局与原计划解绑；原计划、已确认菜单和已取消饭局的菜单快照保留，不生成回忆、不派发完成勋章、不触发做饭库存消耗。取消后的同一计划可以再次创建新的饭局，已取消饭局本身不可恢复、不可完成；重复提交同一幂等键返回已取消摘要，重复使用其他幂等键也返回当前已取消摘要。
 
@@ -2274,15 +2290,20 @@ interface CreateDiningMemoryShareRequest {
 
 `GET /memory-shares/{shareToken}/preview` 是餐桌回忆卡的公开读取路径，无需登录；它校验饭局稳定签名后，只返回该饭局最新回忆快照的白名单字段。不得暴露投票详情、内部备注、个人冰箱、购物清单、过敏忌口、内部主键、权限字段或调试字段。该路径与现有 `GET /share/{shareToken}/preview` 的饭局邀请预览分离，不能复用或混淆。
 
+`POST /dining-events/{eventId}/memory-share-started` 只记录回忆分享发起事实，不生成快照。仅饭局发起人可调用，饭局必须已完成且已有回忆卡快照；请求体为空对象并携带数字字符串 `Idempotency-Key`。同一饭局只记录首次成功调起分享菜单的时间，重复调用返回 `recorded=false`，首次记录返回 `recorded=true`。小程序仅在微信页面分享回调触发或 `showShareImageMenu` 调用成功后调用；保存图片到相册、预览、自动创建快照和生成海报不调用该接口。该事实只证明分享已发起，不证明图片送达、对方打开或保存。
+
 `GET /users/me/medals` 当前按模板返回可见勋章，不再写死在接口层。服务端当前只根据真实完成事实和真实审核收录事实自动点亮，包括：
 
-- `MEAL_COMPLETION`：完成餐次累计达到模板阈值。
+- `MEAL_COMPLETION`：明确确认完成用餐累计达到模板阈值；饭局完成时发起人和完成时仍为已接受状态的参与人各计一餐；已完成的关联计划与饭局合并为一餐。
 - `DINING_EVENT_COMPLETION`：完成饭局累计达到模板阈值，统计发起人和已接受参与人。
 - `GROUP_MEAL_COMPLETION`：作为发起人完成至少有 1 位已接受参与人的饭局，累计达到模板阈值。
-- `FULL_LOOP_COMPLETION`：完成饭局、事件采购已买、最终完成用餐的完整闭环累计达到模板阈值。
-- `RECOMMENDATION_ADOPTED_TOTAL`：推荐收录累计达到模板阈值，当前只统计菜谱推荐审核通过、食材推荐审核通过或归并、单位建议审核通过或归并。
+- `FULL_LOOP_COMPLETION`：首发只统计饭局：所需食材均已通过准备流程确认完成（已买、家里已有或无需采购），且饭局由发起人确认完成，累计达到模板阈值。纯计划餐次没有逐项准备事实，不计入首发完整闭环。
+- `SHOPPING_COMPLETION`：非空清单成功完成采购且所有未删除项均为已买；每人每天最多计两张。
+- `FRIDGE_MAINTENANCE`：食材库发生真实新增或“有”改为“没有”的变化；重复确认相同状态不计，每人每自然周最多计一周。
+- `MEMORY_SHARE_STARTED_TOTAL`：已完成饭局的发起人主动发起微信回忆分享，同一场饭局最多计一次；只证明分享发起，不代表送达。
+- `RECOMMENDATION_ADOPTED_TOTAL`：推荐收录累计达到模板阈值，只统计菜谱推荐和食材推荐审核收录或归并，不统计单位推荐。
 
-当前勋章接口不返回任务进度、差几次、会员加成、排行榜、分享奖励或后台发放状态。勋章图片改为后台独立上传，后台可分别维护 `earnedImageUrl / lockedImageUrl` 两张图；用户侧优先按获得状态读取对应图片，没有对应图片时才回退到另一张图，再回退到现有 `iconKey` 展示。公开资源接口会按原始文件类型返回 `image/png / image/jpeg / image/webp / image/svg+xml`；微信小程序场景下，勋章若使用 `SVG`，继续走后台公开 URL，由页面 `<image>` 直接加载网络资源。勋章只能由服务端在完成餐次、完成饭局或后台审核通过推荐事务里派生；客户端不得提交任何“点亮勋章”字段。
+当前勋章接口不返回任务进度、差几次、会员加成、排行榜、分享送达奖励或后台发放状态。勋章图片改为后台独立上传，后台可分别维护 `earnedImageUrl / lockedImageUrl` 两张图；用户侧优先按获得状态读取对应图片，没有对应图片时才回退到另一张图，再回退到现有 `iconKey` 展示。公开资源接口会按原始文件类型返回 `image/png / image/jpeg / image/webp / image/svg+xml`；微信小程序场景下，勋章若使用 `SVG`，继续走后台公开 URL，由页面 `<image>` 直接加载网络资源。勋章只能由服务端在完成餐次、完成饭局、完成采购清单、食材库真实状态变化、回忆分享发起事实或后台审核通过推荐事务里派生；客户端不得提交任何“点亮勋章”字段。
 
 ### 菜谱
 

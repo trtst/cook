@@ -28,7 +28,7 @@
 | Auth | POST | `/auth/refresh` | 轮换 refresh token 并刷新会话 |
 | Auth | POST | `/auth/logout` | 吊销 refresh token |
 | Auth | GET | `/auth/me` | 读取当前登录用户的最小认证资料 |
-| Home | GET | `/home-entries` | 小程序首页入口配置：`MAIN` 作为 hero 运营位，`SIDE_TOP / SIDE_BOTTOM` 为右侧运营卡，四宫格只返回当前已上架入口 |
+| Home | GET | `/home-entries` | 首页快捷入口四宫格：只返回当前已上架的 `QUICK_1 ... QUICK_4` |
 | Home | GET | `/home/week-overview` | 首页左侧“这周吃饭安排”状态聚合主卡 |
 | HomeTopic | GET | `/home-topics/current` | 当前本周灵感专题页 |
 | HomeTopic | GET | `/home-topics/{topicId}` | 指定本周灵感专题页 |
@@ -49,8 +49,8 @@
 | AdminMaterial | GET | `/admin/material-images` | 后台图片素材分页列表 |
 | AdminMaterial | POST | `/admin/material-images` | 后台上传图片素材并返回可复制地址 |
 | AdminMaterial | DELETE | `/admin/material-images/{imageId}` | 后台删除图片素材，并删除对应对象存储文件 |
-| AdminHome | GET | `/admin/home-entries` | 后台读取小程序首页 7 个快捷入口配置和站内页白名单 |
-| AdminHome | PUT | `/admin/home-entries` | 后台按提交的 `items` 保存小程序首页快捷入口配置，支持单卡或多卡一起保存 |
+| AdminHome | GET | `/admin/home-entries` | 后台读取首页快捷入口四宫格配置和站内页白名单 |
+| AdminHome | PUT | `/admin/home-entries` | 后台按提交的 `items` 保存 4 个快捷入口配置，支持单卡或多卡一起保存 |
 | AdminHome | POST | `/admin/home-entries/{placement}/status` | 后台切换首页四宫格入口上架状态 |
 | AdminHome | POST | `/admin/home-entries/{placement}/image` | 后台上传或替换指定首页快捷入口图片 |
 | AdminHome | DELETE | `/admin/home-entries/{placement}/image` | 后台清空指定首页快捷入口图片 |
@@ -108,6 +108,9 @@
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipes` | 后台按用户读取已发布菜谱 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/recipe-drafts` | 后台按用户读取菜谱草稿 |
 | AdminRecipeDomain | GET | `/admin/users/{userId}/collections*` | 历史合集兼容查询，不作为当前前台功能 |
+| AdminSystemData | GET | `/admin/system-data/export` | 导出带格式版本的系统基础数据 JSON 包 |
+| AdminSystemData | POST | `/admin/system-data/preview` | 校验数据包并预览新增、覆盖和冲突 |
+| AdminSystemData | POST | `/admin/system-data/import` | 事务性导入系统数据包，缺失项保留，要求幂等键 |
 | AdminIngredient | GET | `/admin/ingredient-categories` | 后台系统食材分类列表 |
 | AdminIngredient | POST | `/admin/ingredient-categories` | 后台新建系统食材分类 |
 | AdminIngredient | PUT | `/admin/ingredient-categories/{categoryId}` | 后台编辑系统食材分类 |
@@ -172,7 +175,9 @@
 | DiningEvent | POST | `/dining-events/{eventId}/wishes` | 参与人一次选择最多三道菜加入当前饭局的我想吃池 |
 | DiningEvent | POST | `/dining-events/{eventId}/wishes/{wishItemId}/support` | 参与人附议或取消附议一道我想吃 |
 | DiningEvent | POST | `/dining-events/{eventId}/wishes/{wishItemId}/menu` | 主家把一道我想吃加入本次菜单 |
+| DiningEvent | DELETE | `/dining-events/{eventId}/wishes/{wishItemId}/menu` | 主家把对应菜谱从本次菜单移除，保留成员心愿与支持 |
 | DiningEvent | POST | `/dining-events/{eventId}/memory-shares` | 生成一张带冻结封面和小程序码的不可变餐桌回忆卡快照 |
+| DiningEvent | POST | `/dining-events/{eventId}/memory-share-started` | 饭局完成后记录发起人成功调起回忆分享菜单的事实，同场去重 |
 | DiningEvent | POST | `/dining-events/{eventId}/respond` | 回应饭局 |
 | DiningEvent | POST | `/dining-events/{eventId}/bring` | 选择带菜 |
 | DiningEvent | POST | `/dining-events/{eventId}/complete` | 完成一场饭局 |
